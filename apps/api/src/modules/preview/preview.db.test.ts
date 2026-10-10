@@ -96,6 +96,12 @@ const SECRETS = {
   internalName: "internal-name-marker",
 };
 
+/** The answer ticking the two primes, by the positions `student` shows them at (ADR-097). */
+function primesOf(student: unknown): { selected: number[] } {
+  const { choices } = student as { choices: { id: number; text: string }[] };
+  return { selected: choices.filter((c) => c.text === "2" || c.text === "5").map((c) => c.id) };
+}
+
 /** Five choices, B and D correct, shuffled per attempt. */
 const mcqConfig = {
   configVersion: 2,
@@ -333,9 +339,11 @@ describe("starting a preview", () => {
       const view = (await service.startPreview(db, row, now, seed)).view;
       orders.add(view.items.map((i) => i.id).join());
       const mcq = view.items.find((i) => i.id === w.mcqItemId)!.student as {
-        choices: { id: number }[];
+        choices: { id: number; text: string }[];
       };
-      choices.add(mcq.choices.map((c) => c.id).join());
+      // The ids are the positions (ADR-097); the texts are what moves.
+      expect(mcq.choices.map((c) => c.id)).toEqual(mcq.choices.map((_, position) => position));
+      choices.add(mcq.choices.map((c) => c.text).join());
     }
     expect(orders.size).toBeGreaterThan(1);
     expect(choices.size).toBeGreaterThan(1);
@@ -559,7 +567,8 @@ describe("grading a preview", () => {
       answers: {
         [w.shortItemIds[0]!]: shortAnswer(0), // right
         [w.shortItemIds[1]!]: "wrong", // wrong
-        [w.mcqItemId]: { selected: [1, 3] }, // both primes: right
+        // Both primes: right — named by the positions the player showed them at (ADR-097).
+        [w.mcqItemId]: primesOf(started.view.items.find((i) => i.id === w.mcqItemId)!.student),
         [w.codeItemId]: { regions: ["int x;"] }, // every case exits 0: right
       },
     });
@@ -578,8 +587,11 @@ describe("grading a preview", () => {
     // The final grading runs the WHOLE request, the hidden case included.
     expect(fake.requests.at(-1)!.cases.map((c) => c.name)).toEqual(["visible-1", SECRETS.hiddenCase]);
 
-    // The full correction, whatever the feedback policy: key and explanation.
-    expect(byId.get(w.mcqItemId)!.solution).not.toBeNull();
+    // The full correction, whatever the feedback policy: key and explanation —
+    // the key in the coordinates of the choices the player showed (ADR-097).
+    expect(byId.get(w.mcqItemId)!.solution).toEqual({
+      correct: primesOf(byId.get(w.mcqItemId)!.student).selected.sort((a, b) => a - b),
+    });
     expect(byId.get(w.mcqItemId)!.explanation).toBe(SECRETS.explanation);
     // The student payload is the one the player showed, same shuffle.
     expect(byId.get(w.mcqItemId)!.student).toEqual(
@@ -618,10 +630,14 @@ describe("grading a preview", () => {
     const evaluation = await reload(db, w.evaluationId);
     const added = await evaluationService.addItems(db, evaluation, [essay], () => 3, { attemptCount: 0 });
     const essayItemId = added.at(-1)!.id;
+    const shown = (await service.startPreview(db, await reload(db, w.evaluationId), server.clock.now(), 3)).view;
     const correction = (
       await post(`${w.url}/grade`, teacher.headers, {
         seed: 3,
-        answers: { [essayItemId]: { text: "An address." }, [w.mcqItemId]: { selected: [1, 3] } },
+        answers: {
+          [essayItemId]: { text: "An address." },
+          [w.mcqItemId]: primesOf(shown.items.find((i) => i.id === w.mcqItemId)!.student),
+        },
       })
     ).json() as PreviewCorrection;
     const item = correction.items.find((i) => i.itemId === essayItemId);
@@ -651,7 +667,10 @@ describe("grading a preview", () => {
 
   it("applies the evaluation's mcq policy", async () => {
     const w = await world();
-    const answersOf = { [w.mcqItemId]: { selected: [1] } };
+    // One of the two primes, "2", at the position seed 3 shows it (ADR-097).
+    const shown = (await service.startPreview(db, await reload(db, w.evaluationId), server.clock.now(), 3)).view;
+    const { choices } = shown.items.find((i) => i.id === w.mcqItemId)!.student as { choices: { id: number; text: string }[] };
+    const answersOf = { [w.mcqItemId]: { selected: [choices.find((c) => c.text === "2")!.id] } };
     await db.update(evaluations).set({ mcqPolicy: "all_or_nothing" }).where(eq(evaluations.id, w.evaluationId));
     const strict = (await post(`${w.url}/grade`, teacher.headers, { seed: 3, answers: answersOf })).json();
     await db.update(evaluations).set({ mcqPolicy: "ripkey" }).where(eq(evaluations.id, w.evaluationId));

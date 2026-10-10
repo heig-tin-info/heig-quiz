@@ -48,4 +48,6 @@ export const mcqLeakFixture: StudentLeakFixture<McqConfig> = {
     "discordance",
     "inherit",
   ],
+  // ADR-097: the key, a distractor, and the empty answer, stored canonical.
+  answers: [{ selected: [1] }, { selected: [2] }, { selected: [] }],
 };

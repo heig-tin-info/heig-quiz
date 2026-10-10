@@ -7,9 +7,16 @@ import {
   ConfigMigrationError,
   tallyKeys,
   type QuestionTypeServer,
+  type StudentView,
   type TallyEntry,
 } from "@quiz/core/server";
-import { clozeStudentTemplate, describeBlank, parseCloze } from "@quiz/domain/cloze";
+import {
+  clozeAnswerFromView,
+  clozeAnswerToView,
+  clozeStudentTemplate,
+  describeBlank,
+  parseCloze,
+} from "@quiz/domain/cloze";
 import { toCanonical } from "./canonical.js";
 import { gradeClozeAnswer } from "./grade.js";
 import {
@@ -32,6 +39,9 @@ import { isClozeAnswered } from "./schema.js";
 export function hasSelectBlank(config: ClozeConfig): boolean {
   return parseCloze(config.text).blanks.some((blank) => blank.kind === "select");
 }
+
+/** Whether `view` shuffles this config's dropdowns: the view's switch AND the question's own. */
+const shufflesOptions = (config: ClozeConfig, view: StudentView): boolean => view.shuffle && config.shuffleOptions;
 
 export const clozeServer: QuestionTypeServer<
   ClozeConfig,
@@ -83,13 +93,28 @@ export const clozeServer: QuestionTypeServer<
    * collapses to an opaque input: no answer, no pattern, no tolerance.
    */
   toStudent(config, view): ClozeStudent {
-    return clozeStudentTemplate(
+    return clozeStudentTemplate(parseCloze(config.text), view.seed, view.itemId, shufflesOptions(config, view));
+  },
+
+  /**
+   * ADR-097: a dropdown's value is the option's displayed POSITION on the
+   * wire and its canonical index in storage (D4); a typed blank is the same
+   * in both. A position the view does not have refuses the answer.
+   */
+  fromStudentAnswer(config, view, answer) {
+    const blanks = clozeAnswerFromView(
       parseCloze(config.text),
+      answer.blanks,
       view.seed,
       view.itemId,
-      view.shuffle && config.shuffleOptions,
+      shufflesOptions(config, view),
     );
+    return blanks === null ? null : { blanks };
   },
+
+  toStudentAnswer: (config, view, answer) => ({
+    blanks: clozeAnswerToView(parseCloze(config.text), answer.blanks, view.seed, view.itemId, shufflesOptions(config, view)),
+  }),
 
   toSolution: (config) => ({
     blanks: parseCloze(config.text).blanks.map((blank) => ({
@@ -101,13 +126,22 @@ export const clozeServer: QuestionTypeServer<
   /**
    * `perBlank[].expected` is the key, blank by blank. The verdict, the weight
    * and what the student typed stay: they are the feedback. The expected
-   * value only travels when the teacher publishes the key.
+   * value only travels when the teacher publishes the key. What the student
+   * picked in a dropdown is stored canonical (D4), and leaves as the position
+   * the review's view shows (ADR-097), like the answer itself.
    */
-  studentDetails(details: ClozeDetails, policy): unknown {
+  studentDetails(details: ClozeDetails, policy, config, view): unknown {
     if (policy.showKey) return details;
+    const given = clozeAnswerToView(
+      parseCloze(config.text),
+      details.perBlank.map((blank) => blank.given),
+      view.seed,
+      view.itemId,
+      shufflesOptions(config, view),
+    );
     return {
       ...details,
-      perBlank: details.perBlank.map(({ expected: _expected, ...rest }) => rest),
+      perBlank: details.perBlank.map(({ expected: _expected, ...rest }, row) => ({ ...rest, given: given[row] ?? null })),
     };
   },
 

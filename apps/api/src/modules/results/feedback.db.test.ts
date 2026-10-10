@@ -32,6 +32,10 @@ let teacher: { id: string; headers: Record<string, string> };
 let student: { id: string; headers: Record<string, string> };
 let built: Awaited<ReturnType<typeof gradedEvaluation>>;
 
+/** Where the attempt's view shows "Paris", the key: the student names choices by position (ADR-097). */
+const paris = (student: unknown): number =>
+  (student as { choices: { id: number; text: string }[] }).choices.find((c) => c.text === "Paris")!.id;
+
 /** The key values the student must never read while `showKey` is false. */
 const MCQ_CORRECT = 0;
 const CLOZE_EXPECTED = "Lutece";
@@ -117,7 +121,6 @@ const CONFIGS: Record<string, unknown> = {
 };
 
 const ANSWERS: Record<string, unknown> = {
-  mcq: { selected: [MCQ_CORRECT] },
   short: { text: "Paris" },
   cloze: { blanks: ["Paris"] },
   code: { regions: ["return 42;"] },
@@ -189,7 +192,7 @@ async function gradedEvaluation() {
       url: `/app/api/attempts/${view.attempt.id}/answers/${item.id}`,
       headers: student.headers,
       payload: {
-        payload: ANSWERS[item.type],
+        payload: item.type === "mcq" ? { selected: [paris(item.student)] } : ANSWERS[item.type],
         revision: 1,
         clientTs: server.clock.now().toISOString(),
       },
@@ -276,8 +279,10 @@ describe("the answer key never rides in `details` (H1)", () => {
     const item = await feedbackOf("mcq");
     const details = item["details"] as Record<string, unknown>;
     expect(details["correct"]).toBeUndefined();
-    // The student's own score stays: it IS the feedback.
-    expect(details["selected"]).toEqual([MCQ_CORRECT]);
+    // The student's own score stays: it IS the feedback — their tick in the
+    // review's (the attempt's) order, never the canonical index (ADR-097).
+    expect(details["selected"]).toEqual([paris(item["student"])]);
+    expect(details["selected"]).toEqual([paris(built.servedOf("mcq"))]);
     expect(details["fraction"]).toBe(1);
     expect(item["solution"]).toBeNull();
   });

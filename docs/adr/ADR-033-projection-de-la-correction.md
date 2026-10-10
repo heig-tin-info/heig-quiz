@@ -12,7 +12,10 @@ parameterized question each have their own key, so they are grouped by
 verdict only (an mcq keeps its ticks per choice), and the projected question
 is the instance of the example values, named as such. Amended 2026-10-01 by
 its addendum below: the mcq review letters its choices as the wall does, in
-the teacher's order wherever the key is known.
+the teacher's order wherever the key is known. Amended 2026-10-10 by
+[ADR-097](ADR-097-reponse-transmise-et-reponse-stockee.md): the addendum's §2
+"an answer being canonical" holds for the stored answer only; a student's
+reads it in the review's view.
 
 ## Context
 
@@ -107,7 +110,10 @@ the choices. The review now letters its choices and colours the key's letter
    owner), the grading panel, and the live inspection — which served the
    student's shuffle until now, and whose letters would then have disagreed
    with its own cell (settled in review). The ticks follow, an answer being
-   canonical (D3).
+   canonical (D3). *Amended 2026-10-10 by ADR-097: the stored answer is
+   canonical; the feedback page hands it, its key and its breakdown to the
+   student in the review's view — the teacher's order here, where position
+   and canonical index are one, and the attempt's own order under §3.*
 3. **The attempt's own order while the key is hidden** (settled in review,
    narrowing the product owner's "always the teacher's order"). The teacher's
    order tends to be the key's — a categorize tray typed column by column,

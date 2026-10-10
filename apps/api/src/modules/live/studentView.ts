@@ -189,6 +189,40 @@ export function studentSolutionViewOf(type: string, config: unknown, view: Stude
   return t.studentSolution ? t.studentSolution(solution, config) : solution;
 }
 
+/**
+ * ADR-097: the answer a student SENT, in the coordinates of the view they
+ * were served, back to the canonical answer that is stored and graded — THE
+ * single entry of an answer, as {@link studentViewOf} is the single exit of
+ * a question. `answer` has passed the type's `answerSchema`. `null` when it
+ * names a position `view` does not have: the caller refuses the write with
+ * its `answer_invalid`, never stores a truncated answer.
+ */
+export function answerFromStudent(
+  type: string,
+  config: unknown,
+  view: StudentView,
+  answer: unknown,
+): { answer: unknown } | null {
+  const hook = typeOf(type).fromStudentAnswer;
+  if (!hook) return { answer };
+  const canonical: unknown = hook(config, view, answer);
+  return canonical === null ? null : { answer: canonical };
+}
+
+/**
+ * ADR-097: a STORED answer, canonical, in the coordinates of `view` — for
+ * every reply that hands a student their own answer back. A payload the type's
+ * `answerSchema` no longer reads is withheld (`null`) by a type that converts:
+ * it cannot be put in view coordinates, so it must not travel as if it were.
+ */
+export function answerToStudent(type: string, config: unknown, view: StudentView, stored: unknown): unknown {
+  if (stored === null || stored === undefined) return null;
+  const t = typeOf(type);
+  if (!t.toStudentAnswer) return stored;
+  const parsed = t.answerSchema.safeParse(stored);
+  return parsed.success ? t.toStudentAnswer(config, view, parsed.data) : null;
+}
+
 /** `type.shuffleable(config)`: whether shuffling means anything for this one. */
 export function isShuffleable(type: string, version: StaticVersion): boolean {
   const t = typeOf(type);

@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, isNull } from "drizzle-orm";
 
 import {
+  answers,
   attempts,
   auditLog,
   coursePools,
@@ -427,6 +428,17 @@ describe("the public page (F-AUTH-05)", () => {
     );
     expect(answered.statusCode).toBe(200);
     expect(answered.json().me.answer).toEqual({ selected: [1] });
+    // ADR-097: a poll is never shuffled, so the position a phone sends IS the
+    // canonical index stored and tallied — although the evaluation's own
+    // switch, which a poll does not read, says to shuffle.
+    const [row] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, evaluationId));
+    expect((row!.settings as { shuffleChoices?: boolean }).shuffleChoices ?? true).toBe(true);
+    const [stored] = await server.app.db
+      .select({ payload: answers.payload })
+      .from(answers)
+      .innerJoin(attempts, eq(attempts.id, answers.attemptId))
+      .where(eq(attempts.evaluationId, evaluationId));
+    expect(stored!.payload).toEqual({ selected: [1] });
 
     const changed = await post(
       `/app/api/p/${code}/answer`,

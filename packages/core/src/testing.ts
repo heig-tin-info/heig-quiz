@@ -27,6 +27,14 @@ export interface StudentLeakFixture<Config = unknown> {
   forbiddenKeys: readonly string[];
   /** Literal values of `config` that must appear nowhere in the student view. */
   secrets: readonly string[];
+  /**
+   * Stored (canonical) answers to `config`, for the answer's round trip of
+   * ADR-097: in every view, `fromStudentAnswer(toStudentAnswer(a))` is `a`,
+   * and a type that puts the answer in view coordinates must name its key
+   * and its parts by the same positions. Absent: the type exchanges its
+   * answer as it stores it.
+   */
+  answers?: readonly unknown[];
 }
 
 /**

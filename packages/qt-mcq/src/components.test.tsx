@@ -563,7 +563,7 @@ describe("McqEditor — reordering", () => {
 });
 
 describe("McqPlayer", () => {
-  it("renders radios for a single-answer question and sends the canonical id", async () => {
+  it("renders radios for a single-answer question and sends the id the view gave the choice", async () => {
     const onChange = vi.fn();
     render(<McqPlayer student={student} answer={null} onChange={onChange} readOnly={false} />);
     const radios = screen.getAllByRole("radio");

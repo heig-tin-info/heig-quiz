@@ -44,6 +44,7 @@ import {
   type GradedResult,
   type RunnerOutcome,
   type RunnerService,
+  type StudentView,
 } from "@quiz/core/server";
 import {
   evaluationTotal,
@@ -336,9 +337,13 @@ export async function simulatePreview(
   if (!answer.success) {
     throw new PreviewError("answer_invalid", 422, { details: answer.error.issues });
   }
+  // The view the preview player showed (ADR-097): the answer back to canonical.
+  const { view } = live.attemptItemView(evaluation, joined, { seed: input.seed, instances: {} });
+  const canonical = live.answerFromStudent(joined.question.type, config, view, answer.data);
+  if (canonical === null) throw new PreviewError("answer_invalid", 422);
   const built = type.interactiveRequest(
     config,
-    answer.data,
+    canonical.answer,
     finalizeContext(evaluation, joined, input.seed, now),
   );
   if (built === null) {
@@ -370,6 +375,8 @@ async function gradeItem(
   item: JoinedItem,
   seed: number,
   version: StaticVersion,
+  /** The view the preview player showed (ADR-097): the answer names positions in it. */
+  view: StudentView,
   payload: unknown,
   now: Date,
   log: (err: unknown, msg: string) => void,
@@ -391,7 +398,10 @@ async function gradeItem(
   if (payload !== null) {
     const parsed = type.answerSchema.safeParse(payload);
     if (!parsed.success) return { status: "answer_invalid", points: 0, details: null };
-    answer = parsed.data;
+    // Graded canonical, as the grading pass reads a stored answer.
+    const canonical = live.answerFromStudent(item.question.type, config, view, parsed.data);
+    if (canonical === null) return { status: "answer_invalid", points: 0, details: null };
+    answer = canonical.answer;
   }
 
   const ctx = finalizeContext(evaluation, item, seed, now);
@@ -467,10 +477,11 @@ export async function gradePreview(
     // preview): there is nothing left to grade, and no reason to fail.
     if (!item) continue;
     const payload = answers.has(shown.id) ? answers.get(shown.id) : undefined;
-    // The instance the player showed: the same seed draws the same values (ADR-056 §5).
-    const instance = instanceOf(item.question.type, item.version, { seed, itemId: shown.id });
+    // The instance and the view the player showed: the same seed draws the
+    // same values (ADR-056 §5) and the same shuffle (ADR-097).
+    const { instance, config, view: shownView } = live.attemptItemView(evaluation, item, { seed, instances: {} });
     const { version } = instance;
-    const outcome = await gradeItem(input.runner, evaluation, item, seed, version, payload, now, input.log);
+    const outcome = await gradeItem(input.runner, evaluation, item, seed, version, shownView, payload, now, input.log);
     if (outcome.points !== null) scored.push(outcome.points);
     // An answer to grade by hand is expected, not a failure: not counted here.
     if (!["graded", "no_key", "manual"].includes(outcome.status)) pending += 1;
@@ -490,9 +501,8 @@ export async function gradePreview(
       answer: payload ?? null,
       // As the student's own feedback page builds it (`results/service.ts`):
       // the student's key, without what stays the teacher's (ADR-037).
-      solution: outcome.status === "no_key"
-        ? null
-        : studentSolutionView({ type: item.question.type, version, seed, itemId: shown.id }),
+      // In the view the answer names its choices in (ADR-097).
+      solution: outcome.status === "no_key" ? null : live.studentSolutionViewOf(item.question.type, config, shownView),
       explanation: explanationOrNull(instance.explanation),
       details: outcome.details ?? null,
       ...(outcome.comment === undefined ? {} : { comment: outcome.comment }),

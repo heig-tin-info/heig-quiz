@@ -70,6 +70,19 @@ export function choiceOrder(config: McqConfig, view: StudentView): number[] {
   return shuffle(canonical, streamSeed(view.seed, view.itemId, "choices"));
 }
 
+/**
+ * Canonical choice indices in the coordinates of `view` (ADR-097): the
+ * position each one is displayed at. An index the view does not show is
+ * left out.
+ */
+function toPositions(config: McqConfig, view: StudentView, canonical: readonly number[]): number[] {
+  const order = choiceOrder(config, view);
+  return canonical.flatMap((index) => {
+    const position = order.indexOf(index);
+    return position < 0 ? [] : [position];
+  });
+}
+
 export const mcqServer: QuestionTypeServer<
   McqConfig,
   McqAnswer,
@@ -137,7 +150,10 @@ export const mcqServer: QuestionTypeServer<
     const order = choiceOrder(config, view);
     const student: McqStudent = {
       prompt: config.prompt,
-      choices: order.map((id) => ({ id, text: config.choices[id]?.text ?? "" })),
+      // A choice's id is its displayed POSITION (ADR-097): the order the
+      // teacher typed the choices in tends to put the key first, and a
+      // canonical id would name it to anyone reading the network tab.
+      choices: order.map((canonical, id) => ({ id, text: config.choices[canonical]?.text ?? "" })),
       mode: config.mode,
     };
     if (config.maxSelections !== undefined) student.maxSelections = config.maxSelections;
@@ -145,7 +161,23 @@ export const mcqServer: QuestionTypeServer<
     return student;
   },
 
-  toSolution: (config) => ({ correct: correctIndices(config) }),
+  /**
+   * ADR-097: the student ticks displayed positions; the answer is stored,
+   * graded and counted in canonical indices (D3). A position the view does
+   * not have refuses the answer.
+   */
+  fromStudentAnswer(config, view, answer) {
+    const order = choiceOrder(config, view);
+    const selected = answer.selected.map((position) => order[position]);
+    return selected.every((index) => index !== undefined) ? { selected: selected as number[] } : null;
+  },
+
+  toStudentAnswer: (config, view, answer) => ({ selected: toPositions(config, view, answer.selected) }),
+
+  /** The key in the view's coordinates (ADR-097): canonical for a teacher's unshuffled view. */
+  toSolution: (config, view) => ({
+    correct: toPositions(config, view, correctIndices(config)).sort((a, b) => a - b),
+  }),
 
   hasKey: (config) => config.choices.some((choice) => choice.correct),
 
@@ -165,12 +197,14 @@ export const mcqServer: QuestionTypeServer<
    * `details.correct` is the answer key, and the breakdown is served to the
    * student by the feedback policy: it goes when the key is not published.
    * `c`/`C` and `w`/`W` stay — they are the student's own score, which is
-   * what the review shows next to it.
+   * what the review shows next to it. `selected` is the student's own
+   * answer, stored canonical: it leaves in the review's coordinates
+   * (ADR-097), never as canonical indices.
    */
-  studentDetails(details: McqDetails, policy): unknown {
+  studentDetails(details: McqDetails, policy, config, view): unknown {
     if (policy.showKey) return details;
     const { correct: _correct, ...rest } = details;
-    return rest;
+    return { ...rest, selected: toPositions(config, view, details.selected) };
   },
 
   // `ctx.defaults` carries the EVALUATION's per-type settings; `gradeMcq`

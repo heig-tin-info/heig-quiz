@@ -37,8 +37,13 @@ describe("the contract", () => {
   });
 
   it("hands the key to the feedback path, and only there", () => {
-    expect(mcqServer.toSolution(SECRET_CONFIG, { seed: 1, itemId: "i", shuffle: true })).toEqual({
+    // Canonical under the teacher's unshuffled view; positions otherwise (ADR-097).
+    expect(mcqServer.toSolution(SECRET_CONFIG, { seed: 1, itemId: "i", shuffle: false })).toEqual({
       correct: [1],
+    });
+    const shuffled = { seed: 1, itemId: "i", shuffle: true };
+    expect(mcqServer.toSolution(SECRET_CONFIG, shuffled)).toEqual({
+      correct: [choiceOrder(SECRET_CONFIG, shuffled).indexOf(1)],
     });
   });
 });

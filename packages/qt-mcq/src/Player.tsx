@@ -4,7 +4,9 @@
  * Controlled: it renders exactly what `toStudent` sent — an order already
  * shuffled by the server — and reports every change through `onChange`. It
  * holds no state, so a reload or a resumed attempt shows the stored answer and
- * nothing else. The ids it sends back are canonical (decision D3).
+ * nothing else. The ids it sends back are the ones the view gave the
+ * choices — their displayed positions on a student's screen; the server turns
+ * them into canonical indices (ADR-097).
  *
  * With an `answerKey` (a teacher's preview, "Show answers", #554) the right
  * choices are marked in place, a success tint and their verdict in words, so

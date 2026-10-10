@@ -12,7 +12,11 @@
  * components, including inside a code fence.
  *
  * Decision D4: a `select` blank stores the CANONICAL option index as a decimal
- * string, so shuffling never changes a stored answer.
+ * string, so shuffling never changes a stored answer. What the student SENDS
+ * and reads is the option's displayed position instead (ADR-097, amending
+ * D4): `toStudent` names each option by its position, and the server converts
+ * at its single entry and exit (`selectOptionOrder`, `clozeAnswerFromView`,
+ * `clozeAnswerToView`).
  */
 import { shuffle, streamSeed } from "@quiz/core/rng";
 import {
@@ -356,6 +360,11 @@ export interface ClozeStudent {
  * cannot tell a regex blank from a plain one and no pattern, tolerance or
  * answer ever leaves the server.
  *
+ * A dropdown option's `id` is its displayed POSITION, never its canonical
+ * index (ADR-097): the order the teacher typed the options in tends to be the
+ * key's, so a canonical id would name the right option to anyone reading the
+ * network tab.
+ *
  * `shuffleOptions` must already be the AND of the evaluation switch and the
  * question's own `shuffleOptions` flag.
  */
@@ -369,13 +378,87 @@ export function clozeStudentTemplate(
     if (blank.kind !== "select") {
       return { index: blank.index, weight: blank.weight, kind: "input", numeric: blank.kind === "number" };
     }
-    const canonical = blank.options.map((label, id) => ({ id, label }));
-    const options = shuffleOptions
-      ? shuffle(canonical, streamSeed(seed, itemId, `options:${blank.index}`))
-      : canonical;
+    const options = selectOptionOrder(blank, seed, itemId, shuffleOptions).map((canonical, id) => ({
+      id,
+      label: blank.options[canonical] ?? "",
+    }));
     return { index: blank.index, weight: blank.weight, kind: "select", options };
   });
   return { template: parse.template, blanks };
+}
+
+/**
+ * The display order of one dropdown, as canonical option indices: position
+ * `p` on the student's screen shows option `order[p]`. Recomputed from
+ * `(seed, itemId, "options:<blank>")`, never stored (decision D19).
+ */
+export function selectOptionOrder(
+  blank: { index: number; options: readonly string[] },
+  seed: number,
+  itemId: string,
+  shuffleOptions: boolean,
+): number[] {
+  const canonical = blank.options.map((_, index) => index);
+  return shuffleOptions ? shuffle(canonical, streamSeed(seed, itemId, `options:${blank.index}`)) : canonical;
+}
+
+/** A dropdown's value: a non-negative decimal integer, nothing else. */
+const OPTION_VALUE = /^\d+$/;
+
+/**
+ * ADR-097: the blanks a student SENT, each dropdown's value a displayed
+ * position, brought back to the canonical option index D4 stores. A text,
+ * number or regex blank, and an empty dropdown (`null` or blank), travel
+ * untouched. `null` when a dropdown names a position its view does not have,
+ * or anything but a position: the write refuses the answer.
+ */
+export function clozeAnswerFromView(
+  parse: ClozeParse,
+  blanks: readonly (string | null)[],
+  seed: number,
+  itemId: string,
+  shuffleOptions: boolean,
+): (string | null)[] | null {
+  const out: (string | null)[] = [];
+  for (const [index, given] of blanks.entries()) {
+    const blank = parse.blanks[index];
+    if (blank?.kind !== "select" || given === null || given.trim() === "") {
+      out.push(given);
+      continue;
+    }
+    const position = given.trim();
+    const canonical = OPTION_VALUE.test(position)
+      ? selectOptionOrder(blank, seed, itemId, shuffleOptions)[Number(position)]
+      : undefined;
+    if (canonical === undefined) return null;
+    out.push(String(canonical));
+  }
+  return out;
+}
+
+/**
+ * ADR-097: the inverse of {@link clozeAnswerFromView} — a stored answer with
+ * each dropdown's displayed position in place of its canonical index. A
+ * stored value that names no option of the dropdown comes back empty
+ * (`null`): it can only be a payload of an older shape, and it must not be
+ * read as a position.
+ */
+export function clozeAnswerToView(
+  parse: ClozeParse,
+  blanks: readonly (string | null)[],
+  seed: number,
+  itemId: string,
+  shuffleOptions: boolean,
+): (string | null)[] {
+  return blanks.map((given, index) => {
+    const blank = parse.blanks[index];
+    if (blank?.kind !== "select" || given === null || given.trim() === "") return given;
+    const value = given.trim();
+    const position = OPTION_VALUE.test(value)
+      ? selectOptionOrder(blank, seed, itemId, shuffleOptions).indexOf(Number(value))
+      : -1;
+    return position < 0 ? null : String(position);
+  });
 }
 
 // ---------------------------------------------------------------------------

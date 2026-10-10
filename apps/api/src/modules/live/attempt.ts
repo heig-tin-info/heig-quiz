@@ -51,7 +51,6 @@ import { answers, attempts, enrollments, evaluations, guestParticipants } from "
 import { rateLimited, refusalClass, type FailureArms, type Refusal } from "../http.js";
 import {
   feedbackOf,
-  gradeDefaults,
   classroomIdOf,
   seatsOf,
   trustedClients,
@@ -94,9 +93,10 @@ import {
   scoreVisible,
   type ReleasedGrade,
 } from "../results/service.js";
-import { isShuffleable, studentView } from "./studentView.js";
+import { attemptItemView } from "./itemView.js";
+import { answerToStudent, studentViewOf } from "./studentView.js";
 import type { StoredInstance } from "../../db/columns.js";
-import { instanceOf, itemInstance, type InstanceAttempt } from "../pool/service.js";
+import { instanceOf, type InstanceAttempt } from "../pool/service.js";
 
 export type AttemptRecord = typeof attempts.$inferSelect;
 
@@ -930,21 +930,21 @@ export async function answersOf(db: Db, attemptId: string): Promise<Map<string, 
 // --- Views ----------------------------------------------------------------
 
 function attemptItems(
+  evaluation: EvaluationRecord,
   ordered: readonly OrderedItem[],
   answered: ReadonlyMap<string, AnswerRecord>,
   locked: ReadonlySet<string>,
   /** ADR-091: the items a partial retake carried over. */
   acquired: ReadonlySet<string>,
-  settings: EvaluationSettings,
   attempt: InstanceAttempt,
-  defaults: Readonly<Record<string, unknown>>,
 ): AttemptItem[] {
-  const { seed } = attempt;
   return ordered.map((entry) => {
     const answer = answered.get(entry.item.id) ?? null;
     // The student's own numbers (ADR-056): stored at the attempt's creation,
-    // drawn from the same seed for a preview that stores nothing.
-    const { version } = itemInstance(entry, attempt);
+    // drawn from the same seed for a preview that stores nothing. The ONE
+    // view of the item (ADR-097): the question leaves in it, and so does the
+    // stored answer — a carried-over one (ADR-091) under this attempt's seed.
+    const { type, config, view } = attemptItemView(evaluation, entry, attempt);
     return {
       id: entry.item.id,
       position: entry.item.position,
@@ -955,21 +955,8 @@ function attemptItems(
       // ADR-084: the teacher's passage before the item — an item property,
       // like the two flags above, carried by the one builder of the attempt.
       intro: entry.item.intro,
-      student: studentView({
-        type: entry.question.type,
-        version,
-        seed,
-        itemId: entry.item.id,
-        // Both switches must be on: the evaluation's and the question's.
-        shuffle:
-          settings.shuffleChoices &&
-          entry.question.shuffleable &&
-          isShuffleable(entry.question.type, version),
-        // What the student must know before answering: `mcq`'s negative
-        // marking (ADR-026).
-        defaults,
-      }),
-      answer: answer?.payload ?? null,
+      student: studentViewOf(type, config, view),
+      answer: answerToStudent(type, config, view, answer?.payload),
       revision: answer?.revision ?? 0,
       markedDone: answer?.markedDone ?? false,
       skipped: answer?.skipped ?? false,
@@ -1134,15 +1121,10 @@ async function viewOf(
       pausedAt: isoOrNull(evaluation.pausedAt),
       totalPoints: evaluationTotal(items.map((i) => i.item)),
     },
-    items: attemptItems(
-      ordered,
-      answered,
-      locked,
-      new Set(input.acquired),
-      settings,
-      { seed, instances: input.instances },
-      gradeDefaults(evaluation),
-    ),
+    items: attemptItems(evaluation, ordered, answered, locked, new Set(input.acquired), {
+      seed,
+      instances: input.instances,
+    }),
   };
 }
 

@@ -313,11 +313,16 @@ async function playClosedEvaluation(
       const itemId = questionId ? itemIdByQuestion.get(questionId) : undefined;
       if (!itemId) continue;
       at = new Date(at.getTime() + 2 * MINUTE);
+      // A paper names choices canonically; the student names them by the
+      // position this attempt shows them at (ADR-097), as the player does.
+      const joined = await evaluationService.joinedItem(db, evaluation.id, itemId);
+      if (!joined) continue;
+      const { type, config, view } = live.attemptItemView(evaluation, joined, attempt);
       await live.saveAnswer(db, {
         evaluation,
         attempt,
         itemId,
-        payload,
+        payload: live.answerToStudent(type, config, view, payload),
         revision: 1,
         now: at,
       });

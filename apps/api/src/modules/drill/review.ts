@@ -67,7 +67,13 @@ import {
 } from "../../db/schema.js";
 import { gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
 import { refusalClass, type Refusal } from "../http.js";
-import { drawSeed, isShuffleable, studentSolutionView, studentView } from "../live/service.js";
+import {
+  answerFromStudent,
+  drawSeed,
+  isShuffleable,
+  studentSolutionView,
+  studentView,
+} from "../live/service.js";
 import { ParameterError } from "@quiz/domain/parameters";
 
 import {
@@ -101,7 +107,6 @@ function activeCards(db: DbOrTx, where: SQL | undefined) {
     .select({
       card: drillCards,
       type: questions.type,
-      shuffleable: questions.shuffleable,
       courseCode: courses.code,
       courseName: courses.name,
     })
@@ -259,14 +264,21 @@ function reviewInstance(row: ActiveRow, version: VersionContent, seed: number, s
   }
 }
 
-/** The view of one review: the card is the item, so a new seed gives a new shuffle (06, question 28 (d)). */
+/**
+ * The view of one review: the card is the item, so a new seed gives a new
+ * shuffle (06, question 28 (d)). The serve, the answer and the reveal all
+ * compute it from the same served seed and instance (ADR-097): the student
+ * names choices by position in it, and the key comes back in it. The shuffle
+ * reads the instance's own config only, never the live
+ * `questions.shuffleable` column.
+ */
 function viewOf(row: ActiveRow, version: StaticVersion, seed: number) {
   return {
     type: row.type,
     version,
     seed,
     itemId: row.card.id,
-    shuffle: row.shuffleable && isShuffleable(row.type, version),
+    shuffle: isShuffleable(row.type, version),
   };
 }
 
@@ -505,19 +517,24 @@ export async function answerCard(
     const { row, question } = await servable(tx, userId, cardId, now);
     if (locked.serveSeed === null) throw new DrillError("drill_not_served");
     const type = typeOf(row.type);
+    const card = row.card;
+    const seed = locked.serveSeed;
+    // Graded on the values the student was served (ADR-056 §5), in the view
+    // they were served (ADR-097).
+    const instance = reviewInstance(row, question.version, seed, locked.serveValues);
+    const config = loadConfig(row.type, instance.version);
+    const view = viewOf(row, instance.version, seed);
     let answer: unknown = null;
     if (input.answer !== null && input.answer !== undefined) {
       const parsed = type.answerSchema.safeParse(input.answer);
       if (!parsed.success) throw new DrillError("answer_invalid");
-      answer = parsed.data;
+      // The student named displayed positions; stored and graded canonical.
+      const canonical = answerFromStudent(row.type, config, view, parsed.data);
+      if (canonical === null) throw new DrillError("answer_invalid");
+      answer = canonical.answer;
     }
-    const card = row.card;
-    const seed = locked.serveSeed;
     const references = await referenceTimes(tx, [card.questionId], input.deviceClass, userId);
     const referenceMs = references.get(card.questionId) ?? null;
-    // Graded on the values the student was served (ADR-056 §5).
-    const instance = reviewInstance(row, question.version, seed, locked.serveValues);
-    const config = loadConfig(row.type, instance.version);
     const result = await type.grade(
       config,
       answer,
@@ -573,7 +590,7 @@ export async function answerCard(
       activeMs,
       referenceMs: referenceMs === null ? null : Math.round(referenceMs),
       dueAt: iso(next.dueAt),
-      solution: studentSolutionView(viewOf(row, instance.version, seed)),
+      solution: studentSolutionView(view),
     };
   });
 }

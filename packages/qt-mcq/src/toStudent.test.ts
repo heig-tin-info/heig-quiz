@@ -8,7 +8,12 @@ import { describe, expect, it } from "vitest";
 import { findStudentLeaks } from "@quiz/core/testing";
 import { mcqLeakFixture, SECRET_CONFIG } from "./test/fixtures.js";
 import { McqConfigSchema } from "./schema.js";
-import { mcqServer } from "./server.js";
+import { choiceOrder, mcqServer } from "./server.js";
+
+/** Shuffle on and off, the preview's seed and a spread of attempts'. */
+const VIEWS = [0, 1, 7, 42, 99, 2024].flatMap((seed) =>
+  [true, false].map((shuffle) => ({ seed, itemId: "item-1", shuffle })),
+);
 
 describe("toStudent", () => {
   it("keeps exactly the fields the player needs", () => {
@@ -26,11 +31,20 @@ describe("toStudent", () => {
     expect(student.maxSelections).toBe(2);
   });
 
-  it("keeps the canonical index on every choice, whatever the display order", () => {
-    const student = mcqServer.toStudent(SECRET_CONFIG, { seed: 99, itemId: "i", shuffle: true });
-    for (const choice of student.choices) {
-      expect(SECRET_CONFIG.choices[choice.id]?.text).toBe(choice.text);
-    }
+  /*
+   * ADR-097 (audit H2): a choice's id is its displayed position. A canonical
+   * id named the key whenever the teacher typed it first — the editor's
+   * default — whatever the shuffle drew. Asserted for every view, the
+   * identity permutation included: "the ids are not the canonical order"
+   * would fail whenever the shuffle draws the identity, and prove nothing.
+   */
+  it.each(VIEWS)("names each choice by its displayed position (seed $seed, shuffle $shuffle)", (view) => {
+    const student = mcqServer.toStudent(SECRET_CONFIG, view);
+    const order = choiceOrder(SECRET_CONFIG, view);
+    expect(student.choices.map((choice) => choice.id)).toEqual(order.map((_, position) => position));
+    expect(student.choices.map((choice) => choice.text)).toEqual(
+      order.map((canonical) => SECRET_CONFIG.choices[canonical]!.text),
+    );
   });
 
   it("gives the teacher preview (seed 0) a stable order", () => {
@@ -73,5 +87,71 @@ describe("toStudent", () => {
       const student = mcqServer.toStudent(SECRET_CONFIG, { seed: 7, itemId: "i", shuffle: false, defaults });
       expect(student.negativeMarking).toBeUndefined();
     }
+  });
+});
+
+/*
+ * ADR-097: the student exchanges positions, the server stores canonical
+ * indices; the two hooks are each other's inverse over every view.
+ */
+describe("the answer in view coordinates", () => {
+  const multiple = McqConfigSchema.parse({
+    ...SECRET_CONFIG,
+    choices: ["a", "b", "c", "d", "e"].map((text, index) => ({ text, correct: index % 2 === 0 })),
+    mode: "multiple",
+  });
+
+  it.each(VIEWS)("round-trips every answer (seed $seed, shuffle $shuffle)", (view) => {
+    for (const selected of [[], [0], [4], [0, 2, 4], [1, 3], [3, 0, 1]]) {
+      const shown = mcqServer.toStudentAnswer!(multiple, view, { selected });
+      expect(mcqServer.fromStudentAnswer!(multiple, view, shown)).toEqual({ selected });
+      // And the other way: positions → canonical → the same positions.
+      expect(mcqServer.toStudentAnswer!(multiple, view, mcqServer.fromStudentAnswer!(multiple, view, { selected })!)).toEqual(
+        { selected },
+      );
+    }
+  });
+
+  it.each(VIEWS)("decodes the position the student ticked to the choice shown there (seed $seed)", (view) => {
+    const student = mcqServer.toStudent(multiple, view);
+    for (const [position, choice] of student.choices.entries()) {
+      const stored = mcqServer.fromStudentAnswer!(multiple, view, { selected: [position] });
+      expect(multiple.choices[stored!.selected[0]!]!.text).toBe(choice.text);
+    }
+  });
+
+  it("refuses a position the view does not have, never drops it", () => {
+    const view = { seed: 7, itemId: "i", shuffle: true };
+    expect(mcqServer.fromStudentAnswer!(multiple, view, { selected: [5] })).toBeNull();
+    expect(mcqServer.fromStudentAnswer!(multiple, view, { selected: [0, 9] })).toBeNull();
+  });
+
+  it("names the key in the same coordinates as the choices", () => {
+    for (const view of VIEWS) {
+      const student = mcqServer.toStudent(multiple, view);
+      const { correct } = mcqServer.toSolution(multiple, view);
+      const keyTexts = multiple.choices.filter((choice) => choice.correct).map((choice) => choice.text);
+      expect(correct.map((position) => student.choices[position]!.text).sort()).toEqual(keyTexts.sort());
+    }
+  });
+
+  it("puts the student's own ticks of the breakdown in the review's view, and drops the key", () => {
+    const view = { seed: 7, itemId: "i", shuffle: true };
+    const details = {
+      policy: "symmetric" as const,
+      correct: [0, 2, 4],
+      selected: [0, 1],
+      c: 1,
+      w: 1,
+      C: 3,
+      W: 2,
+      fraction: 0,
+      truncated: false,
+    };
+    const out = mcqServer.studentDetails!(details, { showKey: false, showHiddenCaseNames: false }, multiple, view) as {
+      selected: number[];
+    };
+    expect(out).not.toHaveProperty("correct");
+    expect(out.selected).toEqual(mcqServer.toStudentAnswer!(multiple, view, { selected: [0, 1] }).selected);
   });
 });

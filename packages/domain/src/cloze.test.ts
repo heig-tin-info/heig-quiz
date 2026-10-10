@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   CLOZE_SENTINEL_CLOSE,
   CLOZE_SENTINEL_OPEN,
+  clozeAnswerFromView,
+  clozeAnswerToView,
   clozeSentinel,
   clozeStudentTemplate,
   describeBlank,
@@ -11,6 +13,7 @@ import {
   matchClozeHole,
   parseBlankBody,
   parseCloze,
+  selectOptionOrder,
   type ClozeBlank,
 } from "./cloze.js";
 
@@ -140,7 +143,7 @@ describe("clozeStudentTemplate", () => {
     expect(JSON.stringify(student)).not.toContain("^N$");
   });
 
-  it("keeps the canonical option ids while shuffling the display order (D4)", () => {
+  it("names each option by its displayed position, shuffled or not (ADR-097)", () => {
     const plain = clozeStudentTemplate(parse, 7, "item-1", false).blanks[3];
     const shuffled = clozeStudentTemplate(parse, 7, "item-1", true).blanks[3];
     expect(plain).toEqual({
@@ -154,10 +157,12 @@ describe("clozeStudentTemplate", () => {
         { id: 3, label: "pascal" },
       ],
     });
-    expect(shuffled).not.toEqual(plain);
-    expect(shuffled?.kind === "select" && [...shuffled.options].sort((a, b) => a.id - b.id)).toEqual(
-      plain?.kind === "select" ? plain.options : null,
-    );
+    if (shuffled?.kind !== "select") throw new Error("blank 3 is a dropdown");
+    expect(shuffled.options.map((option) => option.id)).toEqual([0, 1, 2, 3]);
+    const labels = ["newton", "joule", "watt", "pascal"];
+    const order = selectOptionOrder({ index: 3, options: labels }, 7, "item-1", true);
+    expect(order).not.toEqual([0, 1, 2, 3]);
+    expect(shuffled.options.map((option) => option.label)).toEqual(order.map((canonical) => labels[canonical]));
   });
 
   it("is stable for one (seed, itemId) and different for another", () => {
@@ -166,6 +171,51 @@ describe("clozeStudentTemplate", () => {
     const c = clozeStudentTemplate(parse, 7, "item-2", true);
     expect(a).toEqual(b);
     expect(a).not.toEqual(c);
+  });
+});
+
+describe("a dropdown's value in view coordinates (ADR-097)", () => {
+  const parse = parseCloze("{{Paris}} {{=a|b|c|d}} {{#2:0}} {{x|=y|z}}");
+  const seeds = [0, 1, 7, 42, 99, 2024];
+
+  it("round-trips every stored answer, over many views", () => {
+    for (const seed of seeds) {
+      for (const shuffled of [true, false]) {
+        for (const blanks of [
+          ["Paris", "0", "2", "1"],
+          ["paris", "3", null, "2"],
+          [null, null, null, null],
+          ["", "", "", ""],
+          ["x"],
+        ]) {
+          const shown = clozeAnswerToView(parse, blanks, seed, "item-1", shuffled);
+          expect(clozeAnswerFromView(parse, shown, seed, "item-1", shuffled)).toEqual(blanks);
+        }
+      }
+    }
+  });
+
+  it("decodes a position to the option displayed there, and leaves typed blanks alone", () => {
+    for (const seed of seeds) {
+      const select = clozeStudentTemplate(parse, seed, "item-1", true).blanks[1];
+      if (select?.kind !== "select") throw new Error("blank 1 is a dropdown");
+      for (const option of select.options) {
+        const stored = clozeAnswerFromView(parse, ["Paris", String(option.id), "2", null], seed, "item-1", true);
+        expect(stored?.[0]).toBe("Paris");
+        expect(stored?.[2]).toBe("2");
+        expect(["a", "b", "c", "d"][Number(stored?.[1])]).toBe(option.label);
+      }
+    }
+  });
+
+  it("refuses a value that is not a position of the dropdown", () => {
+    for (const value of ["4", "-1", "1.0", "b", "1e0"]) {
+      expect(clozeAnswerFromView(parse, [null, value], 7, "item-1", true)).toBeNull();
+    }
+  });
+
+  it("hands back nothing for a stored value that names no option", () => {
+    expect(clozeAnswerToView(parse, [null, "9", null, "b"], 7, "item-1", true)).toEqual([null, null, null, null]);
   });
 });
 

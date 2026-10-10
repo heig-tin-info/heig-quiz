@@ -11,6 +11,13 @@ import { registerForTests } from "@quiz/registry/server";
 import { fakeShort } from "../../test/fakeType.js";
 import * as service from "./service.js";
 
+/**
+ * The review a breakdown is shown in (ADR-097). The types filtered here name
+ * nothing of the answer by position, so any view does.
+ */
+const filter = (type: string, details: unknown, policy: Parameters<typeof service.filterDetails>[2]) =>
+  service.filterDetails(type, details, policy, { config: null, view: { seed: 7, itemId: "item-1", shuffle: true } });
+
 let restore: () => void;
 beforeAll(() => {
   restore = registerForTests(fakeShort);
@@ -47,7 +54,7 @@ describe("the blind strip of `details` (layer 2, H1)", () => {
   });
 
   it("removes the forbidden keys at every depth, except the expected output of a visible case", () => {
-    expect(service.filterDetails("short", leaky, policy(false))).toEqual({
+    expect(filter("short", leaky, policy(false))).toEqual({
       fraction: 0.5,
       perBlank: [{ index: 0, ok: false, given: "Lyon" }],
       cases: [
@@ -61,7 +68,7 @@ describe("the blind strip of `details` (layer 2, H1)", () => {
   });
 
   it("lets the details through whole when the teacher published the key", () => {
-    expect(service.filterDetails("short", leaky, policy(true))).toEqual(leaky);
+    expect(filter("short", leaky, policy(true))).toEqual(leaky);
   });
 
   it("strips an LLM's reply under every policy, the published key included (ADR-045, ADR-063)", () => {
@@ -71,7 +78,7 @@ describe("the blind strip of `details` (layer 2, H1)", () => {
       ai: { model: "claude-sonnet-5-5", criteria: [{ criterion: "Rubric line", points: 1, maxPoints: 2, comment: "half" }] },
     };
     for (const showKey of [false, true]) {
-      const filtered = service.filterDetails("short", withReply, policy(showKey));
+      const filtered = filter("short", withReply, policy(showKey));
       expect(filtered).not.toHaveProperty("justification");
       expect(filtered).not.toHaveProperty("ai");
       expect(JSON.stringify(filtered)).not.toContain("Rubric line");
@@ -133,7 +140,7 @@ describe("the details filter for `code` (decision D15, deviation W3-5)", () => {
   });
 
   it("strips the hidden case bodies and the name when the policy says so", () => {
-    const filtered = service.filterDetails("code", details, policy());
+    const filtered = filter("code", details, policy());
     const json = JSON.stringify(filtered);
     expect(json).not.toContain("SECRET-EXPECTED");
     expect(json).not.toContain("SECRET-ACTUAL");
@@ -192,7 +199,7 @@ describe("the details filter for `code` (decision D15, deviation W3-5)", () => {
 
   it("keeps the hidden NAMES when `showHiddenCaseNames` is on", () => {
     const named = JSON.stringify(
-      service.filterDetails("code", details, policy({ showHiddenCaseNames: true })),
+      filter("code", details, policy({ showHiddenCaseNames: true })),
     );
     expect(named).toContain("hidden-overflow");
     expect(named).not.toContain("SECRET-EXPECTED");
@@ -200,7 +207,7 @@ describe("the details filter for `code` (decision D15, deviation W3-5)", () => {
 
   it("publishes everything when the teacher published the key", () => {
     const whole = JSON.stringify(
-      service.filterDetails("code", details, policy({ showKey: true })),
+      filter("code", details, policy({ showKey: true })),
     );
     expect(whole).toContain("SECRET-EXPECTED");
   });
