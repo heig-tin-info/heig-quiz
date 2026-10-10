@@ -206,8 +206,10 @@ question's prose never carries it, so the question scenes do not move.
 - **Headings enter one step higher**: `h1` at the page-title step (28 px /
   700 / `-0.02em`), because the page *is* the document and owns its title;
   `h2` 20 (the sheet-title step), `h3` 16 (the section-title step), `h4`
-  and below 14 at 600. The same scale as everywhere else — in a question,
-  `h1` enters at 20 because it sits inside a card. Headings take 32 px above
+  and below 14 at 600. The same scale as everywhere else — in a question
+  (`.md-body`) the headings use the same four steps (28 / 20 / 16 / 14), so
+  `h1` stays distinct from `h2` and from the body; the dense `.md-sm` variant
+  (13 px) steps down one (20 / 16 / 14 / 13). KaTeX renders at 1.2em of its text. Headings take 32 px above
   and 12 below (a heading belongs to what follows it), blocks 16 between
   them instead of 12, a rule 32 above and below.
 - **Everything else is `.md-body` unchanged**: the same tokens in both

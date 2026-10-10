@@ -254,6 +254,19 @@ describe("MarkdownView — content", () => {
     expect(body.querySelector("li")).toHaveClass("md-task");
   });
 
+  it("keeps a task box on the line of its text, in a loose list too", () => {
+    const body = view("- [x] first\n\n- [ ] second");
+    const items = body.querySelectorAll("li");
+    expect(items).toHaveLength(2);
+    for (const li of items) {
+      expect(li).toHaveClass("md-task");
+      // The box is inside the paragraph, inline before the text: no block between them.
+      const box = li.querySelector("input");
+      expect(box?.parentElement?.tagName).toBe("P");
+    }
+    expect(items[0]!.querySelector("p")?.textContent?.trim()).toBe("first");
+  });
+
   it("renders nothing at all for empty source", () => {
     const { container } = renderWithProviders(<MarkdownView source={"   \n  "} />);
     expect(container.querySelector(".md-body")).toBeNull();
