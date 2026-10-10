@@ -2,10 +2,9 @@ import type { ProjectSourceDetail } from "@quiz/contracts";
 
 import { GroupSetPicker } from "../group/GroupSetPicker";
 import { useT } from "../i18n";
-import { FieldError, fieldErrorProps, Segmented, SettingRow, Switch, ToggleChip } from "../ui";
+import { FieldError, fieldErrorProps, Segmented, SettingRow, Switch, ToggleChip, TextInput } from "../ui";
 import { chosenBranches, chosenProtected, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
 import { ProtectedFiles } from "./ProtectedFiles";
-import { TextInput } from "@quiz/ui";
 
 /**
  * A setting that is a count: the row's title names the input, its unit
@@ -44,7 +43,8 @@ function NumberRow({
           max={max}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-           size="sm" className="w-20 text-right tabular-nums"
+          size="sm"
+          className="w-20 text-right tabular-nums"
           {...fieldErrorProps(id, message)}
         />
         <span className="text-[13px] text-fg-muted">{unit}</span>

@@ -642,7 +642,7 @@ function ChoiceRow({
       ) : (
         <TextInput
           id={choiceId(index)}
-          className={cx("min-w-0 flex-1", invalid && "border-danger")}
+          className="min-w-0 flex-1"
           aria-label={`${s.choiceText} ${letter}`}
           aria-invalid={invalid || undefined}
           value={choice.text}
@@ -677,7 +677,8 @@ function ChoiceRow({
 
       <IconButton
         label={`${s.removeChoice} ${letter}`}
-        className="mt-1.25 hover:bg-danger-soft hover:text-danger"
+        danger
+        className="mt-1.25"
         disabled={disabled || !removable}
         onClick={onRemove}
       >

@@ -3,9 +3,8 @@ import { Keyboard } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { useT } from "../i18n";
-import { areaClass, Button, cx, Modal, Segmented, Spinner } from "../ui";
+import { areaClass, Button, cx, Modal, Segmented, Spinner, TextInput } from "../ui";
 import "./formula.css";
-import { TextInput } from "@quiz/ui";
 
 /*
  * The one surface a formula is written on (teacher feedback, round 2: "the Σ
@@ -212,7 +211,7 @@ export function FormulaDialog({
               e.preventDefault();
               submit();
             }}
-             className="w-full font-mono"
+            className="w-full font-mono"
           />
         </div>
 

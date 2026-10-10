@@ -7,9 +7,8 @@ import { imposedConditions, MAX_CONDITION_LENGTH, MAX_CONDITIONS } from "@quiz/d
 import { useCourseConditions } from "../course/parts";
 import { useT, type TFunction } from "../i18n";
 import { ConditionLine, imposedText } from "../student/ConditionsList";
-import { Actions, Badge, Button, Checkbox, Disclosure, type MenuItem, Select } from "../ui";
+import { Actions, Badge, Button, Checkbox, Disclosure, type MenuItem, Select, TextInput } from "../ui";
 import type { ConfigPatch, ConfigView } from "./editTarget";
-import { TextInput } from "@quiz/ui";
 
 /**
  * ADR-079 (F-EVAL-33): the conditions a teacher announces — allowed,
@@ -276,7 +275,8 @@ export function ConditionRow({
         aria-label={`${t("eval.conditions.text")} ${index + 1}`}
         maxLength={MAX_CONDITION_LENGTH}
         disabled={disabled}
-         size="sm" className="min-w-0 flex-1 basis-56"
+        size="sm"
+        className="min-w-0 flex-1 basis-56"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
@@ -317,7 +317,8 @@ function AddCondition({ disabled, onAdd }: { disabled: boolean; onAdd: (conditio
         placeholder={t("eval.conditions.placeholder")}
         maxLength={MAX_CONDITION_LENGTH}
         disabled={disabled}
-         size="sm" className="min-w-0 flex-1 basis-56"
+        size="sm"
+        className="min-w-0 flex-1 basis-56"
         value={text}
         onChange={(e) => setText(e.target.value)}
       />

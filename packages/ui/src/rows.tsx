@@ -7,7 +7,8 @@ import type { ReactNode } from "react";
 
 import { CheckboxField, FieldCell, NumberField } from "./fields.js";
 import { badge, sectionTitle } from "./styles.js";
-import { TextInput, Button } from "./controls.js";
+import { Button, IconButton, TextInput } from "./controls.js";
+import { CloseIcon } from "./icon.js";
 
 /** The list with the row at `index` merged with `patch`; the others untouched. */
 export function patchAt<T>(list: readonly T[], index: number, patch: Partial<T>): T[] {
@@ -85,14 +86,9 @@ export function RemoveRowButton({
   onClick: () => void;
 }): ReactNode {
   return (
-    <Button
-      variant="ghost" size="sm"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      ×
-    </Button>
+    <IconButton danger label={label} disabled={disabled} onClick={onClick}>
+      <CloseIcon />
+    </IconButton>
   );
 }
 

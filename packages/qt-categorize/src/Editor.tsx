@@ -238,7 +238,6 @@ export function CategorizeEditor({
               />
               <Button
                 type="submit"
-                
                 disabled={locked || draft.trim() === ""}
               >
                 {s.addCard}
@@ -355,7 +354,7 @@ function ColumnHeader({
         size="xs"
         label={`${s.removeColumn} ${number}`}
         title={s.removeColumn}
-        className="hover:bg-danger-soft hover:text-danger"
+        danger
         disabled={locked || !removable}
         onClick={onRemove}
       >
@@ -441,7 +440,7 @@ function CardField({
         size="xs"
         label={`${s.removeCard} ${number}`}
         title={s.removeCard}
-        className="hover:bg-danger-soft hover:text-danger"
+        danger
         disabled={locked}
         onClick={onRemove}
       >

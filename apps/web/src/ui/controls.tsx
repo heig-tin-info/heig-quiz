@@ -1,4 +1,4 @@
-import { CalendarRange, Check, ChevronDown, LayoutDashboard, LayoutGrid, List, Loader2, Minus, Search } from "lucide-react";
+import { CalendarRange, Check, LayoutDashboard, LayoutGrid, List, Loader2, Minus, Search } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
@@ -8,7 +8,6 @@ import {
   controlSize,
   cx,
   ErrorText as ErrorTextBase,
-  inputClass,
   inputSize,
   label as fieldLabel,
   Button as ButtonBase,
@@ -101,7 +100,7 @@ export function LinkButton({
  * and players of the question types wear them too, so a field in a question
  * editor is the field of every other form of the app (ADR-094).
  */
-export { areaClass, inputClass, inputSize };
+export { areaClass, TextInput };
 
 /**
  * Label above a control; used by Field, Select and Textarea.
@@ -233,7 +232,7 @@ export function Select({
   const auto = useId();
   const id = props.id ?? auto;
   const control = (
-    <SelectBase {...props} id={id} size={size} {...(width === undefined ? {} : { width })} className={className}>
+    <SelectBase {...props} id={id} size={size} width={width} className={className}>
       {children}
     </SelectBase>
   );

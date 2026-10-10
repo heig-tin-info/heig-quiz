@@ -19,7 +19,7 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { fmt } from "@quiz/core/client";
-import { Button, cx, lockedBlock, PlusIcon, TextInput, TrashIcon } from "@quiz/ui";
+import { Button, cx, IconButton, lockedBlock, PlusIcon, TextInput, TrashIcon } from "@quiz/ui";
 
 import type { CodeLanguage } from "./schema.js";
 
@@ -163,16 +163,15 @@ export function ArgsInput({
               onChange={(e) => onChange(value.map((a, j) => (j === i ? e.target.value : a)))}
               onKeyDown={onKeyDown(i)}
             />
-            <Button
-              // `px-0!`: the sm size sets `px-3`, which would leave the icon 4 px wide.
-              variant="ghost" size="sm" className="w-7 px-0!"
-              aria-label={fmt(s.removeArgument, { n: i + 1 })}
+            <IconButton
+              danger
+              label={fmt(s.removeArgument, { n: i + 1 })}
               title={fmt(s.removeArgument, { n: i + 1 })}
               disabled={disabled}
               onClick={() => remove(i)}
             >
               <TrashIcon />
-            </Button>
+            </IconButton>
           </li>
         ))}
       </ol>
@@ -180,7 +179,8 @@ export function ArgsInput({
         <div>
           <Button
             ref={addButton}
-            variant="ghost" size="sm"
+            variant="ghost"
+            size="sm"
             disabled={disabled}
             onClick={() => insertAfter(-1)}
           >

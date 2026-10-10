@@ -24,8 +24,8 @@ import {
   T,
   TableHead,
   type Tone,
+  TextInput,
 } from "./ui";
-import { TextInput } from "@quiz/ui";
 
 const STATUS_TONE: Record<KioskDevice["status"], Tone> = {
   unnamed: "amber",
@@ -251,7 +251,8 @@ function NameForm({
       }}
     >
       <TextInput
-         size="sm" className="w-36 @2xl:w-56"
+        size="sm"
+        className="w-36 @2xl:w-56"
         aria-label={t("admin.kiosk.name")}
         placeholder={t("admin.kiosk.namePlaceholder")}
         maxLength={KIOSK_LABEL_MAX}

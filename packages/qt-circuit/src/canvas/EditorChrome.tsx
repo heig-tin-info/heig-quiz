@@ -20,7 +20,6 @@ import {
   draftLine,
   fieldError,
   fieldInput,
-  fieldInputInvalid,
   fieldLabel,
   iconButton,
   inspector,
@@ -396,7 +395,7 @@ export function Inspector({
             <span className={fieldLabel}>{s.fieldName}</span>
             <TextInput
               size="sm"
-              className={nameOk ? fieldInput : fieldInputInvalid}
+              className={fieldInput}
               value={nameText}
               spellCheck={false}
               autoComplete="off"
@@ -457,7 +456,7 @@ function ValueField({
         </span>
         <TextInput
           size="sm"
-          className={issue === null ? fieldInput : fieldInputInvalid}
+          className={fieldInput}
           value={component.value}
           spellCheck={false}
           autoComplete="off"

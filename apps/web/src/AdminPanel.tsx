@@ -37,6 +37,7 @@ import {
   Tabs,
   useSortableTable,
   type Column,
+  TextInput,
 } from "./ui";
 import { SystemSection } from "./AdminSystem";
 import { TasksSection } from "./AdminTasks";
@@ -45,7 +46,6 @@ import { KioskSection } from "./AdminKiosk";
 import { UsersSection } from "./AdminUsers";
 import { adminTeachersKey } from "./queryKeys";
 import { useSearchParam } from "./router";
-import { TextInput } from "@quiz/ui";
 
 type SortKey = "email" | "name" | "lastLoginAt" | "courses" | "grantedAt";
 
@@ -301,7 +301,8 @@ function WorkspaceGrant({ id, email, grant }: { id: string; email: string; grant
         inputMode="numeric"
         aria-label={t("admin.workspace.quota", { email })}
         title={t("admin.workspace.quotaHint")}
-         size="sm" className="w-16 text-right tabular-nums"
+        size="sm"
+        className="w-16 text-right tabular-nums"
         value={quota}
         disabled={save.isPending}
         onChange={(e) => setQuota(e.target.value)}

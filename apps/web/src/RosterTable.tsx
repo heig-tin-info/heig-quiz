@@ -39,9 +39,9 @@ import {
   T,
   TableHead,
   useSortableTable,
+  TextInput,
 } from "./ui";
 import { classroomKey } from "./queryKeys";
-import { TextInput } from "@quiz/ui";
 
 function Row({
   classroomId,

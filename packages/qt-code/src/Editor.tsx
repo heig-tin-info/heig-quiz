@@ -535,7 +535,6 @@ function AdvancedFields({
                     },
             })
           }
-          
         >
           <option value="off">{s.numericOff}</option>
           <option value="abs">{s.numericAbs}</option>

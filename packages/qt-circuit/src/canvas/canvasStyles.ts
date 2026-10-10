@@ -86,8 +86,6 @@ export const fieldLabel = "text-[11px] font-medium text-fg-muted";
 /** The classes added to a `TextInput size="sm"` in the inspector (the pill and the scale come from the input). */
 export const fieldInput = "w-full font-mono";
 
-export const fieldInputInvalid = "w-full border-danger font-mono text-danger focus:border-danger focus:ring-danger/20";
-
 export const fieldError = "text-[11px] text-danger";
 
 export const readOnlyValue = "font-mono text-[12px] text-fg-muted";

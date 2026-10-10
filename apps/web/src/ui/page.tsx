@@ -2,8 +2,9 @@ import { PenLine } from "lucide-react";
 import { Fragment, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
-import { buttonClass, card, NotePanel } from "@quiz/ui";
+import { card, NotePanel } from "@quiz/ui";
 
+import { Button } from "./controls";
 import { Fab, type PagePrimary } from "./fab";
 import { Skeleton } from "./feedback";
 import { cx, HelpIcon, LG_PX, PageHelpButton, Tip, useMinWidth, type IconType } from "./layers";
@@ -233,9 +234,9 @@ export function PageHeader({
 
 function PrimaryButton({ icon: Icon, label, onClick, coach }: PagePrimary) {
   return (
-    <button type="button" data-coach={coach} onClick={onClick} className={buttonClass("primary", "md")}>
+    <Button variant="primary" data-coach={coach} onClick={onClick}>
       <Icon /> {label}
-    </button>
+    </Button>
   );
 }
 

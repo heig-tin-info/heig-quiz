@@ -2,9 +2,8 @@ import type { PoolQuestionStats } from "@quiz/contracts";
 import { QUESTION_STATS_MIN_N } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { Spinner, Switch } from "../ui";
+import { Spinner, Switch, TextInput } from "../ui";
 import type { QuestionFilters } from "./filters";
-import { TextInput } from "@quiz/ui";
 
 /**
  * The pool's statistics query as the filter sheet reads it: still loading,
@@ -35,7 +34,8 @@ function Bound({
       step={1}
       min={min}
       aria-label={label}
-       size="sm" className="w-20 text-right tabular-nums"
+      size="sm"
+      className="w-20 text-right tabular-nums"
       value={value ?? ""}
       onChange={(e) => {
         const next = e.target.value === "" ? null : Math.round(Number(e.target.value));

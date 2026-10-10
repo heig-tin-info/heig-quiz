@@ -19,8 +19,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
-import { Button, cx, IconButton, Segmented, useLayer, Z } from "../ui";
-import { TextInput } from "@quiz/ui";
+import { Button, cx, IconButton, Segmented, useLayer, Z, TextInput } from "../ui";
 
 type BlankMode = "any" | "select" | "number" | "regex";
 
@@ -250,7 +249,8 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
                 autoFocus={i === 0}
                 value={answer.text}
                 aria-label={t("md.blank.answer", { n: i + 1 })}
-                 size="sm" className="min-w-0 grow"
+                size="sm"
+                className="min-w-0 grow"
                 onChange={(e) => setAnswer(i, { text: e.target.value })}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -315,7 +315,8 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
             <TextInput
               autoFocus
               value={draft.pattern}
-               size="sm" className="w-full font-mono"
+              size="sm"
+              className="w-full font-mono"
               onChange={(e) => patch({ pattern: e.target.value })}
             />
           </label>
@@ -323,7 +324,8 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
             {t("md.blank.flags")}
             <TextInput
               value={draft.flags}
-               size="sm" className="w-full font-mono"
+              size="sm"
+              className="w-full font-mono"
               onChange={(e) => patch({ flags: e.target.value })}
             />
           </label>
@@ -336,7 +338,8 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
           <TextInput
             inputMode="decimal"
             value={draft.weight}
-             size="sm" className="w-14 text-center tabular-nums"
+            size="sm"
+            className="w-14 text-center tabular-nums"
             onChange={(e) => patch({ weight: e.target.value })}
           />
         </label>
@@ -371,7 +374,8 @@ function NumberField({
         autoFocus={autoFocus}
         inputMode="decimal"
         value={value}
-         size="sm" className="w-full tabular-nums"
+        size="sm"
+        className="w-full tabular-nums"
         onChange={(e) => onChange(e.target.value)}
       />
     </label>

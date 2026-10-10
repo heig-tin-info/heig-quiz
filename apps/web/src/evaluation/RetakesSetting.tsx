@@ -4,9 +4,8 @@ import { retakesOf, type EvaluationSettings, type RetakeSettings } from "@quiz/c
 import { retakeScopeFits, retakeScopeOf, type EvaluationModeName } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { Card, Segmented, SettingRow, Switch } from "../ui";
+import { Card, Segmented, SettingRow, Switch, TextInput } from "../ui";
 import type { ConfigPatch } from "./editTarget";
-import { TextInput } from "@quiz/ui";
 
 /**
  * F-EVAL-15 (ADR-025): several attempts on an exercise.
@@ -100,7 +99,8 @@ export function RetakesSetting({
               max={100}
               placeholder={t("eval.retakes.max.placeholder")}
               disabled={disabled}
-               size="sm" className="w-28 text-right tabular-nums"
+              size="sm"
+              className="w-28 text-right tabular-nums"
               value={max}
               onChange={(e) => setMax(e.target.value)}
               onBlur={commitMax}

@@ -26,11 +26,13 @@ import { explainMatcher } from "./explain.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
 import {
   Button,
+  CloseIcon,
   caption,
   CheckboxField,
   cx,
   FieldCell,
   hint,
+  IconButton,
   IssueList,
   label,
   NumberField,
@@ -697,17 +699,17 @@ export function ShortEditor({
                   )}
                   <IssueList issues={issuesAt(issues, "matchers", index)} />
                 </div>
-                <Button
-                  size="sm"
-                  className="mt-6 w-7 px-0! text-fg-muted! hover:text-danger!"
-                  aria-label={`${s.removeMatcher} ${index + 1}`}
+                <IconButton
+                  danger
+                  label={`${s.removeMatcher} ${index + 1}`}
+                  className="mt-6"
                   // A graded question keeps one accepted answer; a poll may
                   // have none (an opinion poll, `keylessConfigSchema`).
                   disabled={disabled || config.matchers.length <= (ungraded ? 0 : 1)}
                   onClick={() => setMatchers(removeAt(config.matchers, index))}
                 >
-                  ×
-                </Button>
+                  <CloseIcon />
+                </IconButton>
               </li>
             );
           })}

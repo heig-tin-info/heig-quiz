@@ -88,27 +88,62 @@ export function Button({
   return <button type={type} {...props} className={buttonClass(variant, size, className)} />;
 }
 
-const ICON_BUTTON =
-  "inline-flex shrink-0 items-center justify-center rounded-full text-fg-faint transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-40";
-
-/** The two disc sizes of an icon button, which stays outside the control scale (ADR-094). */
-export const iconButtonClass = {
+/** The three disc sizes of an icon button, which stays outside the control scale (ADR-094). */
+const ICON_SIZE = {
   /** 24 px: the bin of a card or a column. */
-  xs: cx(ICON_BUTTON, "size-6"),
+  xs: "size-6",
   /** 28 px: the bin and the `+` of a row. */
-  sm: cx(ICON_BUTTON, "size-7"),
+  sm: "size-7 [&_svg]:size-3.5",
+  /** 32 px: a header or a toolbar. */
+  md: "size-8 [&_svg]:size-4",
 } as const;
 
-/** An icon-only disc. The accessible name is `label` (a tooltip is the caller's, `Tip` or `title`); the icon is its child. */
+export type IconButtonSize = keyof typeof ICON_SIZE;
+
+/**
+ * The round ghost disc of an icon button or an icon link. Under a coarse
+ * pointer its hit area is 44 px (`touch-hit`). `active` is the pressed chip
+ * (a view toggle), `danger` the tint of a removal; they exclude each other.
+ */
+export function iconButtonClass(size: IconButtonSize, tone: "neutral" | "danger" | "active" = "neutral"): string {
+  return cx(
+    "touch-hit inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-150 disabled:pointer-events-none disabled:opacity-40",
+    ICON_SIZE[size],
+    tone === "active"
+      ? "bg-accent-soft text-accent"
+      : tone === "danger"
+        ? "text-fg-faint hover:bg-danger-soft hover:text-danger"
+        : "text-fg-faint hover:bg-surface-2 hover:text-fg",
+  );
+}
+
+/**
+ * An icon-only disc. The accessible name is `label` (a tooltip is the
+ * caller's, `Tip` or `title`); the icon is its child.
+ */
 export function IconButton({
   label,
   size = "sm",
+  danger,
+  active,
   className,
   type = "button",
   ...props
 }: Omit<ComponentPropsWithRef<"button">, "aria-label"> & {
   label: string;
-  size?: keyof typeof iconButtonClass | undefined;
+  size?: IconButtonSize | undefined;
+  /** The tint of a removal. */
+  danger?: boolean | undefined;
+  /** Pressed state (a view toggle, a filter): the accent chip, and `aria-pressed`. */
+  active?: boolean | undefined;
 }): ReactNode {
-  return <button type={type} aria-label={label} {...props} className={cx(iconButtonClass[size], className)} />;
+  return (
+    <button
+      type={type}
+      {...props}
+      aria-label={label}
+      aria-pressed={active ?? props["aria-pressed"]}
+      className={cx(iconButtonClass(size, active ? "active" : danger ? "danger" : "neutral"), className)}
+    />
+  );
 }

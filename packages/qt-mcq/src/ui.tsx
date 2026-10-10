@@ -208,4 +208,3 @@ export function Tip({
     </span>
   );
 }
-

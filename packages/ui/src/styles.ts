@@ -110,7 +110,7 @@ export type ControlSize = keyof typeof controlSize;
  * both compose instead of fighting. The radius is a token, never a literal.
  */
 const fieldChrome =
-  "border border-line-strong bg-surface text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50 disabled:hover:border-line-strong";
+  "border border-line-strong bg-surface text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50 disabled:hover:border-line-strong aria-invalid:border-danger aria-invalid:hover:border-danger aria-invalid:focus:border-danger aria-invalid:focus:ring-danger/20";
 
 /** A one-line field: the chrome and the pill. Pair it with an {@link inputSize}. */
 export const inputClass = `rounded-control ${fieldChrome}`;

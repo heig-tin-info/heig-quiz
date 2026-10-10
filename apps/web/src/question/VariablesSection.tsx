@@ -18,10 +18,9 @@ import { HelpIcon } from "../help";
 import { useT, type TFunction } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { questionInstancesKey, solutionKey } from "../queryKeys";
-import { Alert, Button, Card, cx, ErrorText, Field, IconButton, Select, Skeleton, T, TableHead } from "../ui";
+import { Alert, Button, Card, cx, ErrorText, Field, IconButton, Select, Skeleton, T, TableHead, TextInput } from "../ui";
 import { issueMessage } from "./issues";
 import { PlayedQuestion } from "./PreviewedQuestion";
-import { TextInput } from "@quiz/ui";
 
 type Row = ParametersDraft["rows"][number];
 
@@ -270,7 +269,7 @@ export function VariablesSection({
                       autoComplete="off"
                       aria-label={t("param.nameOf", { n: index + 1 })}
                       aria-invalid={said.length > 0 || undefined}
-                       className="w-full font-mono text-[13px]"
+                      className="w-full font-mono text-[13px]"
                       value={row.name}
                       disabled={disabled}
                       onChange={(e) => patchRow(index, { name: e.target.value.trim() })}
@@ -290,7 +289,7 @@ export function VariablesSection({
                       autoComplete="off"
                       aria-label={t("param.exprOf", { n: index + 1 })}
                       aria-invalid={said.length > 0 || undefined}
-                       className="col-span-2 w-full font-mono text-[13px] sm:col-span-1"
+                      className="col-span-2 w-full font-mono text-[13px] sm:col-span-1"
                       value={row.expr}
                       disabled={disabled}
                       onChange={(e) => patchRow(index, { expr: e.target.value })}

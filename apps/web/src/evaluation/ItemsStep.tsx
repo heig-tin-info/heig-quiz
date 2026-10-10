@@ -54,6 +54,7 @@ import {
   PANE_GAP,
   SectionHeading,
   Tip,
+  TextInput,
 } from "../ui";
 import { BonusLabel } from "../BonusLabel";
 import { ConceptNames } from "../concepts/refs";
@@ -64,7 +65,6 @@ import { useTargetRefresh } from "./editTarget";
 import { IntroBand, IntroEditor } from "./ItemIntro";
 import { ItemPreview, type ItemPane } from "./ItemPreview";
 import { useConfirm } from "../confirm";
-import { TextInput } from "@quiz/ui";
 
 /** The rows drag up and down only. */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
@@ -158,7 +158,8 @@ function PointsField({
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
-         size="sm" className="w-16 text-right tabular-nums"
+        size="sm"
+        className="w-16 text-right tabular-nums"
       />
       <span className="text-xs text-fg-faint">{t("eval.questions.pointsShort")}</span>
     </span>

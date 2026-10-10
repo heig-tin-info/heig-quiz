@@ -495,7 +495,6 @@ export function ProgramAdvancedFields({
             disabled={disabled}
             value={config.action}
             onChange={(e) => patch({ action: e.target.value === "check" ? "check" : "run" })}
-            
           >
             <option value="run">{s.actionRun}</option>
             <option value="check">{s.actionCheck}</option>

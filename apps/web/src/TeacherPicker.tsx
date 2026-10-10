@@ -5,8 +5,7 @@ import type { TeacherCandidate, TeacherCandidateQuery, TeacherCandidates, Teache
 
 import { api } from "./api";
 import { useT } from "./i18n";
-import { ComboboxList, ComboboxOption, cx, ErrorText, FieldLabel, Initials, useCombobox } from "./ui";
-import { TextInput } from "@quiz/ui";
+import { ComboboxList, ComboboxOption, cx, ErrorText, FieldLabel, Initials, useCombobox, TextInput } from "./ui";
 
 /**
  * A colleague picked by name among the teachers a place does not seat yet
@@ -149,7 +148,7 @@ export function TeacherPicker({
             onText(e.target.value);
             setOpen(true);
           }}
-           className="w-full"
+          className="w-full"
         />
 
         {open && !disabled ? (

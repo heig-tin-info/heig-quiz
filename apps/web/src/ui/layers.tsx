@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, u
 import type { ComponentProps, ComponentType, ReactNode, RefCallback, RefObject } from "react";
 import { createPortal } from "react-dom";
 
-import { cx, useMediaQuery } from "@quiz/ui";
+import { cx, IconButton as IconButtonBase, iconButtonClass, useMediaQuery, type IconButtonSize } from "@quiz/ui";
 
 import { useI18n, useT } from "../i18n";
 
@@ -578,16 +578,6 @@ export function PageHelpButton({ topic }: { topic: string }) {
 }
 
 /**
- * The round ghost disc of an icon button and an icon link. Drawn at 28 or
- * 32 px; under a coarse pointer its hit area is 44 px (`touch-hit`).
- */
-const iconDisc = (size: "sm" | "md") =>
-  cx(
-    "touch-hit inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-150",
-    size === "sm" ? "size-7 [&_svg]:size-3.5" : "size-8 [&_svg]:size-4",
-  );
-
-/**
  * {@link IconButton}'s disc as a link to a page OUTSIDE the app, in a new
  * tab (a repository on GitHub, M3-14h): an address one may also copy or
  * open with a modified click, which a button is not. The label is its
@@ -603,7 +593,7 @@ export function IconLink({ label, href, children }: { label: string; href: strin
         rel="noreferrer"
         aria-label={label}
         onClick={(e) => e.stopPropagation()}
-        className={cx(iconDisc("md"), "text-fg-faint hover:bg-surface-2 hover:text-fg")}
+        className={iconButtonClass("md")}
       >
         {children}
       </a>
@@ -611,21 +601,19 @@ export function IconLink({ label, href, children }: { label: string; href: strin
   );
 }
 
-/** Icon-only round button on the shared Tip tooltip (label = accessible name too). */
+/**
+ * Icon-only round button on the shared Tip tooltip (label = accessible name
+ * too). The disc, its sizes, `danger` and `active` are `@quiz/ui`'s; this adds
+ * the tooltip and the shortcut.
+ */
 export function IconButton({
   label,
-  danger,
-  active,
   shortcut,
   size = "md",
   tipSide,
-  className = "",
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+}: Omit<ComponentProps<typeof IconButtonBase>, "size" | "label"> & {
   label: string;
-  danger?: boolean;
-  /** Pressed state (view toggles, filters): accent-soft chip. */
-  active?: boolean;
   /**
    * The key that does the same thing, as `aria-keyshortcuts` spells it: a
    * letter ("F") or "Space". The tooltip names it in parentheses ("Full
@@ -633,7 +621,7 @@ export function IconButton({
    * from the attribute rather than from the name.
    */
   shortcut?: string;
-  size?: "sm" | "md";
+  size?: IconButtonSize;
   /** Where the tooltip opens (`Tip`'s `side`). */
   tipSide?: TipSide;
 }) {
@@ -641,23 +629,7 @@ export function IconButton({
   const key = shortcut === "Space" ? t("key.space") : shortcut;
   return (
     <Tip label={key ? `${label} (${key})` : label} side={tipSide}>
-      <button
-        type="button"
-        {...props}
-        aria-label={label}
-        aria-keyshortcuts={shortcut}
-        aria-pressed={active ?? props["aria-pressed"]}
-        className={cx(
-          iconDisc(size),
-          "disabled:pointer-events-none disabled:opacity-40",
-          active
-            ? "bg-accent-soft text-accent"
-            : danger
-              ? "text-fg-faint hover:bg-danger-soft hover:text-danger"
-              : "text-fg-faint hover:bg-surface-2 hover:text-fg",
-          className,
-        )}
-      />
+      <IconButtonBase {...props} label={label} size={size} aria-keyshortcuts={shortcut} />
     </Tip>
   );
 }
