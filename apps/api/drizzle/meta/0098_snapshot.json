@@ -1,5 +1,5 @@
 {
-  "id": "e01d0f0d-c9e9-4085-9f42-62b607b4114c",
+  "id": "1d4606ef-cca1-4338-965d-b44df3772500",
   "prevId": "963163fa-a429-4ccf-8e6d-a61ada567bef",
   "version": "7",
   "dialect": "postgresql",
@@ -10902,110 +10902,6 @@
       },
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.concept_sort_runs": {
-      "name": "concept_sort_runs",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "'default'"
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "started_by": {
-          "name": "started_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "heartbeat_at": {
-          "name": "heartbeat_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "finished_at": {
-          "name": "finished_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "groups_done": {
-          "name": "groups_done",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "groups_total": {
-          "name": "groups_total",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "batches_failed": {
-          "name": "batches_failed",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "concept_sort_runs_started_by_users_id_fk": {
-          "name": "concept_sort_runs_started_by_users_id_fk",
-          "tableFrom": "concept_sort_runs",
-          "tableTo": "users",
-          "columnsFrom": [
-            "started_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "concept_sort_runs_singleton": {
-          "name": "concept_sort_runs_singleton",
-          "value": "\"concept_sort_runs\".\"id\" = 'default'"
-        },
-        "concept_sort_runs_finished_ck": {
-          "name": "concept_sort_runs_finished_ck",
-          "value": "(\"concept_sort_runs\".\"state\" = 'running') = (\"concept_sort_runs\".\"finished_at\" is null)"
-        },
-        "concept_sort_runs_error_ck": {
-          "name": "concept_sort_runs_error_ck",
-          "value": "(\"concept_sort_runs\".\"state\" = 'failed') = (\"concept_sort_runs\".\"error\" is not null)"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.concept_tag_sortings": {

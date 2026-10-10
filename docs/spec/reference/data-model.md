@@ -51,8 +51,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 |---|---|---|
 | `concepts` | `status` proposed / validated / merged, `merged_into` nullable, `label_fr` / `label_en`, `qualifier_*`, `description_*`, `key_fr` / `key_en`, `created_by` | One vocabulary for the instance. A `proposed` concept may have one language only. Unique key (`conceptKey` of label and qualifier) per language among the concepts not merged; a merged one points at the final concept |
 | `question_concepts` | `question_id`, `concept_id` | composite pk, index on `concept_id`. The concepts a question exercises, unordered and unweighted; the question's links go with it, a concept in use cannot be deleted (RESTRICT), only merged. "A question's first concept" is the smallest id |
-| `concept_tag_sortings` | `pool_id`, `tag`, `decision` concept / drop, `concept_id`, `drop_reason`, `proposal` jsonb, `decided_by`, `decided_at` | pk (pool, tag). The sorting of the former tags (second addendum), FROZEN: the workflow is retired and `question_tags` / `pool_tags` are dropped (step (d), migration 0098). Nothing writes it; its `drop` rows are the stop list of `concept_dropped`, and `concept_id` restricts the deletion of a concept a decision maps to |
-| `concept_sort_runs` | singleton `id = 'default'`, `state`, `started_by`, `heartbeat_at`, `groups_done` / `groups_total` | The model pass that proposed the sorting; retired, nothing reads or writes it |
+| `concept_tag_sortings` | `pool_id`, `tag`, `decision` (only `drop` remains), `drop_reason`, `decided_by`, `decided_at` | pk (pool, tag). The stop list of `concept_dropped` (ADR-081 third addendum §4): migration 0098 (step (d)) deleted every row that was not a `drop`. Frozen, nothing writes it |
 
 **Evaluation**
 

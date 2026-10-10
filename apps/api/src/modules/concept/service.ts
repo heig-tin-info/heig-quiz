@@ -240,8 +240,7 @@ export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller"
 
 /**
  * Deletes a concept nothing refers to (ADR-081 second addendum §2, third
- * addendum §7): a sorting decision that maps to it, a concept merged into
- * it, or a question linked to it makes the foreign key refuse, answered 409
+ * addendum §7): a concept merged into it, or a question linked to it makes the foreign key refuse, answered 409
  * `concept_in_use`; a missing one is a 404. A concept a question uses is
  * merged, never deleted.
  */
@@ -260,11 +259,10 @@ export async function deleteConcept(db: Db, ctx: Omit<ConceptContext, "caller">,
     });
   } catch (error) {
     if (
-      isForeignKeyViolation(error, "concept_tag_sortings_concept_id_concepts_id_fk") ||
       isForeignKeyViolation(error, "concepts_merged_into_fk") ||
       isRestrictViolation(error, "question_concepts_concept_id_concepts_id_fk")
     ) {
-      throw new DomainError("concept_in_use", 409, "A sorting decision, a merge or a question refers to this concept");
+      throw new DomainError("concept_in_use", 409, "A merge or a question refers to this concept");
     }
     throw error;
   }

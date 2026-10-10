@@ -7,7 +7,7 @@
  * taken, `422 concept_dropped` when, unqualified, it is the key of a tag the
  * admin dropped (`c01`, dropped as a chapter label, is one from the start).
  */
-import { ConceptCreate, type Concept, type ConceptExists, type ConceptRef } from "@quiz/contracts";
+import { ConceptCreate, type Concept, type ConceptExists, type ConceptRef, type TagDropReason } from "@quiz/contracts";
 import { conceptKey, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
 
 import { D, iso, MockPayload, on, refuse } from "./runtime";
@@ -101,7 +101,7 @@ export const unknownConceptIds = (ids: readonly string[]): string[] =>
   ids.filter((id) => !concepts.some((c) => c.id === id && c.status !== "merged"));
 
 /** The tags the admin dropped when sorting them: the stop list (third addendum §4). */
-const DROPPED: { tag: string; reason: "organisational" | "task_kind" | "noise" }[] = [
+const DROPPED: { tag: string; reason: TagDropReason }[] = [
   { tag: "c01", reason: "organisational" },
 ];
 

@@ -1,6 +1,6 @@
 # Administration
 
-The administration screen has one main job: deciding who reaches the teacher interface. It also keeps the platform's shared vocabulary of concepts in order. Everything else, courses, pools and evaluations, is managed by the teachers themselves.
+The administration screen has one main job: deciding who reaches the teacher interface. Everything else, courses, pools and evaluations, is managed by the teachers themselves.
 
 ## Who reaches it
 
@@ -34,9 +34,9 @@ Where the platform has kiosk stations, the **People** tab also lists the school'
 
 ## Concepts
 
-Questions are classified by concepts (*Notions* in the French interface): one vocabulary for the whole platform, each concept with a label in French and in English. Teachers pick concepts in the question editor and may create a new one, which stays **Proposed** until you review it (see [Question pools](pools.md#the-properties-panel)).
+Questions are classified by concepts (*Notions* in the French interface): one vocabulary for the whole platform, each concept with a label in French and in English. Teachers pick concepts in the question editor and may create a new one, which stays **Proposed** (see [Question pools](pools.md#the-properties-panel)).
 
-The free tags that questions carried before concepts existed are gone, and so is the administration's former **Concepts** tab where they were sorted. A label the administrator dropped during that sorting (a chapter, a week, a kind of task, noise) still cannot be created again as a concept, by a teacher or by an assistant connected to the platform.
+The administration has no screen for the vocabulary yet; a curation screen (validate, merge, aliases) is planned. The free tags that questions carried before concepts existed are gone, and so is the administration's former **Concepts** tab where they were sorted. A label the administrator dropped during that sorting (a chapter, a week, a kind of task, noise) still cannot be created again as a concept, by a teacher or by an assistant connected to the platform.
 
 ## What an administrator sees elsewhere
 

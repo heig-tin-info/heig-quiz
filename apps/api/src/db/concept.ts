@@ -17,7 +17,6 @@ import {
   check,
   foreignKey,
   index,
-  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -27,7 +26,10 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { CONCEPT_STATUSES, TAG_DROP_REASONS, TAG_SORTING_DECISIONS } from "@quiz/contracts";
+import { CONCEPT_STATUSES, TAG_DROP_REASONS } from "@quiz/contracts";
+
+/** `concept`: the tag mapped to a concept (no such row remains). `drop`: it is not one (ADR-081 §1). */
+const TAG_SORTING_DECISIONS = ["concept", "drop"] as const;
 
 import { users } from "./auth.js";
 import { pools, questions } from "./pool.js";
@@ -74,19 +76,13 @@ export const concepts = pgTable(
 );
 
 /**
- * The sorting of the existing tags (ADR-081, second addendum 2026-10-08 §1):
- * one row per (pool, tag), so a homonym can go to two concepts. FROZEN since
- * step (d): the sorting workflow is retired and `question_tags` / `pool_tags`
- * are dropped, nothing writes this table. The `drop` rows are still read —
- * they are the stop list of `concept_dropped` (third addendum §4) — and
- * `concept_id` restricts the deletion of a concept a decision maps to.
- *
- * A row is accepted exactly when it has a decision, and is otherwise the
- * model's proposal alone. The checks keep it so: a
- * decision is taken at an instant, a row without one holds a proposal and
- * nobody's decision, a `concept` decision names its concept and no reason, a
- * `drop` names its reason and no concept. `concept_id` restricts deletion:
- * a concept a decision maps to cannot vanish under it.
+ * The stop list of `concept_dropped` (ADR-081, third addendum §4): one row
+ * per (pool, tag) the admin dropped in the former tag sorting, with its
+ * reason. Since step (d) (fourth addendum) the sorting workflow is retired,
+ * migration 0098 kept only the `drop` rows, and nothing writes the table; a
+ * pool's rows go with the pool. The checks of the sorting still hold: a
+ * decision is taken at an instant, and a `drop` names its reason and no
+ * concept (the `concept` shape remains legal but no row has it).
  */
 export const conceptTagSortings = pgTable(
   "concept_tag_sortings",
@@ -120,40 +116,6 @@ export const conceptTagSortings = pgTable(
         and (${t.dropReason} is not null) = (${t.decision} is not distinct from 'drop')`,
     ),
     index("concept_tag_sortings_concept_idx").on(t.conceptId),
-  ],
-);
-
-/**
- * The model pass that proposed the sorting (second addendum §3), RETIRED
- * with the sorting workflow (step (d)): nothing reads or writes it; its table
- * is dropped by a later migration. It had ONE row
- * (`id = 'default'`), the last run. A run is started by claiming the row:
- * one conditional upsert that succeeds only when no run is `running`, or
- * when the running one's heartbeat went silent — its process died — so a
- * crash never blocks the next start. `started_at` is the run's lease: the
- * job carries it and writes only while it is still the row's. The
- * heartbeat moves at every batch.
- */
-export const conceptSortRuns = pgTable(
-  "concept_sort_runs",
-  {
-    id: text("id").primaryKey().default("default"),
-    state: text("state").notNull(),
-    /** The admin who started it, billed for its calls; null once their account is gone. */
-    startedBy: uuid("started_by").references(() => users.id, { onDelete: "set null" }),
-    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
-    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }).notNull(),
-    finishedAt: timestamp("finished_at", { withTimezone: true }),
-    groupsDone: integer("groups_done").notNull().default(0),
-    groupsTotal: integer("groups_total").notNull().default(0),
-    /** Batches whose call failed without stopping the run: their pairs kept what they had. */
-    batchesFailed: integer("batches_failed").notNull().default(0),
-    error: text("error"),
-  },
-  (t) => [
-    check("concept_sort_runs_singleton", sql`${t.id} = 'default'`),
-    check("concept_sort_runs_finished_ck", sql`(${t.state} = 'running') = (${t.finishedAt} is null)`),
-    check("concept_sort_runs_error_ck", sql`(${t.state} = 'failed') = (${t.error} is not null)`),
   ],
 );
 

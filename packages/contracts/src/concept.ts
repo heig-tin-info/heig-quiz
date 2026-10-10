@@ -133,15 +133,6 @@ export const ConceptResolveResponse = z.object({ results: z.array(ConceptResolut
 export type ConceptResolveResponse = z.infer<typeof ConceptResolveResponse>;
 
 // ---------------------------------------------------------------------------
-// The stored decisions of the retired tag sorting (ADR-081, second addendum
-// 2026-10-08; workflow retired by step (d)). Only the `drop` rows are read
-// still: they feed the `concept_dropped` refusal (third addendum §4).
-// ---------------------------------------------------------------------------
-
-/** `concept`: the tag maps to a concept. `drop`: it is not one (ADR-081 §1). */
-export const TAG_SORTING_DECISIONS = ["concept", "drop"] as const;
-
-// ---------------------------------------------------------------------------
 // Links between questions and concepts (ADR-081, third addendum 2026-10-08):
 // a write that names concepts, and a concept as a question shows it.
 // ---------------------------------------------------------------------------

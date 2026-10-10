@@ -61,7 +61,7 @@ export type AuditAction =
    * language). `delete`: the admin deleted a concept nothing referred to,
    * before the cut-over (second addendum §2; `payload.status`,
    * `payload.labels`). `validate`: the admin validated a concept
-   * (`payload.created`; `payload.labels`). The tag sorting's `sort` and
+   * (`payload.labels`). The tag sorting's `sort` and
    * `sort_propose` rows of the past stay in the log, no longer written
    * (ADR-081, step (d)).
    */
