@@ -47,7 +47,7 @@ import { meKey } from "./queryKeys";
  * lost (the pointer leaving the window from the corner, the logo's link
  * navigating, the drawer closing under it).
  *
- * `accessory`: the festive day's costume (ADR-092), slipped into one
+ * `accessory`: the festive day's costume (ADR-093), slipped into one
  * bubble's group so it dances with it. Only the Shell passes one.
  *
  * `className` carries the WIDTH; the height follows. It is a drawn word, so

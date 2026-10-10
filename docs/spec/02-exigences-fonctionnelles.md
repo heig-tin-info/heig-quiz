@@ -310,4 +310,4 @@ A classroom's grades in one table: its released evaluations and projects, and a 
 
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
-| F-UI-01 | **Festive touches.** On ten days of the year (Christmas, Easter, Pi Day, a computing pioneer's birthday…), the frame's logo wears an accessory that opens a short sheet about the day with its Wikipedia article, and an ambient animation of five seconds at most plays once a day on the home and the lists. Never in an attempt, a preview, a projection, a Safe Exam Browser or kiosk session, nor under reduced motion; switched off from the settings, per browser. ADR-092. | P3 | C |
+| F-UI-01 | **Festive touches.** On ten days of the year (Christmas, Easter, Pi Day, a computing pioneer's birthday…), the frame's logo wears an accessory that opens a short sheet about the day with its Wikipedia article, and an ambient animation of five seconds at most plays once a day on the home and the lists. Never in an attempt, a preview, a projection, a Safe Exam Browser or kiosk session, nor under reduced motion; switched off from the settings, per browser. ADR-093. | P3 | C |

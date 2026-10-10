@@ -4,7 +4,7 @@ import type { Accessory } from "./art";
 export const LOGO_BOX = { width: 227.2, height: 60.1 } as const;
 
 /**
- * The logo with an accessory slipped into its bubble's group (ADR-092): so
+ * The logo with an accessory slipped into its bubble's group (ADR-093): so
  * it dances with the bubble, first in the group when it is drawn behind
  * (ears behind the U), last when over it (a hat on the Q).
  */

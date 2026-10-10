@@ -11,7 +11,7 @@ import { FESTIVE, type FestiveId, festiveOn } from "./calendar";
 import { LOGO_BOX } from "./logo";
 
 /**
- * The festive touches (ADR-092): on a few days of the year the logo of the
+ * The festive touches (ADR-093): on a few days of the year the logo of the
  * frame wears an accessory, a short ambient animation plays once a day, and
  * the accessory opens a sheet about the day. Drawn by the Shell only, so an
  * attempt, a preview, a projection, a confined (`seb`, `kiosk`) session and
@@ -53,9 +53,12 @@ function today(): FestiveId | null {
   return festiveOn(new Date());
 }
 
-/** Today's festive day with its drawings, once their chunk is in; null on an ordinary day or when switched off. */
-export function useFestive(): Festive | null {
-  const on = useFestiveEnabled();
+/**
+ * Today's festive day with its drawings, once their chunk is in; null on an
+ * ordinary day, when switched off, or where the caller wants none (`wanted`).
+ */
+export function useFestive(wanted = true): Festive | null {
+  const on = useFestiveEnabled() && wanted;
   const [id] = useState(today);
   const [art, setArt] = useState<FestiveArt | null>(null);
   useEffect(() => {

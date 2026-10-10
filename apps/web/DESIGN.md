@@ -396,7 +396,7 @@ with a keyboard-reachable dismiss button.
 
 ## Festive touches
 
-On ten days of the year (ADR-092, `src/festive/`) the logo of the frame wears
+On ten days of the year (ADR-093, `src/festive/`) the logo of the frame wears
 an accessory and a short ambient animation plays: the third surface allowed
 outside the motion rules above, after the logo's dance and the coach marks,
 and to be kept exceptional.

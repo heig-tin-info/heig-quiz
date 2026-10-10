@@ -3,7 +3,7 @@ import "./festive.css";
 import type { FestiveId } from "./calendar";
 
 /**
- * The drawings of the festive touches (ADR-092), a chunk of its own: fetched
+ * The drawings of the festive touches (ADR-093), a chunk of its own: fetched
  * on a festive day only, so an ordinary day costs nothing but the calendar.
  *
  * An accessory is an SVG fragment in the logo's user units (`LOGO_BOX`),
@@ -130,7 +130,7 @@ export const ART: Record<FestiveId, FestiveArt> = {
   },
   hopper: {
     accessory: { bubble: "z", enter: "land", svg: moth(206, 6.5), box: [195, -6, 22, 16] },
-    ambient: { mode: "drift", sprites: [svg("-11 -11 22 20", moth(0, 0, "currentColor", "var(--fg-faint)"))], motion: "flutter", colors: ["var(--fx-lilac)", "var(--fx-ink)"], count: 8, size: [22, 34] },
+    ambient: { mode: "drift", sprites: [svg("-11 -11 22 20", moth(0, 0, "currentColor", "var(--fx-ink)"))], motion: "flutter", colors: ["var(--fx-lilac)", "var(--fx-ink)"], count: 8, size: [22, 34] },
   },
   xmas: {
     accessory: {

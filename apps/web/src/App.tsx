@@ -723,7 +723,7 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
         <WhatsNewModal entries={whatsNew.entries} onClose={whatsNew.acknowledge} />
       </Suspense>
     ) : null}
-    {/* ADR-092: inside the frame only, on the home and the lists, once What's new has spoken. */}
+    {/* ADR-093: inside the frame only, on the home and the lists, once What's new has spoken. */}
     <FestiveAmbient playable={ROUTES[shown.view].whatsNew === true && !whatsNew.pending} />
     {/* The teacher assistant (ADR-080): inside the frame only, like the coach. */}
     <AssistDock me={me.data} route={shown} teacherUi={teacherUi} navigate={navigate} />

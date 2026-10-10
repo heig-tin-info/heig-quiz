@@ -429,7 +429,7 @@ export function Shell({
   wide?: boolean;
   /**
    * A view a teacher may be projecting (`QUIET` in App.tsx, the live
-   * dashboard): the logo wears no festive costume there (ADR-092).
+   * dashboard): the logo wears no festive costume there (ADR-093).
    */
   quiet?: boolean;
   children: ReactNode;
@@ -499,12 +499,11 @@ export function Shell({
     </button>
   );
   /**
-   * The wordmark as the home link. On a festive day (ADR-092) it wears the
+   * The wordmark as the home link. On a festive day (ADR-093) it wears the
    * day's accessory, and a button laid over the accessory — beside the home
    * button, never inside it — opens the day's sheet.
    */
-  const costume = useFestive();
-  const festive = quiet ? null : costume;
+  const festive = useFestive(!quiet);
   const wordmark = (className: string, id?: string) => (
     <div className="relative shrink-0">
       {brand(<Logo id={id} className={className} accessory={festive?.art.accessory} />)}

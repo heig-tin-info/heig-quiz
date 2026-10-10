@@ -1,5 +1,5 @@
 /**
- * The calendar of the festive touches (ADR-092): which day dresses the logo.
+ * The calendar of the festive touches (ADR-093): which day dresses the logo.
  * It is the only part of them always loaded; the drawings (`art.ts`) are a
  * chunk fetched on a festive day only. Dates are the browser's: a costume is
  * cosmetic, never a deadline (invariant 5 binds deadlines, not decoration).

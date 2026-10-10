@@ -1,4 +1,4 @@
-# ADR-092 — Festive touches: the logo dresses up on a few days of the year
+# ADR-093 — Festive touches: the logo dresses up on a few days of the year
 
 ## Status
 

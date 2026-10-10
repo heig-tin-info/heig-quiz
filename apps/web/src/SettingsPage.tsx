@@ -136,7 +136,7 @@ function RpnCalculatorRow({ me }: { me: Me }) {
   );
 }
 
-/** ADR-092: the festive touches, on or off in this browser (like the theme). */
+/** ADR-093: the festive touches, on or off in this browser (like the theme). */
 function FestiveRow() {
   const t = useT();
   const on = useFestiveEnabled();

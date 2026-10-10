@@ -14,7 +14,7 @@ import { setFestiveEnabled } from "./festive";
 import { LOGO_BOX, withAccessory } from "./logo";
 
 /*
- * The festive touches (ADR-092): drawn by the frame only, so an attempt and
+ * The festive touches (ADR-093): drawn by the frame only, so an attempt and
  * a confined session never get any of it; played once a day; switched off
  * from the settings.
  */
