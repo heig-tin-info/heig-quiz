@@ -4,14 +4,17 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { CourseSummary } from "@quiz/contracts";
 
+import { candidatesFor } from "../test/candidates";
+import { flowingClock } from "../test/clock";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "../test/fixtures";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { CoursePage } from "./CoursePage";
 
 /*
  * The page of one course (F-ORG-12), in tabs: its classrooms, its templates,
- * its linked pools, its members, its conditions (F-ORG-16) and its settings, each tab with ONE primary
- * action in the header (none on Settings). The templates tab is the one
+ * its linked pools, its members and its settings (which hold its catalog of
+ * conditions, F-ORG-16), each tab with ONE primary action in the header
+ * (none on Settings). The templates tab is the one
  * surface that lists them, so it says where the door is when empty.
  */
 
@@ -45,6 +48,8 @@ const CONDITIONS = [
   { id: "k2", kind: "forbidden", text: "Phones", archivedAt: null },
   { id: "k0", kind: "info", text: "Bring your student card", archivedAt: "2026-02-01T08:00:00.000Z" },
 ];
+
+const STAFF_CANDIDATES = "/app/api/courses/c1/staff/candidates";
 
 function world(templates: unknown[] = [TEMPLATE]) {
   return {
@@ -275,6 +280,7 @@ describe("CoursePage", () => {
   });
 
   it("lists the members with their roles, changes one, removes one and adds one by address", async () => {
+    const user = flowingClock();
     const staff: CourseSummary["staff"] = [
       { userId: "u-1", givenName: "Marie", familyName: "Dupont", email: "marie.dupont@heig-vd.ch", avatarUrl: null, role: "owner" },
       { userId: "u-2", givenName: "Paul", familyName: "Martin", email: "paul.martin@heig-vd.ch", avatarUrl: null, role: "assistant" },
@@ -282,6 +288,7 @@ describe("CoursePage", () => {
     const { calls } = mockFetch({
       ...world(),
       [`GET ${COURSES}`]: ok([makeCourseSummary({ staff })]),
+      ...candidatesFor(STAFF_CANDIDATES, "Anne.Roux@heig-vd.ch", []),
       "POST /app/api/courses/c1/staff": ok({ userId: "u-3", role: "assistant" }),
       "PATCH /app/api/courses/c1/staff/u-2": ok({ userId: "u-2", role: "owner" }),
       "DELETE /app/api/courses/c1/staff/u-2": noContent(),
@@ -290,10 +297,10 @@ describe("CoursePage", () => {
 
     expect(await screen.findByText("Marie Dupont")).toBeVisible();
     expect(screen.getByText("paul.martin@heig-vd.ch")).toBeVisible();
-    expect(screen.getByText("Owner")).toBeVisible();
+    expect(screen.getByText("Teacher")).toBeVisible();
     expect(screen.getByText("Assistant")).toBeVisible();
 
-    await userEvent.click(screen.getByRole("button", { name: "Make owner" }));
+    await userEvent.click(screen.getByRole("button", { name: "Make teacher" }));
     await waitFor(() =>
       expect(calls.filter((c) => c.method === "PATCH")).toEqual([
         { url: "/app/api/courses/c1/staff/u-2", method: "PATCH", body: { role: "owner" } },
@@ -309,10 +316,12 @@ describe("CoursePage", () => {
       ]),
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /Add a staff member/ }));
+    await user.click(screen.getByRole("button", { name: /Add a staff member/ }));
     const dialog = await screen.findByRole("dialog", { name: "Add a staff member" });
-    await userEvent.type(within(dialog).getByRole("textbox"), "anne.roux@heig-vd.ch");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    // A typed address nobody was picked from is still sent, as an address.
+    await user.type(within(dialog).getByRole("combobox", { name: "Person" }), "Anne.Roux@heig-vd.ch");
+    expect(await within(dialog).findByText("No teacher matches “Anne.Roux@heig-vd.ch”.")).toBeVisible();
+    await user.click(within(dialog).getByRole("button", { name: "Add" }));
     await waitFor(() =>
       expect(calls.filter((c) => c.method === "POST")).toEqual([
         {
@@ -324,22 +333,53 @@ describe("CoursePage", () => {
     );
   });
 
-  it("adds an owner when the form says so, and words a second seat", async () => {
+  it("adds a teacher picked by name, by account", async () => {
+    const user = flowingClock();
+    const grace = { userId: "t2", email: "grace.hopper@heig-vd.ch", givenName: "Grace", familyName: "Hopper" };
     const { calls } = mockFetch({
       ...world(),
-      "POST /app/api/courses/c1/staff": fail(409, { error: "already_staff", message: "x" }),
+      ...candidatesFor(STAFF_CANDIDATES, "gra", [grace]),
+      "POST /app/api/courses/c1/staff": ok({ userId: "t2", role: "owner" }),
     });
     renderWithProviders(<CoursePage id="c1" tab="members" navigate={vi.fn()} />);
 
-    await userEvent.click(await screen.findByRole("button", { name: /Add a staff member/ }));
+    await user.click(await screen.findByRole("button", { name: /Add a staff member/ }));
     const dialog = await screen.findByRole("dialog", { name: "Add a staff member" });
-    await userEvent.type(within(dialog).getByRole("textbox"), "marie.dupont@heig-vd.ch");
-    await userEvent.click(within(dialog).getByRole("radio", { name: "Owner" }));
-    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
-    expect(await within(dialog).findByText("This person is already on the staff of the course.")).toBeVisible();
-    expect(calls.filter((c) => c.method === "POST").map((c) => c.body)).toEqual([
-      { email: "marie.dupont@heig-vd.ch", role: "owner" },
-    ]);
+    const field = within(dialog).getByRole("combobox", { name: "Person" });
+    // Nothing typed yet: nothing picked, nothing to send.
+    expect(within(dialog).getByRole("button", { name: "Add" })).toBeDisabled();
+    await user.type(field, "gra");
+    await user.click(await screen.findByRole("option", { name: /Grace Hopper/ }));
+    expect(field).toHaveValue("Grace Hopper");
+    expect(within(dialog).getByText("grace.hopper@heig-vd.ch")).toBeVisible();
+    // An assistant unless the form says otherwise.
+    expect(within(dialog).getByRole("radio", { name: "Assistant" })).toBeChecked();
+    await user.click(within(dialog).getByRole("radio", { name: "Teacher" }));
+    await user.click(within(dialog).getByRole("button", { name: "Add" }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === "POST").map((c) => c.body)).toEqual([{ userId: "t2", role: "owner" }]),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a staff member" })).toBeNull());
+  });
+
+  it.each([
+    ["already_staff", "This person is already on the staff of the course."],
+    ["unknown_account", "No account has signed in with this address yet."],
+    ["ambiguous_account", /Several accounts hold this address/],
+  ] as const)("words the refusal %s in the dialog", async (code, message) => {
+    const user = flowingClock();
+    mockFetch({
+      ...world(),
+      ...candidatesFor(STAFF_CANDIDATES, "marie.dupont@heig-vd.ch", []),
+      "POST /app/api/courses/c1/staff": fail(409, { error: code, message: "x" }),
+    });
+    renderWithProviders(<CoursePage id="c1" tab="members" navigate={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: /Add a staff member/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a staff member" });
+    await user.type(within(dialog).getByRole("combobox", { name: "Person" }), "marie.dupont@heig-vd.ch");
+    await user.click(within(dialog).getByRole("button", { name: "Add" }));
+    expect(await within(dialog).findByText(message)).toBeVisible();
   });
 
   it("offers nothing that would leave the course without an owner", async () => {
@@ -399,7 +439,7 @@ describe("CoursePage", () => {
 
       await userEvent.click(await screen.findByRole("button", { name: "Leave the course" }));
       expect(screen.queryByRole("button", { name: "Remove from the staff" })).toBeNull();
-      expect(screen.queryByRole("button", { name: /Make (owner|assistant)/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Make (teacher|assistant)/ })).toBeNull();
       const confirm = await screen.findByRole("dialog", { name: /Leave the staff of/ });
       await userEvent.click(within(confirm).getByRole("button", { name: "Leave the course" }));
       await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "home" }));
@@ -415,7 +455,7 @@ describe("CoursePage", () => {
       expect(await screen.findByRole("button", { name: /Hide for me/ })).toBeVisible();
       expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
       expect(screen.queryByRole("button", { name: /Delete course/ })).toBeNull();
-      expect(screen.getByText(/are its owners' to change/)).toBeVisible();
+      expect(screen.getByText(/are its teachers' to change/)).toBeVisible();
     });
 
     it("reads the catalog of conditions without its controls, and says why (F-ORG-16)", async () => {
@@ -428,7 +468,7 @@ describe("CoursePage", () => {
       expect(screen.queryByRole("button", { name: /Add condition/ })).toBeNull();
       expect(screen.queryByRole("button", { name: /Actions on/ })).toBeNull();
       expect(screen.queryByRole("button", { name: /Show archived/ })).toBeNull();
-      expect(screen.getByText(/The catalog is the course owners' to change/)).toBeVisible();
+      expect(screen.getByText(/The catalog is the course teachers' to change/)).toBeVisible();
     });
   });
 

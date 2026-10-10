@@ -22,8 +22,8 @@ type Caller = Awaited<ReturnType<TestServer["signIn"]>>;
 
 let server: TestServer;
 let restore: () => void;
-let owner: Caller;
-let assistant: Caller;
+let owner: Caller & { email: string };
+let assistant: Caller & { email: string };
 let outsider: Caller;
 let courseId: string;
 let classroomId: string;
@@ -174,6 +174,60 @@ describe("the staff", () => {
     const other = await teacherWithAddress();
     expect((await send("POST", url, owner, { email: other.email, role: "owner" })).statusCode).toBe(201);
     expect(await roleOf(other.id)).toBe("owner");
+  });
+
+  it("offers the teachers off the staff to an owner, by name or address, and nobody else", async () => {
+    const colleague = await teacherWithAddress();
+    const studentEmail = `s-${randomUUID().slice(0, 8)}@heig.test`;
+    const student = await server.signIn("student", studentEmail);
+    const url = (q: string) => `/app/api/courses/${courseId}/staff/candidates?q=${encodeURIComponent(q)}`;
+
+    const refused = await send("GET", url(""), assistant);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().error).toBe("owner_required");
+    expect((await send("GET", url(""), outsider)).statusCode).toBe(404);
+
+    const ids = async (q: string) =>
+      ((await send("GET", url(q), owner)).json() as { userId: string }[]).map((c) => c.userId);
+    // Matched on the address, the current staff and the students left out.
+    expect(await ids(colleague.email.slice(0, 8))).toEqual([colleague.id]);
+    for (const seated of [owner, assistant]) expect(await ids(seated.email)).toEqual([]);
+    expect(await ids(studentEmail)).toEqual([]);
+    // `signIn` names a student "Test student": no name finds one either.
+    expect(await ids("student")).not.toContain(student.id);
+    // A typed `%` is a character, not a wildcard.
+    expect(await ids("%")).toEqual([]);
+    // Ten at most: a picker is searched, not browsed.
+    expect((await ids("")).length).toBeLessThanOrEqual(10);
+  });
+
+  it("adds the account picked (by id), audits its address, and refuses a pick that is not a teacher", async () => {
+    const colleague = await teacherWithAddress();
+    const url = `/app/api/courses/${courseId}/staff`;
+    const added = await send("POST", url, owner, { userId: colleague.id, role: "owner" });
+    expect(added.statusCode).toBe(201);
+    expect(added.json()).toEqual({ userId: colleague.id, role: "owner" });
+    expect(await roleOf(colleague.id)).toBe("owner");
+    expect((await lastAudit("course.staff_add"))?.payload).toMatchObject({
+      userId: colleague.id,
+      email: colleague.email,
+      role: "owner",
+    });
+    const again = await send("POST", url, owner, { userId: colleague.id });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error).toBe("already_staff");
+
+    const student = await server.signIn("student", `s-${randomUUID().slice(0, 8)}@heig.test`);
+    for (const userId of [student.id, randomUUID()]) {
+      const unknown = await send("POST", url, owner, { userId });
+      expect(unknown.statusCode).toBe(409);
+      expect(unknown.json().error).toBe("unknown_account");
+    }
+    expect(await roleOf(student.id)).toBeNull();
+
+    // One of the two, never both, never neither.
+    expect((await send("POST", url, owner, { userId: colleague.id, email: colleague.email })).statusCode).toBe(400);
+    expect((await send("POST", url, owner, { role: "assistant" })).statusCode).toBe(400);
   });
 
   it("changes a role (owners only), audits it, and keeps the last owner", async () => {

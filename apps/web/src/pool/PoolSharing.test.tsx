@@ -2,8 +2,9 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { Pool, PoolCandidate, PoolMembers } from "@quiz/contracts";
+import type { Pool, TeacherCandidate, PoolMembers } from "@quiz/contracts";
 
+import { candidatesFor } from "../test/candidates";
 import { flowingClock } from "../test/clock";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { PoolSharing } from "./PoolSharing";
@@ -28,27 +29,18 @@ const POOL: Pool = {
 const MEMBERS = "/app/api/pools/p1/members";
 const CANDIDATES = "/app/api/pools/p1/candidates";
 
-const grace: PoolCandidate = {
+const grace: TeacherCandidate = {
   userId: "t2",
   email: "grace.hopper@heig-vd.ch",
   givenName: "Grace",
   familyName: "Hopper",
 };
-const linus: PoolCandidate = {
+const linus: TeacherCandidate = {
   userId: "t3",
   email: "linus.t@heig-vd.ch",
   givenName: "Linus",
   familyName: "Torvalds",
 };
-
-/** The picker asks after every keystroke: one stub per prefix of what is typed. */
-function candidatesFor(typed: string, rows: PoolCandidate[]) {
-  const stubs: Record<string, ReturnType<typeof ok>> = {};
-  for (let i = 1; i <= typed.length; i += 1) {
-    stubs[`GET ${CANDIDATES}?q=${encodeURIComponent(typed.slice(0, i))}`] = ok(rows);
-  }
-  return stubs;
-}
 
 const list: PoolMembers = {
   visibility: "shared",
@@ -124,8 +116,7 @@ describe("PoolSharing", () => {
     const user = flowingClock();
     const { calls } = mockFetch({
       [`GET ${MEMBERS}`]: ok(list),
-      [`GET ${CANDIDATES}?q=`]: ok([grace, linus]),
-      ...candidatesFor("gra", [grace]),
+      ...candidatesFor(CANDIDATES, "gra", [grace]),
       "POST /app/api/pools/p1/members": { status: 201, body: list },
     });
     renderWithProviders(<PoolSharing pool={POOL} />);
@@ -152,8 +143,7 @@ describe("PoolSharing", () => {
     const user = flowingClock();
     const { calls } = mockFetch({
       [`GET ${MEMBERS}`]: ok(list),
-      [`GET ${CANDIDATES}?q=`]: ok([grace, linus]),
-      ...candidatesFor("Nobody@heig-vd.ch", []),
+      ...candidatesFor(CANDIDATES, "Nobody@heig-vd.ch", []),
       "POST /app/api/pools/p1/members": fail(404, {
         error: "teacher_not_found",
         message: "No teacher account",

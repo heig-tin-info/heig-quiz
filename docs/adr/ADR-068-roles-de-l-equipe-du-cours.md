@@ -8,6 +8,10 @@ Amended 2026-10-09 (product owner, [ADR-079](ADR-079-conditions-de-l-evaluation.
 §5): §3 only — the writes to a course's catalog of conditions (F-ORG-16) join
 the owner-only routes; reading it stays every member's.
 
+Amended 2026-10-10 (product owner): labels only — the `owner` role reads "Teacher"
+("Enseignant") on screen; the stored role, the routes and the error codes
+(`owner_required`, `last_owner`) are unchanged.
+
 Scope: what a member of a course's staff may do on the course, its classrooms and
 its evaluations; who reaches them is unchanged (`staffAccess`, invariant 6).
 

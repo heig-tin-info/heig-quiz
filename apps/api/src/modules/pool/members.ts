@@ -1,26 +1,17 @@
 /** The people of a pool (F-POOL-05): members, candidates, audience, succession. */
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, notInArray, or, sql } from "drizzle-orm";
 
-import type { PoolCandidates, PoolMember, PoolMembers, PoolRole } from "@quiz/contracts";
+import type { TeacherCandidates, PoolMember, PoolMembers, PoolRole } from "@quiz/contracts";
 import { displayName } from "@quiz/domain";
 
-import { likeContains, qualified, type Db } from "../../db/client.js";
-import { STAFF_ROLES, poolMembers, pools, userEmails, users } from "../../db/schema.js";
+import { qualified, type Db } from "../../db/client.js";
+import { poolMembers, pools, userEmails, users } from "../../db/schema.js";
 import { audit } from "../../audit.js";
+import { isStaff, searchTeachers } from "../../directory.js";
 import { notify, notifyMany } from "../notifications/service.js";
 import { accessRevoked, userTopic } from "../realtime/bus.js";
 import { poolPeopleChanged } from "./events.js";
 import { type PoolRow } from "./shared.js";
-
-/**
- * The accounts that may hold a pool seat, and so hear of a pool: the stored
- * role, as `decideRole` (`roles.ts`) computed it, is staff. A deliberate
- * demotion deletes the seats (`vacateSeats`), but a LOGIN that stores
- * `student` keeps them (ADR-013, rule 5), and a demoted owner nobody could
- * inherit from keeps `pools.owner_id`: such an account holds a claim, never
- * the rights nor the news.
- */
-const isStaff = inArray(users.role, [...STAFF_ROLES]);
 
 /**
  * The people of a pool: the `pools.owner_id` account FIRST, then the members
@@ -114,48 +105,21 @@ export async function findTeacherByEmail(db: Db, email: string) {
   return row ?? null;
 }
 
-/** The account behind a pick of the invite list — a teacher or an admin, or nobody. */
-export async function findTeacherById(db: Db, userId: string) {
-  const [row] = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      givenName: users.givenName,
-      familyName: users.familyName,
-      role: users.role,
-    })
-    .from(users)
-    .where(and(eq(users.id, userId), isStaff))
-    .limit(1);
-  return row ?? null;
-}
-
 /**
  * The teachers who hold no seat on the pool yet, matched on name or address:
  * what the picker of the share sheet offers. Ten rows at most — the picker
  * is searched, not browsed — and none when the school is fully seated.
  */
-export async function listCandidates(db: Db, pool: PoolRow, q: string): Promise<PoolCandidates> {
-  const needle = likeContains(q.trim().toLowerCase());
-  const rows = await db
-    .select({
-      userId: users.id,
-      email: users.email,
-      givenName: users.givenName,
-      familyName: users.familyName,
-    })
-    .from(users)
-    .where(
-      and(
-        isStaff,
-        sql`${users.id} <> ${pool.ownerId}`,
-        sql`NOT EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${pool.id} AND ${qualified(poolMembers.userId)} = ${qualified(users.id)})`,
-        sql`lower(${users.givenName} || ' ' || ${users.familyName} || ' ' || ${users.email}) LIKE ${needle}`,
-      ),
-    )
-    .orderBy(asc(users.familyName), asc(users.givenName), asc(users.email))
-    .limit(10);
-  return rows;
+export async function listCandidates(db: Db, pool: PoolRow, q: string): Promise<TeacherCandidates> {
+  return searchTeachers(
+    db,
+    q,
+    ne(users.id, pool.ownerId),
+    notInArray(
+      users.id,
+      db.select({ userId: poolMembers.userId }).from(poolMembers).where(eq(poolMembers.poolId, pool.id)),
+    ),
+  );
 }
 
 /** Already a member, or the owner: the invitation is a 409, not a second row. */

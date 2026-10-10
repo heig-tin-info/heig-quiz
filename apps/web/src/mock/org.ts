@@ -593,16 +593,50 @@ on("POST", "/app/api/courses/:id/unhide", (m) => {
   courseOr404(m.groups!.id!).hidden = false;
   return undefined;
 });
+/**
+ * `TeacherCandidates`: the teachers who signed in, minus those `seated`
+ * holds, matched on name or address — the pool's share sheet and the
+ * course's "Add a person" both ask it.
+ */
+export const teacherCandidates = (seated: (t: (typeof teachers)[number]) => boolean, url: URL) => {
+  const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+  return teachers
+    .filter((t) => t.signedUp && !seated(t))
+    .filter((t) => `${t.givenName ?? ""} ${t.familyName ?? ""} ${t.email}`.toLowerCase().includes(q))
+    .slice(0, 10)
+    .map((t) => ({
+      userId: t.id,
+      email: t.email,
+      givenName: t.givenName ?? "",
+      familyName: t.familyName ?? "",
+    }));
+};
+on("GET", "/app/api/courses/:id/staff/candidates", (m, _body, url) => {
+  const c = courseOr404(m.groups!.id!);
+  return teacherCandidates((t) => c.staff.some((s) => s.userId === t.id || s.email === t.email), url);
+});
 on("POST", "/app/api/courses/:id/staff", (m, body) => {
   const c = courseOr404(m.groups!.id!);
-  const email = String(body.email);
   const role: CourseRole = body.role === "owner" ? "owner" : "assistant";
+  // Picked in the list (`userId`), or spelled out as an address.
+  const picked = body.userId === undefined ? undefined : teachers.find((t) => t.id === body.userId && t.signedUp);
+  if (body.userId !== undefined && !picked) {
+    throw new MockPayload(409, { error: "unknown_account", message: "No teacher has this account" });
+  }
+  const email = picked?.email ?? String(body.email).trim().toLowerCase();
   if (c.staff.some((s) => s.email === email)) {
     throw new MockPayload(409, { error: "already_staff", message: "This account is already on the staff" });
   }
   const [prenom = "New", nom = "Member"] = email.split("@")[0]!.split(".");
-  const userId = nextId("u");
-  c.staff.push({ userId, givenName: prenom, familyName: nom, email, avatarUrl: null, role });
+  const userId = picked?.id ?? nextId("u");
+  c.staff.push({
+    userId,
+    givenName: picked?.givenName ?? prenom,
+    familyName: picked?.familyName ?? nom,
+    email,
+    avatarUrl: null,
+    role,
+  });
   return { userId, role };
 });
 

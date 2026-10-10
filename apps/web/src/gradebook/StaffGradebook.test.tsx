@@ -241,7 +241,7 @@ describe("the writes of a cell", () => {
     expect(await screen.findByText("The points are above the maximum.")).toBeInTheDocument();
     await choose(await cell("Alice Dupont", "Test 1"), "Mark absent (a1.0)");
     // The first PUT of Alice is a 409 in the real API; here the refusal is the owner's.
-    expect(await screen.findByText("Only an owner of the course may replace a released grade.")).toBeInTheDocument();
+    expect(await screen.findByText("Only a teacher of the course may replace a released grade.")).toBeInTheDocument();
   });
 
   it("sets a score: points out of a maximum, a comment, and no submit while the score is above its maximum", async () => {

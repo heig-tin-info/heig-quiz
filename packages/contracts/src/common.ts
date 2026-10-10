@@ -102,3 +102,45 @@ export const IntList = z
 export const BoolFlag = z
   .union([z.string(), z.boolean()])
   .transform((v) => v === true || v === "1" || v === "true");
+
+// --- The staff directory: teachers picked by name (F-POOL-05, ADR-068) ---
+
+/**
+ * `GET /pools/:id/candidates?q=` and `GET /courses/:id/staff/candidates?q=`:
+ * a few letters of a name or an address.
+ */
+export const TeacherCandidateQuery = z.object({ q: z.string().trim().max(100).default("") });
+export type TeacherCandidateQuery = z.infer<typeof TeacherCandidateQuery>;
+
+/**
+ * A teacher or admin account that holds no seat on the pool or the course
+ * yet: what the picker of a share sheet or of the course's staff offers.
+ */
+export const TeacherCandidate = PersonRef;
+export type TeacherCandidate = z.infer<typeof TeacherCandidate>;
+
+export const TeacherCandidates = z.array(TeacherCandidate);
+export type TeacherCandidates = z.infer<typeof TeacherCandidates>;
+
+/**
+ * Whom a seat goes to: the account picked among the candidates (`userId`),
+ * or one named by an address the picker does not list — one of the two,
+ * never both.
+ */
+const teacherChoiceShape = {
+  userId: z.uuid().optional(),
+  email: z.string().trim().toLowerCase().email().max(200).optional(),
+};
+const oneOfTheTwo = (b: { userId?: unknown; email?: unknown }) =>
+  (b.userId === undefined) !== (b.email === undefined);
+
+/** A teacher choice with more fields beside it (the role of the seat). */
+export function teacherChoiceWith<S extends z.ZodRawShape>(shape: S) {
+  return z.object({ ...teacherChoiceShape, ...shape }).refine(oneOfTheTwo, {
+    message: "Either userId or email",
+  });
+}
+
+/** Whom a seat goes to, nothing else beside it. */
+export const TeacherChoice = teacherChoiceWith({});
+export type TeacherChoice = z.infer<typeof TeacherChoice>;

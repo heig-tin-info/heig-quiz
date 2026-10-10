@@ -11,7 +11,7 @@ import { z } from "zod";
 import { QUESTION_TYPE_IDS } from "@quiz/core/contract";
 import { POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
 
-import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf } from "./common.js";
+import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf, teacherChoiceWith } from "./common.js";
 import { ConceptRef } from "./concept.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { QuestionReview, ReviewPill } from "./review.js";
@@ -143,31 +143,12 @@ export const PoolMembers = z.object({
 });
 export type PoolMembers = z.infer<typeof PoolMembers>;
 
-/** `GET /pools/:id/candidates?q=`: a few letters of a name or an address. */
-export const PoolCandidateQuery = z.object({ q: z.string().trim().max(100).default("") });
-export type PoolCandidateQuery = z.infer<typeof PoolCandidateQuery>;
-
-/** A teacher account that holds no seat on the pool yet: what the invite picker offers. */
-export const PoolCandidate = PersonRef;
-export type PoolCandidate = z.infer<typeof PoolCandidate>;
-
-export const PoolCandidates = z.array(PoolCandidate);
-export type PoolCandidates = z.infer<typeof PoolCandidates>;
-
 /**
  * `POST /pools/:id/members`: the account picked among the candidates
  * (`userId`), or named by an address the picker does not list — one of the
  * two, never both. Either way it must be a teacher.
  */
-export const PoolMemberInvite = z
-  .object({
-    userId: z.uuid().optional(),
-    email: z.string().trim().toLowerCase().email().max(200).optional(),
-    role: PoolRole.default("reader"),
-  })
-  .refine((b) => (b.userId === undefined) !== (b.email === undefined), {
-    message: "Either userId or email",
-  });
+export const PoolMemberInvite = teacherChoiceWith({ role: PoolRole.default("reader") });
 export type PoolMemberInvite = z.infer<typeof PoolMemberInvite>;
 
 /** `PATCH /pools/:id/members/:userId`. */

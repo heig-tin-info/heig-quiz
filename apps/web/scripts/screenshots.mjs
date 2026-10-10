@@ -174,10 +174,14 @@ const scenes = [
   { name: "course-page-not-found", role: "teacher", path: "/courses/nope" },
   { name: "course-page-error", role: "teacher", path: "/courses/c1?fail=1", settle: 2500 },
   { name: "course-page-loading", role: "teacher", path: "/courses/c1?slow=1", settle: 300 },
-  // ADR-068: the Add-staff dialog with its role, and the same course read by
+  // ADR-068: the Add-staff dialog with its role and its picker's list of
+  // colleagues open, and the same course read by
   // an assistant (`?assistant=1`): no owner action in the headers, only
   // leaving on their own row, and Settings down to their own navigation.
-  { name: "course-add-staff", role: "teacher", path: "/courses/c1/members", fold: true, act: (p) => p.getByRole("button", { name: /add a staff member|ajouter une personne/i }).first().click() },
+  { name: "course-add-staff", role: "teacher", path: "/courses/c1/members", fold: true, act: async (p) => {
+    await p.getByRole("button", { name: /add a staff member|ajouter une personne/i }).first().click();
+    await p.getByRole("dialog").getByRole("combobox").pressSequentially("a");
+  } },
   { name: "course-page-assistant", role: "teacher", path: "/courses/c1?assistant=1" },
   { name: "course-page-assistant-pools", role: "teacher", path: "/courses/c1/pools?assistant=1" },
   { name: "course-page-assistant-members", role: "teacher", path: "/courses/c1/members?assistant=1" },

@@ -73,6 +73,7 @@ import {
   ME_TEACHER,
   courseOr404,
   rooms,
+  teacherCandidates,
   teachers,
 } from "./org";
 import {
@@ -2283,21 +2284,11 @@ const memberList = (pool: MockPool) => ({
 });
 
 on("GET", "/app/api/pools/:id/members", (m) => memberList(poolOr404(m.groups!.id!)));
-/** `PoolCandidates`: the teachers with an account, not yet seated, by name or address. */
+/** `TeacherCandidates`: the teachers with an account, not yet seated, by name or address. */
 on("GET", "/app/api/pools/:id/candidates", (m, _body, url) => {
   const pool = poolOr404(m.groups!.id!);
-  const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
   const seated = new Set([pool.ownerId, ...(poolMembers[pool.id] ?? []).map((mem) => mem.userId)]);
-  return teachers
-    .filter((t) => t.signedUp && !seated.has(t.id))
-    .filter((t) => `${t.givenName ?? ""} ${t.familyName ?? ""} ${t.email}`.toLowerCase().includes(q))
-    .slice(0, 10)
-    .map((t) => ({
-      userId: t.id,
-      email: t.email,
-      givenName: t.givenName ?? "",
-      familyName: t.familyName ?? "",
-    }));
+  return teacherCandidates((t) => seated.has(t.id), url);
 });
 on("POST", "/app/api/pools/:id/members", (m, body) => {
   const pool = poolOr404(m.groups!.id!);

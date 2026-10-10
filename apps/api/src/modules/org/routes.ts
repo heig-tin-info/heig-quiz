@@ -32,6 +32,7 @@ import {
   StaffAdd,
   StaffParam,
   StaffPatch,
+  TeacherCandidateQuery,
   type CourseDetail,
   type CourseRole,
   type StudentClassroom,
@@ -42,7 +43,6 @@ import { actorOf, tracer } from "../../audit.js";
 import { issueImpersonationLink } from "../../auth/impersonation.js";
 import type { AppConfig } from "../../config.js";
 import { publish } from "../../events.js";
-import { ownersOf } from "../../identity.js";
 import { syncRoleOfUser } from "../../roles.js";
 import {
   accessibleClassroom,
@@ -331,27 +331,31 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   // --- Course staff ---
 
   /**
-   * A new seat, an assistant unless the body says `owner` (ADR-068). An
-   * account that already holds one is `409 already_staff`: its role is
-   * changed by the PATCH below, never by adding it again.
+   * The teachers and admins an owner may still seat, by name or address
+   * (the picker of "Add a person"): the same owner step as the POST below.
+   */
+  app.get(
+    "/app/api/courses/:id/staff/candidates",
+    { preHandler: requireTeacher },
+    teacher({ ...onCourse("owner"), query: TeacherCandidateQuery }, async ({ query, scope: course }) =>
+      service.staffCandidates(app.db, course.id, query.q),
+    ),
+  );
+
+  /**
+   * A new seat, an assistant unless the body says `owner` (ADR-068). The
+   * account is the one picked among the candidates (`userId`, a teacher or
+   * an admin) or the one behind a typed address. An account that already
+   * holds a seat is `409 already_staff`: its role is changed by the PATCH
+   * below, never by adding it again.
    */
   app.post(
     "/app/api/courses/:id/staff",
     { preHandler: requireTeacher },
     teacher({ ...onCourse("owner"), body: StaffAdd }, async ({ req, reply, body, scope: course }) => {
-      // A seat is held by an ACCOUNT, not by an address: the identity of a
-      // person is a set of addresses, so the invitee must have signed in once.
-      const owners = await ownersOf(app.db, body.email);
-      if (owners.length !== 1) {
-        return reply.code(409).send({
-          error: owners.length === 0 ? "unknown_account" : "ambiguous_account",
-          message:
-            owners.length === 0
-              ? "No account has signed in with this address yet"
-              : "Several accounts hold this address",
-        });
-      }
-      const userId = owners[0]!;
+      const who = await service.resolveStaffInvitee(app.db, body);
+      if ("error" in who) return reply.code(409).send(who);
+      const { id: userId, email } = who;
       if (!(await service.addStaff(app.db, course.id, userId, body.role))) {
         return reply
           .code(409)
@@ -362,7 +366,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       await syncRoleOfUser(app.db, config, userId);
       await trace(req, "course.staff_add", "course", course.id, {
         userId,
-        email: body.email,
+        email,
         role: body.role,
       });
       publish("courses", [`teacher:${userId}`, `course:${course.id}`]);

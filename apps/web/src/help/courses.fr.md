@@ -29,14 +29,18 @@ dates** la garde dans la liste jusqu'à ce que vous l'archiviez.
 
 ## Équipe
 
-**Ajouter une personne** prend l'adresse d'un compte qui s'est déjà connecté
-au moins une fois, et un rôle. Tous les membres de l'équipe accèdent à toutes
-les classes du cours. Un **propriétaire** le dirige en plus : l'équipe et ses
+**Ajouter une personne** retrouve un collègue par son nom parmi les
+enseignants qui se sont déjà connectés (une adresse tapée en entier marche
+aussi), et prend un rôle. Tous les membres de l'équipe accèdent à toutes les
+classes du cours. Un **enseignant** le dirige en plus : l'équipe et ses
 rôles, le nom et la suppression du cours, ses banques liées, la création et
 la suppression des classes, et la publication des résultats. Un **assistant**
-fait le reste. Sous **Membres**, un propriétaire change un rôle ou retire
+fait le reste. Sous **Membres**, un enseignant change un rôle ou retire
 quelqu'un depuis sa ligne, et chacun quitte le cours depuis la sienne. Un
-cours garde au moins un propriétaire.
+cours garde au moins un enseignant.
+
+Le **catalogue de conditions**, dans les **Réglages** du cours, garde les
+conditions que vous annoncez souvent ; un enseignant le gère, un assistant le lit et coche ses entrées dans une évaluation.
 
 ## Banques de ce cours
 

@@ -201,7 +201,8 @@ function Course({
  * The staff of the course, one row each, with its role (ADR-068) and what may
  * be done to the seat (`useCourseActions`: the owners change roles and
  * remove, an assistant leaves). Every member reaches the whole course (D04);
- * the line under the list says what an owner does more, and how one is added.
+ * the line under the list says what a teacher does more, and how one is
+ * added. The card spans the content column, like every other tab's.
  */
 function CourseMembers({
   course,
@@ -212,7 +213,7 @@ function CourseMembers({
 }) {
   const t = useT();
   return (
-    <div className="max-w-3xl space-y-3">
+    <div className="space-y-3">
       <Card className="divide-y divide-line px-4">
         {course.staff.map((person) => (
           <div key={person.userId} className="py-3">

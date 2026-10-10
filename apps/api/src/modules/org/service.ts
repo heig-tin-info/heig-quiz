@@ -11,7 +11,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
 import type {
@@ -21,12 +21,15 @@ import type {
   EnrollmentPatch,
   StudentClassroom,
   StudentClassroomPage,
+  TeacherCandidates,
 } from "@quiz/contracts";
 import { effectiveCourseRole, staffChangeRefusal, type StaffChange } from "@quiz/domain";
 
 import type { AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
+import { findTeacherById, searchTeachers } from "../../directory.js";
+import { ownersOf } from "../../identity.js";
 import {
   avatars,
   classrooms,
@@ -42,6 +45,38 @@ import { purgeProjectReceipts } from "../github/service.js";
 import { releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "../project/service.js";
 import { accessRevoked } from "../realtime/bus.js";
 import { rosterRefusal } from "./errors.js";
+
+/** The account a new staff seat goes to, or the 409 body that refuses it. */
+export type Seatable = { id: string; email: string } | { error: "unknown_account" | "ambiguous_account"; message: string };
+
+/**
+ * A pick is a staff account (`findTeacherById`): anyone else is refused as
+ * unknown, so the route tells nothing about who exists beyond the directory.
+ */
+async function byPick(db: Db, userId: string): Promise<Seatable> {
+  return (await findTeacherById(db, userId)) ?? { error: "unknown_account", message: "No teacher has this account" };
+}
+
+/**
+ * A seat is held by an ACCOUNT, not by an address: the identity of a person
+ * is a set of addresses (GH-11), so the one behind a typed address must have
+ * signed in once, and be the only account holding it.
+ */
+async function byAddress(db: Db, email: string): Promise<Seatable> {
+  const owners = await ownersOf(db, email);
+  if (owners.length === 1) return { id: owners[0]!, email };
+  return owners.length === 0
+    ? { error: "unknown_account", message: "No account has signed in with this address yet" }
+    : { error: "ambiguous_account", message: "Several accounts hold this address" };
+}
+
+/** Whom a staff invitation names: the picked account, else the one behind the typed address. */
+export async function resolveStaffInvitee(
+  db: Db,
+  body: { userId?: string | undefined; email?: string | undefined },
+): Promise<Seatable> {
+  return body.userId !== undefined ? byPick(db, body.userId) : byAddress(db, body.email!);
+}
 
 export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
 export {
@@ -289,6 +324,21 @@ export async function setCourseHidden(
 }
 
 // --- Course staff -----------------------------------------------------------
+
+/**
+ * The teachers and admins who hold no seat on the course's staff yet,
+ * matched on name or address: what the picker of "Add a person" offers.
+ */
+export async function staffCandidates(db: Db, courseId: string, q: string): Promise<TeacherCandidates> {
+  return searchTeachers(
+    db,
+    q,
+    notInArray(
+      users.id,
+      db.select({ userId: courseStaff.userId }).from(courseStaff).where(eq(courseStaff.courseId, courseId)),
+    ),
+  );
+}
 
 /**
  * Gives an account a seat on the staff, with its role. True when the seat

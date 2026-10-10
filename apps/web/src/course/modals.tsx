@@ -10,7 +10,7 @@ import {
   type StaffAdd,
 } from "@quiz/contracts";
 
-import { api } from "../api";
+import { api, wordedRefusal } from "../api";
 import { newPeriodDraft, PeriodFields, periodBody, periodInvalid } from "../ClassroomPeriod";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
@@ -18,8 +18,9 @@ import { invalidateHint } from "../realtime/hints";
 import { IconField } from "../pool/IconField";
 import { PoolIconPicker } from "../pool/PoolIconPicker";
 import { DEFAULT_COURSE_ICON } from "../pool/poolIcons";
+import { TeacherPicker, useTeacherPick } from "../TeacherPicker";
 import { Field, FieldLabel, FormDialog, FormError, Segmented } from "../ui";
-import { coursesKey } from "../queryKeys";
+import { courseStaffCandidatesKey, coursesKey } from "../queryKeys";
 import { CourseIcon } from "./CourseIcon";
 
 /**
@@ -220,26 +221,40 @@ export function NewClassroomModal({ course, onClose }: { course: CourseSummary; 
   );
 }
 
+/** The refusals of `POST /courses/:id/staff`, worded for the dialog. */
+const STAFF_REFUSALS = {
+  unknown_account: "courses.staffUnknown",
+  ambiguous_account: "courses.staffAmbiguous",
+  already_staff: "error.alreadyStaff",
+} as const;
+
 /**
- * A colleague named by the address they sign in with, and their role
- * (ADR-068): an assistant unless the owner says otherwise — the weaker role
- * is the one a slip of the hand can give.
+ * A colleague picked by name among the teachers not on the staff yet
+ * (`TeacherPicker`), and their role (ADR-068): an assistant unless the
+ * owner says otherwise — the weaker role is the one a slip of the hand can
+ * give. An address nobody was picked from may still be typed and sent as
+ * such, as in a pool's share sheet: the API resolves it over every address
+ * of an account (GH-11).
  */
 export function AddStaffModal({ course, onClose }: { course: CourseSummary; onClose: () => void }) {
   const t = useT();
   const qc = useQueryClient();
-  const [email, setEmail] = useState("");
+  const who = useTeacherPick();
   const [role, setRole] = useState<CourseRole>("assistant");
   const add = useMutation({
     mutationFn: () => {
-      const body: StaffAdd = { email: email.trim(), role };
+      const body: StaffAdd = { ...who.choice!, role };
       return api(`/app/api/courses/${course.id}/staff`, {
         method: "POST",
         body: JSON.stringify(body),
       });
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: coursesKey });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: coursesKey }),
+        // The newcomer leaves the list of who may still be added.
+        qc.invalidateQueries({ queryKey: courseStaffCandidatesKey(course.id) }),
+      ]);
       onClose();
     },
   });
@@ -250,19 +265,18 @@ export function AddStaffModal({ course, onClose }: { course: CourseSummary; onCl
       onSubmit={() => add.mutate()}
       submitLabel={t("import.add")}
       submitting={add.isPending}
-      canSubmit={email.trim() !== ""}
+      canSubmit={who.choice !== null}
       dense
-      error={<FormError error={add.error} fallback={t("courses.staffUnknown")} />}
+      error={<FormError error={add.error} describe={(error) => wordedRefusal(error, STAFF_REFUSALS, t)} />}
     >
-      <Field
-        label={t("courses.staffEmail")}
-        required
-        type="email"
-        fullWidth
+      <TeacherPicker
+        candidatesKey={courseStaffCandidatesKey(course.id)}
+        candidatesUrl={`/app/api/courses/${course.id}/staff/candidates`}
+        label={t("courses.staffPerson")}
+        everyoneSeated={t("courses.staffEveryoneSeated")}
+        disabled={add.isPending}
         autoFocus
-        placeholder="prenom.nom@heig-vd.ch"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
+        {...who.picker}
       />
       <fieldset className="space-y-1.5">
         <legend className="mb-1.5">

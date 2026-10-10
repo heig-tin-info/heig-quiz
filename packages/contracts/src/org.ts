@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { COURSE_ROLES } from "@quiz/domain";
 
-import { PersonRef } from "./common.js";
+import { PersonRef, teacherChoiceWith } from "./common.js";
 import { ConditionKind, EvaluationCondition } from "./evaluation.js";
 import { PoolColor, PoolIcon } from "./pool.js";
 
@@ -149,11 +149,12 @@ type CourseRef = z.infer<typeof CourseRef>;
 export const CourseRole = z.enum(COURSE_ROLES);
 export type CourseRole = z.infer<typeof CourseRole>;
 
-/** `POST /courses/:id/staff`: an account named by an address, an assistant unless said otherwise. */
-export const StaffAdd = z.object({
-  email: z.email(),
-  role: CourseRole.default("assistant"),
-});
+/**
+ * `POST /courses/:id/staff`: the account picked among the candidates
+ * (`userId`, a teacher or an admin), or named by an address the picker does
+ * not list — one of the two, never both. An assistant unless said otherwise.
+ */
+export const StaffAdd = teacherChoiceWith({ role: CourseRole.default("assistant") });
 export type StaffAdd = z.infer<typeof StaffAdd>;
 
 /** `PATCH /courses/:id/staff/:uid`. */

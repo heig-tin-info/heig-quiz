@@ -70,7 +70,6 @@ export {
 export {
   listMembers,
   findTeacherByEmail,
-  findTeacherById,
   listCandidates,
   isMemberOrOwner,
   addMember,

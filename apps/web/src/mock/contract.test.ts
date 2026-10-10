@@ -110,7 +110,7 @@ import {
   ProjectSourceDetail,
   ProjectSourceRepo,
   ProjectSummary,
-  PoolCandidates,
+  TeacherCandidates,
   PoolCategories,
   PoolDetail,
   PoolMembers,
@@ -309,6 +309,11 @@ const each = (route: string, path: string, schema: Schema): Case => ({
 const CHECKED: Case[] = [
   one("/app/api/courses/:id", `/app/api/courses/${courses[0]!.id}`, CourseDetail),
   each("/app/api/courses/:id/conditions", `/app/api/courses/${courses[0]!.id}/conditions`, CourseCondition),
+  one(
+    "/app/api/courses/:id/staff/candidates",
+    `/app/api/courses/${courses[0]!.id}/staff/candidates?q=a`,
+    TeacherCandidates,
+  ),
   each(
     "/app/api/courses/:id/templates",
     `/app/api/courses/${courses[0]!.id}/templates`,
@@ -343,7 +348,7 @@ const CHECKED: Case[] = [
     one("/app/api/pools/:id", `/app/api/pools/${p.id}`, PoolDetail),
     one("/app/api/pools/:id/categories", `/app/api/pools/${p.id}/categories`, PoolCategories),
     one("/app/api/pools/:id/members", `/app/api/pools/${p.id}/members`, PoolMembers),
-    one("/app/api/pools/:id/candidates", `/app/api/pools/${p.id}/candidates?q=a`, PoolCandidates),
+    one("/app/api/pools/:id/candidates", `/app/api/pools/${p.id}/candidates?q=a`, TeacherCandidates),
     one("/app/api/pools/:id/questions", `/app/api/pools/${p.id}/questions`, QuestionPage),
     one("/app/api/pools/:id/question-stats", `/app/api/pools/${p.id}/question-stats`, PoolQuestionStats),
   ]),

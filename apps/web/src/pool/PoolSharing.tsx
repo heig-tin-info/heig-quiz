@@ -5,8 +5,9 @@ import { useState } from "react";
 import {
   PoolVisibility,
   type Pool,
-  type PoolCandidate,
+  type TeacherCandidate,
   type PoolMember,
+  type PoolMemberInvite,
   type PoolMembers,
   type PoolRole,
 } from "@quiz/contracts";
@@ -15,7 +16,7 @@ import { api, ApiError, apiErrorMessage, isNotFound, refusedWith } from "../api"
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useErrorToast } from "../notify";
-import { TeacherPicker, nameOf } from "./TeacherPicker";
+import { TeacherPicker, useTeacherPick } from "../TeacherPicker";
 import {
   Button,
   Card,
@@ -47,9 +48,6 @@ import { poolCandidatesKey, poolKey, poolMembersKey, poolsKey } from "../queryKe
  * API resolves it over every address of an account (GH-11), which is how an
  * alias reaches a teacher the list shows under another spelling.
  */
-
-/** Enough of an address to be worth sending: the API does the real check. */
-const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const VISIBILITY_ICON = { private: Lock, shared: Users, public: Globe } as const;
 
@@ -148,10 +146,9 @@ export function PoolSharing({ pool }: { pool: Pool }) {
   const qc = useQueryClient();
   const toastError = useErrorToast();
   const key = poolMembersKey(pool.id);
-  const [text, setText] = useState("");
-  const [selected, setSelected] = useState<PoolCandidate | null>(null);
+  const who = useTeacherPick();
   const [role, setRole] = useState<PoolRole>("reader");
-  const canInvite = selected !== null || LOOKS_LIKE_EMAIL.test(text.trim());
+  const canInvite = who.choice !== null;
 
   const members = useQuery<PoolMembers>({
     queryKey: key,
@@ -175,18 +172,12 @@ export function PoolSharing({ pool }: { pool: Pool }) {
   });
 
   const invite = useMutation({
-    mutationFn: () =>
-      api(`/app/api/pools/${pool.id}/members`, {
-        method: "POST",
-        body: JSON.stringify(
-          selected
-            ? { userId: selected.userId, role }
-            : { email: text.trim().toLowerCase(), role },
-        ),
-      }),
+    mutationFn: () => {
+      const body: PoolMemberInvite = { ...who.choice!, role };
+      return api(`/app/api/pools/${pool.id}/members`, { method: "POST", body: JSON.stringify(body) });
+    },
     onSuccess: async () => {
-      setText("");
-      setSelected(null);
+      who.reset();
       await Promise.all([
         qc.invalidateQueries({ queryKey: key }),
         qc.invalidateQueries({ queryKey: poolsKey }),
@@ -271,19 +262,12 @@ export function PoolSharing({ pool }: { pool: Pool }) {
             }}
           >
             <TeacherPicker
-              poolId={pool.id}
-              text={text}
-              selected={selected}
+              candidatesKey={poolCandidatesKey(pool.id)}
+              candidatesUrl={`/app/api/pools/${pool.id}/candidates`}
+              label={t("share.teacher")}
+              everyoneSeated={t("share.everyoneSeated")}
               disabled={invite.isPending}
-              onText={(value) => {
-                setText(value);
-                // The text no longer names the pick.
-                setSelected(null);
-              }}
-              onPick={(candidate) => {
-                setSelected(candidate);
-                setText(nameOf(candidate));
-              }}
+              {...who.picker}
             />
             <Select
               width="w-33"
