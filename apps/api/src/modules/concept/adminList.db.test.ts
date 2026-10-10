@@ -9,9 +9,9 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AdminConceptList } from "@quiz/contracts";
-import { qualifiedConceptKey } from "@quiz/domain";
 
 import { concepts, pools, questionConcepts, questions } from "../../db/schema.js";
+import { seedConcept, type ConceptSide } from "../../test/concepts.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import * as poolService from "../pool/service.js";
 
@@ -24,32 +24,8 @@ let student: Who;
 let poolId: string;
 const db = () => server.app.db;
 
-async function concept(
-  fr: [string, string?] | null,
-  en: [string, string?] | null = null,
-  status: "proposed" | "validated" | "merged" = "validated",
-  mergedInto: string | null = null,
-): Promise<string> {
-  const id = randomUUID();
-  const side = (s: [string, string?] | null) => ({ label: s?.[0] ?? null, qualifier: s?.[1] ?? "" });
-  const f = side(fr);
-  const e = side(en);
-  await db()
-    .insert(concepts)
-    .values({
-      id,
-      status,
-      mergedInto,
-      createdBy: teacher.id,
-      labelFr: f.label,
-      qualifierFr: f.qualifier,
-      keyFr: f.label === null ? null : qualifiedConceptKey(f.label, f.qualifier),
-      labelEn: e.label,
-      qualifierEn: e.qualifier,
-      keyEn: e.label === null ? null : qualifiedConceptKey(e.label, e.qualifier),
-    });
-  return id;
-}
+const concept = (fr: ConceptSide, en: ConceptSide = null, status: "proposed" | "validated" | "merged" = "validated", mergedInto: string | null = null) =>
+  seedConcept(db(), teacher.id, fr, en, status, mergedInto);
 
 async function link(conceptId: string, name: string, deleted = false) {
   const q = await poolService.createQuestion(db(), {

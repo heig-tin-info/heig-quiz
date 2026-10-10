@@ -66,7 +66,7 @@ const ARRAY = vocabulary("c0c0c0c0-0000-4000-8000-000000000002", "Array", "Table
 const ref = (c: typeof POINTER) => ({ id: c.id, label: c.labels.en, qualifier: "", status: c.status });
 const POINTER_REF = ref(POINTER);
 
-const STAFF_CANDIDATES ="/app/api/courses/c1/staff/candidates";
+const STAFF_CANDIDATES = "/app/api/courses/c1/staff/candidates";
 
 function world(templates: unknown[] = [TEMPLATE]) {
   return {
@@ -75,11 +75,10 @@ function world(templates: unknown[] = [TEMPLATE]) {
         classrooms: [makeClassroomSummary({ id: "r1", name: "PRG1-2026", students: 24 })],
       }),
     ]),
-    "GET /app/api/courses/c1": ok(DETAIL),
+    "GET /app/api/courses/c1": ok({ ...DETAIL, concepts: [POINTER_REF] }),
     "GET /app/api/courses/c1/templates": ok(templates),
     "GET /app/api/pools": ok([]),
     "GET /app/api/courses/c1/conditions": ok(CONDITIONS),
-    "GET /app/api/courses/c1/concepts": ok({ concepts: [POINTER_REF] }),
     "GET /app/api/concepts": ok({ concepts: [POINTER, ARRAY] }),
   };
 }

@@ -4,11 +4,14 @@
  * module calls these and reads the links by join. Staff only: nothing here
  * reaches a student payload (invariants 4 and 6).
  *
- * A write share-locks every concept it names or drops, in id order
- * (`lockConcepts`), so a merge in flight finishes before the write reads the
- * links and one that starts after it sees the loser merged: the link a merge
- * rewrites is never re-created on the loser. A `proposed` concept may be
- * listed; a merged or unknown one is a 422 `concept_not_found`.
+ * A write share-locks every concept it names or links, in id order, then
+ * reads the links again (`lockLinkSet`): a merge in flight finishes first, one
+ * that starts after sees the write's locks, and the set the write diffs
+ * against is the one under the locks. Two writes racing on one course
+ * serialize on the rows: the later insert finds the link already there
+ * (`on conflict do nothing`) and the last to commit wins. A `proposed`
+ * concept may be listed; a merged or unknown one is a 422
+ * `concept_not_found`.
  */
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -17,8 +20,7 @@ import type { ConceptLang, ConceptRef } from "@quiz/contracts";
 import { audit, type AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { concepts, courseConcepts } from "../../db/schema.js";
-import { DomainError } from "../http.js";
-import { byLabel, lockConcepts } from "./links.js";
+import { byLabel, lockLinkSet } from "./links.js";
 import { toConceptRef } from "./row.js";
 
 /** The concepts of a course, labelled in `lang`, by label then id. */
@@ -45,14 +47,11 @@ export async function setCourseConcepts(
 ): Promise<void> {
   const ids = [...new Set(conceptIds)];
   await db.transaction(async (tx) => {
-    const current = (
-      await tx.select({ id: courseConcepts.conceptId }).from(courseConcepts).where(eq(courseConcepts.courseId, courseId))
-    ).map((r) => r.id);
-    const live = await lockConcepts(tx, [...new Set([...ids, ...current])]);
-    const bad = ids.filter((id) => !live.has(id));
-    if (bad.length > 0) {
-      throw new DomainError("concept_not_found", 422, "A concept is missing or merged", { ids: bad }); // `ConceptNotFound`
-    }
+    const current = await lockLinkSet(tx, ids, async () =>
+      (await tx.select({ id: courseConcepts.conceptId }).from(courseConcepts).where(eq(courseConcepts.courseId, courseId))).map(
+        (r) => r.id,
+      ),
+    );
     const wanted = new Set(ids);
     const present = new Set(current);
     const removed = current.filter((id) => !wanted.has(id)).sort();
@@ -65,7 +64,9 @@ export async function setCourseConcepts(
     if (added.length > 0) {
       await tx
         .insert(courseConcepts)
-        .values(added.map((conceptId) => ({ courseId, conceptId, addedBy: ctx.userId, addedAt: ctx.now })));
+        .values(added.map((conceptId) => ({ courseId, conceptId, addedBy: ctx.userId, addedAt: ctx.now })))
+        // Two owners saving at once: the second finds the link the first wrote.
+        .onConflictDoNothing();
     }
     if (added.length === 0 && removed.length === 0) return;
     await audit(tx, {

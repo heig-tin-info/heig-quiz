@@ -22,8 +22,9 @@ questions, the pool's filter and Notions tab, the bulk bar, move and copy,
 polls, the drill, the MCP tools, the teacher assistant and the seed read and
 write concepts. Step (d), dropping `question_tags` and `pool_tags`, is
 implemented by the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired). The links to
-courses (§8), relations and the model's help in the picker (#557) are not
-implemented; the curation screen and the aliases are (fifth addendum).
+courses (§8) are implemented by the sixth addendum (step 7a); relations and the
+model's help in the picker (#557) are not; the curation screen and the aliases
+are (fifth addendum).
 
 Scope: what a question is classified by, who may create and change that
 classification, how it is stored, and what a course declares. It does not
@@ -515,10 +516,10 @@ decided plan, not yet built; only 7a is.
    language.
 2. **Who, and where.** Staff only, never in a student payload (invariants 4
    and 6): the course is loaded under `staffAccess` (404 otherwise); every
-   member reads (`GET /courses/:id/concepts`, and `concepts` in
-   `GET /courses/:id`, hence the MCP `get_course` and the teacher
-   assistant's reads), and only an owner replaces the set
-   (`PUT /courses/:id/concepts` `{ conceptIds }`, 403 `owner_required`
+   member reads it as `concepts` in `GET /courses/:id` (hence the MCP
+   `get_course` and the teacher assistant's reads; there is no route of its
+   own), and only an owner replaces the set
+   (`PUT /courses/:id/concepts` `{ conceptIds }`, which answers the new list; 403 `owner_required`
    before the body is read; [ADR-068](ADR-068-roles-de-l-equipe-du-cours.md)
    §3). The web app shows it as a "Concepts" ("Notions") section of the
    course's Settings, editable by an owner, plain text for an assistant.
@@ -528,10 +529,13 @@ decided plan, not yet built; only 7a is.
    owned by the `concept` module (`concept/courseConcepts.ts`), like
    `question_concepts`: the `org` module sets it through the concept service
    and reads it by join; no other module writes it. A write replaces the
-   whole set in one transaction and share-locks every concept it names or
-   drops (`lockConcepts`, in id order), so a merge in flight finishes first
-   and a merged or unknown id is a 422 `concept_not_found`, as for a
-   question; a link already there keeps its author and date. It is audited
+   whole set in one transaction. It share-locks every concept it names or links
+   (`lockLinkSet`, in id order, shared with `setQuestionConcepts`) and then
+   reads the links again, so a merge in flight finishes first, a merge that
+   committed meanwhile is seen, and a merged or unknown id is a 422
+   `concept_not_found`, as for a question. Two saves racing on a course
+   serialize on its rows (the insert ignores a link the other wrote) and the
+   last to commit wins. A link already there keeps its author and date. It is audited
    as `course.concepts_update` (`added`, `removed`), and not at all when
    nothing changed. A concept a course lists cannot be deleted: the
    foreign key refuses, `DELETE /admin/concepts/:id` answers 409
@@ -553,8 +557,8 @@ decided plan, not yet built; only 7a is.
    choices plus the labels and qualifiers of every live concept (no
    descriptions, no creators); at most five existing concepts and two new
    labels come back, and a new label goes through the explicit create form.
-   Hidden when no model is configured; a row in
-   [open question 43](../spec/06-questions-ouvertes.md).
+   Hidden when no model is configured. Building it adds a sentence to
+   [open question 43](../spec/06-questions-ouvertes.md) (the data sent).
 7. **Mastery (9a, 9b, not built).** The teacher's mastery shows the course's
    concepts with coverage, "no evidence" rows and an "outside the course"
    bucket, with no student by concept matrix in v1. The student's mastery

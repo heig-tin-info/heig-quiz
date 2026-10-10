@@ -67,7 +67,7 @@ entity (404 when it fails, invariant 6), and a role that says what the caller ma
    | `POST /courses/:id/classrooms`, `DELETE /classrooms/:id` | the course's classrooms |
    | `POST /evaluations/:id/release`, `/unrelease`, `/publish-correction`; `POST /projects/:id/release` (F-PROJ-14) | what reaches the students as final |
    | `POST /courses/:id/conditions`, `PATCH /courses/:id/conditions/:cid`, `PUT /courses/:id/conditions/order`, `POST /courses/:id/conditions/:cid/archive\|unarchive` (amended 2026-10-09) | the course's catalog of conditions, a course setting (F-ORG-16, ADR-079 §5); its list stays every member's |
-   | `PUT /courses/:id/concepts` (amended 2026-10-10) | the concepts the course declares, a course setting (F-ORG-12, ADR-081 sixth addendum); `GET` stays every member's, and no student route returns it |
+   | `PUT /courses/:id/concepts` (amended 2026-10-10) | the concepts the course declares, a course setting (F-ORG-12, ADR-081 sixth addendum); reading it (in `GET /courses/:id`) stays every member's, and no student route returns it |
 
    Everything else stays open to every member: hiding the course for oneself, templates,
    a classroom's settings (rename, archive, GitHub, journal, drill), the roster, the

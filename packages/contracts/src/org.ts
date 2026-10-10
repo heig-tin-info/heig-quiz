@@ -206,7 +206,7 @@ export const CourseDetail = z.object({
 export type CourseDetail = z.infer<typeof CourseDetail>;
 
 /**
- * `GET /courses/:id/concepts` and the answer of `PUT`: the concepts a course
+ * The answer of `PUT /courses/:id/concepts` (and the `concepts` of `GET /courses/:id`): the concepts a course
  * declares (ADR-081 §8, F-ORG-12), labelled in the reader's language, by
  * label then id. Staff only: never part of a student payload.
  */

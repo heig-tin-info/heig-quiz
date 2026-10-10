@@ -258,19 +258,13 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   // --- The concepts a course declares (F-ORG-12, ADR-081 §8) ---
 
   /**
-   * Every member of the staff reads the list; only an owner replaces it
-   * (ADR-068): the course under `staffAccess` (404), then the owner role
-   * (403 `owner_required`), then the body. Staff only, in every response: no
-   * student route returns it. The write is `concept/service.ts`, which owns
-   * `course_concepts` and locks the concepts against a merge.
+   * Every member of the staff reads the list in `GET /courses/:id`; only an
+   * owner replaces it, here (ADR-068): the course under `staffAccess` (404),
+   * then the owner role (403 `owner_required`), then the body. Staff only, in
+   * every response: no student route returns it. The write is
+   * `concept/service.ts`, which owns `course_concepts` and locks the concepts
+   * against a merge; the answer is the new list, by label.
    */
-  app.get(
-    "/app/api/courses/:id/concepts",
-    { preHandler: requireTeacher },
-    teacher(onCourse(), async ({ req, scope: course }): Promise<CourseConcepts> => ({
-      concepts: await courseConceptsOf(app.db, course.id, readerLang(req)),
-    })),
-  );
 
   app.put(
     "/app/api/courses/:id/concepts",

@@ -32,17 +32,47 @@
  * already had the winner, and the aliases moved, added and dropped, so a
  * reviewed SQL undo is possible; there is no undo button.
  */
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import type { Concept } from "@quiz/contracts";
 import { conceptKey, mergedAliases } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { conceptAliases, concepts, courseConcepts, questionConcepts } from "../../db/schema.js";
 import { DomainError, notFoundError } from "../http.js";
 import { loadAliases, perLang, sideOf, toConcept, toResolvable } from "./row.js";
 import type { ConceptContext } from "./service.js";
+
+/**
+ * Moves the links of `loserId` in `table` to `winnerId`, for the owner column
+ * `owner` (a question, a course): an owner that already links the winner
+ * loses its link to the loser (`already`), every other link is re-pointed
+ * (`moved`), keeping its other columns (author, date). The owners are
+ * answered sorted, for the audit.
+ */
+async function moveLinks(
+  tx: Tx,
+  table: typeof questionConcepts | typeof courseConcepts,
+  owner: PgColumn,
+  loserId: string,
+  winnerId: string,
+): Promise<{ moved: string[]; already: string[] }> {
+  const concept = table.conceptId;
+  const t = table as PgTable;
+  const already = await tx
+    .delete(t)
+    .where(and(eq(concept, loserId), inArray(owner, tx.select({ o: owner }).from(t).where(eq(concept, winnerId)))))
+    .returning({ id: owner });
+  const moved = await tx
+    .update(t)
+    .set({ conceptId: winnerId } as never)
+    .where(eq(concept, loserId))
+    .returning({ id: owner });
+  const ids = (rows: { id: unknown }[]) => rows.map((r) => String(r.id)).sort();
+  return { moved: ids(moved), already: ids(already) };
+}
 
 export async function mergeConcept(
   db: Db,
@@ -69,25 +99,7 @@ export async function mergeConcept(
       throw new DomainError("concept_merge_target_not_validated", 422, "A concept is merged into a validated one only");
     }
 
-    // Two statements: the links the winner lacked are `moved`, every link of the loser is deleted.
-    const moved = (
-      await tx
-        .insert(questionConcepts)
-        .select(
-          tx
-            .select({ questionId: questionConcepts.questionId, conceptId: sql<string>`${winnerId}::uuid`.as("concept_id") })
-            .from(questionConcepts)
-            .where(eq(questionConcepts.conceptId, loserId)),
-        )
-        .onConflictDoNothing()
-        .returning({ id: questionConcepts.questionId })
-    )
-      .map((r) => r.id)
-      .sort();
-    const all = (await tx.delete(questionConcepts).where(eq(questionConcepts.conceptId, loserId)).returning({ id: questionConcepts.questionId }))
-      .map((r) => r.id);
-    const movedSet = new Set(moved);
-    const alreadyLinked = all.filter((id) => !movedSet.has(id)).sort();
+    const questionLinks = await moveLinks(tx, questionConcepts, questionConcepts.questionId, loserId, winnerId);
 
     const repointed = await tx
       .update(concepts)
@@ -108,30 +120,7 @@ export async function mergeConcept(
       );
     }
     // The courses listing the loser list the winner instead (sixth addendum): a course listing both keeps one.
-    const coursesMoved = (
-      await tx
-        .insert(courseConcepts)
-        .select(
-          tx
-            .select({
-              courseId: courseConcepts.courseId,
-              conceptId: sql<string>`${winnerId}::uuid`.as("concept_id"),
-              addedBy: courseConcepts.addedBy,
-              addedAt: courseConcepts.addedAt,
-            })
-            .from(courseConcepts)
-            .where(eq(courseConcepts.conceptId, loserId)),
-        )
-        .onConflictDoNothing()
-        .returning({ id: courseConcepts.courseId })
-    )
-      .map((r) => r.id)
-      .sort();
-    const coursesAll = (
-      await tx.delete(courseConcepts).where(eq(courseConcepts.conceptId, loserId)).returning({ id: courseConcepts.courseId })
-    ).map((r) => r.id);
-    const coursesMovedSet = new Set(coursesMoved);
-    const coursesAlreadyListed = coursesAll.filter((id) => !coursesMovedSet.has(id)).sort();
+    const courseLinks = await moveLinks(tx, courseConcepts, courseConcepts.courseId, loserId, winnerId);
     await tx
       .update(concepts)
       .set({ status: "merged", mergedInto: winnerId, updatedAt: ctx.now })
@@ -150,10 +139,10 @@ export async function mergeConcept(
       payload: {
         loser: { ...describe(loser), status: loser.status },
         winner: describe(winner),
-        moved,
-        alreadyLinked,
-        coursesMoved,
-        coursesAlreadyListed,
+        moved: questionLinks.moved,
+        alreadyLinked: questionLinks.already,
+        coursesMoved: courseLinks.moved,
+        coursesAlreadyListed: courseLinks.already,
         repointed: repointed.map((r) => r.id).sort(),
         aliasesMoved,
         aliasesAdded,

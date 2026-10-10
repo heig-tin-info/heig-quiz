@@ -173,7 +173,7 @@ async function createAll(
  * Every writer of links and the merge (`merge.ts`, `FOR UPDATE` in id order) lock in id order,
  * so merges and writers do not deadlock among themselves; a chained merge racing a writer may abort one side (40P01), never corrupting data.
  */
-export async function lockConcepts(tx: Db | Tx, ids: readonly string[]): Promise<Set<string>> {
+async function lockConcepts(tx: Db | Tx, ids: readonly string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
   const rows = await tx
     .select({ id: concepts.id, mergedInto: concepts.mergedInto })
@@ -185,12 +185,36 @@ export async function lockConcepts(tx: Db | Tx, ids: readonly string[]): Promise
 }
 
 /**
+ * What a write that replaces an owner's set of concepts does first
+ * (a question's here, a course's in `courseConcepts.ts`): share-locks the
+ * wanted concepts AND those the owner links now, in id order, so a merge
+ * cannot move any of them under the write; then reads the current set AGAIN,
+ * because a merge that committed between the first read and the lock has
+ * already replaced a loser by its winner (a concept that appeared meanwhile
+ * is locked too). Every wanted concept must exist and not be merged: a 422
+ * `concept_not_found` naming the others. Returns the current set read under
+ * the locks.
+ */
+export async function lockLinkSet(
+  tx: Db | Tx,
+  wanted: readonly string[],
+  readCurrent: () => Promise<string[]>,
+): Promise<string[]> {
+  const seen = new Set([...wanted, ...(await readCurrent())]);
+  const live = await lockConcepts(tx, [...seen]);
+  const current = await readCurrent();
+  for (const id of await lockConcepts(tx, current.filter((id) => !seen.has(id)))) live.add(id);
+  const bad = wanted.filter((id) => !live.has(id));
+  if (bad.length > 0) {
+    throw new DomainError("concept_not_found", 422, "A concept is missing or merged", { ids: bad }); // `ConceptNotFound`
+  }
+  return current;
+}
+
+/**
  * Replaces a question's concepts with `conceptIds` (duplicates ignored),
- * inside the caller's transaction (addendum §4). Every concept must exist
- * and not be merged — a 422 `concept_not_found` naming the others. The
- * wanted concepts AND those the question links now are share-locked, so that
- * a merge cannot move any of them under the write: a removal made while a
- * merge ran is not undone by the link the merge adds.
+ * inside the caller's transaction (addendum §4), under `lockLinkSet`: a
+ * removal made while a merge ran is not undone by the link the merge adds.
  */
 export async function setQuestionConcepts(
   tx: Db | Tx,
@@ -198,15 +222,11 @@ export async function setQuestionConcepts(
   conceptIds: readonly string[],
 ): Promise<void> {
   const ids = [...new Set(conceptIds)];
-  const current = await tx
-    .select({ id: questionConcepts.conceptId })
-    .from(questionConcepts)
-    .where(eq(questionConcepts.questionId, questionId));
-  const live = await lockConcepts(tx, [...new Set([...ids, ...current.map((c) => c.id)])]);
-  const bad = ids.filter((id) => !live.has(id));
-  if (bad.length > 0) {
-    throw new DomainError("concept_not_found", 422, "A concept is missing or merged", { ids: bad }); // `ConceptNotFound`
-  }
+  await lockLinkSet(tx, ids, async () =>
+    (await tx.select({ id: questionConcepts.conceptId }).from(questionConcepts).where(eq(questionConcepts.questionId, questionId))).map(
+      (c) => c.id,
+    ),
+  );
   await tx.delete(questionConcepts).where(eq(questionConcepts.questionId, questionId));
   if (ids.length > 0) {
     await tx.insert(questionConcepts).values(ids.map((conceptId) => ({ questionId, conceptId })));

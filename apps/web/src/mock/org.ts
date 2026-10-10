@@ -664,7 +664,6 @@ on("DELETE", "/app/api/courses/:id/staff/:uid", (m) => {
   return undefined;
 });
 // --- The concepts a course declares (F-ORG-12, ADR-081 §8) ---
-on("GET", "/app/api/courses/:id/concepts", (m) => ({ concepts: courseConceptRefs(courseOr404(m.groups!.id!).id) }));
 on("PUT", "/app/api/courses/:id/concepts", (m, body) => {
   const course = courseOr404(m.groups!.id!);
   setCourseConceptIds(course.id, Array.isArray(body.conceptIds) ? (body.conceptIds as string[]) : []);

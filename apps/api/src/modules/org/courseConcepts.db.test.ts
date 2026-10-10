@@ -11,16 +11,24 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { CourseConcepts, CourseDetail } from "@quiz/contracts";
-import { qualifiedConceptKey } from "@quiz/domain";
+import { CSRF_COOKIE, type CourseConcepts, type CourseDetail } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { auditLog, concepts, courseConcepts, courseStaff } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { seedConcept } from "../../test/concepts.js";
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 
 type Caller = Awaited<ReturnType<TestServer["signIn"]>>;
+type Headers = Record<string, string>;
+
+/** A session of `kind` for `userId`, as the cookies a browser would send. */
+async function sessionOf(userId: string, auth: Parameters<typeof createSession>[3]): Promise<Headers> {
+  const s = await createSession(server.app.db, userId, 8, auth);
+  return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
+}
 
 let server: TestServer;
 let restore: () => void;
@@ -55,24 +63,13 @@ async function seed() {
   return seeded;
 }
 
-async function concept(en: string, fr: string, status: "proposed" | "validated" = "validated"): Promise<string> {
-  const id = randomUUID();
-  await db().insert(concepts).values({
-    id,
-    status,
-    createdBy: owner.id,
-    labelFr: fr,
-    keyFr: qualifiedConceptKey(fr, ""),
-    labelEn: en,
-    keyEn: qualifiedConceptKey(en, ""),
-  });
-  return id;
-}
+const concept = (en: string, fr: string, status: "proposed" | "validated" = "validated") =>
+  seedConcept(db(), owner.id, [fr], [en], status);
 
 const base = (courseId: string) => `/app/api/courses/${courseId}/concepts`;
 const put = (courseId: string, caller: Caller, conceptIds: string[]) => send("PUT", base(courseId), caller, { conceptIds });
 const listed = async (courseId: string, caller: Caller = owner) =>
-  ((await send("GET", base(courseId), caller)).json() as CourseConcepts).concepts;
+  ((await send("GET", `/app/api/courses/${courseId}`, caller)).json() as CourseDetail).concepts;
 const linkIds = async (courseId: string) =>
   (await db().select().from(courseConcepts).where(eq(courseConcepts.courseId, courseId))).map((r) => r.conceptId).sort();
 
@@ -95,12 +92,9 @@ describe("the course concepts routes", () => {
     expect((await send("PUT", base(courseId), assistant, { conceptIds: "nope" })).statusCode).toBe(403);
     expect(await linkIds(courseId)).toEqual([a, b].sort());
 
-    for (const [method, payload] of [["GET", undefined], ["PUT", { conceptIds: [] }]] as const) {
-      const out = await send(method, base(courseId), outsider, payload);
-      expect(out.statusCode, method).toBe(404);
-    }
+    expect((await send("PUT", base(courseId), outsider, { conceptIds: [] })).statusCode).toBe(404);
+    expect((await send("GET", `/app/api/courses/${courseId}`, outsider)).statusCode).toBe(404);
     expect((await send("PUT", base(courseId), outsider, { conceptIds: "nope" })).statusCode).toBe(404);
-    expect((await send("GET", base(courseId), student)).statusCode).toBeGreaterThanOrEqual(403);
     expect(await linkIds(courseId)).toEqual([a, b].sort());
   });
 
@@ -217,26 +211,33 @@ describe("a concept a course lists", () => {
   });
 });
 
-describe("the student views", () => {
-  it("never carry a course's concepts, in the classroom page or the student's list", async () => {
+describe("the student exits", () => {
+  it("never carry a course's concepts: a claimed student, a staff seat in the student view, an impersonation", async () => {
     const { courseId, classroomId } = await seed();
     const secret = await concept("Zxqv secret notion", "Notion zxqv secrète", "proposed");
     await put(courseId, owner, [secret]);
+    const impersonation = await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null });
 
-    const list = await send("GET", "/app/api/student/classrooms", student);
-    expect(list.statusCode).toBe(200);
-    const gradebook = await send("GET", `/app/api/student/classrooms/${classroomId}/gradebook`, student);
-    expect(gradebook.statusCode).toBe(200);
-    // The teacher routes are refused to a student, and refuse without a word of the list.
-    const course = await send("GET", `/app/api/courses/${courseId}`, student);
-    expect(course.statusCode).toBeGreaterThanOrEqual(403);
-    for (const res of [list, gradebook, course]) {
+    const exits: [string, Headers][] = [["a claimed student", student.headers], ["the staff seat in the student view", owner.headers], ["an impersonation", impersonation]];
+    for (const [who, headers] of exits) {
+      for (const url of [
+        `/app/api/student/classrooms/${classroomId}`,
+        `/app/api/student/classrooms/${classroomId}/gradebook`,
+        "/app/api/student/classrooms",
+        "/app/api/student/home",
+      ]) {
+        const res = await server.app.inject({ method: "GET", url, headers });
+        expect(res.statusCode, `${who} ${url}`).toBe(200);
+        expect(res.body, `${who} ${url}`).not.toMatch(/zxqv/i);
+        expect(res.body, `${who} ${url}`).not.toContain(secret);
+      }
+    }
+    // The staff routes refuse a student, saying nothing of the list.
+    for (const url of [`/app/api/courses/${courseId}`, base(courseId)]) {
+      const res = await send(url === base(courseId) ? "PUT" : "GET", url, student, { conceptIds: [] });
+      expect(res.statusCode, url).toBe(403);
       expect(res.body).not.toMatch(/zxqv/i);
       expect(res.body).not.toContain(secret);
     }
-    // The staff's classroom page does not carry it either: the list is read from the course.
-    const staffPage = await send("GET", `/app/api/classrooms/${classroomId}`, owner);
-    expect(staffPage.statusCode).toBe(200);
-    expect(staffPage.body).not.toMatch(/zxqv/i);
   });
 });
