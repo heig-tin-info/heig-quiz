@@ -21,6 +21,7 @@ import {
   truncateSelection,
   UNREVIEWED_TYPES,
   poolRoleAllows,
+  holdsSeatOnPublic,
   subscriptionState,
 } from "@quiz/domain";
 import type {
@@ -2337,7 +2338,7 @@ on("GET", "/app/api/pools/:id", (m) => {
     concepts: poolConcepts(pool.id),
     questionCount: liveQuestions(pool.id).filter((q) => !q.deletedAt).length,
     subscription: poolSummary(pool).subscription,
-    subscribers: pool.isPublic && poolSummary(pool).subscription === "none" ? poolSummary(pool).subscriberCount : null,
+    subscribers: pool.isPublic && holdsSeatOnPublic(poolSummary(pool).subscription) ? poolSummary(pool).subscriberCount : null,
   };
 });
 on("GET", "/app/api/pools/:id/unpublish-impact", (m) => {

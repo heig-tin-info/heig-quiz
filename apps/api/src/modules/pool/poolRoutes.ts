@@ -73,7 +73,6 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           throw new DomainError("personal_pool_not_publishable", 409, "A personal pool cannot be published");
         }
         const source = fields.description === undefined ? {} : { descriptionSource: descriptionFromAi ? ("ai" as const) : ("owner" as const) };
-        const unpublished = isPublic === false && pool.isPublic;
         // The unpublication and the end of the read links and subscriptions are ONE transaction (ADR-095).
         const { updated, dropped } = await app.db.transaction(async (tx) => ({
           updated: await service.updatePool(tx, pool.id, {
@@ -81,12 +80,13 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
             ...(isPublic === undefined ? {} : { isPublic }),
             ...source,
           }),
-          dropped: unpublished ? await service.dropPublicAccess(tx, pool.id) : null,
+          dropped: isPublic === false ? await service.dropPublicAccess(tx, pool.id) : null,
         }));
         if (isPublic !== undefined && isPublic !== pool.isPublic) {
           await trace(req, isPublic ? "pool.publish" : "pool.unpublish", "pool", pool.id, {});
-          if (dropped) await service.announceRetired(app.db, pool, dropped);
         }
+        // Whenever the patch unpublishes, whatever the pool was loaded as: nothing to drop, nobody told.
+        if (dropped) await service.announceRetired(app.db, pool, dropped);
         if (Object.keys(fields).length > 0) {
           await trace(req, "pool.update", "pool", pool.id, { ...fields, ...source });
         }

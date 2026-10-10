@@ -47,7 +47,7 @@ export async function setCoursePools(
   for (const { poolId, mode } of links) asked.set(poolId, strongerLinkMode(asked.get(poolId) ?? mode, mode));
   const reachable = asked.size
     ? await db
-        .select({ id: pools.id, isPublic: pools.isPublic })
+        .select({ id: pools.id })
         .from(pools)
         .where(and(inArray(pools.id, [...asked.keys()]), allowed))
     : [];
@@ -71,12 +71,6 @@ export async function setCoursePools(
   // The links as they stand: nothing to write, nobody to notify.
   if (changed.length === 0 && !unlinked) return poolsOfCourse(db, courseId);
 
-  const readOnPrivate = changed.filter(([id, mode]) => mode === "read" && !reachable.find((p) => p.id === id)!.isPublic);
-  if (readOnPrivate.length) {
-    throw new DomainError("pool_not_public", 409, "Only a public pool can be linked read-only", {
-      poolIds: readOnPrivate.map(([id]) => id),
-    });
-  }
   const strengthened = changed.filter(([, mode]) => mode === "edit").map(([id]) => id);
   if (strengthened.length) {
     const roles = await poolRolesOf(db, inArray(pools.id, strengthened), viewer);
@@ -97,17 +91,23 @@ export async function setCoursePools(
     }
   }
   await db.transaction(async (tx) => {
-    // A read link is only ever written to a pool that is public NOW: the rows are locked, so an
-    // unpublication that commits first is seen here, and one that comes after drops the link.
-    const reads = [...wanted].filter(([id, mode]) => mode === "read" && current.get(id) !== "read").map(([id]) => id);
+    // A read link is only ever written to a pool that is public NOW, whether it is new or already
+    // there: every wanted read link is locked and re-checked, so an unpublication that commits first
+    // is seen here (and refuses only the failing pools), and one that comes after drops the link.
+    const reads = [...wanted].filter(([, mode]) => mode === "read").map(([id]) => id);
     if (reads.length) {
-      const stillPublic = await tx
-        .select({ id: pools.id })
-        .from(pools)
-        .where(and(inArray(pools.id, reads), eq(pools.isPublic, true)))
-        .for("update");
-      if (stillPublic.length !== reads.length) {
-        throw new DomainError("pool_not_public", 409, "Only a public pool can be linked read-only", { poolIds: reads });
+      const stillPublic = new Set(
+        (
+          await tx
+            .select({ id: pools.id })
+            .from(pools)
+            .where(and(inArray(pools.id, reads), eq(pools.isPublic, true)))
+            .for("update")
+        ).map((p) => p.id),
+      );
+      const failing = reads.filter((id) => !stillPublic.has(id));
+      if (failing.length) {
+        throw new DomainError("pool_not_public", 409, "Only a public pool can be linked read-only", { poolIds: failing });
       }
     }
     const keep = [...wanted.keys()];

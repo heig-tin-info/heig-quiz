@@ -42,7 +42,17 @@ export function linkModeFor(role: PoolRoleName, isPublic: boolean): CoursePoolMo
 }
 
 /** What a teacher can do about following a pool: `available` to subscribe, `subscribed`, or `none` (not public, or already a seat). */
-export type SubscriptionState = "available" | "subscribed" | "none";
+export const SUBSCRIPTION_STATES = ["available", "subscribed", "none"] as const;
+export type SubscriptionState = (typeof SUBSCRIPTION_STATES)[number];
+
+/**
+ * On a PUBLIC pool, `none` means the account holds a seat (owner or member):
+ * the people who read the subscribers (ADR-095). On a private pool the
+ * question does not arise, the subscribers are never told.
+ */
+export function holdsSeatOnPublic(state: SubscriptionState): boolean {
+  return state === "none";
+}
 
 /**
  * THE rule of who may subscribe (ADR-095): a public pool the account neither

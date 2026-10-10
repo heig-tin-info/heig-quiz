@@ -9,7 +9,7 @@
 import { z } from "zod";
 
 import { QUESTION_TYPE_IDS } from "@quiz/core/contract";
-import { COURSE_POOL_MODES, POOL_DESCRIPTION_MAX, POOL_DESCRIPTION_SOURCES, POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
+import { COURSE_POOL_MODES, POOL_DESCRIPTION_MAX, POOL_DESCRIPTION_SOURCES, POOL_ROLES, POOL_VISIBILITIES, SUBSCRIPTION_STATES } from "@quiz/domain";
 
 import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf, teacherChoiceWith } from "./common.js";
 import { ConceptRef } from "./concept.js";
@@ -25,7 +25,8 @@ export const CoursePoolMode = z.enum(COURSE_POOL_MODES);
 export type CoursePoolMode = z.infer<typeof CoursePoolMode>;
 
 /** What a teacher can do about following a pool (`subscriptionState` in `@quiz/domain`, ADR-095). */
-export const SubscriptionStateSchema = z.enum(["available", "subscribed", "none"]);
+export const SubscriptionState = z.enum(SUBSCRIPTION_STATES);
+export type SubscriptionState = z.infer<typeof SubscriptionState>;
 
 /** DERIVED, read-only: public when published, shared when the roster says so, else private (ADR-013, 2026-10-10). */
 export const PoolVisibility = z.enum(POOL_VISIBILITIES);
@@ -121,7 +122,7 @@ export const PoolSummary = Pool.extend({
   /** Teachers subscribed to the pool (ADR-095); 0 for a pool that is not public. */
   subscriberCount: z.number().int(),
   /** What the caller can do about following it (`subscriptionState`, ADR-095): the screens read it as is. */
-  subscription: SubscriptionStateSchema,
+  subscription: SubscriptionState,
 });
 export type PoolSummary = z.infer<typeof PoolSummary>;
 
@@ -760,7 +761,7 @@ export const PoolDetail = z.object({
    * `subscribed`, or `none` (the owner and the members hold it already; a
    * pool that is not public has no subscription).
    */
-  subscription: SubscriptionStateSchema,
+  subscription: SubscriptionState,
   /** How many teachers subscribed: told to the owner and the members only, null to anyone else. */
   subscribers: z.number().int().nullable(),
 });

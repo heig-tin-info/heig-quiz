@@ -401,3 +401,28 @@ describe("the rule is stated, not trusted from the rows (ADR-095, invariant 6)",
     expect(closed).toEqual(expect.arrayContaining([`user:${third.id}`, `user:${other.id}`]));
   });
 });
+
+describe("a read link is written only to a public pool, whatever was read before", () => {
+  it("refuses to save a list that still holds a read link whose pool was unpublished meanwhile", async () => {
+    const open = await newPool("Unpublished meanwhile", { isPublic: true });
+    const course = await courseOf([{ id: other.id }]);
+    expect((await put(other, course, [{ poolId: open, mode: "read" }])).statusCode).toBe(200);
+    // The owner unpublishes; a stale list (the link as it stood) is saved afterwards.
+    expect((await call(owner, "PATCH", `/app/api/pools/${open}`, { isPublic: false })).statusCode).toBe(200);
+    expect(await server.app.db.select().from(coursePools).where(eq(coursePools.poolId, open))).toEqual([]);
+    const stale = await put(other, course, [{ poolId: open, mode: "read" }]);
+    // The pool is out of the course owner's reach now: it is simply not linked (the in-transaction lock covers the race window).
+    expect(stale.statusCode).toBe(200);
+    expect(await server.app.db.select().from(coursePools).where(eq(coursePools.poolId, open))).toEqual([]);
+  });
+
+  it("drops what an unpublication meets even when the pool was loaded as already private", async () => {
+    const open = await newPool("Stale unpublish", { isPublic: true });
+    await call(third, "PUT", `/app/api/pools/${open}/subscription`);
+    // The row says private (a concurrent request), a subscription survives: the next unpublish still sweeps.
+    await server.app.db.update(pools).set({ isPublic: false }).where(eq(pools.id, open));
+    await server.app.db.insert(poolSubscriptions).values({ poolId: open, userId: other.id }).onConflictDoNothing();
+    expect((await call(owner, "PATCH", `/app/api/pools/${open}`, { isPublic: false })).statusCode).toBe(200);
+    expect(await server.app.db.select().from(poolSubscriptions).where(eq(poolSubscriptions.poolId, open))).toEqual([]);
+  });
+});

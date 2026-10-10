@@ -8,6 +8,7 @@ import {
   displayName,
   effectivePoolRole,
   heldPoolRole,
+  holdsSeatOnPublic,
   subscriptionState,
   type PoolDescriptionSource,
   type PoolRoleFacts,
@@ -387,6 +388,6 @@ export async function poolDetail(
     subscription,
     // Told to the owner and the members only, who hold a seat on a public pool (an admin under Super Powers reads as an owner).
     subscribers:
-      pool.isPublic && (subscription === "none" || viewer.reach === "all") ? (summary?.subscriberCount ?? 0) : null,
+      pool.isPublic && (holdsSeatOnPublic(subscription) || viewer.reach === "all") ? (summary?.subscriberCount ?? 0) : null,
   };
 }

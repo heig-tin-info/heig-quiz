@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   effectivePoolRole,
   heldPoolRole,
+  holdsSeatOnPublic,
   poolRoleAllows,
   linkModeFor,
   strongerLinkMode,
@@ -151,5 +152,13 @@ describe("subscriptionState", () => {
     expect(subscriptionState({ ...base, isOwner: true })).toBe("none");
     expect(subscriptionState({ ...base, memberRole: "reader" })).toBe("none");
     expect(subscriptionState({ ...base, memberRole: "owner", subscribed: true })).toBe("none");
+  });
+});
+
+describe("holdsSeatOnPublic", () => {
+  it("reads a seat from `none` only", () => {
+    expect(holdsSeatOnPublic("none")).toBe(true);
+    expect(holdsSeatOnPublic("available")).toBe(false);
+    expect(holdsSeatOnPublic("subscribed")).toBe(false);
   });
 });

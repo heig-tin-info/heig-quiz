@@ -105,6 +105,14 @@ export function linkedCourseStaff(match: SQL, mode?: CoursePoolMode): SQL {
   return sql`EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${match}${only})`;
 }
 
+/**
+ * A `course_pools` row that counts (ADR-095): an `edit` link always, a `read`
+ * link only while its pool is public. The rule is stated where the rows are
+ * read (the course's question picker, what `addItems` pins), never trusted
+ * from the rows: an orphan read link on a private pool opens nothing.
+ */
+export const countingCoursePool: SQL = sql`(${qualified(coursePools.mode)} = 'edit' OR EXISTS (SELECT 1 FROM ${pools} WHERE ${qualified(pools.id)} = ${qualified(coursePools.poolId)} AND ${qualified(pools.isPublic)}))`;
+
 /** The account holds a staff role: the first half of every pool predicate. */
 function staffAccount(userId: string): SQL {
   const staff = sql.join(
