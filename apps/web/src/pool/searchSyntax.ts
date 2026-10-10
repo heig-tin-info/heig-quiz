@@ -288,6 +288,18 @@ export function completionAt(input: string, caret: number): Completion | null {
   };
 }
 
+/**
+ * The kind of token the caret ends, still being typed: a concept word (after
+ * `#` or `tag:`) or a `course:` word, an open quote included
+ * (`course:"Prog`). A word being typed is not judged yet: its chip must not
+ * say it matches nothing. `null` when the caret ends no such word.
+ */
+export function typingKindAt(input: string, caret: number): SearchTokenKind | null {
+  const before = input.slice(0, Math.max(caret, 0));
+  if (/(?:^|\s)course:(?:"[^"]*|[^\s"]*)$/i.test(before)) return "course";
+  return completionAt(input, caret)?.kind === "concept" ? "concept" : null;
+}
+
 /** The field after a pick: the value in place, a space after it, caret there. */
 export function applyCompletion(
   input: string,
