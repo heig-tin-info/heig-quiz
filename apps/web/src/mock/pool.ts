@@ -57,7 +57,7 @@ import {
   type TeamsLinkPreview,
   type TeamsTabState,
 } from "@quiz/contracts";
-import { conceptRefs, seedConceptIds, unknownConceptIds } from "./concept";
+import { conceptRefs, courseConceptRefs, seedConceptIds, unknownConceptIds } from "./concept";
 import {
   D,
   H,
@@ -3165,6 +3165,7 @@ on("GET", "/app/api/courses/:id", (m) => {
         periodEnd: r.periodEnd,
         archivedAt: r.archivedAt,
       })),
+    concepts: courseConceptRefs(course.id),
   };
 });
 on("PUT", "/app/api/courses/:id/pools", (m, body) => {

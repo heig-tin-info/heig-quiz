@@ -23,6 +23,8 @@ import {
   CourseConditionOrder,
   CourseConditionParam,
   CourseConditionPatch,
+  CourseConceptsPut,
+  type CourseConcepts,
   CoursePatch,
   CourseCreate,
   CoursePoolsPut,
@@ -57,7 +59,8 @@ import {
   teacherGuard,
   withCourseRole,
 } from "../guards.js";
-import { invalid, notFound, teacherRoute } from "../http.js";
+import { courseConceptsOf, setCourseConcepts } from "../concept/service.js";
+import { invalid, notFound, readerLang, teacherRoute } from "../http.js";
 import { journalRemovalRefused } from "../journal/service.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
 import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
@@ -147,11 +150,12 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.get(
     "/app/api/courses/:id",
     { preHandler: requireTeacher },
-    teacher(onCourse(), async ({ scope: course }) => {
-      const [staff, rooms, pools] = await Promise.all([
+    teacher(onCourse(), async ({ req, scope: course }) => {
+      const [staff, rooms, pools, concepts] = await Promise.all([
         service.staffOfCourse(app.db, course.id),
         service.classroomsOfCourse(app.db, course.id),
         poolsOfCourse(app.db, course.id),
+        courseConceptsOf(app.db, course.id, readerLang(req)),
       ]);
       const detail: CourseDetail = {
         course: { id: course.id, name: course.name, code: course.code },
@@ -171,6 +175,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
           periodEnd: r.periodEnd,
           archivedAt: r.archivedAt?.toISOString() ?? null,
         })),
+        concepts,
       };
       return detail;
     }),
@@ -247,6 +252,27 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       publish("courses", [`course:${course.id}`, `teacher:${req.user!.id}`]);
       for (const pool of linked) publish("pool", [`pool:${pool.id}`]);
       return linked;
+    }),
+  );
+
+  // --- The concepts a course declares (F-ORG-12, ADR-081 §8) ---
+
+  /**
+   * Every member of the staff reads the list in `GET /courses/:id`; only an
+   * owner replaces it, here (ADR-068): the course under `staffAccess` (404),
+   * then the owner role (403 `owner_required`), then the body. Staff only, in
+   * every response: no student route returns it. The write is
+   * `concept/service.ts`, which owns `course_concepts` and locks the concepts
+   * against a merge; the answer is the new list, by label.
+   */
+
+  app.put(
+    "/app/api/courses/:id/concepts",
+    { preHandler: requireTeacher },
+    teacher({ ...onCourse("owner"), body: CourseConceptsPut }, async ({ req, now, body, scope: course }): Promise<CourseConcepts> => {
+      await setCourseConcepts(app.db, { actor: actorOf(req), userId: req.user!.id, now }, course.id, body.conceptIds);
+      publish("courses", [`course:${course.id}`]);
+      return { concepts: await courseConceptsOf(app.db, course.id, readerLang(req)) };
     }),
   );
 

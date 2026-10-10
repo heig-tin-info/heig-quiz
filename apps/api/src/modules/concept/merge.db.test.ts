@@ -9,9 +9,9 @@ import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { Concept, ConceptResolveResponse } from "@quiz/contracts";
-import { qualifiedConceptKey } from "@quiz/domain";
 
 import { auditLog, concepts, pools, questionConcepts, questions } from "../../db/schema.js";
+import { seedConcept } from "../../test/concepts.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import * as poolService from "../pool/service.js";
 import * as service from "./service.js";
@@ -25,27 +25,12 @@ let student: Who;
 let poolId: string;
 const db = () => server.app.db;
 
-async function concept(
+const concept = (
   fr: string | null,
   en: string | null,
   status: "proposed" | "validated" | "merged" = "validated",
   mergedInto: string | null = null,
-): Promise<string> {
-  const id = randomUUID();
-  await db()
-    .insert(concepts)
-    .values({
-      id,
-      status,
-      mergedInto,
-      createdBy: teacher.id,
-      labelFr: fr,
-      keyFr: fr === null ? null : qualifiedConceptKey(fr, ""),
-      labelEn: en,
-      keyEn: en === null ? null : qualifiedConceptKey(en, ""),
-    });
-  return id;
-}
+) => seedConcept(db(), teacher.id, fr === null ? null : [fr], en === null ? null : [en], status, mergedInto);
 
 async function question(name: string, conceptIds: string[], deleted = false): Promise<string> {
   const q = await poolService.createQuestion(db(), {
@@ -152,6 +137,8 @@ describe("POST /admin/concepts/:id/merge", () => {
       winner: { id: winner, labels: { fr: "Pointeur", en: "Pointer" }, qualifiers: { fr: "", en: "" } },
       moved: [a],
       alreadyLinked: [b],
+      coursesMoved: [],
+      coursesAlreadyListed: [],
       repointed: [old],
       aliasesMoved: [],
       aliasesAdded: [],

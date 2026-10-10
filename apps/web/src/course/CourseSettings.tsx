@@ -3,7 +3,8 @@
  * "Settings row"), the classroom's Settings tab's twin (F-ORG-13): what the
  * header's menu held — hiding (F-ORG-11), deletion (F-ORG-09) — the name
  * and the code, which the header shows and no longer edits, and the
- * course's catalog of conditions (F-ORG-16, `CourseConditions`).
+ * course's concepts (ADR-081 §8, `CourseConcepts`) and its catalog of
+ * conditions (F-ORG-16, `CourseConditions`).
  *
  * Nothing here is accented: a settings tab has no primary. Delete is a
  * `danger-quiet` button whose confirmation is the `danger` one, as the
@@ -22,6 +23,7 @@ import type { CourseSummary } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Button, Card, SectionHeading, SettingRow } from "../ui";
+import { CourseConcepts } from "./CourseConcepts";
 import { CourseConditions } from "./CourseConditions";
 import { CourseIcon } from "./CourseIcon";
 import { EditCourseModal } from "./modals";
@@ -81,6 +83,8 @@ export function CourseSettings({
         </Card>
         {isOwner ? null : <p className="text-[13px] text-fg-muted">{t("courses.settings.ownerOnly")}</p>}
       </section>
+
+      <CourseConcepts courseId={course.id} canManage={isOwner} />
 
       <CourseConditions courseId={course.id} canManage={isOwner} />
 

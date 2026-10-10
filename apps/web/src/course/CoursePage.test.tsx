@@ -49,6 +49,23 @@ const CONDITIONS = [
   { id: "k0", kind: "info", text: "Bring your student card", archivedAt: "2026-02-01T08:00:00.000Z" },
 ];
 
+/** A concept as the vocabulary lists it, and as a course lists it. */
+const vocabulary = (id: string, en: string, fr: string) => ({
+  id,
+  status: "validated",
+  mergedInto: null,
+  labels: { en, fr },
+  qualifiers: { en: "", fr: "" },
+  descriptions: { en: "", fr: "" },
+  aliases: [],
+  createdBy: null,
+  createdAt: "2026-10-01T08:00:00.000Z",
+});
+const POINTER = vocabulary("c0c0c0c0-0000-4000-8000-000000000001", "Pointer", "Pointeur");
+const ARRAY = vocabulary("c0c0c0c0-0000-4000-8000-000000000002", "Array", "Tableau");
+const ref = (c: typeof POINTER) => ({ id: c.id, label: c.labels.en, qualifier: "", status: c.status });
+const POINTER_REF = ref(POINTER);
+
 const STAFF_CANDIDATES = "/app/api/courses/c1/staff/candidates";
 
 function world(templates: unknown[] = [TEMPLATE]) {
@@ -58,10 +75,11 @@ function world(templates: unknown[] = [TEMPLATE]) {
         classrooms: [makeClassroomSummary({ id: "r1", name: "PRG1-2026", students: 24 })],
       }),
     ]),
-    "GET /app/api/courses/c1": ok(DETAIL),
+    "GET /app/api/courses/c1": ok({ ...DETAIL, concepts: [POINTER_REF] }),
     "GET /app/api/courses/c1/templates": ok(templates),
     "GET /app/api/pools": ok([]),
     "GET /app/api/courses/c1/conditions": ok(CONDITIONS),
+    "GET /app/api/concepts": ok({ concepts: [POINTER, ARRAY] }),
   };
 }
 
@@ -514,6 +532,47 @@ describe("CoursePage", () => {
       expect(screen.queryByRole("button", { name: /Actions on/ })).toBeNull();
       expect(screen.queryByRole("button", { name: /Show archived/ })).toBeNull();
       expect(screen.getByText(/The catalog is the course teachers' to change/)).toBeVisible();
+    });
+  });
+
+  describe("its concepts, in its settings (ADR-081 §8)", () => {
+    it("lets an owner pick a concept, saves the whole set, and says only teachers see it", async () => {
+      const { calls } = mockFetch({
+        ...world(),
+        "PUT /app/api/courses/c1/concepts": ok({ concepts: [ref(ARRAY), POINTER_REF] }),
+      });
+      renderWithProviders(<CoursePage id="c1" tab="settings" navigate={vi.fn()} />);
+
+      expect(await screen.findByRole("heading", { name: "Concepts" })).toBeVisible();
+      expect(await screen.findByText("Pointer")).toBeVisible();
+      expect(await screen.findByText(/Only its teachers see this list; students never do/)).toBeVisible();
+
+      const field = screen.getByRole("combobox", { name: "Add a concept" });
+      await userEvent.type(field, "Arr");
+      await userEvent.click(await screen.findByRole("option", { name: /Array/ }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PUT" && c.url === "/app/api/courses/c1/concepts")?.body).toEqual({
+          conceptIds: [POINTER.id, ARRAY.id],
+        }),
+      );
+    });
+
+    it("lets an assistant read the list as plain text, without its controls, and says why", async () => {
+      const staff = [
+        { userId: "u-1", givenName: "Ada", familyName: "Lovelace", email: "ada@heig-vd.ch", avatarUrl: null, role: "assistant" },
+        { userId: "u-2", givenName: "Paul", familyName: "Martin", email: "paul.martin@heig-vd.ch", avatarUrl: null, role: "owner" },
+      ];
+      mockFetch({
+        ...world(),
+        "GET /app/api/me": ok(makeMe()),
+        [`GET ${COURSES}`]: ok([makeCourseSummary({ staff, myRole: "assistant" } as Partial<CourseSummary>)]),
+      });
+      renderWithProviders(<CoursePage id="c1" tab="settings" navigate={vi.fn()} />);
+
+      expect(await screen.findByRole("heading", { name: "Concepts" })).toBeVisible();
+      expect(await screen.findByText("Pointer")).toBeVisible();
+      expect(screen.queryByRole("combobox", { name: "Add a concept" })).toBeNull();
+      expect(screen.getByText("The list is the course teachers' to change.")).toBeVisible();
     });
   });
 

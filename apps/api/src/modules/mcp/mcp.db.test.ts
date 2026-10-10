@@ -334,6 +334,7 @@ describe("an authoring session", () => {
     expect(isError).toBe(true);
     expect(data).toMatchObject({ status: 403, body: { error: "pool_link_forbidden" } });
     expect((await ok("get_course", { courseId: course.id })).pools).toEqual([]);
+    expect((await ok("get_course", { courseId: course.id })).concepts).toEqual([]);
   });
 
   it("refuses an invalid config with its issues, and creates nothing", async () => {

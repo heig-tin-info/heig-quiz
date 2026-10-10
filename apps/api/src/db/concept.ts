@@ -28,6 +28,7 @@ import {
 import { CONCEPT_STATUSES, TAG_DROP_REASONS } from "@quiz/contracts";
 
 import { users } from "./auth.js";
+import { courses } from "./org.js";
 import { pools, questions } from "./pool.js";
 
 /**
@@ -135,4 +136,28 @@ export const conceptAliases = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.conceptId, t.key] }), index("concept_aliases_key_idx").on(t.key)],
+);
+
+/**
+ * The concepts a course declares (ADR-081 §8, sixth addendum): a plain set,
+ * staff-only, owned by the `concept` module like `question_concepts`; the
+ * `org` module sets it by calling the concept service and reads it by join.
+ * The links go with their course (cascade); a concept a course lists cannot
+ * be deleted (RESTRICT: it is merged, which rewrites the links). No order,
+ * no weight: readers sort by label. `added_by` keeps who listed it, null
+ * once their account is gone.
+ */
+export const courseConcepts = pgTable(
+  "course_concepts",
+  {
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    conceptId: uuid("concept_id")
+      .notNull()
+      .references(() => concepts.id, { onDelete: "restrict" }),
+    addedBy: uuid("added_by").references(() => users.id, { onDelete: "set null" }),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.courseId, t.conceptId] }), index("course_concepts_concept_idx").on(t.conceptId)],
 );

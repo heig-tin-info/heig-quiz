@@ -3259,6 +3259,13 @@ export const en = {
   "eval.conditions.actions": "Actions on “{text}”",
   "eval.conditions.imposed": "Added by the platform",
   "eval.conditions.imposed.desc": "Derived from the settings; students read them after yours, kind by kind.",
+  // The concepts a course declares (F-ORG-12, ADR-081 §8).
+  "courses.settings.concepts": "Concepts",
+  "courses.concepts.pickerLabel": "Add a concept",
+  "courses.concepts.empty": "This course declares no concept yet.",
+  "courses.concepts.loadFailed": "Could not load the concepts",
+  "courses.concepts.hint": "The concepts this course teaches. Only its teachers see this list; students never do. Pick one from the vocabulary or create a new one.",
+  "courses.concepts.ownerOnly": "The list is the course teachers' to change.",
   // The course's catalog of conditions (F-ORG-16, ADR-079 §5).
   "courses.settings.conditions": "Conditions",
   "courses.conditions.add": "Add condition",

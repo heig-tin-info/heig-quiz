@@ -243,7 +243,7 @@ export const TOOLS: Tool[] = [
   tool({
     name: "get_course",
     title: "Get a course",
-    description: "One course with its staff, its classrooms (ids needed to create an evaluation) and its linked pools.",
+    description: "One course with its staff, its classrooms (ids needed to create an evaluation), its linked pools and the concepts it declares (what the course teaches).",
     input: z.object({ courseId: Id }),
     annotations: READ,
     run: (api, a) => api.get(`/courses/${a.courseId}`),

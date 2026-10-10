@@ -3257,6 +3257,13 @@ export const fr: Record<keyof Dict, string> = {
   "eval.conditions.actions": "Actions sur « {text} »",
   "eval.conditions.imposed": "Ajoutées par la plateforme",
   "eval.conditions.imposed.desc": "Déduites des réglages ; les étudiants les lisent après les vôtres, type par type.",
+  // The concepts a course declares (F-ORG-12, ADR-081 §8).
+  "courses.settings.concepts": "Notions",
+  "courses.concepts.pickerLabel": "Ajouter une notion",
+  "courses.concepts.empty": "Ce cours ne déclare encore aucune notion.",
+  "courses.concepts.loadFailed": "Impossible de charger les notions",
+  "courses.concepts.hint": "Les notions que ce cours enseigne. Seuls ses enseignants voient cette liste ; les étudiants ne la voient jamais. Choisissez-en une dans le vocabulaire ou créez-en une nouvelle.",
+  "courses.concepts.ownerOnly": "La liste relève des enseignants du cours.",
   // The course's catalog of conditions (F-ORG-16, ADR-079 §5).
   "courses.settings.conditions": "Conditions",
   "courses.conditions.add": "Ajouter une condition",

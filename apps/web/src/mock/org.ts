@@ -38,6 +38,7 @@ import {
   pick,
   rand,
 } from "./runtime";
+import { courseConceptRefs, setCourseConceptIds } from "./concept";
 import { journalRemovalRefusal } from "./journal";
 import {
   me,
@@ -662,6 +663,13 @@ on("DELETE", "/app/api/courses/:id/staff/:uid", (m) => {
   c.staff = c.staff.filter((s) => s.userId !== m.groups!.uid);
   return undefined;
 });
+// --- The concepts a course declares (F-ORG-12, ADR-081 §8) ---
+on("PUT", "/app/api/courses/:id/concepts", (m, body) => {
+  const course = courseOr404(m.groups!.id!);
+  setCourseConceptIds(course.id, Array.isArray(body.conceptIds) ? (body.conceptIds as string[]) : []);
+  return { concepts: courseConceptRefs(course.id) };
+});
+
 // --- The course's catalog of conditions (F-ORG-16) ---
 
 /**

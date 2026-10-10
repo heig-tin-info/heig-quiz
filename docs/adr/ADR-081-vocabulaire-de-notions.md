@@ -13,15 +13,18 @@ product owner before step 3 of #599, and by the
 the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
 (the tag sorting retired, step (d)) and the
 [fifth addendum](#fifth-addendum-2026-10-10-the-curation-of-the-vocabulary)
-(curation, step 5: its queue, the merge and the aliases are implemented; the probable duplicates are not). The work is tracked by #599, under a parent issue that groups #557
+(curation, step 5: its queue, the merge and the aliases are implemented; the probable duplicates are not) and the
+[sixth addendum](#sixth-addendum-2026-10-10-the-concepts-of-a-course-steps-7-9)
+(the concepts of a course, step 7a implemented). The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
 polls, the drill, the MCP tools, the teacher assistant and the seed read and
 write concepts. Step (d), dropping `question_tags` and `pool_tags`, is
 implemented by the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired). The links to
-courses (§8), relations and the model's help in the picker (#557) are not
-implemented; the curation screen and the aliases are (fifth addendum).
+courses (§8) are implemented by the sixth addendum (step 7a); relations and the
+model's help in the picker (#557) are not; the curation screen and the aliases
+are (fifth addendum).
 
 Scope: what a question is classified by, who may create and change that
 classification, how it is stored, and what a course declares. It does not
@@ -424,7 +427,7 @@ is the first pull request; merge, aliases and probable duplicates follow.
    re-pointed, `setQuestionConcepts` and `copyQuestionConcepts` share-lock in
    id order against the merge's `FOR UPDATE`, and the audit `concept.merge`
    records the loser's former status and the question ids moved or already
-   linked. Step 7's course-concept links will join this transaction.
+   linked. The course-concept links join this transaction (sixth addendum §3).
 3. **Aliases** have no language. An alias whose key equals another live
    concept's label is refused unless the admin confirms explicitly.
    As built (PR3): only the admin adds or removes one
@@ -494,3 +497,72 @@ is the first pull request; merge, aliases and probable duplicates follow.
    step 7, the course concepts. There is no split of a polysemous concept and
    no "reject" action in v1: an unwanted proposal is deleted when unused, or
    merged.
+
+## Sixth addendum 2026-10-10: the concepts of a course (steps 7–9)
+
+Settled with the product owner (comment of 2026-10-10 on #599, steps 7–9)
+after a review of the spec. It makes §8 precise. Delivery, in dependency
+order: 7a the course's list (this addendum's §1–§4, implemented), 7b the pool
+filter by course, 7c relations with the merge-cycle policy, 7d coverage in
+the filters, 8a Suggest concepts, 9a the teacher's mastery on the course's
+concepts, 9b the student's mastery (its own ADR first). §5 onwards is the
+decided plan, not yet built; only 7a is.
+
+1. **A plain list.** A course declares a set of concepts: no chapter, level,
+   weight or order (they would be columns of the table, not another model).
+   It may list a `proposed` concept, and its Settings create one with the
+   question editor's own picker, through the ordinary creation path
+   (`POST /concepts`). The list is shown sorted by label, in the reader's
+   language.
+2. **Who, and where.** Staff only, never in a student payload (invariants 4
+   and 6): the course is loaded under `staffAccess` (404 otherwise); every
+   member reads it as `concepts` in `GET /courses/:id` (hence the MCP
+   `get_course` and the teacher assistant's reads; there is no route of its
+   own), and only an owner replaces the set
+   (`PUT /courses/:id/concepts` `{ conceptIds }`, which answers the new list; 403 `owner_required`
+   before the body is read; [ADR-068](ADR-068-roles-de-l-equipe-du-cours.md)
+   §3). The web app shows it as a "Concepts" ("Notions") section of the
+   course's Settings, editable by an owner, plain text for an assistant.
+3. **As built.** Table `course_concepts` (migration 0104): `course_id`
+   (cascade with the course), `concept_id` (RESTRICT), `added_by` (set null),
+   `added_at`, primary key (course, concept), index on `concept_id`. It is
+   owned by the `concept` module (`concept/courseConcepts.ts`), like
+   `question_concepts`: the `org` module sets it through the concept service
+   and reads it by join; no other module writes it. A write replaces the
+   whole set in one transaction. It share-locks every concept it names or links
+   (`lockLinkSet`, in id order, shared with `setQuestionConcepts`) and then
+   reads the links again, so a merge in flight finishes first, a merge that
+   committed meanwhile is seen, and a merged or unknown id is a 422
+   `concept_not_found`, as for a question. Two saves racing on a course
+   serialize on its rows (the insert ignores a link the other wrote) and the
+   last to commit wins. A link already there keeps its author and date. It is audited
+   as `course.concepts_update` (`added`, `removed`), and not at all when
+   nothing changed. A concept a course lists cannot be deleted: the
+   foreign key refuses, `DELETE /admin/concepts/:id` answers 409
+   `concept_in_use`, and `conceptReferenced` (the queue's `deletable`)
+   mirrors it. A **merge rewrites the course links** in its transaction
+   (insert-select on conflict do nothing, then delete): a course listing both
+   concepts keeps one, and `concept.merge` records `coursesMoved` and
+   `coursesAlreadyListed`.
+4. **Room left.** Relations (7c) and Suggest concepts (8a) add to this list
+   without changing it. A course's concept does not reach students: showing
+   them their own mastery of it is 9b, under its own ADR written before the
+   code, with its own student exit and leak test (05 §5.7).
+5. **Relations (7c, not built).** Broader and related edges between
+   concepts, written by the admin only. A merge drops the edges between the
+   loser and the winner and lists them in its audit; a merge that would close
+   a longer cycle is refused (409 `concept_merge_cycle`) naming the path;
+   never a silent deletion.
+6. **Suggest concepts (8a, not built).** It sends the draft's statement and
+   choices plus the labels and qualifiers of every live concept (no
+   descriptions, no creators); at most five existing concepts and two new
+   labels come back, and a new label goes through the explicit create form.
+   Hidden when no model is configured. Building it adds a sentence to
+   [open question 43](../spec/06-questions-ouvertes.md) (the data sent).
+7. **Mastery (9a, 9b, not built).** The teacher's mastery shows the course's
+   concepts with coverage, "no evidence" rows and an "outside the course"
+   bucket, with no student by concept matrix in v1. The student's mastery
+   (F-DRILL-05) shows course concepts only, rolled up, validated concepts
+   only; a level only from five reviewed cards, otherwise "no data yet"; no
+   class comparison or ranking and no "Practise this concept" button (ADR-041
+   §6 and §11 stand); FSRS fading is accepted. Reserved for its own ADR.

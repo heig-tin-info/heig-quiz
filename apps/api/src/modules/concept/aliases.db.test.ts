@@ -9,10 +9,10 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AliasCollision, Concept, ConceptList, ConceptResolveResponse } from "@quiz/contracts";
-import { qualifiedConceptKey } from "@quiz/domain";
 
 import type { AuditActor } from "../../audit.js";
 import { auditLog, conceptAliases, conceptTagSortings, concepts, pools } from "../../db/schema.js";
+import { seedConcept } from "../../test/concepts.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import * as service from "./service.js";
 
@@ -25,22 +25,8 @@ let student: Who;
 let poolId: string;
 const db = () => server.app.db;
 
-async function concept(fr: string | null, en: string | null, qualifier = ""): Promise<string> {
-  const id = randomUUID();
-  await db()
-    .insert(concepts)
-    .values({
-      id,
-      status: "validated",
-      createdBy: teacher.id,
-      labelFr: fr,
-      qualifierFr: fr === null ? "" : qualifier,
-      keyFr: fr === null ? null : qualifiedConceptKey(fr, qualifier),
-      labelEn: en,
-      keyEn: en === null ? null : qualifiedConceptKey(en, ""),
-    });
-  return id;
-}
+const concept = (fr: string | null, en: string | null, qualifier = "") =>
+  seedConcept(db(), teacher.id, fr === null ? null : [fr, qualifier], en === null ? null : [en]);
 
 const add = (who: Who, id: string, alias: string, force?: boolean) =>
   server.app.inject({
