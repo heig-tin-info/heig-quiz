@@ -4,6 +4,7 @@
  * for every forbidden key and secret value — is the registry's contract test.
  */
 import { describe, expect, it } from "vitest";
+import { testGradeContext } from "@quiz/core/testing";
 import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { clozeServer } from "./server.js";
 
@@ -112,8 +113,39 @@ describe("the answer in view coordinates", () => {
     }
   });
 
+  it.each(VIEWS)("hands a stored option back at the position that shows it (seed $seed, shuffle $shuffle)", (at) => {
+    const select = clozeServer.toStudent(SECRET_CONFIG, at).blanks[3];
+    if (select?.kind !== "select") throw new Error("blank 3 is a dropdown");
+    // Canonical 2 is "watt"; "9" names no option and must not be read as a position.
+    const shown = clozeServer.toStudentAnswer!(SECRET_CONFIG, at, { blanks: ["Newton", null, null, "2", null, "9"] });
+    expect(shown.blanks.slice(0, 3)).toEqual(["Newton", null, null]);
+    expect(select.options.find((option) => String(option.id) === shown.blanks[3])?.label).toBe("watt");
+    expect(shown.blanks[5]).toBeNull();
+  });
+
   it("refuses a position the dropdown does not have", () => {
     expect(clozeServer.fromStudentAnswer!(SECRET_CONFIG, view, { blanks: [null, null, null, "4"] })).toBeNull();
     expect(clozeServer.fromStudentAnswer!(SECRET_CONFIG, view, { blanks: [null, null, null, "newton"] })).toBeNull();
+  });
+});
+
+/*
+ * The breakdown names a dropdown's pick by its canonical index (D4): while the
+ * key is hidden, `given` goes with `expected`, and the verdicts stay (ADR-097).
+ */
+describe("studentDetails", () => {
+  const graded = clozeServer.grade(SECRET_CONFIG, { blanks: ["Newton", "10", "+=", "1", "N", "0"] }, testGradeContext(6));
+  if (graded instanceof Promise || graded.kind !== "graded") throw new Error("sync grade expected");
+
+  it("drops the key and the student's canonical picks while the key is hidden", () => {
+    const out = clozeServer.studentDetails!(graded.details, { showKey: false, showHiddenCaseNames: false }) as {
+      perBlank: Record<string, unknown>[];
+    };
+    expect(out.perBlank.map((blank) => blank["ok"])).toEqual(graded.details.perBlank.map((blank) => blank.ok));
+    expect(out.perBlank.some((blank) => "expected" in blank || "given" in blank)).toBe(false);
+  });
+
+  it("keeps the whole breakdown once the key is published", () => {
+    expect(clozeServer.studentDetails!(graded.details, { showKey: true, showHiddenCaseNames: false })).toBe(graded.details);
   });
 });
