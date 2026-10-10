@@ -64,8 +64,8 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
   /**
    * Names a colleague in the pool: an account picked among the candidates,
    * or an address — matched over the whole identity set of an account
-   * (GH-11) for a teacher the picker does not list under that spelling. A
-   * The visibility is derived from the roster, not written here.
+   * (GH-11) for a teacher the picker does not list under that spelling. The
+   * visibility is derived from the roster, not written here.
    */
   app.post(
     "/app/api/pools/:id/members",

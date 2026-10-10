@@ -701,6 +701,7 @@ describe("members (F-POOL-05)", () => {
     const listed = await service.listMembers(
       db,
       (await db.select().from(pools).where(eq(pools.id, pool!.id)))[0]!,
+      false,
     );
     expect(listed.members.map((m) => m.userId)).toEqual([ownerId, first, second]);
     expect(listed.members[0]!.isOwner).toBe(true);

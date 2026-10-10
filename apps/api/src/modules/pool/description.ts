@@ -17,7 +17,7 @@ import { POOL_DESCRIPTION_MAX } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { questions, questionVersions } from "../../db/schema.js";
-import { questionExcerpt } from "../../questionText.js";
+import { questionExcerpt } from "./excerpt.js";
 import { poolConcepts } from "../concept/service.js";
 import { DomainError } from "../http.js";
 import type { LlmGateway } from "../llm/service.js";
@@ -47,6 +47,7 @@ async function excerptsOf(db: Db, poolId: string): Promise<string[]> {
       type: questions.type,
       config: questionVersions.config,
       configVersion: questionVersions.configVersion,
+      variables: questionVersions.variables,
     })
     .from(questions)
     .innerJoin(questionVersions, eq(questionVersions.questionId, questions.id))
@@ -61,7 +62,7 @@ async function excerptsOf(db: Db, poolId: string): Promise<string[]> {
     .limit(20);
   const out: string[] = [];
   for (const r of rows) {
-    const text = questionExcerpt(r.type, { ...r, variables: null }, EXCERPT_CHARS);
+    const text = questionExcerpt(r.type, r, EXCERPT_CHARS);
     if (text) out.push(text);
     if (out.length === EXCERPTS) break;
   }
@@ -69,8 +70,9 @@ async function excerptsOf(db: Db, poolId: string): Promise<string[]> {
 }
 
 /**
- * One proposal, trimmed to the limit. 409 `pool_empty` when the pool has no
- * live question (a description made of a name alone would be invented);
+ * One proposal, trimmed to the limit. 409 `pool_empty` when the pool offers
+ * neither a concept nor an excerpt (a description made of a name alone would
+ * be invented);
  * the gateway's own failures pass through (`llmArms`).
  */
 export async function proposeDescription(
@@ -80,15 +82,8 @@ export async function proposeDescription(
   userId: string,
   lang: ConceptLang,
 ): Promise<string> {
-  const [concepts, excerpts, [counted]] = await Promise.all([
-    poolConcepts(db, pool.id, lang),
-    excerptsOf(db, pool.id),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(questions)
-      .where(and(eq(questions.poolId, pool.id), isNull(questions.deletedAt))),
-  ]);
-  if (!counted || counted.n === 0) throw new DomainError("pool_empty", 409, "The pool has no question to describe");
+  const [concepts, excerpts] = await Promise.all([poolConcepts(db, pool.id, lang), excerptsOf(db, pool.id)]);
+  if (concepts.length === 0 && excerpts.length === 0) throw new DomainError("pool_empty", 409, "The pool has no question to describe");
   const labels = concepts
     .sort((a, b) => b.count - a.count)
     .slice(0, MAX_CONCEPTS)

@@ -4294,6 +4294,8 @@ export const en = {
   "pools.description.suggest": "Suggest a description",
   "pools.description.proposal": "Proposal",
   "pools.description.use": "Use this description",
+  "pools.description.empty": "Add a question or a concept first: there is nothing to describe yet.",
+  "pools.description.failed": "Could not get a proposal.",
   "pools.description.dismiss": "Dismiss",
   "pools.settings.rename": "Rename",
   "pools.settings.iconDesc": "What the pool looks like on the shelf and in the sidebar.",

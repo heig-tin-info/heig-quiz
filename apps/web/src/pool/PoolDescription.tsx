@@ -2,12 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { PoolDescriptionProposal, type Pool } from "@quiz/contracts";
+import { PoolDescriptionProposal, type Pool, type PoolPatch } from "@quiz/contracts";
 import { POOL_DESCRIPTION_MAX } from "@quiz/domain";
 
-import { api } from "../api";
+import { api, refusedWith } from "../api";
 import { useT } from "../i18n";
-import { useErrorToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import { poolKey, poolsKey } from "../queryKeys";
 import { Button, Textarea } from "../ui";
 
@@ -23,6 +23,7 @@ export function PoolDescription({ pool }: { pool: Pool }) {
   const t = useT();
   const qc = useQueryClient();
   const toastError = useErrorToast();
+  const toast = useToast();
   const [draft, setDraft] = useState(pool.description);
   const [proposal, setProposal] = useState<string | null>(null);
   useEffect(() => setDraft(pool.description), [pool.description]);
@@ -34,7 +35,7 @@ export function PoolDescription({ pool }: { pool: Pool }) {
     ]);
   };
   const save = useMutation({
-    mutationFn: (body: { description: string; descriptionFromAi?: boolean }) =>
+    mutationFn: (body: PoolPatch) =>
       api(`/app/api/pools/${pool.id}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: async () => {
       setProposal(null);
@@ -48,7 +49,10 @@ export function PoolDescription({ pool }: { pool: Pool }) {
         await api(`/app/api/pools/${pool.id}/description/propose`, { method: "POST", body: "{}" }),
       ).description,
     onSuccess: setProposal,
-    onError: toastError("error.save"),
+    onError: (error) =>
+      refusedWith(error, "pool_empty")
+        ? toast(t("pools.description.empty"), "error")
+        : toastError("pools.description.failed")(error),
   });
 
   // A text the owner wrote is theirs: the model only ever fills a blank or replaces its own words.

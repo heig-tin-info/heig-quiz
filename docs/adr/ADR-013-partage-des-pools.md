@@ -134,13 +134,16 @@ every teacher. Two facts shape the design:
    to its owner's own course stays private). There is no "make private" action that evicts
    members: a pool becomes private when its people are removed. A public pool is already readable
    by every teacher, so inviting offers `contributor` and `owner` only (`409
-   role_covered_by_public` otherwise); `reader` rows that exist stay, so unpublishing never
-   silently cuts them. The Sharing section lists the linked courses, read-only, with their effect
+   role_covered_by_public` otherwise, and demoting an existing member to `reader` is refused the
+   same way); `reader` rows that exist stay, so unpublishing never silently cuts them. "Shared"
+   counts every `pool_members` row, including a seat kept by an account since demoted to student
+   (rule 5: such a seat opens nothing, but it is not swept either); this only affects the label. The Sharing section lists the linked courses, read-only, with their effect
    (their staff can edit, rule 3 of §3).
 9. **Description** *(amendment, 2026-10-10)*. `pools.description` (at most 280 characters) is
    written by an `owner` of the pool, as the name and the icon are (§1). The model may PROPOSE
    one through the ADR-058 gateway (purpose `describe`; sent: the pool name, its concept labels
-   and at most two statement excerpts from the student view, the scope accepted for ADR-081);
+   and at most two statement excerpts from the student view; recorded in open question 43 on
+   2026-10-10, accepted by the product owner in issue #680);
    the proposal is stored nowhere and becomes the description only when the owner accepts it
    (`PATCH` with `descriptionFromAi`). `description_source` (`owner` / `ai`) records who wrote
    it, and an AI text is refused over text the owner wrote (`409 description_owned`). Accepting is

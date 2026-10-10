@@ -19,7 +19,7 @@ import { type PoolRow } from "./shared.js";
  * in the order they were added — which is the succession order the day the
  * owner loses the teacher role (`transferOnLoss`).
  */
-export async function listMembers(db: Db, pool: PoolRow, seesCourses = false): Promise<PoolMembers> {
+export async function listMembers(db: Db, pool: PoolRow, seesCourses: boolean): Promise<PoolMembers> {
   const [[owner], rows, visibility, courseRows] = await Promise.all([
     db
       .select({
@@ -80,7 +80,7 @@ export async function listMembers(db: Db, pool: PoolRow, seesCourses = false): P
       addedAt: row.addedAt.toISOString(),
     });
   }
-  return { visibility, isPublic: pool.isPublic, members, courses: courseRows };
+  return { visibility, members, courses: courseRows };
 }
 
 /**

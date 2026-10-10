@@ -72,23 +72,17 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         if (isPublic === true && pool.isPersonal) {
           throw new DomainError("personal_pool_not_publishable", 409, "A personal pool cannot be published");
         }
-        // A proposal never overwrites text the owner wrote (ADR-013, amendment of 2026-10-10).
-        if (descriptionFromAi && pool.descriptionSource === "owner" && pool.description !== "") {
-          throw new DomainError("description_owned", 409, "The owner's own description is kept");
-        }
+        const source = fields.description === undefined ? {} : { descriptionSource: descriptionFromAi ? ("ai" as const) : ("owner" as const) };
         const updated = await service.updatePool(app.db, pool.id, {
           ...fields,
           ...(isPublic === undefined ? {} : { isPublic }),
-          ...(fields.description === undefined ? {} : { descriptionSource: descriptionFromAi ? "ai" : "owner" }),
+          ...source,
         });
         if (isPublic !== undefined && isPublic !== pool.isPublic) {
           await trace(req, isPublic ? "pool.publish" : "pool.unpublish", "pool", pool.id, {});
         }
         if (Object.keys(fields).length > 0) {
-          await trace(req, "pool.update", "pool", pool.id, {
-            ...fields,
-            ...(fields.description === undefined ? {} : { descriptionSource: descriptionFromAi ? "ai" : "owner" }),
-          });
+          await trace(req, "pool.update", "pool", pool.id, { ...fields, ...source });
         }
         poolChanged(pool.id);
         // A visibility or a name the members see on their own list too.
@@ -107,6 +101,10 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     "/app/api/pools/:id/description/propose",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool("owner") }, async ({ req, reply, scope: pool }) => {
+      // An AI proposal never replaces the owner's own text (ADR-013, amendment of 2026-10-10).
+      if (pool.descriptionSource === "owner" && pool.description !== "") {
+        throw new DomainError("description_owned", 409, "The owner's own description is kept");
+      }
       if (!proposals.spend(`describe:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
         return rateLimited(reply, BUDGET_RETRY_AFTER_S);
       }

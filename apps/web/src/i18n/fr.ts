@@ -4293,6 +4293,8 @@ export const fr: Record<keyof Dict, string> = {
   "pools.description.suggest": "Suggérer une description",
   "pools.description.proposal": "Proposition",
   "pools.description.use": "Utiliser cette description",
+  "pools.description.empty": "Ajoutez d'abord une question ou une notion : il n'y a encore rien à décrire.",
+  "pools.description.failed": "Impossible d'obtenir une proposition.",
   "pools.description.dismiss": "Ignorer",
   "pools.settings.rename": "Renommer",
   "pools.settings.iconDesc": "L'apparence de la banque dans la liste et dans la barre latérale.",

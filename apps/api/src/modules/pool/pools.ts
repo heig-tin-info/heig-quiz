@@ -7,7 +7,7 @@ import type { ConceptLang, Pool, PoolVisibility, PoolColor, PoolInUse, PoolRole,
 import { displayName, effectivePoolRole, heldPoolRole, type PoolDescriptionSource, type PoolRoleFacts } from "@quiz/domain";
 
 import { isForeignKeyViolation, qualified, type Db } from "../../db/client.js";
-import type { Caller } from "../guards.js";
+import { linkedCourseStaff, type Caller } from "../guards.js";
 import { shownAvatar } from "../avatar.js";
 import {
   attempts,
@@ -62,8 +62,7 @@ const usedCount = sql<number>`(SELECT count(DISTINCT ${qualified(questions.id)})
 export const derivedVisibility = sql<PoolVisibility>`(CASE
   WHEN ${qualified(pools.isPublic)} THEN 'public'
   WHEN EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)})
-    OR EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)}
-      WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} <> ${qualified(pools.ownerId)})
+    OR ${linkedCourseStaff(sql`${qualified(courseStaff.userId)} <> ${qualified(pools.ownerId)}`)}
   THEN 'shared' ELSE 'private' END)`;
 
 /** The derived visibility of one pool, read now. */
@@ -97,7 +96,7 @@ function memberRoleOf(userId: string): SQL<PoolRole | null> {
 }
 
 function courseStaffOf(userId: string): SQL<boolean> {
-  return sql<boolean>`EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} = ${userId})`;
+  return linkedCourseStaff(sql`${qualified(courseStaff.userId)} = ${userId}`) as SQL<boolean>;
 }
 
 /** The facts of `effectivePoolRole` for one row, Super Powers aside. */
@@ -218,6 +217,7 @@ export async function createPool(
       ownerId: input.ownerId,
     })
     .returning();
+  // A new pool has no member and no linked course: it is public or private, never shared.
   return poolJson(row!, row!.isPublic ? "public" : "private");
 }
 
@@ -344,10 +344,10 @@ export async function poolDetail(db: Db, pool: PoolRow, role: PoolRole, lang: Co
   const [tree, used, [counted]] = await Promise.all([
     categoryTree(db, pool.id),
     poolConcepts(db, pool.id, lang),
-    db.select({ n: questionCount }).from(pools).where(eq(pools.id, pool.id)),
+    db.select({ n: questionCount, visibility: derivedVisibility }).from(pools).where(eq(pools.id, pool.id)),
   ]);
   return {
-    pool: poolJson(pool, await visibilityOf(db, pool.id)),
+    pool: poolJson(pool, counted?.visibility ?? "private"),
     role,
     categories: tree,
     concepts: used,

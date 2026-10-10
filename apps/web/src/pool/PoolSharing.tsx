@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import {
   type Pool,
+  type PoolPatch,
   type TeacherCandidate,
   type PoolMember,
   type PoolMemberInvite,
@@ -168,11 +169,10 @@ export function PoolSharing({ pool }: { pool: Pool }) {
   });
 
   const setPublic = useMutation({
-    mutationFn: (isPublic: boolean) =>
-      api(`/app/api/pools/${pool.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ isPublic }),
-      }),
+    mutationFn: (isPublic: boolean) => {
+      const body: PoolPatch = { isPublic };
+      return api(`/app/api/pools/${pool.id}`, { method: "PATCH", body: JSON.stringify(body) });
+    },
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: poolsKey }),
@@ -203,7 +203,7 @@ export function PoolSharing({ pool }: { pool: Pool }) {
   // What the sheet draws: what the members call answered, and the summary
   // the list already had while it loads.
   const visibility = members.data?.visibility ?? pool.visibility;
-  const isPublic = members.data?.isPublic ?? pool.isPublic;
+  const { isPublic } = pool;
   const rows = members.data?.members ?? [];
   const courses = members.data?.courses ?? [];
   // A public pool is already readable: a new seat is a contributor or an owner.
@@ -216,14 +216,15 @@ export function PoolSharing({ pool }: { pool: Pool }) {
         <SettingRow
           title={t("share.publish")}
           desc={
-            pool.isPersonal
+            pool.isPersonal && !isPublic
               ? t("share.publish.personal")
               : `${t("share.publish.help")} ${t(`share.visibility.${visibility}.help`)}`
           }
         >
           <Switch
             checked={isPublic}
-            disabled={pool.isPersonal || setPublic.isPending}
+            // A personal pool migrated as public can still be taken back.
+            disabled={(pool.isPersonal && !isPublic) || setPublic.isPending}
             onChange={(v) => setPublic.mutate(v)}
             label={t("share.publish")}
           />

@@ -2350,7 +2350,6 @@ on("DELETE", "/app/api/pools/:id", (m) => {
 /** `PoolMembers`, which is also what the two write routes answer with. */
 const memberList = (pool: MockPool) => ({
   visibility: derivedVisibility(pool),
-  isPublic: pool.isPublic,
   // The mock links no course to a pool.
   courses:
     pool.id === "p1" ? [{ id: "c1", name: "Programmation C", code: "PRG1" }] : [],

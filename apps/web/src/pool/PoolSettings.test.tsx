@@ -40,7 +40,7 @@ const makeDetail = (over: Partial<PoolDetail["pool"]> = {}, role: PoolDetail["ro
   questionCount: 14,
 });
 
-const members: PoolMembers = { visibility: "private", isPublic: false, members: [], courses: [] };
+const members: PoolMembers = { visibility: "private", members: [], courses: [] };
 
 function renderSettings(detail: PoolDetail, navigate = vi.fn()) {
   const queryClient = makeQueryClient();

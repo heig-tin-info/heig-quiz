@@ -9,10 +9,11 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { PoolMembers, PoolSummary } from "@quiz/contracts";
+import { PoolMembers, PoolSummary, type ParametersDraft } from "@quiz/contracts";
 
 import { loadConfig } from "../../config.js";
 import { auditLog, coursePools, courses, courseStaff, llmCalls, pools } from "../../db/schema.js";
+import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import type { LlmProvider } from "../llm/provider.js";
 import { LlmGateway, writeSettings } from "../llm/service.js";
@@ -77,13 +78,21 @@ const mcq = (prompt: string) => ({
   shuffleChoices: true,
 });
 
-async function publishedQuestion(pool: string, prompt: string): Promise<void> {
-  const id = (await call(owner, "POST", `/app/api/pools/${pool}/questions`, { type: "mcq", internalName: `SECRET-INTERNAL-NAME-${Math.random()}` })).json<{
+async function publishedOf(
+  pool: string,
+  type: string,
+  config: unknown,
+  extra: { explanation?: string; variables?: ParametersDraft | null } = {},
+): Promise<void> {
+  const id = (await call(owner, "POST", `/app/api/pools/${pool}/questions`, { type, internalName: `SECRET-INTERNAL-NAME-${Math.random()}` })).json<{
     meta: { id: string };
   }>().meta.id;
-  expect((await call(owner, "PUT", `/app/api/questions/${id}/draft`, { config: mcq(prompt), explanation: "" })).statusCode).toBe(200);
+  const draft = await call(owner, "PUT", `/app/api/questions/${id}/draft`, { config, explanation: "", ...extra });
+  expect(draft.statusCode).toBe(200);
   expect((await call(owner, "POST", `/app/api/questions/${id}/publish`, {})).statusCode).toBe(201);
 }
+
+const publishedQuestion = (pool: string, prompt: string) => publishedOf(pool, "mcq", mcq(prompt));
 
 beforeAll(async () => {
   const env = { LLM_KEY_SECRET: SECRET };
@@ -222,6 +231,37 @@ describe("description", () => {
     expect(call1).toBeDefined();
   });
 
+  it("never sends an answer key, an explanation, an internal name or a parameterized template", async () => {
+    const id = await newPool("Clés");
+    await publishedOf(id, "short", {
+      configVersion: 3,
+      prompt: "Quelle est la couleur du ciel ?",
+      kind: "text",
+      matchers: [{ kind: "exact", value: "SECRET-KEY-ANSWER" }],
+    }, { explanation: "SECRET-EXPLANATION" });
+    await publishedOf(id, "cloze", { configVersion: 2, text: "Le ciel est {{SECRET-BLANK}} par temps clair." });
+    await publishedOf(id, "short", PARAMETERIZED.short, { explanation: EXPLANATION, variables: VARIABLES });
+    prompts = [];
+    server.clock.advance(61_000);
+    expect((await call(owner, "POST", `/app/api/pools/${id}/description/propose`)).statusCode).toBe(200);
+    const prompt = prompts[0]!;
+    expect(prompt).toContain("couleur du ciel");
+    for (const forbidden of ["SECRET-KEY-ANSWER", "SECRET-EXPLANATION", "SECRET-BLANK", "SECRET-INTERNAL-NAME", "[[", "randint", "sqrt("]) {
+      expect(prompt).not.toContain(forbidden);
+    }
+  });
+
+  it("has no excerpt for a parameterized question: a pool of only those is refused", async () => {
+    const id = await newPool("Paramétrées");
+    await publishedOf(id, "short", PARAMETERIZED.short, { explanation: EXPLANATION, variables: VARIABLES });
+    prompts = [];
+    server.clock.advance(61_000);
+    const res = await call(owner, "POST", `/app/api/pools/${id}/description/propose`);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: "pool_empty" });
+    expect(prompts).toHaveLength(0);
+  });
+
   it("is written, as an AI description, only by the owner's acceptance", async () => {
     const id = await newPool("Accepted");
     await publishedQuestion(id, "Combien font 2 + 2 ?");
@@ -235,11 +275,15 @@ describe("description", () => {
     expect(edited.json()).toMatchObject({ descriptionSource: "owner" });
   });
 
-  it("never lets an AI text replace the owner's own", async () => {
+  it("never proposes over the owner's own text, and asks no model", async () => {
     const id = await newPool("Owned");
+    await publishedQuestion(id, "Combien font 2 + 2 ?");
     await call(owner, "PATCH", `/app/api/pools/${id}`, { description: "Écrit à la main." });
-    const res = await call(owner, "PATCH", `/app/api/pools/${id}`, { description: "Texte IA", descriptionFromAi: true });
+    prompts = [];
+    server.clock.advance(61_000);
+    const res = await call(owner, "POST", `/app/api/pools/${id}/description/propose`);
     expect(res.statusCode).toBe(409);
+    expect(prompts).toHaveLength(0);
     expect(res.json()).toMatchObject({ error: "description_owned" });
     const [row] = await server.app.db.select().from(pools).where(eq(pools.id, id));
     expect(row!.description).toBe("Écrit à la main.");

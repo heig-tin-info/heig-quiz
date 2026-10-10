@@ -47,7 +47,6 @@ const linus: TeacherCandidate = {
 
 const list: PoolMembers = {
   visibility: "shared",
-  isPublic: false,
   courses: [],
   members: [
     {
@@ -135,7 +134,7 @@ describe("PoolSharing", () => {
   it("on a public pool offers contributor and owner only, and marks the reader rows", async () => {
     const reader = { ...list.members[1]!, userId: "t9", givenName: "Rita", familyName: "Reader", role: "reader" as const };
     mockFetch({
-      [`GET ${MEMBERS}`]: ok({ ...list, visibility: "public", isPublic: true, members: [...list.members, reader] }),
+      [`GET ${MEMBERS}`]: ok({ ...list, visibility: "public", members: [...list.members, reader] }),
     });
     renderWithProviders(<PoolSharing pool={{ ...POOL, visibility: "public", isPublic: true }} />);
     await screen.findByText("Rita Reader");

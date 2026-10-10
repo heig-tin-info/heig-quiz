@@ -156,7 +156,6 @@ export type PoolLinkedCourse = z.infer<typeof PoolLinkedCourse>;
 
 export const PoolMembers = z.object({
   visibility: PoolVisibility,
-  isPublic: z.boolean(),
   members: z.array(PoolMember),
   /** The linked courses, shown to the pool's owners only (empty for anyone else). */
   courses: z.array(PoolLinkedCourse),
