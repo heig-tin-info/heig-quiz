@@ -72,6 +72,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-075 — The workspace question: an advanced exam question worked in the online workspace, collected by the server](ADR-075-question-espace-de-travail.md)
 - [ADR-021 — Code image: a variant of `code`, a target in the config, stdout graded whatever the exit](ADR-021-codeimage-variante-de-code.md)
 - [ADR-024 — One locked editor, three student tools, a visible cooldown](ADR-024-editeur-verrouille-et-outils-etudiant.md)
+- [ADR-096 — Extra files and compiler flags of a program question are public program inputs](ADR-096-fichiers-annexes-publics.md)
 - [ADR-036 — Categorize: a new question type, sorting cards into columns](ADR-036-type-classement.md)
 - [ADR-040 — Favourite stars on questions: a second per-user preference table](ADR-040-favoris-de-question.md)
 - [ADR-046 — Diagram: one editor engine, one question type, eight notations](ADR-046-type-diagramme.md)

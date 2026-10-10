@@ -13,7 +13,8 @@ import { codeServer } from "./server.js";
 import {
   codeConfig,
   codeLeakFixture,
-  SECRET_FILE_CONTENT,
+  COMPILE_ARGS,
+  FILE_CONTENT,
   SECRET_HIDDEN_ARG,
   SECRET_HIDDEN_EXPECTED,
   SECRET_HIDDEN_NAME,
@@ -116,10 +117,12 @@ describe("codeServer.toStudent", () => {
     expect(codeServer.toStudent(runno, view).runtime).toBe("runno");
   });
 
-  it("announces the extra files by name and size, never by content", () => {
-    expect(student.filesPreview).toEqual([
-      { name: "data.csv", bytes: SECRET_FILE_CONTENT.length },
-    ]);
+  it("publishes the extra files whole and the compiler flags: public program inputs (ADR-096)", () => {
+    // Every run, the student's own included, hands them to the program, which
+    // can print them: withholding them here would only hide them from the
+    // browser runtime, never from the student.
+    expect(student.files).toEqual([{ name: "data.csv", content: FILE_CONTENT }]);
+    expect(student.compileArgs).toBe(COMPILE_ARGS);
   });
 
   it("hands over the template already split, markers included", () => {

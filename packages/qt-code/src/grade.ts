@@ -25,7 +25,10 @@ import {
   type CodeCaseDetail,
   type CodeConfig,
   type CodeDetails,
+  type CodeReviewDetails,
+  type HiddenCaseFailure,
   type ProgramConfig,
+  type ReviewCaseDetail,
 } from "./schema.js";
 import { caseVerdict } from "./verdict.js";
 
@@ -74,7 +77,9 @@ export function compileDetail(outcome: RunnerOutcome): { ok: boolean; stderr: st
 /**
  * The request of any program run. The single main file is named by the
  * language, so a student cannot choose a file name, and the teacher's extra
- * files are injected here rather than travelling through the browser.
+ * files and flags are taken from the stored config rather than from the
+ * browser. They reach every run, the student's included, and are therefore
+ * public program inputs that `toStudent` publishes too (ADR-096).
  */
 export function programRequest(
   config: ProgramConfig,
@@ -201,6 +206,19 @@ function zeroDetails(
   };
 }
 
+/**
+ * The order the grading request runs the cases in, as indices into
+ * `config.tests.cases`: the visible cases first, the hidden ones last, each
+ * group in the teacher's order (ADR-096). The cases of one request share one
+ * container and its `/work`, so a program could keep a hidden case's stdin
+ * and print it in a later case's output; with no visible case after a
+ * hidden one, no output a student reads can follow a hidden input.
+ */
+export function gradingOrder(cases: readonly CodeCase[]): number[] {
+  const indices = cases.map((_, i) => i);
+  return [...indices.filter((i) => cases[i]!.visible), ...indices.filter((i) => !cases[i]!.visible)];
+}
+
 /** First half: assemble, then delegate (`delegateToRunner`). */
 export function gradeCode(
   config: CodeConfig,
@@ -212,7 +230,11 @@ export function gradeCode(
     answer,
     ctx,
     (runner, reason) => zeroDetails(config, runner, reason),
-    (source) => buildRunnerRequest(config, source, { priority: "grading" }),
+    (source) =>
+      buildRunnerRequest(config, source, {
+        priority: "grading",
+        cases: gradingOrder(config.tests.cases).map((i) => config.tests.cases[i]!),
+      }),
   );
 }
 
@@ -234,8 +256,14 @@ export function finalizeRunnerCode(
     return zeroGrade(ctx, { runner: "ok", compile, cases: [], earned: 0, total, sourceSha256 }, "validated");
   }
 
+  // The request ran the cases in `gradingOrder`; the details keep the
+  // teacher's order, so case `i` reads the run at its position in that order.
+  const runIndex: number[] = [];
+  gradingOrder(config.tests.cases).forEach((caseIndex, position) => {
+    runIndex[caseIndex] = position;
+  });
   const cases: CodeCaseDetail[] = config.tests.cases.map((testCase, i) => {
-    const run = outcome.cases[i];
+    const run = outcome.cases[runIndex[i]!];
     if (run === undefined) {
       // The runner sent fewer results than cases: the missing ones did not pass.
       return {
@@ -289,34 +317,45 @@ export function finalizeRunnerCode(
 }
 
 /**
- * The details a STUDENT may read (decision D15). Hidden cases keep their
- * verdict — a student must be able to see what the scale was made of — but
- * lose their name, their expected output and everything the code printed,
- * unless the feedback policy opens the names.
+ * The coarse reason a hidden case failed, the most a student reads of it
+ * (ADR-096). A case the runner never reported (no `actual`: the run ended
+ * before it) failed, it did not crash.
+ */
+function hiddenFailure(c: CodeCaseDetail): HiddenCaseFailure | undefined {
+  if (c.ok) return undefined;
+  if (c.timedOut) return "timed_out";
+  if (c.oom) return "oom";
+  if (c.exitCode === null && c.actual !== undefined) return "crashed";
+  return "failed";
+}
+
+/**
+ * The details a STUDENT may read (decision D15, ADR-096). A visible case
+ * travels whole. A hidden case keeps its verdict — a student must be able to
+ * see what the scale was made of — and nothing of what the program did: no
+ * expected output, no output, no exit code, no time, only a coarse failure
+ * category. Its name stays `#n` unless the feedback policy opens the names.
  *
  * The grading panel keeps the unredacted details; this is the filter the
- * feedback policy applies on the way out.
+ * feedback policy applies on the way out, when it does not publish the key.
  */
 export function studentDetails(
   details: CodeDetails,
   options: { showHiddenCaseNames?: boolean } = {},
-): CodeDetails {
+): CodeReviewDetails {
   const show = options.showHiddenCaseNames === true;
   return {
     ...details,
-    cases: details.cases.map((c, i) =>
-      c.visible
-        ? c
-        : {
-            name: show ? c.name : `#${i + 1}`,
-            visible: false,
-            points: c.points,
-            ok: c.ok,
-            exitCode: c.exitCode,
-            ms: c.ms,
-            timedOut: c.timedOut,
-            oom: c.oom,
-          },
-    ),
+    cases: details.cases.map((c, i): ReviewCaseDetail => {
+      if (c.visible) return c;
+      const failure = hiddenFailure(c);
+      return {
+        name: show ? c.name : `#${i + 1}`,
+        visible: false,
+        points: c.points,
+        ok: c.ok,
+        ...(failure === undefined ? {} : { failure }),
+      };
+    }),
   };
 }

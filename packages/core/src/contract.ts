@@ -151,11 +151,13 @@ export interface StudentView {
  * answer is, and without them the player judged a visible case by a
  * different rule than the grade. The other four types keep `compare`
  * forbidden in their own leak tests; `code`'s test pins the exact shape.
+ * `compileArgs` left it for ADR-096: the compiler flags of a program
+ * question reach every run, the student's included, so they are a public
+ * program input that `code` and `codeimage` publish; no other type has them.
  */
 export const COMMON_FORBIDDEN_STUDENT_KEYS: readonly string[] = [
   "answers",
   "changeNote",
-  "compileArgs",
   "correct",
   "deprecationNote",
   "difficulty",

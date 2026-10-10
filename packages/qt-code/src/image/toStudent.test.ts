@@ -5,12 +5,12 @@
  * parsed by the student schema — is the registry's contract test.
  *
  * The TARGET is not a secret: it is the picture to draw, published on
- * purpose like a visible case. The reference solution, the compiler flags
- * and the extra files' bytes are.
+ * purpose like a visible case, and so are the compiler flags and the extra
+ * files, public program inputs (ADR-096). The reference solution is secret.
  */
 import { describe, expect, it } from "vitest";
 
-import { IMG_SECRET_FILE, IMG_SECRET_REFERENCE, imageConfig } from "./test/fixtures.js";
+import { IMG_COMPILE_ARGS, IMG_FILE, IMG_SECRET_REFERENCE, imageConfig } from "./test/fixtures.js";
 import { codeimageServer } from "./server.js";
 
 const view = { seed: 7, itemId: "item-1", shuffle: true };
@@ -30,8 +30,9 @@ describe("codeimageServer.toStudent", () => {
     expect(codeimageServer.toStudent(progressive, view).cooldown).toBe("progressive");
   });
 
-  it("names the extra files without their bytes", () => {
-    expect(student.filesPreview).toEqual([{ name: "seed.csv", bytes: IMG_SECRET_FILE.length }]);
+  it("publishes the extra files whole and the compiler flags (ADR-096)", () => {
+    expect(student.files).toEqual([{ name: "seed.csv", content: IMG_FILE }]);
+    expect(student.compileArgs).toBe(IMG_COMPILE_ARGS);
   });
 
   it("keeps the reference solution for the solution view alone", () => {

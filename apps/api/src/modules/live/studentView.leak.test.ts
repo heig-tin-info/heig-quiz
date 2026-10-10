@@ -28,8 +28,11 @@ import {
   type AnyQuestionTypeServer,
 } from "@quiz/core/server";
 
+import { CodeConfig, finalizeRunnerCode } from "@quiz/qt-code/server";
+
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { keysOf } from "../../test/keys.js";
+import { filterDetails } from "../results/service.js";
 import { FORBIDDEN_STUDENT_KEYS, studentSolutionView, studentView, stripMetadata } from "./studentView.js";
 
 /**
@@ -480,6 +483,60 @@ describe("studentView never leaks the key (invariant 4)", () => {
       restore();
     }
   });
+});
+
+/**
+ * The other student exit of a `code` question: its grading breakdown, through
+ * `filterDetails` (docs/05 §5.7, ADR-096). A hidden case comes back as its
+ * verdict alone; nothing it was fed or did — stdin, expected output, output,
+ * stderr, exit code, time — reaches the student unless the key is published.
+ */
+describe("a code grading's student details keep a hidden case closed (ADR-096)", () => {
+  const config = CodeConfig.parse({
+    configVersion: 1,
+    prompt: "p",
+    language: "c",
+    template: "int main(void) { return 0; }\n",
+    tests: {
+      mode: "io",
+      cases: [
+        { name: "shown", stdin: "1", expected: "1", visible: true, points: 1 },
+        { name: "S3CR3TNAME", stdin: "S3CR3TSTDIN", expected: "S3CR3TEXPECTED", visible: false, points: 1 },
+      ],
+    },
+  });
+  const run = (over: object) => ({
+    exitCode: 0, stdout: "", stderr: "", ms: 5, timedOut: false, oom: false, truncated: false, ...over,
+  });
+  const { details } = finalizeRunnerCode(
+    config,
+    { regions: [] },
+    { seed: 0, itemId: "i", attemptId: "a", itemPoints: 2, now: new Date(0) },
+    {
+      compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+      // The visible case runs first; the hidden one prints the stdin it read.
+      cases: [run({ stdout: "1" }), run({ stdout: "S3CR3TSTDIN", stderr: "S3CR3TSTDERR", exitCode: 77, ms: 4321 })],
+    },
+  );
+
+  for (const showHiddenCaseNames of [false, true]) {
+    it(`carries none of it (showHiddenCaseNames: ${showHiddenCaseNames})`, () => {
+      const payload = filterDetails("code", details, {
+        when: "on_release",
+        showAnswer: true,
+        showKey: false,
+        showExplanation: false,
+        showHiddenCaseNames,
+        showTeacherComment: true,
+      }) as { cases: Record<string, unknown>[] };
+      const serialized = JSON.stringify(payload);
+      for (const marker of ["S3CR3TSTDIN", "S3CR3TEXPECTED", "S3CR3TSTDERR", "4321", "77"]) {
+        expect(serialized, marker).not.toContain(marker);
+      }
+      expect(Object.keys(payload.cases[1]!).sort()).toEqual(["failure", "name", "ok", "points", "visible"]);
+      expect(serialized.includes("S3CR3TNAME")).toBe(showHiddenCaseNames);
+    });
+  }
 });
 
 /**

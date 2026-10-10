@@ -145,6 +145,21 @@ describe("the details filter for `code` (decision D15, deviation W3-5)", () => {
     expect(json).toContain("visible-1");
   });
 
+  it("reduces a hidden case to its verdict, exit code and time included (ADR-096)", () => {
+    for (const showHiddenCaseNames of [false, true]) {
+      const filtered = service.filterDetails("code", details, policy({ showHiddenCaseNames })) as CodeDetails;
+      expect(filtered.cases[1]).toEqual({
+        name: showHiddenCaseNames ? "hidden-overflow" : "#2",
+        visible: false,
+        points: 1,
+        ok: false,
+        failure: "failed",
+      });
+      // The visible case is untouched (its expected output is published).
+      expect(filtered.cases[0]).toEqual(details.cases[0]);
+    }
+  });
+
   it("keeps the hidden NAMES when `showHiddenCaseNames` is on", () => {
     const named = JSON.stringify(
       service.filterDetails("code", details, policy({ showHiddenCaseNames: true })),

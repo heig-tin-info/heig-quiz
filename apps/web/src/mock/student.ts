@@ -242,7 +242,8 @@ const studentPayloads: Record<number, unknown> = {
     ],
     hiddenCount: 3,
     hiddenPoints: 3,
-    filesPreview: [],
+    files: [],
+    compileArgs: "",
     allOrNothing: false,
   },
   /*

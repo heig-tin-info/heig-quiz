@@ -219,9 +219,9 @@ The **Reference solution** is your own answer to the editable regions, in their 
 - **Exit code**, 0 by default, empty to accept any; a crash still fails the case;
 - **Hidden**, **Points** and an optional **Time (ms)** for this case alone.
 
-A case must check at least one of the output and the exit code. A visible case is shown to the student, command line and expected output included, and can be run before handing in; a hidden case runs only at grading, and the player says only how many there are and what they are worth. The points of the question are the sum of the cases' points.
+A case must check at least one of the output and the exit code. A visible case is shown to the student, command line and expected output included, and can be run before handing in; a hidden case runs only at grading, after the visible ones, and the player says only how many there are and what they are worth. In the feedback, a student sees whether each hidden case passed and, if not, only why in a word (**Timed out**, **Out of memory**, **Crashed** or **Failed**), never its input, its output or its exit code, unless you show the expected answer. The points of the question are the sum of the cases' points.
 
-**Advanced options** hold the **Action** (**Compile only** or **Compile and run**), the **Compiler arguments**, the **Time limit (ms)**, **Memory (MB)** and **Output (KB)**, the **Runs per minute** a student may spend, **All or nothing**, and the **Output comparison**: **Ignore trailing whitespace**, **Ignore case**, and a **Numeric comparison** with an **Epsilon** for programs that print floating-point results.
+**Advanced options** hold the **Action** (**Compile only** or **Compile and run**), the **Compiler arguments** (shown to the student, like any extra file the question carries: every run uses them, so they never hold an answer), the **Time limit (ms)**, **Memory (MB)** and **Output (KB)**, the **Runs per minute** a student may spend, **All or nothing**, and the **Output comparison**: **Ignore trailing whitespace**, **Ignore case**, and a **Numeric comparison** with an **Epsilon** for programs that print floating-point results.
 
 ### The trial run and the grade
 

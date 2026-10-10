@@ -1969,7 +1969,8 @@ export function studentView(q: MockQuestion, config: Record<string, unknown>): u
         })),
         hiddenCount: hidden.length,
         hiddenPoints: hidden.reduce((sum, c) => sum + c.points, 0),
-        filesPreview: [],
+        files: [],
+        compileArgs: "",
         allOrNothing: config.allOrNothing === true,
       };
     }

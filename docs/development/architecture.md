@@ -344,8 +344,8 @@ The browser path exists because a `printf` should not need a container, and
 thirty students fiddling should not spend the runner's slots. It runs the
 program in a Web Worker so that `terminate()` is the stop button, with the
 `.wasm` runtimes served from this origin, and it only ever sees what
-`toStudent` already publishes: the visible cases, never `compileArgs` or the
-hidden ones. Its result is labelled an essay, because WASI is not Linux and
+`toStudent` already publishes: the visible cases, the extra files and
+`compileArgs` (public program inputs, ADR-096), never the hidden cases. Its result is labelled an essay, because WASI is not Linux and
 nothing signs the page. The grade always goes through `ctx.runner`: the
 source is assembled from the stored template and the student's editable
 regions (invariant 14), and one hardened container is created per request

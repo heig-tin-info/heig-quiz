@@ -196,7 +196,7 @@ config:
         // votre code
         return 0;
     }
-  files:                 # additional files read by the program, optional
+  files:                 # additional files read by the program, optional, PUBLIC (ADR-096)
     - { name: data.csv, content: "..." }
   action: run            # check compiles only, run executes
   compileArgs: "-Wall -Wextra -std=c17"
@@ -232,6 +232,9 @@ config:
 - **Points**: the sum of the cases' points. An `allOrNothing` option on the question gives all or nothing.
 - **Player buttons** (ADR-024): **Compile** builds and reports the compiler's messages, at their line in the editor (`RunBody.compileOnly`); **Run the tests**, the primary action, launches the visible cases and shows for each the command line, stdin, the expected output (when it is compared), the obtained output and the verdict; **Free try** opens a stdin area with its own command line, the only place where arguments come from the browser. Hidden cases are only run at grading. The last result of each tool stays on screen, and running the same code again is allowed. **Run the tests** and **Free try** share one cooldown and refill after each use: `cooldown: fixed` waits 3 s, `progressive` 3 s then 30 % longer each time up to 30 s, forgiven when the student pauses; a server run never waits less than `60 s / runsPerMinute`. **Compile** has no cooldown (one at a time only): on the server it spends a budget of its own, `compilesPerMinute = min(60, max(20, 3 × runsPerMinute))`, and never a test run, and a test run never spends a compilation. A refused run (429) reads "Too many runs in a minute" under the buttons (ADR-024, addendum of 2026-09-25).
 - **Arguments** are entered one per numbered row (`argv[1]`, `argv[2]`…, `argv[0]` shown as the program), with a preview of the command line quoted as a shell would need it.
+- **What `toStudent` publishes** (invariant 4): the statement, the template split into segments, the limits, the visible cases whole, the count and points of the hidden cases, the comparison options, and the extra files and `compileArgs` whole: every run, the student's own included, hands them to the program, so they are **public program inputs** and never hold a key (ADR-096). The hidden cases' stdin, command line and expected output and the reference solution stay home. Secret test data goes in a hidden case; a test-only secret file waits for the runner to run hidden cases in a container of their own.
+- **Order of the cases at grading** (ADR-096): the grading request runs the visible cases first, then the hidden ones, each group in the teacher's order; the stored breakdown keeps the teacher's order. A program cannot carry a hidden input into an output the student reads.
+- **Feedback on a hidden case** (D15, ADR-096): its verdict, its points and, when it failed, a coarse category — timed out, out of memory, crashed or failed; its name only when `showHiddenCaseNames` is on. Never its expected output, output, stderr, exit code or time, unless the policy shows the key.
 - **Answer**: `regions[]` content of each editable region, `lastRun` summary of the last run for the dashboard.
 - **Code editor**: Monaco, theme aligned with the platform, VS Code shortcuts, configurable tab width, no language server.
 
@@ -291,7 +294,7 @@ config:
     - a **layout** toggle, Single | Side by side: side by side shows the computed image on the left and, on the right, the target or the difference (the view toggle picks it); the two stack on a narrow screen;
     - the grid has square cells and a very light line between them while the cells are large enough to carry one; it is drawn on a `<canvas>` (up to 16 384 cells, no element per cell);
     - "x / y pixels correct (z %)", the warnings, and how the run ended. Before the first run the computed image is an empty placeholder. Every run replaces it.
-- **What `toStudent` strips** (invariant 4): the reference solution, `compileArgs`, the content of the extra files. **The target is published on purpose**: it is the picture to draw, like a visible case of `code`.
+- **What `toStudent` strips** (invariant 4): the reference solution. The extra files and `compileArgs` are published whole, public program inputs as for `code` (ADR-096). **The target is published on purpose**: it is the picture to draw, like a visible case of `code`.
 - **Answer**: `{ regions[] }`, as `code`.
 - **Points**: `defaultPoints` proposes 1. The class debrief shows the distribution of pixel accuracy (100 %, 90–99 %, 50–89 %, 1–49 %, 0 %).
 

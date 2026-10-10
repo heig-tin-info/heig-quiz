@@ -12,7 +12,7 @@ import { useId, useState } from "react";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import type { ReviewProps } from "@quiz/core/client";
 
-import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
+import type { CodeAnswer, CodeReviewDetails, CodeSolution, CodeStudent, ReviewCaseDetail } from "./schema.js";
 import { CompileFailure, NoBreakdown, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
 import {
@@ -34,7 +34,7 @@ import {
 import { caseVerdict } from "./verdict.js";
 
 interface CodeReviewProps
-  extends ReviewProps<CodeStudent, CodeAnswer, CodeSolution, CodeDetails> {
+  extends ReviewProps<CodeStudent, CodeAnswer, CodeSolution, CodeReviewDetails> {
   /** docs/06 Q8: the policy may name the hidden cases once the results are out. */
   showHiddenCaseNames?: boolean | undefined;
   strings?: Partial<CodeReviewStrings> | undefined;
@@ -52,11 +52,26 @@ type CaseSpec = NonNullable<CodeSolution["cases"]>[number];
  * verdict stays the honest, blunt "Failed".
  */
 function verdictOf(
-  detail: CodeCaseDetail,
+  detail: ReviewCaseDetail,
   spec: CaseSpec | undefined,
   compare: CodeSolution["compare"] | undefined,
   s: CodeReviewStrings,
 ): string {
+  // A hidden case on a student's path is its verdict alone (ADR-096): the
+  // coarse category is all there is to name, and no exit code is not a crash.
+  if (detail.exitCode === undefined) {
+    if (detail.ok) return s.passed;
+    switch (detail.failure) {
+      case "timed_out":
+        return s.timedOut;
+      case "oom":
+        return s.outOfMemory;
+      case "crashed":
+        return s.crashed;
+      default:
+        return s.failed;
+    }
+  }
   if (detail.timedOut) return s.timedOut;
   if (detail.oom) return s.outOfMemory;
   // The STORED verdict is the grade's; it is never re-decided here.
@@ -68,9 +83,9 @@ function verdictOf(
     {
       exitCode: detail.exitCode,
       stdout: detail.actual ?? "",
-      timedOut: detail.timedOut,
-      oom: detail.oom,
-      ms: detail.ms,
+      timedOut: detail.timedOut ?? false,
+      oom: detail.oom ?? false,
+      ms: detail.ms ?? 0,
     },
     compare,
   );

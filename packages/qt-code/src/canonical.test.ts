@@ -42,7 +42,7 @@ describe("the canonical mapping", () => {
       }),
     );
     expect(canonical.allOrNothing).toBe(true);
-    expect(canonical.compileArgs).toBe("-Wall -Wextra -std=c17 -DSECRET_FLAG");
+    expect(canonical.compileArgs).toBe("-Wall -Wextra -std=c17 -DMAX_ITEMS=64");
     expect(canonical.tests).toMatchObject({
       compare: { trimTrailing: false, ignoreCase: true, numeric: null },
       cases: [{ name: "c", expected: "1", timeMs: 500 }],

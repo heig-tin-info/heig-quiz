@@ -7,6 +7,7 @@ import {
   buildInteractiveRequest,
   finalizeRunnerCode,
   gradeCode,
+  gradingOrder,
   isEmptyAnswer,
   sha256,
   studentDetails,
@@ -20,6 +21,7 @@ import {
   outcome,
   SECRET_HIDDEN_ARG,
   SECRET_HIDDEN_EXPECTED,
+  SECRET_HIDDEN_STDIN,
   templateFor,
 } from "./test/fixtures.js";
 
@@ -160,6 +162,49 @@ describe("gradeCode", () => {
     expect(result.state).toBe("proposed");
     expect(result.comment).toBe("template_region_mismatch");
     expect(result.details.runner).toBe("error");
+  });
+});
+
+describe("the order of the cases at grading (ADR-096)", () => {
+  /** Hidden, visible, hidden: the teacher's order, which the details keep. */
+  const config = CodeConfig.parse({
+    ...codeConfig(),
+    tests: {
+      mode: "io",
+      cases: [
+        { name: "h1", stdin: "hidden-in-1", expected: "H1\n", visible: false, points: 1 },
+        { name: "v1", stdin: "visible-in", expected: "V1\n", visible: true, points: 1 },
+        { name: "h2", stdin: "hidden-in-2", expected: "H2\n", visible: false, points: 1 },
+      ],
+    },
+  });
+
+  it("runs the visible cases first and the hidden ones last", () => {
+    // One container serves the whole request and its /work persists: no
+    // output a student reads may follow a hidden input.
+    expect(gradingOrder(config.tests.cases)).toEqual([1, 0, 2]);
+    const result = gradeCode(config, answerFor(config, "x"), ctx());
+    if (!isPendingRunner(result)) throw new Error("expected a pending runner result");
+    expect(result.request.cases.map((c) => c.name)).toEqual(["v1", "h1", "h2"]);
+  });
+
+  it("pairs each run with its case and keeps the teacher's order in the details", () => {
+    // The runner answers in the request's order: v1, h1, h2.
+    const result = finalizeRunnerCode(
+      config,
+      answerFor(config, "x"),
+      FINALIZE_CTX,
+      outcome([{ stdout: "V1\n" }, { stdout: "H1\n" }, { stdout: "wrong" }]),
+    );
+    expect(result.details.cases.map((c) => [c.name, c.ok, c.actual])).toEqual([
+      ["h1", true, "H1\n"],
+      ["v1", true, "V1\n"],
+      ["h2", false, "wrong"],
+    ]);
+  });
+
+  it("leaves the order of an already visible-first suite alone", () => {
+    expect(gradingOrder(codeConfig().tests.cases)).toEqual([0, 1, 2]);
   });
 });
 
@@ -407,15 +452,41 @@ describe("studentDetails", () => {
     outcome([{ stdout: "6\n" }, { stdout: "0\n" }, { stdout: SECRET_HIDDEN_EXPECTED }]),
   ).details;
 
-  it("keeps the verdict of a hidden case but closes everything else", () => {
+  it("reduces a hidden case to its verdict: name, points, ok (ADR-096)", () => {
     const shown = studentDetails(details);
-    const hidden = shown.cases[2]!;
-    expect(hidden.ok).toBe(true);
-    expect(hidden.points).toBe(2);
-    expect(hidden.name).toBe("#3");
-    expect(hidden.expected).toBeUndefined();
-    expect(hidden.actual).toBeUndefined();
-    expect(JSON.stringify(shown)).not.toContain("negative-values");
+    expect(shown.cases[2]).toEqual({ name: "#3", visible: false, points: 2, ok: true });
+    const json = JSON.stringify(shown);
+    expect(json).not.toContain("negative-values");
+    expect(json).not.toContain(SECRET_HIDDEN_EXPECTED);
+    expect(json).not.toContain(JSON.stringify(SECRET_HIDDEN_STDIN).slice(1, -1));
+  });
+
+  it("names a hidden case's failure coarsely, never by its exit code or its time", () => {
+    const failing = (run: Partial<RunnerOutcome["cases"][number]>) =>
+      studentDetails(
+        finalizeRunnerCode(
+          config,
+          answerFor(config, "x"),
+          FINALIZE_CTX,
+          outcome([{ stdout: "6\n" }, { stdout: "0\n" }, { stderr: "SECRET-STDERR", ...run }]),
+        ).details,
+      ).cases[2]!;
+    expect(failing({ exitCode: 3, ms: 1234 })).toEqual({
+      name: "#3",
+      visible: false,
+      points: 2,
+      ok: false,
+      failure: "failed",
+    });
+    expect(failing({ exitCode: null }).failure).toBe("crashed");
+    expect(failing({ exitCode: null, timedOut: true }).failure).toBe("timed_out");
+    expect(failing({ exitCode: null, oom: true }).failure).toBe("oom");
+    // The runner never reported it (the run ended before): not a crash.
+    const notRun = finalizeRunnerCode(config, answerFor(config, "x"), FINALIZE_CTX, outcome([{ stdout: "6\n" }]));
+    expect(studentDetails(notRun.details).cases[2]!.failure).toBe("failed");
+    for (const key of ["exitCode", "ms", "timedOut", "oom", "stderr", "actual", "expected"]) {
+      expect(failing({ exitCode: 3, ms: 1234 })).not.toHaveProperty(key);
+    }
   });
 
   it("names the hidden cases when the feedback policy allows it", () => {

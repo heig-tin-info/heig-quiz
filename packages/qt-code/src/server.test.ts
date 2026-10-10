@@ -54,3 +54,28 @@ describe("aggregate", () => {
     expect(labels(true)).toEqual(["sum", "overflow"]);
   });
 });
+
+describe("studentDetails", () => {
+  const hidden: CodeCaseDetail = {
+    ...verdict("overflow", false),
+    visible: false,
+    exitCode: 139,
+    ms: 1234,
+    expected: "SECRET-EXPECTED",
+    actual: "SECRET-ACTUAL",
+    stderr: "SECRET-STDERR",
+  };
+  const policy = { showKey: false, showHiddenCaseNames: false };
+
+  it("reduces a hidden case to its verdict on the student path (ADR-096)", () => {
+    const shown = codeServer.studentDetails!(details(verdict("sum", true), hidden), policy) as CodeDetails;
+    expect(shown.cases[1]).toEqual({ name: "#2", visible: false, points: 1, ok: false, failure: "failed" });
+  });
+
+  it("returns everything when the policy publishes the key: on purpose, not forgotten", () => {
+    // `showKey` is the teacher publishing the key; the hidden case travels
+    // whole, its output and exit code included.
+    const whole = details(verdict("sum", true), hidden);
+    expect(codeServer.studentDetails!(whole, { ...policy, showKey: true })).toEqual(whole);
+  });
+});
