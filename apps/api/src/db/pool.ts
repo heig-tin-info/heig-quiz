@@ -66,6 +66,15 @@ export const pools = pgTable(
     description: text("description").notNull().default(""),
     /** Who wrote `description`: the owner, or an AI proposal the owner accepted. */
     descriptionSource: text("description_source", { enum: POOL_DESCRIPTION_SOURCES }).notNull().default("owner"),
+    /**
+     * The domain of a PUBLIC pool, one short label per language, inferred from the concept labels of
+     * its published questions (ADR-095). `domain_key` is the fingerprint of the labels it was inferred
+     * from: the nightly pass redoes only a pool whose labels changed. Empty until inferred.
+     */
+    domainFr: text("domain_fr").notNull().default(""),
+    domainEn: text("domain_en").notNull().default(""),
+    domainKey: text("domain_key").notNull().default(""),
+    domainAt: timestamp("domain_at", { withTimezone: true }),
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id),

@@ -156,6 +156,9 @@ interface MockPool {
   isPublic: boolean;
   description: string;
   descriptionSource: "owner" | "ai";
+  /** The domain the model inferred from the pool's concepts (ADR-095); empty until inferred. */
+  domainFr?: string;
+  domainEn?: string;
   ownerId: string;
   isPersonal: boolean;
   createdAt: string;
@@ -188,13 +191,13 @@ interface MockCategory {
  */
 export const pools: MockPool[] = [
   { id: "p1", name: "Programmation C", icon: "code", color: "blue", isPublic: false, description: "Pointeurs, mémoire dynamique et chaînes de caractères : les questions du cours de C, du premier TP à l'examen.", descriptionSource: "owner", ownerId: "u-me", isPersonal: false, createdAt: iso(-300 * D), updatedAt: iso(-2 * H) },
-  { id: "p2", name: "Systèmes embarqués", icon: "cpu", color: "teal", isPublic: true, description: "", descriptionSource: "owner", ownerId: "u-me", isPersonal: false, createdAt: iso(-120 * D), updatedAt: iso(-6 * D) },
+  { id: "p2", name: "Systèmes embarqués", icon: "cpu", color: "teal", isPublic: true, description: "", descriptionSource: "owner", domainFr: "Systèmes embarqués", domainEn: "Embedded systems", ownerId: "u-me", isPersonal: false, createdAt: iso(-120 * D), updatedAt: iso(-6 * D) },
   { id: "p3", name: "Électronique analogique", icon: "circuit-board", color: null, isPublic: false, description: "Diodes, transistors et amplificateurs opérationnels.", descriptionSource: "ai", ownerId: "t1", isPersonal: false, createdAt: iso(-60 * D), updatedAt: iso(-30 * 60_000) },
   // The personal pool (F-POOL-01): created by the first "Keep this
   // question" after a poll (ADR-014, addenda item 6); the launcher's "Pick a
   // question" tab lists it and nothing else.
   // A colleague's public pool I neither sit on nor subscribed to (ADR-095): the catalogue lists it.
-  { id: "p4", name: "Mécanique des fluides", icon: "waves", color: "blue", isPublic: true, description: "Hydrostatique, Bernoulli et pertes de charge : une cinquantaine de questions d'examen.", descriptionSource: "owner", ownerId: "t2", isPersonal: false, createdAt: iso(-90 * D), updatedAt: iso(-3 * D) },
+  { id: "p4", name: "Mécanique des fluides", icon: "waves", color: "blue", isPublic: true, description: "Hydrostatique, Bernoulli et pertes de charge : une cinquantaine de questions d'examen.", descriptionSource: "owner", domainFr: "Mécanique des fluides", domainEn: "Fluid mechanics", ownerId: "t2", isPersonal: false, createdAt: iso(-90 * D), updatedAt: iso(-3 * D) },
   { id: "p0", name: "Polls", icon: "message-circle-question", color: null, isPublic: false, description: "", descriptionSource: "owner", ownerId: "u-me", isPersonal: true, createdAt: iso(-20 * D), updatedAt: iso(-2 * D) },
 ];
 
@@ -1530,6 +1533,8 @@ export const poolSummary = (pool: MockPool) => {
     ownerFamilyName: owner?.familyName ?? "",
     ownerAvatarUrl: null,
     memberCount: (poolMembers[pool.id] ?? []).filter((m) => m.userId !== pool.ownerId).length,
+    domainFr: pool.domainFr ?? "",
+    domainEn: pool.domainEn ?? "",
     subscriberCount: pool.isPublic ? (subscriberNames[pool.id] ?? []).length + (mySubscriptions.has(pool.id) ? 1 : 0) : 0,
     subscription: subscriptionState({
       isPublic: pool.isPublic,
@@ -2310,6 +2315,21 @@ on("GET", "/app/api/pools", () =>
 );
 /** A colour the real API would accept, or grey. */
 const poolColor = (value: unknown): PoolColor | null => PoolColor.safeParse(value).data ?? null;
+
+/** The catalogue (ADR-095): public pools only, every word found in the name, description, domain or a concept label; the most followed first. */
+on("GET", "/app/api/pools/catalogue", (_m, _body, url) => {
+  const fold = (text: string) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
+  const words = fold(url.searchParams.get("q") ?? "").split(/\s+/).filter(Boolean);
+  const concepts = (pool: MockPool) => poolConcepts(pool.id).map((c) => c.concept.label);
+  return pools
+    .filter((p) => p.isPublic)
+    .filter((p) => {
+      const haystack = fold([p.name, p.description, p.domainFr ?? "", p.domainEn ?? "", ...concepts(p)].join(" "));
+      return words.every((w) => haystack.includes(w));
+    })
+    .map(poolSummary)
+    .sort((a, b) => b.subscriberCount + b.memberCount - (a.subscriberCount + a.memberCount) || a.name.localeCompare(b.name));
+});
 
 on("POST", "/app/api/pools", (_m, body) => {
   const pool: MockPool = {

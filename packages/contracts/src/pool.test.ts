@@ -32,6 +32,8 @@ describe("PoolColor — the colour of a pool's icon (#213)", () => {
       isPublic: false,
       description: "",
       descriptionSource: "owner",
+      domainFr: "",
+      domainEn: "",
       ownerId: "00000000-0000-4000-8000-000000000002",
       isPersonal: false,
       createdAt: "2026-09-28T00:00:00.000Z",

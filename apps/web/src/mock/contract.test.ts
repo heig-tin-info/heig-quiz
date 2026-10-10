@@ -345,6 +345,7 @@ const CHECKED: Case[] = [
     EvaluationSummary,
   ),
   each("/app/api/pools", "/app/api/pools", PoolSummary),
+  each("/app/api/pools/catalogue", "/app/api/pools/catalogue?q=fluides", PoolSummary),
   ...pools.flatMap((p) => [
     one("/app/api/pools/:id", `/app/api/pools/${p.id}`, PoolDetail),
     one("/app/api/pools/:id/categories", `/app/api/pools/${p.id}/categories`, PoolCategories),

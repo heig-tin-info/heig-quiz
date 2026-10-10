@@ -53,6 +53,23 @@ function singular(word: string): string {
   return word;
 }
 
+/** The lower-case letters NFKD keeps whole, and what `foldText` spells them as (the SQL fold of the catalogue reads this too). */
+export const FOLD_LIGATURES: readonly (readonly [string, string])[] = [
+  ["œ", "oe"],
+  ["æ", "ae"],
+  ["ß", "ss"],
+];
+
+/**
+ * Lower-case, accents dropped, the ligatures `œ`, `æ`, `ß` (which NFKD keeps)
+ * spelled out: what a label and a search term are compared as. The one fold
+ * of concept keys and of the catalogue's search.
+ */
+export function foldText(text: string): string {
+  const plain = text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
+  return FOLD_LIGATURES.reduce((out, [ligature, spelled]) => out.replaceAll(ligature, spelled), plain);
+}
+
 /**
  * The matching key of a label. `+` and `#` survive inside a word, so `c`,
  * `c++` and `c#` stay three keys (`C ++` is `c++`); a `#` opening a word is
@@ -61,13 +78,7 @@ function singular(word: string): string {
  * them rather than collapsing to nothing.
  */
 export function conceptKey(label: string): string {
-  const words = label
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/œ/g, "oe")
-    .replace(/æ/g, "ae")
-    .replace(/ß/g, "ss")
+  const words = foldText(label)
     .replace(/\s+(?=\+)/g, "")
     .split(/[^\p{L}\p{N}+#]+/u)
     .map((w) => w.replace(/^#+/, ""))

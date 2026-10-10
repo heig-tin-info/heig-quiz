@@ -187,6 +187,8 @@ export const journalRevisionRenderedKey = (id: string, revisionId: string) =>
 // --- Pools and questions -----------------------------------------------------
 
 export const poolsKey = ["pools"] as const;
+/** The catalogue of public pools (ADR-095), under the shelf's key so a subscription refreshes both. */
+export const poolCatalogueKey = (q: string) => ["pools", "catalogue", q] as const;
 /** The pools an evaluation's picker offers: under `poolsKey`, for the same reason. */
 export const evaluationPoolsKey = (id: string) => ["pools", "evaluation", id] as const;
 /** The pools a template's picker offers (its course's linked pools), likewise. */
