@@ -129,7 +129,7 @@ export const PoolPatch = z
     color: PoolColor.nullable().optional(),
     isPublic: z.boolean().optional(),
     description: z.string().trim().max(POOL_DESCRIPTION_MAX).optional(),
-    /** The description is an AI proposal the owner accepted; refused over text the owner wrote. */
+    /** The description is an AI proposal the owner accepted: the PATCH records `descriptionSource`; `description_owned` is refused when a proposal is requested (propose route). */
     descriptionFromAi: z.boolean().optional(),
   })
   .refine((b) => b.descriptionFromAi === undefined || b.description !== undefined, {

@@ -146,7 +146,7 @@ every teacher. Two facts shape the design:
    2026-10-10, accepted by the product owner in issue #680);
    the proposal is stored nowhere and becomes the description only when the owner accepts it
    (`PATCH` with `descriptionFromAi`). `description_source` (`owner` / `ai`) records who wrote
-   it, and an AI text is refused over text the owner wrote (`409 description_owned`). Accepting is
+   it, and a proposal is refused over text the owner wrote (`409 description_owned`, in the propose route before any model call; the `PATCH` only records `descriptionSource`). Accepting is
    a `pool.update`.
 
 ## Consequences
