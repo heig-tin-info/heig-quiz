@@ -22,19 +22,22 @@ const SHOWN = 8;
 export function ConceptMergeDialog({
   concept,
   candidates,
+  initialTarget,
   onClose,
   onMerged,
 }: {
   concept: AdminConcept;
   /** The queue's concepts; the validated ones other than `concept` are offered. */
   candidates: readonly AdminConcept[];
+  /** A target chosen beforehand (a probable duplicate): preselected, and searched for so it is listed. */
+  initialTarget?: AdminConcept;
   onClose: () => void;
   onMerged: () => void;
 }) {
   const t = useT();
   const { locale } = useI18n();
-  const [typed, setTyped] = useState("");
-  const [picked, setPicked] = useState<string | null>(null);
+  const [typed, setTyped] = useState(initialTarget ? conceptName(initialTarget, locale) : "");
+  const [picked, setPicked] = useState<string | null>(initialTarget?.id ?? null);
   // Off by default (ADR-081 §6): the merged label is dropped unless the admin keeps it as an alias.
   const [keepAlias, setKeepAlias] = useState(false);
   const name = conceptName(concept, locale);

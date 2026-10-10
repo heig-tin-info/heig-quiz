@@ -458,6 +458,16 @@ is the first pull request; merge, aliases and probable duplicates follow.
    the admin asks, on the daily cap of the LLM gateway, as an ephemeral result
    never written automatically, after a deterministic pre-pass; a new row of
    [open question 43](../spec/06-questions-ouvertes.md) records the data sent.
+   As built (PR4a, the pre-pass alone): `probableDuplicates` (`@quiz/domain`)
+   pairs the live concepts, one reason per pair, first that holds: `alias`
+   (a label's key is the other's alias key), `translation` (the qualified key
+   of the French label of one is that of the English label of the other),
+   `homonym` (one bare label in one language under different qualifiers:
+   "check the qualifiers", never offered for a merge) and `close` (two labels
+   within `keyDistance`, the resolver's tolerance, not equal). It runs in the
+   browser on the `GET /admin/concepts` list, which already carries labels,
+   qualifiers and aliases: no route, no table; it compares every pair, so it
+   is for hundreds of concepts, not more. The model on demand is PR4b.
 5. **Out of step 5.** Relations (broader, related, cycle check) move to
    step 7, the course concepts. There is no split of a polysemous concept and
    no "reject" action in v1: an unwanted proposal is deleted when unused, or

@@ -159,6 +159,18 @@ export interface ConceptMatch {
 }
 
 /**
+ * The edits between two keys when they are close enough for a "did you
+ * mean" (see {@link tolerance}), else null. 0 means the same key. The one
+ * rule of {@link closeConcepts} and {@link probableDuplicates}.
+ */
+export function keyDistance(a: string, b: string): number | null {
+  const tol = tolerance(Math.min(a.length, b.length));
+  if (Math.abs(a.length - b.length) > tol) return null;
+  const distance = a === b ? 0 : editDistance(a, b);
+  return distance > tol ? null : distance;
+}
+
+/**
  * The concepts `input` may designate, best first: the exact matches, then
  * the close ones by distance, then by name. One entry per concept, through
  * its best-matching name. An input whose key is empty matches nothing.
@@ -173,11 +185,8 @@ export function closeConcepts(
   for (const concept of concepts) {
     let best: ConceptMatch | undefined;
     for (const name of concept.names) {
-      const other = conceptKey(name);
-      const tol = tolerance(Math.min(key.length, other.length));
-      if (Math.abs(key.length - other.length) > tol) continue;
-      const distance = other === key ? 0 : editDistance(key, other);
-      if (distance > tol) continue;
+      const distance = keyDistance(key, conceptKey(name));
+      if (distance === null) continue;
       if (!best || distance < best.distance) {
         best = {
           id: concept.id,
@@ -383,6 +392,95 @@ export function filterIds(resolution: LabelResolution): string[] {
   if (resolution.kind === "resolved") return [resolution.id];
   if (resolution.kind === "ambiguous") return [...resolution.candidates];
   return [];
+}
+
+/**
+ * A concept as the duplicate check reads it: the shape of the contracts'
+ * `Concept`, so a caller hands it over as it is.
+ */
+export interface DuplicateCandidate {
+  id: string;
+  mergedInto: string | null;
+  labels: Record<ConceptLanguage, string | null>;
+  qualifiers: Record<ConceptLanguage, string>;
+  aliases: readonly string[];
+}
+
+/**
+ * Why two concepts are flagged (ADR-081 fifth addendum §4), strongest first
+ * (a pair carries the first that holds):
+ * - `alias`: a label of one has the key of an alias of the other, so the
+ *   typed word is ambiguous for every teacher;
+ * - `translation`: the French label of one has the key (qualifier included)
+ *   of the English label of the other, or the reverse;
+ * - `homonym`: the same bare label in one language under different
+ *   qualifiers. Often legitimate: the admin checks the qualifiers, a merge
+ *   is not proposed;
+ * - `close`: two labels, in any language, are a few edits apart
+ *   ({@link keyDistance}, the resolver's own rule), but not the same.
+ */
+export const DUPLICATE_REASONS = ["alias", "translation", "close", "homonym"] as const;
+export type DuplicateReason = (typeof DUPLICATE_REASONS)[number];
+
+export interface DuplicatePair {
+  /** The two concepts' ids, in ascending order. */
+  a: string;
+  b: string;
+  reason: DuplicateReason;
+}
+
+interface Keyed {
+  id: string;
+  /** Per language: the bare key and the qualified key of the label. */
+  sides: { lang: ConceptLanguage; bare: string; full: string }[];
+  aliasKeys: Set<string>;
+}
+
+function reasonOf(x: Keyed, y: Keyed): DuplicateReason | null {
+  const aliased = (from: Keyed, to: Keyed) => from.sides.some((s) => to.aliasKeys.has(s.bare));
+  if (aliased(x, y) || aliased(y, x)) return "alias";
+  const crossed = (test: (s: Keyed["sides"][number], o: Keyed["sides"][number]) => boolean) =>
+    x.sides.some((s) => y.sides.some((o) => test(s, o)));
+  if (crossed((s, o) => s.lang !== o.lang && s.full === o.full)) return "translation";
+  if (crossed((s, o) => s.lang === o.lang && s.bare === o.bare && s.full !== o.full)) return "homonym";
+  if (crossed((s, o) => (keyDistance(s.bare, o.bare) ?? 0) > 0)) return "close";
+  return null;
+}
+
+/**
+ * The pairs of concepts that are probably one (ADR-081 fifth addendum §4),
+ * computed from labels, qualifiers and aliases alone: no model, nothing
+ * stored. Merged concepts are left out. At most one pair, with its first
+ * {@link DuplicateReason}, per two concepts; ordered by reason, then ids.
+ *
+ * Every pair is compared (a label's key is computed once), so the cost is
+ * quadratic in the vocabulary: meant for hundreds of concepts, which the
+ * vocabulary is (tens of thousands of comparisons).
+ */
+export function probableDuplicates(concepts: readonly DuplicateCandidate[]): DuplicatePair[] {
+  const keyed: Keyed[] = concepts
+    .filter((c) => !c.mergedInto)
+    .map((c) => ({
+      id: c.id,
+      sides: (["fr", "en"] as const).flatMap((lang) => {
+        const label = c.labels[lang];
+        return label === null
+          ? []
+          : [{ lang, bare: conceptKey(label), full: qualifiedConceptKey(label, c.qualifiers[lang]) }];
+      }),
+      aliasKeys: new Set(c.aliases.map(conceptKey)),
+    }))
+    .sort((p, q) => (p.id < q.id ? -1 : 1));
+  const out: DuplicatePair[] = [];
+  for (let i = 0; i < keyed.length; i++) {
+    for (let j = i + 1; j < keyed.length; j++) {
+      const reason = reasonOf(keyed[i]!, keyed[j]!);
+      if (reason) out.push({ a: keyed[i]!.id, b: keyed[j]!.id, reason });
+    }
+  }
+  const rank = (r: DuplicateReason) => DUPLICATE_REASONS.indexOf(r);
+  // `sort` is stable and the pairs came in id order.
+  return out.sort((p, q) => rank(p.reason) - rank(q.reason));
 }
 
 /** The longest label, and qualifier, a concept takes (the contracts' bound). */

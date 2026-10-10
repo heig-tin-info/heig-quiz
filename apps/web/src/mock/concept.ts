@@ -52,6 +52,10 @@ const concepts: Concept[] = [
   concept("proposed", ["Fuite mémoire", "", "Mémoire allouée que plus aucun pointeur ne désigne."], [null]),
   concept("proposed", [null], ["Hash table", "", "Keys mapped to buckets by a hash function."]),
   concept("proposed", ["Complément à deux"], ["Two's complement"]),
+  // One pair per probable-duplicate reason (with the two Adresse homonyms above and the alias "Tas" below).
+  concept("proposed", ["Alocation dynamique"], ["Dynamic alocation"]),
+  concept("proposed", ["Hash table", "", "Anglicisme saisi par un enseignant."], [null]),
+  concept("proposed", ["Tas"], ["Heap"]),
 ];
 
 concepts[0]!.aliases = ["Référence mémoire", "Pointer variable"];

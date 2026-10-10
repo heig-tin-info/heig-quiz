@@ -1567,6 +1567,13 @@ const scenes = [
       await p.getByRole("radio", { name: /^pointer/i }).first().check({ force: true });
       await p.getByRole("checkbox", { name: /as an alias of/i }).check({ force: true });
     } },
+  // Probable duplicates (fifth addendum, PR4a): the filter's pairs, one per reason, then a merge opened with its target chosen.
+  { name: "admin-concepts-duplicates", role: "admin", path: "/admin?tab=concepts", act: (p) => p.getByRole("radio", { name: /^duplicates/i }).check({ force: true }) },
+  { name: "admin-concepts-duplicates-merge", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
+      await p.getByRole("radio", { name: /^duplicates/i }).check({ force: true });
+      await p.getByRole("button", { name: /^merge dynamic alocation into/i }).click();
+      await p.getByRole("dialog").waitFor();
+    } },
   // Curated aliases (fifth addendum, PR3): the sheet's Aliases section, then the collision warning an alias equal to another concept's label raises.
   { name: "admin-concepts-aliases", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^edit pointer$/i }).click();
