@@ -57,7 +57,6 @@ import {
   type PollRunCounts,
   type PollType,
 } from "@quiz/domain";
-import type { StudentView } from "@quiz/core/server";
 
 import { audit } from "../../audit.js";
 import { iso } from "../../clock.js";
@@ -89,7 +88,6 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import * as live from "../live/service.js";
-import { answerToStudent, studentSolutionView, studentViewOf } from "../live/studentView.js";
 import { asStatic, hasKey, loadConfig, typeOf, type StoredVersion } from "../pool/config.js";
 import { createUnsavedQuestion, searchReachableQuestions } from "../pool/service.js";
 import * as events from "./events.js";
@@ -754,20 +752,7 @@ export async function emitTally(
  * show a template should that ever not hold.
  */
 function studentPayload(type: string, version: StoredVersion, itemId: string): unknown {
-  return studentViewOf(type, loadConfig(type, asStatic(type, version)), pollView(itemId));
-}
-
-/** The one view of a poll's question: seed 0, never shuffled (above, and ADR-097). */
-const pollView = (itemId: string): StudentView => ({ seed: 0, itemId, shuffle: false });
-
-/**
- * A participant's own stored answer, as their phone reads it: through the
- * same conversion as every answer handed back to a student (ADR-097) — the
- * identity under the poll's unshuffled view.
- */
-function ownAnswer(item: JoinedItem, stored: unknown): unknown {
-  const { type } = item.question;
-  return answerToStudent(type, loadConfig(type, asStatic(type, item.version)), pollView(item.item.id), stored);
+  return live.studentViewOf(type, loadConfig(type, asStatic(type, version)), { seed: 0, itemId, shuffle: false });
 }
 
 function studentOf(item: JoinedItem): unknown {
@@ -786,7 +771,7 @@ export function promptOfScope(scope: PollScope): string {
  * both carry the student's key — never a type's teacher-only material.
  */
 function solutionOf(item: JoinedItem): unknown {
-  return studentSolutionView({
+  return live.studentSolutionView({
     type: item.question.type,
     // Static by construction, see `studentPayload`.
     version: asStatic(item.question.type, item.version),
@@ -877,7 +862,7 @@ export async function publicView(
   const { evaluation, item } = scope;
   const settings = pollSettingsOf(scope);
   const attempt = await attemptOfViewer(db, evaluation, viewer);
-  const answer =
+  const stored =
     attempt === null
       ? null
       : ((
@@ -887,6 +872,11 @@ export async function publicView(
             .where(and(eq(answers.attemptId, attempt.id), eq(answers.itemId, item.item.id)))
             .limit(1)
         )[0]?.payload ?? null);
+  // The participant's own answer leaves through the one exit of a stored
+  // answer, in the one view of the item (ADR-097): the identity, a poll
+  // being never shuffled.
+  const own = attempt === null ? null : live.attemptItemView(evaluation, item, attempt);
+  const answer = own === null ? null : live.answerToStudent(own.type, own.config, own.view, stored);
   return {
     code: evaluation.accessCode ?? "",
     state,
@@ -898,7 +888,7 @@ export async function publicView(
       identified: viewer.userId !== null || viewer.guestId !== null,
       loginRequired: !viewer.loggedIn && !settings.anonymous,
       joined: attempt !== null,
-      answer: ownAnswer(item, answer),
+      answer,
     },
   };
 }

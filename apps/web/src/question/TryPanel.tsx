@@ -3,6 +3,7 @@ import { AlertTriangle, FlaskConical, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { PreviewResult, TryResult } from "@quiz/contracts";
+import { ANSWER_COORDINATES } from "@quiz/contracts";
 import type {
   CodeAnswer,
   CodeImageAnswer,
@@ -68,7 +69,7 @@ export function TryPanel({
     mutationFn: () =>
       api(`/app/api/questions/${questionId}/try`, {
         method: "POST",
-        body: JSON.stringify({ source, answer }),
+        body: JSON.stringify({ source, answer, coordinates: ANSWER_COORDINATES }),
       }),
   });
 

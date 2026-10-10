@@ -23,7 +23,7 @@ import {
 } from "@quiz/core/server";
 
 import { questions } from "../../db/schema.js";
-import { answerFromStudent, studentSolutionViewOf, studentViewOf, teacherPreviewView } from "../live/studentView.js";
+import { answerFromStudent, studentSolutionViewOf, studentViewOf, teacherPreviewView } from "../live/service.js";
 import { isParameterized, loadConfig, tryLoadConfig, typeOf } from "./config.js";
 import { exampleInstance, explanationOrNull, parameterIssues, previewInstances } from "./instance.js";
 import type { VersionRecord } from "./shared.js";
@@ -184,12 +184,12 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           const view = teacherPreviewView(scope.question.id);
           // Through the one answer entry (ADR-097), the identity under the
           // preview's unshuffled view: the editor's player shows that view.
-          const canonical =
+          const entry =
             body.answer === undefined || body.answer === null
               ? { answer: null }
-              : answerFromStudent(scope.question.type, loaded.config, view, t.answerSchema.parse(body.answer));
-          if (canonical === null) return reply.code(422).send({ error: "answer_invalid" });
-          const { answer } = canonical;
+              : answerFromStudent(scope.question.type, loaded.config, view, body.answer, body.coordinates);
+          if ("issues" in entry) return reply.code(422).send({ error: "answer_invalid", details: entry.issues });
+          const { answer } = entry;
           const base: FinalizeContext = {
             seed: 0,
             itemId: scope.question.id,

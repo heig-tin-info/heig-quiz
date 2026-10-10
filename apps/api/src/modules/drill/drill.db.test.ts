@@ -30,7 +30,7 @@ import {
 import { testApp, testDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { fallOf, showsKey, markersIn, PARAMETERIZED, publishParameterized } from "../../test/parameterized.js";
-import { reload, seedLive, type Seeded } from "../../test/live.js";
+import { reload, seedLive, shownAnswer, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import * as live from "../live/service.js";
 
@@ -83,16 +83,13 @@ async function sit(
       if (opts.blank) break;
       // The answers are written canonical here; a student names choices by
       // the position this attempt shows them at (ADR-097).
-      const { type, config, view } = live.attemptItemView(
-        evaluation,
-        (await evaluationService.joinedItem(db, evaluation.id, itemId))!,
-        attempt,
-      );
+      const canonical = opts.answers?.[index] ?? (index === 0 ? "answer-q0" : "wrong");
       await live.saveAnswer(db, {
         evaluation,
         attempt,
         itemId,
-        payload: live.answerToStudent(type, config, view, opts.answers?.[index] ?? (index === 0 ? "answer-q0" : "wrong")),
+        payload: await shownAnswer(db, evaluation.id, itemId, attempt, canonical),
+        coordinates: "position",
         revision: 1,
         now: app.clock.now(),
       });
@@ -412,7 +409,7 @@ describe("a review of a parameterized question (ADR-056 §5)", () => {
       // A reload serves the same instance.
       expect(await drill.serveCard(db, userId, card.id, app.clock.now())).toEqual(served);
 
-      const result = await drill.answerCard(db, userId, card.id, { answer: rightAnswer(type, t, served), deviceClass: "fine" }, app.clock.now());
+      const result = await drill.answerCard(db, userId, card.id, { answer: rightAnswer(type, t, served), deviceClass: "fine", coordinates: "position" }, app.clock.now());
       expect(result.correctness).toBe("right");
       expect(markersIn(JSON.stringify(result))).toEqual([]);
       // The key shown after the answer is the instance's.
@@ -781,7 +778,7 @@ describe("the mcq of a review (06, question 28 (d), (h))", () => {
         db,
         userId,
         card!.id,
-        { answer: { selected: [shown] }, deviceClass: "fine" },
+        { answer: { selected: [shown] }, deviceClass: "fine", coordinates: "position" },
         app.clock.now(),
       );
       expect(result.correctness).toBe("right");

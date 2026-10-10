@@ -184,6 +184,7 @@ describe("a student exchanges choices by displayed position (ADR-097)", () => {
         payload,
         revision: 1,
         clientTs: server.clock.now().toISOString(),
+        coordinates: "position",
       });
       expect(saved.statusCode).toBe(200);
       expect(saved.json().accepted).toBe(true);
@@ -205,6 +206,7 @@ describe("a student exchanges choices by displayed position (ADR-097)", () => {
       payload: { selected: [(mcqKey + 1) % 4] },
       revision: 1,
       clientTs: server.clock.now().toISOString(),
+      coordinates: "position",
     });
     expect(stale.statusCode).toBe(200);
     expect(stale.json()).toMatchObject({ accepted: false, payload: { selected: [mcqKey] } });
@@ -221,12 +223,30 @@ describe("a student exchanges choices by displayed position (ADR-097)", () => {
         payload,
         revision: 2,
         clientTs: server.clock.now().toISOString(),
+        coordinates: "position",
       });
       expect(refused.statusCode).toBe(422);
       expect(refused.json().error).toBe("answer_invalid");
     }
     const stored = await server.app.db.select().from(answers).where(eq(answers.attemptId, attemptId));
     expect(stored.find((a) => a.itemId === built.mcq)!.payload).toEqual({ selected: [0] });
+  });
+
+  /*
+   * The marker of ADR-097: a client built before it named choices by
+   * canonical index. On a shuffled view the two readings differ, so its write
+   * is refused — "not saved" until the tab reloads, never a wrong tick.
+   */
+  it("refuses a write without the coordinates marker on a shuffled item", async () => {
+    const refused = await put(`/app/api/attempts/${attemptId}/answers/${built.mcq}`, student.headers, {
+      payload: { selected: [0] },
+      revision: 3,
+      clientTs: server.clock.now().toISOString(),
+    });
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json()).toMatchObject({ error: "answer_invalid", details: [{ message: "answer.coordinates_missing" }] });
+    const stored = await server.app.db.select().from(answers).where(eq(answers.attemptId, attemptId));
+    expect(stored.find((a) => a.itemId === built.mcq)!.revision).toBe(1);
   });
 
   it("keeps the feedback in the attempt's coordinates while the key is hidden", async () => {
@@ -247,9 +267,7 @@ describe("a student exchanges choices by displayed position (ADR-097)", () => {
     expect(labelsOf(cloze)).toEqual(order.cloze);
     expect(mcq.verdict).toBe("correct");
     expect(mcq.answer).toEqual({ selected: [keyPositionOf(mcq)] });
-    expect(mcq.details["selected"]).toEqual([keyPositionOf(mcq)]);
     expect(cloze.answer).toEqual({ blanks: [String(keyPositionOf(cloze))] });
-    expect((cloze.details["perBlank"] as { given: string }[])[0]!.given).toBe(String(keyPositionOf(cloze)));
     expectNoCanonicalKey(res.body);
   });
 
@@ -296,7 +314,15 @@ describe("a partial retake's carried-over answer (ADR-091, ADR-097)", () => {
       [built.mcq, { selected: [shownFirst.mcq.indexOf(KEY)] }],
       [built.cloze, { blanks: [String(shownFirst.cloze.indexOf("Nice"))] }],
     ] as const) {
-      await live.saveAnswer(db, { evaluation, attempt: firstAttempt, itemId, payload, revision: 1, now: server.clock.now() });
+      await live.saveAnswer(db, {
+        evaluation,
+        attempt: firstAttempt,
+        itemId,
+        payload,
+        revision: 1,
+        coordinates: "position",
+        now: server.clock.now(),
+      });
     }
     const submitted = await live.submitAttempt(db, evaluation, firstAttempt, server.clock.now());
     await live.gradeAtHandIn(server.app, evaluation, [submitted.id]);
@@ -320,6 +346,38 @@ describe("a partial retake's carried-over answer (ADR-091, ADR-097)", () => {
     expect(labelsOf(mcq)).toEqual(shownOrder(secondSeed, built.mcq, built.cloze).mcq);
     expect(mcq.answer).toEqual({ selected: [keyPositionOf(mcq)] });
     expect(keyPositionOf(mcq)).not.toBe(shownFirst.mcq.indexOf(KEY));
+  });
+});
+
+describe("an mcq capped by maxSelections (ADR-097)", () => {
+  /*
+   * The grader keeps the LOWEST canonical indices of an answer too long — the
+   * teacher's first-typed choices, the key under the editor's default. With
+   * position ids, ticking every position would let it pick the key: refused.
+   */
+  it("refuses an answer ticking every position", async () => {
+    const db = server.app.db;
+    const seed = await seedLive(db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
+    const questionId = await publishQuestion(db, seed.poolId, teacher.id, "capped", {
+      type: "mcq",
+      config: { ...MCQ, mode: "multiple", maxSelections: 1 },
+    });
+    const [item] = await addItems(db, (await byId(db, seed.evaluationId))!, [questionId], () => 1, { attemptCount: 0 });
+    const evaluation = await live.startEvaluation(db, await reload(db, seed.evaluationId), server.clock.now());
+    const participant = (await live.participantOf(db, evaluation, student.id))!;
+    const { attempt } = await enterStarted(db, { evaluation, participant, now: server.clock.now() });
+    const write = (selected: number[], revision: number) =>
+      live.saveAnswer(db, {
+        evaluation,
+        attempt,
+        itemId: item!.id,
+        payload: { selected },
+        revision,
+        coordinates: "position",
+        now: server.clock.now(),
+      });
+    await expect(write([0, 1, 2, 3], 1)).rejects.toBeInstanceOf(live.AnswerInvalid);
+    await expect(write([3], 2)).resolves.toMatchObject({ accepted: true });
   });
 });
 

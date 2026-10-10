@@ -37,7 +37,7 @@ export interface ItemView {
 }
 
 /** Whether `evaluation` shuffles the choices of `config`: its switch AND the config's own, never in a poll. */
-export function shufflesChoices(evaluation: EvaluationRecord, type: string, config: unknown): boolean {
+function shufflesChoices(evaluation: EvaluationRecord, type: string, config: unknown): boolean {
   return evaluation.mode !== "poll" && settingsOf(evaluation).shuffleChoices && typeOf(type).shuffleable(config);
 }
 

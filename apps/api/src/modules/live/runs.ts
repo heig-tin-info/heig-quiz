@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { RunnerResultEvent } from "@quiz/contracts";
+import type { AnswerCoordinates, RunnerResultEvent } from "@quiz/contracts";
 import {
   RunnerBusy,
   RunnerUnavailable,
@@ -71,6 +71,8 @@ async function attemptRunContext<T>(
      */
     compileOnly?: boolean | undefined;
     answer: unknown;
+    /** ADR-097: the client's `AnswerCoordinates` marker; a `code` run has none and needs none. */
+    coordinates?: AnswerCoordinates | undefined;
   },
 ) {
   const { evaluation, attempt, itemId, now } = input;
@@ -85,8 +87,10 @@ async function attemptRunContext<T>(
   const type = typeOf(joined.question.type);
   // The item as this attempt was served it (ADR-097): its instance, and the
   // view the answer below names its parts in.
+  // A runnable type is never shuffleable: the run's cases and the answer
+  // read the one view alike.
   const { config, view } = attemptItemView(evaluation, joined, attempt);
-  const student = runnableView(studentViewOf(joined.question.type, config, { ...view, shuffle: false }));
+  const student = runnableView(studentViewOf(joined.question.type, config, view));
   const capability = input.capability(type, student);
   if (capability === undefined) throw new LiveError("not_runnable");
 
@@ -103,11 +107,9 @@ async function attemptRunContext<T>(
   });
   if (used >= limit) throw new RateLimited(60);
 
-  const answer = type.answerSchema.safeParse(input.answer);
-  if (!answer.success) throw new AnswerInvalid(answer.error.issues);
   // Run on the canonical answer, as the grading pass reads the stored one.
-  const canonical = answerFromStudent(joined.question.type, config, view, answer.data);
-  if (canonical === null) throw new AnswerInvalid([{ message: "answer.position_not_in_view" }]);
+  const entry = answerFromStudent(joined.question.type, config, view, input.answer, input.coordinates);
+  if ("issues" in entry) throw new AnswerInvalid(entry.issues);
   const ctx: FinalizeContext = {
     seed: attempt.seed,
     itemId,
@@ -118,7 +120,7 @@ async function attemptRunContext<T>(
     // must not be scored under a different policy than the final grading.
     defaults: gradeDefaults(evaluation),
   };
-  return { type, capability, student, config, answer: canonical.answer, ctx };
+  return { type, capability, student, config, answer: entry.answer, ctx };
 }
 
 /**
@@ -242,6 +244,7 @@ interface SimulateInput {
   attempt: AttemptRecord;
   itemId: string;
   answer: unknown;
+  coordinates?: AnswerCoordinates | undefined;
   now: Date;
 }
 

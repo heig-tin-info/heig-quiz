@@ -34,7 +34,6 @@ const META: QuestionMeta = {
   internalName: "ptr-null-check",
   categoryId: null,
   difficulty: 2,
-  shuffleable: true,
   randomizable: false,
   concepts: [{ id: POINTER, label: "Pointer", qualifier: "", status: "validated" }],
   createdBy: "u-me",

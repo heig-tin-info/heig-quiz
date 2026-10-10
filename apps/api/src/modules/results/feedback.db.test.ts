@@ -194,6 +194,7 @@ async function gradedEvaluation() {
       payload: {
         payload: item.type === "mcq" ? { selected: [paris(item.student)] } : ANSWERS[item.type],
         revision: 1,
+        coordinates: "position",
         clientTs: server.clock.now().toISOString(),
       },
     });
@@ -279,10 +280,11 @@ describe("the answer key never rides in `details` (H1)", () => {
     const item = await feedbackOf("mcq");
     const details = item["details"] as Record<string, unknown>;
     expect(details["correct"]).toBeUndefined();
-    // The student's own score stays: it IS the feedback — their tick in the
-    // review's (the attempt's) order, never the canonical index (ADR-097).
-    expect(details["selected"]).toEqual([paris(item["student"])]);
-    expect(details["selected"]).toEqual([paris(built.servedOf("mcq"))]);
+    // The student's own score stays: it IS the feedback. Their ticks go with
+    // the key — canonical indices would name the teacher's order (ADR-097);
+    // the review reads them in the answer, in the attempt's order.
+    expect(details["selected"]).toBeUndefined();
+    expect(item["answer"]).toEqual({ selected: [paris(built.servedOf("mcq"))] });
     expect(details["fraction"]).toBe(1);
     expect(item["solution"]).toBeNull();
   });
@@ -292,8 +294,10 @@ describe("the answer key never rides in `details` (H1)", () => {
     const details = item["details"] as { perBlank: Record<string, unknown>[] };
     expect(details.perBlank).toHaveLength(1);
     expect(details.perBlank[0]!["expected"]).toBeUndefined();
-    // What the student typed stays; what they should have typed does not.
-    expect(details.perBlank[0]!["given"]).toBe("Paris");
+    // The verdict stays; what they should have typed does not, nor what they
+    // typed, which the answer carries (ADR-097: a dropdown's is canonical).
+    expect(details.perBlank[0]!["given"]).toBeUndefined();
+    expect(item["answer"]).toEqual({ blanks: ["Paris"] });
     expect(details.perBlank[0]!["ok"]).toBe(false);
     expect(JSON.stringify(item["details"])).not.toContain(CLOZE_EXPECTED);
   });

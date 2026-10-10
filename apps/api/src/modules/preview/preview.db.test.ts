@@ -564,6 +564,7 @@ describe("grading a preview", () => {
 
     const res = await post(`${w.url}/grade`, teacher.headers, {
       seed: started.seed,
+      coordinates: "position",
       answers: {
         [w.shortItemIds[0]!]: shortAnswer(0), // right
         [w.shortItemIds[1]!]: "wrong", // wrong
@@ -634,6 +635,7 @@ describe("grading a preview", () => {
     const correction = (
       await post(`${w.url}/grade`, teacher.headers, {
         seed: 3,
+        coordinates: "position",
         answers: {
           [essayItemId]: { text: "An address." },
           [w.mcqItemId]: primesOf(shown.items.find((i) => i.id === w.mcqItemId)!.student),
@@ -672,9 +674,9 @@ describe("grading a preview", () => {
     const { choices } = shown.items.find((i) => i.id === w.mcqItemId)!.student as { choices: { id: number; text: string }[] };
     const answersOf = { [w.mcqItemId]: { selected: [choices.find((c) => c.text === "2")!.id] } };
     await db.update(evaluations).set({ mcqPolicy: "all_or_nothing" }).where(eq(evaluations.id, w.evaluationId));
-    const strict = (await post(`${w.url}/grade`, teacher.headers, { seed: 3, answers: answersOf })).json();
+    const strict = (await post(`${w.url}/grade`, teacher.headers, { seed: 3, answers: answersOf, coordinates: "position" })).json();
     await db.update(evaluations).set({ mcqPolicy: "ripkey" }).where(eq(evaluations.id, w.evaluationId));
-    const lenient = (await post(`${w.url}/grade`, teacher.headers, { seed: 3, answers: answersOf })).json();
+    const lenient = (await post(`${w.url}/grade`, teacher.headers, { seed: 3, answers: answersOf, coordinates: "position" })).json();
     const points = (c: PreviewCorrection) => c.items.find((i) => i.itemId === w.mcqItemId)!.points;
     expect(points(strict)).toBe(0);
     expect(points(lenient)).toBe(0.5);

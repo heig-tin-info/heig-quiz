@@ -25,7 +25,7 @@ import { formatValue } from "@quiz/domain/parameters";
 
 import { attempts, evaluations, gradings, questions } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
-import { seedLive, type Seeded } from "../../test/live.js";
+import { seedLive, shownAnswer, type Seeded } from "../../test/live.js";
 import {
   EXPLANATION,
   showsKey,
@@ -35,12 +35,10 @@ import {
   publishParameterized,
   VARIABLES,
 } from "../../test/parameterized.js";
-import { addItems, byId, joinedItem } from "../evaluation/service.js";
+import { addItems, byId } from "../evaluation/service.js";
 import { createPoll } from "../poll/service.js";
 import { exampleConfig, typeOf } from "../pool/service.js";
 import * as poolService from "../pool/service.js";
-import { attemptItemView } from "./itemView.js";
-import { answerToStudent } from "./studentView.js";
 
 type Kind = "mcq" | "short" | "cloze";
 const KINDS: Kind[] = ["mcq", "short", "cloze"];
@@ -69,7 +67,7 @@ async function answer(who: { headers: Record<string, string> }, attemptId: strin
     method: "PUT",
     url: `/app/api/attempts/${attemptId}/answers/${itemOf.get(kind)}`,
     headers: who.headers,
-    payload: { payload, revision: 1, clientTs: server.clock.now().toISOString() },
+    payload: { payload, revision: 1, clientTs: server.clock.now().toISOString(), coordinates: "position" },
   });
   expect(res.statusCode).toBe(200);
   // The autosave's answer is a student payload too.
@@ -78,12 +76,8 @@ async function answer(who: { headers: Record<string, string> }, attemptId: strin
 
 /** The mcq's canonical choices `selected` as this attempt's student names them (ADR-097). */
 async function shownMcq(attemptId: string, selected: number[]): Promise<unknown> {
-  const db = server.app.db;
-  const evaluation = (await byId(db, seed.evaluationId))!;
-  const entry = (await joinedItem(db, seed.evaluationId, itemOf.get("mcq")!))!;
-  const [row] = await db.select().from(attempts).where(eq(attempts.id, attemptId));
-  const { type, config, view } = attemptItemView(evaluation, entry, row!);
-  return answerToStudent(type, config, view, { selected });
+  const [row] = await server.app.db.select().from(attempts).where(eq(attempts.id, attemptId));
+  return shownAnswer(server.app.db, seed.evaluationId, itemOf.get("mcq")!, row!, { selected });
 }
 
 async function setPolicy(patch: Partial<FeedbackPolicy>): Promise<void> {

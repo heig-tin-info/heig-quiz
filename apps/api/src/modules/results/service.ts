@@ -63,7 +63,6 @@ import {
   type FeedbackGate,
   type FeedbackRefusal,
 } from "@quiz/domain";
-import type { StudentView } from "@quiz/core/server";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -803,8 +802,9 @@ async function reviewedItems(
     // With the key hidden, the attempt's own order: the teacher's tends to be
     // the key's (a categorize tray typed column by column), and the review
     // has nothing to colour anyway (ADR-033, addendum 2026-10-01). Either
-    // way ONE view, and the question, the answer, the key and the breakdown
-    // all leave in its coordinates (ADR-097).
+    // way ONE view, and the question, the answer and the key all leave in
+    // its coordinates (ADR-097); the breakdown names no choice of the
+    // student's while the key is hidden.
     const view = { ...attemptView, shuffle: attemptView.shuffle && !policy.showKey };
     return {
       itemId: item.item.id,
@@ -822,7 +822,7 @@ async function reviewedItems(
         policy.showExplanation && instance.explanation !== ""
           ? instance.explanation
           : null,
-      details: grading ? filterDetails(type, grading.details, policy, { config, view }) : null,
+      details: grading ? filterDetails(type, grading.details, policy) : null,
       comment: policy.showTeacherComment ? (grading?.comment ?? null) : null,
     };
   });
@@ -992,18 +992,11 @@ export function filterDetails(
   type: string,
   details: unknown,
   policy: FeedbackPolicy,
-  /**
-   * The config and the view of the review the breakdown is shown in: the
-   * type's hook puts what it names of the student's answer in that view's
-   * coordinates (ADR-097). Under `showKey` the review's view is the
-   * teacher's unshuffled order, where canonical and displayed are one.
-   */
-  review: { config: unknown; view: StudentView },
 ): unknown {
   if (details === null || details === undefined) return null;
   if (policy.showKey) return stripKeys(details, teacherOnlyDetailKeys);
   const hook = typeOf(type).studentDetails;
-  const shaped = hook ? hook(details, policy, review.config, review.view) : details;
+  const shaped = hook ? hook(details, policy) : details;
   return stripKeys(shaped, forbiddenDetailKeys, publishedExpected);
 }
 

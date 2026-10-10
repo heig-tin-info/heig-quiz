@@ -75,15 +75,16 @@ export {
   answerFromStudent,
   answerToStudent,
   FORBIDDEN_STUDENT_KEYS,
-  isShuffleable,
   solutionView,
   studentSolutionView,
   studentSolutionViewOf,
   studentView,
   studentViewOf,
+  teacherPreviewView,
+  type AnswerEntry,
 } from "./studentView.js";
-// ADR-097: the one view of an attempt's item, for the feedback page.
-export { attemptItemView, shufflesChoices, type ItemView } from "./itemView.js";
+// ADR-097: the one view of an attempt's item, for the feedback page and the preview.
+export { attemptItemView } from "./itemView.js";
 export {
   answeredBy,
   saveAnswer,

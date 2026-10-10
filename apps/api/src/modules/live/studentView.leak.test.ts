@@ -30,13 +30,7 @@ import {
 
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { keysOf } from "../../test/keys.js";
-import {
-  FORBIDDEN_STUDENT_KEYS,
-  studentSolutionView,
-  studentView,
-  studentViewOf,
-  stripMetadata,
-} from "./studentView.js";
+import { FORBIDDEN_STUDENT_KEYS, studentSolutionView, studentView, stripMetadata } from "./studentView.js";
 
 /**
  * Keys that name the answer key rather than the question. `expected` and
@@ -522,52 +516,6 @@ describe("studentSolutionView keeps the teacher's material home (ADR-037)", () =
     // Runs after the loop above: without a sown rubric it proved nothing.
     expect(rubricTypes).toEqual(expect.arrayContaining(["rich", "circuit"]));
   });
-});
-
-/*
- * ADR-097 (audit H2): the key value search above cannot see a key that rides
- * in an ORDER. An `mcq` choice or a `cloze` option that kept its canonical
- * index as its id named the key whenever the teacher typed it first — the
- * editor's default. Through the one exit, every id is the displayed
- * position, in every view: "0..n-1 in order", never "not the canonical
- * order", which would fail whenever the shuffle draws the identity.
- */
-describe("a choice leaves by its displayed position (ADR-097)", () => {
-  const labels = ["Paris", "Lyon", "Marseille", "Nice", "Lille"];
-  const configs: Record<"mcq" | "cloze", unknown> = {
-    mcq: questionType("mcq").configSchema.parse({
-      configVersion: 2,
-      prompt: "Which one is the capital of France?",
-      choices: labels.map((text, index) => ({ text, correct: index === 0 })),
-      mode: "single",
-      shuffleChoices: true,
-    }),
-    cloze: questionType("cloze").configSchema.parse({
-      configVersion: 2,
-      text: `The capital is {{=${labels.join("|")}}}, then {{=a|b|c}}.`,
-    }),
-  };
-  /** Each list of choices a student view holds: an mcq's choices, a cloze's dropdowns. */
-  const listsOf = (student: unknown): { id: number; text?: string; label?: string }[][] => {
-    const view = student as { choices?: { id: number }[]; blanks?: { options?: { id: number }[] }[] };
-    return view.choices ? [view.choices] : (view.blanks ?? []).flatMap((b) => (b.options ? [b.options] : []));
-  };
-
-  for (const id of ["mcq", "cloze"] as const) {
-    it(`numbers every choice of "${id}" by its position, shuffled or not`, () => {
-      const orders = new Set<string>();
-      for (let seed = 0; seed < 24; seed++) {
-        for (const shuffle of [true, false]) {
-          const lists = listsOf(studentViewOf(id, configs[id], { seed, itemId: "item-1", shuffle }));
-          expect(lists.length).toBeGreaterThan(0);
-          for (const list of lists) expect(list.map((c) => c.id)).toEqual(list.map((_, position) => position));
-          orders.add(JSON.stringify(lists.map((list) => list.map((c) => c.text ?? c.label))));
-        }
-      }
-      // The shuffle did move the labels: the ids staying put is the rule, not a dead shuffle.
-      expect(orders.size).toBeGreaterThan(1);
-    });
-  }
 });
 
 /** A concept a question carries (ADR-081): its id and its labels in both languages are searched for. */

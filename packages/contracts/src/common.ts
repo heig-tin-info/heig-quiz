@@ -16,6 +16,24 @@ import { COURSE_ROLES } from "@quiz/domain";
 export const CourseRole = z.enum(COURSE_ROLES);
 export type CourseRole = z.infer<typeof CourseRole>;
 
+/**
+ * ADR-097: the marker every answer write of a current client carries — the
+ * autosave, the drill's answer, the Simulate button, the preview's grading
+ * and simulation, the editor's try. It says that the choices the answer
+ * names are DISPLAYED POSITIONS, as the student views name them since
+ * ADR-097, and nothing about the order itself. A client built before it
+ * sends none, and named choices by canonical index: the server refuses such
+ * a write (`422 answer_invalid`) on an item whose view is shuffled, where the
+ * two readings differ, so a tab left open across that deploy shows "not
+ * saved" until it reloads and never stores a wrong tick. A poll and an
+ * unshuffled item accept either.
+ */
+export const AnswerCoordinates = z.literal("position");
+export type AnswerCoordinates = z.infer<typeof AnswerCoordinates>;
+
+/** The marker's one value, for the clients to send. */
+export const ANSWER_COORDINATES: AnswerCoordinates = "position";
+
 /** `/…/:id` — the only path shape the loaders of `guards.ts` accept. */
 export const IdParam = z.object({ id: z.uuid() });
 export type IdParam = z.infer<typeof IdParam>;

@@ -36,7 +36,7 @@ import {
   TrustedClient,
 } from "./evaluation.js";
 import { SESSION_KINDS } from "./api.js";
-import { StaffItemRef } from "./common.js";
+import { AnswerCoordinates, StaffItemRef } from "./common.js";
 import { Verdict } from "./grading.js";
 import { IntegrityIncident } from "./integrity.js";
 
@@ -351,6 +351,8 @@ export const AutosaveRequest = z.object({
    */
   revision: z.number().int().min(1).max(2_000_000_000),
   clientTs: z.iso.datetime(),
+  /** ADR-097: the choices of `payload` are displayed positions (`AnswerCoordinates`). */
+  coordinates: AnswerCoordinates.optional(),
 });
 export type AutosaveRequest = z.infer<typeof AutosaveRequest>;
 
@@ -498,6 +500,8 @@ export type RunBody = z.infer<typeof RunBody>;
 export const SimulateBody = z.object({
   itemId: z.uuid(),
   answer: z.unknown(),
+  /** ADR-097: the choices of `answer` are displayed positions (`AnswerCoordinates`). */
+  coordinates: AnswerCoordinates.optional(),
 });
 export type SimulateBody = z.infer<typeof SimulateBody>;
 

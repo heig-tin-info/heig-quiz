@@ -111,9 +111,9 @@ the choices. The review now letters its choices and colours the key's letter
    student's shuffle until now, and whose letters would then have disagreed
    with its own cell (settled in review). The ticks follow, an answer being
    canonical (D3). *Amended 2026-10-10 by ADR-097: the stored answer is
-   canonical; the feedback page hands it, its key and its breakdown to the
-   student in the review's view — the teacher's order here, where position
-   and canonical index are one, and the attempt's own order under §3.*
+   canonical; the feedback page hands it and its key to the student in the
+   review's view — the teacher's order here, where position and canonical
+   index are one, and the attempt's own order under §3.*
 3. **The attempt's own order while the key is hidden** (settled in review,
    narrowing the product owner's "always the teacher's order"). The teacher's
    order tends to be the key's — a categorize tray typed column by column,

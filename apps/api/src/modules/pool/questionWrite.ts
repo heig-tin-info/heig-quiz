@@ -387,7 +387,6 @@ export async function patchQuestion(
     internalName?: string | undefined;
     categoryId?: string | null | undefined;
     difficulty?: number | undefined;
-    shuffleable?: boolean | undefined;
     concepts?: readonly string[] | undefined;
     createMissing?: boolean | undefined;
   },
@@ -402,7 +401,6 @@ export async function patchQuestion(
         ...(patch.internalName !== undefined ? { internalName: patch.internalName } : {}),
         ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
         ...(patch.difficulty !== undefined ? { difficulty: patch.difficulty } : {}),
-        ...(patch.shuffleable !== undefined ? { shuffleable: patch.shuffleable } : {}),
         updatedAt: now,
       })
       .where(eq(questions.id, question.id));

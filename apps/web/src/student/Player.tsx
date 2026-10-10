@@ -55,6 +55,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ChevronRight, ShieldAlert } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
+import { ANSWER_COORDINATES } from "@quiz/contracts";
 import { answerMark, calculatorOn, mayValidate, notepadOn } from "@quiz/domain";
 
 import { useIntegrityJournal } from "../attempt/integrity";
@@ -226,7 +227,7 @@ export function Player({
   // Stable, like every callback the question receives: it is memoised.
   const simulate = useCallback(
     (itemId: string, answer: unknown) =>
-      postSimulate(`/app/api/attempts/${attemptId}/simulate`, { itemId, answer }),
+      postSimulate(`/app/api/attempts/${attemptId}/simulate`, { itemId, answer, coordinates: ANSWER_COORDINATES }),
     [attemptId],
   );
   // ADR-051 §6: on a station, the page re-attests on its own, and before the submit.

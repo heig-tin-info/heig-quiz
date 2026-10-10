@@ -4,7 +4,6 @@
  * for every forbidden key and secret value — is the registry's contract test.
  */
 import { describe, expect, it } from "vitest";
-import { testGradeContext } from "@quiz/core/testing";
 import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { clozeServer } from "./server.js";
 
@@ -98,18 +97,10 @@ describe("toStudent", () => {
 
 /*
  * ADR-097: a dropdown's value is a displayed position on the wire and a
- * canonical index in storage (D4); a typed blank is the same in both.
+ * canonical index in storage (D4); a typed blank is the same in both. The
+ * round trip over every view is the registry's contract test.
  */
 describe("the answer in view coordinates", () => {
-  // Blanks 3 and 5 of the fixture are the dropdowns.
-  const stored = { blanks: ["Newton", "10", "+=", "0", "N", "2"] };
-
-  it.each(VIEWS)("round-trips a stored answer (seed $seed, shuffle $shuffle)", (at) => {
-    const shown = clozeServer.toStudentAnswer!(SECRET_CONFIG, at, stored);
-    expect(shown.blanks[0]).toBe("Newton");
-    expect(clozeServer.fromStudentAnswer!(SECRET_CONFIG, at, shown)).toEqual(stored);
-  });
-
   it.each(VIEWS)("decodes each position to the label shown there (seed $seed, shuffle $shuffle)", (at) => {
     const student = clozeServer.toStudent(SECRET_CONFIG, at);
     const select = student.blanks[3];
@@ -123,19 +114,6 @@ describe("the answer in view coordinates", () => {
 
   it("refuses a position the dropdown does not have", () => {
     expect(clozeServer.fromStudentAnswer!(SECRET_CONFIG, view, { blanks: [null, null, null, "4"] })).toBeNull();
-  });
-
-  it("puts what the student picked in the breakdown in the review's view, and drops the key", () => {
-    const graded = clozeServer.grade(SECRET_CONFIG, stored, testGradeContext(6));
-    if (graded instanceof Promise || graded.kind !== "graded") throw new Error("sync grade expected");
-    const out = clozeServer.studentDetails!(
-      graded.details,
-      { showKey: false, showHiddenCaseNames: false },
-      SECRET_CONFIG,
-      view,
-    ) as { perBlank: { given: string | null; expected?: string }[] };
-    const shown = clozeServer.toStudentAnswer!(SECRET_CONFIG, view, stored);
-    expect(out.perBlank.map((blank) => blank.given)).toEqual(shown.blanks);
-    expect(out.perBlank.some((blank) => "expected" in blank)).toBe(false);
+    expect(clozeServer.fromStudentAnswer!(SECRET_CONFIG, view, { blanks: [null, null, null, "newton"] })).toBeNull();
   });
 });

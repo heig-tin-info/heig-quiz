@@ -124,7 +124,7 @@ export async function drillPlugin(app: FastifyInstance) {
         app.db,
         scope.userId,
         params.id,
-        { answer: body.answer, deviceClass: body.deviceClass, confidence: body.confidence },
+        { answer: body.answer, deviceClass: body.deviceClass, confidence: body.confidence, coordinates: body.coordinates },
         now,
       ),
     ),

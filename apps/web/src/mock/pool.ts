@@ -137,7 +137,6 @@ export interface MockQuestion {
   internalName: string;
   categoryId: string | null;
   difficulty: number;
-  shuffleable: boolean;
   randomizable: boolean;
   /** Concept ids (ADR-081): a question shows them as `ConceptRef`s (`conceptRefs`). */
   concepts: string[];
@@ -872,7 +871,6 @@ export const questions: MockQuestion[] = [
     internalName: "ptr-arith-01",
     categoryId: "k2",
     difficulty: 3,
-    shuffleable: false,
     randomizable: false,
     concepts: seedConceptIds(["Pointeur", "Arithmétique des pointeurs"]),
     config: codeConfig(
@@ -900,7 +898,6 @@ export const questions: MockQuestion[] = [
     internalName: "ptr-null-check",
     categoryId: "k1",
     difficulty: 2,
-    shuffleable: true,
     randomizable: false,
     concepts: seedConceptIds(["Pointeur", "Sécurité"]),
     config: mcqConfig(
@@ -922,7 +919,6 @@ export const questions: MockQuestion[] = [
     internalName: "sizeof-ptr-64",
     categoryId: "k1",
     difficulty: 1,
-    shuffleable: false,
     randomizable: false,
     concepts: seedConceptIds(["Pointeur", "sizeof"]),
     config: shortNumber(
@@ -939,7 +935,6 @@ export const questions: MockQuestion[] = [
     internalName: "malloc-tableau",
     categoryId: "k3",
     difficulty: 3,
-    shuffleable: true,
     randomizable: false,
     concepts: seedConceptIds(["Allocation dynamique", "Pointeur"]),
     /*
@@ -975,7 +970,6 @@ export const questions: MockQuestion[] = [
     internalName: "array-decay",
     categoryId: "k4",
     difficulty: 3,
-    shuffleable: true,
     randomizable: false,
     concepts: seedConceptIds(["Tableau", "Pointeur"]),
     config: mcqConfig(
@@ -997,7 +991,6 @@ export const questions: MockQuestion[] = [
     internalName: "fopen-modes",
     categoryId: "k5",
     difficulty: 2,
-    shuffleable: true,
     randomizable: false,
     concepts: seedConceptIds(["Fichier"]),
     // The one MULTIPLE-answer question of the mock: two keys, so the scoring
@@ -1024,7 +1017,6 @@ export const questions: MockQuestion[] = [
     internalName: "strcpy-overflow",
     categoryId: "k4",
     difficulty: 4,
-    shuffleable: false,
     randomizable: false,
     concepts: seedConceptIds(["Tableau", "Sécurité"]),
     config: codeConfig(
@@ -1044,7 +1036,6 @@ export const questions: MockQuestion[] = [
     internalName: "chute-libre-planete",
     categoryId: "k6",
     difficulty: 2,
-    shuffleable: false,
     randomizable: true,
     concepts: seedConceptIds(["Accéléromètre", "MRUA"]),
     config: {
@@ -1077,7 +1068,6 @@ export const questions: MockQuestion[] = [
     internalName: "filtre-capteur-rc",
     categoryId: "k6",
     difficulty: 3,
-    shuffleable: false,
     randomizable: false,
     concepts: seedConceptIds(["Filtre", "Capteur", "Circuit RC"]),
     config: circuitConfig(
@@ -1096,7 +1086,6 @@ export const questions: MockQuestion[] = [
     internalName: "loi-ohm-led",
     categoryId: "k6",
     difficulty: 1,
-    shuffleable: false,
     randomizable: false,
     concepts: seedConceptIds(["Électronique", "Résistance"]),
     config: shortNumber(
@@ -1113,7 +1102,6 @@ export const questions: MockQuestion[] = [
     internalName: "i2c-adressage",
     categoryId: "k7",
     difficulty: 2,
-    shuffleable: true,
     randomizable: false,
     concepts: seedConceptIds(["I2C", "Bus"]),
     config: mcqConfig(
@@ -1134,7 +1122,6 @@ export const questions: MockQuestion[] = [
     internalName: "adc-resolution",
     categoryId: "k6",
     difficulty: 3,
-    shuffleable: true,
     randomizable: false,
     concepts: seedConceptIds(["Conversion analogique-numérique", "Mesure"]),
     config: {
@@ -1158,7 +1145,6 @@ export const questions: MockQuestion[] = [
     internalName: "ao-gain-inverseur",
     categoryId: "k8",
     difficulty: 2,
-    shuffleable: true,
     randomizable: false,
     concepts: seedConceptIds(["Amplificateur", "Gain"]),
     config: mcqConfig(
@@ -1179,7 +1165,6 @@ export const questions: MockQuestion[] = [
     internalName: "ao-slew-rate",
     categoryId: "k8",
     difficulty: 3,
-    shuffleable: false,
     randomizable: false,
     concepts: seedConceptIds(["Amplificateur"]),
     config: shortNumber(
@@ -1199,7 +1184,6 @@ export const questions: MockQuestion[] = [
     internalName: "filtre-rc-passe-bas",
     categoryId: "k9",
     difficulty: 2,
-    shuffleable: true,
     randomizable: false,
     concepts: seedConceptIds(["Filtre", "Gain"]),
     config: {
@@ -1217,7 +1201,6 @@ export const questions: MockQuestion[] = [
     internalName: "filtre-ordre-pente",
     categoryId: "k9",
     difficulty: 4,
-    shuffleable: true,
     randomizable: false,
     concepts: seedConceptIds(["Filtre"]),
     config: mcqConfig("Quelle est la pente d'atténuation d'un filtre passif du second ordre ?", [
@@ -1241,7 +1224,6 @@ export const questions: MockQuestion[] = [
     internalName: "carres-concentriques",
     categoryId: "k4",
     difficulty: 2,
-    shuffleable: false,
     randomizable: false,
     concepts: seedConceptIds(["Boucle", "Image"]),
     config: codeimageConfig(),
@@ -1259,7 +1241,6 @@ export const questions: MockQuestion[] = [
     internalName: "redaction-pile",
     categoryId: "k1",
     difficulty: 3,
-    shuffleable: false,
     randomizable: false,
     concepts: seedConceptIds(["Pile", "Adresse (mémoire)"]),
     config: RICH_CONFIG,
@@ -1276,7 +1257,6 @@ export const questions: MockQuestion[] = [
     internalName: "types-c-classement",
     categoryId: "k1",
     difficulty: 1,
-    shuffleable: true,
     randomizable: false,
     concepts: seedConceptIds(["Types"]),
     config: CATEGORIZE_CONFIG,
@@ -1293,7 +1273,6 @@ export const questions: MockQuestion[] = [
     internalName: "figures-diagramme-classes",
     categoryId: "k1",
     difficulty: 2,
-    shuffleable: false,
     randomizable: false,
     concepts: seedConceptIds(["UML", "Héritage", "Diagramme de classes"]),
     config: DIAGRAM_CONFIG,
@@ -1314,7 +1293,6 @@ questions.push(
     internalName: "Que vaut sizeof(char) en C ?",
     categoryId: null,
     difficulty: 2,
-    shuffleable: true,
     randomizable: false,
     concepts: [],
     config: mcqConfig("Que vaut `sizeof(char)` en C, quelle que soit l'architecture ?", [
@@ -1331,7 +1309,6 @@ questions.push(
     internalName: "Combien de bits dans un octet ?",
     categoryId: null,
     difficulty: 1,
-    shuffleable: true,
     randomizable: false,
     concepts: [],
     config: shortNumber("Combien de bits dans un octet ?", 8),
@@ -1343,7 +1320,6 @@ questions.push(
     internalName: "Le rythme des laboratoires vous convient-il ?",
     categoryId: null,
     difficulty: 1,
-    shuffleable: true,
     randomizable: false,
     concepts: [],
     config: mcqConfig("Le rythme des laboratoires vous convient-il ?", [
@@ -1385,7 +1361,6 @@ function inflatePool() {
         internalName: `${tag}-${String(i + 1).padStart(2, "0")}`,
         categoryId: categories[i % 5]!.id,
         difficulty: (i % 5) + 1,
-        shuffleable: true,
         randomizable: false,
         concepts: seedConceptIds([concept!]),
         config:
@@ -1719,7 +1694,6 @@ const questionMeta = (q: MockQuestion) => ({
   internalName: q.internalName,
   categoryId: q.categoryId,
   difficulty: q.difficulty,
-  shuffleable: q.shuffleable,
   randomizable: q.randomizable,
   concepts: conceptRefs(q.concepts),
   createdBy: "u-me",
@@ -2744,7 +2718,6 @@ on("POST", "/app/api/pools/:id/questions", (m, body) => {
     internalName: String(body.internalName),
     categoryId: (body.categoryId as string | null | undefined) ?? null,
     difficulty: 3,
-    shuffleable: true,
     randomizable: false,
     concepts: [],
     config: emptyConfig(type),
@@ -2811,7 +2784,6 @@ on("PATCH", "/app/api/questions/:id", (m, body) => {
   if (typeof body.internalName === "string") q.internalName = body.internalName;
   if (body.categoryId !== undefined) q.categoryId = body.categoryId as string | null;
   if (typeof body.difficulty === "number") q.difficulty = body.difficulty;
-  if (typeof body.shuffleable === "boolean") q.shuffleable = body.shuffleable;
   if (body.tags !== undefined) {
     throw new MockPayload(400, { error: "validation", message: "tags_removed" });
   }
@@ -3136,7 +3108,6 @@ on("POST", "/app/api/questions/:id/copy", (m, body) => {
     internalName: `${q.internalName}-copie`,
     categoryId: q.categoryId,
     difficulty: q.difficulty,
-    shuffleable: q.shuffleable,
     randomizable: q.randomizable,
     concepts: [...q.concepts],
     config: q.draft.config,

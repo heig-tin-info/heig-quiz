@@ -249,6 +249,7 @@ export async function livePlugin(app: FastifyInstance) {
         itemId: params.itemId,
         payload: body.payload,
         revision: body.revision,
+        coordinates: body.coordinates,
         now,
       }),
     ),
@@ -446,6 +447,7 @@ export async function livePlugin(app: FastifyInstance) {
         attempt: scope.attempt,
         itemId: body.itemId,
         answer: body.answer,
+        coordinates: body.coordinates,
         now,
       });
       return reply.code(200).send(outcome);

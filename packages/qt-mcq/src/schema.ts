@@ -109,8 +109,9 @@ export const McqKeylessConfigSchema = McqConfigShape
 export type McqConfig = z.infer<typeof McqConfigSchema>;
 
 /**
- * Indices into `config.choices`: canonical in storage (decision D3), the
- * displayed positions of the student's view on the wire (ADR-097).
+ * Indices into `config.choices`, ascending and unique: canonical in storage
+ * (decision D3), the displayed positions of the student's view on the wire
+ * (ADR-097).
  */
 export const McqAnswerSchema = z.object({
   selected: z.array(z.number().int().min(0).max(MCQ_MAX_CHOICES - 1)).max(MCQ_MAX_CHOICES),

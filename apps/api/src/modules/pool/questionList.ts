@@ -575,7 +575,6 @@ export function metaJson(question: QuestionRecord, concepts: ConceptRef[]): Ques
     internalName: question.internalName,
     categoryId: question.categoryId,
     difficulty: question.difficulty,
-    shuffleable: question.shuffleable,
     randomizable: question.randomizable,
     concepts,
     createdBy: question.createdBy,

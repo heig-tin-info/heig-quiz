@@ -431,7 +431,8 @@ export interface QuestionTypeServer<
    * `answer` has passed `answerSchema`. `null` means the answer names a
    * position `view` does not have: the write refuses it with
    * `422 answer_invalid`, never drops it silently. Pure. Omitting the hook
-   * means the answer has no view coordinates (identity).
+   * means the answer has no view coordinates (identity) — and, for the API,
+   * that the write needs no `coordinates` marker (`AnswerCoordinates`).
    */
   fromStudentAnswer?(config: TConfig, view: StudentView, answer: TAnswer): TAnswer | null;
 
@@ -486,11 +487,11 @@ export interface QuestionTypeServer<
    * of it when `policy.showKey` is false. Omitting it means "the breakdown
    * holds no key"; the `results` module strips the forbidden keys either way.
    *
-   * `config` and `view` are those of the review that shows the breakdown: a
-   * part of the student's own answer the breakdown names by canonical index
-   * leaves in the coordinates of `view` (ADR-097), as the answer does.
+   * A part of the student's own answer the breakdown names by canonical
+   * index leaves with the key (ADR-097): the student reads their answer in
+   * the answer itself, in the coordinates of their view.
    */
-  studentDetails?(details: TDetails, policy: StudentDetailsPolicy, config: TConfig, view: StudentView): unknown;
+  studentDetails?(details: TDetails, policy: StudentDetailsPolicy): unknown;
 
   /**
    * One cell of the live dashboard: what the student answered, in a glyph or

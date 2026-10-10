@@ -31,6 +31,7 @@
  * requests their own typing generates.
  */
 import type { AttemptClosed, AutosaveRequest, AutosaveResponse } from "@quiz/contracts";
+import { ANSWER_COORDINATES } from "@quiz/contracts";
 
 import { ApiError } from "../api";
 import type { SyncState as BadgeState } from "../ui";
@@ -315,6 +316,8 @@ export class Autosave {
       payload: item.pending,
       revision: item.pendingRevision,
       clientTs: new Date(this.now()).toISOString(),
+      // ADR-097: the choices of the payload are the positions the view shows.
+      coordinates: ANSWER_COORDINATES,
     };
     const sentRevision = item.pendingRevision;
     const startedAt = this.now();

@@ -92,24 +92,14 @@ describe("toStudent", () => {
 
 /*
  * ADR-097: the student exchanges positions, the server stores canonical
- * indices; the two hooks are each other's inverse over every view.
+ * indices, ascending and unique. The round trip over every view is the
+ * registry's contract test.
  */
 describe("the answer in view coordinates", () => {
   const multiple = McqConfigSchema.parse({
     ...SECRET_CONFIG,
     choices: ["a", "b", "c", "d", "e"].map((text, index) => ({ text, correct: index % 2 === 0 })),
     mode: "multiple",
-  });
-
-  it.each(VIEWS)("round-trips every answer (seed $seed, shuffle $shuffle)", (view) => {
-    for (const selected of [[], [0], [4], [0, 2, 4], [1, 3], [3, 0, 1]]) {
-      const shown = mcqServer.toStudentAnswer!(multiple, view, { selected });
-      expect(mcqServer.fromStudentAnswer!(multiple, view, shown)).toEqual({ selected });
-      // And the other way: positions → canonical → the same positions.
-      expect(mcqServer.toStudentAnswer!(multiple, view, mcqServer.fromStudentAnswer!(multiple, view, { selected })!)).toEqual(
-        { selected },
-      );
-    }
   });
 
   it.each(VIEWS)("decodes the position the student ticked to the choice shown there (seed $seed)", (view) => {
@@ -135,23 +125,18 @@ describe("the answer in view coordinates", () => {
     }
   });
 
-  it("puts the student's own ticks of the breakdown in the review's view, and drops the key", () => {
-    const view = { seed: 7, itemId: "i", shuffle: true };
-    const details = {
-      policy: "symmetric" as const,
-      correct: [0, 2, 4],
-      selected: [0, 1],
-      c: 1,
-      w: 1,
-      C: 3,
-      W: 2,
-      fraction: 0,
-      truncated: false,
-    };
-    const out = mcqServer.studentDetails!(details, { showKey: false, showHiddenCaseNames: false }, multiple, view) as {
-      selected: number[];
-    };
-    expect(out).not.toHaveProperty("correct");
-    expect(out.selected).toEqual(mcqServer.toStudentAnswer!(multiple, view, { selected: [0, 1] }).selected);
+  /*
+   * The grader truncates an answer longer than `maxSelections` to its LOWEST
+   * canonical indices, the teacher's first-typed choices: ticking every
+   * position would let it pick the key. Such an answer is refused instead.
+   */
+  it("refuses more ticks than maxSelections, whatever positions they are", () => {
+    const capped = McqConfigSchema.parse({ ...multiple, maxSelections: 3 });
+    for (const view of VIEWS) {
+      const every = mcqServer.fromStudentAnswer!(capped, view, { selected: [0, 1, 2, 3, 4] })!;
+      expect(every.selected).toEqual([0, 1, 2, 3, 4]);
+      expect(mcqServer.answerMisfit!(capped, every)).toBe("mcq.too_many_choices");
+      expect(mcqServer.answerMisfit!(capped, mcqServer.fromStudentAnswer!(capped, view, { selected: [4, 0] })!)).toBeNull();
+    }
   });
 });

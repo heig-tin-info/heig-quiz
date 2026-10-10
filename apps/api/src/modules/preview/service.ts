@@ -29,6 +29,7 @@
 import { randomInt } from "node:crypto";
 
 import type {
+  AnswerCoordinates,
   EvaluationPreview,
   ItemPreview,
   PreviewCorrection,
@@ -76,7 +77,7 @@ import {
   visibleRunRequest,
   visibleRunResult,
 } from "../live/visibleRun.js";
-import { hasKey, loadConfig, typeOf, type StaticVersion } from "../pool/config.js";
+import { hasKey, typeOf } from "../pool/config.js";
 import { explanationOrNull, instanceOf } from "../pool/service.js";
 
 // --- Failures -------------------------------------------------------------
@@ -224,22 +225,24 @@ async function previewedItem(db: Db, evaluation: EvaluationRecord, itemId: strin
 
 // --- Running ------------------------------------------------------------------
 
-/** One item of the evaluation, with its config read through the ONE pipeline. */
+/**
+ * One item of the evaluation as the preview of `seed` shows it: the one view
+ * of an attempt's item (ADR-097), on the instance of that seed — the preview
+ * stores nothing, so the values are drawn again (ADR-056 §5).
+ */
 async function previewItem(db: Db, evaluation: EvaluationRecord, itemId: string, seed: number) {
   const joined = await joinedItem(db, evaluation.id, itemId);
   // An item of another evaluation is indistinguishable from none (invariant 6).
   if (!joined) throw notFound();
-  // The preview stores nothing: the instance of its seed, drawn again (ADR-056 §5).
-  const { version } = instanceOf(joined.question.type, joined.version, { seed, itemId });
+  const { config, view } = live.attemptItemView(evaluation, joined, { seed, instances: {} });
   return {
     joined,
     type: typeOf(joined.question.type),
-    config: loadConfig(joined.question.type, version) as unknown,
+    config,
+    view,
     // What the Run button may see: the published half, never the hidden one.
-    // No shuffle: a run is about cases, and `live/runs.ts` reads it the same way.
-    student: runnableView(
-      studentView({ type: joined.question.type, version, seed, itemId, shuffle: false }),
-    ),
+    // A runnable type is never shuffleable, as `live/runs.ts` reads it too.
+    student: runnableView(live.studentViewOf(joined.question.type, config, view)),
   };
 }
 
@@ -321,11 +324,13 @@ export async function simulatePreview(
     seed: number;
     itemId: string;
     answer: unknown;
+    /** ADR-097: the client's `AnswerCoordinates` marker. */
+    coordinates?: AnswerCoordinates | undefined;
     now: Date;
   },
 ): Promise<RunnerOutcome> {
   const { evaluation, now } = input;
-  const { joined, type, config, student } = await previewItem(db, evaluation, input.itemId, input.seed);
+  const { joined, type, config, view, student } = await previewItem(db, evaluation, input.itemId, input.seed);
   // The second test is implied by the first; it is there for TypeScript's narrowing.
   if (runButton(type, student) !== "simulate" || !type.interactiveRequest) throw notRunnable();
   budget.spend(
@@ -333,17 +338,12 @@ export async function simulatePreview(
     student.simulationsPerMinute ?? student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE,
     now,
   );
-  const answer = type.answerSchema.safeParse(input.answer);
-  if (!answer.success) {
-    throw new PreviewError("answer_invalid", 422, { details: answer.error.issues });
-  }
-  // The view the preview player showed (ADR-097): the answer back to canonical.
-  const { view } = live.attemptItemView(evaluation, joined, { seed: input.seed, instances: {} });
-  const canonical = live.answerFromStudent(joined.question.type, config, view, answer.data);
-  if (canonical === null) throw new PreviewError("answer_invalid", 422);
+  // In the view the preview player showed, back to canonical (ADR-097).
+  const entry = live.answerFromStudent(joined.question.type, config, view, input.answer, input.coordinates);
+  if ("issues" in entry) throw new PreviewError("answer_invalid", 422, { details: entry.issues });
   const built = type.interactiveRequest(
     config,
-    canonical.answer,
+    entry.answer,
     finalizeContext(evaluation, joined, input.seed, now),
   );
   if (built === null) {
@@ -374,21 +374,18 @@ async function gradeItem(
   evaluation: EvaluationRecord,
   item: JoinedItem,
   seed: number,
-  version: StaticVersion,
-  /** The view the preview player showed (ADR-097): the answer names positions in it. */
-  view: StudentView,
+  /**
+   * The item as the preview player showed it (ADR-097): its instance's config,
+   * read by `previewView` already, and the view the answer names positions in.
+   */
+  shown: { config: unknown; view: StudentView },
+  coordinates: AnswerCoordinates | undefined,
   payload: unknown,
   now: Date,
   log: (err: unknown, msg: string) => void,
 ): Promise<ItemOutcome> {
   const type = typeOf(item.question.type);
-  let config: unknown;
-  try {
-    config = loadConfig(item.question.type, version);
-  } catch (err) {
-    log(err, "preview: unreadable question config");
-    return ungraded("grader_error");
-  }
+  const { config, view } = shown;
   // An opinion question has nothing to be right about (ADR-014 addendum).
   if (!hasKey(item.question.type, config)) return ungraded("no_key");
   // F-GRADE-01: an item never touched is worth zero, and it is settled.
@@ -396,12 +393,10 @@ async function gradeItem(
 
   let answer: unknown = null;
   if (payload !== null) {
-    const parsed = type.answerSchema.safeParse(payload);
-    if (!parsed.success) return { status: "answer_invalid", points: 0, details: null };
     // Graded canonical, as the grading pass reads a stored answer.
-    const canonical = live.answerFromStudent(item.question.type, config, view, parsed.data);
-    if (canonical === null) return { status: "answer_invalid", points: 0, details: null };
-    answer = canonical.answer;
+    const entry = live.answerFromStudent(item.question.type, config, view, payload, coordinates);
+    if ("issues" in entry) return { status: "answer_invalid", points: 0, details: null };
+    answer = entry.answer;
   }
 
   const ctx = finalizeContext(evaluation, item, seed, now);
@@ -455,6 +450,8 @@ export async function gradePreview(
     userId: string;
     seed: number;
     answers: Readonly<Record<string, unknown>>;
+    /** ADR-097: the client's `AnswerCoordinates` marker. */
+    coordinates?: AnswerCoordinates | undefined;
     now: Date;
     log: (err: unknown, msg: string) => void;
   },
@@ -480,8 +477,17 @@ export async function gradePreview(
     // The instance and the view the player showed: the same seed draws the
     // same values (ADR-056 §5) and the same shuffle (ADR-097).
     const { instance, config, view: shownView } = live.attemptItemView(evaluation, item, { seed, instances: {} });
-    const { version } = instance;
-    const outcome = await gradeItem(input.runner, evaluation, item, seed, version, shownView, payload, now, input.log);
+    const outcome = await gradeItem(
+      input.runner,
+      evaluation,
+      item,
+      seed,
+      { config, view: shownView },
+      input.coordinates,
+      payload,
+      now,
+      input.log,
+    );
     if (outcome.points !== null) scored.push(outcome.points);
     // An answer to grade by hand is expected, not a failure: not counted here.
     if (!["graded", "no_key", "manual"].includes(outcome.status)) pending += 1;

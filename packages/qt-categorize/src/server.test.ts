@@ -129,22 +129,17 @@ describe("summarizeAnswer", () => {
 });
 
 describe("studentDetails", () => {
-  const VIEW = { seed: 7, itemId: "item-1", shuffle: true };
   const { details } = grade(config({ ordered: true }), PARTIAL);
 
   it("keeps everything when the key is published", () => {
-    expect(categorizeServer.studentDetails!(details, { showKey: true, showHiddenCaseNames: false }, config(), VIEW)).toBe(
-      details,
-    );
+    expect(categorizeServer.studentDetails!(details, { showKey: true, showHiddenCaseNames: false })).toBe(details);
   });
 
   it("otherwise keeps only what the student's own placements say", () => {
-    const out = categorizeServer.studentDetails!(
-      details,
-      { showKey: false, showHiddenCaseNames: false },
-      config({ ordered: true }),
-      VIEW,
-    ) as CategorizeReviewDetails;
+    const out = categorizeServer.studentDetails!(details, {
+      showKey: false,
+      showHiddenCaseNames: false,
+    }) as CategorizeReviewDetails;
     const json = JSON.stringify(out);
     expect(json).not.toContain('"expected"');
     expect(json).not.toContain('"expectedRank"');

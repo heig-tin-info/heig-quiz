@@ -145,12 +145,7 @@ describe("CategorizeReview", () => {
   });
 
   it("keeps the verdicts but hides the key without a solution", () => {
-    const redacted = categorizeServer.studentDetails!(
-      graded.details,
-      { showKey: false, showHiddenCaseNames: false },
-      cfg,
-      { seed: 7, itemId: "item-1", shuffle: true },
-    );
+    const redacted = categorizeServer.studentDetails!(graded.details, { showKey: false, showHiddenCaseNames: false });
     render(
       <CategorizeReview
         student={student}

@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 
 import { and, count, eq, getTableColumns, gte, isNull, sql } from "drizzle-orm";
 
-import type { AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
+import type { AnswerCoordinates, AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
 import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer } from "@quiz/core/server";
 import { itemPoints, mayValidate, progressStatus } from "@quiz/domain";
 
@@ -300,6 +300,8 @@ export async function saveAnswer(
     payload: unknown;
     revision: number;
     now: Date;
+    /** ADR-097: the client's `AnswerCoordinates` marker; a server-side writer passes its own. */
+    coordinates?: AnswerCoordinates | undefined;
   },
 ): Promise<AutosaveResponse> {
   const { evaluation, attempt, itemId, revision, now } = input;
@@ -307,17 +309,16 @@ export async function saveAnswer(
 
   // The view this attempt was served of the item (ADR-097), on this
   // attempt's own instance of a parameterized question (ADR-056): a poll's,
-  // forced unshuffled, as much as an exam's.
+  // forced unshuffled, as much as an exam's. Its config is parsed on every
+  // write — the conversion and `answerMisfit` both need it.
   const { config, view } = attemptItemView(evaluation, joined, attempt);
-  // Never persist garbage: the type's own schema is the gate (§4.7 step 6).
+  // Never persist garbage: the type's own schema is the gate (§4.7 step 6),
+  // and the one answer entry applies it. From here on the answer is
+  // canonical — checked, stored, graded and counted as such (ADR-097).
   const type = typeOf(joined.question.type);
-  const parsed = type.answerSchema.safeParse(input.payload);
-  if (!parsed.success) throw new AnswerInvalid(parsed.error.issues);
-  // ADR-097: the student named displayed positions; from here on the answer
-  // is canonical — checked, stored, graded and counted as such.
-  const canonical = answerFromStudent(joined.question.type, config, view, parsed.data);
-  if (canonical === null) throw new AnswerInvalid([{ message: "answer.position_not_in_view" }]);
-  const payload = canonical.answer;
+  const entry = answerFromStudent(joined.question.type, config, view, input.payload, input.coordinates);
+  if ("issues" in entry) throw new AnswerInvalid(entry.issues);
+  const payload = entry.answer;
   // The rules that need the config (an mcq in `single` mode takes one
   // choice, ADR-026): the same 422 as a malformed payload.
   const misfit = type.answerMisfit?.(config, payload);

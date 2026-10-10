@@ -12,6 +12,8 @@
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
+import { ANSWER_COORDINATES } from "@quiz/contracts";
+
 import { PERSONAS, devSub } from "../auth/dev.js";
 import type { Db } from "../db/client.js";
 import {
@@ -323,6 +325,7 @@ async function playClosedEvaluation(
         attempt,
         itemId,
         payload: live.answerToStudent(type, config, view, payload),
+        coordinates: ANSWER_COORDINATES,
         revision: 1,
         now: at,
       });
