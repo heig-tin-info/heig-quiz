@@ -84,6 +84,23 @@ describe("useCombobox — picker", () => {
     expect(result.current.open).toBe(false);
   });
 
+  it("clears the grace timer on unmount, and on a refocus", () => {
+    vi.useFakeTimers();
+    const first = setup();
+    act(() => first.result.current.inputProps.onFocus!());
+    act(() => first.result.current.inputProps.onBlur());
+    first.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+
+    const second = setup();
+    act(() => second.result.current.inputProps.onFocus!());
+    act(() => second.result.current.inputProps.onBlur());
+    act(() => second.result.current.inputProps.onFocus!());
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => vi.advanceTimersByTime(200));
+    expect(second.result.current.open).toBe(true);
+  });
+
   it("closes on Escape without stopping the event", () => {
     const { result } = setup();
     act(() => result.current.inputProps.onFocus!());
