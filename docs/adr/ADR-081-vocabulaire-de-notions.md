@@ -427,6 +427,28 @@ is the first pull request; merge, aliases and probable duplicates follow.
    linked. Step 7's course-concept links will join this transaction.
 3. **Aliases** have no language. An alias whose key equals another live
    concept's label is refused unless the admin confirms explicitly.
+   As built (PR3): only the admin adds or removes one
+   (`POST /admin/concepts/:id/aliases` `{ alias, force? }`, `DELETE
+   .../aliases/:key`; audits `concept.alias_add` with the forced flag and the
+   colliding ids, `concept.alias_remove`). Table `concept_aliases`, primary
+   key (concept, `conceptKey` of the text), the text kept as written; `Concept`
+   carries `aliases: string[]` so the picker resolves like the server. Typed
+   input is matched by key against the bare labels AND the aliases of the live
+   concepts as one set (`resolveConceptLabel`): one hit resolves, several are
+   `concept_ambiguous`. Hence the guard: an alias equal to another live
+   concept's label or alias is a 409 `alias_collision` naming those concepts
+   until resent with `force` (`checkAlias`, `@quiz/domain`); equal to the
+   concept's own label it is a 422 `alias_redundant`, to its own alias a 409
+   `alias_exists`. An alias never becomes a label and questions store only the
+   id. The stop list is not consulted: an alias is a curated decision, and
+   `concept_dropped` only answers an input that designates nothing, so an
+   alias on a dropped tag's key resolves. Rename creates no alias. Merge:
+   the loser's aliases move to the winner always (one the winner answers to
+   is dropped), and with `keepAsAlias` (the dialog's default, off for an API
+   caller that omits it) its labels, qualified when they are, become aliases
+   too; `concept.merge` records `aliasesMoved` and `aliasesAdded`. Deleting an
+   unused concept cascades to its aliases (`conceptReferenced` is unchanged).
+   The catalogue search (ADR-095 §6) does not read aliases in v1.
 4. **Probable duplicates** are proposed from labels and qualifiers only, when
    the admin asks, on the daily cap of the LLM gateway, as an ephemeral result
    never written automatically, after a deterministic pre-pass; a new row of

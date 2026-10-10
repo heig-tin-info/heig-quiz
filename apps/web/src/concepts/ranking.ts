@@ -10,12 +10,14 @@ import { fuzzyScore } from "../fuzzy";
 import type { Locale } from "../i18n";
 import { conceptName } from "./names";
 
-const namesOf = (c: Concept) => [c.labels.fr, c.labels.en].filter((l): l is string => l !== null);
+/** What a concept answers to: its labels, then its curated aliases (ADR-081 §6). */
+const namesOf = (c: Concept) => [...[c.labels.fr, c.labels.en].filter((l): l is string => l !== null), ...c.aliases];
 
 /** A concept as the resolver of `@quiz/domain` sees it, as the server builds it (`toResolvable`). */
 export const resolvable = (c: Concept): ResolvableConcept => ({
   id: c.id,
   mergedInto: c.mergedInto,
+  aliases: c.aliases,
   labels: CONCEPT_LANGS.flatMap((lang) => {
     const label = c.labels[lang];
     return label === null ? [] : [{ label, qualifier: c.qualifiers[lang] }];

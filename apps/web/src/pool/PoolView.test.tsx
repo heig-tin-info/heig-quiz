@@ -36,6 +36,7 @@ const VOCABULARY: Concept[] = [
   labels: { fr: fr!, en: en ?? null },
   qualifiers: { fr: qualifier!, en: en ? qualifier! : "" },
   descriptions: { fr: "", en: "" },
+  aliases: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
 }));

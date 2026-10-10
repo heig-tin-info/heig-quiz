@@ -3,13 +3,13 @@
  * columns of each language, and the JSON a route answers with. Shared by
  * the registry (`service.ts`) and the links (`links.ts`).
  */
-import { and, inArray, ne, or } from "drizzle-orm";
+import { and, asc, inArray, ne, or } from "drizzle-orm";
 
 import { CONCEPT_LANGS, type Concept, type ConceptExists, type ConceptLang, type ConceptRef } from "@quiz/contracts";
 import { conceptLabelIn, qualifiedConceptKey, type ResolvableConcept } from "@quiz/domain";
 
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
-import { concepts } from "../../db/schema.js";
+import { conceptAliases, concepts } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 
 export type ConceptRow = typeof concepts.$inferSelect;
@@ -71,7 +71,21 @@ export function side(label: string | null, qualifier: string, description: strin
 }
 
 
-export function toConcept(row: ConceptRow): Concept {
+/** The curated aliases (display texts) of every concept, by concept id; one query for the whole vocabulary or for `ids`. */
+export async function loadAliases(db: Db | Tx, ids?: readonly string[]): Promise<Map<string, string[]>> {
+  if (ids?.length === 0) return new Map();
+  const rows = await db
+    .select({ conceptId: conceptAliases.conceptId, text: conceptAliases.text })
+    .from(conceptAliases)
+    .where(ids ? inArray(conceptAliases.conceptId, [...ids]) : undefined)
+    .orderBy(asc(conceptAliases.text), asc(conceptAliases.key));
+  const out = new Map<string, string[]>();
+  for (const r of rows) out.set(r.conceptId, [...(out.get(r.conceptId) ?? []), r.text]);
+  return out;
+}
+
+/** A concept as a route answers; `aliases` come from {@link loadAliases} (none by default). */
+export function toConcept(row: ConceptRow, aliases: readonly string[] = []): Concept {
   const sides = perLang((lang) => sideOf(row, lang));
   return {
     id: row.id,
@@ -80,6 +94,7 @@ export function toConcept(row: ConceptRow): Concept {
     labels: perLang((lang) => sides[lang].label),
     qualifiers: perLang((lang) => sides[lang].qualifier),
     descriptions: perLang((lang) => sides[lang].description),
+    aliases: [...aliases],
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
   };
@@ -101,11 +116,12 @@ async function holdersOf(db: Db | Tx, keys: Record<ConceptLang, readonly string[
     .where(and(ne(concepts.status, "merged"), or(...held)));
 }
 
-/** A concept as the resolver of `@quiz/domain` sees it: its id, its merge, its labels with their qualifiers. */
-export function toResolvable(row: ConceptRow): ResolvableConcept {
+/** A concept as the resolver of `@quiz/domain` sees it: its id, its merge, its labels with their qualifiers and its aliases. */
+export function toResolvable(row: ConceptRow, aliases: readonly string[] = []): ResolvableConcept {
   return {
     id: row.id,
     mergedInto: row.mergedInto,
+    aliases,
     labels: CONCEPT_LANGS.flatMap((lang) => {
       const { label, qualifier } = sideOf(row, lang);
       return label === null ? [] : [{ label, qualifier }];
@@ -136,7 +152,7 @@ export async function conflictOr(
   const [holder] = await holdersOf(db, violated);
   return holder
     ? new DomainError("concept_exists", 409, "A concept with this label already exists", {
-        concept: toConcept(holder),
+        concept: toConcept(holder, (await loadAliases(db, [holder.id])).get(holder.id)),
       } satisfies Omit<ConceptExists, "error" | "message">)
     : error;
 }

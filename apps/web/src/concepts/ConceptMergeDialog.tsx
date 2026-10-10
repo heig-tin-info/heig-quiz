@@ -5,7 +5,7 @@ import type { AdminConcept, Concept, ConceptMerge } from "@quiz/contracts";
 
 import { api, refusalCodeOf } from "../api";
 import { useI18n, useT } from "../i18n";
-import { Button, FormError, Modal, RadioRow, SearchInput } from "../ui";
+import { Button, Checkbox, FormError, Modal, RadioRow, SearchInput } from "../ui";
 import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 
@@ -35,6 +35,8 @@ export function ConceptMergeDialog({
   const { locale } = useI18n();
   const [typed, setTyped] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
+  // On by default (fifth addendum, PR3): what teachers typed for the merged concept still finds the target.
+  const [keepAlias, setKeepAlias] = useState(true);
   const name = conceptName(concept, locale);
 
   const targets = useMemo(() => candidates.filter((c) => c.status === "validated" && c.id !== concept.id), [candidates, concept.id]);
@@ -79,7 +81,7 @@ export function ConceptMergeDialog({
             variant="danger"
             loading={merge.isPending}
             disabled={target === undefined}
-            onClick={() => target && merge.mutate({ into: target.id })}
+            onClick={() => target && merge.mutate({ into: target.id, keepAsAlias: keepAlias })}
           >
             {t("admin.concepts.merge.confirm")}
           </Button>
@@ -109,9 +111,21 @@ export function ConceptMergeDialog({
           </fieldset>
         )}
         {target ? (
-          <p role="status" className="text-sm">
-            {effect(conceptName(target, locale))}
-          </p>
+          <>
+            <p role="status" className="text-sm">
+              {effect(conceptName(target, locale))}
+            </p>
+            <div className="space-y-1">
+              <Checkbox
+                checked={keepAlias}
+                onChange={(e) => setKeepAlias(e.target.checked)}
+                label={t("admin.concepts.merge.keepAlias", { name, target: conceptName(target, locale) })}
+              />
+              <p className="pl-[26px] text-xs text-fg-muted">
+                {t("admin.concepts.merge.keepAlias.hint", { name, target: conceptName(target, locale) })}
+              </p>
+            </div>
+          </>
         ) : null}
         <FormError error={merge.error} describe={describe} />
       </div>

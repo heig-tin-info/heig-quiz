@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkAlias,
   cleanConceptLabel,
   closeConcepts,
   conceptKey,
@@ -372,5 +373,52 @@ describe("resolveConceptLabel", () => {
       kind: "resolved",
       id: "lifo",
     });
+  });
+});
+
+describe("aliases", () => {
+  const concept = (
+    id: string,
+    labels: string[],
+    aliases: string[] = [],
+    mergedInto: string | null = null,
+  ): ResolvableConcept => ({
+    id,
+    mergedInto,
+    labels: labels.map((label) => ({ label, qualifier: "" })),
+    aliases,
+  });
+  const ovf = concept("ovf", ["dépassement", "overflow"], ["Débordement d'entier"]);
+  const ptr = concept("ptr", ["pointeur", "pointer"]);
+  const old = concept("old", ["tas"], ["heap"], "ptr");
+
+  it("resolves an alias by its key, spelled any way", () => {
+    for (const typed of ["debordement entier", "Débordements d'entiers", "#debordement-d-entier"]) {
+      expect(resolveConceptLabel(typed, [ovf, ptr])).toEqual({ kind: "resolved", id: "ovf" });
+    }
+  });
+
+  it("never resolves through a merged concept's aliases", () => {
+    expect(resolveConceptLabel("heap", [ovf, ptr, old])).toEqual({ kind: "unknown", candidates: [] });
+  });
+
+  it("is ambiguous when an alias equals another concept's label or alias", () => {
+    const clash = concept("clash", ["autre"], ["pointeurs"]);
+    expect(resolveConceptLabel("pointeur", [ptr, clash])).toEqual({
+      kind: "ambiguous",
+      candidates: expect.arrayContaining(["ptr", "clash"]),
+    });
+  });
+
+  it("checks an alias against the concept itself, then the others", () => {
+    const all = [ovf, ptr, old];
+    expect(checkAlias("Dépassements", ovf, all)).toEqual({ kind: "redundant", of: "label" });
+    expect(checkAlias("debordement entier", ovf, all)).toEqual({ kind: "redundant", of: "alias" });
+    expect(checkAlias("pointers", ovf, all)).toEqual({ kind: "collides", with: [{ id: "ptr", via: "label" }] });
+    expect(checkAlias("Débordement d'entier", ptr, all)).toEqual({
+      kind: "collides",
+      with: [{ id: "ovf", via: "alias" }],
+    });
+    expect(checkAlias("heap", ptr, all)).toEqual({ kind: "free" });
   });
 });

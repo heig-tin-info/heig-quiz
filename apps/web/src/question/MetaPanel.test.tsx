@@ -22,6 +22,7 @@ const concept = (id: string, fr: string, en: string): Concept => ({
   labels: { fr, en },
   qualifiers: { fr: "", en: "" },
   descriptions: { fr: "", en: "" },
+  aliases: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
 });

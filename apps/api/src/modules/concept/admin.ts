@@ -19,7 +19,7 @@ import { displayName } from "@quiz/domain";
 import type { Db } from "../../db/client.js";
 import { concepts, questionConcepts, questions, users } from "../../db/schema.js";
 import { conceptReferenced } from "./referenced.js";
-import { toConcept } from "./row.js";
+import { loadAliases, toConcept } from "./row.js";
 
 export async function listAdminConcepts(db: Db): Promise<AdminConcept[]> {
   const live = db
@@ -48,9 +48,10 @@ export async function listAdminConcepts(db: Db): Promise<AdminConcept[]> {
       asc(concepts.id),
     );
 
+  const aliases = await loadAliases(db);
   return rows.map(
     (r): AdminConcept => ({
-      ...toConcept(r.concept),
+      ...toConcept(r.concept, aliases.get(r.concept.id)),
       questionCount: r.used,
       deletable: !r.referenced,
       creator: displayName({ givenName: r.givenName, familyName: r.familyName, email: null }) || null,

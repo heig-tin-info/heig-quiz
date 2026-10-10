@@ -8,6 +8,7 @@
  * admin dropped (`c01`, dropped as a chapter label, is one from the start).
  */
 import {
+  ConceptAliasAdd,
   ConceptCreate,
   ConceptMerge,
   ConceptPatch,
@@ -18,7 +19,7 @@ import {
   type ConceptRef,
   type TagDropReason,
 } from "@quiz/contracts";
-import { conceptKey, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
+import { checkAlias, conceptKey, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
 
 import { D, flags, H, iso, MockPayload, on, refuse, role } from "./runtime";
 
@@ -34,6 +35,7 @@ const concept = (
   labels: { fr: fr[0], en: en[0] },
   qualifiers: { fr: fr[1] ?? "", en: en[1] ?? "" },
   descriptions: { fr: fr[2] ?? "", en: en[2] ?? "" },
+  aliases: [],
   createdBy: null,
   createdAt: iso(-3 * D),
 });
@@ -50,6 +52,9 @@ const concepts: Concept[] = [
   concept("proposed", [null], ["Hash table", "", "Keys mapped to buckets by a hash function."]),
   concept("proposed", ["Complément à deux"], ["Two's complement"]),
 ];
+
+concepts[0]!.aliases = ["Référence mémoire", "Pointer variable"];
+concepts[6]!.aliases = ["Tas"];
 
 /** The questions each concept's links hold, beyond those the mock's own questions name (`seedConceptIds`). */
 const usage = new Map<string, number>();
@@ -181,9 +186,62 @@ on("POST", "/app/api/admin/concepts/:id/merge", (m, raw): Concept => {
   usage.set(winner.id, (usage.get(winner.id) ?? 0) + moved);
   usage.delete(loser.id);
   for (const c of concepts) if (c.mergedInto === loser.id) c.mergedInto = winner.id;
+  const known = new Set([...[winner.labels.fr, winner.labels.en].flatMap((l) => (l === null ? [] : [conceptKey(l)])), ...winner.aliases.map(conceptKey)]);
+  const kept = body.data.keepAsAlias
+    ? (["fr", "en"] as const).flatMap((lang) => {
+        const label = loser.labels[lang];
+        return label === null ? [] : [loser.qualifiers[lang] ? `${label} (${loser.qualifiers[lang]})` : label];
+      })
+    : [];
+  for (const alias of [...loser.aliases, ...kept]) {
+    if (!known.has(conceptKey(alias))) winner.aliases.push(alias);
+    known.add(conceptKey(alias));
+  }
+  winner.aliases.sort((a, b) => a.localeCompare(b));
+  loser.aliases = [];
   loser.status = "merged";
   loser.mergedInto = winner.id;
   return winner;
+});
+
+const resolvables = () =>
+  concepts.map((c) => ({
+    id: c.id,
+    mergedInto: c.mergedInto,
+    aliases: c.aliases,
+    labels: (["fr", "en"] as const).flatMap((l) => (c.labels[l] === null ? [] : [{ label: c.labels[l]!, qualifier: c.qualifiers[l] }])),
+  }));
+
+/** A curated alias (ADR-081 §6): a collision with another concept's label or alias is a 409 until forced. */
+on("POST", "/app/api/admin/concepts/:id/aliases", (m, raw): Concept => {
+  const c = concepts.find((x) => x.id === m.groups!.id);
+  if (!c) throw refuse(404, "not_found", "No such concept");
+  if (c.status === "merged") throw refuse(409, "concept_merged", "A merged concept has no aliases");
+  const body = ConceptAliasAdd.safeParse(raw);
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  const all = resolvables();
+  const check = checkAlias(body.data.alias, all.find((x) => x.id === c.id)!, all);
+  if (check.kind === "redundant") {
+    throw check.of === "label"
+      ? refuse(422, "alias_redundant", "An alias equal to the concept's own label is pointless")
+      : refuse(409, "alias_exists", "The concept already has this alias");
+  }
+  if (check.kind === "collides" && !body.data.force) {
+    throw refuse(409, "alias_collision", "This alias would make an input ambiguous", {
+      collisions: check.with.map((hit) => ({ concept: conceptRefs([hit.id])[0]!, via: hit.via })),
+    });
+  }
+  c.aliases = [...c.aliases, body.data.alias.replace(/\s+/g, " ")].sort((a, b) => a.localeCompare(b));
+  return c;
+});
+
+on("DELETE", "/app/api/admin/concepts/:id/aliases/:key", (m): Concept => {
+  const c = concepts.find((x) => x.id === m.groups!.id);
+  if (!c) throw refuse(404, "not_found", "No such concept");
+  const key = decodeURIComponent(m.groups!.key!);
+  if (!c.aliases.some((a) => conceptKey(a) === key)) throw refuse(404, "not_found", "No such alias");
+  c.aliases = c.aliases.filter((a) => conceptKey(a) !== key);
+  return c;
 });
 
 on("DELETE", "/app/api/admin/concepts/:id", (m) => {

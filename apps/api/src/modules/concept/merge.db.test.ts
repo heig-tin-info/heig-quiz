@@ -153,6 +153,8 @@ describe("POST /admin/concepts/:id/merge", () => {
       moved: [a],
       alreadyLinked: [b],
       repointed: [old],
+      aliasesMoved: [],
+      aliasesAdded: [],
     });
   });
 

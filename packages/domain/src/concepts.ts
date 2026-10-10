@@ -240,7 +240,12 @@ export interface ResolvableConcept {
   mergedInto: string | null;
   /** Its label and qualifier in each language that has a label. */
   labels: readonly { label: string; qualifier: string }[];
-  /** Other names it answers to, bare (curated aliases, ADR-081 §6); none by default. */
+  /**
+   * Other names it answers to, bare (curated aliases, ADR-081 §6); none by
+   * default. An alias is matched exactly like a label: an input whose key is
+   * a label's or an alias's resolves, and the same key on two concepts is
+   * ambiguous.
+   */
   aliases?: readonly string[];
 }
 
@@ -300,6 +305,38 @@ export function resolveConceptLabel(
   if (exact.length > 1)
     return { kind: "ambiguous", candidates: exact.map((m) => m.id) };
   return { kind: "unknown", candidates: matches.map((m) => m.id) };
+}
+
+/**
+ * Why an alias is refused or needs the admin's confirmation (ADR-081 §6,
+ * fifth addendum). The alias is compared by {@link conceptKey} with the BARE
+ * labels and the aliases of the other concepts that are not merged — the very
+ * names {@link resolveConceptLabel} matches an unqualified input against — so
+ * an alias that would make some input ambiguous is found here, before it is
+ * stored.
+ */
+export type AliasCheck =
+  /** The alias is a name the concept already has (a label, or the same alias): nothing to store. */
+  | { kind: "redundant"; of: "label" | "alias" }
+  /** Other concepts answer to this key already: stored only when forced. */
+  | { kind: "collides"; with: { id: string; via: "label" | "alias" }[] }
+  | { kind: "free" };
+
+export function checkAlias(
+  alias: string,
+  self: ResolvableConcept,
+  concepts: readonly ResolvableConcept[],
+): AliasCheck {
+  const key = conceptKey(alias);
+  if (self.labels.some((l) => conceptKey(l.label) === key)) return { kind: "redundant", of: "label" };
+  if ((self.aliases ?? []).some((a) => conceptKey(a) === key)) return { kind: "redundant", of: "alias" };
+  const hits: { id: string; via: "label" | "alias" }[] = [];
+  for (const c of concepts) {
+    if (c.id === self.id || c.mergedInto) continue;
+    if (c.labels.some((l) => conceptKey(l.label) === key)) hits.push({ id: c.id, via: "label" });
+    else if ((c.aliases ?? []).some((a) => conceptKey(a) === key)) hits.push({ id: c.id, via: "alias" });
+  }
+  return hits.length > 0 ? { kind: "collides", with: hits } : { kind: "free" };
 }
 
 /**

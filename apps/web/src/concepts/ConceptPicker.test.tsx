@@ -19,7 +19,7 @@ let seq = 0;
 const concept = (
   fr: string | null,
   en: string | null,
-  over: Partial<Pick<Concept, "status" | "qualifiers" | "descriptions">> = {},
+  over: Partial<Pick<Concept, "status" | "qualifiers" | "descriptions" | "aliases">> = {},
 ): Concept => ({
   id: `c0c0c0c0-0000-4000-8000-${String((seq += 1)).padStart(12, "0")}`,
   status: "validated",
@@ -27,6 +27,7 @@ const concept = (
   labels: { fr, en },
   qualifiers: { fr: "", en: "" },
   descriptions: { fr: "", en: "" },
+  aliases: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
   ...over,
@@ -34,6 +35,7 @@ const concept = (
 
 const array = concept("Tableau", "Array", {
   descriptions: { fr: "", en: "Elements of one type, contiguous in memory." },
+  aliases: ["Vecteur"],
 });
 const pointer = concept("Pointeur", "Pointer");
 const memoryAddress = concept("Adresse", "Address", {
@@ -227,6 +229,14 @@ describe("ConceptPicker", () => {
     const { user } = setup();
     await user.type(combobox(), "Pointer");
     expect((await optionTexts()).some((x) => x?.startsWith("Create"))).toBe(false);
+  });
+
+  it("finds a concept by one of its aliases, first, and offers no creation", async () => {
+    const { user } = setup();
+    await user.type(combobox(), "vecteurs");
+    const texts = await optionTexts();
+    expect(texts[0]).toMatch(/^Array/);
+    expect(texts.some((x) => x?.startsWith("Create"))).toBe(false);
   });
 
   it('says a typed concept is already on the question rather than "no match"', async () => {

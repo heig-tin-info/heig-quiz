@@ -9,8 +9,8 @@
  * `qualifiedConceptKey` (`@quiz/domain`) of the label and qualifier, computed
  * by the service on every write; they serve this index only (the resolver
  * computes its keys from the labels), and a change of the key rule
- * recomputes them by a migration. Aliases (ADR-081 §6) come with the
- * admin's curation, not in this step.
+ * recomputes them by a migration. Aliases (ADR-081 §6) are `concept_aliases`
+ * below.
  */
 import { sql } from "drizzle-orm";
 import {
@@ -112,4 +112,27 @@ export const questionConcepts = pgTable(
       .references(() => concepts.id, { onDelete: "restrict" }),
   },
   (t) => [primaryKey({ columns: [t.questionId, t.conceptId] }), index("question_concepts_concept_idx").on(t.conceptId)],
+);
+
+/**
+ * The curated aliases of a concept (ADR-081 §6, fifth addendum): other names
+ * it answers to, added by the admin only, with no language. `key` is the
+ * `conceptKey` of `text`, computed by the service; the primary key is
+ * (concept, key), so a concept holds a key once, while another concept MAY
+ * hold the same key (a forced collision: the input is then ambiguous). They
+ * go with their concept (cascade) and are not references: they never block
+ * its deletion.
+ */
+export const conceptAliases = pgTable(
+  "concept_aliases",
+  {
+    conceptId: uuid("concept_id")
+      .notNull()
+      .references(() => concepts.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    text: text("text").notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.conceptId, t.key] }), index("concept_aliases_key_idx").on(t.key)],
 );

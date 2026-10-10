@@ -64,11 +64,17 @@ export type AuditAction =
    * (`payload.labels`). `merge`: the admin merged the subject (the loser)
    * into a validated concept, in one transaction (`payload`: `loser` id, status,
    * labels and qualifiers, `winner` likewise, `moved` and `alreadyLinked` question ids,
-   * `repointed` concept ids; enough for a reviewed SQL undo, ADR-081 fifth
-   * addendum). The tag sorting's `sort` and
+   * `repointed` concept ids, `aliasesAdded` (the loser's labels kept as
+   * aliases) and `aliasesMoved` (its own aliases) texts; enough for a
+   * reviewed SQL undo, ADR-081 fifth addendum). `alias_add` / `alias_remove`:
+   * the admin added or removed a curated alias (subject the concept;
+   * `payload.alias` the text, `payload.forced` for an add confirmed despite a
+   * collision, with the `collidesWith` concept ids). The tag sorting's `sort` and
    * `sort_propose` rows of the past stay in the log, no longer written
    * (ADR-081, step (d)).
    */
+  | "concept.alias_add"
+  | "concept.alias_remove"
   | "concept.delete"
   | "concept.edit"
   | "concept.merge"

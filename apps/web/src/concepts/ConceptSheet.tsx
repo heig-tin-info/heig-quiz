@@ -1,16 +1,17 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { GitMerge, Trash2 } from "lucide-react";
+import { GitMerge, TriangleAlert, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { CONCEPT_LANGS, ConceptPatch, type AdminConcept, type ConceptLang } from "@quiz/contracts";
+import { CONCEPT_LANGS, ConceptPatch, type AdminConcept, type AliasCollision, type Concept, type ConceptLang } from "@quiz/contracts";
+import { conceptKey } from "@quiz/domain";
 
-import { api, refusalCodeOf } from "../api";
+import { api, ApiError, refusalCodeOf } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type Locale } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
-import { Button, Field, FormError, Sheet, Textarea } from "../ui";
+import { Alert, Button, Field, FormError, Sheet, Textarea } from "../ui";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
-import { conceptName } from "./names";
+import { conceptName, refName } from "./names";
 
 type Side = { label: string; qualifier: string; description: string };
 type Sides = Record<ConceptLang, Side>;
@@ -35,6 +36,143 @@ function patchOf(was: Sides, now: Sides) {
     if (Object.keys(changed).length > 0) patch[lang] = changed;
   }
   return patch;
+}
+
+/**
+ * The curated aliases (ADR-081 §6, fifth addendum): chips with a remove
+ * button, and a field to add one. Each change is saved at once, apart from
+ * the labels' Save (it is a separate decision, audited alone). An alias that
+ * is the label or an alias of another concept comes back as a 409
+ * `alias_collision`: the warning names those concepts and the admin confirms
+ * with "Add anyway" or drops it.
+ */
+function Aliases({ concept }: { concept: AdminConcept }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const [typed, setTyped] = useState("");
+  const [collision, setCollision] = useState<{ alias: string; collisions: AliasCollision["collisions"] } | null>(null);
+  const base = `/app/api/admin/concepts/${concept.id}/aliases`;
+  const changed = () => {
+    void qc.invalidateQueries({ queryKey: adminConceptsKey });
+    void qc.invalidateQueries({ queryKey: conceptsKey });
+  };
+  const add = useMutation({
+    mutationFn: (v: { alias: string; force?: boolean }) =>
+      api<Concept>(base, { method: "POST", body: JSON.stringify(v) }),
+    onSuccess: () => {
+      setTyped("");
+      setCollision(null);
+      changed();
+    },
+    onError: (error, v) => {
+      if (error instanceof ApiError && refusalCodeOf(error) === "alias_collision") {
+        setCollision({ alias: v.alias, collisions: (error.body as AliasCollision).collisions });
+      }
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (alias: string) => api<Concept>(`${base}/${encodeURIComponent(conceptKey(alias))}`, { method: "DELETE" }),
+    onSuccess: changed,
+  });
+  const describe = (error: unknown) => {
+    switch (refusalCodeOf(error)) {
+      case "alias_redundant":
+        return t("admin.concepts.error.aliasRedundant");
+      case "alias_exists":
+        return t("admin.concepts.error.aliasExists");
+      case "concept_merged":
+        return t("admin.concepts.error.merged");
+      default:
+        return t("admin.concepts.error.alias");
+    }
+  };
+  const submit = () => {
+    const alias = typed.trim();
+    if (alias === "") return;
+    setCollision(null);
+    add.mutate({ alias });
+  };
+
+  return (
+    <fieldset className="space-y-3">
+      <legend className="mb-1 text-base font-bold tracking-tight">{t("admin.concepts.aliases")}</legend>
+      <p className="text-xs text-fg-muted">{t("admin.concepts.aliases.desc")}</p>
+      {concept.aliases.length === 0 ? (
+        <p className="text-sm text-fg-muted">{t("admin.concepts.aliases.none")}</p>
+      ) : (
+        <ul className="flex flex-wrap gap-1.5">
+          {concept.aliases.map((alias) => (
+            <li key={alias} className="inline-flex items-center gap-1 rounded-full bg-surface-3 py-0.5 pl-2.5 pr-1 text-sm">
+              {alias}
+              <button
+                type="button"
+                disabled={remove.isPending}
+                aria-label={t("admin.concepts.aliases.remove", { name: alias })}
+                onClick={() => remove.mutate(alias)}
+                className="shrink-0 rounded-full p-0.5 text-fg-faint transition-colors hover:bg-line-strong hover:text-fg"
+              >
+                <X className="size-3" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-end gap-2">
+        <Field
+          label={t("admin.concepts.aliases.field")}
+          fullWidth
+          maxLength={120}
+          value={typed}
+          onChange={(e) => {
+            setTyped(e.target.value);
+            setCollision(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submit();
+            }
+          }}
+        />
+        <Button variant="secondary" loading={add.isPending && !collision} disabled={typed.trim() === ""} onClick={submit}>
+          {t("admin.concepts.aliases.add")}
+        </Button>
+      </div>
+      {collision ? (
+        <Alert
+          tone="warning"
+          icon={TriangleAlert}
+          title={t("admin.concepts.aliases.collision.title", { alias: collision.alias })}
+          action={
+            <span className="flex gap-2">
+              <Button variant="secondary" onClick={() => setCollision(null)}>
+                {t("admin.concepts.aliases.collision.cancel")}
+              </Button>
+              <Button
+                variant="secondary"
+                loading={add.isPending}
+                onClick={() => add.mutate({ alias: collision.alias, force: true })}
+              >
+                {t("admin.concepts.aliases.collision.confirm")}
+              </Button>
+            </span>
+          }
+        >
+          <ul className="list-disc pl-4">
+            {collision.collisions.map(({ concept: other, via }) => (
+              <li key={other.id}>
+                {t(via === "label" ? "admin.concepts.aliases.collision.label" : "admin.concepts.aliases.collision.alias", {
+                  name: refName(other),
+                })}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1">{t("admin.concepts.aliases.collision.body")}</p>
+        </Alert>
+      ) : null}
+      <FormError error={add.error && !collision ? add.error : remove.error} describe={describe} />
+    </fieldset>
+  );
 }
 
 /**
@@ -176,6 +314,7 @@ export function ConceptSheet({
             />
           </fieldset>
         ))}
+        <Aliases concept={concept} />
         {!concept.deletable && dirty ? (
           <p id="concept-merge-why" className="text-[13px] text-fg-muted">
             {t("admin.concepts.merge.unsaved")}
