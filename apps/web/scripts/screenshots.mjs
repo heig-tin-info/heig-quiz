@@ -1096,6 +1096,8 @@ const scenes = [
   { name: "pool-concepts-empty", role: "teacher", path: "/pools/p0?tab=concepts" },
   // §7: a typed `#word` filters on every concept it may name; one naming none says so and filters nothing.
   { name: "pool-search-concept", role: "teacher", path: "/pools/p1?q=%23pointer", fold: true, act: skipCoach },
+  { name: "pool-course-filter", role: "teacher", path: "/pools/p1?q=course%3APRG1", fold: true, act: skipCoach },
+  { name: "pool-course-filter-sheet", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^filtres|^filters/i }).first().click() },
   { name: "pool-search-concept-none", role: "teacher", path: "/pools/p1?q=%23inductance", fold: true, act: skipCoach },
   { name: "pool-search-concept-complete", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await skipCoach(p);

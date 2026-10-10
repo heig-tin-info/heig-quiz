@@ -188,7 +188,7 @@ export function QuestionEditTab({
           meta={data.meta}
           categories={pool?.categories ?? []}
           poolName={pool?.pool.name ?? "—"}
-          poolConceptIds={pool?.concepts.map((c) => c.concept.id)}
+          poolConceptIds={pool && pickerConceptIds(pool)}
           conceptPrefill={conceptPrefill}
           disabled={readOnly}
         />

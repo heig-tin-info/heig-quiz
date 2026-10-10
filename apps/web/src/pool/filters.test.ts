@@ -191,6 +191,36 @@ describe("resolveFilters", () => {
   });
 });
 
+describe("the course filter (#599 step 7b)", () => {
+  const PRG1 = { id: "00000000-0000-4000-8000-0000000000c1", name: "Programmation 1", code: "PRG1" };
+  const PRG2 = { id: "00000000-0000-4000-8000-0000000000c2", name: "Programmation 2", code: "PRG2" };
+  const COURSES = [PRG1, PRG2];
+
+  it("sends the course ticked in the sheet", () => {
+    const params = new URLSearchParams(questionQuery({ ...EMPTY_FILTERS, courseId: PRG2.id }, undefined, null, COURSES).slice(1));
+    expect(params.get("course")).toBe(PRG2.id);
+  });
+
+  it("resolves a typed course by its code, else its name, whatever the case, and keeps the rest as text", () => {
+    const byCode = resolveFilters({ ...EMPTY_FILTERS, q: "ptr course:prg1" }, undefined, COURSES);
+    expect(byCode).toMatchObject({ q: "ptr", course: PRG1, courseMiss: null, pending: false });
+    const byName = resolveFilters({ ...EMPTY_FILTERS, q: 'course:"programmation 2"' }, undefined, COURSES);
+    expect(byName.course).toEqual(PRG2);
+  });
+
+  it("filters nothing on a course that is not on offer, and says which", () => {
+    const resolved = resolveFilters({ ...EMPTY_FILTERS, q: "course:ALGO" }, undefined, COURSES);
+    expect(resolved).toMatchObject({ course: null, courseMiss: "ALGO" });
+    expect(questionQuery({ ...EMPTY_FILTERS, q: "course:ALGO" }, undefined, null, COURSES)).toBe("?limit=25");
+  });
+
+  it("is pending until the courses are there, and counts as one filter", () => {
+    expect(resolveFilters({ ...EMPTY_FILTERS, q: "course:PRG1" }).pending).toBe(true);
+    expect(activeFilterCount({ ...EMPTY_FILTERS, q: "course:PRG1" })).toBe(1);
+    expect(activeFilterCount({ ...EMPTY_FILTERS, courseId: PRG1.id })).toBe(1);
+  });
+});
+
 describe("the statistics bounds (F-STAT-03)", () => {
   const TIME = { n: 12, meanS: 95, medianS: 80, p25S: 52, p75S: 121 };
   const stats = (p: number, time: QuestionStats["time"] = null): QuestionStats => ({

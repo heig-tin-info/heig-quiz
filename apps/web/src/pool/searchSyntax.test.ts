@@ -18,6 +18,7 @@ import {
 describe("parseSearch", () => {
   it.each([
     ["keeps plain words as the free text", "  pointeurs   null ", { q: "pointeurs null" }],
+    ["reads a course word, the last one winning", "course:PRG1 ptr course:\"Programmation 2\"", { q: "ptr", courseWord: "Programmation 2" }],
     ["reads a concept word after its hash", "#pointeurs #Mémoire", { conceptWords: ["pointeurs", "Mémoire"] }],
     [
       "reads the tags' spelling as concept words",
@@ -71,6 +72,7 @@ describe("parseSearch", () => {
     expect(parsed).toEqual({
       q: "segfault",
       conceptWords: ["pointeurs"],
+      courseWord: null,
       types: ["code"],
       difficulties: [4, 5],
       versionMin: 2,
@@ -88,6 +90,7 @@ describe("difficultyValues / versionBounds", () => {
 
 describe("withoutToken", () => {
   it.each([
+    ["takes the course token out", "course:PRG1 segfault", "course", undefined, "segfault"],
     ["takes one concept word out and leaves the rest", "#a #b segfault", "concept", "a", "#b segfault"],
     ["takes a word out whatever its spelling", "tag:#A tag:b #\"a\" segfault", "concept", "a", "tag:b segfault"],
     ["takes every concept word at once", "#a tag:b ptr", "concept", undefined, "ptr"],

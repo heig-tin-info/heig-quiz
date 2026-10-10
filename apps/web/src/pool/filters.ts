@@ -26,7 +26,7 @@
  * filters its rows against them itself (`matchesStats`) instead of a second
  * route re-reading the history per search.
  */
-import type { Concept, QuestionSort, QuestionStats } from "@quiz/contracts";
+import type { Concept, PoolFilterCourse, QuestionSort, QuestionStats } from "@quiz/contracts";
 
 import { conceptIdsOf } from "../concepts/refs";
 import { parseSearch } from "./searchSyntax";
@@ -44,6 +44,11 @@ export interface QuestionFilters {
   /** Concept ids, ticked in the sheet or opened from the Concepts tab (`?concept=`). */
   concepts: string[];
   difficulties: number[];
+  /**
+   * A course picked in the sheet (#599 step 7b): its questions are those of
+   * the concepts it lists. `course:PRG1` typed in the box is the other way in.
+   */
+  courseId: string | null;
   /**
    * `null` is "every category". The API filters on one category id and has
    * no "uncategorized" filter (`searchWhere` in the pool service), so the
@@ -94,6 +99,7 @@ export const NO_FILTERS = {
   types: [],
   concepts: [],
   difficulties: [],
+  courseId: null,
   includeDeleted: false,
   versionMin: null,
   versionMax: null,
@@ -131,6 +137,9 @@ export interface ConceptWord {
   ids: string[];
 }
 
+/** A course the list can be filtered by: what `PoolDetail.filterCourses` offers. */
+export type FilterCourse = PoolFilterCourse;
+
 /** The vocabulary a concept word resolves against; `undefined` while it loads. */
 export type Vocabulary = readonly Concept[] | undefined;
 
@@ -139,6 +148,10 @@ export interface ResolvedFilters extends QuestionFilters {
   words: ConceptWord[];
   /** Concept words are typed and the vocabulary is not there yet: no answer to ask for. */
   pending: boolean;
+  /** The course filtering the list: the one `course:` names, else the one ticked. */
+  course: FilterCourse | null;
+  /** The `course:` word that names no course on offer; it filters nothing. */
+  courseMiss: string | null;
 }
 
 /**
@@ -147,8 +160,20 @@ export interface ResolvedFilters extends QuestionFilters {
  * the query string, the chip row, the filter count — reads this and not the
  * raw state, so there is one answer to "what is filtering this list".
  */
-export function resolveFilters(filters: QuestionFilters, vocabulary?: Vocabulary): ResolvedFilters {
+export function resolveFilters(
+  filters: QuestionFilters,
+  vocabulary?: Vocabulary,
+  courses?: readonly FilterCourse[],
+): ResolvedFilters {
   const parsed = parseSearch(filters.q);
+  // A typed word names a course by its code, else by its name, whatever the case.
+  const typed = parsed.courseWord?.toLowerCase();
+  const named =
+    typed === undefined
+      ? undefined
+      : (courses ?? []).find((c) => c.code.toLowerCase() === typed) ??
+        (courses ?? []).find((c) => c.name.toLowerCase() === typed);
+  const course = named ?? (courses ?? []).find((c) => c.id === filters.courseId) ?? null;
   const words = parsed.conceptWords.map((word) => ({
     word,
     ids: vocabulary ? conceptIdsOf(word, vocabulary) : [],
@@ -161,7 +186,9 @@ export function resolveFilters(filters: QuestionFilters, vocabulary?: Vocabulary
     types: union(filters.types, parsed.types),
     concepts: words.reduce((all, w) => union(all, w.ids), filters.concepts),
     words,
-    pending: words.length > 0 && vocabulary === undefined,
+    pending: (words.length > 0 && vocabulary === undefined) || (parsed.courseWord !== null && courses === undefined),
+    course,
+    courseMiss: parsed.courseWord !== null && named === undefined && courses !== undefined ? parsed.courseWord : null,
     difficulties: union(filters.difficulties, parsed.difficulties).sort((a, b) => a - b),
     // Two bounds on one screen intersect: the narrower one is the one the
     // reader can see a reason for.
@@ -181,8 +208,9 @@ export function questionQuery(
   filters: QuestionFilters,
   vocabulary?: Vocabulary,
   cursor?: string | null,
+  courses?: readonly FilterCourse[],
 ): string {
-  const resolved = resolveFilters(filters, vocabulary);
+  const resolved = resolveFilters(filters, vocabulary, courses);
   const params = new URLSearchParams();
   const q = resolved.q.trim();
   if (q) params.set("q", q);
@@ -191,6 +219,7 @@ export function questionQuery(
   if (resolved.difficulties.length) {
     params.set("difficulty", [...resolved.difficulties].sort((a, b) => a - b).join(","));
   }
+  if (resolved.course) params.set("course", resolved.course.id);
   if (resolved.categoryId) params.set("categoryId", resolved.categoryId);
   if (resolved.includeDeleted) params.set("includeDeleted", "1");
   if (resolved.versionMin !== null) params.set("versionMin", String(resolved.versionMin));
@@ -205,6 +234,7 @@ export function questionQuery(
 /** How many filters are active, for the "Filters (2)" button and the clear row. */
 export function activeFilterCount(filters: QuestionFilters): number {
   const resolved = resolveFilters(filters);
+  const parsed = parseSearch(filters.q);
   return (
     (resolved.q.trim() ? 1 : 0) +
     resolved.types.length +
@@ -212,6 +242,8 @@ export function activeFilterCount(filters: QuestionFilters): number {
     filters.concepts.length +
     resolved.words.length +
     resolved.difficulties.length +
+    // One course, ticked or typed.
+    (filters.courseId !== null || parsed.courseWord !== null ? 1 : 0) +
     (resolved.includeDeleted ? 1 : 0) +
     // The two bounds are one filter: "version 2 to 4" is one thing to remove.
     (resolved.versionMin !== null || resolved.versionMax !== null ? 1 : 0) +
