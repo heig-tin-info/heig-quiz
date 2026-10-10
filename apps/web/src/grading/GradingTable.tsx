@@ -122,7 +122,16 @@ export function GradingTable(props: GradingTableProps) {
           c.label
         ) : (
           <span title={c.title ?? c.label} className="block truncate">
-            {c.label}
+            {c.short ? (
+              <>
+                <span aria-hidden className="sm:hidden">
+                  {c.short}
+                </span>
+                <span className="max-sm:sr-only">{c.label}</span>
+              </>
+            ) : (
+              c.label
+            )}
           </span>
         ),
       srOnly: c.key === "verdict",

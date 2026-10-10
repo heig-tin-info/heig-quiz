@@ -42,6 +42,7 @@ export const mcqGrading: QuestionTypeGrading<McqStudent, McqAnswer, McqSolution,
       return {
         key: `choice-${choice.id}`,
         ...headerOf(`${choiceLetter(choice.id)} · ${choice.text}`, HEADER_CHARS),
+        short: choiceLetter(choice.id),
         align: "center",
         cell: ({ answer }) => {
           const state = markOf(answer);

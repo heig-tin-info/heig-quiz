@@ -32,6 +32,7 @@ export interface SortColumn {
   key: string;
   label: string;
   title?: string | undefined;
+  short?: string | undefined;
   align?: "center" | "right" | undefined;
   /** An answer column of the question type (a missing answer spans them all). */
   answer: boolean;
@@ -60,6 +61,7 @@ export function sortColumns(
       key: c.key,
       label: c.label,
       title: c.title,
+      short: c.short,
       align: c.align,
       answer: true,
       sortValue: (e: GradingEntry) =>

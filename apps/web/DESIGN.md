@@ -1637,7 +1637,7 @@ A phone has no hover and a finger is not a cursor. Two classes in
   there.
   Applied: the grading row's Validate / Adjust, the category's rename pencil,
   the title's rename pencil, the sort arrow, the gaps of the evaluation's
-  items.
+  items, the avatar's camera badge (its "Change picture" overlay needs a hover).
 - `touch-hit` gives a small control a 44 × 44 px HIT AREA around its centre
   (an invisible `::before`) under `@media (pointer: coarse)`, without
   changing its drawn size. Built into `IconButton`, `IconLink`, the page's
@@ -1665,6 +1665,9 @@ One question's answers as a table (`src/grading/`, origin
   table must never show. Past the page's width it scrolls sideways under
   its sticky verdict (and student) column; every `<td>` carries its own fill
   so a sticky cell never lets the scrolled ones show through.
+- **Phone headers.** A column that declares a `short` form (`GradingColumn`:
+  the multiple-choice letter) shows it alone under `sm`; the full label stays
+  in the tooltip and as the accessible name. Desktop keeps the label.
 - **Verdict glyph.** A 22 px `rounded-md` square: correct = solid `success`
   and an `on-fill` check; partial = HATCHED, `success` stripes over
   `success` at 40 % on `surface` (`color-mix`), a small solid check square
