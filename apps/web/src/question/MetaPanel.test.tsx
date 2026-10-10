@@ -23,6 +23,8 @@ const concept = (id: string, fr: string, en: string): Concept => ({
   qualifiers: { fr: "", en: "" },
   descriptions: { fr: "", en: "" },
   aliases: [],
+  broader: [],
+  related: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
 });

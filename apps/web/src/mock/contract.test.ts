@@ -79,6 +79,7 @@ import {
   JournalRevisionContent,
   KioskDevice,
   Concept,
+  ConceptCycle,
   AliasCollision,
   ConceptExists,
   ConceptList,
@@ -1125,6 +1126,35 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     const after = (await queue()).concepts;
     expect(after.map((c) => c.id)).not.toContain(loser.id);
     expect(await call("POST", `/app/api/admin/concepts/${loser.id}/merge`, { into: winner.id, keepAsAlias: false })).toMatchObject({ status: 409, body: { error: "concept_merged" } });
+  });
+
+  it("adds, refuses and removes relations as the API does, and rewrites them on a merge", async () => {
+    const find = async (fr: string, qualifier = "") => (await queue()).concepts.find((c) => c.labels.fr === fr && c.qualifiers.fr === qualifier)!;
+    const pointer = await find("Pointeur");
+    const leak = await find("Fuite mémoire");
+    const tableau = await find("Tableau");
+    const dynamic = await find("Allocation dynamique");
+    const url = (c: { id: string }) => `/app/api/admin/concepts/${c.id}/relations`;
+    // The seed: Fuite mémoire < Allocation dynamique < Pointeur.
+    expect(issuesOf(Concept, (await queue()).concepts.find((c) => c.id === dynamic.id))).toEqual([]);
+    const cycle = await call("POST", url(pointer), { kind: "broader", target: leak.id });
+    expect(cycle).toMatchObject({ status: 409, body: { error: "concept_cycle" } });
+    expect(issuesOf(ConceptCycle, cycle.body)).toEqual([]);
+    expect((cycle.body as ConceptCycle).path).toHaveLength(4);
+    expect(await call("POST", url(pointer), { kind: "broader", target: pointer.id })).toMatchObject({ status: 422, body: { error: "relation_self" } });
+    expect(await call("POST", url(leak), { kind: "broader", target: dynamic.id })).toMatchObject({ status: 409, body: { error: "relation_exists" } });
+    expect(await call("POST", url(leak), { kind: "related", target: pointer.id })).toMatchObject({ status: 409, body: { error: "relation_redundant" } });
+    const added = await call("POST", url(tableau), { kind: "related", target: leak.id });
+    expect(added.status).toBe(200);
+    expect(issuesOf(Concept, added.body)).toEqual([]);
+    expect((await find("Fuite mémoire")).related).toEqual([tableau.id]);
+    expect((await call("DELETE", `${url(leak)}/related/${tableau.id}`)).status).toBe(200);
+    expect((await call("DELETE", `${url(leak)}/related/${tableau.id}`)).status).toBe(404);
+    // Merging Fuite mémoire into Pointeur would make Pointeur broader than Allocation dynamique, which is broader than Pointeur.
+    const blocked = await call("POST", `/app/api/admin/concepts/${leak.id}/merge`, { into: pointer.id, keepAsAlias: false });
+    expect(blocked.status).toBe(409);
+    expect(blocked.body).toMatchObject({ error: "concept_merge_cycle" });
+    expect(issuesOf(ConceptCycle, blocked.body)).toEqual([]);
   });
 
   it("adds, refuses and removes aliases as the API does, and keeps a merged label on request", async () => {

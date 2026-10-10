@@ -23,7 +23,7 @@ import { audit } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { conceptAliases, concepts } from "../../db/schema.js";
 import { DomainError, notFoundError } from "../http.js";
-import { loadAliases, toConcept, toConceptRef, toResolvable } from "./row.js";
+import { loadAliases, loadRelations, toConcept, toConceptRef, toResolvable } from "./row.js";
 import type { ConceptContext } from "./service.js";
 
 async function lockLive(tx: Db | Tx, id: string) {
@@ -70,7 +70,7 @@ export async function addAlias(
       subjectId: id,
       payload: { alias: text, forced: collisions.length > 0, collidesWith: collisions.map((c) => c.concept.id).sort() },
     });
-    return toConcept(row, (await loadAliases(tx, [id])).get(id));
+    return toConcept(row, (await loadAliases(tx, [id])).get(id), (await loadRelations(tx, [id])).get(id));
   });
 }
 
@@ -90,6 +90,6 @@ export async function removeAlias(db: Db, ctx: ConceptContext, id: string, alias
       subjectId: id,
       payload: { alias: gone.text },
     });
-    return toConcept(row, (await loadAliases(tx, [id])).get(id));
+    return toConcept(row, (await loadAliases(tx, [id])).get(id), (await loadRelations(tx, [id])).get(id));
   });
 }

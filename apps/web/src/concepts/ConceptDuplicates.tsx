@@ -1,15 +1,16 @@
-import { useQueryClient, type UseMutationResult } from "@tanstack/react-query";
-import { Check, GitMerge, Pencil, Sparkles } from "lucide-react";
+import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
+import { Check, GitMerge, Link2, Pencil, Sparkles } from "lucide-react";
 import { useState } from "react";
 
-import type { AdminConcept, ConceptDuplicatesAi } from "@quiz/contracts";
+import type { AdminConcept, Concept, ConceptDuplicatesAi, ConceptRelationAdd } from "@quiz/contracts";
 import { mergeDirection, probableDuplicates, type AiDuplicateKind, type DuplicatePair as DuplicatePairOf, type DuplicateReason } from "@quiz/domain";
 
-import { apiErrorMessage } from "../api";
+import { api, apiErrorMessage } from "../api";
 import { useI18n, useT } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
-import { Alert, Badge, Button, Card, EmptyState } from "../ui";
+import { Alert, Badge, Button, Card, EmptyState, FormError } from "../ui";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
+import { relationError } from "./ConceptRelations";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, refName, usesLabel } from "./names";
 import { resolvable } from "./ranking";
@@ -178,6 +179,39 @@ function AiSuggestions({
   );
 }
 
+/**
+ * "Add as related" (ADR-081 sixth addendum 7c): the model's `related` pair
+ * becomes a relation in one click, a secondary action like the merge. The
+ * server decides (a pair already in one chain is refused); once the two are
+ * related it reads "Related".
+ */
+function RelateButton({ a, b }: { a: AdminConcept; b: AdminConcept }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const relate = useMutation({
+    mutationFn: () =>
+      api<Concept>(`/app/api/admin/concepts/${a.id}/relations`, {
+        method: "POST",
+        body: JSON.stringify({ kind: "related", target: b.id } satisfies ConceptRelationAdd),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: adminConceptsKey });
+      void qc.invalidateQueries({ queryKey: conceptsKey });
+    },
+  });
+  if (a.related.includes(b.id)) {
+    return <p className="shrink-0 self-center text-xs text-fg-muted">{t("admin.concepts.dup.related.done")}</p>;
+  }
+  return (
+    <div className="shrink-0 space-y-1">
+      <Button size="sm" variant="secondary" loading={relate.isPending} onClick={() => relate.mutate()}>
+        <Link2 /> {t("admin.concepts.dup.related.add")}
+      </Button>
+      <FormError error={relate.error} describe={(error) => relationError(t, error)} />
+    </div>
+  );
+}
+
 function PairRow({
   pair,
   ai,
@@ -228,6 +262,7 @@ function PairRow({
           ))}
         </ul>
       </div>
+      {pair.reason === "related" && ai !== undefined ? <RelateButton a={a} b={b} /> : null}
       {!reason.mergeable ? null : direction ? (
         <Button
           size="sm"

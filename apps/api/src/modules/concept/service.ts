@@ -38,9 +38,10 @@ import { concepts } from "../../db/schema.js";
 import type { Caller } from "../guards.js";
 import { DomainError, notFoundError } from "../http.js";
 import { droppedKeys, insertProposed, refuseInputs } from "./links.js";
-import { columnsOf, conflictOr, loadAliases, perLang, refuseAliasHolder, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
+import { columnsOf, conflictOr, loadAliases, loadRelations, perLang, refuseAliasHolder, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
 
 export { addAlias, removeAlias } from "./aliases.js";
+export { addRelation, removeRelation } from "./relations.js";
 export { listAdminConcepts } from "./admin.js";
 export { aiDuplicates } from "./duplicatesAi.js";
 export { suggestConcepts, SUGGEST_DRAFT_MAX } from "./suggest.js";
@@ -74,7 +75,8 @@ export async function listConcepts(db: Db): Promise<Concept[]> {
     .where(ne(concepts.status, "merged"))
     .orderBy(asc(sql`lower(coalesce(${concepts.labelFr}, ${concepts.labelEn}))`), asc(concepts.id));
   const aliases = await loadAliases(db);
-  return rows.map((r) => toConcept(r, aliases.get(r.id)));
+  const relations = await loadRelations(db);
+  return rows.map((r) => toConcept(r, aliases.get(r.id), relations.get(r.id)));
 }
 
 /**
@@ -212,7 +214,7 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
       await audit(tx, { ...ctx.actor, action: "concept.edit", subjectType: "concept", subjectId: id, payload: patch });
       return row!;
     });
-    return toConcept(row, (await loadAliases(db, [id])).get(id));
+    return toConcept(row, (await loadAliases(db, [id])).get(id), (await loadRelations(db, [id])).get(id));
   } catch (error) {
     throw await conflictOr(db, error, keys);
   }
@@ -250,14 +252,14 @@ export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller"
     });
     return row!;
   });
-  return toConcept(row, (await loadAliases(db, [id])).get(id));
+  return toConcept(row, (await loadAliases(db, [id])).get(id), (await loadRelations(db, [id])).get(id));
 }
 
 /**
  * Deletes a concept nothing refers to (ADR-081 second addendum §2, third
  * addendum §7): a concept merged into it, a question linked to it or a course listing it makes the foreign key refuse, answered 409
- * `concept_in_use`; a missing one is a 404. Its curated aliases go with it
- * (cascade): they are not references. A concept a question uses is
+ * `concept_in_use`; a missing one is a 404. Its curated aliases and its
+ * relations go with it (cascade): they are not references. A concept a question uses is
  * merged, never deleted (a course's list is rewritten by the merge). `conceptReferenced` mirrors these three foreign keys
  * for the admin's queue.
  */

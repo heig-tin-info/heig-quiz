@@ -34,3 +34,26 @@ export const conceptName = (c: Concept, locale: Locale): string => refName(conce
 /** How many questions use a concept: "Unused", "1 question", "{n} questions". */
 export const usesLabel = (t: TFunction, n: number): string =>
   n === 0 ? t("admin.concepts.uses.none") : n === 1 ? t("admin.concepts.uses.one") : t("admin.concepts.uses", { n });
+
+/**
+ * The path above a concept for the picker (ADR-081 §5): its broader concepts
+ * from the root down, `Programming › Pointer`. A concept with several broader
+ * ones follows the first by name (the picker is compact; the sheet lists them
+ * all); a loop (the server refuses them) ends the walk. Empty when it has none.
+ */
+export function broaderTrail(concept: Concept, byId: ReadonlyMap<string, Concept>, locale: Locale): string[] {
+  const trail: string[] = [];
+  const seen = new Set([concept.id]);
+  for (let at: Concept | undefined = concept; at; ) {
+    const parent: Concept | undefined = at.broader
+      .map((id) => byId.get(id))
+      .filter((c): c is Concept => c !== undefined && !seen.has(c.id))
+      .sort((a, b) => conceptName(a, locale).localeCompare(conceptName(b, locale)))[0];
+    if (parent) {
+      seen.add(parent.id);
+      trail.unshift(conceptName(parent, locale));
+    }
+    at = parent;
+  }
+  return trail;
+}

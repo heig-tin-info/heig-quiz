@@ -25,7 +25,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { CONCEPT_STATUSES, TAG_DROP_REASONS } from "@quiz/contracts";
+import { CONCEPT_RELATION_KINDS, CONCEPT_STATUSES, TAG_DROP_REASONS } from "@quiz/contracts";
 
 import { users } from "./auth.js";
 import { courses } from "./org.js";
@@ -160,4 +160,35 @@ export const courseConcepts = pgTable(
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.courseId, t.conceptId] }), index("course_concepts_concept_idx").on(t.conceptId)],
+);
+
+/**
+ * The relations between concepts (ADR-081 §4, sixth addendum 7c), the
+ * admin's: a row reads "`concept_id` has `target_id` as a `broader`
+ * concept", or, for `related`, "the two are related", stored once with
+ * `concept_id < target_id` (the check is the canonical order, so a pair has
+ * one row). Broader edges form a DAG: the service refuses a cycle under a
+ * lock, the database cannot. Like aliases they go with either concept
+ * (cascade) and are not references: they never block its deletion; a merge
+ * rewrites them (`concept/merge.ts`).
+ */
+export const conceptRelations = pgTable(
+  "concept_relations",
+  {
+    conceptId: uuid("concept_id")
+      .notNull()
+      .references(() => concepts.id, { onDelete: "cascade" }),
+    targetId: uuid("target_id")
+      .notNull()
+      .references(() => concepts.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: CONCEPT_RELATION_KINDS }).notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.conceptId, t.targetId, t.kind] }),
+    index("concept_relations_target_idx").on(t.targetId),
+    check("concept_relations_distinct_ck", sql`${t.conceptId} <> ${t.targetId}`),
+    check("concept_relations_related_order_ck", sql`${t.kind} <> 'related' or ${t.conceptId} < ${t.targetId}`),
+  ],
 );

@@ -48,6 +48,8 @@ async function question(name: string, conceptIds: string[], deleted = false): Pr
   return q.id;
 }
 
+const none = { broader: [], related: [] };
+
 const linksOf = async (conceptId: string) =>
   (await db().select().from(questionConcepts).where(eq(questionConcepts.conceptId, conceptId)))
     .map((l) => l.questionId)
@@ -143,6 +145,10 @@ describe("POST /admin/concepts/:id/merge", () => {
       aliasesMoved: [],
       aliasesAdded: [],
       aliasesDropped: [],
+      relationsOfLoser: none,
+      relationsMoved: none,
+      relationsDropped: none,
+      relationsDuplicate: none,
     });
   });
 

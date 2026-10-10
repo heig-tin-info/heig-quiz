@@ -17,6 +17,8 @@ const concept = (n: number, extra: Partial<AdminConcept> = {}): AdminConcept => 
   qualifiers: { fr: "", en: "" },
   descriptions: { fr: "", en: "" },
   aliases: [],
+  broader: [],
+  related: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
   questionCount: 0,
@@ -418,6 +420,34 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
         expect(within(row).getByRole("button", { name: /merge lifo into stack/i })).toBeInTheDocument();
         expect(within(row).getByRole("button", { name: /edit stack/i })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /ask the ai again/i })).toBeInTheDocument();
+      });
+
+      it("adds a related pair as a relation in one click, and offers no merge for it", async () => {
+        const { calls } = mockFetch({
+          [LIST]: ok(page([stack, lifo])),
+          [AI]: ok({ pairs: [aiPair(lifo, stack, "Connected.", "related")], truncated: false }),
+          [`POST /app/api/admin/concepts/${lifo.id}/relations`]: ok({ ...lifo, related: [stack.id] }),
+        });
+        await open();
+        await userEvent.click(screen.getByRole("button", { name: /^ask the ai$/i }));
+        const row = (await screen.findAllByRole("listitem")).find((li) => within(li).queryByText("Connected."))!;
+        expect(within(row).queryByRole("button", { name: /merge/i })).toBeNull();
+        await userEvent.click(within(row).getByRole("button", { name: "Add as related" }));
+        await waitFor(() =>
+          expect(calls.find((c) => c.url.endsWith("/relations"))?.body).toEqual({ kind: "related", target: stack.id }),
+        );
+      });
+
+      it("reads Related once the two are related", async () => {
+        mockFetch({
+          [LIST]: ok(page([stack, { ...lifo, related: [stack.id] }])),
+          [AI]: ok({ pairs: [aiPair(lifo, stack, "Connected.", "related")], truncated: false }),
+        });
+        await open();
+        await userEvent.click(screen.getByRole("button", { name: /^ask the ai$/i }));
+        const row = (await screen.findAllByRole("listitem")).find((li) => within(li).queryByText("Connected."))!;
+        expect(within(row).queryByRole("button", { name: "Add as related" })).toBeNull();
+        expect(within(row).getByText("Related", { selector: "p" })).toBeInTheDocument();
       });
 
       it("merges from an AI pair like from any other", async () => {

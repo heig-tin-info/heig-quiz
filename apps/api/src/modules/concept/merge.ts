@@ -27,22 +27,31 @@
  * 6. the courses listing the loser list the winner instead (a course listing
  *    both keeps one), recorded as `coursesMoved` and `coursesAlreadyListed`.
  *
+ * 7. the loser's relations (ADR-081 §4, sixth addendum 7c) are rewritten
+ *    onto the winner by `mergedRelations`: an edge between the loser and the
+ *    winner is dropped (it would be a self-loop), an edge the winner has is
+ *    not written twice, and a rewrite that would close a longer broader cycle
+ *    is refused BEFORE anything is written, 409 `concept_merge_cycle` naming
+ *    the path. The audit lists the loser's edges and those moved, dropped and
+ *    duplicate. The advisory lock of `relations.ts` is taken first.
+ *
  * The winner keeps its labels, qualifiers, descriptions and status. The audit
  * lists the loser's former status and the question ids moved and those that
  * already had the winner, and the aliases moved, added and dropped, so a
  * reviewed SQL undo is possible; there is no undo button.
  */
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
-import type { Concept } from "@quiz/contracts";
-import { conceptKey, mergedAliases } from "@quiz/domain";
+import type { Concept, ConceptLang } from "@quiz/contracts";
+import { conceptKey, mergedAliases, mergedRelations } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
-import { conceptAliases, concepts, courseConcepts, questionConcepts } from "../../db/schema.js";
+import { conceptAliases, conceptRelations, concepts, courseConcepts, questionConcepts } from "../../db/schema.js";
 import { DomainError, notFoundError } from "../http.js";
-import { loadAliases, perLang, sideOf, toConcept, toResolvable } from "./row.js";
+import { cycleError, lockRelations } from "./relations.js";
+import { loadAliases, loadEdges, loadRelations, perLang, sideOf, toConcept, toResolvable } from "./row.js";
 import type { ConceptContext } from "./service.js";
 
 /**
@@ -80,9 +89,12 @@ export async function mergeConcept(
   loserId: string,
   winnerId: string,
   keepAsAlias: boolean,
+  lang: ConceptLang,
 ): Promise<Concept> {
   if (loserId === winnerId) throw new DomainError("concept_merge_self", 422, "A concept is not merged into itself");
   return db.transaction(async (tx) => {
+    // Before any row lock, like every relation write (`relations.ts`): the relations are rewritten below.
+    await lockRelations(tx);
     const rows = await tx
       .select()
       .from(concepts)
@@ -98,6 +110,11 @@ export async function mergeConcept(
     if (winner.status !== "validated") {
       throw new DomainError("concept_merge_target_not_validated", 422, "A concept is merged into a validated one only");
     }
+
+    // The relations are decided first: a cycle is refused before anything is written.
+    const edges = await loadEdges(tx);
+    const relations = mergedRelations(edges, loserId, winnerId);
+    if (relations.cycle) throw await cycleError(tx, "concept_merge_cycle", relations.cycle, lang);
 
     const questionLinks = await moveLinks(tx, questionConcepts, questionConcepts.questionId, loserId, winnerId);
 
@@ -117,6 +134,19 @@ export async function mergeConcept(
     if (gained.length > 0) {
       await tx.insert(conceptAliases).values(
         gained.map((text) => ({ conceptId: winnerId, key: conceptKey(text), text, createdBy: ctx.caller.id, createdAt: ctx.now })),
+      );
+    }
+    // The loser's relations go with it; those that survive are rewritten onto the winner (sixth addendum, 7c).
+    const touching = (e: { concept: string; target: string }) => e.concept === loserId || e.target === loserId;
+    const ofLoser = { broader: edges.broader.filter(touching), related: edges.related.filter(touching) };
+    await tx.delete(conceptRelations).where(or(eq(conceptRelations.conceptId, loserId), eq(conceptRelations.targetId, loserId)));
+    const rewritten = [
+      ...relations.moved.broader.map((e) => ({ ...e, kind: "broader" as const })),
+      ...relations.moved.related.map((e) => ({ ...e, kind: "related" as const })),
+    ];
+    if (rewritten.length > 0) {
+      await tx.insert(conceptRelations).values(
+        rewritten.map((e) => ({ conceptId: e.concept, targetId: e.target, kind: e.kind, createdBy: ctx.caller.id, createdAt: ctx.now })),
       );
     }
     // The courses listing the loser list the winner instead (sixth addendum): a course listing both keeps one.
@@ -147,8 +177,12 @@ export async function mergeConcept(
         aliasesMoved,
         aliasesAdded,
         aliasesDropped,
+        relationsOfLoser: ofLoser,
+        relationsMoved: relations.moved,
+        relationsDropped: relations.dropped,
+        relationsDuplicate: relations.duplicates,
       },
     });
-    return toConcept(winner, (await loadAliases(tx, [winnerId])).get(winnerId));
+    return toConcept(winner, (await loadAliases(tx, [winnerId])).get(winnerId), (await loadRelations(tx, [winnerId])).get(winnerId));
   });
 }

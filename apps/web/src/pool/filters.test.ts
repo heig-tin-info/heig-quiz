@@ -24,6 +24,8 @@ const concept = (id: string, fr: [string, string?], en: [string, string?]): Conc
   qualifiers: { fr: fr[1] ?? "", en: en[1] ?? "" },
   descriptions: { fr: "", en: "" },
   aliases: [],
+  broader: [],
+  related: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
 });

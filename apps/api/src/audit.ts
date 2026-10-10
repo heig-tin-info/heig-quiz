@@ -70,7 +70,12 @@ export type AuditAction =
    * reviewed SQL undo, ADR-081 fifth addendum). `alias_add` / `alias_remove`:
    * the admin added or removed a curated alias (subject the concept;
    * `payload.alias` the text, `payload.forced` for an add confirmed despite a
-   * collision, with the `collidesWith` concept ids). The tag sorting's `sort` and
+   * collision, with the `collidesWith` concept ids). `relation_add` /
+   * `relation_remove`: the admin added or removed a relation (subject the
+   * concept in the path; `payload.kind` `broader` or `related`,
+   * `payload.target` the other concept id, and the target's `labels` on an
+   * add). A merge also records `relationsMoved`, `relationsDropped` and
+   * `relationsDuplicate` (`{ broader, related }` edges). The tag sorting's `sort` and
    * `sort_propose` rows of the past stay in the log, no longer written
    * (ADR-081, step (d)).
    */
@@ -80,6 +85,8 @@ export type AuditAction =
   | "concept.edit"
   | "concept.merge"
   | "concept.propose"
+  | "concept.relation_add"
+  | "concept.relation_remove"
   | "concept.validate"
   | "course.create"
   | "course.delete"

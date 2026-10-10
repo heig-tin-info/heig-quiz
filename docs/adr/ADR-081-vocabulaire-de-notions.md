@@ -15,15 +15,14 @@ the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
 [fifth addendum](#fifth-addendum-2026-10-10-the-curation-of-the-vocabulary)
 (curation, step 5: its queue, the merge and the aliases are implemented; the probable duplicates are not) and the
 [sixth addendum](#sixth-addendum-2026-10-10-the-concepts-of-a-course-steps-7-9)
-(the concepts of a course, steps 7a, 7b and 9a implemented). The work is tracked by #599, under a parent issue that groups #557
+(the concepts of a course, steps 7a to 7c and 9a implemented). The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
 polls, the drill, the MCP tools, the teacher assistant and the seed read and
 write concepts. Step (d), dropping `question_tags` and `pool_tags`, is
 implemented by the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired). The links to
-courses (§8) are implemented by the sixth addendum (step 7a); relations and the
-model's help in the picker (#557) are not; the curation screen and the aliases
+courses (§8) and the relations (§4, §5) are implemented by the sixth addendum (steps 7a and 7c); the coverage of narrower concepts in the filters (7d) is not; the curation screen and the aliases
 are (fifth addendum).
 
 Scope: what a question is classified by, who may create and change that
@@ -503,7 +502,7 @@ is the first pull request; merge, aliases and probable duplicates follow.
 Settled with the product owner (comment of 2026-10-10 on #599, steps 7–9)
 after a review of the spec. It makes §8 precise. Delivery, in dependency
 order: 7a the course's list (this addendum's §1–§4, implemented), 7b the pool
-filter by course (§8, implemented), 7c relations with the merge-cycle policy, 7d coverage in
+filter by course (§8, implemented), 7c relations with the merge-cycle policy (implemented, §5), 7d coverage in
 the filters, 8a Suggest concepts (implemented, §6), 9a the teacher's mastery on the course's
 concepts (implemented, §9), 9b the student's mastery (its own ADR first). §5 to §7 are the
 decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as built.
@@ -548,11 +547,68 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
    without changing it. A course's concept does not reach students: showing
    them their own mastery of it is 9b, under its own ADR written before the
    code, with its own student exit and leak test (05 §5.7).
-5. **Relations (7c, not built).** Broader and related edges between
+5. **Relations (7c, as built).** Broader and related edges between
    concepts, written by the admin only. A merge drops the edges between the
    loser and the winner and lists them in its audit; a merge that would close
    a longer cycle is refused (409 `concept_merge_cycle`) naming the path;
-   never a silent deletion.
+   never a silent deletion. As built:
+   - **Table** `concept_relations` (migration 0105): `concept_id`,
+     `target_id`, `kind` (`broader` or `related`), `created_by`,
+     `created_at`; primary key (concept, target, kind), index on
+     `target_id`; both ids cascade (like aliases, relations are not
+     references: they never block a deletion, `conceptReferenced` is
+     unchanged). A `broader` row reads "`concept_id` has `target_id` as a
+     broader concept"; a `related` row is stored once with
+     `concept_id < target_id` (a check), so a pair has one row whichever side
+     was asked.
+   - **Rules**, pure, in `packages/domain/src/conceptRelations.ts`. Broader:
+     no self edge, no duplicate, and no edge whose target is at or below the
+     concept (it would close a cycle; the refusal names the shortest closed
+     path `A › B › … › A`). Several broader concepts are allowed. Related: no
+     self, no duplicate in either order, and **refused when one concept is in
+     the other's broader chain**, near or far (a hierarchy says more than
+     "related", the two relations are disjoint as in SKOS); symmetrically a
+     broader edge is refused between two concepts that are `related` already.
+     Only the direct pair is checked: a related pair that a later broader edge
+     puts in one chain stays, harmlessly. Codes: 422 `relation_self`, 409
+     `relation_exists`, 409 `relation_redundant`, 409 `concept_cycle` (with
+     `path`, labelled concepts), 422 `concept_not_found` (the target is
+     missing or merged), 409 `concept_merged` (the concept itself), 404.
+   - **Routes**, the admin's: `POST /admin/concepts/:id/relations`
+     `{ kind, target }` and `DELETE /admin/concepts/:id/relations/:kind/:target`
+     (a related pair from either side), both answering the concept, audited
+     `concept.relation_add` / `concept.relation_remove`. `Concept` gains
+     `broader` and `related` (ids of live concepts, sorted; a related pair
+     appears on both sides) in `GET /concepts` and `GET /admin/concepts`:
+     teachers read them, no student route carries a `Concept` (they get
+     `ConceptRef` through the student views).
+   - **Lock.** A cycle check reads the whole graph, so every relation write
+     and every merge first takes one transaction-scoped advisory lock
+     (`pg_advisory_xact_lock` on a fixed key): two opposite edges sent
+     together serialize and the second sees the first. The two concepts are
+     then share-locked in id order. The advisory lock always precedes any row
+     lock and no writer of question or course links takes it, so there is no
+     lock cycle with `lockLinkSet` or the merge's `FOR UPDATE`.
+   - **Merge.** In the merge's transaction, `mergedRelations` rewrites the
+     loser's edges onto the winner: an edge between the two is dropped (it
+     would be a self-loop), an edge the winner has is not written twice, a
+     rewritten `related` edge keeps the canonical order. A rewrite that
+     closes a longer cycle through the winner (the loser is below `x` and `x`
+     below the winner) is refused 409 `concept_merge_cycle` with the path
+     BEFORE anything is written. The audit records `relationsOfLoser`,
+     `relationsMoved`, `relationsDropped` and `relationsDuplicate`
+     (`{ broader, related }` edge lists), enough for a reviewed SQL undo. The
+     rewritten edges take the merging admin as author.
+   - **Web.** The concept sheet has a Relations section (broader chips and a
+     search offering only the concepts the rule would accept; related
+     likewise); the cycle refusal is shown naming the path. The picker shows,
+     under a concept that has broader concepts, its path from the root down
+     (`Memory › Heap`), following the first broader concept by name; homonyms
+     keep their qualifier. In the Duplicates view a model's `related` pair
+     gains a secondary "Add as related" action.
+   - **Not here.** A concept selected anywhere covering its narrower ones
+     (§4 of the Decision) is 7d: `conceptsCoveredByCourse` is unchanged and
+     the filters still match a concept only on itself.
 6. **Suggest concepts (8a, built).** It sends the draft's statement and
    choices plus the labels and qualifiers of every live concept (no
    descriptions, no creators); at most five existing concepts and two new
