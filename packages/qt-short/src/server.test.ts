@@ -53,6 +53,19 @@ describe("the contract", () => {
     expect(issues).toEqual([{ path: ["matchers", 5], message: "short.llm_not_available" }]);
   });
 
+  it("refuses a pattern RE2 refuses at publication, on the matcher that carries it (ADR-099)", () => {
+    const issues = (pattern: string, flags = "i") =>
+      shortServer.publicationIssues!(
+        ShortConfigSchema.parse(config({ matchers: [{ kind: "exact", value: "a", points: 1 }, { kind: "regex", pattern, flags, points: 1 }] })),
+      );
+    expect(issues("a(")).toEqual([{ path: ["matchers", 1, "pattern"], message: "regex.invalid" }]);
+    expect(issues("(a)\\1")).toEqual([{ path: ["matchers", 1, "pattern"], message: "regex.unsupported" }]);
+    expect(issues("a(?!b)")).toEqual([{ path: ["matchers", 1, "pattern"], message: "regex.unsupported" }]);
+    expect(issues("(?:.?){999}")).toEqual([{ path: ["matchers", 1, "pattern"], message: "regex.too_complex" }]);
+    expect(issues("a", "ii")).toEqual([{ path: ["matchers", 1, "pattern"], message: "regex.invalid_flags" }]);
+    expect(issues("galil[ée]e")).toEqual([]);
+  });
+
   it("refuses a [[…]] reference left in a number key, where nothing will replace it (ADR-056 §4)", () => {
     const template = ShortConfigSchema.parse(
       config({

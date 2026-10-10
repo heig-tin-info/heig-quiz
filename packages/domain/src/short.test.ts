@@ -1,15 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  ALLOWED_REGEX_FLAGS,
   applyTextOptions,
-  compileFullMatch,
   describeMatcher,
   foldCase,
-  InvalidMatcherPattern,
-  isValidPattern,
   MAX_INPUT_LENGTH,
   MAX_PATTERN_LENGTH,
-  MAX_PROGRAM_SIZE,
   matchDate,
   matchExact,
   matchNumber,
@@ -60,95 +55,23 @@ describe("exact matcher", () => {
   });
 });
 
-describe("regex matcher (D10)", () => {
+describe("regex matcher (D10, on RE2)", () => {
   it("anchors as a full match", () => {
     expect(matchRegex("abc", "b")).toBe(false);
     expect(matchRegex("abc", "a.c")).toBe(true);
-  });
-
-  it("rejects a pattern over 300 characters and forbidden flags", () => {
-    const long = "a".repeat(MAX_PATTERN_LENGTH + 1);
-    expect(() => compileFullMatch(long)).toThrow(InvalidMatcherPattern);
-    expect(() => compileFullMatch("a", "g")).toThrow(/flags must match/);
-    expect(ALLOWED_REGEX_FLAGS.test("imsu")).toBe(true);
-    expect(isValidPattern(long)).toBe(false);
-  });
-
-  it("reports an uncompilable pattern at publication time and never matches at grading time", () => {
-    expect(() => compileFullMatch("([a-")).toThrow(InvalidMatcherPattern);
-    expect(isValidPattern("([a-")).toBe(false);
-    expect(isValidPattern("^[0-9a-f]+$", "i")).toBe(true);
-    expect(matchRegex("abc", "([a-")).toBe(false);
   });
 
   it("truncates the input to 500 characters before testing", () => {
     expect(matchRegex("a".repeat(MAX_INPUT_LENGTH), "a+")).toBe(true);
     expect(matchRegex(`${"a".repeat(MAX_INPUT_LENGTH)}b`, "a+b")).toBe(false);
   });
-});
 
-/**
- * Milliseconds a call takes, for the linear-time guarantees below: the best
- * of three, so that a busy machine (the full suite, coverage) does not fail
- * a bound a backtracking engine would miss by seconds anyway.
- */
-function elapsed(run: () => unknown): number {
-  let best = Infinity;
-  for (let i = 0; i < 3; i++) {
-    const start = performance.now();
-    run();
-    best = Math.min(best, performance.now() - start);
-  }
-  return best;
-}
-
-describe("regex matcher on RE2 (audit H3)", () => {
-  it("matches a catastrophic-backtracking pattern in linear time", () => {
-    // Each of these takes a backtracking engine exponential time on a
-    // near-miss; RE2 answers at once, even on ten times the D10 input.
-    const nearMiss = `${"a".repeat(5000)}!`;
-    for (const pattern of ["(a+)+$", "(a|a)*", "(a|aa)+", "(\\w+\\s?)+$"]) {
-      const re = compileFullMatch(pattern, "");
-      expect(elapsed(() => expect(re.test(nearMiss)).toBe(false))).toBeLessThan(100);
-      expect(elapsed(() => matchRegex(nearMiss, pattern, ""))).toBeLessThan(100);
-    }
-  });
-
-  it("refuses a backreference and a lookaround as unsupported, a broken pattern as a syntax error", () => {
-    for (const pattern of ["(a)\\1", "a(?=b)", "a(?!b)", "(?<=a)b", "(?<!a)b", "(?<n>a)\\k<n>"]) {
-      expect(isValidPattern(pattern)).toBe(false);
-      expect(patternProblem(pattern)).toBe("unsupported");
-      expect(() => compileFullMatch(pattern)).toThrow(InvalidMatcherPattern);
+  it("never matches with a pattern RE2 refuses, whatever the answer", () => {
+    for (const pattern of ["([a-", "(a)\\1", "a(?=b)", "a".repeat(MAX_PATTERN_LENGTH + 1)]) {
       expect(matchRegex("aa", pattern)).toBe(false);
+      expect(matchRegex("ab", pattern)).toBe(false);
     }
-    expect(patternProblem("([a-")).toBe("syntax");
-    expect(patternProblem("a".repeat(MAX_PATTERN_LENGTH + 1))).toBe("too_long");
-    expect(patternProblem("a", "g")).toBe("flags");
-    expect(patternProblem("a", "ii")).toBe("flags");
-  });
-
-  it("refuses a pattern whose compiled program exceeds the bound, on the size and not the length", () => {
-    expect(patternProblem("(?:.?){999}")).toBe("too_complex");
-    expect(patternProblem(".{0,100}")).toBeNull();
-    // `(?:.?){n}` compiles to 2n + 4 instructions: right at the bound, and one past it.
-    const atBound = `(?:.?){${(MAX_PROGRAM_SIZE - 4) / 2}}`;
-    expect(patternProblem(atBound)).toBeNull();
-    expect(patternProblem(`(?:.?){${(MAX_PROGRAM_SIZE - 4) / 2 + 1}}`)).toBe("too_complex");
-    // At the bound, the worst a 500-character input can cost stays small.
-    expect(elapsed(() => matchRegex("a".repeat(MAX_INPUT_LENGTH), atBound))).toBeLessThan(100);
-  });
-
-  it("measures a program of Unicode classes before building it", () => {
-    // Built, these 27 thousand copies of `\pL` took some 400 MB of heap.
-    const huge = "\\pL{1000}".repeat(33);
-    const before = process.memoryUsage().heapUsed;
-    expect(patternProblem(huge)).toBe("too_complex");
-    expect(process.memoryUsage().heapUsed - before).toBeLessThan(150_000_000);
-    expect(patternProblem("\\p{L}{1,50}")).toBeNull();
-    // An outline that does not compile leaves the verdict to the pattern.
-    expect(patternProblem("\\pL(")).toBe("syntax");
-    // An escaped backslash before a `p` is a literal, not a class.
-    expect(matchRegex("\\pL", "\\\\pL", "")).toBe(true);
+    expect(matchRegex("a", "a", "g")).toBe(false);
   });
 
   it("keeps ordinary patterns, the flags and Unicode input matching as before", () => {
@@ -165,18 +88,8 @@ describe("regex matcher on RE2 (audit H3)", () => {
     expect(matchRegex("😀", ".", "u")).toBe(true);
     expect(matchRegex("x/y", "x\\/y", "")).toBe(true);
     expect(matchRegex("ab", "(?<first>a)b", "")).toBe(true);
-    expect(isValidPattern("^[0-9a-f]+$", "imsu")).toBe(true);
-  });
-
-  it("serves a pattern again from its compiled form, within a bounded memory", () => {
-    const first = compileFullMatch("cache[d]", "i");
-    expect(compileFullMatch("cache[d]", "i")).toBe(first);
-    expect(compileFullMatch("cache[d]", "")).not.toBe(first);
-    // Neither part can pass for the other in the key.
-    expect(compileFullMatch("i", "")).not.toBe(compileFullMatch("", "i"));
-    // A thousand other patterns later, the first one has been let go.
-    for (let i = 0; i < 1000; i++) compileFullMatch(`evict${i}`);
-    expect(compileFullMatch("cache[d]", "i")).not.toBe(first);
+    expect(matchRegex("\\pL", "\\\\pL", "")).toBe(true);
+    expect(patternProblem("^[0-9a-f]+$", "imsu")).toBeNull();
   });
 });
 

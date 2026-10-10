@@ -83,6 +83,13 @@ describe("toStudent", () => {
     expect(orders.size).toBeGreaterThan(1);
   });
 
+  it("keeps a regex blank RE2 refuses out of the template: its pattern never reaches the student", () => {
+    // A version published under JavaScript's engine (ADR-099): still a blank.
+    const student = clozeServer.toStudent(config("A {{/(SECRET-ANSWER)\\1/}} and {{Newton}}"), view);
+    expect(student.blanks.map((blank) => blank.kind)).toEqual(["input", "input"]);
+    expect(JSON.stringify(student)).not.toContain("SECRET-ANSWER");
+  });
+
   it("keeps the canonical order when either switch is off", () => {
     const canonical = [0, 1, 2, 3];
     for (const student of [

@@ -1,5 +1,5 @@
 /**
- * The pre-deploy audit of the RE2 switch (security audit H3): it finds every
+ * The pre-deploy audit of the RE2 switch (ADR-099, security audit H3): it finds every
  * published pattern RE2 refuses, in short answers and cloze blanks, old
  * versions and deleted questions included, ignores drafts and other types,
  * and writes nothing.
@@ -11,7 +11,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import type { Db } from "./db/client.js";
 import { pools, questions, questionVersions, users } from "./db/schema.js";
-import { auditRegexPatterns, formatRegexAudit } from "./regexAudit.js";
+import { auditRegexPatterns, formatRegexAudit } from "./regex-audit/audit.js";
 import { pgliteDb, testDatabase } from "./test/db.js";
 
 let db: Db;
@@ -69,7 +69,7 @@ describe("auditRegexPatterns", () => {
     const report = formatRegexAudit(audit);
     expect(report).toContain("Regex / fixed later");
     expect(report).toContain("v1\tshort matcher 2\tunsupported\t/(a)\\1/i");
-    expect(report.split("\n").at(-1)).toBe("2 pattern(s) in 2 question(s) no longer compile under RE2 (4 published versions read).");
+    expect(report.split("\n").at(-1)).toBe("2 pattern(s) in 2 question(s) never match under RE2 (4 published versions read).");
   });
 
   it("says so when every pattern compiles, and reads configs of any shape", async () => {

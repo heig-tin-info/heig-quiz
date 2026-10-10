@@ -63,10 +63,10 @@ describe("ShortEditor", () => {
       <ShortEditor
         config={config()}
         onChange={() => {}}
-        issues={[{ path: ["matchers", 0, "pattern"], message: "short.invalid_pattern" }]}
+        issues={[{ path: ["matchers", 0, "pattern"], message: "regex.invalid" }]}
       />,
     );
-    expect(screen.getByText("short.invalid_pattern")).toBeInTheDocument();
+    expect(screen.getByText("regex.invalid")).toBeInTheDocument();
   });
 
   it("offers the four kinds as one segmented control", async () => {

@@ -256,7 +256,9 @@ export function checkConfig(
     const issues = parameterIssues(type, { config, explanation: extra.explanation ?? "", variables });
     return issues.length === 0 ? null : issues.map((i) => ({ path: i.path.join("."), message: i.message }));
   }
-  const parsed = questionType(type).configSchema.safeParse(config);
-  if (parsed.success) return null;
-  return parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+  const t = questionType(type);
+  const parsed = t.configSchema.safeParse(config);
+  // The schema, then what only publication asks (a regex RE2 refuses, ADR-099).
+  const issues = parsed.success ? (t.publicationIssues?.(parsed.data) ?? []) : parsed.error.issues;
+  return issues.length === 0 ? null : issues.map((i) => ({ path: i.path.join("."), message: i.message }));
 }

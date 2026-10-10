@@ -1,24 +1,24 @@
 /**
  * Which published `short` and `cloze` versions hold a regex pattern the RE2
- * engine refuses (security audit H3, `@quiz/domain/short`): a backreference,
- * a lookaround, or a program too large. Such a pattern was accepted when
- * JavaScript's backtracking `RegExp` ran the matchers; under RE2 it never
- * matches, so a student's right answer would be marked wrong. The product
- * owner runs this against production before approving the deploy that
- * switches the engine (`regex-audit.ts`), and the teachers concerned
- * publish a fixed version.
+ * engine refuses (ADR-099, security audit H3): JavaScript-only syntax (a
+ * backreference, a lookaround), or a program too large. Such a pattern was
+ * accepted while JavaScript's backtracking `RegExp` ran the matchers. Under
+ * RE2 the version stays readable, but that matcher or blank never matches,
+ * so a student's right answer there is graded wrong until the teacher
+ * publishes a fixed version (an evaluation that froze the old one keeps it).
  *
- * Read-only: one `READ ONLY` transaction, every published version (a
- * running or past evaluation may still grade an old one), drafts left out —
- * the editor reports those itself on the next save.
+ * The command line is `../regex-audit.ts`. Read-only: one `READ ONLY`
+ * transaction over every published version (a running or past evaluation
+ * may still grade an old one), drafts left out — the editor reports those
+ * itself on the next save.
  */
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { parseCloze } from "@quiz/domain/cloze";
-import { patternProblem, type PatternProblem } from "@quiz/domain/short";
+import { DEFAULT_REGEX_FLAGS, patternProblem, type PatternProblem } from "@quiz/domain/short";
 
-import type { Db } from "./db/client.js";
-import { pools, questions, questionVersions } from "./db/schema.js";
+import type { Db } from "../db/client.js";
+import { pools, questions, questionVersions } from "../db/schema.js";
 
 export interface RegexFinding {
   pool: string | null;
@@ -58,11 +58,12 @@ function shortPatterns(config: unknown): StoredPattern[] {
   return matchers.flatMap((raw, i) => {
     const matcher = asRecord(raw);
     if (matcher.kind !== "regex") return [];
-    return [{ where: `matcher ${i + 1}`, pattern: String(matcher.pattern), flags: typeof matcher.flags === "string" ? matcher.flags : "i" }];
+    const flags = typeof matcher.flags === "string" ? matcher.flags : DEFAULT_REGEX_FLAGS;
+    return [{ where: `matcher ${i + 1}`, pattern: String(matcher.pattern), flags }];
   });
 }
 
-/** The regex blanks of a cloze text: a refused pattern stays a blank (`parseCloze`). */
+/** The regex blanks of a cloze text: the parse keeps every one, whatever its pattern. */
 function clozePatterns(config: unknown): StoredPattern[] {
   const text = asRecord(config).text;
   if (typeof text !== "string") return [];
@@ -135,7 +136,7 @@ export function formatRegexAudit({ versions, findings }: RegexAudit): string {
   lines.push(
     findings.length === 0
       ? `Every regex pattern of the ${versions} published short and cloze versions compiles under RE2.`
-      : `${findings.length} pattern(s) in ${questionCount} question(s) no longer compile under RE2 (${versions} published versions read).`,
+      : `${findings.length} pattern(s) in ${questionCount} question(s) never match under RE2 (${versions} published versions read).`,
   );
   return lines.join("\n");
 }

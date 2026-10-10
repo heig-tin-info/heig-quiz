@@ -50,6 +50,54 @@ describe("the contract", () => {
   });
 });
 
+/**
+ * Milliseconds a call takes, the best of three; `run` lets a call avoid the
+ * cache of compiled patterns, so the build is what gets measured.
+ */
+function elapsed(call: (run: number) => unknown): number {
+  let best = Infinity;
+  for (let run = 0; run < 3; run++) {
+    const start = performance.now();
+    call(run);
+    best = Math.min(best, performance.now() - start);
+  }
+  return best;
+}
+
+describe("regex blanks RE2 refuses (ADR-099)", () => {
+  it("are refused at publication, one issue per blank", () => {
+    const issues = clozeServer.publicationIssues!(
+      config("{{/(a)\\1/}} {{/ok/}} {{/a(?=b)/i}} {{/(?:.?){999}/}} {{/a/g}} {{/([a-/}}"),
+    );
+    expect(issues.map((issue) => issue.message)).toEqual([
+      "regex.unsupported",
+      "regex.unsupported",
+      "regex.too_complex",
+      "regex.invalid_flags",
+      "regex.invalid",
+    ]);
+    expect(issues.every((issue) => issue.path.join(".") === "text")).toBe(true);
+    expect(clozeServer.publicationIssues!(config("{{/galil[ée]e/i}} {{Newton}}"))).toEqual([]);
+  });
+
+  it("are read, served and graded: the refused blank never matches", () => {
+    const old = config("{{/a(?=b)/}} and {{Newton}}");
+    expect(clozeServer.toStudent(old, { seed: 1, itemId: "i", shuffle: false }).blanks).toHaveLength(2);
+    const grade = clozeServer.grade(old, { blanks: ["ab", "Newton"] }, { itemPoints: 2 } as never);
+    expect(grade).toMatchObject({ points: 1 });
+  });
+
+  it("cost little to read, and bounded time to check, however many there are", () => {
+    // Folding `[Ā-\u{10FFFF}]` under `i` took some 35 ms per copy when built.
+    const wide = (run: number, count: number) =>
+      Array.from({ length: count }, (_, i) => `{{/[Ā-\u{10FFFF}]x${run}y${i}/i}}`).join(" ");
+    // A read compiles nothing, even far past the 50 blanks the schema allows.
+    expect(elapsed((run) => ClozeConfigSchema.safeParse({ configVersion: CLOZE_CONFIG_VERSION, text: wide(run, 300) }))).toBeLessThan(200);
+    // Publication checks at most 50, each refused before it is built.
+    expect(elapsed((run) => clozeServer.publicationIssues!(config(wide(run + 10, 50))))).toBeLessThan(200);
+  });
+});
+
 describe("the canonical mapping", () => {
   it("round-trips a full config", () => {
     const cfg = config("{{=a|b}} {{k}}", { caseSensitive: true, shuffleOptions: false });

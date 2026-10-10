@@ -5,7 +5,7 @@
  */
 import { ConfigMigrationError, tallyKeys, type ParameterSample, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
 import { formatStep } from "@quiz/domain";
-import { describeMatcher } from "@quiz/domain/short";
+import { describeMatcher, PATTERN_PROBLEM_KEY, patternProblem } from "@quiz/domain/short";
 import { toCanonical } from "./canonical.js";
 import { shortGenerator } from "./generate.js";
 import { gradeShort } from "./grade.js";
@@ -214,10 +214,16 @@ export const shortServer: QuestionTypeServer<
    * Phase 2 is not here: an `llm` matcher round-trips through a draft and an
    * import, but a question holding one is refused at publication, one issue
    * per matcher so the editor points at it (`matchShort` never matches it).
+   * A regex RE2 refuses is refused here too, and only here (ADR-099): an
+   * old version holding one stays readable, the matcher never matching.
    */
   publicationIssues: (config) =>
     config.matchers.flatMap((matcher, index) => {
       if (matcher.kind === "llm") return [{ path: ["matchers", index], message: "short.llm_not_available" }];
+      if (matcher.kind === "regex") {
+        const problem = patternProblem(matcher.pattern, matcher.flags);
+        return problem === null ? [] : [{ path: ["matchers", index, "pattern"], message: PATTERN_PROBLEM_KEY[problem] }];
+      }
       if (matcher.kind !== "number") return [];
       // A `[[…]]` left in a key: only a question without variables gets here
       // with one (a parameterized one is checked on its instances), and

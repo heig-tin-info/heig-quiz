@@ -11,10 +11,12 @@ import {
   type TallyEntry,
 } from "@quiz/core/server";
 import { clozeStudentTemplate, describeBlank, parseCloze, selectOptionOrder } from "@quiz/domain/cloze";
+import { PATTERN_PROBLEM_KEY, patternProblem } from "@quiz/domain/short";
 import { toCanonical } from "./canonical.js";
 import { gradeClozeAnswer } from "./grade.js";
 import {
   CLOZE_CONFIG_VERSION,
+  CLOZE_MAX_BLANKS,
   ClozeAnswerSchema,
   ClozeConfigSchema,
   ClozeDetailsSchema,
@@ -158,6 +160,21 @@ export const clozeServer: QuestionTypeServer<
   },
 
   grade: (config, answer, ctx) => gradeClozeAnswer(config, answer, ctx.itemPoints),
+
+  /**
+   * A regex blank RE2 refuses (ADR-099), one issue per blank. Here and not in
+   * the schema: the schema is every read's, and a version published under
+   * JavaScript's engine stays readable, that blank never matching. The schema
+   * has already refused a text past {@link CLOZE_MAX_BLANKS}; the slice keeps
+   * the compilations bounded whoever calls.
+   */
+  publicationIssues: (config) =>
+    parseCloze(config.text)
+      .blanks.slice(0, CLOZE_MAX_BLANKS)
+      .flatMap((blank) => {
+        const problem = blank.kind === "regex" ? patternProblem(blank.pattern, blank.flags) : null;
+        return problem === null ? [] : [{ path: ["text"], message: PATTERN_PROBLEM_KEY[problem] }];
+      }),
 
   /**
    * The live grid (F-DASH-02): the blanks in order, joined by " · ".

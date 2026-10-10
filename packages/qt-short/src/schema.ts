@@ -3,9 +3,11 @@
  *
  * The matcher semantics themselves live in `@quiz/domain/short` — this module
  * only describes what may be stored, including the two guards of decision D10
- * (a pattern is at most 300 characters and its flags are restricted to `imsu`)
- * and the compilation check that turns an unusable regex into a publication
- * error rather than a grading-time surprise.
+ * (a pattern is at most 300 characters and its flags are restricted to `imsu`).
+ * Whether RE2 compiles a pattern is checked at publication
+ * (`publicationIssues`, `server.ts`), never here: this schema is also every
+ * read's, and a version published under JavaScript's engine stays readable
+ * (ADR-099).
  *
  * Version 2 moved the two text options a teacher used to set matcher by
  * matcher (`caseSensitive`, `trim`, `collapseSpaces`) up to the QUESTION, as
@@ -20,12 +22,7 @@
  * the schema reads as the number it spells. A v2 config IS a v3 config.
  */
 import { IDENTIFIER_SOURCE } from "@quiz/domain";
-import {
-  ALLOWED_REGEX_FLAGS,
-  MAX_PATTERN_LENGTH,
-  patternProblem,
-  type PatternProblem,
-} from "@quiz/domain/short";
+import { ALLOWED_REGEX_FLAGS, DEFAULT_REGEX_FLAGS, MAX_PATTERN_LENGTH } from "@quiz/domain/short";
 import { z } from "zod";
 
 export const SHORT_CONFIG_VERSION = 3;
@@ -78,7 +75,7 @@ export const ShortMatcherSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("regex"),
     pattern: z.string().min(1).max(MAX_PATTERN_LENGTH),
-    flags: z.string().regex(ALLOWED_REGEX_FLAGS).default("i"),
+    flags: z.string().regex(ALLOWED_REGEX_FLAGS).default(DEFAULT_REGEX_FLAGS),
     points,
   }),
   z.object({
@@ -172,28 +169,11 @@ const ShortConfigShape = z.object({
   matchers: z.array(ShortMatcherSchema).min(1).max(SHORT_MAX_MATCHERS),
 });
 
-/** The i18n key of each reason a regex matcher is refused (the RE2 syntax, `@quiz/domain/short`). */
-const PATTERN_PROBLEM_KEY: Record<PatternProblem, string> = {
-  too_long: "short.invalid_pattern",
-  flags: "short.invalid_pattern",
-  syntax: "short.invalid_pattern",
-  unsupported: "short.unsupported_pattern",
-  too_complex: "short.complex_pattern",
-};
-
 function refineShortConfig(
   config: z.infer<typeof ShortConfigShape>,
   ctx: z.RefinementCtx,
 ): void {
   config.matchers.forEach((matcher, index) => {
-    const problem = matcher.kind === "regex" ? patternProblem(matcher.pattern, matcher.flags) : null;
-    if (problem !== null) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["matchers", index, "pattern"],
-        message: PATTERN_PROBLEM_KEY[problem],
-      });
-    }
     // A field that only takes whole numbers cannot expect 3.5.
     if (
       config.constraints.integer &&
