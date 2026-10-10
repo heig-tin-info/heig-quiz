@@ -183,7 +183,7 @@ describe("CodeEditor", () => {
     expect(screen.getByText("Advanced options")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("All or nothing"));
     expect(screen.getByLabelText("Compiler arguments")).toHaveValue(
-      "-Wall -Wextra -std=c17 -DSECRET_FLAG",
+      "-Wall -Wextra -std=c17 -DMAX_ITEMS=64",
     );
   });
 

@@ -27,7 +27,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { reasonOf, type McqPolicy } from "@quiz/contracts";
-import type { RunnerOutcome, RunnerService } from "@quiz/core/server";
+import type { PendingRunnerResult, RunnerOutcome, RunnerService } from "@quiz/core/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -607,6 +607,36 @@ describe("runner-backed grading (decision D14)", () => {
       expect(rows[0]!.grading.state).toBe("validated");
       expect(rows[0]!.grading.points).toBeGreaterThan(0);
       expect(rows[0]!.grading.details).toMatchObject({ passed: 1 });
+    } finally {
+      restore();
+    }
+  });
+
+  it("carries the type's finalizeState through the runner job, untouched (ADR-096)", async () => {
+    // What `code` stamps there is the order its request sent the cases in:
+    // the job must hand back exactly what `grade` returned, whatever it is.
+    const seen: unknown[] = [];
+    const stamped: typeof fakeRunnableCode = {
+      ...fakeRunnableCode,
+      grade: (config, answer, ctx) => ({
+        ...(fakeRunnableCode.grade(config, answer, ctx) as PendingRunnerResult),
+        finalizeState: [2, 0, 1],
+      }),
+      finalizeRunner: (config, answer, ctx, outcome) => {
+        seen.push(ctx.finalizeState);
+        return fakeRunnableCode.finalizeRunner!(config, answer, ctx, outcome);
+      },
+    };
+    const restore = registerForTests(stamped);
+    try {
+      const app = await appFor();
+      (app as unknown as { runner: RunnerService }).runner = {
+        run: async () => ({ compile: { ok: true, stdout: "", stderr: "", ms: 1 }, cases: [] }),
+        health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
+      };
+      const fixture = await seedCodeEvaluation(db, app.clock.now());
+      await runEvaluationGrading(app, { evaluationId: fixture.evaluationId });
+      expect(seen).toEqual([[2, 0, 1]]);
     } finally {
       restore();
     }

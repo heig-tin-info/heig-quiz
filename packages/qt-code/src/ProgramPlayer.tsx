@@ -245,9 +245,9 @@ export function ProgramStatement({
 
       {badges ? <div className="flex flex-wrap items-center gap-2">{badges}</div> : null}
 
-      {student.filesPreview.length > 0 ? (
+      {student.files.length > 0 ? (
         <p className={hint}>
-          {s.files} {student.filesPreview.map((f) => `${f.name} (${f.bytes} B)`).join(", ")}
+          {s.files} {student.files.map((f) => `${f.name} (${f.content.length} B)`).join(", ")}
         </p>
       ) : null}
     </>

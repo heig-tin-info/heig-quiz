@@ -39,8 +39,12 @@ export const SECRET_HIDDEN_NAME = "negative-values";
 /** A hidden case's command line is part of the key: it must never reach a student. */
 export const SECRET_HIDDEN_ARG = "--secret-hidden-arg";
 export const SECRET_REFERENCE = "int secret_reference_solution(void) { return 42; }";
-export const SECRET_FILE_CONTENT = "id,answer\n1,0x1004\n";
-const SECRET_COMPILE_ARGS = "-Wall -Wextra -std=c17 -DSECRET_FLAG";
+/**
+ * The extra file and the compiler flags are PUBLIC program inputs (ADR-096):
+ * `toStudent` publishes them, so they are not among the secrets below.
+ */
+export const FILE_CONTENT = "id,value\n1,0x2a\n";
+export const COMPILE_ARGS = "-Wall -Wextra -std=c17 -DMAX_ITEMS=64";
 
 export function codeConfig(): CodeConfig {
   return CodeConfig.parse({
@@ -50,9 +54,9 @@ export function codeConfig(): CodeConfig {
     runtime: "backend",
     cooldown: "progressive",
     template: C_TEMPLATE,
-    files: [{ name: "data.csv", content: SECRET_FILE_CONTENT }],
+    files: [{ name: "data.csv", content: FILE_CONTENT }],
     action: "run",
-    compileArgs: SECRET_COMPILE_ARGS,
+    compileArgs: COMPILE_ARGS,
     limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
     runsPerMinute: 10,
     allOrNothing: false,
@@ -82,11 +86,12 @@ export function codeConfig(): CodeConfig {
  * meant to compare them (docs/spec/04 §4.7). The hidden ones are covered by
  * the value search, which is the check that actually matters here. `compare`
  * is out of the floor since audit R-06 and published on purpose (HOW, never
- * WHAT); its exact shape is pinned by `toStudent.test.ts`.
+ * WHAT); its exact shape is pinned by `toStudent.test.ts`. So are `files`
+ * and `compileArgs` since ADR-096: public program inputs.
  */
 export const codeLeakFixture: StudentLeakFixture<CodeConfig> = {
   config: codeConfig(),
-  forbiddenKeys: ["action", "content", "files", "policy", "tolerance"],
+  forbiddenKeys: ["action", "policy", "tolerance"],
   secrets: [
     SECRET_HIDDEN_STDIN,
     SECRET_HIDDEN_EXPECTED,
@@ -94,9 +99,6 @@ export const codeLeakFixture: StudentLeakFixture<CodeConfig> = {
     // A hidden case's command line says as much as its stdin does.
     SECRET_HIDDEN_ARG,
     SECRET_REFERENCE,
-    SECRET_FILE_CONTENT,
-    SECRET_COMPILE_ARGS,
-    "0x1004",
   ],
 };
 
@@ -106,8 +108,9 @@ export const codeLeakFixture: StudentLeakFixture<CodeConfig> = {
 
 export const IMG_SECRET_REFERENCE =
   "    for (int y = 0; y < 4; y++) { /* secret-image-reference */ }";
-export const IMG_SECRET_COMPILE_ARGS = "-std=c17 -DIMAGE_SECRET_FLAG";
-export const IMG_SECRET_FILE = "seed,0x7e57\n";
+/** Public program inputs (ADR-096), like `code`'s. */
+export const IMG_COMPILE_ARGS = "-std=c17 -DIMAGE_SIDE=4";
+export const IMG_FILE = "seed,0x7e57\n";
 
 const IMG_TEMPLATE = `// @@lock
 #include <stdio.h>
@@ -130,8 +133,8 @@ export function imageConfig(overrides: Record<string, unknown> = {}): CodeImageC
     prompt: "Draw a checkerboard.",
     language: "c",
     template: IMG_TEMPLATE,
-    files: [{ name: "seed.csv", content: IMG_SECRET_FILE }],
-    compileArgs: IMG_SECRET_COMPILE_ARGS,
+    files: [{ name: "seed.csv", content: IMG_FILE }],
+    compileArgs: IMG_COMPILE_ARGS,
     referenceSolution: IMG_SECRET_REFERENCE,
     image: { width: 4, height: 3, palette: "bw" },
     target: { width: 4, height: 3, palette: "bw", pixels: encodeImage(CHECKER, "bw") },
@@ -141,11 +144,11 @@ export function imageConfig(overrides: Record<string, unknown> = {}): CodeImageC
 
 /*
  * The TARGET is not a secret: it is the picture to draw, published on purpose
- * like a visible case. The reference solution, the compiler flags and the
- * extra files' bytes are.
+ * like a visible case; nor are the compiler flags and the extra files, public
+ * program inputs (ADR-096). The reference solution is.
  */
 export const codeimageLeakFixture: StudentLeakFixture<CodeImageConfig> = {
   config: imageConfig(),
-  forbiddenKeys: ["action", "content", "files", "compare", "policy", "tolerance", "configVersion"],
-  secrets: [IMG_SECRET_REFERENCE, IMG_SECRET_COMPILE_ARGS, IMG_SECRET_FILE, "0x7e57"],
+  forbiddenKeys: ["action", "compare", "policy", "tolerance", "configVersion"],
+  secrets: [IMG_SECRET_REFERENCE],
 };

@@ -417,7 +417,7 @@ async function gradeItem(
     if (!type.finalizeRunner) return ungraded("runner_unavailable");
     // The WHOLE request, hidden cases included: this is the final grading.
     const outcome = await runner.run(first.request);
-    return settle(type.finalizeRunner(config, answer, ctx, outcome));
+    return settle(type.finalizeRunner(config, answer, { ...ctx, finalizeState: first.finalizeState }, outcome));
   } catch (error) {
     if (error instanceof RunnerUnavailable || error instanceof RunnerBusy) {
       return ungraded("runner_unavailable");

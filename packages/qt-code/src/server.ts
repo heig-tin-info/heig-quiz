@@ -87,8 +87,10 @@ export const codeServer: QuestionTypeServer<
       })),
       hiddenCount: hidden.length,
       hiddenPoints: hidden.reduce((sum, c) => sum + c.points, 0),
-      // Name and size only: a data file may spell the answer out.
-      filesPreview: config.files.map((f) => ({ name: f.name, bytes: f.content.length })),
+      // Public program inputs (ADR-096): every run, the student's included,
+      // hands them to the program, which can print them.
+      files: config.files.map((f) => ({ name: f.name, content: f.content })),
+      compileArgs: config.compileArgs,
       allOrNothing: config.allOrNothing,
       // HOW a visible case is judged, never WHAT the answer is: the player
       // applies the grade's own rule (`caseVerdict`) with it (audit R-06).
@@ -114,9 +116,10 @@ export const codeServer: QuestionTypeServer<
   },
 
   /**
-   * Decision D15: a hidden case keeps its verdict and its points, and loses
-   * its name, its expected output and everything the code printed — unless
-   * the policy opens the names. A VISIBLE case travels whole: its expected
+   * Decision D15, ADR-096: a hidden case keeps its verdict, its points and a
+   * coarse failure category, and loses its expected output and everything
+   * the program did (output, exit code, time); its name too, unless the
+   * policy opens the names. A VISIBLE case travels whole: its expected
    * output is published to the student by `toStudent` already (deviation
    * W3-4). `showKey` means the teacher publishes the key, so nothing is cut.
    */

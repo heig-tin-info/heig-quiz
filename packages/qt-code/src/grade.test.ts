@@ -11,7 +11,13 @@ import {
   sha256,
   studentDetails,
 } from "./grade.js";
-import { CODE_LANGUAGES, CodeConfig, type CodeAnswer, type CodeConfig as Config } from "./schema.js";
+import {
+  CODE_LANGUAGES,
+  CodeConfig,
+  type CodeAnswer,
+  type CodeConfig as Config,
+  type HiddenCaseVerdict,
+} from "./schema.js";
 import { UnavailableRunnerStub } from "./test/runner.js";
 import {
   codeConfig,
@@ -20,6 +26,7 @@ import {
   outcome,
   SECRET_HIDDEN_ARG,
   SECRET_HIDDEN_EXPECTED,
+  SECRET_HIDDEN_STDIN,
   templateFor,
 } from "./test/fixtures.js";
 
@@ -160,6 +167,68 @@ describe("gradeCode", () => {
     expect(result.state).toBe("proposed");
     expect(result.comment).toBe("template_region_mismatch");
     expect(result.details.runner).toBe("error");
+  });
+});
+
+describe("the order of the cases at grading (ADR-096)", () => {
+  /** Hidden, visible, hidden: the teacher's order, which the details keep. */
+  const config = CodeConfig.parse({
+    ...codeConfig(),
+    tests: {
+      mode: "io",
+      cases: [
+        { name: "h1", stdin: "hidden-in-1", expected: "H1\n", visible: false, points: 1 },
+        { name: "v1", stdin: "visible-in", expected: "V1\n", visible: true, points: 1 },
+        { name: "h2", stdin: "hidden-in-2", expected: "H2\n", visible: false, points: 1 },
+      ],
+    },
+  });
+
+  const pending = () => {
+    const result = gradeCode(config, answerFor(config, "x"), ctx());
+    if (!isPendingRunner(result)) throw new Error("expected a pending runner result");
+    return result;
+  };
+  const finalize = (finalizeState: unknown, runs: Parameters<typeof outcome>[0]) =>
+    finalizeRunnerCode(config, answerFor(config, "x"), { ...FINALIZE_CTX, finalizeState }, outcome(runs))
+      .details.cases.map((c) => [c.name, c.ok, c.actual]);
+
+  it("runs the visible cases first and the hidden ones last, and stamps that order", () => {
+    // One container serves the whole request and its /work persists: no
+    // output a student reads may follow a hidden input.
+    const result = pending();
+    expect(result.request.cases.map((c) => c.name)).toEqual(["v1", "h1", "h2"]);
+    expect(result.finalizeState).toEqual([1, 0, 2]);
+  });
+
+  it("pairs each run with its case through the stamp, in the teacher's order", () => {
+    // The runner answers in the request's order: v1, h1, h2.
+    expect(finalize(pending().finalizeState, [{ stdout: "V1\n" }, { stdout: "H1\n" }, { stdout: "wrong" }])).toEqual([
+      ["h1", true, "H1\n"],
+      ["v1", true, "V1\n"],
+      ["h2", false, "wrong"],
+    ]);
+  });
+
+  it("pairs through the order the job SENT, not one recomputed at finalize", () => {
+    // A stamp that differs from today's order (another build queued it).
+    expect(finalize([2, 0, 1], [{ stdout: "H2\n" }, { stdout: "H1\n" }, { stdout: "V1\n" }])).toEqual([
+      ["h1", true, "H1\n"],
+      ["v1", true, "V1\n"],
+      ["h2", true, "H2\n"],
+    ]);
+    // A job queued before the stamp existed sent the config's order.
+    expect(finalize(undefined, [{ stdout: "H1\n" }, { stdout: "V1\n" }, { stdout: "H2\n" }])).toEqual([
+      ["h1", true, "H1\n"],
+      ["v1", true, "V1\n"],
+      ["h2", true, "H2\n"],
+    ]);
+  });
+
+  it("refuses a stamp that does not fit the config rather than mispair", () => {
+    for (const stamp of [[0, 1], [0, 0, 1], [0, 1, 3], "0,1,2"]) {
+      expect(() => finalize(stamp, [{}, {}, {}])).toThrow();
+    }
   });
 });
 
@@ -407,21 +476,49 @@ describe("studentDetails", () => {
     outcome([{ stdout: "6\n" }, { stdout: "0\n" }, { stdout: SECRET_HIDDEN_EXPECTED }]),
   ).details;
 
-  it("keeps the verdict of a hidden case but closes everything else", () => {
+  it("reduces a hidden case to its verdict: name, points, ok (ADR-096)", () => {
     const shown = studentDetails(details);
-    const hidden = shown.cases[2]!;
-    expect(hidden.ok).toBe(true);
-    expect(hidden.points).toBe(2);
-    expect(hidden.name).toBe("#3");
-    expect(hidden.expected).toBeUndefined();
-    expect(hidden.actual).toBeUndefined();
-    expect(JSON.stringify(shown)).not.toContain("negative-values");
+    expect(shown.cases[2]).toEqual({ name: "#3", visible: false, points: 2, ok: true });
+    const json = JSON.stringify(shown);
+    expect(json).not.toContain("negative-values");
+    expect(json).not.toContain(SECRET_HIDDEN_EXPECTED);
+    expect(json).not.toContain(JSON.stringify(SECRET_HIDDEN_STDIN).slice(1, -1));
+  });
+
+  it("names a hidden case's failure coarsely, never by its exit code or its time", () => {
+    const failing = (run: Partial<RunnerOutcome["cases"][number]>) =>
+      studentDetails(
+        finalizeRunnerCode(
+          config,
+          answerFor(config, "x"),
+          FINALIZE_CTX,
+          outcome([{ stdout: "6\n" }, { stdout: "0\n" }, { stderr: "SECRET-STDERR", ...run }]),
+        ).details,
+      ).cases[2]!;
+    expect(failing({ exitCode: 3, ms: 1234 })).toEqual({
+      name: "#3",
+      visible: false,
+      points: 2,
+      ok: false,
+      failure: "failed",
+    });
+    const category = (run: Partial<RunnerOutcome["cases"][number]>) =>
+      (failing(run) as HiddenCaseVerdict).failure;
+    expect(category({ exitCode: null })).toBe("crashed");
+    expect(category({ exitCode: null, timedOut: true })).toBe("timed_out");
+    expect(category({ exitCode: null, oom: true })).toBe("oom");
+    // The runner never reported it (the run ended before): not a crash.
+    const notRun = finalizeRunnerCode(config, answerFor(config, "x"), FINALIZE_CTX, outcome([{ stdout: "6\n" }]));
+    expect((studentDetails(notRun.details).cases[2] as HiddenCaseVerdict).failure).toBe("failed");
+    for (const key of ["exitCode", "ms", "timedOut", "oom", "stderr", "actual", "expected"]) {
+      expect(failing({ exitCode: 3, ms: 1234 })).not.toHaveProperty(key);
+    }
   });
 
   it("names the hidden cases when the feedback policy allows it", () => {
     const shown = studentDetails(details, { showHiddenCaseNames: true });
     expect(shown.cases[2]?.name).toBe("negative-values");
-    expect(shown.cases[2]?.expected).toBeUndefined();
+    expect(shown.cases[2]).not.toHaveProperty("expected");
   });
 
   it("leaves the visible cases untouched", () => {

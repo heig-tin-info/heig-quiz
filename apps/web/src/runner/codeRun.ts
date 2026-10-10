@@ -9,15 +9,10 @@
  * pressed the button. The mark is computed server-side from the stored
  * template and the stored regions, which is invariant 14 and stays untouched.
  *
- * Two things the student's view deliberately does not carry, and so neither
- * does the request built here:
- *
- *  - `compileArgs`. It can encode the key (`-DEXPECTED=42`), so `toStudent`
- *    drops it and the browser compiles with the toolchain's own defaults. The
- *    backend run, and every graded run, uses the teacher's flags.
- *  - the CONTENT of the extra files, for the same reason. A question whose
- *    program reads `data.csv` therefore has to run on the backend; the
- *    browser gets an empty file rather than a wrong one.
+ * The extra files and `compileArgs` travel too: they are public program
+ * inputs that `toStudent` publishes (ADR-096), so the browser compiles with
+ * the teacher's flags and reads the teacher's files, as the backend run and
+ * every graded run do.
  */
 import { assembleSource as assembleFromTemplate } from "@quiz/domain";
 import type { RunOutcome, RunnerRequest } from "@quiz/core/server";
@@ -69,7 +64,7 @@ export function canRunManually(student: CodeStudent): boolean {
 /**
  * The browser's request for a student's run, from the program half of the
  * student view that both `code` and `codeimage` publish: the assembled
- * program, the extra files by name (empty), the toolchain's own flags.
+ * program, the extra files and the compiler's flags (ADR-096).
  */
 export function studentRunRequest(
   student: ProgramStudent,
@@ -80,9 +75,9 @@ export function studentRunRequest(
     language: student.language,
     files: [
       { name: "main", content: assembleSource(student, regions) },
-      ...student.filesPreview.map((f) => ({ name: f.name, content: "" })),
+      ...student.files.map((f) => ({ name: f.name, content: f.content })),
     ],
-    compileArgs: "",
+    compileArgs: student.compileArgs,
     action: "run",
     limits: student.limits,
     cases,
@@ -166,9 +161,9 @@ export async function runCodeImage(args: {
 }
 
 /**
- * The teacher's request, from the whole config: the teacher's flags and the
- * real content of the extra files travel, because the editor holds the
- * config itself. Shared by both program types' "try" buttons.
+ * The teacher's request, from the whole config: the same flags and extra
+ * files as a student's run (ADR-096), and every case. Shared by both program
+ * types' "try" buttons.
  */
 function teacherRunRequest(
   config: ProgramConfig,
@@ -193,12 +188,11 @@ function teacherRunRequest(
 /**
  * The TEACHER'S try, built from the whole config.
  *
- * The student's request above is deliberately poorer than this one, and for a
- * reason that does not apply here: what it may carry is bounded by what
- * `toStudent` let out, so it compiles with the toolchain's defaults and reads
- * empty extra files. The editor holds the config itself — the teacher wrote
- * it — so the flags and the files travel, and the run the teacher sees is the
- * run the grader will do.
+ * The student's request above carries what `toStudent` let out: the same
+ * flags and files, the visible cases only. The editor holds the config
+ * itself, so every case travels, and the run the teacher sees is the run the
+ * grader will do (the grader runs the visible cases first, ADR-096, which
+ * changes nothing for a suite whose cases do not depend on each other).
  *
  * Every case, hidden ones included, in the config's order: the editor counts
  * the passes by walking `outcome.cases[i]` beside `config.tests.cases[i]`.

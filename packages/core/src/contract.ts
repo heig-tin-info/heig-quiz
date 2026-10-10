@@ -71,6 +71,13 @@ export interface PendingRunnerResult {
   request: RunnerRequest;
   /** Partial details already known (e.g. assembled source hash). */
   details?: unknown;
+  /**
+   * What the type needs, at finalize, to read the outcome of THIS request —
+   * `code`'s order of the cases it sent (ADR-096). Opaque to the host, which
+   * carries it unchanged, through a queued job if need be, into
+   * {@link FinalizeContext.finalizeState}. JSON-serialisable.
+   */
+  finalizeState?: unknown;
 }
 
 export interface PendingLlmResult {
@@ -151,11 +158,13 @@ export interface StudentView {
  * answer is, and without them the player judged a visible case by a
  * different rule than the grade. The other four types keep `compare`
  * forbidden in their own leak tests; `code`'s test pins the exact shape.
+ * `compileArgs` left it for ADR-096: the compiler flags of a program
+ * question reach every run, the student's included, so they are a public
+ * program input that `code` and `codeimage` publish; no other type has them.
  */
 export const COMMON_FORBIDDEN_STUDENT_KEYS: readonly string[] = [
   "answers",
   "changeNote",
-  "compileArgs",
   "correct",
   "deprecationNote",
   "difficulty",
@@ -195,8 +204,12 @@ export interface GradeContext {
   defaults?: Readonly<Record<string, unknown>>;
 }
 
-/** The context of the second half of a runner grading: no service is reachable from there. */
-export type FinalizeContext = Omit<GradeContext, "runner" | "llm">;
+/**
+ * The context of the second half of a runner grading: no service is
+ * reachable from there. `finalizeState` is the pending result's own, handed
+ * back as the type returned it; absent on a job queued before it existed.
+ */
+export type FinalizeContext = Omit<GradeContext, "runner" | "llm"> & { finalizeState?: unknown };
 
 /**
  * What the feedback policy allows inside a grading `details` payload.

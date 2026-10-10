@@ -124,7 +124,8 @@ export function codeimageStudentView(config: Record<string, unknown>): CodeImage
     segments: splitTemplate(String(config.template ?? ""), "c"),
     limits: config.limits as CodeImageStudent["limits"],
     runsPerMinute: Number(config.runsPerMinute ?? 10),
-    filesPreview: [],
+    files: [],
+    compileArgs: "",
     image: config.image as ImageSpec,
     target: (config.target ?? null) as CodeImageStudent["target"],
   };

@@ -40,7 +40,8 @@ const student = (over: Partial<CodeStudent> = {}): CodeStudent =>
     ],
     hiddenCount: 0,
     hiddenPoints: 0,
-    filesPreview: [],
+    files: [],
+    compileArgs: "",
     allOrNothing: false,
     ...over,
   }) as CodeStudent;
@@ -61,9 +62,15 @@ describe("codeRunRequest", () => {
   it("sends the visible cases, with their command lines", () => {
     const request = codeRunRequest(student(), { regions: [] });
     expect(request.cases).toEqual([{ name: "one", args: ["3"], stdin: "x" }]);
-    // The key never travels with a trial run: `toStudent` dropped the
-    // compiler flags and the extra files' contents, and so does this.
-    expect(request.compileArgs).toBe("");
+  });
+
+  it("builds and runs with the published files and flags, as the server does (ADR-096)", () => {
+    const request = codeRunRequest(
+      student({ files: [{ name: "data.csv", content: "1,2\n" }], compileArgs: "-DN=3" }),
+      { regions: [] },
+    );
+    expect(request.files.slice(1)).toEqual([{ name: "data.csv", content: "1,2\n" }]);
+    expect(request.compileArgs).toBe("-DN=3");
   });
 
   it("replaces them with the student's own input on a manual run", () => {

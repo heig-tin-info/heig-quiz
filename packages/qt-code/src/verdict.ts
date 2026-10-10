@@ -14,7 +14,7 @@
  */
 import { compareOutput } from "@quiz/domain/compareOutput";
 
-import type { CodeCompare } from "./schema.js";
+import type { CodeCaseDetail, CodeCompare } from "./schema.js";
 
 /** What a case asks for. Every case shape of the package fits it. */
 export interface CaseSpec {
@@ -41,6 +41,16 @@ export interface CaseVerdict {
   ok: boolean;
   failure: CaseFailure | null;
 }
+
+/**
+ * Why a hidden case failed, as much of it as a student reads (ADR-096): an
+ * accident, or merely "failed" — never which check, which would say what
+ * the case expected.
+ */
+export type HiddenCaseFailure = Extract<CaseFailure, "timed_out" | "oom" | "crashed"> | "failed";
+
+/** A spec that checks nothing: `caseVerdict` with it names the accidents alone. */
+export const NO_CHECK: CaseSpec = { expected: "", compareStdout: false, expectedExitCode: null };
 
 /**
  * The verdict of one case.
@@ -74,4 +84,27 @@ export function caseVerdict(
     return { ok: false, failure: "output" };
   }
   return { ok: true, failure: null };
+}
+
+/** What a STORED case says of its run, for the rule above. */
+type StoredRun = Pick<CodeCaseDetail, "exitCode" | "actual" | "timedOut" | "oom" | "ms">;
+
+/**
+ * The run behind a stored case, or `undefined` when the runner never
+ * reported it (no exit code and no output: the run ended before it), which
+ * {@link caseVerdict} reads as `not_run`.
+ */
+export function runOf(detail: StoredRun): CaseRun | undefined {
+  if (detail.exitCode === null && detail.actual === undefined) return undefined;
+  return { exitCode: detail.exitCode, stdout: detail.actual ?? "", timedOut: detail.timedOut, oom: detail.oom, ms: detail.ms };
+}
+
+/**
+ * The accident a stored case met, if any — the rule above with a spec that
+ * checks nothing. A case that never ran did not crash: it `failed`.
+ */
+export function accidentOf(detail: StoredRun): HiddenCaseFailure | null {
+  const { failure } = caseVerdict(NO_CHECK, runOf(detail), undefined);
+  if (failure === "not_run") return "failed";
+  return failure === "timed_out" || failure === "oom" || failure === "crashed" ? failure : null;
 }

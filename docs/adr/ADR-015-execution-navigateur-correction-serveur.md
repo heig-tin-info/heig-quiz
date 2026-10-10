@@ -6,6 +6,10 @@ Accepted (2026-09-21, phase 2). Settles the trial-run half of F-QST-09 for the `
 type, completes `docs/spec/04-types-de-questions.md` §4.7, and lifts decision D14 for the
 STUDENT'S Run button only — never for a grade.
 
+Amended by [ADR-096](ADR-096-fichiers-annexes-publics.md) (2026-10-10): the extra files and
+`compileArgs` are public program inputs; `toStudent` publishes them and the browser runtime
+receives them (§5).
+
 ## Context
 
 A `code` question of phase 1 could only be tried through the backend runner: the student
@@ -67,7 +71,9 @@ Three more facts shaped this:
    `<sys/wait.h>` and parts of `<sys/mman.h>` are absent or stubbed; `clock_gettime` and
    `/dev/urandom` are the host browser's, so anything timed or seeded differs; the file
    system is a virtual one, and the teacher's extra `files` are injected there by the page
-   rather than by the server. A student whose trial run passes can therefore still fail the
+   rather than by the server — the files `toStudent` publishes, whole (ADR-096). The page
+   compiles the entry file alone, with its own flags: an extra `.c` file or a `compileArgs`
+   the program depends on is honoured by the container only. A student whose trial run passes can therefore still fail the
    grading pass, which is exactly why decision 2 exists and why the player says the trial
    is an essay.
 

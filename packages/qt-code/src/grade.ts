@@ -12,8 +12,10 @@
  */
 import { createHash } from "node:crypto";
 
+import { z } from "zod";
+
 import type { FinalizeContext, GradeContext, GradeResult, GradedResult } from "@quiz/core/server";
-import { RunnerRequest, zeroGrade, type RunnerOutcome } from "@quiz/core/server";
+import { RunnerRequest, zeroGrade, type RunnerCase, type RunnerOutcome } from "@quiz/core/server";
 import { assembleSource, mainFileName, TemplateRegionMismatch } from "@quiz/domain/lockedTemplate";
 import { round2 } from "@quiz/domain/round";
 
@@ -25,9 +27,11 @@ import {
   type CodeCaseDetail,
   type CodeConfig,
   type CodeDetails,
+  type CodeReviewDetails,
   type ProgramConfig,
+  type ReviewCaseDetail,
 } from "./schema.js";
-import { caseVerdict } from "./verdict.js";
+import { accidentOf, caseVerdict } from "./verdict.js";
 
 /** Runner output kept in `gradings.details` is capped: a 64 KB stdout is not a grade. */
 const DETAIL_CHARS = 4000;
@@ -74,7 +78,9 @@ export function compileDetail(outcome: RunnerOutcome): { ok: boolean; stderr: st
 /**
  * The request of any program run. The single main file is named by the
  * language, so a student cannot choose a file name, and the teacher's extra
- * files are injected here rather than travelling through the browser.
+ * files and flags are taken from the stored config rather than from the
+ * browser. They reach every run, the student's included, and are therefore
+ * public program inputs that `toStudent` publishes too (ADR-096).
  */
 export function programRequest(
   config: ProgramConfig,
@@ -93,7 +99,8 @@ export function programRequest(
  * The first half of a program grading, `code`'s and `codeimage`'s alike:
  * assemble, then delegate. Nothing is graded here, because nothing can be
  * known before the code has run — except that an empty answer scores zero
- * and an answer that cannot be sent goes to a human.
+ * and an answer that cannot be sent goes to a human. `finalizeState` rides
+ * on the pending result to the type's own finalize (`FinalizeContext`).
  */
 export function delegateToRunner<D>(
   config: ProgramConfig,
@@ -101,6 +108,7 @@ export function delegateToRunner<D>(
   ctx: GradeContext,
   zero: (runner: "ok" | "error", reason: string) => D,
   request: (source: string) => RunnerRequest,
+  finalizeState?: unknown,
 ): GradeResult<D> {
   if (isEmptyAnswer(answer)) {
     return zeroGrade(ctx, zero("ok", "empty"), "validated");
@@ -127,7 +135,13 @@ export function delegateToRunner<D>(
     return zeroGrade(ctx, zero("error", "runner_request_invalid"), "proposed", "runner_request_invalid");
   }
 
-  return { kind: "pending", via: "runner", request: built, details: { sourceSha256: sha256(source) } };
+  return {
+    kind: "pending",
+    via: "runner",
+    request: built,
+    details: { sourceSha256: sha256(source) },
+    finalizeState,
+  };
 }
 
 export interface BuildRequestOptions {
@@ -201,18 +215,57 @@ function zeroDetails(
   };
 }
 
-/** First half: assemble, then delegate (`delegateToRunner`). */
+/**
+ * The order the grading request runs the cases in, as indices into
+ * `config.tests.cases`: the visible cases first, the hidden ones last, each
+ * group in the teacher's order (ADR-096). The cases of one request share one
+ * container and its `/work`, so a program could keep a hidden case's stdin
+ * and print it in a later case's output; with no visible case after a
+ * hidden one, no output a student reads can follow a hidden input.
+ */
+function gradingOrder(cases: readonly CodeCase[]): number[] {
+  const indices = cases.map((_, i) => i);
+  return [...indices.filter((i) => cases[i]!.visible), ...indices.filter((i) => !cases[i]!.visible)];
+}
+
+/** `code`'s finalize state: the order the request sent the cases in, as indices into the config's. */
+const CaseOrder = z.array(z.number().int().min(0));
+
+/**
+ * The order a request actually sent — the one stamped on its pending result,
+ * carried by the grading job — never one recomputed at finalize: a job queued
+ * by an older build may have sent another. A job without the stamp predates
+ * it and sent the config's order. A stamp that does not fit the config is a
+ * bug, and throws rather than pair a run with the wrong case.
+ */
+function sentOrder(config: CodeConfig, state: unknown): number[] {
+  const count = config.tests.cases.length;
+  if (state === undefined) return config.tests.cases.map((_, i) => i);
+  const order = CaseOrder.parse(state);
+  if (order.length !== count || new Set(order).size !== count || order.some((i) => i >= count)) {
+    throw new Error("code: the request's case order does not fit the config");
+  }
+  return order;
+}
+
+/** First half: assemble, then delegate (`delegateToRunner`), stamping the order sent. */
 export function gradeCode(
   config: CodeConfig,
   answer: CodeAnswer | null,
   ctx: GradeContext,
 ): GradeResult<CodeDetails> {
+  const order = gradingOrder(config.tests.cases);
   return delegateToRunner(
     config,
     answer,
     ctx,
     (runner, reason) => zeroDetails(config, runner, reason),
-    (source) => buildRunnerRequest(config, source, { priority: "grading" }),
+    (source) =>
+      buildRunnerRequest(config, source, {
+        priority: "grading",
+        cases: order.map((i) => config.tests.cases[i]!),
+      }),
+    order,
   );
 }
 
@@ -234,8 +287,14 @@ export function finalizeRunnerCode(
     return zeroGrade(ctx, { runner: "ok", compile, cases: [], earned: 0, total, sourceSha256 }, "validated");
   }
 
+  // The details keep the teacher's order: each run goes back to the case
+  // the request sent at its position.
+  const runs: (RunnerCase | undefined)[] = [];
+  sentOrder(config, ctx.finalizeState).forEach((caseIndex, position) => {
+    runs[caseIndex] = outcome.cases[position];
+  });
   const cases: CodeCaseDetail[] = config.tests.cases.map((testCase, i) => {
-    const run = outcome.cases[i];
+    const run = runs[i];
     if (run === undefined) {
       // The runner sent fewer results than cases: the missing ones did not pass.
       return {
@@ -289,34 +348,33 @@ export function finalizeRunnerCode(
 }
 
 /**
- * The details a STUDENT may read (decision D15). Hidden cases keep their
- * verdict — a student must be able to see what the scale was made of — but
- * lose their name, their expected output and everything the code printed,
- * unless the feedback policy opens the names.
+ * The details a STUDENT may read (decision D15, ADR-096). A visible case
+ * travels whole. A hidden case keeps its verdict — a student must be able to
+ * see what the scale was made of — and nothing of what the program did: no
+ * expected output, no output, no exit code, no time, only a coarse failure
+ * category. Its name stays `#n` unless the feedback policy opens the names.
  *
  * The grading panel keeps the unredacted details; this is the filter the
- * feedback policy applies on the way out.
+ * feedback policy applies on the way out, when it does not publish the key.
  */
 export function studentDetails(
   details: CodeDetails,
   options: { showHiddenCaseNames?: boolean } = {},
-): CodeDetails {
+): CodeReviewDetails {
   const show = options.showHiddenCaseNames === true;
   return {
     ...details,
-    cases: details.cases.map((c, i) =>
-      c.visible
-        ? c
-        : {
-            name: show ? c.name : `#${i + 1}`,
-            visible: false,
-            points: c.points,
-            ok: c.ok,
-            exitCode: c.exitCode,
-            ms: c.ms,
-            timedOut: c.timedOut,
-            oom: c.oom,
-          },
-    ),
+    cases: details.cases.map((c, i): ReviewCaseDetail => {
+      if (c.visible) return c;
+      // The coarse reason, the most a student reads of a hidden case.
+      const failure = c.ok ? undefined : (accidentOf(c) ?? "failed");
+      return {
+        name: show ? c.name : `#${i + 1}`,
+        visible: false,
+        points: c.points,
+        ok: c.ok,
+        ...(failure === undefined ? {} : { failure }),
+      };
+    }),
   };
 }

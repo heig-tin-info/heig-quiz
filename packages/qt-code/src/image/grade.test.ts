@@ -12,7 +12,7 @@ import { FINALIZE_CTX, outcome } from "../test/fixtures.js";
 import { finalizeRunnerCodeImage, gradeCodeImage, interactiveImageRequest } from "./grade.js";
 import { CodeImageDetails } from "./schema.js";
 import { codeimageServer } from "./server.js";
-import { CHECKER_STDOUT, IMG_SECRET_COMPILE_ARGS, imageConfig } from "./test/fixtures.js";
+import { CHECKER_STDOUT, IMG_COMPILE_ARGS, imageConfig } from "./test/fixtures.js";
 
 const ctx: GradeContext = {
   ...FINALIZE_CTX,
@@ -42,7 +42,7 @@ describe("gradeCodeImage", () => {
     expect(request.cases).toEqual([{ name: "image", args: [], stdin: "" }]);
     expect(request.action).toBe("run");
     expect(request.priority).toBe("grading");
-    expect(request.compileArgs).toBe(IMG_SECRET_COMPILE_ARGS);
+    expect(request.compileArgs).toBe(IMG_COMPILE_ARGS);
     expect(request.limits.outputKb).toBe(128);
     const main = request.files[0]!;
     expect(main.content).toContain("int main(void) {");

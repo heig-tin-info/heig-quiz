@@ -14,6 +14,7 @@
  * re-implemented here (invariant 14: the source is rebuilt server-side).
  */
 import type { RunnerLanguage } from "@quiz/core/server";
+import type { HiddenCaseFailure } from "./verdict.js";
 import type { TemplateLanguage } from "@quiz/domain/lockedTemplate";
 import { z } from "zod";
 
@@ -159,10 +160,23 @@ export const programFields = {
   cooldown: CodeCooldown.default("fixed"),
   /** Starting code, with the locked regions marked by `@@lock` / `@@endlock`. */
   template: z.string().max(40_000).default(""),
-  /** Extra files the program reads; injected server-side, never by the client. */
-  files: z.array(CodeFile).max(4).default([]),
+  /**
+   * Extra files the program reads. A PUBLIC program input (ADR-096):
+   * `toStudent` publishes them whole, because every run hands them to the
+   * program, which can print them. A key never goes here.
+   */
+  files: z
+    .array(CodeFile)
+    .max(4)
+    .default([])
+    .describe("Extra files the program reads. Shown to the student whole: never put a key or an expected output in them."),
   action: z.enum(["check", "run"]).default("run"),
-  compileArgs: z.string().max(400).default(""),
+  /** The compiler's flags. Public like `files` (ADR-096): the student's runs compile with them. */
+  compileArgs: z
+    .string()
+    .max(400)
+    .default("")
+    .describe("Compiler arguments. Shown to the student: never encode a key in them (-DEXPECTED=42)."),
   limits: CodeLimits.default(DEFAULT_LIMITS),
   runsPerMinute: z.number().int().min(1).max(30).default(10),
   /**
@@ -230,8 +244,9 @@ export type CodeSegment = z.infer<typeof CodeSegment>;
 
 /**
  * What a student receives. Everything that could carry the key is gone:
- * hidden `stdin`/`expected`, `compileArgs`, the contents of the extra files
- * and the reference solution (decision D15).
+ * hidden `stdin`/`expected` and the reference solution (decision D15). The
+ * extra files and `compileArgs` travel: they are program inputs every run
+ * hands to the program, so they are public (ADR-096).
  *
  * The comparison options DO travel (audit R-06): they say HOW an output is
  * compared — trailing whitespace, case, a numeric tolerance — never WHAT the
@@ -240,9 +255,11 @@ export type CodeSegment = z.infer<typeof CodeSegment>;
  */
 /**
  * The program half of a student view, shared by `code` and `codeimage`: the
- * statement, the template split into segments, where "Run" executes and how
- * much it may do. Everything that could carry the key — `compileArgs`, the
- * extra files' bytes, the reference solution — is absent by construction.
+ * statement, the template split into segments, where "Run" executes, how
+ * much it may do, and what the program is built and run with — the extra
+ * files and the compiler's flags, public program inputs (ADR-096), which the
+ * browser runtime needs to run what the server would. The reference
+ * solution is absent by construction.
  */
 export const programStudentFields = {
   prompt: z.string(),
@@ -257,8 +274,13 @@ export const programStudentFields = {
   segments: z.array(CodeSegment),
   limits: CodeLimits,
   runsPerMinute: z.number().int(),
-  /** Enough to say "data.csv is available", never the bytes themselves. */
-  filesPreview: z.array(z.object({ name: z.string(), bytes: z.number().int() })),
+  /**
+   * The extra files, whole (ADR-096). Defaulted, like `cooldown`, so that a
+   * view built before the field existed still parses.
+   */
+  files: z.array(z.object({ name: z.string(), content: z.string() })).default([]),
+  /** The compiler's flags, as every run of the program uses them (ADR-096). */
+  compileArgs: z.string().default(""),
 };
 
 /** The program half of a student view; both types' views satisfy it. */
@@ -319,6 +341,21 @@ export const CodeCaseDetail = z.object({
   stderr: z.string().optional(),
 });
 export type CodeCaseDetail = z.infer<typeof CodeCaseDetail>;
+
+/**
+ * A hidden case as a student reads it (ADR-096): its verdict and a coarse
+ * failure category, nothing the program was fed or did.
+ */
+export type HiddenCaseVerdict = Pick<CodeCaseDetail, "name" | "points" | "ok"> & {
+  visible: false;
+  failure?: HiddenCaseFailure | undefined;
+};
+
+/** A case as a review reads it: stored whole, or a hidden case's verdict alone (`"exitCode" in`). */
+export type ReviewCaseDetail = CodeCaseDetail | HiddenCaseVerdict;
+
+/** The breakdown a review reads: the stored one, or the student's (`studentDetails`). */
+export type CodeReviewDetails = Omit<CodeDetails, "cases"> & { cases: ReviewCaseDetail[] };
 
 export const CodeDetails = z.object({
   runner: z.enum(["ok", "unavailable", "busy", "error"]),

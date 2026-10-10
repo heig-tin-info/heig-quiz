@@ -162,7 +162,7 @@ export function isCodeImageAnswered(answer: CodeImageAnswer): boolean {
  * What a student receives: the program half every program question shares,
  * the image's dimensions and palette, and the TARGET — which is published on
  * purpose, like a visible case: drawing it is the exercise. The reference
- * solution, `compileArgs` and the extra files' bytes stay behind.
+ * solution stays behind.
  */
 export const CodeImageStudent = z.object({
   ...programStudentFields,

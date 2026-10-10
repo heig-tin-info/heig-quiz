@@ -78,8 +78,8 @@ export const codeimageServer: QuestionTypeServer<
   /**
    * The one exit toward a student (invariant 4). The TARGET travels — it is
    * the picture to draw, published like a visible case — and so do the
-   * image's dimensions and palette. The reference solution, `compileArgs`
-   * and the extra files' bytes do not.
+   * image's dimensions and palette, and the extra files and `compileArgs`,
+   * public program inputs (ADR-096). The reference solution does not.
    */
   toStudent(config) {
     return {
@@ -90,7 +90,8 @@ export const codeimageServer: QuestionTypeServer<
       segments: splitTemplate(config.template, config.language),
       limits: { ...config.limits },
       runsPerMinute: config.runsPerMinute,
-      filesPreview: config.files.map((f) => ({ name: f.name, bytes: f.content.length })),
+      files: config.files.map((f) => ({ name: f.name, content: f.content })),
+      compileArgs: config.compileArgs,
       image: { ...config.image },
       target: config.target === null ? null : { ...config.target },
     };

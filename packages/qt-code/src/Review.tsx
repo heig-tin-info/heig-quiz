@@ -12,7 +12,15 @@ import { useId, useState } from "react";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import type { ReviewProps } from "@quiz/core/client";
 
-import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
+import type {
+  CodeAnswer,
+  CodeCaseDetail,
+  CodeReviewDetails,
+  CodeSolution,
+  CodeStudent,
+  HiddenCaseVerdict,
+  ReviewCaseDetail,
+} from "./schema.js";
 import { CompileFailure, NoBreakdown, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
 import {
@@ -31,10 +39,10 @@ import {
   Verdict,
   verdictTone,
 } from "@quiz/ui";
-import { caseVerdict } from "./verdict.js";
+import { caseVerdict, NO_CHECK, runOf } from "./verdict.js";
 
 interface CodeReviewProps
-  extends ReviewProps<CodeStudent, CodeAnswer, CodeSolution, CodeDetails> {
+  extends ReviewProps<CodeStudent, CodeAnswer, CodeSolution, CodeReviewDetails> {
   /** docs/06 Q8: the policy may name the hidden cases once the results are out. */
   showHiddenCaseNames?: boolean | undefined;
   strings?: Partial<CodeReviewStrings> | undefined;
@@ -42,6 +50,10 @@ interface CodeReviewProps
 
 /** The case as the teacher wrote it, when the feedback policy sends the key. */
 type CaseSpec = NonNullable<CodeSolution["cases"]>[number];
+
+/** The stored case, with its run; `undefined` for a hidden case's verdict alone (ADR-096). */
+const ran = (detail: ReviewCaseDetail): CodeCaseDetail | undefined =>
+  "exitCode" in detail ? detail : undefined;
 
 /**
  * Which check failed, not merely that one did.
@@ -52,35 +64,36 @@ type CaseSpec = NonNullable<CodeSolution["cases"]>[number];
  * verdict stays the honest, blunt "Failed".
  */
 function verdictOf(
-  detail: CodeCaseDetail,
+  detail: ReviewCaseDetail,
   spec: CaseSpec | undefined,
   compare: CodeSolution["compare"] | undefined,
   s: CodeReviewStrings,
 ): string {
-  if (detail.timedOut) return s.timedOut;
-  if (detail.oom) return s.outOfMemory;
   // The STORED verdict is the grade's; it is never re-decided here.
   if (detail.ok) return s.passed;
-  // Without the key, only the accidents can be named: a spec that checks
-  // nothing leaves `caseVerdict` exactly those (audit R-06).
-  const verdict = caseVerdict(
-    spec ?? { expected: "", compareStdout: false, expectedExitCode: null },
-    {
-      exitCode: detail.exitCode,
-      stdout: detail.actual ?? "",
-      timedOut: detail.timedOut,
-      oom: detail.oom,
-      ms: detail.ms,
-    },
-    compare,
-  );
-  switch (verdict.failure) {
+  // A hidden case on a student's path carries its coarse category (ADR-096).
+  // A stored case is read by the one rule (audit R-06): an accident first,
+  // then, with the key, the check that failed; without it, a spec that
+  // checks nothing names only the accidents.
+  const stored = ran(detail);
+  const failure =
+    stored === undefined
+      ? (detail as HiddenCaseVerdict).failure
+      : caseVerdict(spec ?? NO_CHECK, runOf(stored), compare).failure;
+  switch (failure) {
+    case "timed_out":
+      return s.timedOut;
+    case "oom":
+      return s.outOfMemory;
     case "crashed":
       return s.crashed;
     case "exit":
-      return fmt(s.exitMismatch, { got: String(detail.exitCode), want: spec!.expectedExitCode! });
+      return fmt(s.exitMismatch, { got: String(stored?.exitCode), want: spec!.expectedExitCode! });
     case "output":
       return s.outputMismatch;
+    case "not_run":
+    case "failed":
+      return s.failed;
     default:
       // The grade failed a case whose every other check held, so it is the
       // output that differed — the stored text may be truncated and cannot
@@ -136,7 +149,7 @@ export function CodeReview({
 
       <CompileFailure compile={breakdown.compile} s={s} />
 
-      {shown.some((c) => c.expected !== undefined && c.actual !== undefined) ? (
+      {shown.some((c) => ran(c)?.expected !== undefined && ran(c)?.actual !== undefined) ? (
         <div className="flex justify-end">
           <OutputControls
             name={controlsName}
@@ -178,9 +191,9 @@ export function CodeReview({
                   </td>
                   <OutputCells
                     mode={outputMode}
-                    expected={detail.expected ?? null}
+                    expected={ran(detail)?.expected ?? null}
                     expectedFallback="—"
-                    actual={detail.actual ?? null}
+                    actual={ran(detail)?.actual ?? null}
                     ok={detail.ok}
                     compare={compare}
                     showWhitespace={showWhitespace}

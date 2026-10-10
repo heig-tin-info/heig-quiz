@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { finalizeRunnerCode, studentDetails } from "./grade.js";
 import { CodeReview } from "./Review.js";
-import type { CodeAnswer, CodeDetails } from "./schema.js";
+import type { CodeAnswer, CodeDetails, CodeReviewDetails } from "./schema.js";
 import { codeServer } from "./server.js";
 import { codeConfig, FINALIZE_CTX, outcome } from "./test/fixtures.js";
 
@@ -19,7 +19,7 @@ const graded = finalizeRunnerCode(
   outcome([{ stdout: "6\n" }, { stdout: "nope" }, { stdout: "5 (hidden-expected-marker)" }]),
 );
 
-function setup(details: CodeDetails | null, props: Partial<React.ComponentProps<typeof CodeReview>> = {}) {
+function setup(details: CodeReviewDetails | null, props: Partial<React.ComponentProps<typeof CodeReview>> = {}) {
   render(
     <CodeReview
       student={student}
@@ -75,6 +75,45 @@ describe("CodeReview", () => {
     expect(screen.getByText("Hidden case")).toBeInTheDocument();
     // Even then, the expected output of a hidden case stays closed.
     expect(screen.queryByText("5 (hidden-expected-marker)")).toBeNull();
+  });
+
+  it("words a hidden case by its coarse category, and never reads no exit code as a crash (ADR-096)", () => {
+    const hiddenFailing = (run: { exitCode?: number | null; timedOut?: boolean }) =>
+      studentDetails(
+        finalizeRunnerCode(
+          config,
+          answer,
+          FINALIZE_CTX,
+          outcome([{ stdout: "6\n" }, { stdout: "nope" }, { stdout: "wrong", ...run }]),
+        ).details,
+        { showHiddenCaseNames: true },
+      );
+    setup(hiddenFailing({ exitCode: 1 }), { showHiddenCaseNames: true });
+    // The visible failure and the hidden one both read "Failed"; no "Crashed".
+    expect(screen.getAllByText("Failed")).toHaveLength(2);
+    expect(screen.queryByText("Crashed")).toBeNull();
+  });
+
+  it("words a case that never ran the same, visible or hidden: Failed, not Crashed", () => {
+    // The runner reported the first case only (the request ran out of time).
+    const cut = finalizeRunnerCode(config, answer, FINALIZE_CTX, outcome([{ stdout: "6\n" }])).details;
+    setup(cut, { audience: "teacher" });
+    expect(screen.getAllByText("Failed")).toHaveLength(2);
+    expect(screen.queryByText("Crashed")).toBeNull();
+  });
+
+  it("names a hidden case's timeout from the category alone", () => {
+    const details = studentDetails(
+      finalizeRunnerCode(
+        config,
+        answer,
+        FINALIZE_CTX,
+        outcome([{ stdout: "6\n" }, { stdout: "6\n" }, { exitCode: null, timedOut: true }]),
+      ).details,
+      { showHiddenCaseNames: true },
+    );
+    setup(details, { showHiddenCaseNames: true });
+    expect(screen.getByText("Timed out")).toBeInTheDocument();
   });
 
   it("draws a diff for a visible case only, never for a hidden one (#553)", () => {

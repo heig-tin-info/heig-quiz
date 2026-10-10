@@ -26,9 +26,10 @@ import type {
   PreviewCorrection,
   RunAccepted,
 } from "@quiz/contracts";
-import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
+import type { AnyQuestionTypeServer, RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { RunnerUnavailable } from "@quiz/core/server";
 import { compilesPerMinute } from "@quiz/domain";
+import { codeServer } from "@quiz/qt-code/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -487,6 +488,66 @@ describe("the Run button of a preview", () => {
 // --- Grading --------------------------------------------------------------------
 
 describe("grading a preview", () => {
+  it("pairs a real code question's runs through the order its request sent (ADR-096)", async () => {
+    // The real `code` type sends the visible case first; the preview must
+    // hand its `finalizeState` back, or the runs land on the wrong cases.
+    const restore = registerForTests(codeServer as unknown as AnyQuestionTypeServer);
+    try {
+      const seed = await seedLive(db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
+      const code = await publish(seed.poolId, teacher.id, "code", {
+        configVersion: 1,
+        prompt: "Echo stdin.",
+        language: "c",
+        template: "int main(void) { return 0; }\n",
+        tests: {
+          mode: "io",
+          cases: [
+            { name: "hidden-first", stdin: "H\n", expected: "H\n", visible: false, points: 1 },
+            { name: "visible-second", stdin: "V\n", expected: "V\n", visible: true, points: 1 },
+          ],
+        },
+      });
+      const evaluation = await reload(db, seed.evaluationId);
+      const [item] = await evaluationService.addItems(
+        db,
+        evaluation,
+        [code],
+        (type, version) => typeOf(type).defaultPoints(loadConfig(type, version)),
+        { attemptCount: 0 },
+      );
+      const sent: string[][] = [];
+      setRunner({
+        // An echo: each case prints the stdin it was given.
+        run: async (request: RunnerRequest): Promise<RunnerOutcome> => {
+          sent.push(request.cases.map((c) => c.name));
+          return {
+            compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+            cases: request.cases.map((c) => ({
+              exitCode: 0, stdout: c.stdin, stderr: "", ms: 1, timedOut: false, oom: false, truncated: false,
+            })),
+          };
+        },
+        health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
+      });
+      const url = `/app/api/evaluations/${seed.evaluationId}/preview`;
+      const started = (await post(url, teacher.headers)).json() as EvaluationPreview;
+      const res = await post(`${url}/grade`, teacher.headers, {
+        seed: started.seed,
+        answers: { [item!.id]: { regions: ["int main(void) { return 0; }\n"] } },
+      });
+      expect(res.statusCode).toBe(200);
+      const graded = (res.json() as PreviewCorrection).items[0]!;
+      expect(sent).toEqual([["visible-second", "hidden-first"]]);
+      expect(graded).toMatchObject({ status: "graded", points: 2, maxPoints: 2 });
+      expect((graded.details as { cases: { name: string; actual: string }[] }).cases).toMatchObject([
+        { name: "hidden-first", ok: true, actual: "H\n" },
+        { name: "visible-second", ok: true, actual: "V\n" },
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
   it("grades every item under the evaluation's settings and returns the full correction", async () => {
     const w = await world();
     const fake = recorder();
