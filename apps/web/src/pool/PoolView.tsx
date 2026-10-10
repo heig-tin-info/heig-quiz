@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  BellPlus,
   Eye,
   ListChecks,
   Plus,
@@ -68,6 +69,7 @@ import { useQuestionActions } from "../question/useQuestionActions";
 import { useLlmAvailability } from "../llmAvailability";
 import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
 import { PoolSettings } from "./PoolSettings";
+import { usePoolSubscription } from "./subscription";
 import { ReviewTab } from "./ReviewTab";
 import { ConceptsTab } from "./ConceptsTab";
 import { useFilterVocabulary } from "./useFilterVocabulary";
@@ -286,6 +288,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const [group, setGroup] = usePersistentChoice<GroupBy>(GROUP_KEY, isGroupBy, "none");
 
   const pool = usePool(id);
+  const subscription = usePoolSubscription(id);
   const mayWrite = pool.data === undefined || poolRoleAllows(pool.data.role, "contributor");
   const poolConceptIds = useMemo(() => (pool.data?.concepts ?? []).map((c) => c.concept.id), [pool.data]);
 
@@ -469,8 +472,12 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           ) : undefined
         }
         primary={
-          // The questions' list only: the other tabs create nothing.
-          readOnly || tab !== "questions"
+          // A public pool the caller reads without a seat: following it is
+          // the one thing to do here (ADR-095). Else the questions' list
+          // only: the other tabs create nothing.
+          detail.subscription === "available"
+            ? { icon: BellPlus, label: t("pool.subscribe"), onClick: () => subscription.subscribe.mutate() }
+            : readOnly || tab !== "questions"
             ? undefined
             : {
                 icon: Plus,

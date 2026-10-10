@@ -556,7 +556,7 @@ export async function editableQuestionIdsOf(
   if (poolIds.length === 0) return [];
   const roles = await poolRolesOf(db, inArray(pools.id, poolIds), viewer);
   const writable = new Set(
-    [...roles].filter(([, role]) => poolRoleAllows(role, "contributor")).map(([id]) => id),
+    [...roles].filter(([, { role }]) => poolRoleAllows(role, "contributor")).map(([id]) => id),
   );
   return rows.filter((r) => r.poolId !== null && writable.has(r.poolId)).map((r) => r.id);
 }

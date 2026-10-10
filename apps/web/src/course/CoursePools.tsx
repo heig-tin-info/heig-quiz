@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FolderTree, Link2, Unlink } from "lucide-react";
+import { Eye, FolderTree, Link2, Unlink } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { CourseSummary } from "@quiz/contracts";
-import { poolRoleAllows } from "@quiz/domain";
+import type { CoursePoolMode, CoursePoolsPut, CourseSummary, PoolSummary } from "@quiz/contracts";
+import { linkModeFor } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -15,7 +15,7 @@ import { courseKey } from "../queryKeys";
 import { useCourseDetail, useIsCourseOwner } from "./parts";
 import { usePools } from "../pool/api";
 
-type LinkedPool = { id: string; name: string; questionCount: number };
+type LinkedPool = { id: string; name: string; questionCount: number; mode: CoursePoolMode };
 
 /**
  * The pools a course draws from (F-POOL-05), on its card on the Courses
@@ -38,17 +38,18 @@ export function CoursePools({ course, navigate }: { course: CourseSummary; navig
  * The links of one course. `PUT /courses/:id/pools` replaces the WHOLE set in
  * one call, so both the link and the unlink send the list the course should
  * end up with — there is no add/remove route, and inventing one on the client
- * would be a second way to do one thing.
+ * would be a second way to do one thing. Each link carries its mode (ADR-095):
+ * the pools already linked are sent back as they stand.
  */
 function usePoolLinks(course: CourseSummary) {
   const qc = useQueryClient();
   const toastError = useErrorToast();
   const linked = useCourseDetail(course.id).data?.pools ?? [];
   const setLinks = useMutation({
-    mutationFn: (poolIds: string[]) =>
+    mutationFn: (links: CoursePoolsPut["pools"]) =>
       api(`/app/api/courses/${course.id}/pools`, {
         method: "PUT",
-        body: JSON.stringify({ poolIds }),
+        body: JSON.stringify({ pools: links } satisfies CoursePoolsPut),
       }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: courseKey(course.id) });
@@ -57,10 +58,11 @@ function usePoolLinks(course: CourseSummary) {
     // nowhere to render but a toast (DESIGN.md › Menu).
     onError: toastError("pools.linkSaveFailed"),
   });
+  const asLinks = (pools: typeof linked) => pools.map((l) => ({ poolId: l.id, mode: l.mode }));
   return {
     linked,
-    link: (poolId: string) => setLinks.mutate([...linked.map((l) => l.id), poolId]),
-    unlink: (poolId: string) => setLinks.mutate(linked.filter((l) => l.id !== poolId).map((l) => l.id)),
+    link: (poolId: string, mode: CoursePoolMode) => setLinks.mutate([...asLinks(linked), { poolId, mode }]),
+    unlink: (poolId: string) => setLinks.mutate(asLinks(linked.filter((l) => l.id !== poolId))),
   };
 }
 
@@ -73,11 +75,15 @@ export function LinkPoolMenu({ course }: { course: CourseSummary }) {
   const t = useT();
   const { linked, link } = usePoolLinks(course);
   const pools = usePools();
-  // Linking makes the whole staff contributors of the pool, so the server
-  // refuses a pool the caller only reads (ADR-013): it is not offered.
-  const available = (pools.data ?? []).filter(
-    (p) => poolRoleAllows(p.role, "contributor") && !linked.some((l) => l.id === p.id),
-  );
+  // A pool the caller writes in is linked for editing: the whole staff become
+  // its contributors (ADR-013). A public pool they only read is linked
+  // read-only (ADR-095), which leaves the staff readers and needs no
+  // subscription. Any other pool is not offered.
+  const unlinked = (pools.data ?? []).filter((p) => !linked.some((l) => l.id === p.id));
+  const available = unlinked.flatMap((p): { pool: PoolSummary; mode: CoursePoolMode }[] => {
+    const mode = linkModeFor(p.role, p.isPublic);
+    return mode ? [{ pool: p, mode }] : [];
+  });
   return (
     <Menu
       label={t("pools.linkAction")}
@@ -88,10 +94,10 @@ export function LinkPoolMenu({ course }: { course: CourseSummary }) {
       }
       items={
         available.length > 0
-          ? available.map((pool) => ({
-              label: pool.name,
-              icon: FolderTree,
-              onSelect: () => link(pool.id),
+          ? available.map(({ pool, mode }) => ({
+              label: mode === "read" ? t("pools.linkReadOnly", { name: pool.name }) : pool.name,
+              icon: mode === "read" ? Eye : FolderTree,
+              onSelect: () => link(pool.id, mode),
             }))
           : [{ label: t("pools.linkEmpty"), disabled: true }]
       }
@@ -168,6 +174,7 @@ function PoolList({
           >
             <FolderTree className="size-3.5 shrink-0 text-fg-faint" />
             <span className="min-w-0 flex-1 truncate font-medium">{pool.name}</span>
+            {pool.mode === "read" ? <Eye aria-label={t("pools.linkMode.read")} className="size-3.5 shrink-0 text-fg-faint" /> : null}
             <span className="shrink-0 text-xs tabular-nums text-fg-muted">
               {t(pool.questionCount === 1 ? "pools.questions.one" : "pools.questions", {
                 n: pool.questionCount,

@@ -33,7 +33,8 @@ export const MCP_READS = {
   list_courses:
     "The courses the user is on the staff of, with the user's role on each (`owner` or `assistant`).",
   get_course: "One course: its staff, its classrooms (with their ids) and the pools linked to it.",
-  list_pools: "The question pools the user reaches (own, shared with them, or through a course), with their question counts.",
+  list_pools:
+    "The user's pools (\"My pools\": own, shared with them, through a course, or public pools they subscribed to), with their question counts.",
   get_pool: "One pool: its detail, the user's role in it, and its category tree with counts.",
   get_pool_question_stats:
     "How students did on a pool's questions, aggregated (ADR-038): per question with at least ten counted exam " +

@@ -113,6 +113,55 @@ describe("PoolSharing", () => {
     expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ isPublic: true });
   });
 
+  it("counts what unpublishing ends before it takes the pool back, and does nothing if cancelled", async () => {
+    const { calls } = mockFetch({
+      [`GET ${MEMBERS}`]: ok({ ...list, visibility: "public" }),
+      "GET /app/api/pools/p1/unpublish-impact": ok({ subscribers: 3, readCourses: 1, templates: 2 }),
+      "PATCH /app/api/pools/p1": ok(POOL),
+    });
+    renderWithProviders(<PoolSharing pool={{ ...POOL, visibility: "public", isPublic: true }} />);
+    await screen.findByText("Ada Lovelace");
+
+    await userEvent.click(screen.getByRole("switch", { name: "Publish in the catalogue" }));
+    const dialog = await screen.findByRole("dialog", { name: "Take this pool out of the catalogue?" });
+    expect(within(dialog).getByText(/3 subscribers stop following it\. 1 course loses its read-only link to it\. 2 templates/)).toBeVisible();
+    // Cancelling leaves the pool published: nothing was written.
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+
+    await userEvent.click(screen.getByRole("switch", { name: "Publish in the catalogue" }));
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Unpublish" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ isPublic: false }));
+  });
+
+  it("unpublishes without a question when nobody follows or links the pool", async () => {
+    const { calls } = mockFetch({
+      [`GET ${MEMBERS}`]: ok({ ...list, visibility: "public" }),
+      "GET /app/api/pools/p1/unpublish-impact": ok({ subscribers: 0, readCourses: 0, templates: 0 }),
+      "PATCH /app/api/pools/p1": ok(POOL),
+    });
+    renderWithProviders(<PoolSharing pool={{ ...POOL, visibility: "public", isPublic: true }} />);
+    await screen.findByText("Ada Lovelace");
+    await userEvent.click(screen.getByRole("switch", { name: "Publish in the catalogue" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ isPublic: false }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("says which linked courses only read the pool", async () => {
+    mockFetch({
+      [`GET ${MEMBERS}`]: ok({
+        ...list,
+        courses: [
+          { id: "c1", name: "Programmation C", code: "PRG1", mode: "edit" },
+          { id: "c2", name: "Systèmes", code: "SYS1", mode: "read" },
+        ],
+      }),
+    });
+    renderWithProviders(<PoolSharing pool={POOL} />);
+    expect(await screen.findByText("Staff can read")).toBeVisible();
+    expect(screen.getByText("Staff can edit")).toBeVisible();
+  });
+
   it("cannot publish the personal pool", async () => {
     mockFetch({ [`GET ${MEMBERS}`]: ok(list) });
     renderWithProviders(<PoolSharing pool={{ ...POOL, isPersonal: true }} />);
@@ -123,7 +172,7 @@ describe("PoolSharing", () => {
 
   it("lists the linked courses, read-only, with their effect", async () => {
     mockFetch({
-      [`GET ${MEMBERS}`]: ok({ ...list, courses: [{ id: "c1", name: "Programmation C", code: "PRG1" }] }),
+      [`GET ${MEMBERS}`]: ok({ ...list, courses: [{ id: "c1", name: "Programmation C", code: "PRG1", mode: "edit" }] }),
     });
     renderWithProviders(<PoolSharing pool={POOL} />);
     expect(await screen.findByText("Linked courses")).toBeVisible();

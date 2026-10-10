@@ -74,6 +74,14 @@ const en = {
   "question_report_resolved.subject": "Your report was handled: {questionName}",
   "question_report_resolved.body": "A writer of the pool “{poolName}” resolved your report on the question “{questionName}”.",
   "question_report_resolved.action": "Open the question",
+  // A public pool left the catalogue (ADR-095): one sentence per state.
+  "pool_unpublished.unpublished.subject": "The pool {poolName} left the catalogue",
+  "pool_unpublished.unpublished.body": "The owner of the pool “{poolName}” unpublished it: your subscription to it ended.",
+  "pool_unpublished.course.subject": "The pool {poolName} left the catalogue",
+  "pool_unpublished.course.body": "The owner of the pool “{poolName}” unpublished it: your course “{courseName}” no longer draws from it. Its evaluations keep their questions; link another pool or ask the owner to publish it again.",
+  "pool_unpublished.deleted.subject": "The pool {poolName} was deleted",
+  "pool_unpublished.deleted.body": "The owner of the pool “{poolName}” deleted it: your subscription to it ended.",
+  "pool_unpublished.action": "Open the pools",
   // The project kinds (F-NOTIF-13, M3-09b): the project's name and counts,
   // never a score nor a student's name.
   "project_published.subject": "New project: {projectTitle}",
@@ -172,6 +180,8 @@ const en = {
   "activity.question_reported.template": "{questionName}: {count} report(s)",
   "activity.question_report_resolved.description": "A writer resolves your report on a question",
   "activity.question_report_resolved.template": "Report handled: {questionName}",
+  "activity.pool_unpublished.description": "A public pool you use leaves the catalogue",
+  "activity.pool_unpublished.template": "The pool {poolName} left the catalogue",
   "activity.activity_scheduled.description": "Exercises are scheduled in your classroom",
   "activity.activity_scheduled.template": "{classroomName}: {count} exercise(s) scheduled",
   "activity.activity_available.description": "An exercise opens",
@@ -254,6 +264,13 @@ const fr: Record<Key, string> = {
   "question_report_resolved.subject": "Votre signalement a été traité : {questionName}",
   "question_report_resolved.body": "Un responsable de la banque « {poolName} » a traité votre signalement sur la question « {questionName} ».",
   "question_report_resolved.action": "Ouvrir la question",
+  "pool_unpublished.unpublished.subject": "La banque {poolName} a quitté le catalogue",
+  "pool_unpublished.unpublished.body": "Le propriétaire de la banque « {poolName} » l'a dépubliée : votre abonnement est terminé.",
+  "pool_unpublished.course.subject": "La banque {poolName} a quitté le catalogue",
+  "pool_unpublished.course.body": "Le propriétaire de la banque « {poolName} » l'a dépubliée : votre cours « {courseName} » n'y puise plus. Ses évaluations gardent leurs questions ; liez une autre banque ou demandez au propriétaire de la republier.",
+  "pool_unpublished.deleted.subject": "La banque {poolName} a été supprimée",
+  "pool_unpublished.deleted.body": "Le propriétaire de la banque « {poolName} » l'a supprimée : votre abonnement est terminé.",
+  "pool_unpublished.action": "Ouvrir les banques",
   "project_published.subject": "Nouveau projet : {projectTitle}",
   "project_published.body": "Le projet « {projectTitle} » est publié dans votre classe. Acceptez-le pour obtenir votre dépôt.",
   "project_published.unlinked.body": "Le projet « {projectTitle} » est publié dans votre classe. Liez votre compte GitHub, puis acceptez-le pour obtenir votre dépôt.",
@@ -342,6 +359,8 @@ const fr: Record<Key, string> = {
   "activity.question_reported.template": "{questionName} : {count} signalement(s)",
   "activity.question_report_resolved.description": "Un responsable traite votre signalement sur une question",
   "activity.question_report_resolved.template": "Signalement traité : {questionName}",
+  "activity.pool_unpublished.description": "Une banque publique que vous utilisez quitte le catalogue",
+  "activity.pool_unpublished.template": "La banque {poolName} a quitté le catalogue",
   "activity.activity_scheduled.description": "Des exercices sont planifiés dans votre classe",
   "activity.activity_scheduled.template": "{classroomName} : {count} exercice(s) planifié(s)",
   "activity.activity_available.description": "Un exercice s'ouvre",
@@ -422,6 +441,8 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
       return { poolName: payload.poolName, questionName: payload.questionName, count: String(payload.count) };
     case "question_report_resolved":
       return { poolName: payload.poolName, questionName: payload.questionName };
+    case "pool_unpublished":
+      return { poolName: payload.poolName, courseName: payload.courseName ?? "" };
     case "project_published":
     case "project_deadline_reminder":
     case "project_repo_invited":
@@ -473,6 +494,8 @@ export function notificationPath(payload: NotificationPayload): string {
     case "pool_ownership":
     case "pool_question_added":
       return `/pools/${payload.poolId}`;
+    case "pool_unpublished":
+      return "/pools";
     case "question_reported":
     case "question_report_resolved":
       return `/questions/${payload.questionId}?tab=reports`;

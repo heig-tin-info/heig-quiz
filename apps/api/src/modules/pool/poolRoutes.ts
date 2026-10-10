@@ -7,7 +7,7 @@ import {
   accessWhere,
   callerOf,
   managedEvaluationAccess,
-  poolAccess,
+  myPools,
   poolRoleOf,
   requirePoolRole,
 } from "../guards.js";
@@ -22,19 +22,19 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, teacher, inPool, topicsOf } = ctx;
 
   /**
-   * Every pool the caller reaches: their own, the ones they were named in,
-   * the public ones and the ones their courses draw from — each with the
-   * caller's effective role, so the list can say what it offers (F-POOL-05).
-   */
-  /**
-   * Filtered by `poolAccess` through `accessWhere`, like every loader: an
-   * admin sees their own shelf, and every pool of the instance only with
-   * Super Powers on (ADR-054, which removed the `?scope=all` switch of #63).
-   * No input, so no schema.
+   * "My pools" (ADR-095): the pools the caller owns, sits on, reaches through
+   * a linked course or subscribed to — each with the caller's effective role,
+   * so the list can say what it offers (F-POOL-05). A public pool they have
+   * no such tie to is not here: the catalogue lists it.
+   *
+   * Filtered by `myPools` through `accessWhere`: an admin sees their own
+   * shelf, and every pool of the instance only with Super Powers on
+   * (ADR-054, which removed the `?scope=all` switch of #63). No input, so no
+   * schema.
    */
   app.get("/app/api/pools", { preHandler: requireTeacher }, async (req) => {
     const caller = callerOf(req);
-    return service.listPools(app.db, accessWhere(caller, poolAccess(caller.id)), caller);
+    return service.listPools(app.db, accessWhere(caller, myPools(caller.id)), caller);
   });
 
   app.post("/app/api/pools", { preHandler: requireTeacher }, async (req, reply) => {
@@ -57,7 +57,7 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     "/app/api/pools/:id",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, scope: pool }) =>
-      service.poolDetail(app.db, pool, await poolRoleOf(app.db, pool, callerOf(req)), readerLang(req)),
+      service.poolDetail(app.db, pool, await poolRoleOf(app.db, pool, callerOf(req)), readerLang(req), callerOf(req)),
     ),
   );
 
@@ -73,14 +73,20 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           throw new DomainError("personal_pool_not_publishable", 409, "A personal pool cannot be published");
         }
         const source = fields.description === undefined ? {} : { descriptionSource: descriptionFromAi ? ("ai" as const) : ("owner" as const) };
-        const updated = await service.updatePool(app.db, pool.id, {
-          ...fields,
-          ...(isPublic === undefined ? {} : { isPublic }),
-          ...source,
-        });
+        // The unpublication and the end of the read links and subscriptions are ONE transaction (ADR-095).
+        const { updated, dropped } = await app.db.transaction(async (tx) => ({
+          updated: await service.updatePool(tx, pool.id, {
+            ...fields,
+            ...(isPublic === undefined ? {} : { isPublic }),
+            ...source,
+          }),
+          dropped: isPublic === false ? await service.dropPublicAccess(tx, pool.id) : null,
+        }));
         if (isPublic !== undefined && isPublic !== pool.isPublic) {
           await trace(req, isPublic ? "pool.publish" : "pool.unpublish", "pool", pool.id, {});
         }
+        // Whenever the patch unpublishes, whatever the pool was loaded as: nothing to drop, nobody told.
+        if (dropped) await service.announceRetired(app.db, pool, dropped);
         if (Object.keys(fields).length > 0) {
           await trace(req, "pool.update", "pool", pool.id, { ...fields, ...source });
         }
@@ -89,6 +95,18 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         poolPeopleChanged(await topicsOf(pool));
         return updated;
       },
+    ),
+  );
+
+  /**
+   * What unpublishing would end, counted for the owner's confirmation
+   * (ADR-095): subscribers, read-linked courses, templates that use the pool.
+   */
+  app.get(
+    "/app/api/pools/:id/unpublish-impact",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: inPool("owner") }, async ({ scope: pool }) =>
+      service.unpublishImpact(app.db, pool.id),
     ),
   );
 
@@ -127,6 +145,7 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       // contributor reach it to WORK in it, not to destroy it.
       const audience = await topicsOf(pool);
       if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
+      const subscribers = await service.subscriberIds(app.db, pool.id);
       // A version an evaluation or a template pins cannot vanish under it
       // (ADR-031): the refusal names what holds the pool, not a 500.
       const inUse = () => service.poolUses(app.db, pool.id, managedEvaluationAccess(callerOf(req)));
@@ -138,6 +157,8 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         return reply.code(409).send(late);
       }
       await trace(req, "pool.delete", "pool", pool.id, { name: pool.name });
+      // The subscribers lose their pool (the read-only links cascade with it): told once it is gone.
+      await service.tellPoolDeleted(app.db, pool.name, subscribers);
       poolChanged(pool.id);
       poolPeopleChanged(audience);
       return reply.code(204).send();

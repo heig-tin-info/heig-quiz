@@ -135,7 +135,8 @@ describe("the Teams app package", () => {
     );
     // The reports on a question (issue #680): the two kinds of F-POOL-11, at 2.3.0.
     expect(TEAMS_ACTIVITY_KINDS).toEqual(expect.arrayContaining(["question_reported", "question_report_resolved"]));
-    expect(TEAMS_APP_VERSION).toBe("2.3.0");
+    expect(TEAMS_ACTIVITY_KINDS).toContain("pool_unpublished");
+    expect(TEAMS_APP_VERSION).toBe("2.4.0");
     // Semver, as Teams wants it; the value itself is bumped by hand.
     expect(TEAMS_APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
     expect(new Set(types.map((a) => a.type)).size).toBe(types.length);

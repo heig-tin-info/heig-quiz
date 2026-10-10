@@ -38,6 +38,8 @@ const makeDetail = (over: Partial<PoolDetail["pool"]> = {}, role: PoolDetail["ro
   categories: [],
   concepts: [],
   questionCount: 14,
+  subscription: "none",
+  subscribers: null,
 });
 
 const members: PoolMembers = { visibility: "private", members: [], courses: [] };
@@ -62,6 +64,24 @@ describe("PoolSettings", () => {
     expect(screen.getByRole("button", { name: /Delete pool/ })).toBeVisible();
     // The account the pool belongs to cannot leave it.
     expect(screen.queryByRole("button", { name: /Leave/ })).toBeNull();
+  });
+
+  it("lists the subscribers by name to a seat holder, with no way to remove one", async () => {
+    mockFetch({
+      "GET /app/api/pools/p1/subscribers": ok({ subscribers: [{ name: "Ada Lovelace" }, { name: "Grace Hopper" }] }),
+    });
+    renderSettings({ ...makeDetail({ ownerId: "t1", isPublic: true }, "contributor"), subscribers: 2 });
+    expect(await screen.findByText("Subscribers (2)")).toBeVisible();
+    expect(await screen.findByText("Grace Hopper")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Remove/ })).toBeNull();
+  });
+
+  it("does not draw the subscribers for a reader of a public pool, who can unsubscribe", async () => {
+    const { calls } = mockFetch({ "DELETE /app/api/pools/p1/subscription": noContent() });
+    renderSettings({ ...makeDetail({ ownerId: "t1", isPublic: true }, "reader"), subscription: "subscribed" });
+    expect(screen.queryByText(/^Subscribers/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Unsubscribe" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url.endsWith("/subscription"))).toBe(true));
   });
 
   it("tells a member what is the owners', and offers them the way out", async () => {

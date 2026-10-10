@@ -33,7 +33,7 @@ import {
   accessWhere,
   callerOf,
   findReachableEvaluation,
-  poolAccess,
+  myPools,
   sitRefusal,
   staffAccess,
 } from "../guards.js";
@@ -225,7 +225,7 @@ async function topicsOf(app: FastifyInstance, req: FastifyRequest): Promise<Set<
     const reachablePools = await app.db
       .select({ id: pools.id })
       .from(pools)
-      .where(accessWhere(me, poolAccess(me.id)));
+      .where(accessWhere(me, myPools(me.id)));
     for (const pool of reachablePools) topics.add(`pool:${pool.id}`);
   } else {
     const rooms = await app.db

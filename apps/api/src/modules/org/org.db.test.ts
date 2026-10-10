@@ -705,7 +705,7 @@ describe("GET /courses/:id", () => {
       method: "PUT",
       url: `/app/api/courses/${courseId}/pools`,
       headers: teacher.headers,
-      payload: { poolIds: [pool.json().id] },
+      payload: { pools: [{ poolId: pool.json().id, mode: "edit" }] },
     });
     const res = await server.app.inject({
       method: "GET",

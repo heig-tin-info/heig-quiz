@@ -565,7 +565,7 @@ describe("templates first (ADR-022, addendum of 2026-10-01)", () => {
       method: "PUT",
       url: `/app/api/courses/${course.id}/pools`,
       headers: teacher.headers,
-      payload: { poolIds: [] },
+      payload: { pools: [] },
     });
     expect(unlink.statusCode).toBe(200);
 
@@ -584,5 +584,31 @@ describe("templates first (ADR-022, addendum of 2026-10-01)", () => {
     const stranger = await call("create_template", { courseId: course.id, title: "Intrus" }, await tokenFor(other.headers));
     expect(stranger.isError).toBe(true);
     expect(stranger.data.status).toBe(404);
+  });
+  it("links a colleague's public pool read-only, keeps modes, and lists only My pools (ADR-095)", async () => {
+    const colleague = await server.signIn("teacher");
+    const colleagueToken = await tokenFor(colleague.headers);
+    const open = (await call("create_pool", { name: "Colleague public", isPublic: true }, colleagueToken)).data;
+    const course = await ok("create_course", { name: "Cours lecture", code: "RO-LINK" });
+
+    // Not on the shelf until linked or subscribed, but readable.
+    expect((await ok("list_pools")).map((p: { id: string }) => p.id)).not.toContain(open.id);
+    await ok("get_pool", { poolId: open.id });
+
+    // The default mode is edit, which a reader's link is refused for; read is accepted without a subscription.
+    const refused = await call("link_pool_to_course", { courseId: course.id, poolId: open.id });
+    expect(refused.isError).toBe(true);
+    expect(refused.data).toMatchObject({ status: 403, body: { error: "pool_link_forbidden" } });
+    const linked = await ok("link_pool_to_course", { courseId: course.id, poolId: open.id, mode: "read" });
+    expect(linked).toMatchObject([{ id: open.id, mode: "read" }]);
+    expect((await ok("list_pools")).map((p: { id: string }) => p.id)).toContain(open.id);
+
+    // Linking another pool keeps the first link in its mode.
+    const own = await ok("create_pool", { name: "Mine too" });
+    const both = await ok("link_pool_to_course", { courseId: course.id, poolId: own.id });
+    expect(Object.fromEntries(both.map((p: { id: string; mode: string }) => [p.id, p.mode]))).toEqual({
+      [open.id]: "read",
+      [own.id]: "edit",
+    });
   });
 });

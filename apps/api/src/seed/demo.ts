@@ -435,7 +435,7 @@ export async function seedDemoContent(
   // F-EVAL-01: an evaluation may only draw from the pools of its course.
   // `undefined` as the reachability predicate is the seed's privilege; it
   // links as the teacher who owns every pool it just created.
-  await poolService.setCoursePools(db, ctx.courseId, linked, undefined, {
+  await poolService.setCoursePools(db, ctx.courseId, linked.map((poolId) => ({ poolId, mode: "edit" as const })), undefined, {
     id: ctx.teacherId,
     role: "teacher",
     reach: "seats",

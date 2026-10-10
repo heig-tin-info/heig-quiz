@@ -81,7 +81,17 @@ export {
   transferOnLoss,
   vacateSeats,
 } from "./members.js";
-export { mayLinkPool, poolsOfCourse, setCoursePools } from "./coursePools.js";
+export { poolsOfCourse, setCoursePools } from "./coursePools.js";
+export {
+  listSubscribers,
+  announceRetired,
+  dropPublicAccess,
+  subscribe,
+  subscriberIds,
+  tellPoolDeleted,
+  unpublishImpact,
+  unsubscribe,
+} from "./subscriptions.js";
 export {
   categoryTree,
   categoriesWithCounts,

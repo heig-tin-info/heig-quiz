@@ -367,7 +367,7 @@ describe("search", () => {
       { concept: expect.objectContaining({ id: theory, label: "search theory" }), count: 1 },
     ]);
     const [row] = await db.select().from(pools).where(eq(pools.id, searchPool));
-    expect((await service.poolDetail(db, row!, "owner", "en")).concepts.map((c) => [c.concept.label, c.count])).toEqual([
+    expect((await service.poolDetail(db, row!, "owner", "en", { id: row!.ownerId, reach: "seats" })).concepts.map((c) => [c.concept.label, c.count])).toEqual([
       ["search language C", 1],
       ["search memory", 1],
       ["search theory", 1],
@@ -590,13 +590,13 @@ describe("question counts", () => {
     expect(listed[0]!.questionCount).toBe(3);
 
     const [row] = await db.select().from(pools).where(eq(pools.id, counted));
-    expect((await service.poolDetail(db, row!, "owner", "en")).questionCount).toBe(3);
+    expect((await service.poolDetail(db, row!, "owner", "en", { id: row!.ownerId, reach: "seats" })).questionCount).toBe(3);
 
     const courseId = randomUUID();
     await db
       .insert(courses)
       .values({ id: courseId, name: "Counting", code: `C-${courseId.slice(0, 8)}` });
-    await service.setCoursePools(db, courseId, [counted], undefined, viewer());
+    await service.setCoursePools(db, courseId, [{ poolId: counted, mode: "edit" }], undefined, viewer());
     const ofCourse = await service.poolsOfCourse(db, courseId);
     expect(ofCourse.map((p) => p.questionCount)).toEqual([3]);
   });
@@ -626,9 +626,9 @@ describe("question counts", () => {
       if (m.kind === "close") closed.push(...m.topics);
     });
     try {
-      await service.setCoursePools(db, courseId, [linked], undefined, viewer());
+      await service.setCoursePools(db, courseId, [{ poolId: linked, mode: "edit" }], undefined, viewer());
       expect(closed).toEqual([]);
-      await service.setCoursePools(db, courseId, [linked], undefined, viewer());
+      await service.setCoursePools(db, courseId, [{ poolId: linked, mode: "edit" }], undefined, viewer());
       expect(closed).toEqual([]);
       await service.setCoursePools(db, courseId, [], undefined, viewer());
       expect(closed.sort()).toEqual([`user:${ownerId}`, `user:${colleague}`].sort());
@@ -643,10 +643,10 @@ describe("question counts", () => {
     await db
       .insert(courses)
       .values({ id: courseId, name: "Unchanged", code: `N-${courseId.slice(0, 8)}` });
-    await service.setCoursePools(db, courseId, [linked], undefined, viewer());
+    await service.setCoursePools(db, courseId, [{ poolId: linked, mode: "edit" }], undefined, viewer());
     const before = await db.select().from(coursePools).where(eq(coursePools.courseId, courseId));
 
-    const again = await service.setCoursePools(db, courseId, [linked], undefined, viewer());
+    const again = await service.setCoursePools(db, courseId, [{ poolId: linked, mode: "edit" }], undefined, viewer());
 
     expect(again.map((p) => p.id)).toEqual([linked]);
     // The same row, not a deleted and re-inserted one.

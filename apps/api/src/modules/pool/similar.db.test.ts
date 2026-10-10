@@ -170,8 +170,8 @@ describe("GET /courses/:id/similar-questions", () => {
       canLink: true,
     });
     expect(byId.get(ids.own)).toMatchObject({ linked: false, canLink: true });
-    // A colleague's public pool is read-only for the caller: linking it is refused (ADR-013).
-    expect(byId.get(ids.public)).toMatchObject({ linked: false, canLink: false, pool: { name: "Algorithmes publics" } });
+    // A colleague's public pool can be linked read-only (ADR-095), whatever the caller's role in it.
+    expect(byId.get(ids.public)).toMatchObject({ linked: false, canLink: true, pool: { name: "Algorithmes publics" } });
   });
 
   it("gives the pool screen's statistics, withheld under ten answers", async () => {

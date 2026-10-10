@@ -231,6 +231,7 @@ describe("CoursePage", () => {
           id: "p2",
           name: "Colleague's public pool",
           visibility: "public",
+          isPublic: true,
           ownerId: "u-2",
           isPersonal: false,
           createdAt: "2026-01-01T08:00:00.000Z",
@@ -244,12 +245,56 @@ describe("CoursePage", () => {
     renderWithProviders(<CoursePage id="c1" tab="pools" navigate={vi.fn()} />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Link a pool" }));
-    // A pool the teacher only reads is not offered: linking it is refused (ADR-013).
+    // A public pool the teacher only reads is offered read-only (ADR-095): editing it is refused (ADR-013).
     expect(screen.queryByRole("menuitem", { name: "Colleague's public pool" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Colleague's public pool (read-only)" })).toBeVisible();
     await userEvent.click(screen.getByRole("menuitem", { name: "Pointers" }));
     // `PUT` replaces the WHOLE set, which is the only route there is.
     expect(calls.filter((c) => c.method === "PUT")).toEqual([
-      { url: "/app/api/courses/c1/pools", method: "PUT", body: { poolIds: ["p1"] } },
+      { url: "/app/api/courses/c1/pools", method: "PUT", body: { pools: [{ poolId: "p1", mode: "edit" }] } },
+    ]);
+  });
+
+  it("links a colleague's public pool read-only and keeps the modes of the links already there", async () => {
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([makeCourseSummary()]),
+      "GET /app/api/courses/c1": ok({
+        course: { id: "c1", name: "Programmation C", code: "PRG1" },
+        staff: [],
+        pools: [{ id: "p1", name: "Pointers", questionCount: 7, mode: "read" }],
+        classrooms: [],
+      }),
+      "GET /app/api/pools": ok([
+        {
+          id: "p2",
+          name: "Colleague's public pool",
+          visibility: "public",
+          isPublic: true,
+          ownerId: "u-2",
+          isPersonal: false,
+          createdAt: "2026-01-01T08:00:00.000Z",
+          questionCount: 3,
+          role: "reader",
+        },
+      ]),
+      "PUT /app/api/courses/c1/pools": ok(undefined),
+      "GET /app/api/courses/c1/templates": ok([]),
+    });
+    renderWithProviders(<CoursePage id="c1" tab="pools" navigate={vi.fn()} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Link a pool" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Colleague's public pool (read-only)" }));
+    expect(calls.filter((c) => c.method === "PUT")).toEqual([
+      {
+        url: "/app/api/courses/c1/pools",
+        method: "PUT",
+        body: {
+          pools: [
+            { poolId: "p1", mode: "read" },
+            { poolId: "p2", mode: "read" },
+          ],
+        },
+      },
     ]);
   });
 
@@ -275,7 +320,7 @@ describe("CoursePage", () => {
       within(dialog).getByRole("button", { name: "Unlink from this course" }),
     );
     expect(calls.filter((c) => c.method === "PUT")).toEqual([
-      { url: "/app/api/courses/c1/pools", method: "PUT", body: { poolIds: [] } },
+      { url: "/app/api/courses/c1/pools", method: "PUT", body: { pools: [] } },
     ]);
   });
 

@@ -25,6 +25,7 @@ import {
   type QuestionTypeId,
   type SimilarQuestions,
 } from "@quiz/contracts";
+import { linkModeFor } from "@quiz/domain";
 import { similarityTerms } from "@quiz/domain/similarityTerms";
 
 import { pools } from "../../db/schema.js";
@@ -66,15 +67,16 @@ export function similarRoutes(app: FastifyInstance, ctx: PoolRouteContext): void
         const byPool = new Map<string, string[]>();
         for (const hit of hits) byPool.set(hit.pool.id, [...(byPool.get(hit.pool.id) ?? []), hit.question.id]);
         if (byPool.size === 0) return { items: [] };
+        const hitPools = inArray(pools.id, [...byPool.keys()]);
         const [roles, stats] = await Promise.all([
-          service.poolRolesOf(app.db, inArray(pools.id, [...byPool.keys()]), callerOf(req)),
+          service.poolRolesOf(app.db, hitPools, callerOf(req)),
           Promise.all([...byPool].map(([poolId, ids]) => poolQuestionStats(app.db, poolId, ids))),
         ]);
         const statsOf = new Map(stats.flatMap((s) => s.items).map((s) => [s.questionId, s] as const));
         return {
           items: hits.map(({ question, pool, latestNumber, linked, searchText }) => {
             const figures = statsOf.get(question.id);
-            const role = roles.get(pool.id);
+            const held = roles.get(pool.id);
             return {
               questionId: question.id,
               pool,
@@ -83,7 +85,8 @@ export function similarRoutes(app: FastifyInstance, ctx: PoolRouteContext): void
               excerpt: excerptOf(searchText, question.internalName),
               latestNumber,
               linked,
-              canLink: linked || (role !== undefined && service.mayLinkPool(role)),
+              // `linkModeFor`: edit where the caller contributes, read-only on a public pool (ADR-095).
+              canLink: linked || (held !== undefined && linkModeFor(held.role, held.isPublic) !== null),
               stats: figures ? { n: figures.n, p: figures.p, r: figures.discrimination?.r ?? null } : null,
             };
           }),

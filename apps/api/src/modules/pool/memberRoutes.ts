@@ -13,6 +13,7 @@ import { findTeacherById } from "../../directory.js";
 import { callerOf, poolRoleOf, requirePoolRole } from "../guards.js";
 import { DomainError } from "../http.js";
 import { notify } from "../notifications/service.js";
+import { accessRevoked, userTopic } from "../realtime/bus.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
@@ -42,6 +43,57 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     teacher({ params: IdParam, load: inPool() }, async ({ req, scope: pool }) =>
       service.listMembers(app.db, pool, (await poolRoleOf(app.db, pool, callerOf(req))) === "owner"),
     ),
+  );
+
+  /**
+   * The subscribers of a public pool, by name only (ADR-095). Its owner and
+   * its members see them, nobody else: a reader through a course or a
+   * subscription is a 403, since the pool is plainly visible to them.
+   */
+  app.get(
+    "/app/api/pools/:id/subscribers",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: inPool() }, async ({ req, reply, scope: pool }) => {
+      const me = callerOf(req);
+      if (me.reach !== "all" && !(await service.isMemberOrOwner(app.db, pool, me.id))) {
+        return reply.code(403).send({ error: "forbidden", message: "Only the owner and the members see the subscribers" });
+      }
+      return service.listSubscribers(app.db, pool.id);
+    }),
+  );
+
+  /**
+   * Subscribes the caller to a public pool: it joins their "My pools", and
+   * nothing else changes (ADR-095). Idempotent. A pool that is not public
+   * cannot be subscribed to, and its owner and members already have it.
+   */
+  app.put(
+    "/app/api/pools/:id/subscription",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: inPool() }, async ({ req, reply, scope: pool }) => {
+      const me = req.user!.id;
+      if (await service.subscribe(app.db, pool.id, me)) {
+        await trace(req, "pool.subscribe", "pool", pool.id, {});
+        poolChanged(pool.id);
+      }
+      poolPeopleChanged([userTopic(me)]);
+      return reply.code(204).send();
+    }),
+  );
+
+  app.delete(
+    "/app/api/pools/:id/subscription",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: inPool() }, async ({ req, reply, scope: pool }) => {
+      const me = req.user!.id;
+      if (await service.unsubscribe(app.db, pool.id, me)) {
+        await trace(req, "pool.unsubscribe", "pool", pool.id, {});
+        poolChanged(pool.id);
+      }
+      // Their streams were subscribed to the pool's topic when they opened: close them.
+      accessRevoked([me]);
+      return reply.code(204).send();
+    }),
   );
 
   /**

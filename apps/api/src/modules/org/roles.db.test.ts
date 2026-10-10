@@ -102,7 +102,7 @@ describe("owner-only course routes", () => {
     ok: number;
   }[] => [
     { method: "PATCH", url: `/app/api/courses/${courseId}`, body: { name: "Renamed" }, bad: { name: 42 }, ok: 200 },
-    { method: "PUT", url: `/app/api/courses/${courseId}/pools`, body: { poolIds: [] }, bad: { poolIds: "x" }, ok: 200 },
+    { method: "PUT", url: `/app/api/courses/${courseId}/pools`, body: { pools: [] }, bad: { pools: "x" }, ok: 200 },
     {
       method: "POST",
       url: `/app/api/courses/${courseId}/classrooms`,

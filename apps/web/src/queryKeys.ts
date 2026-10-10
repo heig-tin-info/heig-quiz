@@ -220,6 +220,8 @@ export const poolStarredKey = (poolId: string) => ["pool", poolId, "starred"] as
 /** `GET /pools/:id/categories`, the tree with its counts: under the pool. */
 export const poolCategoriesKey = (poolId: string) => ["pool", poolId, "categories"] as const;
 export const poolMembersKey = (poolId: string) => ["pool-members", poolId] as const;
+/** `GET /pools/:id/subscribers` (ADR-095): under the pool, so a pool hint refreshes it. */
+export const poolSubscribersKey = (poolId: string) => ["pool", poolId, "subscribers"] as const;
 /** The prefix of every search of that pool's candidates. */
 export const poolCandidatesKey = (poolId: string) => ["pool-candidates", poolId] as const;
 

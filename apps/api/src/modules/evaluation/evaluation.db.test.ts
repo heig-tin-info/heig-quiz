@@ -26,6 +26,7 @@ import {
   enrollments,
   evaluationItems,
   evaluations,
+  pools,
   questions,
 } from "../../db/schema.js";
 import { type Payload, type TestServer, testServer } from "../../test/http.js";
@@ -295,6 +296,24 @@ describe("items (F-EVAL-02, F-EVAL-03)", () => {
     const offered = await service.listCoursePools(db, { classroomId: seed.classroomId }, viewer);
     expect(offered.map((p) => p.id)).toEqual([seed.poolId]);
     expect(offered.map((p) => p.id)).not.toContain(other.poolId);
+  });
+
+  it("counts a read link only while its pool is public (ADR-095): an orphan row opens nothing", async () => {
+    const seed = await seedLive(db, { questions: 1 });
+    const other = await seedLive(db, { questions: 1 });
+    const viewer = { id: seed.teacherId, role: "teacher", reach: "seats" as const };
+    const row = await reload(db, seed.evaluationId);
+    // What a race with an unpublication could leave: a read link to a pool that is private.
+    await db.insert(coursePools).values({ courseId: seed.courseId, poolId: other.poolId, mode: "read" });
+    const offered = await service.listCoursePools(db, { classroomId: seed.classroomId }, viewer);
+    expect(offered.map((p) => p.id)).not.toContain(other.poolId);
+    await expect(
+      service.addItems(db, row, [other.questionIds[0]!], points, { attemptCount: 0 }),
+    ).rejects.toMatchObject({ code: "question_not_in_course", status: 422 });
+    // Public, the same row counts: the picker offers the pool and its questions can be added.
+    await db.update(pools).set({ isPublic: true }).where(eq(pools.id, other.poolId));
+    expect((await service.listCoursePools(db, { classroomId: seed.classroomId }, viewer)).map((p) => p.id)).toContain(other.poolId);
+    await expect(service.addItems(db, row, [other.questionIds[0]!], points, { attemptCount: 0 })).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ questionId: other.questionIds[0] })]));
   });
 
   it("reorders in one transaction, without colliding with its own unique index", async () => {

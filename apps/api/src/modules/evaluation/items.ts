@@ -25,7 +25,7 @@ import {
 } from "./shared.js";
 import { byId, classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
 import type { ItemRecord } from "./shared.js";
-import type { Caller } from "../guards.js";
+import { countingCoursePool, type Caller } from "../guards.js";
 
 /**
  * THE pools a home may draw questions from (F-EVAL-01, ADR-031 addendum c):
@@ -39,12 +39,12 @@ export async function coursePoolIds(db: DbOrTx, home: CopyHome): Promise<Set<str
       ? await db
           .select({ poolId: coursePools.poolId })
           .from(coursePools)
-          .where(eq(coursePools.courseId, home.courseId))
+          .where(and(eq(coursePools.courseId, home.courseId), countingCoursePool))
       : await db
           .select({ poolId: coursePools.poolId })
           .from(classrooms)
           .innerJoin(coursePools, eq(coursePools.courseId, classrooms.courseId))
-          .where(eq(classrooms.id, home.classroomId));
+          .where(and(eq(classrooms.id, home.classroomId), countingCoursePool));
   return new Set(rows.map((r) => r.poolId));
 }
 

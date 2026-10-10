@@ -93,7 +93,7 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
     "project_provision_failed",
     "github_org_lost",
   ];
-  const POOL_KINDS = ["pool_shared", "pool_ownership", "pool_question_added", "question_reported", "question_report_resolved"];
+  const POOL_KINDS = ["pool_shared", "pool_ownership", "pool_question_added", "question_reported", "question_report_resolved", "pool_unpublished"];
   const STAFF_KINDS = [...COURSE_KINDS, ...POOL_KINDS];
   const ADMIN_KINDS = ["system_alert"];
 

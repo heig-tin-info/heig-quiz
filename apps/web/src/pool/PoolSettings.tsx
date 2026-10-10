@@ -27,6 +27,8 @@ import { PoolDescription } from "./PoolDescription";
 import { PoolFormModal } from "./PoolFormModal";
 import { PoolIcon } from "./PoolIcon";
 import { PoolSharing } from "./PoolSharing";
+import { PoolSubscribers } from "./PoolSubscribers";
+import { usePoolSubscription } from "./subscription";
 
 /** The body of a `409 pool_in_use`, or null for any other failure. */
 function poolInUse(error: unknown): PoolInUse | null {
@@ -62,6 +64,7 @@ export function PoolSettings({
   const me = useMe().data;
   const [edit, setEdit] = useState<"form" | "icon" | null>(null);
   const { pool } = detail;
+  const { unsubscribe } = usePoolSubscription(pool.id);
 
   const owner = detail.role === "owner";
   /** The account the pool BELONGS to cannot leave it; a co-owner can. */
@@ -147,6 +150,21 @@ export function PoolSettings({
       </section>
 
       {owner ? <PoolSharing pool={pool} /> : null}
+
+      {detail.subscribers !== null ? <PoolSubscribers poolId={pool.id} count={detail.subscribers} /> : null}
+
+      {detail.subscription === "subscribed" ? (
+        <section className="space-y-3">
+          <SectionHeading title={t("pool.subscription")} />
+          <Card className="divide-y divide-line px-5">
+            <SettingRow title={t("pool.subscribed")} desc={t("pool.subscription.desc")}>
+              <Button variant="danger-quiet" loading={unsubscribe.isPending} onClick={() => unsubscribe.mutate()}>
+                {t("pool.unsubscribe")}
+              </Button>
+            </SettingRow>
+          </Card>
+        </section>
+      ) : null}
 
       {seat || owner ? (
         <section className="space-y-3">
