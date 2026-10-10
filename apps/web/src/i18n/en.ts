@@ -3376,6 +3376,7 @@ export const en = {
   "player.ipBlocked": "This evaluation cannot be taken from this network.",
 
   // WP8: evaluation + dashboard
+  "classroom.tab.activities": "Activities",
   "eval.title": "Evaluations",
   "eval.new": "New evaluation",
   "eval.create": "Create evaluation",

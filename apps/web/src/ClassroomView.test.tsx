@@ -85,7 +85,7 @@ describe("ClassroomView", () => {
       [`GET ${EVALUATIONS}`]: ok([]),
     });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
-    expect(await screen.findByRole("tab", { name: /Evaluations/ })).toHaveAttribute(
+    expect(await screen.findByRole("tab", { name: /Activities/ })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -98,7 +98,7 @@ describe("ClassroomView", () => {
       [`GET ${EVALUATIONS}`]: ok([]),
     });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
-    expect(await screen.findByRole("tab", { name: /Evaluations/ })).toHaveAttribute(
+    expect(await screen.findByRole("tab", { name: /Activities/ })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -191,16 +191,24 @@ describe("ClassroomView", () => {
     expect(screen.getByRole("tab", { name: /Roster/ })).toHaveTextContent("2");
   });
 
-  it("counts the evaluations on their tab", async () => {
+  it("names the tab Activities, with no count, and counts the evaluations under their heading", async () => {
     mockFetch({
       [`GET ${ROOM}`]: ok(makeClassroomDetail()),
       [`GET ${EVALUATIONS}`]: ok([summary({ title: "Test 0" }), summary({ title: "Test 1" })]),
     });
-    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-    // The roster tab is the one on screen: the count comes from the list's
-    // own query, not from the panel being mounted.
-    const tab = await screen.findByRole("tab", { name: /Evaluations/ });
-    await waitFor(() => expect(tab).toHaveTextContent("2"));
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    const tab = await screen.findByRole("tab", { name: /Activities/ });
+    expect(tab).toHaveTextContent(/^Activities$/);
+    const heading = await screen.findByRole("heading", { name: /Evaluations/ });
+    expect(heading.parentElement).toHaveTextContent("Evaluations2");
+  });
+
+  it("draws no Evaluations heading while the classroom has none", async () => {
+    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${EVALUATIONS}`]: ok([]) });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    await screen.findByRole("tab", { name: /Activities/ });
+    await screen.findByText("No evaluation yet");
+    expect(screen.queryByRole("heading", { name: /Evaluations/ })).toBeNull();
   });
 
   it("moves between the two tabs and writes the choice to the URL", async () => {

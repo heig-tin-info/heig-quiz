@@ -3372,6 +3372,7 @@ export const fr: Record<keyof Dict, string> = {
   "player.ipBlocked": "Cette évaluation ne peut pas être passée depuis ce réseau.",
 
   // WP8: evaluation + dashboard
+  "classroom.tab.activities": "Activités",
   "eval.title": "Évaluations",
   "eval.new": "Nouvelle évaluation",
   "eval.create": "Créer l'évaluation",
