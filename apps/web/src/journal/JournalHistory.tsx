@@ -200,7 +200,6 @@ function RevisionView({ classroomId, path, revisionId }: { classroomId: string; 
     <section aria-label={t("journalHistory.revision")} className="space-y-3 border-t border-line pt-5">
       <Segmented
         name="journal-revision-view"
-        size="sm"
         label={t("journalHistory.view")}
         value={as}
         onChange={setAs}

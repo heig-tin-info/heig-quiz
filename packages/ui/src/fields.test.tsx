@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
 
@@ -18,7 +18,7 @@ describe("Segmented", () => {
       </>,
     );
     const group = screen.getByRole("radiogroup", { name: "Kind" });
-    expect(group.className).toContain("rounded-full");
+    expect(group.className).toContain("rounded-control");
     expect(screen.getByRole("radio", { name: "Alpha" })).toBeChecked();
     fireEvent.click(screen.getByRole("radio", { name: "Beta" }));
     expect(onChange).toHaveBeenCalledWith("b");
@@ -51,7 +51,64 @@ describe("Segmented", () => {
   it("takes an aria-label when no caption names it, and a dense size", () => {
     render(<Segmented name="k" label="Group by" size="sm" value="a" options={options} onChange={() => {}} />);
     screen.getByRole("radiogroup", { name: "Group by" });
-    expect(screen.getByText("Alpha").className).toContain("h-6");
+    expect(screen.getByText("Alpha").className).toContain("h-5.5");
+  });
+
+  it("is md (34 px track) unless told otherwise", () => {
+    render(<Segmented name="k" label="Kind" value="a" options={options} onChange={() => {}} />);
+    expect(screen.getByText("Alpha").className).toContain("h-7");
+  });
+
+  describe("thumb", () => {
+    const boxes: Record<string, { left: number; top: number; width: number; height: number }> = {
+      Alpha: { left: 3, top: 3, width: 60, height: 28 },
+      Beta: { left: 65, top: 3, width: 48, height: 28 },
+    };
+    const originals = new Map<string, PropertyDescriptor | undefined>();
+
+    beforeEach(() => {
+      for (const key of ["offsetLeft", "offsetTop", "offsetWidth", "offsetHeight"]) {
+        originals.set(key, Object.getOwnPropertyDescriptor(HTMLElement.prototype, key));
+        Object.defineProperty(HTMLElement.prototype, key, {
+          configurable: true,
+          get(this: HTMLElement) {
+            const box = boxes[this.textContent ?? ""];
+            const field = key.replace("offset", "").toLowerCase() as "left" | "top" | "width" | "height";
+            return box ? box[field] : 0;
+          },
+        });
+      }
+    });
+    afterEach(() => {
+      for (const [key, d] of originals) {
+        if (d) Object.defineProperty(HTMLElement.prototype, key, d);
+        else delete (HTMLElement.prototype as unknown as Record<string, unknown>)[key];
+      }
+    });
+
+    const thumbOf = (container: HTMLElement) => container.querySelector<HTMLElement>("[data-thumb]");
+
+    it("sits under the selected label, measured from it", () => {
+      const { container, rerender } = render(
+        <Segmented name="k" label="Kind" value="a" options={options} onChange={() => {}} />,
+      );
+      expect(thumbOf(container)?.style).toMatchObject({ left: "3px", width: "60px", height: "28px" });
+      rerender(<Segmented name="k" label="Kind" value="b" options={options} onChange={() => {}} />);
+      expect(thumbOf(container)?.style).toMatchObject({ left: "65px", width: "48px" });
+    });
+
+    it("is decorative, and the labels keep the native radios", () => {
+      const { container } = render(<Segmented name="k" label="Kind" value="a" options={options} onChange={() => {}} />);
+      expect(thumbOf(container)?.getAttribute("aria-hidden")).toBe("true");
+      expect(screen.getAllByRole("radio")).toHaveLength(2);
+    });
+
+    it("slides in ~200 ms, and not at all under reduced motion", async () => {
+      const { container } = render(<Segmented name="k" label="Kind" value="a" options={options} onChange={() => {}} />);
+      await waitFor(() => expect(thumbOf(container)?.className).toContain("duration-200"));
+      expect(thumbOf(container)?.className).toContain("ease-out-emphasized");
+      expect(thumbOf(container)?.className).toContain("motion-reduce:transition-none");
+    });
   });
 });
 

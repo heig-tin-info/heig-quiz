@@ -68,7 +68,6 @@ export function GradingToolbar({
       <Segmented<StateFilter>
         name="grading-state"
         label={t("grading.filter.state")}
-        size="sm"
         value={view.stateFilter}
         options={[
           { value: "all", label: t("grading.filter.all") },
@@ -88,7 +87,6 @@ export function GradingToolbar({
       <Segmented<GradingSource | Any>
         name="grading-source"
         labelledBy={sourceId}
-        size="sm"
         value={view.source}
         options={([ANY, "auto", "llm", "manual"] as const).map((value) => ({
           value,
@@ -104,7 +102,6 @@ export function GradingToolbar({
           <Segmented<GradingConfidence | Any>
             name="grading-confidence"
             labelledBy={confidenceId}
-            size="sm"
             value={view.confidence}
             options={([ANY, "high", "medium", "low"] as const).map((value) => ({
               value,

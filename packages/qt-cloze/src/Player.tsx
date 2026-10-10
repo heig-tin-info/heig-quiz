@@ -71,7 +71,7 @@ export function ClozePlayer({
           title={title}
           className={cx(
             inputClass,
-            "mx-0.5 h-8 align-baseline",
+            "mx-0.5 h-8 px-3 text-sm align-baseline",
             keyClass,
             key !== undefined && value === "" && "font-mono !text-success",
           )}
@@ -100,7 +100,7 @@ export function ClozePlayer({
         maxLength={200}
         placeholder={key}
         title={title}
-        className={cx(inputClass, "mx-0.5 h-8 align-baseline", keyClass)}
+        className={cx(inputClass, "mx-0.5 h-8 px-3 text-sm align-baseline", keyClass)}
         value={value}
         disabled={locked}
         onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}

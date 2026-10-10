@@ -59,7 +59,7 @@ describe("buttonClass", () => {
     expect(cls).toContain("bg-accent");
     expect(cls).toContain("text-on-fill");
     expect(cls).toContain("h-8.5");
-    expect(cls).toContain("rounded-full");
+    expect(cls).toContain("rounded-control");
   });
 
   it("defaults to the primary variant at the md size", () => {

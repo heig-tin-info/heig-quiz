@@ -34,6 +34,7 @@ import {
   TableHead,
   cx,
   inputClass,
+  inputSize,
 } from "./ui";
 
 /** Where an MCP client connects: this origin, the API's MCP route. */
@@ -61,7 +62,7 @@ export function CopyField({ label, value, mono = true }: { label: string; value:
           value={value}
           aria-label={label}
           onFocus={(e) => e.currentTarget.select()}
-          className={cx(inputClass, "h-8.5 min-w-0 flex-1 px-2.5 text-[13px]", mono && "font-mono")}
+          className={cx(inputClass, inputSize.md, "min-w-0 flex-1", mono && "font-mono")}
         />
         <Button variant="secondary" onClick={copy} aria-label={`${t("tokens.copy")} — ${label}`}>
           {copied ? <Check /> : <Copy />}

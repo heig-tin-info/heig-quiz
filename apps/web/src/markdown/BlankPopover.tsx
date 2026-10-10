@@ -19,7 +19,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
-import { Button, cx, IconButton, inputClass, useLayer, Z } from "../ui";
+import { Button, cx, IconButton, inputClass, inputSize, useLayer, Z } from "../ui";
 
 type BlankMode = "any" | "select" | "number" | "regex";
 
@@ -249,7 +249,7 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
                 autoFocus={i === 0}
                 value={answer.text}
                 aria-label={t("md.blank.answer", { n: i + 1 })}
-                className={cx(inputClass, "h-7 min-w-0 grow py-0 text-[13px]")}
+                className={cx(inputClass, inputSize.sm, "min-w-0 grow")}
                 onChange={(e) => setAnswer(i, { text: e.target.value })}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -332,7 +332,7 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
             <input
               autoFocus
               value={draft.pattern}
-              className={cx(inputClass, "h-7 w-full py-0 font-mono text-[13px]")}
+              className={cx(inputClass, inputSize.sm, "w-full font-mono")}
               onChange={(e) => patch({ pattern: e.target.value })}
             />
           </label>
@@ -340,7 +340,7 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
             {t("md.blank.flags")}
             <input
               value={draft.flags}
-              className={cx(inputClass, "h-7 w-full py-0 font-mono text-[13px]")}
+              className={cx(inputClass, inputSize.sm, "w-full font-mono")}
               onChange={(e) => patch({ flags: e.target.value })}
             />
           </label>
@@ -353,7 +353,7 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
           <input
             inputMode="decimal"
             value={draft.weight}
-            className={cx(inputClass, "h-7 w-14 py-0 text-center text-[13px] tabular-nums")}
+            className={cx(inputClass, inputSize.sm, "w-14 text-center tabular-nums")}
             onChange={(e) => patch({ weight: e.target.value })}
           />
         </label>
@@ -388,7 +388,7 @@ function NumberField({
         autoFocus={autoFocus}
         inputMode="decimal"
         value={value}
-        className={cx(inputClass, "h-7 w-full py-0 text-[13px] tabular-nums")}
+        className={cx(inputClass, inputSize.sm, "w-full tabular-nums")}
         onChange={(e) => onChange(e.target.value)}
       />
     </label>

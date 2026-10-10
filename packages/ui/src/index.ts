@@ -26,7 +26,10 @@ export {
   canvasStyles,
   caption,
   card,
+  areaClass,
   codeArea,
+  controlRadius,
+  controlSize,
   cx,
   gripClass,
   hint,
@@ -43,6 +46,7 @@ export {
   type BadgeTone,
   type ButtonSize,
   type ButtonVariant,
+  type ControlSize,
 } from "./styles.js";
 export { breakdownOf, isLocked, markdown } from "./content.js";
 export { ExpandableCanvas, type ExpandableCanvasProps, type ExpandableCanvasStrings } from "./expand.js";

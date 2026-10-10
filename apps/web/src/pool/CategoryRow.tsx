@@ -175,7 +175,7 @@ function CategoryName(props: RowProps) {
           }
         }}
         onBlur={(e) => props.onRename(node, e.currentTarget.value)}
-        className={cx(inputClass, inputSize.sm, "min-w-0 flex-1 px-2 font-medium")}
+        className={cx(inputClass, inputSize.sm, "min-w-0 flex-1 font-medium")}
       />
     );
   }

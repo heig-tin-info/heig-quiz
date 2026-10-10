@@ -3,7 +3,9 @@ import { useId } from "react";
 import type { ReactNode } from "react";
 
 import {
+  areaClass,
   buttonClass,
+  controlSize,
   cx,
   ErrorText as ErrorTextBase,
   inputClass,
@@ -13,6 +15,7 @@ import {
   textareaClass,
   type ButtonSize,
   type ButtonVariant,
+  type ControlSize,
 } from "@quiz/ui";
 
 import { useT } from "../i18n";
@@ -93,14 +96,15 @@ export function LinkButton({
 // --- Form controls ---
 
 /*
- * The field chrome (`inputClass`, no width and no height of its own), the two
- * control heights (`inputSize`) and the multi-line field (`textareaClass`,
- * which `Textarea` wears) are written once, in `@quiz/ui`: the editors and
- * players of the question types wear them too, so a field in a question
- * editor is the field of every other form of the app.
+ * The control scale (`controlSize`, sm 28 / md 34 / lg 40), the field chrome
+ * (`inputClass`, a pill with no width and no height of its own), its size
+ * slice (`inputSize`) and the multi-line field (`textareaClass`, a soft
+ * square, which `Textarea` wears) are written once, in `@quiz/ui`: the editors
+ * and players of the question types wear them too, so a field in a question
+ * editor is the field of every other form of the app (ADR-094).
  */
-export { inputClass, inputSize };
-type InputSize = keyof typeof inputSize;
+export { areaClass, controlSize, inputClass, inputSize };
+type InputSize = ControlSize;
 
 /**
  * Label above a control; used by Field, Select and Textarea.
@@ -173,7 +177,7 @@ export function Field({
   suffix?: string;
   /** Stretch label and input to the parent width (grid cells). */
   fullWidth?: boolean;
-  /** Control height: `sm` 28 px for dense rows, `md` 34 px by default. */
+  /** Control size of the scale: `sm` 28 px for a table row, `md` 34 px by default, `lg` 40 px. */
   size?: InputSize;
   /**
    * Width utility, on the wrapper so the label shares it. It lives here and
@@ -211,7 +215,7 @@ export function Field({
   );
 }
 
-/** Native select with the field chrome and a chevron. */
+/** Native select: the field chrome (a pill) and a chevron. */
 export function Select({
   label,
   help,
@@ -223,7 +227,7 @@ export function Select({
 }: Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "size"> & {
   label?: string;
   help?: string;
-  /** Control height: `sm` 28 px for dense rows, `md` 34 px by default. */
+  /** Control size of the scale: `sm` 28 px for a table row, `md` 34 px by default, `lg` 40 px. */
   size?: InputSize;
   /** Width utility on the wrapper; without it the select sizes to its parent. */
   width?: string;
@@ -235,11 +239,11 @@ export function Select({
       <select
         {...props}
         id={id}
-        className={cx(inputClass, inputSize[size], "w-full appearance-none pr-8", className)}
+        className={cx(inputClass, inputSize[size], "w-full appearance-none pr-9", className)}
       >
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-fg-faint" />
+      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-fg-faint" />
     </span>
   );
   if (!label) return control;
@@ -282,18 +286,29 @@ export function Textarea({
   );
 }
 
-/** Pill search box; keeps its own width so toolbars stay aligned. */
+/**
+ * The search box: a `Field` with a leading icon (same chrome, same scale,
+ * same pill), minus the label. It keeps its own width so toolbars stay
+ * aligned; `md` by default, 34 px like the controls it sits beside.
+ */
 export function SearchInput({
   className = "w-56",
+  size = "md",
   ...props
-}: React.ComponentPropsWithRef<"input">) {
+}: Omit<React.ComponentPropsWithRef<"input">, "size"> & { size?: InputSize }) {
+  const scale = controlSize[size];
   return (
     <label className={cx("relative block", className)}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-faint" />
+      <Search
+        className={cx(
+          "pointer-events-none absolute top-1/2 -translate-y-1/2 text-fg-faint",
+          size === "sm" ? "left-3 size-3.5" : "left-3.5 size-4",
+        )}
+      />
       <input
         type="search"
         {...props}
-        className={cx(inputClass, inputSize.md, "w-full rounded-full pl-9 pr-3")}
+        className={cx(inputClass, scale.height, scale.text, scale.iconPad, "w-full pr-4")}
       />
     </label>
   );
@@ -321,6 +336,7 @@ export function ToggleChip({
   onToggle,
   tone = "accent",
   disabled,
+  size = "sm",
   className = "",
   "aria-label": ariaLabel,
 }: {
@@ -341,6 +357,8 @@ export function ToggleChip({
    */
   tone?: "accent" | "neutral";
   disabled?: boolean;
+  /** Size of the control scale; a chip is `sm` (28 px) unless its toolbar is `md`. */
+  size?: InputSize;
   className?: string;
   /** For a chip whose visible label is a bare number ("3" is not a name). */
   "aria-label"?: string;
@@ -353,7 +371,8 @@ export function ToggleChip({
       disabled={disabled}
       onClick={onToggle}
       className={cx(
-        "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[13px] font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-control border font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50",
+        inputSize[size],
         pressed
           ? tone === "neutral"
             ? "border-fg bg-fg text-surface"

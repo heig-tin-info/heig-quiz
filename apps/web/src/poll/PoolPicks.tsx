@@ -90,7 +90,6 @@ export function PoolPicks({
           {classroomId === null ? null : (
             <Segmented
               name="poll-pool-scope"
-              size="sm"
               label={t("poll.scope")}
               value={scope}
               onChange={setScope}

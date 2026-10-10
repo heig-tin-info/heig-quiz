@@ -28,7 +28,7 @@ export function GroupBySwitch<T extends string>({
       <span id={caption} className="text-[11px] text-fg-faint">
         {t("common.groupBy")}
       </span>
-      <Segmented name={name} size="sm" labelledBy={caption} value={value} onChange={onChange} options={options} />
+      <Segmented name={name} labelledBy={caption} value={value} onChange={onChange} options={options} />
     </div>
   );
 }

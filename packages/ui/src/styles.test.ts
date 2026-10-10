@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { badge, buttonClass, cx, inputClass, textareaClass } from "./styles.js";
+import { badge, buttonClass, controlSize, cx, inputClass, inputSize, textareaClass } from "./styles.js";
 
 describe("cx", () => {
   it("joins the truthy parts and skips the rest", () => {
@@ -11,7 +11,7 @@ describe("cx", () => {
 describe("buttonClass", () => {
   it("defaults to the primary medium pill", () => {
     const classes = buttonClass().split(" ");
-    expect(classes).toContain("rounded-full");
+    expect(classes).toContain("rounded-control");
     expect(classes).toContain("bg-accent");
     expect(classes).toContain("h-8.5");
   });
@@ -38,6 +38,29 @@ describe("badge", () => {
 describe("inputClass", () => {
   it("carries no height, width or vertical padding: inputSize and the caller give them", () => {
     expect(inputClass).not.toMatch(/(^| )(h|w|py)-/);
+  });
+});
+
+describe("the control scale", () => {
+  it("has the three heights of ADR-094: 28, 34 and 40 px", () => {
+    expect(controlSize.sm.height).toBe("h-7");
+    expect(controlSize.md.height).toBe("h-8.5");
+    expect(controlSize.lg.height).toBe("h-10");
+  });
+
+  it("is the one table a button, a field and a chip read", () => {
+    for (const size of ["sm", "md", "lg"] as const) {
+      const { height, px, text } = controlSize[size];
+      expect(buttonClass("primary", size)).toContain(`${height} ${px} ${text}`);
+      expect(inputSize[size]).toBe(`${height} ${px} ${text}`);
+    }
+  });
+
+  it("makes every single-line control a pill and a multi-line field a soft square", () => {
+    expect(inputClass).toContain("rounded-control");
+    expect(buttonClass()).toContain("rounded-control");
+    expect(textareaClass).toContain("rounded-field");
+    expect(textareaClass).not.toContain("rounded-control");
   });
 });
 
