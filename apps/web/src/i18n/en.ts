@@ -1348,8 +1348,8 @@ export const en = {
   "md.image.percent": "{n}%",
   "md.image.remove": "Remove the image",
   // An image outside the journal, never fetched (M4-06).
-  "md.image.refused": "Image outside the journal, not shown",
-  "md.image.refusedAlt": "Image outside the journal, not shown: {alt}",
+  "md.image.refused": "External image, not shown",
+  "md.image.refusedAlt": "External image, not shown: {alt}",
   "md.placeholder.body": "Write the question…",
   "md.placeholder.bold": "bold text",
   "md.placeholder.italic": "italic text",

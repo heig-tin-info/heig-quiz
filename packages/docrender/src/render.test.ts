@@ -177,6 +177,12 @@ describe("links", () => {
     expect(p.warnings).toEqual([]);
   });
 
+  it("drops a protocol-relative link: `//host` and `/\\host` lead off the platform (audit L16)", () => {
+    const p = renderPage("[a](//evil.example/x) [b](/\\evil.example/y)\n", ctx());
+    expect(p.html).not.toMatch(/<a\b/);
+    expect(p.html).not.toContain("evil.example");
+  });
+
   it("leaves a malformed escape as typed", () => {
     const p = renderPage("[bad](a%E0.pdf)\n", ctx());
     expect(p.warnings).toEqual([
@@ -222,6 +228,13 @@ describe("images", () => {
     expect(p.html).not.toContain("<img");
     expect(p.html).toContain("remote");
     expect(p.warnings).toEqual([{ code: "external_image", href: "https://example.org/p.png" }]);
+    expect(p.assets).toEqual([]);
+  });
+
+  it("never fetches a protocol-relative image either (audit L14)", () => {
+    const p = renderPage("![a](//evil.example/p.png) ![b](/\\evil.example/q.png)\n", ctx());
+    expect(p.html).not.toContain("<img");
+    expect(p.html).not.toContain("evil.example");
     expect(p.assets).toEqual([]);
   });
 
@@ -283,6 +296,16 @@ describe("math", () => {
   it("marks a broken display formula as a block", () => {
     const p = renderPage("$$\n\\frac{\n$$\n", ctx());
     expect(p.html).toContain('<code class="md-math-error md-math-block">');
+  });
+
+  it("caps a formula's sizes and macro expansions (audit L15)", () => {
+    const huge = renderPage("$\\rule{1000em}{1000em}$\n", ctx());
+    expect(huge.warnings).toEqual([]);
+    // The TeX source survives in the MathML annotation; what is DRAWN is capped.
+    expect(huge.html).toContain("border-top-width:10em");
+    expect(huge.html).not.toMatch(/(?:width|height)[:=]"?1000em/);
+    const bomb = renderPage(`$\\def\\a{xx}${"\\a".repeat(150)}$\n`, ctx());
+    expect(codes(bomb.warnings)).toEqual(["math_error"]);
   });
 
   it("does not let a formula smuggle a link in", () => {

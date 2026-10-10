@@ -109,6 +109,20 @@ describe("RichText — it shows the markdown, it does not print it", () => {
     expect(img).toHaveAttribute("src", "/app/api/assets/a1b2");
     expect(img).toHaveAttribute("data-asset", "asset:a1b2");
   });
+
+  it("never fetches a picture that is not an asset: no src, its alt text instead (audit L14)", async () => {
+    // A co-author of a shared pool must not be able to plant a tracking pixel.
+    const { container } = renderWithProviders(
+      <Host
+        initial={"![pixel](https://evil.example/p.png)\n\n![](//evil.example/q.png)\n\n![x](data:image/png;base64,AAAA)"}
+      />,
+    );
+    await waitFor(() => expect(container.querySelector("[data-asset]")).not.toBeNull());
+    expect(container.querySelector("img[src]")).toBeNull();
+    expect(container.innerHTML).not.toMatch(/src="[^"]*(?:evil\.example|data:)/);
+    expect(screen.getByText("External image, not shown: pixel")).toBeInTheDocument();
+    expect(screen.getByText("External image, not shown")).toBeInTheDocument();
+  });
 });
 
 describe("RichText — what it tells its host", () => {

@@ -40,6 +40,8 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { BlockMath, InlineMath } from "@tiptap/extension-mathematics";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 
+import { KATEX_LIMITS } from "@quiz/docrender/katex";
+
 import { clozeHoleExtensions } from "./clozeHole";
 import { ParamExpr } from "./paramExpr";
 import { CodeHighlight } from "./codeHighlight";
@@ -47,8 +49,12 @@ import { REFUSED, type ImageUrl } from "./imageUrl";
 import { assetUrl, assetWidth } from "./render";
 
 
-/** KaTeX behaves here as in the student view: a broken formula shows, it never throws. */
-const KATEX_OPTIONS = { throwOnError: false } as const;
+/**
+ * KaTeX behaves here as in the student view: a broken formula shows, it never
+ * throws, and it renders under the same bounds (`KATEX_LIMITS`) — so a
+ * formula the student view would refuse is refused while it is written.
+ */
+const KATEX_OPTIONS = { throwOnError: false, ...KATEX_LIMITS } as const;
 
 /**
  * What an INLINE field (one choice of an mcq) lets the keyboard build: the
@@ -83,9 +89,12 @@ export const INLINE_INPUT_RULES = [
  * the picture the teacher just dropped. So the attribute keeps the canonical
  * `asset:` form — that is what `renderMarkdown` serializes and what is stored —
  * and only the rendered `src` is resolved to the same-origin endpoint. A URL
- * that is not an asset is left alone and simply does not load, which is what
- * the student view does with it too (`render.ts`) — unless the host resolves
- * it: the journal's images are RELATIVE paths beside the page (F-JRN-11), which
+ * that is not an asset is REFUSED, exactly as the student view drops it
+ * (`render.ts`): no `src` reaches the DOM, so nothing is fetched — an external
+ * picture in a shared pool would otherwise be a tracking pixel on every
+ * co-author who opens the question (audit L14). The reference stays in the
+ * markdown as written. The one exception is what the host resolves itself:
+ * the journal's images are RELATIVE paths beside the page (F-JRN-11), which
  * `imageUrl` turns into the journal's asset route.
  */
 const assetImage = (imageUrl?: ImageUrl) => Image.extend({
@@ -100,12 +109,11 @@ const assetImage = (imageUrl?: ImageUrl) => Image.extend({
         renderHTML: (attributes: Record<string, unknown>) => {
           const src = typeof attributes.src === "string" ? attributes.src : "";
           const hosted = imageUrl?.(src) ?? null;
+          if (hosted !== null && hosted !== REFUSED) return { src: hosted, "data-asset": src };
+          const resolved = hosted === REFUSED ? null : assetUrl(src);
           // Refused: no `src` at all, so nothing is fetched; the reference
           // travels in `data-asset`, which the parser reads back.
-          if (hosted === REFUSED) return { "data-asset": src, "data-refused": "" };
-          if (hosted !== null) return { src: hosted, "data-asset": src };
-          const resolved = assetUrl(src);
-          if (resolved === null) return { src };
+          if (resolved === null) return { "data-asset": src, "data-refused": "" };
           // The WIDTH lives in the reference too (`asset:<id>?w=50`), and it
           // is rendered as the student's own class so a copy of the editor's
           // HTML looks like the question. The editor itself draws through the

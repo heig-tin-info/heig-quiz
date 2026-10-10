@@ -2,6 +2,8 @@ import katex from "katex";
 import { Keyboard } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { KATEX_LIMITS } from "@quiz/docrender/katex";
+
 import { useT } from "../i18n";
 import { areaClass, Button, cx, Modal, Segmented, Spinner, TextInput } from "../ui";
 import "./formula.css";
@@ -140,6 +142,7 @@ export function FormulaDialog({
         displayMode: display,
         throwOnError: false,
         output: "htmlAndMathml",
+        ...KATEX_LIMITS,
       });
     } catch {
       return null;

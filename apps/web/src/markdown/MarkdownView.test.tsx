@@ -52,6 +52,14 @@ describe("MarkdownView — sanitisation", () => {
     expect(body.textContent).toContain("pixel");
   });
 
+  it("drops a protocol-relative image, which is another host too (audit L14)", () => {
+    const body = view(
+      '![a](//evil.example/p.png)\n\n<img src="//evil.example/q.png"><img src="/\\evil.example/r.png">',
+    );
+    expect(body.querySelectorAll("img")).toHaveLength(0);
+    expect(body.innerHTML).not.toContain("evil.example");
+  });
+
   it("refuses a data: URI image", () => {
     const body = view("![x](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)");
     expect(body.querySelector("img")).toBeNull();
@@ -81,6 +89,49 @@ describe("MarkdownView — sanitisation", () => {
     expect(link).toHaveAttribute("href", "https://example.org/a");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link.getAttribute("rel")).toContain("noreferrer");
+  });
+});
+
+/*
+ * Audit L16: whether a link leaves the app is decided on the URL the browser
+ * will follow, not on how the href starts. `//host` and `/\host` look like
+ * paths and are other hosts.
+ */
+describe("MarkdownView — where a link goes", () => {
+  const link = (source: string) => view(source).querySelector("a");
+  const external = (a: Element | null, href: string) => {
+    expect(a).toHaveAttribute("href", href);
+    expect(a).toHaveAttribute("target", "_blank");
+    expect(a?.getAttribute("rel")).toBe("noreferrer noopener");
+  };
+  const internal = (a: Element | null, href: string) => {
+    expect(a).toHaveAttribute("href", href);
+    expect(a).not.toHaveAttribute("target");
+    expect(a).not.toHaveAttribute("rel");
+  };
+
+  it("treats a protocol-relative link as the external link it is", () => {
+    external(link("[x](//evil.example/a)"), "//evil.example/a");
+  });
+
+  it("treats a backslash after the slash the same way", () => {
+    external(link('<a href="/\\evil.example/b">x</a>'), "/\\evil.example/b");
+    // In markdown, marked percent-encodes the backslash: a path of the app.
+    internal(link("[x](/\\evil.example/a)"), "/%5Cevil.example/a");
+  });
+
+  it("opens an absolute link to another host in its own tab", () => {
+    external(link("[x](https://evil.example)"), "https://evil.example");
+  });
+
+  it("keeps a link to the app itself in the current tab, as written", () => {
+    internal(link("[x](/app/pools)"), "/app/pools");
+    internal(link("[x](#part-2)"), "#part-2");
+    internal(link(`[x](${location.origin}/app/pools)`), `${location.origin}/app/pools`);
+  });
+
+  it("leaves a mailto: link alone", () => {
+    internal(link("[x](mailto:prof@heig-vd.ch)"), "mailto:prof@heig-vd.ch");
   });
 });
 
@@ -140,6 +191,26 @@ describe("MarkdownView — content", () => {
     expect(body.querySelector(".md-math-display")).not.toBeNull();
     // KaTeX's own markup survived sanitisation (it is produced after it).
     expect(body.innerHTML).toContain("katex-html");
+  });
+
+  /*
+   * Audit L15: an essay is rendered on the grader's screen, and a formula
+   * must not be able to grow over it. KaTeX caps what the author sizes
+   * (`maxSize`), refuses a macro bomb (`maxExpand`), and `\Huge` is an
+   * absolute size that nesting does not compound.
+   */
+  it("bounds a formula: sizes capped, macro bombs refused, sizing not compounded", () => {
+    const rule = view("$\\rule{1000em}{1000em}$");
+    expect(rule.querySelector(".katex-rule")?.getAttribute("style")).toContain("border-top-width:10em");
+    // The source survives as the MathML annotation; nothing DRAWN is 1000em.
+    expect(rule.innerHTML).not.toMatch(/(?:width|height)[:=]"?1000em/);
+
+    const bomb = view(`$\\def\\a{xx}${"\\a".repeat(150)}$`);
+    expect(bomb.querySelector(".katex-error")).not.toBeNull();
+    expect(bomb.querySelector(".katex-html")).toBeNull();
+
+    const huge = view(`$${"{\\Huge ".repeat(12)}x${"}".repeat(12)}$`);
+    expect(huge.querySelectorAll(".katex-sizing")).toHaveLength(1);
   });
 
   /*

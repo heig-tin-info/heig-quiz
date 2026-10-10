@@ -50,6 +50,7 @@ import { decodeEntities } from "./entities.js";
 import { asBoolean, oneLine, splitFrontMatter } from "./frontMatter.js";
 import { escapeHtml, highlight } from "./highlight.js";
 import { relativeHref, resolveRelative } from "./journalTree.js";
+import { KATEX_LIMITS } from "./katex.js";
 import { taskTally } from "./tasks.js";
 
 export interface RenderContext {
@@ -349,7 +350,8 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
 /**
  * One formula. `throwOnError` is deliberately ON so the author gets a warning
  * instead of a red blob nobody reports; the broken source is kept visible as
- * code, which is what it is.
+ * code, which is what it is. A formula past `KATEX_LIMITS`' expansions is
+ * such an error; one past its size is drawn at the cap.
  */
 function math(source: string, display: boolean, warnings: JournalWarning[]): string {
   try {
@@ -359,6 +361,7 @@ function math(source: string, display: boolean, warnings: JournalWarning[]): str
       strict: false,
       trust: false,
       output: "htmlAndMathml",
+      ...KATEX_LIMITS,
     });
   } catch {
     warnings.push({ code: "math_error", source });

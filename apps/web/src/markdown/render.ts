@@ -4,6 +4,7 @@ import { Marked, type Tokens } from "marked";
 
 import { decodeEntities } from "@quiz/docrender/entities";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
+import { KATEX_LIMITS } from "@quiz/docrender/katex";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 
 import { escapableStart, referenceAt } from "./delimiters";
@@ -252,11 +253,13 @@ function renderMathIn(node: Text, doc: Document): boolean {
     host.className = display ? "md-math md-math-display" : "md-math";
     // `throwOnError: false` renders the offending source in the error colour
     // instead of taking the whole prompt down: a half-written formula must
-    // not blank the question a student is reading.
+    // not blank the question a student is reading. The limits keep a
+    // formula's size and macro expansion bounded (audit L15, `KATEX_LIMITS`).
     host.innerHTML = katex.renderToString(tex, {
       displayMode: display,
       throwOnError: false,
       output: "htmlAndMathml",
+      ...KATEX_LIMITS,
     });
     frag.append(host);
     last = match.index + match[0].length;
@@ -363,6 +366,25 @@ function placeHoles(root: HTMLElement, holes: EncodedHoles) {
   }
 }
 
+/**
+ * Where a link goes, decided on the URL the browser will follow and never on
+ * the text of the href (audit L16): `//evil.example` and `/\evil.example` (a
+ * backslash is a slash to a URL parser) start like a path and lead to
+ * another host. The href is resolved against the page: `internal` when it
+ * stays on the app's origin or is a `mailto:` (it opens no tab), `external`
+ * when it leaves the origin, `dead` when nothing can follow it.
+ */
+function linkKind(href: string): "internal" | "external" | "dead" {
+  if (href === "") return "dead";
+  let url: URL;
+  try {
+    url = new URL(href, globalThis.location.href);
+  } catch {
+    return "dead";
+  }
+  return url.protocol === "mailto:" || url.origin === globalThis.location.origin ? "internal" : "external";
+}
+
 /** Walks the sanitised tree and applies steps 3 and 4 above. */
 function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHoles | null) {
   const doc = root.ownerDocument;
@@ -395,16 +417,17 @@ function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHo
   }
 
   // A link out of the app opens in its own tab and carries no referrer. A
-  // relative one (an asset, another page) keeps the current tab. An <a> whose
-  // href the allow-list refused (a `javascript:` URL) becomes plain text:
-  // leaving it underlined and red would promise a link that does nothing.
+  // link to the app itself (an asset, another page) keeps the current tab.
+  // An <a> whose href the allow-list refused (a `javascript:` URL), or that
+  // no URL parser reads, becomes plain text: leaving it underlined and red
+  // would promise a link that does nothing.
   for (const a of Array.from(root.querySelectorAll("a"))) {
-    const href = a.getAttribute("href") ?? "";
-    if (href === "") {
+    const kind = linkKind(a.getAttribute("href") ?? "");
+    if (kind === "dead") {
       a.replaceWith(...Array.from(a.childNodes));
       continue;
     }
-    if (/^https?:/i.test(href)) {
+    if (kind === "external") {
       a.setAttribute("target", "_blank");
       a.setAttribute("rel", "noreferrer noopener");
     }
