@@ -7,10 +7,19 @@
  * taken, `422 concept_dropped` when, unqualified, it is the key of a tag the
  * admin dropped (`c01`, dropped as a chapter label, is one from the start).
  */
-import { ConceptCreate, type Concept, type ConceptExists, type ConceptRef, type TagDropReason } from "@quiz/contracts";
+import {
+  ConceptCreate,
+  ConceptPatch,
+  type AdminConcept,
+  type AdminConceptList,
+  type Concept,
+  type ConceptExists,
+  type ConceptRef,
+  type TagDropReason,
+} from "@quiz/contracts";
 import { conceptKey, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
 
-import { D, iso, MockPayload, on, refuse } from "./runtime";
+import { D, flags, H, iso, MockPayload, on, refuse, role } from "./runtime";
 
 let conceptSeq = 0;
 const concept = (
@@ -36,7 +45,17 @@ const concepts: Concept[] = [
   concept("proposed", ["Récursivité", "", "Fonction qui s'appelle elle-même."], [null]),
   concept("proposed", ["Héritage"], ["Inheritance"]),
   concept("validated", ["Allocation dynamique", "", "malloc, free et la durée de vie du tas."], ["Dynamic allocation"]),
+  concept("proposed", ["Fuite mémoire", "", "Mémoire allouée que plus aucun pointeur ne désigne."], [null]),
+  concept("proposed", [null], ["Hash table", "", "Keys mapped to buckets by a hash function."]),
+  concept("proposed", ["Complément à deux"], ["Two's complement"]),
 ];
+
+/** The questions each concept's links hold, beyond those the mock's own questions name (`seedConceptIds`). */
+const usage = new Map<string, number>();
+const use = (c: Concept | undefined, n: number) => c && usage.set(c.id, (usage.get(c.id) ?? 0) + n);
+for (const [label, n] of [["Héritage", 4], ["Complément à deux", 12], ["Fuite mémoire", 1]] as const) {
+  use(concepts.find((c) => c.labels.fr === label), n);
+}
 
 /** The English of the mock's seeded labels, so an English reader reads English. */
 const SEED_EN: Record<string, string> = {
@@ -70,9 +89,13 @@ export function seedConceptIds(labels: readonly string[]): string[] {
     const { label, qualifier } = splitQualifiedLabel(written) ?? { label: written, qualifier: "" };
     const key = qualifiedConceptKey(label, qualifier);
     const known = concepts.find((c) => c.labels.fr !== null && qualifiedConceptKey(c.labels.fr, c.qualifiers.fr) === key);
-    if (known) return known.id;
+    if (known) {
+      use(known, 1);
+      return known.id;
+    }
     const created = concept("validated", [label, qualifier], [SEED_EN[label] ?? label, qualifier]);
     concepts.push(created);
+    use(created, 1);
     return created.id;
   });
 }
@@ -104,6 +127,72 @@ export const unknownConceptIds = (ids: readonly string[]): string[] =>
 const DROPPED: { tag: string; reason: TagDropReason }[] = [
   { tag: "c01", reason: "organisational" },
 ];
+
+/**
+ * The admin's curation queue (ADR-081 fifth addendum): the vocabulary whole,
+ * proposed first, with the number of questions using each (a number only).
+ */
+on("GET", "/app/api/admin/concepts", (): AdminConceptList => {
+  const live = flags.empty ? [] : concepts.filter((c) => c.status !== "merged");
+  const sorted = [...live].sort(
+    (a, b) =>
+      Number(b.status === "proposed") - Number(a.status === "proposed") ||
+      (a.labels.fr ?? a.labels.en ?? "").localeCompare(b.labels.fr ?? b.labels.en ?? ""),
+  );
+  return {
+    concepts: sorted.map(
+      (c, i): AdminConcept => ({
+        ...c,
+        createdAt: iso(-(1 + (i % 9)) * D - H),
+        createdBy: null,
+        questionCount: usage.get(c.id) ?? 0,
+        deletable: (usage.get(c.id) ?? 0) === 0,
+        creator: c.status === "proposed" ? (i % 2 === 0 ? "Marie Dupont" : "Jean Martin") : null,
+      }),
+    ),
+  };
+});
+
+on("POST", "/app/api/admin/concepts/:id/validate", (m): Concept => {
+  const c = concepts.find((x) => x.id === m.groups!.id);
+  if (!c) throw refuse(404, "not_found", "No such concept");
+  for (const lang of ["fr", "en"] as const) {
+    if (c.labels[lang] === null) throw refuse(422, "concept_label_missing", "A validated concept has both labels", { lang });
+  }
+  c.status = "validated";
+  return c;
+});
+
+on("DELETE", "/app/api/admin/concepts/:id", (m) => {
+  const i = concepts.findIndex((x) => x.id === m.groups!.id);
+  if (i < 0) throw refuse(404, "not_found", "No such concept");
+  if ((usage.get(concepts[i]!.id) ?? 0) > 0) throw refuse(409, "concept_in_use", "A question refers to this concept");
+  concepts.splice(i, 1);
+  return undefined;
+});
+
+/** The admin edits any concept; a teacher only their own proposed ones, which the mock does not model. */
+on("PATCH", "/app/api/concepts/:id", (m, raw): Concept => {
+  const c = concepts.find((x) => x.id === m.groups!.id);
+  if (!c) throw refuse(404, "not_found", "No such concept");
+  if (role !== "admin") throw refuse(403, "concept_forbidden", "Only the admin edits this concept");
+  const body = ConceptPatch.safeParse(raw);
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  for (const lang of ["fr", "en"] as const) {
+    const p = body.data[lang];
+    if (!p) continue;
+    const label = p.label ?? c.labels[lang];
+    const qualifier = p.qualifier ?? c.qualifiers[lang];
+    if (label !== null) {
+      const holder = concepts.find((x) => x.id !== c.id && x.status !== "merged" && keyOf(x, lang) === qualifiedConceptKey(label, qualifier));
+      if (holder) throw new MockPayload(409, { error: "concept_exists", message: "A concept with this label already exists", concept: holder });
+    }
+    c.labels[lang] = label;
+    c.qualifiers[lang] = qualifier;
+    c.descriptions[lang] = p.description ?? c.descriptions[lang];
+  }
+  return c;
+});
 
 on("GET", "/app/api/concepts", () => ({ concepts: concepts.filter((c) => c.status !== "merged") }));
 

@@ -36,7 +36,13 @@ Where the platform has kiosk stations, the **People** tab also lists the school'
 
 Questions are classified by concepts (*Notions* in the French interface): one vocabulary for the whole platform, each concept with a label in French and in English. Teachers pick concepts in the question editor and may create a new one, which stays **Proposed** (see [Question pools](pools.md#the-properties-panel)).
 
-The administration has no screen for the vocabulary yet; a curation screen (validate, merge, aliases) is planned. The free tags that questions carried before concepts existed are gone, and so is the administration's former **Concepts** tab where they were sorted. A label the administrator dropped during that sorting (a chapter, a week, a kind of task, noise) still cannot be created again as a concept, by a teacher or by an assistant connected to the platform.
+The **Concepts** tab of the administration is the curation queue of that vocabulary. It lists every concept, those teachers proposed first, with the number of questions of the whole platform that use it (a number only: the pools and statements stay out of reach without Super Powers), who proposed it and when. Filter by **To validate** or **Validated**, or search a label in either language.
+
+- **Validate** accepts a proposed concept. It is disabled while the concept has no label in French or in English: the row says which one is missing. Open the concept with **Edit** to add it.
+- **Edit** opens the concept: label, qualifier (what tells *Address (memory)* from *Address (network)*) and description, in both languages. A label another concept already holds is refused.
+- **Delete concept**, in the same sheet, is possible only while nothing refers to the concept. Otherwise it stays disabled and says why: a question uses it, or a deleted question or a merged concept still points to it.
+
+Merging two concepts, aliases and the detection of probable duplicates come next. The free tags that questions carried before concepts existed are gone, and so is the administration's former **Concepts** tab where they were sorted. A label the administrator dropped during that sorting (a chapter, a week, a kind of task, noise) still cannot be created again as a concept, by a teacher or by an assistant connected to the platform.
 
 ## What an administrator sees elsewhere
 

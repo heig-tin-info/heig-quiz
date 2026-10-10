@@ -26,6 +26,7 @@
  */
 import {
   ActivityStats,
+  AdminConceptList,
   ChangelogList,
   ActivitySummary,
   AdminScheduledTask,
@@ -473,6 +474,7 @@ const CHECKED: Case[] = [
   each("/app/api/admin/users", "/app/api/admin/users", AdminUser),
   each("/app/api/admin/tasks", "/app/api/admin/tasks", AdminScheduledTask),
   one("/app/api/concepts", "/app/api/concepts", ConceptList),
+  one("/app/api/admin/concepts", "/app/api/admin/concepts", AdminConceptList),
   each("/app/api/admin/kiosk-devices", "/app/api/admin/kiosk-devices", KioskDevice),
   one("/app/api/kiosk/station", "/app/api/kiosk/station", KioskStation),
   one("/app/api/pair/:code", "/app/api/pair/BCDF-GHJK", PairPreview),
@@ -1037,5 +1039,42 @@ describe("the mock's concept creation (ADR-081, third addendum §5)", () => {
 
   it("answers an invalid body with 400 validation", async () => {
     expect((await post({ lang: "fr", label: "--" })).status).toBe(400);
+  });
+});
+
+describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
+  const call = async (method: string, path: string, body?: unknown) => {
+    const res = await fetch(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const text = await res.text();
+    return { status: res.status, body: text === "" ? null : (JSON.parse(text) as Record<string, unknown>) };
+  };
+  const queue = async () => {
+    const res = await call("GET", "/app/api/admin/concepts");
+    expect(issuesOf(AdminConceptList, res.body)).toEqual([]);
+    return res.body as unknown as AdminConceptList;
+  };
+
+  it("lists the proposed concepts first, with their usage", async () => {
+    const all = await queue();
+    expect(all.concepts[0]?.status).toBe("proposed");
+    expect(all.concepts.some((c) => c.questionCount > 0)).toBe(true);
+  });
+
+  it("refuses to validate a concept missing a language, and to delete a used one", async () => {
+    const all = await queue();
+    const missing = all.concepts.find((c) => c.labels.en === null)!;
+    const refused = await call("POST", `/app/api/admin/concepts/${missing.id}/validate`);
+    expect(refused).toMatchObject({ status: 422, body: { error: "concept_label_missing" } });
+    const used = all.concepts.find((c) => !c.deletable)!;
+    expect((await call("DELETE", `/app/api/admin/concepts/${used.id}`)).status).toBe(409);
+  });
+
+  it("validates a complete concept and deletes an unused one", async () => {
+    const all = await queue();
+    const ready = all.concepts.find((c) => c.status === "proposed" && c.labels.fr !== null && c.labels.en !== null)!;
+    expect((await call("POST", `/app/api/admin/concepts/${ready.id}/validate`)).status).toBe(200);
+    const unused = (await queue()).concepts.find((c) => c.deletable)!;
+    expect((await call("DELETE", `/app/api/admin/concepts/${unused.id}`)).status).toBe(204);
+    expect((await queue()).concepts.map((c) => c.id)).not.toContain(unused.id);
   });
 });

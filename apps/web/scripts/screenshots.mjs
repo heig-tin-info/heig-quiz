@@ -1555,6 +1555,13 @@ const scenes = [
   { name: "admin-llm", role: "admin", path: "/admin?tab=llm&empty=0" },
   { name: "admin-llm-empty", role: "admin", path: "/admin?tab=llm&empty=1" },
   { name: "admin-llm-error", role: "admin", path: "/admin?tab=llm&fail=1", settle: 2500 },
+  // ADR-081, fifth addendum: the concept curation queue, a sheet on an unused concept and on a used one (Delete disabled).
+  { name: "admin-concepts", role: "admin", path: "/admin?tab=concepts" },
+  { name: "admin-concepts-sheet", role: "admin", path: "/admin?tab=concepts", fold: true, act: (p) => p.getByRole("button", { name: /^edit récursivité/i }).click() },
+  { name: "admin-concepts-sheet-used", role: "admin", path: "/admin?tab=concepts", fold: true, act: (p) => p.getByRole("button", { name: /^edit two's complement/i }).click() },
+  { name: "admin-concepts-empty", role: "admin", path: "/admin?tab=concepts&empty=1" },
+  { name: "admin-concepts-error", role: "admin", path: "/admin?tab=concepts&fail=1", settle: 2500 },
+  { name: "admin-concepts-loading", role: "admin", path: "/admin?tab=concepts&slow=1", settle: 300 },
   { name: "admin-system", role: "admin", path: "/admin?tab=system&degraded=0" },
   { name: "admin-system-degraded", role: "admin", path: "/admin?tab=system&degraded=1" },
   { name: "admin-system-error", role: "admin", path: "/admin?tab=system&fail=1", settle: 2500 },

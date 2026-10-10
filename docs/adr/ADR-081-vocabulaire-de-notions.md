@@ -11,7 +11,9 @@ product owner before step 3 of #599, and by the
 (sorting the existing tags) and the
 [third addendum](#third-addendum-2026-10-08-the-cut-over) (the cut-over) and
 the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
-(the tag sorting retired, step (d)). The work is tracked by #599, under a parent issue that groups #557
+(the tag sorting retired, step (d)) and the
+[fifth addendum](#fifth-addendum-2026-10-10-the-curation-of-the-vocabulary)
+(curation, step 5: its queue is implemented, merge and aliases are not). The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
@@ -397,3 +399,33 @@ addendum §1(d), second addendum §1 to §5 and third addendum §3 where named.
    concept still linked to questions is first unlinked by the PO's reviewed
    one-off SQL. Merging waits for the curation screen (step 5 of the
    transition), and no migration deletes data of concepts.
+
+## Fifth addendum 2026-10-10: the curation of the vocabulary
+
+Settled with the product owner (comment of 2026-10-10 on #599, step 5) after
+a review of the spec. It adds to §7 and §11, third addendum §7 and fourth
+addendum §4 where named. Delivery: the queue (list, validate, edit, delete)
+is the first pull request; merge, aliases and probable duplicates follow.
+
+1. **The admin's queue.** `GET /admin/concepts` lists the concepts that are
+   not merged, `proposed` first, with the instance-wide number of **live**
+   questions using each (a deleted question is not counted, though its link
+   still refuses a deletion: the route also says whether the concept is
+   deletable). An admin without Super Powers reads this number; pool names and
+   statements are not in the payload and need Super Powers
+   ([ADR-054](ADR-054-super-powers-admin.md), amended).
+2. **Merge only into a validated target**, which keeps its labels. The links
+   are rewritten in one audited transaction: duplicate links collapse,
+   earlier `merged_into` chains are re-pointed, soft-deleted questions are
+   included, and `copyQuestionConcepts` is locked against the merge. The audit
+   keeps the moved question ids. There is no undo button.
+3. **Aliases** have no language. An alias whose key equals another live
+   concept's label is refused unless the admin confirms explicitly.
+4. **Probable duplicates** are proposed from labels and qualifiers only, when
+   the admin asks, on the daily cap of the LLM gateway, as an ephemeral result
+   never written automatically, after a deterministic pre-pass; a new row of
+   [open question 43](../spec/06-questions-ouvertes.md) records the data sent.
+5. **Out of step 5.** Relations (broader, related, cycle check) move to
+   step 7, the course concepts. There is no split of a polysemous concept and
+   no "reject" action in v1: an unwanted proposal is deleted when unused, or
+   merged.

@@ -59,6 +59,25 @@ export type ConceptRef = z.infer<typeof ConceptRef>;
 export const ConceptList = z.object({ concepts: z.array(Concept) });
 export type ConceptList = z.infer<typeof ConceptList>;
 
+/**
+ * A concept as the curation queue shows it. `questionCount` is the number of
+ * live (not deleted) questions of the whole instance that use it: a number
+ * only, never a pool name or a statement (ADR-054 amended). `deletable` is
+ * the database's answer to `DELETE`: no question link at all (a deleted
+ * question keeps its link) and no concept merged into it.
+ */
+export const AdminConcept = Concept.extend({
+  questionCount: z.number().int().min(0),
+  deletable: z.boolean(),
+  /** The proposer's name, or null once their account is gone. */
+  creator: z.string().nullable(),
+});
+export type AdminConcept = z.infer<typeof AdminConcept>;
+
+/** `GET /admin/concepts` (ADR-081 fifth addendum): the vocabulary whole, `proposed` first, as `GET /concepts` is. */
+export const AdminConceptList = z.object({ concepts: z.array(AdminConcept) });
+export type AdminConceptList = z.infer<typeof AdminConceptList>;
+
 /** A label must hold a letter or a digit, so that its key is never empty. */
 const ConceptLabel = z
   .string()
