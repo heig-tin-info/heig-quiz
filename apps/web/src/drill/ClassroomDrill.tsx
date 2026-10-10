@@ -18,6 +18,7 @@ import { useI18n, useT } from "../i18n";
 import {
   Button,
   Card,
+  Disclosure,
   EmptyState,
   isoDateParts,
   percent,
@@ -108,13 +109,15 @@ export function ClassroomDrill({
 }
 
 /**
- * Mastery per concept: one bar per concept, the mean retrievability of the
- * classroom's reviewed cards, labelled in the reader's language (ADR-081
- * third addendum §8); the questions without a concept in a bar of their own.
+ * Mastery on the course's concepts (#599 step 9a): one line per concept the
+ * course lists, the reviewed cards counted toward it (a card counts on every
+ * listed concept that covers one of its own), a line without evidence apart
+ * from a low mastery, and what the list does not cover in a folded bucket.
+ * A course listing no concept gets the flat per-concept view and the hint to
+ * declare them (ADR-081 sixth addendum).
  */
 function MasteryPerConcept({ classroomId }: { classroomId: string }) {
   const t = useT();
-  const { locale } = useI18n();
   const mastery = useClassroomDrillMastery(classroomId);
   if (mastery.isLoading) return <Skeleton className="h-40 w-full" />;
   if (mastery.isError || !mastery.data) {
@@ -122,29 +125,63 @@ function MasteryPerConcept({ classroomId }: { classroomId: string }) {
       <QueryError title={t("drill.mastery.loadFailed")} query={mastery} />
     );
   }
-  // Nothing reviewed yet: the activity above already says so.
-  if (mastery.data.length === 0) return null;
+  const { declared, concepts, outside } = mastery.data;
+  // Nothing reviewed and nothing declared: the activity above already says so.
+  if (concepts.length === 0 && !declared) return null;
   return (
     <section className="space-y-3">
-      <SectionHeading icon={Tag} title={t("drill.mastery.title")} description={t("drill.mastery.desc")} />
+      <SectionHeading
+        icon={Tag}
+        title={declared ? t("drill.mastery.course.title") : t("drill.mastery.title")}
+        description={declared ? t("drill.mastery.course.desc") : t("drill.mastery.desc")}
+      />
+      {declared ? null : <p className="px-1 text-xs text-fg-faint">{t("drill.mastery.declareHint")}</p>}
       <Card className="divide-y divide-line">
-        {mastery.data.map((m: DrillConceptMastery) => (
-          <div key={m.concept?.id ?? ""} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
-            <div className="min-w-0">
-              <p className={m.concept === null ? "truncate text-sm italic text-fg-muted" : "truncate text-sm font-semibold"}>
-                {m.concept === null ? t("drill.mastery.noConcept") : refName(m.concept)}
-              </p>
-              <p className="text-xs text-fg-faint">{t("drill.mastery.counts", { cards: m.cards, students: m.students })}</p>
-            </div>
-            {/* A share with no verdict (`info`): the figure beside it is the reading. */}
-            <div className="order-last col-span-2 sm:order-none sm:col-span-1">
-              <SegmentedBar parts={[{ tone: "info", value: m.retrievability }]} total={1} />
-            </div>
-            <p className="text-right text-sm font-semibold tabular-nums">{percent(m.retrievability, locale)}</p>
-          </div>
+        {concepts.map((m) => (
+          <MasteryRow key={m.concept?.id ?? ""} m={m} />
         ))}
       </Card>
+      {outside ? (
+        <Disclosure
+          title={t("drill.mastery.outside")}
+          desc={t("drill.mastery.outside.desc")}
+          aside={<span className="text-xs font-normal text-fg-faint">{t("drill.mastery.outside.count", { cards: outside.cards })}</span>}
+        >
+          {outside.concepts.map((m) => (
+            <MasteryRow key={m.concept?.id ?? ""} m={m} />
+          ))}
+        </Disclosure>
+      ) : null}
     </section>
+  );
+}
+
+/** One concept: its name and counts, its bar and figure — or, without a card, a plain "no evidence". */
+function MasteryRow({ m }: { m: DrillConceptMastery }) {
+  const t = useT();
+  const { locale } = useI18n();
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
+      <div className="min-w-0">
+        <p className={m.concept === null ? "truncate text-sm italic text-fg-muted" : "truncate text-sm font-semibold"}>
+          {m.concept === null ? t("drill.mastery.noConcept") : refName(m.concept)}
+        </p>
+        {m.retrievability === null ? null : (
+          <p className="text-xs text-fg-faint">{t("drill.mastery.counts", { cards: m.cards, students: m.students })}</p>
+        )}
+      </div>
+      {m.retrievability === null ? (
+        <p className="col-span-1 text-right text-xs italic text-fg-faint sm:col-span-2">{t("drill.mastery.noEvidence")}</p>
+      ) : (
+        <>
+          {/* A share with no verdict (`info`): the figure beside it is the reading. */}
+          <div className="order-last col-span-2 sm:order-none sm:col-span-1">
+            <SegmentedBar parts={[{ tone: "info", value: m.retrievability }]} total={1} />
+          </div>
+          <p className="text-right text-sm font-semibold tabular-nums">{percent(m.retrievability, locale)}</p>
+        </>
+      )}
+    </div>
   );
 }
 

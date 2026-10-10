@@ -55,6 +55,7 @@ export * from "./deadline.js";
 export * from "./drillCalibration.js";
 export * from "./drillConfidence.js";
 export * from "./drillEligibility.js";
+export * from "./drillMastery.js";
 export * from "./drillProgress.js";
 export * from "./drillRating.js";
 export * from "./drillSession.js";

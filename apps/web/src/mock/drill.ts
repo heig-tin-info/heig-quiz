@@ -27,7 +27,7 @@ import type {
   DrillServed,
   DrillSession,
   DrillStudentActivity,
-  DrillConceptMastery,
+  DrillClassroomMastery,
   DrillWeek,
   EvaluationDrill,
 } from "@quiz/contracts";
@@ -338,22 +338,35 @@ on("GET", "/app/api/classrooms/:id/drill/progress", (m, _body, url): DrillProgre
 });
 
 /** The concepts of the C course, and the questions without one; weakest first. */
-const MASTERY_IDS = seedConceptIds(["Pointeur", "Allocation dynamique", "Tableau", "Boucle", "Types"]);
-/** Labelled when asked, in the reader's language, as the server labels them. */
-const mastery = (): DrillConceptMastery[] => {
-  const [pointer, allocation, array, loop, types] = conceptRefs(MASTERY_IDS);
-  return [
-    { concept: pointer!, cards: 40, students: 18, retrievability: 0.58 },
-    { concept: allocation!, cards: 57, students: 17, retrievability: 0.66 },
-    { concept: array!, cards: 74, students: 16, retrievability: 0.74 },
-    { concept: null, cards: 25, students: 13, retrievability: 0.79 },
-    { concept: loop!, cards: 91, students: 15, retrievability: 0.83 },
-    { concept: types!, cards: 108, students: 14, retrievability: 0.88 },
-  ];
+const MASTERY_IDS = seedConceptIds(["Pointeur", "Allocation dynamique", "Tableau", "Boucle", "Types", "Récursivité"]);
+/**
+ * The course lists five concepts, one of them (recursion) exercised by
+ * nothing yet; a sixth thing practised, a question without a concept, falls
+ * outside the list. Labelled when asked, in the reader's language.
+ */
+const mastery = (): DrillClassroomMastery => {
+  const [pointer, allocation, array, loop, types, recursion] = conceptRefs(MASTERY_IDS);
+  return {
+    declared: true,
+    concepts: [
+      { concept: pointer!, cards: 40, students: 18, retrievability: 0.58 },
+      { concept: allocation!, cards: 57, students: 17, retrievability: 0.66 },
+      { concept: array!, cards: 74, students: 16, retrievability: 0.74 },
+      { concept: loop!, cards: 91, students: 15, retrievability: 0.83 },
+      { concept: types!, cards: 108, students: 14, retrievability: 0.88 },
+      { concept: recursion!, cards: 0, students: 0, retrievability: null },
+    ],
+    outside: {
+      cards: 25,
+      students: 13,
+      retrievability: 0.79,
+      concepts: [{ concept: null, cards: 25, students: 13, retrievability: 0.79 }],
+    },
+  };
 };
 
-on("GET", "/app/api/classrooms/:id/drill/mastery", (m): DrillConceptMastery[] =>
-  hasHistory(roomOr404(m.groups!.id!).id) ? mastery() : [],
+on("GET", "/app/api/classrooms/:id/drill/mastery", (m): DrillClassroomMastery =>
+  hasHistory(roomOr404(m.groups!.id!).id) ? mastery() : { declared: false, concepts: [], outside: null },
 );
 
 /**

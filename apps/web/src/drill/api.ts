@@ -25,7 +25,7 @@ import {
   type DrillServed,
   type DrillSession,
   type DrillStudentActivity,
-  type DrillConceptMastery,
+  type DrillClassroomMastery,
   type EvaluationDrill,
   ANSWER_COORDINATES,
 } from "@quiz/contracts";
@@ -187,7 +187,7 @@ export function useDrillProgress(classroomId: string, student: string) {
 export function useClassroomDrillMastery(classroomId: string) {
   return useQuery({
     queryKey: classroomDrillKey(classroomId, "mastery"),
-    queryFn: () => api<DrillConceptMastery[]>(`/app/api/classrooms/${classroomId}/drill/mastery`),
+    queryFn: () => api<DrillClassroomMastery>(`/app/api/classrooms/${classroomId}/drill/mastery`),
   });
 }
 

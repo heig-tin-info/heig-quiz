@@ -178,35 +178,11 @@ function servableToday(card: CardRow, day: Day, introduced: number): boolean {
   return card.dueAt < day.end;
 }
 
-/**
- * What serving a set of cards needs, loaded in three queries whatever their
- * number: the question versions as they stand now, the evaluations the cards
- * were met in, and the student's latest attempt of each.
- */
-async function loadContext(db: DbOrTx, userId: string, rows: readonly ActiveRow[]) {
-  const evaluationIds = [...new Set(rows.map((r) => r.card.evaluationId))];
-  if (evaluationIds.length === 0) {
-    return { versions: new Map(), evaluations: new Map(), latest: new Map() } as const;
-  }
-  const [versions, found, latest] = await Promise.all([
-    currentVersions(db, [...new Set(rows.map((r) => r.card.questionId))]),
-    db.select().from(evaluations).where(inArray(evaluations.id, evaluationIds)),
-    db
-      .selectDistinctOn([attempts.evaluationId], { evaluationId: attempts.evaluationId, state: attempts.state })
-      .from(attempts)
-      .where(and(inArray(attempts.evaluationId, evaluationIds), eq(attempts.userId, userId)))
-      .orderBy(attempts.evaluationId, desc(attempts.attemptNumber)),
-  ]);
-  return {
-    versions,
-    evaluations: new Map(found.map((e) => [e.id, e])),
-    latest: new Map(latest.map((a) => [a.evaluationId, a.state])),
-  };
-}
-type Context = Awaited<ReturnType<typeof loadContext>>;
+/** A card, as far as its key's release is concerned: where it was met and whose it is. */
+type KeyedCard = { evaluationId: string; userId: string };
 
 /**
- * Whether the card's evaluation lets its key reach this student now (ADR-041
+ * Whether the card's evaluation lets its key reach its student now (ADR-041
  * §13) — a review always ends on the key:
  *   - an exam's, once its results are released: a withdrawn release
  *     suspends its cards until the next one;
@@ -224,6 +200,62 @@ function keyReleased(evaluation: EvaluationRecord, latestAttemptState: string | 
 }
 
 /**
+ * The evaluations the cards were met in and the latest attempt of each
+ * student, two queries whatever the number of cards, and from them whether a
+ * card's key is released ({@link keyReleased}); false when its evaluation is
+ * gone.
+ */
+async function loadKeys(db: DbOrTx, cards: readonly KeyedCard[]) {
+  const evaluationIds = [...new Set(cards.map((c) => c.evaluationId))];
+  const userIds = [...new Set(cards.map((c) => c.userId))];
+  if (evaluationIds.length === 0) return { evaluations: new Map<string, EvaluationRecord>(), open: () => false };
+  const [found, latest] = await Promise.all([
+    db.select().from(evaluations).where(inArray(evaluations.id, evaluationIds)),
+    db
+      .selectDistinctOn([attempts.evaluationId, attempts.userId], {
+        evaluationId: attempts.evaluationId,
+        userId: attempts.userId,
+        state: attempts.state,
+      })
+      .from(attempts)
+      .where(and(inArray(attempts.evaluationId, evaluationIds), inArray(attempts.userId, userIds)))
+      .orderBy(attempts.evaluationId, attempts.userId, desc(attempts.attemptNumber)),
+  ]);
+  const byEvaluation = new Map(found.map((e) => [e.id, e]));
+  const state = new Map(latest.map((a) => [`${a.evaluationId}:${a.userId}`, a.state]));
+  return {
+    evaluations: byEvaluation,
+    open: (card: KeyedCard) => {
+      const evaluation = byEvaluation.get(card.evaluationId);
+      return evaluation !== undefined && keyReleased(evaluation, state.get(`${card.evaluationId}:${card.userId}`));
+    },
+  };
+}
+
+/**
+ * The one place that says whether cards may show their key now: the drill
+ * serves only those (a suspended card is not served), and the teacher's
+ * mastery counts only those, so the two agree (ADR-081 sixth addendum §9).
+ */
+export async function keyOpen(db: DbOrTx, cards: readonly KeyedCard[]): Promise<(card: KeyedCard) => boolean> {
+  return (await loadKeys(db, cards)).open;
+}
+
+/**
+ * What serving a set of cards needs, loaded in a bounded number of queries
+ * whatever their number: the question versions as they stand now, and the
+ * evaluations and keys ({@link loadKeys}).
+ */
+async function loadContext(db: DbOrTx, rows: readonly ActiveRow[]) {
+  const [versions, keys] = await Promise.all([
+    rows.length === 0 ? new Map() : currentVersions(db, [...new Set(rows.map((r) => r.card.questionId))]),
+    loadKeys(db, rows.map((r) => r.card)),
+  ]);
+  return { versions, ...keys };
+}
+type Context = Awaited<ReturnType<typeof loadContext>>;
+
+/**
  * The question of a card as it stands now, the settings of the evaluation
  * where it was met first (06, question 28 (e)), and whether the card may be
  * served ({@link keyReleased}). Whether the question can be drilled at all
@@ -237,7 +269,7 @@ function questionOf(row: ActiveRow, context: Context) {
   return {
     version,
     defaults: gradeDefaults(evaluation),
-    open: keyReleased(evaluation, context.latest.get(evaluation.id)),
+    open: context.open(row.card),
   };
 }
 
@@ -280,7 +312,7 @@ async function servable(db: DbOrTx, userId: string, cardId: string, now: Date) {
   const row = await ownActiveCard(db, userId, cardId);
   const day = drillDayBounds(now);
   if (!servableToday(row.card, day, await introducedToday(db, userId, day))) throw new DrillError("not_found");
-  const question = questionOf(row, await loadContext(db, userId, [row]));
+  const question = questionOf(row, await loadContext(db, [row]));
   if (!question?.open) throw new DrillError("not_found");
   return { row, question };
 }
@@ -357,7 +389,7 @@ export async function drillSession(
 ): Promise<DrillSession> {
   const day = drillDayBounds(now);
   const active = await activeCards(db, eq(drillCards.userId, userId));
-  const context = await loadContext(db, userId, active);
+  const context = await loadContext(db, active);
   const rows = active.filter((row) => questionOf(row, context)?.open === true);
   const questionIds = [...new Set(rows.map((r) => r.card.questionId))];
   const introduced = await introducedToday(db, userId, day);

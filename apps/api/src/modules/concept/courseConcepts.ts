@@ -34,11 +34,21 @@ export async function courseConceptsOf(db: Db | Tx, courseId: string, lang: Conc
 }
 
 /**
+ * COVERAGE, in one place: for each of the given concepts, the concepts it
+ * covers, itself included (ADR-081 §4: a selected concept covers its narrower
+ * ones). Today a concept covers only itself. Step 7d widens THIS function
+ * alone, once relations exist: every reader of coverage (a course's filter,
+ * the picker's ranking, the teacher's mastery per course concept, the
+ * student's later) goes through it and follows without a change.
+ */
+export async function coverage(_db: Db | Tx, conceptIds: readonly string[]): Promise<Map<string, string[]>> {
+  return new Map([...new Set(conceptIds)].map((id) => [id, [id]]));
+}
+
+/**
  * The concept ids the given courses COVER together: what a filter by a
- * course matches and what the picker ranks first (#599 step 7b). Today a
- * concept covers only itself, so this is the union of the courses' own lists;
- * narrower concepts will widen it here (7d), and every reader takes it from
- * this one place.
+ * course matches and what the picker ranks first (#599 step 7b), the union of
+ * {@link coverage} over the courses' own lists.
  */
 export async function conceptsCoveredByCourse(db: Db | Tx, courseIds: readonly string[]): Promise<string[]> {
   if (courseIds.length === 0) return [];
@@ -46,7 +56,11 @@ export async function conceptsCoveredByCourse(db: Db | Tx, courseIds: readonly s
     .selectDistinct({ id: courseConcepts.conceptId })
     .from(courseConcepts)
     .where(inArray(courseConcepts.courseId, [...courseIds]));
-  return rows.map((r) => r.id);
+  const covered = await coverage(
+    db,
+    rows.map((r) => r.id),
+  );
+  return [...new Set([...covered.values()].flat())];
 }
 
 /**
