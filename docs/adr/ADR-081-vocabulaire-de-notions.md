@@ -580,7 +580,7 @@ decided plan, not yet built; §8 describes 7b as built.
    (`PoolMembers.courses`): the screen offers its own list,
    `PoolDetail.filterCourses` (`id`, `name`, `code`: the linked courses the
    caller staffs, computed server-side by `filterCoursesOf`), and
-   `PoolDetail.courseConceptIds`, the concepts those courses cover together.
+   `PoolDetail.courseConceptIds`, the concepts those courses cover together (one query, `conceptsCoveredByCourse(db, courseIds)`, the function 7d widens).
    The poll launcher's search across pools has no such filter
    (`PollPoolSearch` omits it). **Web:** a "Course" ("Cours") block in the
    filters sheet (one course at a time, shown only when the pool has one on
@@ -588,5 +588,5 @@ decided plan, not yet built; §8 describes 7b as built.
    (the last one wins; a word naming no course on offer is a dashed chip
    that filters nothing, as for a concept). The MCP `list_questions` takes
    `courseId` under the same rule. **Picker (§5):** the question editor's
-   `ConceptPicker` ranks the concepts of those courses first, beside the
-   pool's own (`first` set).
+   `ConceptPicker` and the bulk bar's rank the concepts of those courses
+   first, beside the pool's own (`first` set), so a pool ranks concepts one way.

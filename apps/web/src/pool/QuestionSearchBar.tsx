@@ -1,7 +1,7 @@
 import { SlidersHorizontal } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 
-import type { ConceptRef } from "@quiz/contracts";
+import type { ConceptRef, PoolFilterCourse } from "@quiz/contracts";
 
 import { conceptName, refName } from "../concepts/names";
 import { useConcepts } from "../concepts/useConcepts";
@@ -26,17 +26,16 @@ import {
   NO_FILTERS,
   resolveFilters,
   toggle,
-  type FilterCourse,
   type QuestionFilters,
   type Vocabulary,
 } from "./filters";
 import {
   applyCompletion,
   completionAt,
+  SEARCH_TOKEN_KINDS,
   SEARCH_TYPE_IDS,
   withoutToken,
   type Completion,
-  type SearchTokenKind,
 } from "./searchSyntax";
 import { StatsFilterFields, type StatsOffer } from "./StatsFilterFields";
 
@@ -312,7 +311,7 @@ export function QuestionSearchBar({
    * pool and staffed by the caller). Absent, the bar has no Course filter
    * and `course:` names nothing.
    */
-  courses?: readonly FilterCourse[];
+  courses?: readonly PoolFilterCourse[];
   /** The question types the sheet and the `type:` completion offer. */
   types?: readonly string[];
   /** Whether the sheet offers the soft-deleted questions (F-QST-11). */
@@ -333,6 +332,8 @@ export function QuestionSearchBar({
   const [focused, setFocused] = useState(false);
   const typing =
     focused && completionAt(filters.q, filters.q.length)?.kind === "concept" ? resolved.words.at(-1)?.word : undefined;
+  /** A `course:` word still being typed is not judged either. */
+  const typingCourse = focused && /(?:^|\s)course:[^\s"]*$/i.test(filters.q);
   /** A ticked concept's name: the scope's, else the vocabulary's; it may have left both. */
   const nameOf = (id: string) => {
     const own = concepts.find((c) => c.id === id);
@@ -432,7 +433,7 @@ export function QuestionSearchBar({
               onRemove={dropCourse}
             />
           ) : null}
-          {resolved.courseMiss !== null ? (
+          {resolved.courseMiss !== null && !typingCourse ? (
             <Chip
               remove={t("pool.filter.clear")}
               label={`course:${resolved.courseMiss}`}
@@ -507,10 +508,7 @@ export function QuestionSearchBar({
                   onChange({
                     ...filters,
                     ...NO_FILTERS,
-                    q: ["concept", "type", "difficulty", "version", "course"].reduce(
-                      (q, kind) => withoutToken(q, kind as SearchTokenKind),
-                      filters.q,
-                    ),
+                    q: SEARCH_TOKEN_KINDS.reduce((q, kind) => withoutToken(q, kind), filters.q),
                   })
                 }
               >

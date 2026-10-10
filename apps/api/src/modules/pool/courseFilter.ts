@@ -39,11 +39,5 @@ export async function courseFilterConcepts(
 ): Promise<string[] | null> {
   const offered = await filterCoursesOf(db, poolId, caller);
   if (!offered.some((c) => c.id === courseId)) return null;
-  return conceptsCoveredByCourse(db, courseId);
-}
-
-/** The concepts the given courses cover together: what the concept picker ranks first for a question of the pool. */
-export async function conceptsCoveredBy(db: Db, courseIds: readonly string[]): Promise<string[]> {
-  const covered = await Promise.all(courseIds.map((id) => conceptsCoveredByCourse(db, id)));
-  return [...new Set(covered.flat())];
+  return conceptsCoveredByCourse(db, [courseId]);
 }

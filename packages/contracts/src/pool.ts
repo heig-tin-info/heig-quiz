@@ -184,7 +184,7 @@ export const PoolLinkedCourse = z.object({
 export type PoolLinkedCourse = z.infer<typeof PoolLinkedCourse>;
 
 /** A course the caller can filter this pool by: linked to it, and on the caller's staff. */
-export const PoolFilterCourse = z.object({ id: z.uuid(), name: z.string(), code: z.string() });
+export const PoolFilterCourse = PoolLinkedCourse.omit({ mode: true });
 export type PoolFilterCourse = z.infer<typeof PoolFilterCourse>;
 
 export const PoolMembers = z.object({

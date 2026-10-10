@@ -34,9 +34,9 @@ import {
   users,
 } from "../../db/schema.js";
 import { type PoolRow } from "./shared.js";
-import { poolConcepts } from "../concept/service.js";
+import { conceptsCoveredByCourse, poolConcepts } from "../concept/service.js";
 import { categoryTree } from "./categories.js";
-import { conceptsCoveredBy, filterCoursesOf } from "./courseFilter.js";
+import { filterCoursesOf } from "./courseFilter.js";
 
 export const questionCount = sql<number>`(SELECT count(*) FROM ${questions} WHERE ${qualified(questions.poolId)} = ${qualified(pools.id)} AND ${qualified(questions.deletedAt)} IS NULL)::int`;
 
@@ -378,13 +378,15 @@ export async function poolDetail(
   lang: ConceptLang,
   viewer: Pick<Caller, "id" | "reach">,
 ) {
-  const [tree, used, [summary], filterCourses] = await Promise.all([
+  const [tree, used, [summary], [filterCourses, courseConceptIds]] = await Promise.all([
     categoryTree(db, pool.id),
     poolConcepts(db, pool.id, lang),
     listPools(db, eq(pools.id, pool.id), viewer),
-    filterCoursesOf(db, pool.id, viewer),
+    // The courses the caller may filter by, and the concepts they cover (the pickers rank those first).
+    filterCoursesOf(db, pool.id, viewer).then(
+      async (courses) => [courses, await conceptsCoveredByCourse(db, courses.map((c) => c.id))] as const,
+    ),
   ]);
-  const courseConceptIds = await conceptsCoveredBy(db, filterCourses.map((c) => c.id));
   const subscription = summary?.subscription ?? "none";
   return {
     pool: poolJson(pool, summary?.visibility ?? "private"),
