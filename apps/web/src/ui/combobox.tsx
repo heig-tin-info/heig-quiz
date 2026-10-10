@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { cx, Z } from "./layers";
 import { listboxIndex } from "./menu";
@@ -98,6 +98,15 @@ export function useCombobox({
 
   useEffect(() => setHighlight(0), [query, wanted]);
 
+  // The blur's grace timer must not outlive the input: it would set state on
+  // an unmounted component, and in a test after the environment is gone.
+  const graceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearGrace = () => {
+    if (graceTimer.current !== null) clearTimeout(graceTimer.current);
+    graceTimer.current = null;
+  };
+  useEffect(() => clearGrace, []);
+
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       if (!open) return;
@@ -129,10 +138,18 @@ export function useCombobox({
       "aria-controls": completion && !open ? undefined : listId,
       "aria-activedescendant": open && count > 0 ? optionId(active) : undefined,
       "aria-autocomplete": "list",
-      onFocus: completion ? undefined : () => setWanted(true),
+      onFocus: completion
+        ? undefined
+        : () => {
+            clearGrace(); // a refocus inside the grace keeps the list open
+            setWanted(true);
+          },
       onBlur: completion
         ? () => setWanted(false)
-        : () => window.setTimeout(() => setWanted(false), BLUR_GRACE),
+        : () => {
+            clearGrace();
+            graceTimer.current = setTimeout(() => setWanted(false), BLUR_GRACE);
+          },
       onKeyDown,
     },
     listProps: { id: listId, role: "listbox" },

@@ -113,9 +113,30 @@ function foundBy(files: { path: string; src: string }[], find: (src: string) => 
 
 const NATIVE_TYPES = new Set(["checkbox", "radio", "file", "range", "hidden", "submit"]);
 
+/** The value of the `className` prop of an opening tag: a string, or the braces matched like `tagsOf` does. */
+function classNameOf(tag: string): string {
+  const m = /\bclassName=/.exec(tag);
+  if (!m) return "";
+  const start = m.index + m[0].length;
+  if (tag[start] === '"') return tag.slice(start + 1, tag.indexOf('"', start + 1));
+  if (tag[start] !== "{") return "";
+  let depth = 0;
+  let quote = "";
+  for (let i = start; i < tag.length; i++) {
+    const c = tag[i];
+    if (quote) {
+      if (c === quote) quote = "";
+    } else if (c === '"' || c === "'" || c === "`") quote = c;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return tag.slice(start + 1, i);
+  }
+  return tag.slice(start + 1);
+}
+
 /** Components whose height and radius come from the scale. */
 const SCALE_TAGS = "TextInput|Select|Field|SearchInput|NumberField|Button";
-const LITERAL_HEIGHT = /(?:^|[\s"'`{(])(?:h-(?:\d|\[|px|full|auto|screen|fit|min|max)|rounded-full)/;
+// `:` leads too, so a variant (`sm:h-8`, `hover:rounded-full`) is a violation as well.
+const LITERAL_HEIGHT = /(?:^|[\s"'`{(:])(?:h-(?:\d|\[|px|full|auto|screen|fit|min|max)|rounded-full)/;
 
 describe("control scale guard rail (ADR-094)", () => {
   const files = sourceFiles().map((path) => ({ path, src: blankComments(readFileSync(join(ROOT, path), "utf8")) }));
@@ -150,9 +171,13 @@ describe("control scale guard rail (ADR-094)", () => {
     // `@quiz/ui` has a Button (secondary by default) and a Select with other defaults than the app's.
     const bad = files.flatMap(({ path, src }) => {
       if (!path.startsWith("apps/web/src/") || path.startsWith("apps/web/src/ui/")) return [];
-      return [...src.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"@quiz\/ui"/g)]
-        .filter((m) => /\b(?:Button|Select|IconButton|TextInput)\b/.test((m[1] ?? "").replace(/\bButtonSize\b|\bButtonVariant\b/g, "")))
-        .map((m) => `${path}:${src.slice(0, m.index).split("\n").length}`);
+      const guarded = /\b(?:Button|Select|IconButton|TextInput)\b/;
+      // `import { … }` and `export { … } from`, then `import * as x` and `export *`: all reach the same names.
+      const named = [...src.matchAll(/\b(?:import|export)\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"@quiz\/ui"/g)].filter((m) =>
+        guarded.test((m[1] ?? "").replace(/\bButtonSize\b|\bButtonVariant\b/g, "")),
+      );
+      const whole = [...src.matchAll(/\b(?:import\s*\*\s*as\s+\w+|export\s*\*(?:\s*as\s+\w+)?)\s*from\s*"@quiz\/ui"/g)];
+      return [...named, ...whole].map((m) => `${path}:${src.slice(0, m.index).split("\n").length}`);
     });
     expect(bad).toEqual([]);
   });
@@ -163,9 +188,8 @@ describe("control scale guard rail (ADR-094)", () => {
       // The primitives define the scale; the gallery measures it.
       if (path === "packages/ui/src/styles.ts" || path.startsWith("apps/web/src/devgallery/") || path === "apps/web/src/DevGallery.tsx") continue;
       for (const { tag, line } of tagsOf(src, SCALE_TAGS)) {
-        const cls = /\bclassName=(?:"([^"]*)"|\{([\s\S]*)\})/.exec(tag);
-        const classes = cls?.[1] ?? cls?.[2] ?? "";
-        if (LITERAL_HEIGHT.test(classes) || (/^<TextInput\b/.test(tag) && /(?:^|[\s"'`{(])rounded-/.test(classes))) bad.push(`${path}:${line}`);
+        const classes = classNameOf(tag);
+        if (LITERAL_HEIGHT.test(classes) || (/^<TextInput\b/.test(tag) && /(?:^|[\s"'`{(:])rounded-/.test(classes))) bad.push(`${path}:${line}`);
       }
       src.split("\n").forEach((text, i) => {
         if (!/\binputClass\b/.test(text) || /^\s*(import|export|\{?\s*inputClass,?\s*\}?)/.test(text)) return;
