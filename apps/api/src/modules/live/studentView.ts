@@ -219,7 +219,8 @@ export function answerFromStudent(
   config: unknown,
   view: StudentView,
   raw: unknown,
-  coordinates: AnswerCoordinates | undefined,
+  /** The client's marker; absent, a converting type on a shuffled view is refused. */
+  coordinates?: AnswerCoordinates,
 ): AnswerEntry {
   const t = typeOf(type);
   const parsed = t.answerSchema.safeParse(raw);

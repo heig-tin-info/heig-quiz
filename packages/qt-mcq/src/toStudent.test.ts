@@ -124,19 +124,4 @@ describe("the answer in view coordinates", () => {
       expect(correct.map((position) => student.choices[position]!.text).sort()).toEqual(keyTexts.sort());
     }
   });
-
-  /*
-   * The grader truncates an answer longer than `maxSelections` to its LOWEST
-   * canonical indices, the teacher's first-typed choices: ticking every
-   * position would let it pick the key. Such an answer is refused instead.
-   */
-  it("refuses more ticks than maxSelections, whatever positions they are", () => {
-    const capped = McqConfigSchema.parse({ ...multiple, maxSelections: 3 });
-    for (const view of VIEWS) {
-      const every = mcqServer.fromStudentAnswer!(capped, view, { selected: [0, 1, 2, 3, 4] })!;
-      expect(every.selected).toEqual([0, 1, 2, 3, 4]);
-      expect(mcqServer.answerMisfit!(capped, every)).toBe("mcq.too_many_choices");
-      expect(mcqServer.answerMisfit!(capped, mcqServer.fromStudentAnswer!(capped, view, { selected: [4, 0] })!)).toBeNull();
-    }
-  });
 });

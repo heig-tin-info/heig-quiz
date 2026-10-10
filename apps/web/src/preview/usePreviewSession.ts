@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 
-import { PreviewRunBody, PreviewSimulateBody, type EvaluationPreview, ANSWER_COORDINATES } from "@quiz/contracts";
+import { PreviewRunBody, PreviewSimulateBody, type EvaluationPreview } from "@quiz/contracts";
 
 import { postRun, postSimulate, runBody } from "../attempt/run";
 import { emptyPlayerState, playerReducer } from "../attempt/playerReducer";
@@ -106,7 +106,7 @@ export function usePreviewSession({
   );
 
   const simulate = useCallback<PlayerSession["simulate"]>(
-    (itemId, answer) => postSimulate(`${base}/simulate`, PreviewSimulateBody.parse({ seed, itemId, answer, coordinates: ANSWER_COORDINATES })),
+    (itemId, answer) => postSimulate(`${base}/simulate`, PreviewSimulateBody.parse({ seed, itemId, answer })),
     [base, seed],
   );
 

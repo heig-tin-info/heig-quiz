@@ -525,6 +525,9 @@ export async function answerCard(
       // The student named displayed positions; stored and graded canonical.
       const entry = answerFromStudent(row.type, config, view, input.answer, input.coordinates);
       if ("issues" in entry) throw new DrillError("answer_invalid");
+      // The attempt's rules hold here too: an mcq ticked past `maxSelections`
+      // would be truncated to its lowest canonical indices, the key's (ADR-097).
+      if (type.answerMisfit?.(config, entry.answer)) throw new DrillError("answer_invalid");
       answer = entry.answer;
     }
     const references = await referenceTimes(tx, [card.questionId], input.deviceClass, userId);

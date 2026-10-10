@@ -119,10 +119,12 @@ import {
   attemptItemView,
   orderItems,
   purgeIntegrityJournal,
+  solutionView,
   studentSolutionViewOf,
+  studentView,
   studentViewOf,
 } from "../live/service.js";
-import { solutionView, stripKeys, studentView } from "../live/studentView.js";
+import { stripKeys } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
 import { exampleInstance, explanationOrNull, isParameterized } from "../pool/service.js";
 

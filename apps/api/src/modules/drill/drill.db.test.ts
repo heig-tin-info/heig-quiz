@@ -794,6 +794,19 @@ describe("the mcq of a review (06, question 28 (d), (h))", () => {
       app.clock.set((await db.select().from(drillCards).where(eq(drillCards.id, card!.id)))[0]!.dueAt);
     }
     expect(orders.size).toBeGreaterThan(1);
+
+    // The attempt's rules hold in the drill (ADR-097): every position at once
+    // would be truncated to the lowest canonical index, the key's. Refused.
+    await drill.serveCard(db, userId, card!.id, app.clock.now());
+    await expect(
+      drill.answerCard(
+        db,
+        userId,
+        card!.id,
+        { answer: { selected: [0, 1, 2, 3, 4, 5] }, deviceClass: "fine", coordinates: "position" },
+        app.clock.now(),
+      ),
+    ).rejects.toMatchObject({ code: "answer_invalid" });
   });
 });
 

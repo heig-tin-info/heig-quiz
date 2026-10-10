@@ -30,6 +30,7 @@ import { answerToStudent, attemptItemView, enterEvaluation } from "../modules/li
 import * as evaluationService from "../modules/evaluation/service.js";
 import { loadConfig, typeOf } from "../modules/pool/config.js";
 import * as poolService from "../modules/pool/service.js";
+import type { InstanceAttempt } from "../modules/pool/service.js";
 
 interface SeedOptions {
   teacherId?: string;
@@ -199,7 +200,7 @@ export async function shownAnswer(
   db: Db,
   evaluationId: string,
   itemId: string,
-  attempt: { seed: number; instances: Parameters<typeof attemptItemView>[2]["instances"] },
+  attempt: InstanceAttempt,
   canonical: unknown,
 ): Promise<unknown> {
   const evaluation = (await evaluationService.byId(db, evaluationId))!;

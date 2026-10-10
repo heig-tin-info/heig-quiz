@@ -187,7 +187,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           const entry =
             body.answer === undefined || body.answer === null
               ? { answer: null }
-              : answerFromStudent(scope.question.type, loaded.config, view, body.answer, body.coordinates);
+              : answerFromStudent(scope.question.type, loaded.config, view, body.answer);
           if ("issues" in entry) return reply.code(422).send({ error: "answer_invalid", details: entry.issues });
           const { answer } = entry;
           const base: FinalizeContext = {

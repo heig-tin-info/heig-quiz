@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { AnswerCoordinates, RunnerResultEvent } from "@quiz/contracts";
+import type { RunnerResultEvent } from "@quiz/contracts";
 import {
   RunnerBusy,
   RunnerUnavailable,
@@ -15,7 +15,6 @@ import {
   type RunnerRequest,
   type RunnerService,
 } from "@quiz/core/server";
-import { shuffle } from "@quiz/core/rng";
 import { compilesPerMinute } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
@@ -71,8 +70,6 @@ async function attemptRunContext<T>(
      */
     compileOnly?: boolean | undefined;
     answer: unknown;
-    /** ADR-097: the client's `AnswerCoordinates` marker; a `code` run has none and needs none. */
-    coordinates?: AnswerCoordinates | undefined;
   },
 ) {
   const { evaluation, attempt, itemId, now } = input;
@@ -107,8 +104,10 @@ async function attemptRunContext<T>(
   });
   if (used >= limit) throw new RateLimited(60);
 
-  // Run on the canonical answer, as the grading pass reads the stored one.
-  const entry = answerFromStudent(joined.question.type, config, view, input.answer, input.coordinates);
+  // Run on the canonical answer, as the grading pass reads the stored one. A
+  // runnable type never converts today, so no marker is sent; one that did
+  // on a shuffled view would be refused, never silently misread.
+  const entry = answerFromStudent(joined.question.type, config, view, input.answer);
   if ("issues" in entry) throw new AnswerInvalid(entry.issues);
   const ctx: FinalizeContext = {
     seed: attempt.seed,
@@ -244,7 +243,6 @@ interface SimulateInput {
   attempt: AttemptRecord;
   itemId: string;
   answer: unknown;
-  coordinates?: AnswerCoordinates | undefined;
   now: Date;
 }
 

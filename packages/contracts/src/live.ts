@@ -500,8 +500,6 @@ export type RunBody = z.infer<typeof RunBody>;
 export const SimulateBody = z.object({
   itemId: z.uuid(),
   answer: z.unknown(),
-  /** ADR-097: the choices of `answer` are displayed positions (`AnswerCoordinates`). */
-  coordinates: AnswerCoordinates.optional(),
 });
 export type SimulateBody = z.infer<typeof SimulateBody>;
 

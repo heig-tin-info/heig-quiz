@@ -11,7 +11,7 @@ import { z } from "zod";
 import { QUESTION_TYPE_IDS } from "@quiz/core/contract";
 import { CATALOGUE_QUERY_MAX, COURSE_POOL_MODES, POOL_DESCRIPTION_MAX, POOL_DESCRIPTION_SOURCES, POOL_ROLES, POOL_VISIBILITIES, SUBSCRIPTION_STATES } from "@quiz/domain";
 
-import { AnswerCoordinates, BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf, teacherChoiceWith } from "./common.js";
+import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf, teacherChoiceWith } from "./common.js";
 import { ConceptRef } from "./concept.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { QuestionReview, ReviewPill } from "./review.js";
@@ -715,8 +715,6 @@ export type DraftInstances = z.infer<typeof DraftInstances>;
 export const TryBody = z.object({
   source: VersionSource.default("draft"),
   answer: z.unknown(),
-  /** ADR-097: the choices of `answer` are displayed positions (`AnswerCoordinates`). */
-  coordinates: AnswerCoordinates.optional(),
 });
 export type TryBody = z.infer<typeof TryBody>;
 

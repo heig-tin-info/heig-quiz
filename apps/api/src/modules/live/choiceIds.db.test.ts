@@ -392,7 +392,7 @@ describe("the one view of an item (ADR-097)", () => {
     expect(live.attemptItemView({ ...exam, mode: "poll" }, entry, attempt).view.shuffle).toBe(false);
     const off = { ...exam, settings: { ...(exam.settings as object), shuffleChoices: false } };
     expect(live.attemptItemView(off, entry, attempt).view.shuffle).toBe(false);
-    // The live column a teacher may patch is not read on the student path.
+    // The live column is not read on the student path.
     expect(live.attemptItemView(exam, { ...entry, question: { ...entry.question, shuffleable: false } }, attempt).view.shuffle).toBe(
       true,
     );

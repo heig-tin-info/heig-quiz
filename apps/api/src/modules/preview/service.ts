@@ -45,7 +45,6 @@ import {
   type GradedResult,
   type RunnerOutcome,
   type RunnerService,
-  type StudentView,
 } from "@quiz/core/server";
 import {
   evaluationTotal,
@@ -70,7 +69,6 @@ import {
 } from "../evaluation/service.js";
 import { verdictOf } from "../grading/service.js";
 import * as live from "../live/service.js";
-import { studentSolutionView, studentView, teacherPreviewView } from "../live/studentView.js";
 import {
   runButton,
   runnableView,
@@ -191,7 +189,7 @@ export async function itemPreview(
     type: input.type,
     versionNumber: joined.version.number ?? 0,
     points: joined.item.points,
-    student: studentView(input),
+    student: live.studentView(input),
   };
 }
 
@@ -206,14 +204,14 @@ export async function itemSolution(
   itemId: string,
 ): Promise<PreviewSolution> {
   const { input, explanation } = await previewedItem(db, evaluation, itemId);
-  return { solution: studentSolutionView(input), explanation: explanationOrNull(explanation) };
+  return { solution: live.studentSolutionView(input), explanation: explanationOrNull(explanation) };
 }
 
 /** One item at its frozen version, in the teacher preview's view. */
 async function previewedItem(db: Db, evaluation: EvaluationRecord, itemId: string) {
   const joined = await joinedItem(db, evaluation.id, itemId);
   if (!joined) throw notFound();
-  const view = teacherPreviewView(joined.item.id);
+  const view = live.teacherPreviewView(joined.item.id);
   // A parameterized question shows the instance of the view's seed (ADR-056).
   const { version, explanation } = instanceOf(joined.question.type, joined.version, view);
   return {
@@ -324,8 +322,6 @@ export async function simulatePreview(
     seed: number;
     itemId: string;
     answer: unknown;
-    /** ADR-097: the client's `AnswerCoordinates` marker. */
-    coordinates?: AnswerCoordinates | undefined;
     now: Date;
   },
 ): Promise<RunnerOutcome> {
@@ -339,7 +335,7 @@ export async function simulatePreview(
     now,
   );
   // In the view the preview player showed, back to canonical (ADR-097).
-  const entry = live.answerFromStudent(joined.question.type, config, view, input.answer, input.coordinates);
+  const entry = live.answerFromStudent(joined.question.type, config, view, input.answer);
   if ("issues" in entry) throw new PreviewError("answer_invalid", 422, { details: entry.issues });
   const built = type.interactiveRequest(
     config,
@@ -375,10 +371,10 @@ async function gradeItem(
   item: JoinedItem,
   seed: number,
   /**
-   * The item as the preview player showed it (ADR-097): its instance's config,
-   * read by `previewView` already, and the view the answer names positions in.
+   * The item as the preview player showed it (`attemptItemView`, ADR-097):
+   * its instance's config, and the view the answer names positions in.
    */
-  shown: { config: unknown; view: StudentView },
+  shown: Pick<ReturnType<typeof live.attemptItemView>, "config" | "view">,
   coordinates: AnswerCoordinates | undefined,
   payload: unknown,
   now: Date,
@@ -476,13 +472,14 @@ export async function gradePreview(
     const payload = answers.has(shown.id) ? answers.get(shown.id) : undefined;
     // The instance and the view the player showed: the same seed draws the
     // same values (ADR-056 §5) and the same shuffle (ADR-097).
-    const { instance, config, view: shownView } = live.attemptItemView(evaluation, item, { seed, instances: {} });
+    const served = live.attemptItemView(evaluation, item, { seed, instances: {} });
+    const { instance } = served;
     const outcome = await gradeItem(
       input.runner,
       evaluation,
       item,
       seed,
-      { config, view: shownView },
+      served,
       input.coordinates,
       payload,
       now,
@@ -508,7 +505,7 @@ export async function gradePreview(
       // As the student's own feedback page builds it (`results/service.ts`):
       // the student's key, without what stays the teacher's (ADR-037).
       // In the view the answer names its choices in (ADR-097).
-      solution: outcome.status === "no_key" ? null : live.studentSolutionViewOf(item.question.type, config, shownView),
+      solution: outcome.status === "no_key" ? null : live.studentSolutionViewOf(item.question.type, served.config, served.view),
       explanation: explanationOrNull(instance.explanation),
       details: outcome.details ?? null,
       ...(outcome.comment === undefined ? {} : { comment: outcome.comment }),

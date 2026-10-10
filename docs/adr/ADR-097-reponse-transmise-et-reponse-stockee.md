@@ -72,15 +72,17 @@ view) cannot see a key that rides in an order.
    services, the conversion holds for an impersonation session (ADR-034) and
    a teacher's own attempt in the student view (ADR-018) alike.
 
-4. **A marker tells a current client from an old one.** Every answer write
-   of a current client carries `coordinates: "position"`
+4. **A marker tells a current client from an old one.** The three answer
+   writes that can reach a shuffled view carry `coordinates: "position"`
    (`AnswerCoordinates`, `@quiz/contracts`): the autosave, the drill's
-   answer, the Simulate button, the preview's grading and simulation, the
-   editor's try. A client built before this decision sends none and names
-   choices by canonical index. On a view that shuffles a type that converts,
-   a write without the marker is refused with `422 answer_invalid`
-   (`answer.coordinates_missing`); a poll and an unshuffled item accept
-   either, since the two readings agree there. The marker says nothing about
+   answer and the preview's grading. (The Simulate button and the editor's
+   try never do: only `code` and `circuit` simulate, and they never convert;
+   the try's view is never shuffled.) A client built before this decision
+   sends none and names choices by canonical index. On a view that shuffles
+   a type that converts, a write without the marker is refused with
+   `422 answer_invalid` (`answer.coordinates_missing`) — so a future type
+   that both converts and runs is refused, never silently misread; a poll
+   and an unshuffled item accept either, since the two readings agree there. The marker says nothing about
    the order, and is never derived from it. A tab left open across the deploy
    — a take-home exercise, a served drill card, whose unacknowledged answers
    the autosave replays on reconnection before it refetches the view —
@@ -120,7 +122,7 @@ view) cannot see a key that rides in an order.
 
 7. **An `mcq` answer longer than `maxSelections` is refused**
    (`mcq.too_many_choices`), as ADR-026 refuses two ticks on a `single`
-   question. The grader truncates such an answer to its LOWEST canonical
+   question, by the attempt and the drill alike. The grader truncates such an answer to its LOWEST canonical
    indices, the teacher's first-typed choices: with position ids, ticking
    every position would let the truncation pick the key. The truncation stays
    in the grader for an answer stored before this rule.

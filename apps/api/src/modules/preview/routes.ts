@@ -167,7 +167,6 @@ export async function previewPlugin(app: FastifyInstance) {
           seed: body.seed,
           itemId: body.itemId,
           answer: body.answer,
-          coordinates: body.coordinates,
           now,
         }),
     ),
