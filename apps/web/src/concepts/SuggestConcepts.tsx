@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Tags } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ConceptSuggestions, type NewConceptName, type QuestionMeta, type SuggestConceptsRequest } from "@quiz/contracts";
 
@@ -99,13 +99,11 @@ function SuggestDialog({
       );
     },
   });
-  // Once on mount (a ref: React's development double mount must not ask twice); Retry asks again.
-  const started = useRef(false);
+  // Once on mount, while idle (React's development double mount asks twice, which the mutation tolerates); Retry asks again.
+  const { isIdle, mutate } = suggestions;
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    suggestions.mutate();
-  });
+    if (isIdle) mutate();
+  }, [isIdle, mutate]);
   const data = suggestions.data;
   const empty = data !== undefined && data.existing.length === 0 && data.created.length === 0;
   const toggle = (id: string) =>
