@@ -8,17 +8,17 @@ import type { Db } from "../../db/client.js";
 import { DomainError } from "../http.js";
 import { coursePools, courseStaff, pools } from "../../db/schema.js";
 import { accessRevoked } from "../realtime/bus.js";
-import { questionCount, poolJson, poolRolesOf } from "./pools.js";
+import { derivedVisibility, questionCount, poolJson, poolRolesOf } from "./pools.js";
 import type { Caller } from "../guards.js";
 
 export async function poolsOfCourse(db: Db, courseId: string) {
   const rows = await db
-    .select({ pool: pools, questionCount })
+    .select({ pool: pools, visibility: derivedVisibility, questionCount })
     .from(coursePools)
     .innerJoin(pools, eq(coursePools.poolId, pools.id))
     .where(eq(coursePools.courseId, courseId))
     .orderBy(asc(pools.name));
-  return rows.map((r) => ({ ...poolJson(r.pool), questionCount: r.questionCount }));
+  return rows.map((r) => ({ ...poolJson(r.pool, r.visibility), questionCount: r.questionCount }));
 }
 
 /**

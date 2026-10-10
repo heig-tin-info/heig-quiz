@@ -43,12 +43,12 @@ async function republish(id: string, statement: string) {
   await poolService.publishQuestion(db, question!, { userId: seed.teacherId });
 }
 
-async function newPool(who: Actor, name: string, visibility: "private" | "public" = "private") {
+async function newPool(who: Actor, name: string, isPublic = false) {
   const res = await server.app.inject({
     method: "POST",
     url: "/app/api/pools",
     headers: who.headers,
-    payload: { name, visibility },
+    payload: { name, isPublic },
   });
   expect(res.statusCode).toBe(201);
   return res.json<{ id: string }>().id;
@@ -124,7 +124,7 @@ beforeAll(async () => {
 
   const own = await newPool(teacher, "Mes algorithmes");
   ids.own = await publishQuestion(db, own, teacher.id, "own", short("Le tri rapide est-il stable ?"));
-  const open = await newPool(colleague, "Algorithmes publics", "public");
+  const open = await newPool(colleague, "Algorithmes publics", true);
   ids.public = await publishQuestion(db, open, colleague.id, "pub", short("Complexité moyenne du tri rapide"));
   const closed = await newPool(colleague, "Privé");
   ids.private = await publishQuestion(db, closed, colleague.id, "priv", short(TEXT));

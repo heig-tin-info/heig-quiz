@@ -8,7 +8,13 @@
 export const POOL_ROLES = ["reader", "contributor", "owner"] as const;
 export type PoolRoleName = (typeof POOL_ROLES)[number];
 
-/** Who reads a pool beyond its members: nobody, its courses' staff, every teacher. */
+export const POOL_DESCRIPTION_SOURCES = ["owner", "ai"] as const;
+export type PoolDescriptionSource = (typeof POOL_DESCRIPTION_SOURCES)[number];
+
+/** The longest pool description, in characters (ADR-013, amendment of 2026-10-10). */
+export const POOL_DESCRIPTION_MAX = 280;
+
+/** Who reads a pool beyond its members: nobody, its courses' staff, every teacher. DERIVED from the roster and `pools.is_public`, never stored. */
 export const POOL_VISIBILITIES = ["private", "shared", "public"] as const;
 
 /** What the database knows about one (pool, account) pair. */
@@ -25,7 +31,7 @@ export interface PoolRoleFacts {
   memberRole: PoolRoleName | null;
   /** On the staff of a course the pool is linked to (`course_pools`). */
   isCourseStaff: boolean;
-  /** `pools.visibility = 'public'` — readable by every teacher. */
+  /** `pools.is_public` — readable by every teacher. */
   isPublic: boolean;
 }
 

@@ -207,7 +207,11 @@ The **Sharing** section of a pool's **Settings** tab says who may read and write
   <figcaption>The Settings tab of a pool: its name and icon, its visibility, who has access, and an invitation.</figcaption>
 </figure>
 
-**Visibility** has three settings. **Private** is you alone, plus the teachers you invite. **Shared** is the invited teachers, each with the role you give them; inviting someone into a private pool switches it to shared by itself. **Public** lets every teacher of the school read the pool, while writing stays with you and your members.
+The one choice is the **Publish in the catalogue** switch: a published pool is **public** and every teacher of the school may read it, while writing stays with you and your members (your personal pool cannot be published). The other two visibilities follow from who has access, so there is nothing to set: a pool is **shared** as soon as it has a member, or a linked course whose staff includes someone other than you, and **private** otherwise. To make a pool private again, remove its people. The **Linked courses** list shows the courses whose staff can edit the pool.
+
+On a public pool the invitation offers **Contributor** and **Owner** only, since every teacher already reads it; the **Reader** seats that exist stay, marked "covered by public".
+
+The **Description** field of the pool's Settings (280 characters, owners only) shows on the card. **Suggest a description** asks the AI for a proposal, built from the pool's name, its concepts and two excerpts of its questions; nothing is saved until you press **Use this description**, and a text you wrote yourself is never replaced.
 
 **Invite a teacher** takes an e-mail address and a **Role**:
 

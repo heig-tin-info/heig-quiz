@@ -125,7 +125,7 @@ describe("the personal pool is the home of poll questions (F-POOL-01)", () => {
       .where(and(eq(pools.ownerId, teacher.id), eq(pools.isPersonal, true)));
     expect(personal).toHaveLength(1);
     expect(personal[0]!.name).toBe(poolService.PERSONAL_POOL_NAME);
-    expect(personal[0]!.visibility).toBe("private");
+    expect(personal[0]!.isPublic).toBe(false);
   });
 
   it("refuses a question type a poll cannot run", async () => {

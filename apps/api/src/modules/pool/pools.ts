@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 
-import type { ConceptLang, Pool, PoolColor, PoolInUse, PoolRole, PoolSummary } from "@quiz/contracts";
-import { displayName, effectivePoolRole, heldPoolRole, type PoolRoleFacts } from "@quiz/domain";
+import type { ConceptLang, Pool, PoolVisibility, PoolColor, PoolInUse, PoolRole, PoolSummary } from "@quiz/contracts";
+import { displayName, effectivePoolRole, heldPoolRole, type PoolDescriptionSource, type PoolRoleFacts } from "@quiz/domain";
 
 import { isForeignKeyViolation, qualified, type Db } from "../../db/client.js";
 import type { Caller } from "../guards.js";
@@ -52,13 +52,36 @@ const usedCount = sql<number>`(SELECT count(DISTINCT ${qualified(questions.id)})
           AND ${qualified(attempts.userId)} IS NOT NULL
           AND NOT ${isStaffAttempt}))::int`;
 
-export function poolJson(pool: PoolRow): Pool {
+/**
+ * The visibility a pool DISPLAYS (ADR-013, amendment of 2026-10-10), derived
+ * from the roster in SQL so the list can sort on it: `public` when published;
+ * `shared` when someone other than the owner holds a seat, directly or through
+ * the staff of a linked course; `private` otherwise (a pool linked only to the
+ * owner's own course stays private).
+ */
+export const derivedVisibility = sql<PoolVisibility>`(CASE
+  WHEN ${qualified(pools.isPublic)} THEN 'public'
+  WHEN EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)})
+    OR EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)}
+      WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} <> ${qualified(pools.ownerId)})
+  THEN 'shared' ELSE 'private' END)`;
+
+/** The derived visibility of one pool, read now. */
+export async function visibilityOf(db: Db, poolId: string): Promise<PoolVisibility> {
+  const [row] = await db.select({ v: derivedVisibility }).from(pools).where(eq(pools.id, poolId));
+  return row?.v ?? "private";
+}
+
+export function poolJson(pool: PoolRow, visibility: PoolVisibility): Pool {
   return {
     id: pool.id,
     name: pool.name,
     icon: pool.icon,
     color: pool.color,
-    visibility: pool.visibility,
+    visibility,
+    isPublic: pool.isPublic,
+    description: pool.description,
+    descriptionSource: pool.descriptionSource,
     ownerId: pool.ownerId,
     isPersonal: pool.isPersonal,
     createdAt: pool.createdAt.toISOString(),
@@ -79,7 +102,7 @@ function courseStaffOf(userId: string): SQL<boolean> {
 
 /** The facts of `effectivePoolRole` for one row, Super Powers aside. */
 function roleFacts(
-  row: { ownerId: string; visibility: string; memberRole: PoolRole | null; isCourseStaff: boolean },
+  row: { ownerId: string; isPublic: boolean; memberRole: PoolRole | null; isCourseStaff: boolean },
   viewerId: string,
 ): PoolRoleFacts {
   return {
@@ -87,7 +110,7 @@ function roleFacts(
     isOwner: row.ownerId === viewerId,
     memberRole: row.memberRole,
     isCourseStaff: row.isCourseStaff,
-    isPublic: row.visibility === "public",
+    isPublic: row.isPublic,
   };
 }
 
@@ -105,7 +128,7 @@ export async function poolRolesOf(
     .select({
       id: pools.id,
       ownerId: pools.ownerId,
-      visibility: pools.visibility,
+      isPublic: pools.isPublic,
       memberRole: memberRoleOf(viewer.id),
       isCourseStaff: courseStaffOf(viewer.id),
     })
@@ -136,6 +159,7 @@ export async function listPools(
   const rows = await db
     .select({
       pool: pools,
+      visibility: derivedVisibility,
       questionCount,
       usedCount,
       memberCount: memberCountOf,
@@ -155,7 +179,7 @@ export async function listPools(
   return rows.map((r) => {
     const facts = roleFacts({ ...r.pool, memberRole: r.memberRole, isCourseStaff: r.isCourseStaff }, viewer.id);
     return {
-      ...poolJson(r.pool),
+      ...poolJson(r.pool, r.visibility),
       questionCount: r.questionCount,
       usedCount: r.usedCount,
       memberCount: r.memberCount,
@@ -177,7 +201,7 @@ export async function createPool(
   db: Db,
   input: {
     name: string;
-    visibility: "private" | "shared" | "public";
+    isPublic?: boolean | undefined;
     ownerId: string;
     icon?: string | null | undefined;
     color?: PoolColor | null | undefined;
@@ -190,11 +214,11 @@ export async function createPool(
       name: input.name,
       icon: input.icon ?? null,
       color: input.color ?? null,
-      visibility: input.visibility,
+      isPublic: input.isPublic ?? false,
       ownerId: input.ownerId,
     })
     .returning();
-  return poolJson(row!);
+  return poolJson(row!, row!.isPublic ? "public" : "private");
 }
 
 /** The name the personal pool is born with; the teacher may rename it. */
@@ -218,7 +242,6 @@ export async function ensurePersonalPool(db: Db, userId: string): Promise<PoolRo
       id: randomUUID(),
       name: PERSONAL_POOL_NAME,
       icon: "message-circle-question",
-      visibility: "private",
       ownerId: userId,
       isPersonal: true,
     })
@@ -245,7 +268,9 @@ export async function updatePool(
     name?: string | undefined;
     icon?: string | null | undefined;
     color?: PoolColor | null | undefined;
-    visibility?: "private" | "shared" | "public" | undefined;
+    isPublic?: boolean | undefined;
+    description?: string | undefined;
+    descriptionSource?: PoolDescriptionSource | undefined;
   },
 ) {
   const [row] = await db
@@ -253,7 +278,7 @@ export async function updatePool(
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(pools.id, poolId))
     .returning();
-  return poolJson(row!);
+  return poolJson(row!, await visibilityOf(db, poolId));
 }
 
 /**
@@ -322,7 +347,7 @@ export async function poolDetail(db: Db, pool: PoolRow, role: PoolRole, lang: Co
     db.select({ n: questionCount }).from(pools).where(eq(pools.id, pool.id)),
   ]);
   return {
-    pool: poolJson(pool),
+    pool: poolJson(pool, await visibilityOf(db, pool.id)),
     role,
     categories: tree,
     concepts: used,

@@ -6,7 +6,7 @@
  * Nothing here is accented: a settings tab has no primary. Delete and Leave
  * are `danger-quiet` buttons whose confirmations are the `danger` ones.
  *
- * The name, the icon, the sharing and the deletion are an owner's: anyone
+ * The name, the description, the icon, the sharing and the deletion are an owner's: anyone
  * else sees one line saying so, and the way out of a pool they hold a seat
  * on — no disabled buttons, as the pool's other read-only screens.
  */
@@ -23,6 +23,7 @@ import { useErrorToast, useToast } from "../notify";
 import { poolKey, poolsKey } from "../queryKeys";
 import type { Route } from "../router";
 import { Button, Card, SectionHeading, SettingRow, Tip } from "../ui";
+import { PoolDescription } from "./PoolDescription";
 import { PoolFormModal } from "./PoolFormModal";
 import { PoolIcon } from "./PoolIcon";
 import { PoolSharing } from "./PoolSharing";
@@ -124,6 +125,7 @@ export function PoolSettings({
                 {t("pools.settings.rename")}
               </Button>
             </SettingRow>
+            <PoolDescription pool={pool} />
             <SettingRow title={t("pools.icon")} desc={t("pools.settings.iconDesc")}>
               {/* The tile IS the trigger, as in the form: the icon the pool
                   wears, one click from the shelf it comes off. */}

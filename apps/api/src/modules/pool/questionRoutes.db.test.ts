@@ -192,7 +192,7 @@ describe("versions: read, restore, deprecate", () => {
 
   it("refuses the role before a malformed number, and the number before the body", async () => {
     const reader = await server.signIn("teacher");
-    const created = await call(owner, "POST", "/app/api/pools", { name: "Versions order pool", visibility: "public" });
+    const created = await call(owner, "POST", "/app/api/pools", { name: "Versions order pool", isPublic: true });
     expect(created.statusCode).toBe(201);
     const id = await newQuestion("versions order", created.json<{ id: string }>().id);
     // A reader reads versions: a malformed number is the 404 of a miss.

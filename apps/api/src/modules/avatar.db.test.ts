@@ -152,8 +152,8 @@ describe("avatar", () => {
       for (const who of [publisher, hermit]) {
         expect((await put(PNG, "image/png", who)).statusCode).toBe(204);
       }
-      await createPool(db, { name: "Open", visibility: "public", ownerId: publisher.id });
-      await createPool(db, { name: "Closed", visibility: "private", ownerId: hermit.id });
+      await createPool(db, { name: "Open", isPublic: true, ownerId: publisher.id });
+      await createPool(db, { name: "Closed", ownerId: hermit.id });
       expect(await fetchAvatar(publisher, outsider)).toBe(200);
       expect(await fetchAvatar(hermit, outsider)).toBe(404);
       expect(await fetchAvatar(publisher, stranger)).toBe(404);

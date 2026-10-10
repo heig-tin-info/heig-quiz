@@ -88,12 +88,9 @@ function VisibilityBadge({ pool }: { pool: PoolSummary }) {
   );
 }
 
-/** "Prof Démo · contributor": whose pool it is, and what I may do in it. */
-function poolAttribution(pool: PoolSummary, mine: boolean, t: TFunction): string | null {
-  const parts: string[] = [];
-  if (!mine) parts.push(pool.ownerName);
-  if (pool.role !== "owner") parts.push(t(`share.role.${pool.role}`));
-  return parts.length > 0 ? parts.join(" · ") : null;
+/** What I may do in a pool that is not mine ("Contributor"); null for an owner. */
+function poolRoleLabel(pool: PoolSummary, t: TFunction): string | null {
+  return pool.role !== "owner" ? t(`share.role.${pool.role}`) : null;
 }
 
 function PoolCard({
@@ -107,7 +104,7 @@ function PoolCard({
 }) {
   const t = useT();
   const mine = me != null && pool.ownerId === me.id;
-  const attribution = poolAttribution(pool, mine, t);
+  const roleLabel = poolRoleLabel(pool, t);
 
   return (
     // A column, so the date strip is at the BOTTOM of every card and not
@@ -124,27 +121,36 @@ function PoolCard({
           <PoolIcon icon={pool.icon} color={pool.color} className="size-8.75" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-bold">{pool.name}</span>
+          {/* Two pools may share a name: the owner is told beside it when the pool is not mine. */}
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span className="min-w-0 truncate text-sm font-bold">{pool.name}</span>
+            {!mine ? (
+              <span className="max-w-[45%] shrink-0 truncate text-xs text-fg-faint">{pool.ownerName}</span>
+            ) : null}
+          </span>
           <span className="mt-0.5 block text-xs text-fg-muted">
             {t(pool.questionCount === 1 ? "pools.questions.one" : "pools.questions", {
               n: pool.questionCount,
             })}
           </span>
-          <span className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <VisibilityBadge pool={pool} />
-            {attribution ? (
-              <span className="truncate text-xs text-fg-faint">{attribution}</span>
-            ) : null}
-          </span>
+          {pool.description !== "" ? (
+            <span className="mt-2 line-clamp-3 block text-xs text-fg-muted">{pool.description}</span>
+          ) : null}
         </span>
       </button>
       {/* The last change, said by its icon rather than by the same word on
           every card, and set to the right where a date is read. Outside the
           door: the date carries its own tooltip and focus. */}
-      <div className="flex items-center justify-end gap-1.5 border-t border-line px-4 py-2 text-xs text-fg-faint">
-        <History aria-hidden className="size-3.5" />
-        <span className="sr-only">{t("pools.updated")}</span>
-        <RelativeTime iso={pool.updatedAt} />
+      <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-2 text-xs text-fg-faint">
+        <span className="flex min-w-0 items-center gap-2">
+          <VisibilityBadge pool={pool} />
+          {roleLabel ? <span className="truncate">{roleLabel}</span> : null}
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <History aria-hidden className="size-3.5" />
+          <span className="sr-only">{t("pools.updated")}</span>
+          <RelativeTime iso={pool.updatedAt} />
+        </span>
       </div>
     </Card>
   );

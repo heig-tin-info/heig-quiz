@@ -430,7 +430,7 @@ export const TOOLS: Tool[] = [
     name: "create_pool",
     title: "Create a question pool",
     description:
-      "Creates a pool owned by the teacher. `private` by default. Link it to a course with " +
+      "Creates a pool owned by the teacher. Not published by default (`isPublic: false`); its visibility is then derived from who has access. Link it to a course with " +
       "`link_pool_to_course` before using its questions in that course's evaluations.",
     input: PoolCreate,
     annotations: WRITE,

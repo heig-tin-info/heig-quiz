@@ -10,11 +10,23 @@ import {
 } from "@quiz/contracts";
 
 import { findTeacherById } from "../../directory.js";
-import { requirePoolRole } from "../guards.js";
+import { callerOf, poolRoleOf, requirePoolRole } from "../guards.js";
+import { DomainError } from "../http.js";
 import { notify } from "../notifications/service.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
+
+/**
+ * A public pool is already readable by every teacher: a `reader` seat would
+ * add nothing and could later be mistaken for a restriction (ADR-013,
+ * amendment of 2026-10-10). Existing reader rows stay; no new one is made.
+ */
+function refuseReaderOnPublic(isPublic: boolean, role: string): void {
+  if (isPublic && role === "reader") {
+    throw new DomainError("role_covered_by_public", 409, "A public pool is already readable by every teacher");
+  }
+}
 
 export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, teacher, inPool, topicsOf } = ctx;
@@ -27,8 +39,8 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
   app.get(
     "/app/api/pools/:id/members",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: inPool() }, ({ scope: pool }) =>
-      service.listMembers(app.db, pool),
+    teacher({ params: IdParam, load: inPool() }, async ({ req, scope: pool }) =>
+      service.listMembers(app.db, pool, (await poolRoleOf(app.db, pool, callerOf(req))) === "owner"),
     ),
   );
 
@@ -53,7 +65,7 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
    * Names a colleague in the pool: an account picked among the candidates,
    * or an address — matched over the whole identity set of an account
    * (GH-11) for a teacher the picker does not list under that spelling. A
-   * `private` pool becomes `shared` on the first invitation.
+   * The visibility is derived from the roster, not written here.
    */
   app.post(
     "/app/api/pools/:id/members",
@@ -76,7 +88,8 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
             .code(409)
             .send({ error: "already_member", message: "This account already holds a seat" });
         }
-        const added = await service.addMember(app.db, pool, invitee.id, body.role);
+        refuseReaderOnPublic(pool.isPublic, body.role);
+        await service.addMember(app.db, pool, invitee.id, body.role);
         await trace(req, "pool.share", "pool", pool.id, {
           userId: invitee.id,
           email: invitee.email,
@@ -91,7 +104,7 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
         });
         poolChanged(pool.id);
         poolPeopleChanged(await topicsOf(pool));
-        return reply.code(201).send(await service.listMembers(app.db, { ...pool, visibility: added.visibility }));
+        return reply.code(201).send(await service.listMembers(app.db, pool, true));
       },
     ),
   );
@@ -109,13 +122,14 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
             message: "The owner of the pool holds their seat by ownership",
           });
         }
+        refuseReaderOnPublic(pool.isPublic, body.role);
         const audience = await topicsOf(pool);
         const done = await service.setMemberRole(app.db, pool.id, path.userId, body.role);
         if (!done) return reply.code(404).send({ error: "not_found" });
         await trace(req, "pool.member_update", "pool", pool.id, { userId: path.userId, role: body.role });
         poolChanged(pool.id);
         poolPeopleChanged(audience);
-        return service.listMembers(app.db, pool);
+        return service.listMembers(app.db, pool, true);
       },
     ),
   );

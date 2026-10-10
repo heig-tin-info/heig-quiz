@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Globe, Lock, Trash2, UserPlus, Users } from "lucide-react";
+import { Trash2, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import {
-  PoolVisibility,
   type Pool,
   type TeacherCandidate,
   type PoolMember,
@@ -25,21 +24,29 @@ import {
   Initials,
   QueryError,
   SectionHeading,
-  Segmented,
   Select,
   SettingRow,
   Skeleton,
+  Switch,
 } from "../ui";
 import { poolCandidatesKey, poolKey, poolMembersKey, poolsKey } from "../queryKeys";
 
 /**
  * Who may read and write a pool (F-POOL-05), in the pool's Settings tab: the
- * visibility of the pool, the accounts that hold a seat on it, and the row
- * that adds one.
+ * one switch that publishes it in the catalogue, the accounts that hold a
+ * seat on it, the courses whose staff can edit it (read-only) and the row
+ * that adds a seat.
+ *
+ * The visibility the pool WEARS (private, shared, public) is derived from
+ * who has access (ADR-013, amendment of 2026-10-10): there is no control for
+ * it, and no button that evicts members — a pool becomes private when its
+ * people are removed. A public pool is already readable by every teacher, so
+ * it offers contributor and owner only; reader seats already there stay,
+ * marked as covered.
  *
  * Only an owner is shown it, so every control here is live — a section whose
  * halves are disabled is a section that should not have been drawn. The
- * visibility and the roles are settings that save as they are touched;
+ * switch and the roles are settings that save as they are touched;
  * "Invite" is the one button that sends anything, and it stays `secondary`:
  * a settings tab has no primary.
  *
@@ -48,8 +55,6 @@ import { poolCandidatesKey, poolKey, poolMembersKey, poolsKey } from "../queryKe
  * API resolves it over every address of an account (GH-11), which is how an
  * alias reaches a teacher the list shows under another spelling.
  */
-
-const VISIBILITY_ICON = { private: Lock, shared: Users, public: Globe } as const;
 
 /**
  * The invite errors the API names (`teacher_not_found`, and the 409 of a seat
@@ -66,10 +71,12 @@ function inviteMessage(error: unknown, t: TFunction): string {
 function MemberRow({
   poolId,
   member,
+  isPublic,
   onBusy,
 }: {
   poolId: string;
   member: PoolMember;
+  isPublic: boolean;
   onBusy: (error: unknown) => void;
 }) {
   const t = useT();
@@ -115,7 +122,12 @@ function MemberRow({
             disabled={setRole.isPending}
             onChange={(e) => setRole.mutate(e.target.value as PoolRole)}
           >
-            <option value="reader">{t("share.role.reader")}</option>
+            {/* A reader row on a public pool stays, but is no longer offered. */}
+            {!isPublic || member.role === "reader" ? (
+              <option value="reader">
+                {isPublic ? t("share.role.readerCovered") : t("share.role.reader")}
+              </option>
+            ) : null}
             <option value="contributor">{t("share.role.contributor")}</option>
             <option value="owner">{t("share.role.owner")}</option>
           </Select>
@@ -155,11 +167,11 @@ export function PoolSharing({ pool }: { pool: Pool }) {
     queryFn: () => api(`/app/api/pools/${pool.id}/members`),
   });
 
-  const setVisibility = useMutation({
-    mutationFn: (visibility: PoolVisibility) =>
+  const setPublic = useMutation({
+    mutationFn: (isPublic: boolean) =>
       api(`/app/api/pools/${pool.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ visibility }),
+        body: JSON.stringify({ isPublic }),
       }),
     onSuccess: async () => {
       await Promise.all([
@@ -173,7 +185,7 @@ export function PoolSharing({ pool }: { pool: Pool }) {
 
   const invite = useMutation({
     mutationFn: () => {
-      const body: PoolMemberInvite = { ...who.choice!, role };
+      const body: PoolMemberInvite = { ...who.choice!, role: pickedRole };
       return api(`/app/api/pools/${pool.id}/members`, { method: "POST", body: JSON.stringify(body) });
     },
     onSuccess: async () => {
@@ -188,33 +200,32 @@ export function PoolSharing({ pool }: { pool: Pool }) {
     },
   });
 
-  // The visibility the sheet draws: what the members call answered, and the
-  // summary the list already had while it loads.
+  // What the sheet draws: what the members call answered, and the summary
+  // the list already had while it loads.
   const visibility = members.data?.visibility ?? pool.visibility;
+  const isPublic = members.data?.isPublic ?? pool.isPublic;
   const rows = members.data?.members ?? [];
+  const courses = members.data?.courses ?? [];
+  // A public pool is already readable: a new seat is a contributor or an owner.
+  const pickedRole: PoolRole = isPublic && role === "reader" ? "contributor" : role;
 
   return (
     <section className="space-y-3">
       <SectionHeading icon={Users} title={t("share.title")} />
       <Card className="divide-y divide-line px-5">
-        <SettingRow title={t("share.visibility")} desc={t(`share.visibility.${visibility}.help`)}>
-          <Segmented
-            name="pool-visibility"
-            value={visibility}
-            disabled={setVisibility.isPending}
-            onChange={(v) => setVisibility.mutate(v)}
-            options={PoolVisibility.options.map((v) => {
-              const Icon = VISIBILITY_ICON[v];
-              return {
-                value: v,
-                label: (
-                  <span className="flex items-center gap-1.5">
-                    <Icon className="size-3.5" />
-                    {t(`share.visibility.${v}`)}
-                  </span>
-                ),
-              };
-            })}
+        <SettingRow
+          title={t("share.publish")}
+          desc={
+            pool.isPersonal
+              ? t("share.publish.personal")
+              : `${t("share.publish.help")} ${t(`share.visibility.${visibility}.help`)}`
+          }
+        >
+          <Switch
+            checked={isPublic}
+            disabled={pool.isPersonal || setPublic.isPending}
+            onChange={(v) => setPublic.mutate(v)}
+            label={t("share.publish")}
           />
         </SettingRow>
 
@@ -236,6 +247,7 @@ export function PoolSharing({ pool }: { pool: Pool }) {
                   key={m.userId}
                   poolId={pool.id}
                   member={m}
+                  isPublic={isPublic}
                   onBusy={toastError("error.save")}
                 />
               ))}
@@ -251,6 +263,27 @@ export function PoolSharing({ pool }: { pool: Pool }) {
               list is what decides who inherits it. */}
           <p className="mt-3 text-xs text-fg-faint">{t("share.succession")}</p>
         </div>
+
+        {courses.length > 0 ? (
+          <div className="py-3">
+            <h3 className="text-sm font-medium">{t("share.courses")}</h3>
+            <p className="mt-0.5 text-xs text-fg-muted">{t("share.courses.help")}</p>
+            <ul className="mt-2">
+              {courses.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center justify-between gap-3 border-t border-line py-2.5 text-sm first:border-t-0"
+                >
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium">{c.name}</span>{" "}
+                    <span className="text-xs text-fg-muted">{c.code}</span>
+                  </span>
+                  <span className="shrink-0 text-[13px] text-fg-muted">{t("share.courses.canEdit")}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="py-4">
           <h3 className="text-sm font-medium">{t("share.invite")}</h3>
@@ -272,10 +305,10 @@ export function PoolSharing({ pool }: { pool: Pool }) {
             <Select
               width="w-33"
               label={t("share.roleLabel")}
-              value={role}
+              value={pickedRole}
               onChange={(e) => setRole(e.target.value as PoolRole)}
             >
-              <option value="reader">{t("share.role.reader")}</option>
+              {isPublic ? null : <option value="reader">{t("share.role.reader")}</option>}
               <option value="contributor">{t("share.role.contributor")}</option>
               <option value="owner">{t("share.role.owner")}</option>
             </Select>

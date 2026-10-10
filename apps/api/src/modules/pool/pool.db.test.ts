@@ -708,17 +708,16 @@ describe("members (F-POOL-05)", () => {
     expect(listed.members.slice(1).every((m) => !m.isOwner)).toBe(true);
   });
 
-  it("turns a private pool into a shared one on the first invitation", async () => {
+  it("derives a shared visibility from the first invitation, and back to private when it goes", async () => {
     const id = randomUUID();
-    await db
-      .insert(pools)
-      .values({ id, name: `Private ${id.slice(0, 8)}`, ownerId, visibility: "private" });
+    await db.insert(pools).values({ id, name: `Private ${id.slice(0, 8)}`, ownerId });
     const [pool] = await db.select().from(pools).where(eq(pools.id, id));
+    expect(await service.visibilityOf(db, id)).toBe("private");
     const colleague = await seedTeacher(`flip-${randomUUID().slice(0, 6)}@heig.test`);
-    const added = await service.addMember(db, pool!, colleague, "reader");
-    expect(added.visibility).toBe("shared");
-    const [after] = await db.select().from(pools).where(eq(pools.id, id));
-    expect(after!.visibility).toBe("shared");
+    await service.addMember(db, pool!, colleague, "reader");
+    expect(await service.visibilityOf(db, id)).toBe("shared");
+    await service.removeMember(db, id, colleague);
+    expect(await service.visibilityOf(db, id)).toBe("private");
   });
 
   it("finds a teacher by e-mail and never a student", async () => {
@@ -925,7 +924,7 @@ describe("a member demoted to student loses their seat (ADR-013, rule 5)", () =>
     expect(await seatsOf(member)).toHaveLength(1);
     expect(await reaches(id, member)).toBe(false);
     // Nor through a public pool, whatever guard runs before.
-    await db.update(pools).set({ visibility: "public" }).where(eq(pools.id, id));
+    await db.update(pools).set({ isPublic: true }).where(eq(pools.id, id));
     expect(await reaches(id, member)).toBe(false);
     expect(await reaches(id, owner)).toBe(true);
   });

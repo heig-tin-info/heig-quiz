@@ -187,7 +187,6 @@ async function ensurePool(
       await poolService.createPool(db, {
         name: spec.name,
         icon: spec.icon,
-        visibility: "shared",
         ownerId: teacherId,
       })
     ).id;

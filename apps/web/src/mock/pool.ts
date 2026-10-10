@@ -151,7 +151,9 @@ interface MockPool {
   icon: string | null;
   /** A `PoolColor` name (#213), or null for grey, the default. */
   color: PoolColor | null;
-  visibility: "private" | "shared" | "public";
+  isPublic: boolean;
+  description: string;
+  descriptionSource: "owner" | "ai";
   ownerId: string;
   isPersonal: boolean;
   createdAt: string;
@@ -183,13 +185,13 @@ interface MockCategory {
  * owner's name, the role and the "Leave" item of the menu are ever on screen.
  */
 export const pools: MockPool[] = [
-  { id: "p1", name: "Programmation C", icon: "code", color: "blue", visibility: "shared", ownerId: "u-me", isPersonal: false, createdAt: iso(-300 * D), updatedAt: iso(-2 * H) },
-  { id: "p2", name: "Systèmes embarqués", icon: "cpu", color: "teal", visibility: "public", ownerId: "u-me", isPersonal: false, createdAt: iso(-120 * D), updatedAt: iso(-6 * D) },
-  { id: "p3", name: "Électronique analogique", icon: "circuit-board", color: null, visibility: "shared", ownerId: "t1", isPersonal: false, createdAt: iso(-60 * D), updatedAt: iso(-30 * 60_000) },
+  { id: "p1", name: "Programmation C", icon: "code", color: "blue", isPublic: false, description: "Pointeurs, mémoire dynamique et chaînes de caractères : les questions du cours de C, du premier TP à l'examen.", descriptionSource: "owner", ownerId: "u-me", isPersonal: false, createdAt: iso(-300 * D), updatedAt: iso(-2 * H) },
+  { id: "p2", name: "Systèmes embarqués", icon: "cpu", color: "teal", isPublic: true, description: "", descriptionSource: "owner", ownerId: "u-me", isPersonal: false, createdAt: iso(-120 * D), updatedAt: iso(-6 * D) },
+  { id: "p3", name: "Électronique analogique", icon: "circuit-board", color: null, isPublic: false, description: "Diodes, transistors et amplificateurs opérationnels.", descriptionSource: "ai", ownerId: "t1", isPersonal: false, createdAt: iso(-60 * D), updatedAt: iso(-30 * 60_000) },
   // The personal pool (F-POOL-01): created by the first "Keep this
   // question" after a poll (ADR-014, addenda item 6); the launcher's "Pick a
   // question" tab lists it and nothing else.
-  { id: "p0", name: "Polls", icon: "message-circle-question", color: null, visibility: "private", ownerId: "u-me", isPersonal: true, createdAt: iso(-20 * D), updatedAt: iso(-2 * D) },
+  { id: "p0", name: "Polls", icon: "message-circle-question", color: null, isPublic: false, description: "", descriptionSource: "owner", ownerId: "u-me", isPersonal: true, createdAt: iso(-20 * D), updatedAt: iso(-2 * D) },
 ];
 
 const ADA = { userId: "t1", email: "ada.lovelace@heig-vd.ch", givenName: "Ada", familyName: "Lovelace" };
@@ -1485,6 +1487,14 @@ export function registerUsedProbe(probe: (questionId: string) => boolean): void 
   usedByStudents = probe;
 }
 
+/** The visibility the API derives: published, else shared when someone else holds a seat, else private. */
+const derivedVisibility = (pool: MockPool): "private" | "shared" | "public" =>
+  pool.isPublic
+    ? "public"
+    : (poolMembers[pool.id] ?? []).some((m) => m.userId !== pool.ownerId)
+      ? "shared"
+      : "private";
+
 export const poolSummary = (pool: MockPool) => {
   const owner = poolOwner(pool);
   const live = liveQuestions(pool.id).filter((q) => !q.deletedAt);
@@ -1495,6 +1505,7 @@ export const poolSummary = (pool: MockPool) => {
     myMembership(pool.id)?.role ?? (pool.ownerId === (me?.id ?? "u-me") ? "owner" : "reader");
   return {
     ...pool,
+    visibility: derivedVisibility(pool),
     questionCount: live.length,
     usedCount: live.filter((q) => usedByStudents(q.id)).length,
     role,
@@ -2269,7 +2280,7 @@ on("GET", "/app/api/pools", () =>
   pools
     .filter(
       (p) =>
-        me?.session?.superPowersUntil != null || p.ownerId === "u-me" || p.visibility !== "private",
+        me?.session?.superPowersUntil != null || p.ownerId === "u-me" || derivedVisibility(p) !== "private",
     )
     .map(poolSummary),
 );
@@ -2282,7 +2293,9 @@ on("POST", "/app/api/pools", (_m, body) => {
     name: String(body.name),
     icon: typeof body.icon === "string" ? body.icon : null,
     color: poolColor(body.color),
-    visibility: "private",
+    isPublic: body.isPublic === true,
+    description: "",
+    descriptionSource: "owner",
     ownerId: "u-me",
     isPersonal: false,
     createdAt: iso(0),
@@ -2295,7 +2308,7 @@ on("POST", "/app/api/pools", (_m, body) => {
 on("GET", "/app/api/pools/:id", (m) => {
   const pool = poolOr404(m.groups!.id!);
   return {
-    pool,
+    pool: poolSummary(pool),
     role: poolSummary(pool).role,
     categories: categoryTree(pool.id),
     concepts: poolConcepts(pool.id),
@@ -2309,11 +2322,21 @@ on("PATCH", "/app/api/pools/:id", (m, body) => {
   // is what decides, not its truthiness.
   if ("icon" in body) pool.icon = typeof body.icon === "string" ? body.icon : null;
   if ("color" in body) pool.color = poolColor(body.color);
-  if (typeof body.visibility === "string") {
-    pool.visibility = body.visibility as MockPool["visibility"];
+  if (typeof body.isPublic === "boolean") {
+    if (body.isPublic && pool.isPersonal) throw new MockError(409, "A personal pool cannot be published.");
+    pool.isPublic = body.isPublic;
+  }
+  if (typeof body.description === "string") {
+    pool.description = body.description;
+    pool.descriptionSource = body.descriptionFromAi === true ? "ai" : "owner";
   }
   pool.updatedAt = iso(0);
   return poolSummary(pool);
+});
+/** The AI's proposal: written nowhere until the owner accepts it with a PATCH. */
+on("POST", "/app/api/pools/:id/description/propose", (m) => {
+  const pool = poolOr404(m.groups!.id!);
+  return { description: `Questions of the pool "${pool.name}": a short summary the AI proposes from its concepts.` };
 });
 on("DELETE", "/app/api/pools/:id", (m) => {
   const i = pools.findIndex((p) => p.id === m.groups!.id);
@@ -2326,7 +2349,11 @@ on("DELETE", "/app/api/pools/:id", (m) => {
 
 /** `PoolMembers`, which is also what the two write routes answer with. */
 const memberList = (pool: MockPool) => ({
-  visibility: pool.visibility,
+  visibility: derivedVisibility(pool),
+  isPublic: pool.isPublic,
+  // The mock links no course to a pool.
+  courses:
+    pool.id === "p1" ? [{ id: "c1", name: "Programmation C", code: "PRG1" }] : [],
   // The owner's row first, whatever order the seats were given in.
   members: [...(poolMembers[pool.id] ?? [])]
     .sort((a, b) => Number(b.userId === pool.ownerId) - Number(a.userId === pool.ownerId))
@@ -2360,8 +2387,6 @@ on("POST", "/app/api/pools/:id/members", (m, body) => {
     role: (body.role as MockMember["role"] | undefined) ?? "reader",
     addedAt: iso(0),
   });
-  // Inviting someone is what makes a pool shared, exactly as the API does it.
-  if (pool.visibility === "private") pool.visibility = "shared";
   return memberList(pool);
 });
 on("PATCH", "/app/api/pools/:id/members/:userId", (m, body) => {

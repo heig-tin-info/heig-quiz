@@ -9,7 +9,7 @@
 import { z } from "zod";
 
 import { QUESTION_TYPE_IDS } from "@quiz/core/contract";
-import { POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
+import { POOL_DESCRIPTION_MAX, POOL_DESCRIPTION_SOURCES, POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
 
 import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf, teacherChoiceWith } from "./common.js";
 import { ConceptRef } from "./concept.js";
@@ -20,6 +20,7 @@ import { QuestionReview, ReviewPill } from "./review.js";
 export const QuestionTypeId = z.enum(QUESTION_TYPE_IDS);
 export type QuestionTypeId = z.infer<typeof QuestionTypeId>;
 
+/** DERIVED, read-only: public when published, shared when the roster says so, else private (ADR-013, 2026-10-10). */
 export const PoolVisibility = z.enum(POOL_VISIBILITIES);
 export type PoolVisibility = z.infer<typeof PoolVisibility>;
 
@@ -71,7 +72,13 @@ export const Pool = z.object({
   name: z.string(),
   icon: PoolIcon.nullable(),
   color: PoolColor.nullable(),
+  /** Derived from the roster; the stored fact is `isPublic`. */
   visibility: PoolVisibility,
+  /** Published in the catalogue. */
+  isPublic: z.boolean(),
+  /** At most 280 characters; empty when nobody wrote one. */
+  description: z.string().max(POOL_DESCRIPTION_MAX),
+  descriptionSource: z.enum(POOL_DESCRIPTION_SOURCES),
   ownerId: z.uuid(),
   isPersonal: z.boolean(),
   createdAt: z.string(),
@@ -111,7 +118,7 @@ export const PoolCreate = z.object({
   name: z.string().trim().min(1).max(200),
   icon: PoolIcon.nullable().optional(),
   color: PoolColor.nullable().optional(),
-  visibility: PoolVisibility.default("private"),
+  isPublic: z.boolean().default(false),
 });
 export type PoolCreate = z.infer<typeof PoolCreate>;
 
@@ -120,7 +127,13 @@ export const PoolPatch = z
     name: z.string().trim().min(1).max(200).optional(),
     icon: PoolIcon.nullable().optional(),
     color: PoolColor.nullable().optional(),
-    visibility: PoolVisibility.optional(),
+    isPublic: z.boolean().optional(),
+    description: z.string().trim().max(POOL_DESCRIPTION_MAX).optional(),
+    /** The description is an AI proposal the owner accepted; refused over text the owner wrote. */
+    descriptionFromAi: z.boolean().optional(),
+  })
+  .refine((b) => b.descriptionFromAi === undefined || b.description !== undefined, {
+    message: "descriptionFromAi needs a description",
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
 export type PoolPatch = z.infer<typeof PoolPatch>;
@@ -137,9 +150,16 @@ export const PoolMember = PersonRef.extend({
 });
 export type PoolMember = z.infer<typeof PoolMember>;
 
+/** A course whose staff are contributors of the pool through a `course_pools` link. */
+export const PoolLinkedCourse = z.object({ id: z.uuid(), name: z.string(), code: z.string() });
+export type PoolLinkedCourse = z.infer<typeof PoolLinkedCourse>;
+
 export const PoolMembers = z.object({
   visibility: PoolVisibility,
+  isPublic: z.boolean(),
   members: z.array(PoolMember),
+  /** The linked courses, shown to the pool's owners only (empty for anyone else). */
+  courses: z.array(PoolLinkedCourse),
 });
 export type PoolMembers = z.infer<typeof PoolMembers>;
 
@@ -154,6 +174,10 @@ export type PoolMemberInvite = z.infer<typeof PoolMemberInvite>;
 /** `PATCH /pools/:id/members/:userId`. */
 export const PoolMemberPatch = z.object({ role: PoolRole });
 export type PoolMemberPatch = z.infer<typeof PoolMemberPatch>;
+
+/** `POST /pools/:id/description/propose`: the AI's proposal, written nowhere until the owner accepts it. */
+export const PoolDescriptionProposal = z.object({ description: z.string().max(POOL_DESCRIPTION_MAX) });
+export type PoolDescriptionProposal = z.infer<typeof PoolDescriptionProposal>;
 
 export const PoolMemberParam = z.object({ id: z.uuid(), userId: z.uuid() });
 export type PoolMemberParam = z.infer<typeof PoolMemberParam>;
