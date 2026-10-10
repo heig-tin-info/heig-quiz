@@ -41,12 +41,10 @@ selection with no motion.
    track that wraps onto several lines is a recessed panel and takes
    `rounded-card`; its options stay pills.
 3. **`md` by default.** `Segmented` defaults to `md` (34 px, the height of the
-   field beside it). `sm` is for a control inside a table row, or one of the
-   named exceptions: the drill's confidence scale (it must fit 390 px), the
-   dense chrome whose neighbours are 28 px discs (the view switch of the
-   header, the language switch and sign-in button of the landing header) and
-   the output viewer's own toolbar inside a result table. A toolbar never
-   mixes an `sm` control with `md` ones. Icon buttons (`IconButton`, 28 or
+   field beside it). The rule: **`sm` when every neighbour is 28 px** (table rows,
+   dense popovers, editor toolbars, the drill's confidence scale, the
+   header); otherwise `md`. A toolbar never mixes an `sm` control with `md`
+   ones. Icon buttons (`IconButton`, 28 or
    32 px discs) are not form controls and stay outside the scale; the page
    help button is on it (34 px).
 4. **An animated thumb.** The selected option of a `Segmented` is marked by a

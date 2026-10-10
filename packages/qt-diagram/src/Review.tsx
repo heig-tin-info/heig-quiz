@@ -91,7 +91,6 @@ export function DiagramReview({
                 <Segmented<"student" | "reference">
                   name={`${id}-text`}
                   label={s.text}
-                  size="sm"
                   value={tab}
                   onChange={setTab}
                   options={[

@@ -103,7 +103,7 @@ export function LinkButton({
  * and players of the question types wear them too, so a field in a question
  * editor is the field of every other form of the app (ADR-094).
  */
-export { areaClass, controlSize, inputClass, inputSize };
+export { areaClass, inputClass, inputSize };
 
 /**
  * Label above a control; used by Field, Select and Textarea.
@@ -304,7 +304,7 @@ export function SearchInput({
       <input
         type="search"
         {...props}
-        className={cx(inputClass, scale.height, scale.text, scale.iconPad, scale.px.replace("px-", "pr-"), "w-full")}
+        className={cx(inputClass, inputSize[size], scale.iconPad, "w-full")}
       />
     </label>
   );
