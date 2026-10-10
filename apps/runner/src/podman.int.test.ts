@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { release as osRelease } from "node:os";
 
 import type { RunnerLanguage, RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -26,6 +27,8 @@ const has = (language: RunnerLanguage): boolean => host.has(language);
 announce(host, "the integration suite");
 
 const config = host.config;
+/** The CI's gVisor leg: every container of this file runs under runsc. */
+const GVISOR = config.RUNNER_RUNTIME === "runsc";
 let engine: Engine;
 
 beforeAll(async () => {
@@ -524,6 +527,11 @@ describe.skipIf(!has("c"))("the container itself", () => {
     // removes the syscall outright answers. Anything else — EFAULT above all
     // — means the call reached the kernel and no profile was in the way.
     expect([1, 38]).toContain(errno);
+    // Under gVisor the syscall never reaches the host kernel, and runsc
+    // IGNORES the OCI profile unless it runs with `--oci-seccomp`; its own
+    // answer to perf_event_open is not EPERM. Only the profile's `errnoRet`
+    // proves the profile is in force there (README, gVisor).
+    if (GVISOR) expect(errno).toBe(1);
   });
 
   it("carries the closed list of environment variables and nothing else", async () => {
@@ -564,5 +572,68 @@ describe.skipIf(!has("c"))("the container itself", () => {
     expect(host.languages.map((language) => imageRef(config, language))).toContain(
       "quiz-runner-c:latest",
     );
+  });
+});
+
+/**
+ * The container's state is Podman's to say, never the program's (security
+ * audit L12): a program that prints Podman's own words, or exits with
+ * Podman's exit code, keeps its stderr, is not called out of memory, and does
+ * not get a fresh container (and a fresh compilation) per case.
+ */
+const IMPERSONATOR =
+  "import os, sys\n" +
+  "if sys.argv[1] == 'write':\n" +
+  "    open('/work/marker', 'w').write('x')\n" +
+  "if sys.argv[1] == 'read':\n" +
+  "    print('same' if os.path.exists('/work/marker') else 'rebuilt')\n" +
+  "    sys.exit(0)\n" +
+  "print('Error: no such container: quiz-run-x', file=sys.stderr)\n" +
+  "print('Error: can only create exec sessions on running containers', file=sys.stderr)\n" +
+  "sys.exit(int(sys.argv[2]))\n";
+
+describe.skipIf(!has("python"))("a program that impersonates Podman", () => {
+  it("keeps its stderr, and is not out of memory, when it prints Podman's words and exits 1", async () => {
+    const outcome = await run(
+      request("python", IMPERSONATOR, { cases: [{ name: "one", args: ["say", "1"], stdin: "" }] }),
+    );
+    expect(outcome.compile.ok, outcome.compile.stderr).toBe(true);
+    expect(outcome.cases[0]).toMatchObject({ exitCode: 1, oom: false, timedOut: false });
+    expect(outcome.cases[0]!.stderr).toContain("no such container");
+  });
+
+  it("keeps its container when it exits 125 with them: the next case sees its files", async () => {
+    const outcome = await run(
+      request("python", IMPERSONATOR, {
+        cases: [
+          { name: "lie", args: ["write", "125"], stdin: "" },
+          { name: "look", args: ["read"], stdin: "" },
+        ],
+      }),
+    );
+    expect(outcome.cases[0]).toMatchObject({ exitCode: 125, oom: false });
+    expect(outcome.cases[0]!.stderr).toContain("can only create exec sessions");
+    // A rebuilt container would have lost /work/marker with its tmpfs.
+    expect(outcome.cases[1]!.stdout).toBe("same\n");
+  });
+});
+
+/**
+ * The gVisor leg of CI (`RUNNER_RUNTIME=runsc`): the program really runs on
+ * gVisor's kernel and not on the host's. `uname` inside a gVisor sandbox
+ * answers the Sentry's own release, never the host kernel's; a container that
+ * silently fell back to runc or crun would answer the host's.
+ */
+describe.skipIf(!GVISOR || !has("python"))("under gVisor", () => {
+  it("runs the program on gVisor's kernel, not the host's", async () => {
+    const outcome = await run(request("python", "import os\nprint(os.uname().release)\n"));
+    expect(outcome.compile.ok, outcome.compile.stderr).toBe(true);
+    const release = outcome.cases[0]!.stdout.trim();
+    expect(release).not.toBe("");
+    expect(release).not.toBe(osRelease());
+  });
+
+  it("reports runsc as the engine's runtime", () => {
+    expect(engine.capabilities.runtime).toBe("runsc");
   });
 });

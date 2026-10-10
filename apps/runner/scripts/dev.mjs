@@ -26,14 +26,17 @@ if (socket === undefined) {
   process.exit(0);
 }
 
-// `.env` at the root belongs to the API, and its PORT is the API's. Node's
-// `--env-file` never overrides a variable that is already set, so pinning it
-// here is what keeps the runner on 3200 while the API keeps 3000.
+// `.env` at the root belongs to the API, and its PORT and HOST are the API's
+// (HOST=0.0.0.0 there). Node's `--env-file` never overrides a variable that
+// is already set, so pinning both here is what keeps the runner on
+// 127.0.0.1:3200 while the API keeps 0.0.0.0:3000. A public bind needs a
+// RUNNER_TOKEN, or the runner refuses to start (config.ts, audit L13).
 const port = process.env.RUNNER_PORT ?? "3200";
+const host = process.env.RUNNER_HOST ?? "127.0.0.1";
 
-console.log(`[runner] Podman socket ${socket} — starting on :${port}`);
+console.log(`[runner] Podman socket ${socket} — starting on ${host}:${port}`);
 const child = spawn("tsx", ["watch", "--env-file-if-exists=../../.env", "src/server.ts"], {
   stdio: "inherit",
-  env: { ...process.env, PODMAN_SOCKET: socket, PORT: port },
+  env: { ...process.env, PODMAN_SOCKET: socket, PORT: port, HOST: host },
 });
 child.on("exit", (code) => process.exit(code ?? 0));

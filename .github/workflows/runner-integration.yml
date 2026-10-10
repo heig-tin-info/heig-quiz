@@ -34,11 +34,28 @@ concurrency:
 
 jobs:
   podman:
+    # Two legs, the same suite. `default`: the system socket, whose runtime is
+    # crun — what production runs today. `runsc`: the runner's own gVisor
+    # socket, set up by apps/runner/deploy/install-gvisor.sh — the script the
+    # operator runs on the engine VM — with RUNNER_RUNTIME=runsc, so the
+    # fail-closed startup gate, the seccomp profile under `--oci-seccomp`,
+    # `--userns=auto`, the cgroup limits, `podman exec` and the OOM verdict
+    # are proven under gVisor BEFORE production is switched to it (ADR-016,
+    # amendment of 2026-10-11). The runsc leg does not fail the workflow until
+    # it has been green on GitHub once; then `continue-on-error` goes.
+    name: podman (${{ matrix.runtime }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    continue-on-error: ${{ matrix.runtime == 'runsc' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [default, runsc]
     env:
       PODMAN_SOCKET: /run/podman/podman.sock
       PODMAN_REMOTE_URL: unix:///run/podman/podman.sock
+      # `auto` on the default leg, exactly as in production today.
+      RUNNER_RUNTIME: ${{ matrix.runtime == 'runsc' && 'runsc' || 'auto' }}
     defaults:
       run:
         shell: bash
@@ -72,12 +89,34 @@ jobs:
           sudo chown "$(id -u)" "$PODMAN_SOCKET"
           podman --remote --url "$PODMAN_REMOTE_URL" info --format '{{.Host.Security.Rootless}} {{.Host.CgroupsVersion}} {{.Host.OCIRuntime.Name}}'
 
-      # Every language, rust included: build.sh's default list.
+      # Every language, rust included: build.sh's default list. Built through
+      # the system socket on both legs: the gVisor service shares its storage.
       - name: Build the language images
         run: apps/runner/images/build.sh
+
+      # gVisor from its apt repository and the runner's gVisor socket, by the
+      # operator's own script; the socket is handed to the job's user like the
+      # system one. The systrap platform (runsc's default) needs no KVM.
+      - name: Install gVisor and the runner's gVisor socket
+        if: matrix.runtime == 'runsc'
+        run: |
+          sudo apps/runner/deploy/install-gvisor.sh
+          sudo chmod o+x /run/quiz-runner-podman
+          sudo chown "$(id -u)" /run/quiz-runner-podman/podman.sock
 
       # Strict: the suite fails, instead of skipping, when Podman is not
       # reachable, when a language of the contract has no image, or when the
       # engine is rootless or without --userns=auto (src/test/integration.ts).
+      # Under RUNNER_RUNTIME=runsc it also fails, before any test, unless a
+      # hardened container runs under gVisor (`proveRuntime`).
       - name: Integration suite
+        env:
+          PODMAN_SOCKET: ${{ matrix.runtime == 'runsc' && '/run/quiz-runner-podman/podman.sock' || '/run/podman/podman.sock' }}
         run: RUNNER_INTEGRATION_STRICT=1 pnpm --filter @quiz/runner test:integration
+
+      # What the engine said, when something went wrong: the runtime's own
+      # errors (an unsupported flag under runsc) land in the service's journal.
+      - name: Podman service journal
+        if: failure()
+        run: |
+          sudo journalctl --no-pager -u podman.service -u quiz-runner-podman.service | tail -n 300

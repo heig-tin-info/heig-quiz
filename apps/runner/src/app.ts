@@ -3,7 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { RunnerConfig } from "./config.js";
 import { createEngine, type Engine } from "./engine.js";
 import { executeRequest } from "./execute.js";
-import { probeEngine } from "./probe.js";
+import { gvisorWarning, probeEngine, proveRuntime } from "./probe.js";
 import { RunQueue } from "./queue.js";
 import { registerRoutes } from "./routes.js";
 
@@ -28,7 +28,6 @@ export async function buildApp({ config, engine }: AppDeps): Promise<FastifyInst
       socket: config.PODMAN_SOCKET,
       seccompProfile: config.RUNNER_SECCOMP,
       usernsAuto: probe.capabilities.usernsAuto,
-      runtime: probe.capabilities.runtime,
       cgroupParent: config.RUNNER_CGROUP_PARENT,
       capabilities: probe.capabilities,
     });
@@ -40,7 +39,7 @@ export async function buildApp({ config, engine }: AppDeps): Promise<FastifyInst
         socket: config.PODMAN_SOCKET ?? "local CLI",
         rootless: probe.capabilities.rootless,
         usernsAuto: probe.capabilities.usernsAuto,
-        runtime: probe.capabilities.runtime ?? "default",
+        runtime: probe.capabilities.runtime ?? "unknown",
         cgroups: probe.capabilities.cgroupVersion,
         seccomp: config.RUNNER_SECCOMP,
         cgroupParent: config.RUNNER_CGROUP_PARENT ?? "engine default",
@@ -50,6 +49,18 @@ export async function buildApp({ config, engine }: AppDeps): Promise<FastifyInst
     );
   }
   const theEngine = resolved;
+
+  // gVisor, fail-closed when it was asked for: a runner that cannot start a
+  // hardened container under runsc does not start at all (ADR-016, audit M6).
+  try {
+    await proveRuntime(theEngine, config);
+  } catch (error) {
+    app.log.fatal({ err: error }, "refusing to start: RUNNER_RUNTIME=runsc and gVisor does not work");
+    await app.close();
+    throw error;
+  }
+  const warning = gvisorWarning(config, theEngine.capabilities);
+  if (warning !== null) app.log.warn(warning);
 
   // Whatever a previous life of this service left behind. A container is
   // removed in the `finally` of its own request; a process killed between
@@ -69,6 +80,6 @@ export async function buildApp({ config, engine }: AppDeps): Promise<FastifyInst
     run: (request, signal) => executeRequest(request, { engine: theEngine, config, signal }),
   });
 
-  registerRoutes(app, { config, engine: theEngine, queue });
+  registerRoutes(app, { config, engine: theEngine, queue, warning });
   return app;
 }

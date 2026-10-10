@@ -48,3 +48,28 @@ describe("buildApp", () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+
+/**
+ * `RUNNER_RUNTIME=runsc` is fail-closed (ADR-016, audit M6): `buildApp` serves
+ * nothing until `proveRuntime` passes (its cases: probe.test.ts; against a
+ * real engine: the CI's runsc leg).
+ */
+describe("buildApp under RUNNER_RUNTIME=runsc", () => {
+  const runsc = testConfig({ LOG_LEVEL: "fatal", RUNNER_RUNTIME: "runsc" });
+
+  it("starts once a hardened container ran under gVisor", async () => {
+    const engine = createFakeEngine(() => ({ stdout: "4.4.0\n" }));
+    const gvisor: FakeEngine = { ...engine, capabilities: { ...engine.capabilities, runtime: "runsc" } };
+    app = await buildApp({ config: runsc, engine: gvisor });
+
+    expect(engine.created).toHaveLength(1);
+    expect((await app.inject({ url: "/health" })).json()).toMatchObject({ ok: true, runtime: "runsc" });
+  });
+
+  it("refuses to start on an engine that does not run runsc", async () => {
+    const engine = createFakeEngine();
+    await expect(buildApp({ config: runsc, engine })).rejects.toThrow(/runs crun, not runsc/);
+    expect(engine.created).toEqual([]);
+  });
+});

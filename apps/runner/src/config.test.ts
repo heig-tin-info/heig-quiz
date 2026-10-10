@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultSeccompPath, loadConfig } from "./config.js";
+import { defaultSeccompPath, isLoopback, loadConfig } from "./config.js";
 
 const SECCOMP = defaultSeccompPath();
 
@@ -62,6 +62,35 @@ describe("loadConfig", () => {
     expect(loadConfig({ ...base, NODE_ENV: "production", RUNNER_TOKEN: "x" }).RUNNER_TOKEN).toBe(
       "x",
     );
+  });
+
+  it("listens on the loopback by default", () => {
+    const config = loadConfig({ PODMAN_SOCKET: "/tmp/x.sock", RUNNER_SECCOMP: SECCOMP });
+    expect(config.HOST).toBe("127.0.0.1");
+    expect(config.RUNNER_TOKEN).toBe("");
+  });
+
+  it("refuses a public bind without a token, and accepts one with it (audit L13)", () => {
+    const base = { PODMAN_SOCKET: "/tmp/x.sock", RUNNER_SECCOMP: SECCOMP };
+    for (const HOST of ["127.0.0.1", "127.0.1.1", "::1", "0:0:0:0:0:0:0:1", "localhost", " 127.0.0.1 "]) {
+      expect(() => loadConfig({ ...base, HOST }), HOST).not.toThrow();
+    }
+    for (const HOST of ["0.0.0.0", "::", "192.168.1.10", "10.0.0.2", "fe80::1", "runner.local"]) {
+      expect(() => loadConfig({ ...base, HOST }), HOST).toThrow(
+        new RegExp(`RUNNER_TOKEN is required to listen on ${HOST.replace(/[.]/g, "\\.")}`),
+      );
+      expect(() => loadConfig({ ...base, HOST, RUNNER_TOKEN: "   " }), HOST).toThrow(/RUNNER_TOKEN/);
+      expect(loadConfig({ ...base, HOST, RUNNER_TOKEN: "s3cret" }).HOST).toBe(HOST);
+    }
+  });
+
+  it("tells the loopback from everything else", () => {
+    expect(["127.0.0.1", "127.255.255.254", "::1", "::ffff:127.0.0.1", "LOCALHOST"].map(isLoopback)).toEqual([
+      true, true, true, true, true,
+    ]);
+    expect(["0.0.0.0", "::", "128.0.0.1", "126.255.255.255", "::2", "", "127.0.0.1.example"].map(isLoopback)).toEqual([
+      false, false, false, false, false, false, false,
+    ]);
   });
 
   it("takes a slice unit name as the cgroup parent, and nothing else", () => {

@@ -101,6 +101,35 @@ S3 from the engine VM, before a real class. Procedures: `deployment.md` §3.
 belong to their owners); it is applied by hand behind a timed rollback,
 never by a deploy.
 
+**Amended (2026-10-11, security audit M6, L12, L13): gVisor, the container's
+state, the bind address.** Scope: point 2 (what the sandbox containers run
+under) and the runner's own startup; invariants 10–14 are unchanged.
+(a) *gVisor is the Podman service's runtime, never a flag.* A `--remote`
+client cannot choose the runtime of a container (`podman run` has no
+`--runtime`; the global one is ignored remotely), so the `--runtime runsc` the
+runner used to append would have failed every run. gVisor is the default
+runtime of a Podman service of the runner's own,
+`quiz-runner-podman.socket` (`/run/quiz-runner-podman/podman.sock`), whose
+`CONTAINERS_CONF_OVERRIDE` names a wrapper running `runsc --oci-seccomp` —
+without that flag runsc ignores the seccomp profile of invariant 12. The
+system socket keeps crun for the workspace portal. One script,
+`apps/runner/deploy/install-gvisor.sh`, sets it up on the VM and on CI.
+(b) *Fail-closed only on demand* (owner): with `RUNNER_RUNTIME=runsc` the
+runner refuses to start unless the engine names runsc, a container created
+with the argv of a real run executes a command through `podman exec`, and
+that command sees another kernel release than the host's; the quadlet
+restarts it, `/healthz` reports it down, the ADR-055 alert fires. With `auto`
+(the default) a production runner without gVisor warns at startup and on
+every `/health`. The owner installs gVisor and flips the variable by hand;
+no deploy does (`apps/runner/README.md`, Switching production to gVisor).
+(c) *The proof before production*: the runner integration workflow has a
+`runsc` leg running the whole suite through that socket, non-blocking until
+first green. (d) `RunnerHealth` carries an optional `runtime`, tolerated
+absent on both sides. (e) A program's stderr or exit code only triggers a
+`podman container inspect`, whose answer alone says the container is gone.
+(f) The runner binds `127.0.0.1` by default and refuses a bind outside the
+loopback without `RUNNER_TOKEN`.
+
 ## Context
 
 `docs/spec/05-architecture.md` (5.5 and 5.9) and ADR-009 put the runner in the

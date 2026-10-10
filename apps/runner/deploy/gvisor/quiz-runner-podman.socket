@@ -1,0 +1,19 @@
+# The runner's own Podman API socket, whose service runs every container
+# under gVisor (quiz-runner-podman.service). Installed by
+# apps/runner/deploy/install-gvisor.sh as
+# /etc/systemd/system/quiz-runner-podman.socket.
+#
+# Why a second socket: a `--remote` client cannot choose the runtime of a
+# container, so gVisor has to be the DEFAULT runtime of the service the runner
+# talks to — and the engine VM's own /run/podman/podman.sock also serves the
+# workspace portal, whose sessions must not change runtime behind its back.
+[Unit]
+Description=Podman API socket of the quiz runner (gVisor)
+Documentation=https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md
+
+[Socket]
+ListenStream=/run/quiz-runner-podman/podman.sock
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

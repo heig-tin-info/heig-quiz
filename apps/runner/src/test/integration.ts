@@ -5,7 +5,7 @@ import type { RunnerLanguage } from "@quiz/core/server";
 import { loadConfig, type RunnerConfig } from "../config.js";
 import { createEngine, remoteArgs, type Engine } from "../engine.js";
 import { availableLanguages, LANGUAGES } from "../images.js";
-import { probeEngine } from "../probe.js";
+import { probeEngine, proveRuntime } from "../probe.js";
 
 /**
  * The bootstrap the three `*.int.test.ts` files share.
@@ -45,8 +45,13 @@ let cached: IntegrationHost | null = null;
 export function integrationHost(): IntegrationHost {
   if (cached !== null) return cached;
   // PODMAN_SOCKET, when set, wins over detection (loadConfig's own rule): the
-  // CI job points the suite at the ROOTFUL socket.
-  const config = loadConfig({ LOG_LEVEL: "fatal", PODMAN_SOCKET: process.env.PODMAN_SOCKET ?? "" });
+  // CI job points the suite at the ROOTFUL socket. RUNNER_RUNTIME=runsc is
+  // the CI's gVisor leg: every container of the suite then runs under runsc.
+  const config = loadConfig({
+    LOG_LEVEL: "fatal",
+    PODMAN_SOCKET: process.env.PODMAN_SOCKET ?? "",
+    RUNNER_RUNTIME: process.env.RUNNER_RUNTIME ?? "auto",
+  });
   try {
     const images = execFileSync(
       config.PODMAN_BIN,
@@ -103,13 +108,17 @@ export async function integrationEngine(host: IntegrationHost): Promise<Engine> 
       `[runner] strict: the engine must be rootful with --userns=auto (rootless=${rootless}, userns=auto:${usernsAuto})`,
     );
   }
-  return createEngine({
+  const engine = createEngine({
     podmanBin: host.config.PODMAN_BIN,
     socket: host.config.PODMAN_SOCKET,
     seccompProfile: host.config.RUNNER_SECCOMP,
     usernsAuto: probed.capabilities.usernsAuto,
-    runtime: probed.capabilities.runtime,
     cgroupParent: host.config.RUNNER_CGROUP_PARENT,
     capabilities: probed.capabilities,
   });
+  // The fail-closed gate of `buildApp`, against the real engine: under
+  // RUNNER_RUNTIME=runsc it throws, and the whole suite with it, unless a
+  // hardened container really runs under gVisor.
+  await proveRuntime(engine, host.config);
+  return engine;
 }

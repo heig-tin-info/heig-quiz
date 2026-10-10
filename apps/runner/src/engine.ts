@@ -51,7 +51,15 @@ export interface EngineCapabilities {
   remote: boolean;
   /** `--userns=auto` accepted by this engine (always true rootful). */
   usernsAuto: boolean;
-  /** An alternative OCI runtime, `runsc` (gVisor) when the host has it. */
+  /**
+   * The OCI runtime every container runs under — `runsc` is gVisor — as the
+   * engine's `podman info` names its default; `null` when it did not say.
+   *
+   * It is the SERVICE's choice, never this client's: with `--remote` the
+   * global `--runtime` is ignored and `podman run` has no such flag, so the
+   * only way to gVisor is a Podman service whose default runtime is runsc
+   * (`deploy/install-gvisor.sh`). `GET /health` reports it (ADR-016, audit M6).
+   */
   runtime: string | null;
   cgroupVersion: string;
 }
@@ -83,7 +91,10 @@ export interface ExecResult {
   ms: number;
   timedOut: boolean;
   truncated: boolean;
-  /** The container was gone: killed by the OOM reaper, or never started. */
+  /**
+   * The container was gone — killed by the OOM reaper, or never started — as
+   * `podman container inspect` says, never as the program's stderr says.
+   */
   containerGone: boolean;
 }
 
@@ -133,7 +144,6 @@ export interface EngineOptions {
   socket: string | null;
   seccompProfile: string;
   usernsAuto: boolean;
-  runtime: string | null;
   /**
    * `--cgroup-parent=<slice>` (`RUNNER_CGROUP_PARENT`), validated as a slice
    * unit name by `loadConfig`; `null` = no flag. An addition to the
@@ -150,13 +160,27 @@ export interface EngineOptions {
   instanceId?: string;
 }
 
-/** Message fragments Podman uses when the container is not there any more. */
+/**
+ * Message fragments Podman uses when the container is not there any more.
+ *
+ * A HINT, never a verdict: the program writes to the same stderr, so a
+ * student can print any of these. A match (or an exit code below) only makes
+ * the engine ask Podman whether the container still runs, and that answer
+ * alone decides (`exec`, security audit L12).
+ */
 const GONE = [
   "no such container",
   "is not running",
   "container state improper",
   "can only create exec sessions on running containers",
 ];
+
+/**
+ * Exit codes worth asking Podman about: 125 is `podman exec`'s own failure,
+ * 137 a SIGKILL — the OOM killer's, which may have taken the container with
+ * it. A program can exit with either, so they too only raise the question.
+ */
+const SUSPECT_EXIT = new Set([125, 137]);
 
 interface SpawnResult {
   code: number | null;
@@ -263,6 +287,21 @@ export function createEngine(options: EngineOptions): Engine {
     });
   }
 
+  /**
+   * Whether Podman says the container runs. A container it no longer knows
+   * (`inspect` exits non-zero) does not run; an inspect that could not be
+   * asked at all (no binary, killed) is evidence of nothing and changes
+   * nothing: the container is taken as running.
+   */
+  async function isRunning(name: string): Promise<boolean> {
+    const result = await podman(
+      ["container", "inspect", "--format", "{{.State.Running}}", name],
+      { timeoutMs: 30_000, maxBytes: 16 * 1024 },
+    );
+    if (result.code === null) return true;
+    return result.code === 0 && result.stdout.toString("utf8").trim() === "true";
+  }
+
   function containerArgs(create: CreateOptions): string[] {
     return [
       "run",
@@ -319,7 +358,9 @@ export function createEngine(options: EngineOptions): Engine {
       // Podman refuses it together with `--network none`.
       "--network",
       "none",
-      ...(options.runtime === null ? [] : ["--runtime", options.runtime]),
+      // No `--runtime`: `podman run` has no such flag, and the global one is
+      // ignored by a `--remote` client. gVisor is the Podman service's default
+      // runtime or nothing (`capabilities.runtime`, `proveRuntime`).
       // Invariant 10: a CLOSED list, and no secret in it.
       ...Object.entries(CONTAINER_ENV).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
       create.image,
@@ -353,8 +394,17 @@ export function createEngine(options: EngineOptions): Engine {
         { stdin: exec.stdin, timeoutMs: exec.timeoutMs, maxBytes: exec.maxBytes },
       );
       const stderr = result.stderr.toString("utf8");
-      const gone =
-        result.code !== 0 && GONE.some((needle) => stderr.toLowerCase().includes(needle));
+      // The stderr and the exit code belong to the student as much as to
+      // Podman: they only raise the question. `podman container inspect`
+      // answers it, and nothing the program printed can change that answer.
+      // A case the service's clock ended is destroyed by its caller anyway.
+      const suspect =
+        result.code !== null &&
+        result.code !== 0 &&
+        !result.timedOut &&
+        (SUSPECT_EXIT.has(result.code) ||
+          GONE.some((needle) => stderr.toLowerCase().includes(needle)));
+      const gone = suspect && !(await isRunning(name));
       return {
         exitCode: result.code,
         stdout: result.stdout.toString("utf8"),
