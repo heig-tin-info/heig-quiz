@@ -304,8 +304,16 @@ describe("math", () => {
     // The TeX source survives in the MathML annotation; what is DRAWN is capped.
     expect(huge.html).toContain("border-top-width:10em");
     expect(huge.html).not.toMatch(/(?:width|height)[:=]"?1000em/);
-    const bomb = renderPage(`$\\def\\a{xx}${"\\a".repeat(150)}$\n`, ctx());
+    // Past 500 expansions: a math error, not minutes of rendering.
+    const bomb = renderPage(`$\\def\\a{xx}${"\\a".repeat(600)}$\n`, ctx());
     expect(codes(bomb.warnings)).toEqual(["math_error"]);
+    // A six-line aligned proof (about 70 expansions) renders.
+    const proof = renderPage(
+      String.raw`$$\begin{aligned} (p \implies q) &\iff (\neg p \lor q) \\ &\iff (q \lor \neg p) \\ &\iff (\neg\neg q \lor \neg p) \\ &\iff (\neg q \implies \neg p) \\ x \neq y &\iff \neg(x = y) \\ f(x) &= \int_0^1 g(t)\,dt \neq 0 \end{aligned}$$` + "\n",
+      ctx(),
+    );
+    expect(proof.warnings).toEqual([]);
+    expect(proof.html).toContain("katex-display");
   });
 
   it("does not let a formula smuggle a link in", () => {

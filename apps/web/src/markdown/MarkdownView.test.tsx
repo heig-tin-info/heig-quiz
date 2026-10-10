@@ -12,6 +12,9 @@ import { assetMarkdown, assetUrl, assetWidth, renderMarkdown, withAssetWidth } f
  * tag on the screen of thirty students under exam conditions.
  */
 
+/** A six-line aligned proof: what a long, legitimate formula costs KaTeX in expansions. */
+const LOGIC_PROOF = String.raw`$$\begin{aligned} (p \implies q) &\iff (\neg p \lor q) \\ &\iff (q \lor \neg p) \\ &\iff (\neg\neg q \lor \neg p) \\ &\iff (\neg q \implies \neg p) \\ x \neq y &\iff \neg(x = y) \\ f(x) &= \int_0^1 g(t)\,dt \neq 0 \end{aligned}$$`;
+
 /** Renders and returns the container, so a test can query the raw DOM. */
 function view(source: string) {
   const { container } = renderWithProviders(<MarkdownView source={source} />);
@@ -205,9 +208,15 @@ describe("MarkdownView — content", () => {
     // The source survives as the MathML annotation; nothing DRAWN is 1000em.
     expect(rule.innerHTML).not.toMatch(/(?:width|height)[:=]"?1000em/);
 
-    const bomb = view(`$\\def\\a{xx}${"\\a".repeat(150)}$`);
+    // Past 500 expansions: refused, shown as its source in the error colour.
+    const bomb = view(`$\\def\\a{xx}${"\\a".repeat(600)}$`);
     expect(bomb.querySelector(".katex-error")).not.toBeNull();
     expect(bomb.querySelector(".katex-html")).toBeNull();
+
+    // A long derivation (about 70 expansions: `\iff` costs 8, `\implies` 10) renders.
+    const proof = view(LOGIC_PROOF);
+    expect(proof.querySelector(".katex-error")).toBeNull();
+    expect(proof.querySelector(".md-math-display .katex-html")).not.toBeNull();
 
     const huge = view(`$${"{\\Huge ".repeat(12)}x${"}".repeat(12)}$`);
     expect(huge.querySelectorAll(".katex-sizing")).toHaveLength(1);
