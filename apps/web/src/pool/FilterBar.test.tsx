@@ -3,10 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Concept, ConceptRef } from "@quiz/contracts";
+import type { Concept, ConceptRef, PoolFilterCourse } from "@quiz/contracts";
 
 import { renderWithProviders } from "../test/render";
-import { EMPTY_FILTERS, type FilterCourse, type QuestionFilters, type Vocabulary } from "./filters";
+import { EMPTY_FILTERS, type QuestionFilters, type Vocabulary } from "./filters";
 import { FilterBar } from "./FilterBar";
 import type { GroupBy } from "./QuestionGroups";
 
@@ -54,7 +54,7 @@ function Host({
   onView,
   onGroup,
 }: {
-  courses: FilterCourse[];
+  courses: PoolFilterCourse[];
   initial: QuestionFilters;
   concepts: ConceptRef[];
   vocabulary: Vocabulary;
@@ -82,7 +82,7 @@ function Host({
   );
 }
 
-function setup(filters: Partial<QuestionFilters> = {}, concepts: ConceptRef[] = CONCEPTS, courses: FilterCourse[] = []) {
+function setup(filters: Partial<QuestionFilters> = {}, concepts: ConceptRef[] = CONCEPTS, courses: PoolFilterCourse[] = []) {
   const onChange = vi.fn();
   const onView = vi.fn();
   const onGroup = vi.fn();
@@ -274,8 +274,8 @@ describe("FilterBar · how the list is drawn", () => {
 });
 
 describe("FilterBar · the course filter (#599 step 7b)", () => {
-  const PRG1: FilterCourse = { id: idOf(901), name: "Programmation 1", code: "PRG1" };
-  const PRG2: FilterCourse = { id: idOf(902), name: "Programmation 2", code: "PRG2" };
+  const PRG1: PoolFilterCourse = { id: idOf(901), name: "Programmation 1", code: "PRG1" };
+  const PRG2: PoolFilterCourse = { id: idOf(902), name: "Programmation 2", code: "PRG2" };
 
   it("offers the courses it is given, one pressed at most, and reports the pick", async () => {
     const { onChange, user } = setup({ courseId: PRG1.id }, CONCEPTS, [PRG1, PRG2]);

@@ -137,9 +137,6 @@ export interface ConceptWord {
   ids: string[];
 }
 
-/** A course the list can be filtered by: what `PoolDetail.filterCourses` offers. */
-export type FilterCourse = PoolFilterCourse;
-
 /** The vocabulary a concept word resolves against; `undefined` while it loads. */
 export type Vocabulary = readonly Concept[] | undefined;
 
@@ -149,8 +146,10 @@ export interface ResolvedFilters extends QuestionFilters {
   /** Concept words are typed and the vocabulary is not there yet: no answer to ask for. */
   pending: boolean;
   /** The course filtering the list: the one `course:` names, else the one ticked. */
-  course: FilterCourse | null;
-  /** The `course:` word that names no course on offer; it filters nothing. */
+  course: PoolFilterCourse | null;
+  /** The `course:` word as typed, whether or not it names a course on offer. */
+  courseWord: string | null;
+  /** That word when it names no course on offer; it then filters nothing. */
   courseMiss: string | null;
 }
 
@@ -163,7 +162,7 @@ export interface ResolvedFilters extends QuestionFilters {
 export function resolveFilters(
   filters: QuestionFilters,
   vocabulary?: Vocabulary,
-  courses?: readonly FilterCourse[],
+  courses?: readonly PoolFilterCourse[],
 ): ResolvedFilters {
   const parsed = parseSearch(filters.q);
   // A typed word names a course by its code, else by its name, whatever the case.
@@ -186,8 +185,9 @@ export function resolveFilters(
     types: union(filters.types, parsed.types),
     concepts: words.reduce((all, w) => union(all, w.ids), filters.concepts),
     words,
-    pending: (words.length > 0 && vocabulary === undefined) || (parsed.courseWord !== null && courses === undefined),
+    pending: words.length > 0 && vocabulary === undefined,
     course,
+    courseWord: parsed.courseWord,
     courseMiss: parsed.courseWord !== null && named === undefined && courses !== undefined ? parsed.courseWord : null,
     difficulties: union(filters.difficulties, parsed.difficulties).sort((a, b) => a - b),
     // Two bounds on one screen intersect: the narrower one is the one the
@@ -208,7 +208,7 @@ export function questionQuery(
   filters: QuestionFilters,
   vocabulary?: Vocabulary,
   cursor?: string | null,
-  courses?: readonly FilterCourse[],
+  courses?: readonly PoolFilterCourse[],
 ): string {
   const resolved = resolveFilters(filters, vocabulary, courses);
   const params = new URLSearchParams();
@@ -234,7 +234,6 @@ export function questionQuery(
 /** How many filters are active, for the "Filters (2)" button and the clear row. */
 export function activeFilterCount(filters: QuestionFilters): number {
   const resolved = resolveFilters(filters);
-  const parsed = parseSearch(filters.q);
   return (
     (resolved.q.trim() ? 1 : 0) +
     resolved.types.length +
@@ -243,7 +242,7 @@ export function activeFilterCount(filters: QuestionFilters): number {
     resolved.words.length +
     resolved.difficulties.length +
     // One course, ticked or typed.
-    (filters.courseId !== null || parsed.courseWord !== null ? 1 : 0) +
+    (filters.courseId !== null || resolved.courseWord !== null ? 1 : 0) +
     (resolved.includeDeleted ? 1 : 0) +
     // The two bounds are one filter: "version 2 to 4" is one thing to remove.
     (resolved.versionMin !== null || resolved.versionMax !== null ? 1 : 0) +

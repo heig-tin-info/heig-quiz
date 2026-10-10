@@ -24,7 +24,8 @@
 import { QuestionTypeId } from "@quiz/contracts";
 
 /** The five token kinds. The free text is not one: it is what is left. */
-export type SearchTokenKind = "concept" | "type" | "difficulty" | "version" | "course";
+export const SEARCH_TOKEN_KINDS = ["concept", "type", "difficulty", "version", "course"] as const;
+export type SearchTokenKind = (typeof SEARCH_TOKEN_KINDS)[number];
 
 export interface ParsedSearch {
   /** The free text, tokens taken out and quotes stripped. */

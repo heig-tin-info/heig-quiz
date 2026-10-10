@@ -138,15 +138,27 @@ describe("the course filter", () => {
     expect((await list(outsider, `course=${linkedCourse}`)).statusCode).toBe(404);
   });
 
-  it("is a 400 for something that is not an id", async () => {
-    expect((await list(owner, "course=PRG1")).statusCode).toBe(400);
-  });
-
   it("is offered in the pool detail as the linked courses the caller staffs, and no other", async () => {
     const detail = async (caller: Caller) =>
       PoolDetail.parse((await server.app.inject({ method: "GET", url: `/app/api/pools/${poolId}`, headers: caller.headers })).json())
         .filterCourses;
     expect((await detail(owner)).map((c) => c.code)).toEqual(["EMPTY", "PRG1", "PRG2"]);
     expect(await detail(member)).toEqual([{ id: otherLinkedCourse, name: "Course PRG2", code: "PRG2" }]);
+  });
+
+  it("reaches every linked course under Super Powers only, never an unlinked one", async () => {
+    const detail = async (caller: Caller) =>
+      PoolDetail.parse((await server.app.inject({ method: "GET", url: `/app/api/pools/${poolId}`, headers: caller.headers })).json())
+        .filterCourses;
+    // An admin who sits on the pool but staffs no course: no more than a member.
+    const admin = await server.signIn("admin");
+    await db().insert(poolMembers).values({ poolId, userId: admin.id, role: "reader" });
+    expect((await list(admin, `course=${linkedCourse}`)).statusCode).toBe(404);
+    expect(await detail(admin)).toEqual([]);
+
+    const powers = await server.signInWithSuperPowers();
+    expect((await detail(powers)).map((c) => c.code)).toEqual(["EMPTY", "PRG1", "PRG2"]);
+    expect(idsOf(await list(powers, `course=${linkedCourse}`))).toEqual([question.loop, question.both].sort());
+    expect((await list(powers, `course=${unlinkedCourse}`)).statusCode).toBe(404);
   });
 });

@@ -203,7 +203,7 @@ describe("the course filter (#599 step 7b)", () => {
 
   it("resolves a typed course by its code, else its name, whatever the case, and keeps the rest as text", () => {
     const byCode = resolveFilters({ ...EMPTY_FILTERS, q: "ptr course:prg1" }, undefined, COURSES);
-    expect(byCode).toMatchObject({ q: "ptr", course: PRG1, courseMiss: null, pending: false });
+    expect(byCode).toMatchObject({ q: "ptr", course: PRG1, courseMiss: null });
     const byName = resolveFilters({ ...EMPTY_FILTERS, q: 'course:"programmation 2"' }, undefined, COURSES);
     expect(byName.course).toEqual(PRG2);
   });
@@ -214,8 +214,7 @@ describe("the course filter (#599 step 7b)", () => {
     expect(questionQuery({ ...EMPTY_FILTERS, q: "course:ALGO" }, undefined, null, COURSES)).toBe("?limit=25");
   });
 
-  it("is pending until the courses are there, and counts as one filter", () => {
-    expect(resolveFilters({ ...EMPTY_FILTERS, q: "course:PRG1" }).pending).toBe(true);
+  it("counts as one filter, ticked or typed", () => {
     expect(activeFilterCount({ ...EMPTY_FILTERS, q: "course:PRG1" })).toBe(1);
     expect(activeFilterCount({ ...EMPTY_FILTERS, courseId: PRG1.id })).toBe(1);
   });
