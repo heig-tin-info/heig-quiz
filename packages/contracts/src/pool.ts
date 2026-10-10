@@ -9,7 +9,7 @@
 import { z } from "zod";
 
 import { QUESTION_TYPE_IDS } from "@quiz/core/contract";
-import { COURSE_POOL_MODES, POOL_DESCRIPTION_MAX, POOL_DESCRIPTION_SOURCES, POOL_ROLES, POOL_VISIBILITIES, SUBSCRIPTION_STATES } from "@quiz/domain";
+import { CATALOGUE_QUERY_MAX, COURSE_POOL_MODES, POOL_DESCRIPTION_MAX, POOL_DESCRIPTION_SOURCES, POOL_ROLES, POOL_VISIBILITIES, SUBSCRIPTION_STATES } from "@quiz/domain";
 
 import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf, teacherChoiceWith } from "./common.js";
 import { ConceptRef } from "./concept.js";
@@ -87,6 +87,9 @@ export const Pool = z.object({
   /** At most 280 characters; empty when nobody wrote one. */
   description: z.string().max(POOL_DESCRIPTION_MAX),
   descriptionSource: z.enum(POOL_DESCRIPTION_SOURCES),
+  /** The domain the model inferred from the pool's concepts, in each language; empty until inferred (ADR-095). */
+  domainFr: z.string(),
+  domainEn: z.string(),
   ownerId: z.uuid(),
   isPersonal: z.boolean(),
   createdAt: z.string(),
@@ -125,6 +128,13 @@ export const PoolSummary = Pool.extend({
   subscription: SubscriptionState,
 });
 export type PoolSummary = z.infer<typeof PoolSummary>;
+
+/** `GET /pools/catalogue`: the public pools, searched by words (ADR-095). */
+export const CatalogueQuery = z.object({
+  q: z.string().trim().max(CATALOGUE_QUERY_MAX).default(""),
+  limit: z.coerce.number().int().min(1).max(100).default(60),
+});
+export type CatalogueQuery = z.infer<typeof CatalogueQuery>;
 
 export const PoolCreate = z.object({
   name: z.string().trim().min(1).max(200),

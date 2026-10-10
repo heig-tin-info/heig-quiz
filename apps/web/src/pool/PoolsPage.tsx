@@ -1,13 +1,13 @@
-import { Globe, History, Library, Lock, Plus, Users } from "lucide-react";
+import type { UseQueryResult } from "@tanstack/react-query";
+import { Globe, Library, Plus } from "lucide-react";
 import { useState } from "react";
 
 import type { Me, PoolSummary } from "@quiz/contracts";
 
 import { useMe } from "../api";
-import { useT, type TFunction } from "../i18n";
-import type { Route } from "../router";
+import { useT } from "../i18n";
+import { useSearchParam, type Route } from "../router";
 import {
-  Badge,
   Button,
   Card,
   type Column,
@@ -22,10 +22,13 @@ import {
   Spinner,
   T,
   TableHead,
+  Tabs,
   usePersistentChoice,
   useSortableTable,
   ViewSwitch,
 } from "../ui";
+import { PoolCard, VisibilityBadge } from "./PoolCard";
+import { PoolCatalogue } from "./PoolCatalogue";
 import { PoolFormModal } from "./PoolFormModal";
 import { PoolIcon } from "./PoolIcon";
 import { usePools } from "./api";
@@ -56,105 +59,6 @@ import { usePools } from "./api";
 const VIEW_KEY = "quiz-pools-view";
 const VIEWS = ["cards", "list"] as const;
 type PoolsView = (typeof VIEWS)[number];
-
-/** The visibility badge of a pool: what it says, and who else is on it. */
-function VisibilityBadge({ pool }: { pool: PoolSummary }) {
-  const t = useT();
-  if (pool.visibility === "public") {
-    return (
-      <Badge tone="amber" icon={Globe}>
-        {t("pools.visibility.public")}
-      </Badge>
-    );
-  }
-  if (pool.visibility === "shared") {
-    return (
-      <Badge tone="zinc" icon={Users}>
-        {t(
-          pool.memberCount === 0
-            ? "pools.visibility.sharedNone"
-            : pool.memberCount === 1
-              ? "pools.visibility.sharedOne"
-              : "pools.visibility.shared",
-          { n: pool.memberCount },
-        )}
-      </Badge>
-    );
-  }
-  return (
-    <Badge tone="zinc" icon={Lock}>
-      {t("pools.visibility.private")}
-    </Badge>
-  );
-}
-
-/** What I may do in a pool that is not mine ("Contributor"); null for an owner. */
-function poolRoleLabel(pool: PoolSummary, t: TFunction): string | null {
-  return pool.role !== "owner" ? t(`share.role.${pool.role}`) : null;
-}
-
-function PoolCard({
-  pool,
-  me,
-  navigate,
-}: {
-  pool: PoolSummary;
-  me: Me | null | undefined;
-  navigate: (r: Route) => void;
-}) {
-  const t = useT();
-  const mine = me != null && pool.ownerId === me.id;
-  const roleLabel = poolRoleLabel(pool, t);
-
-  return (
-    // A column, so the date strip is at the BOTTOM of every card and not
-    // wherever its own text ended: three cards side by side with three rules
-    // at three heights read as three different objects.
-    <Card className="flex h-full flex-col overflow-hidden">
-      {/* The card IS the door, so the whole of it is one button. */}
-      <button
-        type="button"
-        onClick={() => navigate({ view: "pool", id: pool.id })}
-        className="flex w-full flex-1 items-start gap-3 p-4 text-left transition-colors hover:bg-surface-2/50"
-      >
-        <span className="inline-flex size-14 shrink-0 items-center justify-center rounded-field bg-surface-2 text-fg-muted">
-          <PoolIcon icon={pool.icon} color={pool.color} className="size-8.75" />
-        </span>
-        <span className="min-w-0 flex-1">
-          {/* Two pools may share a name: the owner is told beside it when the pool is not mine. */}
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className="min-w-0 truncate text-sm font-bold">{pool.name}</span>
-            {!mine ? (
-              <span className="max-w-[45%] shrink-0 truncate text-xs text-fg-faint">{pool.ownerName}</span>
-            ) : null}
-          </span>
-          <span className="mt-0.5 block text-xs text-fg-muted">
-            {t(pool.questionCount === 1 ? "pools.questions.one" : "pools.questions", {
-              n: pool.questionCount,
-            })}
-          </span>
-          {pool.description !== "" ? (
-            <span className="mt-2 line-clamp-3 block text-xs text-fg-muted">{pool.description}</span>
-          ) : null}
-        </span>
-      </button>
-      {/* The last change, said by its icon rather than by the same word on
-          every card, and set to the right where a date is read. Outside the
-          door: the date carries its own tooltip and focus. */}
-      <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-2 text-xs text-fg-faint">
-        <span className="flex min-w-0 items-center gap-2">
-          <VisibilityBadge pool={pool} />
-          {roleLabel ? <span className="truncate">{roleLabel}</span> : null}
-        </span>
-        <span className="flex shrink-0 items-center gap-1.5">
-          <History aria-hidden className="size-3.5" />
-          <span className="sr-only">{t("pools.updated")}</span>
-          <RelativeTime iso={pool.updatedAt} />
-        </span>
-      </div>
-    </Card>
-  );
-}
 
 function PoolRow({
   pool,
@@ -238,16 +142,21 @@ function poolRank(pool: PoolSummary, key: PoolSort): string | number {
 
 const ROLE_RANK: Record<PoolSummary["heldRole"], number> = { owner: 0, contributor: 1, reader: 2 };
 
-export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
+type PoolsTab = "mine" | "explore";
+
+/** "My pools": the shelf, as cards or as a table (ADR-095). */
+function PoolShelf({
+  pools,
+  navigate,
+  onCreate,
+}: {
+  pools: UseQueryResult<PoolSummary[]>;
+  navigate: (r: Route) => void;
+  onCreate: () => void;
+}) {
   const t = useT();
   const me = useMe();
-  const [creating, setCreating] = useState(false);
   const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "cards");
-
-  // Everything the caller reaches: an admin's own shelf, or every pool of
-  // the instance while their Super Powers are on (ADR-054) — the server's
-  // call, not a switch here.
-  const pools = usePools();
   const rows = pools.data ?? [];
   /* No initial sort: the server hands the shelf over in its own order, and
      the reader picks another one by clicking a label. */
@@ -266,22 +175,8 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
     { key: "updated", label: t("pools.updatedColumn"), className: T.colHigh },
   ];
 
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        help="pools"
-        title={t("pools.title")}
-        description={t("pools.subtitle")}
-        primary={
-          // Not while the list is empty: the empty state below carries the
-          // same action, and two accent fills of one action is noise.
-          rows.length > 0
-            ? { icon: Plus, label: t("pools.new"), onClick: () => setCreating(true), coach: "pools.new" }
-            : undefined
-        }
-      />
-
+    <>
       {rows.length > 0 && !pools.isError ? (
         <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
           <ViewSwitch name="pools-view" views={["cards", "list"]} value={view} onChange={setView} />
@@ -301,7 +196,7 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
           icon={Library}
           title={t("pools.empty.title")}
           action={
-            <Button onClick={() => setCreating(true)}>
+            <Button onClick={onCreate}>
               <Plus /> {t("pools.new")}
             </Button>
           }
@@ -330,6 +225,53 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
       )}
 
       {pools.isFetching && !pools.isLoading ? <Spinner className="py-2" /> : null}
+    </>
+  );
+}
+
+export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
+  const t = useT();
+  const [creating, setCreating] = useState(false);
+  // "My pools" or the catalogue of public pools (ADR-095).
+  const [tabParam, setTab] = useSearchParam("tab", "mine");
+  const tab: PoolsTab = tabParam === "explore" ? "explore" : "mine";
+
+  // Everything the caller reaches: an admin's own shelf, or every pool of
+  // the instance while their Super Powers are on (ADR-054) — the server's
+  // call, not a switch here.
+  const pools = usePools();
+  const rows = pools.data ?? [];
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        help="pools"
+        title={t("pools.title")}
+        description={t("pools.subtitle")}
+        primary={
+          // Not while the list is empty: the empty state below carries the
+          // same action, and two accent fills of one action is noise. Nor on
+          // the catalogue, which creates nothing.
+          tab === "mine" && rows.length > 0
+            ? { icon: Plus, label: t("pools.new"), onClick: () => setCreating(true), coach: "pools.new" }
+            : undefined
+        }
+      />
+
+      <Tabs<PoolsTab>
+        value={tab}
+        onChange={setTab}
+        idPrefix="pools"
+        items={[
+          { value: "mine", label: t("pools.tab.mine"), icon: Library },
+          { value: "explore", label: t("pools.tab.explore"), icon: Globe },
+        ]}
+      />
+
+      {tab === "explore" ? (
+        <PoolCatalogue navigate={navigate} />
+      ) : (
+        <PoolShelf pools={pools} navigate={navigate} onCreate={() => setCreating(true)} />
+      )}
       {creating ? <PoolFormModal onClose={() => setCreating(false)} /> : null}
     </div>
   );

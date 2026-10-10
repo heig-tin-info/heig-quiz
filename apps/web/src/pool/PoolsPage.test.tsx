@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -40,6 +40,8 @@ const makePool = (over: Partial<PoolSummary> = {}): PoolSummary => ({
   isPublic: false,
   description: "",
   descriptionSource: "owner",
+  domainFr: "",
+  domainEn: "",
   ownerId: "u-me",
   isPersonal: false,
   createdAt: "2026-01-01T08:00:00.000Z",
@@ -98,6 +100,61 @@ describe("PoolsPage", () => {
     // The description is clamped to three lines, and only drawn when there is one.
     expect(screen.getByText(/Diodes et transistors/)).toHaveClass("line-clamp-3");
     expect(screen.getAllByText(/hours ago/).length).toBeGreaterThan(0);
+  });
+
+  it("counts the teachers who follow or sit on a public pool, and only on a public one", async () => {
+    mockFetch({
+      [`GET ${POOLS}`]: ok([
+        makePool({ id: "p1", name: "Privée" }),
+        makePool({ id: "p2", name: "Publique", isPublic: true, visibility: "public", memberCount: 2, subscriberCount: 5, domainEn: "Embedded systems" }),
+      ]),
+    });
+    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
+    await screen.findByText("Publique");
+    // 5 subscribers + 2 members, in a discreet counter with its own label.
+    expect(screen.getByLabelText("7 following or sitting on this pool")).toHaveTextContent("7");
+    expect(screen.getAllByLabelText(/following or sitting on this pool/)).toHaveLength(1);
+    // The domain beside the count of questions.
+    expect(screen.getByText(/Embedded systems/)).toBeVisible();
+  });
+
+  it("explores the public pools in a panel of its own: one search, a Subscribe per card, no New pool", async () => {
+    const open = makePool({
+      id: "p9",
+      name: "Fluides",
+      isPublic: true,
+      visibility: "public",
+      role: "reader",
+      heldRole: "reader",
+      ownerId: "t2",
+      ownerName: "Grace Hopper",
+      subscriberCount: 3,
+      subscription: "available",
+    });
+    // A reader seat on a public pool: the server says there is nothing to follow, so no Subscribe.
+    const seated = makePool({ id: "p10", name: "Optique", isPublic: true, visibility: "public", role: "reader", heldRole: "reader", ownerId: "t2", subscription: "none" });
+    const { calls } = mockFetch({
+      [`GET ${POOLS}`]: ok([makePool()]),
+      [`GET ${POOLS}/catalogue?q=`]: ok([open, seated]),
+      [`GET ${POOLS}/catalogue?q=fluides`]: ok([open]),
+      [`GET ${POOLS}/catalogue?q=zzz`]: ok([]),
+      "PUT /app/api/pools/p9/subscription": ok(undefined),
+    });
+    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe(), route: "/?tab=explore" });
+
+    expect(await screen.findByText("Fluides")).toBeVisible();
+    // The catalogue creates nothing: the shelf's one primary action is not here.
+    expect(screen.queryByRole("button", { name: /New pool/ })).toBeNull();
+    expect(screen.queryByText("Programmation C")).toBeNull();
+
+    expect(await screen.findByText("Optique")).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "Subscribe" })).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "Subscribe" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT" && c.url === "/app/api/pools/p9/subscription")).toBe(true));
+
+    await userEvent.type(screen.getByRole("searchbox", { name: /Search by name, domain or concept/ }), "zzz");
+    expect(await screen.findByText("No public pool matches", {}, { timeout: 2000 })).toBeVisible();
+    expect(calls.some((c) => c.url.endsWith("catalogue?q=zzz"))).toBe(true);
   });
 
   it("opens the pool that was clicked", async () => {

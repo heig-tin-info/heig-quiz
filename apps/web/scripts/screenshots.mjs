@@ -955,6 +955,7 @@ const scenes = [
   { name: "pools", role: "teacher", path: "/pools" },
   { name: "pools-admin-all", role: "admin", path: "/pools", act: (p) => p.getByRole("switch", { name: /other teachers/i }).click() },
   { name: "pools-list", role: "teacher", path: "/pools", ls: { "quiz-pools-view": "list" } },
+  { name: "pools-explore", role: "teacher", path: "/pools?tab=explore", settle: 800 },
   { name: "pools-empty", role: "teacher", path: "/pools?empty=1" },
   { name: "pools-error", role: "teacher", path: "/pools?fail=1", settle: 2500 },
   // The icon picker, reached the way a teacher reaches it: the New pool form

@@ -54,6 +54,21 @@ function singular(word: string): string {
 }
 
 /**
+ * Lower-case, accents dropped, the ligatures `œ`, `æ`, `ß` (which NFKD keeps)
+ * spelled out: what a label and a search term are compared as. The one fold
+ * of concept keys and of the catalogue's search.
+ */
+export function foldText(text: string): string {
+  return text
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/œ/g, "oe")
+    .replace(/æ/g, "ae")
+    .replace(/ß/g, "ss");
+}
+
+/**
  * The matching key of a label. `+` and `#` survive inside a word, so `c`,
  * `c++` and `c#` stay three keys (`C ++` is `c++`); a `#` opening a word is
  * dropped (`#include`). The ligatures `œ`, `æ`, `ß`, which NFKD keeps, are
@@ -61,13 +76,7 @@ function singular(word: string): string {
  * them rather than collapsing to nothing.
  */
 export function conceptKey(label: string): string {
-  const words = label
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/œ/g, "oe")
-    .replace(/æ/g, "ae")
-    .replace(/ß/g, "ss")
+  const words = foldText(label)
     .replace(/\s+(?=\+)/g, "")
     .split(/[^\p{L}\p{N}+#]+/u)
     .map((w) => w.replace(/^#+/, ""))

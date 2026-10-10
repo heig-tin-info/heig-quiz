@@ -48,7 +48,7 @@ export const questionCount = sql<number>`(SELECT count(*) FROM ${questions} WHER
  * `questions.pool_id`, so a moved question carries its history along.
  * Reads `evaluations`, `evaluation_items` and `attempts` by join.
  */
-const usedCount = sql<number>`(SELECT count(DISTINCT ${qualified(questions.id)}) FROM ${questions}
+export const usedCount = sql<number>`(SELECT count(DISTINCT ${qualified(questions.id)}) FROM ${questions}
     JOIN ${questionVersions} ON ${qualified(questionVersions.questionId)} = ${qualified(questions.id)}
     JOIN ${evaluationItems} ON ${qualified(evaluationItems.questionVersionId)} = ${qualified(questionVersions.id)}
     JOIN ${evaluations} ON ${qualified(evaluations.id)} = ${qualified(evaluationItems.evaluationId)}
@@ -90,6 +90,8 @@ export function poolJson(pool: PoolRow, visibility: PoolVisibility): Pool {
     isPublic: pool.isPublic,
     description: pool.description,
     descriptionSource: pool.descriptionSource,
+    domainFr: pool.domainFr,
+    domainEn: pool.domainEn,
     ownerId: pool.ownerId,
     isPersonal: pool.isPersonal,
     createdAt: pool.createdAt.toISOString(),
@@ -98,7 +100,7 @@ export function poolJson(pool: PoolRow, visibility: PoolVisibility): Pool {
 }
 
 /** The facts `effectivePoolRole` needs, gathered per row rather than per pool. */
-const memberCountOf = sql<number>`(SELECT count(*) FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)})::int`;
+export const memberCountOf = sql<number>`(SELECT count(*) FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)})::int`;
 
 function memberRoleOf(userId: string): SQL<PoolRole | null> {
   return sql<PoolRole | null>`(SELECT ${qualified(poolMembers.role)} FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId})`;
@@ -110,7 +112,7 @@ function courseStaffOf(userId: string): SQL<boolean> {
 }
 
 /** Teachers subscribed to a PUBLIC pool: 0 for any other, whatever rows survive (ADR-095). */
-const subscriberCountOf = sql<number>`(CASE WHEN ${qualified(pools.isPublic)} THEN (SELECT count(*) FROM ${poolSubscriptions} WHERE ${qualified(poolSubscriptions.poolId)} = ${qualified(pools.id)}) ELSE 0 END)::int`;
+export const subscriberCountOf = sql<number>`(CASE WHEN ${qualified(pools.isPublic)} THEN (SELECT count(*) FROM ${poolSubscriptions} WHERE ${qualified(poolSubscriptions.poolId)} = ${qualified(pools.id)}) ELSE 0 END)::int`;
 
 /** The facts of `effectivePoolRole` for one row, Super Powers aside. */
 function roleFacts(
@@ -171,8 +173,9 @@ export async function listPools(
   db: Db,
   where: SQL | undefined,
   viewer: Pick<Caller, "id" | "reach">,
+  options: { orderBy?: SQL[]; limit?: number } = {},
 ): Promise<PoolSummary[]> {
-  const rows = await db
+  const query = db
     .select({
       pool: pools,
       visibility: derivedVisibility,
@@ -193,7 +196,8 @@ export async function listPools(
     .leftJoin(users, eq(users.id, pools.ownerId))
     .leftJoin(avatars, eq(avatars.userId, pools.ownerId))
     .where(where)
-    .orderBy(asc(pools.name));
+    .orderBy(...(options.orderBy ?? [asc(pools.name)]));
+  const rows = await (options.limit === undefined ? query : query.limit(options.limit));
   return rows.map((r) => {
     const facts = roleFacts({ ...r.pool, memberRole: r.memberRole, isCourseStaff: r.isCourseStaff }, viewer.id);
     return {

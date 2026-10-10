@@ -12,10 +12,7 @@ import { z } from "zod";
 import type { QuestionReview, ReviewFinding } from "@quiz/contracts";
 import {
   applyFix,
-  isReviewNight,
   LLM_REVIEW_NIGHT_SHARE,
-  llmWorstCaseUsd,
-  modelFor,
   parsePath,
   REVIEW_MAX_FINDINGS,
   REVIEW_SEVERITIES,
@@ -27,6 +24,7 @@ import {
 import type { Db } from "../../db/client.js";
 import { LlmError, settingsRow, spentToday, type LlmGateway } from "../llm/service.js";
 import { draftOf, putDraft } from "./questionWrite.js";
+import { nightPass } from "./nightPass.js";
 import { nightCandidates, reviewJson, saveFindings, saveReview } from "./reviewStore.js";
 import type { QuestionRecord } from "./shared.js";
 
@@ -189,31 +187,15 @@ const NIGHT_BATCH = 60;
  * night; a missing key or an empty cap ends the run.
  */
 export async function runNightReview(db: Db, gateway: LlmGateway, now: Date): Promise<string> {
-  if (!isReviewNight(now)) return "outside the night (01:00–06:00, Zurich)";
-  if (!(await gateway.ready())) return "no LLM key: nothing reviewed";
-  const settings = await settingsRow(db);
-  const share = settings.dailyCapUsd * LLM_REVIEW_NIGHT_SHARE;
-  const model = modelFor(settings.models, "review");
-  const candidates = await nightCandidates(db, now, NIGHT_BATCH);
-  let reviewed = 0;
-  let failed = 0;
-  for (const version of candidates) {
-    const promptChars = JSON.stringify(version.config).length + version.explanation.length + SYSTEM.length;
-    if ((await spentToday(db, now, { purpose: "review", unattributed: true })) + llmWorstCaseUsd(model, promptChars, MAX_TOKENS) > share) {
-      return `${reviewed} reviewed, ${failed} failed; the night's share of the cap is spent`;
-    }
-    try {
-      await reviewVersion(db, gateway, { ...version, id: version.versionId, number: version.number! }, null, now);
-      reviewed += 1;
-    } catch (error) {
-      if (!(error instanceof LlmError)) throw error;
-      // No key, or the cap itself: nothing more tonight.
-      if (error.code === "not_configured" || error.code === "key_unreadable" || error.code === "budget_exhausted") {
-        return `${reviewed} reviewed, ${failed} failed; stopped: ${error.code}`;
-      }
-      await saveReview(db, version.versionId, { state: "failed", findings: [], model: null, at: now });
-      failed += 1;
-    }
-  }
-  return `${reviewed} reviewed, ${failed} failed`;
+  return nightPass(db, gateway, now, {
+    purpose: "review",
+    share: LLM_REVIEW_NIGHT_SHARE,
+    noKey: "nothing reviewed",
+    items: () => nightCandidates(db, now, NIGHT_BATCH),
+    promptChars: (v) => JSON.stringify(v.config).length + v.explanation.length + SYSTEM.length,
+    maxTokens: MAX_TOKENS,
+    run: (version) => reviewVersion(db, gateway, { ...version, id: version.versionId, number: version.number! }, null, now).then(() => undefined),
+    onFailure: async (version) => void (await saveReview(db, version.versionId, { state: "failed", findings: [], model: null, at: now })),
+    report: (reviewed, failed) => `${reviewed} reviewed, ${failed} failed`,
+  });
 }

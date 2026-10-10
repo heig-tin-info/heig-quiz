@@ -28,6 +28,8 @@ const makeDetail = (over: Partial<PoolDetail["pool"]> = {}, role: PoolDetail["ro
     isPublic: false,
     description: "",
     descriptionSource: "owner",
+    domainFr: "",
+    domainEn: "",
     ownerId: "u-me",
     isPersonal: false,
     createdAt: "2026-01-01T08:00:00.000Z",

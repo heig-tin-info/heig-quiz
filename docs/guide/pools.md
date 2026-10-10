@@ -19,6 +19,15 @@ A pool is where your questions live: a tree of categories, the concepts each que
 
 A pool is offered when you fill an evaluation only once it is linked to the course, from the course card on **Courses**. Unlinking removes that offer and nothing else. See [Evaluations](evaluations.md).
 
+
+### Explore the public pools
+
+The **Explore** tab of the pools page is the catalogue of the pools your colleagues published. Search by a name, a domain or a concept: each word must be found in the pool's name, its description, its domain or the concepts of its published questions, in French or in English, without minding accents or plurals. The most followed pools come first. The **domain** on a card is a short label the platform infers from the pool's concepts when it is published, and again at night when the concepts changed; only the concept labels are sent to the model.
+
+**My pools** is a shelf, not the whole reach: it lists the pools you own, sit on, reach through a linked course or subscribed to. Every teacher can still read any public pool. **Subscribe** on a card adds a public pool to your shelf and nothing else: you are not a member, so the pool's owner and members see you by name only and cannot remove you (unsubscribe from the pool's **Settings** tab). The small counter with two people on a public card is the number of subscribers plus members.
+
+To draw a public pool's questions in a course without making the course staff contributors, link it **read-only** (**Linked read-only** on the course's pools page); a course owner may do so without subscribing. Unpublishing a pool first tells you how many subscribers, read-only courses and templates depend on it; once you confirm, the read-only links and subscriptions end and those teachers are told. Links that let a course edit the pool stay.
+
 ## Opening a pool
 
 A click on a card opens the pool: its categories in the sidebar, its questions in the table.

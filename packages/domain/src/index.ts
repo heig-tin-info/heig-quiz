@@ -112,6 +112,7 @@ export * from "./period.js";
 export * from "./pollOutcome.js";
 export * from "./pollTally.js";
 export * from "./poolRole.js";
+export * from "./catalogue.js";
 export * from "./projectGrade.js";
 export * from "./projectAccept.js";
 export * from "./projectRuns.js";

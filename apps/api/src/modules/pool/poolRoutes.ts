@@ -1,7 +1,7 @@
 /** The pools themselves: list, create, read, rename, delete. */
 import type { FastifyInstance } from "fastify";
 
-import { IdParam, PoolCreate, PoolPatch, type PoolInUse } from "@quiz/contracts";
+import { CatalogueQuery, IdParam, PoolCreate, PoolPatch, type PoolInUse } from "@quiz/contracts";
 
 import {
   accessWhere,
@@ -36,6 +36,20 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     const caller = callerOf(req);
     return service.listPools(app.db, accessWhere(caller, myPools(caller.id)), caller);
   });
+
+  /**
+   * The catalogue (ADR-095): the public pools, searched and ranked. Public
+   * pools only, so Super Powers do not widen it; every teacher may read it.
+   */
+  app.get(
+    "/app/api/pools/catalogue",
+    { preHandler: requireTeacher },
+    async (req, reply) => {
+      const query = CatalogueQuery.safeParse(req.query);
+      if (!query.success) return invalid(reply, query.error);
+      return service.catalogue(app.db, callerOf(req), query.data);
+    },
+  );
 
   app.post("/app/api/pools", { preHandler: requireTeacher }, async (req, reply) => {
     const body = PoolCreate.safeParse(req.body);
@@ -84,6 +98,8 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         }));
         if (isPublic !== undefined && isPublic !== pool.isPublic) {
           await trace(req, isPublic ? "pool.publish" : "pool.unpublish", "pool", pool.id, {});
+          // Published: the domain is inferred in the background, after the answer (ADR-095).
+          if (isPublic) void service.refreshDomainInBackground(app.db, app.llmGateway, pool.id, req.user!.id, app.clock.now(), app.log);
         }
         // Whenever the patch unpublishes, whatever the pool was loaded as: nothing to drop, nobody told.
         if (dropped) await service.announceRetired(app.db, pool, dropped);
