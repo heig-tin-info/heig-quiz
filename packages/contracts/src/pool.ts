@@ -296,6 +296,12 @@ export const QuestionRow = z.object({
   randomizable: z.boolean(),
   /** The LLM review of the latest published version (ADR-060 §3): the pill; null when not reviewed. */
   review: ReviewPill.nullable(),
+  /**
+   * The reports still open on it that the CALLER may read (issue #680): all
+   * of them for a writer of the pool, their own for anyone else. Distinct
+   * from `review`, which is the nightly review's.
+   */
+  openReports: z.number().int().nonnegative(),
 });
 export type QuestionRow = z.infer<typeof QuestionRow>;
 

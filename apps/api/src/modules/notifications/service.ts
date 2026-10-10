@@ -173,6 +173,7 @@ export async function notifyMany(
           id: randomUUID(),
           userId: d.userId,
           poolId: "poolId" in d.payload ? d.payload.poolId : null,
+          questionId: "questionId" in d.payload ? d.payload.questionId : null,
           evaluationId: evaluationIdOf(d.payload),
           classroomId: "classroomId" in d.payload ? d.payload.classroomId : null,
           projectId: "projectId" in d.payload ? d.payload.projectId : null,

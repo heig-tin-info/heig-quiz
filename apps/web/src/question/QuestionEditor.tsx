@@ -19,6 +19,7 @@ import { useEditorShortcuts } from "./useEditorShortcuts";
 import { useQuestionActions } from "./useQuestionActions";
 import { useQuestionDraft } from "./useQuestionDraft";
 import { VersionHistory } from "./VersionHistory";
+import { QuestionReportsTab, ReportDialog, useQuestionReports } from "./reports";
 import { evaluationKey, gradingKey, poolKey, questionKey } from "../queryKeys";
 import { useEvaluation, useTemplate } from "../evaluation/api";
 
@@ -146,10 +147,12 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const qc = useQueryClient();
   const toast = useToast();
   const [rawTab, setTab] = useSearchParam("tab", "edit");
-  const tab: Tab = rawTab === "try" || rawTab === "versions" ? rawTab : "edit";
+  const tab: Tab = rawTab === "try" || rawTab === "versions" || rawTab === "reports" ? rawTab : "edit";
   const { detail, pool, poolId, readOnly, draft, setDraft, autosave, issues, edited, savedStamp } =
     useQuestionDraft(id);
   const [publishing, setPublishing] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const reports = useQuestionReports(id);
   const origin = useOrigin();
   const crumbs = useQuestionCrumbs(origin, poolId, pool.data?.pool.name);
   // The tab panel, so `Ctrl+Enter` can put the reader inside what it opened.
@@ -244,6 +247,8 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         onPublish={startPublish}
         onDuplicate={() => duplicate(data.meta)}
         onDelete={() => void askDelete(data.meta)}
+        openReports={reports.data?.items.filter((r) => !r.resolvedAt).length ?? 0}
+        onReport={() => setReporting(true)}
       />
 
       <Tabs
@@ -255,6 +260,10 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
           { value: "edit", label: t("question.tab.edit") },
           { value: "try", label: t("question.tab.try") },
           { value: "versions", label: t("question.tab.versions"), count: data.versions.length },
+          // Only when there is something to read: a reader sees their own, a writer all of them.
+          ...(reports.data && reports.data.items.length > 0
+            ? [{ value: "reports" as const, label: t("question.tab.reports"), count: reports.data.items.length }]
+            : []),
         ]}
       />
 
@@ -278,10 +287,16 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         </EditorExpandChrome.Provider>
       ) : tab === "try" ? (
         <TryPanel questionId={id} type={data.meta.type} />
+      ) : tab === "reports" ? (
+        <QuestionReportsTab questionId={id} poolId={data.meta.poolId} />
       ) : (
         <VersionHistory questionId={id} versions={data.versions} />
       )}
       </TabPanel>
+
+      {reporting ? (
+        <ReportDialog questionId={id} poolId={data.meta.poolId} onClose={() => setReporting(false)} />
+      ) : null}
 
       {publishing ? (
         <PublishDialog

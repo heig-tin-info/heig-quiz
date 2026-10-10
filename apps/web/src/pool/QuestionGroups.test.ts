@@ -22,6 +22,7 @@ const row = (over: Partial<QuestionRow> & { id: string }): QuestionRow => ({
   review: null,
   starred: false,
   randomizable: false,
+  openReports: 0,
   updatedAt: "2026-09-18T08:00:00.000Z",
   deprecated: false,
   deletedAt: null,

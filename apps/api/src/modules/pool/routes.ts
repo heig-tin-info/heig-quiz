@@ -20,6 +20,7 @@ import { memberRoutes } from "./memberRoutes.js";
 import { categoryRoutes } from "./categoryRoutes.js";
 import { questionRoutes } from "./questionRoutes.js";
 import { reviewRoutes } from "./reviewRoutes.js";
+import { reportRoutes } from "./reportRoutes.js";
 import { moveRoutes } from "./moveRoutes.js";
 import { starRoutes } from "./starRoutes.js";
 import { tryRoutes } from "./tryRoutes.js";
@@ -39,6 +40,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   categoryRoutes(app, ctx);
   questionRoutes(app, ctx);
   reviewRoutes(app, ctx);
+  reportRoutes(app, ctx);
   moveRoutes(app, ctx);
   starRoutes(app, ctx);
   tryRoutes(app, ctx);

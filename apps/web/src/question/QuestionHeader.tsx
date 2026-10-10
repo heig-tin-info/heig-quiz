@@ -1,4 +1,4 @@
-import { Copy, Eye, Save, Trash2 } from "lucide-react";
+import { Copy, Eye, Flag, Save, Trash2 } from "lucide-react";
 
 import type { QuestionDetail } from "@quiz/contracts";
 import { reviewPill } from "@quiz/domain";
@@ -9,6 +9,7 @@ import { routeToPath, type Route } from "../router";
 import { Trail, type Crumb } from "../Trail";
 import { Badge, Button, LinkButton, Menu, PageHeader, SyncBadge } from "../ui";
 import { ParameterizedBadge } from "../pool/ParameterizedBadge";
+import { ReportBadge } from "../pool/ReportBadge";
 import { ReviewBadge } from "../pool/ReviewBadge";
 import type { Autosave } from "./autosave";
 
@@ -16,7 +17,8 @@ import type { Autosave } from "./autosave";
  * The editor's header: the pool it lives in, the question's internal name,
  * where it stands (type, published version, unpublished changes, the save
  * badge) and its actions — the preview, and "Publish", the ONE primary action,
- * with the overflow menu beside it.
+ * with the overflow menu beside it. A reader keeps the preview and the menu's
+ * "Report a problem" (issue #680): the rest would be refused by the server.
  */
 export function QuestionHeader({
   id,
@@ -28,6 +30,8 @@ export function QuestionHeader({
   onPublish,
   onDuplicate,
   onDelete,
+  openReports,
+  onReport,
 }: {
   id: string;
   data: QuestionDetail;
@@ -39,6 +43,10 @@ export function QuestionHeader({
   onPublish: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  /** The open reports the caller may read (issue #680). */
+  openReports: number;
+  /** Opens the "Report a problem" dialog: open to every reader, a secondary action. */
+  onReport: () => void;
 }) {
   const t = useT();
   const latest = data.latestPublished;
@@ -67,6 +75,7 @@ export function QuestionHeader({
           {/* ADR-056 §8: its published version draws values per attempt. */}
           {data.meta.randomizable ? <ParameterizedBadge /> : null}
           <ReviewBadge review={data.review ? reviewPill(data.review.state, data.review.findings) : null} />
+          <ReportBadge count={openReports} />
           {draftAhead ? (
             <Badge tone="amber">{t("question.unpublished")}</Badge>
           ) : null}
@@ -109,26 +118,22 @@ export function QuestionHeader({
         </>
       }
       menu={
-        readOnly ? null : (
-          <Menu
-            label={t("common.actions")}
-            items={[
-              { label: t("question.saveNow"), icon: Save, onSelect: () => autosave.flush() },
-              {
-                label: t("question.duplicate"),
-                icon: Copy,
-                onSelect: onDuplicate,
-              },
-              {
-                label: t("question.delete"),
-                icon: Trash2,
-                danger: true,
-                separator: true,
-                onSelect: onDelete,
-              },
-            ]}
-          />
-        )
+        <Menu
+          label={t("common.actions")}
+          items={[
+            ...(readOnly
+              ? []
+              : [
+                  { label: t("question.saveNow"), icon: Save, onSelect: () => autosave.flush() },
+                  { label: t("question.duplicate"), icon: Copy, onSelect: onDuplicate },
+                ]),
+            // Any reader may tell the writers a question is wrong (issue #680).
+            { label: t("question.report"), icon: Flag, onSelect: onReport },
+            ...(readOnly
+              ? []
+              : [{ label: t("question.delete"), icon: Trash2, danger: true, separator: true, onSelect: onDelete }]),
+          ]}
+        />
       }
     />
   );

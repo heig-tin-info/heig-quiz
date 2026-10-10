@@ -11,6 +11,7 @@ import type { QuestionGroup } from "./QuestionGroups";
 import { StarButton } from "./stars";
 import { entryKey, type RowProps } from "./useQuestionBrowse";
 import { ParameterizedBadge } from "./ParameterizedBadge";
+import { ReportBadge } from "./ReportBadge";
 import { ReviewBadge } from "./ReviewBadge";
 
 /**
@@ -89,6 +90,7 @@ function QuestionCard({
         {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
         {row.randomizable ? <ParameterizedBadge /> : null}
         <ReviewBadge review={row.review} />
+        <ReportBadge count={row.openReports} />
         <RowStatsButton row={row} statsFor={statsFor} />
         <StarButton row={row} onToggle={onStar} />
         {readOnly ? null : (

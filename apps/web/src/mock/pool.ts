@@ -1581,6 +1581,55 @@ const reviewPillOf = (q: MockQuestion) => {
   return review ? reviewPill(review.state, review.findings) : null;
 };
 
+// --- Reports on a question (issue #680): one open report from a colleague on
+// ptr-null-check, one already resolved. `?empty=1`: none. The mock user writes
+// in every pool, so it sees all of them and may resolve.
+interface MockReport {
+  id: string;
+  questionId: string;
+  reporterName: string | null;
+  mine: boolean;
+  message: string;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedByName: string | null;
+  resolution: string;
+}
+const reportsOf = new Map<string, MockReport[]>(
+  flags.empty
+    ? []
+    : [
+        [
+          "q1",
+          [
+            {
+              id: "00000000-0000-4000-8000-0000000000a1",
+              questionId: "q1",
+              reporterName: "Marc Dupont",
+              mine: false,
+              message: "La réponse B est aussi correcte si le pointeur est initialisé à NULL.",
+              createdAt: iso(-3 * H),
+              resolvedAt: null,
+              resolvedByName: null,
+              resolution: "",
+            },
+            {
+              id: "00000000-0000-4000-8000-0000000000a2",
+              questionId: "q1",
+              reporterName: "Lea Rochat",
+              mine: false,
+              message: "Faute de frappe dans l'énoncé.",
+              createdAt: iso(-48 * H),
+              resolvedAt: iso(-40 * H),
+              resolvedByName: "Yves Chevallier",
+              resolution: "Corrigé, merci.",
+            },
+          ],
+        ],
+      ],
+);
+const openReportsOf = (q: MockQuestion) => (reportsOf.get(q.id) ?? []).filter((r) => !r.resolvedAt).length;
+
 const questionRow = (q: MockQuestion) => ({
   id: q.id,
   type: q.type,
@@ -1599,6 +1648,7 @@ const questionRow = (q: MockQuestion) => ({
   starred: stars.has(q.id) && q.deletedAt === null,
   randomizable: q.randomizable,
   review: reviewPillOf(q),
+  openReports: openReportsOf(q),
 });
 
 /**
@@ -2713,6 +2763,35 @@ on("PUT", "/app/api/pools/:id/review", (m, body) => {
   if (body.enabled === true) reviewedPools.add(poolId);
   else reviewedPools.delete(poolId);
   return poolReviewList(poolId);
+});
+on("GET", "/app/api/questions/:id/reports", (m) => {
+  const q = questionOr404(m.groups!.id!);
+  return { canResolve: true, items: [...(reportsOf.get(q.id) ?? [])].sort((a, b) => Number(!!a.resolvedAt) - Number(!!b.resolvedAt)) };
+});
+on("POST", "/app/api/questions/:id/reports", (m, body) => {
+  const q = questionOr404(m.groups!.id!);
+  const report: MockReport = {
+    id: crypto.randomUUID(),
+    questionId: q.id,
+    reporterName: null,
+    mine: true,
+    message: String(body.message),
+    createdAt: iso(0),
+    resolvedAt: null,
+    resolvedByName: null,
+    resolution: "",
+  };
+  reportsOf.set(q.id, [report, ...(reportsOf.get(q.id) ?? [])]);
+  return report;
+});
+on("POST", "/app/api/questions/:id/reports/:reportId/resolve", (m, body) => {
+  const q = questionOr404(m.groups!.id!);
+  const report = reportsOf.get(q.id)?.find((r) => r.id === m.groups!.reportId);
+  if (!report) throw new MockError(404, "not_found");
+  report.resolvedAt = iso(0);
+  report.resolvedByName = "Yves Chevallier";
+  report.resolution = String(body.reply ?? "");
+  return { ok: true };
 });
 on("POST", "/app/api/questions/:id/review", (m) => {
   const q = questionOr404(m.groups!.id!);

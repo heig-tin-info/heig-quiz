@@ -238,6 +238,8 @@ export const poolCandidatesKey = (poolId: string) => ["pool-candidates", poolId]
 export const poolQuestionStatsKey = (poolId: string) => ["pool", poolId, "question-stats"] as const;
 
 export const questionKey = (id: string) => ["question", id] as const;
+/** `GET /questions/:id/reports` (issue #680): under the question, so its refresh covers them. */
+export const questionReportsKey = (id: string) => ["question", id, "reports"] as const;
 /** `POST /questions/:id/preview` of the draft or of one published version. */
 export const questionPreviewKey = (id: string, source: "draft" | number | undefined) =>
   ["question", id, "preview", source] as const;

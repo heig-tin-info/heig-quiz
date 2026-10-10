@@ -66,6 +66,14 @@ const en = {
   "pool_question_added.body": "Colleagues published {count} questions in the pool “{poolName}”.",
   "pool_question_added.body.one": "A colleague published a question in the pool “{poolName}”.",
   "pool_question_added.action": "Open the pool",
+  "question_reported.subject": "{count} reports on {questionName}",
+  "question_reported.subject.one": "A report on {questionName}",
+  "question_reported.body": "{count} colleagues reported a problem on the question “{questionName}” of the pool “{poolName}”.",
+  "question_reported.body.one": "A colleague reported a problem on the question “{questionName}” of the pool “{poolName}”.",
+  "question_reported.action": "Open the question",
+  "question_report_resolved.subject": "Your report was handled: {questionName}",
+  "question_report_resolved.body": "A writer of the pool “{poolName}” resolved your report on the question “{questionName}”.",
+  "question_report_resolved.action": "Open the question",
   // The project kinds (F-NOTIF-13, M3-09b): the project's name and counts,
   // never a score nor a student's name.
   "project_published.subject": "New project: {projectTitle}",
@@ -160,6 +168,10 @@ const en = {
   "activity.grading_ready.template": "Grading to validate: {evaluationTitle}",
   "activity.pool_question_added.description": "A colleague publishes questions in a pool you share",
   "activity.pool_question_added.template": "{poolName}: {count} new question(s)",
+  "activity.question_reported.description": "A colleague reports a problem on a question of a pool you write in",
+  "activity.question_reported.template": "{questionName}: {count} report(s)",
+  "activity.question_report_resolved.description": "A writer resolves your report on a question",
+  "activity.question_report_resolved.template": "Report handled: {questionName}",
   "activity.activity_scheduled.description": "Exercises are scheduled in your classroom",
   "activity.activity_scheduled.template": "{classroomName}: {count} exercise(s) scheduled",
   "activity.activity_available.description": "An exercise opens",
@@ -234,6 +246,14 @@ const fr: Record<Key, string> = {
   "pool_question_added.body": "Des collègues ont publié {count} questions dans la banque « {poolName} ».",
   "pool_question_added.body.one": "Un collègue a publié une question dans la banque « {poolName} ».",
   "pool_question_added.action": "Ouvrir la banque",
+  "question_reported.subject": "{count} signalements sur {questionName}",
+  "question_reported.subject.one": "Un signalement sur {questionName}",
+  "question_reported.body": "{count} collègues ont signalé un problème sur la question « {questionName} » de la banque « {poolName} ».",
+  "question_reported.body.one": "Un collègue a signalé un problème sur la question « {questionName} » de la banque « {poolName} ».",
+  "question_reported.action": "Ouvrir la question",
+  "question_report_resolved.subject": "Votre signalement a été traité : {questionName}",
+  "question_report_resolved.body": "Un responsable de la banque « {poolName} » a traité votre signalement sur la question « {questionName} ».",
+  "question_report_resolved.action": "Ouvrir la question",
   "project_published.subject": "Nouveau projet : {projectTitle}",
   "project_published.body": "Le projet « {projectTitle} » est publié dans votre classe. Acceptez-le pour obtenir votre dépôt.",
   "project_published.unlinked.body": "Le projet « {projectTitle} » est publié dans votre classe. Liez votre compte GitHub, puis acceptez-le pour obtenir votre dépôt.",
@@ -318,6 +338,10 @@ const fr: Record<Key, string> = {
   "activity.grading_ready.template": "Correction à valider : {evaluationTitle}",
   "activity.pool_question_added.description": "Un collègue publie des questions dans une banque que vous partagez",
   "activity.pool_question_added.template": "{poolName} : {count} nouvelle(s) question(s)",
+  "activity.question_reported.description": "Un collègue signale un problème sur une question d'une banque où vous écrivez",
+  "activity.question_reported.template": "{questionName} : {count} signalement(s)",
+  "activity.question_report_resolved.description": "Un responsable traite votre signalement sur une question",
+  "activity.question_report_resolved.template": "Signalement traité : {questionName}",
   "activity.activity_scheduled.description": "Des exercices sont planifiés dans votre classe",
   "activity.activity_scheduled.template": "{classroomName} : {count} exercice(s) planifié(s)",
   "activity.activity_available.description": "Un exercice s'ouvre",
@@ -394,6 +418,10 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
       return { evaluationTitle: payload.evaluationTitle, count: String(payload.count) };
     case "pool_question_added":
       return { poolName: payload.poolName, count: String(payload.count) };
+    case "question_reported":
+      return { poolName: payload.poolName, questionName: payload.questionName, count: String(payload.count) };
+    case "question_report_resolved":
+      return { poolName: payload.poolName, questionName: payload.questionName };
     case "project_published":
     case "project_deadline_reminder":
     case "project_repo_invited":
@@ -445,6 +473,9 @@ export function notificationPath(payload: NotificationPayload): string {
     case "pool_ownership":
     case "pool_question_added":
       return `/pools/${payload.poolId}`;
+    case "question_reported":
+    case "question_report_resolved":
+      return `/questions/${payload.questionId}?tab=reports`;
     case "student_joined":
     case "roster_conflict":
       return `/classrooms/${payload.classroomId}?tab=roster`;
