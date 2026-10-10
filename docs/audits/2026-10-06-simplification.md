@@ -7,6 +7,7 @@ search:
 
 > The report the simplification pull requests of October 2026 follow, translated from its French original.
 > Its paths and line numbers refer to commit `b5e44c3`: relocate each claim before acting on it.
+> Since resolved: C01 (`CLASSROOM_PAGES` is gone) and the `bumpVersion` exception (M4-11 is dropped, so the function was removed).
 
 Base: commit `b5e44c3` (branch `claude/vigilant-cerf-qr16e0`, identical to `main`), 6 October 2026.
 Analysis report only: no file in the repository was modified.

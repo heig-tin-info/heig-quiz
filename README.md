@@ -53,7 +53,7 @@ and students already hold an edu-ID**:
   dragged into columns), essay and diagram.
 - **Parameterized questions**: write `[[R]]` instead of a value, and every
   student gets numbers of their own, graded against a key of their own.
-- **Question pools** with categories, tags, difficulty and a history of
+- **Question pools** with categories, concepts, difficulty and a history of
   published versions, shared with colleagues and filtered in a keystroke.
 - **Evaluation templates** kept by the course, instantiated into next year's
   classroom in one click.
@@ -145,7 +145,7 @@ and students already hold an edu-ID**:
         <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/pool-dark.png">
         <img alt="A question pool: categories in the sidebar, questions in the table" src="docs/assets/screenshots/pool-light.png">
       </picture>
-      <p align="center"><sub><b>Question pools</b>: categories, tags, difficulty and published versions, shared with colleagues.</sub></p>
+      <p align="center"><sub><b>Question pools</b>: categories, concepts, difficulty and published versions, shared with colleagues.</sub></p>
     </td>
     <td width="50%">
       <picture>

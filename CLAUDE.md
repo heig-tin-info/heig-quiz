@@ -72,7 +72,7 @@ Never work around these, not even "temporarily".
 4. **Content reaches a student only through the student view of its kind.**
    **Question content never reaches a student except through `toStudent`.**
    One point of exit, in the `studentView` service of the `live` module: it
-   strips the internal name, the tags, the difficulty and the explanation,
+   strips the internal name, the concepts, the difficulty and the explanation,
    then applies the feedback policy. Every question type is tested with a
    full configuration passed through `toStudent`, by forbidden-key list AND
    by searching the serialized output for the answer-key values

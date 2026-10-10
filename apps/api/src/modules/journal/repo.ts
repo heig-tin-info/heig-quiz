@@ -3,7 +3,7 @@
  * `journal/repo.ts`, sync point `ab98cc0`): the reads of the ingestion
  * (M4-02), then the writes (M4-03) — create a repository, find one by name,
  * put a file. Since ADR-057 the platform never edits a GitHub-mode journal's
- * pages: the put serves the creation's README and M4-11's Move to GitHub.
+ * pages: the put serves the creation's README.
  * Classroom's `commitMoves` (a reorder as one commit) is not ported.
  *
  * Everything goes through the REST API with the installation's client, and
@@ -308,7 +308,7 @@ export interface FileWrite {
 
 /**
  * Creates one file through the Contents API (the README of a new
- * repository; M4-11's export). Only the AUTHOR is the teacher: the
+ * repository). Only the AUTHOR is the teacher: the
  * committer stays the App, so GitHub signs the commit (Verified) and the
  * history says it came through Quiz. The path's segments are encoded, the
  * slashes kept.

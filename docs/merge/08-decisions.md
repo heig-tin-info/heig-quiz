@@ -191,7 +191,7 @@ Status values: `open`, `settled`, `superseded`.
 - **Suggested**: if none, phase M6 runs after the cutover and the
   migration drops the codespace columns (reported); the portal is untouched
   meanwhile.
-- Blocks: M6, M8-04.
+- Blocks: M6. (M8-04, the identity remap, is dropped: see its row in [`PROGRESS.md`](PROGRESS.md).)
 - **Status**: measured 2026-09-28: 3 online assignments, all in test
   classrooms with a roster of 1. **Settled 2026-10-01** (product owner,
   conversation): off the critical path. The test classrooms are not

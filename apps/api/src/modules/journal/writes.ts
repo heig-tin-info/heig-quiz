@@ -11,7 +11,7 @@
  * Quiz mode's (`quiz.ts`, M4-08), which refuses a GitHub-mode journal with
  * 409 `read_only`. Of M4-03's GitHub writes, what creates a repository and
  * commits a file (`createRepo`, `putFile`, `commitAuthor`) stays, for the
- * creation and for M4-11's Move to GitHub.
+ * creation.
  *
  * A new row starts at a random `version` (below), so an ingestion that read
  * GitHub for a removed row never writes its stale copy over a new one (J2,

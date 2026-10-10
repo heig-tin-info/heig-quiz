@@ -233,16 +233,6 @@ async function lockedAt(tx: Tx, classroomId: string, expected: number): Promise<
 
 const bumped = () => sql`${classroomJournals.version} + 1`;
 
-/**
- * The platform wrote to the repository or changed the row outside an
- * ingestion (M4-11's Move to GitHub, a mode switch): the row's `version`
- * moves, so an ingestion that read GitHub before it loses its
- * compare-and-set and starts over from a fresh snapshot (J2).
- */
-export async function bumpVersion(db: Db, classroomId: string): Promise<void> {
-  await db.update(classroomJournals).set({ version: bumped() }).where(eq(classroomJournals.classroomId, classroomId));
-}
-
 /** The copy written in one short transaction, or false when the row moved since the snapshot. */
 async function commitCopy(db: Db, snap: Snapshot, copy: Copy, now: Date): Promise<boolean> {
   const classroomId = snap.row.classroomId;

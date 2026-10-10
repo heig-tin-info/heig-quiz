@@ -66,7 +66,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M1-02 | GitHub adapters, config, image | done | M0-03 | `merge/M1-02-github-adapters` | #372 | The GitHub App client lives in `apps/api/src/github/`, with token redaction, the `config.ts` refusals and tokens handed to git through the environment only. |
 | M1-03 | `ActivityKind`, `ActivitySummary` union | done | M0-03 | `merge/M1-03-activity-kind` | #373 | `ActivitySummary` is a union on `kind`, and `ActivityKind` over `KINDS` (`modules/activity/`) is the point each activity kind fills (migration 0037). |
 | M1-04 | Missing primitives, long-form styles | done | M0-05 | `merge/M1-04-primitives` | #374 | The primitives `GithubIcon`, `OrgAvatar`, `Progress` and `Initials` in `./ui`, and the long-form `md-doc` style (DESIGN.md › Long-form reading). |
-| M1-05 | Web routes and mock skeleton | done | M1-03 | `merge/M1-05-web-routes` | #375 | The classroom routes and their mocks, placed behind `CLASSROOM_PAGES` until the task that ships each screen. |
+| M1-05 | Web routes and mock skeleton | done | M1-03 | `merge/M1-05-web-routes` | #375 | The classroom routes and their mocks, placed behind a route flag (`CLASSROOM_PAGES`, since removed) until the task that ships each screen. |
 | M1-06 | Import script skeleton, identity, login adoption | done | D04, D08 | `merge/M1-06-import-identity` | #464 | `apps/api/scripts/import-classroom.ts` imports people, accounts, GitHub links and rosters into existing Quiz classrooms (migration `0052`, login adoption ADR-061), and M8-01 extends it: card M1-06, "As delivered". |
 
 ## M2 — GitHub substrate

@@ -16,8 +16,8 @@
  * - **Lock**: a page's `version`; a save against another is 409 `conflict`,
  *   nothing written. The page a write answers is read in its transaction:
  *   its `version` is that write's own, the next save's `baseVersion`.
- * - **Paths** are set at creation and never change here (order and parent
- *   are M4-10's).
+ * - **Paths** are set at creation and never change here (rename, order and
+ *   nesting are not built).
  * - **Revisions**: one per save, add and restore (the markdown and its front
  *   matter), no limit; they outlive the page's deletion, so a deleted page
  *   can be restored, and go with the journal (cascade). No student route

@@ -77,6 +77,7 @@ nav = [
       { "Production measurements" = "merge/measures-2026-09-28.md" },
     ] },
     { "Archive" = [
+      { "Simplification audit, 2026-10-06" = "audits/2026-10-06-simplification.md" },
       { "MVP plan (phase 1, D1–D20)" = "PLAN-MVP.md" },
       { "MVP plan, full text" = "history/PLAN-MVP.md" },
     ] },
