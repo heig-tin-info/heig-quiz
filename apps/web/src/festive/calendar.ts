@@ -1,13 +1,11 @@
-import type { Locale } from "@quiz/domain";
-
 /**
  * The calendar of the festive touches (ADR-092): which day dresses the logo.
- * It is the only part of them always loaded; the drawings (`art.tsx`) are a
+ * It is the only part of them always loaded; the drawings (`art.ts`) are a
  * chunk fetched on a festive day only. Dates are the browser's: a costume is
  * cosmetic, never a deadline (invariant 5 binds deadlines, not decoration).
  */
 
-/** First and last day of a period, for a given year; `to` before `from` wraps into January. */
+/** A day of a given year: the first or the last of a period (a `to` before its `from` wraps into January). */
 type Rule = (year: number) => Date;
 
 const day =
@@ -52,27 +50,23 @@ const day256: Rule = (year) => new Date(year, 0, 256);
 
 const once = (rule: Rule) => ({ from: rule, to: rule });
 
-/**
- * The festive days, in the order of the academic year. `wiki` names the
- * Wikipedia article in each interface language.
- */
+/** The festive days, in the order of the academic year. */
 export const FESTIVE = [
-  { id: "programmers", ...once(day256), wiki: { en: "Programmers' Day", fr: "Journée des programmeurs" } },
-  { id: "ada", ...once(adaDay), wiki: { en: "Ada Lovelace Day", fr: "Ada Lovelace Day" } },
-  { id: "hopper", ...once(day(12, 9)), wiki: { en: "Grace Hopper", fr: "Grace Hopper" } },
-  { id: "xmas", from: day(12, 15), to: day(1, 6), wiki: { en: "Christmas", fr: "Noël" } },
-  { id: "torvalds", ...once(day(12, 28)), wiki: { en: "Linus Torvalds", fr: "Linus Torvalds" } },
-  { id: "kernighan", ...once(day(1, 30)), wiki: { en: "Brian Kernighan", fr: "Brian Kernighan" } },
-  { id: "pi", ...once(day(3, 14)), wiki: { en: "Pi Day", fr: "Journée de pi" } },
+  { id: "programmers", ...once(day256) },
+  { id: "ada", ...once(adaDay) },
+  { id: "hopper", ...once(day(12, 9)) },
+  { id: "xmas", from: day(12, 15), to: day(1, 6) },
+  { id: "torvalds", ...once(day(12, 28)) },
+  { id: "kernighan", ...once(day(1, 30)) },
+  { id: "pi", ...once(day(3, 14)) },
   {
     id: "easter",
     from: shift(easter, -2),
     to: shift(easter, 1),
-    wiki: { en: "Date of Easter", fr: "Calcul de la date de Pâques" },
   },
-  { id: "starwars", ...once(day(5, 4)), wiki: { en: "Star Wars Day", fr: "Journée Star Wars" } },
-  { id: "turing", ...once(day(6, 23)), wiki: { en: "Alan Turing", fr: "Alan Turing" } },
-] as const satisfies readonly { id: string; from: Rule; to: Rule; wiki: Record<Locale, string> }[];
+  { id: "starwars", ...once(day(5, 4)) },
+  { id: "turing", ...once(day(6, 23)) },
+] as const satisfies readonly { id: string; from: Rule; to: Rule }[];
 
 export type FestiveId = (typeof FESTIVE)[number]["id"];
 
@@ -92,10 +86,4 @@ export function festiveOn(date: Date): FestiveId | null {
     }
   }
   return best?.id ?? null;
-}
-
-/** The Wikipedia article of a festive day, in the interface language. */
-export function wikipediaUrl(id: FestiveId, locale: Locale): string {
-  const title = FESTIVE.find((f) => f.id === id)!.wiki[locale];
-  return `https://${locale}.wikipedia.org/wiki/${encodeURIComponent(title.replaceAll(" ", "_"))}`;
 }

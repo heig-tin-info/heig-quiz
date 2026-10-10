@@ -6,8 +6,8 @@ import type { FestiveId } from "./calendar";
  * The drawings of the festive touches (ADR-092), a chunk of its own: fetched
  * on a festive day only, so an ordinary day costs nothing but the calendar.
  *
- * An accessory is an SVG fragment in the logo's user units (viewBox
- * 227.2 × 60.1), slipped into one bubble's group so it dances with it.
+ * An accessory is an SVG fragment in the logo's user units (`LOGO_BOX`),
+ * slipped into one bubble's group so it dances with it.
  * Like the logo's, its colours are a drawing's, outside the token scale; the
  * ambient sprites take theirs from the `--fx-*` pastels (festive.css).
  */
@@ -45,28 +45,31 @@ export interface FestiveArt {
 
 // --- Drawings ---
 
-/** Tux standing with its feet at (x, y). */
-const tux = (x: number, y: number) => `
-  <ellipse cx="${x - 7.2}" cy="${y - 8.5}" rx="2.2" ry="6" transform="rotate(15 ${x - 7.2} ${y - 8.5})" fill="#1a1917"/>
-  <ellipse cx="${x + 7.2}" cy="${y - 8.5}" rx="2.2" ry="6" transform="rotate(-15 ${x + 7.2} ${y - 8.5})" fill="#1a1917"/>
-  <ellipse cx="${x}" cy="${y - 9}" rx="7.5" ry="9.5" fill="#1a1917" stroke="#fff" stroke-opacity=".5" stroke-width=".6"/>
-  <ellipse cx="${x}" cy="${y - 7}" rx="5" ry="7" fill="#fff"/>
-  <circle cx="${x}" cy="${y - 19.5}" r="6" fill="#1a1917" stroke="#fff" stroke-opacity=".5" stroke-width=".6"/>
-  <circle cx="${x - 2}" cy="${y - 20.5}" r="1.6" fill="#fff"/><circle cx="${x + 2}" cy="${y - 20.5}" r="1.6" fill="#fff"/>
-  <circle cx="${x - 1.6}" cy="${y - 20.3}" r=".8" fill="#1a1917"/><circle cx="${x + 2.4}" cy="${y - 20.3}" r=".8" fill="#1a1917"/>
-  <path d="M${x - 2.2},${y - 17.5}L${x + 2.2},${y - 17.5}L${x},${y - 15.1}Z" fill="#f4a300"/>
-  <ellipse cx="${x - 3.5}" cy="${y}" rx="3" ry="1.6" fill="#f4a300"/><ellipse cx="${x + 3.5}" cy="${y}" rx="3" ry="1.6" fill="#f4a300"/>`;
+/**
+ * Tux standing with its feet at (x, y), in its own colours on the logo, or in
+ * the sprite's (`currentColor`, the canvas, a pastel) when it crosses the screen.
+ */
+const tux = (x: number, y: number, ink = "#1a1917", belly = "#fff", beak = "#f4a300") => `
+  <ellipse cx="${x - 7.2}" cy="${y - 8.5}" rx="2.2" ry="6" transform="rotate(15 ${x - 7.2} ${y - 8.5})" fill="${ink}"/>
+  <ellipse cx="${x + 7.2}" cy="${y - 8.5}" rx="2.2" ry="6" transform="rotate(-15 ${x + 7.2} ${y - 8.5})" fill="${ink}"/>
+  <ellipse cx="${x}" cy="${y - 9}" rx="7.5" ry="9.5" fill="${ink}" stroke="${belly}" stroke-opacity=".5" stroke-width=".6"/>
+  <ellipse cx="${x}" cy="${y - 7}" rx="5" ry="7" fill="${belly}"/>
+  <circle cx="${x}" cy="${y - 19.5}" r="6" fill="${ink}" stroke="${belly}" stroke-opacity=".5" stroke-width=".6"/>
+  <circle cx="${x - 2}" cy="${y - 20.5}" r="1.6" fill="${belly}"/><circle cx="${x + 2}" cy="${y - 20.5}" r="1.6" fill="${belly}"/>
+  <circle cx="${x - 1.6}" cy="${y - 20.3}" r=".8" fill="${ink}"/><circle cx="${x + 2.4}" cy="${y - 20.3}" r=".8" fill="${ink}"/>
+  <path d="M${x - 2.2},${y - 17.5}L${x + 2.2},${y - 17.5}L${x},${y - 15.1}Z" fill="${beak}"/>
+  <ellipse cx="${x - 3.5}" cy="${y}" rx="3" ry="1.6" fill="${beak}"/><ellipse cx="${x + 3.5}" cy="${y}" rx="3" ry="1.6" fill="${beak}"/>`;
 
-/** A moth centred on (x, y); its wings flap as one group. */
-const moth = (x: number, y: number) => `
-  <g class="festive-wings" fill="#cbb89c" stroke="#8a7660" stroke-width=".5">
+/** A moth centred on (x, y), its wings flapping as one group; in `currentColor` as a sprite. */
+const moth = (x: number, y: number, wing = "#cbb89c", body = "#6b5a45") => `
+  <g class="festive-wings" fill="${wing}" stroke="${body}" stroke-opacity=".6" stroke-width=".5">
     <ellipse cx="${x - 4.5}" cy="${y - 2}" rx="5" ry="3.2" transform="rotate(-25 ${x - 4.5} ${y - 2})"/>
     <ellipse cx="${x + 4.5}" cy="${y - 2}" rx="5" ry="3.2" transform="rotate(25 ${x + 4.5} ${y - 2})"/>
     <ellipse cx="${x - 3.5}" cy="${y + 2.5}" rx="3.5" ry="2.4" transform="rotate(20 ${x - 3.5} ${y + 2.5})"/>
     <ellipse cx="${x + 3.5}" cy="${y + 2.5}" rx="3.5" ry="2.4" transform="rotate(-20 ${x + 3.5} ${y + 2.5})"/>
   </g>
-  <ellipse cx="${x}" cy="${y}" rx="1.4" ry="5" fill="#6b5a45"/>
-  <path d="M${x - 0.5},${y - 4.5}q-1.5,-3 -3.5,-3.5M${x + 0.5},${y - 4.5}q1.5,-3 3.5,-3.5" stroke="#6b5a45" stroke-width=".5" fill="none"/>`;
+  <ellipse cx="${x}" cy="${y}" rx="1.4" ry="5" fill="${body}"/>
+  <path d="M${x - 0.5},${y - 4.5}q-1.5,-3 -3.5,-3.5M${x + 0.5},${y - 4.5}q1.5,-3 3.5,-3.5" stroke="${body}" stroke-width=".5" fill="none"/>`;
 
 /** A gear of n teeth (outer radius R, root radius r) with a hole in the middle. */
 function gear(cx: number, cy: number, R: number, r: number, n: number) {
@@ -127,7 +130,7 @@ export const ART: Record<FestiveId, FestiveArt> = {
   },
   hopper: {
     accessory: { bubble: "z", enter: "land", svg: moth(206, 6.5), box: [195, -6, 22, 16] },
-    ambient: { mode: "drift", sprites: [svg("-11 -11 22 20", moth(0, 0))], motion: "flutter", colors: ["var(--fg)"], count: 8, size: [22, 34] },
+    ambient: { mode: "drift", sprites: [svg("-11 -11 22 20", moth(0, 0, "currentColor", "var(--fg-faint)"))], motion: "flutter", colors: ["var(--fx-lilac)", "var(--fx-ink)"], count: 8, size: [22, 34] },
   },
   xmas: {
     accessory: {
@@ -143,7 +146,7 @@ export const ART: Record<FestiveId, FestiveArt> = {
   },
   torvalds: {
     accessory: { bubble: "i", enter: "drop", svg: tux(152.5, 8.6), box: [143, -18, 20, 28] },
-    ambient: { mode: "drift", sprites: [svg("-11 -26 22 28", tux(0, 0))], motion: "waddle", colors: ["var(--fg)"], count: 7, size: [30, 44] },
+    ambient: { mode: "drift", sprites: [svg("-11 -26 22 28", tux(0, 0, "currentColor", "var(--canvas)", "var(--fx-yellow)"))], motion: "waddle", colors: ["var(--fx-ink)", "var(--fx-blue)"], count: 7, size: [30, 44] },
   },
   kernighan: {
     accessory: { bubble: "q", enter: "type", svg: typed(4, -4, "hello, world"), box: [2, -15, 90, 15] },

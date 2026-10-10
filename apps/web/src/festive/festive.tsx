@@ -7,7 +7,7 @@ import { useI18n } from "../i18n";
 import { cx, Modal, Z } from "../ui";
 import { createSignal, readStored, removeStored, writeStored } from "../ui/state";
 import type { Ambient, FestiveArt } from "./art";
-import { FESTIVE, type FestiveId, festiveOn, wikipediaUrl } from "./calendar";
+import { FESTIVE, type FestiveId, festiveOn } from "./calendar";
 import { LOGO_BOX } from "./logo";
 
 /**
@@ -77,6 +77,10 @@ export function useFestive(): Festive | null {
 
 const percent = (value: number, of: number) => `${(value / of) * 100}%`;
 
+/** A Wikipedia article (its title in that language: `festive.<id>.wiki`) in the interface language. */
+const wikipediaUrl = (title: string, locale: string) =>
+  `https://${locale}.wikipedia.org/wiki/${encodeURIComponent(title.replaceAll(" ", "_"))}`;
+
 /**
  * A button laid exactly over the accessory, BESIDE the home button (never
  * inside it: a button holds no button). The rest of the logo still goes home.
@@ -109,7 +113,7 @@ export function FestiveInfo({ festive }: { festive: Festive }) {
           </div>
           <p className="mt-4 text-fg-muted">{t(`festive.${festive.id}.text`)}</p>
           <a
-            href={wikipediaUrl(festive.id, locale)}
+            href={wikipediaUrl(t(`festive.${festive.id}.wiki`), locale)}
             target="_blank"
             rel="noreferrer"
             className="mt-3 inline-flex items-center gap-1.5 font-medium text-accent hover:underline"
@@ -196,7 +200,7 @@ export function FestiveAmbient({ playable }: { playable: boolean }) {
   if (!festive || !sprites) return null;
   const { mode, motion } = festive.art.ambient;
   return (
-    <div aria-hidden className={cx("festive-layer", `festive-${mode}`, mode === "burst" ? Z.festive : "-z-1")}>
+    <div aria-hidden className={cx("festive-layer", `festive-${mode}`, mode === "burst" ? Z.festive : Z.festiveBehind)}>
       {sprites.map((sprite, k) => (
         <span key={k} className="festive-sprite" style={sprite.style}>
           <span className={`festive-move-${motion}`} dangerouslySetInnerHTML={{ __html: sprite.html }} />

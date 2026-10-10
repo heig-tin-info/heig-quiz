@@ -102,7 +102,7 @@ html.dark {
 @keyframes festive-spin { from { transform: rotate(var(--turn)); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes festive-flap { to { transform: scaleX(0.45); } }
 
-/* --- The ambient layer: behind the page (z −1, under every surface), a burst over it (Z.festive) --- */
+/* --- The ambient layer: behind every surface (Z.festiveBehind), a burst over the page (Z.festive) --- */
 
 .festive-layer {
   position: fixed;

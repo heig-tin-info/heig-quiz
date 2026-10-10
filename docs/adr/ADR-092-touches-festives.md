@@ -38,21 +38,23 @@ button, which cannot hold another button.
    inlined logo, so it dances with its bubble; `quiz.svg` stays untouched. Its
    colours are a drawing's, like the logo's, outside the token scale.
 3. **The ambient layer**: sprites in one of three CSS modes — fall, drift,
-   burst — behind every surface (z −1), a burst coming out of the logo over
+   burst — behind every surface (`Z.festiveBehind`), a burst coming out of the logo over
    the page (`Z.festive`, under the coach and every dialog). **Five seconds at
    most, once a day per browser**, so no control is needed (WCAG 2.2.2).
-   Its sprites take the `--fx-*` pastels; the logo's colours stay in the logo.
+   Its sprites, Tux and the moth included, take the `--fx-*` pastels; the
+   logo's colours stay in the logo.
 4. **Where**: the Shell draws all of it, so the full-screen views (attempt,
    previews, poll and correction projections), confined `seb` and `kiosk`
-   sessions and the signed-out page (a kiosk station before pairing) get
-   none — by construction, not by a check. The folded sidebar's Q bubble
-   stays bare. The layer plays only on the views ADR-087 opens What's new on
-   (the home and the lists, never mid-task; the live dashboard is not one),
-   after What's new has been closed, and stops when the page is left; a
-   coach mark (z 45) stays above a burst. A
-   teacher projecting an ordinary page cannot be detected: the setting is the
-   way out. A student with an attempt open in another tab still sees it on
-   the home; the integrity journal (ADR-088) records nothing of it.
+   sessions and the signed-out page (a kiosk station before pairing) get none
+   — by construction, not by a check. The folded sidebar's Q bubble stays
+   bare, and so does the logo on the live dashboard, which a teacher may be
+   projecting (`QUIET` of `App.tsx`). The layer plays only on the views
+   ADR-087 opens What's new on (the home and the lists, never mid-task; the
+   live dashboard is not one), after What's new has been closed, and stops
+   when the page is left; a coach mark (z 45) stays above a burst. A teacher
+   projecting an ordinary page cannot be detected: the setting is the way out.
+   A student with an attempt open in another tab still sees it on the home;
+   the integrity journal (ADR-088) records nothing of it.
 5. **The sheet**: a button laid exactly over the accessory, beside the home
    button and not inside it, with its own label ("Happy holidays: learn
    more"), opens a modal: the dressed logo, two or three sentences, the

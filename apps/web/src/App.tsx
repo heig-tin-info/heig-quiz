@@ -709,6 +709,7 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
       studentView={inStudentView}
       onToggleStudentView={toggleView}
       wide={WIDE.has(shown.view)}
+      quiet={QUIET.has(shown.view)}
     >
       {page}
     </Shell>

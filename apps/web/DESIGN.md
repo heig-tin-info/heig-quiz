@@ -407,13 +407,14 @@ and to be kept exceptional.
   over it, beside the home button, opens the day's sheet (`Modal`).
 - The ambient layer is decoration (`aria-hidden`, no pointer events): one of
   three modes — fall, drift, burst — five seconds at most, once a day per
-  browser, behind every surface (z −1); only a burst, out of the logo, passes
+  browser, behind every surface (`Z.festiveBehind`); only a burst, out of the logo, passes
   over the page (`Z.festive`). Its sprites take the `--fx-*` pastels
   (`festive.css`, soft in both themes); the logo's four colours stay in the
   logo.
 - Drawn by the Shell only, and played on the home and the lists only, after
   What's new: never in an exam, a preview, a projection or a confined
-  session. Nothing moves under `prefers-reduced-motion`, and Settings ›
+  session, and no costume on the live dashboard (it may be projected).
+  Nothing moves under `prefers-reduced-motion`, and Settings ›
   Preferences switches it off.
 
 ## Coach marks

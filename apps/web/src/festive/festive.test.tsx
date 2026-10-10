@@ -2,15 +2,16 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AttemptOrLobby } from "@quiz/contracts";
+import type { AttemptOrLobby, ChangelogList, Me } from "@quiz/contracts";
 
 import App from "../App";
+import quizLogo from "../assets/quiz.svg?raw";
 import { resetEventStream } from "../realtime/useEventStream";
 import { makeMe } from "../test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import type { Accessory } from "./art";
 import { setFestiveEnabled } from "./festive";
-import { withAccessory } from "./logo";
+import { LOGO_BOX, withAccessory } from "./logo";
 
 /*
  * The festive touches (ADR-092): drawn by the frame only, so an attempt and
@@ -41,19 +42,37 @@ const lobby: AttemptOrLobby = {
   },
 };
 
-function render(route: string, me = makeMe({ role: "teacher" })) {
+function render(route: string, me: Me = makeMe({ role: "teacher" }), unseen: ChangelogList = []) {
   vi.stubGlobal("EventSource", FakeStream);
-  mockFetch({
+  const { calls } = mockFetch({
     "GET /app/api/me": ok(me),
     "GET /app/api/courses": ok([]),
     "GET /app/api/pools": ok([]),
+    "GET /app/api/changelog/unseen": ok(unseen),
+    "POST /app/api/me/changelog": { status: 204, body: undefined },
     [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(lobby),
   });
-  return renderWithProviders(<App />, { route });
+  return { calls, ...renderWithProviders(<App />, { route }) };
+}
+
+const session = (kind: "seb" | "kiosk") =>
+  makeMe({
+    session: { kind, evaluationId: EVAL, projectId: null, readOnly: false, superPowersUntil: null, superPowersAvailable: false },
+  });
+
+/** No accessory, no layer, once the page had time to ask for the drawings had it wanted them. */
+async function expectBare(route: string, me?: Me) {
+  const { calls } = render(route, me);
+  await waitFor(() => expect(calls.some((c) => c.url === "/app/api/me")).toBe(true));
+  await new Promise((r) => setTimeout(r, 100));
+  expect(document.querySelector(".festive-accessory, .festive-layer")).toBeNull();
 }
 
 /** The sidebar's and the top bar's: jsdom applies no CSS, both are there. */
 const sheetButton = async () => (await screen.findAllByRole("button", { name: "Happy holidays: learn more" }))[0]!;
+
+/** The setup's stub, put back after the reduced-motion case replaced it. */
+const matchMedia = window.matchMedia;
 
 beforeEach(() => {
   vi.setSystemTime(CHRISTMAS);
@@ -66,6 +85,7 @@ afterEach(() => {
   sessionStorage.clear();
   setFestiveEnabled(true);
   vi.stubGlobal("EventSource", undefined);
+  vi.stubGlobal("matchMedia", matchMedia);
 });
 
 describe("the festive touches", () => {
@@ -115,35 +135,41 @@ describe("the festive touches", () => {
     expect(document.querySelector(".festive-accessory")).toBeNull();
   });
 
-  it("never reach an attempt", async () => {
-    render(`/take/${EVAL}`, makeMe({ role: "student" }));
-    expect(await screen.findByText("Quiz 3 — Pointers")).toBeVisible();
-    // Long enough for the drawings' chunk, had anything asked for it.
-    await new Promise((r) => setTimeout(r, 50));
-    expect(document.querySelector(".festive-accessory, .festive-layer")).toBeNull();
+  it("wait for What's new, then play", async () => {
+    const unseen: ChangelogList = [
+      { id: "x", kind: "new", text: { en: "Something new.", fr: "Du nouveau." }, liveAt: "2026-12-19T08:00:00.000Z", commitSha: "abc1234" },
+    ];
+    render("/", makeMe({ role: "teacher" }), unseen);
+    const whatsNew = await screen.findByRole("dialog", { name: "What's new" });
+    expect(document.querySelector(".festive-layer")).toBeNull();
+    await userEvent.click(within(whatsNew).getByRole("button", { name: "Got it" }));
+    await waitFor(() => expect(document.querySelector(".festive-layer")).not.toBeNull());
   });
 
-  it("never reach a Safe Exam Browser session", async () => {
-    render(
-      `/take/${EVAL}`,
-      makeMe({
-        session: {
-          kind: "seb",
-          evaluationId: EVAL,
-          projectId: null,
-          readOnly: false,
-          superPowersUntil: null,
-          superPowersAvailable: false,
-        },
-      }),
-    );
-    expect(await screen.findByText("Quiz 3 — Pointers")).toBeVisible();
-    await new Promise((r) => setTimeout(r, 50));
-    expect(document.querySelector(".festive-accessory, .festive-layer")).toBeNull();
+  it("play on the home and the lists only, not on a page such as the settings", async () => {
+    render("/settings");
+    await sheetButton();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(document.querySelector(".festive-layer")).toBeNull();
+  });
+
+  it.each([
+    ["an attempt", `/take/${EVAL}`, makeMe({ role: "student" })],
+    ["a Safe Exam Browser session", `/take/${EVAL}`, session("seb")],
+    ["a kiosk session", `/take/${EVAL}`, session("kiosk")],
+    ["the evaluation preview", `/evaluations/${EVAL}/preview`, undefined],
+    ["the poll projection", `/evaluations/${EVAL}/poll`, undefined],
+    ["the live dashboard, which may be projected", `/evaluations/${EVAL}/live`, undefined],
+  ])("never reach %s", async (_, route, me) => {
+    await expectBare(route, me);
   });
 });
 
 describe("withAccessory", () => {
+  it("draws in the logo's own units", () => {
+    expect(quizLogo).toContain(`viewBox="0 0 ${LOGO_BOX.width} ${LOGO_BOX.height}"`);
+  });
+
   const svg = `<svg><g class="logo-q"><path d="Q"/></g><g class="logo-u"><path d="U"/></g></svg>`;
   const accessory = (behind: boolean): Accessory => ({
     bubble: "u",

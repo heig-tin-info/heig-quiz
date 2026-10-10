@@ -410,6 +410,7 @@ export function Shell({
   studentView,
   onToggleStudentView,
   wide = false,
+  quiet = false,
   children,
 }: {
   me: Me;
@@ -426,6 +427,11 @@ export function Shell({
    * scrolls sideways beside two empty margins (#93).
    */
   wide?: boolean;
+  /**
+   * A view a teacher may be projecting (`QUIET` in App.tsx, the live
+   * dashboard): the logo wears no festive costume there (ADR-092).
+   */
+  quiet?: boolean;
   children: ReactNode;
 }) {
   const { t, locale, setLocale } = useI18n();
@@ -497,7 +503,8 @@ export function Shell({
    * day's accessory, and a button laid over the accessory — beside the home
    * button, never inside it — opens the day's sheet.
    */
-  const festive = useFestive();
+  const costume = useFestive();
+  const festive = quiet ? null : costume;
   const wordmark = (className: string, id?: string) => (
     <div className="relative shrink-0">
       {brand(<Logo id={id} className={className} accessory={festive?.art.accessory} />)}

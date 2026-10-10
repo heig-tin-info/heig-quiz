@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { easter, festiveOn, wikipediaUrl } from "./calendar";
+import { easter, festiveOn } from "./calendar";
 
 const on = (iso: string) => festiveOn(new Date(`${iso}T12:00:00`));
 
@@ -57,12 +57,5 @@ describe("festiveOn", () => {
 
   it("finds nothing on an ordinary day", () => {
     expect(on("2026-10-09")).toBeNull();
-  });
-});
-
-describe("wikipediaUrl", () => {
-  it("names the article in the interface language", () => {
-    expect(wikipediaUrl("xmas", "fr")).toBe("https://fr.wikipedia.org/wiki/No%C3%ABl");
-    expect(wikipediaUrl("programmers", "en")).toBe("https://en.wikipedia.org/wiki/Programmers'_Day");
   });
 });
