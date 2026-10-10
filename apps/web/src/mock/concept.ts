@@ -30,7 +30,9 @@ import {
   cleanConceptLabel,
   conceptKey,
   mergedAliases,
+  edgesOf,
   mergedRelations,
+  relationsOf,
   qualifiedConceptKey,
   splitQualifiedLabel,
   type RelationEdges,
@@ -79,28 +81,12 @@ const concepts: Concept[] = [
 concepts[0]!.aliases = ["Référence mémoire", "Pointer variable"];
 concepts[6]!.aliases = ["Tas"];
 
-/** Every relation edge of the mock's vocabulary: a related pair once, in canonical order. */
-function edgesOf(): RelationEdges {
-  const related = new Map<string, { concept: string; target: string }>();
-  for (const c of concepts) {
-    for (const other of c.related) {
-      const edge = canonicalRelated(c.id, other);
-      related.set(`${edge.concept}>${edge.target}`, edge);
-    }
-  }
-  return {
-    broader: concepts.flatMap((c) => c.broader.map((target) => ({ concept: c.id, target }))),
-    related: [...related.values()],
-  };
-}
-
 /** Writes edges back onto the concepts, both sides of a related pair. */
 function setEdges(edges: RelationEdges): void {
+  const all = relationsOf(edges);
   for (const c of concepts) {
-    c.broader = edges.broader.filter((e) => e.concept === c.id).map((e) => e.target).sort();
-    c.related = edges.related
-      .flatMap((e) => (e.concept === c.id ? [e.target] : e.target === c.id ? [e.concept] : []))
-      .sort();
+    c.broader = all.get(c.id)?.broader ?? [];
+    c.related = all.get(c.id)?.related ?? [];
   }
 }
 
@@ -258,7 +244,7 @@ on("POST", "/app/api/admin/concepts/:id/merge", (m, raw): Concept => {
   if (!loser || !winner) throw refuse(404, "not_found", "No such concept");
   if (loser.status === "merged" || winner.status === "merged") throw refuse(409, "concept_merged", "A merged concept is not merged again");
   if (winner.status !== "validated") throw refuse(422, "concept_merge_target_not_validated", "A concept is merged into a validated one only");
-  const relations = mergedRelations(edgesOf(), loser.id, winner.id);
+  const relations = mergedRelations(edgesOf(concepts), loser.id, winner.id);
   if (relations.cycle) {
     throw refuse(409, "concept_merge_cycle", "This merge would make a concept broader than itself", { path: relations.cycle.map((id) => conceptRefs([id])[0]) });
   }
@@ -269,14 +255,7 @@ on("POST", "/app/api/admin/concepts/:id/merge", (m, raw): Concept => {
   for (const [course, ids] of courseConcepts) {
     courseConcepts.set(course, [...new Set(ids.map((id) => (id === loser.id ? winner.id : id)))]);
   }
-  {
-    const before = edgesOf();
-    const touches = (e: { concept: string; target: string }) => e.concept === loser.id || e.target === loser.id;
-    setEdges({
-      broader: [...before.broader.filter((e) => !touches(e)), ...relations.moved.broader],
-      related: [...before.related.filter((e) => !touches(e)), ...relations.moved.related],
-    });
-  }
+  setEdges(relations.after);
   for (const c of concepts) if (c.mergedInto === loser.id) c.mergedInto = winner.id;
   const { moved: movedAliases, added } = mergedAliases(resolvable(loser), resolvable(winner), body.data.keepAsAlias);
   winner.aliases = [...winner.aliases, ...movedAliases, ...added].sort((a, b) => a.localeCompare(b));
@@ -331,7 +310,7 @@ on("POST", "/app/api/admin/concepts/:id/relations", (m, raw): Concept => {
   if (!other || other.status === "merged") {
     throw refuse(422, "concept_not_found", "A concept is missing or merged", { ids: [body.data.target] });
   }
-  const edges = edgesOf();
+  const edges = edgesOf(concepts);
   const refusal =
     body.data.kind === "broader" ? checkBroaderEdge(edges, c.id, other.id) : checkRelatedEdge(edges, c.id, other.id);
   if (refusal?.kind === "self") throw refuse(422, "relation_self", "A concept is not related to itself");
@@ -355,7 +334,7 @@ on("DELETE", "/app/api/admin/concepts/:id/relations/:kind/:target", (m): Concept
   const target = m.groups!.target!;
   const present = kind.data === "broader" ? c.broader.includes(target) : c.related.includes(target);
   if (!present) throw refuse(404, "not_found", "No such relation");
-  const edges = edgesOf();
+  const edges = edgesOf(concepts);
   if (kind.data === "broader") edges.broader = edges.broader.filter((e) => !(e.concept === c.id && e.target === target));
   else {
     const gone = canonicalRelated(c.id, target);
@@ -372,7 +351,7 @@ on("DELETE", "/app/api/admin/concepts/:id", (m) => {
     throw refuse(409, "concept_in_use", "A merge, a question or a course refers to this concept");
   }
   const [gone] = concepts.splice(i, 1);
-  const edges = edgesOf();
+  const edges = edgesOf(concepts);
   const other = (e: { concept: string; target: string }) => e.concept !== gone!.id && e.target !== gone!.id;
   setEdges({ broader: edges.broader.filter(other), related: edges.related.filter(other) });
   return undefined;

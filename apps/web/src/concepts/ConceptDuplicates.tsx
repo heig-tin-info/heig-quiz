@@ -1,16 +1,16 @@
-import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
+import { useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { Check, GitMerge, Link2, Pencil, Sparkles } from "lucide-react";
 import { useState } from "react";
 
-import type { AdminConcept, Concept, ConceptDuplicatesAi, ConceptRelationAdd } from "@quiz/contracts";
+import type { AdminConcept, ConceptDuplicatesAi } from "@quiz/contracts";
 import { mergeDirection, probableDuplicates, type AiDuplicateKind, type DuplicatePair as DuplicatePairOf, type DuplicateReason } from "@quiz/domain";
 
-import { api, apiErrorMessage } from "../api";
+import { apiErrorMessage } from "../api";
 import { useI18n, useT } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
 import { Alert, Badge, Button, Card, EmptyState, FormError } from "../ui";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
-import { relationError } from "./ConceptRelations";
+import { relationError, useAddRelation } from "./ConceptRelations";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, refName, usesLabel } from "./names";
 import { resolvable } from "./ranking";
@@ -187,24 +187,13 @@ function AiSuggestions({
  */
 function RelateButton({ a, b }: { a: AdminConcept; b: AdminConcept }) {
   const t = useT();
-  const qc = useQueryClient();
-  const relate = useMutation({
-    mutationFn: () =>
-      api<Concept>(`/app/api/admin/concepts/${a.id}/relations`, {
-        method: "POST",
-        body: JSON.stringify({ kind: "related", target: b.id } satisfies ConceptRelationAdd),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: adminConceptsKey });
-      void qc.invalidateQueries({ queryKey: conceptsKey });
-    },
-  });
+  const relate = useAddRelation(a.id);
   if (a.related.includes(b.id)) {
     return <p className="shrink-0 self-center text-xs text-fg-muted">{t("admin.concepts.dup.related.done")}</p>;
   }
   return (
     <div className="shrink-0 space-y-1">
-      <Button size="sm" variant="secondary" loading={relate.isPending} onClick={() => relate.mutate()}>
+      <Button size="sm" variant="secondary" loading={relate.isPending} onClick={() => relate.mutate({ kind: "related", target: b.id })}>
         <Link2 /> {t("admin.concepts.dup.related.add")}
       </Button>
       <FormError error={relate.error} describe={(error) => relationError(t, error)} />
@@ -262,7 +251,7 @@ function PairRow({
           ))}
         </ul>
       </div>
-      {pair.reason === "related" && ai !== undefined ? <RelateButton a={a} b={b} /> : null}
+      {pair.reason === "related" ? <RelateButton a={a} b={b} /> : null}
       {!reason.mergeable ? null : direction ? (
         <Button
           size="sm"

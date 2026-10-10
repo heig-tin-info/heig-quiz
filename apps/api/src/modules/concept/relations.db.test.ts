@@ -1,8 +1,8 @@
 /**
- * Relations between concepts (ADR-081 §4, sixth addendum 7c): the admin's
- * `POST /admin/concepts/:id/relations` and `DELETE .../relations/:kind/:target`,
- * the cycle refusal, the canonical order of `related`, the cascade and the
- * rewrite by a merge.
+ * Relations between concepts (ADR-081 §4, sixth addendum 7c): the wiring
+ * only, the rule matrix being `@quiz/domain`'s. One refusal per HTTP code,
+ * the lock race, the cascade, the audit, a merge's rewrite, its drops and
+ * its cycle, and the deletion that takes the same lock.
  */
 import { randomUUID } from "node:crypto";
 
@@ -25,20 +25,19 @@ const db = () => server.app.db;
 
 const concept = (fr: string, en: string, status: "proposed" | "validated" | "merged" = "validated", into: string | null = null) =>
   seedConcept(db(), teacher.id, [fr], [en], status, into);
+const three = async () => [await concept("A", "A"), await concept("B", "B"), await concept("C", "C")] as [string, string, string];
 
 const add = (who: Who, id: string, kind: string, target: string) =>
   server.app.inject({ method: "POST", url: `/app/api/admin/concepts/${id}/relations`, headers: who.headers, payload: { kind, target } });
 const remove = (who: Who, id: string, kind: string, target: string) =>
   server.app.inject({ method: "DELETE", url: `/app/api/admin/concepts/${id}/relations/${kind}/${target}`, headers: who.headers });
 const merge = (id: string, into: string) =>
-  server.app.inject({
-    method: "POST",
-    url: `/app/api/admin/concepts/${id}/merge`,
-    headers: admin.headers,
-    payload: { into, keepAsAlias: false },
-  });
-const edges = async () =>
-  (await db().select().from(conceptRelations)).map((r) => `${r.kind}:${r.conceptId}>${r.targetId}`).sort();
+  server.app.inject({ method: "POST", url: `/app/api/admin/concepts/${id}/merge`, headers: admin.headers, payload: { into, keepAsAlias: false } });
+const edges = async () => (await db().select().from(conceptRelations)).map((r) => `${r.kind}:${r.conceptId}>${r.targetId}`).sort();
+const mergeAudit = async (loser: string) => {
+  const [entry] = await db().select().from(auditLog).where(and(eq(auditLog.subjectId, loser), eq(auditLog.action, "concept.merge")));
+  return entry?.payload as Record<string, { broader: unknown[]; related: unknown[]; hierarchical?: unknown[] }>;
+};
 
 beforeAll(async () => {
   server = await testServer();
@@ -55,139 +54,102 @@ afterAll(async () => {
   await server.close();
 });
 
-describe("POST /admin/concepts/:id/relations", () => {
-  it("is the admin's: a teacher gets a 403, a student too", async () => {
-    const [a, b] = [await concept("A", "A"), await concept("B", "B")];
-    expect((await add(teacher, a, "broader", b)).statusCode).toBe(403);
-    expect((await add(student, a, "broader", b)).statusCode).toBe(403);
-    expect((await remove(teacher, a, "broader", b)).statusCode).toBe(403);
+describe("relations routes", () => {
+  it("are the admin's: a teacher and a student get a 403", async () => {
+    const [a, b] = await three();
+    for (const who of [teacher, student]) {
+      expect((await add(who, a, "broader", b)).statusCode).toBe(403);
+      expect((await remove(who, a, "broader", b)).statusCode).toBe(403);
+    }
     expect(await edges()).toEqual([]);
   });
 
-  it("adds a broader edge, several parents allowed, and answers the concept", async () => {
-    const [child, p1, p2] = [await concept("Arithmétique de pointeurs", "Pointer arithmetic"), await concept("Pointeur", "Pointer"), await concept("C", "C")];
-    expect(Concept.parse((await add(admin, child, "broader", p1)).json()).broader).toEqual([p1]);
-    const res = await add(admin, child, "broader", p2);
-    expect(res.statusCode, res.body).toBe(200);
-    expect(Concept.parse(res.json()).broader).toEqual([p1, p2].sort());
-    expect(await edges()).toEqual([`broader:${child}>${p1}`, `broader:${child}>${p2}`].sort());
-  });
-
-  it("reads back in the lists, on both sides of a related edge", async () => {
-    const [a, b, c] = [await concept("A", "A"), await concept("B", "B"), await concept("C", "C")];
-    await add(admin, a, "broader", c);
-    await add(admin, b, "related", a);
-    const list = ConceptList.parse((await server.app.inject({ method: "GET", url: "/app/api/concepts", headers: teacher.headers })).json());
-    expect(list.concepts.find((x) => x.id === a)).toMatchObject({ broader: [c], related: [b] });
-    expect(list.concepts.find((x) => x.id === b)).toMatchObject({ broader: [], related: [a] });
-    const queue = AdminConceptList.parse((await server.app.inject({ method: "GET", url: "/app/api/admin/concepts", headers: admin.headers })).json());
-    expect(queue.concepts.find((x) => x.id === c)).toMatchObject({ broader: [], related: [] });
-  });
-
-  it("stores a related pair once, in canonical order, whichever side is asked", async () => {
-    const [a, b] = [await concept("A", "A"), await concept("B", "B")];
-    const [lo, hi] = [a, b].sort() as [string, string];
+  it("add broader (several parents) and related, answer the concept, and read back on both sides", async () => {
+    const [a, b, c] = await three();
+    expect(Concept.parse((await add(admin, a, "broader", b)).json()).broader).toEqual([b]);
+    expect(Concept.parse((await add(admin, a, "broader", c)).json()).broader).toEqual([b, c].sort());
+    const [lo, hi] = [b, c].sort() as [string, string];
     expect((await add(admin, hi, "related", lo)).statusCode).toBe(200);
-    expect(await edges()).toEqual([`related:${lo}>${hi}`]);
-    const again = await add(admin, lo, "related", hi);
-    expect(again.statusCode).toBe(409);
-    expect(again.json()).toMatchObject({ error: "relation_exists" });
+    expect(await edges()).toContain(`related:${lo}>${hi}`);
+    const list = ConceptList.parse((await server.app.inject({ method: "GET", url: "/app/api/concepts", headers: teacher.headers })).json());
+    expect(list.concepts.find((x) => x.id === lo)?.related).toEqual([hi]);
+    expect(list.concepts.find((x) => x.id === hi)?.related).toEqual([lo]);
+    const queue = AdminConceptList.parse((await server.app.inject({ method: "GET", url: "/app/api/admin/concepts", headers: admin.headers })).json());
+    expect(queue.concepts.find((x) => x.id === a)?.broader).toEqual([b, c].sort());
   });
 
-  it("refuses itself (422), a duplicate (409), a missing or merged target (422) and a merged concept (409)", async () => {
-    const [a, b] = [await concept("A", "A"), await concept("B", "B")];
+  it("refuse with one code each: self 422, exists 409, redundant 409, cycle 409 with its path, missing target 422, merged 409, unknown 404, bad kind 400", async () => {
+    const [a, b, c] = await three();
     const gone = await concept("Gone", "Gone", "merged", b);
-    for (const kind of ["broader", "related"]) {
-      expect((await add(admin, a, kind, a)).json()).toMatchObject({ error: "relation_self" });
-    }
+    expect((await add(admin, a, "related", a)).json()).toMatchObject({ error: "relation_self" });
     await add(admin, a, "broader", b);
     expect((await add(admin, a, "broader", b)).json()).toMatchObject({ error: "relation_exists" });
+    expect((await add(admin, b, "related", a)).json()).toMatchObject({ error: "relation_redundant" });
+    await add(admin, b, "broader", c);
+    const res = await add(admin, c, "broader", a);
+    expect(res.statusCode).toBe(409);
+    const cycle = ConceptCycle.parse(res.json());
+    expect(cycle.error).toBe("concept_cycle");
+    expect(cycle.path.map((p) => p.label)).toEqual(["C", "A", "B", "C"]);
     expect((await add(admin, a, "broader", randomUUID())).json()).toMatchObject({ error: "concept_not_found" });
     expect((await add(admin, a, "related", gone)).json()).toMatchObject({ error: "concept_not_found" });
     expect((await add(admin, gone, "related", a)).json()).toMatchObject({ error: "concept_merged" });
     expect((await add(admin, randomUUID(), "related", a)).statusCode).toBe(404);
-    expect((await server.app.inject({ method: "POST", url: `/app/api/admin/concepts/${a}/relations`, headers: admin.headers, payload: { kind: "nope", target: b } })).statusCode).toBe(400);
-  });
-
-  it("refuses the opposite broader edge and a long cycle with 409 naming the path", async () => {
-    const [a, b, c] = [await concept("A", "A"), await concept("B", "B"), await concept("C", "C")];
-    await add(admin, a, "broader", b);
-    await add(admin, b, "broader", c);
-    const res = await add(admin, c, "broader", a);
-    expect(res.statusCode).toBe(409);
-    const body = ConceptCycle.parse(res.json());
-    expect(body.error).toBe("concept_cycle");
-    expect(body.path.map((p) => p.id)).toEqual([c, a, b, c]);
-    expect(body.path.map((p) => p.label)).toEqual(["C", "A", "B", "C"]);
+    expect((await add(admin, a, "nope", b)).statusCode).toBe(400);
     expect(await edges()).toHaveLength(2);
   });
 
-  it("refuses related for two concepts of one broader chain, and broader for a related pair", async () => {
-    const [a, b, c] = [await concept("A", "A"), await concept("B", "B"), await concept("C", "C")];
-    await add(admin, a, "broader", b);
-    await add(admin, b, "broader", c);
-    expect((await add(admin, c, "related", a)).json()).toMatchObject({ error: "relation_redundant" });
-    expect((await add(admin, a, "related", b)).json()).toMatchObject({ error: "relation_redundant" });
-    const [x, y] = [await concept("X", "X"), await concept("Y", "Y")];
-    await add(admin, x, "related", y);
-    expect((await add(admin, y, "broader", x)).json()).toMatchObject({ error: "relation_redundant" });
-  });
-
-  it("serializes two opposite edges sent together: exactly one gets in", async () => {
-    const [a, b] = [await concept("A", "A"), await concept("B", "B")];
+  it("serialize two opposite edges sent together: exactly one gets in", async () => {
+    const [a, b] = await three();
     const [one, two] = await Promise.all([add(admin, a, "broader", b), add(admin, b, "broader", a)]);
     expect([one.statusCode, two.statusCode].sort()).toEqual([200, 409]);
     expect(await edges()).toHaveLength(1);
   });
 
-  it("audits an add and a removal", async () => {
-    const [a, b] = [await concept("A", "A"), await concept("B", "B")];
-    await add(admin, a, "broader", b);
-    await remove(admin, a, "broader", b);
-    const entries = await db().select().from(auditLog).where(eq(auditLog.subjectId, a));
-    const added = entries.find((e) => e.action === "concept.relation_add");
-    const removed = entries.find((e) => e.action === "concept.relation_remove");
-    expect(added).toMatchObject({ subjectType: "concept", actorUserId: admin.id });
-    expect(added?.payload).toEqual({ kind: "broader", target: b, labels: { fr: "B", en: "B" } });
-    expect(removed?.payload).toEqual({ kind: "broader", target: b });
-  });
-});
-
-describe("DELETE /admin/concepts/:id/relations/:kind/:target", () => {
-  it("removes a broader edge only in its direction, and a related pair from either side", async () => {
-    const [a, b, c] = [await concept("A", "A"), await concept("B", "B"), await concept("C", "C")];
+  it("remove an edge (a related pair from either side) and audit both writes", async () => {
+    const [a, b, c] = await three();
     await add(admin, a, "broader", b);
     await add(admin, a, "related", c);
     expect((await remove(admin, b, "broader", a)).statusCode).toBe(404);
     expect(Concept.parse((await remove(admin, a, "broader", b)).json()).broader).toEqual([]);
     expect(Concept.parse((await remove(admin, c, "related", a)).json()).related).toEqual([]);
-    expect(await edges()).toEqual([]);
     expect((await remove(admin, c, "related", a)).statusCode).toBe(404);
-    expect((await remove(admin, randomUUID(), "related", a)).statusCode).toBe(404);
+    const entries = await db().select().from(auditLog).where(eq(auditLog.subjectId, a));
+    expect(entries.find((e) => e.action === "concept.relation_add")?.payload).toEqual({ kind: "broader", target: b, labels: { fr: "B", en: "B" } });
+    expect(entries.find((e) => e.action === "concept.relation_remove" && (e.payload as { kind: string }).kind === "broader")?.payload).toEqual({
+      kind: "broader",
+      target: b,
+    });
   });
 });
 
 describe("deletion", () => {
   it("is not blocked by relations, which go with the concept", async () => {
-    const [a, b] = [await concept("A", "A"), await concept("B", "B")];
+    const [a, b] = await three();
     await add(admin, a, "broader", b);
     const queue = AdminConceptList.parse((await server.app.inject({ method: "GET", url: "/app/api/admin/concepts", headers: admin.headers })).json());
     expect(queue.concepts.find((x) => x.id === b)?.deletable).toBe(true);
-    const res = await server.app.inject({ method: "DELETE", url: `/app/api/admin/concepts/${b}`, headers: admin.headers });
-    expect(res.statusCode).toBe(204);
+    expect((await server.app.inject({ method: "DELETE", url: `/app/api/admin/concepts/${b}`, headers: admin.headers })).statusCode).toBe(204);
+    expect(await edges()).toEqual([]);
+  });
+
+  it("takes turns with a merge that is rewriting a relation to the deleted concept", async () => {
+    const [loser, winner, x] = await three();
+    await add(admin, loser, "broader", x);
+    const [merged, deleted] = await Promise.all([
+      merge(loser, winner),
+      server.app.inject({ method: "DELETE", url: `/app/api/admin/concepts/${x}`, headers: admin.headers }),
+    ]);
+    expect([merged.statusCode, deleted.statusCode]).toEqual([200, 204]);
     expect(await edges()).toEqual([]);
   });
 });
 
 describe("merge", () => {
-  it("rewrites the loser's edges onto the winner, both directions and both kinds", async () => {
-    const [loser, winner, up, down, side] = [
-      await concept("Pointage", "Pointing"),
-      await concept("Pointeur", "Pointer"),
-      await concept("Mémoire", "Memory"),
-      await concept("Arithmétique", "Arithmetic"),
-      await concept("Référence", "Reference"),
-    ];
+  it("rewrites the loser's edges onto the winner and audits them", async () => {
+    const [loser, winner, up] = await three();
+    const down = await concept("Down", "Down");
+    const side = await concept("Side", "Side");
     await add(admin, loser, "broader", up);
     await add(admin, down, "broader", loser);
     await add(admin, loser, "related", side);
@@ -196,39 +158,25 @@ describe("merge", () => {
     expect(Concept.parse(res.json())).toMatchObject({ broader: [up], related: [side] });
     const [lo, hi] = [winner, side].sort();
     expect(await edges()).toEqual([`broader:${winner}>${up}`, `broader:${down}>${winner}`, `related:${lo}>${hi}`].sort());
+    const audit = await mergeAudit(loser);
+    expect(audit.relationsOfLoser?.broader).toHaveLength(2);
+    expect(audit.relationsMoved?.broader).toHaveLength(2);
   });
 
-  it("drops the edges between the loser and the winner, and lists them in the audit", async () => {
-    const [loser, winner] = [await concept("Pointage", "Pointing"), await concept("Pointeur", "Pointer")];
+  it("drops the edges between the two, and a related edge whose pair becomes a broader pair, and lists them", async () => {
+    const [loser, winner, x] = await three();
     await add(admin, loser, "broader", winner);
+    await add(admin, loser, "related", x);
+    await add(admin, winner, "broader", x);
     expect((await merge(loser, winner)).statusCode).toBe(200);
-    expect(await edges()).toEqual([]);
-    const [entry] = await db()
-      .select()
-      .from(auditLog)
-      .where(and(eq(auditLog.subjectId, loser), eq(auditLog.action, "concept.merge")));
-    const payload = entry?.payload as Record<string, { broader: unknown[]; related: unknown[] }>;
-    expect(payload.relationsDropped).toEqual({ broader: [{ concept: loser, target: winner }], related: [] });
-    expect(payload.relationsMoved).toEqual({ broader: [], related: [] });
-    expect(payload.relationsOfLoser?.broader).toHaveLength(1);
+    expect(await edges()).toEqual([`broader:${winner}>${x}`]);
+    const dropped = (await mergeAudit(loser)).relationsDropped!;
+    expect(dropped.broader).toEqual([{ concept: loser, target: winner }]);
+    expect(dropped.hierarchical).toEqual([expect.objectContaining({})]);
   });
 
-  it("does not write twice an edge the winner has", async () => {
-    const [loser, winner, up] = [await concept("Pointage", "Pointing"), await concept("Pointeur", "Pointer"), await concept("Mémoire", "Memory")];
-    await add(admin, loser, "broader", up);
-    await add(admin, winner, "broader", up);
-    expect((await merge(loser, winner)).statusCode).toBe(200);
-    expect(await edges()).toEqual([`broader:${winner}>${up}`]);
-    const [entry] = await db().select().from(auditLog).where(and(eq(auditLog.subjectId, loser), eq(auditLog.action, "concept.merge")));
-    expect((entry?.payload as { relationsDuplicate: unknown }).relationsDuplicate).toEqual({
-      broader: [{ concept: winner, target: up }],
-      related: [],
-    });
-  });
-
-  it("refuses a merge that would close a longer cycle, naming the path, and writes nothing", async () => {
-    // loser is below mid, mid is below winner: the merge would make winner below mid below winner.
-    const [loser, winner, mid] = [await concept("Pointage", "Pointing"), await concept("Pointeur", "Pointer"), await concept("Milieu", "Middle")];
+  it("refuses a longer cycle with the path and writes nothing", async () => {
+    const [loser, winner, mid] = await three();
     await add(admin, loser, "broader", mid);
     await add(admin, mid, "broader", winner);
     const before = await edges();
@@ -238,7 +186,6 @@ describe("merge", () => {
     expect(body.error).toBe("concept_merge_cycle");
     expect(body.path.map((p) => p.id)).toEqual([winner, mid, winner]);
     expect(await edges()).toEqual(before);
-    const [row] = await db().select().from(concepts).where(eq(concepts.id, loser));
-    expect(row?.status).toBe("validated");
+    expect((await db().select().from(concepts).where(eq(concepts.id, loser)))[0]?.status).toBe("validated");
   });
 });

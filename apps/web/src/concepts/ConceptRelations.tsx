@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import type { AdminConcept, Concept, ConceptCycle, ConceptRelationAdd, ConceptRelationKind } from "@quiz/contracts";
-import { broaderAncestors, narrowerDescendants } from "@quiz/domain";
+import { checkBroaderEdge, checkRelatedEdge, edgesOf } from "@quiz/domain";
 
 import { api, ApiError, refusalCodeOf } from "../api";
 import { useI18n, useT, type TFunction } from "../i18n";
@@ -37,10 +37,26 @@ export function relationError(t: TFunction, error: unknown): string {
 }
 
 /**
+ * Adds a relation of `conceptId` (the admin's `POST .../relations`) and
+ * refreshes the vocabulary; shared by the sheet and the Duplicates view.
+ */
+export function useAddRelation(conceptId: string, onAdded?: () => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ConceptRelationAdd) =>
+      api<Concept>(`/app/api/admin/concepts/${conceptId}/relations`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      onAdded?.();
+      void qc.invalidateQueries({ queryKey: adminConceptsKey });
+      void qc.invalidateQueries({ queryKey: conceptsKey });
+    },
+  });
+}
+
+/**
  * One kind of relation of a concept: its chips, each removable, and a search
- * that offers the concepts the server would accept (never the concept, one
- * already there, or, by the rule of `@quiz/domain`, one in a chain with it for
- * `related`, or below it for `broader`); a click adds one. The server still
+ * that offers the concepts the rule of `@quiz/domain` accepts (the server's
+ * own check, run on the edges once); a click adds one. The server still
  * decides: a cycle comes back as a 409 naming the path.
  */
 function Group({
@@ -60,31 +76,19 @@ function Group({
   const byId = useMemo(() => new Map(concepts.map((c) => [c.id, c])), [concepts]);
 
   const offered = useMemo(() => {
-    const edges = concepts.flatMap((c) => c.broader.map((target) => ({ concept: c.id, target })));
-    const below = new Set(narrowerDescendants(edges, concept.id));
-    const above = new Set(broaderAncestors(edges, concept.id));
-    const taken = new Set([concept.id, ...current]);
-    const pool = concepts.filter((c) => {
-      if (c.status === "merged" || taken.has(c.id)) return false;
-      if (kind === "broader") return !below.has(c.id) && !concept.related.includes(c.id);
-      return !below.has(c.id) && !above.has(c.id);
-    });
-    return typed.trim() === "" ? [] : rankConcepts(typed.trim(), pool, locale).slice(0, SHOWN);
-  }, [concepts, concept, current, kind, typed, locale]);
+    if (typed.trim() === "") return [];
+    const edges = edgesOf(concepts);
+    const check = kind === "broader" ? checkBroaderEdge : checkRelatedEdge;
+    const pool = concepts.filter((c) => c.status !== "merged" && check(edges, concept.id, c.id) === null);
+    return rankConcepts(typed.trim(), pool, locale).slice(0, SHOWN);
+  }, [concepts, concept.id, kind, typed, locale]);
 
   const changed = () => {
     void qc.invalidateQueries({ queryKey: adminConceptsKey });
     void qc.invalidateQueries({ queryKey: conceptsKey });
   };
   const base = `/app/api/admin/concepts/${concept.id}/relations`;
-  const add = useMutation({
-    mutationFn: (target: string) =>
-      api<Concept>(base, { method: "POST", body: JSON.stringify({ kind, target } satisfies ConceptRelationAdd) }),
-    onSuccess: () => {
-      setTyped("");
-      changed();
-    },
-  });
+  const add = useAddRelation(concept.id, () => setTyped(""));
   const remove = useMutation({
     mutationFn: (target: string) => api<Concept>(`${base}/${kind}/${target}`, { method: "DELETE" }),
     onSuccess: changed,
@@ -125,7 +129,7 @@ function Group({
         <ul className="flex flex-wrap gap-1.5">
           {offered.map((c) => (
             <li key={c.id}>
-              <Button variant="secondary" size="sm" loading={add.isPending && add.variables === c.id} onClick={() => add.mutate(c.id)}>
+              <Button variant="secondary" size="sm" loading={add.isPending && add.variables?.target === c.id} onClick={() => add.mutate({ kind, target: c.id })}>
                 {conceptName(c, locale)}
               </Button>
             </li>

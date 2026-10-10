@@ -147,8 +147,7 @@ describe("POST /admin/concepts/:id/merge", () => {
       aliasesDropped: [],
       relationsOfLoser: none,
       relationsMoved: none,
-      relationsDropped: none,
-      relationsDuplicate: none,
+      relationsDropped: { ...none, hierarchical: [] },
     });
   });
 

@@ -38,10 +38,11 @@ import { concepts } from "../../db/schema.js";
 import type { Caller } from "../guards.js";
 import { DomainError, notFoundError } from "../http.js";
 import { droppedKeys, insertProposed, refuseInputs } from "./links.js";
-import { columnsOf, conflictOr, loadAliases, loadRelations, perLang, refuseAliasHolder, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
+import { columnsOf, conflictOr, loadAliases, loadConcept, loadRelations, perLang, refuseAliasHolder, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
 
 export { addAlias, removeAlias } from "./aliases.js";
 export { addRelation, removeRelation } from "./relations.js";
+import { lockRelations } from "./relations.js";
 export { listAdminConcepts } from "./admin.js";
 export { aiDuplicates } from "./duplicatesAi.js";
 export { suggestConcepts, SUGGEST_DRAFT_MAX } from "./suggest.js";
@@ -214,7 +215,7 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
       await audit(tx, { ...ctx.actor, action: "concept.edit", subjectType: "concept", subjectId: id, payload: patch });
       return row!;
     });
-    return toConcept(row, (await loadAliases(db, [id])).get(id), (await loadRelations(db, [id])).get(id));
+    return loadConcept(db, row);
   } catch (error) {
     throw await conflictOr(db, error, keys);
   }
@@ -252,7 +253,7 @@ export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller"
     });
     return row!;
   });
-  return toConcept(row, (await loadAliases(db, [id])).get(id), (await loadRelations(db, [id])).get(id));
+  return loadConcept(db, row);
 }
 
 /**
@@ -266,6 +267,8 @@ export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller"
 export async function deleteConcept(db: Db, ctx: Omit<ConceptContext, "caller">, id: string): Promise<void> {
   try {
     await db.transaction(async (tx) => {
+      // Like a merge, which may be inserting a relation to this concept: they take turns (`relations.ts`).
+      await lockRelations(tx);
       const [gone] = await tx.delete(concepts).where(eq(concepts.id, id)).returning();
       if (!gone) throw notFoundError("concept");
       await audit(tx, {

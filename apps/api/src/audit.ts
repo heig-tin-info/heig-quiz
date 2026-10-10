@@ -74,8 +74,10 @@ export type AuditAction =
    * `relation_remove`: the admin added or removed a relation (subject the
    * concept in the path; `payload.kind` `broader` or `related`,
    * `payload.target` the other concept id, and the target's `labels` on an
-   * add). A merge also records `relationsMoved`, `relationsDropped` and
-   * `relationsDuplicate` (`{ broader, related }` edges). The tag sorting's `sort` and
+   * add). A merge also records `relationsOfLoser` (every edge that named the
+   * loser), `relationsMoved` (the rewritten edges kept) and `relationsDropped`
+   * (`broader` and `related` edges between the two, and `hierarchical`: related
+   * edges whose pair became a broader pair), all `{ concept, target }` edges. The tag sorting's `sort` and
    * `sort_propose` rows of the past stay in the log, no longer written
    * (ADR-081, step (d)).
    */

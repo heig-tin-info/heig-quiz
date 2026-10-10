@@ -6,14 +6,16 @@
  *
  * **Locks.** A cycle check reads the whole graph, so two writes that are each
  * valid alone (`A broader B` and `B broader A`) could both pass it. Every
- * relation write, and the merge, which rewrites relations, first takes ONE
- * transaction-scoped advisory lock (`RELATIONS_LOCK`): they serialize, and
- * the second reads the first's edge. Then the two concepts are share-locked
- * in id order, like `lockLinkSet`, so a deletion cannot slip between the
- * check and the insert. The advisory lock is always taken BEFORE any row
- * lock and no writer of question or course links takes it, so the order
- * advisory then rows cannot form a cycle with them: a relation write and a
- * link write share-lock rows; the merge takes the advisory lock, then
+ * relation write, the merge (which rewrites relations) and the deletion of a
+ * concept (whose relations cascade, and which a merge may be inserting a
+ * relation to) first take ONE transaction-scoped advisory lock
+ * (`lockRelations`): they serialize, and the second reads the first's edge.
+ * A deletion therefore never meets a merge's insert, so no foreign key
+ * violation or deadlock can come of it. Then the two concepts are
+ * share-locked in id order, like `lockLinkSet`. The advisory lock is always
+ * taken BEFORE any row lock and no writer of question or course links takes
+ * it, so advisory-then-rows cannot form a cycle with them: a relation write
+ * and a link write share-lock rows; the merge takes the advisory lock, then
  * `FOR UPDATE` in id order, as before.
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -31,7 +33,7 @@ import { audit } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { conceptRelations, concepts } from "../../db/schema.js";
 import { DomainError, notFoundError } from "../http.js";
-import { loadAliases, loadEdges, loadRelations, perLang, sideOf, toConcept, toConceptRef } from "./row.js";
+import { loadConcept, loadEdges, perLang, sideOf, toConceptRef } from "./row.js";
 import type { ConceptContext } from "./service.js";
 
 /** The key of the advisory lock every relation write and every merge takes first. */
@@ -117,7 +119,7 @@ export async function addRelation(
       subjectId: id,
       payload: { kind: body.kind, target: body.target, labels: perLang((l) => sideOf(other, l).label) },
     });
-    return toConcept(row, (await loadAliases(tx, [id])).get(id), (await loadRelations(tx, [id])).get(id));
+    return loadConcept(tx, row);
   });
 }
 
@@ -151,6 +153,6 @@ export async function removeRelation(
       subjectId: id,
       payload: { kind, target },
     });
-    return toConcept(row, (await loadAliases(tx, [id])).get(id), (await loadRelations(tx, [id])).get(id));
+    return loadConcept(tx, row);
   });
 }

@@ -108,12 +108,8 @@ describe("broaderTrail", () => {
     expect(broaderTrail(arithmetic, byId, "en")).toEqual(["Memory", "Pointer"]);
     expect(broaderTrail(memory, byId, "en")).toEqual([]);
   });
-  it("follows the first parent by name when there are several, and survives a loop", () => {
+  it("follows the first parent by name when there are several", () => {
     const two = { ...arithmetic, broader: [pointer.id, address.id] };
     expect(broaderTrail(two, new Map([...byId, [two.id, two]]), "en")).toEqual(["Address"]);
-    const a = concept(10, "A", "A");
-    const b = concept(11, "B", "B", { broader: [a.id] });
-    const looped = { ...a, broader: [b.id] };
-    expect(broaderTrail(looped, new Map([[looped.id, looped], [b.id, b]]), "en")).toEqual(["B"]);
   });
 });

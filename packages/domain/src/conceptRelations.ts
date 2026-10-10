@@ -23,6 +23,44 @@ export interface RelationEdges {
   related: readonly RelationEdge[];
 }
 
+/** A concept as the relation helpers read it: its id and its direct relations (`Concept` has them). */
+export interface RelatedConcept {
+  id: string;
+  broader: readonly string[];
+  related: readonly string[];
+}
+
+/** Every edge of a list of concepts; a related pair, listed on both sides, once in canonical order. */
+export function edgesOf(concepts: readonly RelatedConcept[]): RelationEdges {
+  const related = new Map<string, RelationEdge>();
+  for (const c of concepts) {
+    for (const other of c.related) {
+      const edge = canonicalRelated(c.id, other);
+      related.set(`${edge.concept}\u0000${edge.target}`, edge);
+    }
+  }
+  return {
+    broader: concepts.flatMap((c) => c.broader.map((target) => ({ concept: c.id, target }))),
+    related: [...related.values()],
+  };
+}
+
+/** The direct relations of every concept named by `edges`, sorted (a related pair on both sides); the inverse of {@link edgesOf}. */
+export function relationsOf(edges: RelationEdges): Map<string, { broader: string[]; related: string[] }> {
+  const out = new Map<string, { broader: string[]; related: string[] }>();
+  const of = (id: string) => out.get(id) ?? out.set(id, { broader: [], related: [] }).get(id)!;
+  for (const e of edges.broader) of(e.concept).broader.push(e.target);
+  for (const e of edges.related) {
+    of(e.concept).related.push(e.target);
+    of(e.target).related.push(e.concept);
+  }
+  for (const r of out.values()) {
+    r.broader.sort();
+    r.related.sort();
+  }
+  return out;
+}
+
 /** The two ids in the order a `related` edge is stored: smaller id first. */
 export function canonicalRelated(a: string, b: string): RelationEdge {
   return a < b ? { concept: a, target: b } : { concept: b, target: a };
@@ -54,11 +92,6 @@ function reach(next: ReadonlyMap<string, readonly string[]>, start: string): Map
     }
   }
   return from;
-}
-
-/** Every broader concept of `id`, near or far, sorted; `id` itself is never in it. */
-export function broaderAncestors(broader: readonly RelationEdge[], id: string): string[] {
-  return [...reach(adjacency(broader, true), id).keys()].filter((c) => c !== id).sort();
 }
 
 /** Every narrower concept of `id`, near or far, sorted: what a selected concept covers (§4). */
@@ -123,12 +156,24 @@ export function checkRelatedEdge(edges: RelationEdges, a: string, b: string): Re
 
 /** What a merge does to the relations of the loser (ADR-081 sixth addendum, step 7c). */
 export interface MergedRelations {
-  /** Edges between the loser and the winner: they would be self-loops, so they are dropped and audited. Original orientation. */
-  dropped: { broader: RelationEdge[]; related: RelationEdge[] };
-  /** The loser's other edges, rewritten onto the winner, that the winner did not have yet. */
+  /** Every edge that names the loser, as it was: all of them go with it. */
+  ofLoser: RelationEdges;
+  dropped: {
+    /** Broader edges between the loser and the winner: they would be self-loops. Original orientation. */
+    broader: RelationEdge[];
+    /** Related edges between the loser and the winner, likewise. */
+    related: RelationEdge[];
+    /**
+     * Related edges whose pair is a broader pair after the merge (the loser
+     * was related to `x`, the winner is below `x`): the two relations are
+     * disjoint, so the related one goes. Canonical order; already stored or not.
+     */
+    hierarchical: RelationEdge[];
+  };
+  /** The loser's other edges, rewritten onto the winner, that are not there yet and are kept. */
   moved: { broader: RelationEdge[]; related: RelationEdge[] };
-  /** The rewritten edges the winner had already (or another rewritten edge just produced): not written twice. */
-  duplicates: { broader: RelationEdge[]; related: RelationEdge[] };
+  /** Every edge after the merge. */
+  after: RelationEdges;
   /** A longer broader cycle through the winner (first and last id equal), or null. The merge is then refused. */
   cycle: string[] | null;
 }
@@ -139,11 +184,12 @@ const bySort = (a: RelationEdge, b: RelationEdge) => (key(a) < key(b) ? -1 : key
 /**
  * The relations after merging `loser` into `winner`: every edge naming the
  * loser names the winner instead; an edge between the two is dropped (it
- * would be a self-loop); a rewritten edge that exists already is a
- * duplicate. A rewritten broader edge may close a longer cycle (`loser`
- * broader `x`, `x` broader `winner`): the shortest one through the winner is
- * returned and the caller refuses the merge before writing anything. Lists
- * are sorted.
+ * would be a self-loop); a rewritten edge that exists already is not written
+ * twice; a related edge whose pair is then also a broader pair is dropped
+ * (`hierarchical`), so the two relations stay disjoint. A rewritten broader
+ * edge may close a longer cycle (`loser` broader `x`, `x` broader `winner`):
+ * the shortest one through the winner is returned and the caller refuses the
+ * merge before writing anything. Lists are sorted.
  */
 export function mergedRelations(edges: RelationEdges, loser: string, winner: string): MergedRelations {
   const touches = (e: RelationEdge) => e.concept === loser || e.target === loser;
@@ -151,26 +197,29 @@ export function mergedRelations(edges: RelationEdges, loser: string, winner: str
   const split = (list: readonly RelationEdge[], canonical: boolean) => {
     const present = new Set(list.filter((e) => !touches(e)).map(key));
     const moved: RelationEdge[] = [];
-    const duplicates: RelationEdge[] = [];
     for (const e of list.filter((e) => touches(e) && !between(e))) {
       const concept = e.concept === loser ? winner : e.concept;
       const target = e.target === loser ? winner : e.target;
       const rewritten = canonical ? canonicalRelated(concept, target) : { concept, target };
-      if (present.has(key(rewritten))) duplicates.push(rewritten);
-      else {
+      if (!present.has(key(rewritten))) {
         present.add(key(rewritten));
         moved.push(rewritten);
       }
     }
-    return { dropped: list.filter(between).sort(bySort), moved: moved.sort(bySort), duplicates: duplicates.sort(bySort) };
+    return { kept: list.filter((e) => !touches(e)), dropped: list.filter(between).sort(bySort), moved: moved.sort(bySort) };
   };
   const broader = split(edges.broader, false);
   const related = split(edges.related, true);
-  const after = [...edges.broader.filter((e) => !touches(e)), ...broader.moved];
+  const broaderAfter = [...broader.kept, ...broader.moved];
+  const pairs = new Set(broaderAfter.map((e) => key(canonicalRelated(e.concept, e.target))));
+  const relatedAfter = [...related.kept, ...related.moved];
+  const hierarchical = relatedAfter.filter((e) => pairs.has(key(e))).sort(bySort);
+  const keep = (e: RelationEdge) => !pairs.has(key(e));
   return {
-    dropped: { broader: broader.dropped, related: related.dropped },
-    moved: { broader: broader.moved, related: related.moved },
-    duplicates: { broader: broader.duplicates, related: related.duplicates },
-    cycle: broaderPath(after, winner, winner),
+    ofLoser: { broader: edges.broader.filter(touches), related: edges.related.filter(touches) },
+    dropped: { broader: broader.dropped, related: related.dropped, hierarchical },
+    moved: { broader: broader.moved, related: related.moved.filter(keep) },
+    after: { broader: broaderAfter, related: relatedAfter.filter(keep) },
+    cycle: broaderPath(broaderAfter, winner, winner),
   };
 }

@@ -32,8 +32,10 @@
  *    winner is dropped (it would be a self-loop), an edge the winner has is
  *    not written twice, and a rewrite that would close a longer broader cycle
  *    is refused BEFORE anything is written, 409 `concept_merge_cycle` naming
- *    the path. The audit lists the loser's edges and those moved, dropped and
- *    duplicate. The advisory lock of `relations.ts` is taken first.
+ *    the path. A related edge whose pair becomes a broader pair is dropped
+ *    too (the relations are disjoint). The audit lists the loser's edges and
+ *    those moved and dropped (`relationsDropped`: between the two,
+ *    `hierarchical`). The advisory lock of `relations.ts` is taken first.
  *
  * The winner keeps its labels, qualifiers, descriptions and status. The audit
  * lists the loser's former status and the question ids moved and those that
@@ -51,7 +53,7 @@ import type { Db, Tx } from "../../db/client.js";
 import { conceptAliases, conceptRelations, concepts, courseConcepts, questionConcepts } from "../../db/schema.js";
 import { DomainError, notFoundError } from "../http.js";
 import { cycleError, lockRelations } from "./relations.js";
-import { loadAliases, loadEdges, loadRelations, perLang, sideOf, toConcept, toResolvable } from "./row.js";
+import { loadAliases, loadConcept, loadEdges, perLang, sideOf, toResolvable } from "./row.js";
 import type { ConceptContext } from "./service.js";
 
 /**
@@ -112,8 +114,7 @@ export async function mergeConcept(
     }
 
     // The relations are decided first: a cycle is refused before anything is written.
-    const edges = await loadEdges(tx);
-    const relations = mergedRelations(edges, loserId, winnerId);
+    const relations = mergedRelations(await loadEdges(tx), loserId, winnerId);
     if (relations.cycle) throw await cycleError(tx, "concept_merge_cycle", relations.cycle, lang);
 
     const questionLinks = await moveLinks(tx, questionConcepts, questionConcepts.questionId, loserId, winnerId);
@@ -137,9 +138,16 @@ export async function mergeConcept(
       );
     }
     // The loser's relations go with it; those that survive are rewritten onto the winner (sixth addendum, 7c).
-    const touching = (e: { concept: string; target: string }) => e.concept === loserId || e.target === loserId;
-    const ofLoser = { broader: edges.broader.filter(touching), related: edges.related.filter(touching) };
-    await tx.delete(conceptRelations).where(or(eq(conceptRelations.conceptId, loserId), eq(conceptRelations.targetId, loserId)));
+    // A related edge whose pair is now a broader pair goes too, stored or not (the two relations are disjoint).
+    await tx.delete(conceptRelations).where(
+      or(
+        eq(conceptRelations.conceptId, loserId),
+        eq(conceptRelations.targetId, loserId),
+        ...relations.dropped.hierarchical.map((e) =>
+          and(eq(conceptRelations.kind, "related"), eq(conceptRelations.conceptId, e.concept), eq(conceptRelations.targetId, e.target)),
+        ),
+      ),
+    );
     const rewritten = [
       ...relations.moved.broader.map((e) => ({ ...e, kind: "broader" as const })),
       ...relations.moved.related.map((e) => ({ ...e, kind: "related" as const })),
@@ -177,12 +185,11 @@ export async function mergeConcept(
         aliasesMoved,
         aliasesAdded,
         aliasesDropped,
-        relationsOfLoser: ofLoser,
+        relationsOfLoser: relations.ofLoser,
         relationsMoved: relations.moved,
         relationsDropped: relations.dropped,
-        relationsDuplicate: relations.duplicates,
       },
     });
-    return toConcept(winner, (await loadAliases(tx, [winnerId])).get(winnerId), (await loadRelations(tx, [winnerId])).get(winnerId));
+    return loadConcept(tx, winner);
   });
 }

@@ -582,22 +582,29 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
      appears on both sides) in `GET /concepts` and `GET /admin/concepts`:
      teachers read them, no student route carries a `Concept` (they get
      `ConceptRef` through the student views).
-   - **Lock.** A cycle check reads the whole graph, so every relation write
-     and every merge first takes one transaction-scoped advisory lock
-     (`pg_advisory_xact_lock` on a fixed key): two opposite edges sent
-     together serialize and the second sees the first. The two concepts are
+   - **Lock.** A cycle check reads the whole graph, so every relation write,
+     every merge and every deletion of a concept (whose relations cascade,
+     and which a merge may be inserting a relation to) first takes one
+     transaction-scoped advisory lock (`pg_advisory_xact_lock` on a fixed
+     key): two opposite edges sent together serialize and the second sees the
+     first, and a deletion never meets a merge's insert (no foreign key
+     violation, no deadlock). The two concepts are
      then share-locked in id order. The advisory lock always precedes any row
      lock and no writer of question or course links takes it, so there is no
      lock cycle with `lockLinkSet` or the merge's `FOR UPDATE`.
    - **Merge.** In the merge's transaction, `mergedRelations` rewrites the
      loser's edges onto the winner: an edge between the two is dropped (it
      would be a self-loop), an edge the winner has is not written twice, a
-     rewritten `related` edge keeps the canonical order. A rewrite that
+     rewritten `related` edge keeps the canonical order, and a `related` edge
+     whose pair becomes a broader pair (the loser was related to `x`, the
+     winner is below `x`) is dropped, stored or rewritten, so the two
+     relations stay disjoint after a merge. A rewrite that
      closes a longer cycle through the winner (the loser is below `x` and `x`
      below the winner) is refused 409 `concept_merge_cycle` with the path
      BEFORE anything is written. The audit records `relationsOfLoser`,
-     `relationsMoved`, `relationsDropped` and `relationsDuplicate`
-     (`{ broader, related }` edge lists), enough for a reviewed SQL undo. The
+     `relationsMoved` and `relationsDropped` (`broader` and `related` between
+     the two, and `hierarchical` for the related edges dropped as above;
+     `{ concept, target }` edge lists), enough for a reviewed SQL undo. The
      rewritten edges take the merging admin as author.
    - **Web.** The concept sheet has a Relations section (broader chips and a
      search offering only the concepts the rule would accept; related

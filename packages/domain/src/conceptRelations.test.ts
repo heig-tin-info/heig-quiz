@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  broaderAncestors,
   broaderPath,
   canonicalRelated,
   checkBroaderEdge,
   checkRelatedEdge,
+  edgesOf,
   mergedRelations,
   narrowerDescendants,
+  relationsOf,
   type RelationEdge,
   type RelationEdges,
 } from "./conceptRelations.js";
@@ -22,10 +23,6 @@ const diamond: RelationEdges = {
 };
 
 describe("broader closure", () => {
-  it("reaches every ancestor through several parents, once", () => {
-    expect(broaderAncestors(diamond.broader, "e")).toEqual(["a", "b", "c", "d"]);
-    expect(broaderAncestors(diamond.broader, "a")).toEqual([]);
-  });
   it("reaches every descendant, the concept itself excluded", () => {
     expect(narrowerDescendants(diamond.broader, "a")).toEqual(["b", "c", "d", "e"]);
     expect(narrowerDescendants(diamond.broader, "e")).toEqual([]);
@@ -40,7 +37,7 @@ describe("broader closure", () => {
   it("finds the cycle through a concept, and survives a cyclic input", () => {
     const cyclic = [b("x", "y"), b("y", "z"), b("z", "x")];
     expect(broaderPath(cyclic, "x", "x")).toEqual(["x", "y", "z", "x"]);
-    expect(broaderAncestors(cyclic, "x")).toEqual(["y", "z"]);
+    expect(narrowerDescendants(cyclic, "x")).toEqual(["y", "z"]);
     expect(broaderPath([b("x", "x")], "x", "x")).toEqual(["x", "x"]);
     expect(broaderPath(diamond.broader, "e", "e")).toBeNull();
   });
@@ -106,7 +103,7 @@ describe("mergedRelations", () => {
     const out = mergedRelations(edges, "L", "W");
     expect(out.moved.broader).toEqual([b("W", "p"), b("c", "W")]);
     expect(out.moved.related).toEqual([canonicalRelated("W", "r")]);
-    expect(out.dropped).toEqual({ broader: [], related: [] });
+    expect(out.dropped).toEqual({ broader: [], related: [], hierarchical: [] });
     expect(out.cycle).toBeNull();
   });
   it("drops the edges between the loser and the winner, whatever their orientation or kind", () => {
@@ -127,9 +124,9 @@ describe("mergedRelations", () => {
     };
     const out = mergedRelations(edges, "L", "W");
     expect(out.moved.broader).toEqual([b("W", "s")]);
-    expect(out.duplicates.broader).toEqual([b("W", "p"), b("W", "q")]);
     expect(out.moved.related).toEqual([]);
-    expect(out.duplicates.related).toEqual([canonicalRelated("W", "r")]);
+    expect(out.after.broader).toHaveLength(3);
+    expect(out.after.related).toEqual([canonicalRelated("W", "r")]);
     const twice = mergedRelations({ broader: [b("L", "t"), b("t", "L")], related: [] }, "L", "W");
     expect(twice.moved.broader).toEqual([b("W", "t"), b("t", "W")]);
   });
@@ -140,9 +137,42 @@ describe("mergedRelations", () => {
     const longer: RelationEdges = { broader: [b("W", "m"), b("m", "n"), b("n", "L")], related: [] };
     expect(mergedRelations(longer, "L", "W").cycle).toEqual(["W", "m", "n", "W"]);
   });
+  it("drops a related edge whose pair becomes a broader pair, rewritten or already stored", () => {
+    // L related to x, W below x: after the merge W is related to x AND below it.
+    const rewritten = mergedRelations({ broader: [b("W", "x")], related: [canonicalRelated("L", "x")] }, "L", "W");
+    expect(rewritten.dropped.hierarchical).toEqual([canonicalRelated("W", "x")]);
+    expect(rewritten.moved.related).toEqual([]);
+    expect(rewritten.after.related).toEqual([]);
+    // L below y, W related to y (stored): the stored related edge goes.
+    const stored = mergedRelations({ broader: [b("L", "y")], related: [canonicalRelated("W", "y")] }, "L", "W");
+    expect(stored.dropped.hierarchical).toEqual([canonicalRelated("W", "y")]);
+    expect(stored.after).toEqual({ broader: [b("W", "y")], related: [] });
+  });
+  it("lists every edge of the loser, as it was", () => {
+    const edges: RelationEdges = { broader: [b("L", "p"), b("c", "L"), b("m", "n")], related: [canonicalRelated("L", "r")] };
+    expect(mergedRelations(edges, "L", "W").ofLoser).toEqual({ broader: [b("L", "p"), b("c", "L")], related: [canonicalRelated("L", "r")] });
+  });
   it("leaves unrelated edges alone", () => {
     const out = mergedRelations(diamond, "x", "y");
     expect(out.moved).toEqual({ broader: [], related: [] });
     expect(out.cycle).toBeNull();
+  });
+});
+
+describe("edgesOf and relationsOf", () => {
+  const concepts = [
+    { id: "a", broader: ["p"], related: ["b"] },
+    { id: "b", broader: [], related: ["a"] },
+    { id: "p", broader: [], related: [] },
+  ];
+  it("lists a related pair once, in canonical order, and a broader edge from its child", () => {
+    expect(edgesOf(concepts)).toEqual({ broader: [b("a", "p")], related: [b("a", "b")] });
+  });
+  it("is inverted by relationsOf, a related pair on both sides, sorted", () => {
+    const out = relationsOf(edgesOf(concepts));
+    expect(out.get("a")).toEqual({ broader: ["p"], related: ["b"] });
+    expect(out.get("b")).toEqual({ broader: [], related: ["a"] });
+    expect(out.get("p")).toBeUndefined();
+    expect(relationsOf({ broader: [b("c", "z"), b("c", "y")], related: [] }).get("c")?.broader).toEqual(["y", "z"]);
   });
 });
