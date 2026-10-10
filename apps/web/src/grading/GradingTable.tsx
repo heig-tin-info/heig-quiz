@@ -83,10 +83,6 @@ export interface GradingTableProps {
  * placeholder to read and grade by hand — and the one accent of the screen
  * stays the batch.
  */
-/** A phone has no room for a mark column's words: "B · The heap" shows "B"
- * (CSS only: the full label stays in the tooltip and for a screen reader). */
-const markHeader = (label: string) => label.split(" · ")[0] ?? label;
-
 export function GradingTable(props: GradingTableProps) {
   const t = useT();
   const { columns, rows, named, selected } = props;
@@ -125,16 +121,17 @@ export function GradingTable(props: GradingTableProps) {
         c.key === "verdict" ? (
           c.label
         ) : (
-          <span
-            title={c.title ?? c.label}
-            data-short={c.align === "center" ? markHeader(c.label) : undefined}
-            className={cx(
-              "block truncate",
-              // One text node, so a screen reader still gets the whole label.
-              c.align === "center" && "max-sm:text-[0px] max-sm:before:text-xs max-sm:before:content-[attr(data-short)]",
+          <span title={c.title ?? c.label} className="block truncate">
+            {c.short ? (
+              <>
+                <span aria-hidden className="sm:hidden">
+                  {c.short}
+                </span>
+                <span className="max-sm:sr-only">{c.label}</span>
+              </>
+            ) : (
+              c.label
             )}
-          >
-            {c.label}
           </span>
         ),
       srOnly: c.key === "verdict",

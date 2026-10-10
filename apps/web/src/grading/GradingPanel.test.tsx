@@ -84,6 +84,13 @@ beforeEach(() => {
   localStorage.clear();
 });
 
+/** A header's words, without the phone's aria-hidden short form. */
+const headerText = (h: HTMLElement) =>
+  [...h.querySelectorAll("[aria-hidden]")].reduce(
+    (text, el) => text.replace(el.textContent ?? "", ""),
+    h.textContent ?? "",
+  );
+
 describe("GradingPanel — the table", () => {
   it("draws the type's columns under the key, anonymised: no Student column and no name", async () => {
     mockFetch(routes([proposal("a1", 2), validated("a2", 0)].map((e) => ({ ...e, label: null }))));
@@ -92,9 +99,14 @@ describe("GradingPanel — the table", () => {
     const t = await table();
     const heads = within(t)
       .getAllByRole("columnheader")
-      .map((h) => h.textContent);
+      .map(headerText);
     // mcq: one column per choice, lettered canonically.
     expect(heads).toEqual(["Verdict", "A · 4", "B · 8", "Points", "Actions"]);
+    // The phone shows the letter alone: an aria-hidden short form beside the full label.
+    const a = within(t).getAllByRole("columnheader")[1];
+    const short = a?.querySelector("span[aria-hidden].sm\\:hidden");
+    expect(short?.textContent).toBe("A");
+    expect(a?.textContent).toContain("A · 4");
     // The expected row is the first one, marking the correct choice.
     const [, expected] = within(t).getAllByRole("row");
     expect(within(expected!).getByRole("img", { name: "Expected answer" })).toBeInTheDocument();
@@ -459,7 +471,7 @@ describe("GradingPanel — a parameterized question", () => {
     const t = await table();
     const heads = within(t)
       .getAllByRole("columnheader")
-      .map((h) => h.textContent);
+      .map(headerText);
     // The template's choices, never one student's numbers.
     expect(heads).toEqual(["Verdict", "A · [[t]] s", "B · [[sqrt(h/g)]] s", "Points", "Actions"]);
     const [, expected] = within(t).getAllByRole("row");

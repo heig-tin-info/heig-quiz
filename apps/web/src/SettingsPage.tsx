@@ -300,7 +300,7 @@ export function SettingsPage({
                 <span className="absolute inset-0 flex items-center justify-center rounded-full bg-fg/50 text-xs font-medium text-canvas opacity-0 transition-opacity group-hover:opacity-100">
                   {t("settings.changePicture")}
                 </span>
-                {/* No hover to reveal the overlay on a touch screen: a camera badge says the picture is a button. */}
+                {/* No hover on touch: the badge says the picture is a button. */}
                 <span
                   aria-hidden
                   className="hover-reveal absolute -right-0.5 -bottom-0.5 flex size-6 items-center justify-center rounded-full border border-line bg-surface text-fg-muted opacity-0"

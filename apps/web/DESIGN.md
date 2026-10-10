@@ -1637,7 +1637,7 @@ A phone has no hover and a finger is not a cursor. Two classes in
   there.
   Applied: the grading row's Validate / Adjust, the category's rename pencil,
   the title's rename pencil, the sort arrow, the gaps of the evaluation's
-  items.
+  items, the avatar's camera badge (its "Change picture" overlay needs a hover).
 - `touch-hit` gives a small control a 44 × 44 px HIT AREA around its centre
   (an invisible `::before`) under `@media (pointer: coarse)`, without
   changing its drawn size. Built into `IconButton`, `IconLink`, the page's
@@ -1648,12 +1648,6 @@ A phone has no hover and a finger is not a cursor. Two classes in
   and chevron) takes `touch-group`, which spaces its children by a margin,
   so an overlap of two areas only ever covers the gap between them, never a
   neighbour's disc.
-- A MARK column of the grading table (the multiple-choice choices) shows its
-  letter only under `sm`: "B · The heap" reads "B", and the whole label stays
-  in the tooltip and for a screen reader. Desktop keeps the label.
-- A control that only a hover announces (the avatar's "Change picture"
-  overlay) gets a visible cue under `hover: none`: a camera badge on the
-  avatar's corner, `hover-reveal` on an `opacity-0` element.
 
 Drag handles stay a pointer affordance: every drag has a menu or button
 twin (the group set's →, the category's "Move to…", the pool's bulk Move).
@@ -1671,6 +1665,9 @@ One question's answers as a table (`src/grading/`, origin
   table must never show. Past the page's width it scrolls sideways under
   its sticky verdict (and student) column; every `<td>` carries its own fill
   so a sticky cell never lets the scrolled ones show through.
+- **Phone headers.** A column that declares a `short` form (`GradingColumn`:
+  the multiple-choice letter) shows it alone under `sm`; the full label stays
+  in the tooltip and as the accessible name. Desktop keeps the label.
 - **Verdict glyph.** A 22 px `rounded-md` square: correct = solid `success`
   and an `on-fill` check; partial = HATCHED, `success` stripes over
   `success` at 40 % on `surface` (`color-mix`), a small solid check square
