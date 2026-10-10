@@ -63,12 +63,10 @@ async function link(conceptId: string, name: string, deleted = false) {
   if (deleted) await db().update(questions).set({ deletedAt: new Date() }).where(eq(questions.id, q.id));
 }
 
-const list = async (who: Who, query = "") => {
-  const res = await server.app.inject({ method: "GET", url: `/app/api/admin/concepts${query}`, headers: who.headers });
-  return res;
-};
-const read = async (query = "") => {
-  const res = await list(admin, query);
+const list = (who: Who) =>
+  server.app.inject({ method: "GET", url: "/app/api/admin/concepts", headers: who.headers });
+const read = async () => {
+  const res = await list(admin);
   expect(res.statusCode, res.body).toBe(200);
   return AdminConceptList.parse(res.json());
 };
@@ -107,8 +105,6 @@ describe("GET /admin/concepts", () => {
     await concept(["Récursivité"], null, "proposed");
     const res = await read();
     expect(res.concepts.map((c) => c.labels.fr)).toEqual(["Récursivité", "Boucle", "Zèbre"]);
-    expect(res.total).toBe(3);
-    expect(res.proposed).toBe(1);
     expect(res.concepts[0]?.creator).toMatch(/\S/);
   });
 
@@ -137,6 +133,12 @@ describe("GET /admin/concepts", () => {
     const target = await concept(["Cible"], ["Target"]);
     await concept(["Source"], ["Source"], "merged", target);
     expect((await read()).concepts[0]).toMatchObject({ questionCount: 0, deletable: false });
+    const refused = await server.app.inject({
+      method: "DELETE",
+      url: `/app/api/admin/concepts/${target}`,
+      headers: admin.headers,
+    });
+    expect(refused.statusCode).toBe(409);
   });
 
   it("exposes no pool name and no statement, only the number", async () => {
@@ -147,28 +149,5 @@ describe("GET /admin/concepts", () => {
     expect(body).not.toContain("Secret question name");
     expect(body).not.toContain(poolId);
     expect(JSON.parse(body).concepts[0].questionCount).toBe(1);
-  });
-
-  it("filters by status and by text, accents and plurals folded", async () => {
-    await concept(["Pointeur"], ["Pointer"]);
-    await concept(["Tableau"], ["Array"], "proposed");
-    await concept(["Chaîne de caractères"], ["String"]);
-    expect((await read("?status=proposed")).concepts.map((c) => c.labels.fr)).toEqual(["Tableau"]);
-    expect((await read("?status=validated")).total).toBe(2);
-    expect((await read("?q=chaines")).concepts.map((c) => c.labels.fr)).toEqual(["Chaîne de caractères"]);
-    expect((await read("?q=point")).total).toBe(1);
-    expect((await read("?q=array")).concepts.map((c) => c.labels.en)).toEqual(["Array"]);
-    // The count of proposed concepts ignores the filters.
-    expect((await read("?q=point")).proposed).toBe(1);
-    expect((await read("?q=%25")).total).toBe(0);
-    expect((await list(admin, "?status=merged")).statusCode).toBe(400);
-  });
-
-  it("pages the queue", async () => {
-    for (const label of ["Alpha", "Bravo", "Charlie"]) await concept([label], [label]);
-    const first = await read("?limit=2");
-    expect(first.concepts.map((c) => c.labels.fr)).toEqual(["Alpha", "Bravo"]);
-    expect(first.total).toBe(3);
-    expect((await read("?limit=2&offset=2")).concepts.map((c) => c.labels.fr)).toEqual(["Charlie"]);
   });
 });

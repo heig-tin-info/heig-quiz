@@ -606,7 +606,6 @@ export const en = {
   "admin.concepts.validate.needs.en": "Add an English label to validate this concept",
   "admin.concepts.edit": "Edit",
   "admin.concepts.editNamed": "Edit {name}",
-  "admin.concepts.shown": "{shown} of {total}",
   "admin.concepts.empty.title": "No concepts yet",
   "admin.concepts.empty.body": "Teachers propose concepts from the question editor. They appear here to be validated.",
   "admin.concepts.done.title": "Nothing left to validate",

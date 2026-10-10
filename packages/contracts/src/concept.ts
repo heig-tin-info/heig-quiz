@@ -60,21 +60,6 @@ export const ConceptList = z.object({ concepts: z.array(Concept) });
 export type ConceptList = z.infer<typeof ConceptList>;
 
 /**
- * `GET /admin/concepts` (ADR-081 fifth addendum): the curation queue. The
- * default order is `proposed` first, then by label; `status` narrows it and
- * `q` searches the labels of both languages (accents and plurals folded, as
- * the keys are). Paged: `limit` concepts from `offset`.
- */
-export const ADMIN_CONCEPT_PAGE = 100;
-export const AdminConceptQuery = z.object({
-  status: z.enum(["proposed", "validated"]).optional(),
-  q: z.string().trim().max(120).optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(ADMIN_CONCEPT_PAGE),
-  offset: z.coerce.number().int().min(0).default(0),
-});
-export type AdminConceptQuery = z.infer<typeof AdminConceptQuery>;
-
-/**
  * A concept as the curation queue shows it. `questionCount` is the number of
  * live (not deleted) questions of the whole instance that use it: a number
  * only, never a pool name or a statement (ADR-054 amended). `deletable` is
@@ -89,12 +74,8 @@ export const AdminConcept = Concept.extend({
 });
 export type AdminConcept = z.infer<typeof AdminConcept>;
 
-/** `total` counts what matches the filters; `proposed` counts every proposed concept, whatever the filters. */
-export const AdminConceptList = z.object({
-  concepts: z.array(AdminConcept),
-  total: z.number().int().min(0),
-  proposed: z.number().int().min(0),
-});
+/** `GET /admin/concepts` (ADR-081 fifth addendum): the vocabulary whole, `proposed` first, as `GET /concepts` is. */
+export const AdminConceptList = z.object({ concepts: z.array(AdminConcept) });
 export type AdminConceptList = z.infer<typeof AdminConceptList>;
 
 /** A label must hold a letter or a digit, so that its key is never empty. */

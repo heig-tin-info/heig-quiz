@@ -1,19 +1,12 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookMarked, Check, Pencil } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import {
-  ADMIN_CONCEPT_PAGE,
-  CONCEPT_LANGS,
-  type AdminConcept,
-  type AdminConceptList,
-  type ConceptLang,
-} from "@quiz/contracts";
+import { CONCEPT_LANGS, type AdminConcept, type AdminConceptList, type ConceptLang } from "@quiz/contracts";
 
 import { api, refusalCodeOf } from "../api";
 import { useI18n, useT } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
-import { useDebounced } from "../useDebounced";
 import {
   Badge,
   Button,
@@ -26,14 +19,14 @@ import {
   SectionHeading,
   Segmented,
   Skeleton,
-  Spinner,
 } from "../ui";
 import { ConceptSheet } from "./ConceptSheet";
 import { conceptName } from "./names";
+import { rankConcepts } from "./ranking";
 
 type Filter = "all" | "proposed" | "validated";
 
-/** The first language a concept has no label in: what stops its validation. */
+/** The languages a concept has no label in: what stops its validation. */
 const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((lang) => c.labels[lang] === null);
 
 /**
@@ -43,8 +36,8 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  * **Validate**; a concept is renamed, completed in its other language or
  * deleted (when nothing uses it) from its sheet.
  *
- * Paged by the server, `ADMIN_CONCEPT_PAGE` at a time, and searched there:
- * the vocabulary can hold a few hundred concepts.
+ * The vocabulary is loaded whole, as the pickers load it: the filter is a
+ * status, the search is `rankConcepts`, the one rule of the picker.
  */
 export function ConceptQueue() {
   const t = useT();
@@ -52,28 +45,22 @@ export function ConceptQueue() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<Filter>("all");
   const [typed, setTyped] = useState("");
-  const q = useDebounced(typed.trim());
   const [editing, setEditing] = useState<string | null>(null);
 
-  const list = useInfiniteQuery({
-    queryKey: [...adminConceptsKey, filter, q],
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) => {
-      const query = new URLSearchParams({ limit: String(ADMIN_CONCEPT_PAGE), offset: String(pageParam) });
-      if (filter !== "all") query.set("status", filter);
-      if (q !== "") query.set("q", q);
-      return api<AdminConceptList>(`/app/api/admin/concepts?${query}`);
-    },
-    getNextPageParam: (last, pages) => {
-      const loaded = pages.reduce((n, page) => n + page.concepts.length, 0);
-      return loaded < last.total ? loaded : undefined;
-    },
-    placeholderData: (previous) => previous,
+  const list = useQuery<AdminConceptList>({
+    queryKey: adminConceptsKey,
+    queryFn: () => api("/app/api/admin/concepts"),
   });
-  const rows = list.data?.pages.flatMap((page) => page.concepts) ?? [];
-  const total = list.data?.pages[0]?.total ?? 0;
-  const proposed = list.data?.pages[0]?.proposed ?? 0;
-  const edited = rows.find((c) => c.id === editing);
+  const all = list.data?.concepts;
+  const proposed = all?.filter((c) => c.status === "proposed").length ?? 0;
+  const q = typed.trim();
+  const rows = useMemo(() => {
+    const byStatus = (all ?? []).filter((c) => filter === "all" || c.status === filter);
+    if (q === "") return byStatus;
+    const byId = new Map(byStatus.map((c) => [c.id, c]));
+    return rankConcepts(q, byStatus, locale).flatMap((c) => byId.get(c.id) ?? []);
+  }, [all, filter, q, locale]);
+  const edited = all?.find((c) => c.id === editing);
 
   const validate = useMutation({
     mutationFn: (id: string) => api(`/app/api/admin/concepts/${id}/validate`, { method: "POST" }),
@@ -131,9 +118,8 @@ export function ConceptQueue() {
           )}
         </Card>
       ) : (
-        <>
-          <Card>
-            <ul className="divide-y divide-line">
+        <Card>
+          <ul className="divide-y divide-line">
               {rows.map((c) => (
                 <ConceptRow
                   key={c.id}
@@ -144,21 +130,9 @@ export function ConceptQueue() {
                   onEdit={() => setEditing(c.id)}
                 />
               ))}
-            </ul>
-          </Card>
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-[13px] tabular-nums text-fg-muted">
-              {t("admin.concepts.shown", { shown: rows.length, total })}
-            </p>
-            {list.hasNextPage ? (
-              <Button variant="secondary" loading={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
-                {t("pool.loadMore")}
-              </Button>
-            ) : null}
-          </div>
-        </>
+          </ul>
+        </Card>
       )}
-      {list.isFetching && !list.isLoading && !list.isFetchingNextPage ? <Spinner className="py-2" /> : null}
 
       {edited ? <ConceptSheet concept={edited} locale={locale} onClose={() => setEditing(null)} /> : null}
     </section>
@@ -226,7 +200,7 @@ function ConceptRow({
           <>
             <Button
               size="sm"
-              variant="primary"
+              variant="secondary"
               loading={validating}
               disabled={missing.length > 0}
               aria-describedby={missing.length > 0 ? reasonId : undefined}

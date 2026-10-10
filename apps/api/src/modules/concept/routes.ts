@@ -18,8 +18,7 @@
  *
  * The admin's, with the admin role alone:
  *
- * - `GET /app/api/admin/concepts`: the curation queue, filtered and paged,
- *   with the instance-wide count of questions using each concept (a number;
+ * - `GET /app/api/admin/concepts`: the curation queue, with the instance-wide count of questions using each concept (a number;
  *   Super Powers are not needed, ADR-054 amended).
  * - `POST /app/api/admin/concepts/:id/validate`: 422
  *   `concept_label_missing`, 409 `concept_merged`, 404.
@@ -28,7 +27,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
-  AdminConceptQuery,
+  type AdminConceptList,
   ConceptCreate,
   type ConceptList,
   ConceptPatch,
@@ -86,10 +85,8 @@ export async function conceptPlugin(app: FastifyInstance) {
     }
   });
 
-  app.get("/app/api/admin/concepts", { preHandler: requireAdmin }, async (req, reply) => {
-    const query = AdminConceptQuery.safeParse(req.query);
-    if (!query.success) return invalid(reply, query.error);
-    return await service.listAdminConcepts(app.db, query.data);
+  app.get("/app/api/admin/concepts", { preHandler: requireAdmin }, async () => {
+    return { concepts: await service.listAdminConcepts(app.db) } satisfies AdminConceptList;
   });
 
   app.post("/app/api/admin/concepts/:id/validate", { preHandler: requireAdmin }, async (req, reply) => {

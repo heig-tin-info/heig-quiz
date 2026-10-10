@@ -41,6 +41,7 @@ import { droppedKeys, insertProposed, refuseInputs } from "./links.js";
 import { columnsOf, conflictOr, perLang, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
 
 export { listAdminConcepts } from "./admin.js";
+export { conceptReferenced } from "./referenced.js";
 export { toConcept, toConceptRef } from "./row.js";
 export {
   byLabel,
@@ -243,7 +244,8 @@ export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller"
  * Deletes a concept nothing refers to (ADR-081 second addendum §2, third
  * addendum §7): a concept merged into it, or a question linked to it makes the foreign key refuse, answered 409
  * `concept_in_use`; a missing one is a 404. A concept a question uses is
- * merged, never deleted.
+ * merged, never deleted. `conceptReferenced` mirrors these two foreign keys
+ * for the admin's queue.
  */
 export async function deleteConcept(db: Db, ctx: Omit<ConceptContext, "caller">, id: string): Promise<void> {
   try {

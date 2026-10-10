@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { BellPlus, Check, Globe } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { CatalogueQueryInput, PoolSummary } from "@quiz/contracts";
 
@@ -8,10 +8,22 @@ import { api, useMe } from "../api";
 import { useT } from "../i18n";
 import { poolCatalogueKey } from "../queryKeys";
 import type { Route } from "../router";
-import { useDebounced } from "../useDebounced";
 import { Button, EmptyState, QueryError, SearchInput, Skeleton, Spinner } from "../ui";
 import { PoolCard } from "./PoolCard";
 import { usePoolSubscription } from "./subscription";
+
+/** The pause after the last keystroke before the search is sent. */
+const TYPING_MS = 250;
+
+/** The query as typed, delayed: one request per pause, not one per letter. */
+function useDebounced(value: string): string {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), TYPING_MS);
+    return () => clearTimeout(timer);
+  }, [value]);
+  return settled;
+}
 
 /**
  * Follow (or stop following) a public pool from its card. A secondary

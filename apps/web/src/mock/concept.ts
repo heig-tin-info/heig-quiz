@@ -8,13 +8,16 @@
  * admin dropped (`c01`, dropped as a chapter label, is one from the start).
  */
 import {
-  ADMIN_CONCEPT_PAGE,
   ConceptCreate,
   ConceptPatch,
   type AdminConcept,
   type AdminConceptList,
-  type Concept, type ConceptExists, type ConceptRef, type TagDropReason } from "@quiz/contracts";
-import { conceptKey, foldText, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
+  type Concept,
+  type ConceptExists,
+  type ConceptRef,
+  type TagDropReason,
+} from "@quiz/contracts";
+import { conceptKey, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
 
 import { D, flags, H, iso, MockPayload, on, refuse, role } from "./runtime";
 
@@ -125,30 +128,19 @@ const DROPPED: { tag: string; reason: TagDropReason }[] = [
   { tag: "c01", reason: "organisational" },
 ];
 
-/** The accent-folded, lower-cased text a search is matched against. */
-const haystack = (c: Concept) => foldText(`${c.labels.fr ?? ""} ${c.labels.en ?? ""}`);
-
 /**
- * The admin's curation queue (ADR-081 fifth addendum): proposed first, the
- * number of questions using each (a number only), paged and filtered as the
- * real route does. The persona's creator is the teacher of the demo.
+ * The admin's curation queue (ADR-081 fifth addendum): the vocabulary whole,
+ * proposed first, with the number of questions using each (a number only).
  */
-on("GET", "/app/api/admin/concepts", (_m, _b, url): AdminConceptList => {
-  const status = url.searchParams.get("status");
-  const q = foldText(url.searchParams.get("q") ?? "").trim();
-  const limit = Number(url.searchParams.get("limit") ?? ADMIN_CONCEPT_PAGE);
-  const offset = Number(url.searchParams.get("offset") ?? 0);
+on("GET", "/app/api/admin/concepts", (): AdminConceptList => {
   const live = flags.empty ? [] : concepts.filter((c) => c.status !== "merged");
-  const matching = live
-    .filter((c) => status === null || c.status === status)
-    .filter((c) => q === "" || haystack(c).includes(q))
-    .sort(
-      (a, b) =>
-        Number(b.status === "proposed") - Number(a.status === "proposed") ||
-        (a.labels.fr ?? a.labels.en ?? "").localeCompare(b.labels.fr ?? b.labels.en ?? ""),
-    );
+  const sorted = [...live].sort(
+    (a, b) =>
+      Number(b.status === "proposed") - Number(a.status === "proposed") ||
+      (a.labels.fr ?? a.labels.en ?? "").localeCompare(b.labels.fr ?? b.labels.en ?? ""),
+  );
   return {
-    concepts: matching.slice(offset, offset + limit).map(
+    concepts: sorted.map(
       (c, i): AdminConcept => ({
         ...c,
         createdAt: iso(-(1 + (i % 9)) * D - H),
@@ -158,8 +150,6 @@ on("GET", "/app/api/admin/concepts", (_m, _b, url): AdminConceptList => {
         creator: c.status === "proposed" ? (i % 2 === 0 ? "Marie Dupont" : "Jean Martin") : null,
       }),
     ),
-    total: matching.length,
-    proposed: live.filter((c) => c.status === "proposed").length,
   };
 });
 

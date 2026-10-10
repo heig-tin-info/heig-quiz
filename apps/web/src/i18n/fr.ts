@@ -603,7 +603,6 @@ export const fr: Record<keyof Dict, string> = {
   "admin.concepts.validate.needs.en": "Ajoutez un libellé anglais pour valider cette notion",
   "admin.concepts.edit": "Modifier",
   "admin.concepts.editNamed": "Modifier {name}",
-  "admin.concepts.shown": "{shown} sur {total}",
   "admin.concepts.empty.title": "Aucune notion pour l'instant",
   "admin.concepts.empty.body": "Les enseignants proposent des notions depuis l'éditeur de questions. Elles apparaissent ici pour être validées.",
   "admin.concepts.done.title": "Plus rien à valider",

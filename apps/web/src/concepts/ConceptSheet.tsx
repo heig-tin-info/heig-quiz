@@ -120,7 +120,7 @@ export function ConceptSheet({
       footer={
         <>
           <Button
-            variant="danger"
+            variant="danger-quiet"
             className="mr-auto"
             disabled={blocked !== null}
             aria-describedby={blocked !== null ? "concept-delete-why" : undefined}

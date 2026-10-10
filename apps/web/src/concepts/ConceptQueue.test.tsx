@@ -7,7 +7,7 @@ import type { AdminConcept, AdminConceptList } from "@quiz/contracts";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { ConceptQueue } from "./ConceptQueue";
 
-const LIST = "GET /app/api/admin/concepts?limit=100&offset=0";
+const LIST = "GET /app/api/admin/concepts";
 
 const concept = (n: number, extra: Partial<AdminConcept> = {}): AdminConcept => ({
   id: `c0c0c0c0-0000-4000-8000-${String(n).padStart(12, "0")}`,
@@ -34,16 +34,12 @@ const validated = concept(3, {
   creator: null,
 });
 
-const page = (concepts: AdminConcept[], total = concepts.length): AdminConceptList => ({
-  concepts,
-  total,
-  proposed: concepts.filter((c) => c.status === "proposed").length,
-});
+const page = (concepts: AdminConcept[]): AdminConceptList => ({ concepts });
 
 const validateOf = (c: AdminConcept) => `POST /app/api/admin/concepts/${c.id}/validate`;
 
 describe("the concept curation queue (ADR-081, fifth addendum)", () => {
-  it("lists the concepts with their usage, and Validate is the primary action of a proposed one", async () => {
+  it("lists the concepts with their usage, and offers Validate on the proposed ones only", async () => {
     const { calls } = mockFetch({
       [LIST]: ok(page([ready, halfDone, validated])),
       [validateOf(ready)]: ok({ ...ready, status: "validated" }),
@@ -71,23 +67,20 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     expect(validate).toHaveAccessibleDescription(/add an english label/i);
   });
 
-  it("narrows to the concepts to validate and searches by text", async () => {
-    mockFetch({
-      [LIST]: ok(page([ready, validated])),
-      "GET /app/api/admin/concepts?limit=100&offset=0&status=proposed": ok(page([ready])),
-      "GET /app/api/admin/concepts?limit=100&offset=0&q=poin": ok(page([validated])),
-    });
+  it("narrows to the concepts to validate and searches by text, without asking the server again", async () => {
+    const { calls } = mockFetch({ [LIST]: ok(page([ready, validated])) });
     renderWithProviders(<ConceptQueue />);
     await screen.findByText("Pointer");
 
-    await userEvent.click(screen.getByRole("radio", { name: /to validate/i }));
+    await userEvent.click(screen.getByRole("radio", { name: /to validate \(1\)/i }));
     await waitFor(() => expect(screen.queryByText("Pointer")).toBeNull());
     expect(screen.getByText("Recursion")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("radio", { name: /^all$/i }));
-    await userEvent.type(screen.getByRole("searchbox", { name: /search a concept/i }), "poin");
-    expect(await screen.findByText("Pointer")).toBeInTheDocument();
+    await userEvent.type(screen.getByRole("searchbox", { name: /search a concept/i }), "pointe");
     await waitFor(() => expect(screen.queryByText("Recursion")).toBeNull());
+    expect(screen.getByText("Pointer")).toBeInTheDocument();
+    expect(calls).toHaveLength(1);
   });
 
   it("deletes an unused concept from its sheet, after a confirmation", async () => {
@@ -147,14 +140,12 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     expect(await within(sheet).findByText(/another concept already has this label/i)).toBeInTheDocument();
   });
 
-  it("has an empty state, a done state and an error state", async () => {
+  it("has a done state", async () => {
     mockFetch({
-      [LIST]: ok(page([])),
-      "GET /app/api/admin/concepts?limit=100&offset=0&status=proposed": ok(page([])),
+      [LIST]: ok(page([validated])),
     });
     renderWithProviders(<ConceptQueue />);
-    expect(await screen.findByText("No concepts yet")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: /to validate/i }));
+    await userEvent.click(await screen.findByRole("radio", { name: /^to validate$/i }));
     expect(await screen.findByText("Nothing left to validate")).toBeInTheDocument();
   });
 

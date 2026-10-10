@@ -1048,18 +1048,16 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     const text = await res.text();
     return { status: res.status, body: text === "" ? null : (JSON.parse(text) as Record<string, unknown>) };
   };
-  const queue = async (query = "") => {
-    const res = await call("GET", `/app/api/admin/concepts${query}`);
+  const queue = async () => {
+    const res = await call("GET", "/app/api/admin/concepts");
     expect(issuesOf(AdminConceptList, res.body)).toEqual([]);
     return res.body as unknown as AdminConceptList;
   };
 
-  it("lists the proposed concepts first, with their usage, and filters", async () => {
+  it("lists the proposed concepts first, with their usage", async () => {
     const all = await queue();
     expect(all.concepts[0]?.status).toBe("proposed");
     expect(all.concepts.some((c) => c.questionCount > 0)).toBe(true);
-    expect((await queue("?status=validated")).concepts.every((c) => c.status === "validated")).toBe(true);
-    expect((await queue("?q=heritage")).concepts.map((c) => c.labels.fr)).toEqual(["Héritage"]);
   });
 
   it("refuses to validate a concept missing a language, and to delete a used one", async () => {
