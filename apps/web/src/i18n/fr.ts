@@ -643,7 +643,7 @@ export const fr: Record<keyof Dict, string> = {
   "admin.concepts.aliases.none": "Aucun alias pour l'instant.",
   "admin.concepts.aliases.field": "Nouvel alias",
   "admin.concepts.aliases.add": "Ajouter l'alias",
-  "admin.concepts.aliases.remove": "Retirer l'alias {name}",
+  "admin.concepts.aliases.remove": "Retirer l'alias",
   "admin.concepts.aliases.collision.title": "\u00ab {alias} \u00bb désigne déjà une autre notion",
   "admin.concepts.aliases.collision.label": "{name} : son libellé",
   "admin.concepts.aliases.collision.alias": "{name} : l'un de ses alias",

@@ -178,14 +178,14 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     it("lists the aliases as chips, and removes one by its key", async () => {
       const { calls } = mockFetch({
         [LIST]: ok(page([withAlias])),
-        [`DELETE ${aliasUrl(withAlias)}/debordement`]: ok({ ...withAlias, aliases: [] }),
+        [`DELETE ${aliasUrl(withAlias)}/${encodeURIComponent("Débordement")}`]: ok({ ...withAlias, aliases: [] }),
       });
       renderWithProviders(<ConceptQueue />);
       const sheet = await openSheet();
       const group = within(sheet).getByRole("group", { name: "Aliases" });
       expect(within(group).getByText("Débordement")).toBeInTheDocument();
-      await userEvent.click(within(group).getByRole("button", { name: "Remove the alias Débordement" }));
-      await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url.endsWith("/aliases/debordement"))).toBe(true));
+      await userEvent.click(within(group).getByRole("button", { name: "Remove alias — Débordement" }));
+      await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url.endsWith(`/aliases/${encodeURIComponent("Débordement")}`))).toBe(true));
     });
 
     it("adds an alias, apart from the labels' Save", async () => {
@@ -219,14 +219,14 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       await userEvent.type(within(sheet).getByRole("textbox", { name: "New alias" }), "pointers");
       await userEvent.click(within(sheet).getByRole("button", { name: "Add alias" }));
 
-      const warning = await within(sheet).findByRole("status");
+      const warning = await screen.findByRole("dialog", { name: /already designates another concept/i });
       expect(warning).toHaveTextContent("\u201cpointers\u201d already designates another concept");
       expect(warning).toHaveTextContent("Pointer: its label");
       expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
 
       await userEvent.click(within(warning).getByRole("button", { name: "Add anyway" }));
       await waitFor(() => expect(calls.filter((c) => c.method === "POST")[1]?.body).toEqual({ alias: "pointers", force: true }));
-      await waitFor(() => expect(within(sheet).queryByRole("status")).toBeNull());
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: /already designates/i })).toBeNull());
     });
 
     it("says why an alias equal to the label is refused", async () => {
@@ -280,12 +280,12 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
         "The 4 questions that use Héritage will use Pointer. The label Héritage will no longer designate a concept.",
       );
       await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
-      await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: validated.id, keepAsAlias: true }));
+      await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: validated.id, keepAsAlias: false }));
       // The queue is read again: the merged concept is gone from the next answer.
       await waitFor(() => expect(calls.filter((c) => c.method === "GET" && c.url.endsWith("/admin/concepts")).length).toBeGreaterThan(1));
     });
 
-    it("keeps the merged label as an alias by default, and sends the admin's choice", async () => {
+    it("drops the merged label by default, and keeps it as an alias when asked", async () => {
       const { calls } = mockFetch({
         [LIST]: ok(page([halfDone, validated])),
         [mergeOf(halfDone)]: ok(validated),
@@ -295,10 +295,10 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       expect(within(dialog).queryByRole("checkbox")).toBeNull();
       await userEvent.click(within(dialog).getByRole("radio", { name: /pointer/i }));
       const keep = within(dialog).getByRole("checkbox", { name: "Keep Héritage as an alias of Pointer" });
-      expect(keep).toBeChecked();
+      expect(keep).not.toBeChecked();
       await userEvent.click(keep);
       await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
-      await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: validated.id, keepAsAlias: false }));
+      await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: validated.id, keepAsAlias: true }));
     });
 
     it("searches the targets with the picker's rule", async () => {

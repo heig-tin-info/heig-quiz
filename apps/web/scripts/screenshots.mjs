@@ -1575,8 +1575,7 @@ const scenes = [
       await p.getByRole("button", { name: /^edit pointer$/i }).click();
       await p.getByRole("textbox", { name: /^new alias$/i }).fill("array");
       await p.getByRole("button", { name: /^add alias$/i }).click();
-      await p.getByRole("group", { name: /^aliases$/i }).getByRole("status").waitFor();
-      await p.getByRole("group", { name: /^aliases$/i }).scrollIntoViewIfNeeded();
+      await p.getByRole("dialog", { name: /already designates another concept/i }).waitFor();
     } },
   { name: "admin-concepts-empty", role: "admin", path: "/admin?tab=concepts&empty=1" },
   { name: "admin-concepts-error", role: "admin", path: "/admin?tab=concepts&fail=1", settle: 2500 },

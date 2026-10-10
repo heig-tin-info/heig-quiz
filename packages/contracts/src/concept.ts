@@ -217,8 +217,11 @@ export type ConceptExists = z.infer<typeof ConceptExists>;
 /** `POST /admin/concepts/:id/merge`: the validated concept that absorbs the one in the path. */
 export const ConceptMerge = z.object({
   into: z.uuid(),
-  /** Keeps the merged concept's labels as aliases of the target (fifth addendum, PR3); the dialog asks for it by default. */
-  keepAsAlias: z.boolean().optional(),
+  /**
+   * Keeps the merged concept's labels as aliases of the target (ADR-081 §6):
+   * its label is dropped unless asked, so the caller says which, always.
+   */
+  keepAsAlias: z.boolean(),
 });
 export type ConceptMerge = z.infer<typeof ConceptMerge>;
 
@@ -253,6 +256,6 @@ export const AliasCollision = z.object({
 });
 export type AliasCollision = z.infer<typeof AliasCollision>;
 
-/** `DELETE /admin/concepts/:id/aliases/:key` — the `conceptKey` of the alias. */
-export const ConceptAliasParams = z.object({ id: z.uuid(), key: z.string().min(1).max(400) });
+/** `DELETE /admin/concepts/:id/aliases/:alias` — the alias as written; the server computes its key. */
+export const ConceptAliasParams = z.object({ id: z.uuid(), alias: ConceptAliasText });
 export type ConceptAliasParams = z.infer<typeof ConceptAliasParams>;

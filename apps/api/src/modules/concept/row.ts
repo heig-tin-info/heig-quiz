@@ -3,10 +3,10 @@
  * columns of each language, and the JSON a route answers with. Shared by
  * the registry (`service.ts`) and the links (`links.ts`).
  */
-import { and, asc, inArray, ne, or } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, or } from "drizzle-orm";
 
 import { CONCEPT_LANGS, type Concept, type ConceptExists, type ConceptLang, type ConceptRef } from "@quiz/contracts";
-import { conceptLabelIn, qualifiedConceptKey, type ResolvableConcept } from "@quiz/domain";
+import { conceptKey, conceptLabelIn, qualifiedConceptKey, type ResolvableConcept } from "@quiz/domain";
 
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
 import { conceptAliases, concepts } from "../../db/schema.js";
@@ -117,11 +117,11 @@ async function holdersOf(db: Db | Tx, keys: Record<ConceptLang, readonly string[
 }
 
 /** A concept as the resolver of `@quiz/domain` sees it: its id, its merge, its labels with their qualifiers and its aliases. */
-export function toResolvable(row: ConceptRow, aliases: readonly string[] = []): ResolvableConcept {
+export function toResolvable(row: ConceptRow, aliases: ReadonlyMap<string, readonly string[]>): ResolvableConcept {
   return {
     id: row.id,
     mergedInto: row.mergedInto,
-    aliases,
+    aliases: aliases.get(row.id) ?? [],
     labels: CONCEPT_LANGS.flatMap((lang) => {
       const { label, qualifier } = sideOf(row, lang);
       return label === null ? [] : [{ label, qualifier }];
@@ -132,6 +132,33 @@ export function toResolvable(row: ConceptRow, aliases: readonly string[] = []): 
 /** A concept as a question shows it, in the reader's language or the other one (`conceptLabelIn`). */
 export function toConceptRef(row: ConceptRow, lang: ConceptLang): ConceptRef {
   return { id: row.id, status: row.status, ...conceptLabelIn(perLang((l) => sideOf(row, l)), lang) };
+}
+
+/**
+ * Refuses a label that another live concept answers to as an ALIAS (the
+ * mirror of the alias guard, ADR-081 §6): the same 409 `concept_exists` as a
+ * taken label, naming that concept, because the typed word would otherwise
+ * be ambiguous for every teacher. `selfId` is the concept being renamed.
+ */
+export async function refuseAliasHolder(db: Db | Tx, labels: readonly string[], selfId: string | null): Promise<void> {
+  const keys = labels.map(conceptKey).filter(Boolean);
+  if (keys.length === 0) return;
+  const [hit] = await db
+    .select({ concept: concepts })
+    .from(conceptAliases)
+    .innerJoin(concepts, eq(concepts.id, conceptAliases.conceptId))
+    .where(
+      and(
+        inArray(conceptAliases.key, keys),
+        ne(concepts.status, "merged"),
+        selfId === null ? undefined : ne(concepts.id, selfId),
+      ),
+    )
+    .limit(1);
+  if (!hit) return;
+  throw new DomainError("concept_exists", 409, "A concept answers to this label as an alias", {
+    concept: toConcept(hit.concept, (await loadAliases(db, [hit.concept.id])).get(hit.concept.id)),
+  } satisfies Omit<ConceptExists, "error" | "message">);
 }
 
 /**

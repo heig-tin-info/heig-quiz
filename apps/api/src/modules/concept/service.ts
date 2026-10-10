@@ -38,7 +38,7 @@ import { concepts } from "../../db/schema.js";
 import type { Caller } from "../guards.js";
 import { DomainError, notFoundError } from "../http.js";
 import { droppedKeys, insertProposed, refuseInputs } from "./links.js";
-import { columnsOf, conflictOr, loadAliases, perLang, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
+import { columnsOf, conflictOr, loadAliases, perLang, refuseAliasHolder, side, sideOf, toConcept, toConceptRef, toResolvable } from "./row.js";
 
 export { addAlias, removeAlias } from "./aliases.js";
 export { listAdminConcepts } from "./admin.js";
@@ -95,7 +95,7 @@ export async function resolveLabels(
   const rows = await db.select().from(concepts);
   const byId = new Map(rows.map((r) => [r.id, toConceptRef(r, lang)]));
   const aliases = await loadAliases(db);
-  const vocabulary = rows.map((r) => toResolvable(r, aliases.get(r.id)));
+  const vocabulary = rows.map((r) => toResolvable(r, aliases));
   const concept = (id: string) => byId.get(id)!;
   const dropped = await stopList(db, caller);
 
@@ -194,6 +194,11 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
         return reason === null ? [] : [{ input: label, error: "concept_dropped" as const, reason }];
       });
       if (refused.length > 0) throw refuseInputs(refused);
+      const renamed = CONCEPT_LANGS.flatMap((lang) => {
+        const { label } = sides[lang];
+        return label === null || label === sideOf(current, lang).label ? [] : [label];
+      });
+      await refuseAliasHolder(tx, renamed, id);
 
       const [row] = await tx
         .update(concepts)

@@ -7,6 +7,7 @@ import {
   conceptKey,
   editDistance,
   filterIds,
+  mergedAliases,
   qualifiedConceptKey,
   resolveConceptLabel,
   splitQualifiedLabel,
@@ -420,5 +421,30 @@ describe("aliases", () => {
       with: [{ id: "ovf", via: "alias" }],
     });
     expect(checkAlias("heap", ptr, all)).toEqual({ kind: "free" });
+  });
+});
+
+describe("mergedAliases", () => {
+  const concept = (id: string, labels: [string, string?][], aliases: string[] = []): ResolvableConcept => ({
+    id,
+    mergedInto: null,
+    labels: labels.map(([label, qualifier = ""]) => ({ label, qualifier })),
+    aliases,
+  });
+  const winner = concept("w", [["Pointeur"], ["Pointer"]], ["Visée"]);
+
+  it("moves the loser's aliases, drops those the winner answers to, and adds no label by default", () => {
+    const loser = concept("l", [["Pointage"], ["Pointing"]], ["Cible", "visees", "pointers"]);
+    expect(mergedAliases(loser, winner, false)).toEqual({ moved: ["Cible"], added: [], dropped: ["pointers", "visees"] });
+  });
+
+  it("adds the loser's labels on request, qualified as written, skipping a name the winner has", () => {
+    const loser = concept("l", [["Adresse", "mémoire"], ["Pointer"]], ["Cible"]);
+    expect(mergedAliases(loser, winner, true)).toEqual({ moved: ["Cible"], added: ["Adresse (mémoire)"], dropped: [] });
+  });
+
+  it("takes each key once, aliases before labels", () => {
+    const loser = concept("l", [["Cible"]], ["cibles", "Cible"]);
+    expect(mergedAliases(loser, winner, true)).toEqual({ moved: ["cibles"], added: [], dropped: ["Cible"] });
   });
 });

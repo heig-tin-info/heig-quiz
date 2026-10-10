@@ -17,34 +17,36 @@
  *    taken again; its old label no longer resolves (a bare label matches the
  *    live concepts only), while its id still resolves to the winner.
  *
- * 5. the loser's curated aliases move to the winner (always; one it holds
- *    already, or equal to one of its labels, is dropped), so none resolves to
- *    the loser; with `keepAsAlias`, the loser's own labels (with their
- *    qualifier) become aliases of the winner too, so what teachers typed
- *    still finds the concept. An alias is never created otherwise.
+ * 5. the loser's curated aliases move to the winner, so none resolves to
+ *    the loser; one the winner answers to already is dropped. With
+ *    `keepAsAlias` (the caller always says; by default §6 drops the label) the
+ *    loser's labels become aliases of the winner too. The rule is
+ *    `mergedAliases` of `@quiz/domain`; the audit records what moved, was
+ *    added and was dropped.
  *
  * The winner keeps its labels, qualifiers, descriptions and status. The audit
  * lists the loser's former status and the question ids moved and those that
- * already had the winner, so a reviewed SQL undo is possible; there is no undo button.
+ * already had the winner, and the aliases moved, added and dropped, so a
+ * reviewed SQL undo is possible; there is no undo button.
  */
 import { asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Concept } from "@quiz/contracts";
-import { conceptKey } from "@quiz/domain";
+import { conceptKey, mergedAliases } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
-import type { Db, Tx } from "../../db/client.js";
+import type { Db } from "../../db/client.js";
 import { conceptAliases, concepts, questionConcepts } from "../../db/schema.js";
 import { DomainError, notFoundError } from "../http.js";
-import { loadAliases, perLang, sideOf, toConcept } from "./row.js";
+import { loadAliases, perLang, sideOf, toConcept, toResolvable } from "./row.js";
 import type { ConceptContext } from "./service.js";
 
 export async function mergeConcept(
   db: Db,
-  ctx: Omit<ConceptContext, "caller">,
+  ctx: ConceptContext,
   loserId: string,
   winnerId: string,
-  options: { keepAsAlias?: boolean | undefined; userId?: string | null } = {},
+  keepAsAlias: boolean,
 ): Promise<Concept> {
   if (loserId === winnerId) throw new DomainError("concept_merge_self", 422, "A concept is not merged into itself");
   return db.transaction(async (tx) => {
@@ -89,8 +91,19 @@ export async function mergeConcept(
       .set({ mergedInto: winnerId, updatedAt: ctx.now })
       .where(eq(concepts.mergedInto, loserId))
       .returning({ id: concepts.id });
-    const aliasesMoved = await moveAliases(tx, loser, winner, ctx.now);
-    const aliasesAdded = options.keepAsAlias ? await keepLabels(tx, loser, winner, options.userId ?? null, ctx.now) : [];
+    const aliases = await loadAliases(tx, [loserId, winnerId]);
+    const { moved: aliasesMoved, added: aliasesAdded, dropped: aliasesDropped } = mergedAliases(
+      toResolvable(loser, aliases),
+      toResolvable(winner, aliases),
+      keepAsAlias,
+    );
+    await tx.delete(conceptAliases).where(eq(conceptAliases.conceptId, loserId));
+    const gained = [...aliasesMoved, ...aliasesAdded];
+    if (gained.length > 0) {
+      await tx.insert(conceptAliases).values(
+        gained.map((text) => ({ conceptId: winnerId, key: conceptKey(text), text, createdBy: ctx.caller.id, createdAt: ctx.now })),
+      );
+    }
     // Step 7's course-concept links join here (ADR-081 fifth addendum).
     await tx
       .update(concepts)
@@ -115,53 +128,9 @@ export async function mergeConcept(
         repointed: repointed.map((r) => r.id).sort(),
         aliasesMoved,
         aliasesAdded,
+        aliasesDropped,
       },
     });
     return toConcept(winner, (await loadAliases(tx, [winnerId])).get(winnerId));
   });
-}
-
-type Row = typeof concepts.$inferSelect;
-
-/** The keys a concept answers to already: its labels' and its aliases'. */
-async function namesOf(tx: Db | Tx, row: Row): Promise<Set<string>> {
-  const aliases = await tx.select({ key: conceptAliases.key }).from(conceptAliases).where(eq(conceptAliases.conceptId, row.id));
-  const labels = [row.labelFr, row.labelEn].filter((l): l is string => l !== null).map(conceptKey);
-  return new Set([...labels, ...aliases.map((a) => a.key)]);
-}
-
-/** The loser's aliases go to the winner (those it answers to already are dropped); the texts moved. */
-async function moveAliases(tx: Db | Tx, loser: Row, winner: Row, now: Date): Promise<string[]> {
-  const mine = await tx.select().from(conceptAliases).where(eq(conceptAliases.conceptId, loser.id));
-  const known = await namesOf(tx, winner);
-  const moving = mine.filter((a) => !known.has(a.key));
-  if (moving.length > 0) {
-    await tx
-      .insert(conceptAliases)
-      .values(moving.map((a) => ({ ...a, conceptId: winner.id, createdAt: now })))
-      .onConflictDoNothing();
-  }
-  await tx.delete(conceptAliases).where(eq(conceptAliases.conceptId, loser.id));
-  return moving.map((a) => a.text).sort();
-}
-
-/** The loser's labels, qualified when they are, become aliases of the winner unless it answers to them; the texts added. */
-async function keepLabels(tx: Db | Tx, loser: Row, winner: Row, userId: string | null, now: Date): Promise<string[]> {
-  const known = await namesOf(tx, winner);
-  const added: { key: string; text: string }[] = [];
-  for (const lang of ["fr", "en"] as const) {
-    const { label, qualifier } = sideOf(loser, lang);
-    if (label === null) continue;
-    const text = qualifier ? `${label} (${qualifier})` : label;
-    const key = conceptKey(text);
-    if (known.has(key)) continue;
-    known.add(key);
-    added.push({ key, text });
-  }
-  if (added.length > 0) {
-    await tx
-      .insert(conceptAliases)
-      .values(added.map((a) => ({ conceptId: winner.id, ...a, createdBy: userId, createdAt: now })));
-  }
-  return added.map((a) => a.text).sort();
 }

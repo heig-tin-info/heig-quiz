@@ -646,7 +646,7 @@ export const en = {
   "admin.concepts.aliases.none": "No alias yet.",
   "admin.concepts.aliases.field": "New alias",
   "admin.concepts.aliases.add": "Add alias",
-  "admin.concepts.aliases.remove": "Remove the alias {name}",
+  "admin.concepts.aliases.remove": "Remove alias",
   "admin.concepts.aliases.collision.title": "\u201c{alias}\u201d already designates another concept",
   "admin.concepts.aliases.collision.label": "{name}: its label",
   "admin.concepts.aliases.collision.alias": "{name}: one of its aliases",

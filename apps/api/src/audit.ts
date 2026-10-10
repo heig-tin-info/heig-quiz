@@ -65,7 +65,8 @@ export type AuditAction =
    * into a validated concept, in one transaction (`payload`: `loser` id, status,
    * labels and qualifiers, `winner` likewise, `moved` and `alreadyLinked` question ids,
    * `repointed` concept ids, `aliasesAdded` (the loser's labels kept as
-   * aliases) and `aliasesMoved` (its own aliases) texts; enough for a
+   * aliases), `aliasesMoved` (its own aliases) and `aliasesDropped` (its
+   * aliases the winner answered to already) texts; enough for a
    * reviewed SQL undo, ADR-081 fifth addendum). `alias_add` / `alias_remove`:
    * the admin added or removed a curated alias (subject the concept;
    * `payload.alias` the text, `payload.forced` for an add confirmed despite a

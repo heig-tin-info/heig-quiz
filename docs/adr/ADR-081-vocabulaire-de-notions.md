@@ -13,15 +13,15 @@ product owner before step 3 of #599, and by the
 the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
 (the tag sorting retired, step (d)) and the
 [fifth addendum](#fifth-addendum-2026-10-10-the-curation-of-the-vocabulary)
-(curation, step 5: its queue is implemented, merge and aliases are not). The work is tracked by #599, under a parent issue that groups #557
+(curation, step 5: its queue, the merge and the aliases are implemented; the probable duplicates are not). The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
 polls, the drill, the MCP tools, the teacher assistant and the seed read and
 write concepts. Step (d), dropping `question_tags` and `pool_tags`, is
 implemented by the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired). The links to
-courses (§8), aliases, relations, the curation screen and the model's help
-in the picker (#557) are not implemented.
+courses (§8), relations and the model's help in the picker (#557) are not
+implemented; the curation screen and the aliases are (fifth addendum).
 
 Scope: what a question is classified by, who may create and change that
 classification, how it is stored, and what a course declares. It does not
@@ -444,9 +444,14 @@ is the first pull request; merge, aliases and probable duplicates follow.
    `concept_dropped` only answers an input that designates nothing, so an
    alias on a dropped tag's key resolves. Rename creates no alias. Merge:
    the loser's aliases move to the winner always (one the winner answers to
-   is dropped), and with `keepAsAlias` (the dialog's default, off for an API
-   caller that omits it) its labels, qualified when they are, become aliases
-   too; `concept.merge` records `aliasesMoved` and `aliasesAdded`. Deleting an
+   is dropped), and with `keepAsAlias` its labels, qualified when they are,
+   become aliases too. As §6 says, the loser's label is dropped unless asked:
+   `keepAsAlias` is required in the body and the dialog's checkbox starts off.
+   The rule is `mergedAliases` (`@quiz/domain`); `concept.merge` records
+   `aliasesMoved`, `aliasesAdded` and `aliasesDropped`. A label given to a
+   concept (creation or rename) that another live concept answers to as an
+   alias is refused like a taken label (409 `concept_exists`, the holder named),
+   the mirror of the alias guard. Deleting an
    unused concept cascades to its aliases (`conceptReferenced` is unchanged).
    The catalogue search (ADR-095 §6) does not read aliases in v1.
 4. **Probable duplicates** are proposed from labels and qualifiers only, when

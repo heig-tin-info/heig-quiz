@@ -19,8 +19,9 @@ import {
   type ConceptRef,
   type TagDropReason,
 } from "@quiz/contracts";
-import { checkAlias, conceptKey, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
+import { checkAlias, cleanConceptLabel, conceptKey, mergedAliases, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
 
+import { resolvable } from "../concepts/ranking";
 import { D, flags, H, iso, MockPayload, on, refuse, role } from "./runtime";
 
 let conceptSeq = 0;
@@ -186,31 +187,15 @@ on("POST", "/app/api/admin/concepts/:id/merge", (m, raw): Concept => {
   usage.set(winner.id, (usage.get(winner.id) ?? 0) + moved);
   usage.delete(loser.id);
   for (const c of concepts) if (c.mergedInto === loser.id) c.mergedInto = winner.id;
-  const known = new Set([...[winner.labels.fr, winner.labels.en].flatMap((l) => (l === null ? [] : [conceptKey(l)])), ...winner.aliases.map(conceptKey)]);
-  const kept = body.data.keepAsAlias
-    ? (["fr", "en"] as const).flatMap((lang) => {
-        const label = loser.labels[lang];
-        return label === null ? [] : [loser.qualifiers[lang] ? `${label} (${loser.qualifiers[lang]})` : label];
-      })
-    : [];
-  for (const alias of [...loser.aliases, ...kept]) {
-    if (!known.has(conceptKey(alias))) winner.aliases.push(alias);
-    known.add(conceptKey(alias));
-  }
-  winner.aliases.sort((a, b) => a.localeCompare(b));
+  const { moved: movedAliases, added } = mergedAliases(resolvable(loser), resolvable(winner), body.data.keepAsAlias);
+  winner.aliases = [...winner.aliases, ...movedAliases, ...added].sort((a, b) => a.localeCompare(b));
   loser.aliases = [];
   loser.status = "merged";
   loser.mergedInto = winner.id;
   return winner;
 });
 
-const resolvables = () =>
-  concepts.map((c) => ({
-    id: c.id,
-    mergedInto: c.mergedInto,
-    aliases: c.aliases,
-    labels: (["fr", "en"] as const).flatMap((l) => (c.labels[l] === null ? [] : [{ label: c.labels[l]!, qualifier: c.qualifiers[l] }])),
-  }));
+const resolvables = () => concepts.map(resolvable);
 
 /** A curated alias (ADR-081 §6): a collision with another concept's label or alias is a 409 until forced. */
 on("POST", "/app/api/admin/concepts/:id/aliases", (m, raw): Concept => {
@@ -231,14 +216,14 @@ on("POST", "/app/api/admin/concepts/:id/aliases", (m, raw): Concept => {
       collisions: check.with.map((hit) => ({ concept: conceptRefs([hit.id])[0]!, via: hit.via })),
     });
   }
-  c.aliases = [...c.aliases, body.data.alias.replace(/\s+/g, " ")].sort((a, b) => a.localeCompare(b));
+  c.aliases = [...c.aliases, cleanConceptLabel(body.data.alias)].sort((a, b) => a.localeCompare(b));
   return c;
 });
 
-on("DELETE", "/app/api/admin/concepts/:id/aliases/:key", (m): Concept => {
+on("DELETE", "/app/api/admin/concepts/:id/aliases/:alias", (m): Concept => {
   const c = concepts.find((x) => x.id === m.groups!.id);
   if (!c) throw refuse(404, "not_found", "No such concept");
-  const key = decodeURIComponent(m.groups!.key!);
+  const key = conceptKey(decodeURIComponent(m.groups!.alias!));
   if (!c.aliases.some((a) => conceptKey(a) === key)) throw refuse(404, "not_found", "No such alias");
   c.aliases = c.aliases.filter((a) => conceptKey(a) !== key);
   return c;

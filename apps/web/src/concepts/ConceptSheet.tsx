@@ -1,15 +1,23 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { GitMerge, TriangleAlert, Trash2, X } from "lucide-react";
+import { GitMerge, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { CONCEPT_LANGS, ConceptPatch, type AdminConcept, type AliasCollision, type Concept, type ConceptLang } from "@quiz/contracts";
-import { conceptKey } from "@quiz/domain";
+import {
+  CONCEPT_LANGS,
+  ConceptPatch,
+  type AdminConcept,
+  type AliasCollision,
+  type Concept,
+  type ConceptAliasAdd,
+  type ConceptLang,
+} from "@quiz/contracts";
+import { CONCEPT_LABEL_MAX } from "@quiz/domain";
 
 import { api, ApiError, refusalCodeOf } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type Locale } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
-import { Alert, Button, Field, FormError, Sheet, Textarea } from "../ui";
+import { Button, Chip, Field, FormError, Sheet, Textarea } from "../ui";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
 import { conceptName, refName } from "./names";
 
@@ -43,35 +51,28 @@ function patchOf(was: Sides, now: Sides) {
  * button, and a field to add one. Each change is saved at once, apart from
  * the labels' Save (it is a separate decision, audited alone). An alias that
  * is the label or an alias of another concept comes back as a 409
- * `alias_collision`: the warning names those concepts and the admin confirms
- * with "Add anyway" or drops it.
+ * `alias_collision`: a confirmation names those concepts, and "Add anyway"
+ * sends it again with `force`.
  */
 function Aliases({ concept }: { concept: AdminConcept }) {
   const t = useT();
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const [typed, setTyped] = useState("");
-  const [collision, setCollision] = useState<{ alias: string; collisions: AliasCollision["collisions"] } | null>(null);
   const base = `/app/api/admin/concepts/${concept.id}/aliases`;
   const changed = () => {
     void qc.invalidateQueries({ queryKey: adminConceptsKey });
     void qc.invalidateQueries({ queryKey: conceptsKey });
   };
   const add = useMutation({
-    mutationFn: (v: { alias: string; force?: boolean }) =>
-      api<Concept>(base, { method: "POST", body: JSON.stringify(v) }),
+    mutationFn: (body: ConceptAliasAdd) => api<Concept>(base, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       setTyped("");
-      setCollision(null);
       changed();
-    },
-    onError: (error, v) => {
-      if (error instanceof ApiError && refusalCodeOf(error) === "alias_collision") {
-        setCollision({ alias: v.alias, collisions: (error.body as AliasCollision).collisions });
-      }
     },
   });
   const remove = useMutation({
-    mutationFn: (alias: string) => api<Concept>(`${base}/${encodeURIComponent(conceptKey(alias))}`, { method: "DELETE" }),
+    mutationFn: (alias: string) => api<Concept>(`${base}/${encodeURIComponent(alias)}`, { method: "DELETE" }),
     onSuccess: changed,
   });
   const describe = (error: unknown) => {
@@ -86,12 +87,38 @@ function Aliases({ concept }: { concept: AdminConcept }) {
         return t("admin.concepts.error.alias");
     }
   };
-  const submit = () => {
+  const submit = async () => {
     const alias = typed.trim();
     if (alias === "") return;
-    setCollision(null);
-    add.mutate({ alias });
+    try {
+      await add.mutateAsync({ alias });
+    } catch (error) {
+      if (!(error instanceof ApiError) || refusalCodeOf(error) !== "alias_collision") return;
+      const { collisions } = error.body as AliasCollision;
+      const ok = await confirm({
+        title: t("admin.concepts.aliases.collision.title", { alias }),
+        message: (
+          <>
+            <ul className="list-disc pl-4">
+              {collisions.map(({ concept: other, via }) => (
+                <li key={other.id}>
+                  {t(via === "label" ? "admin.concepts.aliases.collision.label" : "admin.concepts.aliases.collision.alias", {
+                    name: refName(other),
+                  })}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2">{t("admin.concepts.aliases.collision.body")}</p>
+          </>
+        ),
+        confirmLabel: t("admin.concepts.aliases.collision.confirm"),
+        cancelLabel: t("admin.concepts.aliases.collision.cancel"),
+      });
+      if (ok) await add.mutateAsync({ alias, force: true }).catch(() => undefined);
+    }
   };
+  // A collision is answered by the confirmation, not by a message under the field.
+  const failure = refusalCodeOf(add.error) === "alias_collision" ? null : add.error;
 
   return (
     <fieldset className="space-y-3">
@@ -102,17 +129,13 @@ function Aliases({ concept }: { concept: AdminConcept }) {
       ) : (
         <ul className="flex flex-wrap gap-1.5">
           {concept.aliases.map((alias) => (
-            <li key={alias} className="inline-flex items-center gap-1 rounded-full bg-surface-3 py-0.5 pl-2.5 pr-1 text-sm">
-              {alias}
-              <button
-                type="button"
+            <li key={alias}>
+              <Chip
+                label={alias}
+                remove={t("admin.concepts.aliases.remove")}
                 disabled={remove.isPending}
-                aria-label={t("admin.concepts.aliases.remove", { name: alias })}
-                onClick={() => remove.mutate(alias)}
-                className="shrink-0 rounded-full p-0.5 text-fg-faint transition-colors hover:bg-line-strong hover:text-fg"
-              >
-                <X className="size-3" />
-              </button>
+                onRemove={() => remove.mutate(alias)}
+              />
             </li>
           ))}
         </ul>
@@ -121,56 +144,21 @@ function Aliases({ concept }: { concept: AdminConcept }) {
         <Field
           label={t("admin.concepts.aliases.field")}
           fullWidth
-          maxLength={120}
+          maxLength={CONCEPT_LABEL_MAX}
           value={typed}
-          onChange={(e) => {
-            setTyped(e.target.value);
-            setCollision(null);
-          }}
+          onChange={(e) => setTyped(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              submit();
+              void submit();
             }
           }}
         />
-        <Button variant="secondary" loading={add.isPending && !collision} disabled={typed.trim() === ""} onClick={submit}>
+        <Button variant="secondary" loading={add.isPending} disabled={typed.trim() === ""} onClick={() => void submit()}>
           {t("admin.concepts.aliases.add")}
         </Button>
       </div>
-      {collision ? (
-        <Alert
-          tone="warning"
-          icon={TriangleAlert}
-          title={t("admin.concepts.aliases.collision.title", { alias: collision.alias })}
-          action={
-            <span className="flex gap-2">
-              <Button variant="secondary" onClick={() => setCollision(null)}>
-                {t("admin.concepts.aliases.collision.cancel")}
-              </Button>
-              <Button
-                variant="secondary"
-                loading={add.isPending}
-                onClick={() => add.mutate({ alias: collision.alias, force: true })}
-              >
-                {t("admin.concepts.aliases.collision.confirm")}
-              </Button>
-            </span>
-          }
-        >
-          <ul className="list-disc pl-4">
-            {collision.collisions.map(({ concept: other, via }) => (
-              <li key={other.id}>
-                {t(via === "label" ? "admin.concepts.aliases.collision.label" : "admin.concepts.aliases.collision.alias", {
-                  name: refName(other),
-                })}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-1">{t("admin.concepts.aliases.collision.body")}</p>
-        </Alert>
-      ) : null}
-      <FormError error={add.error && !collision ? add.error : remove.error} describe={describe} />
+      <FormError error={failure ?? remove.error} describe={describe} />
     </fieldset>
   );
 }

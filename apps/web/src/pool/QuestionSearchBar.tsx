@@ -1,4 +1,4 @@
-import { CircleAlert, SlidersHorizontal, X } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { ConceptRef } from "@quiz/contracts";
@@ -11,6 +11,7 @@ import { typeIcon, typeLabel, QUESTION_TYPE_IDS } from "../questionTypes";
 import {
   Badge,
   Button,
+  Chip,
   ComboboxList,
   cx,
   ComboboxOption,
@@ -89,31 +90,6 @@ const CONCEPT_LIMIT = 20;
 
 /** How many suggestions the `#` / `type:` popover offers at once. */
 const COMPLETION_LIMIT = 8;
-
-function Chip({ label, warning, onRemove }: { label: string; warning?: string; onRemove: () => void }) {
-  const t = useT();
-  return (
-    <span
-      title={warning}
-      className={cx(
-        "inline-flex h-6 items-center gap-1 rounded-full pl-2.5 pr-1 text-xs font-medium",
-        warning ? "border border-dashed border-fg-faint bg-surface text-fg-muted" : "bg-surface-3 text-fg-muted",
-      )}
-    >
-      {warning ? <CircleAlert className="size-3 shrink-0 text-warning" aria-hidden /> : null}
-      {label}
-      {warning ? <span className="font-normal text-fg-faint">· {warning}</span> : null}
-      <button
-        type="button"
-        aria-label={`${t("pool.filter.clear")} — ${label}`}
-        onClick={onRemove}
-        className="rounded-full p-0.5 text-fg-faint transition-colors hover:bg-line-strong hover:text-fg"
-      >
-        <X className="size-3" />
-      </button>
-    </span>
-  );
-}
 
 /**
  * The concepts of the scope as chips, with a search above them.
@@ -434,13 +410,14 @@ export function QuestionSearchBar({
       {count > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5">
           {resolved.types.map((type) => (
-            <Chip key={`type-${type}`} label={typeLabel(t, type)} onRemove={() => dropType(type)} />
+            <Chip remove={t("pool.filter.clear")} key={`type-${type}`} label={typeLabel(t, type)} onRemove={() => dropType(type)} />
           ))}
           {filters.concepts.map((id) => (
-            <Chip key={`concept-${id}`} label={nameOf(id)} onRemove={() => dropConcept(id)} />
+            <Chip remove={t("pool.filter.clear")} key={`concept-${id}`} label={nameOf(id)} onRemove={() => dropConcept(id)} />
           ))}
           {resolved.words.map(({ word, ids }) => (
             <Chip
+              remove={t("pool.filter.clear")}
               key={`word-${word}`}
               label={`#${word}`}
               warning={
@@ -451,6 +428,7 @@ export function QuestionSearchBar({
           ))}
           {resolved.difficulties.map((d) => (
             <Chip
+              remove={t("pool.filter.clear")}
               key={`diff-${d}`}
               label={t("pool.difficultyOf", { n: d })}
               onRemove={() => dropDifficulty(d)}
@@ -458,18 +436,21 @@ export function QuestionSearchBar({
           ))}
           {resolved.versionMin !== null || resolved.versionMax !== null ? (
             <Chip
+              remove={t("pool.filter.clear")}
               label={rangeLabel("version", resolved.versionMin, resolved.versionMax)}
               onRemove={dropVersion}
             />
           ) : null}
           {filters.rateMin !== null || filters.rateMax !== null ? (
             <Chip
+              remove={t("pool.filter.clear")}
               label={rangeLabel("rate", filters.rateMin, filters.rateMax)}
               onRemove={() => set({ rateMin: null, rateMax: null })}
             />
           ) : null}
           {filters.timeMin !== null || filters.timeMax !== null ? (
             <Chip
+              remove={t("pool.filter.clear")}
               label={rangeLabel("time", filters.timeMin, filters.timeMax, (s) =>
                 formatSpan(s, t),
               )}
@@ -477,7 +458,7 @@ export function QuestionSearchBar({
             />
           ) : null}
           {resolved.includeDeleted ? (
-            <Chip label={t("pool.filter.deleted")} onRemove={() => set({ includeDeleted: false })} />
+            <Chip remove={t("pool.filter.clear")} label={t("pool.filter.deleted")} onRemove={() => set({ includeDeleted: false })} />
           ) : null}
           <button
             type="button"

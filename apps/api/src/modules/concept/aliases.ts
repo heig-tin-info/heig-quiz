@@ -17,7 +17,7 @@
 import { and, eq } from "drizzle-orm";
 
 import type { AliasCollision, Concept, ConceptAliasAdd, ConceptLang } from "@quiz/contracts";
-import { checkAlias, conceptKey } from "@quiz/domain";
+import { checkAlias, cleanConceptLabel, conceptKey } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
@@ -26,8 +26,6 @@ import { DomainError, notFoundError } from "../http.js";
 import { loadAliases, toConcept, toConceptRef, toResolvable } from "./row.js";
 import type { ConceptContext } from "./service.js";
 
-type AliasContext = Omit<ConceptContext, "caller"> & { userId: string | null; lang: ConceptLang };
-
 async function lockLive(tx: Db | Tx, id: string) {
   const [row] = await tx.select().from(concepts).where(eq(concepts.id, id)).for("update");
   if (!row) throw notFoundError("concept");
@@ -35,14 +33,20 @@ async function lockLive(tx: Db | Tx, id: string) {
   return row;
 }
 
-export async function addAlias(db: Db, ctx: AliasContext, id: string, body: ConceptAliasAdd): Promise<Concept> {
-  const text = body.alias.replace(/\s+/g, " ");
+export async function addAlias(
+  db: Db,
+  ctx: ConceptContext,
+  id: string,
+  body: ConceptAliasAdd,
+  lang: ConceptLang,
+): Promise<Concept> {
+  const text = cleanConceptLabel(body.alias);
   const key = conceptKey(text);
   return db.transaction(async (tx) => {
     const row = await lockLive(tx, id);
     const rows = await tx.select().from(concepts);
     const aliases = await loadAliases(tx);
-    const vocabulary = rows.map((r) => toResolvable(r, aliases.get(r.id)));
+    const vocabulary = rows.map((r) => toResolvable(r, aliases));
     const check = checkAlias(text, vocabulary.find((c) => c.id === id)!, vocabulary);
     if (check.kind === "redundant") {
       throw check.of === "label"
@@ -51,14 +55,14 @@ export async function addAlias(db: Db, ctx: AliasContext, id: string, body: Conc
     }
     const collisions =
       check.kind === "collides"
-        ? check.with.map((hit) => ({ concept: toConceptRef(rows.find((r) => r.id === hit.id)!, ctx.lang), via: hit.via }))
+        ? check.with.map((hit) => ({ concept: toConceptRef(rows.find((r) => r.id === hit.id)!, lang), via: hit.via }))
         : [];
     if (collisions.length > 0 && !body.force) {
       throw new DomainError("alias_collision", 409, "This alias would make an input ambiguous", {
         collisions,
       } satisfies Omit<AliasCollision, "error" | "message">);
     }
-    await tx.insert(conceptAliases).values({ conceptId: id, key, text, createdBy: ctx.userId, createdAt: ctx.now });
+    await tx.insert(conceptAliases).values({ conceptId: id, key, text, createdBy: ctx.caller.id, createdAt: ctx.now });
     await audit(tx, {
       ...ctx.actor,
       action: "concept.alias_add",
@@ -70,7 +74,8 @@ export async function addAlias(db: Db, ctx: AliasContext, id: string, body: Conc
   });
 }
 
-export async function removeAlias(db: Db, ctx: Omit<ConceptContext, "caller">, id: string, key: string): Promise<Concept> {
+export async function removeAlias(db: Db, ctx: ConceptContext, id: string, alias: string): Promise<Concept> {
+  const key = conceptKey(alias);
   return db.transaction(async (tx) => {
     const row = await lockLive(tx, id);
     const [gone] = await tx

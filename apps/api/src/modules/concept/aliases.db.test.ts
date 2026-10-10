@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { AliasCollision, Concept, ConceptList, ConceptResolveResponse, ConceptWriteRefusal } from "@quiz/contracts";
+import { AliasCollision, Concept, ConceptList, ConceptResolveResponse } from "@quiz/contracts";
 import { qualifiedConceptKey } from "@quiz/domain";
 
 import type { AuditActor } from "../../audit.js";
@@ -49,18 +49,18 @@ const add = (who: Who, id: string, alias: string, force?: boolean) =>
     headers: who.headers,
     payload: force === undefined ? { alias } : { alias, force },
   });
-const remove = (who: Who, id: string, key: string) =>
+const remove = (who: Who, id: string, alias: string) =>
   server.app.inject({
     method: "DELETE",
-    url: `/app/api/admin/concepts/${id}/aliases/${encodeURIComponent(key)}`,
+    url: `/app/api/admin/concepts/${id}/aliases/${encodeURIComponent(alias)}`,
     headers: who.headers,
   });
-const merge = (id: string, into: string, keepAsAlias?: boolean) =>
+const merge = (id: string, into: string, keepAsAlias: boolean) =>
   server.app.inject({
     method: "POST",
     url: `/app/api/admin/concepts/${id}/merge`,
     headers: admin.headers,
-    payload: keepAsAlias === undefined ? { into } : { into, keepAsAlias },
+    payload: { into, keepAsAlias },
   });
 const resolveInput = async (input: string) => {
   const res = await server.app.inject({
@@ -105,10 +105,10 @@ describe("POST and DELETE /admin/concepts/:id/aliases", () => {
     const adminList = (await server.app.inject({ method: "GET", url: "/app/api/admin/concepts", headers: admin.headers })).json();
     expect(adminList.concepts.find((c: { id: string }) => c.id === ovf).aliases).toEqual(["Débordement d'entier"]);
 
-    const gone = await remove(admin, ovf, "debordement-entier");
+    const gone = await remove(admin, ovf, "Débordements d'entier");
     expect(gone.statusCode).toBe(200);
     expect(Concept.parse(gone.json()).aliases).toEqual([]);
-    expect((await remove(admin, ovf, "debordement-entier")).statusCode).toBe(404);
+    expect((await remove(admin, ovf, "Débordements d'entier")).statusCode).toBe(404);
 
     const entries = await db().select().from(auditLog).where(eq(auditLog.subjectId, ovf));
     expect(entries.map((e) => e.action).sort()).toEqual(["concept.alias_add", "concept.alias_remove"]);
@@ -179,7 +179,7 @@ describe("resolution through an alias", () => {
     expect(write).toMatchObject({ ids: [ovf], created: [] });
 
     const ptr = await concept("Pointeur", "Pointer");
-    expect((await merge(ovf, ptr)).statusCode).toBe(200);
+    expect((await merge(ovf, ptr, false)).statusCode).toBe(200);
     // Without the option, the alias goes with the loser's aliases to the winner, and the loser's labels vanish.
     expect(await resolveInput("debordement entier")).toMatchObject({ kind: "resolved", concept: { id: ptr } });
     expect(await resolveInput("Dépassement")).toMatchObject({ kind: "unknown" });
@@ -212,6 +212,7 @@ describe("merge and delete", () => {
     expect(entry?.payload).toMatchObject({
       aliasesMoved: [],
       aliasesAdded: ["Pointage (mémoire)", "Pointing"],
+      aliasesDropped: ["Visée", "pointer"],
     });
     expect(await resolveInput("Pointage (mémoire)")).toMatchObject({ kind: "resolved", concept: { id: winner } });
   });
@@ -220,17 +221,17 @@ describe("merge and delete", () => {
     const loser = await concept("Pointage", "Pointing");
     const winner = await concept("Pointeur", "Pointer");
     await add(admin, loser, "Visée");
-    const res = await merge(loser, winner);
+    const res = await merge(loser, winner, false);
     expect(Concept.parse(res.json()).aliases).toEqual(["Visée"]);
     const [entry] = await db().select().from(auditLog).where(and(eq(auditLog.subjectId, loser), eq(auditLog.action, "concept.merge")));
-    expect(entry?.payload).toMatchObject({ aliasesMoved: ["Visée"], aliasesAdded: [] });
+    expect(entry?.payload).toMatchObject({ aliasesMoved: ["Visée"], aliasesAdded: [], aliasesDropped: [] });
     expect(await resolveInput("Pointage")).toMatchObject({ kind: "unknown" });
   });
 
   it("adds no alias to a merged concept, and deleting a concept deletes its aliases", async () => {
     const loser = await concept("Pointage", null);
     const winner = await concept("Pointeur", "Pointer");
-    await merge(loser, winner);
+    await merge(loser, winner, false);
     expect((await add(admin, loser, "Visée")).json()).toMatchObject({ error: "concept_merged" });
 
     const unused = await concept("Inutile", "Unused");
@@ -241,20 +242,34 @@ describe("merge and delete", () => {
   });
 });
 
-describe("the write refusal for an alias collision", () => {
-  it("is a concept_ambiguous 422 with both candidates", async () => {
-    const ptr = await concept("Pointeur", "Pointer");
+describe("a label another concept answers to as an alias", () => {
+  it("is refused on create and on rename with the holder named, so no word turns ambiguous", async () => {
     const ovf = await concept("Dépassement", "Overflow");
-    await add(admin, ovf, "pointers", true);
-    const actor: AuditActor = { actorUserId: teacher.id, actorType: "user" };
-    const error = await service
-      .resolveForWrite(db(), ["pointers"], { create: false, lang: "fr", createdBy: teacher.id, actor, now: new Date() })
-      .catch((e: unknown) => e);
-    const details = (error as { details: unknown }).details;
-    const refusal = ConceptWriteRefusal.parse({ error: (error as { code: string }).code, ...(details as object) });
-    expect(refusal.errors[0]).toMatchObject({ error: "concept_ambiguous" });
-    expect(new Set((refusal.errors[0] as { candidates: { id: string }[] }).candidates.map((c) => c.id))).toEqual(
-      new Set([ptr, ovf]),
-    );
+    const ptr = await concept("Pointeur", "Pointer");
+    await add(admin, ovf, "Trop-plein");
+    const created = await server.app.inject({
+      method: "POST",
+      url: "/app/api/concepts",
+      headers: teacher.headers,
+      payload: { lang: "fr", label: "trop plein" },
+    });
+    expect(created.statusCode).toBe(409);
+    expect(created.json()).toMatchObject({ error: "concept_exists", concept: { id: ovf, aliases: ["Trop-plein"] } });
+    const renamed = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/concepts/${ptr}`,
+      headers: admin.headers,
+      payload: { fr: { label: "Trop plein" } },
+    });
+    expect(renamed.statusCode).toBe(409);
+    expect(renamed.json()).toMatchObject({ error: "concept_exists", concept: { id: ovf } });
+    // Renaming a concept onto its own alias is no ambiguity.
+    const own = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/concepts/${ovf}`,
+      headers: admin.headers,
+      payload: { fr: { label: "Trop-plein" } },
+    });
+    expect(own.statusCode).toBe(200);
   });
 });

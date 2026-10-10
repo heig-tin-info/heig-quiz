@@ -35,8 +35,8 @@ export function ConceptMergeDialog({
   const { locale } = useI18n();
   const [typed, setTyped] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
-  // On by default (fifth addendum, PR3): what teachers typed for the merged concept still finds the target.
-  const [keepAlias, setKeepAlias] = useState(true);
+  // Off by default (ADR-081 §6): the merged label is dropped unless the admin keeps it as an alias.
+  const [keepAlias, setKeepAlias] = useState(false);
   const name = conceptName(concept, locale);
 
   const targets = useMemo(() => candidates.filter((c) => c.status === "validated" && c.id !== concept.id), [candidates, concept.id]);

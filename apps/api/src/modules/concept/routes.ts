@@ -27,7 +27,7 @@
  *   `alias_collision` (its key is another concept's label or alias; resent
  *   with `force` it is stored), 409 `alias_exists`, 422 `alias_redundant`
  *   (the concept's own label), 409 `concept_merged`, 404.
- *   `DELETE .../aliases/:key` (the alias's `conceptKey`) removes one, answering the concept.
+ *   `DELETE .../aliases/:alias` (the alias as written) removes one, answering the concept.
  * - `DELETE /app/api/admin/concepts/:id`: 204; 409 `concept_in_use`, 404.
  * - `POST /app/api/admin/concepts/:id/merge` `{ into }`: merges the concept
  *   (`keepAsAlias`: its labels stay as aliases of the winner) into a validated one, answering the winner (`Concept`); 422
@@ -120,10 +120,7 @@ export async function conceptPlugin(app: FastifyInstance) {
     const body = ConceptMerge.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     try {
-      return await service.mergeConcept(app.db, { actor: actorOf(req), now }, params.data.id, body.data.into, {
-        keepAsAlias: body.data.keepAsAlias,
-        userId: callerOf(req).id,
-      });
+      return await service.mergeConcept(app.db, context(req, now), params.data.id, body.data.into, body.data.keepAsAlias);
     } catch (error) {
       return sendFailure(reply, error, now);
     }
@@ -136,19 +133,18 @@ export async function conceptPlugin(app: FastifyInstance) {
     const body = ConceptAliasAdd.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     try {
-      const ctx = { actor: actorOf(req), now, userId: callerOf(req).id, lang: readerLang(req) };
-      return await service.addAlias(app.db, ctx, params.data.id, body.data);
+      return await service.addAlias(app.db, context(req, now), params.data.id, body.data, readerLang(req));
     } catch (error) {
       return sendFailure(reply, error, now);
     }
   });
 
-  app.delete("/app/api/admin/concepts/:id/aliases/:key", { preHandler: requireAdmin }, async (req, reply) => {
+  app.delete("/app/api/admin/concepts/:id/aliases/:alias", { preHandler: requireAdmin }, async (req, reply) => {
     const now = app.clock.now();
     const params = ConceptAliasParams.safeParse(req.params);
     if (!params.success) return notFound(reply);
     try {
-      return await service.removeAlias(app.db, { actor: actorOf(req), now }, params.data.id, params.data.key);
+      return await service.removeAlias(app.db, context(req, now), params.data.id, params.data.alias);
     } catch (error) {
       return sendFailure(reply, error, now);
     }
