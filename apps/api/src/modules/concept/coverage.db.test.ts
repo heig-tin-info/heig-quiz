@@ -64,6 +64,9 @@ beforeAll(async () => {
     });
     expect(res.statusCode, res.body).toBe(201);
     q[n] = res.json().meta.id;
+    // The poll launcher only searches published questions.
+    const published = await server.app.inject({ method: "POST", url: `/app/api/questions/${q[n]}/publish`, headers: owner.headers });
+    expect(published.statusCode, published.body).toBe(201);
   }
   courseId = randomUUID();
   await db().insert(courses).values({ id: courseId, name: "Cov course", code: "COV" });
