@@ -56,6 +56,8 @@ import {
   type QuestionSort,
 } from "./filters";
 import { FilterBar, type ListView } from "./FilterBar";
+import { pickerConceptIds } from "./pickerConceptIds";
+import { parseSearch } from "./searchSyntax";
 import { NewQuestionModal } from "./NewQuestionModal";
 import { PoolEmpty, PoolListSkeleton, PoolListTail } from "./PoolListStates";
 import { QuestionCards } from "./QuestionCards";
@@ -290,7 +292,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const pool = usePool(id);
   const subscription = usePoolSubscription(id);
   const mayWrite = pool.data === undefined || poolRoleAllows(pool.data.role, "contributor");
-  const poolConceptIds = useMemo(() => (pool.data?.concepts ?? []).map((c) => c.concept.id), [pool.data]);
+  const poolConceptIds = useMemo(() => (pool.data ? pickerConceptIds(pool.data) : []), [pool.data]);
 
   // What this screen adds to the command palette while it is open
   // (docs/spec/08 §8.3): one entry per question type, so an expert never
@@ -311,12 +313,15 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   );
 
   const search = useMemo<QuestionFilters>(() => ({ ...filters, categoryId }), [filters, categoryId]);
-  const query = questionQuery(search, vocabulary);
+  // The courses the list can be filtered by (the pool detail's `filterCourses`); a typed `course:` waits for them.
+  const courses = pool.data?.filterCourses;
+  const courseWaiting = courses === undefined && parseSearch(filters.q).courseWord !== null;
+  const query = questionQuery(search, vocabulary, null, courses);
   const questions = useInfiniteQuery<QuestionPage>({
     queryKey: poolQuestionsKey(id, query),
     queryFn: ({ pageParam }) =>
-      api(`/app/api/pools/${id}/questions${questionQuery(search, vocabulary, pageParam as string | null)}`),
-    enabled: !waiting,
+      api(`/app/api/pools/${id}/questions${questionQuery(search, vocabulary, pageParam as string | null, courses)}`),
+    enabled: !waiting && !courseWaiting,
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
   });
@@ -535,6 +540,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 }}
                 concepts={detail.concepts.map((c) => c.concept)}
                 vocabulary={vocabulary}
+                courses={detail.filterCourses}
                 stats={questionStats}
                 total={total}
                 view={view}

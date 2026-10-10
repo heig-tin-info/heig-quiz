@@ -62,6 +62,8 @@ const POOL: PoolDetail = {
   questionCount: 1,
   subscription: "none",
   subscribers: null,
+  filterCourses: [],
+  courseConceptIds: [],
 };
 
 function mcqDetail(over: Partial<QuestionDetail> = {}): QuestionDetail {
