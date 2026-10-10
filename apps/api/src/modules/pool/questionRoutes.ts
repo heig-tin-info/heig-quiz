@@ -25,7 +25,7 @@ import { iso, isoOrNull } from "../../clock.js";
 import { questions } from "../../db/schema.js";
 import { actorOf } from "../../audit.js";
 import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
-import { rateLimited, readerLang } from "../http.js";
+import { notFound, rateLimited, readerLang } from "../http.js";
 import { poolChanged } from "./events.js";
 import { generateAnswers, generatorTypes } from "./generate.js";
 import * as service from "./service.js";
@@ -43,7 +43,13 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       async ({ req, reply, query, scope: pool }) => {
         try {
           const viewer = { id: req.user!.id, seesAll: await seesAllReports(req, pool) };
-          return await service.listQuestions(app.db, pool.id, viewer, query, readerLang(req));
+          // A course the caller does not staff, or the pool is not linked to, is a missing one (#599 step 7b).
+          const courseConcepts =
+            query.course === undefined
+              ? undefined
+              : await service.courseFilterConcepts(app.db, pool.id, callerOf(req), query.course);
+          if (courseConcepts === null) return notFound(reply);
+          return await service.listQuestions(app.db, pool.id, viewer, query, readerLang(req), courseConcepts);
         } catch (error) {
           // A cursor is only valid for the order that produced it: a client that
           // changes column mid-scroll starts the list again rather than reading a

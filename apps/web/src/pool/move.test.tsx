@@ -41,6 +41,8 @@ const POOL: PoolDetail = {
   questionCount: 2,
   subscription: "none",
   subscribers: null,
+  filterCourses: [],
+  courseConceptIds: [],
 };
 
 const TARGET: PoolDetail = {

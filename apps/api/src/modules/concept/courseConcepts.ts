@@ -34,6 +34,22 @@ export async function courseConceptsOf(db: Db | Tx, courseId: string, lang: Conc
 }
 
 /**
+ * The concept ids the given courses COVER together: what a filter by a
+ * course matches and what the picker ranks first (#599 step 7b). Today a
+ * concept covers only itself, so this is the union of the courses' own lists;
+ * narrower concepts will widen it here (7d), and every reader takes it from
+ * this one place.
+ */
+export async function conceptsCoveredByCourse(db: Db | Tx, courseIds: readonly string[]): Promise<string[]> {
+  if (courseIds.length === 0) return [];
+  const rows = await db
+    .selectDistinct({ id: courseConcepts.conceptId })
+    .from(courseConcepts)
+    .where(inArray(courseConcepts.courseId, [...courseIds]));
+  return rows.map((r) => r.id);
+}
+
+/**
  * Replaces the course's concepts with `conceptIds` (duplicates ignored), in
  * one audited transaction (`course.concepts_update`, the ids added and
  * removed). A link already there keeps its author and date; a call that

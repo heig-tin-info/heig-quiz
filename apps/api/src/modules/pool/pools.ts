@@ -34,8 +34,9 @@ import {
   users,
 } from "../../db/schema.js";
 import { type PoolRow } from "./shared.js";
-import { poolConcepts } from "../concept/service.js";
+import { conceptsCoveredByCourse, poolConcepts } from "../concept/service.js";
 import { categoryTree } from "./categories.js";
+import { filterCoursesOf } from "./courseFilter.js";
 
 export const questionCount = sql<number>`(SELECT count(*) FROM ${questions} WHERE ${qualified(questions.poolId)} = ${qualified(pools.id)} AND ${qualified(questions.deletedAt)} IS NULL)::int`;
 
@@ -377,10 +378,14 @@ export async function poolDetail(
   lang: ConceptLang,
   viewer: Pick<Caller, "id" | "reach">,
 ) {
-  const [tree, used, [summary]] = await Promise.all([
+  const [tree, used, [summary], [filterCourses, courseConceptIds]] = await Promise.all([
     categoryTree(db, pool.id),
     poolConcepts(db, pool.id, lang),
     listPools(db, eq(pools.id, pool.id), viewer),
+    // The courses the caller may filter by, and the concepts they cover (the pickers rank those first).
+    filterCoursesOf(db, pool.id, viewer).then(
+      async (courses) => [courses, await conceptsCoveredByCourse(db, courses.map((c) => c.id))] as const,
+    ),
   ]);
   const subscription = summary?.subscription ?? "none";
   return {
@@ -390,6 +395,8 @@ export async function poolDetail(
     concepts: used,
     questionCount: summary?.questionCount ?? 0,
     subscription,
+    filterCourses,
+    courseConceptIds,
     // Told to the owner and the members only, who hold a seat on a public pool (an admin under Super Powers reads as an owner).
     subscribers:
       pool.isPublic && (holdsSeatOnPublic(subscription) || viewer.reach === "all") ? (summary?.subscriberCount ?? 0) : null,

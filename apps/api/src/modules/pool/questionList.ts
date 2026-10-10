@@ -120,16 +120,30 @@ function keyText(value: unknown): string {
  * ANY version of the question plus its internal name, because a teacher
  * searches for what they wrote, published or not.
  */
-function searchWhere(poolId: string, userId: string, search: QuestionSearch): SQL[] {
+function searchWhere(
+  poolId: string,
+  userId: string,
+  search: QuestionSearch,
+  courseConcepts?: readonly string[],
+): SQL[] {
   const clauses = [eq(questions.poolId, poolId), ...filterWhere(search)];
+  // The course filter (#599 step 7b), already expanded to the concepts it
+  // covers and authorised by the route: none covered, none matched.
+  if (courseConcepts) clauses.push(exercisesAny(courseConcepts));
   // The caller's favourites only (F-POOL-10): the same predicate that
   // computes the row's `starred` flag.
   if (search.starred) clauses.push(starredBy(userId));
   return clauses;
 }
 
+/** The question exercises at least one of `conceptIds`. */
+const exercisesAny = (conceptIds: readonly string[]): SQL =>
+  conceptIds.length === 0
+    ? sql`false`
+    : sql`EXISTS (SELECT 1 FROM ${questionConcepts} WHERE ${questionConcepts.questionId} = ${questions.id} AND ${inArray(questionConcepts.conceptId, [...conceptIds])})`;
+
 /** What {@link filterWhere} reads: the search without its order and page. */
-type SearchFilters = Omit<QuestionSearch, "sort" | "dir" | "limit" | "cursor" | "starred">;
+type SearchFilters = Omit<QuestionSearch, "sort" | "dir" | "limit" | "cursor" | "starred" | "course">;
 
 /**
  * The filters of the search box and its sheet, without the pool: shared by
@@ -143,9 +157,7 @@ function filterWhere(search: SearchFilters): SQL[] {
   if (search.type?.length) clauses.push(inArray(questions.type, search.type));
   if (search.difficulty?.length) clauses.push(inArray(questions.difficulty, search.difficulty));
   if (search.concept?.length) {
-    clauses.push(
-      sql`EXISTS (SELECT 1 FROM ${questionConcepts} WHERE ${questionConcepts.questionId} = ${questions.id} AND ${inArray(questionConcepts.conceptId, search.concept)})`,
-    );
+    clauses.push(exercisesAny(search.concept));
   }
   if (search.q) {
     const like = likeContains(search.q);
@@ -289,10 +301,12 @@ export async function listQuestions(
   viewer: ReportViewer,
   search: QuestionSearch,
   lang: ConceptLang,
+  /** The concepts a `course` filter covers, resolved and authorised by the caller of this function (`courseFilterConcepts`). */
+  courseConcepts?: readonly string[],
 ) {
   const { page, facts, nextCursor, total } = await pageWhere(
     db,
-    searchWhere(poolId, viewer.id, search),
+    searchWhere(poolId, viewer.id, search, courseConcepts),
     search,
     starredBy(viewer.id),
   );

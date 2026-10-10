@@ -8,6 +8,7 @@ import { api } from "../api";
 import { HelpIcon } from "../help";
 import { useT } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
+import { pickerConceptIds } from "../pool/pickerConceptIds";
 import { QuestionEditorHost, type TryOutcome } from "../questionTypes";
 import type { Navigate } from "../router";
 import { Alert, Card, Spinner } from "../ui";
@@ -177,7 +178,7 @@ export function QuestionEditTab({
           meta={data.meta}
           categories={pool?.categories ?? []}
           poolName={pool?.pool.name ?? "—"}
-          poolConceptIds={pool?.concepts.map((c) => c.concept.id)}
+          poolConceptIds={pool && pickerConceptIds(pool)}
           disabled={readOnly}
         />
         {/* Where the type's own settings land, under "Properties". Empty

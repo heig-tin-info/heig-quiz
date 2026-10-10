@@ -1,7 +1,7 @@
 import { SlidersHorizontal } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 
-import type { ConceptRef } from "@quiz/contracts";
+import type { ConceptRef, PoolFilterCourse } from "@quiz/contracts";
 
 import { conceptName, refName } from "../concepts/names";
 import { useConcepts } from "../concepts/useConcepts";
@@ -32,7 +32,9 @@ import {
 import {
   applyCompletion,
   completionAt,
+  SEARCH_TOKEN_KINDS,
   SEARCH_TYPE_IDS,
+  typingKindAt,
   withoutToken,
   type Completion,
 } from "./searchSyntax";
@@ -292,6 +294,7 @@ export function QuestionSearchBar({
   onChange,
   concepts,
   vocabulary,
+  courses,
   types = QUESTION_TYPE_IDS,
   deleted = true,
   stats,
@@ -304,6 +307,12 @@ export function QuestionSearchBar({
   concepts: readonly ConceptRef[];
   /** The vocabulary the typed concept words resolved against (`useFilterVocabulary`). */
   vocabulary: Vocabulary;
+  /**
+   * The courses the list can be filtered by (the pool screen: linked to the
+   * pool and staffed by the caller). Absent, the bar has no Course filter
+   * and `course:` names nothing.
+   */
+  courses?: readonly PoolFilterCourse[];
   /** The question types the sheet and the `type:` completion offer. */
   types?: readonly string[];
   /** Whether the sheet offers the soft-deleted questions (F-QST-11). */
@@ -319,11 +328,11 @@ export function QuestionSearchBar({
   const { locale } = useI18n();
   const [open, setOpen] = useState(false);
   const count = activeFilterCount(filters);
-  const resolved = resolveFilters(filters, vocabulary);
+  const resolved = resolveFilters(filters, vocabulary, courses ?? []);
   /** The word still being typed (the focused field's last, no space after it): not judged yet. */
   const [focused, setFocused] = useState(false);
-  const typing =
-    focused && completionAt(filters.q, filters.q.length)?.kind === "concept" ? resolved.words.at(-1)?.word : undefined;
+  const typingKind = focused ? typingKindAt(filters.q, filters.q.length) : null;
+  const typing = typingKind === "concept" ? resolved.words.at(-1)?.word : undefined;
   /** A ticked concept's name: the scope's, else the vocabulary's; it may have left both. */
   const nameOf = (id: string) => {
     const own = concepts.find((c) => c.id === id);
@@ -340,6 +349,7 @@ export function QuestionSearchBar({
    */
   const dropType = (id: string) =>
     set({ types: filters.types.filter((x) => x !== id), q: withoutToken(filters.q, "type", id) });
+  const dropCourse = () => set({ courseId: null, q: withoutToken(filters.q, "course") });
   const dropWord = (word: string) => set({ q: withoutToken(filters.q, "concept", word) });
   /**
    * A concept off, in the sheet: off the ticked list, and every typed word
@@ -415,6 +425,21 @@ export function QuestionSearchBar({
           {filters.concepts.map((id) => (
             <Chip remove={t("pool.filter.clear")} key={`concept-${id}`} label={nameOf(id)} onRemove={() => dropConcept(id)} />
           ))}
+          {resolved.course ? (
+            <Chip
+              remove={t("pool.filter.clear")}
+              label={t("pool.filter.courseChip", { code: resolved.course.code })}
+              onRemove={dropCourse}
+            />
+          ) : null}
+          {resolved.courseMiss !== null && typingKind !== "course" ? (
+            <Chip
+              remove={t("pool.filter.clear")}
+              label={`course:${resolved.courseMiss}`}
+              warning={t("pool.filter.noCourseMatch")}
+              onRemove={dropCourse}
+            />
+          ) : null}
           {resolved.words.map(({ word, ids }) => (
             <Chip
               remove={t("pool.filter.clear")}
@@ -482,10 +507,7 @@ export function QuestionSearchBar({
                   onChange({
                     ...filters,
                     ...NO_FILTERS,
-                    q: withoutToken(
-                      withoutToken(withoutToken(withoutToken(filters.q, "concept"), "type"), "difficulty"),
-                      "version",
-                    ),
+                    q: SEARCH_TOKEN_KINDS.reduce((q, kind) => withoutToken(q, kind), filters.q),
                   })
                 }
               >
@@ -551,6 +573,23 @@ export function QuestionSearchBar({
                 />
               )}
             </fieldset>
+
+            {courses && courses.length > 0 ? (
+              <fieldset>
+                <legend className="mb-2 text-[13px] font-medium">{t("pool.filter.course")}</legend>
+                <div className="flex flex-wrap gap-2">
+                  {courses.map((c) => (
+                    <ToggleChip
+                      key={c.id}
+                      label={c.name}
+                      pressed={resolved.course?.id === c.id}
+                      onToggle={() => (resolved.course?.id === c.id ? dropCourse() : set({ courseId: c.id, q: withoutToken(filters.q, "course") }))}
+                    />
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-fg-muted">{t("pool.filter.courseHint", { code: courses[0]!.code })}</p>
+              </fieldset>
+            ) : null}
 
             {stats ? <StatsFilterFields offer={stats} filters={filters} onChange={set} /> : null}
 

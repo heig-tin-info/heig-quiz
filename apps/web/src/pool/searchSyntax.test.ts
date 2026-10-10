@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyCompletion,
+  typingKindAt,
   completionAt,
   difficultyValues,
   parseSearch,
@@ -18,6 +19,7 @@ import {
 describe("parseSearch", () => {
   it.each([
     ["keeps plain words as the free text", "  pointeurs   null ", { q: "pointeurs null" }],
+    ["reads a course word, the last one winning", "course:PRG1 ptr course:\"Programmation 2\"", { q: "ptr", courseWord: "Programmation 2" }],
     ["reads a concept word after its hash", "#pointeurs #Mémoire", { conceptWords: ["pointeurs", "Mémoire"] }],
     [
       "reads the tags' spelling as concept words",
@@ -71,6 +73,7 @@ describe("parseSearch", () => {
     expect(parsed).toEqual({
       q: "segfault",
       conceptWords: ["pointeurs"],
+      courseWord: null,
       types: ["code"],
       difficulties: [4, 5],
       versionMin: 2,
@@ -88,6 +91,7 @@ describe("difficultyValues / versionBounds", () => {
 
 describe("withoutToken", () => {
   it.each([
+    ["takes the course token out", "course:PRG1 segfault", "course", undefined, "segfault"],
     ["takes one concept word out and leaves the rest", "#a #b segfault", "concept", "a", "#b segfault"],
     ["takes a word out whatever its spelling", "tag:#A tag:b #\"a\" segfault", "concept", "a", "tag:b segfault"],
     ["takes every concept word at once", "#a tag:b ptr", "concept", undefined, "ptr"],
@@ -146,5 +150,19 @@ describe("applyCompletion", () => {
     ["does not double the space that is already there", "tag:poi ptr", 7, "tag:pointeurs ptr"],
   ])("%s", (_, line, caret, expected) => {
     expect(applyCompletion(line, completionAt(line, caret)!, "pointeurs").text).toBe(expected);
+  });
+});
+
+describe("typingKindAt", () => {
+  it.each([
+    ["a concept word", "ptr #poin", "concept"],
+    ["a course word", "ptr course:PR", "course"],
+    ["an open quoted course name", 'course:"Prog', "course"],
+    ["an open quoted course name of two words", 'course:"Programmation 2', "course"],
+    ["nothing once the word is closed by a space", "course:PR ", null],
+    ["nothing once the quote is closed", 'course:"Prog 2"', null],
+    ["nothing for free text", "ptr", null],
+  ] as const)("reads %s", (_, line, kind) => {
+    expect(typingKindAt(line, line.length)).toBe(kind);
   });
 });

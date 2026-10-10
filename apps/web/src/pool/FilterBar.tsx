@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { ConceptRef } from "@quiz/contracts";
+import type { ConceptRef, PoolFilterCourse } from "@quiz/contracts";
 
 import { useT, type Dict } from "../i18n";
 import { GroupBySwitch, ViewSwitch } from "../ui";
@@ -52,6 +52,7 @@ export function FilterBar({
   onChange,
   concepts,
   vocabulary,
+  courses,
   stats,
   total,
   view,
@@ -66,6 +67,8 @@ export function FilterBar({
   concepts: readonly ConceptRef[];
   /** What the typed concept words resolve against. */
   vocabulary: Vocabulary;
+  /** The courses the pool is linked to that the caller staffs: the sheet's Course filter (#599 step 7b). */
+  courses: readonly PoolFilterCourse[];
   /** The pool's statistics, which the sheet's last block filters on (F-STAT-03). */
   stats?: StatsOffer;
   /** How many questions the search matches (the API's `total`); `null` while unknown. */
@@ -85,6 +88,7 @@ export function FilterBar({
       onChange={onChange}
       concepts={concepts}
       vocabulary={vocabulary}
+      courses={courses}
       stats={stats}
       coach="pool.search"
     >

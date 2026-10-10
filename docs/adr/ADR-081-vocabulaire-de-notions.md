@@ -15,7 +15,7 @@ the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
 [fifth addendum](#fifth-addendum-2026-10-10-the-curation-of-the-vocabulary)
 (curation, step 5: its queue, the merge and the aliases are implemented; the probable duplicates are not) and the
 [sixth addendum](#sixth-addendum-2026-10-10-the-concepts-of-a-course-steps-7-9)
-(the concepts of a course, step 7a implemented). The work is tracked by #599, under a parent issue that groups #557
+(the concepts of a course, steps 7a and 7b implemented). The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
@@ -503,10 +503,10 @@ is the first pull request; merge, aliases and probable duplicates follow.
 Settled with the product owner (comment of 2026-10-10 on #599, steps 7–9)
 after a review of the spec. It makes §8 precise. Delivery, in dependency
 order: 7a the course's list (this addendum's §1–§4, implemented), 7b the pool
-filter by course, 7c relations with the merge-cycle policy, 7d coverage in
+filter by course (§8, implemented), 7c relations with the merge-cycle policy, 7d coverage in
 the filters, 8a Suggest concepts, 9a the teacher's mastery on the course's
-concepts, 9b the student's mastery (its own ADR first). §5 onwards is the
-decided plan, not yet built; only 7a is.
+concepts, 9b the student's mastery (its own ADR first). §5 to §7 are the
+decided plan, not yet built; §8 describes 7b as built.
 
 1. **A plain list.** A course declares a set of concepts: no chapter, level,
    weight or order (they would be columns of the table, not another model).
@@ -566,3 +566,27 @@ decided plan, not yet built; only 7a is.
    only; a level only from five reviewed cards, otherwise "no data yet"; no
    class comparison or ranking and no "Practise this concept" button (ADR-041
    §6 and §11 stand); FSRS fading is accepted. Reserved for its own ADR.
+8. **The pool's course filter (7b, as built).** `GET /pools/:id/questions`
+   takes `course=<courseId>` (`QuestionSearch.course`): the questions that
+   exercise any concept the course covers. The expansion is the one function
+   `conceptsCoveredByCourse` (`concept/courseConcepts.ts`); today a concept
+   covers only itself, so it is the course's list, and 7d widens that one
+   function. A course that lists nothing matches nothing. **Access:** the
+   course must be one the caller staffs (`staffAccess`, or any course under
+   Super Powers) **and** that the pool is linked to (`course_pools`, either
+   mode); otherwise the answer is the 404 of a missing entity, the same body
+   for an unknown id, so a course the caller does not staff is never
+   revealed. The pool's linked courses stay the owner's to see
+   (`PoolMembers.courses`): the screen offers its own list,
+   `PoolDetail.filterCourses` (`id`, `name`, `code`: the linked courses the
+   caller staffs, computed server-side by `filterCoursesOf`), and
+   `PoolDetail.courseConceptIds`, the concepts those courses cover together (one query, `conceptsCoveredByCourse(db, courseIds)`, the function 7d widens).
+   The poll launcher's search across pools has no such filter
+   (`PollPoolSearch` omits it). **Web:** a "Course" ("Cours") block in the
+   filters sheet (one course at a time, shown only when the pool has one on
+   offer), a removable chip, and the search token `course:<code or name>`
+   (the last one wins; a word naming no course on offer is a dashed chip
+   that filters nothing, as for a concept). The MCP `list_questions` takes
+   `courseId` under the same rule. **Picker (§5):** the question editor's
+   `ConceptPicker` and the bulk bar's rank the concepts of those courses
+   first, beside the pool's own (`first` set), so a pool ranks concepts one way.

@@ -8,7 +8,7 @@
  *
  * The grammar, in one line: `#<concept>` (also `tag:<word>` and
  * `tag:#<word>`, the spelling of the tags the concepts replaced),
- * `type:<id>`,
+ * `type:<id>`, `course:<code>`,
  * `difficulty:<n|>n|>=n|<n|<=n|a-b>`, `version:<v1|n|>n|>=n|<n|<=n|a-b>`,
  * `"a quoted phrase"`, everything else is free text. A token repeated adds to
  * its set; two version bounds intersect.
@@ -23,8 +23,9 @@
  */
 import { QuestionTypeId } from "@quiz/contracts";
 
-/** The four token kinds. The free text is not one: it is what is left. */
-export type SearchTokenKind = "concept" | "type" | "difficulty" | "version";
+/** The five token kinds. The free text is not one: it is what is left. */
+export const SEARCH_TOKEN_KINDS = ["concept", "type", "difficulty", "version", "course"] as const;
+export type SearchTokenKind = (typeof SEARCH_TOKEN_KINDS)[number];
 
 export interface ParsedSearch {
   /** The free text, tokens taken out and quotes stripped. */
@@ -32,6 +33,12 @@ export interface ParsedSearch {
   /** The concept words, as typed (`#pointeurs` → `pointeurs`), each once whatever its case. */
   conceptWords: string[];
   types: string[];
+  /**
+   * The word of `course:PRG1` (the last one when repeated: a pool is read
+   * through one course at a time), as typed. Which course it names is the
+   * pool's business (`resolveFilters`).
+   */
+  courseWord: string | null;
   /** `difficulty:>3` arrives here expanded, as the API takes a list. */
   difficulties: number[];
   versionMin: number | null;
@@ -90,7 +97,7 @@ function tokenOf(text: string): { kind: SearchTokenKind; value: string } | null 
     const value = unquote(text.slice(1)).trim();
     return value === "" ? null : { kind: "concept", value };
   }
-  const match = /^(tag|type|difficulty|version):(.*)$/i.exec(text);
+  const match = /^(tag|type|difficulty|version|course):(.*)$/i.exec(text);
   if (!match) return null;
   const name = match[1]!.toLowerCase();
   const kind = (name === "tag" ? "concept" : name) as SearchTokenKind;
@@ -161,6 +168,7 @@ export function versionBounds(value: string): { min: number | null; max: number 
 export function parseSearch(input: string): ParsedSearch {
   const conceptWords: string[] = [];
   const types: string[] = [];
+  let courseWord: string | null = null;
   const difficulties: number[] = [];
   let versionMin: number | null = null;
   let versionMax: number | null = null;
@@ -175,6 +183,10 @@ export function parseSearch(input: string): ParsedSearch {
     }
     if (token.kind === "concept") {
       if (!conceptWords.some((w) => sameWord(w, token.value))) conceptWords.push(token.value);
+      continue;
+    }
+    if (token.kind === "course") {
+      courseWord = token.value;
       continue;
     }
     if (token.kind === "type") {
@@ -205,6 +217,7 @@ export function parseSearch(input: string): ParsedSearch {
     q: free.join(" "),
     conceptWords,
     types,
+    courseWord,
     difficulties: [...difficulties].sort((a, b) => a - b),
     versionMin,
     versionMax,
@@ -273,6 +286,18 @@ export function completionAt(input: string, caret: number): Completion | null {
     start: before.length - prefix.length,
     end: caret + rest.length,
   };
+}
+
+/**
+ * The kind of token the caret ends, still being typed: a concept word (after
+ * `#` or `tag:`) or a `course:` word, an open quote included
+ * (`course:"Prog`). A word being typed is not judged yet: its chip must not
+ * say it matches nothing. `null` when the caret ends no such word.
+ */
+export function typingKindAt(input: string, caret: number): SearchTokenKind | null {
+  const before = input.slice(0, Math.max(caret, 0));
+  if (/(?:^|\s)course:(?:"[^"]*|[^\s"]*)$/i.test(before)) return "course";
+  return completionAt(input, caret)?.kind === "concept" ? "concept" : null;
 }
 
 /** The field after a pick: the value in place, a space after it, caret there. */
