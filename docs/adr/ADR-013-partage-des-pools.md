@@ -24,6 +24,12 @@ SHOWN as is derived from the roster (decision 8 below). The owner also writes a 
 description (decision 9). Access (§2), the resolution order (§3) and the succession (§5) are
 unchanged; `poolAccess` reads `is_public` where it read `visibility = 'public'`.
 
+**Amended 2026-10-10 by [ADR-095](ADR-095-catalogue-des-banques-publiques.md) (issue #680 lot 2),
+scope: what a teacher's list shows and rule 3 of §3.** Public pools are found in a catalogue and
+followed by subscription; the pool list shows only the pools a teacher owns, sits on, reaches
+through a course or subscribed to. A course link has a mode, and staff are contributors only
+through an `edit` link. Access (§2) is unchanged.
+
 ## Context
 
 Until now a question pool was reached by its owner and by the teaching staff of the courses

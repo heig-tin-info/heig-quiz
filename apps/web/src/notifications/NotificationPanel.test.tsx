@@ -229,6 +229,31 @@ describe("the inbox in the account menu", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "question", id: Q });
   });
 
+  it("announces a public pool that left the catalogue, in the words of a subscriber and of a course owner, and opens the pools", async () => {
+    const withdrawn: Notification = {
+      id: "n30",
+      payload: { kind: "pool_unpublished", state: "unpublished", poolName: "Fluides", courseName: null },
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      readAt: null,
+    };
+    const course: Notification = {
+      id: "n31",
+      payload: { kind: "pool_unpublished", state: "course", poolName: "Optique", courseName: "PHY1" },
+      createdAt: new Date(Date.now() - 120_000).toISOString(),
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [withdrawn, course], unread: 2 }),
+      "POST /app/api/notifications/n30/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    expect(screen.getByText(/“Optique” left the catalogue: your course “PHY1” no longer draws from it\./)).toBeVisible();
+    await userEvent.click(screen.getByText(/“Fluides” left the catalogue: your subscription ended\./));
+    expect(navigate).toHaveBeenCalledWith({ view: "pools" });
+  });
+
   it("announces a student's exercises: scheduled opens the home, open opens the attempt", async () => {
     const scheduled: Notification = {
       id: "n7",

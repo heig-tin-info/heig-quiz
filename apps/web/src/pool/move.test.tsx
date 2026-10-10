@@ -37,6 +37,8 @@ const POOL: PoolDetail = {
   ],
   concepts: [],
   questionCount: 2,
+  subscription: "none",
+  subscribers: null,
 };
 
 const TARGET: PoolDetail = {
@@ -59,6 +61,8 @@ const summary = (detail: PoolDetail, role: PoolSummary["role"] = "owner"): PoolS
   ownerFamilyName: "Démo",
   ownerAvatarUrl: null,
   memberCount: 0,
+  subscriberCount: 0,
+  subscribed: false,
 });
 
 const PAGE: QuestionPage = {

@@ -11,7 +11,7 @@ import { COURSE_ROLES } from "@quiz/domain";
 
 import { PersonRef, teacherChoiceWith } from "./common.js";
 import { ConditionKind, EvaluationCondition } from "./evaluation.js";
-import { PoolColor, PoolIcon } from "./pool.js";
+import { CoursePoolMode, PoolColor, PoolIcon } from "./pool.js";
 
 /** One roster entry of one classroom: `/classrooms/:id/roster/:eid`. */
 export const RosterEntryParams = z.object({ id: z.uuid(), eid: z.uuid() });
@@ -130,8 +130,15 @@ export const ROSTER_REFUSALS = ["duplicate_email", "already_enrolled", "revoke_f
 export const RosterErrorCode = z.enum(ROSTER_REFUSALS);
 export type RosterErrorCode = z.infer<typeof RosterErrorCode>;
 
-/** `PUT /courses/:id/pools` — the whole set of pools the course draws from. */
-export const CoursePoolsPut = z.object({ poolIds: z.array(z.uuid()).max(50) });
+/**
+ * `PUT /courses/:id/pools` — the whole set of pools the course draws from,
+ * each with the mode it is linked in. A link already there keeps its mode
+ * unless the body asks for a stronger one; a pool named twice takes the
+ * stronger (ADR-095).
+ */
+export const CoursePoolsPut = z.object({
+  pools: z.array(z.object({ poolId: z.uuid(), mode: CoursePoolMode })).max(50),
+});
 export type CoursePoolsPut = z.infer<typeof CoursePoolsPut>;
 
 const CourseRef = z.object({
@@ -183,7 +190,13 @@ export const CourseDetail = z.object({
   staff: z.array(StaffMember),
   /** Pools linked to the course, in name order (see `@quiz/contracts` pool.ts). */
   pools: z.array(
-    z.object({ id: z.uuid(), name: z.string(), visibility: z.string(), questionCount: z.number() }),
+    z.object({
+      id: z.uuid(),
+      name: z.string(),
+      visibility: z.string(),
+      questionCount: z.number(),
+      mode: CoursePoolMode,
+    }),
   ),
   classrooms: z.array(ClassroomRef),
 });

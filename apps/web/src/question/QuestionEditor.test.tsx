@@ -58,6 +58,8 @@ const POOL: PoolDetail = {
   categories: [{ id: "k1", poolId: "p1", parentId: null, name: "Pointeurs", position: 0, children: [] }],
   concepts: [{ concept: { id: "00000000-0000-4000-8000-0000000000a1", label: "Pointeur", qualifier: "", status: "validated" }, count: 1 }],
   questionCount: 1,
+  subscription: "none",
+  subscribers: null,
 };
 
 function mcqDetail(over: Partial<QuestionDetail> = {}): QuestionDetail {

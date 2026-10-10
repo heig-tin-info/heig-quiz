@@ -16,7 +16,7 @@
  * hold here exactly as there. Composed here rather than in the pool service:
  * the stats module already imports the pool module.
  */
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import {
@@ -66,10 +66,13 @@ export function similarRoutes(app: FastifyInstance, ctx: PoolRouteContext): void
         const byPool = new Map<string, string[]>();
         for (const hit of hits) byPool.set(hit.pool.id, [...(byPool.get(hit.pool.id) ?? []), hit.question.id]);
         if (byPool.size === 0) return { items: [] };
-        const [roles, stats] = await Promise.all([
-          service.poolRolesOf(app.db, inArray(pools.id, [...byPool.keys()]), callerOf(req)),
+        const hitPools = inArray(pools.id, [...byPool.keys()]);
+        const [roles, publicPools, stats] = await Promise.all([
+          service.poolRolesOf(app.db, hitPools, callerOf(req)),
+          app.db.select({ id: pools.id }).from(pools).where(and(hitPools, eq(pools.isPublic, true))),
           Promise.all([...byPool].map(([poolId, ids]) => poolQuestionStats(app.db, poolId, ids))),
         ]);
+        const publicIds = new Set(publicPools.map((p) => p.id));
         const statsOf = new Map(stats.flatMap((s) => s.items).map((s) => [s.questionId, s] as const));
         return {
           items: hits.map(({ question, pool, latestNumber, linked, searchText }) => {
@@ -83,7 +86,8 @@ export function similarRoutes(app: FastifyInstance, ctx: PoolRouteContext): void
               excerpt: excerptOf(searchText, question.internalName),
               latestNumber,
               linked,
-              canLink: linked || (role !== undefined && service.mayLinkPool(role)),
+              // A public pool can always be linked read-only (ADR-095).
+              canLink: linked || publicIds.has(pool.id) || (role !== undefined && service.mayLinkPool(role)),
               stats: figures ? { n: figures.n, p: figures.p, r: figures.discrimination?.r ?? null } : null,
             };
           }),

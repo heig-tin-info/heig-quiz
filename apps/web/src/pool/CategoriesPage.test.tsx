@@ -32,6 +32,8 @@ const POOL: PoolDetail = {
   categories: [],
   concepts: [],
   questionCount: 6,
+  subscription: "none",
+  subscribers: null,
 };
 
 const node = (

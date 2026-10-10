@@ -161,6 +161,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
           name: p.name,
           visibility: p.visibility,
           questionCount: p.questionCount,
+          mode: p.mode,
         })),
         classrooms: rooms.map((r) => ({
           id: r.id,
@@ -221,9 +222,10 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   }
 
   /**
-   * The whole set of pools the course draws from, replaced in one call.
-   * Only pools the caller can already reach are linked, and a NEW link needs
-   * contributor access to the pool (ADR-013) — the write goes through
+   * The whole set of pools the course draws from, each with its mode,
+   * replaced in one call. Only pools the caller can already reach are linked;
+   * a NEW `edit` link needs contributor access to the pool (ADR-013), a
+   * `read` link a public pool (ADR-095) — the write goes through
    * `pool/service.ts`, which owns `course_pools`.
    */
   app.put(
@@ -234,12 +236,13 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       const linked = await setCoursePools(
         app.db,
         course.id,
-        body.poolIds,
+        body.pools,
         accessWhere(callerOf(req), poolAccess(req.user!.id)),
         callerOf(req),
       );
       await trace(req, "course.pools_update", "course", course.id, {
         poolIds: linked.map((p) => p.id),
+        links: linked.map((p) => ({ poolId: p.id, mode: p.mode })),
       });
       publish("courses", [`course:${course.id}`, `teacher:${req.user!.id}`]);
       for (const pool of linked) publish("pool", [`pool:${pool.id}`]);

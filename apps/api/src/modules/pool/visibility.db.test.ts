@@ -139,7 +139,9 @@ describe("derived visibility", () => {
   it("is public when published, whatever the roster", async () => {
     const id = await newPool("Open", { isPublic: true });
     expect(await visibilityOf(id)).toBe("public");
-    expect(await visibilityOf(id, stranger)).toBe("public");
+    // A stranger does not list it ("My pools", ADR-095) but reads it, public.
+    const detail = await call(stranger, "GET", `/app/api/pools/${id}`);
+    expect(detail.json().pool.visibility).toBe("public");
   });
 
   it("sorts and lists the same derived value in the pool detail", async () => {

@@ -83,6 +83,15 @@ export {
 } from "./members.js";
 export { mayLinkPool, poolsOfCourse, setCoursePools } from "./coursePools.js";
 export {
+  listSubscribers,
+  retirePublicAccess,
+  subscribe,
+  subscribersOf,
+  tellPoolDeleted,
+  unpublishImpact,
+  unsubscribe,
+} from "./subscriptions.js";
+export {
   categoryTree,
   categoriesWithCounts,
   createCategory,

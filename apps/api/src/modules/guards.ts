@@ -20,6 +20,7 @@ import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import { EvaluationSettings, type CourseRole, type PoolRole } from "@quiz/contracts";
 import {
+  type CoursePoolMode,
   courseRoleAllows,
   effectiveCourseRole,
   effectivePoolRole,
@@ -44,6 +45,7 @@ import {
   gradings,
   groupSets,
   poolMembers,
+  poolSubscriptions,
   pools,
   questionVersions,
   questions,
@@ -94,18 +96,42 @@ export function staffAccess(userId: string, courseId: AnyColumn | SQL = courses.
 /**
  * Rule 3 of ADR-013, written once: the pool is linked to a course whose staff
  * seat satisfies `match` (a condition on `course_staff`). `poolAccess`, the
- * pool list's role facts and the derived visibility all read it here.
+ * pool list's role facts, the roles and the derived visibility all read it
+ * here. `mode` narrows it to the links of that mode (ADR-095): the staff are
+ * contributors through an `edit` link only, while any link lets them in.
  */
-export function linkedCourseStaff(match: SQL): SQL {
-  return sql`EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${match})`;
+export function linkedCourseStaff(match: SQL, mode?: CoursePoolMode): SQL {
+  const only = mode ? sql` AND ${qualified(coursePools.mode)} = ${mode}` : sql``;
+  return sql`EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${match}${only})`;
 }
 
-export function poolAccess(userId: string): SQL {
+/** The account holds a staff role: the first half of every pool predicate. */
+function staffAccount(userId: string): SQL {
   const staff = sql.join(
     STAFF_ROLES.map((role) => sql`${role}`),
     sql`, `,
   );
-  return sql`(EXISTS (SELECT 1 FROM ${users} WHERE ${qualified(users.id)} = ${userId} AND ${qualified(users.role)} IN (${staff})) AND (${qualified(pools.ownerId)} = ${userId} OR ${qualified(pools.isPublic)} OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR ${linkedCourseStaff(sql`${qualified(courseStaff.userId)} = ${userId}`)}))`;
+  return sql`EXISTS (SELECT 1 FROM ${users} WHERE ${qualified(users.id)} = ${userId} AND ${qualified(users.role)} IN (${staff}))`;
+}
+
+/** What puts a pool on the account's own shelf, whether or not it is public (ADR-095). */
+function ownReach(userId: string): SQL {
+  return sql`(${qualified(pools.ownerId)} = ${userId} OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR ${linkedCourseStaff(sql`${qualified(courseStaff.userId)} = ${userId}`)} OR EXISTS (SELECT 1 FROM ${poolSubscriptions} WHERE ${qualified(poolSubscriptions.poolId)} = ${qualified(pools.id)} AND ${qualified(poolSubscriptions.userId)} = ${userId}))`;
+}
+
+export function poolAccess(userId: string): SQL {
+  return sql`(${staffAccount(userId)} AND (${qualified(pools.isPublic)} OR ${ownReach(userId)}))`;
+}
+
+/**
+ * "My pools" (ADR-095): the pools the account owns, sits on, reaches through
+ * a linked course or subscribed to. A public pool the account has no such
+ * tie to is reachable ({@link poolAccess}) but not on its shelf: the pool
+ * list, the realtime topics and the assistant read this one, while loaders
+ * and similar-question searches keep reading `poolAccess`.
+ */
+export function myPools(userId: string): SQL {
+  return sql`(${staffAccount(userId)} AND ${ownReach(userId)})`;
 }
 
 /**
@@ -126,18 +152,18 @@ export async function poolRoleOf(
       .from(poolMembers)
       .where(and(eq(poolMembers.poolId, pool.id), eq(poolMembers.userId, user.id)))
       .limit(1),
+    // Rule 3, the one definition: only an `edit` link makes the staff contributors.
     db
-      .select({ courseId: coursePools.courseId })
-      .from(coursePools)
-      .innerJoin(courseStaff, eq(courseStaff.courseId, coursePools.courseId))
-      .where(and(eq(coursePools.poolId, pool.id), eq(courseStaff.userId, user.id)))
+      .select({ editLink: linkedCourseStaff(sql`${qualified(courseStaff.userId)} = ${user.id}`, "edit") })
+      .from(pools)
+      .where(eq(pools.id, pool.id))
       .limit(1),
   ]);
   return effectivePoolRole({
     reachesAll: false,
     isOwner: false,
     memberRole: member?.role ?? null,
-    isCourseStaff: seat !== undefined,
+    isCourseStaff: seat?.editLink === true,
     isPublic: pool.isPublic,
   });
 }

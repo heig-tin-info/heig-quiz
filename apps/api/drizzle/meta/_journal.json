@@ -701,6 +701,13 @@
       "when": 1791627177708,
       "tag": "0099_pool_is_public",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1791632832304,
+      "tag": "0100_pool_catalogue_links",
+      "breakpoints": true
     }
   ]
 }

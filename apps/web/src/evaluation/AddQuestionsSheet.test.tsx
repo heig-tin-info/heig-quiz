@@ -52,6 +52,8 @@ const POOLS: PoolSummary[] = [
     ownerFamilyName: "Dupont",
     ownerAvatarUrl: null,
     memberCount: 0,
+    subscriberCount: 0,
+    subscribed: false,
   },
   {
     id: "p2",
@@ -75,6 +77,8 @@ const POOLS: PoolSummary[] = [
     ownerFamilyName: "Dupont",
     ownerAvatarUrl: null,
     memberCount: 2,
+    subscriberCount: 0,
+    subscribed: false,
   },
 ];
 

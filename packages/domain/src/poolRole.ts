@@ -17,6 +17,19 @@ export const POOL_DESCRIPTION_MAX = 280;
 /** Who reads a pool beyond its members: nobody, its courses' staff, every teacher. DERIVED from the roster and `pools.is_public`, never stored. */
 export const POOL_VISIBILITIES = ["private", "shared", "public"] as const;
 
+/**
+ * How a course draws from a pool (`course_pools.mode`, ADR-095): `edit` makes
+ * the course staff contributors of it, `read` leaves them readers. A `read`
+ * link is only made to a public pool.
+ */
+export const COURSE_POOL_MODES = ["edit", "read"] as const;
+export type CoursePoolMode = (typeof COURSE_POOL_MODES)[number];
+
+/** The stronger of two link modes: `edit` wins over `read`. */
+export function strongerLinkMode(a: CoursePoolMode, b: CoursePoolMode): CoursePoolMode {
+  return a === "edit" || b === "edit" ? "edit" : "read";
+}
+
 /** What the database knows about one (pool, account) pair. */
 export interface PoolRoleFacts {
   /**
@@ -29,7 +42,7 @@ export interface PoolRoleFacts {
   isOwner: boolean;
   /** The `pool_members` row, when there is one. */
   memberRole: PoolRoleName | null;
-  /** On the staff of a course the pool is linked to (`course_pools`). */
+  /** On the staff of a course the pool is linked to for editing (`course_pools.mode = 'edit'`); a `read` link gives nothing here. */
   isCourseStaff: boolean;
   /** `pools.is_public` — readable by every teacher. */
   isPublic: boolean;
@@ -42,7 +55,7 @@ export interface PoolRoleFacts {
  *   2. the member role, as the owner of the pool set it. An explicit seat
  *      WINS over the course-staff rule below: naming a colleague `reader`
  *      has to mean something;
- *   3. `contributor` — the staff of a course the pool is linked to. They can
+ *   3. `contributor` — the staff of a course the pool is linked to for editing. They can
  *      write in it today and must not be demoted by this rule landing;
  *   4. `reader` — a public pool, and the floor of the function: never more
  *      than the caller can prove.

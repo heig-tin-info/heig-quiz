@@ -9,7 +9,7 @@
 import { z } from "zod";
 
 import { QUESTION_TYPE_IDS } from "@quiz/core/contract";
-import { POOL_DESCRIPTION_MAX, POOL_DESCRIPTION_SOURCES, POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
+import { COURSE_POOL_MODES, POOL_DESCRIPTION_MAX, POOL_DESCRIPTION_SOURCES, POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
 
 import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf, teacherChoiceWith } from "./common.js";
 import { ConceptRef } from "./concept.js";
@@ -21,6 +21,10 @@ export const QuestionTypeId = z.enum(QUESTION_TYPE_IDS);
 export type QuestionTypeId = z.infer<typeof QuestionTypeId>;
 
 /** DERIVED, read-only: public when published, shared when the roster says so, else private (ADR-013, 2026-10-10). */
+/** `edit`: the course staff are contributors of the pool; `read`: they only read it (ADR-095). */
+export const CoursePoolMode = z.enum(COURSE_POOL_MODES);
+export type CoursePoolMode = z.infer<typeof CoursePoolMode>;
+
 export const PoolVisibility = z.enum(POOL_VISIBILITIES);
 export type PoolVisibility = z.infer<typeof PoolVisibility>;
 
@@ -111,6 +115,10 @@ export const PoolSummary = Pool.extend({
   ownerAvatarUrl: z.string().nullable(),
   /** Explicit members (the owner excluded), for the card's "shared with n". */
   memberCount: z.number().int(),
+  /** Teachers subscribed to the pool (ADR-095); 0 for a pool that is not public. */
+  subscriberCount: z.number().int(),
+  /** The caller is subscribed to it. */
+  subscribed: z.boolean(),
 });
 export type PoolSummary = z.infer<typeof PoolSummary>;
 
@@ -150,8 +158,13 @@ export const PoolMember = PersonRef.extend({
 });
 export type PoolMember = z.infer<typeof PoolMember>;
 
-/** A course whose staff are contributors of the pool through a `course_pools` link. */
-export const PoolLinkedCourse = z.object({ id: z.uuid(), name: z.string(), code: z.string() });
+/** A course drawing from the pool through a `course_pools` link: its staff edit it (`edit`) or only read it (`read`). */
+export const PoolLinkedCourse = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  code: z.string(),
+  mode: CoursePoolMode,
+});
 export type PoolLinkedCourse = z.infer<typeof PoolLinkedCourse>;
 
 export const PoolMembers = z.object({
@@ -161,6 +174,26 @@ export const PoolMembers = z.object({
   courses: z.array(PoolLinkedCourse),
 });
 export type PoolMembers = z.infer<typeof PoolMembers>;
+
+/**
+ * `GET /pools/:id/subscribers`: the teachers subscribed to a public pool, by
+ * name only (ADR-095) — no id, no address, no avatar, so that nobody learns
+ * more of a colleague than the pool list already showed.
+ */
+export const PoolSubscribers = z.object({ subscribers: z.array(z.object({ name: z.string() })) });
+export type PoolSubscribers = z.infer<typeof PoolSubscribers>;
+
+/**
+ * `GET /pools/:id/unpublish-impact`: what unpublishing the pool would end,
+ * counted for the owner's confirmation (ADR-095).
+ */
+export const PoolUnpublishImpact = z.object({
+  subscribers: z.number().int(),
+  readCourses: z.number().int(),
+  /** Templates of those courses that use a question of the pool. */
+  templates: z.number().int(),
+});
+export type PoolUnpublishImpact = z.infer<typeof PoolUnpublishImpact>;
 
 /**
  * `POST /pools/:id/members`: the account picked among the candidates
@@ -718,6 +751,15 @@ export const PoolDetail = z.object({
   /** The concepts the pool's live questions use, with their counts, by label. */
   concepts: z.array(PoolConcept),
   questionCount: z.number().int(),
+  /**
+   * The caller and the pool's subscriptions (ADR-095): `available` to a
+   * teacher who reads a public pool without a seat or a subscription,
+   * `subscribed`, or `none` (the owner and the members hold it already; a
+   * pool that is not public has no subscription).
+   */
+  subscription: z.enum(["available", "subscribed", "none"]),
+  /** How many teachers subscribed: told to the owner and the members only, null to anyone else. */
+  subscribers: z.number().int().nullable(),
 });
 export type PoolDetail = z.infer<typeof PoolDetail>;
 

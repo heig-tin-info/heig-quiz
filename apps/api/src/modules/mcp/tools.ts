@@ -26,6 +26,7 @@ import {
   EvaluationCreate,
   EvaluationPatch,
   EvaluationPreset,
+  CoursePoolMode,
   OAUTH_SCOPE,
   ParametersDraft,
   PoolCreate,
@@ -250,7 +251,9 @@ export const TOOLS: Tool[] = [
   tool({
     name: "list_pools",
     title: "List question pools",
-    description: "The question pools the teacher can reach (own, shared with them, or through a course), with their question counts.",
+    description:
+      "The teacher's pools (\"My pools\"): own, shared with them, reached through a course, or public pools they subscribed to, with their question counts. " +
+      "A public pool they have none of those ties to is not listed, but get_pool, list_questions and find_similar_questions still read it.",
     input: z.object({}),
     annotations: READ,
     run: (api) => api.get("/pools"),
@@ -335,7 +338,8 @@ export const TOOLS: Tool[] = [
       "Hits come from the course's pools first, then from every pool the teacher reaches (public pools " +
       "included, so other teachers' questions may appear), ranked by shared words with no threshold: judge " +
       "each `excerpt`. `linked`: usable as is in the course's evaluations. `canLink`: call " +
-      "link_pool_to_course first (it makes the course staff contributors of that whole pool). `stats` " +
+      "link_pool_to_course first (`mode: \"read\"` for a colleague's public pool, which keeps the course staff readers; " +
+      "`mode: \"edit\"` makes them contributors of that whole pool). `stats` " +
       "`{ n, p, r }` reads as in get_pool_question_stats (`r`: discrimination); null below ten exam answers.",
     input: z.object({
       courseId: Id,
@@ -444,18 +448,21 @@ export const TOOLS: Tool[] = [
     name: "link_pool_to_course",
     title: "Link a pool to a course",
     description:
-      "Makes a pool's questions available to a course's evaluations. Keeps the pools already linked. Idempotent. " +
-      "Linking needs the contributor or owner role on the pool, because it makes the whole course staff " +
-      "contributors of it: a pool the teacher only reads (a colleague's public pool, a reader seat) is " +
-      "refused with 403 `pool_link_forbidden`. Only an owner of the course may link (`myRole` of " +
-      "list_courses); an assistant is refused with 403 `owner_required`.",
-    input: z.object({ courseId: Id, poolId: Id }),
+      "Makes a pool's questions available to a course's evaluations. Keeps the pools already linked, each in its mode. Idempotent. " +
+      "`mode: \"edit\"` (the default) makes the whole course staff contributors of the pool, so it needs the contributor " +
+      "or owner role on it: otherwise 403 `pool_link_forbidden`. `mode: \"read\"` leaves the staff readers: use it for a " +
+      "colleague's PUBLIC pool, which any course owner may link without subscribing (a pool that is not public is " +
+      "refused with 409 `pool_not_public`). A link already there keeps its mode unless this call asks for a stronger one. " +
+      "Only an owner of the course may link (`myRole` of list_courses); an assistant is refused with 403 `owner_required`.",
+    input: z.object({ courseId: Id, poolId: Id, mode: CoursePoolMode.default("edit") }),
     annotations: { ...WRITE, idempotentHint: true },
     run: async (api, a) => {
       const course = await api.get(`/courses/${a.courseId}`);
-      const ids = new Set<string>(course.pools.map((p: { id: string }) => p.id));
-      ids.add(a.poolId);
-      return api.put(`/courses/${a.courseId}/pools`, { poolIds: [...ids] });
+      const links = new Map<string, string>(course.pools.map((p: { id: string; mode: string }) => [p.id, p.mode]));
+      links.set(a.poolId, a.mode);
+      return api.put(`/courses/${a.courseId}/pools`, {
+        pools: [...links].map(([poolId, mode]) => ({ poolId, mode })),
+      });
     },
   }),
 

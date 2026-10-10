@@ -47,6 +47,7 @@ function settings(
       pool_question_added: { bell: true, email: false, teams: false },
       question_reported: { bell: true, email: false, teams: false },
       question_report_resolved: ALL_ON,
+      pool_unpublished: ALL_ON,
       system_alert: { bell: true, email: true, teams: false },
       project_published: { bell: true, email: false, teams: false },
       project_deadline_reminder: ALL_ON,

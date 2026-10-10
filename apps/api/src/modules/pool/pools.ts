@@ -19,6 +19,7 @@ import {
   evaluations,
   isStaffAttempt,
   poolMembers,
+  poolSubscriptions,
   pools,
   questionVersions,
   questions,
@@ -95,8 +96,16 @@ function memberRoleOf(userId: string): SQL<PoolRole | null> {
   return sql<PoolRole | null>`(SELECT ${qualified(poolMembers.role)} FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId})`;
 }
 
+/** Rule 3: staff of a course linked for editing (a `read` link makes nobody a contributor, ADR-095). */
 function courseStaffOf(userId: string): SQL<boolean> {
-  return linkedCourseStaff(sql`${qualified(courseStaff.userId)} = ${userId}`) as SQL<boolean>;
+  return linkedCourseStaff(sql`${qualified(courseStaff.userId)} = ${userId}`, "edit") as SQL<boolean>;
+}
+
+/** Teachers subscribed to a PUBLIC pool: 0 for any other, whatever rows survive (ADR-095). */
+const subscriberCountOf = sql<number>`(CASE WHEN ${qualified(pools.isPublic)} THEN (SELECT count(*) FROM ${poolSubscriptions} WHERE ${qualified(poolSubscriptions.poolId)} = ${qualified(pools.id)}) ELSE 0 END)::int`;
+
+function subscribedBy(userId: string): SQL<boolean> {
+  return sql<boolean>`EXISTS (SELECT 1 FROM ${poolSubscriptions} WHERE ${qualified(poolSubscriptions.poolId)} = ${qualified(pools.id)} AND ${qualified(poolSubscriptions.userId)} = ${userId})`;
 }
 
 /** The facts of `effectivePoolRole` for one row, Super Powers aside. */
@@ -142,8 +151,9 @@ export async function poolRolesOf(
 }
 
 /**
- * Every pool the predicate lets the caller see (their own, the ones they were
- * named in, the public ones and the ones their courses draw from), with the
+ * Every pool the predicate selects ("My pools" for the list route: their own,
+ * the ones they were named in, the ones their courses draw from and the
+ * public ones they subscribed to, ADR-095), with the
  * caller's EFFECTIVE role on each — the list screen needs it to know which
  * cards open on a read-only pool.
  *
@@ -162,6 +172,8 @@ export async function listPools(
       questionCount,
       usedCount,
       memberCount: memberCountOf,
+      subscriberCount: subscriberCountOf,
+      subscribed: subscribedBy(viewer.id),
       memberRole: memberRoleOf(viewer.id),
       isCourseStaff: courseStaffOf(viewer.id),
       ownerGivenName: users.givenName,
@@ -182,6 +194,8 @@ export async function listPools(
       questionCount: r.questionCount,
       usedCount: r.usedCount,
       memberCount: r.memberCount,
+      subscriberCount: r.subscriberCount,
+      subscribed: r.subscribed,
       role: effectivePoolRole({ ...facts, reachesAll: viewer.reach === "all" }),
       heldRole: heldPoolRole(facts),
       ownerName: displayName({
@@ -340,17 +354,32 @@ export async function deletePool(db: Db, poolId: string): Promise<boolean> {
  * their counts (labelled in `lang`, the pool's "Concepts" tab) — and the caller's effective role, which is what the
  * screen reads to decide whether it offers an editor or a reading view.
  */
-export async function poolDetail(db: Db, pool: PoolRow, role: PoolRole, lang: ConceptLang) {
-  const [tree, used, [counted]] = await Promise.all([
+export async function poolDetail(
+  db: Db,
+  pool: PoolRow,
+  role: PoolRole,
+  lang: ConceptLang,
+  viewer: Pick<Caller, "id" | "reach">,
+) {
+  const [tree, used, [counted], [tie]] = await Promise.all([
     categoryTree(db, pool.id),
     poolConcepts(db, pool.id, lang),
     db.select({ n: questionCount, visibility: derivedVisibility }).from(pools).where(eq(pools.id, pool.id)),
+    db
+      .select({ memberRole: memberRoleOf(viewer.id), subscribed: subscribedBy(viewer.id), subscribers: subscriberCountOf })
+      .from(pools)
+      .where(eq(pools.id, pool.id)),
   ]);
+  const seated = pool.ownerId === viewer.id || (tie?.memberRole ?? null) !== null;
+  const subscription = !pool.isPublic || seated ? "none" : tie?.subscribed ? "subscribed" : "available";
   return {
     pool: poolJson(pool, counted?.visibility ?? "private"),
     role,
     categories: tree,
     concepts: used,
     questionCount: counted?.n ?? 0,
+    subscription: subscription as "available" | "subscribed" | "none",
+    // Told to the owner and the members only (an admin under Super Powers reads as an owner).
+    subscribers: pool.isPublic && (seated || viewer.reach === "all") ? (tie?.subscribers ?? 0) : null,
   };
 }

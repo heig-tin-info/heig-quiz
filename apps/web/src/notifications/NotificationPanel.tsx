@@ -122,6 +122,11 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
       });
     case "question_report_resolved":
       return t("notif.questionReportResolved", { questionName: payload.questionName });
+    case "pool_unpublished":
+      return t(`notif.poolUnpublished.${payload.state}`, {
+        poolName: payload.poolName,
+        courseName: payload.courseName ?? "",
+      });
     case "system_alert":
       return t(`notif.systemAlert.${payload.state}`, {
         checks: payload.checks.map((key) => t(checkName(key))).join(", "),
@@ -169,6 +174,8 @@ function notificationRoute(payload: NotificationPayload): Route {
     case "pool_ownership":
     case "pool_question_added":
       return { view: "pool", id: payload.poolId };
+    case "pool_unpublished":
+      return { view: "pools" };
     case "question_reported":
     case "question_report_resolved":
       return { view: "question", id: payload.questionId };

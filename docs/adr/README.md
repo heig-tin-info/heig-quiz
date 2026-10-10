@@ -51,6 +51,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 ### Identity, access and exam confinement
 
 - [ADR-013 — Pool sharing: three roles, one resolution order, succession by seniority](ADR-013-partage-des-pools.md)
+- [ADR-095 — Public pool catalogue: subscriptions, read-only course links, unpublishing](ADR-095-catalogue-des-banques-publiques.md)
 - [ADR-018 — The real student view and stateless preview](ADR-018-vue-etudiant-reelle.md)
 - [ADR-022 — Personal API tokens, and an MCP server that is one more client of the API](ADR-022-jetons-api-et-serveur-mcp.md)
 - [ADR-023 — The portal is its own OAuth 2.1 server, so claude.ai and ChatGPT can sign in](ADR-023-serveur-oauth-pour-mcp.md)

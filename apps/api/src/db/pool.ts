@@ -31,7 +31,7 @@ import {
 import type { ParametersDraft } from "@quiz/contracts";
 
 import { POOL_COLORS } from "@quiz/contracts";
-import { POOL_DESCRIPTION_SOURCES, POOL_ROLES } from "@quiz/domain";
+import { COURSE_POOL_MODES, POOL_DESCRIPTION_SOURCES, POOL_ROLES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { courses } from "./org.js";
@@ -124,12 +124,37 @@ export const coursePools = pgTable(
     poolId: uuid("pool_id")
       .notNull()
       .references(() => pools.id, { onDelete: "cascade" }),
+    /**
+     * `edit`: the course staff are contributors of the pool (ADR-013 rule 3);
+     * `read`: they only read it, and the pool is public (ADR-095).
+     */
+    mode: text("mode", { enum: COURSE_POOL_MODES }).notNull().default("edit"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.courseId, t.poolId] }),
     index("course_pools_pool_idx").on(t.poolId),
   ],
+);
+
+/**
+ * A teacher's subscription to a public pool (ADR-095): it brings the pool
+ * into "My pools" and nothing else. Never a `pool_members` row: that would
+ * enter the succession by seniority (ADR-013 section 5), turn the pool
+ * "shared" and clutter the roster.
+ */
+export const poolSubscriptions = pgTable(
+  "pool_subscriptions",
+  {
+    poolId: uuid("pool_id")
+      .notNull()
+      .references(() => pools.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.poolId, t.userId] }), index("pool_subscriptions_user_idx").on(t.userId)],
 );
 
 /** Folder of a pool. A null parent is a root folder; `position` orders siblings. */

@@ -48,7 +48,7 @@ export async function listMembers(db: Db, pool: PoolRow, seesCourses: boolean): 
     // Only an owner of the pool is told which courses draw from it (their staff can edit).
     seesCourses
       ? db
-          .select({ id: courses.id, name: courses.name, code: courses.code })
+          .select({ id: courses.id, name: courses.name, code: courses.code, mode: coursePools.mode })
           .from(coursePools)
           .innerJoin(courses, eq(courses.id, coursePools.courseId))
           .where(eq(coursePools.poolId, pool.id))

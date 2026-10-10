@@ -307,6 +307,9 @@ export type AuditAction =
   /** The owner turned the night's LLM review on or off (ADR-060 §1): `payload.enabled`. */
   | "pool.review"
   | "pool.share"
+  /** A teacher (un)subscribed to a public pool (ADR-095). */
+  | "pool.subscribe"
+  | "pool.unsubscribe"
   | "pool.transfer"
   | "pool.unshare"
   | "pool.update"

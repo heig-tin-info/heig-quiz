@@ -164,6 +164,19 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     count: z.number().int().positive(),
   }),
   z.object({
+    /**
+     * A public pool left the catalogue (ADR-095): the recipient lost a
+     * subscription (`unpublished`), the course they own lost a read-only
+     * link (`course`, with its name), or the pool was deleted (`deleted`).
+     * No pool id: a deleted pool takes the bells that point at it, and the
+     * recipient can no longer open the pool anyway.
+     */
+    kind: z.literal("pool_unpublished"),
+    state: z.enum(["unpublished", "course", "deleted"]),
+    poolName: z.string(),
+    courseName: z.string().nullable(),
+  }),
+  z.object({
     /** A writer resolved the recipient's report; the reply, if any, is read in the inspector. */
     kind: z.literal("question_report_resolved"),
     poolId: z.uuid(),
@@ -297,6 +310,7 @@ export const NOTIFICATION_KINDS = [
   "pool_question_added",
   "question_reported",
   "question_report_resolved",
+  "pool_unpublished",
   "system_alert",
 ] as const;
 export const NotificationKind = z.enum(NOTIFICATION_KINDS);
@@ -355,6 +369,8 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   // to one's own report is worth an e-mail.
   question_reported: { bell: true, email: false, teams: false },
   question_report_resolved: { bell: true, email: true, teams: true },
+  // Access lost for good (ADR-095): worth an e-mail.
+  pool_unpublished: { bell: true, email: true, teams: true },
   // The secondary alarm of the operator (ADR-055 §5): the e-mail is the point.
   // Teams stays off: `KIND_CHANNELS` forbids it (a test holds every default to it).
   system_alert: { bell: true, email: true, teams: false },
@@ -418,6 +434,7 @@ export const NOTIFICATION_AUDIENCE: Readonly<
   pool_question_added: "pool",
   question_reported: "pool",
   question_report_resolved: "pool",
+  pool_unpublished: "pool",
   system_alert: "admin",
 };
 

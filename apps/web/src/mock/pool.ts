@@ -191,6 +191,8 @@ export const pools: MockPool[] = [
   // The personal pool (F-POOL-01): created by the first "Keep this
   // question" after a poll (ADR-014, addenda item 6); the launcher's "Pick a
   // question" tab lists it and nothing else.
+  // A colleague's public pool I neither sit on nor subscribed to (ADR-095): the catalogue lists it.
+  { id: "p4", name: "Mécanique des fluides", icon: "waves", color: "blue", isPublic: true, description: "Hydrostatique, Bernoulli et pertes de charge : une cinquantaine de questions d'examen.", descriptionSource: "owner", ownerId: "t2", isPersonal: false, createdAt: iso(-90 * D), updatedAt: iso(-3 * D) },
   { id: "p0", name: "Polls", icon: "message-circle-question", color: null, isPublic: false, description: "", descriptionSource: "owner", ownerId: "u-me", isPersonal: true, createdAt: iso(-20 * D), updatedAt: iso(-2 * D) },
 ];
 
@@ -211,6 +213,7 @@ export const poolMembers: Record<string, MockMember[]> = {
     { ...GRACE, role: "reader", addedAt: iso(-12 * D) },
   ],
   p2: [{ ...ME_MEMBER, role: "owner", addedAt: iso(-120 * D) }],
+  p4: [{ ...GRACE, role: "owner", addedAt: iso(-90 * D) }],
   p0: [{ ...ME_MEMBER, role: "owner", addedAt: iso(-20 * D) }],
   // The one pool this browser only READS: the pool screen then draws no
   // create, edit, duplicate, delete or bulk action (F-POOL-05).
@@ -319,6 +322,13 @@ export const categories: MockCategory[] = [
 
 /** `course_pools`: which pools a course draws from. */
 export const coursePools: Record<string, string[]> = { c1: ["p1"], c2: ["p2"] };
+
+/** The `read` links among them (ADR-095), as `courseId:poolId`; every other link is `edit`. */
+export const readLinks = new Set<string>();
+
+/** The teachers subscribed to each public pool, by name (ADR-095); this browser's own are in `mySubscriptions`. */
+export const subscriberNames: Record<string, string[]> = { p2: ["Ada Lovelace", "Grace Hopper"] };
+export const mySubscriptions = new Set<string>();
 
 const mcqConfig = (
   prompt: string,
@@ -1404,6 +1414,9 @@ function stripPool() {
   for (const key of Object.keys(poolMembers)) delete poolMembers[key];
   notifications.length = 0;
   for (const key of Object.keys(coursePools)) coursePools[key] = [];
+  readLinks.clear();
+  mySubscriptions.clear();
+  for (const key of Object.keys(subscriberNames)) delete subscriberNames[key];
 }
 
 /**
@@ -1515,8 +1528,17 @@ export const poolSummary = (pool: MockPool) => {
     ownerFamilyName: owner?.familyName ?? "",
     ownerAvatarUrl: null,
     memberCount: (poolMembers[pool.id] ?? []).filter((m) => m.userId !== pool.ownerId).length,
+    subscriberCount: pool.isPublic ? (subscriberNames[pool.id] ?? []).length + (mySubscriptions.has(pool.id) ? 1 : 0) : 0,
+    subscribed: mySubscriptions.has(pool.id),
   };
 };
+
+/** "My pools" (ADR-095): owned, sat on, drawn by a course, or subscribed to. */
+const onMyShelf = (pool: MockPool): boolean =>
+  pool.ownerId === (me?.id ?? "u-me") ||
+  myMembership(pool.id) !== undefined ||
+  mySubscriptions.has(pool.id) ||
+  Object.values(coursePools).some((ids) => ids.includes(pool.id));
 
 interface TreeNode extends MockCategory {
   children: TreeNode[];
@@ -2277,12 +2299,7 @@ on("DELETE", "/app/api/pools/:id/stars", (m) => {
 
 // An admin with Super Powers (ADR-054) sees the private pools of other teachers too.
 on("GET", "/app/api/pools", () =>
-  pools
-    .filter(
-      (p) =>
-        me?.session?.superPowersUntil != null || p.ownerId === "u-me" || derivedVisibility(p) !== "private",
-    )
-    .map(poolSummary),
+  pools.filter((p) => me?.session?.superPowersUntil != null || onMyShelf(p)).map(poolSummary),
 );
 /** A colour the real API would accept, or grey. */
 const poolColor = (value: unknown): PoolColor | null => PoolColor.safeParse(value).data ?? null;
@@ -2313,7 +2330,28 @@ on("GET", "/app/api/pools/:id", (m) => {
     categories: categoryTree(pool.id),
     concepts: poolConcepts(pool.id),
     questionCount: liveQuestions(pool.id).filter((q) => !q.deletedAt).length,
+    subscription: !pool.isPublic || myMembership(pool.id) ? "none" : mySubscriptions.has(pool.id) ? "subscribed" : "available",
+    subscribers: pool.isPublic && myMembership(pool.id) ? poolSummary(pool).subscriberCount : null,
   };
+});
+on("GET", "/app/api/pools/:id/unpublish-impact", (m) => {
+  const pool = poolOr404(m.groups!.id!);
+  const readCourses = Object.keys(coursePools).filter((c) => readLinks.has(`${c}:${pool.id}`)).length;
+  return { subscribers: poolSummary(pool).subscriberCount, readCourses, templates: readCourses > 0 ? 1 : 0 };
+});
+on("GET", "/app/api/pools/:id/subscribers", (m) => {
+  const pool = poolOr404(m.groups!.id!);
+  return { subscribers: (subscriberNames[pool.id] ?? []).map((name) => ({ name })) };
+});
+on("PUT", "/app/api/pools/:id/subscription", (m) => {
+  const pool = poolOr404(m.groups!.id!);
+  if (!pool.isPublic) throw new MockError(409, "Only a public pool can be subscribed to.");
+  mySubscriptions.add(pool.id);
+  return undefined;
+});
+on("DELETE", "/app/api/pools/:id/subscription", (m) => {
+  mySubscriptions.delete(poolOr404(m.groups!.id!).id);
+  return undefined;
 });
 on("PATCH", "/app/api/pools/:id", (m, body) => {
   const pool = poolOr404(m.groups!.id!);
@@ -2324,6 +2362,18 @@ on("PATCH", "/app/api/pools/:id", (m, body) => {
   if ("color" in body) pool.color = poolColor(body.color);
   if (typeof body.isPublic === "boolean") {
     if (body.isPublic && pool.isPersonal) throw new MockError(409, "A personal pool cannot be published.");
+    // Unpublishing drops the subscriptions and the read links (ADR-095).
+    if (!body.isPublic && pool.isPublic) {
+      delete subscriberNames[pool.id];
+      mySubscriptions.delete(pool.id);
+      for (const key of [...readLinks]) {
+        if (key.endsWith(`:${pool.id}`)) {
+          readLinks.delete(key);
+          const course = key.split(":")[0]!;
+          coursePools[course] = (coursePools[course] ?? []).filter((id) => id !== pool.id);
+        }
+      }
+    }
     pool.isPublic = body.isPublic;
   }
   if (typeof body.description === "string") {
@@ -2347,12 +2397,18 @@ on("DELETE", "/app/api/pools/:id", (m) => {
 
 // --- Pool members and the bell (F-POOL-05) --------------------------------
 
+const linkMode = (courseId: string, poolId: string): "edit" | "read" =>
+  readLinks.has(`${courseId}:${poolId}`) ? "read" : "edit";
+
 /** `PoolMembers`, which is also what the two write routes answer with. */
 const memberList = (pool: MockPool) => ({
   visibility: derivedVisibility(pool),
-  // The mock links no course to a pool.
-  courses:
-    pool.id === "p1" ? [{ id: "c1", name: "Programmation C", code: "PRG1" }] : [],
+  courses: Object.entries(coursePools)
+    .filter(([, ids]) => ids.includes(pool.id))
+    .map(([courseId]) => {
+      const course = courseOr404(courseId);
+      return { id: course.id, name: course.name, code: course.code, mode: linkMode(courseId, pool.id) };
+    }),
   // The owner's row first, whatever order the seats were given in.
   members: [...(poolMembers[pool.id] ?? [])]
     .sort((a, b) => Number(b.userId === pool.ownerId) - Number(a.userId === pool.ownerId))
@@ -3071,7 +3127,7 @@ on("GET", "/app/api/courses/:id", (m) => {
     pools: (coursePools[course.id] ?? [])
       .map((poolId) => pools.find((p) => p.id === poolId))
       .filter((p): p is MockPool => p !== undefined)
-      .map(poolSummary),
+      .map((p) => ({ ...poolSummary(p), mode: linkMode(course.id, p.id) })),
     classrooms: rooms
       .filter((r) => r.courseId === course.id)
       .map((r) => ({
@@ -3086,10 +3142,20 @@ on("GET", "/app/api/courses/:id", (m) => {
 });
 on("PUT", "/app/api/courses/:id/pools", (m, body) => {
   const course = courseOr404(m.groups!.id!);
-  coursePools[course.id] = (body.poolIds as string[] | undefined) ?? [];
+  // A link keeps its mode unless the body asks for a stronger one (ADR-095).
+  const asked = (body.pools as { poolId: string; mode: "edit" | "read" }[] | undefined) ?? [];
+  const next = new Map<string, "edit" | "read">();
+  for (const { poolId, mode } of asked) {
+    const held = coursePools[course.id]?.includes(poolId) ? linkMode(course.id, poolId) : null;
+    const wanted = next.get(poolId) ?? held ?? mode;
+    next.set(poolId, wanted === "edit" || mode === "edit" ? "edit" : "read");
+  }
+  for (const key of [...readLinks]) if (key.startsWith(`${course.id}:`)) readLinks.delete(key);
+  for (const [poolId, mode] of next) if (mode === "read") readLinks.add(`${course.id}:${poolId}`);
+  coursePools[course.id] = [...next.keys()];
   return coursePools[course.id]!
     .map((poolId) => pools.find((p) => p.id === poolId))
     .filter((p): p is MockPool => p !== undefined)
-    .map(poolSummary);
+    .map((p) => ({ ...poolSummary(p), mode: linkMode(course.id, p.id) }));
 });
 

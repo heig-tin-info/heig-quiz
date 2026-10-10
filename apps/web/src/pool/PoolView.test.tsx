@@ -70,6 +70,8 @@ const POOL: PoolDetail = {
   ],
   concepts: [{ concept: { id: PTR, label: "Pointeur", qualifier: "", status: "validated" }, count: 1 }],
   questionCount: 2,
+  subscription: "none",
+  subscribers: null,
 };
 
 const PAGE: QuestionPage = {
@@ -630,6 +632,26 @@ describe("PoolView", () => {
     await user.click(within(dialog).getByRole("button", { name: "Move to a category" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Name already used");
     expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+  });
+
+  it("makes Subscribe the one action of a public pool the caller reads without a seat (ADR-095)", async () => {
+    const { calls } = mockFetch(
+      routes({
+        "GET /app/api/pools/p1": ok({ ...POOL, role: "reader", subscription: "available" }),
+        "PUT /app/api/pools/p1/subscription": ok(undefined),
+      }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /New question/ })).toBeNull();
+    await userEvent.click((await screen.findAllByRole("button", { name: "Subscribe" }))[0]!);
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT" && c.url === "/app/api/pools/p1/subscription")).toBe(true));
+  });
+
+  it("offers no Subscribe to the owner, a member or a subscriber", async () => {
+    mockFetch(routes({ "GET /app/api/pools/p1": ok({ ...POOL, subscription: "subscribed" }) }));
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    expect(screen.queryByRole("button", { name: "Subscribe" })).toBeNull();
   });
 
   it("offers the one action of an empty pool", async () => {

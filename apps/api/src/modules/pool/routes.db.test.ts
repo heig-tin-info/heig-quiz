@@ -104,7 +104,7 @@ describe("guards (invariant 6)", () => {
       method: "PUT",
       url: `/app/api/courses/${courseId}/pools`,
       headers: stranger.headers,
-      payload: { poolIds: [poolId] },
+      payload: { pools: [{ poolId: poolId, mode: "edit" }] },
     });
     // The stranger cannot link a pool they cannot reach: the link is empty.
     expect(linked.statusCode).toBe(200);
@@ -116,7 +116,7 @@ describe("guards (invariant 6)", () => {
       method: "PUT",
       url: `/app/api/courses/${courseId}/pools`,
       headers: owner.headers,
-      payload: { poolIds: [poolId] },
+      payload: { pools: [{ poolId: poolId, mode: "edit" }] },
     });
     expect(byOwner.json()).toHaveLength(1);
     expect(
@@ -1041,7 +1041,7 @@ describe("pool sharing", () => {
       method: "PUT",
       url: `/app/api/courses/${courseId}/pools`,
       headers: staffer.headers,
-      payload: { poolIds: [shared] },
+      payload: { pools: [{ poolId: shared, mode: "edit" }] },
     });
     // A pool is linked only by someone who can already reach it, so the owner
     // does it: the staffer cannot link a pool they do not see yet.
@@ -1069,7 +1069,13 @@ describe("pool sharing", () => {
     expect((await writeQuestion(open, outsider, "not yours")).statusCode).toBe(403);
     expect((await renamePool(open, outsider, "not yours")).statusCode).toBe(403);
 
-    // And it is listed, with the owner's name on it.
+    // It is NOT on the outsider's shelf until they subscribe (ADR-095)...
+    const before = await server.app.inject({ method: "GET", url: "/app/api/pools", headers: outsider.headers });
+    expect(before.json().some((p: { id: string }) => p.id === open)).toBe(false);
+    expect(
+      (await server.app.inject({ method: "PUT", url: `/app/api/pools/${open}/subscription`, headers: outsider.headers })).statusCode,
+    ).toBe(204);
+    // ...and then it is listed, with the owner's name on it.
     const listed = await server.app.inject({
       method: "GET",
       url: "/app/api/pools",
@@ -1123,7 +1129,7 @@ describe("pool sharing", () => {
         method: "PUT",
         url: `/app/api/courses/${courseId}/pools`,
         headers: who.headers,
-        payload: { poolIds },
+        payload: { pools: poolIds.map((poolId) => ({ poolId, mode: "edit" })) },
       });
 
     // A colleague's PUBLIC pool: readable, but linking it would make the

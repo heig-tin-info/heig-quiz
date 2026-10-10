@@ -128,7 +128,7 @@ beforeAll(async () => {
   const course = await call(teacher, "POST", "/app/api/courses", { name: "Programmation 1", code: "PRG1" });
   expect(course.statusCode).toBe(201);
   courseId = (course.json() as { id: string }).id;
-  expect((await call(teacher, "PUT", `/app/api/courses/${courseId}/pools`, { poolIds: [poolId] })).statusCode).toBe(200);
+  expect((await call(teacher, "PUT", `/app/api/courses/${courseId}/pools`, { pools: [{ poolId: poolId, mode: "edit" }] })).statusCode).toBe(200);
   draftId = await question("brouillon", false);
   publishedId = await question("publiee", true);
 });

@@ -10,6 +10,7 @@ import {
   type PoolMemberInvite,
   type PoolMembers,
   type PoolRole,
+  type PoolUnpublishImpact,
 } from "@quiz/contracts";
 
 import { api, ApiError, apiErrorMessage, isNotFound, refusedWith } from "../api";
@@ -56,6 +57,22 @@ import { poolCandidatesKey, poolKey, poolMembersKey, poolsKey } from "../queryKe
  * API resolves it over every address of an account (GH-11), which is how an
  * alias reaches a teacher the list shows under another spelling.
  */
+
+/**
+ * What unpublishing ends, in the owner's words (ADR-095): only the parts that
+ * are not zero, since "0 subscribers" is noise. Null when nothing breaks.
+ */
+function unpublishMessage(impact: PoolUnpublishImpact, t: TFunction): string | null {
+  const parts = [
+    impact.subscribers > 0 &&
+      t(impact.subscribers === 1 ? "share.unpublish.subscribers.one" : "share.unpublish.subscribers", { n: impact.subscribers }),
+    impact.readCourses > 0 &&
+      t(impact.readCourses === 1 ? "share.unpublish.courses.one" : "share.unpublish.courses", { n: impact.readCourses }),
+    impact.templates > 0 &&
+      t(impact.templates === 1 ? "share.unpublish.templates.one" : "share.unpublish.templates", { n: impact.templates }),
+  ].filter((p): p is string => p !== false);
+  return parts.length === 0 ? null : t("share.unpublish.message", { parts: parts.join(" ") });
+}
 
 /**
  * The invite errors the API names (`teacher_not_found`, and the 409 of a seat
@@ -163,6 +180,7 @@ export function PoolSharing({ pool }: { pool: Pool }) {
   const [role, setRole] = useState<PoolRole>("reader");
   const canInvite = who.choice !== null;
 
+  const confirm = useConfirm();
   const members = useQuery<PoolMembers>({
     queryKey: key,
     queryFn: () => api(`/app/api/pools/${pool.id}/members`),
@@ -182,6 +200,23 @@ export function PoolSharing({ pool }: { pool: Pool }) {
     },
     onError: toastError("error.save"),
   });
+
+  // Taking the pool out of the catalogue ends subscriptions and read-only
+  // links: the owner is told how many first. Nothing to count, nothing to ask.
+  const askUnpublish = async () => {
+    const impact = await api<PoolUnpublishImpact>(`/app/api/pools/${pool.id}/unpublish-impact`);
+    const message = unpublishMessage(impact, t);
+    if (message !== null) {
+      const ok = await confirm({
+        title: t("share.unpublish.title"),
+        message,
+        confirmLabel: t("share.unpublish.action"),
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    setPublic.mutate(false);
+  };
 
   const invite = useMutation({
     mutationFn: () => {
@@ -225,7 +260,7 @@ export function PoolSharing({ pool }: { pool: Pool }) {
             checked={isPublic}
             // A personal pool migrated as public can still be taken back.
             disabled={(pool.isPersonal && !isPublic) || setPublic.isPending}
-            onChange={(v) => setPublic.mutate(v)}
+            onChange={(v) => (v ? setPublic.mutate(true) : void askUnpublish())}
             label={t("share.publish")}
           />
         </SettingRow>
@@ -279,7 +314,9 @@ export function PoolSharing({ pool }: { pool: Pool }) {
                     <span className="font-medium">{c.name}</span>{" "}
                     <span className="text-xs text-fg-muted">{c.code}</span>
                   </span>
-                  <span className="shrink-0 text-[13px] text-fg-muted">{t("share.courses.canEdit")}</span>
+                  <span className="shrink-0 text-[13px] text-fg-muted">
+                    {t(c.mode === "read" ? "share.courses.canRead" : "share.courses.canEdit")}
+                  </span>
                 </li>
               ))}
             </ul>
