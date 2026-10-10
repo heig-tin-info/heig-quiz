@@ -20,7 +20,7 @@ export const resolvable = (c: Concept): ResolvableConcept => ({
   aliases: c.aliases,
   labels: CONCEPT_LANGS.flatMap((lang) => {
     const label = c.labels[lang];
-    return label === null ? [] : [{ label, qualifier: c.qualifiers[lang] }];
+    return label === null ? [] : [{ label, qualifier: c.qualifiers[lang], lang }];
   }),
 });
 

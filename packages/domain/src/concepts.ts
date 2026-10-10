@@ -249,7 +249,7 @@ export interface ResolvableConcept {
   /** The concept it was merged into, always the final one (addendum §3); null when not merged. */
   mergedInto: string | null;
   /** Its label and qualifier in each language that has a label. */
-  labels: readonly { label: string; qualifier: string }[];
+  labels: readonly { label: string; qualifier: string; lang?: ConceptLanguage }[];
   /**
    * Other names it answers to, bare (curated aliases, ADR-081 §6). An alias is matched exactly like a label: an input whose key is
    * a label's or an alias's resolves, and the same key on two concepts is
@@ -397,9 +397,9 @@ export function filterIds(resolution: LabelResolution): string[] {
 /**
  * Why two concepts are flagged (ADR-081 fifth addendum §4), in precedence
  * order: a pair carries the first reason that holds.
- * - `alias`: a name of one (label or alias) has the key of an alias of the
- *   other, so the typed word is ambiguous for every teacher. This is
- *   {@link checkAlias}'s collision, seen from both concepts;
+ * - `alias`: {@link checkAlias} finds that an alias of one collides with
+ *   the other (one of its labels or aliases), so the typed word is ambiguous
+ *   for every teacher;
  * - `translation`: a label of one has the same qualified key as a label of
  *   the other (the per-language unique index makes that a French label
  *   against an English one);
@@ -411,23 +411,41 @@ export function filterIds(resolution: LabelResolution): string[] {
 export const DUPLICATE_REASONS = ["alias", "translation", "homonym", "close"] as const;
 export type DuplicateReason = (typeof DUPLICATE_REASONS)[number];
 
-/** A concept's keys, computed once. */
-interface Keyed {
-  /** Each label: its bare key and its qualified key. */
-  labels: { bare: string; full: string }[];
-  aliases: Set<string>;
+type Label = ResolvableConcept["labels"][number];
+
+/** A live concept and its labels' keys, computed once. */
+interface Live<C extends ResolvableConcept = ResolvableConcept> {
+  concept: C;
+  labels: { label: Label; bare: string; full: string }[];
 }
 
-const TESTS: Record<DuplicateReason, (x: Keyed, y: Keyed) => boolean> = {
-  alias: (x, y) => {
-    const names = (k: Keyed) => new Set([...k.labels.map((l) => l.bare), ...k.aliases]);
-    const [nx, ny] = [names(x), names(y)];
-    return [...x.aliases].some((a) => ny.has(a)) || [...y.aliases].some((a) => nx.has(a));
-  },
-  translation: (x, y) => x.labels.some((l) => y.labels.some((o) => l.full === o.full)),
+/** The labels of two concepts that share a qualified key (a French one against an English one, per the unique index). */
+const translationMatch = (x: Live, y: Live): [Label, Label] | undefined => {
+  for (const l of x.labels) {
+    const o = y.labels.find((m) => m.full === l.full);
+    if (o) return [l.label, o.label];
+  }
+  return undefined;
+};
+
+/** Whether an alias of `c` collides with `other`, asked of {@link checkAlias} as if `c` had no other name (an alias is never "redundant" with itself). */
+const clashes = (c: ResolvableConcept, other: ResolvableConcept) =>
+  c.aliases.some((a) => checkAlias(a, { ...c, labels: [], aliases: [] }, [other]).kind === "collides");
+
+const TESTS: Record<DuplicateReason, (x: Live, y: Live) => boolean> = {
+  alias: (x, y) => clashes(x.concept, y.concept) || clashes(y.concept, x.concept),
+  translation: (x, y) => translationMatch(x, y) !== undefined,
   homonym: (x, y) => x.labels.some((l) => y.labels.some((o) => l.bare === o.bare && l.full !== o.full)),
   close: (x, y) => x.labels.some((l) => y.labels.some((o) => (keyDistance(l.bare, o.bare) ?? 0) > 0)),
 };
+
+export interface DuplicatePair<C> {
+  a: C;
+  b: C;
+  reason: DuplicateReason;
+  /** For a `translation`: the label of `a` and the label of `b` that match. */
+  match?: [Label, Label];
+}
 
 /**
  * The pairs of concepts that are probably one (ADR-081 fifth addendum §4),
@@ -440,24 +458,24 @@ const TESTS: Record<DuplicateReason, (x: Keyed, y: Keyed) => boolean> = {
  * is quadratic in the vocabulary: meant for hundreds of concepts, which the
  * vocabulary is (tens of thousands of comparisons).
  */
-export function probableDuplicates<C extends ResolvableConcept>(
-  concepts: readonly C[],
-): { a: C; b: C; reason: DuplicateReason }[] {
+export function probableDuplicates<C extends ResolvableConcept>(concepts: readonly C[]): DuplicatePair<C>[] {
   const live = concepts
     .filter((c) => !c.mergedInto)
     .sort((p, q) => (p.id < q.id ? -1 : 1))
     .map((concept) => ({
       concept,
-      keys: {
-        labels: concept.labels.map((l) => ({ bare: conceptKey(l.label), full: qualifiedConceptKey(l.label, l.qualifier) })),
-        aliases: new Set(concept.aliases.map(conceptKey)),
-      } satisfies Keyed,
+      labels: concept.labels.map((label) => ({
+        label,
+        bare: conceptKey(label.label),
+        full: qualifiedConceptKey(label.label, label.qualifier),
+      })),
     }));
-  const out: { a: C; b: C; reason: DuplicateReason }[] = [];
+  const out: DuplicatePair<C>[] = [];
   for (const [i, x] of live.entries()) {
     for (const y of live.slice(i + 1)) {
-      const reason = DUPLICATE_REASONS.find((r) => TESTS[r](x.keys, y.keys));
-      if (reason) out.push({ a: x.concept, b: y.concept, reason });
+      const reason = DUPLICATE_REASONS.find((r) => TESTS[r](x, y));
+      const match = reason === "translation" ? translationMatch(x, y) : undefined;
+      if (reason) out.push({ a: x.concept, b: y.concept, reason, ...(match && { match }) });
     }
   }
   const rank = (r: DuplicateReason) => DUPLICATE_REASONS.indexOf(r);

@@ -562,3 +562,19 @@ describe("mergeDirection", () => {
     expect(mergeDirection(c("proposed", 1), c("proposed", 2))).toBeNull();
   });
 });
+
+describe("probableDuplicates, translation matches", () => {
+  it("hands back the two labels that match", () => {
+    const a = { id: "a", mergedInto: null, aliases: [], labels: [{ label: "Hash table", qualifier: "", lang: "fr" as const }] };
+    const b = {
+      id: "b",
+      mergedInto: null,
+      aliases: [],
+      labels: [
+        { label: "Table de hachage", qualifier: "", lang: "fr" as const },
+        { label: "Hash table", qualifier: "", lang: "en" as const },
+      ],
+    };
+    expect(probableDuplicates([a, b])[0]?.match).toEqual([a.labels[0], b.labels[1]]);
+  });
+});

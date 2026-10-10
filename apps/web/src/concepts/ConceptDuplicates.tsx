@@ -2,8 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, GitMerge, Pencil } from "lucide-react";
 import { useState } from "react";
 
-import { CONCEPT_LANGS, type AdminConcept } from "@quiz/contracts";
-import { mergeDirection, probableDuplicates, qualifiedConceptKey, type DuplicateReason } from "@quiz/domain";
+import type { AdminConcept } from "@quiz/contracts";
+import { mergeDirection, probableDuplicates, type DuplicatePair as DuplicatePairOf, type DuplicateReason } from "@quiz/domain";
 
 import { useI18n, useT } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
@@ -13,44 +13,27 @@ import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, refName, usesLabel } from "./names";
 import { resolvable } from "./ranking";
 
-export interface DuplicatePair {
-  a: AdminConcept;
-  b: AdminConcept;
-  reason: DuplicateReason;
-}
+export type DuplicatePair = DuplicatePairOf<AdminConcept>;
 
 /**
  * The probable duplicates of the queue's list (`probableDuplicates`, ADR-081
  * fifth addendum §4): computed on read, nothing is stored.
  */
 export function duplicatePairs(concepts: readonly AdminConcept[]): DuplicatePair[] {
-  return probableDuplicates(concepts.map((concept) => ({ ...resolvable(concept), concept }))).map((p) => ({
-    a: p.a.concept,
-    b: p.b.concept,
-    reason: p.reason,
+  return probableDuplicates(concepts.map((concept) => ({ ...resolvable(concept), concept }))).map(({ a, b, ...rest }) => ({
+    ...rest,
+    a: a.concept,
+    b: b.concept,
   }));
 }
 
 /**
- * The two labels that make a translation pair, each with its language
- * (`Hash table (FR)` / `Hash table (EN)`): the interface language would show
- * both concepts under the one label they share, and hide why they match.
+ * A translation pair's matching labels, each with its language (`Hash table
+ * (FR)` / `Hash table (EN)`): the interface language would show both concepts
+ * under the one label they share, and hide why they match.
  */
-function translationNames(a: AdminConcept, b: AdminConcept): [string, string] | null {
-  const keyed = (c: AdminConcept) =>
-    CONCEPT_LANGS.flatMap((lang) => {
-      const label = c.labels[lang];
-      return label === null ? [] : [{ lang, label, qualifier: c.qualifiers[lang] }];
-    });
-  for (const x of keyed(a)) {
-    for (const y of keyed(b)) {
-      if (qualifiedConceptKey(x.label, x.qualifier) === qualifiedConceptKey(y.label, y.qualifier)) {
-        return [`${refName(x)} (${x.lang.toUpperCase()})`, `${refName(y)} (${y.lang.toUpperCase()})`];
-      }
-    }
-  }
-  return null;
-}
+const withLang = ({ lang, ...label }: { label: string; qualifier: string; lang?: string }) =>
+  lang ? `${refName(label)} (${lang.toUpperCase()})` : refName(label);
 
 const REASONS = {
   alias: { tone: "red", mergeable: true, label: "admin.concepts.dup.alias", why: "admin.concepts.dup.alias.why" },
@@ -129,10 +112,7 @@ function PairRow({
   const { locale } = useI18n();
   const reason = REASONS[pair.reason];
   const direction = reason.mergeable ? mergeDirection(pair.a, pair.b) : null;
-  const names = (pair.reason === "translation" ? translationNames(pair.a, pair.b) : null) ?? [
-    conceptName(pair.a, locale),
-    conceptName(pair.b, locale),
-  ];
+  const names = pair.match?.map(withLang) ?? [conceptName(pair.a, locale), conceptName(pair.b, locale)];
   const whyId = `dup-${pair.a.id}-${pair.b.id}-why`;
 
   return (
