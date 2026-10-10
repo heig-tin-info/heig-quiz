@@ -159,7 +159,7 @@ on("GET", "/app/api/admin/concepts", (): AdminConceptList => {
         createdAt: iso(-(1 + (i % 9)) * D - H),
         createdBy: null,
         questionCount: usage.get(c.id) ?? 0,
-        deletable: (usage.get(c.id) ?? 0) === 0,
+        deletable: (usage.get(c.id) ?? 0) === 0 && !listedByACourse(c.id),
         creator: c.status === "proposed" ? (i % 2 === 0 ? "Marie Dupont" : "Jean Martin") : null,
       }),
     ),
@@ -209,6 +209,10 @@ on("POST", "/app/api/admin/concepts/:id/merge", (m, raw): Concept => {
   const moved = usage.get(loser.id) ?? 0;
   usage.set(winner.id, (usage.get(winner.id) ?? 0) + moved);
   usage.delete(loser.id);
+  // The courses listing the loser list the winner instead, once (sixth addendum).
+  for (const [course, ids] of courseConcepts) {
+    courseConcepts.set(course, [...new Set(ids.map((id) => (id === loser.id ? winner.id : id)))]);
+  }
   for (const c of concepts) if (c.mergedInto === loser.id) c.mergedInto = winner.id;
   const { moved: movedAliases, added } = mergedAliases(resolvable(loser), resolvable(winner), body.data.keepAsAlias);
   winner.aliases = [...winner.aliases, ...movedAliases, ...added].sort((a, b) => a.localeCompare(b));
@@ -255,7 +259,9 @@ on("DELETE", "/app/api/admin/concepts/:id/aliases/:alias", (m): Concept => {
 on("DELETE", "/app/api/admin/concepts/:id", (m) => {
   const i = concepts.findIndex((x) => x.id === m.groups!.id);
   if (i < 0) throw refuse(404, "not_found", "No such concept");
-  if ((usage.get(concepts[i]!.id) ?? 0) > 0) throw refuse(409, "concept_in_use", "A question refers to this concept");
+  if ((usage.get(concepts[i]!.id) ?? 0) > 0 || listedByACourse(concepts[i]!.id)) {
+    throw refuse(409, "concept_in_use", "A merge, a question or a course refers to this concept");
+  }
   concepts.splice(i, 1);
   return undefined;
 });
@@ -314,3 +320,30 @@ on("POST", "/app/api/concepts", (_m, raw): Concept => {
   concepts.push(created);
   return created;
 });
+
+/**
+ * The concepts each course declares (ADR-081 §8): a plain set per course id,
+ * staff only. PRG1 (`c1`) lists three validated concepts and one proposed
+ * (`?empty=1` lists none); the other courses start empty.
+ */
+const courseConcepts = new Map<string, string[]>([
+  [
+    "c1",
+    flags.empty
+      ? []
+      : ["Pointeur", "Allocation dynamique", "Tableau", "Récursivité"].map((fr) => concepts.find((c) => c.labels.fr === fr)!.id),
+  ],
+]);
+
+const listedByACourse = (id: string) => [...courseConcepts.values()].some((ids) => ids.includes(id));
+
+/** A course's concepts as the staff reads them: by label, a merged one followed (as the server's merge rewrites the links). */
+export const courseConceptRefs = (courseId: string): ConceptRef[] =>
+  conceptRefs(courseConcepts.get(courseId) ?? []).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+
+/** `PUT /courses/:id/concepts`: the whole set; a merged or unknown id is `422 concept_not_found`. */
+export function setCourseConceptIds(courseId: string, ids: readonly string[]): void {
+  const unknown = unknownConceptIds(ids);
+  if (unknown.length > 0) throw refuse(422, "concept_not_found", "A concept is missing or merged", { ids: unknown });
+  courseConcepts.set(courseId, [...new Set(ids)]);
+}

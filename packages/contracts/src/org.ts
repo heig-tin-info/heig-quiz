@@ -10,6 +10,7 @@ import { z } from "zod";
 import { COURSE_ROLES } from "@quiz/domain";
 
 import { PersonRef, teacherChoiceWith } from "./common.js";
+import { ConceptRef } from "./concept.js";
 import { ConditionKind, EvaluationCondition } from "./evaluation.js";
 import { CoursePoolMode, PoolColor, PoolIcon } from "./pool.js";
 
@@ -199,8 +200,25 @@ export const CourseDetail = z.object({
     }),
   ),
   classrooms: z.array(ClassroomRef),
+  /** The concepts the course declares, by label (ADR-081 §8); staff only, like the rest of this response. */
+  concepts: z.array(ConceptRef),
 });
 export type CourseDetail = z.infer<typeof CourseDetail>;
+
+/**
+ * `GET /courses/:id/concepts` and the answer of `PUT`: the concepts a course
+ * declares (ADR-081 §8, F-ORG-12), labelled in the reader's language, by
+ * label then id. Staff only: never part of a student payload.
+ */
+export const CourseConcepts = z.object({ concepts: z.array(ConceptRef) });
+export type CourseConcepts = z.infer<typeof CourseConcepts>;
+
+/**
+ * `PUT /courses/:id/concepts` — the whole set (an owner's). A concept may be
+ * `proposed`; a merged or unknown one is a 422 `concept_not_found`.
+ */
+export const CourseConceptsPut = z.object({ conceptIds: z.array(z.uuid()).max(200) });
+export type CourseConceptsPut = z.infer<typeof CourseConceptsPut>;
 
 // --- The course's catalog of conditions (ADR-079 §5, F-ORG-16) ---
 

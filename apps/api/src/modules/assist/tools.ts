@@ -32,7 +32,7 @@ import { inputJsonSchema, runTool, ToolRefusal, toolByName, type Api, type Tool,
 export const MCP_READS = {
   list_courses:
     "The courses the user is on the staff of, with the user's role on each (`owner` or `assistant`).",
-  get_course: "One course: its staff, its classrooms (with their ids) and the pools linked to it.",
+  get_course: "One course: its staff, its classrooms (with their ids), the pools linked to it and the concepts it declares.",
   list_pools:
     "The user's pools (\"My pools\": own, shared with them, through a course, or public pools they subscribed to), with their question counts.",
   get_pool: "One pool: its detail, the user's role in it, and its category tree with counts.",

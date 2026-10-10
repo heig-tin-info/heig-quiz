@@ -58,6 +58,7 @@ export function ConceptPicker({
   onChange,
   poolConceptIds = NO_POOL,
   disabled,
+  label,
 }: {
   /** The ids of the question's concepts, in order. */
   value: readonly string[];
@@ -66,6 +67,8 @@ export function ConceptPicker({
   /** The concepts the pool's questions already use: offered first (ADR-081 §5). */
   poolConceptIds?: readonly string[];
   disabled?: boolean;
+  /** The field's label when "Concepts" would repeat the heading around it (the course's Settings). */
+  label?: string;
 }) {
   const t = useT();
   const { locale } = useI18n();
@@ -224,7 +227,7 @@ export function ConceptPicker({
   return (
     <div className="space-y-1.5">
       <label htmlFor={combo.inputId} className="block text-[13px] font-medium text-fg">
-        {t("concepts.picker.label")}
+        {label ?? t("concepts.picker.label")}
       </label>
 
       <div className="relative">

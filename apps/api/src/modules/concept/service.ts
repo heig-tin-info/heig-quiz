@@ -44,6 +44,7 @@ export { addAlias, removeAlias } from "./aliases.js";
 export { listAdminConcepts } from "./admin.js";
 export { aiDuplicates } from "./duplicatesAi.js";
 export { mergeConcept } from "./merge.js";
+export { courseConceptsOf, setCourseConcepts } from "./courseConcepts.js";
 export { conceptReferenced } from "./referenced.js";
 export { toConcept, toConceptRef } from "./row.js";
 export {
@@ -253,10 +254,10 @@ export async function validateConcept(db: Db, ctx: Omit<ConceptContext, "caller"
 
 /**
  * Deletes a concept nothing refers to (ADR-081 second addendum §2, third
- * addendum §7): a concept merged into it, or a question linked to it makes the foreign key refuse, answered 409
+ * addendum §7): a concept merged into it, a question linked to it or a course listing it makes the foreign key refuse, answered 409
  * `concept_in_use`; a missing one is a 404. Its curated aliases go with it
  * (cascade): they are not references. A concept a question uses is
- * merged, never deleted. `conceptReferenced` mirrors these two foreign keys
+ * merged, never deleted (a course's list is rewritten by the merge). `conceptReferenced` mirrors these three foreign keys
  * for the admin's queue.
  */
 export async function deleteConcept(db: Db, ctx: Omit<ConceptContext, "caller">, id: string): Promise<void> {
@@ -275,9 +276,10 @@ export async function deleteConcept(db: Db, ctx: Omit<ConceptContext, "caller">,
   } catch (error) {
     if (
       isForeignKeyViolation(error, "concepts_merged_into_fk") ||
-      isRestrictViolation(error, "question_concepts_concept_id_concepts_id_fk")
+      isRestrictViolation(error, "question_concepts_concept_id_concepts_id_fk") ||
+      isRestrictViolation(error, "course_concepts_concept_id_concepts_id_fk")
     ) {
-      throw new DomainError("concept_in_use", 409, "A merge or a question refers to this concept");
+      throw new DomainError("concept_in_use", 409, "A merge, a question or a course refers to this concept");
     }
     throw error;
   }

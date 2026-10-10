@@ -152,6 +152,8 @@ describe("POST /admin/concepts/:id/merge", () => {
       winner: { id: winner, labels: { fr: "Pointeur", en: "Pointer" }, qualifiers: { fr: "", en: "" } },
       moved: [a],
       alreadyLinked: [b],
+      coursesMoved: [],
+      coursesAlreadyListed: [],
       repointed: [old],
       aliasesMoved: [],
       aliasesAdded: [],

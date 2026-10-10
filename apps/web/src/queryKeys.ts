@@ -88,6 +88,8 @@ export const courseKey = (id: string) => ["course", id] as const;
  * refresh reaches it. `null` while the course is not known yet.
  */
 export const courseTemplatesKey = (id: string | null) => ["course", id, "templates"] as const;
+/** `GET /courses/:id/concepts` (F-ORG-12, ADR-081 §8): the concepts the course declares, staff only. */
+export const courseConceptsKey = (id: string) => ["course", id, "concepts"] as const;
 /** `GET /courses/:id/conditions` (F-ORG-16): the course's whole catalog, archived entries included. */
 export const courseConditionsKey = (id: string) => ["course", id, "conditions"] as const;
 /**

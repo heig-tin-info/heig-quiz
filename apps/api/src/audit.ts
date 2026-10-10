@@ -85,6 +85,8 @@ export type AuditAction =
   | "course.delete"
   | "course.staff_add"
   | "course.pools_update"
+  /** The course's concepts replaced (ADR-081 §8); `payload.added` and `payload.removed` are concept ids. */
+  | "course.concepts_update"
   | "course.staff_remove"
   | "course.staff_role_change"
   | "course.update"

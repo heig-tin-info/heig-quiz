@@ -173,7 +173,7 @@ async function createAll(
  * Every writer of links and the merge (`merge.ts`, `FOR UPDATE` in id order) lock in id order,
  * so merges and writers do not deadlock among themselves; a chained merge racing a writer may abort one side (40P01), never corrupting data.
  */
-async function lockConcepts(tx: Db | Tx, ids: readonly string[]): Promise<Set<string>> {
+export async function lockConcepts(tx: Db | Tx, ids: readonly string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
   const rows = await tx
     .select({ id: concepts.id, mergedInto: concepts.mergedInto })
