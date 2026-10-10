@@ -18,7 +18,7 @@ import { displayName } from "@quiz/domain";
 import type { Db, Tx } from "../../db/client.js";
 import { questionReports, users } from "../../db/schema.js";
 import { DomainError, notFoundError } from "../http.js";
-import { notifyMany } from "../notifications/service.js";
+import { notifyUsers } from "../notifications/service.js";
 import { poolAudience } from "./members.js";
 import type { PoolRow, QuestionRecord } from "./shared.js";
 
@@ -90,13 +90,16 @@ export async function openReportCounts(
 }
 
 /**
- * Files a report on `question` and tells the writers of its pool, folded per
- * question. The notification is best-effort: the report is already written.
+ * Files a report on `question` and tells the owner and the `contributor` and
+ * `owner` members of its pool (as `pool_question_added`: never a reader, nor
+ * the staff of a linked course), folded per question, never the reporter. A
+ * deleted question takes no report: the 404 a missing one gets.
  */
 export async function createReport(
   db: Db,
   input: { question: QuestionRecord; pool: PoolRow; reporterId: string; message: string },
-): Promise<ReportRow> {
+): Promise<QuestionReportRow> {
+  if (input.question.deletedAt) throw notFoundError("question");
   const [row] = await db
     .insert(questionReports)
     .values({
@@ -106,28 +109,19 @@ export async function createReport(
       message: input.message,
     })
     .returning();
-  try {
-    const writers = (await poolAudience(db, input.pool, ["contributor", "owner"])).filter(
-      (id) => id !== input.reporterId,
-    );
-    await notifyMany(
-      db,
-      writers.map((userId) => ({
-        userId,
-        payload: {
-          kind: "question_reported" as const,
-          poolId: input.pool.id,
-          poolName: input.pool.name,
-          questionId: input.question.id,
-          questionName: input.question.internalName,
-          count: 1,
-        },
-      })),
-    );
-  } catch (err) {
-    console.error(`pool: telling the writers of a report on ${input.question.id} failed`, err);
-  }
-  return row!;
+  const writers = (await poolAudience(db, input.pool, ["contributor", "owner"])).filter(
+    (id) => id !== input.reporterId,
+  );
+  await notifyUsers(db, writers, {
+    kind: "question_reported",
+    poolId: input.pool.id,
+    poolName: input.pool.name,
+    questionId: input.question.id,
+    questionName: input.question.internalName,
+    count: 1,
+  });
+  const viewer = { id: input.reporterId, seesAll: false };
+  return reportJson(row!, viewer, await namesOf(db, [input.reporterId]));
 }
 
 /**
@@ -160,22 +154,13 @@ export async function resolveReport(
     throw new DomainError("report_resolved", 409, "This report is already resolved");
   }
   if (row.reporterId && row.reporterId !== input.resolverId) {
-    try {
-      await notifyMany(db, [
-        {
-          userId: row.reporterId,
-          payload: {
-            kind: "question_report_resolved",
-            poolId: input.pool.id,
-            poolName: input.pool.name,
-            questionId: input.question.id,
-            questionName: input.question.internalName,
-          },
-        },
-      ]);
-    } catch (err) {
-      console.error(`pool: telling the reporter of report ${row.id} failed`, err);
-    }
+    await notifyUsers(db, [row.reporterId], {
+      kind: "question_report_resolved",
+      poolId: input.pool.id,
+      poolName: input.pool.name,
+      questionId: input.question.id,
+      questionName: input.question.internalName,
+    });
   }
   return row;
 }

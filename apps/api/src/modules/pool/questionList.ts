@@ -26,7 +26,7 @@ import {
 import { byLabel, conceptsOf, toConceptRef } from "../concept/service.js";
 import { hasKey, isParameterized, loadConfig, publicationIssuesOf, tryLoadConfig } from "./config.js";
 import { exampleConfig, parameterIssues, type VersionContent } from "./instance.js";
-import { openReportCounts } from "./reports.js";
+import { openReportCounts, type ReportViewer } from "./reports.js";
 import { type QuestionRecord, poolOf, type VersionRecord } from "./shared.js";
 import { starredBy } from "./stars.js";
 
@@ -285,22 +285,21 @@ function rowJson(
 export async function listQuestions(
   db: Db,
   poolId: string,
-  userId: string,
+  /** The caller; `seesAll` when they write in the pool: the open reports counted are all of them (issue #680). */
+  viewer: ReportViewer,
   search: QuestionSearch,
   lang: ConceptLang,
-  /** The caller writes in the pool: the open reports counted are all of them, not only their own (issue #680). */
-  seesAllReports = false,
 ) {
   const { page, facts, nextCursor, total } = await pageWhere(
     db,
-    searchWhere(poolId, userId, search),
+    searchWhere(poolId, viewer.id, search),
     search,
-    starredBy(userId),
+    starredBy(viewer.id),
   );
   const ids = page.map((q) => q.id);
   const [refs, reports] = await Promise.all([
     conceptsOf(db, ids, lang),
-    openReportCounts(db, ids, { id: userId, seesAll: seesAllReports }),
+    openReportCounts(db, ids, viewer),
   ]);
   return {
     items: page.map((q) => rowJson(q, refs.get(q.id) ?? [], facts.get(q.id), reports.get(q.id) ?? 0)),

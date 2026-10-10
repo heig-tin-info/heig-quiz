@@ -5,13 +5,14 @@ import { useState } from "react";
 import {
   REPORT_MESSAGE_MAX,
   REPORT_REPLY_MAX,
-  type QuestionReports,
   type QuestionReportRow,
+  type QuestionReports,
   type ReportCreate,
+  type ReportResolve,
 } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useT } from "../i18n";
+import { useT, type Dict } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { questionReportsKey, poolKey, questionKey } from "../queryKeys";
 import { Badge, Button, Card, EmptyState, FormDialog, QueryError, RelativeTime, Skeleton, Textarea } from "../ui";
@@ -24,13 +25,86 @@ export function useQuestionReports(questionId: string) {
   });
 }
 
-/** After a report is filed or resolved: its list, the question and the pool's list indicator. */
-function useRefreshReports(questionId: string, poolId: string) {
+/**
+ * The one dialog of the feature: a text sent to the server, then the question
+ * and the pool's list refresh. "Report a problem" (a required message, any
+ * reader) and "Resolve" (an optional reply, a writer) differ only by their
+ * words, their limit and their route.
+ */
+function ReportTextDialog<Body extends ReportCreate | ReportResolve>({
+  questionId,
+  poolId,
+  url,
+  field,
+  body,
+  max,
+  required,
+  title,
+  label,
+  help,
+  submit,
+  failed,
+  sent,
+  onClose,
+  preview,
+}: {
+  questionId: string;
+  poolId: string;
+  url: string;
+  /** The body's text field: `message` of a report, `reply` of a resolution. */
+  field: keyof ReportCreate | keyof ReportResolve;
+  body: (text: string) => Body;
+  max: number;
+  required: boolean;
+  title: keyof Dict;
+  label: keyof Dict;
+  help: keyof Dict;
+  submit: keyof Dict;
+  failed: keyof Dict;
+  /** A toast on success, none when absent. */
+  sent?: keyof Dict;
+  onClose: () => void;
+  /** What the dialog answers: the report's own text, shown above the field. */
+  preview?: string;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const toastError = useErrorToast();
   const qc = useQueryClient();
-  return async () => {
-    await qc.invalidateQueries({ queryKey: questionKey(questionId) });
-    await qc.invalidateQueries({ queryKey: poolKey(poolId) });
-  };
+  const [text, setText] = useState("");
+
+  const send = useMutation({
+    mutationFn: (payload: Body) => api(url, { method: "POST", body: JSON.stringify(payload) }),
+    onSuccess: async () => {
+      if (sent) toast(t(sent), "success");
+      await qc.invalidateQueries({ queryKey: questionKey(questionId) });
+      await qc.invalidateQueries({ queryKey: poolKey(poolId) });
+      onClose();
+    },
+    onError: toastError(failed),
+  });
+
+  return (
+    <FormDialog
+      title={t(title)}
+      onClose={onClose}
+      onSubmit={() => send.mutate(body(text.trim()))}
+      submitLabel={t(submit)}
+      submitting={send.isPending}
+      canSubmit={!required || text.trim() !== ""}
+    >
+      {preview ? <p className="whitespace-pre-wrap text-sm text-fg-muted">{preview}</p> : null}
+      <Textarea
+        name={field}
+        label={t(label)}
+        help={t(help)}
+        autoFocus
+        maxLength={max}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+    </FormDialog>
+  );
 }
 
 /** "Report a problem": a message to the writers of the pool. A secondary action, from the editor's menu. */
@@ -43,92 +117,23 @@ export function ReportDialog({
   poolId: string;
   onClose: () => void;
 }) {
-  const t = useT();
-  const toast = useToast();
-  const toastError = useErrorToast();
-  const refresh = useRefreshReports(questionId, poolId);
-  const [message, setMessage] = useState("");
-
-  const send = useMutation({
-    mutationFn: (body: ReportCreate) =>
-      api(`/app/api/questions/${questionId}/reports`, { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: async () => {
-      toast(t("question.report.sent"), "success");
-      await refresh();
-      onClose();
-    },
-    onError: toastError("question.report.failed"),
-  });
-
   return (
-    <FormDialog
-      title={t("question.report.title")}
+    <ReportTextDialog
+      questionId={questionId}
+      poolId={poolId}
+      url={`/app/api/questions/${questionId}/reports`}
+      field="message"
+      body={(message): ReportCreate => ({ message })}
+      max={REPORT_MESSAGE_MAX}
+      required
+      title="question.report.title"
+      label="question.report.message"
+      help="question.report.help"
+      submit="question.report.submit"
+      failed="question.report.failed"
+      sent="question.report.sent"
       onClose={onClose}
-      onSubmit={() => send.mutate({ message: message.trim() })}
-      submitLabel={t("question.report.submit")}
-      submitting={send.isPending}
-      canSubmit={message.trim() !== ""}
-    >
-      <Textarea
-        label={t("question.report.message")}
-        help={t("question.report.help")}
-        autoFocus
-        maxLength={REPORT_MESSAGE_MAX}
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-      />
-    </FormDialog>
-  );
-}
-
-/** A writer closes a report, with an optional reply the reporter is told of. */
-function ResolveDialog({
-  questionId,
-  poolId,
-  report,
-  onClose,
-}: {
-  questionId: string;
-  poolId: string;
-  report: QuestionReportRow;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const toastError = useErrorToast();
-  const refresh = useRefreshReports(questionId, poolId);
-  const [reply, setReply] = useState("");
-
-  const resolve = useMutation({
-    mutationFn: (body: { reply: string }) =>
-      api(`/app/api/questions/${questionId}/reports/${report.id}/resolve`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      }),
-    onSuccess: async () => {
-      await refresh();
-      onClose();
-    },
-    onError: toastError("question.reports.resolveFailed"),
-  });
-
-  return (
-    <FormDialog
-      title={t("question.reports.resolveTitle")}
-      onClose={onClose}
-      onSubmit={() => resolve.mutate({ reply: reply.trim() })}
-      submitLabel={t("question.reports.resolve")}
-      submitting={resolve.isPending}
-    >
-      <p className="whitespace-pre-wrap text-sm text-fg-muted">{report.message}</p>
-      <Textarea
-        label={t("question.reports.reply")}
-        help={t("question.reports.replyHelp")}
-        autoFocus
-        maxLength={REPORT_REPLY_MAX}
-        value={reply}
-        onChange={(e) => setReply(e.target.value)}
-      />
-    </FormDialog>
+    />
   );
 }
 
@@ -137,14 +142,23 @@ function ResolveDialog({
  * message, who sent it, and for a writer the one action that closes it. A
  * reporter who is not a writer sees only their own, and no action.
  */
-export function QuestionReportsTab({ questionId, poolId }: { questionId: string; poolId: string }) {
+export function QuestionReportsTab({
+  questionId,
+  poolId,
+  canResolve,
+}: {
+  questionId: string;
+  poolId: string;
+  /** The caller writes in the pool (the editor's `!readOnly`). */
+  canResolve: boolean;
+}) {
   const t = useT();
   const reports = useQuestionReports(questionId);
   const [resolving, setResolving] = useState<QuestionReportRow | null>(null);
 
   if (reports.isLoading) return <Skeleton className="h-24 w-full" />;
   if (reports.isError) return <QueryError title={t("question.reports.failed")} query={reports} />;
-  const { items, canResolve } = reports.data!;
+  const items = reports.data!;
   if (items.length === 0) {
     return (
       <Card>
@@ -188,10 +202,20 @@ export function QuestionReportsTab({ questionId, poolId }: { questionId: string;
         </Card>
       ))}
       {resolving ? (
-        <ResolveDialog
+        <ReportTextDialog
           questionId={questionId}
           poolId={poolId}
-          report={resolving}
+          url={`/app/api/questions/${questionId}/reports/${resolving.id}/resolve`}
+          field="reply"
+          body={(reply): ReportResolve => ({ reply })}
+          max={REPORT_REPLY_MAX}
+          required={false}
+          title="question.reports.resolveTitle"
+          label="question.reports.reply"
+          help="question.reports.replyHelp"
+          submit="question.reports.resolve"
+          failed="question.reports.resolveFailed"
+          preview={resolving.message}
           onClose={() => setResolving(null)}
         />
       ) : null}

@@ -41,14 +41,8 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       { params: IdParam, query: QuestionSearch, load: inPool() },
       async ({ req, reply, query, scope: pool }) => {
         try {
-          return await service.listQuestions(
-            app.db,
-            pool.id,
-            req.user!.id,
-            query,
-            readerLang(req),
-            await seesAllReports(req, pool),
-          );
+          const viewer = { id: req.user!.id, seesAll: await seesAllReports(req, pool) };
+          return await service.listQuestions(app.db, pool.id, viewer, query, readerLang(req));
         } catch (error) {
           // A cursor is only valid for the order that produced it: a client that
           // changes column mid-scroll starts the list again rather than reading a

@@ -2766,7 +2766,7 @@ on("PUT", "/app/api/pools/:id/review", (m, body) => {
 });
 on("GET", "/app/api/questions/:id/reports", (m) => {
   const q = questionOr404(m.groups!.id!);
-  return { canResolve: true, items: [...(reportsOf.get(q.id) ?? [])].sort((a, b) => Number(!!a.resolvedAt) - Number(!!b.resolvedAt)) };
+  return [...(reportsOf.get(q.id) ?? [])].sort((a, b) => Number(!!a.resolvedAt) - Number(!!b.resolvedAt));
 });
 on("POST", "/app/api/questions/:id/reports", (m, body) => {
   const q = questionOr404(m.groups!.id!);

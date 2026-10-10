@@ -117,14 +117,7 @@ export {
   hardDeleteQuestion,
   copyQuestion,
 } from "./questionWrite.js";
-export {
-  closeReportsOf,
-  createReport,
-  listReports,
-  openReportCounts,
-  resolveReport,
-  type ReportViewer,
-} from "./reports.js";
+export { createReport, listReports, resolveReport } from "./reports.js";
 export type { UsingCourse } from "./move.js";
 export {
   MoveNameTaken,

@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { QUESTION_TABS } from "@quiz/domain";
+import { QUESTION_TABS } from "@quiz/domain";
 
 import { editorSlot, useAssistEditor } from "../assist/editor";
 import { useT } from "../i18n";
@@ -141,13 +141,14 @@ function useQuestionCrumbs(origin: Origin | null, poolId: string | undefined, po
  */
 
 type Tab = (typeof QUESTION_TABS)[number];
+const isTab = (v: string): v is Tab => (QUESTION_TABS as readonly string[]).includes(v);
 
 export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const [rawTab, setTab] = useSearchParam("tab", "edit");
-  const tab: Tab = rawTab === "try" || rawTab === "versions" || rawTab === "reports" ? rawTab : "edit";
+  const tab: Tab = isTab(rawTab) ? rawTab : "edit";
   const { detail, pool, poolId, readOnly, draft, setDraft, autosave, issues, edited, savedStamp } =
     useQuestionDraft(id);
   const [publishing, setPublishing] = useState(false);
@@ -247,7 +248,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         onPublish={startPublish}
         onDuplicate={() => duplicate(data.meta)}
         onDelete={() => void askDelete(data.meta)}
-        openReports={reports.data?.items.filter((r) => !r.resolvedAt).length ?? 0}
+        openReports={reports.data?.filter((r) => !r.resolvedAt).length ?? 0}
         onReport={() => setReporting(true)}
       />
 
@@ -261,8 +262,8 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
           { value: "try", label: t("question.tab.try") },
           { value: "versions", label: t("question.tab.versions"), count: data.versions.length },
           // Only when there is something to read: a reader sees their own, a writer all of them.
-          ...(reports.data && reports.data.items.length > 0
-            ? [{ value: "reports" as const, label: t("question.tab.reports"), count: reports.data.items.length }]
+          ...(reports.data && reports.data.length > 0
+            ? [{ value: "reports" as const, label: t("question.tab.reports"), count: reports.data.length }]
             : []),
         ]}
       />
@@ -288,7 +289,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       ) : tab === "try" ? (
         <TryPanel questionId={id} type={data.meta.type} />
       ) : tab === "reports" ? (
-        <QuestionReportsTab questionId={id} poolId={data.meta.poolId} />
+        <QuestionReportsTab questionId={id} poolId={data.meta.poolId} canResolve={!readOnly} />
       ) : (
         <VersionHistory questionId={id} versions={data.versions} />
       )}

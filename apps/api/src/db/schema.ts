@@ -26,7 +26,6 @@ export * from "./system.js";
 export * from "./kiosk.js";
 export * from "./llm.js";
 export * from "./assist.js";
-export * from "./report.js";
 export * from "./review.js";
 export * from "./importClassroom.js";
 export * from "./concept.js";

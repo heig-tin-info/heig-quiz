@@ -20,9 +20,8 @@ export function reportRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     "/app/api/questions/:id/reports",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: onQuestion() }, async ({ req, scope }) => {
-      const canResolve = await seesAllReports(req, scope.pool);
-      const items = await service.listReports(app.db, scope.question.id, { id: req.user!.id, seesAll: canResolve });
-      return { canResolve, items };
+      const seesAll = await seesAllReports(req, scope.pool);
+      return service.listReports(app.db, scope.question.id, { id: req.user!.id, seesAll });
     }),
   );
 
@@ -30,8 +29,7 @@ export function reportRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     "/app/api/questions/:id/reports",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, body: ReportCreate, load: onQuestion() }, async ({ req, reply, body, scope }) => {
-      // A deleted question is gone for the reader: the same 404 a missing one gets.
-      if (scope.question.deletedAt) return reply.code(404).send({ error: "not_found" });
+      // A deleted question is the 404 of a missing one (`createReport`).
       const report = await service.createReport(app.db, {
         question: scope.question,
         pool: scope.pool,
@@ -43,9 +41,7 @@ export function reportRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
         poolId: scope.pool.id,
       });
       poolChanged(scope.pool.id);
-      const mine = { id: req.user!.id, seesAll: false };
-      const row = (await service.listReports(app.db, scope.question.id, mine)).find((r) => r.id === report.id);
-      return reply.code(201).send(row);
+      return reply.code(201).send(report);
     }),
   );
 

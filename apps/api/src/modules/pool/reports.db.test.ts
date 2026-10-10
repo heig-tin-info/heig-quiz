@@ -52,10 +52,9 @@ const report = (who: Actor, question: string, message = "The key is wrong") =>
   call(who, "POST", `/app/api/questions/${question}/reports`, { message });
 
 const reportsOf = async (who: Actor, question: string) =>
-  (await call(who, "GET", `/app/api/questions/${question}/reports`)).json<{
-    canResolve: boolean;
-    items: { id: string; mine: boolean; message: string; resolvedAt: string | null; resolution: string }[];
-  }>();
+  (await call(who, "GET", `/app/api/questions/${question}/reports`)).json<
+    { id: string; mine: boolean; message: string; resolvedAt: string | null; resolution: string }[]
+  >();
 
 const bellsOf = (userId: string, kind: string) =>
   server.app.db
@@ -104,8 +103,8 @@ describe("who may report", () => {
   it("never serves a student", async () => {
     const student = await server.signIn("student");
     const q = await newQuestion("student-q");
-    expect((await report(student, q)).statusCode).toBeGreaterThanOrEqual(400);
-    expect((await call(student, "GET", `/app/api/questions/${q}/reports`)).statusCode).toBeGreaterThanOrEqual(400);
+    expect((await report(student, q)).statusCode).toBe(403);
+    expect((await call(student, "GET", `/app/api/questions/${q}/reports`)).statusCode).toBe(403);
   });
 
   it("refuses an empty message and one over 1000 characters", async () => {
@@ -123,13 +122,11 @@ describe("who reads which report", () => {
     await report(contributor, q, "from the contributor");
 
     const asOwner = await reportsOf(owner, q);
-    expect(asOwner.canResolve).toBe(true);
-    expect(asOwner.items.map((r) => r.message).sort()).toEqual(["from the contributor", "from the reader"]);
+    expect(asOwner.map((r) => r.message).sort()).toEqual(["from the contributor", "from the reader"]);
 
     const asReader = await reportsOf(reader, q);
-    expect(asReader.canResolve).toBe(false);
-    expect(asReader.items.map((r) => r.message)).toEqual(["from the reader"]);
-    expect(asReader.items[0]!.mine).toBe(true);
+    expect(asReader.map((r) => r.message)).toEqual(["from the reader"]);
+    expect(asReader[0]!.mine).toBe(true);
   });
 
   it("counts the open reports the caller may read on the question row", async () => {
@@ -186,7 +183,7 @@ describe("resolving", () => {
     const id = (await report(reader, q)).json<{ id: string }>().id;
     const url = `/app/api/questions/${q}/reports/${id}/resolve`;
     expect((await call(owner, "POST", url, { reply: "Thanks, fixed" })).statusCode).toBe(200);
-    const mine = (await reportsOf(reader, q)).items[0]!;
+    const mine = (await reportsOf(reader, q))[0]!;
     expect(mine.resolvedAt).not.toBeNull();
     expect(mine.resolution).toBe("Thanks, fixed");
     expect((await call(owner, "POST", url, {})).statusCode).toBe(409);
@@ -221,7 +218,7 @@ describe("moves and deletion", () => {
     const rows = await server.app.db.select().from(questionReports).where(eq(questionReports.questionId, q));
     expect(rows).toHaveLength(1);
     expect(rows[0]!.resolvedAt).toBeNull();
-    expect((await reportsOf(owner, q)).items).toHaveLength(1);
+    expect((await reportsOf(owner, q))).toHaveLength(1);
   });
 
   it("closes the open reports of a soft-deleted question, without a resolver", async () => {

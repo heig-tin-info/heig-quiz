@@ -37,9 +37,5 @@ export const QuestionReportRow = z.object({
 export type QuestionReportRow = z.infer<typeof QuestionReportRow>;
 
 /** `GET /app/api/questions/:id/reports`: the reports the caller may read, open ones first. */
-export const QuestionReports = z.object({
-  /** The caller may resolve them (a writer of the pool, or Super Powers). */
-  canResolve: z.boolean(),
-  items: z.array(QuestionReportRow),
-});
+export const QuestionReports = z.array(QuestionReportRow);
 export type QuestionReports = z.infer<typeof QuestionReports>;

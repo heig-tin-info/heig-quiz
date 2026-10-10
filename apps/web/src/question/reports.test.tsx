@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { QuestionReportRow, QuestionReports } from "@quiz/contracts";
+import type { QuestionReportRow } from "@quiz/contracts";
 
 import { ReportBadge } from "../pool/ReportBadge";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
@@ -29,8 +29,6 @@ const report = (over: Partial<QuestionReportRow> = {}): QuestionReportRow => ({
   ...over,
 });
 
-const list = (canResolve: boolean, items: QuestionReportRow[]): QuestionReports => ({ canResolve, items });
-
 describe("ReportBadge", () => {
   it("says nothing when no report is open", () => {
     renderWithProviders(<ReportBadge count={0} />);
@@ -51,10 +49,10 @@ describe("ReportBadge", () => {
 describe("QuestionReportsTab", () => {
   it("offers a writer the Resolve action, and sends the optional reply", async () => {
     const { calls } = mockFetch({
-      [`GET /app/api/questions/${Q}/reports`]: ok(list(true, [report()])),
+      [`GET /app/api/questions/${Q}/reports`]: ok([report()]),
       [`POST /app/api/questions/${Q}/reports/${report().id}/resolve`]: ok({ ok: true }),
     });
-    renderWithProviders(<QuestionReportsTab questionId={Q} poolId={P} />);
+    renderWithProviders(<QuestionReportsTab questionId={Q} poolId={P} canResolve />);
     expect(await screen.findByText("The key is wrong")).toBeInTheDocument();
     expect(screen.getByText("Marc Dupont")).toBeInTheDocument();
 
@@ -69,30 +67,28 @@ describe("QuestionReportsTab", () => {
 
   it("gives a reporter who does not write no action", async () => {
     mockFetch({
-      [`GET /app/api/questions/${Q}/reports`]: ok(list(false, [report({ mine: true, reporterName: "Me" })])),
+      [`GET /app/api/questions/${Q}/reports`]: ok([report({ mine: true, reporterName: "Me" })]),
     });
-    renderWithProviders(<QuestionReportsTab questionId={Q} poolId={P} />);
+    renderWithProviders(<QuestionReportsTab questionId={Q} poolId={P} canResolve={false} />);
     expect(await screen.findByText("You")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Resolve" })).toBeNull();
   });
 
   it("shows a resolved report with its reply and who closed it", async () => {
     mockFetch({
-      [`GET /app/api/questions/${Q}/reports`]: ok(
-        list(true, [
-          report({ resolvedAt: "2026-10-09T09:00:00.000Z", resolvedByName: "Yves", resolution: "Done" }),
-        ]),
-      ),
+      [`GET /app/api/questions/${Q}/reports`]: ok([
+        report({ resolvedAt: "2026-10-09T09:00:00.000Z", resolvedByName: "Yves", resolution: "Done" }),
+      ]),
     });
-    renderWithProviders(<QuestionReportsTab questionId={Q} poolId={P} />);
+    renderWithProviders(<QuestionReportsTab questionId={Q} poolId={P} canResolve />);
     expect(await screen.findByText("Resolved by Yves")).toBeInTheDocument();
     expect(screen.getByText("Done")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Resolve" })).toBeNull();
   });
 
   it("says so when there is nothing to read", async () => {
-    mockFetch({ [`GET /app/api/questions/${Q}/reports`]: ok(list(true, [])) });
-    renderWithProviders(<QuestionReportsTab questionId={Q} poolId={P} />);
+    mockFetch({ [`GET /app/api/questions/${Q}/reports`]: ok([]) });
+    renderWithProviders(<QuestionReportsTab questionId={Q} poolId={P} canResolve />);
     expect(await screen.findByText("No report on this question.")).toBeInTheDocument();
   });
 });
