@@ -143,6 +143,27 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
     expect(type.studentSchema.safeParse(student).success).toBe(true);
   });
 
+  /*
+   * ADR-097: what a student sends and reads back is in the coordinates of the
+   * view they were served; what is stored is canonical. Over every view, the
+   * two conversions are each other's inverse on the fixture's answers, and
+   * what the student reads back still parses under the type's own schema.
+   */
+  it.each(VIEWS)("round-trips its answers through the student's view (seed $seed, shuffle $shuffle)", (view) => {
+    for (const stored of fixture.answers ?? []) {
+      const answer = type.answerSchema.parse(stored);
+      const shown = type.toStudentAnswer ? type.toStudentAnswer(fixture.config, view, answer) : answer;
+      expect(type.answerSchema.safeParse(shown).success).toBe(true);
+      const back = type.fromStudentAnswer ? type.fromStudentAnswer(fixture.config, view, shown) : shown;
+      expect(back).toEqual(answer);
+    }
+  });
+
+  it("converts the answer in both directions or in neither (ADR-097)", () => {
+    expect(type.fromStudentAnswer === undefined).toBe(type.toStudentAnswer === undefined);
+    if (type.fromStudentAnswer) expect(fixture.answers?.length ?? 0).toBeGreaterThan(0);
+  });
+
   it("serves its empty draft to the preview: no forbidden key, a valid student view", () => {
     const student = type.toStudent(type.emptyDraft(), { seed: 0, itemId: "item-1", shuffle: true });
     expect(findStudentLeaks(student, { forbiddenKeys })).toEqual([]);

@@ -15,16 +15,15 @@ import {
   type RunnerRequest,
   type RunnerService,
 } from "@quiz/core/server";
-import { shuffle } from "@quiz/core/rng";
 import { compilesPerMinute } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { loadConfig, typeOf } from "../pool/config.js";
-import { itemInstance } from "../pool/service.js";
+import { typeOf } from "../pool/config.js";
 import type { EvaluationRecord } from "../evaluation/service.js";
 import { gradeDefaults, joinedItem } from "../evaluation/service.js";
 import * as events from "./events.js";
-import { studentView } from "./studentView.js";
+import { attemptItemView } from "./itemView.js";
+import { answerFromStudent, studentViewOf } from "./studentView.js";
 import {
   runButton,
   runnableView,
@@ -83,10 +82,12 @@ async function attemptRunContext<T>(
   if (!joined) throw new LiveError("not_found");
 
   const type = typeOf(joined.question.type);
-  const { version } = itemInstance(joined, attempt);
-  const student = runnableView(
-    studentView({ type: joined.question.type, version, seed: attempt.seed, itemId, shuffle: false }),
-  );
+  // The item as this attempt was served it (ADR-097): its instance, and the
+  // view the answer below names its parts in.
+  // A runnable type is never shuffleable: the run's cases and the answer
+  // read the one view alike.
+  const { config, view } = attemptItemView(evaluation, joined, attempt);
+  const student = runnableView(studentViewOf(joined.question.type, config, view));
   const capability = input.capability(type, student);
   if (capability === undefined) throw new LiveError("not_runnable");
 
@@ -103,10 +104,11 @@ async function attemptRunContext<T>(
   });
   if (used >= limit) throw new RateLimited(60);
 
-  const answer = type.answerSchema.safeParse(input.answer);
-  if (!answer.success) throw new AnswerInvalid(answer.error.issues);
-
-  const config: unknown = loadConfig(joined.question.type, version);
+  // Run on the canonical answer, as the grading pass reads the stored one. A
+  // runnable type never converts today, so no marker is sent; one that did
+  // on a shuffled view would be refused, never silently misread.
+  const entry = answerFromStudent(joined.question.type, config, view, input.answer);
+  if ("issues" in entry) throw new AnswerInvalid(entry.issues);
   const ctx: FinalizeContext = {
     seed: attempt.seed,
     itemId,
@@ -117,7 +119,7 @@ async function attemptRunContext<T>(
     // must not be scored under a different policy than the final grading.
     defaults: gradeDefaults(evaluation),
   };
-  return { type, capability, student, config, answer: answer.data as unknown, ctx };
+  return { type, capability, student, config, answer: entry.answer, ctx };
 }
 
 /**

@@ -17,9 +17,16 @@
  *      Step 3 is defence in depth: a type that respects its contract loses
  *      nothing to it, and a type that slips gains no reach.
  */
+import {
+  ANSWER_COORDINATES,
+  issuesOf,
+  NOT_ZOD_ISSUE,
+  type AnswerCoordinates,
+  type ZodIssueLite,
+} from "@quiz/contracts";
 import { COMMON_FORBIDDEN_STUDENT_KEYS, type StudentView } from "@quiz/core/server";
 
-import { loadConfig, TemplateRead, typeOf, type StaticVersion } from "../pool/config.js";
+import { loadConfig, typeOf, type StaticVersion } from "../pool/config.js";
 
 /**
  * Keys a student payload may never carry, whatever produced it.
@@ -100,7 +107,7 @@ interface StudentViewInput {
   seed: number;
   /** `evaluation_items.id`: the shuffle stream is per item, not per question. */
   itemId: string;
-  /** `settings.shuffleChoices` AND the question's own `shuffleable` flag. */
+  /** Whether the choices are shuffled: on the student path, `attemptItemView` decides (ADR-097). */
   shuffle: boolean;
   /**
    * The evaluation's per-type settings (`gradeDefaults`), for a view built
@@ -189,14 +196,51 @@ export function studentSolutionViewOf(type: string, config: unknown, view: Stude
   return t.studentSolution ? t.studentSolution(solution, config) : solution;
 }
 
-/** `type.shuffleable(config)`: whether shuffling means anything for this one. */
-export function isShuffleable(type: string, version: StaticVersion): boolean {
+/** An answer a student sent, read: canonical, or the reasons it is refused (`422 answer_invalid`). */
+export type AnswerEntry = { answer: unknown } | { issues: ZodIssueLite[] };
+
+const refused = (message: string): AnswerEntry => ({ issues: [{ path: [], code: NOT_ZOD_ISSUE, message }] });
+
+/**
+ * ADR-097: THE single entry of an answer a student sent, as
+ * {@link studentViewOf} is the single exit of a question — so no caller can
+ * read an answer without converting it. It parses `raw` with the type's
+ * `answerSchema`, then brings it from the coordinates of the view the student
+ * was served back to the canonical answer that is stored and graded. Refused:
+ *   - a payload the schema does not accept;
+ *   - on a view that shuffles a type that converts, a write without the
+ *     `coordinates` marker (`AnswerCoordinates`): it comes from a client
+ *     built before ADR-097, which named choices by canonical index;
+ *   - a position `view` does not have — never dropped silently.
+ * A `null` answer ("not answered") is the caller's to handle before.
+ */
+export function answerFromStudent(
+  type: string,
+  config: unknown,
+  view: StudentView,
+  raw: unknown,
+  /** The client's marker; absent, a converting type on a shuffled view is refused. */
+  coordinates?: AnswerCoordinates,
+): AnswerEntry {
   const t = typeOf(type);
-  try {
-    return t.shuffleable(loadConfig(type, version));
-  } catch (error) {
-    // A template is a programming error, not an unshuffleable question.
-    if (error instanceof TemplateRead) throw error;
-    return false;
-  }
+  const parsed = t.answerSchema.safeParse(raw);
+  if (!parsed.success) return { issues: issuesOf(parsed.error) };
+  if (!t.fromStudentAnswer) return { answer: parsed.data };
+  if (view.shuffle && coordinates !== ANSWER_COORDINATES) return refused("answer.coordinates_missing");
+  const canonical: unknown = t.fromStudentAnswer(config, view, parsed.data);
+  return canonical === null ? refused("answer.position_not_in_view") : { answer: canonical };
+}
+
+/**
+ * ADR-097: a STORED answer, canonical, in the coordinates of `view` — for
+ * every reply that hands a student their own answer back. A payload the type's
+ * `answerSchema` no longer reads is withheld (`null`) by a type that converts:
+ * it cannot be put in view coordinates, so it must not travel as if it were.
+ */
+export function answerToStudent(type: string, config: unknown, view: StudentView, stored: unknown): unknown {
+  if (stored === null || stored === undefined) return null;
+  const t = typeOf(type);
+  if (!t.toStudentAnswer) return stored;
+  const parsed = t.answerSchema.safeParse(stored);
+  return parsed.success ? t.toStudentAnswer(config, view, parsed.data) : null;
 }

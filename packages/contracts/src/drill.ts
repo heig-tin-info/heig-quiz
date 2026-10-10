@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { DRILL_CORRECTNESSES, DRILL_DEVICE_CLASSES } from "@quiz/domain";
 
+import { AnswerCoordinates } from "./common.js";
 import { ConceptRef } from "./concept.js";
 
 /** The pointer a review was made with (`useCoarsePointer`): `coarse` is a phone or a tablet. */
@@ -99,6 +100,8 @@ export const DrillAnswerBody = z.object({
   answer: z.unknown(),
   deviceClass: DrillDeviceClass,
   confidence: DrillConfidence.nullable().optional(),
+  /** ADR-097: the choices of `answer` are displayed positions (`AnswerCoordinates`). */
+  coordinates: AnswerCoordinates.optional(),
 });
 export type DrillAnswerBody = z.infer<typeof DrillAnswerBody>;
 

@@ -29,6 +29,7 @@
 import { randomInt } from "node:crypto";
 
 import type {
+  AnswerCoordinates,
   EvaluationPreview,
   ItemPreview,
   PreviewCorrection,
@@ -68,14 +69,13 @@ import {
 } from "../evaluation/service.js";
 import { verdictOf } from "../grading/service.js";
 import * as live from "../live/service.js";
-import { studentSolutionView, studentView, teacherPreviewView } from "../live/studentView.js";
 import {
   runButton,
   runnableView,
   visibleRunRequest,
   visibleRunResult,
 } from "../live/visibleRun.js";
-import { hasKey, loadConfig, typeOf, type StaticVersion } from "../pool/config.js";
+import { hasKey, typeOf } from "../pool/config.js";
 import { explanationOrNull, instanceOf } from "../pool/service.js";
 
 // --- Failures -------------------------------------------------------------
@@ -189,7 +189,7 @@ export async function itemPreview(
     type: input.type,
     versionNumber: joined.version.number ?? 0,
     points: joined.item.points,
-    student: studentView(input),
+    student: live.studentView(input),
   };
 }
 
@@ -204,14 +204,14 @@ export async function itemSolution(
   itemId: string,
 ): Promise<PreviewSolution> {
   const { input, explanation } = await previewedItem(db, evaluation, itemId);
-  return { solution: studentSolutionView(input), explanation: explanationOrNull(explanation) };
+  return { solution: live.studentSolutionView(input), explanation: explanationOrNull(explanation) };
 }
 
 /** One item at its frozen version, in the teacher preview's view. */
 async function previewedItem(db: Db, evaluation: EvaluationRecord, itemId: string) {
   const joined = await joinedItem(db, evaluation.id, itemId);
   if (!joined) throw notFound();
-  const view = teacherPreviewView(joined.item.id);
+  const view = live.teacherPreviewView(joined.item.id);
   // A parameterized question shows the instance of the view's seed (ADR-056).
   const { version, explanation } = instanceOf(joined.question.type, joined.version, view);
   return {
@@ -223,22 +223,24 @@ async function previewedItem(db: Db, evaluation: EvaluationRecord, itemId: strin
 
 // --- Running ------------------------------------------------------------------
 
-/** One item of the evaluation, with its config read through the ONE pipeline. */
+/**
+ * One item of the evaluation as the preview of `seed` shows it: the one view
+ * of an attempt's item (ADR-097), on the instance of that seed — the preview
+ * stores nothing, so the values are drawn again (ADR-056 §5).
+ */
 async function previewItem(db: Db, evaluation: EvaluationRecord, itemId: string, seed: number) {
   const joined = await joinedItem(db, evaluation.id, itemId);
   // An item of another evaluation is indistinguishable from none (invariant 6).
   if (!joined) throw notFound();
-  // The preview stores nothing: the instance of its seed, drawn again (ADR-056 §5).
-  const { version } = instanceOf(joined.question.type, joined.version, { seed, itemId });
+  const { config, view } = live.attemptItemView(evaluation, joined, { seed, instances: {} });
   return {
     joined,
     type: typeOf(joined.question.type),
-    config: loadConfig(joined.question.type, version) as unknown,
+    config,
+    view,
     // What the Run button may see: the published half, never the hidden one.
-    // No shuffle: a run is about cases, and `live/runs.ts` reads it the same way.
-    student: runnableView(
-      studentView({ type: joined.question.type, version, seed, itemId, shuffle: false }),
-    ),
+    // A runnable type is never shuffleable, as `live/runs.ts` reads it too.
+    student: runnableView(live.studentViewOf(joined.question.type, config, view)),
   };
 }
 
@@ -324,7 +326,7 @@ export async function simulatePreview(
   },
 ): Promise<RunnerOutcome> {
   const { evaluation, now } = input;
-  const { joined, type, config, student } = await previewItem(db, evaluation, input.itemId, input.seed);
+  const { joined, type, config, view, student } = await previewItem(db, evaluation, input.itemId, input.seed);
   // The second test is implied by the first; it is there for TypeScript's narrowing.
   if (runButton(type, student) !== "simulate" || !type.interactiveRequest) throw notRunnable();
   budget.spend(
@@ -332,13 +334,12 @@ export async function simulatePreview(
     student.simulationsPerMinute ?? student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE,
     now,
   );
-  const answer = type.answerSchema.safeParse(input.answer);
-  if (!answer.success) {
-    throw new PreviewError("answer_invalid", 422, { details: answer.error.issues });
-  }
+  // In the view the preview player showed, back to canonical (ADR-097).
+  const entry = live.answerFromStudent(joined.question.type, config, view, input.answer);
+  if ("issues" in entry) throw new PreviewError("answer_invalid", 422, { details: entry.issues });
   const built = type.interactiveRequest(
     config,
-    answer.data,
+    entry.answer,
     finalizeContext(evaluation, joined, input.seed, now),
   );
   if (built === null) {
@@ -369,19 +370,18 @@ async function gradeItem(
   evaluation: EvaluationRecord,
   item: JoinedItem,
   seed: number,
-  version: StaticVersion,
+  /**
+   * The item as the preview player showed it (`attemptItemView`, ADR-097):
+   * its instance's config, and the view the answer names positions in.
+   */
+  shown: Pick<ReturnType<typeof live.attemptItemView>, "config" | "view">,
+  coordinates: AnswerCoordinates | undefined,
   payload: unknown,
   now: Date,
   log: (err: unknown, msg: string) => void,
 ): Promise<ItemOutcome> {
   const type = typeOf(item.question.type);
-  let config: unknown;
-  try {
-    config = loadConfig(item.question.type, version);
-  } catch (err) {
-    log(err, "preview: unreadable question config");
-    return ungraded("grader_error");
-  }
+  const { config, view } = shown;
   // An opinion question has nothing to be right about (ADR-014 addendum).
   if (!hasKey(item.question.type, config)) return ungraded("no_key");
   // F-GRADE-01: an item never touched is worth zero, and it is settled.
@@ -389,9 +389,10 @@ async function gradeItem(
 
   let answer: unknown = null;
   if (payload !== null) {
-    const parsed = type.answerSchema.safeParse(payload);
-    if (!parsed.success) return { status: "answer_invalid", points: 0, details: null };
-    answer = parsed.data;
+    // Graded canonical, as the grading pass reads a stored answer.
+    const entry = live.answerFromStudent(item.question.type, config, view, payload, coordinates);
+    if ("issues" in entry) return { status: "answer_invalid", points: 0, details: null };
+    answer = entry.answer;
   }
 
   const ctx = finalizeContext(evaluation, item, seed, now);
@@ -445,6 +446,8 @@ export async function gradePreview(
     userId: string;
     seed: number;
     answers: Readonly<Record<string, unknown>>;
+    /** ADR-097: the client's `AnswerCoordinates` marker. */
+    coordinates?: AnswerCoordinates | undefined;
     now: Date;
     log: (err: unknown, msg: string) => void;
   },
@@ -467,10 +470,21 @@ export async function gradePreview(
     // preview): there is nothing left to grade, and no reason to fail.
     if (!item) continue;
     const payload = answers.has(shown.id) ? answers.get(shown.id) : undefined;
-    // The instance the player showed: the same seed draws the same values (ADR-056 §5).
-    const instance = instanceOf(item.question.type, item.version, { seed, itemId: shown.id });
-    const { version } = instance;
-    const outcome = await gradeItem(input.runner, evaluation, item, seed, version, payload, now, input.log);
+    // The instance and the view the player showed: the same seed draws the
+    // same values (ADR-056 §5) and the same shuffle (ADR-097).
+    const served = live.attemptItemView(evaluation, item, { seed, instances: {} });
+    const { instance } = served;
+    const outcome = await gradeItem(
+      input.runner,
+      evaluation,
+      item,
+      seed,
+      served,
+      input.coordinates,
+      payload,
+      now,
+      input.log,
+    );
     if (outcome.points !== null) scored.push(outcome.points);
     // An answer to grade by hand is expected, not a failure: not counted here.
     if (!["graded", "no_key", "manual"].includes(outcome.status)) pending += 1;
@@ -490,9 +504,8 @@ export async function gradePreview(
       answer: payload ?? null,
       // As the student's own feedback page builds it (`results/service.ts`):
       // the student's key, without what stays the teacher's (ADR-037).
-      solution: outcome.status === "no_key"
-        ? null
-        : studentSolutionView({ type: item.question.type, version, seed, itemId: shown.id }),
+      // In the view the answer names its choices in (ADR-097).
+      solution: outcome.status === "no_key" ? null : live.studentSolutionViewOf(item.question.type, served.config, served.view),
       explanation: explanationOrNull(instance.explanation),
       details: outcome.details ?? null,
       ...(outcome.comment === undefined ? {} : { comment: outcome.comment }),

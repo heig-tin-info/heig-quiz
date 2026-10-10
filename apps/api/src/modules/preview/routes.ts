@@ -185,6 +185,7 @@ export async function previewPlugin(app: FastifyInstance) {
           userId: req.user!.id,
           seed: body.seed,
           answers: body.answers,
+          coordinates: body.coordinates,
           now,
           log: (err, msg) => req.log.error({ err }, msg),
         }),

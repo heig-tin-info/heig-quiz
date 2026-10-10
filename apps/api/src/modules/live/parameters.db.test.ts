@@ -25,7 +25,7 @@ import { formatValue } from "@quiz/domain/parameters";
 
 import { attempts, evaluations, gradings, questions } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
-import { seedLive, type Seeded } from "../../test/live.js";
+import { seedLive, shownAnswer, type Seeded } from "../../test/live.js";
 import {
   EXPLANATION,
   showsKey,
@@ -67,11 +67,17 @@ async function answer(who: { headers: Record<string, string> }, attemptId: strin
     method: "PUT",
     url: `/app/api/attempts/${attemptId}/answers/${itemOf.get(kind)}`,
     headers: who.headers,
-    payload: { payload, revision: 1, clientTs: server.clock.now().toISOString() },
+    payload: { payload, revision: 1, clientTs: server.clock.now().toISOString(), coordinates: "position" },
   });
   expect(res.statusCode).toBe(200);
   // The autosave's answer is a student payload too.
   expect(markersIn(res.body)).toEqual([]);
+}
+
+/** The mcq's canonical choices `selected` as this attempt's student names them (ADR-097). */
+async function shownMcq(attemptId: string, selected: number[]): Promise<unknown> {
+  const [row] = await server.app.db.select().from(attempts).where(eq(attempts.id, attemptId));
+  return shownAnswer(server.app.db, seed.evaluationId, itemOf.get("mcq")!, row!, { selected });
 }
 
 async function setPolicy(patch: Partial<FeedbackPolicy>): Promise<void> {
@@ -168,10 +174,11 @@ describe("the attempt (ADR-056 §5, invariant 4)", () => {
     const bobAttempt = attemptOf.get("bob")!;
     const t = fallOf((await valuesOf(aliceAttempt, "short")).values);
     const tCloze = fallOf((await valuesOf(aliceAttempt, "cloze")).values);
-    await answer(alice, aliceAttempt, "mcq", { selected: [0] });
+    // Choices are named by their displayed position (ADR-097): canonical 0 is the key.
+    await answer(alice, aliceAttempt, "mcq", await shownMcq(aliceAttempt, [0]));
     await answer(alice, aliceAttempt, "short", { text: t });
     await answer(alice, aliceAttempt, "cloze", { blanks: [tCloze] });
-    await answer(bob, bobAttempt, "mcq", { selected: [1] });
+    await answer(bob, bobAttempt, "mcq", await shownMcq(bobAttempt, [1]));
     await answer(bob, bobAttempt, "short", { text: "0" });
     await answer(bob, bobAttempt, "cloze", { blanks: ["0"] });
 

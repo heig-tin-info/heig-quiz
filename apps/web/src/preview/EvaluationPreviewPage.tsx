@@ -34,6 +34,7 @@ import {
   PreviewGradeBody,
   type EvaluationPreview,
   type PreviewCorrection,
+  ANSWER_COORDINATES,
 } from "@quiz/contracts";
 
 import { api, isNotFound } from "../api";
@@ -96,7 +97,7 @@ export function EvaluationPreviewPage({
     mutationFn: (input: { seed: number; answers: Record<string, unknown> }) =>
       api<PreviewCorrection>(`/app/api/evaluations/${id}/preview/grade`, {
         method: "POST",
-        body: JSON.stringify(PreviewGradeBody.parse(input)),
+        body: JSON.stringify(PreviewGradeBody.parse({ ...input, coordinates: ANSWER_COORDINATES })),
       }),
     onSuccess: setCorrection,
   });

@@ -77,6 +77,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-040 — Favourite stars on questions: a second per-user preference table](ADR-040-favoris-de-question.md)
 - [ADR-046 — Diagram: one editor engine, one question type, eight notations](ADR-046-type-diagramme.md)
 - [ADR-056 — Parameterized questions: variables drawn per attempt](ADR-056-questions-parametrees.md)
+- [ADR-097 — Transmitted answer and stored answer: a student exchanges choices by displayed position](ADR-097-reponse-transmise-et-reponse-stockee.md)
 - [ADR-081 — Concepts replace tags: one instance-wide, bilingual vocabulary, curated by the admin](ADR-081-vocabulaire-de-notions.md)
 - [ADR-083 — Frequency-domain stimuli for circuit](ADR-083-stimulus-frequentiel-de-circuit.md)
 

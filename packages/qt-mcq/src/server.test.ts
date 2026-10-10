@@ -37,8 +37,13 @@ describe("the contract", () => {
   });
 
   it("hands the key to the feedback path, and only there", () => {
-    expect(mcqServer.toSolution(SECRET_CONFIG, { seed: 1, itemId: "i", shuffle: true })).toEqual({
+    // Canonical under the teacher's unshuffled view; positions otherwise (ADR-097).
+    expect(mcqServer.toSolution(SECRET_CONFIG, { seed: 1, itemId: "i", shuffle: false })).toEqual({
       correct: [1],
+    });
+    const shuffled = { seed: 1, itemId: "i", shuffle: true };
+    expect(mcqServer.toSolution(SECRET_CONFIG, shuffled)).toEqual({
+      correct: [choiceOrder(SECRET_CONFIG, shuffled).indexOf(1)],
     });
   });
 });
@@ -231,5 +236,17 @@ describe("answerMisfit (ADR-026)", () => {
       choices: SECRET_CONFIG.choices.map((c, i) => ({ ...c, correct: i > 0 })),
     });
     expect(mcqServer.answerMisfit!(multiple, { selected: [0, 1, 2] })).toBeNull();
+  });
+
+  // ADR-097: the grader would truncate to the lowest canonical indices, the key's.
+  it("refuses more choices than maxSelections", () => {
+    const capped = McqConfigSchema.parse({
+      ...SECRET_CONFIG,
+      mode: "multiple",
+      choices: SECRET_CONFIG.choices.map((c, i) => ({ ...c, correct: i > 0 })),
+      maxSelections: 2,
+    });
+    expect(mcqServer.answerMisfit!(capped, { selected: [0, 1, 2] })).toBe("mcq.too_many_choices");
+    expect(mcqServer.answerMisfit!(capped, { selected: [0, 2] })).toBeNull();
   });
 });

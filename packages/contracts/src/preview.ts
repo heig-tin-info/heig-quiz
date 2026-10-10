@@ -22,6 +22,7 @@
  */
 import { z } from "zod";
 
+import { AnswerCoordinates } from "./common.js";
 import { GradingScale } from "./evaluation.js";
 import { Verdict } from "./grading.js";
 import { AttemptView, RunBody, SimulateBody } from "./live.js";
@@ -102,6 +103,8 @@ export const PreviewGradeBody = z.object({
   answers: z
     .record(z.uuid(), z.unknown())
     .refine((answers) => Object.keys(answers).length <= 200, "too many answers"),
+  /** ADR-097: the choices of each answer are displayed positions (`AnswerCoordinates`). */
+  coordinates: AnswerCoordinates.optional(),
 });
 export type PreviewGradeBody = z.infer<typeof PreviewGradeBody>;
 

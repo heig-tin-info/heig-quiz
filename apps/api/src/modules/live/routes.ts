@@ -249,6 +249,7 @@ export async function livePlugin(app: FastifyInstance) {
         itemId: params.itemId,
         payload: body.payload,
         revision: body.revision,
+        coordinates: body.coordinates,
         now,
       }),
     ),

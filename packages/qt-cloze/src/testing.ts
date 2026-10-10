@@ -64,4 +64,10 @@ export const clozeLeakFixture: StudentLeakFixture<ClozeConfig> = {
     "value",
   ],
   secrets: SECRET_VALUES,
+  // ADR-097: both dropdowns answered (canonical option indices, D4), and blank.
+  answers: [
+    { blanks: ["Newton", "10", "+=", "0", "N", "2"] },
+    { blanks: ["x", null, "", "3", null, "1"] },
+    { blanks: [] },
+  ],
 };

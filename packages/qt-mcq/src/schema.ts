@@ -108,7 +108,11 @@ export const McqKeylessConfigSchema = McqConfigShape
   );
 export type McqConfig = z.infer<typeof McqConfigSchema>;
 
-/** Canonical indices into `config.choices`, ascending and unique (decision D3). */
+/**
+ * Indices into `config.choices`, ascending and unique: canonical in storage
+ * (decision D3), the displayed positions of the student's view on the wire
+ * (ADR-097).
+ */
 export const McqAnswerSchema = z.object({
   selected: z.array(z.number().int().min(0).max(MCQ_MAX_CHOICES - 1)).max(MCQ_MAX_CHOICES),
 });
@@ -133,9 +137,10 @@ export function choiceLetter(index: number): string {
 }
 
 /**
- * What `toStudent` may emit. `id` is the canonical index and the ARRAY ORDER is
- * the shuffled display order (decision D3): the answer is always canonical, the
- * display never is.
+ * What `toStudent` may emit. The ARRAY ORDER is the shuffled display order and
+ * `id` is the position in it (ADR-097, amending decision D3): the student
+ * sends positions, the server stores canonical indices, and the conversion is
+ * the type's `fromStudentAnswer` / `toStudentAnswer`.
  */
 export const McqStudentSchema = z.object({
   prompt: z.string(),

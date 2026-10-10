@@ -62,7 +62,11 @@ type QuestionLike = Pick<PollTeacherView["question"], "type" | "student" | "solu
 
 /** An mcq choice as the room saw it: its letter, its text, whether it is in the key. */
 export interface ChoiceLike {
-  /** The canonical index, what a tally is keyed by. */
+  /**
+   * The choice's id, which a tally is keyed by: a student view names a choice
+   * by its position (ADR-097), and a poll is never shuffled, so here the
+   * position IS the canonical index the tally counts.
+   */
   id: number;
   letter: string;
   text: string;

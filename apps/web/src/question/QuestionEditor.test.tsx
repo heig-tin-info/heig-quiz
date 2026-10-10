@@ -75,7 +75,6 @@ function mcqDetail(over: Partial<QuestionDetail> = {}): QuestionDetail {
       internalName: "ptr-null-check",
       categoryId: "k1",
       difficulty: 2,
-      shuffleable: true,
       randomizable: false,
       concepts: [{ id: "00000000-0000-4000-8000-0000000000a1", label: "Pointeur", qualifier: "", status: "validated" }],
       createdBy: "u-me",

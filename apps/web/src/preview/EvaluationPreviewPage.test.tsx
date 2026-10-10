@@ -272,8 +272,8 @@ describe("EvaluationPreviewPage", () => {
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Hand in" }));
     await screen.findByRole("heading", { name: "Preview correction" });
     expect(calls.filter((c) => c.url === `${URL}/grade`).map((c) => c.body)).toEqual([
-      { seed: 1, answers: {} },
-      { seed: 2, answers: {} },
+      { seed: 1, answers: {}, coordinates: "position" },
+      { seed: 2, answers: {}, coordinates: "position" },
     ]);
   });
 
@@ -467,6 +467,7 @@ describe("EvaluationPreviewPage — fixing a question", () => {
     expect(calls.find((c) => c.url === `${URL}/grade`)?.body).toEqual({
       seed: 42,
       answers: { [I2]: { selected: [0] } },
+      coordinates: "position",
     });
     open.mockRestore();
   });

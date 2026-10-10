@@ -32,6 +32,10 @@ let teacher: { id: string; headers: Record<string, string> };
 let student: { id: string; headers: Record<string, string> };
 let built: Awaited<ReturnType<typeof gradedEvaluation>>;
 
+/** Where the attempt's view shows "Paris", the key: the student names choices by position (ADR-097). */
+const paris = (student: unknown): number =>
+  (student as { choices: { id: number; text: string }[] }).choices.find((c) => c.text === "Paris")!.id;
+
 /** The key values the student must never read while `showKey` is false. */
 const MCQ_CORRECT = 0;
 const CLOZE_EXPECTED = "Lutece";
@@ -117,7 +121,6 @@ const CONFIGS: Record<string, unknown> = {
 };
 
 const ANSWERS: Record<string, unknown> = {
-  mcq: { selected: [MCQ_CORRECT] },
   short: { text: "Paris" },
   cloze: { blanks: ["Paris"] },
   code: { regions: ["return 42;"] },
@@ -189,8 +192,9 @@ async function gradedEvaluation() {
       url: `/app/api/attempts/${view.attempt.id}/answers/${item.id}`,
       headers: student.headers,
       payload: {
-        payload: ANSWERS[item.type],
+        payload: item.type === "mcq" ? { selected: [paris(item.student)] } : ANSWERS[item.type],
         revision: 1,
+        coordinates: "position",
         clientTs: server.clock.now().toISOString(),
       },
     });
@@ -276,8 +280,11 @@ describe("the answer key never rides in `details` (H1)", () => {
     const item = await feedbackOf("mcq");
     const details = item["details"] as Record<string, unknown>;
     expect(details["correct"]).toBeUndefined();
-    // The student's own score stays: it IS the feedback.
-    expect(details["selected"]).toEqual([MCQ_CORRECT]);
+    // The student's own score stays: it IS the feedback. Their ticks go with
+    // the key — canonical indices would name the teacher's order (ADR-097);
+    // the review reads them in the answer, in the attempt's order.
+    expect(details["selected"]).toBeUndefined();
+    expect(item["answer"]).toEqual({ selected: [paris(built.servedOf("mcq"))] });
     expect(details["fraction"]).toBe(1);
     expect(item["solution"]).toBeNull();
   });
@@ -287,8 +294,10 @@ describe("the answer key never rides in `details` (H1)", () => {
     const details = item["details"] as { perBlank: Record<string, unknown>[] };
     expect(details.perBlank).toHaveLength(1);
     expect(details.perBlank[0]!["expected"]).toBeUndefined();
-    // What the student typed stays; what they should have typed does not.
-    expect(details.perBlank[0]!["given"]).toBe("Paris");
+    // The verdict stays; what they should have typed does not, nor what they
+    // typed, which the answer carries (ADR-097: a dropdown's is canonical).
+    expect(details.perBlank[0]!["given"]).toBeUndefined();
+    expect(item["answer"]).toEqual({ blanks: ["Paris"] });
     expect(details.perBlank[0]!["ok"]).toBe(false);
     expect(JSON.stringify(item["details"])).not.toContain(CLOZE_EXPECTED);
   });

@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 
 import { and, count, eq, getTableColumns, gte, isNull, sql } from "drizzle-orm";
 
-import type { AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
+import type { AnswerCoordinates, AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
 import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer } from "@quiz/core/server";
 import { itemPoints, mayValidate, progressStatus } from "@quiz/domain";
 
@@ -17,10 +17,12 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attemptEvents, attempts, evaluations } from "../../db/schema.js";
 import { typeOf } from "../pool/config.js";
-import { configPerAttempt, itemInstance, loadConfig, type InstanceAttempt } from "../pool/service.js";
+import { configPerAttempt, type InstanceAttempt } from "../pool/service.js";
 import { settingsOf, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
 import { gradeDefaults, joinedItem, joinedItems } from "../evaluation/service.js";
 import { closeShown } from "./dwell.js";
+import { attemptItemView } from "./itemView.js";
+import { answerFromStudent, answerToStudent } from "./studentView.js";
 import * as events from "./events.js";
 import { verdictOf } from "../grading/service.js";
 import { UnavailableRunner } from "../runner/unavailable.js";
@@ -298,23 +300,28 @@ export async function saveAnswer(
     payload: unknown;
     revision: number;
     now: Date;
+    /** ADR-097: the client's `AnswerCoordinates` marker; a server-side writer passes its own. */
+    coordinates?: AnswerCoordinates | undefined;
   },
 ): Promise<AutosaveResponse> {
   const { evaluation, attempt, itemId, revision, now } = input;
   const { joined, current } = await stateTarget(db, evaluation, attempt, itemId, now);
 
-  // Never persist garbage: the type's own schema is the gate (§4.7 step 6).
+  // The view this attempt was served of the item (ADR-097), on this
+  // attempt's own instance of a parameterized question (ADR-056): a poll's,
+  // forced unshuffled, as much as an exam's. Its config is parsed on every
+  // write — the conversion and `answerMisfit` both need it.
+  const { config, view } = attemptItemView(evaluation, joined, attempt);
+  // Never persist garbage: the type's own schema is the gate (§4.7 step 6),
+  // and the one answer entry applies it. From here on the answer is
+  // canonical — checked, stored, graded and counted as such (ADR-097).
   const type = typeOf(joined.question.type);
-  const parsed = type.answerSchema.safeParse(input.payload);
-  if (!parsed.success) throw new AnswerInvalid(parsed.error.issues);
-  const payload = parsed.data;
+  const entry = answerFromStudent(joined.question.type, config, view, input.payload, input.coordinates);
+  if ("issues" in entry) throw new AnswerInvalid(entry.issues);
+  const payload = entry.answer;
   // The rules that need the config (an mcq in `single` mode takes one
   // choice, ADR-026): the same 422 as a malformed payload.
-  // This attempt's own instance of a parameterized question (ADR-056).
-  const misfit = type.answerMisfit?.(
-    loadConfig(joined.question.type, itemInstance(joined, attempt).version),
-    payload,
-  );
+  const misfit = type.answerMisfit?.(config, payload);
   if (misfit) throw new AnswerInvalid([{ message: misfit }]);
   // Issue #89: writing an answer that holds something takes back an "I won't
   // answer". An EMPTY write leaves it alone — a cleared field is not an
@@ -362,11 +369,11 @@ export async function saveAnswer(
 
   if (written.length === 0) {
     // Stale: the row in the database is newer. Hand it back so the client
-    // adopts it (last-writer-wins by revision).
+    // adopts it (last-writer-wins by revision), in the client's coordinates.
     return {
       accepted: false,
       revision: current?.revision ?? 0,
-      payload: current?.payload ?? null,
+      payload: answerToStudent(joined.question.type, config, view, current?.payload),
       serverNow: iso(now),
     };
   }

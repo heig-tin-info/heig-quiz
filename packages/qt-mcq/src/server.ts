@@ -70,6 +70,18 @@ export function choiceOrder(config: McqConfig, view: StudentView): number[] {
   return shuffle(canonical, streamSeed(view.seed, view.itemId, "choices"));
 }
 
+/**
+ * Canonical choice indices in the coordinates of `view` (ADR-097): the
+ * position each one is displayed at, ascending and unique. An index the view
+ * does not show is left out.
+ */
+function toPositions(config: McqConfig, view: StudentView, canonical: readonly number[]): number[] {
+  const order = choiceOrder(config, view);
+  return ascending(canonical.map((index) => order.indexOf(index)).filter((position) => position >= 0));
+}
+
+const ascending = (indices: readonly number[]): number[] => [...new Set(indices)].sort((a, b) => a - b);
+
 export const mcqServer: QuestionTypeServer<
   McqConfig,
   McqAnswer,
@@ -88,11 +100,18 @@ export const mcqServer: QuestionTypeServer<
   /**
    * A `single` question takes one choice. The player cannot send more; a
    * crafted write can, and under negative marking it would otherwise try
-   * the key and a distractor at once (ADR-026). `maxSelections` stays a
-   * grading-time truncation: an answer that is too long is never lost.
+   * the key and a distractor at once (ADR-026). Past `maxSelections` it is
+   * refused as well (ADR-097): the grader keeps the LOWEST canonical indices
+   * of an answer too long, the teacher's first-typed choices, so ticking
+   * every position would let the truncation pick the key. The truncation
+   * stays in the grader, for an answer stored before the rule.
    */
-  answerMisfit: (config, answer) =>
-    config.mode === "single" && new Set(answer.selected).size > 1 ? "mcq.single_one_choice" : null,
+  answerMisfit: (config, answer) => {
+    const ticked = new Set(answer.selected).size;
+    if (config.mode === "single" && ticked > 1) return "mcq.single_one_choice";
+    if (config.maxSelections !== undefined && ticked > config.maxSelections) return "mcq.too_many_choices";
+    return null;
+  },
   studentSchema: McqStudentSchema,
   solutionSchema: McqSolutionSchema,
   detailsSchema: McqDetailsSchema,
@@ -137,7 +156,10 @@ export const mcqServer: QuestionTypeServer<
     const order = choiceOrder(config, view);
     const student: McqStudent = {
       prompt: config.prompt,
-      choices: order.map((id) => ({ id, text: config.choices[id]?.text ?? "" })),
+      // A choice's id is its displayed POSITION (ADR-097): the order the
+      // teacher typed the choices in tends to put the key first, and a
+      // canonical id would name it to anyone reading the network tab.
+      choices: order.map((canonical, id) => ({ id, text: config.choices[canonical]?.text ?? "" })),
       mode: config.mode,
     };
     if (config.maxSelections !== undefined) student.maxSelections = config.maxSelections;
@@ -145,7 +167,21 @@ export const mcqServer: QuestionTypeServer<
     return student;
   },
 
-  toSolution: (config) => ({ correct: correctIndices(config) }),
+  /**
+   * ADR-097: the student ticks displayed positions; the answer is stored,
+   * graded and counted in canonical indices (D3). A position the view does
+   * not have refuses the answer.
+   */
+  fromStudentAnswer(config, view, answer) {
+    const order = choiceOrder(config, view);
+    const selected = answer.selected.map((position) => order[position]);
+    return selected.every((index) => index !== undefined) ? { selected: ascending(selected as number[]) } : null;
+  },
+
+  toStudentAnswer: (config, view, answer) => ({ selected: toPositions(config, view, answer.selected) }),
+
+  /** The key in the view's coordinates (ADR-097): canonical for a teacher's unshuffled view. */
+  toSolution: (config, view) => ({ correct: toPositions(config, view, correctIndices(config)) }),
 
   hasKey: (config) => config.choices.some((choice) => choice.correct),
 
@@ -165,11 +201,13 @@ export const mcqServer: QuestionTypeServer<
    * `details.correct` is the answer key, and the breakdown is served to the
    * student by the feedback policy: it goes when the key is not published.
    * `c`/`C` and `w`/`W` stay — they are the student's own score, which is
-   * what the review shows next to it.
+   * what the review shows next to it. `selected` goes with the key: it is
+   * the student's answer in canonical indices, which would name choices by
+   * the teacher's order (ADR-097); the review reads the answer itself.
    */
   studentDetails(details: McqDetails, policy): unknown {
     if (policy.showKey) return details;
-    const { correct: _correct, ...rest } = details;
+    const { correct: _correct, selected: _selected, ...rest } = details;
     return rest;
   },
 

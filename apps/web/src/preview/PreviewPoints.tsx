@@ -13,7 +13,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { Calculator } from "lucide-react";
 
-import { PreviewGradeBody, type PreviewCorrection, type PreviewItemStatus } from "@quiz/contracts";
+import { PreviewGradeBody, type PreviewCorrection, type PreviewItemStatus, ANSWER_COORDINATES } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { api, apiErrorMessage } from "../api";
@@ -46,7 +46,7 @@ export function PreviewPoints({
       const answers = input.answer === undefined ? {} : { [input.itemId]: input.answer };
       const correction = await api<PreviewCorrection>(
         `/app/api/evaluations/${evaluationId}/preview/grade`,
-        { method: "POST", body: JSON.stringify(PreviewGradeBody.parse({ seed, answers })) },
+        { method: "POST", body: JSON.stringify(PreviewGradeBody.parse({ seed, answers, coordinates: ANSWER_COORDINATES })) },
       );
       return { ...input, correction };
     },

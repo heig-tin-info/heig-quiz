@@ -53,7 +53,8 @@ export type ClozeConfig = z.infer<typeof ClozeConfigSchema>;
 /**
  * One entry per blank, in order of appearance; `null` means untouched.
  * A `select` blank stores the CANONICAL option index as a decimal string, so a
- * shuffled dropdown never changes a stored answer (decision D4).
+ * shuffled dropdown never changes a stored answer (decision D4). On the wire,
+ * to and from a student, it is the option's displayed position (ADR-097).
  */
 export const ClozeAnswerSchema = z.object({
   blanks: z.array(z.string().max(CLOZE_MAX_BLANK_LENGTH).nullable()).max(CLOZE_MAX_BLANKS),

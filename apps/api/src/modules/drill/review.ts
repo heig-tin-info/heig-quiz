@@ -3,8 +3,8 @@
  * session, a card served, the time it stays on screen, and the review.
  *
  * What this file holds by construction:
- *   - a question reaches the student only through `studentView`, its key only
- *     through `studentSolutionView`, after the answer (invariant 4, 06,
+ *   - a question reaches the student only through `studentViewOf`, its key only
+ *     through `studentSolutionViewOf`, after the answer (invariant 4, 06,
  *     question 28 (h));
  *   - every instant is the server's (invariant 5): the serve, each report of
  *     the tab's visibility, the answer. The active time is summed here from
@@ -24,12 +24,14 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 
 import type {
+  AnswerCoordinates,
   DrillCalibrationLevel,
   DrillDeviceClass,
   DrillReviewResult,
   DrillServed,
   DrillSession,
 } from "@quiz/contracts";
+import type { StudentView } from "@quiz/core/server";
 import {
   composeDrillSession,
   drillCalibration,
@@ -67,7 +69,7 @@ import {
 } from "../../db/schema.js";
 import { gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
 import { refusalClass, type Refusal } from "../http.js";
-import { drawSeed, isShuffleable, studentSolutionView, studentView } from "../live/service.js";
+import { answerFromStudent, drawSeed, studentSolutionViewOf, studentViewOf } from "../live/service.js";
 import { ParameterError } from "@quiz/domain/parameters";
 
 import {
@@ -75,7 +77,6 @@ import {
   InstanceMismatch,
   loadConfig,
   typeOf,
-  type StaticVersion,
   type VersionContent,
 } from "../pool/service.js";
 import type { StoredInstance } from "../../db/columns.js";
@@ -101,7 +102,6 @@ function activeCards(db: DbOrTx, where: SQL | undefined) {
     .select({
       card: drillCards,
       type: questions.type,
-      shuffleable: questions.shuffleable,
       courseCode: courses.code,
       courseName: courses.name,
     })
@@ -259,15 +259,16 @@ function reviewInstance(row: ActiveRow, version: VersionContent, seed: number, s
   }
 }
 
-/** The view of one review: the card is the item, so a new seed gives a new shuffle (06, question 28 (d)). */
-function viewOf(row: ActiveRow, version: StaticVersion, seed: number) {
-  return {
-    type: row.type,
-    version,
-    seed,
-    itemId: row.card.id,
-    shuffle: row.shuffleable && isShuffleable(row.type, version),
-  };
+/**
+ * The view of one review: the card is the item, so a new seed gives a new
+ * shuffle (06, question 28 (d)). The serve, the answer and the reveal all
+ * compute it from the same served seed and instance (ADR-097): the student
+ * names choices by position in it, and the key comes back in it. The shuffle
+ * reads the instance's own config only, never the live
+ * `questions.shuffleable` column.
+ */
+function viewOf(row: ActiveRow, config: unknown, seed: number): StudentView {
+  return { seed, itemId: row.card.id, shuffle: typeOf(row.type).shuffleable(config) };
 }
 
 /**
@@ -440,8 +441,9 @@ export async function serveCard(db: Db, userId: string, cardId: string, now: Dat
     .returning({ seed: drillCards.serveSeed, values: drillCards.serveValues });
   const instance =
     fresh && claimed.length > 0 ? fresh : reviewInstance(row, question.version, served!.seed!, served!.values);
-  const view = viewOf(row, instance.version, served!.seed!);
-  return { cardId, type: row.type, student: studentView({ ...view, defaults: question.defaults }) };
+  const config = loadConfig(row.type, instance.version);
+  const view = viewOf(row, config, served!.seed!);
+  return { cardId, type: row.type, student: studentViewOf(row.type, config, { ...view, defaults: question.defaults }) };
 }
 
 /** The credit of the open interval at `now`, capped (ADR-039): SQL on `drill_cards`. */
@@ -490,7 +492,13 @@ export async function answerCard(
   db: Db,
   userId: string,
   cardId: string,
-  input: { answer: unknown; deviceClass: DrillDeviceClass; confidence?: number | null | undefined },
+  input: {
+    answer: unknown;
+    deviceClass: DrillDeviceClass;
+    confidence?: number | null | undefined;
+    /** ADR-097: the client's `AnswerCoordinates` marker. */
+    coordinates?: AnswerCoordinates | undefined;
+  },
   now: Date,
 ): Promise<DrillReviewResult> {
   return db.transaction(async (tx) => {
@@ -505,19 +513,25 @@ export async function answerCard(
     const { row, question } = await servable(tx, userId, cardId, now);
     if (locked.serveSeed === null) throw new DrillError("drill_not_served");
     const type = typeOf(row.type);
-    let answer: unknown = null;
-    if (input.answer !== null && input.answer !== undefined) {
-      const parsed = type.answerSchema.safeParse(input.answer);
-      if (!parsed.success) throw new DrillError("answer_invalid");
-      answer = parsed.data;
-    }
     const card = row.card;
     const seed = locked.serveSeed;
-    const references = await referenceTimes(tx, [card.questionId], input.deviceClass, userId);
-    const referenceMs = references.get(card.questionId) ?? null;
-    // Graded on the values the student was served (ADR-056 §5).
+    // Graded on the values the student was served (ADR-056 §5), in the view
+    // they were served (ADR-097).
     const instance = reviewInstance(row, question.version, seed, locked.serveValues);
     const config = loadConfig(row.type, instance.version);
+    const view = viewOf(row, config, seed);
+    let answer: unknown = null;
+    if (input.answer !== null && input.answer !== undefined) {
+      // The student named displayed positions; stored and graded canonical.
+      const entry = answerFromStudent(row.type, config, view, input.answer, input.coordinates);
+      if ("issues" in entry) throw new DrillError("answer_invalid");
+      // The attempt's rules hold here too: an mcq ticked past `maxSelections`
+      // would be truncated to its lowest canonical indices, the key's (ADR-097).
+      if (type.answerMisfit?.(config, entry.answer)) throw new DrillError("answer_invalid");
+      answer = entry.answer;
+    }
+    const references = await referenceTimes(tx, [card.questionId], input.deviceClass, userId);
+    const referenceMs = references.get(card.questionId) ?? null;
     const result = await type.grade(
       config,
       answer,
@@ -573,7 +587,7 @@ export async function answerCard(
       activeMs,
       referenceMs: referenceMs === null ? null : Math.round(referenceMs),
       dueAt: iso(next.dueAt),
-      solution: studentSolutionView(viewOf(row, instance.version, seed)),
+      solution: studentSolutionViewOf(row.type, config, view),
     };
   });
 }

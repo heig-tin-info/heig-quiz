@@ -80,7 +80,6 @@ import {
   cachedGrades,
   clearRelease,
   feedbackOf,
-  gradeDefaults,
   joinedItems,
   retakePolicyOf,
   retakesEnabled,
@@ -114,10 +113,20 @@ import {
   type PairKey,
   type StudentAttempts,
 } from "../grading/service.js";
-import { answeredBy, orderItems, purgeIntegrityJournal } from "../live/service.js";
-import { solutionView, stripKeys, studentSolutionView, studentView } from "../live/studentView.js";
+import {
+  answeredBy,
+  answerToStudent,
+  attemptItemView,
+  orderItems,
+  purgeIntegrityJournal,
+  solutionView,
+  studentSolutionViewOf,
+  studentView,
+  studentViewOf,
+} from "../live/service.js";
+import { stripKeys } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
-import { exampleInstance, explanationOrNull, isParameterized, itemInstance } from "../pool/service.js";
+import { exampleInstance, explanationOrNull, isParameterized } from "../pool/service.js";
 
 export { watchReleasedGrades } from "./updated.js";
 
@@ -783,21 +792,22 @@ async function reviewedItems(
     .from(gradings)
     .where(and(eq(gradings.attemptId, attempt.id), eq(gradings.state, "validated")));
   const gradingByItem = new Map(graded.map((g) => [g.itemId, g]));
-  const settings = settingsOf(evaluation);
 
   const result: StudentResultItem[] = items.map((item) => {
     const grading = gradingByItem.get(item.item.id) ?? null;
     const answer = byItem.get(item.item.id) ?? null;
     // The student's OWN instance (ADR-056 §9): the values stored with the
     // attempt, in the statement, the key and the explanation alike.
-    const instance = itemInstance(item, attempt);
-    const { version } = instance;
-    const view = {
-      type: item.question.type,
-      version,
-      seed: attempt.seed,
-      itemId: item.item.id,
-    };
+    const { type, instance, config, view: attemptView } = attemptItemView(evaluation, item, attempt);
+    // With the key published, the teacher's order: the review letters its
+    // choices A, B, C… as the wall, the grading table and the live grid do.
+    // With the key hidden, the attempt's own order: the teacher's tends to be
+    // the key's (a categorize tray typed column by column), and the review
+    // has nothing to colour anyway (ADR-033, addendum 2026-10-01). Either
+    // way ONE view, and the question, the answer and the key all leave in
+    // its coordinates (ADR-097); the breakdown names no choice of the
+    // student's while the key is hidden.
+    const view = { ...attemptView, shuffle: attemptView.shuffle && !policy.showKey };
     return {
       itemId: item.item.id,
       position: item.item.position,
@@ -806,25 +816,15 @@ async function reviewedItems(
       maxPoints: item.item.points,
       bonus: item.item.bonus,
       verdict: grading ? verdictOf(grading) : null,
-      student: studentView({
-        ...view,
-        // With the key published, the teacher's order: the review letters
-        // its choices A, B, C… as the wall, the grading table and the live
-        // grid do, and the ticks follow, since an answer is canonical. With
-        // the key hidden, the attempt's own order: the teacher's tends to be
-        // the key's (a categorize tray typed column by column), and the
-        // review has nothing to colour anyway (ADR-033, addendum 2026-10-01).
-        shuffle: !policy.showKey && settings.shuffleChoices && item.question.shuffleable,
-        defaults: gradeDefaults(evaluation),
-      }),
-      answer: policy.showAnswer ? (answer?.payload ?? null) : null,
+      student: studentViewOf(type, config, view),
+      answer: policy.showAnswer ? answerToStudent(type, config, view, answer?.payload) : null,
       // The student's key: the grading criteria stay the teacher's (ADR-037).
-      solution: policy.showKey ? studentSolutionView(view) : null,
+      solution: policy.showKey ? studentSolutionViewOf(type, config, view) : null,
       explanation:
         policy.showExplanation && instance.explanation !== ""
           ? instance.explanation
           : null,
-      details: grading ? filterDetails(item.question.type, grading.details, policy) : null,
+      details: grading ? filterDetails(type, grading.details, policy) : null,
       comment: policy.showTeacherComment ? (grading?.comment ?? null) : null,
     };
   });

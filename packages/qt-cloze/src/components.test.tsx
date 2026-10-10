@@ -71,7 +71,7 @@ describe("ClozePlayer", () => {
     expect(onChange).toHaveBeenCalledWith({ blanks: ["N", null, null, null, null, null] });
   });
 
-  it("stores the canonical option index of a dropdown (decision D4)", async () => {
+  it("sends the id the view gave a dropdown option (ADR-097)", async () => {
     const onChange = vi.fn();
     render(<ClozePlayer student={student} answer={null} onChange={onChange} readOnly={false} />);
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Blank 4" }), "2");

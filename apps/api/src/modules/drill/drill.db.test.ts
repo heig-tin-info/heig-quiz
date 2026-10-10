@@ -10,7 +10,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
@@ -30,7 +30,7 @@ import {
 import { testApp, testDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { fallOf, showsKey, markersIn, PARAMETERIZED, publishParameterized } from "../../test/parameterized.js";
-import { reload, seedLive, type Seeded } from "../../test/live.js";
+import { reload, seedLive, shownAnswer, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import * as live from "../live/service.js";
 
@@ -81,11 +81,15 @@ async function sit(
     const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());
     for (const [index, itemId] of seed.itemIds.entries()) {
       if (opts.blank) break;
+      // The answers are written canonical here; a student names choices by
+      // the position this attempt shows them at (ADR-097).
+      const canonical = opts.answers?.[index] ?? (index === 0 ? "answer-q0" : "wrong");
       await live.saveAnswer(db, {
         evaluation,
         attempt,
         itemId,
-        payload: opts.answers?.[index] ?? (index === 0 ? "answer-q0" : "wrong"),
+        payload: await shownAnswer(db, evaluation.id, itemId, attempt, canonical),
+        coordinates: "position",
         revision: 1,
         now: app.clock.now(),
       });
@@ -379,8 +383,13 @@ describe("a review of a parameterized question (ADR-056 §5)", () => {
   }
 
   const WRONG = { mcq: { selected: [1] }, short: { text: "0" }, cloze: { blanks: ["0"] } } as const;
-  const rightAnswer = (type: "mcq" | "short" | "cloze", t: string) =>
-    type === "mcq" ? { selected: [0] } : type === "short" ? { text: t } : { blanks: [t] };
+  /** The right answer, as the student sends it: an mcq's choice by the position `served` shows it at (ADR-097). */
+  const rightAnswer = (type: "mcq" | "short" | "cloze", t: string, served: { student: unknown }) =>
+    type === "mcq"
+      ? { selected: [(served.student as { choices: { id: number; text: string }[] }).choices.find((c) => c.text === `${t} s`)!.id] }
+      : type === "short"
+        ? { text: t }
+        : { blanks: [t] };
 
   for (const type of ["mcq", "short", "cloze"] as const) {
     it(`${type}: serves the values it stores beside the seed, grades on them, keeps them with the review, keys the card on the template`, async () => {
@@ -400,7 +409,7 @@ describe("a review of a parameterized question (ADR-056 §5)", () => {
       // A reload serves the same instance.
       expect(await drill.serveCard(db, userId, card.id, app.clock.now())).toEqual(served);
 
-      const result = await drill.answerCard(db, userId, card.id, { answer: rightAnswer(type, t), deviceClass: "fine" }, app.clock.now());
+      const result = await drill.answerCard(db, userId, card.id, { answer: rightAnswer(type, t, served), deviceClass: "fine", coordinates: "position" }, app.clock.now());
       expect(result.correctness).toBe("right");
       expect(markersIn(JSON.stringify(result))).toEqual([]);
       // The key shown after the answer is the instance's.
@@ -761,19 +770,43 @@ describe("the mcq of a review (06, question 28 (d), (h))", () => {
       const served = await drill.serveCard(db, userId, card!.id, app.clock.now());
       const student = served.student as { choices: { id: number; text: string }[] };
       expect(JSON.stringify(served)).not.toMatch(/"correct"|"solution"/);
-      orders.add(student.choices.map((c) => c.id).join(","));
+      orders.add(student.choices.map((c) => c.text).join(","));
+      // ADR-097: a choice is named by its displayed position, and so is the key.
+      expect(student.choices.map((c) => c.id)).toEqual([0, 1, 2, 3, 4, 5]);
+      const shown = student.choices.find((c) => c.text === "charlie")!.id;
       const result = await drill.answerCard(
         db,
         userId,
         card!.id,
-        { answer: { selected: [2] }, deviceClass: "fine" },
+        { answer: { selected: [shown] }, deviceClass: "fine", coordinates: "position" },
         app.clock.now(),
       );
       expect(result.correctness).toBe("right");
-      expect(result.solution).toEqual({ correct: [2] });
+      expect(result.solution).toEqual({ correct: [shown] });
+      // Stored canonical: the review's payload names the key's canonical index.
+      const [review] = await db
+        .select()
+        .from(drillReviews)
+        .where(eq(drillReviews.cardId, card!.id))
+        .orderBy(desc(drillReviews.reviewedAt))
+        .limit(1);
+      expect(review!.answerPayload).toEqual({ selected: [2] });
       app.clock.set((await db.select().from(drillCards).where(eq(drillCards.id, card!.id)))[0]!.dueAt);
     }
     expect(orders.size).toBeGreaterThan(1);
+
+    // The attempt's rules hold in the drill (ADR-097): every position at once
+    // would be truncated to the lowest canonical index, the key's. Refused.
+    await drill.serveCard(db, userId, card!.id, app.clock.now());
+    await expect(
+      drill.answerCard(
+        db,
+        userId,
+        card!.id,
+        { answer: { selected: [0, 1, 2, 3, 4, 5] }, deviceClass: "fine", coordinates: "position" },
+        app.clock.now(),
+      ),
+    ).rejects.toMatchObject({ code: "answer_invalid" });
   });
 });
 

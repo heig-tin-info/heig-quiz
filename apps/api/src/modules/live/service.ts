@@ -72,12 +72,18 @@ export { studentGrades } from "./grades.js";
 // The one student exit (invariant 4), for the modules that serve a question
 // outside an attempt: the drill (ADR-041 §9).
 export {
+  answerFromStudent,
+  answerToStudent,
   FORBIDDEN_STUDENT_KEYS,
-  isShuffleable,
   solutionView,
   studentSolutionView,
+  studentSolutionViewOf,
   studentView,
+  studentViewOf,
+  teacherPreviewView,
 } from "./studentView.js";
+// ADR-097: the one view of an attempt's item, for the feedback page and the preview.
+export { attemptItemView } from "./itemView.js";
 export {
   answeredBy,
   saveAnswer,

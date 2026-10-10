@@ -26,10 +26,11 @@ import {
   questions,
   users,
 } from "../db/schema.js";
-import { enterEvaluation } from "../modules/live/service.js";
+import { answerToStudent, attemptItemView, enterEvaluation } from "../modules/live/service.js";
 import * as evaluationService from "../modules/evaluation/service.js";
 import { loadConfig, typeOf } from "../modules/pool/config.js";
 import * as poolService from "../modules/pool/service.js";
+import type { InstanceAttempt } from "../modules/pool/service.js";
 
 interface SeedOptions {
   teacherId?: string;
@@ -188,4 +189,22 @@ export async function enterStarted(db: Db, input: Omit<Parameters<typeof enterEv
   const result = await enterEvaluation(db, { ...input, start: true });
   if (result.kind === "ready") throw new Error("a started entry never answers ready");
   return result;
+}
+
+/**
+ * ADR-097: a CANONICAL answer as the student of `attempt` sends it — the
+ * positions its view shows the choices at — for a test that states its
+ * answers in the teacher's order. Send it with the `coordinates` marker.
+ */
+export async function shownAnswer(
+  db: Db,
+  evaluationId: string,
+  itemId: string,
+  attempt: InstanceAttempt,
+  canonical: unknown,
+): Promise<unknown> {
+  const evaluation = (await evaluationService.byId(db, evaluationId))!;
+  const entry = (await evaluationService.joinedItem(db, evaluationId, itemId))!;
+  const { type, config, view } = attemptItemView(evaluation, entry, attempt);
+  return answerToStudent(type, config, view, canonical);
 }

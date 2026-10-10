@@ -39,7 +39,10 @@ import { MarkdownView } from "../markdown/MarkdownView";
 import { cx } from "../ui";
 import { pollRows, PROJECTION_ROW_CAP } from "./pollTally";
 
-/** The canonical indices an `mcq` payload holds, whatever the server sent. */
+/**
+ * The choices an `mcq` payload ticks, whatever the server sent: canonical
+ * indices, a poll being never shuffled (ADR-097).
+ */
 function selectedOf(answer: unknown): number[] {
   const raw = (answer as { selected?: unknown } | null)?.selected;
   return Array.isArray(raw) ? raw.filter((x): x is number => typeof x === "number") : [];

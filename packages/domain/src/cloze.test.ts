@@ -11,6 +11,7 @@ import {
   matchClozeHole,
   parseBlankBody,
   parseCloze,
+  selectOptionOrder,
   type ClozeBlank,
 } from "./cloze.js";
 
@@ -140,7 +141,7 @@ describe("clozeStudentTemplate", () => {
     expect(JSON.stringify(student)).not.toContain("^N$");
   });
 
-  it("keeps the canonical option ids while shuffling the display order (D4)", () => {
+  it("names each option by its displayed position, shuffled or not (ADR-097)", () => {
     const plain = clozeStudentTemplate(parse, 7, "item-1", false).blanks[3];
     const shuffled = clozeStudentTemplate(parse, 7, "item-1", true).blanks[3];
     expect(plain).toEqual({
@@ -154,10 +155,12 @@ describe("clozeStudentTemplate", () => {
         { id: 3, label: "pascal" },
       ],
     });
-    expect(shuffled).not.toEqual(plain);
-    expect(shuffled?.kind === "select" && [...shuffled.options].sort((a, b) => a.id - b.id)).toEqual(
-      plain?.kind === "select" ? plain.options : null,
-    );
+    if (shuffled?.kind !== "select") throw new Error("blank 3 is a dropdown");
+    expect(shuffled.options.map((option) => option.id)).toEqual([0, 1, 2, 3]);
+    const labels = ["newton", "joule", "watt", "pascal"];
+    const order = selectOptionOrder({ index: 3, options: labels }, 7, "item-1", true);
+    expect(order).not.toEqual([0, 1, 2, 3]);
+    expect(shuffled.options.map((option) => option.label)).toEqual(order.map((canonical) => labels[canonical]));
   });
 
   it("is stable for one (seed, itemId) and different for another", () => {

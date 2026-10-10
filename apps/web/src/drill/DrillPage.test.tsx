@@ -98,7 +98,7 @@ describe("the drill session", () => {
     expect(await screen.findByText("4 bytes")).toBeVisible();
     const answer = calls.find((c) => c.url === "/app/api/drill/cards/k1/answer");
     // The confidence was skipped: it leaves as null, and nothing is said back.
-    expect(answer?.body).toEqual({ answer: { text: "4" }, deviceClass: "fine", confidence: null });
+    expect(answer?.body).toEqual({ answer: { text: "4" }, deviceClass: "fine", confidence: null, coordinates: "position" });
     expect(screen.queryByText(/^You said/)).toBeNull();
     // One primary: Next, and nothing else to press but the page's navigation.
     await user.click(screen.getByRole("button", { name: "Next" }));
@@ -112,6 +112,7 @@ describe("the drill session", () => {
       answer: null,
       deviceClass: "fine",
       confidence: null,
+      coordinates: "position",
     });
     await user.click(screen.getByRole("button", { name: "Finish" }));
 
@@ -156,6 +157,7 @@ describe("the drill session", () => {
       answer: { text: "4" },
       deviceClass: "fine",
       confidence: 2,
+      coordinates: "position",
     });
   });
 

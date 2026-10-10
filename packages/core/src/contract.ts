@@ -121,7 +121,11 @@ export interface StudentView {
   /** Attempt seed; 0 for the teacher preview (stable preview). */
   seed: number;
   itemId: string;
-  /** Evaluation-level shuffle switch AND question-level shuffleable flag, ANDed by the caller. */
+  /**
+   * Whether the parts this view can shuffle are shuffled: on the student path,
+   * the evaluation's switch AND the frozen config's `shuffleable`, decided by
+   * the API in one place (ADR-097); never shuffled for a poll or a teacher.
+   */
   shuffle: boolean;
   /**
    * The same per-type settings of the evaluation as `GradeContext.defaults`,
@@ -416,10 +420,41 @@ export interface QuestionTypeServer<
   toStudent(config: TConfig, view: StudentView): TStudent;
 
   /**
+   * ADR-097: the answer a student SENT, in the coordinates of the view they
+   * were served, brought back to the CANONICAL answer that is stored, graded
+   * and counted. A type whose student view names its parts by their displayed
+   * position (`mcq`'s choices, `cloze`'s dropdown options) converts here;
+   * the API calls it at the very first entry of every answer write, before
+   * `answerMisfit`, `grade` or the store, with the view the student was
+   * served.
+   *
+   * `answer` has passed `answerSchema`. `null` means the answer names a
+   * position `view` does not have: the write refuses it with
+   * `422 answer_invalid`, never drops it silently. Pure. Omitting the hook
+   * means the answer has no view coordinates (identity) — and, for the API,
+   * that the write needs no `coordinates` marker (`AnswerCoordinates`).
+   */
+  fromStudentAnswer?(config: TConfig, view: StudentView, answer: TAnswer): TAnswer | null;
+
+  /**
+   * ADR-097: the inverse of {@link fromStudentAnswer} — a stored, canonical
+   * answer in the coordinates of `view`, wherever one goes back to a student
+   * (a reload, a stale save, the feedback page). A canonical part `view`
+   * does not show is left out. `answer` has passed `answerSchema`. Pure.
+   * Omitting the hook means identity.
+   */
+  toStudentAnswer?(config: TConfig, view: StudentView, answer: TAnswer): TAnswer;
+
+  /**
    * Key + rationale, whole: what the TEACHER surfaces show (grading panel,
    * dashboard inspector, results by question, the editor's try). A student
    * gets it only when the feedback policy shows the key, and then through
    * {@link studentSolution}, never as-is.
+   *
+   * A part the student view names by position is named by its position IN
+   * `view` here too (ADR-097), so the key and the student's choices share one
+   * coordinate system; the teacher's surfaces pass an unshuffled view, where
+   * position and canonical index are one.
    */
   toSolution(config: TConfig, view: StudentView): TSolution;
 
@@ -451,6 +486,10 @@ export interface QuestionTypeServer<
    * a hidden test's output. This hook is where the answer key comes back out
    * of it when `policy.showKey` is false. Omitting it means "the breakdown
    * holds no key"; the `results` module strips the forbidden keys either way.
+   *
+   * A part of the student's own answer the breakdown names by canonical
+   * index leaves with the key (ADR-097): the student reads their answer in
+   * the answer itself, in the coordinates of their view.
    */
   studentDetails?(details: TDetails, policy: StudentDetailsPolicy): unknown;
 

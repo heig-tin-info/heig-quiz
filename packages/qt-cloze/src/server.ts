@@ -7,9 +7,10 @@ import {
   ConfigMigrationError,
   tallyKeys,
   type QuestionTypeServer,
+  type StudentView,
   type TallyEntry,
 } from "@quiz/core/server";
-import { clozeStudentTemplate, describeBlank, parseCloze } from "@quiz/domain/cloze";
+import { clozeStudentTemplate, describeBlank, parseCloze, selectOptionOrder } from "@quiz/domain/cloze";
 import { toCanonical } from "./canonical.js";
 import { gradeClozeAnswer } from "./grade.js";
 import {
@@ -31,6 +32,36 @@ import { isClozeAnswered } from "./schema.js";
 /** Does this text hold at least one dropdown, the only shuffleable thing here? */
 export function hasSelectBlank(config: ClozeConfig): boolean {
   return parseCloze(config.text).blanks.some((blank) => blank.kind === "select");
+}
+
+/** Whether `view` shuffles this config's dropdowns: the view's switch AND the question's own. */
+const shufflesOptions = (config: ClozeConfig, view: StudentView): boolean => view.shuffle && config.shuffleOptions;
+
+/** A dropdown's value: a non-negative decimal integer, nothing else. */
+const OPTION_VALUE = /^\d+$/;
+
+/**
+ * ADR-097: each dropdown's value of `blanks` passed through `map`, given that
+ * dropdown's display order in `view` (position `p` shows option `order[p]`).
+ * A typed blank and an empty dropdown travel untouched; `undefined` marks a
+ * value that names no option — not a decimal integer, or out of range.
+ */
+function mapDropdowns(
+  config: ClozeConfig,
+  view: StudentView,
+  blanks: readonly (string | null)[],
+  map: (order: readonly number[], value: number) => number | undefined,
+): (string | null | undefined)[] {
+  const parse = parseCloze(config.text);
+  const shuffles = shufflesOptions(config, view);
+  return blanks.map((given, index) => {
+    const blank = parse.blanks[index];
+    if (blank?.kind !== "select" || given === null || given.trim() === "") return given;
+    const value = given.trim();
+    if (!OPTION_VALUE.test(value)) return undefined;
+    const mapped = map(selectOptionOrder(blank, view.seed, view.itemId, shuffles), Number(value));
+    return mapped === undefined || mapped < 0 ? undefined : String(mapped);
+  });
 }
 
 export const clozeServer: QuestionTypeServer<
@@ -83,13 +114,25 @@ export const clozeServer: QuestionTypeServer<
    * collapses to an opaque input: no answer, no pattern, no tolerance.
    */
   toStudent(config, view): ClozeStudent {
-    return clozeStudentTemplate(
-      parseCloze(config.text),
-      view.seed,
-      view.itemId,
-      view.shuffle && config.shuffleOptions,
-    );
+    return clozeStudentTemplate(parseCloze(config.text), view.seed, view.itemId, shufflesOptions(config, view));
   },
+
+  /**
+   * ADR-097: a dropdown's value is the option's displayed POSITION on the
+   * wire and its canonical index in storage (D4); a typed blank is the same
+   * in both. A position the view does not have refuses the answer.
+   */
+  fromStudentAnswer(config, view, answer) {
+    const blanks = mapDropdowns(config, view, answer.blanks, (order, position) => order[position]);
+    return blanks.includes(undefined) ? null : { blanks: blanks as (string | null)[] };
+  },
+
+  /** A stored value that names no option comes back empty: it must not be read as a position. */
+  toStudentAnswer: (config, view, answer) => ({
+    blanks: mapDropdowns(config, view, answer.blanks, (order, canonical) => order.indexOf(canonical)).map(
+      (given) => given ?? null,
+    ),
+  }),
 
   toSolution: (config) => ({
     blanks: parseCloze(config.text).blanks.map((blank) => ({
@@ -101,13 +144,16 @@ export const clozeServer: QuestionTypeServer<
   /**
    * `perBlank[].expected` is the key, blank by blank. The verdict, the weight
    * and what the student typed stay: they are the feedback. The expected
-   * value only travels when the teacher publishes the key.
+   * value only travels when the teacher publishes the key, and so does
+   * `given`: a dropdown's is its canonical option index (D4), which would
+   * name options by the teacher's order (ADR-097). The review reads what the
+   * student wrote in the answer itself, in the coordinates of their view.
    */
   studentDetails(details: ClozeDetails, policy): unknown {
     if (policy.showKey) return details;
     return {
       ...details,
-      perBlank: details.perBlank.map(({ expected: _expected, ...rest }) => rest),
+      perBlank: details.perBlank.map(({ expected: _expected, given: _given, ...rest }) => rest),
     };
   },
 

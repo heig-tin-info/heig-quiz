@@ -27,6 +27,7 @@ import {
   type DrillStudentActivity,
   type DrillConceptMastery,
   type EvaluationDrill,
+  ANSWER_COORDINATES,
 } from "@quiz/contracts";
 
 import { api } from "../api";
@@ -76,7 +77,7 @@ export const answerCard = (
 ) =>
   api<DrillReviewResult>(
     `/app/api/drill/cards/${cardId}/answer`,
-    send("POST", DrillAnswerBody, { answer, deviceClass, confidence }),
+    send("POST", DrillAnswerBody, { answer, deviceClass, confidence, coordinates: ANSWER_COORDINATES }),
   );
 
 export const setOptOut = (classroomId: string, optedOut: boolean) =>

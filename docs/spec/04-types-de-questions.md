@@ -10,7 +10,8 @@ A type is a TypeScript package that exports a `QuestionType` object:
 | `configSchema` | Zod schema of the configuration, statement included. Validated at publication and at import. |
 | `answerSchema` | Zod schema of the student's answer. Validated at every autosave. |
 | `defaultPoints(config)` | Default points when the question is added to an evaluation. |
-| `toStudent(config, seed)` | Returns the configuration visible to the student: no key, no explanation, no hidden tests, choices shuffled according to the seed. Pure function, tested. |
+| `toStudent(config, seed)` | Returns the configuration visible to the student: no key, no explanation, no hidden tests, choices shuffled according to the seed. Pure function, tested. *Amended 2026-10-10 (ADR-097): a choice or a dropdown option is named by its displayed position, never by its canonical index.* |
+| `fromStudentAnswer(config, view, answer)` / `toStudentAnswer(config, view, answer)` | Optional (`mcq`, `cloze`), added 2026-10-10 by ADR-097: the answer a student sends, in the coordinates of the view they were served, back to the canonical answer that is stored (`null`: a position the view does not have, refused with `422 answer_invalid`), and the inverse for every answer handed back to a student. Identity when absent. `toSolution` names the key in the same coordinates; `studentDetails` drops the canonical indices of the student's own choices with the key. |
 | `grade(config, answer, ctx)` | Returns a graded result or a pending runner/LLM request (`GradeResult` in `packages/core/src/contract.ts`). `ctx` provides the seed, the item's points, the runner service and an LLM-availability flag; the API owns model calls (ADR-063). |
 | `distinctTexts(config)` | Optional (`mcq`). The texts an instance of a parameterized question keeps distinct (ADR-056 §7). Variables themselves are a header field of the version, instantiated by the API before any hook is called, never by the type. |
 | `parameterIssues(template)` | Optional (`short`). What a parameterized template may not do although its instances could (a computed text key, ADR-056 §10). |
@@ -84,7 +85,7 @@ condition: "t > 1"
 
 **Configuration** (config version 2): `prompt` markdown, `choices[]` with `text` markdown and `correct`, `mode` `single` or `multiple`, optional `maxSelections`, `policy` one of the five below or `inherit` (default), `shuffleChoices`. Version 1 carried a `penalty` factor and an `allowNegative` flag; the v1 → v2 migration maps `partial` and `penalized` onto `symmetric` and drops both fields.
 
-**Answer**: `selected[]` indices of the choices in canonical order. Shuffling is applied by `toStudent`; the answer is always in canonical indices.
+**Answer**: `selected[]` indices of the choices in canonical order. Shuffling is applied by `toStudent`; the answer is always in canonical indices. *Amended 2026-10-10 (ADR-097): the STORED answer is in canonical indices, ascending and unique; on the wire a student sends and reads the displayed positions of their view, and the server converts at its single entry and exit. An answer with more choices than `maxSelections` is refused, like two choices on a `single` question.*
 
 **Which rule applies**, in this order:
 
@@ -175,7 +176,7 @@ Inside a blank, a backslash before an ASCII punctuation character makes that cha
 
 The `label`s of a dropdown reach the student, they are the options, but `correct` never does.
 
-**Answer**: `blanks[]` strings in order of appearance.
+**Answer**: `blanks[]` strings in order of appearance. A dropdown stores its canonical option index as a decimal string (decision D4); *amended 2026-10-10 (ADR-097): on the wire a student sends and reads the option's displayed position instead.*
 
 **Scoring**: sum of the weights of the correct blanks over the sum of the weights.
 

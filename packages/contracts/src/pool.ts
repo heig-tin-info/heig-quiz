@@ -328,7 +328,6 @@ export const QuestionMeta = z.object({
   internalName: z.string(),
   categoryId: z.uuid().nullable(),
   difficulty: z.number().int().min(1).max(5),
-  shuffleable: z.boolean(),
   randomizable: z.boolean(),
   /** What the question exercises (ADR-081), labelled in the reader's language, by label. */
   concepts: z.array(ConceptRef),
@@ -464,7 +463,6 @@ export const QuestionPatchFields = z.object({
   internalName: z.string().trim().min(1).max(200).optional(),
   categoryId: z.uuid().nullable().optional(),
   difficulty: z.number().int().min(1).max(5).optional(),
-  shuffleable: z.boolean().optional(),
   concepts: ConceptInputs.optional(),
   createMissing: z.boolean().optional(),
 });

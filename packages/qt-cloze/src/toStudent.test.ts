@@ -4,10 +4,16 @@
  * for every forbidden key and secret value — is the registry's contract test.
  */
 import { describe, expect, it } from "vitest";
+import { testGradeContext } from "@quiz/core/testing";
 import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { clozeServer } from "./server.js";
 
 const view = { seed: 7, itemId: "i", shuffle: true };
+
+/** Shuffle on and off, the preview's seed and a spread of attempts'. */
+const VIEWS = [0, 1, 7, 42, 99, 2024].flatMap((seed) =>
+  [true, false].map((shuffle) => ({ seed, itemId: "item-1", shuffle })),
+);
 
 describe("toStudent", () => {
   it("replaces every blank by its sentinel, and nothing else", () => {
@@ -47,13 +53,17 @@ describe("toStudent", () => {
     expect(student.template).toContain("| Force | ⸢5⸣ |");
   });
 
-  it("shuffles the dropdown options while keeping the canonical id", () => {
-    const student = clozeServer.toStudent(SECRET_CONFIG, view);
-    const select = student.blanks.find((blank) => blank.kind === "select");
-    expect(select?.kind).toBe("select");
-    if (select?.kind !== "select") throw new Error("the fixture must hold a dropdown");
-    expect(select.options.map((option) => option.id).sort()).toEqual([0, 1, 2, 3]);
-    expect(select.options.find((option) => option.id === 0)?.label).toBe("newton");
+  /*
+   * ADR-097 (audit H2): an option's id is its displayed position, for every
+   * view — the identity permutation included, which is why the assertion is
+   * "ids are 0..n-1 in order", never "ids differ from the canonical order".
+   */
+  it.each(VIEWS)("names each dropdown option by its displayed position (seed $seed, shuffle $shuffle)", (at) => {
+    const student = clozeServer.toStudent(SECRET_CONFIG, at);
+    for (const blank of student.blanks) {
+      if (blank.kind !== "select") continue;
+      expect(blank.options.map((option) => option.id)).toEqual(blank.options.map((_, position) => position));
+    }
   });
 
   it("is stable for one (seed, item): a reload shows the same order", () => {
@@ -67,7 +77,7 @@ describe("toStudent", () => {
       Array.from({ length: 24 }, (_, seed) => {
         const student = clozeServer.toStudent(SECRET_CONFIG, { ...view, seed });
         const select = student.blanks.find((blank) => blank.kind === "select");
-        return select?.kind === "select" ? select.options.map((o) => o.id).join(",") : "";
+        return select?.kind === "select" ? select.options.map((o) => o.label).join(",") : "";
       }),
     );
     expect(orders.size).toBeGreaterThan(1);
@@ -83,5 +93,59 @@ describe("toStudent", () => {
       if (select?.kind !== "select") throw new Error("the fixture must hold a dropdown");
       expect(select.options.map((option) => option.id)).toEqual(canonical);
     }
+  });
+});
+
+/*
+ * ADR-097: a dropdown's value is a displayed position on the wire and a
+ * canonical index in storage (D4); a typed blank is the same in both. The
+ * round trip over every view is the registry's contract test.
+ */
+describe("the answer in view coordinates", () => {
+  it.each(VIEWS)("decodes each position to the label shown there (seed $seed, shuffle $shuffle)", (at) => {
+    const student = clozeServer.toStudent(SECRET_CONFIG, at);
+    const select = student.blanks[3];
+    if (select?.kind !== "select") throw new Error("blank 3 is a dropdown");
+    for (const option of select.options) {
+      const blanks = [null, null, null, String(option.id), null, null];
+      const canonical = clozeServer.fromStudentAnswer!(SECRET_CONFIG, at, { blanks });
+      expect(["newton", "joule", "watt", "pascal"][Number(canonical?.blanks[3])]).toBe(option.label);
+    }
+  });
+
+  it.each(VIEWS)("hands a stored option back at the position that shows it (seed $seed, shuffle $shuffle)", (at) => {
+    const select = clozeServer.toStudent(SECRET_CONFIG, at).blanks[3];
+    if (select?.kind !== "select") throw new Error("blank 3 is a dropdown");
+    // Canonical 2 is "watt"; "9" names no option and must not be read as a position.
+    const shown = clozeServer.toStudentAnswer!(SECRET_CONFIG, at, { blanks: ["Newton", null, null, "2", null, "9"] });
+    expect(shown.blanks.slice(0, 3)).toEqual(["Newton", null, null]);
+    expect(select.options.find((option) => String(option.id) === shown.blanks[3])?.label).toBe("watt");
+    expect(shown.blanks[5]).toBeNull();
+  });
+
+  it("refuses a position the dropdown does not have", () => {
+    expect(clozeServer.fromStudentAnswer!(SECRET_CONFIG, view, { blanks: [null, null, null, "4"] })).toBeNull();
+    expect(clozeServer.fromStudentAnswer!(SECRET_CONFIG, view, { blanks: [null, null, null, "newton"] })).toBeNull();
+  });
+});
+
+/*
+ * The breakdown names a dropdown's pick by its canonical index (D4): while the
+ * key is hidden, `given` goes with `expected`, and the verdicts stay (ADR-097).
+ */
+describe("studentDetails", () => {
+  const graded = clozeServer.grade(SECRET_CONFIG, { blanks: ["Newton", "10", "+=", "1", "N", "0"] }, testGradeContext(6));
+  if (graded instanceof Promise || graded.kind !== "graded") throw new Error("sync grade expected");
+
+  it("drops the key and the student's canonical picks while the key is hidden", () => {
+    const out = clozeServer.studentDetails!(graded.details, { showKey: false, showHiddenCaseNames: false }) as {
+      perBlank: Record<string, unknown>[];
+    };
+    expect(out.perBlank.map((blank) => blank["ok"])).toEqual(graded.details.perBlank.map((blank) => blank.ok));
+    expect(out.perBlank.some((blank) => "expected" in blank || "given" in blank)).toBe(false);
+  });
+
+  it("keeps the whole breakdown once the key is published", () => {
+    expect(clozeServer.studentDetails!(graded.details, { showKey: true, showHiddenCaseNames: false })).toBe(graded.details);
   });
 });
