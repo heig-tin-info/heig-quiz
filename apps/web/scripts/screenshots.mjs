@@ -1053,6 +1053,8 @@ const scenes = [
   // The evaluation's picker on the Polls pool: the opinion question is out of reach.
   { name: "eval-config-picker-keyless", role: "teacher", path: "/evaluations/draft?step=questions", act: async (p) => { await p.getByRole("button", { name: /add questions/i }).first().click(); await p.getByLabel(/^pool$|^banque$/i).selectOption({ label: "Polls" }); } },
   // The same question in the editor: one muted line, nothing to fix to view it.
+  { name: "question-reports", role: "teacher", path: "/questions/q1?tab=reports", settle: 3000 },
+  { name: "pool-open-report", role: "teacher", path: "/pools/p1" },
   { name: "question-keyless", role: "teacher", path: "/pools/p0", act: (p) => p.getByRole("button", { name: /^(Edit|Modifier) Le rythme des laboratoires/ }).first().click() },
   // The worst case of the wall: a three-line question and eight choices that
   // wrap. It must come back with no scrollbar and nothing cut off — the band

@@ -149,6 +149,28 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     poolName: z.string(),
     count: z.number().int().positive(),
   }),
+  z.object({
+    /**
+     * A reader reported a problem on a question of the pool the recipient
+     * writes in (issue #680, lot 3), folded per question (§e): `count` the
+     * reports folded into the entry. The question's name is the teacher-facing
+     * one; the message and the reporter stay in the inspector.
+     */
+    kind: z.literal("question_reported"),
+    poolId: z.uuid(),
+    poolName: z.string(),
+    questionId: z.uuid(),
+    questionName: z.string(),
+    count: z.number().int().positive(),
+  }),
+  z.object({
+    /** A writer resolved the recipient's report; the reply, if any, is read in the inspector. */
+    kind: z.literal("question_report_resolved"),
+    poolId: z.uuid(),
+    poolName: z.string(),
+    questionId: z.uuid(),
+    questionName: z.string(),
+  }),
   // --- Projects (F-NOTIF-13, D18; merge task M3-09b). Ids and the project's
   // name only: never a score, a login or a student's name (N-SEC-20). The
   // entry opens the project (`/projects/:id`, the student's view for a
@@ -273,6 +295,8 @@ export const NOTIFICATION_KINDS = [
   "pool_shared",
   "pool_ownership",
   "pool_question_added",
+  "question_reported",
+  "question_report_resolved",
   "system_alert",
 ] as const;
 export const NotificationKind = z.enum(NOTIFICATION_KINDS);
@@ -327,6 +351,10 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   pool_shared: { bell: true, email: true, teams: true },
   pool_ownership: { bell: true, email: true, teams: true },
   pool_question_added: { bell: true, email: false, teams: false },
+  // A colleague's report on a question: news for the next visit; the answer
+  // to one's own report is worth an e-mail.
+  question_reported: { bell: true, email: false, teams: false },
+  question_report_resolved: { bell: true, email: true, teams: true },
   // The secondary alarm of the operator (ADR-055 §5): the e-mail is the point.
   // Teams stays off: `KIND_CHANNELS` forbids it (a test holds every default to it).
   system_alert: { bell: true, email: true, teams: false },
@@ -388,6 +416,8 @@ export const NOTIFICATION_AUDIENCE: Readonly<
   pool_shared: "pool",
   pool_ownership: "pool",
   pool_question_added: "pool",
+  question_reported: "pool",
+  question_report_resolved: "pool",
   system_alert: "admin",
 };
 

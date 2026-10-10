@@ -492,6 +492,14 @@ export type AuditAction =
   | "question.deprecate"
   | "question.move"
   | "question.publish"
+  /**
+   * `question.report` (issue #680): a reader reported a problem; the target
+   * is the question, `payload.reportId` and `poolId`, never the message.
+   * `question.report_resolve`: a writer resolved one; `payload.reportId`,
+   * `poolId`, `replied` (whether a reply was given).
+   */
+  | "question.report"
+  | "question.report_resolve"
   | "question.restore_version"
   | "question.stats_reset"
   | "question.update"

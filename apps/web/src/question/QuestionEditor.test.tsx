@@ -702,7 +702,7 @@ describe("QuestionEditor — shared as reader", () => {
   const readerRoutes = (detail: QuestionDetail) =>
     routes(detail, { "GET /app/api/pools/p1": ok({ ...POOL, role: "reader" as const }) });
 
-  it("says so in the header and drops every action that would be refused", async () => {
+  it("says so in the header and drops every action that would be refused but the report", async () => {
     mockFetch(readerRoutes(mcqDetail()));
     renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: "ptr-null-check" });
@@ -710,7 +710,11 @@ describe("QuestionEditor — shared as reader", () => {
       await screen.findByText("Read-only — shared with you as reader"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Publish" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
+    // The menu keeps one entry for a reader: telling the writers it is wrong (issue #680).
+    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
+    expect(screen.getByRole("menuitem", { name: "Report a problem" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Duplicate" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Delete question" })).toBeNull();
     // The one thing a reader may still do with the screen.
     expect(screen.getByRole("link", { name: "Student preview" })).toBeInTheDocument();
   });

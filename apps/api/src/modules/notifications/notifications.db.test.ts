@@ -213,7 +213,7 @@ describe("a folded kind", () => {
     const { rows } = (await db.execute(
       sql`select indexname, indexdef from pg_indexes where tablename = 'notifications' and indexname like '%_fold_uq'`,
     )) as unknown as { rows: { indexname: string; indexdef: string }[] };
-    const column = { classroomId: "classroom_id", poolId: "pool_id", evaluationId: "evaluation_id", projectId: "project_id" };
+    const column = { classroomId: "classroom_id", poolId: "pool_id", evaluationId: "evaluation_id", projectId: "project_id", questionId: "question_id" };
     expect(rows.map((r) => r.indexname).sort()).toEqual(
       Object.keys(NOTIFICATION_FOLD_TARGETS).map((k) => `notifications_${k}_fold_uq`).sort(),
     );

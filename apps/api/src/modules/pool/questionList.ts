@@ -26,6 +26,7 @@ import {
 import { byLabel, conceptsOf, toConceptRef } from "../concept/service.js";
 import { hasKey, isParameterized, loadConfig, publicationIssuesOf, tryLoadConfig } from "./config.js";
 import { exampleConfig, parameterIssues, type VersionContent } from "./instance.js";
+import { openReportCounts, type ReportViewer } from "./reports.js";
 import { type QuestionRecord, poolOf, type VersionRecord } from "./shared.js";
 import { starredBy } from "./stars.js";
 
@@ -254,6 +255,7 @@ function rowJson(
   question: QuestionRecord & { starred: boolean },
   concepts: ConceptRef[],
   facts: VersionFacts | undefined,
+  openReports: number,
 ): QuestionRow {
   return {
     id: question.id,
@@ -271,6 +273,7 @@ function rowJson(
     starred: question.starred,
     randomizable: question.randomizable,
     review: facts?.review ?? null,
+    openReports,
   };
 }
 
@@ -282,19 +285,24 @@ function rowJson(
 export async function listQuestions(
   db: Db,
   poolId: string,
-  userId: string,
+  /** The caller; `seesAll` when they write in the pool: the open reports counted are all of them (issue #680). */
+  viewer: ReportViewer,
   search: QuestionSearch,
   lang: ConceptLang,
 ) {
   const { page, facts, nextCursor, total } = await pageWhere(
     db,
-    searchWhere(poolId, userId, search),
+    searchWhere(poolId, viewer.id, search),
     search,
-    starredBy(userId),
+    starredBy(viewer.id),
   );
-  const refs = await conceptsOf(db, page.map((q) => q.id), lang);
+  const ids = page.map((q) => q.id);
+  const [refs, reports] = await Promise.all([
+    conceptsOf(db, ids, lang),
+    openReportCounts(db, ids, viewer),
+  ]);
   return {
-    items: page.map((q) => rowJson(q, refs.get(q.id) ?? [], facts.get(q.id))),
+    items: page.map((q) => rowJson(q, refs.get(q.id) ?? [], facts.get(q.id), reports.get(q.id) ?? 0)),
     nextCursor,
     total,
   };

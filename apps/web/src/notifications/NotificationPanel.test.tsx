@@ -202,6 +202,33 @@ describe("the inbox in the account menu", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p4" });
   });
 
+  it("announces the reports on a question and their resolution, and opens the question", async () => {
+    const Q = "00000000-0000-4000-8000-000000000001";
+    const base = { poolId: "p1", poolName: "Programmation C", questionId: Q, questionName: "ptr-null-check" };
+    const reported: Notification = {
+      id: "n20",
+      payload: { kind: "question_reported", ...base, count: 3 },
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      readAt: null,
+    };
+    const resolved: Notification = {
+      id: "n21",
+      payload: { kind: "question_report_resolved", ...base },
+      createdAt: new Date(Date.now() - 120_000).toISOString(),
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [reported, resolved], unread: 2 }),
+      "POST /app/api/notifications/n20/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    expect(screen.getByText(/Your report on “ptr-null-check” was resolved\./)).toBeVisible();
+    await userEvent.click(screen.getByText(/3 reports on “ptr-null-check”\./));
+    expect(navigate).toHaveBeenCalledWith({ view: "question", id: Q });
+  });
+
   it("announces a student's exercises: scheduled opens the home, open opens the attempt", async () => {
     const scheduled: Notification = {
       id: "n7",

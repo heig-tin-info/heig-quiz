@@ -50,6 +50,7 @@ import {
   questionWriteError,
 } from "./shared.js";
 import { tellPoolOfPublication } from "./members.js";
+import { closeReportsOf } from "./reports.js";
 import { ensurePersonalPool } from "./pools.js";
 import { isKeyless, metaJson, versionJson, draftJson } from "./questionList.js";
 import { reviewJson, reviewOf } from "./reviewStore.js";
@@ -768,10 +769,14 @@ async function isQuestionInUse(db: Db, questionId: string): Promise<boolean> {
 export async function softDeleteQuestion(db: Db, question: QuestionRecord): Promise<void> {
   if (await isQuestionInUse(db, question.id)) throw new VersionInUse();
   const now = new Date();
-  await db
-    .update(questions)
-    .set({ deletedAt: now, updatedAt: now })
-    .where(eq(questions.id, question.id));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(questions)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(eq(questions.id, question.id));
+    // Its open reports close with it (issue #680): nobody is left to resolve them.
+    await closeReportsOf(tx, question.id, now);
+  });
 }
 
 /** `?hard=1`: the rows really go away (cascade on versions and concept links). */

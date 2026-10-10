@@ -79,6 +79,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["poolQuestionListsKey", keys.poolQuestionListsKey("p1"), ["pool", "p1", "questions"]],
     ["poolStarredKey", keys.poolStarredKey("p1"), ["pool", "p1", "starred"]],
     ["questionKey", keys.questionKey("q1"), ["question", "q1"]],
+    ["questionReportsKey", keys.questionReportsKey("q1"), ["question", "q1", "reports"]],
     [
       "questionPreviewKey (draft)",
       keys.questionPreviewKey("q1", "draft"),

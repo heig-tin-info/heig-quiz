@@ -28,7 +28,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, courseConditions, courseStaff, enrollments, evaluations, journalPageRevisions, poolMembers } from "../db/schema.js";
+import { attempts, courseConditions, courseStaff, enrollments, evaluations, journalPageRevisions, poolMembers, questionReports } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
@@ -117,6 +117,9 @@ async function world(): Promise<World> {
   // An entry of the course's catalog of conditions (F-ORG-16): the `:cid`.
   const conditionId = randomUUID();
   await db.insert(courseConditions).values({ id: conditionId, courseId: seed.courseId, kind: "info", text: "Swept", position: 0 });
+  // A report on the pool's question (issue #680): the `:reportId` of its resolution.
+  const reportId = randomUUID();
+  await db.insert(questionReports).values({ id: reportId, questionId: seed.questionIds[0]!, reporterId: owner.id, message: "Swept" });
   const attemptId = randomUUID();
   await db.insert(attempts).values({ id: attemptId, evaluationId: seed.evaluationId, userId: enrolled.id, seed: 1 });
   return {
@@ -139,6 +142,7 @@ async function world(): Promise<World> {
       kind: "evaluation",
       activityId: graded.id,
       cid: conditionId,
+      reportId,
     },
   };
 }

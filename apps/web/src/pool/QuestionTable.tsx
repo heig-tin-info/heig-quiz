@@ -26,6 +26,7 @@ import type { QuestionSort, SortDir } from "./filters";
 import { StarButton } from "./stars";
 import { entryKey, type RowProps } from "./useQuestionBrowse";
 import { ParameterizedBadge } from "./ParameterizedBadge";
+import { ReportBadge } from "./ReportBadge";
 import { ReviewBadge } from "./ReviewBadge";
 
 /**
@@ -292,6 +293,7 @@ export function QuestionTable({
                     {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
                     {row.randomizable ? <ParameterizedBadge /> : null}
                     <ReviewBadge review={row.review} />
+                    <ReportBadge count={row.openReports} />
                     <RowStatsButton row={row} statsFor={statsFor} />
                   </span>
                 </td>

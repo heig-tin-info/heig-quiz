@@ -7,6 +7,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { PoolRole } from "@quiz/contracts";
 import { QuizCoreError } from "@quiz/core/server";
+import { poolRoleAllows } from "@quiz/domain";
 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -18,6 +19,7 @@ import {
   accessWhere,
   callerOf,
   poolAccess,
+  poolRoleOf,
   requirePoolRole,
   teacherGuard,
   withRoleStep,
@@ -114,8 +116,17 @@ export function poolRouteContext(app: FastifyInstance, config: AppConfig) {
   const topicsOf = async (pool: typeof pools.$inferSelect) =>
     (await service.poolAudience(app.db, pool)).map(userTopic);
 
+  /**
+   * The caller writes in the pool (`contributor` or above, or Super Powers):
+   * they read every report on its questions, anyone else only their own
+   * (issue #680).
+   */
+  const seesAllReports = async (req: FastifyRequest, pool: typeof pools.$inferSelect) =>
+    poolRoleAllows(await poolRoleOf(app.db, pool, callerOf(req)), "contributor");
+
   return {
     config,
+    seesAllReports,
     requireTeacher,
     trace,
     mine,

@@ -32,7 +32,7 @@ import * as service from "./service.js";
 import { coreFailure, LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
 
 export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
-  const { requireTeacher, trace, teacher, inPool, onQuestion } = ctx;
+  const { requireTeacher, trace, teacher, inPool, onQuestion, seesAllReports } = ctx;
 
   app.get(
     "/app/api/pools/:id/questions",
@@ -41,7 +41,8 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       { params: IdParam, query: QuestionSearch, load: inPool() },
       async ({ req, reply, query, scope: pool }) => {
         try {
-          return await service.listQuestions(app.db, pool.id, req.user!.id, query, readerLang(req));
+          const viewer = { id: req.user!.id, seesAll: await seesAllReports(req, pool) };
+          return await service.listQuestions(app.db, pool.id, viewer, query, readerLang(req));
         } catch (error) {
           // A cursor is only valid for the order that produced it: a client that
           // changes column mid-scroll starts the list again rather than reading a
