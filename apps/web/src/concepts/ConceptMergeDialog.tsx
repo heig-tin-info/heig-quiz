@@ -22,25 +22,33 @@ const SHOWN = 8;
 export function ConceptMergeDialog({
   concept,
   candidates,
+  initialTarget,
   onClose,
   onMerged,
 }: {
   concept: AdminConcept;
   /** The queue's concepts; the validated ones other than `concept` are offered. */
   candidates: readonly AdminConcept[];
+  /** The id of a target chosen beforehand (a probable duplicate): preselected, and listed first until a search. */
+  initialTarget?: string;
   onClose: () => void;
   onMerged: () => void;
 }) {
   const t = useT();
   const { locale } = useI18n();
   const [typed, setTyped] = useState("");
-  const [picked, setPicked] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(initialTarget ?? null);
   // Off by default (ADR-081 §6): the merged label is dropped unless the admin keeps it as an alias.
   const [keepAlias, setKeepAlias] = useState(false);
   const name = conceptName(concept, locale);
 
   const targets = useMemo(() => candidates.filter((c) => c.status === "validated" && c.id !== concept.id), [candidates, concept.id]);
-  const shown = useMemo(() => rankConcepts(typed.trim(), targets, locale).slice(0, SHOWN), [targets, typed, locale]);
+  const shown = useMemo(() => {
+    const ranked = rankConcepts(typed.trim(), targets, locale);
+    // Until a search, the target chosen beforehand leads, whatever its rank.
+    const pinned = typed.trim() === "" ? targets.find((c) => c.id === initialTarget) : undefined;
+    return (pinned ? [pinned, ...ranked.filter((c) => c !== pinned)] : ranked).slice(0, SHOWN);
+  }, [targets, typed, locale, initialTarget]);
   const target = targets.find((c) => c.id === picked);
 
   const merge = useMutation({

@@ -159,6 +159,18 @@ export interface ConceptMatch {
 }
 
 /**
+ * The edits between two keys when they are close enough for a "did you
+ * mean" (see {@link tolerance}), else null. 0 means the same key. The one
+ * rule of {@link closeConcepts} and {@link probableDuplicates}.
+ */
+export function keyDistance(a: string, b: string): number | null {
+  const tol = tolerance(Math.min(a.length, b.length));
+  if (Math.abs(a.length - b.length) > tol) return null;
+  const distance = a === b ? 0 : editDistance(a, b);
+  return distance > tol ? null : distance;
+}
+
+/**
  * The concepts `input` may designate, best first: the exact matches, then
  * the close ones by distance, then by name. One entry per concept, through
  * its best-matching name. An input whose key is empty matches nothing.
@@ -173,11 +185,8 @@ export function closeConcepts(
   for (const concept of concepts) {
     let best: ConceptMatch | undefined;
     for (const name of concept.names) {
-      const other = conceptKey(name);
-      const tol = tolerance(Math.min(key.length, other.length));
-      if (Math.abs(key.length - other.length) > tol) continue;
-      const distance = other === key ? 0 : editDistance(key, other);
-      if (distance > tol) continue;
+      const distance = keyDistance(key, conceptKey(name));
+      if (distance === null) continue;
       if (!best || distance < best.distance) {
         best = {
           id: concept.id,
@@ -240,7 +249,7 @@ export interface ResolvableConcept {
   /** The concept it was merged into, always the final one (addendum §3); null when not merged. */
   mergedInto: string | null;
   /** Its label and qualifier in each language that has a label. */
-  labels: readonly { label: string; qualifier: string }[];
+  labels: readonly { label: string; qualifier: string; lang?: ConceptLanguage }[];
   /**
    * Other names it answers to, bare (curated aliases, ADR-081 §6). An alias is matched exactly like a label: an input whose key is
    * a label's or an alias's resolves, and the same key on two concepts is
@@ -383,6 +392,110 @@ export function filterIds(resolution: LabelResolution): string[] {
   if (resolution.kind === "resolved") return [resolution.id];
   if (resolution.kind === "ambiguous") return [...resolution.candidates];
   return [];
+}
+
+/**
+ * Why two concepts are flagged (ADR-081 fifth addendum §4), in precedence
+ * order: a pair carries the first reason that holds.
+ * - `alias`: {@link checkAlias} finds that an alias of one collides with
+ *   the other (one of its labels or aliases), so the typed word is ambiguous
+ *   for every teacher;
+ * - `translation`: a label of one has the same qualified key as a label of
+ *   the other (the per-language unique index makes that a French label
+ *   against an English one);
+ * - `homonym`: the same bare label under different qualifiers. Often
+ *   legitimate: the admin checks the qualifiers, a merge is not proposed;
+ * - `close`: two labels a few edits apart ({@link keyDistance}, the
+ *   resolver's own rule), but not the same.
+ */
+export const DUPLICATE_REASONS = ["alias", "translation", "homonym", "close"] as const;
+export type DuplicateReason = (typeof DUPLICATE_REASONS)[number];
+
+type Label = ResolvableConcept["labels"][number];
+
+/** A live concept and its labels' keys, computed once. */
+interface Live<C extends ResolvableConcept = ResolvableConcept> {
+  concept: C;
+  labels: { label: Label; bare: string; full: string }[];
+}
+
+/** The labels of two concepts that share a qualified key (a French one against an English one, per the unique index). */
+const translationMatch = (x: Live, y: Live): [Label, Label] | undefined => {
+  for (const l of x.labels) {
+    const o = y.labels.find((m) => m.full === l.full);
+    if (o) return [l.label, o.label];
+  }
+  return undefined;
+};
+
+/** Whether an alias of `c` collides with `other`, asked of {@link checkAlias} as if `c` had no other name (an alias is never "redundant" with itself). */
+const clashes = (c: ResolvableConcept, other: ResolvableConcept) =>
+  c.aliases.some((a) => checkAlias(a, { ...c, labels: [], aliases: [] }, [other]).kind === "collides");
+
+const TESTS: Record<DuplicateReason, (x: Live, y: Live) => boolean> = {
+  alias: (x, y) => clashes(x.concept, y.concept) || clashes(y.concept, x.concept),
+  translation: (x, y) => translationMatch(x, y) !== undefined,
+  homonym: (x, y) => x.labels.some((l) => y.labels.some((o) => l.bare === o.bare && l.full !== o.full)),
+  close: (x, y) => x.labels.some((l) => y.labels.some((o) => (keyDistance(l.bare, o.bare) ?? 0) > 0)),
+};
+
+export interface DuplicatePair<C> {
+  a: C;
+  b: C;
+  reason: DuplicateReason;
+  /** For a `translation`: the label of `a` and the label of `b` that match. */
+  match?: [Label, Label];
+}
+
+/**
+ * The pairs of concepts that are probably one (ADR-081 fifth addendum §4),
+ * computed from labels, qualifiers and aliases alone: no model, nothing
+ * stored. Merged concepts are left out. At most one pair, with its first
+ * {@link DuplicateReason}, per two concepts; ordered by reason, then ids,
+ * the lower id first.
+ *
+ * Every pair is compared (a concept's keys are computed once), so the cost
+ * is quadratic in the vocabulary: meant for hundreds of concepts, which the
+ * vocabulary is (tens of thousands of comparisons).
+ */
+export function probableDuplicates<C extends ResolvableConcept>(concepts: readonly C[]): DuplicatePair<C>[] {
+  const live = concepts
+    .filter((c) => !c.mergedInto)
+    .sort((p, q) => (p.id < q.id ? -1 : 1))
+    .map((concept) => ({
+      concept,
+      labels: concept.labels.map((label) => ({
+        label,
+        bare: conceptKey(label.label),
+        full: qualifiedConceptKey(label.label, label.qualifier),
+      })),
+    }));
+  const out: DuplicatePair<C>[] = [];
+  for (const [i, x] of live.entries()) {
+    for (const y of live.slice(i + 1)) {
+      const reason = DUPLICATE_REASONS.find((r) => TESTS[r](x, y));
+      const match = reason === "translation" ? translationMatch(x, y) : undefined;
+      if (reason) out.push({ a: x.concept, b: y.concept, reason, ...(match && { match }) });
+    }
+  }
+  const rank = (r: DuplicateReason) => DUPLICATE_REASONS.indexOf(r);
+  // `sort` is stable and the pairs came in id order.
+  return out.sort((p, q) => rank(p.reason) - rank(q.reason));
+}
+
+/**
+ * Which of two probable duplicates goes into the other (a merge target is
+ * validated, fifth addendum §2), or null when neither can be the target.
+ * With two validated ones the less used goes; the first on a tie.
+ */
+export function mergeDirection<C extends { status: string; questionCount: number }>(
+  a: C,
+  b: C,
+): { loser: C; target: C } | null {
+  if (a.status !== "validated" && b.status !== "validated") return null;
+  if (a.status !== "validated") return { loser: a, target: b };
+  if (b.status !== "validated") return { loser: b, target: a };
+  return b.questionCount < a.questionCount ? { loser: b, target: a } : { loser: a, target: b };
 }
 
 /** The longest label, and qualifier, a concept takes (the contracts' bound). */

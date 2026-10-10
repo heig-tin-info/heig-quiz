@@ -20,11 +20,13 @@ import {
   Segmented,
   Skeleton,
 } from "../ui";
+import { ConceptDuplicates, duplicatePairs } from "./ConceptDuplicates";
 import { ConceptSheet } from "./ConceptSheet";
+import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 
-type Filter = "all" | "proposed" | "validated";
+type Filter = "all" | "proposed" | "validated" | "duplicates";
 
 /** The languages a concept has no label in: what stops its validation. */
 const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((lang) => c.labels[lang] === null);
@@ -37,7 +39,10 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  * deleted (when nothing uses it) or merged into a validated concept from its sheet.
  *
  * The vocabulary is loaded whole, as the pickers load it: the filter is a
- * status, the search is `rankConcepts`, the one rule of the picker.
+ * status, the search is `rankConcepts`, the one rule of the picker. The
+ * **Probable duplicates** filter lists the pairs `probableDuplicates` finds in
+ * that same list (quadratic, fine for hundreds of concepts): no route, nothing
+ * stored.
  */
 export function ConceptQueue() {
   const t = useT();
@@ -55,12 +60,21 @@ export function ConceptQueue() {
   const proposed = all?.filter((c) => c.status === "proposed").length ?? 0;
   const q = typed.trim();
   const rows = useMemo(() => {
+    if (filter === "duplicates") return [];
     const byStatus = (all ?? []).filter((c) => filter === "all" || c.status === filter);
     if (q === "") return byStatus;
     // The proposed ones stay ahead of the validated ones, as without a search (the picker's `first`).
     const proposedIds = new Set(byStatus.filter((c) => c.status === "proposed").map((c) => c.id));
     return rankConcepts(q, byStatus, locale, proposedIds);
   }, [all, filter, q, locale]);
+
+  const found = useMemo(() => duplicatePairs(all ?? []), [all]);
+  // Under a search, the pairs of which a concept matches.
+  const pairs = useMemo(() => {
+    if (q === "") return found;
+    const matched = new Set(rankConcepts(q, all ?? [], locale).map((c) => c.id));
+    return found.filter((p) => matched.has(p.a.id) || matched.has(p.b.id));
+  }, [found, all, q, locale]);
   const edited = all?.find((c) => c.id === editing);
 
   const validate = useMutation({
@@ -89,6 +103,10 @@ export function ConceptQueue() {
               label: proposed > 0 ? t("admin.concepts.filter.proposedCount", { n: proposed }) : t("admin.concepts.filter.proposed"),
             },
             { value: "validated", label: t("admin.concepts.filter.validated") },
+            {
+              value: "duplicates",
+              label: found.length > 0 ? t("admin.concepts.filter.duplicatesCount", { n: found.length }) : t("admin.concepts.filter.duplicates"),
+            },
           ]}
         />
         <SearchInput
@@ -104,6 +122,8 @@ export function ConceptQueue() {
         <Skeleton className="h-64 w-full" />
       ) : list.isError ? (
         <QueryError title={t("admin.concepts.title")} query={list} />
+      ) : filter === "duplicates" ? (
+        <ConceptDuplicates pairs={pairs} concepts={all ?? []} onEdit={setEditing} />
       ) : rows.length === 0 ? (
         <Card>
           {q !== "" ? (
@@ -165,9 +185,7 @@ function ConceptRow({
       <div className="min-w-0 flex-1 basis-60 space-y-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-semibold">{name}</span>
-          <Badge tone={c.status === "validated" ? "green" : "amber"}>
-            {c.status === "validated" ? t("admin.concepts.status.validated") : t("admin.concepts.status.proposed")}
-          </Badge>
+          <ConceptStatusBadge status={c.status} />
           {missing.map((lang) => (
             <Badge key={lang} tone="red">
               {lang === "fr" ? t("admin.concepts.missing.fr") : t("admin.concepts.missing.en")}

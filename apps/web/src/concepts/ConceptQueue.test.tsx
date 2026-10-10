@@ -332,6 +332,76 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     });
   });
 
+  describe("probable duplicates", () => {
+    const pointer = concept(10, { status: "validated", labels: { fr: "Allocation dynamique", en: "Dynamic allocation" }, questionCount: 5, deletable: false, aliases: ["Tas"] });
+    const typo = concept(11, { labels: { fr: "Alocation dynamique", en: null }, questionCount: 2, deletable: false });
+    const heap = concept(12, { labels: { fr: "Tas", en: "Heap" } });
+    const hash = concept(13, { labels: { fr: "Hash table", en: null } });
+    const hashEn = concept(14, { labels: { fr: null, en: "Hash table" } });
+    const memory = concept(15, { status: "validated", labels: { fr: "Adresse", en: "Address" }, qualifiers: { fr: "mémoire", en: "memory" }, deletable: false });
+    const network = concept(16, { status: "validated", labels: { fr: "Adresse", en: "Address" }, qualifiers: { fr: "réseau", en: "network" }, deletable: false });
+    const all = [pointer, typo, heap, hash, hashEn, memory, network, ready];
+    const mergeOf = (c: AdminConcept) => `POST /app/api/admin/concepts/${c.id}/merge`;
+
+    const open = async () => {
+      renderWithProviders(<ConceptQueue />);
+      await userEvent.click(await screen.findByRole("radio", { name: /^duplicates/i }));
+    };
+
+    it("counts the pairs on the filter and says why each pair is listed", async () => {
+      mockFetch({ [LIST]: ok(page(all)) });
+      await open();
+      expect(screen.getByRole("radio", { name: /^duplicates \(4\)/i })).toBeChecked();
+      for (const badge of ["Alias clash", "Translation", "Close labels", "Same label"]) {
+        expect(screen.getByText(badge)).toBeInTheDocument();
+      }
+    });
+
+    it("opens the merge with the other concept already chosen", async () => {
+      const { calls } = mockFetch({ [LIST]: ok(page(all)), [mergeOf(typo)]: ok(pointer) });
+      await open();
+      await userEvent.click(screen.getByRole("button", { name: /merge alocation dynamique into dynamic allocation/i }));
+      const dialog = await screen.findByRole("dialog", { name: /merge .* into another concept/i });
+      expect(within(dialog).getByRole("radio", { name: /dynamic allocation/i })).toBeChecked();
+      await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
+      await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: pointer.id, keepAsAlias: false }));
+    });
+
+    it("offers no merge for homonym candidates, and none while neither is validated", async () => {
+      mockFetch({ [LIST]: ok(page([memory, network, hash, hashEn])) });
+      await open();
+      // The pair's own row comes before the concept lines nested in it.
+      const rows = screen.getAllByRole("listitem");
+      const homonyms = rows.find((li) => within(li).queryByText("Same label"));
+      expect(homonyms).toBeDefined();
+      expect(within(homonyms!).queryByRole("button", { name: /merge/i })).toBeNull();
+      expect(within(homonyms!).getByText(/check the qualifiers/i)).toBeInTheDocument();
+      const translation = rows.find((li) => within(li).queryByText("Translation"));
+      // Each concept shows the label that matches, with its language.
+      expect(within(translation!).getByText("Hash table (FR)")).toBeInTheDocument();
+      expect(within(translation!).getByText("Hash table (EN)")).toBeInTheDocument();
+      expect(within(translation!).queryByRole("button", { name: /merge/i })).toBeNull();
+      expect(within(translation!).getByText(/validate one of them/i)).toBeInTheDocument();
+    });
+
+    it("opens a concept's sheet from a pair, and narrows with the search", async () => {
+      mockFetch({ [LIST]: ok(page(all)) });
+      await open();
+      await userEvent.type(screen.getByRole("searchbox", { name: /search a concept/i }), "heap");
+      await waitFor(() => expect(screen.queryByText("Close labels")).toBeNull());
+      expect(screen.getByText("Alias clash")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: /edit heap/i }));
+      expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    });
+
+    it("says so when there is none", async () => {
+      mockFetch({ [LIST]: ok(page([validated, ready])) });
+      await open();
+      expect(await screen.findByText("No probable duplicates")).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: /^duplicates$/i })).toBeChecked();
+    });
+  });
+
   it("has a done state", async () => {
     mockFetch({
       [LIST]: ok(page([validated])),
