@@ -226,8 +226,8 @@ export function ProjectAdvanced({
           The set's maximum size replaced the project's (ADR-070 §2). Offered
           in every build since Accept provisions group repositories
           (M3-15b-1); a membership change reaching one is confirmed, then
-          applied by the `group.sync` job (M3-15b-2a), and a set's deletion
-          that would remove one answers `409 has_repo`. */}
+          applied by the `group.sync` job (M3-15b-2a), and a set's write
+          that would delete such a group answers `409 has_repo`. */}
       <SettingRow title={t("project.groups")} desc={t("project.groups.desc")}>
         <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
       </SettingRow>

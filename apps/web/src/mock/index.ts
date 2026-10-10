@@ -76,8 +76,8 @@
  *                      station knows of itself (ADR-051).
  *   assist.ts      11. the teacher assistant's development stub: its
  *                      answer, one stored conversation and the history (ADR-080).
- *   concept.ts     12. the vocabulary of concepts and the admin's sorting of
- *                      the tags it replaced (ADR-081, second addendum).
+ *   concept.ts     12. the vocabulary of concepts and the stop list of the
+ *                      dropped tags (ADR-081, second addendum).
  *
  * That list is also the dependency order, and the graph is acyclic: a file
  * reads the ones above it and never the ones below. Two handlers are

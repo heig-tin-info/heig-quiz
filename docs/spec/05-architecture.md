@@ -51,8 +51,8 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 |---|---|---|
 | `auth` | OIDC, sessions, claims, multi-address identity, global roles | |
 | `org` | Courses, classrooms, staff, rosters, accommodations | `auth` |
-| `pool` | Pools, categories, concepts' links, questions, versions, drafts, assets, search | `auth`, `core` |
-| `concept` | The instance-wide vocabulary of concepts (ADR-081): concepts, the resolution of a typed label, proposing and editing; the frozen decisions of the retired tag sorting (`concept_tag_sortings`, whose `drop` rows are the stop list of `concept_dropped`); the links to questions (`question_concepts`) and the resolution of a write naming concepts, inert until the cut-over (third addendum §1); aliases, relations and the links to courses come later | `auth` |
+| `pool` | Pools, categories, questions, versions, drafts, assets, search | `auth`, `core`, `concept` |
+| `concept` | The instance-wide vocabulary of concepts (ADR-081): concepts, the resolution of a typed label, proposing and editing; the frozen decisions of the retired tag sorting (`concept_tag_sortings`, whose `drop` rows are the stop list of `concept_dropped`); the links to questions (`question_concepts`) and the resolution of a write naming concepts; aliases, relations and the links to courses come later | `auth` |
 | `evaluation` | Configuration of an evaluation, items, lifecycle, settings | `org`, `pool` |
 | `live` | Attempts, answers, autosave, presence, clock, live control, deadline ticker | `evaluation` |
 | `preview` | The teacher's stateless preview of an evaluation: seed, student view, runs and grading, nothing stored (ADR-018) | `live`, `grading`, `runner` |

@@ -145,7 +145,7 @@ and students already hold an edu-ID**:
         <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/pool-dark.png">
         <img alt="A question pool: categories in the sidebar, questions in the table" src="docs/assets/screenshots/pool-light.png">
       </picture>
-      <p align="center"><sub><b>Question pools</b>: categories, tags, difficulty and published versions, shared with colleagues.</sub></p>
+      <p align="center"><sub><b>Question pools</b>: categories, concepts, difficulty and published versions, shared with colleagues.</sub></p>
     </td>
     <td width="50%">
       <picture>

@@ -20,8 +20,9 @@
  *   named by GitHub and neither a bot: the reconciliation knows no pusher —
  *   with its CI state. It writes no push receipt (the intake's alone,
  *   ADR-012) and restores nothing (the push webhook's). A group's
- *   invitations are not re-invited here (the `group.sync` job follows them,
- *   ADR-070); its head and runs are reconciled like any row's. Before them, a repository left
+ *   pending invitations are never re-invited (ADR-070 leaves the per-member
+ *   follow-up for later); a late acceptance is still read, and its head and
+ *   runs are reconciled like any row's. Before them, a repository left
  *   WITHOUT its `hgc-protect` ruleset (`ruleset_id` null: provisioned on a
  *   plan that served none) gets it applied once the plan allows it — live,
  *   not archived, its effective deadline still ahead on the server's clock —
