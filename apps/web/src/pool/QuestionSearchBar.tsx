@@ -34,6 +34,7 @@ import {
   completionAt,
   SEARCH_TOKEN_KINDS,
   SEARCH_TYPE_IDS,
+  typingKindAt,
   withoutToken,
   type Completion,
 } from "./searchSyntax";
@@ -330,10 +331,8 @@ export function QuestionSearchBar({
   const resolved = resolveFilters(filters, vocabulary, courses ?? []);
   /** The word still being typed (the focused field's last, no space after it): not judged yet. */
   const [focused, setFocused] = useState(false);
-  const typing =
-    focused && completionAt(filters.q, filters.q.length)?.kind === "concept" ? resolved.words.at(-1)?.word : undefined;
-  /** A `course:` word still being typed is not judged either. */
-  const typingCourse = focused && /(?:^|\s)course:[^\s"]*$/i.test(filters.q);
+  const typingKind = focused ? typingKindAt(filters.q, filters.q.length) : null;
+  const typing = typingKind === "concept" ? resolved.words.at(-1)?.word : undefined;
   /** A ticked concept's name: the scope's, else the vocabulary's; it may have left both. */
   const nameOf = (id: string) => {
     const own = concepts.find((c) => c.id === id);
@@ -433,7 +432,7 @@ export function QuestionSearchBar({
               onRemove={dropCourse}
             />
           ) : null}
-          {resolved.courseMiss !== null && !typingCourse ? (
+          {resolved.courseMiss !== null && typingKind !== "course" ? (
             <Chip
               remove={t("pool.filter.clear")}
               label={`course:${resolved.courseMiss}`}

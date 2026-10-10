@@ -56,6 +56,7 @@ import {
   type QuestionSort,
 } from "./filters";
 import { FilterBar, type ListView } from "./FilterBar";
+import { pickerConceptIds } from "./pickerConceptIds";
 import { parseSearch } from "./searchSyntax";
 import { NewQuestionModal } from "./NewQuestionModal";
 import { PoolEmpty, PoolListSkeleton, PoolListTail } from "./PoolListStates";
@@ -291,11 +292,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const pool = usePool(id);
   const subscription = usePoolSubscription(id);
   const mayWrite = pool.data === undefined || poolRoleAllows(pool.data.role, "contributor");
-  // What both concept pickers rank first: the pool's own concepts, then those of its courses (ADR-081 §5).
-  const poolConceptIds = useMemo(
-    () => [...(pool.data?.concepts ?? []).map((c) => c.concept.id), ...(pool.data?.courseConceptIds ?? [])],
-    [pool.data],
-  );
+  const poolConceptIds = useMemo(() => (pool.data ? pickerConceptIds(pool.data) : []), [pool.data]);
 
   // What this screen adds to the command palette while it is open
   // (docs/spec/08 §8.3): one entry per question type, so an expert never

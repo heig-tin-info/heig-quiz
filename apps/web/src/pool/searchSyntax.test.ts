@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyCompletion,
+  typingKindAt,
   completionAt,
   difficultyValues,
   parseSearch,
@@ -149,5 +150,19 @@ describe("applyCompletion", () => {
     ["does not double the space that is already there", "tag:poi ptr", 7, "tag:pointeurs ptr"],
   ])("%s", (_, line, caret, expected) => {
     expect(applyCompletion(line, completionAt(line, caret)!, "pointeurs").text).toBe(expected);
+  });
+});
+
+describe("typingKindAt", () => {
+  it.each([
+    ["a concept word", "ptr #poin", "concept"],
+    ["a course word", "ptr course:PR", "course"],
+    ["an open quoted course name", 'course:"Prog', "course"],
+    ["an open quoted course name of two words", 'course:"Programmation 2', "course"],
+    ["nothing once the word is closed by a space", "course:PR ", null],
+    ["nothing once the quote is closed", 'course:"Prog 2"', null],
+    ["nothing for free text", "ptr", null],
+  ] as const)("reads %s", (_, line, kind) => {
+    expect(typingKindAt(line, line.length)).toBe(kind);
   });
 });

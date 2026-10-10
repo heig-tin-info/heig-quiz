@@ -302,4 +302,12 @@ describe("FilterBar · the course filter (#599 step 7b)", () => {
     expect(screen.getByText("course:ALGO")).toBeInTheDocument();
     expect(screen.getByText(/no course matches/)).toBeInTheDocument();
   });
+
+  it("does not judge a course word still being typed", async () => {
+    const { user } = setup({}, CONCEPTS, [PRG1]);
+    await user.type(screen.getByLabelText("Search a question"), "course:PR");
+    expect(screen.queryByText(/no course matches/)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Search a question"), "X ");
+    expect(screen.getByText(/no course matches/)).toBeInTheDocument();
+  });
 });
