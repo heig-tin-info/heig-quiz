@@ -177,7 +177,7 @@ the combinations marked below.
 | `KIOSK_GOOGLE_CUSTOMER_ID` | the Workspace's customer id | with `google`, missing |
 | `KIOSK_ENROLLMENT_DOMAIN` | the stations' enrollment domain | with `google`, missing |
 | `KIOSK_EXTENSION_ID` | the companion extension's id | with `google`, missing |
-| `SEB_CONFIG_KEY_ENFORCE` | `0` (default) until proof B, then `1` | never; see the checklist |
+| `SEB_CONFIG_KEY_ENFORCE` | `0` (default); `1` in production and staging (proof B, 2026-10-10) | never; see the checklist |
 
 With `google`, every missing piece is named in one error message, so one
 edit of the file fixes them all. `mock` is for development only: it accepts
@@ -291,7 +291,7 @@ exam comes back as soon as one attestation is accepted.
 
 ADR-051 §10, step 0. These have not been observed on a real station yet.
 Until the first two are recorded, keep `KIOSK_ATTESTATION=off` in
-production; until the last is recorded, keep `SEB_CONFIG_KEY_ENFORCE=0`.
+production. Proof B is recorded (2026-10-10) and `SEB_CONFIG_KEY_ENFORCE=1` in production.
 
 - [ ] In a **web** kiosk app (Google documents the enterprise challenge for
       a PWA kiosk app), the extension's `challengeKey` with the `MACHINE`
@@ -306,8 +306,8 @@ production; until the last is recorded, keep `SEB_CONFIG_KEY_ENFORCE=0`.
       serial on the machine's label.
 - [ ] The Admin console paths and labels on this page are the ones on the
       screen; the ones marked **(unverified)** are corrected here.
-- [ ] **Proof B**: a real Safe Exam Browser sends the
+- [x] **Proof B** (2026-10-10): a real Safe Exam Browser sends the
       `X-SafeExamBrowser-ConfigKeyHash` header on `fetch` and `EventSource`
       requests (`docs/merge/06-codespace-seb-infra.md` §6.3), with no
-      `auth.seb_config_key_mismatch` in the audit during a rehearsal. Only
-      then set `SEB_CONFIG_KEY_ENFORCE=1`.
+      `auth.seb_config_key_mismatch` in the audit during a rehearsal.
+      `SEB_CONFIG_KEY_ENFORCE=1` is set in production and staging.

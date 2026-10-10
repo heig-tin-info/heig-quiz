@@ -70,7 +70,7 @@ the tick with 100 due projects) was deferred (product owner, 2026-10-06).
   **proof B recorded** before the first SEB project.
 - **As delivered** (branch `merge/M6-07-seb-projects`). Migrations
   `0080_seb_projects` (Quiz) and the portal's `0002_platform_seb`.
-  **Proof B is pending**: the manual procedure is 06 §6.3, "Proof B, by
+  **Proof B is done for evaluations (2026-10-10) and pending for projects**: the manual procedure is 06 §6.3, "Proof B, by
   hand", for the product owner; nothing opens SEB projects to students
   before it is recorded here.
   - Point 2, the platform builds every `.seb`: `auth/seb.ts`

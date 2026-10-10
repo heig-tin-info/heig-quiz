@@ -20,8 +20,8 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
 - **Next actions**: the rehearsal on staging (M8-06, runbook §7), which is
   also the import's dry run on a production dump (M8-01), then the cutover
   (M8-07) once the runbook's open decisions O1–O5, the owner's, are
-  settled. M6-07's code is merged and waits for proof B (a real SEB, the
-  owner, on staging); M6-08 and M6-09 are to do. Quiz's production App
+  settled. M6-07's code is merged; proof B is done for evaluations (2026-10-10, Config Key
+  enforced in production) and waits for the project flow (a real SEB, the owner, on staging); M6-08 and M6-09 are to do. Quiz's production App
   exists (registered by hand); staging's, `heig-quiz-staging`, exists
   since 2026-10-06 (M2-06). Teachers create their Quiz classrooms; the
   merge then writes the correspondence table (D22).

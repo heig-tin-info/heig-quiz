@@ -6,6 +6,8 @@ Accepted (2026-09-30, settled with the product owner on the implementation plan)
 the session end is `endKioskSessions` (`auth/session.ts`), formerly named `endConfinedSessions` here;
 §10's delivery plan is removed (delivery lives in `docs/merge/PROGRESS.md` and `changes/`), its step 0
 stays as §10; §1 names the stale-submit refusal (`423 kiosk_attestation_stale`) the code already answers.
+Amended 2026-10-10: proof B of §3 and §10 is recorded for evaluations, and production enforces the
+Config Key check (see "Amendment 2026-10-10" below).
 
 Scope: for **evaluations only**, the part of merge decision D21 (`docs/merge/08-decisions.md`) that
 concerns how a SEB session is checked; the confinement of a session to an **activity** (a project) was
@@ -398,6 +400,20 @@ Step 0, done by hand on real hardware, gates the SEB hardening (§3–4) and the
 - D21's other part, a session confined to an activity (a project) and
   `packages/seb`, was settled on 2026-10-01 for M6. When M6 implements it, `trustRefusal` is where the
   project's SEB check goes.
+
+## Amendment 2026-10-10: proof B recorded, the Config Key check enforced
+
+Scope: the "Audit-only until proof B" rule of §3 and the second check of §10, for **evaluations**.
+
+- **Proof B done (product owner, 2026-10-10).** A real Safe Exam Browser ran a full attempt on an
+  evaluation with a waiting room: the `EventSource` stream of the waiting room, the start, autosaved
+  answers (`fetch`), a reload, the hand-in and the quit. The header was present on every request
+  and no `auth.seb_config_key_mismatch` was written.
+- **Production enforces it**: `SEB_CONFIG_KEY_ENFORCE=1` (staging too). A `seb` session whose
+  hash does not match is anonymous on that request; the audit still records the mismatch. The
+  default of the variable stays `0` for development.
+- Not covered: the project flow (cross-host 303 to the portal, `docs/merge/06-codespace-seb-infra.md`
+  §6.3 steps 5-8) still waits for its own run.
 
 ## Alternatives considered
 

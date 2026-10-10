@@ -142,7 +142,13 @@ limits it found, both for the product owner:
   `POST /launch` on the portal whose hashed URL no longer carries the
   token: not cheap, and not safe to improvise without proof B's evidence.
 
-### Proof B, by hand (pending, the product owner)
+### Proof B, by hand (evaluations done 2026-10-10; projects pending)
+
+Done on 2026-10-10 for an evaluation (ADR-051, amendment 2026-10-10): a full attempt in a real SEB
+(waiting room `EventSource`, start, autosave `fetch`, reload, hand-in, quit) with the header on every
+request and no `auth.seb_config_key_mismatch`; production runs `SEB_CONFIG_KEY_ENFORCE=1`. Steps 4
+and 8 below are thus settled for Quiz's own pages. Steps 1-3 and 5-7 (the project, the cross-host
+303 to the portal, the Browser Exam Key comparison) are still pending and gate the first SEB project.
 
 On a real Safe Exam Browser — each version and platform of the fleet
 (Windows 3.x, macOS 3.x) — against staging (`quiz.dev.chevallier.io`) and
