@@ -260,3 +260,15 @@
   font-family: var(--font-mono);
   font-size: 13px;
 }
+
+/* TASK LISTS, in the editing surface only. TipTap writes a task item as
+   `li > label > input + div > p`: the block `div` would drop the text under
+   the box, so the item is a flex row, the box first and the text beside it,
+   wrapped lines aligned after the box. No bullet, no indent. */
+.rt-surface ul[data-type="taskList"] { list-style: none; padding-left: 0; }
+.rt-surface ul[data-type="taskList"] > li { display: flex; align-items: flex-start; gap: 8px; }
+.rt-surface ul[data-type="taskList"] > li > label { flex: none; display: flex; height: 1lh; align-items: center; }
+.rt-surface ul[data-type="taskList"] > li > label input { margin: 0; accent-color: var(--accent); }
+.rt-surface ul[data-type="taskList"] > li > div { flex: 1; min-width: 0; }
+.rt-surface ul[data-type="taskList"] > li > div > p:first-child { margin-top: 0; }
+.rt-surface ul[data-type="taskList"] > li > div > p:last-child { margin-bottom: 0; }

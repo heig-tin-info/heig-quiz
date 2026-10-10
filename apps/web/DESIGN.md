@@ -124,7 +124,8 @@ Two pairs stay below their target, on purpose:
   anything a student will copy.
 - Scale (px): 12 caption · 13 dense UI (tables, chips) · 14 body · 16 section
   title · 20 sheet title · 28 page title. Page title / body = 2×, and the
-  title is 700 with `-0.02em` tracking; body is 400, labels 500.
+  title is 700 with `-0.02em` tracking; body is 400, labels 500. Rendered
+  markdown adds a 24 step for the `h1` of a question (see MarkdownView).
 - Numbers in tables and countdowns are tabular (`tabular-nums`).
 
 ## Spacing
@@ -205,13 +206,9 @@ question's prose never carries it, so the question scenes do not move.
   code is scanned, not read.
 - **Headings enter one step higher**: `h1` at the page-title step (28 px /
   700 / `-0.02em`), because the page *is* the document and owns its title;
-  `h2` 20 (the sheet-title step), `h3` 16 (the section-title step), `h4`
-  and below 14 at 600. The same scale as everywhere else — in a question
-  (`.md-body`) the headings use the same four steps (28 / 20 / 16 / 14), so
-  `h1` stays distinct from `h2` and from the body; the dense `.md-sm` variant
-  (13 px) steps down one (20 / 16 / 14 / 13). KaTeX renders at 1.2em of its text. Headings take 32 px above
-  and 12 below (a heading belongs to what follows it), blocks 16 between
-  them instead of 12, a rule 32 above and below.
+  `h2` 20, `h3` 16, `h4` and below 14 at 600. Headings take 32 px above and
+  12 below (a heading belongs to what follows it), blocks 16 between them
+  instead of 12, a rule 32 above and below.
 - **Everything else is `.md-body` unchanged**: the same tokens in both
   themes (no colour of its own, so dark mode follows by itself), the same
   radii — a code block and an image at `rounded-field` (10 px), inline code
@@ -1277,7 +1274,12 @@ live in `ui/state.ts`, each written once.
   and every other `src` is dropped. Its typography lives in the `.md-body`
   block of `style.css` — the one place a stylesheet is unavoidable, because
   the content is HTML the component never sees as React elements. `size="sm"`
-  is the dense variant for a table cell or an inspection panel.
+  is the dense variant for a table cell or an inspection panel. Headings
+  follow 24 / 20 / 16 / 14 (700 for `h1` and `h2`; `h1` at 24 was chosen in the
+  product owner's gallery review of 2026-10-10, the title being too close to
+  the subtitle and the body at 20), one step down in `size="sm"`; KaTeX
+  renders at 1.2em of its text; a task item has no bullet, its box inline
+  before the text.
   `markdown.tsx` beside it is a different thing: trusted help text turned into
   React elements, never into HTML.
 - RichText: the teacher's editor (decision D11, Tiptap). Markdown in, markdown

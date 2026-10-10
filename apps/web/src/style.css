@@ -563,12 +563,11 @@ html.dark {
   letter-spacing: -0.01em;
   line-height: 1.3;
 }
-/* One heading scale, the type scale of DESIGN.md: 28 page title, 20 sheet
-   title, 16 section title, 14 body at 600. Each step is far enough from the
-   next (and from the 14 px body) to be told apart at a glance; the dense
-   `.md-sm` variant below keeps its own, smaller steps. */
-.md-body h1 { font-size: 28px; letter-spacing: -0.02em; }
-.md-body h2 { font-size: 20px; }
+/* One heading scale (DESIGN.md, MarkdownView): 24 / 20 / 16 / 14. Product
+   owner's gallery review of 2026-10-10: the `#` title was a little too close
+   to the subtitle and the body. `.md-sm` steps down one. */
+.md-body h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.md-body h2 { font-size: 20px; font-weight: 700; }
 .md-body h3 { font-size: 16px; }
 .md-body h4, .md-body h5, .md-body h6 { font-size: 14px; }
 .md-body ul, .md-body ol { padding-left: 22px; }
@@ -577,16 +576,6 @@ html.dark {
 .md-body li { margin: 4px 0; }
 .md-body li.md-task { list-style: none; margin-left: -22px; }
 .md-body li.md-task input { margin-right: 8px; accent-color: var(--accent); }
-/* The editing surface (TipTap) writes a task item as
-   `li > label > input + div > p`: the block `div` would drop the text under
-   the box, so the item is a flex row, the box first and the text beside it,
-   wrapped lines aligned after the box. No bullet, no indent. */
-.md-body ul[data-type="taskList"] { list-style: none; padding-left: 0; }
-.md-body ul[data-type="taskList"] > li { display: flex; align-items: flex-start; gap: 8px; }
-.md-body ul[data-type="taskList"] > li > label { flex: none; margin-top: 0.3em; line-height: 1; }
-.md-body ul[data-type="taskList"] > li > label input { margin: 0; accent-color: var(--accent); }
-.md-body ul[data-type="taskList"] > li > div { flex: 1; min-width: 0; }
-.md-body ul[data-type="taskList"] > li > div > p { margin: 0; }
 .md-body a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .md-body strong { font-weight: 600; }
 .md-body del { color: var(--fg-faint); }
@@ -655,10 +644,10 @@ html.dark {
   border-radius: 4px;
 }
 
-/* KaTeX: inherit the surrounding size (its own stylesheet forces 1.21em) and
-   let a long display formula scroll instead of widening the question. 1.2em
-   is KaTeX's own proportion to its text (1.21): below it, a formula reads
-   smaller than the words around it, the letters' x-height being lower. */
+/* KaTeX: its own stylesheet forces 1.21em; 1.2em keeps that proportion, so a
+   formula reads at the size of the words around it (the 1.05em set here made
+   formulas visibly smaller). A long display formula scrolls instead of
+   widening the question. */
 .md-body .katex { font-size: 1.2em; }
 .md-body .md-math-display { display: block; margin: 12px 0; overflow-x: auto; overflow-y: hidden; }
 
@@ -671,8 +660,8 @@ html.dark {
 
 /* `.md-doc`: long-form reading, the journal (DESIGN.md › Long-form reading).
    A modifier, never the default: a question's prose keeps everything above.
-   The page IS the document, so its headings enter one step higher than in a
-   question card (h1 at the 28 px page-title step); the measure is capped at
+   The page IS the document, so its h1 is the 28 px page-title step (a
+   question card's scale stops at 24); the measure is capped at
    72 characters and the leading opened to 1.75, because a page is read for
    minutes, not scanned. Colours and radii are the `.md-body` ones — tokens,
    so dark mode follows by itself. */
@@ -703,9 +692,7 @@ html.dark {
   line-height: 1.25;
 }
 .md-body.md-doc h1 { font-size: 28px; letter-spacing: -0.02em; }
-.md-body.md-doc h2 { font-size: 20px; }
-.md-body.md-doc h3 { font-size: 16px; }
-.md-body.md-doc h4, .md-body.md-doc h5, .md-body.md-doc h6 { font-size: 14px; font-weight: 600; }
+.md-body.md-doc h4, .md-body.md-doc h5, .md-body.md-doc h6 { font-weight: 600; }
 .md-body.md-doc hr { margin: 32px 0; }
 /* Code is scanned, not read: it keeps the tighter leading. */
 .md-body.md-doc pre { line-height: 1.6; }

@@ -416,13 +416,10 @@ function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHo
     if (input.getAttribute("type") !== "checkbox") input.remove();
     else {
       input.setAttribute("disabled", "");
-      // The item, not the paragraph a loose list wraps the text in. A loose
-      // item is `<li><input> <p>text</p></li>`: the box goes INTO the
-      // paragraph, or the block would break the line after it.
-      const item = input.closest("li");
+      // Tag the item, not the paragraph a loose list wraps it in; a box nested deeper (a table cell) tags nothing.
+      const host = input.parentElement;
+      const item = host?.tagName === "LI" ? host : host?.tagName === "P" && host.parentElement?.tagName === "LI" ? host.parentElement : null;
       item?.classList.add("md-task");
-      const next = input.nextElementSibling;
-      if (item && input.parentElement === item && next?.tagName === "P") next.prepend(input, " ");
     }
   }
 

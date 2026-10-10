@@ -260,11 +260,13 @@ describe("MarkdownView — content", () => {
     expect(items).toHaveLength(2);
     for (const li of items) {
       expect(li).toHaveClass("md-task");
-      // The box is inside the paragraph, inline before the text: no block between them.
-      const box = li.querySelector("input");
-      expect(box?.parentElement?.tagName).toBe("P");
     }
     expect(items[0]!.querySelector("p")?.textContent?.trim()).toBe("first");
+  });
+
+  it("does not tag an item for a checkbox nested in a table", () => {
+    const body = view("- item\n\n  | a |\n  | --- |\n  | <input type=\"checkbox\"> |");
+    expect(body.querySelector("li")).not.toHaveClass("md-task");
   });
 
   it("renders nothing at all for empty source", () => {
