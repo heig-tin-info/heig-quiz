@@ -20,6 +20,7 @@ import {
   Menu,
   pressable,
   QueryError,
+  SectionHeading,
   GroupBySwitch,
   Select,
   Skeleton,
@@ -300,13 +301,17 @@ export function EvaluationList({
   const open = (row: EvaluationSummary) => navigate(evaluationHome(row));
 
   return (
-    <section className="space-y-3">
-      {/* No heading and no button: the tab above names the list, and "New
-          evaluation" sits in the page header, where "Add students" stands on
-          the roster tab — one primary per tab, always in the same place.
-          The classroom's projects, when it has any, follow under a heading
-          of their own (`ProjectGroup`, M3-10): the tab names this list, not
-          the second one. */}
+    <section aria-labelledby="classroom-evaluations" className="space-y-3">
+      {/* No button: "New evaluation" sits in the page header, where "Add
+          students" stands on the roster tab — one primary per tab, always in
+          the same place. The heading is the sibling of the projects' one
+          (`ProjectGroup`, M3-10): the tab is "Activities", each list names
+          itself and carries its own count (none while it loads or failed). */}
+      <SectionHeading
+        icon={ClipboardList}
+        title={<span id="classroom-evaluations">{t("eval.title")}</span>}
+        count={list.data?.length}
+      />
       {list.isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : list.isError || !list.data ? (

@@ -35,15 +35,15 @@ On the course page's **Classrooms** tab, click **New classroom**. A classroom ha
 
 ### The classroom screen
 
-The eyebrow above the title names the course and goes back to it. The title is the classroom's name, followed by the page's help **?**, by the period and, when the classroom is connected to GitHub, by its organization. Under the title, four tabs, and the primary action at the right of the title changes with the tab, always in the same place: **Add students** on the roster, **New evaluation** on the evaluations; the **Drill** tab is a read view and **Settings** a page of settings, and neither has one.
+The eyebrow above the title names the course and goes back to it. The title is the classroom's name, followed by the page's help **?**, by the period and, when the classroom is connected to GitHub, by its organization. Under the title, four tabs, and the primary action at the right of the title changes with the tab, always in the same place: **Add students** on the roster, **New evaluation** on the activities; the **Drill** tab is a read view and **Settings** a page of settings, and neither has one.
 
 <figure markdown="span">
-  ![A classroom, on its evaluations tab](../assets/screenshots/classroom-evaluations-light.png#only-light)
-  ![A classroom, on its evaluations tab](../assets/screenshots/classroom-evaluations-dark.png#only-dark)
-  <figcaption>The Evaluations tab: one row per evaluation, with its state, its mode, its questions, its points and its attempts.</figcaption>
+  ![A classroom, on its Activities tab](../assets/screenshots/classroom-evaluations-light.png#only-light)
+  ![A classroom, on its Activities tab](../assets/screenshots/classroom-evaluations-dark.png#only-dark)
+  <figcaption>The Activities tab, Evaluations section: one row per evaluation, with its state, its mode, its questions, its points and its attempts.</figcaption>
 </figure>
 
-**Evaluations** lists the evaluations you run with this group, each with its state: draft, scheduled, waiting room (shown as *lobby*), running, paused, closed, grading, released. The row's menu leads to what the state allows: the setup, the live dashboard, the grading panel or the results. The chapters [Evaluations](evaluations.md), [Running an evaluation](live.md) and [Grading and results](grading.md) take it from there.
+The **Activities** tab opens on an **Evaluations** section, which lists the evaluations you run with this group, each with its state: draft, scheduled, waiting room (shown as *lobby*), running, paused, closed, grading, released. The row's menu leads to what the state allows: the setup, the live dashboard, the grading panel or the results. The chapters [Evaluations](evaluations.md), [Running an evaluation](live.md) and [Grading and results](grading.md) take it from there.
 
 <figure markdown="span">
   ![The same classroom, on its roster tab](../assets/screenshots/classroom-roster-light.png#only-light)
@@ -120,7 +120,7 @@ GitHub is optional: a classroom that is never connected is a plain Quiz classroo
 - Once connected, the section shows the organization and three checks: the App installed with access to every repository (the only one that blocks), the organization's plan (on the free plan, no rulesets and no organization secrets for private repositories), and the `ANTHROPIC_API_KEY` secret the LLM review of projects needs (present, missing, or unknown when the App cannot read secrets).
 - **Disconnect** deletes nothing on GitHub. It is refused while the classroom has a journal: remove the journal first.
 
-Once connected, the classroom can hold [projects](projects.md) (**New**, then **Project**, on the Evaluations tab) and its **Groups** tab keeps the [group sets](groups.md) they follow. Installing the App, the checks and what students must do to link their account are in [Connecting GitHub](github.md).
+Once connected, the classroom can hold [projects](projects.md) (**New**, then **Project**, on the Activities tab) and its **Groups** tab keeps the [group sets](groups.md) they follow. Installing the App, the checks and what students must do to link their account are in [Connecting GitHub](github.md).
 
 Your own GitHub account is linked from your **Settings** page, in its **GitHub** card, which shows once you are on the staff of a connected classroom, or hold a seat as a student in one. **Link GitHub** goes through GitHub's authorisation and comes back to the page you started from, with a message saying it is linked, already linked to another Quiz account, or failed. **Unlink** undoes it.
 

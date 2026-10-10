@@ -178,7 +178,7 @@ const scenes = [
   },
   {
     name: "classroom-evaluations",
-    caption: "A classroom, on its evaluations tab.",
+    caption: "A classroom, on its Activities tab.",
     persona: "teacher",
     path: (w) => `/classrooms/${w.classroom.id}`,
     state: "As seeded: four evaluations (draft, scheduled, lobby, closed).",

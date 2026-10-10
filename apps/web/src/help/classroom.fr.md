@@ -22,18 +22,19 @@ tant qu'étudiant** fait tout cela d'un clic — la place vous est proposée si
 vous n'en avez pas, puis la vraie salle d'attente et le vrai lecteur
 s'ouvrent.
 
-## Évaluations
+## Activités
 
-Les évaluations de cette classe, chacune avec son état — brouillon,
-planifiée, salle d'attente, en cours, en pause, clôturée, correction,
-publiée. Depuis une ligne, vous atteignez sa configuration, le tableau de
-bord, le panneau de correction ou les résultats, selon l'endroit où elle en
-est. **Nouvelle évaluation**, en haut à droite tant que cet onglet est
-ouvert, en crée une. Là où la plateforme offre les projets, ce bouton est
-**Nouveau**, un menu d'**Évaluation** et de **Projet** : un projet demande
-la classe connectée à GitHub, et sur une classe qui ne l'est pas, Projet
-ouvre d'abord la connexion dans les Réglages. Les projets de la classe sont
-listés sous ses évaluations, chacun avec son état, son début et son
+L'onglet réunit les activités de la classe. **Évaluations** liste ses
+évaluations, chacune avec son état — brouillon, planifiée, salle d'attente,
+en cours, en pause, clôturée, correction, publiée. Depuis une ligne, vous
+atteignez sa configuration, le tableau de bord, le panneau de correction ou
+les résultats, selon l'endroit où elle en est. **Nouvelle évaluation**, en
+haut à droite tant que cet onglet est ouvert, en crée une. Là où la
+plateforme offre les projets, ce bouton est **Nouveau**, un menu
+d'**Évaluation** et de **Projet** : un projet demande la classe connectée à
+GitHub, et sur une classe qui ne l'est pas, Projet ouvre d'abord la
+connexion dans les Réglages. Les projets de la classe sont listés sous
+**Projets**, sous les évaluations, chacun avec son état, son début et son
 échéance.
 
 ## Réglages

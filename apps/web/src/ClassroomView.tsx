@@ -55,10 +55,9 @@ import { classroomKey } from "./queryKeys";
 import { Trail, useClassroomCrumbs } from "./Trail";
 import { invalidateHint } from "./realtime/hints";
 import { useClassroom } from "./course/parts";
-import { useEvaluations } from "./evaluation/api";
 
 /**
- * One classroom: its roster, its evaluations, its drill and its settings,
+ * One classroom: its roster, its activities, its drill and its settings,
  * one tab each.
  *
  * Two lists that never answer the same question sat stacked on one page, so
@@ -66,9 +65,10 @@ import { useEvaluations } from "./evaluation/api";
  * tabs also settle the primary action, and the page header carries it in the
  * same slot whichever tab is open: "Add students" on the roster — an empty
  * roster is the only thing that blocks everything a classroom is for — and
- * "New evaluation" on the evaluations (#295), a "New ▾" of Evaluation and
- * Project since M3-10 (`NewActivity`), whose projects are a group under the
- * evaluations (`ProjectGroup`). The third tab, the drill
+ * "New evaluation" on the Activities tab (#295, #683), a "New ▾" of Evaluation
+ * and Project since M3-10 (`NewActivity`), whose projects are a section under
+ * the evaluations' (`ProjectGroup`). The tab's value stays `evaluations`, so
+ * old links keep working. The third tab, the drill
  * (ADR-041, #317), is a read view — each student's practice — so the slot
  * stays empty there. The fourth, Settings (F-ORG-13, D24), is a route of its
  * own (`/classrooms/:id/settings`): rename, archive, delete and the drill
@@ -210,14 +210,6 @@ export function ClassroomView({
 
   const crumbs = useClassroomCrumbs(id);
   const room = useClassroom(id);
-  /**
-   * The evaluations, for the number on their tab. It is the query the list
-   * itself runs, key included, so the count and the rows are one cache entry
-   * and can never disagree — a count carried by the classroom payload would
-   * still read "2" the moment after a third evaluation was created.
-   */
-  const evaluations = useEvaluations(id);
-
   /**
    * The teacher takes a (staff) seat in their own classroom, to walk the
    * student flow without a second account. It stays out of the headcount.
@@ -361,10 +353,9 @@ export function ClassroomView({
           items={[
             {
               value: "evaluations",
-              label: t("eval.title"),
-              // No number while the list is loading or failed: a "0" that
-              // means "not known yet" is worse than no count at all.
-              count: evaluations.data?.length,
+              // "Activities": evaluations and projects, each list counting
+              // itself under its own heading (#683), so the tab has no number.
+              label: t("classroom.tab.activities"),
               icon: ClipboardList,
               coach: "classroom.tab.evaluations",
             },

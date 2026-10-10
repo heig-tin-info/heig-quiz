@@ -70,9 +70,9 @@
     },
     {
       "name": "classroom-evaluations",
-      "caption": "A classroom, on its evaluations tab.",
+      "caption": "A classroom, on its Activities tab.",
       "persona": "teacher",
-      "path": "/classrooms/0df3b5ef-4264-42ea-8f93-3dbbe9ead93e",
+      "path": "/classrooms/2575e389-5142-40a3-be21-02108d28c242",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -87,8 +87,8 @@
         "light": "classroom-evaluations-light.png",
         "dark": "classroom-evaluations-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
+      "takenAt": "2026-10-10T02:42:44.428Z",
+      "commit": "adffc1d3",
       "base": "http://localhost:3100"
     },
     {

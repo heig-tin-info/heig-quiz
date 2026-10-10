@@ -4,7 +4,7 @@ The live dashboard is the screen you keep open while the class takes an evaluati
 
 ## Reaching the dashboard
 
-From the classroom's **Evaluations** tab, a row in `lobby`, `running` or `paused` opens the dashboard on a click; the row's menu also offers **Live dashboard** for any evaluation past `draft`. From the configuration screen, the **Launch** tab of a live evaluation shows **Go to the dashboard**.
+From the classroom's **Activities** tab, a row in `lobby`, `running` or `paused` opens the dashboard on a click; the row's menu also offers **Live dashboard** for any evaluation past `draft`. From the configuration screen, the **Launch** tab of a live evaluation shows **Go to the dashboard**.
 
 The **Configure** link above the title leads back to the three configuration steps, where nothing structural can change any more.
 

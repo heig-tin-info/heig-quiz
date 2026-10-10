@@ -20,18 +20,18 @@ stays out of the headcount. From an evaluation, **View as student** does the
 whole thing in one click — it offers the seat if you have none, then walks
 you through the real waiting room and player.
 
-## Evaluations
+## Activities
 
-The evaluations of this classroom, each with its state — draft, scheduled,
-waiting room, running, paused, closed, grading, released. From a row you
-reach its configuration, the live dashboard, the grading panel or the
-results, depending on where it stands. **New evaluation**, at the top right
-while this tab is open, creates one. Where the platform offers projects, that
-button is **New**, a menu of **Evaluation** and **Project**: a project needs
-the classroom connected to GitHub, and on a classroom that is not, Project
-opens the connection in the Settings first. The classroom's projects are
-listed under its evaluations, each with its state, its start and its
-deadline.
+The tab holds the classroom's activities. **Evaluations** lists its
+evaluations, each with its state — draft, scheduled, waiting room, running,
+paused, closed, grading, released. From a row you reach its configuration,
+the live dashboard, the grading panel or the results, depending on where it
+stands. **New evaluation**, at the top right while this tab is open, creates
+one. Where the platform offers projects, that button is **New**, a menu of
+**Evaluation** and **Project**: a project needs the classroom connected to
+GitHub, and on a classroom that is not, Project opens the connection in the
+Settings first. The classroom's projects are listed under **Projects**, below
+the evaluations, each with its state, its start and its deadline.
 
 ## Settings
 
