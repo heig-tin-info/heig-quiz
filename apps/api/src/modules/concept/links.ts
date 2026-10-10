@@ -222,12 +222,21 @@ export function byLabel(a: ConceptRef, b: ConceptRef): number {
   return a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
 }
 
-/** Gives the question `toId` the concepts of `fromId` (a copy, ADR-017), inside the caller's transaction. */
+/**
+ * Gives the question `toId` the concepts of `fromId` (a copy, ADR-017), inside
+ * the caller's transaction. A concept merged meanwhile is followed to the one
+ * it went into: each concept is share-locked, like `setQuestionConcepts`
+ * does, so a merge in flight is waited for and its outcome read (the locked
+ * row comes back in its latest version), and no link to a merged concept is
+ * ever re-created.
+ */
 export async function copyQuestionConcepts(tx: Db | Tx, fromId: string, toId: string): Promise<void> {
   await tx.execute(sql`
     INSERT INTO ${questionConcepts} (question_id, concept_id)
-    SELECT ${toId}::uuid, ${questionConcepts.conceptId} FROM ${questionConcepts}
-    WHERE ${questionConcepts.questionId} = ${fromId}
+    SELECT ${toId}::uuid, coalesce(c.merged_into, c.id) FROM ${questionConcepts} qc
+    JOIN ${concepts} c ON c.id = qc.concept_id
+    WHERE qc.question_id = ${fromId}
+    FOR SHARE OF c
     ON CONFLICT DO NOTHING`);
 }
 

@@ -23,12 +23,17 @@
  * - `POST /app/api/admin/concepts/:id/validate`: 422
  *   `concept_label_missing`, 409 `concept_merged`, 404.
  * - `DELETE /app/api/admin/concepts/:id`: 204; 409 `concept_in_use`, 404.
+ * - `POST /app/api/admin/concepts/:id/merge` `{ into }`: merges the concept
+ *   into a validated one, answering `ConceptMergeResult`; 422
+ *   `concept_merge_self` or `concept_merge_target_not_validated`, 409
+ *   `concept_merged` (either side already merged), 404 (either unknown).
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
   type AdminConceptList,
   ConceptCreate,
+  ConceptMerge,
   type ConceptList,
   ConceptPatch,
   ConceptResolveQuery,
@@ -95,6 +100,19 @@ export async function conceptPlugin(app: FastifyInstance) {
     if (!params.success) return notFound(reply);
     try {
       return await service.validateConcept(app.db, { actor: actorOf(req), now }, params.data.id);
+    } catch (error) {
+      return sendFailure(reply, error, now);
+    }
+  });
+
+  app.post("/app/api/admin/concepts/:id/merge", { preHandler: requireAdmin }, async (req, reply) => {
+    const now = app.clock.now();
+    const params = IdParam.safeParse(req.params);
+    if (!params.success) return notFound(reply);
+    const body = ConceptMerge.safeParse(req.body);
+    if (!body.success) return invalid(reply, body.error);
+    try {
+      return await service.mergeConcept(app.db, { actor: actorOf(req), now }, params.data.id, body.data.into);
     } catch (error) {
       return sendFailure(reply, error, now);
     }

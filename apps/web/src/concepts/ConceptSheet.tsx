@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { GitMerge, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { CONCEPT_LANGS, ConceptPatch, type AdminConcept, type ConceptLang } from "@quiz/contracts";
@@ -9,6 +9,7 @@ import { useConfirm } from "../confirm";
 import { useT, type Locale } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
 import { Button, Field, FormError, Sheet, Textarea } from "../ui";
+import { ConceptMergeDialog } from "./ConceptMergeDialog";
 import { conceptName } from "./names";
 
 type Side = { label: string; qualifier: string; description: string };
@@ -41,14 +42,18 @@ function patchOf(was: Sides, now: Sides) {
  * and description, saved through the existing `PATCH`, and the deletion of a
  * concept nothing uses. The deletion is offered but disabled, with its
  * reason, while a question uses the concept: it is merged then, never
- * deleted (ADR-081 third addendum §7).
+ * deleted (ADR-081 third addendum §7); **Merge into…** opens the dialog that
+ * folds it into a validated concept.
  */
 export function ConceptSheet({
   concept,
+  concepts,
   locale,
   onClose,
 }: {
   concept: AdminConcept;
+  /** The whole queue: the validated ones are the targets of a merge. */
+  concepts: readonly AdminConcept[];
   locale: Locale;
   onClose: () => void;
 }) {
@@ -57,6 +62,7 @@ export function ConceptSheet({
   const confirm = useConfirm();
   const was = sidesOf(concept);
   const [sides, setSides] = useState<Sides>(was);
+  const [merging, setMerging] = useState(false);
   const name = conceptName(concept, locale);
 
   const refresh = () => {
@@ -129,6 +135,9 @@ export function ConceptSheet({
           >
             {remove.isPending ? null : <Trash2 />} {t("admin.concepts.delete")}
           </Button>
+          <Button variant="secondary" onClick={() => setMerging(true)}>
+            <GitMerge /> {t("admin.concepts.merge")}
+          </Button>
           <Button variant="secondary" onClick={onClose}>
             {t("common.cancel")}
           </Button>
@@ -180,6 +189,9 @@ export function ConceptSheet({
         ) : null}
         <FormError error={save.error ?? remove.error} describe={describe} />
       </div>
+      {merging ? (
+        <ConceptMergeDialog concept={concept} candidates={concepts} onClose={() => setMerging(false)} onMerged={refresh} />
+      ) : null}
     </Sheet>
   );
 }

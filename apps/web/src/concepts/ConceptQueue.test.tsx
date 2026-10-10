@@ -149,6 +149,75 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     expect(await within(sheet).findByText(/another concept already has this label/i)).toBeInTheDocument();
   });
 
+  describe("merging a concept into a validated one", () => {
+    const target = concept(5, { status: "validated", labels: { fr: "Récursion", en: "Recursive call" }, questionCount: 3, deletable: false });
+    const mergeOf = (c: AdminConcept) => `POST /app/api/admin/concepts/${c.id}/merge`;
+
+    const openDialog = async (loser: AdminConcept) => {
+      await userEvent.click(await screen.findByRole("button", { name: new RegExp(`edit ${loser.labels.en ?? loser.labels.fr}`, "i") }));
+      const sheet = await screen.findByRole("dialog");
+      await userEvent.click(within(sheet).getByRole("button", { name: /merge into/i }));
+      return screen.findByRole("dialog", { name: /merge .* into another concept/i });
+    };
+
+    it("offers the validated concepts only, never the concept itself, with both usage counts", async () => {
+      mockFetch({ [LIST]: ok(page([halfDone, ready, validated, target])) });
+      renderWithProviders(<ConceptQueue />);
+      const dialog = await openDialog(halfDone);
+
+      expect(within(dialog).getByText("4 questions")).toBeInTheDocument();
+      expect(within(dialog).getByRole("radio", { name: /pointer/i })).toBeInTheDocument();
+      expect(within(dialog).getByRole("radio", { name: /recursive call/i })).toBeInTheDocument();
+      // A proposed concept cannot absorb another, nor can the concept absorb itself.
+      expect(within(dialog).getAllByRole("radio")).toHaveLength(2);
+      expect(within(dialog).queryByRole("radio", { name: /recursion/i })).toBeNull();
+      expect(within(dialog).getByRole("button", { name: /^merge$/i })).toBeDisabled();
+    });
+
+    it("says what happens, then merges and refreshes the queue", async () => {
+      const { calls } = mockFetch({
+        [LIST]: ok(page([halfDone, validated])),
+        [mergeOf(halfDone)]: ok({ concept: validated, moved: 4, alreadyLinked: 0 }),
+      });
+      renderWithProviders(<ConceptQueue />);
+      const dialog = await openDialog(halfDone);
+
+      await userEvent.click(within(dialog).getByRole("radio", { name: /pointer/i }));
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        "4 questions will now use Pointer. The label Héritage will no longer designate a concept.",
+      );
+      await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
+      await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: validated.id }));
+      // The queue is read again: the merged concept is gone from the next answer.
+      await waitFor(() => expect(calls.filter((c) => c.method === "GET" && c.url.endsWith("/admin/concepts")).length).toBeGreaterThan(1));
+    });
+
+    it("searches the targets with the picker's rule", async () => {
+      mockFetch({ [LIST]: ok(page([ready, validated, target])) });
+      renderWithProviders(<ConceptQueue />);
+      const dialog = await openDialog(ready);
+
+      await userEvent.type(within(dialog).getByRole("searchbox", { name: /search a validated concept/i }), "pointe");
+      await waitFor(() => expect(within(dialog).queryByRole("radio", { name: /recursive call/i })).toBeNull());
+      expect(within(dialog).getByRole("radio", { name: /pointer/i })).toBeInTheDocument();
+      await userEvent.clear(within(dialog).getByRole("searchbox"));
+      await userEvent.type(within(dialog).getByRole("searchbox"), "zzzz");
+      expect(await within(dialog).findByText("No validated concept matches")).toBeInTheDocument();
+    });
+
+    it("shows a refusal and keeps the dialog open", async () => {
+      mockFetch({
+        [LIST]: ok(page([ready, validated])),
+        [mergeOf(ready)]: fail(409, { error: "concept_merged" }),
+      });
+      renderWithProviders(<ConceptQueue />);
+      const dialog = await openDialog(ready);
+      await userEvent.click(within(dialog).getByRole("radio", { name: /pointer/i }));
+      await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
+      expect(await within(dialog).findByText(/merged in the meantime/i)).toBeInTheDocument();
+    });
+  });
+
   it("has a done state", async () => {
     mockFetch({
       [LIST]: ok(page([validated])),

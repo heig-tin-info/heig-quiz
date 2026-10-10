@@ -203,3 +203,23 @@ export const ConceptExists = z.object({
   concept: Concept,
 });
 export type ConceptExists = z.infer<typeof ConceptExists>;
+
+// ---------------------------------------------------------------------------
+// The admin's merge (ADR-081, fifth addendum 2026-10-10)
+// ---------------------------------------------------------------------------
+
+/** `POST /admin/concepts/:id/merge`: the validated concept that absorbs the one in the path. */
+export const ConceptMerge = z.object({ into: z.uuid() });
+export type ConceptMerge = z.infer<typeof ConceptMerge>;
+
+/**
+ * The merge's answer: the surviving concept, and how many links moved to it
+ * (`moved`: questions that now use it) or collapsed into one it already had
+ * (`alreadyLinked`). Both count soft-deleted questions too.
+ */
+export const ConceptMergeResult = z.object({
+  concept: Concept,
+  moved: z.number().int().min(0),
+  alreadyLinked: z.number().int().min(0),
+});
+export type ConceptMergeResult = z.infer<typeof ConceptMergeResult>;

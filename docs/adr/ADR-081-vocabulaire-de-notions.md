@@ -419,6 +419,27 @@ is the first pull request; merge, aliases and probable duplicates follow.
    earlier `merged_into` chains are re-pointed, soft-deleted questions are
    included, and `copyQuestionConcepts` is locked against the merge. The audit
    keeps the moved question ids. There is no undo button.
+   As built (`POST /admin/concepts/:id/merge`, `{ into }`, the admin's;
+   `apps/api/src/modules/concept/merge.ts`), in one transaction:
+   (a) the two rows are locked `FOR UPDATE` in id order; refusals are 422
+   `concept_merge_self`, 409 `concept_merged` (either side already merged),
+   422 `concept_merge_target_not_validated`, 404; (b) the loser's links move to
+   the winner (`ON CONFLICT DO NOTHING`, then the loser's are deleted), every
+   question included, deleted ones too; (c) the concepts merged into the loser
+   are re-pointed to the winner (the database checks neither chains nor the
+   target's status, so this is the service's); (d) the loser becomes `merged`
+   with `merged_into` the winner, keeping its keys, which leave the unique
+   indexes. The winner keeps its labels, qualifiers, descriptions and status.
+   `setQuestionConcepts` share-locks the concepts it links and
+   `copyQuestionConcepts` does the same while following `merged_into`, so a
+   write in flight is waited for and none re-creates a link to the loser. The
+   loser's old label no longer resolves (a bare label matches live concepts
+   only: 422 `concept_unknown` on a write, `unknown` on `resolve`), while its
+   id still resolves to the winner in one hop. The audit `concept.merge`
+   (subject: the loser) carries the loser's and the winner's ids, labels and
+   qualifiers, `moved` and `alreadyLinked` (the ids of the questions that
+   already had the winner) and `repointed`, enough for a reviewed SQL undo.
+   Course-concept links (step 7) will join this transaction.
 3. **Aliases** have no language. An alias whose key equals another live
    concept's label is refused unless the admin confirms explicitly.
 4. **Probable duplicates** are proposed from labels and qualifiers only, when

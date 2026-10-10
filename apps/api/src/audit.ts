@@ -61,12 +61,17 @@ export type AuditAction =
    * language). `delete`: the admin deleted a concept nothing referred to,
    * before the cut-over (second addendum §2; `payload.status`,
    * `payload.labels`). `validate`: the admin validated a concept
-   * (`payload.labels`). The tag sorting's `sort` and
+   * (`payload.labels`). `merge`: the admin merged the subject (the loser)
+   * into a validated concept, in one transaction (`payload`: `loser` id and
+   * labels, `winner` id and labels, `moved` and `alreadyLinked` question ids,
+   * `repointed` concept ids; enough for a reviewed SQL undo, ADR-081 fifth
+   * addendum). The tag sorting's `sort` and
    * `sort_propose` rows of the past stay in the log, no longer written
    * (ADR-081, step (d)).
    */
   | "concept.delete"
   | "concept.edit"
+  | "concept.merge"
   | "concept.propose"
   | "concept.validate"
   | "course.create"

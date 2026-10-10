@@ -34,7 +34,7 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  * vocabulary, the concepts teachers proposed first, each with how many
  * questions of the instance use it. The screen's one primary action is
  * **Validate**; a concept is renamed, completed in its other language or
- * deleted (when nothing uses it) from its sheet.
+ * deleted (when nothing uses it) or merged into a validated concept from its sheet.
  *
  * The vocabulary is loaded whole, as the pickers load it: the filter is a
  * status, the search is `rankConcepts`, the one rule of the picker.
@@ -136,7 +136,7 @@ export function ConceptQueue() {
         </Card>
       )}
 
-      {edited ? <ConceptSheet concept={edited} locale={locale} onClose={() => setEditing(null)} /> : null}
+      {edited ? <ConceptSheet concept={edited} concepts={all ?? []} locale={locale} onClose={() => setEditing(null)} /> : null}
     </section>
   );
 }
