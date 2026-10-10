@@ -279,6 +279,11 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       expect(within(dialog).getByRole("status")).toHaveTextContent(
         "The 4 questions that use Héritage will use Pointer. The label Héritage will no longer designate a concept.",
       );
+      await userEvent.click(within(dialog).getByRole("checkbox"));
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        "The 4 questions that use Héritage will use Pointer. Héritage will remain an alias of Pointer.",
+      );
+      await userEvent.click(within(dialog).getByRole("checkbox"));
       await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
       await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: validated.id, keepAsAlias: false }));
       // The queue is read again: the merged concept is gone from the next answer.

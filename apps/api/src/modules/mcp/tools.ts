@@ -107,7 +107,8 @@ const Concepts = QuestionPatchFields.shape.concepts.describe(
   `${CONCEPTS_MEANING} Replaces the question's concepts. Each entry is a concept id, a label in either ` +
   "language, or a label with its qualifier (`adresse (mémoire)`). All or nothing: an ambiguous label is " +
   "refused with 422 `concept_ambiguous` and its candidates, an unknown one with 422 `concept_unknown` and " +
-  "the close candidates (pick one and retry with its id), a label the admin dropped with 422 `concept_dropped`.",
+  "the close candidates (pick one and retry with its id), a label the admin dropped with 422 `concept_dropped`, " +
+  "a new label that another concept answers to as an alias with 409 `concept_exists` naming that concept (use its id).",
 );
 /** A question's internal name reads as a title in every teacher list, not as an identifier (#691). */
 const INTERNAL_NAME_MEANING =

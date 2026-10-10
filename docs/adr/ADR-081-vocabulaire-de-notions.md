@@ -429,7 +429,7 @@ is the first pull request; merge, aliases and probable duplicates follow.
    concept's label is refused unless the admin confirms explicitly.
    As built (PR3): only the admin adds or removes one
    (`POST /admin/concepts/:id/aliases` `{ alias, force? }`, `DELETE
-   .../aliases/:key`; audits `concept.alias_add` with the forced flag and the
+   .../aliases/:alias` (the text; the server computes the key); audits `concept.alias_add` with the forced flag and the
    colliding ids, `concept.alias_remove`). Table `concept_aliases`, primary
    key (concept, `conceptKey` of the text), the text kept as written; `Concept`
    carries `aliases: string[]` so the picker resolves like the server. Typed

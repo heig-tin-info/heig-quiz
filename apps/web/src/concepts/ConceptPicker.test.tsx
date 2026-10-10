@@ -188,20 +188,37 @@ describe("ConceptPicker", () => {
     expect(await screen.findByText("Linked list")).toBeInTheDocument();
   });
 
-  it("picks the existing concept when the label is taken (409 concept_exists), and says so", async () => {
+  it("never attaches a concept that only answers to the typed name as an alias (409 concept_exists)", async () => {
     const { user, onChange } = setup({
       create: fail(409, {
         error: "concept_exists",
-        message: "A concept with this label already exists",
-        concept: pointer,
+        message: "A concept answers to this label as an alias",
+        concept: { ...pointer, aliases: ["Pointr"] },
       }),
     });
     await user.type(combobox(), "pointr");
     await user.click(await screen.findByRole("option", { name: "Create “pointr”" }));
     await user.click(screen.getByRole("button", { name: "Create" }));
 
-    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([pointer.id]));
-    expect(screen.getByRole("status")).toHaveTextContent("“Pointer” already existed: it was added instead.");
+    expect(await screen.findByText("Another concept already answers to this name.")).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("picks the existing concept when the label is taken (409 concept_exists), and says so", async () => {
+    const taken = concept("Pointr", "Pointr");
+    const { user, onChange } = setup({
+      create: fail(409, {
+        error: "concept_exists",
+        message: "A concept with this label already exists",
+        concept: taken,
+      }),
+    });
+    await user.type(combobox(), "pointr");
+    await user.click(await screen.findByRole("option", { name: "Create “pointr”" }));
+    await user.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([taken.id]));
+    expect(screen.getByRole("status")).toHaveTextContent("“Pointr” already existed: it was added instead.");
     expect(screen.queryByLabelText("Label")).toBeNull();
   });
 

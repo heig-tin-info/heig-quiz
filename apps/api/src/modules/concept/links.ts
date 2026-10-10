@@ -87,7 +87,8 @@ export async function insertProposed(
   lang: ConceptLang,
   input: { label: string; qualifier: string; description: string },
 ): Promise<ConceptRow> {
-  await refuseAliasHolder(tx, [input.label], null);
+  // A qualified label is a homonym, told apart as labels are: no alias can clash with it.
+  if (!input.qualifier) await refuseAliasHolder(tx, [input.label], null);
   const id = randomUUID();
   const sides = perLang((l) =>
     l === lang ? side(input.label, input.qualifier, input.description) : side(null, "", ""),

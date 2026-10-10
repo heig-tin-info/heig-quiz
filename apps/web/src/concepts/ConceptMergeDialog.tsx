@@ -49,12 +49,16 @@ export function ConceptMergeDialog({
     onSuccess: onMerged,
   });
 
+  // What happens to the questions, then to the merged label: dropped, or kept as an alias.
   const effect = (into: string) =>
-    concept.questionCount === 0
-      ? t("admin.concepts.merge.effect.none", { name, target: into })
-      : concept.questionCount === 1
-        ? t("admin.concepts.merge.effect.one", { name, target: into })
-        : t("admin.concepts.merge.effect", { n: concept.questionCount, name, target: into });
+    [
+      concept.questionCount === 0
+        ? t("admin.concepts.merge.effect.none", { name })
+        : concept.questionCount === 1
+          ? t("admin.concepts.merge.effect.one", { name, target: into })
+          : t("admin.concepts.merge.effect", { n: concept.questionCount, name, target: into }),
+      t(keepAlias ? "admin.concepts.merge.effect.keep" : "admin.concepts.merge.effect.drop", { name, target: into }),
+    ].join(" ");
 
   const describe = (error: unknown) => {
     switch (refusalCodeOf(error)) {

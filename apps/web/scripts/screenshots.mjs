@@ -1565,6 +1565,7 @@ const scenes = [
       await p.getByRole("dialog").getByRole("button", { name: /^merge into/i }).click();
       await p.getByRole("searchbox", { name: /search a validated concept/i }).fill("pointer");
       await p.getByRole("radio", { name: /^pointer/i }).first().check({ force: true });
+      await p.getByRole("checkbox", { name: /as an alias of/i }).check({ force: true });
     } },
   // Curated aliases (fifth addendum, PR3): the sheet's Aliases section, then the collision warning an alias equal to another concept's label raises.
   { name: "admin-concepts-aliases", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {

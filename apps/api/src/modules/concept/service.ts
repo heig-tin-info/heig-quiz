@@ -195,8 +195,9 @@ export async function patchConcept(db: Db, ctx: ConceptContext, id: string, patc
       });
       if (refused.length > 0) throw refuseInputs(refused);
       const renamed = CONCEPT_LANGS.flatMap((lang) => {
-        const { label } = sides[lang];
-        return label === null || label === sideOf(current, lang).label ? [] : [label];
+        const { label, qualifier } = sides[lang];
+        // A qualified label is a homonym, told apart as labels are: no alias can clash with it.
+        return label === null || qualifier !== "" || label === sideOf(current, lang).label ? [] : [label];
       });
       await refuseAliasHolder(tx, renamed, id);
 

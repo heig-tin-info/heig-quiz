@@ -263,6 +263,21 @@ describe("a label another concept answers to as an alias", () => {
     });
     expect(renamed.statusCode).toBe(409);
     expect(renamed.json()).toMatchObject({ error: "concept_exists", concept: { id: ovf } });
+    // A qualified label is a homonym, allowed as for labels: it cannot make "trop plein" ambiguous.
+    const qualified = await server.app.inject({
+      method: "POST",
+      url: "/app/api/concepts",
+      headers: teacher.headers,
+      payload: { lang: "fr", label: "Trop plein", qualifier: "hydraulique" },
+    });
+    expect(qualified.statusCode).toBe(201);
+    const qualifiedRename = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/concepts/${ptr}`,
+      headers: admin.headers,
+      payload: { fr: { label: "Trop plein", qualifier: "mécanique" } },
+    });
+    expect(qualifiedRename.statusCode).toBe(200);
     // Renaming a concept onto its own alias is no ambiguity.
     const own = await server.app.inject({
       method: "PATCH",

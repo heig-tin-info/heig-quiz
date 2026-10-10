@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Info, Plus, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
-import { ConceptCreate, ConceptExists, type Concept, type ConceptList } from "@quiz/contracts";
-import { CONCEPT_LABEL_MAX, CONCEPT_QUALIFIER_MAX, splitQualifiedLabel } from "@quiz/domain";
+import { CONCEPT_LANGS, ConceptCreate, ConceptExists, type Concept, type ConceptList } from "@quiz/contracts";
+import { CONCEPT_LABEL_MAX, CONCEPT_QUALIFIER_MAX, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
 
 import { api, ApiError, wordedRefusal } from "../api";
 import { useI18n, useT, type Locale } from "../i18n";
@@ -127,12 +127,22 @@ export function ConceptPicker({
       setDraft(null);
       input.current?.focus();
     },
-    onError: (error) => {
+    onError: (error, body) => {
       // Someone named it first (or a spelling of it): the existing concept is
-      // what the teacher meant, so it is picked, and the notice says so.
+      // what the teacher meant, so it is picked, and the notice says so. A
+      // holder that does not carry the typed name is one that answers to it
+      // as an alias: a different concept, never attached silently.
       const existing = error instanceof ApiError ? ConceptExists.safeParse(error.body) : null;
       if (existing?.success) {
         const { concept } = existing.data;
+        const typedKey = qualifiedConceptKey(body.label, body.qualifier ?? "");
+        const named = CONCEPT_LANGS.some(
+          (lang) => concept.labels[lang] !== null && qualifiedConceptKey(concept.labels[lang], concept.qualifiers[lang]) === typedKey,
+        );
+        if (!named) {
+          setCreateError(t("concepts.picker.aliasTaken"));
+          return;
+        }
         remember(concept);
         add(concept.id);
         setDraft(null);
