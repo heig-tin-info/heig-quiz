@@ -40,6 +40,8 @@ export const Z = {
    * its sticky bars, under the pause overlay, the coach marks and every dialog.
    */
   tool: "z-35",
+  /** A festive burst (ADR-092): out of the logo over the page, under the coach and every dialog. */
+  festive: "z-40",
   /** Coach marks: over the page and its sticky bars, under every dialog. */
   coach: "z-45",
   popover: "z-55",

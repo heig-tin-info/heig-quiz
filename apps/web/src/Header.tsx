@@ -19,6 +19,8 @@ import type { Me } from "@quiz/contracts";
 import { api } from "./api";
 import { purgeAllNotepads } from "./notepad/store";
 import quizLogo from "./assets/quiz.svg?raw";
+import type { Accessory } from "./festive/art";
+import { withAccessory } from "./festive/logo";
 import { useT } from "./i18n";
 import {
   NotificationPanel,
@@ -45,11 +47,22 @@ import { meKey } from "./queryKeys";
  * lost (the pointer leaving the window from the corner, the logo's link
  * navigating, the drawer closing under it).
  *
+ * `accessory`: the festive day's costume (ADR-092), slipped into one
+ * bubble's group so it dances with it. Only the Shell passes one.
+ *
  * `className` carries the WIDTH; the height follows. It is a drawn word, so
  * it is sized like a word — about 200 px in the sidebar, 110 px in the phone
  * top bar, 220 px on the door — and never like a 20 px icon.
  */
-export function Logo({ className = "w-28", id }: { className?: string; id?: string }) {
+export function Logo({
+  className = "w-28",
+  id,
+  accessory,
+}: {
+  className?: string;
+  id?: string;
+  accessory?: Accessory;
+}) {
   const [dancing, setDancing] = useState(false);
   return (
     <span
@@ -61,7 +74,7 @@ export function Logo({ className = "w-28", id }: { className?: string; id?: stri
       onAnimationEnd={(e) => {
         if (e.animationName === "logo-peck") setDancing(false);
       }}
-      dangerouslySetInnerHTML={{ __html: quizLogo }}
+      dangerouslySetInnerHTML={{ __html: accessory ? withAccessory(quizLogo, accessory) : quizLogo }}
     />
   );
 }

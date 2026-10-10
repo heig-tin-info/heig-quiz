@@ -394,6 +394,28 @@ with a keyboard-reachable dismiss button.
   260 ms for sheets. Easing `cubic-bezier(0.2, 0, 0, 1)`. Presses scale to
   0.97. Honors `prefers-reduced-motion`.
 
+## Festive touches
+
+On ten days of the year (ADR-092, `src/festive/`) the logo of the frame wears
+an accessory and a short ambient animation plays: the third surface allowed
+outside the motion rules above, after the logo's dance and the coach marks,
+and to be kept exceptional.
+
+- The accessory is a drawing slipped into one bubble's group of the logo, so
+  it dances with it; its colours are a drawing's, like the logo's. It enters
+  once (drop, pop, fade, slide, type…) and then sits still. A button laid
+  over it, beside the home button, opens the day's sheet (`Modal`).
+- The ambient layer is decoration (`aria-hidden`, no pointer events): one of
+  three modes — fall, drift, burst — five seconds at most, once a day per
+  browser, behind every surface (z −1); only a burst, out of the logo, passes
+  over the page (`Z.festive`). Its sprites take the `--fx-*` pastels
+  (`festive.css`, soft in both themes); the logo's four colours stay in the
+  logo.
+- Drawn by the Shell only, and played on the home and the lists only, after
+  What's new: never in an exam, a preview, a projection or a confined
+  session. Nothing moves under `prefers-reduced-motion`, and Settings ›
+  Preferences switches it off.
+
 ## Coach marks
 
 The speech bubbles that introduce a screen to a newcomer (`src/coach/`). They
@@ -664,8 +686,9 @@ live in `ui/state.ts`, each written once.
   retyped copy is a second version to keep in step. Each bubble is a group
   of the file, so under the pointer the four of them dance for fun (the Q
   pecks, the U bounces, the i and the z squabble; 1.6 s rounds, ending on
-  the rest pose) — the one decoration allowed outside the motion rules
-  above, and off under `prefers-reduced-motion`. Its four colours are its own and live outside the
+  the rest pose) — a decoration allowed outside the motion rules
+  above, and off under `prefers-reduced-motion`. On a festive day the
+  frame's logo wears an accessory (Festive touches, above). Its four colours are its own and live outside the
   token scale — nothing else on a screen may use them. `className` carries
   the WIDTH and the height follows, because it is a drawn word and is sized
   like a word: 100 % of the sidebar (about 200 px), 112 px in the phone top
