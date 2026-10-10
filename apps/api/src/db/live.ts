@@ -80,8 +80,9 @@ export const attempts = pgTable(
      * a property of the schema rather than of a service.
      *
      * NO ACTION, like `enrollments.user_id`: deleting an account must never
-     * erase its answers, gradings and journal in passing. An account leaves
-     * by `users.anonymized_at` (ADR-003 §5), not by a DELETE.
+     * erase its answers, gradings and journal in passing. Quiz deletes no
+     * account; `users.anonymized_at` only marks accounts imported already
+     * anonymized from heig-classroom (pseudonymization: issue #681, backlog).
      */
     userId: uuid("user_id").references(() => users.id),
     guestId: uuid("guest_id").references(() => guestParticipants.id, { onDelete: "cascade" }),

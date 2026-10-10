@@ -4,7 +4,7 @@
 
 Accepted (2026-07-03, phase 3).
 
-Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`randomUUID()`), not v7; §4 drops the repository layer that was never built (the modules import `drizzle-orm`). §5 (audit immutability): enforced by the trigger of migration `0096_audit_log_immutable`, not by SQL roles (the application connects as the owner role, so no GRANT or REVOKE could take the privileges away); the pseudonymization routine of NFR-07 is tracked by issue #681.
+Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`randomUUID()`), not v7; §4 drops the repository layer that was never built (the modules import `drizzle-orm`). §5 (audit immutability): enforced by the trigger of migration `0096_audit_log_immutable`, not by SQL roles (the application connects as the owner role, so no GRANT or REVOKE could take the privileges away); account pseudonymization is not a Quiz requirement (NFR-07 is heig-classroom's and was not carried over; Quiz keeps data until the teacher deletes it, N-DATA-03), and issue #681, in the backlog, keeps its analysis.
 
 ## Context
 
@@ -32,10 +32,9 @@ mechanism (NFR-09), revocable sessions (AU-06), a durable job queue and a simple
    (migration `0096_audit_log_immutable`) refuses every `UPDATE` and `DELETE` statement on
    `audit_log`, whatever the role (NFR-05); `INSERT` and `SELECT` are untouched. It guards
    against the application and against mistakes, not against an owner who drops the
-   trigger; `TRUNCATE` fires no such trigger and nothing truncates the table. The data
-   protection (FADP) pseudonymization routine (NFR-07, not built: issue #681) decides,
-   when it is designed, whether it must rewrite identity fields here and how it passes the
-   trigger.
+   trigger; `TRUNCATE` fires no such trigger and nothing truncates the table. Quiz has no
+   account pseudonymization routine (issue #681, backlog); if one is ever specified, it
+   decides whether it must rewrite identity fields here and how it passes the trigger.
 
 ## Consequences
 
