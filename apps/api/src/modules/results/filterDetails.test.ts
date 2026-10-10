@@ -5,7 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
-import type { CodeDetails } from "@quiz/qt-code/server";
+import { CodeConfig, finalizeRunnerCode, type CodeDetails } from "@quiz/qt-code/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import { fakeShort } from "../../test/fakeType.js";
@@ -145,18 +145,48 @@ describe("the details filter for `code` (decision D15, deviation W3-5)", () => {
     expect(json).toContain("visible-1");
   });
 
-  it("reduces a hidden case to its verdict, exit code and time included (ADR-096)", () => {
+  it("reduces a hidden case to its verdict: no stdin, output, stderr, exit code or time (ADR-096, 05 §5.7)", () => {
+    // A real grading: the hidden case echoes the stdin it read, exits 77 in 1234 ms.
+    const config = CodeConfig.parse({
+      configVersion: 1,
+      prompt: "p",
+      language: "c",
+      template: "int main(void) { return 0; }\n",
+      tests: {
+        mode: "io",
+        cases: [
+          { name: "shown", stdin: "1", expected: "1", visible: true, points: 1 },
+          { name: "S3CR3TNAME", stdin: "S3CR3TSTDIN", expected: "S3CR3TEXPECTED", visible: false, points: 1 },
+        ],
+      },
+    });
+    const run = (over: object) => ({
+      exitCode: 0, stdout: "", stderr: "", ms: 5, timedOut: false, oom: false, truncated: false, ...over,
+    });
+    const graded = finalizeRunnerCode(
+      config,
+      { regions: [] },
+      { seed: 0, itemId: "i", attemptId: "a", itemPoints: 2, now: new Date(0) },
+      {
+        compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+        cases: [run({ stdout: "1" }), run({ stdout: "S3CR3TSTDIN", stderr: "S3CR3TSTDERR", exitCode: 77, ms: 1234 })],
+      },
+    ).details;
     for (const showHiddenCaseNames of [false, true]) {
-      const filtered = service.filterDetails("code", details, policy({ showHiddenCaseNames })) as CodeDetails;
+      const filtered = service.filterDetails("code", graded, policy({ showHiddenCaseNames })) as CodeDetails;
       expect(filtered.cases[1]).toEqual({
-        name: showHiddenCaseNames ? "hidden-overflow" : "#2",
+        name: showHiddenCaseNames ? "S3CR3TNAME" : "#2",
         visible: false,
         points: 1,
         ok: false,
         failure: "failed",
       });
+      const serialized = JSON.stringify(filtered);
+      for (const marker of ["S3CR3TSTDIN", "S3CR3TEXPECTED", "S3CR3TSTDERR", "1234", "77"]) {
+        expect(serialized, marker).not.toContain(marker);
+      }
       // The visible case is untouched (its expected output is published).
-      expect(filtered.cases[0]).toEqual(details.cases[0]);
+      expect(filtered.cases[0]).toEqual(graded.cases[0]);
     }
   });
 

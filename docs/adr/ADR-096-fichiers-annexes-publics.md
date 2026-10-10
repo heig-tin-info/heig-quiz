@@ -13,7 +13,8 @@ Relations: amends decision D15 ([settled questions](../spec/history/settled-ques
 row 8) and `docs/spec/04-types-de-questions.md` §4.7 and §4.9 (what `toStudent` strips);
 amends [ADR-015](ADR-015-execution-navigateur-correction-serveur.md) §5 (the browser runtime
 receives the published files and flags); removes `compileArgs` from
-`COMMON_FORBIDDEN_STUDENT_KEYS` (`packages/core/src/contract.ts`).
+`COMMON_FORBIDDEN_STUDENT_KEYS` and adds an opaque `finalizeState` to a pending runner result
+(`packages/core/src/contract.ts`).
 
 ## Context
 
@@ -49,10 +50,12 @@ quieter channel of the same kind (audit finding M3).
    the runner's container split; until then, secret test data belongs in a hidden case's
    stdin or command line.
 4. **Visible cases run first, hidden cases last.** `gradeCode` builds the grading request in
-   `gradingOrder` (the visible cases in the teacher's order, then the hidden ones), and
-   `finalizeRunnerCode` pairs each run with its case through that order, so the stored
-   details keep the teacher's order. No output a student reads can follow a hidden input in
-   the same container.
+   `gradingOrder` (the visible cases in the teacher's order, then the hidden ones) and stamps
+   that order on its pending result as `finalizeState`. The host carries it opaquely — on the
+   queued grading job too — into `FinalizeContext.finalizeState`, and `finalizeRunnerCode`
+   pairs each run with the case sent at its position, so the stored details keep the
+   teacher's order. A missing stamp means the config's order; a stamp that does not fit the
+   config throws. No output a student reads can follow a hidden input in the same container.
 5. **A student reads a hidden case's verdict, not its run.** On the student path
    (`studentDetails`, `packages/qt-code/src/grade.ts`), a hidden case is
    `{ name, visible: false, points, ok, failure? }`, where `failure` is `timed_out`, `oom`,
@@ -68,6 +71,8 @@ No migration and no new config field: `CODE_CONFIG_VERSION` stays at 1.
 - A teacher who put an expected output or a key in an extra file or a `-D` flag publishes it
   the day this ships; it was already readable by any student who printed it. Configs with
   non-empty `files` should be reviewed by their owners before the deploy.
+- A grading job queued before the deploy carries no stamp and sent the cases in the config's
+  order, so it is paired in that order: jobs in flight at the deploy are graded correctly.
 - A suite whose cases depend on each other's order through `/work` (a case writing a file a
   later case reads) behaves differently when a hidden case preceded a visible one. Under
   `RUNNER_REQUEST_TIMEOUT_MS`, the cases starved at the end of a slow request are now the

@@ -12,7 +12,14 @@ import { useId, useState } from "react";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import type { ReviewProps } from "@quiz/core/client";
 
-import type { CodeAnswer, CodeReviewDetails, CodeSolution, CodeStudent, ReviewCaseDetail } from "./schema.js";
+import type {
+  CodeAnswer,
+  CodeCaseDetail,
+  CodeReviewDetails,
+  CodeSolution,
+  CodeStudent,
+  ReviewCaseDetail,
+} from "./schema.js";
 import { CompileFailure, NoBreakdown, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
 import {
@@ -31,7 +38,7 @@ import {
   Verdict,
   verdictTone,
 } from "@quiz/ui";
-import { caseVerdict } from "./verdict.js";
+import { accidentOf, caseVerdict, NO_CHECK } from "./verdict.js";
 
 interface CodeReviewProps
   extends ReviewProps<CodeStudent, CodeAnswer, CodeSolution, CodeReviewDetails> {
@@ -42,6 +49,10 @@ interface CodeReviewProps
 
 /** The case as the teacher wrote it, when the feedback policy sends the key. */
 type CaseSpec = NonNullable<CodeSolution["cases"]>[number];
+
+/** The stored case, with its run; `undefined` for a hidden case's verdict alone (ADR-096). */
+const ran = (detail: ReviewCaseDetail): CodeCaseDetail | undefined =>
+  "exitCode" in detail ? detail : undefined;
 
 /**
  * Which check failed, not merely that one did.
@@ -57,45 +68,30 @@ function verdictOf(
   compare: CodeSolution["compare"] | undefined,
   s: CodeReviewStrings,
 ): string {
-  // A hidden case on a student's path is its verdict alone (ADR-096): the
-  // coarse category is all there is to name, and no exit code is not a crash.
-  if (detail.exitCode === undefined) {
-    if (detail.ok) return s.passed;
-    switch (detail.failure) {
-      case "timed_out":
-        return s.timedOut;
-      case "oom":
-        return s.outOfMemory;
-      case "crashed":
-        return s.crashed;
-      default:
-        return s.failed;
-    }
-  }
-  if (detail.timedOut) return s.timedOut;
-  if (detail.oom) return s.outOfMemory;
   // The STORED verdict is the grade's; it is never re-decided here.
   if (detail.ok) return s.passed;
-  // Without the key, only the accidents can be named: a spec that checks
-  // nothing leaves `caseVerdict` exactly those (audit R-06).
-  const verdict = caseVerdict(
-    spec ?? { expected: "", compareStdout: false, expectedExitCode: null },
-    {
-      exitCode: detail.exitCode,
-      stdout: detail.actual ?? "",
-      timedOut: detail.timedOut ?? false,
-      oom: detail.oom ?? false,
-      ms: detail.ms ?? 0,
-    },
-    compare,
-  );
-  switch (verdict.failure) {
+  // A hidden case on a student's path carries its coarse category (ADR-096).
+  // A stored case is read by the one rule (audit R-06): an accident first —
+  // a case that never ran is not a crash — then, with the key, the check
+  // that failed; without it, a spec that checks nothing names only accidents.
+  const failure =
+    "exitCode" in detail
+      ? (accidentOf(detail) ??
+        caseVerdict(spec ?? NO_CHECK, { ...detail, stdout: detail.actual ?? "" }, compare).failure)
+      : detail.failure;
+  switch (failure) {
+    case "timed_out":
+      return s.timedOut;
+    case "oom":
+      return s.outOfMemory;
     case "crashed":
       return s.crashed;
     case "exit":
-      return fmt(s.exitMismatch, { got: String(detail.exitCode), want: spec!.expectedExitCode! });
+      return fmt(s.exitMismatch, { got: String(ran(detail)?.exitCode), want: spec!.expectedExitCode! });
     case "output":
       return s.outputMismatch;
+    case "failed":
+      return s.failed;
     default:
       // The grade failed a case whose every other check held, so it is the
       // output that differed — the stored text may be truncated and cannot
@@ -151,7 +147,7 @@ export function CodeReview({
 
       <CompileFailure compile={breakdown.compile} s={s} />
 
-      {shown.some((c) => c.expected !== undefined && c.actual !== undefined) ? (
+      {shown.some((c) => ran(c)?.expected !== undefined && ran(c)?.actual !== undefined) ? (
         <div className="flex justify-end">
           <OutputControls
             name={controlsName}
@@ -193,9 +189,9 @@ export function CodeReview({
                   </td>
                   <OutputCells
                     mode={outputMode}
-                    expected={detail.expected ?? null}
+                    expected={ran(detail)?.expected ?? null}
                     expectedFallback="—"
-                    actual={detail.actual ?? null}
+                    actual={ran(detail)?.actual ?? null}
                     ok={detail.ok}
                     compare={compare}
                     showWhitespace={showWhitespace}

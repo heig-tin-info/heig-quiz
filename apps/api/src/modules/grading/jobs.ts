@@ -151,6 +151,12 @@ interface RunnerGradingJob {
    */
   revision?: number;
   request: RunnerRequest;
+  /**
+   * The pending result's `finalizeState`, carried opaquely to `finalizeRunner`
+   * (ADR-096). Absent on a job queued before it existed, or for a type that
+   * returns none; the type then reads the outcome as it did before.
+   */
+  finalizeState?: unknown;
   regradeNote?: string;
 }
 
@@ -454,7 +460,14 @@ async function gradeCell(
     const details = withWarning(outcome.details, warning);
     return { llm: { ...cellOf, request: outcome.request, details, bonus: item.item.bonus } };
   }
-  return { runner: { ...cellOf, revision: answer.revision, request: outcome.request } };
+  return {
+    runner: {
+      ...cellOf,
+      revision: answer.revision,
+      request: outcome.request,
+      ...(outcome.finalizeState === undefined ? {} : { finalizeState: outcome.finalizeState }),
+    },
+  };
 }
 
 /**
@@ -547,7 +560,7 @@ type GradeOutcome =
         confidence?: GradingConfidence;
       };
     }
-  | { kind: "runner"; request: RunnerRequest }
+  | { kind: "runner"; request: RunnerRequest; finalizeState?: unknown }
   | { kind: "llm"; request: LlmGradeRequest; details?: unknown };
 
 /**
@@ -597,7 +610,13 @@ async function gradeOne(
       },
     };
   }
-  if (isPendingRunner(result)) return { kind: "runner", request: result.request };
+  if (isPendingRunner(result)) {
+    return {
+      kind: "runner",
+      request: result.request,
+      ...(result.finalizeState === undefined ? {} : { finalizeState: result.finalizeState }),
+    };
+  }
   // A type asks for a model only when `ctx.llm` is offered (F-LLM-03).
   if (!input.ctx.llm) return { kind: "written", grading: failedProposal("llm_not_configured", "llm") };
   return { kind: "llm", request: result.request, details: result.details };
@@ -714,6 +733,7 @@ async function gradeWithRunner(
         itemPoints: item.item.points,
         now,
         defaults: gradeDefaults(evaluation),
+        ...(job.finalizeState === undefined ? {} : { finalizeState: job.finalizeState }),
       },
       run.outcome,
     );

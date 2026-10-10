@@ -94,6 +94,14 @@ describe("CodeReview", () => {
     expect(screen.queryByText("Crashed")).toBeNull();
   });
 
+  it("words a case that never ran the same, visible or hidden: Failed, not Crashed", () => {
+    // The runner reported the first case only (the request ran out of time).
+    const cut = finalizeRunnerCode(config, answer, FINALIZE_CTX, outcome([{ stdout: "6\n" }])).details;
+    setup(cut, { audience: "teacher" });
+    expect(screen.getAllByText("Failed")).toHaveLength(2);
+    expect(screen.queryByText("Crashed")).toBeNull();
+  });
+
   it("names a hidden case's timeout from the category alone", () => {
     const details = studentDetails(
       finalizeRunnerCode(

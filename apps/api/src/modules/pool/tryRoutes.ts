@@ -208,7 +208,12 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
             return { status: "runner_unavailable", reason: "not_configured" } satisfies TryResult;
           }
           const outcome = await runner.run(result.request);
-          const final = t.finalizeRunner(loaded.config, answer, base, outcome);
+          const final = t.finalizeRunner(
+            loaded.config,
+            answer,
+            { ...base, finalizeState: result.finalizeState },
+            outcome,
+          );
           return graded(final, t.toSolution(loaded.config, view));
         } catch (error) {
           if (error instanceof RunnerUnavailable) {

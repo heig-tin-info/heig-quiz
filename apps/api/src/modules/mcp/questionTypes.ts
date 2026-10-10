@@ -102,7 +102,6 @@ const GUIDES: Record<string, TypeGuide> = {
     rules: [
       "Only write one when the teacher asks for a programming question.",
       "The tests and the reference solution must agree: publish, then the teacher can run the Try panel.",
-      "`files` and `compileArgs` are shown to the student, whole: never put an expected output or a key in them. Secret test data goes in a hidden case's `stdin` or `args`.",
       "Read an existing code question with `get_question` for a complete, working example.",
     ],
   },

@@ -14,6 +14,7 @@
  * re-implemented here (invariant 14: the source is rebuilt server-side).
  */
 import type { RunnerLanguage } from "@quiz/core/server";
+import type { HiddenCaseFailure } from "./verdict.js";
 import type { TemplateLanguage } from "@quiz/domain/lockedTemplate";
 import { z } from "zod";
 
@@ -341,19 +342,17 @@ export const CodeCaseDetail = z.object({
 });
 export type CodeCaseDetail = z.infer<typeof CodeCaseDetail>;
 
-/** Why a hidden case failed, as much of it as a student reads (ADR-096). */
-export type HiddenCaseFailure = "timed_out" | "oom" | "crashed" | "failed";
-
 /**
- * A case as a review reads it: a stored {@link CodeCaseDetail} whole, or — a
- * hidden case on a student's path — its verdict alone, `{ name, visible:
- * false, points, ok, failure? }` (ADR-096). What the program did is
- * optional here, so a missing `exitCode` reads "not told", never "crashed".
+ * A hidden case as a student reads it (ADR-096): its verdict and a coarse
+ * failure category, nothing the program was fed or did.
  */
-export type ReviewCaseDetail = Pick<CodeCaseDetail, "name" | "visible" | "points" | "ok"> &
-  Partial<Omit<CodeCaseDetail, "name" | "visible" | "points" | "ok">> & {
-    failure?: HiddenCaseFailure | undefined;
-  };
+export type HiddenCaseVerdict = Pick<CodeCaseDetail, "name" | "points" | "ok"> & {
+  visible: false;
+  failure?: HiddenCaseFailure | undefined;
+};
+
+/** A case as a review reads it: stored whole, or a hidden case's verdict alone (`"exitCode" in`). */
+export type ReviewCaseDetail = CodeCaseDetail | HiddenCaseVerdict;
 
 /** The breakdown a review reads: the stored one, or the student's (`studentDetails`). */
 export type CodeReviewDetails = Omit<CodeDetails, "cases"> & { cases: ReviewCaseDetail[] };
