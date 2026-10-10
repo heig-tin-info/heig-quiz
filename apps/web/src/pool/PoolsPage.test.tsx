@@ -37,6 +37,9 @@ const makePool = (over: Partial<PoolSummary> = {}): PoolSummary => ({
   icon: "code",
   color: null,
   visibility: "private",
+  isPublic: false,
+  description: "",
+  descriptionSource: "owner",
   ownerId: "u-me",
   isPersonal: false,
   createdAt: "2026-01-01T08:00:00.000Z",
@@ -70,6 +73,7 @@ describe("PoolsPage", () => {
           name: "Électronique",
           questionCount: 7,
           visibility: "shared",
+          description: "Diodes et transistors.\nPremière ligne\nDeuxième\nTroisième\nQuatrième",
           memberCount: 2,
           role: "contributor",
           ownerId: "t1",
@@ -83,8 +87,12 @@ describe("PoolsPage", () => {
     expect(screen.getByText("14 questions")).toBeVisible();
     expect(screen.getByText("private")).toBeVisible();
     expect(screen.getByText("shared with 2")).toBeVisible();
-    // Whose it is and what I may do in it, only on the pool that is not mine.
-    expect(screen.getByText("Ada Lovelace · Contributor")).toBeVisible();
+    // Whose it is (beside the name) and what I may do in it, only on the pool that is not mine.
+    expect(screen.getAllByText("Ada Lovelace")).toHaveLength(1);
+    expect(screen.queryByText("Prof Démo")).toBeNull();
+    expect(screen.getByText("Contributor")).toBeVisible();
+    // The description is clamped to three lines, and only drawn when there is one.
+    expect(screen.getByText(/Diodes et transistors/)).toHaveClass("line-clamp-3");
     expect(screen.getAllByText(/hours ago/).length).toBeGreaterThan(0);
   });
 

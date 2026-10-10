@@ -65,8 +65,10 @@ export {
   updatePool,
   poolUses,
   deletePool,
+  visibilityOf,
   poolDetail,
 } from "./pools.js";
+export { proposeDescription } from "./description.js";
 export {
   listMembers,
   findTeacherByEmail,

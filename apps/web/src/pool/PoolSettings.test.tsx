@@ -25,6 +25,9 @@ const makeDetail = (over: Partial<PoolDetail["pool"]> = {}, role: PoolDetail["ro
     icon: "code",
     color: null,
     visibility: "private",
+    isPublic: false,
+    description: "",
+    descriptionSource: "owner",
     ownerId: "u-me",
     isPersonal: false,
     createdAt: "2026-01-01T08:00:00.000Z",
@@ -37,7 +40,7 @@ const makeDetail = (over: Partial<PoolDetail["pool"]> = {}, role: PoolDetail["ro
   questionCount: 14,
 });
 
-const members: PoolMembers = { visibility: "private", members: [] };
+const members: PoolMembers = { visibility: "private", members: [], courses: [] };
 
 function renderSettings(detail: PoolDetail, navigate = vi.fn()) {
   const queryClient = makeQueryClient();
@@ -53,7 +56,8 @@ describe("PoolSettings", () => {
 
     expect(screen.getByRole("button", { name: "Rename" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Change the icon" })).toBeVisible();
-    expect(screen.getByRole("radio", { name: /Public/ })).toBeVisible();
+    expect(screen.getByRole("switch", { name: "Publish in the catalogue" })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "Description" })).toBeVisible();
     expect(await screen.findByText("Nobody else has access yet.")).toBeVisible();
     expect(screen.getByRole("button", { name: /Delete pool/ })).toBeVisible();
     // The account the pool belongs to cannot leave it.
@@ -131,7 +135,7 @@ describe("PoolSettings", () => {
 
     // Picking the icon takes both back to the form; Save sends both.
     await userEvent.click(tile);
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" }));
     const patch = calls.find((c) => c.method === "PATCH");
     expect(patch?.body).toEqual({ name: "Programmation C", icon: "code", color: "cyan" });
   });
@@ -153,5 +157,46 @@ describe("PoolSettings", () => {
     await userEvent.click(within(form).getByRole("button", { name: "Save" }));
     const patch = calls.find((c) => c.method === "PATCH");
     expect(patch?.body).toEqual({ name: "Programmation C", icon: "code", color: "pink" });
+  });
+
+  it("saves the owner's own description", async () => {
+    const { calls } = mockFetch({
+      [`GET ${MEMBERS}`]: ok(members),
+      [`PATCH ${POOL}`]: ok(makeDetail({ description: "Du C." }).pool),
+    });
+    renderSettings(makeDetail());
+    const field = screen.getByRole("textbox", { name: "Description" });
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await userEvent.type(field, "Du C.");
+    expect(screen.getByText(/5 \/ 280 characters/)).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ description: "Du C." }));
+  });
+
+  it("writes the AI's proposal only when the owner accepts it", async () => {
+    const { calls } = mockFetch({
+      [`GET ${MEMBERS}`]: ok(members),
+      [`POST ${POOL}/description/propose`]: ok({ description: "Pointeurs et mémoire." }),
+      [`PATCH ${POOL}`]: ok(makeDetail({ description: "Pointeurs et mémoire.", descriptionSource: "ai" }).pool),
+    });
+    renderSettings(makeDetail());
+    await userEvent.click(screen.getByRole("button", { name: /Suggest a description/ }));
+    expect(await screen.findByText("Pointeurs et mémoire.")).toBeVisible();
+    // Nothing is written by the proposal alone.
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Use this description" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
+        description: "Pointeurs et mémoire.",
+        descriptionFromAi: true,
+      }),
+    );
+  });
+
+  it("does not offer the AI over a description the owner wrote", async () => {
+    mockFetch({ [`GET ${MEMBERS}`]: ok(members) });
+    renderSettings(makeDetail({ description: "Écrit à la main." }));
+    expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue("Écrit à la main.");
+    expect(screen.queryByRole("button", { name: /Suggest a description/ })).toBeNull();
   });
 });

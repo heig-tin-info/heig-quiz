@@ -324,7 +324,7 @@ describe("an authoring session", () => {
       method: "POST",
       url: "/app/api/pools",
       headers: colleague.headers,
-      payload: { name: "Publique", visibility: "public" },
+      payload: { name: "Publique", isPublic: true },
     });
     const course = await ok("create_course", { name: "Emprunt", code: "BORROW-MCP" });
     const { isError, data } = await call("link_pool_to_course", {

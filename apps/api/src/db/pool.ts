@@ -31,7 +31,7 @@ import {
 import type { ParametersDraft } from "@quiz/contracts";
 
 import { POOL_COLORS } from "@quiz/contracts";
-import { POOL_ROLES, POOL_VISIBILITIES } from "@quiz/domain";
+import { POOL_DESCRIPTION_SOURCES, POOL_ROLES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { courses } from "./org.js";
@@ -57,9 +57,15 @@ export const pools = pgTable(
     icon: text("icon"),
     /** The icon's colour, a `PoolColor` name (`teal`); null is grey, the default. */
     color: text("color", { enum: POOL_COLORS }),
-    visibility: text("visibility", { enum: POOL_VISIBILITIES })
-      .notNull()
-      .default("private"),
+    /**
+     * Published in the catalogue: the ONE visibility fact stored (ADR-013, amendment of
+     * 2026-10-10). "Shared" and "private" are derived from the roster (`pools.ts`).
+     */
+    isPublic: boolean("is_public").notNull().default(false),
+    /** What the pool is about, at most 280 characters; written by the owner (or accepted from the AI). */
+    description: text("description").notNull().default(""),
+    /** Who wrote `description`: the owner, or an AI proposal the owner accepted. */
+    descriptionSource: text("description_source", { enum: POOL_DESCRIPTION_SOURCES }).notNull().default("owner"),
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id),

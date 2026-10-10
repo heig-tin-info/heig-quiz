@@ -694,6 +694,13 @@
       "when": 1791625407208,
       "tag": "0098_drop_tag_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1791627177708,
+      "tag": "0099_pool_is_public",
+      "breakpoints": true
     }
   ]
 }

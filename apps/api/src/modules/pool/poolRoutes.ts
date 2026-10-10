@@ -11,11 +11,12 @@ import {
   poolRoleOf,
   requirePoolRole,
 } from "../guards.js";
-import { invalid, readerLang } from "../http.js";
+import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
+import { DomainError, invalid, rateLimited, readerLang } from "../http.js";
 import { publish } from "../../events.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
 import * as service from "./service.js";
-import type { PoolRouteContext } from "./routeContext.js";
+import { LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
 
 export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, teacher, inPool, topicsOf } = ctx;
@@ -42,8 +43,9 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     const pool = await service.createPool(app.db, { ...body.data, ownerId: req.user!.id });
     await trace(req, "pool.create", "pool", pool.id, {
       name: pool.name,
-      visibility: pool.visibility,
+      isPublic: pool.isPublic,
     });
+    if (pool.isPublic) await trace(req, "pool.publish", "pool", pool.id, {});
     // A brand-new pool has no `pool:<id>` subscriber yet — topics are computed
     // at connection time — so the teacher's own topic is the only one that can
     // carry it. It refreshes `GET /app/api/pools`, which emits nothing back.
@@ -66,14 +68,55 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     teacher(
       { params: IdParam, body: PoolPatch, load: inPool("owner") },
       async ({ req, body, scope: pool }) => {
-        const updated = await service.updatePool(app.db, pool.id, body);
-        await trace(req, "pool.update", "pool", pool.id, body);
+        const { isPublic, descriptionFromAi, ...fields } = body;
+        if (isPublic === true && pool.isPersonal) {
+          throw new DomainError("personal_pool_not_publishable", 409, "A personal pool cannot be published");
+        }
+        const source = fields.description === undefined ? {} : { descriptionSource: descriptionFromAi ? ("ai" as const) : ("owner" as const) };
+        const updated = await service.updatePool(app.db, pool.id, {
+          ...fields,
+          ...(isPublic === undefined ? {} : { isPublic }),
+          ...source,
+        });
+        if (isPublic !== undefined && isPublic !== pool.isPublic) {
+          await trace(req, isPublic ? "pool.publish" : "pool.unpublish", "pool", pool.id, {});
+        }
+        if (Object.keys(fields).length > 0) {
+          await trace(req, "pool.update", "pool", pool.id, { ...fields, ...source });
+        }
         poolChanged(pool.id);
         // A visibility or a name the members see on their own list too.
         poolPeopleChanged(await topicsOf(pool));
         return updated;
       },
     ),
+  );
+
+  /**
+   * The AI's proposal of a description (owner only). Nothing is written: the
+   * owner accepts it with a `PATCH` carrying `descriptionFromAi`.
+   */
+  const proposals = new Budget();
+  app.post(
+    "/app/api/pools/:id/description/propose",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: inPool("owner") }, async ({ req, reply, scope: pool }) => {
+      // An AI proposal never replaces the owner's own text (ADR-013, amendment of 2026-10-10).
+      if (pool.descriptionSource === "owner" && pool.description !== "") {
+        throw new DomainError("description_owned", 409, "The owner's own description is kept");
+      }
+      if (!proposals.spend(`describe:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
+        return rateLimited(reply, BUDGET_RETRY_AFTER_S);
+      }
+      const description = await service.proposeDescription(
+        app.db,
+        app.llmGateway,
+        pool,
+        req.user!.id,
+        readerLang(req),
+      );
+      return { description };
+    }),
   );
 
   app.delete(

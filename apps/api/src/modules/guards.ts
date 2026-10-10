@@ -91,12 +91,21 @@ export function staffAccess(userId: string, courseId: AnyColumn | SQL = courses.
  * (invariant 6). That EXISTS is uncorrelated, a primary-key lookup on
  * `users`: PostgreSQL evaluates it once per statement, not per pool row.
  */
+/**
+ * Rule 3 of ADR-013, written once: the pool is linked to a course whose staff
+ * seat satisfies `match` (a condition on `course_staff`). `poolAccess`, the
+ * pool list's role facts and the derived visibility all read it here.
+ */
+export function linkedCourseStaff(match: SQL): SQL {
+  return sql`EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${match})`;
+}
+
 export function poolAccess(userId: string): SQL {
   const staff = sql.join(
     STAFF_ROLES.map((role) => sql`${role}`),
     sql`, `,
   );
-  return sql`(EXISTS (SELECT 1 FROM ${users} WHERE ${qualified(users.id)} = ${userId} AND ${qualified(users.role)} IN (${staff})) AND (${qualified(pools.ownerId)} = ${userId} OR ${qualified(pools.visibility)} = 'public' OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} = ${userId})))`;
+  return sql`(EXISTS (SELECT 1 FROM ${users} WHERE ${qualified(users.id)} = ${userId} AND ${qualified(users.role)} IN (${staff})) AND (${qualified(pools.ownerId)} = ${userId} OR ${qualified(pools.isPublic)} OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR ${linkedCourseStaff(sql`${qualified(courseStaff.userId)} = ${userId}`)}))`;
 }
 
 /**
@@ -107,7 +116,7 @@ export function poolAccess(userId: string): SQL {
  */
 export async function poolRoleOf(
   db: Db,
-  pool: Pick<AccessiblePool, "id" | "ownerId" | "visibility">,
+  pool: Pick<AccessiblePool, "id" | "ownerId" | "isPublic">,
   user: Pick<Caller, "id" | "reach">,
 ): Promise<PoolRole> {
   if (user.reach === "all" || pool.ownerId === user.id) return "owner";
@@ -129,7 +138,7 @@ export async function poolRoleOf(
     isOwner: false,
     memberRole: member?.role ?? null,
     isCourseStaff: seat !== undefined,
-    isPublic: pool.visibility === "public",
+    isPublic: pool.isPublic,
   });
 }
 
@@ -149,7 +158,7 @@ export async function requirePoolRole(
   app: FastifyInstance,
   req: FastifyRequest,
   reply: FastifyReply,
-  pool: Pick<AccessiblePool, "id" | "ownerId" | "visibility">,
+  pool: Pick<AccessiblePool, "id" | "ownerId" | "isPublic">,
   needed: PoolRole,
 ): Promise<PoolRole | null> {
   const role = await poolRoleOf(app.db, pool, callerOf(req));

@@ -155,7 +155,7 @@ erDiagram
 - **COURSE**: `id`, `name`, `code`.
 - **CLASSROOM**: `id`, `course_id`, `name`, `period`, `period_start`, `period_end`, `archived_at`.
 - **ENROLLMENT**: `classroom_id`, `user_id`, `time_bonus_percent` integer, 0 by default, `note`.
-- **POOL**: `id`, `name`, `visibility` `private` / `shared` / `public`, `owner_id`.
+- **POOL**: `id`, `name`, `is_public`, `description`, `owner_id` (the displayed visibility `private` / `shared` / `public` is derived, ADR-013).
 - **QUESTION**: `id`, `pool_id`, `category_id`, `type`, `internal_name`, `difficulty` 1 to 5, `created_by`, `origin_question_id` for a fork.
 - **QUESTION_VERSION**: `question_id`, `number` null for the draft, `config` JSONB conforming to the type's schema, `explanation`, `published_at`, `published_by`, `change_note`.
 - **EVALUATION**: `id`, `classroom_id`, `course_id` set on a template only (exactly one home: a classroom, a course, or — an anonymous poll — its owner), `revision` on a template, `origin_template_id` and `origin_revision` on an instance, `title`, `mode`, `state`, `settings` JSONB, see [02-exigences-fonctionnelles.md](02-exigences-fonctionnelles.md) F-EVAL, `grading_scale`, `feedback_policy`, `opens_at`, `closes_at`, `duration_s`, `correction_published_at` (an exercise's published correction, ADR-050), `access_code` (a poll's session code only, ADR-014; an exam or an exercise has none, [ADR-053](../adr/ADR-053-retrait-des-codes-d-entree.md)).

@@ -29,6 +29,9 @@ describe("PoolColor — the colour of a pool's icon (#213)", () => {
       name: "PRG1",
       icon: null,
       visibility: "private",
+      isPublic: false,
+      description: "",
+      descriptionSource: "owner",
       ownerId: "00000000-0000-4000-8000-000000000002",
       isPersonal: false,
       createdAt: "2026-09-28T00:00:00.000Z",
@@ -36,6 +39,26 @@ describe("PoolColor — the colour of a pool's icon (#213)", () => {
     };
     expect(Pool.safeParse(pool).success).toBe(false);
     expect(Pool.parse({ ...pool, color: null }).color).toBeNull();
+  });
+});
+
+describe("Publication and description of a pool (ADR-013, 2026-10-10)", () => {
+  it("creates unpublished by default and takes `isPublic`, no longer a visibility", () => {
+    expect(PoolCreate.parse({ name: "P" }).isPublic).toBe(false);
+    expect(PoolCreate.parse({ name: "P", isPublic: true }).isPublic).toBe(true);
+    expect(PoolPatch.parse({ isPublic: false })).toEqual({ isPublic: false });
+    // The derived visibility is read-only: alone, it is an empty patch.
+    expect(PoolPatch.safeParse({ visibility: "public" }).success).toBe(false);
+  });
+
+  it("limits the description to 280 characters", () => {
+    expect(PoolPatch.safeParse({ description: "x".repeat(280) }).success).toBe(true);
+    expect(PoolPatch.safeParse({ description: "x".repeat(281) }).success).toBe(false);
+  });
+
+  it("accepts an AI description only together with its text", () => {
+    expect(PoolPatch.safeParse({ descriptionFromAi: true }).success).toBe(false);
+    expect(PoolPatch.safeParse({ description: "Du C.", descriptionFromAi: true }).success).toBe(true);
   });
 });
 

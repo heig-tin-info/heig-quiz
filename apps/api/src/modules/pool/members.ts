@@ -5,12 +5,13 @@ import type { TeacherCandidates, PoolMember, PoolMembers, PoolRole } from "@quiz
 import { displayName } from "@quiz/domain";
 
 import { qualified, type Db } from "../../db/client.js";
-import { poolMembers, pools, userEmails, users } from "../../db/schema.js";
+import { coursePools, courses, poolMembers, pools, userEmails, users } from "../../db/schema.js";
 import { audit } from "../../audit.js";
 import { isStaff, searchTeachers } from "../../directory.js";
 import { notify, notifyMany } from "../notifications/service.js";
 import { accessRevoked, userTopic } from "../realtime/bus.js";
 import { poolPeopleChanged } from "./events.js";
+import { visibilityOf } from "./pools.js";
 import { type PoolRow } from "./shared.js";
 
 /**
@@ -18,8 +19,8 @@ import { type PoolRow } from "./shared.js";
  * in the order they were added — which is the succession order the day the
  * owner loses the teacher role (`transferOnLoss`).
  */
-export async function listMembers(db: Db, pool: PoolRow): Promise<PoolMembers> {
-  const [[owner], rows] = await Promise.all([
+export async function listMembers(db: Db, pool: PoolRow, seesCourses: boolean): Promise<PoolMembers> {
+  const [[owner], rows, visibility, courseRows] = await Promise.all([
     db
       .select({
         id: users.id,
@@ -43,6 +44,16 @@ export async function listMembers(db: Db, pool: PoolRow): Promise<PoolMembers> {
       .innerJoin(users, eq(users.id, poolMembers.userId))
       .where(eq(poolMembers.poolId, pool.id))
       .orderBy(asc(poolMembers.createdAt), asc(users.email)),
+    visibilityOf(db, pool.id),
+    // Only an owner of the pool is told which courses draw from it (their staff can edit).
+    seesCourses
+      ? db
+          .select({ id: courses.id, name: courses.name, code: courses.code })
+          .from(coursePools)
+          .innerJoin(courses, eq(courses.id, coursePools.courseId))
+          .where(eq(coursePools.poolId, pool.id))
+          .orderBy(asc(courses.name))
+      : Promise.resolve([]),
   ]);
   const members: PoolMember[] = [];
   if (owner) {
@@ -69,7 +80,7 @@ export async function listMembers(db: Db, pool: PoolRow): Promise<PoolMembers> {
       addedAt: row.addedAt.toISOString(),
     });
   }
-  return { visibility: pool.visibility, members };
+  return { visibility, members, courses: courseRows };
 }
 
 /**
@@ -134,28 +145,12 @@ export async function isMemberOrOwner(db: Db, pool: PoolRow, userId: string): Pr
 }
 
 /**
- * Names one account in the pool. A `private` pool becomes `shared` on the
- * first invitation — the visibility is a consequence of the members, never a
- * second thing to remember (F-POOL-05).
+ * Names one account in the pool. The visibility is derived from the roster
+ * (ADR-013, amendment of 2026-10-10): nothing to update here.
  */
-export async function addMember(
-  db: Db,
-  pool: PoolRow,
-  userId: string,
-  role: PoolRole,
-): Promise<{ addedAt: Date; visibility: PoolRow["visibility"] }> {
-  return db.transaction(async (tx) => {
-    const [row] = await tx
-      .insert(poolMembers)
-      .values({ poolId: pool.id, userId, role })
-      .returning();
-    const visibility = pool.visibility === "private" ? "shared" : pool.visibility;
-    await tx
-      .update(pools)
-      .set({ visibility, updatedAt: new Date() })
-      .where(eq(pools.id, pool.id));
-    return { addedAt: row!.createdAt, visibility };
-  });
+export async function addMember(db: Db, pool: PoolRow, userId: string, role: PoolRole): Promise<Date> {
+  const [row] = await db.insert(poolMembers).values({ poolId: pool.id, userId, role }).returning();
+  return row!.createdAt;
 }
 
 export async function setMemberRole(

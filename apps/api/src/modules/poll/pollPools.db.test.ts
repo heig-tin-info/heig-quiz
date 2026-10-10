@@ -94,7 +94,6 @@ beforeAll(async () => {
 
   const unlinked = await poolService.createPool(db, {
     name: "Réserve",
-    visibility: "private",
     ownerId: teacher.id,
   });
   unlinkedPoolId = unlinked.id;
@@ -107,7 +106,6 @@ beforeAll(async () => {
 
   const foreign = await poolService.createPool(db, {
     name: "Privé",
-    visibility: "private",
     ownerId: colleague.id,
   });
   foreignId = await question(foreign.id, colleague.id, { type: "mcq", name: "Secret", config: MCQ, concepts: ["secret"] });

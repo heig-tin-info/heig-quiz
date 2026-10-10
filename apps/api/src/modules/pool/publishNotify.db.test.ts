@@ -42,7 +42,7 @@ async function sharedPool() {
     makeUser("admin"),
   ]);
   const poolId = randomUUID();
-  await db.insert(pools).values({ id: poolId, name: "Réseaux", ownerId: owner!, visibility: "shared" });
+  await db.insert(pools).values({ id: poolId, name: "Réseaux", ownerId: owner! });
   await db.insert(poolMembers).values([
     { poolId, userId: coOwner!, role: "owner" },
     { poolId, userId: contributor!, role: "contributor" },

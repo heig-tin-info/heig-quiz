@@ -36,7 +36,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `pools` | `name`, `visibility` private / shared / public, `owner_id` | |
+| `pools` | `name`, `is_public` (the only stored visibility; private / shared / public is derived from the roster, ADR-013), `description` (280 characters) and `description_source` owner / ai, `owner_id` | |
 | `pool_members` | `pool_id`, `user_id`, `role` reader / contributor / owner | Phase 2 |
 | `categories` | `pool_id`, `parent_id` nullable, `name`, `position` | Tree by parent |
 | `questions` | `pool_id` nullable (an unsaved poll question, ADR-014 addendum), `category_id` nullable, `type` text, `internal_name`, `difficulty` smallint 1 to 5, `shuffleable` bool, `randomizable` bool (derived: the latest published version declares variables, ADR-056 §1), `origin_question_id` nullable, `stats_since` nullable, `deleted_at` | Stable metadata. `stats_since`: written only by the statistics reset (ADR-038) |

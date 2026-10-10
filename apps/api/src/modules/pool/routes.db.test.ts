@@ -620,9 +620,9 @@ describe("pool lifecycle", () => {
       method: "PATCH",
       url: `/app/api/pools/${id}`,
       headers: owner.headers,
-      payload: { name: "Renamed", visibility: "shared" },
+      payload: { name: "Renamed" },
     });
-    expect(renamed.json()).toMatchObject({ name: "Renamed", visibility: "shared" });
+    expect(renamed.json()).toMatchObject({ name: "Renamed", visibility: "private" });
 
     const listed = await server.app.inject({
       method: "GET",
@@ -891,7 +891,7 @@ describe("pool sharing", () => {
     }
   });
 
-  it("flips a private pool to shared on the first invitation", async () => {
+  it("shows a pool as shared once it has members", async () => {
     const detail = await readPool(shared, poolOwner);
     expect(detail.json().pool.visibility).toBe("shared");
     expect(detail.json().role).toBe("owner");
@@ -1060,7 +1060,7 @@ describe("pool sharing", () => {
       method: "POST",
       url: "/app/api/pools",
       headers: poolOwner.headers,
-      payload: { name: "Public pool", visibility: "public" },
+      payload: { name: "Public pool", isPublic: true },
     });
     const open = created.json().id;
     const seen = await readPool(open, outsider);
@@ -1100,7 +1100,7 @@ describe("pool sharing", () => {
         method: "POST",
         url: "/app/api/pools",
         headers: poolOwner.headers,
-        payload: { name: "Public preview pool", visibility: "public" },
+        payload: { name: "Public preview pool", isPublic: true },
       })
     ).json().id;
     const inPublic = (await writeQuestion(open, poolOwner, "previewed by anyone")).json().meta.id;
@@ -1133,7 +1133,7 @@ describe("pool sharing", () => {
         method: "POST",
         url: "/app/api/pools",
         headers: poolOwner.headers,
-        payload: { name: "Public, not linkable", visibility: "public" },
+        payload: { name: "Public, not linkable", isPublic: true },
       })
     ).json().id as string;
     const question = (await writeQuestion(open, poolOwner, "public question")).json().meta.id;
@@ -1400,7 +1400,7 @@ describe("the order of the refusals, over HTTP", () => {
       method: "POST",
       url: "/app/api/pools",
       headers: owner.headers,
-      payload: { name: "Refusal order pool", visibility: "public" },
+      payload: { name: "Refusal order pool", isPublic: true },
     });
     const open = created.json().id as string;
     const hidden = await server.app.inject({

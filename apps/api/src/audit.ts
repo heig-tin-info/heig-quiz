@@ -301,6 +301,9 @@ export type AuditAction =
   | "pool.create"
   | "pool.delete"
   | "pool.member_update"
+  /** The owner published the pool in the catalogue, or took it back (ADR-013, 2026-10-10). */
+  | "pool.publish"
+  | "pool.unpublish"
   /** The owner turned the night's LLM review on or off (ADR-060 §1): `payload.enabled`. */
   | "pool.review"
   | "pool.share"

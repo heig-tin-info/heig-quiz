@@ -96,7 +96,7 @@ describe("who may report", () => {
   it("reaches a public reader through poolAccess", async () => {
     const pool = await newPool("Public reports pool");
     const q = await newQuestion("public-q", pool);
-    expect((await call(owner, "PATCH", `/app/api/pools/${pool}`, { visibility: "public" })).statusCode).toBe(200);
+    expect((await call(owner, "PATCH", `/app/api/pools/${pool}`, { isPublic: true })).statusCode).toBe(200);
     expect((await report(stranger, q)).statusCode).toBe(201);
   });
 

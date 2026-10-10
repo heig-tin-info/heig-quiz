@@ -18,6 +18,12 @@ scope: the wording of §1.** Since the cut-over from tags to concepts, a `contri
 the question's concepts, not tags; the vocabulary itself is the instance's, not the pool's
 (ADR-081, addendum §5, for who creates and edits a concept).
 
+**Amended 2026-10-10 (product owner, issue #680 lot 1), scope: §1 (what the owner decides) and
+§4 (visibility).** Only publication is stored and decided: `pools.is_public`. What a pool is
+SHOWN as is derived from the roster (decision 8 below). The owner also writes a pool's
+description (decision 9). Access (§2), the resolution order (§3) and the succession (§5) are
+unchanged; `poolAccess` reads `is_public` where it read `visibility = 'public'`.
+
 ## Context
 
 Until now a question pool was reached by its owner and by the teaching staff of the courses
@@ -118,6 +124,30 @@ every teacher. Two facts shape the design:
    reach through `poolAccess` — public pools included, so every teacher sees the uploaded
    avatar of a public pool's owner. Students still never do. Reverting that widening would
    leave the avatar as initials for those viewers, nothing more.
+
+8. **Derived visibility** *(amendment, 2026-10-10)*. §4's "visibility follows the members" is
+   generalised: `pools.visibility` is replaced by `pools.is_public boolean` (the owner's
+   deliberate act, audited `pool.publish` / `pool.unpublish`; a personal pool cannot be
+   published). The visibility a pool displays is computed in SQL (so the list can sort on it):
+   **public** if `is_public`; else **shared** if the pool has at least one member or a linked
+   course whose staff includes someone other than the owner; else **private** (a pool linked only
+   to its owner's own course stays private). There is no "make private" action that evicts
+   members: a pool becomes private when its people are removed. A public pool is already readable
+   by every teacher, so inviting offers `contributor` and `owner` only (`409
+   role_covered_by_public` otherwise, and demoting an existing member to `reader` is refused the
+   same way); `reader` rows that exist stay, so unpublishing never silently cuts them. "Shared"
+   counts every `pool_members` row, including a seat kept by an account since demoted to student
+   (rule 5: such a seat opens nothing, but it is not swept either); this only affects the label. The Sharing section lists the linked courses, read-only, with their effect
+   (their staff can edit, rule 3 of §3).
+9. **Description** *(amendment, 2026-10-10)*. `pools.description` (at most 280 characters) is
+   written by an `owner` of the pool, as the name and the icon are (§1). The model may PROPOSE
+   one through the ADR-058 gateway (purpose `describe`; sent: the pool name, its concept labels
+   and at most two statement excerpts from the student view; recorded in open question 43 on
+   2026-10-10, accepted by the product owner in issue #680);
+   the proposal is stored nowhere and becomes the description only when the owner accepts it
+   (`PATCH` with `descriptionFromAi`). `description_source` (`owner` / `ai`) records who wrote
+   it, and a proposal is refused over text the owner wrote (`409 description_owned`, in the propose route before any model call; the `PATCH` only records `descriptionSource`). Accepting is
+   a `pool.update`.
 
 ## Consequences
 

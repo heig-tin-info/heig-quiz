@@ -20,6 +20,9 @@ const POOL: Pool = {
   icon: "code",
   color: null,
   visibility: "shared",
+  isPublic: false,
+  description: "",
+  descriptionSource: "owner",
   ownerId: "u-me",
   isPersonal: false,
   createdAt: "2026-01-01T08:00:00.000Z",
@@ -44,6 +47,7 @@ const linus: TeacherCandidate = {
 
 const list: PoolMembers = {
   visibility: "shared",
+  courses: [],
   members: [
     {
       userId: "u-me",
@@ -95,19 +99,49 @@ describe("PoolSharing", () => {
     expect(patch?.body).toEqual({ role: "reader" });
   });
 
-  it("changes the visibility, and says what the choice means", async () => {
+  it("publishes the pool with one switch, and offers no way to evict the members", async () => {
     const { calls } = mockFetch({
       [`GET ${MEMBERS}`]: ok(list),
       "PATCH /app/api/pools/p1": ok(POOL),
     });
     renderWithProviders(<PoolSharing pool={POOL} />);
     await screen.findByText("Ada Lovelace");
-    expect(
-      screen.getByText("The teachers invited below, each with the role you give them."),
-    ).toBeVisible();
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(screen.queryByRole("button", { name: /private/i })).toBeNull();
 
-    await userEvent.click(screen.getByRole("radio", { name: /Public/ }));
-    expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ visibility: "public" });
+    await userEvent.click(screen.getByRole("switch", { name: "Publish in the catalogue" }));
+    expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ isPublic: true });
+  });
+
+  it("cannot publish the personal pool", async () => {
+    mockFetch({ [`GET ${MEMBERS}`]: ok(list) });
+    renderWithProviders(<PoolSharing pool={{ ...POOL, isPersonal: true }} />);
+    await screen.findByText("Ada Lovelace");
+    expect(screen.getByRole("switch", { name: "Publish in the catalogue" })).toBeDisabled();
+    expect(screen.getByText("Your personal pool cannot be published.")).toBeVisible();
+  });
+
+  it("lists the linked courses, read-only, with their effect", async () => {
+    mockFetch({
+      [`GET ${MEMBERS}`]: ok({ ...list, courses: [{ id: "c1", name: "Programmation C", code: "PRG1" }] }),
+    });
+    renderWithProviders(<PoolSharing pool={POOL} />);
+    expect(await screen.findByText("Linked courses")).toBeVisible();
+    expect(screen.getByText("PRG1")).toBeVisible();
+    expect(screen.getByText("Staff can edit")).toBeVisible();
+  });
+
+  it("on a public pool offers contributor and owner only, and marks the reader rows", async () => {
+    const reader = { ...list.members[1]!, userId: "t9", givenName: "Rita", familyName: "Reader", role: "reader" as const };
+    mockFetch({
+      [`GET ${MEMBERS}`]: ok({ ...list, visibility: "public", members: [...list.members, reader] }),
+    });
+    renderWithProviders(<PoolSharing pool={{ ...POOL, visibility: "public", isPublic: true }} />);
+    await screen.findByText("Rita Reader");
+    expect(screen.getByRole("combobox", { name: "Role of Rita Reader" })).toHaveDisplayValue("Reader · covered by public");
+    const invite = screen.getByRole("combobox", { name: "Role" });
+    expect(within(invite).queryByRole("option", { name: "Reader" })).toBeNull();
+    expect(within(invite).getAllByRole("option").map((o) => o.textContent)).toEqual(["Contributor", "Owner"]);
   });
 
   it("offers the colleagues by name, and invites the one picked by account", async () => {
