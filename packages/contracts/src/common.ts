@@ -116,12 +116,7 @@ export type TeacherCandidateQuery = z.infer<typeof TeacherCandidateQuery>;
  * A teacher or admin account that holds no seat on the pool or the course
  * yet: what the picker of a share sheet or of the course's staff offers.
  */
-export const TeacherCandidate = z.object({
-  userId: z.uuid(),
-  email: z.string(),
-  givenName: z.string(),
-  familyName: z.string(),
-});
+export const TeacherCandidate = PersonRef;
 export type TeacherCandidate = z.infer<typeof TeacherCandidate>;
 
 export const TeacherCandidates = z.array(TeacherCandidate);
@@ -136,19 +131,16 @@ const teacherChoiceShape = {
   userId: z.uuid().optional(),
   email: z.string().trim().toLowerCase().email().max(200).optional(),
 };
-const oneOfTheTwo = (b: { userId?: string | undefined; email?: string | undefined }) =>
+const oneOfTheTwo = (b: { userId?: unknown; email?: unknown }) =>
   (b.userId === undefined) !== (b.email === undefined);
 
-export const TeacherChoice = z.object(teacherChoiceShape).refine(oneOfTheTwo, {
-  message: "Either userId or email",
-});
-export type TeacherChoice = z.infer<typeof TeacherChoice>;
-
-/** A `TeacherChoice` with more fields beside it (the role of the seat). */
+/** A teacher choice with more fields beside it (the role of the seat). */
 export function teacherChoiceWith<S extends z.ZodRawShape>(shape: S) {
-  return z
-    .object({ ...teacherChoiceShape, ...shape })
-    .refine((b) => oneOfTheTwo(b as { userId?: string; email?: string }), {
-      message: "Either userId or email",
-    });
+  return z.object({ ...teacherChoiceShape, ...shape }).refine(oneOfTheTwo, {
+    message: "Either userId or email",
+  });
 }
+
+/** Whom a seat goes to, nothing else beside it. */
+export const TeacherChoice = teacherChoiceWith({});
+export type TeacherChoice = z.infer<typeof TeacherChoice>;

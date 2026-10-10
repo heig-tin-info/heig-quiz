@@ -42,10 +42,7 @@ import type { Cell } from "@quiz/domain";
 import { actorOf, tracer } from "../../audit.js";
 import { issueImpersonationLink } from "../../auth/impersonation.js";
 import type { AppConfig } from "../../config.js";
-import type { Db } from "../../db/client.js";
-import { findTeacherById } from "../../directory.js";
 import { publish } from "../../events.js";
-import { ownersOf } from "../../identity.js";
 import { syncRoleOfUser } from "../../roles.js";
 import {
   accessibleClassroom,
@@ -76,30 +73,6 @@ const RowsBody = z.object({
 /** A course keeps at least one owner (ADR-068): the refusal of removing or demoting the last. */
 const lastOwner = (reply: FastifyReply) =>
   reply.code(409).send({ error: "last_owner", message: "A course keeps at least one owner" });
-
-/** The account a new staff seat goes to, or the 409 body that refuses it. */
-type Seatable = { id: string; email: string } | { error: "unknown_account" | "ambiguous_account"; message: string };
-
-/**
- * A pick is a staff account (`findTeacherById`): anyone else is refused as
- * unknown, so the route tells nothing about who exists beyond the directory.
- */
-async function byPick(db: Db, userId: string): Promise<Seatable> {
-  return (await findTeacherById(db, userId)) ?? { error: "unknown_account", message: "No teacher has this account" };
-}
-
-/**
- * A seat is held by an ACCOUNT, not by an address: the identity of a person
- * is a set of addresses (GH-11), so the one behind a typed address must have
- * signed in once, and be the only account holding it.
- */
-async function byAddress(db: Db, email: string): Promise<Seatable> {
-  const owners = await ownersOf(db, email);
-  if (owners.length === 1) return { id: owners[0]!, email };
-  return owners.length === 0
-    ? { error: "unknown_account", message: "No account has signed in with this address yet" }
-    : { error: "ambiguous_account", message: "Several accounts hold this address" };
-}
 
 /** A course code is unique across the instance: the one refusal of a create and of an edit. */
 const duplicateCode = (reply: FastifyReply) =>
@@ -380,8 +353,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     "/app/api/courses/:id/staff",
     { preHandler: requireTeacher },
     teacher({ ...onCourse("owner"), body: StaffAdd }, async ({ req, reply, body, scope: course }) => {
-      const who =
-        body.userId !== undefined ? await byPick(app.db, body.userId) : await byAddress(app.db, body.email!);
+      const who = await service.resolveStaffInvitee(app.db, body);
       if ("error" in who) return reply.code(409).send(who);
       const { id: userId, email } = who;
       if (!(await service.addStaff(app.db, course.id, userId, body.role))) {

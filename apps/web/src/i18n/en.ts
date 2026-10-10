@@ -455,7 +455,7 @@ export const en = {
   "courses.settings.lifecycle": "Delete",
   "courses.settings.deleteDesc":
     "Deletes the course, its classrooms with their rosters and results, and its templates. This cannot be undone.",
-  "courses.settings.ownerOnly": "The name, the code, the icon and the deletion of the course are its teachers' to change.",
+  "courses.settings.ownerOnly": "The name, the code and the deletion of the course are its teachers' to change.",
   "classrooms.title": "Classrooms",
   "classrooms.new": "New classroom",
   "classrooms.name": "Name",

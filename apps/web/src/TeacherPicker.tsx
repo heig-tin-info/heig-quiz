@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import type { TeacherCandidate, TeacherCandidates, TeacherChoice } from "@quiz/contracts";
+import type { TeacherCandidate, TeacherCandidateQuery, TeacherCandidates, TeacherChoice } from "@quiz/contracts";
 
 import { api } from "./api";
 import { useT } from "./i18n";
@@ -117,7 +117,7 @@ export function TeacherPicker({
   const q = text.trim();
   const candidates = useQuery<TeacherCandidates>({
     queryKey: [...candidatesKey, q],
-    queryFn: () => api(`${candidatesUrl}?q=${encodeURIComponent(q)}`),
+    queryFn: () => api(`${candidatesUrl}?${new URLSearchParams({ q } satisfies TeacherCandidateQuery)}`),
     // Asked only while the list shows: the form opens on its fields, not on
     // the directory.
     enabled: open,

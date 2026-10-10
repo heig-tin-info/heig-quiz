@@ -452,7 +452,7 @@ export const fr: Record<keyof Dict, string> = {
   "courses.settings.lifecycle": "Supprimer",
   "courses.settings.deleteDesc":
     "Supprime le cours, ses classes avec leurs listes d'étudiants et leurs résultats, et ses modèles. C'est irréversible.",
-  "courses.settings.ownerOnly": "Le nom, l'abréviation, l'icône et la suppression du cours relèvent de ses enseignants.",
+  "courses.settings.ownerOnly": "Le nom, l'abréviation et la suppression du cours relèvent de ses enseignants.",
   "classrooms.title": "Classes",
   "classrooms.new": "Nouvelle classe",
   "classrooms.name": "Nom",

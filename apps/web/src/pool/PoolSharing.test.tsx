@@ -42,7 +42,6 @@ const linus: TeacherCandidate = {
   familyName: "Torvalds",
 };
 
-
 const list: PoolMembers = {
   visibility: "shared",
   members: [
@@ -117,7 +116,6 @@ describe("PoolSharing", () => {
     const user = flowingClock();
     const { calls } = mockFetch({
       [`GET ${MEMBERS}`]: ok(list),
-      [`GET ${CANDIDATES}?q=`]: ok([grace, linus]),
       ...candidatesFor(CANDIDATES, "gra", [grace]),
       "POST /app/api/pools/p1/members": { status: 201, body: list },
     });
@@ -145,7 +143,6 @@ describe("PoolSharing", () => {
     const user = flowingClock();
     const { calls } = mockFetch({
       [`GET ${MEMBERS}`]: ok(list),
-      [`GET ${CANDIDATES}?q=`]: ok([grace, linus]),
       ...candidatesFor(CANDIDATES, "Nobody@heig-vd.ch", []),
       "POST /app/api/pools/p1/members": fail(404, {
         error: "teacher_not_found",

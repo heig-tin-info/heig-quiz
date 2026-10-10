@@ -39,7 +39,7 @@ teacher changes a role or removes someone from a person's row, and anyone
 leaves the course from their own. A course keeps at least one teacher.
 
 The **conditions catalog**, in the course's **Settings**, keeps the
-conditions you announce often; every member of the staff manages it.
+conditions you announce often; a teacher manages it, an assistant reads it and ticks its entries in an evaluation.
 
 ## Pools of this course
 

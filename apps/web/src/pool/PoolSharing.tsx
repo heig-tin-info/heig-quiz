@@ -7,6 +7,7 @@ import {
   type Pool,
   type TeacherCandidate,
   type PoolMember,
+  type PoolMemberInvite,
   type PoolMembers,
   type PoolRole,
 } from "@quiz/contracts";
@@ -171,11 +172,10 @@ export function PoolSharing({ pool }: { pool: Pool }) {
   });
 
   const invite = useMutation({
-    mutationFn: () =>
-      api(`/app/api/pools/${pool.id}/members`, {
-        method: "POST",
-        body: JSON.stringify({ ...who.choice, role }),
-      }),
+    mutationFn: () => {
+      const body: PoolMemberInvite = { ...who.choice!, role };
+      return api(`/app/api/pools/${pool.id}/members`, { method: "POST", body: JSON.stringify(body) });
+    },
     onSuccess: async () => {
       who.reset();
       await Promise.all([

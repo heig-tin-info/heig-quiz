@@ -40,7 +40,7 @@ quelqu'un depuis sa ligne, et chacun quitte le cours depuis la sienne. Un
 cours garde au moins un enseignant.
 
 Le **catalogue de conditions**, dans les **Réglages** du cours, garde les
-conditions que vous annoncez souvent ; chaque membre de l'équipe le gère.
+conditions que vous annoncez souvent ; un enseignant le gère, un assistant le lit et coche ses entrées dans une évaluation.
 
 ## Banques de ce cours
 
