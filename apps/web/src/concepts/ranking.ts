@@ -42,12 +42,12 @@ export const namesAConcept = (query: string, concepts: readonly Concept[]): bool
  * the others, the direct matches excepted: what was typed exactly stays on
  * top, so Enter picks it.
  */
-export function rankConcepts(
+export function rankConcepts<C extends Concept>(
   query: string,
-  concepts: readonly Concept[],
+  concepts: readonly C[],
   locale: Locale,
   first: ReadonlySet<string> = new Set(),
-): Concept[] {
+): C[] {
   const byId = new Map(concepts.map((c) => [c.id, c]));
   const direct = new Set(designated(query, concepts));
   const matches = closeConcepts(
@@ -63,7 +63,7 @@ export function rankConcepts(
         conceptName(a, locale).localeCompare(conceptName(b, locale), locale),
     );
   const hits = [...new Set([...direct, ...matches])].flatMap((id) => byId.get(id) ?? []);
-  const tier = (c: Concept) => (direct.has(c.id) ? 0 : 2) + (first.has(c.id) ? 0 : 1);
+  const tier = (c: C) => (direct.has(c.id) ? 0 : 2) + (first.has(c.id) ? 0 : 1);
   // `sort` is stable: within a tier, the matcher's order holds.
   return [...hits, ...rest].sort((a, b) => tier(a) - tier(b));
 }

@@ -1,12 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
-import type { AdminConcept, ConceptMerge, ConceptMergeResult } from "@quiz/contracts";
+import type { AdminConcept, Concept, ConceptMerge } from "@quiz/contracts";
 
 import { api, refusalCodeOf } from "../api";
 import { useI18n, useT } from "../i18n";
 import { Button, FormError, Modal, RadioRow, SearchInput } from "../ui";
-import { conceptName } from "./names";
+import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 
 /** How many candidates the list shows at once; the search narrows the rest. */
@@ -38,25 +38,15 @@ export function ConceptMergeDialog({
   const name = conceptName(concept, locale);
 
   const targets = useMemo(() => candidates.filter((c) => c.status === "validated" && c.id !== concept.id), [candidates, concept.id]);
-  const shown = useMemo(() => {
-    const ranked = rankConcepts(typed.trim(), targets, locale);
-    const byId = new Map(targets.map((c) => [c.id, c]));
-    return ranked.flatMap((c) => byId.get(c.id) ?? []).slice(0, SHOWN);
-  }, [targets, typed, locale]);
+  const shown = useMemo(() => rankConcepts(typed.trim(), targets, locale).slice(0, SHOWN), [targets, typed, locale]);
   const target = targets.find((c) => c.id === picked);
 
   const merge = useMutation({
     mutationFn: (body: ConceptMerge) =>
-      api<ConceptMergeResult>(`/app/api/admin/concepts/${concept.id}/merge`, { method: "POST", body: JSON.stringify(body) }),
+      api<Concept>(`/app/api/admin/concepts/${concept.id}/merge`, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: onMerged,
   });
 
-  const uses = (c: AdminConcept) =>
-    c.questionCount === 0
-      ? t("admin.concepts.uses.none")
-      : c.questionCount === 1
-        ? t("admin.concepts.uses.one")
-        : t("admin.concepts.uses", { n: c.questionCount });
   const effect = (into: string) =>
     concept.questionCount === 0
       ? t("admin.concepts.merge.effect.none", { name, target: into })
@@ -78,7 +68,7 @@ export function ConceptMergeDialog({
   return (
     <Modal
       title={t("admin.concepts.merge.title", { name })}
-      subtitle={uses(concept)}
+      subtitle={usesLabel(t, concept.questionCount)}
       onClose={onClose}
       footer={
         <>
@@ -113,7 +103,7 @@ export function ConceptMergeDialog({
             {shown.map((c) => (
               <RadioRow key={c.id} name="merge-target" value={c.id} checked={picked === c.id} onPick={setPicked}>
                 <span className="font-semibold">{conceptName(c, locale)}</span>
-                <span className="ml-2 text-xs tabular-nums text-fg-muted">{uses(c)}</span>
+                <span className="ml-2 text-xs tabular-nums text-fg-muted">{usesLabel(t, c.questionCount)}</span>
               </RadioRow>
             ))}
           </fieldset>

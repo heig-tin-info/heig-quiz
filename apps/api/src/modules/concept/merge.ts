@@ -18,12 +18,12 @@
  *    live concepts only), while its id still resolves to the winner.
  *
  * The winner keeps its labels, qualifiers, descriptions and status. The audit
- * lists the question ids moved and those that already had the winner, so a
- * reviewed SQL undo is possible; there is no undo button.
+ * lists the loser's former status and the question ids moved and those that
+ * already had the winner, so a reviewed SQL undo is possible; there is no undo button.
  */
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 
-import type { ConceptMergeResult } from "@quiz/contracts";
+import type { Concept } from "@quiz/contracts";
 
 import { audit } from "../../audit.js";
 import type { Db } from "../../db/client.js";
@@ -37,7 +37,7 @@ export async function mergeConcept(
   ctx: Omit<ConceptContext, "caller">,
   loserId: string,
   winnerId: string,
-): Promise<ConceptMergeResult> {
+): Promise<Concept> {
   if (loserId === winnerId) throw new DomainError("concept_merge_self", 422, "A concept is not merged into itself");
   return db.transaction(async (tx) => {
     const rows = await tx
@@ -56,40 +56,32 @@ export async function mergeConcept(
       throw new DomainError("concept_merge_target_not_validated", 422, "A concept is merged into a validated one only");
     }
 
-    const linked = (
-      await tx
-        .select({ questionId: questionConcepts.questionId })
-        .from(questionConcepts)
-        .where(eq(questionConcepts.conceptId, loserId))
-    ).map((l) => l.questionId);
-    const had = new Set(
-      linked.length === 0
-        ? []
-        : (
-            await tx
-              .select({ questionId: questionConcepts.questionId })
-              .from(questionConcepts)
-              .where(and(eq(questionConcepts.conceptId, winnerId), inArray(questionConcepts.questionId, linked)))
-          ).map((l) => l.questionId),
-    );
-    const ids = linked.sort();
-    const moved = ids.filter((id) => !had.has(id));
-    const alreadyLinked = ids.filter((id) => had.has(id));
-    // Chunked: the busiest concept of the vocabulary may hold thousands of questions.
-    for (let i = 0; i < moved.length; i += 5000) {
+    // Two statements: the links the winner lacked are `moved`, every link of the loser is deleted.
+    const moved = (
       await tx
         .insert(questionConcepts)
-        .values(moved.slice(i, i + 5000).map((questionId) => ({ questionId, conceptId: winnerId })))
-        .onConflictDoNothing();
-    }
-    await tx.delete(questionConcepts).where(eq(questionConcepts.conceptId, loserId));
+        .select(
+          tx
+            .select({ questionId: questionConcepts.questionId, conceptId: sql<string>`${winnerId}::uuid`.as("concept_id") })
+            .from(questionConcepts)
+            .where(eq(questionConcepts.conceptId, loserId)),
+        )
+        .onConflictDoNothing()
+        .returning({ id: questionConcepts.questionId })
+    )
+      .map((r) => r.id)
+      .sort();
+    const all = (await tx.delete(questionConcepts).where(eq(questionConcepts.conceptId, loserId)).returning({ id: questionConcepts.questionId }))
+      .map((r) => r.id);
+    const movedSet = new Set(moved);
+    const alreadyLinked = all.filter((id) => !movedSet.has(id)).sort();
 
     const repointed = await tx
       .update(concepts)
       .set({ mergedInto: winnerId, updatedAt: ctx.now })
       .where(eq(concepts.mergedInto, loserId))
       .returning({ id: concepts.id });
-    // Course-concept links (step 7, #578) join this transaction: rewrite them here as well.
+    // Step 7's course-concept links join here (ADR-081 fifth addendum).
     await tx
       .update(concepts)
       .set({ status: "merged", mergedInto: winnerId, updatedAt: ctx.now })
@@ -106,13 +98,13 @@ export async function mergeConcept(
       subjectType: "concept",
       subjectId: loserId,
       payload: {
-        loser: describe(loser),
+        loser: { ...describe(loser), status: loser.status },
         winner: describe(winner),
         moved,
         alreadyLinked,
         repointed: repointed.map((r) => r.id).sort(),
       },
     });
-    return { concept: toConcept(winner), moved: moved.length, alreadyLinked: alreadyLinked.length };
+    return toConcept(winner);
   });
 }

@@ -16,7 +16,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Concept, ConceptInputError, ConceptLang, ConceptRef, PoolConcept, TagDropReason } from "@quiz/contracts";
 import { conceptKey, planConceptWrite, type ConceptToCreate, type ConceptWriteError } from "@quiz/domain";
@@ -166,10 +166,28 @@ async function createAll(
 }
 
 /**
+ * Share-locks `ids` in id order, and answers the ones that are not merged.
+ * Every writer of links and the merge (`merge.ts`, `FOR UPDATE` in id order)
+ * lock in the same order, so none deadlocks with another.
+ */
+async function lockConcepts(tx: Db | Tx, ids: readonly string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await tx
+    .select({ id: concepts.id, mergedInto: concepts.mergedInto })
+    .from(concepts)
+    .where(inArray(concepts.id, [...ids]))
+    .orderBy(asc(concepts.id))
+    .for("share");
+  return new Set(rows.filter((r) => r.mergedInto === null).map((r) => r.id));
+}
+
+/**
  * Replaces a question's concepts with `conceptIds` (duplicates ignored),
  * inside the caller's transaction (addendum §4). Every concept must exist
- * and not be merged — a 422 `concept_not_found` naming the others — and is
- * share-locked so that a merge cannot move it under the write.
+ * and not be merged — a 422 `concept_not_found` naming the others. The
+ * wanted concepts AND those the question links now are share-locked, so that
+ * a merge cannot move any of them under the write: a removal made while a
+ * merge ran is not undone by the link the merge adds.
  */
 export async function setQuestionConcepts(
   tx: Db | Tx,
@@ -177,17 +195,14 @@ export async function setQuestionConcepts(
   conceptIds: readonly string[],
 ): Promise<void> {
   const ids = [...new Set(conceptIds)];
-  if (ids.length > 0) {
-    const live = await tx
-      .select({ id: concepts.id })
-      .from(concepts)
-      .where(and(inArray(concepts.id, ids), isNull(concepts.mergedInto)))
-      .for("share");
-    const ok = new Set(live.map((c) => c.id));
-    const bad = ids.filter((id) => !ok.has(id));
-    if (bad.length > 0) {
-      throw new DomainError("concept_not_found", 422, "A concept is missing or merged", { ids: bad }); // `ConceptNotFound`
-    }
+  const current = await tx
+    .select({ id: questionConcepts.conceptId })
+    .from(questionConcepts)
+    .where(eq(questionConcepts.questionId, questionId));
+  const live = await lockConcepts(tx, [...new Set([...ids, ...current.map((c) => c.id)])]);
+  const bad = ids.filter((id) => !live.has(id));
+  if (bad.length > 0) {
+    throw new DomainError("concept_not_found", 422, "A concept is missing or merged", { ids: bad }); // `ConceptNotFound`
   }
   await tx.delete(questionConcepts).where(eq(questionConcepts.questionId, questionId));
   if (ids.length > 0) {
@@ -224,19 +239,22 @@ export function byLabel(a: ConceptRef, b: ConceptRef): number {
 
 /**
  * Gives the question `toId` the concepts of `fromId` (a copy, ADR-017), inside
- * the caller's transaction. A concept merged meanwhile is followed to the one
- * it went into: each concept is share-locked, like `setQuestionConcepts`
- * does, so a merge in flight is waited for and its outcome read (the locked
- * row comes back in its latest version), and no link to a merged concept is
- * ever re-created.
+ * the caller's transaction. Its concepts are share-locked first (`lockConcepts`),
+ * so a merge in flight is waited for; the links are read afterwards and a
+ * concept merged meanwhile is followed to the one it went into: no link to a
+ * merged concept is ever re-created.
  */
 export async function copyQuestionConcepts(tx: Db | Tx, fromId: string, toId: string): Promise<void> {
+  const source = await tx
+    .select({ id: questionConcepts.conceptId })
+    .from(questionConcepts)
+    .where(eq(questionConcepts.questionId, fromId));
+  await lockConcepts(tx, source.map((c) => c.id));
   await tx.execute(sql`
     INSERT INTO ${questionConcepts} (question_id, concept_id)
     SELECT ${toId}::uuid, coalesce(c.merged_into, c.id) FROM ${questionConcepts} qc
     JOIN ${concepts} c ON c.id = qc.concept_id
     WHERE qc.question_id = ${fromId}
-    FOR SHARE OF c
     ON CONFLICT DO NOTHING`);
 }
 

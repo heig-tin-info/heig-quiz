@@ -10,7 +10,6 @@
 import {
   ConceptCreate,
   ConceptMerge,
-  type ConceptMergeResult,
   ConceptPatch,
   type AdminConcept,
   type AdminConceptList,
@@ -169,7 +168,7 @@ on("POST", "/app/api/admin/concepts/:id/validate", (m): Concept => {
  * The merge (ADR-081 fifth addendum §2): into a validated concept only; the
  * usage moves, earlier merges are re-pointed, the merged one leaves the queue.
  */
-on("POST", "/app/api/admin/concepts/:id/merge", (m, raw): ConceptMergeResult => {
+on("POST", "/app/api/admin/concepts/:id/merge", (m, raw): Concept => {
   const body = ConceptMerge.safeParse(raw);
   if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
   const loser = concepts.find((x) => x.id === m.groups!.id);
@@ -184,7 +183,7 @@ on("POST", "/app/api/admin/concepts/:id/merge", (m, raw): ConceptMergeResult => 
   for (const c of concepts) if (c.mergedInto === loser.id) c.mergedInto = winner.id;
   loser.status = "merged";
   loser.mergedInto = winner.id;
-  return { concept: winner, moved, alreadyLinked: 0 };
+  return winner;
 });
 
 on("DELETE", "/app/api/admin/concepts/:id", (m) => {

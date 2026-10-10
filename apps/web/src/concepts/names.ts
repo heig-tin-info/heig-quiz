@@ -4,7 +4,7 @@
  */
 import type { Concept } from "@quiz/contracts";
 
-import type { Locale } from "../i18n";
+import type { Locale, TFunction } from "../i18n";
 
 /**
  * A concept in the reader's language: its label and qualifier there, else in
@@ -30,3 +30,7 @@ export function refName({ label, qualifier }: { label: string; qualifier: string
 
 /** The label in the reader's language, else the other, with its qualifier: `Adresse (mémoire)`. */
 export const conceptName = (c: Concept, locale: Locale): string => refName(conceptSide(c, locale));
+
+/** How many questions use a concept: "Unused", "1 question", "{n} questions". */
+export const usesLabel = (t: TFunction, n: number): string =>
+  n === 0 ? t("admin.concepts.uses.none") : n === 1 ? t("admin.concepts.uses.one") : t("admin.concepts.uses", { n });

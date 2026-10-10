@@ -107,15 +107,26 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
   });
 
-  it("offers no deletion while a question uses the concept, and says so", async () => {
+  it("offers Merge into… instead of Delete while a question uses the concept", async () => {
     mockFetch({ [LIST]: ok(page([validated])) });
     renderWithProviders(<ConceptQueue />);
 
     await userEvent.click(await screen.findByRole("button", { name: /edit pointer/i }));
     const sheet = await screen.findByRole("dialog");
-    const remove = within(sheet).getByRole("button", { name: /delete concept/i });
-    expect(remove).toBeDisabled();
-    expect(remove).toHaveAccessibleDescription(/12 questions use this concept/i);
+    expect(within(sheet).queryByRole("button", { name: /delete concept/i })).toBeNull();
+    expect(within(sheet).getByRole("button", { name: /merge into/i })).toBeEnabled();
+  });
+
+  it("holds the merge back while the sheet has unsaved edits, and says why", async () => {
+    mockFetch({ [LIST]: ok(page([validated])) });
+    renderWithProviders(<ConceptQueue />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /edit pointer/i }));
+    const sheet = await screen.findByRole("dialog");
+    await userEvent.type(within(within(sheet).getByRole("group", { name: "English" })).getByRole("textbox", { name: /label/i }), "s");
+    const merge = within(sheet).getByRole("button", { name: /merge into/i });
+    expect(merge).toBeDisabled();
+    expect(merge).toHaveAccessibleDescription(/save or cancel your edits/i);
   });
 
   it("saves only what changed, filling the missing language", async () => {
@@ -177,14 +188,14 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     it("says what happens, then merges and refreshes the queue", async () => {
       const { calls } = mockFetch({
         [LIST]: ok(page([halfDone, validated])),
-        [mergeOf(halfDone)]: ok({ concept: validated, moved: 4, alreadyLinked: 0 }),
+        [mergeOf(halfDone)]: ok(validated),
       });
       renderWithProviders(<ConceptQueue />);
       const dialog = await openDialog(halfDone);
 
       await userEvent.click(within(dialog).getByRole("radio", { name: /pointer/i }));
       expect(within(dialog).getByRole("status")).toHaveTextContent(
-        "4 questions will now use Pointer. The label Héritage will no longer designate a concept.",
+        "The 4 questions that use Héritage will use Pointer. The label Héritage will no longer designate a concept.",
       );
       await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
       await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: validated.id }));
@@ -193,9 +204,9 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     });
 
     it("searches the targets with the picker's rule", async () => {
-      mockFetch({ [LIST]: ok(page([ready, validated, target])) });
+      mockFetch({ [LIST]: ok(page([halfDone, validated, target])) });
       renderWithProviders(<ConceptQueue />);
-      const dialog = await openDialog(ready);
+      const dialog = await openDialog(halfDone);
 
       await userEvent.type(within(dialog).getByRole("searchbox", { name: /search a validated concept/i }), "pointe");
       await waitFor(() => expect(within(dialog).queryByRole("radio", { name: /recursive call/i })).toBeNull());
@@ -207,11 +218,11 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
 
     it("shows a refusal and keeps the dialog open", async () => {
       mockFetch({
-        [LIST]: ok(page([ready, validated])),
-        [mergeOf(ready)]: fail(409, { error: "concept_merged" }),
+        [LIST]: ok(page([halfDone, validated])),
+        [mergeOf(halfDone)]: fail(409, { error: "concept_merged" }),
       });
       renderWithProviders(<ConceptQueue />);
-      const dialog = await openDialog(ready);
+      const dialog = await openDialog(halfDone);
       await userEvent.click(within(dialog).getByRole("radio", { name: /pointer/i }));
       await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
       expect(await within(dialog).findByText(/merged in the meantime/i)).toBeInTheDocument();

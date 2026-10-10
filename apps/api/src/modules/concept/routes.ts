@@ -24,7 +24,7 @@
  *   `concept_label_missing`, 409 `concept_merged`, 404.
  * - `DELETE /app/api/admin/concepts/:id`: 204; 409 `concept_in_use`, 404.
  * - `POST /app/api/admin/concepts/:id/merge` `{ into }`: merges the concept
- *   into a validated one, answering `ConceptMergeResult`; 422
+ *   into a validated one, answering the winner (`Concept`); 422
  *   `concept_merge_self` or `concept_merge_target_not_validated`, 409
  *   `concept_merged` (either side already merged), 404 (either unknown).
  */

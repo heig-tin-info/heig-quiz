@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { ConceptMergeResult, ConceptResolveResponse } from "@quiz/contracts";
+import { Concept, ConceptResolveResponse } from "@quiz/contracts";
 import { qualifiedConceptKey } from "@quiz/domain";
 
 import { auditLog, concepts, pools, questionConcepts, questions } from "../../db/schema.js";
@@ -106,11 +106,17 @@ describe("POST /admin/concepts/:id/merge", () => {
 
     const res = await merge(admin, loser, winner);
     expect(res.statusCode, res.body).toBe(200);
-    const body = ConceptMergeResult.parse(res.json());
-    expect(body).toMatchObject({ concept: { id: winner, status: "validated" }, moved: 2, alreadyLinked: 1 });
+    expect(Concept.parse(res.json())).toMatchObject({ id: winner, status: "validated" });
 
     expect(await linksOf(loser)).toEqual([]);
     expect(await linksOf(winner)).toEqual([onlyLoser, both, onlyWinner, ghost].sort());
+    // No link to a merged concept remains anywhere.
+    const dangling = await db()
+      .select({ q: questionConcepts.questionId })
+      .from(questionConcepts)
+      .innerJoin(concepts, eq(concepts.id, questionConcepts.conceptId))
+      .where(eq(concepts.status, "merged"));
+    expect(dangling).toEqual([]);
     const [row] = await db().select().from(concepts).where(eq(concepts.id, loser));
     expect(row).toMatchObject({ status: "merged", mergedInto: winner });
     // The winner keeps its labels and status.
@@ -132,20 +138,6 @@ describe("POST /admin/concepts/:id/merge", () => {
     expect(resolved.map((r) => r.kind === "resolved" && r.concept.id)).toEqual([winner, winner]);
   });
 
-  it("leaves no link to a merged concept anywhere", async () => {
-    const loser = await concept("A", "A");
-    const winner = await concept("B", "B");
-    await question("one", [loser]);
-    await question("two", [loser, winner], true);
-    await merge(admin, loser, winner);
-    const dangling = await db()
-      .select({ q: questionConcepts.questionId })
-      .from(questionConcepts)
-      .innerJoin(concepts, eq(concepts.id, questionConcepts.conceptId))
-      .where(eq(concepts.status, "merged"));
-    expect(dangling).toEqual([]);
-  });
-
   it("audits the loser, the winner and the question ids, for a reviewed undo", async () => {
     const loser = await concept("Pointage", "Pointing");
     const winner = await concept("Pointeur", "Pointer");
@@ -156,7 +148,7 @@ describe("POST /admin/concepts/:id/merge", () => {
     const [entry] = await db().select().from(auditLog).where(eq(auditLog.subjectId, loser));
     expect(entry).toMatchObject({ subjectType: "concept", subjectId: loser, actorUserId: admin.id });
     expect(entry?.payload).toEqual({
-      loser: { id: loser, labels: { fr: "Pointage", en: "Pointing" }, qualifiers: { fr: "", en: "" } },
+      loser: { id: loser, status: "validated", labels: { fr: "Pointage", en: "Pointing" }, qualifiers: { fr: "", en: "" } },
       winner: { id: winner, labels: { fr: "Pointeur", en: "Pointer" }, qualifiers: { fr: "", en: "" } },
       moved: [a],
       alreadyLinked: [b],
@@ -209,7 +201,8 @@ describe("POST /admin/concepts/:id/merge", () => {
     await question("q", [loser]);
     const res = await merge(admin, loser, winner);
     expect(res.statusCode, res.body).toBe(200);
-    expect(ConceptMergeResult.parse(res.json()).moved).toBe(1);
+    const [entry] = await db().select().from(auditLog).where(eq(auditLog.subjectId, loser));
+    expect(entry?.payload).toMatchObject({ loser: { status: "proposed" }, moved: [expect.any(String)], alreadyLinked: [] });
   });
 
   it("is the admin's alone", async () => {
