@@ -94,8 +94,7 @@ a text that changes after the exam leaves no record of what was announced.
    `409 stale_order`; `POST /:cid/archive|unarchive`, an unarchived entry
    going last), loaded under `staffAccess` with no role step. Audited as
    `course.condition_create|update|archive|unarchive`; a reorder is not.
-   The course page has a Conditions tab ("Add condition" its primary) *(obsolete:
-   see the amendment of 2026-10-08 below)*; the
+   The course page has a Conditions tab ("Add condition" its primary); the
    settings editor of an evaluation or a template lists the active entries
    of its course as checkboxes — ticking appends `{ kind, text, catalogId }`,
    unticking removes the entry with that id — and an entry whose

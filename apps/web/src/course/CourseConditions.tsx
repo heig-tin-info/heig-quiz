@@ -79,7 +79,6 @@ function Catalog({
 }) {
   const t = useT();
   const qc = useQueryClient();
-  const [adding, setAdding] = useState(false);
   const toastError = useErrorToast();
   const [showArchived, setShowArchived] = useState(false);
   const catalog = useCourseConditions(courseId);
@@ -105,35 +104,6 @@ function Catalog({
     [ids[i], ids[i + delta]] = [ids[i + delta]!, ids[i]!];
     write.mutate({ path: "/order", method: "PUT", body: { ids } satisfies CourseConditionOrder });
   };
-
-  const heading = (
-    <SectionHeading
-      icon={ListChecks}
-      title={t("courses.settings.conditions")}
-      actions={
-        <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
-          <Plus /> {t("courses.conditions.add")}
-        </Button>
-      }
-    />
-  );
-  if (catalog.isLoading || catalog.isError) {
-    return (
-      <section className="space-y-3">
-        {heading}
-        {catalog.isLoading ? (
-          <Skeleton className="h-40 w-full" />
-        ) : (
-          <QueryError
-            title={t("courses.conditions.loadFailed")}
-            error={catalog.error}
-            onRetry={() => void catalog.refetch()}
-            retrying={catalog.isFetching}
-          />
-        )}
-      </section>
-    );
-  }
 
   return (
     <>
@@ -217,9 +187,9 @@ function Catalog({
         <AddConditionModal
           submitting={write.isPending}
           onCreate={(body) =>
-            write.mutate({ method: "POST", body }, { onSuccess: () => setAdding(false) })
+            write.mutate({ method: "POST", body }, { onSuccess: () => onAdding(false) })
           }
-          onClose={() => setAdding(false)}
+          onClose={() => onAdding(false)}
         />
       ) : null}
     </>
