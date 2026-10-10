@@ -1,0 +1,251 @@
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { BookMarked, Check, Pencil } from "lucide-react";
+import { useState } from "react";
+
+import {
+  ADMIN_CONCEPT_PAGE,
+  CONCEPT_LANGS,
+  type AdminConcept,
+  type AdminConceptList,
+  type ConceptLang,
+} from "@quiz/contracts";
+
+import { api, refusalCodeOf } from "../api";
+import { useI18n, useT } from "../i18n";
+import { adminConceptsKey, conceptsKey } from "../queryKeys";
+import { useDebounced } from "../useDebounced";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  QueryError,
+  RelativeTime,
+  SearchInput,
+  SectionHeading,
+  Segmented,
+  Skeleton,
+  Spinner,
+} from "../ui";
+import { ConceptSheet } from "./ConceptSheet";
+import { conceptName } from "./names";
+
+type Filter = "all" | "proposed" | "validated";
+
+/** The first language a concept has no label in: what stops its validation. */
+const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((lang) => c.labels[lang] === null);
+
+/**
+ * The admin's curation queue (ADR-081, fifth addendum): the shared
+ * vocabulary, the concepts teachers proposed first, each with how many
+ * questions of the instance use it. The screen's one primary action is
+ * **Validate**; a concept is renamed, completed in its other language or
+ * deleted (when nothing uses it) from its sheet.
+ *
+ * Paged by the server, `ADMIN_CONCEPT_PAGE` at a time, and searched there:
+ * the vocabulary can hold a few hundred concepts.
+ */
+export function ConceptQueue() {
+  const t = useT();
+  const { locale } = useI18n();
+  const qc = useQueryClient();
+  const [filter, setFilter] = useState<Filter>("all");
+  const [typed, setTyped] = useState("");
+  const q = useDebounced(typed.trim());
+  const [editing, setEditing] = useState<string | null>(null);
+
+  const list = useInfiniteQuery({
+    queryKey: [...adminConceptsKey, filter, q],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => {
+      const query = new URLSearchParams({ limit: String(ADMIN_CONCEPT_PAGE), offset: String(pageParam) });
+      if (filter !== "all") query.set("status", filter);
+      if (q !== "") query.set("q", q);
+      return api<AdminConceptList>(`/app/api/admin/concepts?${query}`);
+    },
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((n, page) => n + page.concepts.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+    placeholderData: (previous) => previous,
+  });
+  const rows = list.data?.pages.flatMap((page) => page.concepts) ?? [];
+  const total = list.data?.pages[0]?.total ?? 0;
+  const proposed = list.data?.pages[0]?.proposed ?? 0;
+  const edited = rows.find((c) => c.id === editing);
+
+  const validate = useMutation({
+    mutationFn: (id: string) => api(`/app/api/admin/concepts/${id}/validate`, { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: adminConceptsKey });
+      void qc.invalidateQueries({ queryKey: conceptsKey });
+    },
+  });
+
+  return (
+    <section className="space-y-4">
+      <SectionHeading icon={BookMarked} title={t("admin.concepts.title")} description={t("admin.concepts.hint")} />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented<Filter>
+          name="concept-filter"
+          label={t("admin.concepts.filter")}
+          size="sm"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: "all", label: t("admin.concepts.filter.all") },
+            {
+              value: "proposed",
+              label: proposed > 0 ? t("admin.concepts.filter.proposedCount", { n: proposed }) : t("admin.concepts.filter.proposed"),
+            },
+            { value: "validated", label: t("admin.concepts.filter.validated") },
+          ]}
+        />
+        <SearchInput
+          className="w-full sm:w-64"
+          aria-label={t("admin.concepts.search")}
+          placeholder={t("admin.concepts.search")}
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+        />
+      </div>
+
+      {list.isLoading ? (
+        <Skeleton className="h-64 w-full" />
+      ) : list.isError ? (
+        <QueryError title={t("admin.concepts.title")} query={list} />
+      ) : rows.length === 0 ? (
+        <Card>
+          {q !== "" ? (
+            <EmptyState icon={BookMarked} title={t("admin.concepts.noMatch")} />
+          ) : filter === "proposed" ? (
+            <EmptyState icon={Check} title={t("admin.concepts.done.title")}>
+              {t("admin.concepts.done.body")}
+            </EmptyState>
+          ) : (
+            <EmptyState icon={BookMarked} title={t("admin.concepts.empty.title")}>
+              {t("admin.concepts.empty.body")}
+            </EmptyState>
+          )}
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <ul className="divide-y divide-line">
+              {rows.map((c) => (
+                <ConceptRow
+                  key={c.id}
+                  concept={c}
+                  validating={validate.isPending && validate.variables === c.id}
+                  failed={validate.isError && validate.variables === c.id ? validate.error : null}
+                  onValidate={() => validate.mutate(c.id)}
+                  onEdit={() => setEditing(c.id)}
+                />
+              ))}
+            </ul>
+          </Card>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-[13px] tabular-nums text-fg-muted">
+              {t("admin.concepts.shown", { shown: rows.length, total })}
+            </p>
+            {list.hasNextPage ? (
+              <Button variant="secondary" loading={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
+                {t("pool.loadMore")}
+              </Button>
+            ) : null}
+          </div>
+        </>
+      )}
+      {list.isFetching && !list.isLoading && !list.isFetchingNextPage ? <Spinner className="py-2" /> : null}
+
+      {edited ? <ConceptSheet concept={edited} locale={locale} onClose={() => setEditing(null)} /> : null}
+    </section>
+  );
+}
+
+function ConceptRow({
+  concept: c,
+  validating,
+  failed,
+  onValidate,
+  onEdit,
+}: {
+  concept: AdminConcept;
+  validating: boolean;
+  failed: unknown;
+  onValidate: () => void;
+  onEdit: () => void;
+}) {
+  const t = useT();
+  const { locale } = useI18n();
+  const name = conceptName(c, locale);
+  const missing = missingLangs(c);
+  const reasonId = `concept-${c.id}-why`;
+  const description = c.descriptions[locale] || c.descriptions[locale === "fr" ? "en" : "fr"];
+
+  return (
+    <li className="flex flex-wrap items-start gap-x-4 gap-y-3 p-4">
+      <div className="min-w-0 flex-1 basis-60 space-y-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="font-semibold">{name}</span>
+          <Badge tone={c.status === "validated" ? "green" : "amber"}>
+            {c.status === "validated" ? t("admin.concepts.status.validated") : t("admin.concepts.status.proposed")}
+          </Badge>
+          {missing.map((lang) => (
+            <Badge key={lang} tone="red">
+              {lang === "fr" ? t("admin.concepts.missing.fr") : t("admin.concepts.missing.en")}
+            </Badge>
+          ))}
+        </div>
+        {description ? <p className="line-clamp-2 text-xs text-fg-muted">{description}</p> : null}
+        <p className="flex flex-wrap gap-x-2 text-xs text-fg-muted">
+          <span className="tabular-nums">
+            {c.questionCount === 0
+              ? t("admin.concepts.uses.none")
+              : c.questionCount === 1
+                ? t("admin.concepts.uses.one")
+                : t("admin.concepts.uses", { n: c.questionCount })}
+          </span>
+          {c.creator ? <span>· {t("admin.concepts.by", { name: c.creator })}</span> : null}
+          <span>
+            · <RelativeTime iso={c.createdAt} />
+          </span>
+        </p>
+        {failed ? (
+          <ErrorText className="text-xs">
+            {refusalCodeOf(failed) === "concept_label_missing"
+              ? t("admin.concepts.error.missing")
+              : t("admin.concepts.error.save")}
+          </ErrorText>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {c.status === "proposed" ? (
+          <>
+            <Button
+              size="sm"
+              variant="primary"
+              loading={validating}
+              disabled={missing.length > 0}
+              aria-describedby={missing.length > 0 ? reasonId : undefined}
+              aria-label={t("admin.concepts.validateNamed", { name })}
+              onClick={onValidate}
+            >
+              {validating ? null : <Check />} {t("admin.concepts.validate")}
+            </Button>
+            {missing[0] ? (
+              <span id={reasonId} className="sr-only">
+                {missing[0] === "fr" ? t("admin.concepts.validate.needs.fr") : t("admin.concepts.validate.needs.en")}
+              </span>
+            ) : null}
+          </>
+        ) : null}
+        <Button size="sm" variant="ghost" aria-label={t("admin.concepts.editNamed", { name })} onClick={onEdit}>
+          <Pencil /> {t("admin.concepts.edit")}
+        </Button>
+      </div>
+    </li>
+  );
+}

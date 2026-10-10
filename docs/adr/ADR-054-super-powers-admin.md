@@ -15,6 +15,11 @@ admin role without Super Powers ([ADR-081, second addendum §4](ADR-081-vocabula
 ([ADR-081, fourth addendum](ADR-081-vocabulaire-de-notions.md#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)),
 the tag sorting being retired. The admin-only validate and delete routes of
 concepts remain, on the admin role, as they do not read anyone's content.
+A second scoped exception: the admin's concept queue shows, without Super
+Powers, the instance-wide number of live questions using each concept, a
+number and nothing else, because curating the vocabulary is a decision about
+all of them; pool names and statements still need Super Powers ([ADR-081,
+fifth addendum §1](ADR-081-vocabulaire-de-notions.md#fifth-addendum-2026-10-10-the-curation-of-the-vocabulary)).
 
 ## Context
 

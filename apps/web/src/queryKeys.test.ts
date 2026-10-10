@@ -27,6 +27,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["poolCatalogueKey", keys.poolCatalogueKey("fluides"), ["pools", "catalogue", "fluides"]],
     ["adminLlmUsageKey", keys.adminLlmUsageKey, ["admin-teachers", "llm-usage"]],
     ["conceptsKey", keys.conceptsKey, ["concepts"]],
+    ["adminConceptsKey", keys.adminConceptsKey, ["admin-teachers", "concepts"]],
     ["adminKioskKey", keys.adminKioskKey, ["admin-kiosk-devices"]],
     ["kioskStationKey", keys.kioskStationKey, ["kiosk-station"]],
     ["pairPreviewKey", keys.pairPreviewKey("BCDF-GHJK"), ["pair-preview", "BCDF-GHJK"]],

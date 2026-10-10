@@ -46,6 +46,8 @@ export const adminLlmKey = [...adminTeachersKey, "llm"] as const;
 export const adminLlmUsageKey = [...adminTeachersKey, "llm-usage"] as const;
 /** The instance's vocabulary of concepts, merged ones left out (ADR-081). */
 export const conceptsKey = ["concepts"] as const;
+/** The admin's curation queue (ADR-081 fifth addendum): every filter and page below it, refreshed by the `admin` hint. */
+export const adminConceptsKey = [...adminTeachersKey, "concepts"] as const;
 /** The kiosk station registry (ADR-051 §5). */
 export const adminKioskKey = ["admin-kiosk-devices"] as const;
 /** Whether this browser is a kiosk station: its `quiz_kiosk` cookie, read by the server. */
