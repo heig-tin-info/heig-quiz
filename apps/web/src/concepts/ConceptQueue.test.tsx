@@ -394,6 +394,83 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       expect(await screen.findByRole("dialog")).toBeInTheDocument();
     });
 
+    describe("the AI's pass", () => {
+      const AI = "POST /app/api/admin/concepts/duplicates/ai";
+      const stack = concept(20, { status: "validated", labels: { fr: "Pile", en: "Stack" }, questionCount: 3, deletable: false });
+      const lifo = concept(21, { labels: { fr: "LIFO", en: "LIFO" } });
+      const aiPair = (a: AdminConcept, b: AdminConcept, reason: string) => ({ a: a.id, b: b.id, reason });
+
+      it("asks on demand only, then shows its pairs below the others, labelled and with their reason", async () => {
+        const { calls } = mockFetch({
+          [LIST]: ok(page([...all, stack, lifo])),
+          [AI]: ok({ pairs: [aiPair(lifo, stack, "LIFO is the discipline of a stack.")] }),
+        });
+        await open();
+        expect(calls.some((c) => c.url.endsWith("/duplicates/ai"))).toBe(false);
+        expect(screen.queryByText("AI suggestion")).toBeNull();
+
+        await userEvent.click(screen.getByRole("button", { name: /^ask the ai$/i }));
+        expect(await screen.findByText("LIFO is the discipline of a stack.")).toBeInTheDocument();
+        expect(screen.getByText("AI suggestion")).toBeInTheDocument();
+        expect(calls.filter((c) => c.url.endsWith("/duplicates/ai"))).toHaveLength(1);
+        // The AI's pair is the only one not labelled by a deterministic reason.
+        const row = screen.getAllByRole("listitem").find((li) => within(li).queryByText("AI suggestion"))!;
+        expect(within(row).getByRole("button", { name: /merge lifo into stack/i })).toBeInTheDocument();
+        expect(within(row).getByRole("button", { name: /edit stack/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /ask the ai again/i })).toBeInTheDocument();
+      });
+
+      it("merges from an AI pair like from any other", async () => {
+        const { calls } = mockFetch({
+          [LIST]: ok(page([stack, lifo])),
+          [AI]: ok({ pairs: [aiPair(lifo, stack, "Same thing.")] }),
+          [mergeOf(lifo)]: ok(stack),
+        });
+        await open();
+        await userEvent.click(screen.getByRole("button", { name: /^ask the ai$/i }));
+        await userEvent.click(await screen.findByRole("button", { name: /merge lifo into stack/i }));
+        const dialog = await screen.findByRole("dialog", { name: /merge .* into another concept/i });
+        expect(within(dialog).getByRole("radio", { name: /stack/i })).toBeChecked();
+        await userEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
+        await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: stack.id, keepAsAlias: false }));
+      });
+
+      it("leaves out a pair the comparison already lists, or of a concept that is gone", async () => {
+        mockFetch({
+          [LIST]: ok(page(all)),
+          [AI]: ok({
+            pairs: [
+              aiPair(typo, pointer, "Already found as close labels."),
+              aiPair(ready, { ...stack, id: "c0c0c0c0-0000-4000-8000-0000000000ff" }, "Unknown concept."),
+            ],
+          }),
+        });
+        await open();
+        await userEvent.click(screen.getByRole("button", { name: /^ask the ai$/i }));
+        expect(await screen.findByText("The AI found no further pair.")).toBeInTheDocument();
+        expect(screen.queryByText("Already found as close labels.")).toBeNull();
+      });
+
+      it("says why when the platform has no AI key or the cap is reached, and can be asked again", async () => {
+        mockFetch({
+          [LIST]: ok(page(all)),
+          [AI]: fail(409, { error: "llm_not_configured", reason: "not_configured" }),
+        });
+        await open();
+        await userEvent.click(screen.getByRole("button", { name: /^ask the ai$/i }));
+        expect(await screen.findByText("The AI could not look for duplicates")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /^ask the ai$/i })).toBeEnabled();
+      });
+
+      it("is offered even when the comparison finds nothing", async () => {
+        mockFetch({ [LIST]: ok(page([validated, ready])), [AI]: ok({ pairs: [] }) });
+        await open();
+        expect(await screen.findByText("No probable duplicates")).toBeInTheDocument();
+        await userEvent.click(screen.getByRole("button", { name: /^ask the ai$/i }));
+        expect(await screen.findByText("The AI found no further pair.")).toBeInTheDocument();
+      });
+    });
+
     it("says so when there is none", async () => {
       mockFetch({ [LIST]: ok(page([validated, ready])) });
       await open();

@@ -82,6 +82,7 @@ import {
   AliasCollision,
   ConceptExists,
   ConceptList,
+  ConceptDuplicatesAi,
   ConceptWriteRefusal,
   KioskStation,
   PairPreview,
@@ -1054,6 +1055,18 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     expect(issuesOf(AdminConceptList, res.body)).toEqual([]);
     return res.body as unknown as AdminConceptList;
   };
+
+  it("answers the AI's probable duplicates as live concepts of the queue, writing nothing", async () => {
+    const before = await queue();
+    const res = await call("POST", "/app/api/admin/concepts/duplicates/ai");
+    expect(res.status).toBe(200);
+    expect(issuesOf(ConceptDuplicatesAi, res.body)).toEqual([]);
+    const { pairs } = res.body as unknown as ConceptDuplicatesAi;
+    expect(pairs.length).toBeGreaterThan(0);
+    const ids = new Set(before.concepts.map((c) => c.id));
+    for (const p of pairs) expect([ids.has(p.a), ids.has(p.b), p.a !== p.b]).toEqual([true, true, true]);
+    expect(await queue()).toEqual(before);
+  });
 
   it("lists the proposed concepts first, with their usage", async () => {
     const all = await queue();

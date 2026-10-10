@@ -84,6 +84,17 @@ export type AdminConcept = z.infer<typeof AdminConcept>;
 export const AdminConceptList = z.object({ concepts: z.array(AdminConcept) });
 export type AdminConceptList = z.infer<typeof AdminConceptList>;
 
+/**
+ * `POST /admin/concepts/duplicates/ai` (ADR-081 fifth addendum §4, PR4b): the
+ * pairs a model finds probably one, from labels and qualifiers alone. Ids of
+ * live concepts, `a` before `b`, each pair once, with a short reason in the
+ * model's words. Nothing is stored.
+ */
+export const ConceptDuplicatesAi = z.object({
+  pairs: z.array(z.object({ a: z.uuid(), b: z.uuid(), reason: z.string() })),
+});
+export type ConceptDuplicatesAi = z.infer<typeof ConceptDuplicatesAi>;
+
 /** A label must hold a letter or a digit, so that its key is never empty. */
 const ConceptLabel = z
   .string()

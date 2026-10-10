@@ -8,9 +8,10 @@
  * Why a call is made: the `purpose` column of `llm_calls` (ADR-058 §1;
  * `assist`, the teacher assistant, ADR-080; `describe`, the proposal of a
  * pool's description, ADR-013 amendment of 2026-10-10; `domain`, the bilingual label
- * of a public pool, ADR-095).
+ * of a public pool, ADR-095; `concepts`, the probable duplicates of the
+ * vocabulary, ADR-081 fifth addendum §4).
  */
-export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll", "assist", "describe", "domain"] as const;
+export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll", "assist", "describe", "domain", "concepts"] as const;
 export type LlmPurpose = (typeof LLM_PURPOSES)[number];
 
 export interface LlmModel {

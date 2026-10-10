@@ -467,7 +467,21 @@ is the first pull request; merge, aliases and probable duplicates follow.
    within `keyDistance`, the resolver's tolerance, not equal). It runs in the
    browser on the `GET /admin/concepts` list, which already carries labels,
    qualifiers and aliases: no route, no table; it compares every pair, so it
-   is for hundreds of concepts, not more. The model on demand is PR4b.
+   is for hundreds of concepts, not more.
+   As built (PR4b, the model on demand): `POST /admin/concepts/duplicates/ai`
+   (admin, no body, five a minute per admin) is the secondary action "Ask the
+   AI" under the deterministic pairs, purpose `concepts` of the ADR-058
+   gateway (the default model, `effort: medium`, 3000 output tokens at most).
+   It sends one line per live concept, `c<n> | fr: label (qualifier) | en:
+   label (qualifier)`, up to 1000 concepts (about 25 tokens each): no
+   description, no alias, no id, no creator, no question or pool. The reply
+   is validated by zod, then strictly: an index not sent, a pair of one
+   concept, a repeated pair or an empty reason is dropped, at most 50 pairs
+   and 200 characters of reason are kept. The browser also drops a pair the
+   deterministic pass lists. Nothing is stored and no concept is written; the
+   `llm_calls` row is the only trace, and the failures are the gateway's
+   (`llm_not_configured`, `llm_budget_exhausted`, `rate_limited`,
+   `llm_failed`). Merge and Edit on an AI pair are the same as on the others.
 5. **Out of step 5.** Relations (broader, related, cycle check) move to
    step 7, the course concepts. There is no split of a polysemous concept and
    no "reject" action in v1: an unwanted proposal is deleted when unused, or

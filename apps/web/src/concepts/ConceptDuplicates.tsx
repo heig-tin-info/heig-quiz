@@ -1,13 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, GitMerge, Pencil } from "lucide-react";
-import { useState } from "react";
+import { Check, GitMerge, Pencil, Sparkles } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
-import type { AdminConcept } from "@quiz/contracts";
+import type { AdminConcept, ConceptDuplicatesAi } from "@quiz/contracts";
 import { mergeDirection, probableDuplicates, type DuplicatePair as DuplicatePairOf, type DuplicateReason } from "@quiz/domain";
 
+import { apiErrorMessage } from "../api";
 import { useI18n, useT } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
-import { Badge, Button, Card, EmptyState } from "../ui";
+import { Alert, Badge, Button, Card, EmptyState } from "../ui";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, refName, usesLabel } from "./names";
@@ -25,6 +26,38 @@ export function duplicatePairs(concepts: readonly AdminConcept[]): DuplicatePair
     a: a.concept,
     b: b.concept,
   }));
+}
+
+/** A pair the model proposed (purpose `concepts`), with its reason in the model's words. */
+export interface AiPair {
+  a: AdminConcept;
+  b: AdminConcept;
+  reason: string;
+}
+
+/** The AI's session state, held by the queue so that a paid answer survives a change of filter. */
+export interface AiDuplicates {
+  ask: () => void;
+  pending: boolean;
+  error: unknown;
+  /** The answer, or undefined before the first ask. */
+  result: ConceptDuplicatesAi | undefined;
+}
+
+const pairKey = (a: string, b: string) => (a < b ? `${a}:${b}` : `${b}:${a}`);
+
+/**
+ * The model's pairs on the queue's concepts: a concept that is gone (merged
+ * since the call) drops its pair, and so does a pair the deterministic pass
+ * already lists. The server validated the rest.
+ */
+export function aiPairsOf(result: ConceptDuplicatesAi | undefined, concepts: readonly AdminConcept[], found: readonly DuplicatePair[]): AiPair[] {
+  const byId = new Map(concepts.map((c) => [c.id, c]));
+  const known = new Set(found.map((p) => pairKey(p.a.id, p.b.id)));
+  return (result?.pairs ?? []).flatMap(({ a, b, reason }) => {
+    const [ca, cb] = [byId.get(a), byId.get(b)];
+    return ca && cb && !known.has(pairKey(a, b)) ? [{ a: ca, b: cb, reason }] : [];
+  });
 }
 
 /**
@@ -51,10 +84,14 @@ const REASONS = {
  */
 export function ConceptDuplicates({
   pairs,
+  aiPairs,
+  ai,
   concepts,
   onEdit,
 }: {
   pairs: readonly DuplicatePair[];
+  aiPairs: readonly AiPair[];
+  ai: AiDuplicates;
   concepts: readonly AdminConcept[];
   onEdit: (id: string) => void;
 }) {
@@ -62,26 +99,41 @@ export function ConceptDuplicates({
   const qc = useQueryClient();
   const [merging, setMerging] = useState<{ loser: AdminConcept; target: AdminConcept } | null>(null);
 
-  if (pairs.length === 0) {
-    return (
-      <Card>
-        <EmptyState icon={Check} title={t("admin.concepts.dup.empty.title")}>
-          {t("admin.concepts.dup.empty.body")}
-        </EmptyState>
-      </Card>
-    );
-  }
-
   return (
     <>
-      <p className="text-[13px] text-fg-muted">{t("admin.concepts.dup.hint")}</p>
-      <Card>
-        <ul className="divide-y divide-line">
-          {pairs.map((pair) => (
-            <PairRow key={`${pair.a.id}:${pair.b.id}`} pair={pair} onEdit={onEdit} onMerge={setMerging} />
-          ))}
-        </ul>
-      </Card>
+      {pairs.length === 0 ? (
+        <Card>
+          <EmptyState icon={Check} title={t("admin.concepts.dup.empty.title")}>
+            {t("admin.concepts.dup.empty.body")}
+          </EmptyState>
+        </Card>
+      ) : (
+        <>
+          <p className="text-[13px] text-fg-muted">{t("admin.concepts.dup.hint")}</p>
+          <Card>
+            <ul className="divide-y divide-line">
+              {pairs.map((pair) => {
+                const reason = REASONS[pair.reason];
+                return (
+                  <PairRow
+                    key={`${pair.a.id}:${pair.b.id}`}
+                    a={pair.a}
+                    b={pair.b}
+                    names={pair.match?.map(withLang)}
+                    badge={<Badge tone={reason.tone}>{t(reason.label)}</Badge>}
+                    why={t(reason.why)}
+                    mergeable={reason.mergeable}
+                    onEdit={onEdit}
+                    onMerge={setMerging}
+                  />
+                );
+              })}
+            </ul>
+          </Card>
+        </>
+      )}
+
+      <AiSuggestions aiPairs={aiPairs} ai={ai} onEdit={onEdit} onMerge={setMerging} />
       {merging ? (
         <ConceptMergeDialog
           concept={merging.loser}
@@ -99,33 +151,103 @@ export function ConceptDuplicates({
   );
 }
 
-function PairRow({
-  pair,
+/**
+ * "Ask the AI" (ADR-081 fifth addendum §4): a secondary action under the
+ * deterministic pairs. It sends the concepts' labels and qualifiers and
+ * nothing else; the pairs it brings back are suggestions, labelled as such,
+ * and lost on reload.
+ */
+function AiSuggestions({
+  aiPairs,
+  ai,
   onEdit,
   onMerge,
 }: {
-  pair: DuplicatePair;
+  aiPairs: readonly AiPair[];
+  ai: AiDuplicates;
+  onEdit: (id: string) => void;
+  onMerge: (direction: { loser: AdminConcept; target: AdminConcept }) => void;
+}) {
+  const t = useT();
+  return (
+    <section aria-label={t("admin.concepts.ai.title")} className="space-y-3 pt-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Button variant="secondary" size="sm" loading={ai.pending} onClick={ai.ask}>
+          <Sparkles /> {t(ai.result ? "admin.concepts.ai.askAgain" : "admin.concepts.ai.ask")}
+        </Button>
+        <p className="min-w-0 flex-1 basis-64 text-xs text-fg-muted">{t("admin.concepts.ai.hint")}</p>
+      </div>
+      {ai.error ? (
+        <Alert tone="danger" title={t("admin.concepts.ai.failed")}>
+          {apiErrorMessage(ai.error, t("error.llmFailed"))}
+        </Alert>
+      ) : null}
+      {ai.result && !ai.pending && aiPairs.length === 0 ? (
+        <p className="text-sm text-fg-muted">{t("admin.concepts.ai.none")}</p>
+      ) : null}
+      {aiPairs.length > 0 ? (
+        <Card>
+          <ul className="divide-y divide-line">
+            {aiPairs.map((pair) => (
+              <PairRow
+                key={`${pair.a.id}:${pair.b.id}`}
+                a={pair.a}
+                b={pair.b}
+                badge={
+                  <Badge tone="accent" icon={Sparkles}>
+                    {t("admin.concepts.ai.badge")}
+                  </Badge>
+                }
+                why={pair.reason}
+                mergeable
+                onEdit={onEdit}
+                onMerge={onMerge}
+              />
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+    </section>
+  );
+}
+
+function PairRow({
+  a,
+  b,
+  names: matched,
+  badge,
+  why,
+  mergeable,
+  onEdit,
+  onMerge,
+}: {
+  a: AdminConcept;
+  b: AdminConcept;
+  /** The labels to show instead of the concepts' names (a translation's matching labels). */
+  names?: string[] | undefined;
+  badge: ReactNode;
+  why: string;
+  mergeable: boolean;
   onEdit: (id: string) => void;
   onMerge: (direction: { loser: AdminConcept; target: AdminConcept }) => void;
 }) {
   const t = useT();
   const { locale } = useI18n();
-  const reason = REASONS[pair.reason];
-  const direction = reason.mergeable ? mergeDirection(pair.a, pair.b) : null;
-  const names = pair.match?.map(withLang) ?? [conceptName(pair.a, locale), conceptName(pair.b, locale)];
-  const whyId = `dup-${pair.a.id}-${pair.b.id}-why`;
+  const direction = mergeable ? mergeDirection(a, b) : null;
+  const names = matched ?? [conceptName(a, locale), conceptName(b, locale)];
+  const whyId = `dup-${a.id}-${b.id}-why`;
 
   return (
     <li className="flex flex-wrap items-start gap-x-4 gap-y-3 p-4">
       <div className="min-w-0 flex-1 basis-72 space-y-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <Badge tone={reason.tone}>{t(reason.label)}</Badge>
+          {badge}
           <span id={whyId} className="text-xs text-fg-muted">
-            {t(reason.why)}
+            {why}
           </span>
         </div>
         <ul className="space-y-1">
-          {[pair.a, pair.b].map((c, i) => (
+          {[a, b].map((c, i) => (
             <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="font-semibold">{names[i]}</span>
               <ConceptStatusBadge status={c.status} />
@@ -142,7 +264,7 @@ function PairRow({
           ))}
         </ul>
       </div>
-      {!reason.mergeable ? null : direction ? (
+      {!mergeable ? null : direction ? (
         <Button
           size="sm"
           variant="secondary"

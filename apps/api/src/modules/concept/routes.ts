@@ -20,6 +20,10 @@
  *
  * - `GET /app/api/admin/concepts`: the curation queue, with the instance-wide count of questions using each concept (a number;
  *   Super Powers are not needed, ADR-054 amended).
+ * - `POST /app/api/admin/concepts/duplicates/ai` (no body): the model's probable
+ *   duplicate pairs, from labels and qualifiers alone (fifth addendum §4,
+ *   purpose `concepts`); nothing stored. 409 `llm_not_configured`, 429
+ *   `llm_budget_exhausted` or `rate_limited`, 502 `llm_failed`.
  * - `POST /app/api/admin/concepts/:id/validate`: 422
  *   `concept_label_missing`, 409 `concept_merged`, 404.
  * - `POST /app/api/admin/concepts/:id/aliases` `{ alias, force? }`: adds a
@@ -50,9 +54,15 @@ import {
 } from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
+import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import { adminGuard, callerOf, teacherGuard } from "../guards.js";
-import { invalid, notFound, readerLang, sendFailure } from "../http.js";
+import { invalid, notFound, rateLimited, readerLang, sendFailure } from "../http.js";
+import { llmArms } from "../llm/service.js";
+import { aiDuplicates } from "./duplicatesAi.js";
 import * as service from "./service.js";
+
+/** A double click, not a quota: the gateway's daily cap is the ceiling (ADR-059). */
+const ASKS_PER_MINUTE = 5;
 
 export async function conceptPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
@@ -100,6 +110,17 @@ export async function conceptPlugin(app: FastifyInstance) {
 
   app.get("/app/api/admin/concepts", { preHandler: requireAdmin }, async () => {
     return { concepts: await service.listAdminConcepts(app.db) } satisfies AdminConceptList;
+  });
+
+  const asks = new Budget();
+  app.post("/app/api/admin/concepts/duplicates/ai", { preHandler: requireAdmin }, async (req, reply) => {
+    const now = app.clock.now();
+    if (!asks.spend(`concepts:${req.user!.id}`, ASKS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
+    try {
+      return await aiDuplicates(app.db, app.llmGateway, req.user!.id);
+    } catch (error) {
+      return sendFailure(reply, error, now, llmArms);
+    }
   });
 
   app.post("/app/api/admin/concepts/:id/validate", { preHandler: requireAdmin }, async (req, reply) => {

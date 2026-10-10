@@ -14,6 +14,7 @@ import {
   ConceptPatch,
   type AdminConcept,
   type AdminConceptList,
+  type ConceptDuplicatesAi,
   type Concept,
   type ConceptExists,
   type ConceptRef,
@@ -162,6 +163,21 @@ on("GET", "/app/api/admin/concepts", (): AdminConceptList => {
       }),
     ),
   };
+});
+
+/**
+ * The model's pass for probable duplicates (fifth addendum §4, PR4b): two
+ * pairs a label comparison cannot find, from the live concepts; the `nollm`
+ * scene refuses as a platform without a key does.
+ */
+on("POST", "/app/api/admin/concepts/duplicates/ai", (): ConceptDuplicatesAi => {
+  if (flags.nollm) throw refuse(409, "llm_not_configured", "No AI key is configured", { reason: "not_configured" });
+  const live = (fr: string, qualifier = "") => concepts.find((c) => c.status !== "merged" && c.labels.fr === fr && c.qualifiers.fr === qualifier);
+  const pairs = [
+    [live("Pointeur"), live("Adresse", "mémoire"), "A pointer is a memory address: teachers may type either."],
+    [live("Fuite mémoire"), live("Allocation dynamique"), "A leak is a dynamic-allocation fault; the two may overlap."],
+  ] as const;
+  return { pairs: pairs.flatMap(([a, b, reason]) => (a && b ? [{ a: a.id, b: b.id, reason }] : [])) };
 });
 
 on("POST", "/app/api/admin/concepts/:id/validate", (m): Concept => {
