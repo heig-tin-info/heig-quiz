@@ -18,6 +18,7 @@ import type {
   CodeReviewDetails,
   CodeSolution,
   CodeStudent,
+  HiddenCaseVerdict,
   ReviewCaseDetail,
 } from "./schema.js";
 import { CompileFailure, NoBreakdown, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
@@ -38,7 +39,7 @@ import {
   Verdict,
   verdictTone,
 } from "@quiz/ui";
-import { accidentOf, caseVerdict, NO_CHECK } from "./verdict.js";
+import { caseVerdict, NO_CHECK, runOf } from "./verdict.js";
 
 interface CodeReviewProps
   extends ReviewProps<CodeStudent, CodeAnswer, CodeSolution, CodeReviewDetails> {
@@ -71,14 +72,14 @@ function verdictOf(
   // The STORED verdict is the grade's; it is never re-decided here.
   if (detail.ok) return s.passed;
   // A hidden case on a student's path carries its coarse category (ADR-096).
-  // A stored case is read by the one rule (audit R-06): an accident first —
-  // a case that never ran is not a crash — then, with the key, the check
-  // that failed; without it, a spec that checks nothing names only accidents.
+  // A stored case is read by the one rule (audit R-06): an accident first,
+  // then, with the key, the check that failed; without it, a spec that
+  // checks nothing names only the accidents.
+  const stored = ran(detail);
   const failure =
-    "exitCode" in detail
-      ? (accidentOf(detail) ??
-        caseVerdict(spec ?? NO_CHECK, { ...detail, stdout: detail.actual ?? "" }, compare).failure)
-      : detail.failure;
+    stored === undefined
+      ? (detail as HiddenCaseVerdict).failure
+      : caseVerdict(spec ?? NO_CHECK, runOf(stored), compare).failure;
   switch (failure) {
     case "timed_out":
       return s.timedOut;
@@ -87,9 +88,10 @@ function verdictOf(
     case "crashed":
       return s.crashed;
     case "exit":
-      return fmt(s.exitMismatch, { got: String(ran(detail)?.exitCode), want: spec!.expectedExitCode! });
+      return fmt(s.exitMismatch, { got: String(stored?.exitCode), want: spec!.expectedExitCode! });
     case "output":
       return s.outputMismatch;
+    case "not_run":
     case "failed":
       return s.failed;
     default:

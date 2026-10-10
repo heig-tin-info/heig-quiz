@@ -86,19 +86,25 @@ export function caseVerdict(
   return { ok: true, failure: null };
 }
 
+/** What a STORED case says of its run, for the rule above. */
+type StoredRun = Pick<CodeCaseDetail, "exitCode" | "actual" | "timedOut" | "oom" | "ms">;
+
 /**
- * The accident a STORED case met, if any — the rule above with a spec that
- * checks nothing. A case the runner never reported (no exit code and no
- * output: the run ended before it) did not crash, it did not run: `failed`.
+ * The run behind a stored case, or `undefined` when the runner never
+ * reported it (no exit code and no output: the run ended before it), which
+ * {@link caseVerdict} reads as `not_run`.
  */
-export function accidentOf(
-  detail: Pick<CodeCaseDetail, "exitCode" | "actual" | "timedOut" | "oom" | "ms">,
-): HiddenCaseFailure | null {
-  if (detail.exitCode === null && detail.actual === undefined) return "failed";
-  const { failure } = caseVerdict(
-    NO_CHECK,
-    { exitCode: detail.exitCode, stdout: detail.actual ?? "", timedOut: detail.timedOut, oom: detail.oom, ms: detail.ms },
-    undefined,
-  );
+export function runOf(detail: StoredRun): CaseRun | undefined {
+  if (detail.exitCode === null && detail.actual === undefined) return undefined;
+  return { exitCode: detail.exitCode, stdout: detail.actual ?? "", timedOut: detail.timedOut, oom: detail.oom, ms: detail.ms };
+}
+
+/**
+ * The accident a stored case met, if any — the rule above with a spec that
+ * checks nothing. A case that never ran did not crash: it `failed`.
+ */
+export function accidentOf(detail: StoredRun): HiddenCaseFailure | null {
+  const { failure } = caseVerdict(NO_CHECK, runOf(detail), undefined);
+  if (failure === "not_run") return "failed";
   return failure === "timed_out" || failure === "oom" || failure === "crashed" ? failure : null;
 }

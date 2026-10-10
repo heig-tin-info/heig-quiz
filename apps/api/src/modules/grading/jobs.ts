@@ -465,7 +465,7 @@ async function gradeCell(
       ...cellOf,
       revision: answer.revision,
       request: outcome.request,
-      ...(outcome.finalizeState === undefined ? {} : { finalizeState: outcome.finalizeState }),
+      finalizeState: outcome.finalizeState,
     },
   };
 }
@@ -614,7 +614,7 @@ async function gradeOne(
     return {
       kind: "runner",
       request: result.request,
-      ...(result.finalizeState === undefined ? {} : { finalizeState: result.finalizeState }),
+      finalizeState: result.finalizeState,
     };
   }
   // A type asks for a model only when `ctx.llm` is offered (F-LLM-03).
@@ -733,7 +733,7 @@ async function gradeWithRunner(
         itemPoints: item.item.points,
         now,
         defaults: gradeDefaults(evaluation),
-        ...(job.finalizeState === undefined ? {} : { finalizeState: job.finalizeState }),
+        finalizeState: job.finalizeState,
       },
       run.outcome,
     );

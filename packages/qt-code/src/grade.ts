@@ -140,7 +140,7 @@ export function delegateToRunner<D>(
     via: "runner",
     request: built,
     details: { sourceSha256: sha256(source) },
-    ...(finalizeState === undefined ? {} : { finalizeState }),
+    finalizeState,
   };
 }
 
