@@ -57,7 +57,7 @@ import {
   type TeamsLinkPreview,
   type TeamsTabState,
 } from "@quiz/contracts";
-import { conceptRefs, courseConceptRefs, seedConceptIds, unknownConceptIds } from "./concept";
+import { conceptRefs, courseConceptRefs, coveredByCourse, seedConceptIds, unknownConceptIds } from "./concept";
 import {
   D,
   H,
@@ -2350,6 +2350,15 @@ on("POST", "/app/api/pools", (_m, body) => {
   poolMembers[pool.id] = [{ ...ME_MEMBER, role: "owner", addedAt: iso(0) }];
   return poolSummary(pool);
 });
+/** The linked courses the demo user staffs (every mock course): `PoolDetail.filterCourses`. */
+const filterCourses = (pool: MockPool) =>
+  Object.entries(coursePools)
+    .filter(([, ids]) => ids.includes(pool.id))
+    .map(([courseId]) => {
+      const course = courseOr404(courseId);
+      return { id: course.id, name: course.name, code: course.code };
+    });
+
 on("GET", "/app/api/pools/:id", (m) => {
   const pool = poolOr404(m.groups!.id!);
   return {
@@ -2359,6 +2368,8 @@ on("GET", "/app/api/pools/:id", (m) => {
     concepts: poolConcepts(pool.id),
     questionCount: liveQuestions(pool.id).filter((q) => !q.deletedAt).length,
     subscription: poolSummary(pool).subscription,
+    filterCourses: filterCourses(pool),
+    courseConceptIds: [...new Set(filterCourses(pool).flatMap((c) => coveredByCourse(c.id)))],
     subscribers: pool.isPublic && holdsSeatOnPublic(poolSummary(pool).subscription) ? poolSummary(pool).subscriberCount : null,
   };
 });
@@ -2708,7 +2719,15 @@ on("GET", "/app/api/pools/:id/questions", (m, _body, url) => {
   const pool = poolOr404(m.groups!.id!);
   const limit = Number(url.searchParams.get("limit") ?? 25);
   const cursor = url.searchParams.get("cursor");
-  const matching = searchQuestions(liveQuestions(pool.id), url.searchParams);
+  const courseId = url.searchParams.get("course");
+  // A course the pool is not linked to is a missing one, as on the server.
+  if (courseId !== null && !filterCourses(pool).some((c) => c.id === courseId)) {
+    throw new MockPayload(404, { error: "not_found" });
+  }
+  const covered = courseId === null ? null : coveredByCourse(courseId);
+  const matching = searchQuestions(liveQuestions(pool.id), url.searchParams).filter(
+    (q) => covered === null || q.concepts.some((x) => covered.includes(x)),
+  );
   const start = cursor ? matching.findIndex((x) => x.id === cursor) + 1 : 0;
   const page = matching.slice(start, start + limit);
   const next = start + limit < matching.length ? page.at(-1)!.id : null;

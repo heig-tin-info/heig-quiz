@@ -42,6 +42,8 @@ const makeDetail = (over: Partial<PoolDetail["pool"]> = {}, role: PoolDetail["ro
   questionCount: 14,
   subscription: "none",
   subscribers: null,
+  filterCourses: [],
+  courseConceptIds: [],
 });
 
 const members: PoolMembers = { visibility: "private", members: [], courses: [] };

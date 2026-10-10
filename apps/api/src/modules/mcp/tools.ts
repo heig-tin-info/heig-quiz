@@ -301,7 +301,8 @@ export const TOOLS: Tool[] = [
     description:
       "Search a pool's questions. `latestNumber` is null for a question never published — only published " +
       "questions can go into an evaluation. Each question lists its `concepts`. Pass `cursor` from the " +
-      "previous page to continue.",
+      "previous page to continue. `courseId` keeps the questions of one course's concepts (the concepts it lists, see " +
+      "get_course); a course the teacher does not staff or that the pool is not linked to answers 404.",
     input: z.object({
       poolId: Id,
       q: z.string().trim().max(200).optional().describe("Full-text search in names and statements"),
@@ -314,6 +315,9 @@ export const TOOLS: Tool[] = [
           "Only the questions that exercise one of these concepts: ids or labels in either language. A label " +
             "matches every concept it may designate; one that matches none is refused with close candidates.",
         ),
+      courseId: Id.optional().describe(
+        "Only the questions that exercise a concept this course lists; the course must be one the teacher staffs and the pool linked to it.",
+      ),
       categoryId: Id.optional(),
       limit: z.number().int().min(1).max(200).default(50),
       cursor: z.string().max(200).optional(),
@@ -321,6 +325,7 @@ export const TOOLS: Tool[] = [
     annotations: READ,
     run: async (api, a) =>
       api.get(`/pools/${a.poolId}/questions`, {
+        course: a.courseId,
         q: a.q,
         type: a.type?.join(","),
         concept: await conceptFilter(api, a.concepts),

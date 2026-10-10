@@ -341,6 +341,9 @@ const listedByACourse = (id: string) => [...courseConcepts.values()].some((ids) 
 export const courseConceptRefs = (courseId: string): ConceptRef[] =>
   conceptRefs(courseConcepts.get(courseId) ?? []).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
 
+/** The concept ids a course covers (the server's `conceptsCoveredByCourse`): today the ones it lists. */
+export const coveredByCourse = (courseId: string): string[] => courseConceptRefs(courseId).map((c) => c.id);
+
 /** `PUT /courses/:id/concepts`: the whole set; a merged or unknown id is `422 concept_not_found`. */
 export function setCourseConceptIds(courseId: string, ids: readonly string[]): void {
   const unknown = unknownConceptIds(ids);

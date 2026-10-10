@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Concept, ConceptRef } from "@quiz/contracts";
 
 import { renderWithProviders } from "../test/render";
-import { EMPTY_FILTERS, type QuestionFilters, type Vocabulary } from "./filters";
+import { EMPTY_FILTERS, type FilterCourse, type QuestionFilters, type Vocabulary } from "./filters";
 import { FilterBar } from "./FilterBar";
 import type { GroupBy } from "./QuestionGroups";
 
@@ -49,10 +49,12 @@ function Host({
   initial,
   concepts,
   vocabulary,
+  courses,
   onChange,
   onView,
   onGroup,
 }: {
+  courses: FilterCourse[];
   initial: QuestionFilters;
   concepts: ConceptRef[];
   vocabulary: Vocabulary;
@@ -70,6 +72,7 @@ function Host({
       }}
       concepts={concepts}
       vocabulary={vocabulary}
+      courses={courses}
       total={7}
       view="list"
       onView={onView}
@@ -79,7 +82,7 @@ function Host({
   );
 }
 
-function setup(filters: Partial<QuestionFilters> = {}, concepts: ConceptRef[] = CONCEPTS) {
+function setup(filters: Partial<QuestionFilters> = {}, concepts: ConceptRef[] = CONCEPTS, courses: FilterCourse[] = []) {
   const onChange = vi.fn();
   const onView = vi.fn();
   const onGroup = vi.fn();
@@ -88,6 +91,7 @@ function setup(filters: Partial<QuestionFilters> = {}, concepts: ConceptRef[] = 
       initial={{ ...EMPTY_FILTERS, ...filters }}
       concepts={concepts}
       vocabulary={VOCABULARY}
+      courses={courses}
       onChange={onChange}
       onView={onView}
       onGroup={onGroup}
@@ -266,5 +270,36 @@ describe("FilterBar · how the list is drawn", () => {
   it("shows how many questions the search matches, filtered or not", () => {
     setup();
     expect(screen.getByText("7 questions")).toHaveAttribute("aria-live", "polite");
+  });
+});
+
+describe("FilterBar · the course filter (#599 step 7b)", () => {
+  const PRG1: FilterCourse = { id: idOf(901), name: "Programmation 1", code: "PRG1" };
+  const PRG2: FilterCourse = { id: idOf(902), name: "Programmation 2", code: "PRG2" };
+
+  it("offers the courses it is given, one pressed at most, and reports the pick", async () => {
+    const { onChange, user } = setup({ courseId: PRG1.id }, CONCEPTS, [PRG1, PRG2]);
+    const sheet = await openSheet(user);
+    expect(within(sheet).getByRole("button", { name: "Programmation 1" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(sheet).getByRole("button", { name: "Programmation 2" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ courseId: PRG2.id }));
+  });
+
+  it("shows no Course block when the pool has no course on offer", async () => {
+    const { user } = setup();
+    const sheet = await openSheet(user);
+    expect(within(sheet).queryByText("Course")).not.toBeInTheDocument();
+  });
+
+  it("shows a typed course as a chip, and removing it takes the token out of the text", async () => {
+    const { onChange, user } = setup({ q: "course:prg2 segfault" }, CONCEPTS, [PRG1, PRG2]);
+    await user.click(screen.getByRole("button", { name: "Clear filters — Course PRG2" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ q: "segfault", courseId: null }));
+  });
+
+  it("says on its chip that a typed course is not on offer", () => {
+    setup({ q: "course:ALGO" }, CONCEPTS, [PRG1]);
+    expect(screen.getByText("course:ALGO")).toBeInTheDocument();
+    expect(screen.getByText(/no course matches/)).toBeInTheDocument();
   });
 });

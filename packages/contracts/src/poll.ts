@@ -190,6 +190,8 @@ export const PollPoolSearch = QuestionSearch.omit({
   includeDeleted: true,
   // Favourites are a pool's (F-POOL-10); the launcher searches across pools.
   starred: true,
+  // The course filter is a pool's (#599 step 7b), where the pool is linked.
+  course: true,
 }).extend({
   classroomId: z.uuid().optional(),
 });

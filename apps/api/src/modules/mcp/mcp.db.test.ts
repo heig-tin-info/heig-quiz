@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ApiTokenCreated } from "@quiz/contracts";
 import { questionType } from "@quiz/registry/server";
 
-import { conceptTagSortings, evaluations } from "../../db/schema.js";
+import { conceptTagSortings, courseConcepts, evaluations } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
 
@@ -273,6 +273,14 @@ describe("an authoring session", () => {
     expect(listed.total).toBe(2);
     expect((await ok("list_questions", { poolId: pool.id, concepts: ["figures de style"] })).total).toBe(3);
     expect((await call("list_questions", { poolId: pool.id, concepts: ["nothing like it"] })).isError).toBe(true);
+    // The course filter (#599 step 7b): the concepts the course lists; a course the pool is not linked to is a 404.
+    const figures = (await ok("get_question", { questionId: ids[0] })).meta.concepts[0].id as string;
+    await server.app.db.insert(courseConcepts).values({ courseId: course.id, conceptId: figures, addedBy: teacher.id });
+    expect((await ok("list_questions", { poolId: pool.id, courseId: course.id })).total).toBe(3);
+    const stranger = await ok("create_course", { name: "Étranger", code: "STRANGER-MCP" });
+    const notLinked = await call("list_questions", { poolId: pool.id, courseId: stranger.id });
+    expect(notLinked.isError).toBe(true);
+    expect(JSON.stringify(notLinked.data)).toContain("404");
     const detail = await ok("get_question", { questionId: ids[0] });
     expect(detail.meta).toMatchObject({
       difficulty: 4,

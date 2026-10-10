@@ -183,6 +183,10 @@ export const PoolLinkedCourse = z.object({
 });
 export type PoolLinkedCourse = z.infer<typeof PoolLinkedCourse>;
 
+/** A course the caller can filter this pool by: linked to it, and on the caller's staff. */
+export const PoolFilterCourse = z.object({ id: z.uuid(), name: z.string(), code: z.string() });
+export type PoolFilterCourse = z.infer<typeof PoolFilterCourse>;
+
 export const PoolMembers = z.object({
   visibility: PoolVisibility,
   members: z.array(PoolMember),
@@ -403,6 +407,13 @@ export const QuestionSearch = z.object({
   concept: StringList.pipe(z.array(z.uuid())).optional(),
   difficulty: IntList.optional(),
   categoryId: z.uuid().optional(),
+  /**
+   * A course id (#599 step 7b): only the questions that exercise a concept
+   * the course lists (expanded server-side). It must be a course the caller
+   * staffs AND that the pool is linked to, else the answer is the 404 of a
+   * missing course. Narrower concepts are not covered yet (7d).
+   */
+  course: z.uuid().optional(),
   /** Soft-deleted questions are hidden unless this is set (F-QST-11). */
   includeDeleted: BoolFlag.optional(),
   /** Only the questions the caller starred (F-POOL-10); the order and the cursor are unchanged. */
@@ -776,6 +787,19 @@ export const PoolDetail = z.object({
   subscription: SubscriptionState,
   /** How many teachers subscribed: told to the owner and the members only, null to anyone else. */
   subscribers: z.number().int().nullable(),
+  /**
+   * The courses the question list can be filtered by (#599 step 7b): linked
+   * to the pool AND staffed by the caller (or all of them under Super
+   * Powers). Unlike `PoolMembers.courses`, never a course the caller does
+   * not staff.
+   */
+  filterCourses: z.array(PoolFilterCourse),
+  /**
+   * The concepts those courses cover, together: the concept picker offers
+   * them first beside the pool's own (ADR-081 §5). Staff data, for a
+   * caller who staffs the courses.
+   */
+  courseConceptIds: z.array(z.uuid()),
 });
 export type PoolDetail = z.infer<typeof PoolDetail>;
 
