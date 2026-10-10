@@ -29,6 +29,15 @@ export type ConceptStatus = z.infer<typeof ConceptStatus>;
 /** One value per language. */
 const perLang = <T extends z.ZodType>(value: T) => z.object({ fr: value, en: value });
 
+/**
+ * The relations between concepts (ADR-081 §4, sixth addendum 7c): `broader`
+ * builds the hierarchy (a concept may have several, never a cycle),
+ * `related` is symmetric and non-hierarchical.
+ */
+export const CONCEPT_RELATION_KINDS = ["broader", "related"] as const;
+export const ConceptRelationKind = z.enum(CONCEPT_RELATION_KINDS);
+export type ConceptRelationKind = z.infer<typeof ConceptRelationKind>;
+
 export const Concept = z.object({
   id: z.uuid(),
   status: ConceptStatus,
@@ -44,6 +53,14 @@ export const Concept = z.object({
    * neither a label nor an id resolves through them, client and server alike.
    */
   aliases: z.array(z.string()),
+  /**
+   * Its relations (ADR-081 §4, sixth addendum 7c), as concept ids of live
+   * concepts, sorted: the concepts directly broader than it, and the ones
+   * related to it (both directions of the symmetric edge). Teachers read
+   * them; a student never receives a `Concept`.
+   */
+  broader: z.array(z.uuid()),
+  related: z.array(z.uuid()),
   /** The teacher who proposed it; null once their account is gone. */
   createdBy: z.uuid().nullable(),
   createdAt: z.iso.datetime(),
@@ -316,3 +333,31 @@ export type AliasCollision = z.infer<typeof AliasCollision>;
 /** `DELETE /admin/concepts/:id/aliases/:alias` — the alias as written; the server computes its key. */
 export const ConceptAliasParams = z.object({ id: z.uuid(), alias: ConceptAliasText });
 export type ConceptAliasParams = z.infer<typeof ConceptAliasParams>;
+
+// ---------------------------------------------------------------------------
+// Relations (ADR-081 §4, sixth addendum 7c): the admin's
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /admin/concepts/:id/relations`: the concept in the path gets `target`
+ * as a `broader` concept, or is `related` to it. Answers the concept.
+ */
+export const ConceptRelationAdd = z.object({ kind: ConceptRelationKind, target: z.uuid() });
+export type ConceptRelationAdd = z.infer<typeof ConceptRelationAdd>;
+
+/** `DELETE /admin/concepts/:id/relations/:kind/:target`. */
+export const ConceptRelationParams = z.object({ id: z.uuid(), kind: ConceptRelationKind, target: z.uuid() });
+export type ConceptRelationParams = z.infer<typeof ConceptRelationParams>;
+
+/**
+ * The 409 `concept_cycle` of a `broader` edge that would close a cycle, and
+ * the 409 `concept_merge_cycle` of a merge that would: `path` is the closed
+ * chain of concepts (first and last equal), each labelled in the reader's
+ * language, so the admin sees which edge to remove.
+ */
+export const ConceptCycle = z.object({
+  error: z.enum(["concept_cycle", "concept_merge_cycle"]),
+  message: z.string().optional(),
+  path: z.array(ConceptRef).min(2),
+});
+export type ConceptCycle = z.infer<typeof ConceptCycle>;

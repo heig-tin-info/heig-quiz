@@ -9,7 +9,7 @@ import { concepts, courseConcepts, questionConcepts } from "../../db/schema.js";
  * It mirrors the three foreign keys `deleteConcept` maps to 409 `concept_in_use`
  * (`question_concepts.concept_id`, `course_concepts.concept_id`, `concepts.merged_into`), so the queue's
  * `deletable` and the deletion agree; a new reference to `concepts` is added
- * here and there.
+ * here and there. Relations and aliases are not references: they cascade.
  */
 export function conceptReferenced(id: PgColumn): SQL<boolean> {
   // Drizzle renders an aliased table without its source: `alias(concepts, "merged")` and the raw `as "merged"` below must match.

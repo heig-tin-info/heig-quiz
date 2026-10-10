@@ -58,6 +58,8 @@ const vocabulary = (id: string, en: string, fr: string) => ({
   qualifiers: { en: "", fr: "" },
   descriptions: { en: "", fr: "" },
   aliases: [],
+  broader: [],
+  related: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
 });

@@ -736,6 +736,13 @@
       "when": 1791663964704,
       "tag": "0104_course_concepts",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1791671468338,
+      "tag": "0105_concept_relations",
+      "breakpoints": true
     }
   ]
 }

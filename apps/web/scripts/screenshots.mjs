@@ -1599,6 +1599,21 @@ const scenes = [
       await p.getByRole("button", { name: /^edit pointer$/i }).click();
       await p.getByRole("group", { name: /^aliases$/i }).scrollIntoViewIfNeeded();
     } },
+  // ADR-081 sixth addendum 7c: the relations of a concept (one broader, one narrower) and the picker's broader path.
+  { name: "admin-concepts-relations", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^edit allocation dynamique$|^edit dynamic allocation$/i }).click();
+      await p.getByRole("group", { name: /^relations$/i }).scrollIntoViewIfNeeded();
+    } },
+  { name: "admin-concepts-relations-cycle", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^edit pointeur$|^edit pointer$/i }).click();
+      await p.getByRole("searchbox", { name: /^search a broader concept$/i }).fill("fuite");
+      await p.getByRole("group", { name: /^relations$/i }).scrollIntoViewIfNeeded();
+    } },
+  { name: "editor-concept-picker-path", role: "teacher", path: "/questions/q2", fold: true, act: async (p) => {
+      await p.getByRole("combobox", { name: /concept|notion/i }).first().fill("fuite");
+      await p.getByRole("listbox").first().scrollIntoViewIfNeeded();
+      await p.waitForTimeout(600);
+    } },
   { name: "admin-concepts-alias-collision", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^edit pointer$/i }).click();
       await p.getByRole("textbox", { name: /^new alias$/i }).fill("array");

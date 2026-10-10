@@ -19,7 +19,7 @@ let seq = 0;
 const concept = (
   fr: string | null,
   en: string | null,
-  over: Partial<Pick<Concept, "status" | "qualifiers" | "descriptions" | "aliases">> = {},
+  over: Partial<Pick<Concept, "status" | "qualifiers" | "descriptions" | "aliases" | "broader" | "related">> = {},
 ): Concept => ({
   id: `c0c0c0c0-0000-4000-8000-${String((seq += 1)).padStart(12, "0")}`,
   status: "validated",
@@ -28,6 +28,8 @@ const concept = (
   qualifiers: { fr: "", en: "" },
   descriptions: { fr: "", en: "" },
   aliases: [],
+  broader: [],
+  related: [],
   createdBy: null,
   createdAt: "2026-10-01T08:00:00.000Z",
   ...over,
@@ -75,8 +77,11 @@ function setup({
   pool,
   create,
   locale,
+  extra = [],
 }: {
   initial?: string[];
+  /** More concepts in the vocabulary, for a test that needs a hierarchy. */
+  extra?: Concept[];
   pool?: string[];
   create?: RouteHandler;
   locale?: "en" | "fr";
@@ -85,7 +90,7 @@ function setup({
   // The server's list holds what it created since.
   const created: Concept[] = [];
   const { calls } = mockFetch({
-    "GET /app/api/concepts": () => ok({ concepts: [...VOCABULARY, ...created] }),
+    "GET /app/api/concepts": () => ok({ concepts: [...VOCABULARY, ...extra, ...created] }),
     ...(create
       ? {
           "POST /app/api/concepts": (call) => {
@@ -116,6 +121,20 @@ describe("ConceptPicker", () => {
       "ArrayElements of one type, contiguous in memory.",
       "Récursivitéproposed",
     ]);
+  });
+
+  it("shows the broader path of a concept that has one, from the root down (ADR-081 §5)", async () => {
+    const memory = concept("Mémoire", "Memory");
+    const heap = concept("Tas", "Heap", { broader: [memory.id] });
+    const leak = concept("Fuite", "Leak", { broader: [heap.id] });
+    const { user } = setup({ extra: [memory, heap, leak] });
+    await user.type(combobox(), "leak");
+    const options = await screen.findAllByRole("option");
+    expect(options[0]).toHaveTextContent("LeakWithin Memory › Heap");
+    // A root has no path.
+    await user.clear(combobox());
+    await user.type(combobox(), "memory");
+    expect((await screen.findAllByRole("option"))[0]).toHaveTextContent(/^Memory$/);
   });
 
   it("tells homonyms apart by their qualifier, in the reader's language", async () => {

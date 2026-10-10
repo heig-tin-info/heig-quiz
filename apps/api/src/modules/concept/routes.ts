@@ -32,11 +32,22 @@
  *   with `force` it is stored), 409 `alias_exists`, 422 `alias_redundant`
  *   (the concept's own label), 409 `concept_merged`, 404.
  *   `DELETE .../aliases/:alias` (the alias as written) removes one, answering the concept.
+ * - `POST /app/api/admin/concepts/:id/relations` `{ kind, target }`: the concept
+ *   gets `target` as a `broader` concept, or is `related` to it (ADR-081 §4,
+ *   sixth addendum 7c), answering the concept; 409 `concept_cycle` (a broader
+ *   edge that would close a cycle, with the closed `path`), 409
+ *   `relation_exists`, 409 `relation_redundant` (the pair is related already,
+ *   or one is in the other's broader chain), 422 `relation_self`, 422
+ *   `concept_not_found` (the target is missing or merged), 409 `concept_merged`, 404.
+ *   `DELETE .../relations/:kind/:target` removes one (a `related` pair in
+ *   either order), answering the concept; 404 for a missing edge.
  * - `DELETE /app/api/admin/concepts/:id`: 204; 409 `concept_in_use`, 404.
  * - `POST /app/api/admin/concepts/:id/merge` `{ into }`: merges the concept
  *   (`keepAsAlias`: its labels stay as aliases of the winner) into a validated one, answering the winner (`Concept`); 422
  *   `concept_merge_self` or `concept_merge_target_not_validated`, 409
- *   `concept_merged` (either side already merged), 404 (either unknown).
+ *   `concept_merged` (either side already merged), 409 `concept_merge_cycle`
+ *   (the rewritten relations would close a broader cycle: the `path` is named
+ *   and nothing is written), 404 (either unknown).
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
@@ -48,6 +59,8 @@ import {
   ConceptMerge,
   type ConceptList,
   ConceptPatch,
+  ConceptRelationAdd,
+  ConceptRelationParams,
   ConceptResolveQuery,
   type ConceptResolveResponse,
   IdParam,
@@ -137,7 +150,7 @@ export async function conceptPlugin(app: FastifyInstance) {
     const body = ConceptMerge.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     try {
-      return await service.mergeConcept(app.db, context(req, now), params.data.id, body.data.into, body.data.keepAsAlias);
+      return await service.mergeConcept(app.db, context(req, now), params.data.id, body.data.into, body.data.keepAsAlias, readerLang(req));
     } catch (error) {
       return sendFailure(reply, error, now);
     }
@@ -162,6 +175,30 @@ export async function conceptPlugin(app: FastifyInstance) {
     if (!params.success) return notFound(reply);
     try {
       return await service.removeAlias(app.db, context(req, now), params.data.id, params.data.alias);
+    } catch (error) {
+      return sendFailure(reply, error, now);
+    }
+  });
+
+  app.post("/app/api/admin/concepts/:id/relations", { preHandler: requireAdmin }, async (req, reply) => {
+    const now = app.clock.now();
+    const params = IdParam.safeParse(req.params);
+    if (!params.success) return notFound(reply);
+    const body = ConceptRelationAdd.safeParse(req.body);
+    if (!body.success) return invalid(reply, body.error);
+    try {
+      return await service.addRelation(app.db, context(req, now), params.data.id, body.data, readerLang(req));
+    } catch (error) {
+      return sendFailure(reply, error, now);
+    }
+  });
+
+  app.delete("/app/api/admin/concepts/:id/relations/:kind/:target", { preHandler: requireAdmin }, async (req, reply) => {
+    const now = app.clock.now();
+    const params = ConceptRelationParams.safeParse(req.params);
+    if (!params.success) return notFound(reply);
+    try {
+      return await service.removeRelation(app.db, context(req, now), params.data.id, params.data.kind, params.data.target);
     } catch (error) {
       return sendFailure(reply, error, now);
     }

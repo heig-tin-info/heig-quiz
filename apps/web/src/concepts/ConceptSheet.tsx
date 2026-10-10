@@ -19,6 +19,7 @@ import { useT, type Locale } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
 import { Button, Chip, Field, FormError, Sheet, Textarea } from "../ui";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
+import { ConceptRelations } from "./ConceptRelations";
 import { conceptName, refName } from "./names";
 
 type Side = { label: string; qualifier: string; description: string };
@@ -303,6 +304,7 @@ export function ConceptSheet({
           </fieldset>
         ))}
         <Aliases concept={concept} />
+        <ConceptRelations concept={concept} concepts={concepts} />
         {!concept.deletable && dirty ? (
           <p id="concept-merge-why" className="text-[13px] text-fg-muted">
             {t("admin.concepts.merge.unsaved")}

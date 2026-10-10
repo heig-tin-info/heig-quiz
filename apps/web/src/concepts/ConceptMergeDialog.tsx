@@ -6,6 +6,7 @@ import type { AdminConcept, Concept, ConceptMerge } from "@quiz/contracts";
 import { api, refusalCodeOf } from "../api";
 import { useI18n, useT } from "../i18n";
 import { Button, Checkbox, FormError, Modal, RadioRow, SearchInput } from "../ui";
+import { pathLabel } from "./ConceptRelations";
 import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 
@@ -72,6 +73,8 @@ export function ConceptMergeDialog({
     switch (refusalCodeOf(error)) {
       case "concept_merged":
         return t("admin.concepts.error.merged");
+      case "concept_merge_cycle":
+        return t("admin.concepts.error.mergeCycle", { path: pathLabel(error) ?? "" });
       case "concept_merge_target_not_validated":
         return t("admin.concepts.error.targetNotValidated");
       default:

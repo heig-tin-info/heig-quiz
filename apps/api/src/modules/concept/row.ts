@@ -6,10 +6,10 @@
 import { and, asc, eq, inArray, ne, or } from "drizzle-orm";
 
 import { CONCEPT_LANGS, type Concept, type ConceptExists, type ConceptLang, type ConceptRef } from "@quiz/contracts";
-import { conceptKey, conceptLabelIn, qualifiedConceptKey, type ResolvableConcept } from "@quiz/domain";
+import { conceptKey, conceptLabelIn, qualifiedConceptKey, relationsOf, type RelationEdges, type ResolvableConcept } from "@quiz/domain";
 
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
-import { conceptAliases, concepts } from "../../db/schema.js";
+import { conceptAliases, conceptRelations, concepts } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 
 export type ConceptRow = typeof concepts.$inferSelect;
@@ -84,8 +84,41 @@ export async function loadAliases(db: Db | Tx, ids?: readonly string[]): Promise
   return out;
 }
 
-/** A concept as a route answers; `aliases` come from {@link loadAliases} (none by default). */
-export function toConcept(row: ConceptRow, aliases: readonly string[] = []): Concept {
+/** The direct relations of a concept, as ids, sorted (both directions of a `related` edge). */
+export type Relations = { broader: string[]; related: string[] };
+
+const edgesOfRows = (rows: { concept: string; target: string; kind: "broader" | "related" }[]): RelationEdges => ({
+  broader: rows.filter((r) => r.kind === "broader").map(({ concept, target }) => ({ concept, target })),
+  related: rows.filter((r) => r.kind === "related").map(({ concept, target }) => ({ concept, target })),
+});
+
+const edgeRows = (db: Db | Tx) =>
+  db
+    .select({ concept: conceptRelations.conceptId, target: conceptRelations.targetId, kind: conceptRelations.kind })
+    .from(conceptRelations);
+
+/** Every relation edge of the vocabulary, for a rule that reads the whole graph (the cycle checks). */
+export async function loadEdges(db: Db | Tx): Promise<RelationEdges> {
+  return edgesOfRows(await edgeRows(db));
+}
+
+/** The direct relations of the asked concepts (all by default), by concept id; the edges of `ids` only are read. */
+export async function loadRelations(db: Db | Tx, ids?: readonly string[]): Promise<Map<string, Relations>> {
+  if (ids?.length === 0) return new Map();
+  const rows = await edgeRows(db).where(
+    ids ? or(inArray(conceptRelations.conceptId, [...ids]), inArray(conceptRelations.targetId, [...ids])) : undefined,
+  );
+  const all = relationsOf(edgesOfRows(rows));
+  return ids ? new Map([...all].filter(([id]) => ids.includes(id))) : all;
+}
+
+/** A concept as a route answers, with its aliases and relations read now. */
+export async function loadConcept(db: Db | Tx, row: ConceptRow): Promise<Concept> {
+  return toConcept(row, (await loadAliases(db, [row.id])).get(row.id), (await loadRelations(db, [row.id])).get(row.id));
+}
+
+/** A concept as a route answers; `aliases` come from {@link loadAliases}, `relations` from {@link loadRelations} (none by default). */
+export function toConcept(row: ConceptRow, aliases: readonly string[] = [], relations?: Relations): Concept {
   const sides = perLang((lang) => sideOf(row, lang));
   return {
     id: row.id,
@@ -95,6 +128,8 @@ export function toConcept(row: ConceptRow, aliases: readonly string[] = []): Con
     qualifiers: perLang((lang) => sides[lang].qualifier),
     descriptions: perLang((lang) => sides[lang].description),
     aliases: [...aliases],
+    broader: relations?.broader ?? [],
+    related: relations?.related ?? [],
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
   };
@@ -157,7 +192,7 @@ export async function refuseAliasHolder(db: Db | Tx, labels: readonly string[], 
     .limit(1);
   if (!hit) return;
   throw new DomainError("concept_exists", 409, "A concept answers to this label as an alias", {
-    concept: toConcept(hit.concept, (await loadAliases(db, [hit.concept.id])).get(hit.concept.id)),
+    concept: await loadConcept(db, hit.concept),
   } satisfies Omit<ConceptExists, "error" | "message">);
 }
 
@@ -179,7 +214,7 @@ export async function conflictOr(
   const [holder] = await holdersOf(db, violated);
   return holder
     ? new DomainError("concept_exists", 409, "A concept with this label already exists", {
-        concept: toConcept(holder, (await loadAliases(db, [holder.id])).get(holder.id)),
+        concept: await loadConcept(db, holder),
       } satisfies Omit<ConceptExists, "error" | "message">)
     : error;
 }
