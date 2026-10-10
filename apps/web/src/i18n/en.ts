@@ -2871,6 +2871,8 @@ export const en = {
   "dev.ui.orgAvatar": "Organization avatar",
   "dev.ui.progress": "Progress",
   "dev.ui.progressExplore": "Exploring the template repository…",
+  "dev.ui.controlsToday": "Controls today",
+  "dev.ui.controlsProposed": "Controls proposed",
   "dev.ui.longForm": "Long-form reading (journal)",
 
   // WP9: student player

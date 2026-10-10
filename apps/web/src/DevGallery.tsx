@@ -4,6 +4,7 @@ import { Plot, SchematicEditor, SchematicView, withRoutes, type PlotProps, type 
 import { Pencil, Trash2, UserMinus, Users } from "lucide-react";
 import { useState } from "react";
 
+import { ControlsGallery } from "./devgallery/ControlsGallery";
 import { useT } from "./i18n";
 import { MarkdownField } from "./markdown/MarkdownField";
 import { MarkdownView } from "./markdown/MarkdownView";
@@ -286,6 +287,8 @@ export function DevGallery() {
   return (
     <div className="space-y-8 pb-16">
       <PageHeader title={t("dev.ui.title")} description={t("dev.ui.subtitle")} />
+
+      <ControlsGallery />
 
       <Row title={t("dev.ui.actions")}>
         <Specimen name="one">

@@ -2870,6 +2870,8 @@ export const fr: Record<keyof Dict, string> = {
   "dev.ui.orgAvatar": "Avatar d'organisation",
   "dev.ui.progress": "Progression",
   "dev.ui.progressExplore": "Exploration du dépôt modèle…",
+  "dev.ui.controlsToday": "Contrôles actuels",
+  "dev.ui.controlsProposed": "Contrôles proposés",
   "dev.ui.longForm": "Lecture longue (journal)",
 
   // WP9: student player
