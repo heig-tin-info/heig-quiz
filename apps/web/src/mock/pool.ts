@@ -58,7 +58,7 @@ import {
   type TeamsLinkPreview,
   type TeamsTabState,
 } from "@quiz/contracts";
-import { conceptRefs, courseConceptRefs, coveredByCourse, seedConceptIds, unknownConceptIds } from "./concept";
+import { conceptRefs, courseConceptRefs, coveredByCourse, coveredConceptIds, seedConceptIds, unknownConceptIds } from "./concept";
 import {
   D,
   H,
@@ -2628,7 +2628,7 @@ on("DELETE", "/app/api/categories/:id", (m) => {
  */
 export function searchQuestions(candidates: MockQuestion[], params: URLSearchParams): MockQuestion[] {
   const list = params.getAll("type").flatMap((v) => v.split(","));
-  const concepts = params.getAll("concept").flatMap((v) => v.split(","));
+  const concepts = coveredConceptIds(params.getAll("concept").flatMap((v) => v.split(",")));
   const difficulties = params.getAll("difficulty").flatMap((v) => v.split(",")).map(Number);
   const q = (params.get("q") ?? "").trim().toLowerCase();
   const categoryId = params.get("categoryId");

@@ -15,14 +15,14 @@ the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
 [fifth addendum](#fifth-addendum-2026-10-10-the-curation-of-the-vocabulary)
 (curation, step 5: its queue, the merge and the aliases are implemented; the probable duplicates are not) and the
 [sixth addendum](#sixth-addendum-2026-10-10-the-concepts-of-a-course-steps-7-9)
-(the concepts of a course, steps 7a to 7c and 9a implemented). The work is tracked by #599, under a parent issue that groups #557
+(the concepts of a course, steps 7a to 7d and 9a implemented). The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
 polls, the drill, the MCP tools, the teacher assistant and the seed read and
 write concepts. Step (d), dropping `question_tags` and `pool_tags`, is
 implemented by the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired). The links to
-courses (§8) and the relations (§4, §5) are implemented by the sixth addendum (steps 7a and 7c); the coverage of narrower concepts in the filters (7d) is not; the curation screen and the aliases
+courses (§8), the relations (§4, §5) and the coverage of narrower concepts (§4, 7d) are implemented by the sixth addendum (steps 7a, 7c and 7d); the curation screen and the aliases
 are (fifth addendum).
 
 Scope: what a question is classified by, who may create and change that
@@ -503,7 +503,7 @@ Settled with the product owner (comment of 2026-10-10 on #599, steps 7–9)
 after a review of the spec. It makes §8 precise. Delivery, in dependency
 order: 7a the course's list (this addendum's §1–§4, implemented), 7b the pool
 filter by course (§8, implemented), 7c relations with the merge-cycle policy (implemented, §5), 7d coverage in
-the filters, 8a Suggest concepts (implemented, §6), 9a the teacher's mastery on the course's
+the filters (implemented, §10), 8a Suggest concepts (implemented, §6), 9a the teacher's mastery on the course's
 concepts (implemented, §9), 9b the student's mastery (its own ADR first). §5 to §7 are the
 decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as built.
 
@@ -614,8 +614,7 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
      keep their qualifier. In the Duplicates view a model's `related` pair
      gains a secondary "Add as related" action.
    - **Not here.** A concept selected anywhere covering its narrower ones
-     (§4 of the Decision) is 7d: `conceptsCoveredByCourse` is unchanged and
-     the filters still match a concept only on itself.
+     (§4 of the Decision) is 7d (§10).
 6. **Suggest concepts (8a, built).** It sends the draft's statement and
    choices plus the labels and qualifiers of every live concept (no
    descriptions, no creators); at most five existing concepts and two new
@@ -673,9 +672,9 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
 8. **The pool's course filter (7b, as built).** `GET /pools/:id/questions`
    takes `course=<courseId>` (`QuestionSearch.course`): the questions that
    exercise any concept the course covers. The expansion is the one function
-   `conceptsCoveredByCourse` (`concept/courseConcepts.ts`); today a concept
-   covers only itself, so it is the course's list, and 7d widens that one
-   function. A course that lists nothing matches nothing. **Access:** the
+   `conceptsCoveredByCourse` (`concept/courseConcepts.ts`); a concept
+   covers itself and its narrower ones (7d, §10), so the course covers more
+   than its list. A course that lists nothing matches nothing. **Access:** the
    course must be one the caller staffs (`staffAccess`, or any course under
    Super Powers) **and** that the pool is linked to (`course_pools`, either
    mode); otherwise the answer is the 404 of a missing entity, the same body
@@ -700,8 +699,8 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
    student by concept matrix, nothing for a student.
    - **Coverage in one place.** `coverage(db, conceptIds)` in
      `concept/courseConcepts.ts` gives, per concept, the concepts it covers
-     (itself today). `conceptsCoveredByCourse` and the mastery use it; **7d
-     widens this one function**, and 9b will follow.
+     (itself, then its narrower ones since 7d, §10). `conceptsCoveredByCourse`
+     and the mastery use it, and 9b will follow.
    - **Counting** is the pure `drillMastery` of `@quiz/domain`, callable for
      one student by 9b: a card counts toward **every** listed concept that
      covers one of its question's concepts; a listed concept nothing counts
@@ -715,3 +714,28 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
      serves the drill. Kept on the teacher side so the teacher and the
      student (ADR-098 §7) agree, **pending the product owner's
      confirmation**.
+
+10. **Coverage of narrower concepts (7d, as built).** The §4 rule is in force:
+    a concept selected anywhere covers its narrower ones, near or far, through
+    any number of parents. `coverage(db, conceptIds)` (`concept/courseConcepts.ts`)
+    reads the `broader` edges once and returns, per id, `[id, ...narrowerDescendants]`
+    (`@quiz/domain`); `coveredConcepts` is the union. Only `broader` edges widen
+    it: a `related` concept is never covered, and a merged concept's edges were
+    rewritten onto its winner (§5). No migration. Every reader goes through it:
+    - **The pool's concept filter** (`QuestionSearch.concept`, a typed `#word`)
+      and **the poll launcher's search across pools**, which share
+      `filterWhere`, widen the selected ids at their entry points
+      (`withCoveredConcepts`, `pool/questionList.ts`); a question matches when
+      linked to a selected concept or to any narrower one.
+    - **The MCP `list_questions`** `concepts` filter calls the same route, so it
+      follows; its description says so.
+    - **The course filter (7b)**, `PoolDetail.courseConceptIds` (the picker's
+      ranking) and **the teacher's mastery (9a)** use `conceptsCoveredByCourse`
+      or `coverage` and follow without another change: a card of a narrower
+      concept counts toward the listed broader one.
+    - **Not widened, by design:** the pool catalogue's text search (a word
+      matched against concept labels, not a concept selected), the concept
+      suggestions and the drill's per-card concept (a question's own concepts),
+      and the question editor's picker (it chooses a link, which stays exact).
+    - **Web:** the mock applies the same domain function; the course filter
+      hint says narrower concepts are included. No other screen changes.

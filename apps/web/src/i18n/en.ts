@@ -1428,7 +1428,7 @@ export const en = {
   "pool.filter.noConcept": "No concept matches.",
   "pool.filter.noConceptMatch": "no concept matches",
   "pool.filter.course": "Course",
-  "pool.filter.courseHint": "The questions that exercise a concept the course lists. In the search box: course:{code}.",
+  "pool.filter.courseHint": "The questions that exercise a concept the course lists or one narrower than it. In the search box: course:{code}.",
   "pool.filter.courseChip": "Course {code}",
   "pool.filter.noCourseMatch": "no course matches",
   "pool.filter.difficulty": "Difficulty",

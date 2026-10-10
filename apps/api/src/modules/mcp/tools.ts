@@ -312,11 +312,12 @@ export const TOOLS: Tool[] = [
         .max(32)
         .optional()
         .describe(
-          "Only the questions that exercise one of these concepts: ids or labels in either language. A label " +
-            "matches every concept it may designate; one that matches none is refused with close candidates.",
+          "Only the questions that exercise one of these concepts or a concept narrower than one: ids or labels in " +
+            "either language. A label matches every concept it may designate; one that matches none is refused " +
+            "with close candidates.",
         ),
       courseId: Id.optional().describe(
-        "Only the questions that exercise a concept this course lists; the course must be one the teacher staffs and the pool linked to it.",
+        "Only the questions that exercise a concept this course lists or one narrower than it; the course must be one the teacher staffs and the pool linked to it.",
       ),
       categoryId: Id.optional(),
       limit: z.number().int().min(1).max(200).default(50),

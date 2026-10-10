@@ -23,7 +23,7 @@ import { drillRecallCounts, type DrillReviewFact } from "@quiz/domain";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
 import { registerForTests } from "@quiz/registry/server";
 
-import { classrooms, concepts, drillCards, drillReviews, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
+import { classrooms, conceptRelations, concepts, drillCards, drillReviews, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
@@ -404,5 +404,23 @@ describe("the teacher's view of the drill: mastery per concept", () => {
       await db.update(evaluations).set({ feedbackPolicy: before!.feedbackPolicy }).where(eq(evaluations.id, seed.evaluationId));
     }
     expect((await mastery()).concepts.some((c) => c.cards > 0)).toBe(true);
+  });
+
+  it("counts a card of a narrower concept toward the listed broader one, which then leaves the outside (7d)", async () => {
+    const db = server.app.db;
+    const at = new Date(NOW);
+    const loops = (await db.select().from(concepts)).find((c) => c.keyEn === "loop")!;
+    const parentId = randomUUID();
+    await db.insert(concepts).values({ id: parentId, status: "validated", labelEn: "control", keyEn: "control", createdAt: at, updatedAt: at });
+    await db.insert(questionConcepts).values({ questionId: seed.questionIds[1]!, conceptId: loops.id }).onConflictDoNothing();
+    await db.insert(conceptRelations).values({ conceptId: loops.id, targetId: parentId, kind: "broader" });
+    expect((await putConcepts([parentId])).statusCode).toBe(200);
+
+    const body = await mastery();
+    // q1 carries loops, narrower than the listed concept: its one card counts there.
+    expect(body.concepts.find((c) => c.concept!.id === parentId)).toMatchObject({ cards: 1, students: 1 });
+    // The loops are covered, so no longer outside; q0's pointers still are.
+    expect(body.outside!.concepts.map((c) => c.concept?.id)).not.toContain(loops.id);
+    await db.delete(conceptRelations).where(eq(conceptRelations.targetId, parentId));
   });
 });

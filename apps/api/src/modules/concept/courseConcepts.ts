@@ -15,11 +15,13 @@
  */
 import { and, eq, inArray } from "drizzle-orm";
 
+import { narrowerDescendants } from "@quiz/domain";
+
 import type { ConceptLang, ConceptRef } from "@quiz/contracts";
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
-import { concepts, courseConcepts } from "../../db/schema.js";
+import { conceptRelations, concepts, courseConcepts } from "../../db/schema.js";
 import { byLabel, lockLinkSet } from "./links.js";
 import { toConceptRef } from "./row.js";
 
@@ -35,14 +37,27 @@ export async function courseConceptsOf(db: Db | Tx, courseId: string, lang: Conc
 
 /**
  * COVERAGE, in one place: for each of the given concepts, the concepts it
- * covers, itself included (ADR-081 §4: a selected concept covers its narrower
- * ones). Today a concept covers only itself. Step 7d widens THIS function
- * alone, once relations exist: every reader of coverage (a course's filter,
- * the picker's ranking, the teacher's mastery per course concept, the
- * student's later) goes through it and follows without a change.
+ * covers, itself first and then every narrower one, near or far (ADR-081 §4:
+ * a selected concept covers its narrower ones; sixth addendum, step 7d). Only
+ * `broader` edges widen it: a `related` concept is never covered, a merged
+ * concept has no edges left. One read of the broader edges, whatever the
+ * number of ids. Every reader of coverage (the pool and MCP concept filters,
+ * a course's filter, the picker's ranking, the teacher's mastery per course
+ * concept, the student's later) goes through it.
  */
-export async function coverage(_db: Db | Tx, conceptIds: readonly string[]): Promise<Map<string, string[]>> {
-  return new Map([...new Set(conceptIds)].map((id) => [id, [id]]));
+export async function coverage(db: Db | Tx, conceptIds: readonly string[]): Promise<Map<string, string[]>> {
+  const ids = [...new Set(conceptIds)];
+  if (ids.length === 0) return new Map();
+  const broader = await db
+    .select({ concept: conceptRelations.conceptId, target: conceptRelations.targetId })
+    .from(conceptRelations)
+    .where(eq(conceptRelations.kind, "broader"));
+  return new Map(ids.map((id) => [id, [id, ...narrowerDescendants(broader, id)]]));
+}
+
+/** The union of {@link coverage}: every concept id the given ones cover together. */
+export async function coveredConcepts(db: Db | Tx, conceptIds: readonly string[]): Promise<string[]> {
+  return [...new Set([...(await coverage(db, conceptIds)).values()].flat())];
 }
 
 /**
@@ -56,11 +71,10 @@ export async function conceptsCoveredByCourse(db: Db | Tx, courseIds: readonly s
     .selectDistinct({ id: courseConcepts.conceptId })
     .from(courseConcepts)
     .where(inArray(courseConcepts.courseId, [...courseIds]));
-  const covered = await coverage(
+  return coveredConcepts(
     db,
     rows.map((r) => r.id),
   );
-  return [...new Set([...covered.values()].flat())];
 }
 
 /**

@@ -10,7 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ApiTokenCreated } from "@quiz/contracts";
 import { questionType } from "@quiz/registry/server";
 
-import { conceptTagSortings, courseConcepts, evaluations } from "../../db/schema.js";
+import { conceptRelations, conceptTagSortings, courseConcepts, evaluations } from "../../db/schema.js";
+import { seedConcept } from "../../test/concepts.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
 
@@ -282,6 +283,11 @@ describe("an authoring session", () => {
     expect(listed.total).toBe(2);
     expect((await ok("list_questions", { poolId: pool.id, concepts: ["figures de style"] })).total).toBe(3);
     expect((await call("list_questions", { poolId: pool.id, concepts: ["nothing like it"] })).isError).toBe(true);
+    // A broader concept covers its narrower ones (#599 step 7d): filtering by the parent finds their questions.
+    const narrower = (await ok("get_question", { questionId: ids[0] })).meta.concepts[0].id as string;
+    const parent = await seedConcept(server.app.db, teacher.id, ["Procédés"], ["Devices"]);
+    await server.app.db.insert(conceptRelations).values({ conceptId: narrower, targetId: parent, kind: "broader" });
+    expect((await ok("list_questions", { poolId: pool.id, concepts: ["Devices"] })).total).toBe(3);
     // The course filter (#599 step 7b): the concepts the course lists; a course the pool is not linked to is a 404.
     const figures = (await ok("get_question", { questionId: ids[0] })).meta.concepts[0].id as string;
     await server.app.db.insert(courseConcepts).values({ courseId: course.id, conceptId: figures, addedBy: teacher.id });
