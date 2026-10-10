@@ -2,7 +2,7 @@ import type { NodeViewProps } from "@tiptap/core";
 import { NodeViewContent, NodeViewWrapper } from "@tiptap/react";
 
 import { useT } from "../i18n";
-import { cx, inputClass } from "../ui";
+import { cx, inputClass, inputSize } from "../ui";
 
 /*
  * The code block of the rich editor, as a Tiptap NODE VIEW (React), for one
@@ -61,7 +61,7 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
             placeholder={t("md.code.languagePlaceholder")}
             spellCheck={false}
             autoComplete="off"
-            className={cx(inputClass, "h-6 w-24 px-2.5 font-mono text-[11px]")}
+            className={cx(inputClass, inputSize.sm, "w-24 font-mono")}
             // The editor must not see what happens in this field: its own key
             // handlers would type these characters into the block.
             onMouseDown={(e) => e.stopPropagation()}

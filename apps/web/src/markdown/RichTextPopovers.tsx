@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
-import { Button, cx, IconButton, inputClass, Menu, Z } from "../ui";
+import { Button, cx, IconButton, inputClass, inputSize, Menu, Z } from "../ui";
 import { BlankPopover } from "./BlankPopover";
 import type { Formula } from "./FormulaDialog";
 import type { HolePreview, OpenHole } from "./useClozeHole";
@@ -102,7 +102,7 @@ function AskBar({
             onCancel();
           }
         }}
-        className={cx(inputClass, "h-7 min-w-0 flex-1 font-mono text-[13px]")}
+        className={cx(inputClass, inputSize.sm, "min-w-0 flex-1 font-mono")}
       />
       <Button size="sm" variant="secondary" onClick={() => onSubmit(text)}>
         {apply}

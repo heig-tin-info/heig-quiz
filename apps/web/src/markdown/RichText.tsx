@@ -5,7 +5,7 @@ import { useId, useMemo, useRef, useState } from "react";
 import type { RichTextProps } from "@quiz/core/client";
 
 import { useT } from "../i18n";
-import { cx, inputClass } from "../ui";
+import { areaClass, cx } from "../ui";
 import { ImageToolsContext } from "./ImageView";
 import "./richtext.css";
 import { LinkPrompt, RichTextOverlays } from "./RichTextPopovers";
@@ -218,9 +218,9 @@ export function RichText({
           <div
             onMouseDown={(e) => focusFromChrome(e, editor, disabled)}
             className={cx(
-              inputClass,
-              "w-full px-3 py-2",
-              // `inputClass` styles the wrapper, and the focus ring has to
+              areaClass,
+              "w-full py-2",
+              // `areaClass` styles the wrapper, and the focus ring has to
               // follow the caret into the contenteditable inside it.
               "focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/20",
               disabled ? "opacity-50" : "cursor-text",

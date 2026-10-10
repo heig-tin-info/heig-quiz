@@ -154,15 +154,18 @@ Two pairs stay below their target, on purpose:
 
 ## Shape and elevation
 
-- Radii: controls (buttons, chips, segmented, avatars) are **pills**;
-  fields 10 px; cards 12 px; sheets and dialogs 16 px; menus 12 px.
-  Pills on everything you press, soft squares on everything that holds —
-  save the keys of the calculator's keypad, soft squares in a grid (below).
+- Radii: every single-line control (button, field, select, search box,
+  segmented, chip) and the avatars are **pills** (`rounded-control`);
+  multi-line fields and fields that hold content (textarea, code, rich text,
+  formula) 10 px; cards 12 px; sheets and dialogs 16 px; menus 12 px.
+  **Pill for one line, soft square for multi-line or containing content**
+  (ADR-094) — save the keys of the calculator's keypad, soft squares in a
+  grid (below). A segmented track that wraps is a soft square (`rounded-card`):
+  a pill two rows tall is a lens.
   The radii stay small because the pool table, the live grid and the grading
   list are the screens this product is for, and a 16 px corner around a
-  13 px row makes the card louder than its contents. The pills mark what you
-  press, and that distinction is the point of the scale.
-  In the markup the radii are the tokens `rounded-field`, `rounded-card`,
+  13 px row makes the card louder than its contents.
+  In the markup the radii are the tokens `rounded-control`, `rounded-field`, `rounded-card`,
   `rounded-sheet`, `rounded-menu` and `rounded-key` (`style.css`), never a
   bracketed pixel value that happens to equal one. Two values stand outside
   the scale, on purpose:
@@ -510,7 +513,8 @@ live in `ui/state.ts`, each written once.
   fill, surface text): the primary of a neutral tool's own layer — the
   assistant's Confirm and Apply (ADR-069, ADR-080 P3) — never on the page
   itself, where `primary` is the one accent.
-  Sizes `sm` 28 px, `md` 34 px, `lg` 40 px.
+  Sizes `sm` 28 px, `md` 34 px, `lg` 40 px: the control scale (`controlSize`
+  in `@quiz/ui`, ADR-094), read by every single-line control.
   Pressed to 0.97. The class list is `buttonClass` in `@quiz/ui`, which the
   app's `Button` and `LinkButton` and the question types all wear.
 - Icon button: round, ghost; `danger` turns red on hover only. Its disc as
@@ -713,13 +717,18 @@ live in `ui/state.ts`, each written once.
   `error` slot); with a `title` it is a danger `Alert`, the shape a step, a
   sheet or a page uses, where a bare red line would be lost. It lives beside
   QueryError (`queryError.tsx`), because `ui/` never imports the HTTP client.
-- Field: label 13 px 500 above, 10 px radius (`rounded-field`), `line-strong` border, accent
+- Field: label 13 px 500 above, a pill (`rounded-control`), `line-strong` border, accent
   ring on focus. The `<label>` covers the text only and points at the control
   through `htmlFor`; the help "?" is its sibling, never inside it, or that
-  button becomes the labelled control and the input loses its name. Two heights, from the button scale: `sm` 28 px for a control
-  inside a table row, `md` 34 px everywhere else (`inputSize`). A textarea
-  is `textareaClass`: the same chrome, 8 px of vertical padding, the relaxed
-  line height, and its rows for a height. `inputClass`, `inputSize`,
+  button becomes the labelled control and the input loses its name. One scale with the buttons (`controlSize`, ADR-094): `sm` 28 px for a
+  control inside a table row, `md` 34 px everywhere else, `lg` 40 px
+  (`inputSize` carries the height, the side padding and the text size). A
+  textarea is `textareaClass` and anything else that holds content `areaClass`:
+  the same chrome as a soft square (10 px, `rounded-field`), 8 px of vertical
+  padding for a textarea, the relaxed line height, and its rows for a height.
+  `SearchInput` is a field with a leading icon and `Select` shares the chrome,
+  so a search box, a select and a field in one toolbar are one height and one
+  shape. `inputClass`, `inputSize`,
   `textareaClass` and the label row are written once, in `@quiz/ui`, and
   `ui/controls.tsx` re-exports them: a field in a question editor IS the
   field of every other form of the app, not a copy that may drift.
@@ -748,7 +757,8 @@ live in `ui/state.ts`, each written once.
   font size, so one value holds at 13 px and at 28 px.
 - ToggleChip: a value you switch on, as a pill — `border-line-strong` on
   `surface` in `fg-muted` at rest, `accent-soft` on an `accent` border in
-  `accent` when pressed, 28 px tall, 13 px, an optional leading icon.
+  `accent` when pressed, 28 px tall by default (a `size` of the control
+  scale, ADR-094), 13 px, an optional leading icon.
   Containers lay them out with `flex flex-wrap gap-2`. Not a column of
   checkboxes, which is the shape of independent SETTINGS: the filter sheet
   holds SETS — the type of a question, a difficulty, a tag — the reader wants
@@ -765,7 +775,14 @@ live in `ui/state.ts`, each written once.
   not one of them: it belongs to the question, not to the answer, and is an
   `IconButton` with `aria-pressed` floated in the card's top-right corner,
   filled in `fg` when on (the favourite star's recipe).
-- Segmented: `surface-3` pill track, selected chip raised to `surface`.
+- Segmented: `surface-3` pill track; the selected option is raised to
+  `surface` by a thumb that slides under it (~200 ms `ease-out-emphasized`,
+  none under `prefers-reduced-motion`; measured from the selected label, the
+  native radios unchanged). `md` (34 px, the height of the field beside it)
+  by default; `sm` when every neighbour is 28 px (table rows, dense
+  popovers, editor toolbars, the drill's scale below, the header); a
+  toolbar never mixes `sm` and `md` controls (ADR-094). Icon buttons are discs, not
+  form controls, and stay outside the scale.
   Segmented is ONE choice out of a set small enough to show whole — two or
   three normally, five at most and only with one-word labels (the pool
   toolbar's "Group by"); ToggleChip is any number out of many. One

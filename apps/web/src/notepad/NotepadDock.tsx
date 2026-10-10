@@ -24,7 +24,7 @@ import { useEffect, useRef, type SyntheticEvent } from "react";
 
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { cx, IconButton, inputClass, ToolDock, type ToolDockSeat } from "../ui";
+import { areaClass, cx, IconButton, ToolDock, type ToolDockSeat } from "../ui";
 import { MAX_PAGE_LENGTH, MAX_PAGES } from "./store";
 import type { Notepad } from "./useNotepad";
 
@@ -107,11 +107,11 @@ export function NotepadDock({
             onChange={(event) => notepad.setText(event.target.value)}
             spellCheck={false}
             {...clipboard}
-            // The field's chrome (`inputClass`), in the code face and ruled.
+            // The field's chrome (`areaClass`), in the code face and ruled.
             // The whole panel is this one field: focused, its border turns
             // to the ink rather than the accent's red frame and ring.
             className={cx(
-              inputClass,
+              areaClass,
               "notepad-ruled min-h-0 w-full flex-1 resize-none pb-1 font-mono !text-[13px] focus:!border-fg focus:!ring-0",
             )}
           />

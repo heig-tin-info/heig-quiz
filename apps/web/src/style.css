@@ -254,6 +254,9 @@ html.dark {
 
   /* Tightened one step (DESIGN.md, "Shape and elevation"): the previous
      radii read as soft and toy-like next to dense tables. */
+  /* Every single-line control: field, select, search, segmented, chip, button
+     (ADR-094). The browser clamps it to half the height, which is the pill. */
+  --radius-control: 9999px;
   --radius-field: 10px;
   --radius-card: 12px;
   --radius-sheet: 16px;

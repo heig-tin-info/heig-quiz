@@ -2,7 +2,7 @@ import { Bold, Code, Image as ImageIcon, Italic, Link, Sigma } from "lucide-reac
 import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { useT, type TFunction } from "../i18n";
-import { cx, IconButton, inputClass, type IconType } from "../ui";
+import { areaClass, cx, IconButton, type IconType } from "../ui";
 import { indent, insertBlock, replace, wrap, type Selection } from "./insert";
 
 /*
@@ -210,7 +210,7 @@ export function SourcePane({
           }
         }}
         className={cx(
-          inputClass,
+          areaClass,
           "w-full resize-y py-2 font-mono text-[13px] leading-relaxed",
           dragging && "border-accent",
         )}

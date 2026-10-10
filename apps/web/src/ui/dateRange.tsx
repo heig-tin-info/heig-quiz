@@ -350,7 +350,7 @@ function RangePanel({
         aria-label={t("ui.range.time", { label: name })}
         value={which === "start" ? draft.startTime : draft.endTime}
         onChange={(e) => setDraft({ ...draft, [which === "start" ? "startTime" : "endTime"]: e.target.value })}
-        className={cx(inputClass, inputSize.sm, "w-full px-2 tabular-nums")}
+        className={cx(inputClass, inputSize.sm, "w-full tabular-nums")}
       />
     </label>
   );

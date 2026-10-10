@@ -6,6 +6,8 @@ Accepted (2026-07-03, inherited from heig-classroom). Amended 2026-10-03:
 React/Vite SPA remains the choice; Radix, TanStack Router/Table, i18next and
 Luxon are withdrawn; the [inherited record](history/ADR-008-frontend-spa-react.md)'s frontend library list was not carried into Quiz
 as a package requirement. Current implementation is evidenced below.
+See also [ADR-094](ADR-094-echelle-des-controles.md) for the size, shape and
+motion of the single-line form controls.
 
 ## Context
 

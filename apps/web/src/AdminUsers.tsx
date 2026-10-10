@@ -124,7 +124,6 @@ export function UsersSection() {
         />
         <Segmented
           name="admin-users-role"
-          size="sm"
           label={t("admin.col.role")}
           value={filter}
           onChange={setFilter}

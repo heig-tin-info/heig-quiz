@@ -4,17 +4,31 @@
  * checkbox with its word. Native elements every time — the keyboard, the
  * grouping and the announcement come from the platform.
  */
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-import { cx, inputClass, inputSize, label as labelToken } from "./styles.js";
+import { controlSize, cx, inputClass, inputSize, label as labelToken, type ControlSize } from "./styles.js";
+
+/** The box of the selected option inside the track, as the thumb draws it. */
+interface Thumb {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
 
 /**
  * The segmented control of the whole product — `apps/web` re-exports this
  * one: a pill track on `surface-3`, the selected option lifted onto `surface`
  * with a hairline ring (selection is structure, never colour: the accent
- * stays for primary actions). At `md` its track is 34 px tall, the height of
- * a field, so a segmented control and the fields beside it sit on one
- * baseline; `sm` is the dense toolbar variant.
+ * stays for primary actions). Its track is 34 px tall at the default `md`
+ * (the control scale, ADR-094), the height of a field, so a segmented control
+ * and the fields beside it sit on one baseline; `sm` (28 px) is for a control
+ * inside a table row only.
+ *
+ * The thumb is a decorative span that slides under the selected option
+ * (~200 ms, `ease-out-emphasized`, none under `prefers-reduced-motion`). Its
+ * box is MEASURED from the selected label, so options of any width, and a
+ * wrapped second row, need no per-option width.
  *
  * Native radios, visually hidden inside the labels: the arrow keys, the
  * grouping and the announcement come from the platform rather than from a
@@ -38,7 +52,7 @@ export function Segmented<T extends string>({
   options: ReadonlyArray<{ value: T; label: ReactNode; disabled?: boolean | undefined; title?: string | undefined }>;
   onChange: (value: T) => void;
   disabled?: boolean | undefined;
-  size?: "sm" | "md" | undefined;
+  size?: ControlSize | undefined;
   /**
    * The name of the GROUP, for a radiogroup with no visible caption of its
    * own — two segmented controls side by side ("Group by", "Sort by") are
@@ -60,31 +74,80 @@ export function Segmented<T extends string>({
    */
   labelledBy?: string | undefined;
 }): ReactNode {
+  const track = useRef<HTMLDivElement>(null);
+  const [thumb, setThumb] = useState<Thumb | null>(null);
+  // The first placement must not slide in from the corner.
+  const [armed, setArmed] = useState(false);
+
+  const measure = useCallback(() => {
+    const on = track.current?.querySelector<HTMLElement>('[data-on="true"]');
+    const next = on
+      ? { left: on.offsetLeft, top: on.offsetTop, width: on.offsetWidth, height: on.offsetHeight }
+      : null;
+    // A measurement that changed nothing must not render again.
+    setThumb((prev) =>
+      prev === next || (prev && next && prev.left === next.left && prev.top === next.top && prev.width === next.width && prev.height === next.height)
+        ? prev
+        : next,
+    );
+  }, []);
+
+  const optionKey = options.map((o) => o.value).join("\u0000");
+  useLayoutEffect(measure, [measure, value, size, wrap, optionKey]);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setArmed(true));
+    const el = track.current;
+    // Fonts loading or a container resizing move the labels without a render.
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    if (el && ro) {
+      ro.observe(el);
+      // The labels only: the thumb moves with every measure, observing it would loop.
+      for (const label of Array.from(el.querySelectorAll(":scope > label"))) ro.observe(label);
+    }
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+    };
+  }, [measure, optionKey]);
+
   return (
     <div
+      ref={track}
       role="radiogroup"
       {...(label === undefined ? {} : { "aria-label": label })}
       {...(labelledBy === undefined ? {} : { "aria-labelledby": labelledBy })}
       className={cx(
-        "gap-0.5 bg-surface-3 p-0.75",
-        // A track two rows tall is not a pill any more: `rounded-full` on it
+        "relative gap-0.5 bg-surface-3 p-0.75",
+        // A track two rows tall is not a pill any more: a full radius on it
         // draws two half-circles the height of both rows. It becomes what it
         // now is — a recessed panel — and keeps the card radius of the design
-        // scale, while the pills inside stay pills.
-        wrap ? "flex w-full flex-wrap rounded-card" : "inline-flex shrink-0 rounded-full",
+        // scale, while the options inside stay pills.
+        wrap ? "flex w-full flex-wrap rounded-card" : "inline-flex shrink-0 rounded-control",
         disabled && "opacity-60",
       )}
     >
+      {thumb ? (
+        <span
+          aria-hidden
+          data-thumb
+          className={cx(
+            "pointer-events-none absolute rounded-control bg-surface ring-1 ring-line-strong/70",
+            armed && "transition-[left,top,width,height] duration-200 ease-out-emphasized motion-reduce:transition-none",
+          )}
+          style={thumb}
+        />
+      ) : null}
       {options.map((o) => (
         <label
           key={o.value}
+          data-on={value === o.value}
           {...(o.title === undefined ? {} : { title: o.title })}
           className={cx(
             o.disabled && "opacity-60",
-            "inline-flex items-center justify-center rounded-full px-3 font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-accent/50",
-            size === "sm" ? "h-6 text-xs" : "h-7 text-[13px]",
+            "relative z-10 inline-flex items-center justify-center rounded-control px-3 font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-accent/50",
+            controlSize[size].segment,
             value === o.value
-              ? "bg-surface text-fg ring-1 ring-line-strong/70"
+              ? "text-fg"
               : cx("text-fg-muted", !disabled && !o.disabled && "cursor-pointer hover:text-fg"),
           )}
         >
@@ -179,7 +242,7 @@ export function NumberField({
   placeholder?: string | undefined;
   width?: string;
   /** The control height: `sm` 28 px in a dense row (the default), `md` 34 px in a form. */
-  size?: keyof typeof inputSize;
+  size?: ControlSize;
   /** When the visible label is shared by several rows ("Points" → "Points 2"). */
   "aria-label"?: string | undefined;
 }): ReactNode {

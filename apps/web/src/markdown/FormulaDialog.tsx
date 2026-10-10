@@ -3,7 +3,7 @@ import { Keyboard } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { useT } from "../i18n";
-import { Button, cx, inputClass, Modal, Segmented, Spinner } from "../ui";
+import { areaClass, Button, cx, inputClass, inputSize, Modal, Segmented, Spinner } from "../ui";
 import "./formula.css";
 
 /*
@@ -185,7 +185,6 @@ export function FormulaDialog({
             <span className="text-[13px] font-medium text-fg">{t("md.formula.placement")}</span>
             <Segmented
               name="formula-placement"
-              size="sm"
               value={display ? "display" : "inline"}
               onChange={(v) => setDisplay(v === "display")}
               options={[
@@ -212,7 +211,7 @@ export function FormulaDialog({
               e.preventDefault();
               submit();
             }}
-            className={cx(inputClass, "h-8.5 w-full font-mono text-[13px]")}
+            className={cx(inputClass, inputSize.md, "w-full font-mono")}
           />
         </div>
 
@@ -240,7 +239,7 @@ export function FormulaDialog({
               event.preventDefault();
               mf.focus();
             }}
-            className={cx(inputClass, "flex min-h-11 w-full cursor-text items-center py-1.5")}
+            className={cx(areaClass, "flex min-h-11 w-full cursor-text items-center py-1.5")}
           >
             {ready ? null : <Spinner label={t("md.formula.loading")} className="py-1" />}
             {/* MathLive's own element lives in here, and React puts nothing

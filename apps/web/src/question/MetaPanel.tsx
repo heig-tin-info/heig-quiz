@@ -125,7 +125,6 @@ export function MetaPanel({
         <div>
           <Segmented
             name="difficulty"
-            size="sm"
             disabled={disabled}
             value={String(meta.difficulty)}
             options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }))}

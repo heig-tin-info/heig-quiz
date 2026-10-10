@@ -113,7 +113,7 @@ export default defineConfig({
     // data or development screens, not code a test should be asked to reach.
     coverage: {
       ...coverage,
-      exclude: [...coverage.exclude, "src/mock/**", "src/i18n/en.ts", "src/i18n/fr.ts", "src/DevGallery.tsx"],
+      exclude: [...coverage.exclude, "src/mock/**", "src/i18n/en.ts", "src/i18n/fr.ts", "src/DevGallery.tsx", "src/devgallery/**"],
     },
     // Vitest 4 removed `environmentMatchGlobs`; test projects are its
     // replacement. Two of them, so the pure-logic suite keeps running in

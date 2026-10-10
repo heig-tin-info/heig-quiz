@@ -3,7 +3,7 @@
  *
  * A package cannot import `apps/web/src/ui/`, so the primitives it would
  * have used are reduced to their class lists here. Where the app has the
- * same thing — `cx`, `inputClass`, `inputSize`, `textareaClass`, `label`,
+ * same thing — `cx`, `inputClass`, `inputSize`, `controlSize`, `textareaClass`, `label`,
  * `buttonClass` — it is not copied: `apps/web/src/ui/` imports it from here,
  * so a field or a button in a question editor is the app's own. One token per
  * role (apps/web/DESIGN.md, "The question-type surfaces"). Semantic tokens only
@@ -62,32 +62,85 @@ export const reviewPrompt = "text-sm font-medium text-fg";
 export const setting = "flex items-center gap-2 text-[13px] text-fg";
 
 /**
- * Field chrome, with no width and no height of its own — the one field of the
- * product: `apps/web`'s `Field`, `Select` and `Textarea` wear it, as the
- * editors and players of every question type do, so a field inside a
- * question editor is the same field as one in a settings form.
+ * THE control scale (ADR-094): one table read by buttons, fields, selects,
+ * search boxes, segmented controls and chips, so that a toolbar of them sits
+ * on one height. `sm` 28 px is for a control inside a table row or a dense
+ * strip, `md` 34 px for everything else, `lg` 40 px for a form's lead action.
+ *
+ * - `height`, `text`, `px`: the one-line box.
+ * - `svg`: the size of an icon inside a button.
+ * - `icon`, `iconLeft`, `iconPad`: a field's leading icon (search), its inset
+ *   and the left padding that clears it (`px` + icon + a gap).
+ * - `edgeRight`, `padRight`: a trailing adornment (a select's chevron, a
+ *   field's unit) at the same inset as the side padding, and the right
+ *   padding that clears it.
+ * - `segment`: the option inside a segmented track (`p-0.75` = 3 px of track
+ *   on each side, so 22 + 6 = 28, 28 + 6 = 34, 34 + 6 = 40).
+ */
+export const controlSize = {
+  sm: {
+    height: "h-7", text: "text-[13px]", px: "px-3", svg: "[&_svg]:size-3.5",
+    icon: "size-3.5", iconLeft: "left-3", iconPad: "pl-8", edgeRight: "right-3", padRight: "pr-9",
+    segment: "h-5.5 text-xs",
+  },
+  md: {
+    height: "h-8.5", text: "text-sm", px: "px-4", svg: "[&_svg]:size-4",
+    icon: "size-4", iconLeft: "left-4", iconPad: "pl-10", edgeRight: "right-4", padRight: "pr-10",
+    segment: "h-7 text-[13px]",
+  },
+  lg: {
+    height: "h-10", text: "text-sm", px: "px-5", svg: "[&_svg]:size-4",
+    icon: "size-4", iconLeft: "left-5", iconPad: "pl-11", edgeRight: "right-5", padRight: "pr-11",
+    segment: "h-8.5 text-[13px]",
+  },
+} as const;
+
+export type ControlSize = keyof typeof controlSize;
+
+/**
+ * Field chrome, with no width, no height, no padding and no radius of its own
+ * — the border, the ink and the focus ring of the one field of the product.
+ * `inputClass` (a pill, one line) and `textareaClass` (a soft square, many
+ * lines) add the shape; `inputSize` the height and the padding.
  *
  * Tailwind resolves conflicting utilities by their order in the generated
  * stylesheet, not by their order in the class attribute, so a `w-16` or an
- * `h-8` written next to this string was never guaranteed to win. Height comes
- * from `inputSize` and width from the caller, which both compose instead of
- * fighting. The radius is the `rounded-field` token, never a literal.
+ * `h-8` written next to this string was never guaranteed to win. Height and
+ * horizontal padding come from `inputSize` and width from the caller, which
+ * both compose instead of fighting. The radius is a token, never a literal.
  */
-export const inputClass =
-  "rounded-field border border-line-strong bg-surface px-3 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50 disabled:hover:border-line-strong";
+const fieldChrome =
+  "border border-line-strong bg-surface text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50 disabled:hover:border-line-strong";
+
+/** A one-line field: the chrome and the pill. Pair it with an {@link inputSize}. */
+export const inputClass = `rounded-control ${fieldChrome}`;
+
+/** Builds one value per step of the scale, so no row of the table is spelled twice. */
+const bySize = <T>(pick: (size: ControlSize) => T): Record<ControlSize, T> => ({
+  sm: pick("sm"),
+  md: pick("md"),
+  lg: pick("lg"),
+});
 
 /**
- * Control heights, aligned on the button scale of `apps/web/DESIGN.md`:
- * `sm` 28 px for a control inside a dense row, `md` 34 px everywhere else.
+ * The one-line box of the scale: height, side padding and text size. A field,
+ * a select, a search box, a chip and a button wear it; the question types
+ * import it too.
  */
-export const inputSize = { sm: "h-7", md: "h-8.5" } as const;
+export const inputSize = bySize((size) =>
+  cx(controlSize[size].height, controlSize[size].px, controlSize[size].text),
+);
 
 /**
- * A multi-line field: the chrome above, with the vertical padding and the
- * reading line height of `apps/web`'s `Textarea`. Its height is its content
- * (`rows`), never one of the two control heights.
+ * A multi-line field, or a field that holds content (a rich-text editor, a
+ * formula box): the chrome with the soft square, not the pill. Its height is
+ * its content, never one of the control heights; the caller sets the vertical
+ * padding.
  */
-export const textareaClass = `${inputClass} py-2 leading-relaxed`;
+export const areaClass = `rounded-field ${fieldChrome} px-3 text-sm`;
+
+/** {@link areaClass} with the vertical padding and the reading line height of a textarea. */
+export const textareaClass = `${areaClass} py-2 leading-relaxed`;
 
 export const codeArea =
   "w-full rounded-field border border-line-strong bg-surface px-3 py-2 font-mono text-[13px] leading-[1.55] text-fg transition-colors focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-60";
@@ -98,7 +151,7 @@ export const lockedBlock =
 // disabled:pointer-events-none: hovering a disabled button must hit the
 // wrapping Tip span (disabled controls swallow mouse events).
 const BUTTON_BASE =
-  "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-[background-color,color,border-color,opacity,transform] duration-150 ease-out-emphasized active:scale-97 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-medium transition-[background-color,color,border-color,opacity,transform] duration-150 ease-out-emphasized active:scale-97 disabled:pointer-events-none disabled:opacity-50";
 
 const BUTTON_VARIANT = {
   primary: "bg-accent text-on-fill hover:bg-accent-hover",
@@ -115,15 +168,11 @@ const BUTTON_VARIANT = {
   "danger-quiet": "border border-danger/40 bg-surface text-danger hover:border-danger hover:bg-danger-soft",
 } as const;
 
-/** The button heights of DESIGN.md: 28, 34 and 40 px. */
-const BUTTON_SIZE = {
-  sm: "h-7 px-3 text-[13px] [&_svg]:size-3.5",
-  md: "h-8.5 px-4 text-sm [&_svg]:size-4",
-  lg: "h-10 px-5 text-sm [&_svg]:size-4",
-} as const;
+/** The button sizes are the control scale: the one-line box and the icon size. */
+const BUTTON_SIZE = bySize((size) => cx(inputSize[size], controlSize[size].svg));
 
 export type ButtonVariant = keyof typeof BUTTON_VARIANT;
-export type ButtonSize = keyof typeof BUTTON_SIZE;
+export type ButtonSize = ControlSize;
 
 /**
  * The class list of a button: a pill in one of seven variants and three

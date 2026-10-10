@@ -416,8 +416,7 @@ export function QuestionSearchBar({
           coach={coach}
           onFocusChange={setFocused}
         />
-        {/* Default size (md, 34 px) on purpose: `SearchInput` is `inputSize.md`
-            and a 28 px button beside it sat on a different baseline. */}
+        {/* Default size (md, 34 px) on purpose: one toolbar, one height (ADR-094). */}
         <Button variant="secondary" onClick={() => setOpen(true)}>
           <SlidersHorizontal /> {t("pool.filters")}
           {count > 0 ? (

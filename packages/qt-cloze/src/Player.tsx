@@ -17,7 +17,7 @@ import { resolveStrings } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozePlayerStrings, type ClozePlayerStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { caption, cx, inputClass, isLocked } from "@quiz/ui";
+import { caption, cx, inputClass, inputSize, isLocked } from "@quiz/ui";
 
 type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer, ClozeSolution> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -71,7 +71,7 @@ export function ClozePlayer({
           title={title}
           className={cx(
             inputClass,
-            "mx-0.5 h-8 align-baseline",
+            inputSize.sm, "mx-0.5 align-baseline",
             keyClass,
             key !== undefined && value === "" && "font-mono !text-success",
           )}
@@ -100,7 +100,7 @@ export function ClozePlayer({
         maxLength={200}
         placeholder={key}
         title={title}
-        className={cx(inputClass, "mx-0.5 h-8 align-baseline", keyClass)}
+        className={cx(inputClass, inputSize.sm, "mx-0.5 align-baseline", keyClass)}
         value={value}
         disabled={locked}
         onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}

@@ -4,6 +4,7 @@ import { Plot, SchematicEditor, SchematicView, withRoutes, type PlotProps, type 
 import { Pencil, Trash2, UserMinus, Users } from "lucide-react";
 import { useState } from "react";
 
+import { ControlsGallery } from "./devgallery/ControlsGallery";
 import { useT } from "./i18n";
 import { MarkdownField } from "./markdown/MarkdownField";
 import { MarkdownView } from "./markdown/MarkdownView";
@@ -252,7 +253,7 @@ const CIRCUIT_BODE = circuitBode(7000);
 const CIRCUIT_BODE_EXPECTED = circuitBode(10_000);
 
 /** A section of the gallery: a heading and a row of specimens. */
-function Row({ title, children }: { title: string; children: React.ReactNode }) {
+export function Row({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
       <SectionHeading title={title} />
@@ -286,6 +287,8 @@ export function DevGallery() {
   return (
     <div className="space-y-8 pb-16">
       <PageHeader title={t("dev.ui.title")} description={t("dev.ui.subtitle")} />
+
+      <ControlsGallery />
 
       <Row title={t("dev.ui.actions")}>
         <Specimen name="one">
