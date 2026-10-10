@@ -74,7 +74,7 @@ export function labelsKey(labels: readonly ConceptLabels[]): string {
   return sorted.length === 0 ? "" : createHash("sha256").update(sorted.join("\n")).digest("hex").slice(0, 16);
 }
 
-const clean = (text: string) => oneLine(oneLine(text, Infinity).replace(/^["«]\s*|\s*["»]$/g, ""), POOL_DOMAIN_MAX);
+const clean = (text: string) => oneLine(text.replace(/^\s*["«]\s*|\s*["»]\s*$/g, ""), POOL_DOMAIN_MAX);
 
 export type DomainOutcome = "updated" | "empty";
 

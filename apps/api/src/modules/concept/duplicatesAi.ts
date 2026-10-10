@@ -15,7 +15,7 @@ import { asc, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { CONCEPT_AI_PAIRS_MAX, CONCEPT_AI_REASON_MAX, type ConceptDuplicatesAi } from "@quiz/contracts";
-import { AI_DUPLICATE_KINDS, CONCEPT_LABEL_MAX, CONCEPT_QUALIFIER_MAX, type Locale } from "@quiz/domain";
+import { AI_DUPLICATE_KINDS, CONCEPT_LABEL_MAX, CONCEPT_QUALIFIER_MAX, type AiDuplicateKind, type Locale } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { concepts } from "../../db/schema.js";
@@ -26,15 +26,20 @@ const MAX_CONCEPTS = 1000;
 /** About 40 tokens a pair. */
 const MAX_TOKENS = 3000;
 
+/** What each kind means, so that a new kind fails to compile until it is described. */
+const KIND_GUIDE = {
+  close: "synonym, spelling or plural variant, abbreviation and its spelling out, typo: probably one concept, to merge",
+  translation: "the French of one is the English of the other: probably one concept, to merge",
+  homonym: "one label with two meanings: probably two concepts, never to merge",
+  related: "distinct concepts that are connected: never to merge",
+} satisfies Record<AiDuplicateKind, string>;
+
 const SYSTEM = [
   "You review the vocabulary of concepts that classify quiz questions of the HEIG-VD, a Swiss school of engineering.",
   "Each line is one concept: an index, then its French and English label, each with its qualifier in parentheses when it has one",
   "(the qualifier tells homonyms apart, as in « adresse (mémoire) »).",
   "File each pair you report under one kind:",
-  "close (synonym, spelling or plural variant, abbreviation and its spelling out, typo: probably one concept, to merge),",
-  "translation (the French of one is the English of the other: probably one concept, to merge),",
-  "homonym (one label with two meanings: probably two concepts, never to merge),",
-  "related (distinct concepts that are connected: never to merge).",
+  ...AI_DUPLICATE_KINDS.map((kind) => `${kind} (${KIND_GUIDE[kind]})${kind === "related" ? "." : ","}`),
   "Do not report concepts that merely belong to the same field.",
   `Answer at most ${CONCEPT_AI_PAIRS_MAX} pairs, the surest first, as {"pairs":[{"a":"c1","b":"c2","kind":"close","reason":"…"}]}`,
   `where a and b are indexes and reason is one short sentence (at most ${CONCEPT_AI_REASON_MAX} characters).`,

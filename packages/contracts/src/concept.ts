@@ -105,7 +105,7 @@ export const ConceptDuplicatesAi = z.object({
       }),
     )
     .max(CONCEPT_AI_PAIRS_MAX),
-  /** The vocabulary was longer than a call takes: the newest validated concepts were left out. */
+  /** The vocabulary was longer than a call takes: the oldest validated concepts were left out. */
   truncated: z.boolean(),
 });
 export type ConceptDuplicatesAi = z.infer<typeof ConceptDuplicatesAi>;

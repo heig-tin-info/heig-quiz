@@ -31,7 +31,6 @@ import { GenerateRefusal } from "./generate.js";
 import { ReviewRefusal } from "./review.js";
 import * as service from "./service.js";
 
-
 /**
  * A failure raised by the question-type layer is a client error, not a 500:
  * an unregistered type (the registry is filled by WP2/WP3) and a config that
