@@ -101,9 +101,9 @@ A teacher who connects an AI assistant to the platform (see [AI assistants](assi
 
 ### The application administrator
 
-One account, named in the server configuration, holds the administrator role (`apps/api/src/roles.ts`). It reaches every course and every classroom, and sees the list of all accounts, with their pictures.
+One account, named in the server configuration, holds the administrator role (`apps/api/src/roles.ts`). By default it reaches no more than a teacher: the courses and classrooms whose staff it is on. It reaches every course and every classroom only while it has switched on **Super Powers** in its own browser session: a switch that lasts one hour, cannot be extended, never applies to an API token or a connected assistant, and whose switching on, switching off and end are written to the audit log (`superpowers.enabled`, `superpowers.disabled`; ADR-054, `apps/api/src/modules/guards.ts`). It sees the list of all accounts, with their pictures, without them.
 
-To help a student with a problem they report, the administrator may open a view of that student's account (ADR-034): a one-time link, valid five minutes, opens at most one hour as the student. In production that view is read only: it cannot answer or submit anything (`apps/api/src/auth/plugin.ts`). Its start and its end are written to the audit log under the administrator's name. The student is not notified; the student help says, in general terms, that an administrator can open such a view (`apps/web/src/help/student-home.md`).
+To help a student with a problem they report, the administrator, with Super Powers on, may open a view of that student's account (ADR-034, ADR-054): a one-time link, valid five minutes, opens at most one hour as the student. In production that view is read only: it cannot answer or submit anything (`apps/api/src/auth/plugin.ts`). Its start and its end are written to the audit log under the administrator's name. The student is not notified; the student help says, in general terms, that an administrator can open such a view (`apps/web/src/help/student-home.md`).
 
 ### The system administrator
 
@@ -239,11 +239,11 @@ The institutional contact for these requests, and the supervisory authority to n
 
 ## Known limits and planned improvements
 
-The following points are known and tracked in issue [#274](https://github.com/heig-tin-info/heig-quiz/issues/274). None is fixed as of this page; none is scheduled unless the issue says otherwise.
+The following points are known and tracked in issue [#274](https://github.com/heig-tin-info/heig-quiz/issues/274). Only what is still open is listed; none of it is scheduled unless the issue says otherwise.
 
 Retention and deletion:
 
-- no retention period except the drill's five years, no purge after a student leaves;
+- no general retention period: only specific ones are set (the drill's five years, the help assistant's conversations 30 days, the exam integrity journal at the release of grades or six months after the close, and the content of GitHub's notifications 30 days), and nothing is purged when a student leaves;
 - no deletion or anonymisation of accounts: the column meant to mark an account as anonymised exists, but no code sets it;
 - removing a student from a classroom does not delete their attempts, grades or drill data;
 - the edu-ID information is kept unfiltered and with no time limit;
@@ -258,7 +258,7 @@ Access and traceability:
 
 - reads are not traced, neither the teachers' nor the administrator's;
 - direct access to the machine and the database is not traced by the platform;
-- the audit log is described as unmodifiable by the application, but the production configuration does not enforce it;
+- the audit log is protected against change by a database trigger that refuses UPDATE and DELETE (migration `0096_audit_log_immutable`), but the application connects as the database's owner role, which could drop the trigger, and TRUNCATE is not covered; the application never does either, but the database does not forbid it;
 - the student is not notified when an administrator opens a view of their account; only the student help mentions the possibility;
 - a personal API token carries all its owner's rights and may never expire.
 
