@@ -6,7 +6,8 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-import { controlSize, cx, inputClass, inputSize, label as labelToken, type ControlSize } from "./styles.js";
+import { TextInput } from "./controls.js";
+import { controlSize, cx, label as labelToken, type ControlSize } from "./styles.js";
 
 /** The box of the selected option inside the track, as the thumb draws it. */
 interface Thumb {
@@ -248,10 +249,11 @@ export function NumberField({
 }): ReactNode {
   return (
     <FieldCell label={label} htmlFor={id} {...chrome}>
-      <input
+      <TextInput
         id={id}
         type="number"
-        className={cx(inputClass, inputSize[size], width, "text-right tabular-nums")}
+        size={size}
+        className={cx(width, "text-right tabular-nums")}
         {...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel })}
         disabled={disabled}
         {...(min === undefined ? {} : { min })}

@@ -32,8 +32,6 @@ import {
   ErrorText,
   GithubIcon,
   IconButton,
-  inputClass,
-  inputSize,
   Menu,
   Modal,
   PersonAvatar,
@@ -43,6 +41,7 @@ import {
   useSortableTable,
 } from "./ui";
 import { classroomKey } from "./queryKeys";
+import { TextInput } from "@quiz/ui";
 
 function Row({
   classroomId,
@@ -109,12 +108,12 @@ function Row({
         : null;
     // Compact: an inline edit sits inside a table row, so it takes the 28 px
     // control height instead of the 34 px one a form field gets.
-    const small = cx(inputClass, inputSize.sm, "w-full");
     return (
       <tr className={cx(T.row, "bg-surface-2/60")}>
         <td className={T.td}>
-          <input
-            className={small}
+          <TextInput
+            size="sm"
+            className="w-full"
             aria-label={t("roster.col.lastName")}
             value={form.nom}
             onChange={(e) => setForm({ ...form, nom: e.target.value })}
@@ -122,8 +121,9 @@ function Row({
           />
         </td>
         <td className={T.td}>
-          <input
-            className={small}
+          <TextInput
+            size="sm"
+            className="w-full"
             aria-label={t("roster.col.firstName")}
             value={form.prenom}
             onChange={(e) => setForm({ ...form, prenom: e.target.value })}
@@ -133,8 +133,9 @@ function Row({
             container has hidden leaves this row one column wider than every
             other one, and the table shears. */}
         <td className={cx(T.td, T.colHigh)}>
-          <input
-            className={small}
+          <TextInput
+            size="sm"
+            className="w-full"
             aria-label={t("roster.col.email")}
             type="email"
             value={form.email}
@@ -147,8 +148,9 @@ function Row({
         </td>
         <td className={T.td} />
         <td className={cx(T.td, T.colMid)}>
-          <input
-            className={cx(small, "text-right tabular-nums")}
+          <TextInput
+            size="sm"
+            className="w-full text-right tabular-nums"
             aria-label={t("roster.col.bonus")}
             type="number"
             min={0}

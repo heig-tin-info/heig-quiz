@@ -5,17 +5,8 @@ import type { TeacherCandidate, TeacherCandidateQuery, TeacherCandidates, Teache
 
 import { api } from "./api";
 import { useT } from "./i18n";
-import {
-  ComboboxList,
-  ComboboxOption,
-  cx,
-  ErrorText,
-  FieldLabel,
-  Initials,
-  inputClass,
-  inputSize,
-  useCombobox,
-} from "./ui";
+import { ComboboxList, ComboboxOption, cx, ErrorText, FieldLabel, Initials, useCombobox } from "./ui";
+import { TextInput } from "@quiz/ui";
 
 /**
  * A colleague picked by name among the teachers a place does not seat yet
@@ -145,7 +136,7 @@ export function TeacherPicker({
         {label}
       </FieldLabel>
       <div className="relative">
-        <input
+        <TextInput
           id={combo.inputId}
           disabled={disabled}
           autoFocus={autoFocus}
@@ -158,7 +149,7 @@ export function TeacherPicker({
             onText(e.target.value);
             setOpen(true);
           }}
-          className={cx(inputClass, inputSize.md, "w-full")}
+           className="w-full"
         />
 
         {open && !disabled ? (

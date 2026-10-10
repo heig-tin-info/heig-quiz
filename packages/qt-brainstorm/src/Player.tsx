@@ -8,7 +8,7 @@ import { useState } from "react";
 import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
 import { BRAINSTORM_IDEA_MAX, ideaKey } from "@quiz/domain";
-import { buttonClass, caption, CloseIcon, cx, inputClass, inputSize, isLocked, label, markdown } from "@quiz/ui";
+import { Button, caption, CloseIcon, IconButton, isLocked, label, markdown, TextInput } from "@quiz/ui";
 
 import type { BrainstormAnswer, BrainstormStudent } from "./schema.js";
 import { brainstormPlayerStrings, type BrainstormPlayerStringKey } from "./strings.js";
@@ -57,21 +57,20 @@ export function BrainstormPlayer({
             {s.label}
           </label>
           <div className="flex gap-2">
-            <input
+            <TextInput
               id="brainstorm-idea"
-              type="text"
               autoComplete="off"
               enterKeyHint="send"
               maxLength={BRAINSTORM_IDEA_MAX}
-              className={cx(inputClass, inputSize.md, "min-w-0 flex-1")}
+              className="min-w-0 flex-1"
               placeholder={s.placeholder}
               value={draft}
               disabled={full}
               onChange={(e) => setDraft(e.target.value)}
             />
-            <button type="submit" className={buttonClass("primary", "md")} disabled={full || draft.trim() === ""}>
+            <Button type="submit" variant="primary" disabled={full || draft.trim() === ""}>
               {s.add}
-            </button>
+            </Button>
           </div>
           <p className={caption}>{(full ? s.full : s.hint).replace("{max}", max)}</p>
         </form>
@@ -85,14 +84,13 @@ export function BrainstormPlayer({
             >
               <span className="break-all">{idea}</span>
               {locked ? null : (
-                <button
-                  type="button"
-                  className="grid size-6 place-items-center rounded-full text-fg-muted hover:bg-surface-3 hover:text-fg"
-                  aria-label={`${s.remove} ${idea}`}
+                <IconButton
+                  size="xs"
+                  label={`${s.remove} ${idea}`}
                   onClick={() => onChange({ ideas: ideas.filter((_, j) => j !== i) })}
                 >
                   <CloseIcon />
-                </button>
+                </IconButton>
               )}
             </li>
           ))}

@@ -51,8 +51,6 @@ import {
   EmptyState,
   FormError,
   IconButton,
-  inputClass,
-  inputSize,
   PANE_GAP,
   SectionHeading,
   Tip,
@@ -66,6 +64,7 @@ import { useTargetRefresh } from "./editTarget";
 import { IntroBand, IntroEditor } from "./ItemIntro";
 import { ItemPreview, type ItemPane } from "./ItemPreview";
 import { useConfirm } from "../confirm";
+import { TextInput } from "@quiz/ui";
 
 /** The rows drag up and down only. */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
@@ -147,7 +146,7 @@ function PointsField({
   // control, the unit is beside it.
   return (
     <span className="flex items-center gap-1.5">
-      <input
+      <TextInput
         type="number"
         min={0}
         step={0.5}
@@ -159,7 +158,7 @@ function PointsField({
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
-        className={cx(inputClass, inputSize.sm, "w-16 text-right tabular-nums")}
+         size="sm" className="w-16 text-right tabular-nums"
       />
       <span className="text-xs text-fg-faint">{t("eval.questions.pointsShort")}</span>
     </span>

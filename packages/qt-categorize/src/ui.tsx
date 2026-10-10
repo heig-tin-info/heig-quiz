@@ -47,6 +47,3 @@ export const CheckIcon = ({ className = "size-3.5" }: { className?: string }) =>
   </StrokeIcon>
 );
 
-/** A round button the size of a card's line: the bin of a card or a column. */
-export const iconButtonClass =
-  "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-fg-faint transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-40";

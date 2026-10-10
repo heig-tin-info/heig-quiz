@@ -23,7 +23,17 @@ import type { EditorProps, StringOverrides } from "@quiz/core/client";
 import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import { DiagramEditor, ToolIcon, type DiagramStrings } from "@quiz/diagram/client";
 import { DIAGRAM_KINDS, emptyScene, freshCopy, isEmptyScene, type DiagramKind, type PlaceTool, type Scene } from "@quiz/diagram/server";
-import { AsideSection, buttonClass, cx, ExpandableCanvas, hint, IssueList, label, PromptField, sectionClass } from "@quiz/ui";
+import {
+  AsideSection,
+  Button,
+  cx,
+  ExpandableCanvas,
+  hint,
+  IssueList,
+  label,
+  PromptField,
+  sectionClass,
+} from "@quiz/ui";
 
 import type { DiagramConfig } from "./schema.js";
 import { diagramEditorStrings, kindHintKey, kindKey, type DiagramEditorStringKey } from "./strings.js";
@@ -164,12 +174,12 @@ export function DiagramQuestionEditor({
             <p className="text-[13px] font-medium text-fg">{s.kindChange}</p>
             <p className={hint}>{s.kindChangeBody}</p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className={buttonClass("danger", "sm")} onClick={() => setKind(pending)}>
+              <Button variant="danger" size="sm" onClick={() => setKind(pending)}>
                 {s.kindChangeConfirm}
-              </button>
-              <button type="button" className={buttonClass("secondary", "sm")} onClick={() => setPending(null)}>
+              </Button>
+              <Button size="sm" onClick={() => setPending(null)}>
                 {s.kindChangeCancel}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -197,24 +207,23 @@ export function DiagramQuestionEditor({
           strings={s}
           actions={
             config.starter === undefined || disabled ? undefined : (
-              <button type="button" className={buttonClass("ghost", "sm")} onClick={() => setStarter(undefined)}>
+              <Button variant="ghost" size="sm" onClick={() => setStarter(undefined)}>
                 {s.starterRemove}
-              </button>
+              </Button>
             )
           }
         >
           {config.starter === undefined
             ? () => (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    className={buttonClass("secondary", "sm")}
+                  <Button
+                    size="sm"
                     disabled={disabled || isEmptyScene(config.reference)}
                     // Fresh ids: the starter reaches the student, and must share none with the reference (ADR-046 §2).
                     onClick={() => setStarter(freshCopy(config.reference))}
                   >
                     {s.starterCopy}
-                  </button>
+                  </Button>
                   <span className={hint}>{s.starterCopyHint}</span>
                 </div>
               )

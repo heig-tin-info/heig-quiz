@@ -33,9 +33,8 @@ import {
   T,
   TableHead,
   cx,
-  inputClass,
-  inputSize,
 } from "./ui";
+import { TextInput } from "@quiz/ui";
 
 /** Where an MCP client connects: this origin, the API's MCP route. */
 const mcpUrl = () => `${window.location.origin}/app/api/mcp`;
@@ -57,12 +56,12 @@ export function CopyField({ label, value, mono = true }: { label: string; value:
     <div className="space-y-1">
       <p className="text-xs font-medium text-fg-muted">{label}</p>
       <div className="flex gap-2">
-        <input
+        <TextInput
           readOnly
           value={value}
           aria-label={label}
           onFocus={(e) => e.currentTarget.select()}
-          className={cx(inputClass, inputSize.md, "min-w-0 flex-1", mono && "font-mono")}
+           className={cx("min-w-0 flex-1", mono && "font-mono")}
         />
         <Button variant="secondary" onClick={copy} aria-label={`${t("tokens.copy")} — ${label}`}>
           {copied ? <Check /> : <Copy />}

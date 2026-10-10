@@ -41,8 +41,9 @@ import { useEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode
 import type { GroupSetDetail, GroupStudent } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { cx, IconButton, inputClass, inputSize, Menu, Tip, type MenuItem } from "../ui";
+import { cx, IconButton, Menu, Tip, type MenuItem } from "../ui";
 import { overMax, placeOf, stepZone, studentName, studentOf } from "./groupRules";
+import { TextInput } from "@quiz/ui";
 
 /** The dnd id of the "No group" zone; a group's zone is `g:<id>`, a student `s:<enrollment id>`. */
 const NONE = "none";
@@ -489,7 +490,7 @@ function GroupNameField({
   };
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1 py-0.5">
-      <input
+      <TextInput
         id={id}
         autoFocus
         aria-label={t("groups.group.name")}
@@ -515,7 +516,7 @@ function GroupNameField({
         onBlur={() => {
           if (!refused) void save();
         }}
-        className={cx(inputClass, inputSize.sm, "w-full font-semibold")}
+         size="sm" className="w-full font-semibold"
       />
       {refused ? (
         <p id={`${id}-error`} className="text-xs text-danger">

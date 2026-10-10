@@ -19,7 +19,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
-import { Button, cx, IconButton, inputClass, inputSize, Segmented, useLayer, Z } from "../ui";
+import { Button, cx, IconButton, Segmented, useLayer, Z } from "../ui";
+import { TextInput } from "@quiz/ui";
 
 type BlankMode = "any" | "select" | "number" | "regex";
 
@@ -245,11 +246,11 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
                   onChange={(e) => setAnswer(i, { correct: e.target.checked })}
                 />
               ) : null}
-              <input
+              <TextInput
                 autoFocus={i === 0}
                 value={answer.text}
                 aria-label={t("md.blank.answer", { n: i + 1 })}
-                className={cx(inputClass, inputSize.sm, "min-w-0 grow")}
+                 size="sm" className="min-w-0 grow"
                 onChange={(e) => setAnswer(i, { text: e.target.value })}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -311,18 +312,18 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
         <div className="flex items-end gap-2">
           <label className="flex min-w-0 grow flex-col gap-1 text-xs font-medium text-fg-muted">
             {t("md.blank.pattern")}
-            <input
+            <TextInput
               autoFocus
               value={draft.pattern}
-              className={cx(inputClass, inputSize.sm, "w-full font-mono")}
+               size="sm" className="w-full font-mono"
               onChange={(e) => patch({ pattern: e.target.value })}
             />
           </label>
           <label className="flex w-16 shrink-0 flex-col gap-1 text-xs font-medium text-fg-muted">
             {t("md.blank.flags")}
-            <input
+            <TextInput
               value={draft.flags}
-              className={cx(inputClass, inputSize.sm, "w-full font-mono")}
+               size="sm" className="w-full font-mono"
               onChange={(e) => patch({ flags: e.target.value })}
             />
           </label>
@@ -332,10 +333,10 @@ export function BlankPopover({ anchor, body, onApply, onCancel }: BlankPopoverPr
       <div className="flex items-center gap-2 border-t border-line pt-2">
         <label className="flex items-center gap-1.5 text-xs text-fg-muted">
           {t("md.blank.weight")}
-          <input
+          <TextInput
             inputMode="decimal"
             value={draft.weight}
-            className={cx(inputClass, inputSize.sm, "w-14 text-center tabular-nums")}
+             size="sm" className="w-14 text-center tabular-nums"
             onChange={(e) => patch({ weight: e.target.value })}
           />
         </label>
@@ -366,11 +367,11 @@ function NumberField({
   return (
     <label className="flex w-24 flex-col gap-1 text-xs font-medium text-fg-muted">
       {label}
-      <input
+      <TextInput
         autoFocus={autoFocus}
         inputMode="decimal"
         value={value}
-        className={cx(inputClass, inputSize.sm, "w-full tabular-nums")}
+         size="sm" className="w-full tabular-nums"
         onChange={(e) => onChange(e.target.value)}
       />
     </label>

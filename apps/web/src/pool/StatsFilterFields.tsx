@@ -2,8 +2,9 @@ import type { PoolQuestionStats } from "@quiz/contracts";
 import { QUESTION_STATS_MIN_N } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { cx, inputClass, inputSize, Spinner, Switch } from "../ui";
+import { Spinner, Switch } from "../ui";
 import type { QuestionFilters } from "./filters";
+import { TextInput } from "@quiz/ui";
 
 /**
  * The pool's statistics query as the filter sheet reads it: still loading,
@@ -28,13 +29,13 @@ function Bound({
   onChange: (next: number | null) => void;
 }) {
   return (
-    <input
+    <TextInput
       type="number"
       inputMode="numeric"
       step={1}
       min={min}
       aria-label={label}
-      className={cx(inputClass, inputSize.sm, "w-20 text-right tabular-nums")}
+       size="sm" className="w-20 text-right tabular-nums"
       value={value ?? ""}
       onChange={(e) => {
         const next = e.target.value === "" ? null : Math.round(Number(e.target.value));

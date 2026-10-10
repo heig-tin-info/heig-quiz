@@ -34,18 +34,17 @@ import { joinReference, referenceEditorView } from "./reference.js";
 import type { CodeEditorStrings } from "./strings.js";
 import {
   badge,
-  buttonClass,
-  cx,
+  Button,
   EditorSection,
   FieldCell,
   hint,
-  inputClass,
-  inputSize,
   IssueList,
   label as labelToken,
   PromptSection,
-  Segmented,
   sectionTitle,
+  Segmented,
+  Select,
+  TextInput,
 } from "@quiz/ui";
 
 /** The keys of the editor dictionary the program half reads. */
@@ -140,19 +139,19 @@ export function ProgramPromptSection({
     >
       <div className="flex flex-wrap items-end gap-4">
         <FieldCell label={s.language} htmlFor={`${ids}-language`}>
-          <select
+          <Select
             id={`${ids}-language`}
             disabled={disabled}
             value={config.language}
             onChange={(e) => patch({ language: e.target.value as CodeLanguage })}
-            className={cx(inputClass, inputSize.md, "w-52")}
+            width="w-52"
           >
             {CODE_LANGUAGES.map((lang) => (
               <option key={lang} value={lang}>
                 {lang}
               </option>
             ))}
-          </select>
+          </Select>
         </FieldCell>
       </div>
       <IssueList issues={issuesAt(issues, "language")} />
@@ -228,9 +227,9 @@ export function TemplateSection({
     setSelection(null);
   };
   const lockButton = (floating: boolean) => (
-    <button
-      type="button"
-      className={buttonClass("secondary", "sm", floating ? "absolute top-2 right-4 z-10" : "ml-auto")}
+    <Button
+      size="sm"
+      className={floating ? "absolute top-2 right-4 z-10" : "ml-auto"}
       title={unlocking ? s.unlockLines : s.lockLines}
       aria-label={unlocking ? s.unlockLines : s.lockLines}
       disabled={disabled || selection === null}
@@ -240,7 +239,7 @@ export function TemplateSection({
     >
       <LockIcon open={unlocking} />
       {unlocking ? s.unlock : s.lock}
-    </button>
+    </Button>
   );
 
   return (
@@ -398,13 +397,13 @@ export function SettingNumber({
 }): ReactNode {
   return (
     <FieldCell label={label} htmlFor={id}>
-      <input
+      <TextInput
         id={id}
         type="number"
         min={min}
         {...(step === undefined ? {} : { step })}
         {...(max === undefined ? {} : { max })}
-        className={cx(inputClass, inputSize.md, "tabular-nums")}
+        className="tabular-nums"
         disabled={disabled}
         value={value}
         onChange={(e) => onChange(Number(e.target.value) || fallback)}
@@ -491,22 +490,22 @@ export function ProgramAdvancedFields({
       </div>
       {showAction ? (
         <FieldCell label={s.action} htmlFor={`${ids}-action`}>
-          <select
+          <Select
             id={`${ids}-action`}
             disabled={disabled}
             value={config.action}
             onChange={(e) => patch({ action: e.target.value === "check" ? "check" : "run" })}
-            className={cx(inputClass, inputSize.md)}
+            
           >
             <option value="run">{s.actionRun}</option>
             <option value="check">{s.actionCheck}</option>
-          </select>
+          </Select>
         </FieldCell>
       ) : null}
       <FieldCell label={s.compileArgs} htmlFor={`${ids}-args`}>
-        <input
+        <TextInput
           id={`${ids}-args`}
-          className={cx(inputClass, inputSize.md, "font-mono")}
+          className="font-mono"
           disabled={disabled}
           value={config.compileArgs}
           onChange={(e) => patch({ compileArgs: e.target.value })}

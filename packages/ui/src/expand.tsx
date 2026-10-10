@@ -28,7 +28,8 @@ import type { ExpandProps } from "@quiz/core/client";
 
 import { StrokeIcon } from "./icon.js";
 import { useMediaQuery } from "./media.js";
-import { buttonClass, caption, label as labelClass } from "./styles.js";
+import { caption, label as labelClass } from "./styles.js";
+import { Button } from "./controls.js";
 
 /** Below this width a canvas with a preview draws in the layer only (docs/spec/04 §4.11, §4.14). */
 const WIDE_QUERY = "(min-width: 1024px)";
@@ -102,10 +103,10 @@ export function ExpandableCanvas({
           <span className="flex flex-wrap items-center gap-2">
             {actions}
             {Expand === undefined ? null : (
-              <button type="button" className={buttonClass("secondary", "sm")} onClick={() => setExpanded(true)}>
+              <Button size="sm" onClick={() => setExpanded(true)}>
                 <ExpandIcon />
                 {s.expand}
-              </button>
+              </Button>
             )}
           </span>
         )}

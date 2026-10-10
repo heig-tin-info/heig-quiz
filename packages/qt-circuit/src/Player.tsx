@@ -32,7 +32,7 @@ import { formatValue, LIBRARY, PORT_IDS, type PortId } from "./library.js";
 import { extractNets, type NetlistIssue } from "./netlist.js";
 import { biasOf, type CircuitAnswer, type CircuitStudent, type Load, type Source, type StudentStimulus } from "./schema.js";
 import { PLAYER_STRINGS, type CircuitPlayerStrings } from "./strings.js";
-import { badge, buttonClass, card, cx, ExpandableCanvas, hint, isLocked, markdown, sectionTitle } from "@quiz/ui";
+import { badge, Button, card, cx, ExpandableCanvas, hint, isLocked, markdown, sectionTitle } from "@quiz/ui";
 
 import { strip } from "./styles.js";
 
@@ -313,14 +313,14 @@ export function CircuitPlayer({
            * thing the student came for.
            */}
           {student.canSimulate && onSimulate !== undefined ? (
-            <button
-              type="button"
-              className={buttonClass("secondary", "sm", "ml-auto")}
+            <Button
+              size="sm"
+              className="ml-auto"
               disabled={locked || empty || sim.status === "running"}
               onClick={() => void simulate()}
             >
               {sim.status === "running" ? s.simulating : s.simulate}
-            </button>
+            </Button>
           ) : null}
         </div>
 

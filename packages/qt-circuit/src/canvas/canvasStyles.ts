@@ -83,11 +83,10 @@ export const inspectorTitle = "text-[13px] font-semibold text-fg";
 
 export const fieldLabel = "text-[11px] font-medium text-fg-muted";
 
-export const fieldInput =
-  "h-7 w-full rounded-field border border-line-strong bg-surface px-2 font-mono text-[12px] text-fg transition-colors focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-60";
+/** The classes added to a `TextInput size="sm"` in the inspector (the pill and the scale come from the input). */
+export const fieldInput = "w-full font-mono";
 
-export const fieldInputInvalid =
-  "h-7 w-full rounded-field border border-danger bg-surface px-2 font-mono text-[12px] text-danger transition-colors focus:outline-none focus:ring-3 focus:ring-danger/20";
+export const fieldInputInvalid = "w-full border-danger font-mono text-danger focus:border-danger focus:ring-danger/20";
 
 export const fieldError = "text-[11px] text-danger";
 

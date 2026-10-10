@@ -4,8 +4,9 @@ import { retakesOf, type EvaluationSettings, type RetakeSettings } from "@quiz/c
 import { retakeScopeFits, retakeScopeOf, type EvaluationModeName } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { Card, cx, inputClass, inputSize, Segmented, SettingRow, Switch } from "../ui";
+import { Card, Segmented, SettingRow, Switch } from "../ui";
 import type { ConfigPatch } from "./editTarget";
+import { TextInput } from "@quiz/ui";
 
 /**
  * F-EVAL-15 (ADR-025): several attempts on an exercise.
@@ -92,14 +93,14 @@ export function RetakesSetting({
           </SettingRow>
           <SettingRow title={t("eval.retakes.max")} desc={t("eval.retakes.max.desc")}>
             {/* The row's title is the label: a Field would repeat it. */}
-            <input
+            <TextInput
               aria-label={t("eval.retakes.max")}
               type="number"
               min={2}
               max={100}
               placeholder={t("eval.retakes.max.placeholder")}
               disabled={disabled}
-              className={cx(inputClass, inputSize.sm, "w-28 text-right tabular-nums")}
+               size="sm" className="w-28 text-right tabular-nums"
               value={max}
               onChange={(e) => setMax(e.target.value)}
               onBlur={commitMax}

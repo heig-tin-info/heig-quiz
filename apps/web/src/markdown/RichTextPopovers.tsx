@@ -4,11 +4,12 @@ import { useId, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
-import { Button, cx, IconButton, inputClass, inputSize, Menu, Z } from "../ui";
+import { Button, cx, IconButton, Menu, Z } from "../ui";
 import { BlankPopover } from "./BlankPopover";
 import type { Formula } from "./FormulaDialog";
 import type { HolePreview, OpenHole } from "./useClozeHole";
 import type { FormulaDialogComponent, FormulaTarget } from "./useFormulaTarget";
+import { TextInput } from "@quiz/ui";
 
 /*
  * What the rich text field opens over or beside itself: the link prompt, the
@@ -88,7 +89,7 @@ function AskBar({
       <label htmlFor={id} className="text-xs font-medium text-fg-muted">
         {label}
       </label>
-      <input
+      <TextInput
         id={id}
         autoFocus
         value={text}
@@ -102,7 +103,7 @@ function AskBar({
             onCancel();
           }
         }}
-        className={cx(inputClass, inputSize.sm, "min-w-0 flex-1 font-mono")}
+         size="sm" className="min-w-0 flex-1 font-mono"
       />
       <Button size="sm" variant="secondary" onClick={() => onSubmit(text)}>
         {apply}

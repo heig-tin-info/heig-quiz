@@ -18,23 +18,10 @@ import { HelpIcon } from "../help";
 import { useT, type TFunction } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { questionInstancesKey, solutionKey } from "../queryKeys";
-import {
-  Alert,
-  Button,
-  Card,
-  cx,
-  ErrorText,
-  Field,
-  IconButton,
-  inputClass,
-  inputSize,
-  Select,
-  Skeleton,
-  T,
-  TableHead,
-} from "../ui";
+import { Alert, Button, Card, cx, ErrorText, Field, IconButton, Select, Skeleton, T, TableHead } from "../ui";
 import { issueMessage } from "./issues";
 import { PlayedQuestion } from "./PreviewedQuestion";
+import { TextInput } from "@quiz/ui";
 
 type Row = ParametersDraft["rows"][number];
 
@@ -278,13 +265,12 @@ export function VariablesSection({
               return (
                 <li key={index} className="space-y-1">
                   <div className="grid grid-cols-[minmax(0,1fr)_2rem] gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_15rem_2rem]">
-                    <input
-                      type="text"
+                    <TextInput
                       spellCheck={false}
                       autoComplete="off"
                       aria-label={t("param.nameOf", { n: index + 1 })}
                       aria-invalid={said.length > 0 || undefined}
-                      className={cx(inputClass, inputSize.md, "w-full font-mono text-[13px]")}
+                       className="w-full font-mono text-[13px]"
                       value={row.name}
                       disabled={disabled}
                       onChange={(e) => patchRow(index, { name: e.target.value.trim() })}
@@ -299,13 +285,12 @@ export function VariablesSection({
                         <Trash2 />
                       </IconButton>
                     </span>
-                    <input
-                      type="text"
+                    <TextInput
                       spellCheck={false}
                       autoComplete="off"
                       aria-label={t("param.exprOf", { n: index + 1 })}
                       aria-invalid={said.length > 0 || undefined}
-                      className={cx(inputClass, inputSize.md, "col-span-2 w-full font-mono text-[13px] sm:col-span-1")}
+                       className="col-span-2 w-full font-mono text-[13px] sm:col-span-1"
                       value={row.expr}
                       disabled={disabled}
                       onChange={(e) => patchRow(index, { expr: e.target.value })}

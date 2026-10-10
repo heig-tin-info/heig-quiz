@@ -17,7 +17,7 @@ import { resolveStrings } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozePlayerStrings, type ClozePlayerStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { caption, cx, inputClass, inputSize, isLocked } from "@quiz/ui";
+import { caption, cx, isLocked, Select, TextInput } from "@quiz/ui";
 
 type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer, ClozeSolution> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -66,15 +66,13 @@ export function ClozePlayer({
 
     if (blank.kind === "select") {
       return (
-        <select
+        <Select
           aria-label={label}
           title={title}
-          className={cx(
-            inputClass,
-            inputSize.sm, "mx-0.5 align-baseline",
-            keyClass,
-            key !== undefined && value === "" && "font-mono !text-success",
-          )}
+          inline
+          wrapperClassName="mx-0.5 align-middle"
+          size="sm"
+          className={cx(keyClass, key !== undefined && value === "" && "font-mono !text-success")}
           value={value}
           disabled={locked}
           onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}
@@ -85,22 +83,23 @@ export function ClozePlayer({
               {option.label}
             </option>
           ))}
-        </select>
+        </Select>
       );
     }
 
     return (
-      <input
-        type="text"
+      <TextInput
         aria-label={label}
         inputMode={blank.numeric ? "decimal" : undefined}
         autoComplete="off"
         spellCheck={false}
-        size={Math.max(6, value.length + 2, (key?.length ?? 0) + 2)}
+        // Sized in characters like a native `size`, plus the pill's 2 x 12 px of padding.
+        style={{ width: `calc(${Math.max(6, value.length + 2, (key?.length ?? 0) + 2)}ch + 1.5rem)` }}
         maxLength={200}
         placeholder={key}
         title={title}
-        className={cx(inputClass, inputSize.sm, "mx-0.5 align-baseline", keyClass)}
+        size="sm"
+        className={cx("mx-0.5 align-middle", keyClass)}
         value={value}
         disabled={locked}
         onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}

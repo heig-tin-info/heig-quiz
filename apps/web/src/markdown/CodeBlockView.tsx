@@ -2,7 +2,8 @@ import type { NodeViewProps } from "@tiptap/core";
 import { NodeViewContent, NodeViewWrapper } from "@tiptap/react";
 
 import { useT } from "../i18n";
-import { cx, inputClass, inputSize } from "../ui";
+
+import { TextInput } from "@quiz/ui";
 
 /*
  * The code block of the rich editor, as a Tiptap NODE VIEW (React), for one
@@ -55,13 +56,13 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
       </pre>
       {editor.isEditable ? (
         <div className="absolute top-1.5 right-1.5" contentEditable={false}>
-          <input
+          <TextInput
             value={language}
             aria-label={t("md.code.language")}
             placeholder={t("md.code.languagePlaceholder")}
             spellCheck={false}
             autoComplete="off"
-            className={cx(inputClass, inputSize.sm, "w-24 font-mono")}
+             size="sm" className="w-24 font-mono"
             // The editor must not see what happens in this field: its own key
             // handlers would type these characters into the block.
             onMouseDown={(e) => e.stopPropagation()}

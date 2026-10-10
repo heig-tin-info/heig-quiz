@@ -11,7 +11,10 @@ import {
   inputClass,
   inputSize,
   label as fieldLabel,
+  Button as ButtonBase,
   Segmented,
+  Select as SelectBase,
+  TextInput,
   textareaClass,
   type ButtonSize,
   type ButtonVariant,
@@ -47,15 +50,10 @@ export function Button({
   loading?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      {...props}
-      disabled={props.disabled || loading}
-      className={buttonClass(variant, size, className)}
-    >
+    <ButtonBase {...props} variant={variant} size={size} disabled={props.disabled || loading} className={className}>
       {loading ? <Loader2 className="animate-spin" /> : null}
       {children}
-    </button>
+    </ButtonBase>
   );
 }
 
@@ -193,7 +191,7 @@ export function Field({
         {label}
       </FieldLabel>
       <SuffixWrap suffix={suffix} id={id} size={size}>
-        <input
+        <TextInput
           {...props}
           // Added to, never replaced by, a caller's own (`fieldErrorProps`).
           aria-describedby={
@@ -202,7 +200,8 @@ export function Field({
               .join(" ") || undefined
           }
           id={id}
-          className={cx(inputClass, inputSize[size], "w-full", suffix && controlSize[size].padRight, className)}
+          size={size}
+          className={cx("w-full", suffix && controlSize[size].padRight, className)}
         />
       </SuffixWrap>
       {description ? (
@@ -234,16 +233,9 @@ export function Select({
   const auto = useId();
   const id = props.id ?? auto;
   const control = (
-    <span className={cx("relative block", width)}>
-      <select
-        {...props}
-        id={id}
-        className={cx(inputClass, inputSize[size], "w-full appearance-none", controlSize[size].padRight, className)}
-      >
-        {children}
-      </select>
-      <ChevronDown className={cx("pointer-events-none absolute top-1/2 -translate-y-1/2 text-fg-faint", controlSize[size].icon, controlSize[size].edgeRight)} />
-    </span>
+    <SelectBase {...props} id={id} size={size} {...(width === undefined ? {} : { width })} className={className}>
+      {children}
+    </SelectBase>
   );
   if (!label) return control;
   // The width sits on the control; the label column takes it from there.
@@ -301,11 +293,7 @@ export function SearchInput({
       <Search
         className={cx("pointer-events-none absolute top-1/2 -translate-y-1/2 text-fg-faint", scale.icon, scale.iconLeft)}
       />
-      <input
-        type="search"
-        {...props}
-        className={cx(inputClass, inputSize[size], scale.iconPad, "w-full")}
-      />
+      <TextInput type="search" {...props} size={size} className={cx(scale.iconPad, "w-full")} />
     </label>
   );
 }

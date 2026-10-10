@@ -3,8 +3,9 @@ import { Keyboard } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { useT } from "../i18n";
-import { areaClass, Button, cx, inputClass, inputSize, Modal, Segmented, Spinner } from "../ui";
+import { areaClass, Button, cx, Modal, Segmented, Spinner } from "../ui";
 import "./formula.css";
+import { TextInput } from "@quiz/ui";
 
 /*
  * The one surface a formula is written on (teacher feedback, round 2: "the Σ
@@ -199,7 +200,7 @@ export function FormulaDialog({
           <label htmlFor={latexId} className="text-[13px] font-medium text-fg">
             {t("md.latex")}
           </label>
-          <input
+          <TextInput
             id={latexId}
             autoFocus
             value={latex}
@@ -211,7 +212,7 @@ export function FormulaDialog({
               e.preventDefault();
               submit();
             }}
-            className={cx(inputClass, inputSize.md, "w-full font-mono")}
+             className="w-full font-mono"
           />
         </div>
 

@@ -9,7 +9,7 @@
  */
 import type { PlayerProps, StringOverrides } from "@quiz/core/client";
 import { plural, resolveStrings } from "@quiz/core/client";
-import { buttonClass, caption, cx, GripIcon, isLocked, markdown } from "@quiz/ui";
+import { Button, caption, cx, GripIcon, isLocked, markdown } from "@quiz/ui";
 
 import { Board, OverlayCard } from "./Board.js";
 import { moveCard, normalizePlacement, trayOf } from "./placement.js";
@@ -116,9 +116,9 @@ export function CategorizePlayer({
 
       {placedAny && !locked ? (
         <div>
-          <button type="button" className={buttonClass("ghost", "sm")} onClick={() => onChange({ columns: {} })}>
+          <Button variant="ghost" size="sm" onClick={() => onChange({ columns: {} })}>
             {s.reset}
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>

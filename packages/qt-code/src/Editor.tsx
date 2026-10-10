@@ -35,8 +35,6 @@ import {
   EditorSection,
   FieldCell,
   hint,
-  inputClass,
-  inputSize,
   IssueList,
   label as labelToken,
   NumberField,
@@ -45,12 +43,14 @@ import {
   RowHead,
   RowList,
   RowListHeader,
+  Select,
   setting,
   textareaClass,
+  TextInput,
   TryPanel,
+  type TryState as UiTryState,
   tryStatusOf,
   useReferenceTry,
-  type TryState as UiTryState,
 } from "@quiz/ui";
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
@@ -436,9 +436,10 @@ function CaseFields({
             htmlFor={`${ids}-expected-${i}`}
             className="min-w-48 flex-1"
           >
-            <input
+            <TextInput
               id={`${ids}-expected-${i}`}
-              className={cx(inputClass, inputSize.sm, "w-full font-mono")}
+              size="sm"
+              className="w-full font-mono"
               aria-label={`${s.expected} ${i + 1}`}
               disabled={disabled}
               value={testCase.expected}
@@ -519,7 +520,7 @@ function AdvancedFields({
         onChange={(ignoreCase) => patchCompare({ ignoreCase })}
       />
       <FieldCell label={s.numeric} htmlFor={`${ids}-numeric`}>
-        <select
+        <Select
           id={`${ids}-numeric`}
           disabled={disabled}
           value={compare.numeric === null ? "off" : compare.numeric.mode}
@@ -534,21 +535,21 @@ function AdvancedFields({
                     },
             })
           }
-          className={cx(inputClass, inputSize.md)}
+          
         >
           <option value="off">{s.numericOff}</option>
           <option value="abs">{s.numericAbs}</option>
           <option value="rel">{s.numericRel}</option>
-        </select>
+        </Select>
       </FieldCell>
       {compare.numeric === null ? null : (
         <FieldCell label={s.epsilon} htmlFor={`${ids}-epsilon`}>
-          <input
+          <TextInput
             id={`${ids}-epsilon`}
             type="number"
             min={0}
             step="any"
-            className={cx(inputClass, inputSize.md, "tabular-nums")}
+            className="tabular-nums"
             disabled={disabled}
             value={compare.numeric.epsilon}
             onChange={(e) =>

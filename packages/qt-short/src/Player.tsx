@@ -26,7 +26,7 @@ import {
   type ShortStudent,
 } from "./schema.js";
 import { shortPlayerStrings, type ShortPlayerStringKey } from "./strings.js";
-import { caption, cx, inputClass, inputSize, isLocked, label, markdown, Verdict } from "@quiz/ui";
+import { caption, isLocked, label, markdown, TextInput, Verdict } from "@quiz/ui";
 
 type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer, ShortSolution> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -110,12 +110,12 @@ export function ShortPlayer({
         <label className={label} htmlFor="short-answer">
           {s.label}
         </label>
-        <input
+        <TextInput
           id="short-answer"
           {...fieldAttributes(student.kind, constraints)}
           autoComplete="off"
           spellCheck={false}
-          className={cx(inputClass, inputSize.md, "w-full max-w-md")}
+          className="w-full max-w-md"
           placeholder={student.placeholder ?? ""}
           value={answer?.text ?? ""}
           disabled={locked}

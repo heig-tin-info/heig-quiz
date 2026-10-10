@@ -24,8 +24,6 @@ import {
   ErrorText,
   Field,
   IconButton,
-  inputClass,
-  inputSize,
   PageHeader,
   PersonAvatar,
   QueryError,
@@ -47,6 +45,7 @@ import { KioskSection } from "./AdminKiosk";
 import { UsersSection } from "./AdminUsers";
 import { adminTeachersKey } from "./queryKeys";
 import { useSearchParam } from "./router";
+import { TextInput } from "@quiz/ui";
 
 type SortKey = "email" | "name" | "lastLoginAt" | "courses" | "grantedAt";
 
@@ -295,14 +294,14 @@ function WorkspaceGrant({ id, email, grant }: { id: string; email: string; grant
         label={t("admin.workspace.enable", { email })}
         onChange={(enabled) => save.mutate({ enabled })}
       />
-      <input
+      <TextInput
         type="number"
         min={0}
         max={MAX_ACTIVE_SESSIONS_LIMIT}
         inputMode="numeric"
         aria-label={t("admin.workspace.quota", { email })}
         title={t("admin.workspace.quotaHint")}
-        className={cx(inputClass, inputSize.sm, "w-16 text-right tabular-nums")}
+         size="sm" className="w-16 text-right tabular-nums"
         value={quota}
         disabled={save.isPending}
         onChange={(e) => setQuota(e.target.value)}

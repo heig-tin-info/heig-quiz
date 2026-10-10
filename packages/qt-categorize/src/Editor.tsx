@@ -23,15 +23,14 @@ import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/cl
 import { newId } from "@quiz/core/id";
 import {
   AsideSection,
-  buttonClass,
+  Button,
   CheckboxField,
   CloseIcon,
   cx,
   gripClass,
   GripIcon,
   hint,
-  inputClass,
-  inputSize,
+  IconButton,
   IssueList,
   label,
   markdown,
@@ -41,6 +40,7 @@ import {
   sectionTitle,
   Segmented,
   setting,
+  TextInput,
 } from "@quiz/ui";
 
 import { Board, OverlayCard, type CardSlot } from "./Board.js";
@@ -55,7 +55,7 @@ import {
   type CategorizeQuestionPolicy,
 } from "./schema.js";
 import { categorizeEditorStrings, type CategorizeEditorStringKey } from "./strings.js";
-import { iconButtonClass, Rank } from "./ui.js";
+import { Rank } from "./ui.js";
 
 type CategorizeEditorProps = EditorProps<CategorizeConfig> & {
   strings?: StringOverrides<CategorizeEditorStringKey>;
@@ -227,8 +227,8 @@ export function CategorizeEditor({
                 addCard();
               }}
             >
-              <input
-                className={cx(inputClass, inputSize.md, "min-w-0 flex-1")}
+              <TextInput
+                className="min-w-0 flex-1"
                 placeholder={s.newCard}
                 aria-label={s.newCard}
                 value={draft}
@@ -236,13 +236,13 @@ export function CategorizeEditor({
                 disabled={locked || config.cards.length >= CATEGORIZE_MAX_CARDS}
                 onChange={(e) => setDraft(e.target.value)}
               />
-              <button
+              <Button
                 type="submit"
-                className={buttonClass("secondary", "md")}
+                
                 disabled={locked || draft.trim() === ""}
               >
                 {s.addCard}
-              </button>
+              </Button>
             </form>
           }
           columnHead={(column, count) => (
@@ -351,16 +351,16 @@ function ColumnHeader({
         onChange={(e) => onRename(e.target.value)}
       />
       <span className="text-xs tabular-nums text-fg-faint">{count}</span>
-      <button
-        type="button"
-        className={cx(iconButtonClass, "hover:bg-danger-soft hover:text-danger")}
-        aria-label={`${s.removeColumn} ${number}`}
+      <IconButton
+        size="xs"
+        label={`${s.removeColumn} ${number}`}
         title={s.removeColumn}
+        className="hover:bg-danger-soft hover:text-danger"
         disabled={locked || !removable}
         onClick={onRemove}
       >
         <CloseIcon />
-      </button>
+      </IconButton>
     </>
   );
 }
@@ -426,8 +426,9 @@ function CardField({
           className="min-w-0 flex-1"
         />
       ) : (
-        <input
-          className={cx(inputClass, inputSize.sm, "min-w-24 flex-1 text-[13px]")}
+        <TextInput
+          size="sm"
+          className="min-w-24 flex-1 text-[13px]"
           aria-label={`${s.cardText} ${number}`}
           aria-invalid={invalid || undefined}
           value={value}
@@ -436,16 +437,16 @@ function CardField({
           onChange={(e) => onText(e.target.value)}
         />
       )}
-      <button
-        type="button"
-        className={cx(iconButtonClass, "hover:bg-danger-soft hover:text-danger")}
-        aria-label={`${s.removeCard} ${number}`}
+      <IconButton
+        size="xs"
+        label={`${s.removeCard} ${number}`}
         title={s.removeCard}
+        className="hover:bg-danger-soft hover:text-danger"
         disabled={locked}
         onClick={onRemove}
       >
         <CloseIcon />
-      </button>
+      </IconButton>
     </div>
   );
 }
