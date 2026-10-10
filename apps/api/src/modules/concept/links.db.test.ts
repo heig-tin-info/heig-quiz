@@ -69,7 +69,6 @@ async function drop(tag: string, reason: "organisational" | "task_kind" | "noise
     poolId,
     tag,
     dropReason: reason,
-    decidedAt: now,
   });
 }
 
