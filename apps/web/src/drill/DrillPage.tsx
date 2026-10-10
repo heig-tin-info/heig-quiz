@@ -27,6 +27,7 @@ import type { Route } from "../router";
 import { Button, Card, EmptyState, isoDateParts, PageHeader, QueryError, Skeleton } from "../ui";
 import { useDrillClassrooms, useDrillDevice, useDrillSession } from "./api";
 import { DrillCalibration } from "./Confidence";
+import { ConceptMastery } from "./ConceptMastery";
 import { DrillClassrooms } from "./DrillClassrooms";
 import { DrillRun, DrillSummary, type DrillOutcome } from "./DrillRun";
 import { sessionCourses, sessionLine } from "./format";
@@ -112,6 +113,8 @@ export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
     <div className="space-y-8">
       <PageHeader title={t("nav.drill")} description={t("drill.subtitle")} />
       {day()}
+      {/* ADR-098: a read, no action. One section per classroom; a course without concepts draws none. */}
+      {hasRooms ? rooms.data!.map((room) => <ConceptMastery key={room.classroomId} room={room} />) : null}
       {hasRooms ? <DrillClassrooms rooms={rooms.data!} /> : null}
       {/* Secondary, after the switches: what the statements on the cards add up to (ADR-085 §8). */}
       {hasRooms ? <DrillCalibration /> : null}

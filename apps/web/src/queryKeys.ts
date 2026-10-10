@@ -348,6 +348,8 @@ export const drillClassroomsKey = [...drillRootKey, "classrooms"] as const;
 /** Today's drill session, for one device class (its reference times are that class's). */
 export const drillSessionKey = (device: string) => [...drillRootKey, "session", device] as const;
 /** The student's own calibration (ADR-085 §8): a finished session moves it. */
+/** The student's own concept mastery in one classroom (ADR-098). */
+export const drillMasteryKey = (classroomId: string) => [...drillRootKey, "mastery", classroomId] as const;
 export const drillCalibrationKey = [...drillRootKey, "calibration"] as const;
 /**
  * One card served (`POST /drill/cards/:id/serve`). Outside the `student`

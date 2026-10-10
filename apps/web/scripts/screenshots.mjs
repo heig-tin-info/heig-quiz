@@ -753,6 +753,8 @@ const scenes = [
   { name: "drill-done", role: "student", path: "/drill", act: drillWalk },
   // ADR-085 §8: the calibration under the classrooms (also on `drill-today`, full page).
   { name: "drill-calibration", role: "student", path: "/drill", fold: true, act: (p) => p.getByRole("heading", { name: /^(How sure, how right|Certitude et réussite)$/ }).scrollIntoViewIfNeeded() },
+  // ADR-098: the student's level on the course's concepts, one section per classroom.
+  { name: "drill-concepts", role: "student", path: "/drill", fold: true, act: (p) => p.getByRole("heading", { name: /^(Concepts|Notions)$/ }).first().scrollIntoViewIfNeeded() },
   { name: "drill-empty", role: "student", path: "/drill?reviewed=1" },
   { name: "drill-off", role: "student", path: "/drill?empty=1" },
   { name: "drill-error", role: "student", path: "/drill?fail=1", settle: 2500 },

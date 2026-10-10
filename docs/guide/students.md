@@ -51,6 +51,15 @@ A row you can open has an arrow: it leads to your results page. On a phone, the 
   <figcaption>Grades: your finished work, classroom by classroom.</figcaption>
 </figure>
 
+## Your concepts in the drill
+
+On the **Drill** page, a **Concepts** section appears for each classroom whose course lists concepts. Each row names a concept, your level on it and the number of cards it is based on:
+
+- **To work on**, **Getting there** or **Solid**: how well you are likely to remember that concept today, from the drill cards you reviewed on it.
+- **No data yet**: you have reviewed fewer than 5 cards on that concept, so no level is shown.
+
+The levels are as of today and fade when a concept is not reviewed for a while, so a level can drop without any new mistake. Only questions whose answer you may already read count. Only you see these levels: there is no ranking and no comparison with your class, and the section has no button of its own; the day's session is how you practise.
+
 ## The waiting room
 
 An in-class evaluation usually opens on a waiting room. You enter it from your home and wait; your teacher starts the evaluation for everybody at once, and your screen switches to the first question by itself.

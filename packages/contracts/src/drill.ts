@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 
-import { DRILL_CORRECTNESSES, DRILL_DEVICE_CLASSES } from "@quiz/domain";
+import { DRILL_CORRECTNESSES, DRILL_DEVICE_CLASSES, DRILL_LEVELS } from "@quiz/domain";
 
 import { AnswerCoordinates } from "./common.js";
 import { ConceptRef } from "./concept.js";
@@ -253,6 +253,41 @@ export const DrillClassroomMastery = z.object({
     .nullable(),
 });
 export type DrillClassroomMastery = z.infer<typeof DrillClassroomMastery>;
+
+// --- The student's own concept mastery (ADR-098, #599 step 9b) ---------------
+
+/** The three bands of a student's level on a concept; `null` is "No data yet". */
+export const DrillLevel = z.enum(DRILL_LEVELS);
+export type DrillLevel = z.infer<typeof DrillLevel>;
+
+/**
+ * One course concept as a student reads it: the label in their language and
+ * the qualifier, nothing of the concept's status, aliases or relations.
+ */
+export const StudentConceptRef = ConceptRef.pick({ id: true, label: true, qualifier: true });
+export type StudentConceptRef = z.infer<typeof StudentConceptRef>;
+
+/**
+ * `GET /student/classrooms/:id/drill/mastery` (ADR-098): the caller's own
+ * level on each VALIDATED concept their course declares, in the course's
+ * order of concepts (label order), never ranked. `level` is a band, or
+ * `null` below five reviewed cards ("No data yet"); `cards` is the number of
+ * reviewed cards the level rests on. The mean retrievability itself, a
+ * question, a card, a date and any other concept never leave the server.
+ * `declared` is false (and `concepts` empty) when the course shows no
+ * concept, or the classroom's drill is off: the page then shows nothing.
+ */
+export const StudentConceptMastery = z.object({
+  declared: z.boolean(),
+  concepts: z.array(
+    z.object({
+      concept: StudentConceptRef,
+      level: DrillLevel.nullable(),
+      cards: z.number().int(),
+    }),
+  ),
+});
+export type StudentConceptMastery = z.infer<typeof StudentConceptMastery>;
 
 // --- Confidence (ADR-085 §8, part 2 of issue #453) ---------------------------
 

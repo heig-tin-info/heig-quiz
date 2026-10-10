@@ -11,7 +11,7 @@
  * `staffAccess` first; and the reads of the teacher's view — each
  * student's activity, the weekly progression, the mastery per concept, the
  * confidence per question (ADR-085 §8, aggregated only). The student also
- * reads their own calibration.
+ * reads their own calibration and their own concept mastery (ADR-098).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -33,7 +33,7 @@ import {
 
 import { tracer } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
-import { accessibleClassroom, loadEvaluation, teacherGuard } from "../guards.js";
+import { accessibleClassroom, callerOf, loadEvaluation, readableClassroom, teacherGuard } from "../guards.js";
 import { invalid, notFound, readerLang, studentRoute, teacherRoute } from "../http.js";
 import { drillAllowed, setAllowDrill, type EvaluationRecord } from "../evaluation/service.js";
 import { setClassroomDrill, setDrillOptOut } from "../org/service.js";
@@ -94,6 +94,23 @@ export async function drillPlugin(app: FastifyInstance) {
       if (!set) return notFound(reply);
       return { ...room, optedOutAt: isoOrNull(set.optedOutAt) } satisfies DrillClassroom;
     }),
+  );
+
+  /**
+   * ADR-098: the caller's own level on each concept their course declares.
+   * The classroom is loaded through `readableClassroom` with the STUDENT
+   * payload forced, so a teacher in the student view and an impersonation
+   * session read their own / the impersonated seat; a `seb` or `kiosk`
+   * session and anyone off the classroom get the 404 of a missing one.
+   */
+  app.get(
+    "/app/api/student/classrooms/:id/drill/mastery",
+    { preHandler: requireSession },
+    student(
+      { params: IdParam, load: (req, reply, p) => readableClassroom(app, req, reply, p, { studentView: true }) },
+      ({ req, now, scope }) =>
+        service.studentConceptMastery(app.db, scope.room, callerOf(req).id, now, readerLang(req)),
+    ),
   );
 
   /** The question of a card, through `studentView` (invariant 4), with a new seed. */

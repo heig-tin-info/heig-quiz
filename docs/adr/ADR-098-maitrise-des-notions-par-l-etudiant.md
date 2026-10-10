@@ -120,3 +120,22 @@ design (ADR-041 §6, §11). And FSRS retrievability decays between reviews.
 
 None for the product owner. Two choices were settled by the author and can change without touching
 the rules: the band cut-offs of §3 and the section's place on the drill page (§10).
+
+## As built (2026-10-11, #599 step 9b)
+
+- The exit is `studentConceptMastery` (`apps/api/src/modules/drill/studentMastery.ts`) behind
+  `GET /app/api/student/classrooms/:id/drill/mastery`, loaded through `readableClassroom` with the
+  student payload forced. The caller's own user id filters the cards. The answer is
+  `{ declared, concepts: [{ concept: { id, label, qualifier }, level: "work" | "getting" | "solid" | null, cards }] }`
+  (`StudentConceptMastery`, `packages/contracts/src/drill.ts`).
+- The rule is pure, in `packages/domain/src/drillLevel.ts`: `drillLevel` (the cut-offs
+  `DRILL_LEVEL_GETTING_FROM` 0.7 and `DRILL_LEVEL_SOLID_FROM` 0.9) and `studentConceptLevels`, which
+  rolls the cards up with `drillMastery`. `DRILL_LEVEL_MIN_CARDS` is `DRILL_CALIBRATION_MIN_N`, so
+  the 5 of §2 is the calibration's constant, not a second one.
+- A classroom whose drill is off or archived answers `declared: false` like a course without a
+  validated concept; the page draws nothing in both cases. The rows follow the label order of the
+  course's concepts (the same order as the teacher's list).
+- The section is a component of the drill page (`apps/web/src/drill/ConceptMastery.tsx`), one per
+  listed classroom, between the day's card and the classroom switches.
+- The leak test is `drill/studentMastery.db.test.ts`. Broader relations (step 7c) reach the exit
+  through `coverage` with no change here.
