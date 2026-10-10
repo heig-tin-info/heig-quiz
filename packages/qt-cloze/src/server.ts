@@ -11,7 +11,7 @@ import {
   type TallyEntry,
 } from "@quiz/core/server";
 import { clozeStudentTemplate, describeBlank, parseCloze, selectOptionOrder } from "@quiz/domain/cloze";
-import { PATTERN_PROBLEM_KEY, patternProblem } from "@quiz/domain/short";
+import { CONFIG_TOO_COMPLEX_KEY, configPatternProblems, PATTERN_PROBLEM_KEY } from "@quiz/domain/regex";
 import { toCanonical } from "./canonical.js";
 import { gradeClozeAnswer } from "./grade.js";
 import {
@@ -162,19 +162,35 @@ export const clozeServer: QuestionTypeServer<
   grade: (config, answer, ctx) => gradeClozeAnswer(config, answer, ctx.itemPoints),
 
   /**
-   * A regex blank RE2 refuses (ADR-099), one issue per blank. Here and not in
-   * the schema: the schema is every read's, and a version published under
-   * JavaScript's engine stays readable, that blank never matching. The schema
-   * has already refused a text past {@link CLOZE_MAX_BLANKS}; the slice keeps
-   * the compilations bounded whoever calls.
+   * The regex blanks RE2 refuses (ADR-099): first all of them together
+   * against the build budget of one question, read on the text, then one
+   * issue per blank. Here and not in the schema: the schema is every read's,
+   * and a version published under JavaScript's engine stays readable, that
+   * blank never matching. The schema has already refused a text past
+   * {@link CLOZE_MAX_BLANKS}; the slice keeps the work bounded whoever calls.
    */
-  publicationIssues: (config) =>
-    parseCloze(config.text)
+  publicationIssues(config) {
+    const regexes = parseCloze(config.text)
       .blanks.slice(0, CLOZE_MAX_BLANKS)
-      .flatMap((blank) => {
-        const problem = blank.kind === "regex" ? patternProblem(blank.pattern, blank.flags) : null;
-        return problem === null ? [] : [{ path: ["text"], message: PATTERN_PROBLEM_KEY[problem] }];
-      }),
+      .flatMap((blank) => (blank.kind === "regex" ? [blank] : []));
+    const problems = configPatternProblems(regexes);
+    if (problems === "too_costly") return [{ path: ["text"], message: CONFIG_TOO_COMPLEX_KEY }];
+    return problems.flatMap((problem) => (problem ? [{ path: ["text"], message: PATTERN_PROBLEM_KEY[problem] }] : []));
+  },
+
+  /**
+   * ADR-056 §10, as for `short`: a parameterized question's key is a number.
+   * A `[[…]]` inside a regex blank would make every student's instance a
+   * pattern of its own — one more build per student, and a text compared
+   * with a formatted number. The number blank (`{{#[[x]]}}`) is the way.
+   */
+  parameterIssues(template) {
+    const text = (template as { text?: unknown } | null)?.text;
+    if (typeof text !== "string") return [];
+    return parseCloze(text).blanks.some((blank) => blank.kind === "regex" && blank.pattern.includes("[["))
+      ? [{ path: ["text"], message: "cloze.computed_regex_key" }]
+      : [];
+  },
 
   /**
    * The live grid (F-DASH-02): the blanks in order, joined by " · ".

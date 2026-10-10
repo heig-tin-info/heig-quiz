@@ -15,17 +15,6 @@
  */
 import { DEFAULT_REGEX_FLAGS, MAX_INPUT_LENGTH, testPattern } from "./regex.js";
 
-export {
-  ALLOWED_REGEX_FLAGS,
-  DEFAULT_REGEX_FLAGS,
-  MAX_INPUT_LENGTH,
-  MAX_PATTERN_LENGTH,
-  MAX_PROGRAM_SIZE,
-  PATTERN_PROBLEM_KEY,
-  patternProblem,
-  type PatternProblem,
-} from "./regex.js";
-
 export type ToleranceMode = "abs" | "rel";
 
 export type ShortMatcher =

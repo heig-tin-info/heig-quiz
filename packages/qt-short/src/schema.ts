@@ -22,7 +22,7 @@
  * the schema reads as the number it spells. A v2 config IS a v3 config.
  */
 import { IDENTIFIER_SOURCE } from "@quiz/domain";
-import { ALLOWED_REGEX_FLAGS, DEFAULT_REGEX_FLAGS, MAX_PATTERN_LENGTH } from "@quiz/domain/short";
+import { ALLOWED_REGEX_FLAGS, DEFAULT_REGEX_FLAGS, MAX_PATTERN_LENGTH } from "@quiz/domain/regex";
 import { z } from "zod";
 
 export const SHORT_CONFIG_VERSION = 3;

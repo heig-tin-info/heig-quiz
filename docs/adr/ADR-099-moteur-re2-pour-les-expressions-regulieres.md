@@ -22,8 +22,11 @@ input does not help an engine that is exponential in it.
 Three further costs showed up once the engine was linear in the input:
 the program itself (`(.?){999}` is 4 000 instructions, each walked per input
 character), the build (under `i`, a range such as `[Ā-\u{10FFFF}]` is folded
-code point by code point, 35 ms a copy), and the memory a compiled program
-keeps (a written-out `\pL` holds some 1 400 ranges).
+code point by code point, 35 ms a copy; each `\p{Ll}` merges its table with
+the folding table, 0.2 ms), the memory a compiled program keeps (a written-out
+`\pL` holds some 1 400 ranges, and re2js's one-pass matcher copies a class
+into every instruction that tests it), and the sum over one question: fifty
+blanks, each acceptable alone, built on every draft save.
 
 ## Decision
 
@@ -34,13 +37,26 @@ keeps (a written-out `\pL` holds some 1 400 ranges).
    Flags `ims` map to RE2's inline flags, `u` is RE2's default; the full
    match stays `^(?:pattern)$`.
 2. **Bounds, each checked before the next costs anything:** D10's limits; a
-   static estimate read on the pattern's text (program size, at most twice
-   the bound below, and at most 2 000 code points folded one by one); the
-   compiled program at most 500 instructions; its weight in memory at most
-   about 1 MB. Compiled patterns and refusals are cached, least recently used
-   first out once the weights pass about 48 MB. The weight reads re2js's
-   program (pinned version, shape asserted by a test).
-3. **Where the refusal applies.** A pattern RE2 refuses is a publication
+   static estimate read on the pattern's text — program size at most twice
+   the bound below, at most 2 000 code points folded one by one, at most ten
+   Unicode property escapes written and a hundred copies of them made by
+   repetitions — so the slowest pattern accepted builds in about 2 ms; the
+   compiled program at most 500 instructions; its weight in memory (its
+   instructions and class runes, and those of the one-pass matcher, which is
+   dropped when it alone would pass the bound) at most 250 kB. Compiled
+   patterns and refusals are cached, least recently used first out once the
+   weights pass 48 MB; the weights are calibrated so that a cache full of the
+   heaviest accepted families holds about half of that. The weight reads
+   re2js's program (pinned version, shape asserted by a test).
+3. **One question's budget.** Publication first sums the estimated build
+   time of all the patterns of one question (its matchers, its blanks) and
+   refuses past 25 ms (`regex.config_too_complex`), building none of them.
+4. **No computed regex.** A cloze regex blank of a parameterized question
+   may not hold a `[[…]]` reference (`cloze.computed_regex_key`), as a
+   `short` text or regex key may not (ADR-056 §10, `short.computed_text_key`):
+   every student's instance would be a pattern of its own, built cold at the
+   first grade. That gap predates this record.
+5. **Where the refusal applies.** A pattern RE2 refuses is a publication
    issue (the types' `publicationIssues`, also returned with a draft's issues
    and checked by the MCP tools before they publish), with one key per reason
    shared by both types: `regex.invalid`, `regex.invalid_flags`,
@@ -59,7 +75,13 @@ keeps (a written-out `\pL` holds some 1 400 ranges).
   teacher publishes a fixed version; an evaluation that froze the old version
   keeps it. The audit command is how the product owner finds them first.
 - A rare legitimate pattern is refused as too complex (a CJK range under `i`,
-  `.{0,300}`); the teacher drops the flag or narrows the repetition.
+  `.{0,300}`, eleven Unicode classes); the teacher drops the flag or narrows
+  the repetition.
+- The residual cost is the cold build: about 2 ms for the slowest pattern,
+  25 ms for the costliest question, paid once per process and per pattern
+  (after a restart, or when a question's patterns change), and a question's
+  compiled patterns (at most 12.5 MB) fit the cache four times over, so
+  grading one question never evicts its own.
 - The browser never compiles a pattern (the parser and the schemas do not):
   re2js stays out of the web bundle, and the editor shows the server's
   issues.

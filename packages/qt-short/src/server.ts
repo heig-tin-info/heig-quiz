@@ -5,7 +5,8 @@
  */
 import { ConfigMigrationError, tallyKeys, type ParameterSample, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
 import { formatStep } from "@quiz/domain";
-import { describeMatcher, PATTERN_PROBLEM_KEY, patternProblem } from "@quiz/domain/short";
+import { CONFIG_TOO_COMPLEX_KEY, configPatternProblems, PATTERN_PROBLEM_KEY } from "@quiz/domain/regex";
+import { describeMatcher } from "@quiz/domain/short";
 import { toCanonical } from "./canonical.js";
 import { shortGenerator } from "./generate.js";
 import { gradeShort } from "./grade.js";
@@ -138,6 +139,20 @@ function stamped(config: unknown): ShortConfig {
   return { ...(config as object), configVersion: SHORT_CONFIG_VERSION } as ShortConfig;
 }
 
+/**
+ * The regex matchers RE2 refuses (ADR-099): first all of them together
+ * against the build budget of one question, read on the text, then each.
+ */
+function regexIssues(config: ShortConfig): PublicationIssue[] {
+  const regexes = config.matchers.flatMap((matcher, index) => (matcher.kind === "regex" ? [{ ...matcher, index }] : []));
+  const problems = configPatternProblems(regexes);
+  if (problems === "too_costly") return [{ path: ["matchers"], message: CONFIG_TOO_COMPLEX_KEY }];
+  return regexes.flatMap((matcher, i) => {
+    const problem = problems[i];
+    return problem ? [{ path: ["matchers", matcher.index, "pattern"], message: PATTERN_PROBLEM_KEY[problem] }] : [];
+  });
+}
+
 export const shortServer: QuestionTypeServer<
   ShortConfig,
   ShortAnswer,
@@ -217,13 +232,9 @@ export const shortServer: QuestionTypeServer<
    * A regex RE2 refuses is refused here too, and only here (ADR-099): an
    * old version holding one stays readable, the matcher never matching.
    */
-  publicationIssues: (config) =>
-    config.matchers.flatMap((matcher, index) => {
+  publicationIssues: (config) => [
+    ...config.matchers.flatMap((matcher, index): PublicationIssue[] => {
       if (matcher.kind === "llm") return [{ path: ["matchers", index], message: "short.llm_not_available" }];
-      if (matcher.kind === "regex") {
-        const problem = patternProblem(matcher.pattern, matcher.flags);
-        return problem === null ? [] : [{ path: ["matchers", index, "pattern"], message: PATTERN_PROBLEM_KEY[problem] }];
-      }
       if (matcher.kind !== "number") return [];
       // A `[[…]]` left in a key: only a question without variables gets here
       // with one (a parameterized one is checked on its instances), and
@@ -232,6 +243,8 @@ export const shortServer: QuestionTypeServer<
         isReference(matcher[field]) ? [{ path: ["matchers", index, field], message: "short.unresolved_reference" }] : [],
       );
     }),
+    ...regexIssues(config),
+  ],
 
   /**
    * ADR-056 §10: a parameterized question's key is a NUMBER. A computed

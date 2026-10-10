@@ -2839,6 +2839,10 @@ export const en = {
   "issue.regex.unsupported":
     "This regular expression uses JavaScript-only syntax (backreferences such as \\1, lookaround such as (?=…) or (?<=…), \\u escapes), which grading does not support: patterns follow the RE2 syntax.",
   "issue.regex.too_complex": "This regular expression is too complex: reduce its repetitions or its character ranges.",
+  "issue.regex.config_too_complex":
+    "Together, the regular expressions of this question are too complex: simplify some of them, starting with their Unicode classes (\\p{…}).",
+  "issue.cloze.computed_regex_key":
+    "A regular expression blank cannot hold a [[…]] reference: give the computed value to a number blank ({{#[[x]]}}).",
   "issue.short.integer_expected": "This question only takes whole numbers.",
   "issue.short.length_range": "The maximum length is below the minimum length.",
   "issue.short.number_range": "The maximum is below the minimum.",

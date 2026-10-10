@@ -27,6 +27,8 @@ const KNOWN: Record<string, keyof Dict> = {
   "regex.invalid_flags": "issue.regex.invalid_flags",
   "regex.unsupported": "issue.regex.unsupported",
   "regex.too_complex": "issue.regex.too_complex",
+  "regex.config_too_complex": "issue.regex.config_too_complex",
+  "cloze.computed_regex_key": "issue.cloze.computed_regex_key",
   "short.integer_expected": "issue.short.integer_expected",
   "short.length_range": "issue.short.length_range",
   "short.number_range": "issue.short.number_range",

@@ -15,7 +15,7 @@
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { parseCloze } from "@quiz/domain/cloze";
-import { DEFAULT_REGEX_FLAGS, patternProblem, type PatternProblem } from "@quiz/domain/short";
+import { DEFAULT_REGEX_FLAGS, patternProblem, type PatternProblem } from "@quiz/domain/regex";
 
 import type { Db } from "../db/client.js";
 import { pools, questions, questionVersions } from "../db/schema.js";

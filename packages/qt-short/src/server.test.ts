@@ -66,6 +66,18 @@ describe("the contract", () => {
     expect(issues("galil[ée]e")).toEqual([]);
   });
 
+  it("refuses matchers that together would cost too much to build, building none (ADR-099)", () => {
+    const costly = Array.from({ length: 20 }, (_, i) => ({
+      kind: "regex" as const,
+      pattern: `${"\\p{Ll}".repeat(10)}${i}`,
+      flags: "i",
+      points: 1,
+    }));
+    expect(shortServer.publicationIssues!(ShortConfigSchema.parse(config({ matchers: costly })))).toEqual([
+      { path: ["matchers"], message: "regex.config_too_complex" },
+    ]);
+  });
+
   it("refuses a [[…]] reference left in a number key, where nothing will replace it (ADR-056 §4)", () => {
     const template = ShortConfigSchema.parse(
       config({

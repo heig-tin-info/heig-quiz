@@ -3,8 +3,6 @@ import {
   applyTextOptions,
   describeMatcher,
   foldCase,
-  MAX_INPUT_LENGTH,
-  MAX_PATTERN_LENGTH,
   matchDate,
   matchExact,
   matchNumber,
@@ -16,10 +14,10 @@ import {
   parseDateInput,
   parseNumericInput,
   parseTimeInput,
-  patternProblem,
   withinTolerance,
   type ShortMatcher,
 } from "./short.js";
+import { MAX_INPUT_LENGTH, MAX_PATTERN_LENGTH, patternProblem } from "./regex.js";
 
 describe("normalisation", () => {
   it("folds CRLF, exotic spaces and composed characters", () => {
