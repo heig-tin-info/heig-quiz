@@ -20,7 +20,7 @@ import { LLM_DOMAIN_NIGHT_SHARE, POOL_DOMAIN_MAX } from "@quiz/domain";
 
 import { qualified, type Db } from "../../db/client.js";
 import { concepts, pools, questionConcepts, questions, questionVersions } from "../../db/schema.js";
-import type { LlmGateway } from "../llm/service.js";
+import { oneLine, type LlmGateway } from "../llm/service.js";
 import { nightPass } from "./nightPass.js";
 
 /** Concept labels sent, most used first. */
@@ -74,7 +74,7 @@ export function labelsKey(labels: readonly ConceptLabels[]): string {
   return sorted.length === 0 ? "" : createHash("sha256").update(sorted.join("\n")).digest("hex").slice(0, 16);
 }
 
-const clean = (text: string) => text.trim().replace(/\s+/g, " ").replace(/^["«]\s*|\s*["»]$/g, "").slice(0, POOL_DOMAIN_MAX);
+const clean = (text: string) => oneLine(text.replace(/^\s*["«]\s*|\s*["»]\s*$/g, ""), POOL_DOMAIN_MAX);
 
 export type DomainOutcome = "updated" | "empty";
 

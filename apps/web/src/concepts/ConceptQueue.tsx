@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookMarked, Check, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { CONCEPT_LANGS, type AdminConcept, type AdminConceptList, type ConceptLang } from "@quiz/contracts";
+import { CONCEPT_LANGS, ConceptDuplicatesAi, type AdminConcept, type AdminConceptList, type ConceptLang } from "@quiz/contracts";
 
 import { api, refusalCodeOf } from "../api";
 import { useI18n, useT } from "../i18n";
@@ -20,7 +20,7 @@ import {
   Segmented,
   Skeleton,
 } from "../ui";
-import { ConceptDuplicates, duplicatePairs } from "./ConceptDuplicates";
+import { aiPairsOf, ConceptDuplicates, duplicatePairs } from "./ConceptDuplicates";
 import { ConceptSheet } from "./ConceptSheet";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, usesLabel } from "./names";
@@ -42,7 +42,8 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  * status, the search is `rankConcepts`, the one rule of the picker. The
  * **Probable duplicates** filter lists the pairs `probableDuplicates` finds in
  * that same list (quadratic, fine for hundreds of concepts): no route, nothing
- * stored.
+ * stored. "Ask the AI" there (`POST /admin/concepts/duplicates/ai`) adds the
+ * model's pairs below, kept in this component's state only.
  */
 export function ConceptQueue() {
   const t = useT();
@@ -70,11 +71,16 @@ export function ConceptQueue() {
 
   const found = useMemo(() => duplicatePairs(all ?? []), [all]);
   // Under a search, the pairs of which a concept matches.
-  const pairs = useMemo(() => {
-    if (q === "") return found;
+  const narrowed = useMemo(() => {
+    if (q === "") return () => true;
     const matched = new Set(rankConcepts(q, all ?? [], locale).map((c) => c.id));
-    return found.filter((p) => matched.has(p.a.id) || matched.has(p.b.id));
-  }, [found, all, q, locale]);
+    return (p: { a: AdminConcept; b: AdminConcept }) => matched.has(p.a.id) || matched.has(p.b.id);
+  }, [all, q, locale]);
+  const pairs = useMemo(() => found.filter(narrowed), [found, narrowed]);
+  const asked = useMutation({
+    mutationFn: async () => ConceptDuplicatesAi.parse(await api("/app/api/admin/concepts/duplicates/ai", { method: "POST" })),
+  });
+  const aiPairs = useMemo(() => aiPairsOf(asked.data, all ?? [], found).filter(narrowed), [asked.data, all, found, narrowed]);
   const edited = all?.find((c) => c.id === editing);
 
   const validate = useMutation({
@@ -123,7 +129,13 @@ export function ConceptQueue() {
       ) : list.isError ? (
         <QueryError title={t("admin.concepts.title")} query={list} />
       ) : filter === "duplicates" ? (
-        <ConceptDuplicates pairs={pairs} concepts={all ?? []} onEdit={setEditing} />
+        <ConceptDuplicates
+          pairs={pairs}
+          aiPairs={aiPairs}
+          ai={asked}
+          concepts={all ?? []}
+          onEdit={setEditing}
+        />
       ) : rows.length === 0 ? (
         <Card>
           {q !== "" ? (

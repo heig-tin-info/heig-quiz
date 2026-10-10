@@ -77,6 +77,12 @@ const LLM_FAILURES: Partial<Record<LlmErrorCode, [number, string]>> = {
   budget_exhausted: [429, "llm_budget_exhausted"],
   rate_limited: [429, "rate_limited"],
 };
+/** A held-down wand, not a quota (ADR-059): the gateway's daily cap is the ceiling. */
+export const LLM_CALLS_PER_MINUTE = 10;
+
+/** A model's text, or a label sent to one, as one line of at most `max` characters. */
+export const oneLine = (text: string, max: number): string => text.trim().replace(/\s+/g, " ").slice(0, max);
+
 export const llmArms: FailureArms = (reply, error) => {
   if (!(error instanceof LlmError)) return null;
   const [status, code] = LLM_FAILURES[error.code] ?? [502, "llm_failed"];

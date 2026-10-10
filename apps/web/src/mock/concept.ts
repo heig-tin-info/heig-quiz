@@ -14,6 +14,7 @@ import {
   ConceptPatch,
   type AdminConcept,
   type AdminConceptList,
+  type ConceptDuplicatesAi,
   type Concept,
   type ConceptExists,
   type ConceptRef,
@@ -52,6 +53,7 @@ const concepts: Concept[] = [
   concept("proposed", ["Fuite mémoire", "", "Mémoire allouée que plus aucun pointeur ne désigne."], [null]),
   concept("proposed", [null], ["Hash table", "", "Keys mapped to buckets by a hash function."]),
   concept("proposed", ["Complément à deux"], ["Two's complement"]),
+  concept("proposed", ["Complément à 2"], [null]),
   // One pair per probable-duplicate reason (with the two Adresse homonyms above and the alias "Tas" below).
   concept("proposed", ["Alocation dynamique"], ["Dynamic alocation"]),
   concept("proposed", ["Hash table", "", "Anglicisme saisi par un enseignant."], [null]),
@@ -162,6 +164,23 @@ on("GET", "/app/api/admin/concepts", (): AdminConceptList => {
       }),
     ),
   };
+});
+
+/**
+ * The model's pass for probable duplicates (fifth addendum §4, PR4b): two
+ * pairs a label comparison cannot find, from the live concepts; the `nollm`
+ * scene refuses as a platform without a key does.
+ */
+on("POST", "/app/api/admin/concepts/duplicates/ai", (): ConceptDuplicatesAi => {
+  if (flags.nollm) throw refuse(409, "llm_not_configured", "No AI key is configured", { reason: "not_configured" });
+  const live = (fr: string, qualifier = "") => concepts.find((c) => c.status !== "merged" && c.labels.fr === fr && c.qualifiers.fr === qualifier);
+  const french = document.documentElement.lang === "fr";
+  const pairs = [
+    [live("Complément à deux"), live("Complément à 2"), "close", french ? "La même notion, écrite avec un chiffre." : "The same notion, written with a digit."],
+    [live("Pointeur"), live("Adresse", "mémoire"), "related", french ? "Un pointeur contient une adresse mémoire." : "A pointer holds a memory address."],
+    [live("Fuite mémoire"), live("Allocation dynamique"), "related", french ? "Une fuite est un défaut d'allocation dynamique." : "A leak is a dynamic-allocation fault."],
+  ] as const;
+  return { pairs: pairs.flatMap(([a, b, kind, reason]) => (a && b ? [{ a: a.id, b: b.id, kind, reason }] : [])), truncated: false };
 });
 
 on("POST", "/app/api/admin/concepts/:id/validate", (m): Concept => {

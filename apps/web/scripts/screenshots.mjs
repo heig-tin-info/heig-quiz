@@ -1572,6 +1572,13 @@ const scenes = [
       await p.getByRole("radio", { name: /^duplicates/i }).check({ force: true });
       await skipCoach(p);
     } },
+  // PR4b: "Ask the AI" answered, its pairs below the deterministic ones.
+  { name: "admin-concepts-duplicates-ai", role: "admin", path: "/admin?tab=concepts", act: async (p) => {
+      await p.getByRole("radio", { name: /^duplicates/i }).check({ force: true });
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^ask the ai$/i }).click();
+      await p.getByText("AI suggestion").first().waitFor();
+    } },
   { name: "admin-concepts-duplicates-merge", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
       await p.getByRole("radio", { name: /^duplicates/i }).check({ force: true });
       await p.getByRole("button", { name: /^merge dynamic alocation into/i }).click();

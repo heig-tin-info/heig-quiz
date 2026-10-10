@@ -20,7 +20,7 @@ import { questions, questionVersions } from "../../db/schema.js";
 import { questionExcerpt } from "./excerpt.js";
 import { poolConcepts } from "../concept/service.js";
 import { DomainError } from "../http.js";
-import type { LlmGateway } from "../llm/service.js";
+import { oneLine, type LlmGateway } from "../llm/service.js";
 import type { PoolRow } from "./shared.js";
 
 const EXCERPTS = 2;
@@ -102,5 +102,5 @@ export async function proposeDescription(
     maxTokens: MAX_TOKENS,
     effort: "low",
   });
-  return value.description.trim().replace(/\s+/g, " ").slice(0, POOL_DESCRIPTION_MAX);
+  return oneLine(value.description, POOL_DESCRIPTION_MAX);
 }

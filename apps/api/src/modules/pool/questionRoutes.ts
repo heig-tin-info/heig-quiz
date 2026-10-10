@@ -29,7 +29,8 @@ import { rateLimited, readerLang } from "../http.js";
 import { poolChanged } from "./events.js";
 import { generateAnswers, generatorTypes } from "./generate.js";
 import * as service from "./service.js";
-import { coreFailure, LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
+import { LLM_CALLS_PER_MINUTE } from "../llm/service.js";
+import { coreFailure, type PoolRouteContext } from "./routeContext.js";
 
 export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, teacher, inPool, onQuestion, seesAllReports } = ctx;
