@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ChevronRight, GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Camera, ChevronRight, GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 import { LOCALES } from "@quiz/domain";
 
@@ -299,6 +299,13 @@ export function SettingsPage({
                 <Avatar me={me} className="size-16 text-xl" />
                 <span className="absolute inset-0 flex items-center justify-center rounded-full bg-fg/50 text-xs font-medium text-canvas opacity-0 transition-opacity group-hover:opacity-100">
                   {t("settings.changePicture")}
+                </span>
+                {/* No hover to reveal the overlay on a touch screen: a camera badge says the picture is a button. */}
+                <span
+                  aria-hidden
+                  className="hover-reveal absolute -right-0.5 -bottom-0.5 flex size-6 items-center justify-center rounded-full border border-line bg-surface text-fg-muted opacity-0"
+                >
+                  <Camera className="size-3.5" />
                 </span>
               </button>
             </Tip>
