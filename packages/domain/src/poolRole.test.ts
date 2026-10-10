@@ -4,7 +4,9 @@ import {
   effectivePoolRole,
   heldPoolRole,
   poolRoleAllows,
+  linkModeFor,
   strongerLinkMode,
+  subscriptionState,
   type PoolRoleFacts,
 } from "./poolRole.js";
 
@@ -126,5 +128,28 @@ describe("strongerLinkMode", () => {
     expect(strongerLinkMode("edit", "read")).toBe("edit");
     expect(strongerLinkMode("read", "edit")).toBe("edit");
     expect(strongerLinkMode("edit", "edit")).toBe("edit");
+  });
+});
+
+describe("linkModeFor", () => {
+  it("links for editing where the caller contributes, read-only on a public pool, never otherwise", () => {
+    expect(linkModeFor("owner", false)).toBe("edit");
+    expect(linkModeFor("contributor", true)).toBe("edit");
+    expect(linkModeFor("reader", true)).toBe("read");
+    expect(linkModeFor("reader", false)).toBeNull();
+  });
+});
+
+describe("subscriptionState", () => {
+  const base = { isPublic: true, isOwner: false, memberRole: null, subscribed: false } as const;
+  it("is available on a public pool without a seat, subscribed once they did", () => {
+    expect(subscriptionState(base)).toBe("available");
+    expect(subscriptionState({ ...base, subscribed: true })).toBe("subscribed");
+  });
+  it("is none on a private pool, for the owner and for every member, a reader included", () => {
+    expect(subscriptionState({ ...base, isPublic: false })).toBe("none");
+    expect(subscriptionState({ ...base, isOwner: true })).toBe("none");
+    expect(subscriptionState({ ...base, memberRole: "reader" })).toBe("none");
+    expect(subscriptionState({ ...base, memberRole: "owner", subscribed: true })).toBe("none");
   });
 });

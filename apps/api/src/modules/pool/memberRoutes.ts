@@ -72,10 +72,6 @@ export function memberRoutes(app: FastifyInstance, ctx: PoolRouteContext): void 
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, reply, scope: pool }) => {
       const me = req.user!.id;
-      if (!pool.isPublic) throw new DomainError("pool_not_public", 409, "Only a public pool can be subscribed to");
-      if (await service.isMemberOrOwner(app.db, pool, me)) {
-        throw new DomainError("already_member", 409, "This account already holds a seat");
-      }
       if (await service.subscribe(app.db, pool.id, me)) {
         await trace(req, "pool.subscribe", "pool", pool.id, {});
         poolChanged(pool.id);

@@ -20,11 +20,14 @@ import { QuestionReview, ReviewPill } from "./review.js";
 export const QuestionTypeId = z.enum(QUESTION_TYPE_IDS);
 export type QuestionTypeId = z.infer<typeof QuestionTypeId>;
 
-/** DERIVED, read-only: public when published, shared when the roster says so, else private (ADR-013, 2026-10-10). */
 /** `edit`: the course staff are contributors of the pool; `read`: they only read it (ADR-095). */
 export const CoursePoolMode = z.enum(COURSE_POOL_MODES);
 export type CoursePoolMode = z.infer<typeof CoursePoolMode>;
 
+/** What a teacher can do about following a pool (`subscriptionState` in `@quiz/domain`, ADR-095). */
+export const SubscriptionStateSchema = z.enum(["available", "subscribed", "none"]);
+
+/** DERIVED, read-only: public when published, shared when the roster says so, else private (ADR-013, 2026-10-10). */
 export const PoolVisibility = z.enum(POOL_VISIBILITIES);
 export type PoolVisibility = z.infer<typeof PoolVisibility>;
 
@@ -117,8 +120,8 @@ export const PoolSummary = Pool.extend({
   memberCount: z.number().int(),
   /** Teachers subscribed to the pool (ADR-095); 0 for a pool that is not public. */
   subscriberCount: z.number().int(),
-  /** The caller is subscribed to it. */
-  subscribed: z.boolean(),
+  /** What the caller can do about following it (`subscriptionState`, ADR-095): the screens read it as is. */
+  subscription: SubscriptionStateSchema,
 });
 export type PoolSummary = z.infer<typeof PoolSummary>;
 
@@ -757,7 +760,7 @@ export const PoolDetail = z.object({
    * `subscribed`, or `none` (the owner and the members hold it already; a
    * pool that is not public has no subscription).
    */
-  subscription: z.enum(["available", "subscribed", "none"]),
+  subscription: SubscriptionStateSchema,
   /** How many teachers subscribed: told to the owner and the members only, null to anyone else. */
   subscribers: z.number().int().nullable(),
 });

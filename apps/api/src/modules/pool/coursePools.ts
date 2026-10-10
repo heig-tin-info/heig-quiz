@@ -1,8 +1,8 @@
 /** `course_pools`: written here, called by the `org` module. */
 import { and, asc, eq, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 
-import type { CoursePoolsPut, PoolRole } from "@quiz/contracts";
-import { poolRoleAllows, strongerLinkMode, type CoursePoolMode } from "@quiz/domain";
+import type { CoursePoolsPut } from "@quiz/contracts";
+import { linkModeFor, strongerLinkMode, type CoursePoolMode } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { DomainError } from "../http.js";
@@ -22,21 +22,13 @@ export async function poolsOfCourse(db: Db, courseId: string) {
 }
 
 /**
- * The caller may newly link a pool in `edit` mode where they hold `role`:
- * that link makes the whole staff contributors of it, so it takes at least
- * that (ADR-013). A `read` link takes no role, only a public pool they reach
- * (ADR-095).
- */
-export const mayLinkPool = (role: PoolRole) => poolRoleAllows(role, "contributor");
-
-/**
  * Replaces the whole set of pools a course draws from. Only pools the caller
  * can already see may be linked, hence `allowed`.
  *
  * Modes (ADR-095): a link already there KEEPS its mode unless the body asks
  * for a stronger one, and a pool named twice takes the stronger. A NEW `edit`
  * link, and the upgrade of a `read` one, need the caller's effective role to
- * be at least `contributor` (`mayLinkPool`), because the link makes the whole
+ * be at least `contributor` (`linkModeFor`), because the link makes the whole
  * staff contributors of it; a NEW `read` link needs only that the pool be
  * public (a read link to a private pool would stand for nothing and could not
  * be kept: unpublishing drops them). Unlinking needs nothing more than the
@@ -88,7 +80,7 @@ export async function setCoursePools(
   const strengthened = changed.filter(([, mode]) => mode === "edit").map(([id]) => id);
   if (strengthened.length) {
     const roles = await poolRolesOf(db, inArray(pools.id, strengthened), viewer);
-    const refused = [...roles].filter(([, role]) => !mayLinkPool(role)).map(([id]) => id);
+    const refused = [...roles].filter(([, { role, isPublic }]) => linkModeFor(role, isPublic) !== "edit").map(([id]) => id);
     if (refused.length) {
       const named = await db
         .select({ id: pools.id, name: pools.name })
@@ -105,6 +97,19 @@ export async function setCoursePools(
     }
   }
   await db.transaction(async (tx) => {
+    // A read link is only ever written to a pool that is public NOW: the rows are locked, so an
+    // unpublication that commits first is seen here, and one that comes after drops the link.
+    const reads = [...wanted].filter(([id, mode]) => mode === "read" && current.get(id) !== "read").map(([id]) => id);
+    if (reads.length) {
+      const stillPublic = await tx
+        .select({ id: pools.id })
+        .from(pools)
+        .where(and(inArray(pools.id, reads), eq(pools.isPublic, true)))
+        .for("update");
+      if (stillPublic.length !== reads.length) {
+        throw new DomainError("pool_not_public", 409, "Only a public pool can be linked read-only", { poolIds: reads });
+      }
+    }
     const keep = [...wanted.keys()];
     await tx
       .delete(coursePools)

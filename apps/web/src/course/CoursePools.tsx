@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Eye, FolderTree, Link2, Unlink } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { CoursePoolMode, CourseSummary, PoolSummary } from "@quiz/contracts";
-import { poolRoleAllows } from "@quiz/domain";
+import type { CoursePoolMode, CoursePoolsPut, CourseSummary, PoolSummary } from "@quiz/contracts";
+import { linkModeFor } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -46,10 +46,10 @@ function usePoolLinks(course: CourseSummary) {
   const toastError = useErrorToast();
   const linked = useCourseDetail(course.id).data?.pools ?? [];
   const setLinks = useMutation({
-    mutationFn: (links: { poolId: string; mode: CoursePoolMode }[]) =>
+    mutationFn: (links: CoursePoolsPut["pools"]) =>
       api(`/app/api/courses/${course.id}/pools`, {
         method: "PUT",
-        body: JSON.stringify({ pools: links }),
+        body: JSON.stringify({ pools: links } satisfies CoursePoolsPut),
       }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: courseKey(course.id) });
@@ -80,13 +80,10 @@ export function LinkPoolMenu({ course }: { course: CourseSummary }) {
   // read-only (ADR-095), which leaves the staff readers and needs no
   // subscription. Any other pool is not offered.
   const unlinked = (pools.data ?? []).filter((p) => !linked.some((l) => l.id === p.id));
-  const available = unlinked.flatMap((p): { pool: PoolSummary; mode: CoursePoolMode }[] =>
-    poolRoleAllows(p.role, "contributor")
-      ? [{ pool: p, mode: "edit" }]
-      : p.isPublic
-        ? [{ pool: p, mode: "read" }]
-        : [],
-  );
+  const available = unlinked.flatMap((p): { pool: PoolSummary; mode: CoursePoolMode }[] => {
+    const mode = linkModeFor(p.role, p.isPublic);
+    return mode ? [{ pool: p, mode }] : [];
+  });
   return (
     <Menu
       label={t("pools.linkAction")}

@@ -13,9 +13,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PoolDetail, PoolSummary, PoolUnpublishImpact, type Notification } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { publish } from "../../events.js";
+import { publish, subscribe as onBus, type BusMessage } from "../../events.js";
 
-import { auditLog, coursePools, courses, courseStaff, notifications, poolSubscriptions, pools, questions } from "../../db/schema.js";
+import { auditLog, coursePools, courses, courseStaff, notifications, poolMembers, poolSubscriptions, pools, questions } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
@@ -137,7 +137,7 @@ describe("subscriptions", () => {
     const detail = PoolDetail.parse((await call(other, "GET", `/app/api/pools/${id}`)).json());
     expect(detail).toMatchObject({ role: "reader", subscription: "subscribed", subscribers: null });
     const summary = (await shelf(other)).find((p) => p.id === id)!;
-    expect(summary).toMatchObject({ role: "reader", subscribed: true, subscriberCount: 1, memberCount: 0, visibility: "public" });
+    expect(summary).toMatchObject({ role: "reader", subscription: "subscribed", subscriberCount: 1, memberCount: 0, visibility: "public" });
     // Not on the roster, and the owner's detail counts them.
     const members = (await call(owner, "GET", `/app/api/pools/${id}/members`)).json<{ members: { userId: string }[] }>();
     expect(members.members.map((m) => m.userId)).toEqual([owner.id]);
@@ -330,5 +330,74 @@ describe("unpublishing", () => {
     const bell = (await bells(third)).find((n) => n.payload.kind === "pool_unpublished" && n.payload.state === "deleted");
     expect(bell?.payload).toMatchObject({ poolName: "Soon gone", courseName: null });
     expect(await server.app.db.select().from(notifications).where(eq(notifications.id, bell!.id))).toHaveLength(1);
+  });
+});
+
+describe("the rule is stated, not trusted from the rows (ADR-095, invariant 6)", () => {
+  it("opens nothing to a subscription or a read link that survived on a private pool", async () => {
+    const stray = await newPool("Was public once", { isPublic: true });
+    const course = await courseOf([{ id: other.id }]);
+    // What a race between an unpublication and a write could leave behind: rows inserted by hand.
+    await server.app.db.update(pools).set({ isPublic: false }).where(eq(pools.id, stray));
+    await server.app.db.insert(poolSubscriptions).values({ poolId: stray, userId: third.id });
+    await server.app.db.insert(coursePools).values({ courseId: course, poolId: stray, mode: "read" });
+
+    for (const who of [third, other]) {
+      expect((await call(who, "GET", `/app/api/pools/${stray}`)).statusCode).toBe(404);
+      expect(await shelfIds(who)).not.toContain(stray);
+    }
+    // No `pool:` topic either: the stream hears nothing about the pool.
+    const res = await server.app.inject({ method: "GET", url: "/app/api/events", headers: third.headers, payloadAsStream: true });
+    let received = "";
+    const stream = res.stream();
+    stream.on("data", (chunk: Buffer) => (received += chunk.toString()));
+    for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+    const before = received;
+    publish("pool", [`pool:${stray}`]);
+    for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+    expect(received).toBe(before);
+    stream.destroy();
+  });
+
+  it("does not subscribe to a pool that is not public", async () => {
+    const closed = await newPool("Closed");
+    expect((await call(other, "PUT", `/app/api/pools/${closed}/subscription`)).statusCode).toBe(404);
+    expect(await server.app.db.select().from(poolSubscriptions).where(eq(poolSubscriptions.poolId, closed))).toEqual([]);
+  });
+
+  it("does not offer Subscribe to a reader member, and refuses it with already_member", async () => {
+    const open = await newPool("Open with a reader", { isPublic: true });
+    // A reader seat that predates the publication (the invitation offers none on a public pool).
+    await server.app.db.insert(poolMembers).values({ poolId: open, userId: other.id, role: "reader" });
+    const summary = (await shelf(other)).find((p) => p.id === open)!;
+    expect(summary.subscription).toBe("none");
+    expect((await call(other, "PUT", `/app/api/pools/${open}/subscription`)).json().error).toBe("already_member");
+  });
+
+  it("keeps a read link when the teacher unsubscribes", async () => {
+    const open = await newPool("Follow and link", { isPublic: true });
+    const course = await courseOf([{ id: third.id }]);
+    expect((await put(third, course, [{ poolId: open, mode: "read" }])).statusCode).toBe(200);
+    await call(third, "PUT", `/app/api/pools/${open}/subscription`);
+    await call(third, "DELETE", `/app/api/pools/${open}/subscription`);
+    expect(await server.app.db.select().from(coursePools).where(and(eq(coursePools.poolId, open), eq(coursePools.courseId, course)))).toHaveLength(1);
+    expect(await shelfIds(third)).toContain(open);
+  });
+
+  it("closes the streams of the subscriber and of the read-linked staff when the pool is unpublished", async () => {
+    const open = await newPool("Closing time", { isPublic: true });
+    const course = await courseOf([{ id: other.id }]);
+    await put(other, course, [{ poolId: open, mode: "read" }]);
+    await call(third, "PUT", `/app/api/pools/${open}/subscription`);
+    const closed: string[] = [];
+    const off = onBus((m: BusMessage) => {
+      if (m.kind === "close") closed.push(...m.topics);
+    });
+    try {
+      expect((await call(owner, "PATCH", `/app/api/pools/${open}`, { isPublic: false })).statusCode).toBe(200);
+    } finally {
+      off();
+    }
+    expect(closed).toEqual(expect.arrayContaining([`user:${third.id}`, `user:${other.id}`]));
   });
 });

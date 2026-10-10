@@ -62,7 +62,7 @@ const summary = (detail: PoolDetail, role: PoolSummary["role"] = "owner"): PoolS
   ownerAvatarUrl: null,
   memberCount: 0,
   subscriberCount: 0,
-  subscribed: false,
+  subscription: "none",
 });
 
 const PAGE: QuestionPage = {

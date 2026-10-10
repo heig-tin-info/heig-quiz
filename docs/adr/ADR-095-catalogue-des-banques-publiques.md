@@ -44,8 +44,11 @@ public pool but never use its questions.
    favourites in ADR-040) of subscribers plus members, on public pools only.
 4. **Link modes.** `course_pools.mode` is `edit` (the default, as before) or `read`. Course
    staff are contributors only through an `edit` link; a `read` link makes them `reader`.
-   Rule 3 is resolved in one place, `linkedCourseStaff(match, mode?)`: `poolAccess` and the
-   derived visibility read any link, the role facts and `poolRoleOf` read `edit` only.
+   Rule 3 is resolved in one place, `linkedCourseStaff(match, mode?)`: the role facts,
+   `poolRoleOf` and `poolAccess` read `edit` links only (a public pool is open to every teacher
+   anyway), while the shelf (`myPools`) and the derived visibility also read a `read` link and a
+   subscription, and the shelf only while the pool is public: the predicate states the rule
+   instead of trusting the rows, so a row that survived an unpublication opens nothing.
    - Any owner of a course may create a `read` link to a public pool they reach, without
      subscribing. A `read` link to a pool that is not public is refused (`409 pool_not_public`).
    - A NEW `edit` link, and the upgrade of a `read` link to `edit`, still need `mayLinkPool`

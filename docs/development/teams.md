@@ -110,7 +110,7 @@ which declares at once the activity types of `student_joined`,
 `results_updated`, and **2.2.0** since merge task M3-09b, which declares the
 seven project kinds of F-NOTIF-13, and **2.3.0** since the reports on a
 question (issue #680), which declares `question_reported` and
-`question_report_resolved`. **Every user who uploaded an older
+`question_report_resolved`, and **2.4.0** since the unpublishing of a public pool (issue #680, ADR-095), which declares `pool_unpublished`. **Every user who uploaded an older
 version must re-upload the package** (Teams offers the update of an
 uploaded app only when it is uploaded again): until they do, Graph refuses
 an activity type their version does not declare, with a 400. Its words come
@@ -196,7 +196,7 @@ docker compose logs -f app | grep -i teams
 - **`refused for good` with status 403** for a user: the app is not
   installed for them, they installed the bot's package (1.x) which grants no
   permission, or a Teams policy blocks it. They should install the current
-  package (version 2.3.0) and open it once.
+  package (version 2.4.0) and open it once.
 - **Status 400 from Graph**: the manifest and the code disagree (an activity
   type or a template parameter). The package served and the code come from
   the same build; the user's installed version may be older — reinstall.

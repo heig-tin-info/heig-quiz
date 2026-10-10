@@ -5,16 +5,19 @@
 import { and, asc, countDistinct, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { PoolSubscribers, PoolUnpublishImpact } from "@quiz/contracts";
-import { displayName } from "@quiz/domain";
+import { displayName, subscriptionState } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import { DomainError } from "../http.js";
+import type { Db, Tx } from "../../db/client.js";
 import {
   coursePools,
   courseStaff,
   courses,
   evaluationItems,
   evaluations,
+  poolMembers,
   poolSubscriptions,
+  pools,
   questionVersions,
   questions,
   users,
@@ -23,14 +26,39 @@ import { notifyUsers } from "../notifications/service.js";
 import { accessRevoked } from "../realtime/bus.js";
 import type { PoolRow } from "./shared.js";
 
-/** Records the subscription; false when the teacher was subscribed already. */
+/**
+ * Records the subscription; false when the teacher was subscribed already.
+ * The pool is read FOR UPDATE inside the transaction, so a concurrent
+ * unpublication either runs first (409 `pool_not_public`) or waits for the
+ * row and then drops it: no subscription row can outlive the pool's
+ * publication. `subscriptionState` is the one rule of who may subscribe.
+ */
 export async function subscribe(db: Db, poolId: string, userId: string): Promise<boolean> {
-  const rows = await db
-    .insert(poolSubscriptions)
-    .values({ poolId, userId })
-    .onConflictDoNothing()
-    .returning({ userId: poolSubscriptions.userId });
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    const [pool] = await tx
+      .select({ isPublic: pools.isPublic, ownerId: pools.ownerId })
+      .from(pools)
+      .where(eq(pools.id, poolId))
+      .for("update");
+    const [seat] = await tx
+      .select({ role: poolMembers.role })
+      .from(poolMembers)
+      .where(and(eq(poolMembers.poolId, poolId), eq(poolMembers.userId, userId)));
+    const state = subscriptionState({
+      isPublic: pool?.isPublic ?? false,
+      isOwner: pool?.ownerId === userId,
+      memberRole: seat?.role ?? null,
+      subscribed: false,
+    });
+    if (!pool?.isPublic) throw new DomainError("pool_not_public", 409, "Only a public pool can be subscribed to");
+    if (state === "none") throw new DomainError("already_member", 409, "This account already holds a seat");
+    const rows = await tx
+      .insert(poolSubscriptions)
+      .values({ poolId, userId })
+      .onConflictDoNothing()
+      .returning({ userId: poolSubscriptions.userId });
+    return rows.length > 0;
+  });
 }
 
 /** Ends the subscription; false when there was none. */
@@ -53,7 +81,8 @@ export async function listSubscribers(db: Db, poolId: string): Promise<PoolSubsc
   return { subscribers: rows.map((r) => ({ name: displayName(r) })) };
 }
 
-async function subscriberIds(db: Db, poolId: string): Promise<string[]> {
+/** The ids of the pool's subscribers. */
+export async function subscriberIds(db: Db, poolId: string): Promise<string[]> {
   const rows = await db
     .select({ userId: poolSubscriptions.userId })
     .from(poolSubscriptions)
@@ -62,7 +91,7 @@ async function subscriberIds(db: Db, poolId: string): Promise<string[]> {
 }
 
 /** The courses linked `read` to the pool, by id and name. */
-async function readCourses(db: Db, poolId: string) {
+async function readCourses(db: Db | Tx, poolId: string) {
   return db
     .select({ id: courses.id, name: courses.name })
     .from(coursePools)
@@ -99,27 +128,34 @@ export async function unpublishImpact(db: Db, poolId: string): Promise<PoolUnpub
   return { subscribers: subscribers.length, readCourses: linked.length, templates };
 }
 
+/** What leaving the catalogue took away: the read-linked courses and the subscribers. */
+export interface DroppedPublicAccess {
+  linked: { id: string; name: string }[];
+  subscribers: string[];
+}
+
 /**
- * The pool leaves the catalogue: its `read` links and its subscriptions go in
- * ONE transaction (the owner has confirmed the count), then — once committed —
- * each subscriber and the owners of each read-linked course are told, and the
- * streams of everyone who lost the pool are closed, as `removeMember` does.
- * Evaluations keep their pinned versions.
+ * The pool leaves the catalogue (the owner has confirmed the count): its
+ * `read` links and its subscriptions go. Runs in the SAME transaction as the
+ * unpublication (`isPublic = false`), so no row outlives it; `announceRetired`
+ * tells the people once that transaction has committed.
  */
-export async function retirePublicAccess(db: Db, pool: Pick<PoolRow, "id" | "name">): Promise<void> {
-  const dropped = await db.transaction(async (tx) => {
-    const linked = await tx
-      .select({ id: courses.id, name: courses.name })
-      .from(coursePools)
-      .innerJoin(courses, eq(courses.id, coursePools.courseId))
-      .where(and(eq(coursePools.poolId, pool.id), eq(coursePools.mode, "read")));
-    const subscribed = await tx
-      .delete(poolSubscriptions)
-      .where(eq(poolSubscriptions.poolId, pool.id))
-      .returning({ userId: poolSubscriptions.userId });
-    await tx.delete(coursePools).where(and(eq(coursePools.poolId, pool.id), eq(coursePools.mode, "read")));
-    return { linked, subscribers: subscribed.map((s) => s.userId) };
-  });
+export async function dropPublicAccess(tx: Tx, poolId: string): Promise<DroppedPublicAccess> {
+  const linked = await readCourses(tx, poolId);
+  const subscribers = await tx
+    .delete(poolSubscriptions)
+    .where(eq(poolSubscriptions.poolId, poolId))
+    .returning({ userId: poolSubscriptions.userId });
+  await tx.delete(coursePools).where(and(eq(coursePools.poolId, poolId), eq(coursePools.mode, "read")));
+  return { linked, subscribers: subscribers.map((s) => s.userId) };
+}
+
+/**
+ * Once committed: tells each subscriber and the owners of each read-linked
+ * course, and closes the streams of everyone who lost the pool, as
+ * `removeMember` does. Evaluations keep their pinned versions.
+ */
+export async function announceRetired(db: Db, pool: Pick<PoolRow, "name">, dropped: DroppedPublicAccess): Promise<void> {
   const staff = dropped.linked.length
     ? await db
         .select({ userId: courseStaff.userId, courseId: courseStaff.courseId, role: courseStaff.role })
@@ -143,9 +179,6 @@ export async function retirePublicAccess(db: Db, pool: Pick<PoolRow, "id" | "nam
   }
   accessRevoked([...subscriberSet, ...staff.map((s) => s.userId)]);
 }
-
-/** The subscribers of a pool about to be deleted, to tell once it is gone (best-effort). */
-export const subscribersOf = subscriberIds;
 
 /** Tells the former subscribers of a deleted public pool. */
 export async function tellPoolDeleted(db: Db, poolName: string, userIds: readonly string[]): Promise<void> {

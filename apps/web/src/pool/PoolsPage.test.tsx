@@ -54,7 +54,7 @@ const makePool = (over: Partial<PoolSummary> = {}): PoolSummary => ({
   ownerAvatarUrl: null,
   memberCount: 0,
   subscriberCount: 0,
-  subscribed: false,
+  subscription: "none",
   ...over,
 });
 
@@ -78,7 +78,7 @@ describe("PoolsPage", () => {
           description: "Diodes et transistors.\nPremière ligne\nDeuxième\nTroisième\nQuatrième",
           memberCount: 2,
           subscriberCount: 0,
-          subscribed: false,
+          subscription: "none",
           role: "contributor",
           ownerId: "t1",
           ownerName: "Ada Lovelace",

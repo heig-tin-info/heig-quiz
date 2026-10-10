@@ -98,7 +98,7 @@ export function staffAccess(userId: string, courseId: AnyColumn | SQL = courses.
  * seat satisfies `match` (a condition on `course_staff`). `poolAccess`, the
  * pool list's role facts, the roles and the derived visibility all read it
  * here. `mode` narrows it to the links of that mode (ADR-095): the staff are
- * contributors through an `edit` link only, while any link lets them in.
+ * contributors through an `edit` link only; the shelf also counts a `read` link, while the pool is public.
  */
 export function linkedCourseStaff(match: SQL, mode?: CoursePoolMode): SQL {
   const only = mode ? sql` AND ${qualified(coursePools.mode)} = ${mode}` : sql``;
@@ -114,13 +114,27 @@ function staffAccount(userId: string): SQL {
   return sql`EXISTS (SELECT 1 FROM ${users} WHERE ${qualified(users.id)} = ${userId} AND ${qualified(users.role)} IN (${staff}))`;
 }
 
-/** What puts a pool on the account's own shelf, whether or not it is public (ADR-095). */
+/** The account subscribed to the pool (`pool_subscriptions`, ADR-095). One definition, read by the shelf and by the pool's own state. */
+export function subscribed(userId: string): SQL<boolean> {
+  return sql<boolean>`EXISTS (SELECT 1 FROM ${poolSubscriptions} WHERE ${qualified(poolSubscriptions.poolId)} = ${qualified(pools.id)} AND ${qualified(poolSubscriptions.userId)} = ${userId})`;
+}
+
+/** The account owns the pool, sits on it, or is staff of a course linked to it for editing: ties that hold on a private pool too. */
+function writerReach(userId: string): SQL {
+  return sql`(${qualified(pools.ownerId)} = ${userId} OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR ${linkedCourseStaff(sql`${qualified(courseStaff.userId)} = ${userId}`, "edit")})`;
+}
+
+/**
+ * What puts a pool on the account's own shelf (ADR-095). The rule is stated,
+ * not trusted from the rows: a subscription or a read link counts only while
+ * the pool is public, so a row that survived an unpublication opens nothing.
+ */
 function ownReach(userId: string): SQL {
-  return sql`(${qualified(pools.ownerId)} = ${userId} OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR ${linkedCourseStaff(sql`${qualified(courseStaff.userId)} = ${userId}`)} OR EXISTS (SELECT 1 FROM ${poolSubscriptions} WHERE ${qualified(poolSubscriptions.poolId)} = ${qualified(pools.id)} AND ${qualified(poolSubscriptions.userId)} = ${userId}))`;
+  return sql`(${writerReach(userId)} OR (${qualified(pools.isPublic)} AND (${linkedCourseStaff(sql`${qualified(courseStaff.userId)} = ${userId}`)} OR ${subscribed(userId)})))`;
 }
 
 export function poolAccess(userId: string): SQL {
-  return sql`(${staffAccount(userId)} AND (${qualified(pools.isPublic)} OR ${ownReach(userId)}))`;
+  return sql`(${staffAccount(userId)} AND (${qualified(pools.isPublic)} OR ${writerReach(userId)}))`;
 }
 
 /**

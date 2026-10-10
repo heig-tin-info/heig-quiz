@@ -73,15 +73,19 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           throw new DomainError("personal_pool_not_publishable", 409, "A personal pool cannot be published");
         }
         const source = fields.description === undefined ? {} : { descriptionSource: descriptionFromAi ? ("ai" as const) : ("owner" as const) };
-        const updated = await service.updatePool(app.db, pool.id, {
-          ...fields,
-          ...(isPublic === undefined ? {} : { isPublic }),
-          ...source,
-        });
+        const unpublished = isPublic === false && pool.isPublic;
+        // The unpublication and the end of the read links and subscriptions are ONE transaction (ADR-095).
+        const { updated, dropped } = await app.db.transaction(async (tx) => ({
+          updated: await service.updatePool(tx, pool.id, {
+            ...fields,
+            ...(isPublic === undefined ? {} : { isPublic }),
+            ...source,
+          }),
+          dropped: unpublished ? await service.dropPublicAccess(tx, pool.id) : null,
+        }));
         if (isPublic !== undefined && isPublic !== pool.isPublic) {
           await trace(req, isPublic ? "pool.publish" : "pool.unpublish", "pool", pool.id, {});
-          // The pool leaves the catalogue: its read-only links and its subscriptions end (ADR-095).
-          if (!isPublic) await service.retirePublicAccess(app.db, pool);
+          if (dropped) await service.announceRetired(app.db, pool, dropped);
         }
         if (Object.keys(fields).length > 0) {
           await trace(req, "pool.update", "pool", pool.id, { ...fields, ...source });
@@ -141,7 +145,7 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       // contributor reach it to WORK in it, not to destroy it.
       const audience = await topicsOf(pool);
       if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
-      const subscribers = await service.subscribersOf(app.db, pool.id);
+      const subscribers = await service.subscriberIds(app.db, pool.id);
       // A version an evaluation or a template pins cannot vanish under it
       // (ADR-031): the refusal names what holds the pool, not a 500.
       const inUse = () => service.poolUses(app.db, pool.id, managedEvaluationAccess(callerOf(req)));

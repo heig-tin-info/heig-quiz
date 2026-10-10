@@ -53,7 +53,7 @@ const POOLS: PoolSummary[] = [
     ownerAvatarUrl: null,
     memberCount: 0,
     subscriberCount: 0,
-    subscribed: false,
+    subscription: "none",
   },
   {
     id: "p2",
@@ -78,7 +78,7 @@ const POOLS: PoolSummary[] = [
     ownerAvatarUrl: null,
     memberCount: 2,
     subscriberCount: 0,
-    subscribed: false,
+    subscription: "none",
   },
 ];
 

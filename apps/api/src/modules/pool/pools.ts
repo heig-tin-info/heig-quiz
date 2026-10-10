@@ -4,10 +4,17 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 
 import type { ConceptLang, Pool, PoolVisibility, PoolColor, PoolInUse, PoolRole, PoolSummary } from "@quiz/contracts";
-import { displayName, effectivePoolRole, heldPoolRole, type PoolDescriptionSource, type PoolRoleFacts } from "@quiz/domain";
+import {
+  displayName,
+  effectivePoolRole,
+  heldPoolRole,
+  subscriptionState,
+  type PoolDescriptionSource,
+  type PoolRoleFacts,
+} from "@quiz/domain";
 
-import { isForeignKeyViolation, qualified, type Db } from "../../db/client.js";
-import { linkedCourseStaff, type Caller } from "../guards.js";
+import { isForeignKeyViolation, qualified, type Db, type Tx } from "../../db/client.js";
+import { linkedCourseStaff, subscribed, type Caller } from "../guards.js";
 import { shownAvatar } from "../avatar.js";
 import {
   attempts,
@@ -67,7 +74,7 @@ export const derivedVisibility = sql<PoolVisibility>`(CASE
   THEN 'shared' ELSE 'private' END)`;
 
 /** The derived visibility of one pool, read now. */
-export async function visibilityOf(db: Db, poolId: string): Promise<PoolVisibility> {
+export async function visibilityOf(db: Db | Tx, poolId: string): Promise<PoolVisibility> {
   const [row] = await db.select({ v: derivedVisibility }).from(pools).where(eq(pools.id, poolId));
   return row?.v ?? "private";
 }
@@ -104,10 +111,6 @@ function courseStaffOf(userId: string): SQL<boolean> {
 /** Teachers subscribed to a PUBLIC pool: 0 for any other, whatever rows survive (ADR-095). */
 const subscriberCountOf = sql<number>`(CASE WHEN ${qualified(pools.isPublic)} THEN (SELECT count(*) FROM ${poolSubscriptions} WHERE ${qualified(poolSubscriptions.poolId)} = ${qualified(pools.id)}) ELSE 0 END)::int`;
 
-function subscribedBy(userId: string): SQL<boolean> {
-  return sql<boolean>`EXISTS (SELECT 1 FROM ${poolSubscriptions} WHERE ${qualified(poolSubscriptions.poolId)} = ${qualified(pools.id)} AND ${qualified(poolSubscriptions.userId)} = ${userId})`;
-}
-
 /** The facts of `effectivePoolRole` for one row, Super Powers aside. */
 function roleFacts(
   row: { ownerId: string; isPublic: boolean; memberRole: PoolRole | null; isCourseStaff: boolean },
@@ -131,7 +134,7 @@ export async function poolRolesOf(
   db: Db,
   where: SQL | undefined,
   viewer: Pick<Caller, "id" | "reach">,
-): Promise<Map<string, PoolRole>> {
+): Promise<Map<string, { role: PoolRole; isPublic: boolean }>> {
   const rows = await db
     .select({
       id: pools.id,
@@ -145,7 +148,10 @@ export async function poolRolesOf(
   return new Map(
     rows.map((r) => [
       r.id,
-      effectivePoolRole({ ...roleFacts(r, viewer.id), reachesAll: viewer.reach === "all" }),
+      {
+        role: effectivePoolRole({ ...roleFacts(r, viewer.id), reachesAll: viewer.reach === "all" }),
+        isPublic: r.isPublic,
+      },
     ]),
   );
 }
@@ -173,7 +179,7 @@ export async function listPools(
       usedCount,
       memberCount: memberCountOf,
       subscriberCount: subscriberCountOf,
-      subscribed: subscribedBy(viewer.id),
+      subscribed: subscribed(viewer.id),
       memberRole: memberRoleOf(viewer.id),
       isCourseStaff: courseStaffOf(viewer.id),
       ownerGivenName: users.givenName,
@@ -195,7 +201,12 @@ export async function listPools(
       usedCount: r.usedCount,
       memberCount: r.memberCount,
       subscriberCount: r.subscriberCount,
-      subscribed: r.subscribed,
+      subscription: subscriptionState({
+        isPublic: r.pool.isPublic,
+        isOwner: r.pool.ownerId === viewer.id,
+        memberRole: r.memberRole,
+        subscribed: r.subscribed,
+      }),
       role: effectivePoolRole({ ...facts, reachesAll: viewer.reach === "all" }),
       heldRole: heldPoolRole(facts),
       ownerName: displayName({
@@ -276,7 +287,7 @@ async function personalPool(db: Db, userId: string): Promise<PoolRow | null> {
 }
 
 export async function updatePool(
-  db: Db,
+  db: Db | Tx,
   poolId: string,
   patch: {
     name?: string | undefined;
@@ -361,25 +372,21 @@ export async function poolDetail(
   lang: ConceptLang,
   viewer: Pick<Caller, "id" | "reach">,
 ) {
-  const [tree, used, [counted], [tie]] = await Promise.all([
+  const [tree, used, [summary]] = await Promise.all([
     categoryTree(db, pool.id),
     poolConcepts(db, pool.id, lang),
-    db.select({ n: questionCount, visibility: derivedVisibility }).from(pools).where(eq(pools.id, pool.id)),
-    db
-      .select({ memberRole: memberRoleOf(viewer.id), subscribed: subscribedBy(viewer.id), subscribers: subscriberCountOf })
-      .from(pools)
-      .where(eq(pools.id, pool.id)),
+    listPools(db, eq(pools.id, pool.id), viewer),
   ]);
-  const seated = pool.ownerId === viewer.id || (tie?.memberRole ?? null) !== null;
-  const subscription = !pool.isPublic || seated ? "none" : tie?.subscribed ? "subscribed" : "available";
+  const subscription = summary?.subscription ?? "none";
   return {
-    pool: poolJson(pool, counted?.visibility ?? "private"),
+    pool: poolJson(pool, summary?.visibility ?? "private"),
     role,
     categories: tree,
     concepts: used,
-    questionCount: counted?.n ?? 0,
-    subscription: subscription as "available" | "subscribed" | "none",
-    // Told to the owner and the members only (an admin under Super Powers reads as an owner).
-    subscribers: pool.isPublic && (seated || viewer.reach === "all") ? (tie?.subscribers ?? 0) : null,
+    questionCount: summary?.questionCount ?? 0,
+    subscription,
+    // Told to the owner and the members only, who hold a seat on a public pool (an admin under Super Powers reads as an owner).
+    subscribers:
+      pool.isPublic && (subscription === "none" || viewer.reach === "all") ? (summary?.subscriberCount ?? 0) : null,
   };
 }

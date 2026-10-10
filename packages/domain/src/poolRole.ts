@@ -30,6 +30,34 @@ export function strongerLinkMode(a: CoursePoolMode, b: CoursePoolMode): CoursePo
   return a === "edit" || b === "edit" ? "edit" : "read";
 }
 
+/**
+ * The mode in which the account may link the pool to a course, or null when
+ * it may not: `edit` where they hold `contributor` or more (the link makes the
+ * whole staff contributors), `read` on a public pool they only read (ADR-095),
+ * nothing otherwise.
+ */
+export function linkModeFor(role: PoolRoleName, isPublic: boolean): CoursePoolMode | null {
+  if (poolRoleAllows(role, "contributor")) return "edit";
+  return isPublic ? "read" : null;
+}
+
+/** What a teacher can do about following a pool: `available` to subscribe, `subscribed`, or `none` (not public, or already a seat). */
+export type SubscriptionState = "available" | "subscribed" | "none";
+
+/**
+ * THE rule of who may subscribe (ADR-095): a public pool the account neither
+ * owns nor sits on (whatever the seat). A seat makes a subscription redundant.
+ */
+export function subscriptionState(facts: {
+  isPublic: boolean;
+  isOwner: boolean;
+  memberRole: PoolRoleName | null;
+  subscribed: boolean;
+}): SubscriptionState {
+  if (!facts.isPublic || facts.isOwner || facts.memberRole !== null) return "none";
+  return facts.subscribed ? "subscribed" : "available";
+}
+
 /** What the database knows about one (pool, account) pair. */
 export interface PoolRoleFacts {
   /**

@@ -21,6 +21,7 @@ import {
   truncateSelection,
   UNREVIEWED_TYPES,
   poolRoleAllows,
+  subscriptionState,
 } from "@quiz/domain";
 import type {
   McqScorePolicy,
@@ -1529,7 +1530,12 @@ export const poolSummary = (pool: MockPool) => {
     ownerAvatarUrl: null,
     memberCount: (poolMembers[pool.id] ?? []).filter((m) => m.userId !== pool.ownerId).length,
     subscriberCount: pool.isPublic ? (subscriberNames[pool.id] ?? []).length + (mySubscriptions.has(pool.id) ? 1 : 0) : 0,
-    subscribed: mySubscriptions.has(pool.id),
+    subscription: subscriptionState({
+      isPublic: pool.isPublic,
+      isOwner: pool.ownerId === (me?.id ?? "u-me"),
+      memberRole: myMembership(pool.id)?.role ?? null,
+      subscribed: mySubscriptions.has(pool.id),
+    }),
   };
 };
 
@@ -2330,8 +2336,8 @@ on("GET", "/app/api/pools/:id", (m) => {
     categories: categoryTree(pool.id),
     concepts: poolConcepts(pool.id),
     questionCount: liveQuestions(pool.id).filter((q) => !q.deletedAt).length,
-    subscription: !pool.isPublic || myMembership(pool.id) ? "none" : mySubscriptions.has(pool.id) ? "subscribed" : "available",
-    subscribers: pool.isPublic && myMembership(pool.id) ? poolSummary(pool).subscriberCount : null,
+    subscription: poolSummary(pool).subscription,
+    subscribers: pool.isPublic && poolSummary(pool).subscription === "none" ? poolSummary(pool).subscriberCount : null,
   };
 });
 on("GET", "/app/api/pools/:id/unpublish-impact", (m) => {
