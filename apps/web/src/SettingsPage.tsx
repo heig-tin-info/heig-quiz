@@ -23,6 +23,7 @@ import { meKey } from "./queryKeys";
 import type { Route } from "./router";
 import { SuperPowersSection } from "./SuperPowers";
 import { setThemeChoice, useThemeChoice } from "./theme";
+import { setFestiveEnabled, useFestiveEnabled } from "./festive/festive";
 import {
   Avatar,
   Badge,
@@ -135,6 +136,17 @@ function RpnCalculatorRow({ me }: { me: Me }) {
   );
 }
 
+/** ADR-093: the festive touches, on or off in this browser (like the theme). */
+function FestiveRow() {
+  const t = useT();
+  const on = useFestiveEnabled();
+  return (
+    <SettingRow title={t("settings.festive")} desc={t("settings.festiveHint")}>
+      <Switch checked={on} onChange={setFestiveEnabled} label={t("settings.festive")} />
+    </SettingRow>
+  );
+}
+
 /** Language, appearance, date format — and, for a teacher, MCQ scoring. */
 function PreferencesCard({ me }: { me: Me }) {
   const { t, choice, setLocale } = useI18n();
@@ -193,6 +205,7 @@ function PreferencesCard({ me }: { me: Me }) {
         {me.role === "student" ? null : <McqPolicyRow me={me} />}
         <RpnCalculatorRow me={me} />
         <CoachRow me={me} />
+        <FestiveRow />
       </Card>
       <FormError error={saveDate.error} fallback={t("error.save")} />
     </section>

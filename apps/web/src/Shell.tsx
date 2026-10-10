@@ -18,6 +18,7 @@ import type { Me } from "@quiz/contracts";
 import { displayName } from "@quiz/domain";
 
 import { CommandPalette } from "./CommandPalette";
+import { FestiveInfo, useFestive } from "./festive/festive";
 import { Logo, UserMenu, useSignOut, ViewModeToggle } from "./Header";
 import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
@@ -409,6 +410,7 @@ export function Shell({
   studentView,
   onToggleStudentView,
   wide = false,
+  quiet = false,
   children,
 }: {
   me: Me;
@@ -425,6 +427,11 @@ export function Shell({
    * scrolls sideways beside two empty margins (#93).
    */
   wide?: boolean;
+  /**
+   * A view a teacher may be projecting (`QUIET` in App.tsx, the live
+   * dashboard): the logo wears no festive costume there (ADR-093).
+   */
+  quiet?: boolean;
   children: ReactNode;
 }) {
   const { t, locale, setLocale } = useI18n();
@@ -491,6 +498,18 @@ export function Shell({
       {mark}
     </button>
   );
+  /**
+   * The wordmark as the home link. On a festive day (ADR-093) it wears the
+   * day's accessory, and a button laid over the accessory — beside the home
+   * button, never inside it — opens the day's sheet.
+   */
+  const festive = useFestive(!quiet);
+  const wordmark = (className: string, id?: string) => (
+    <div className="relative shrink-0">
+      {brand(<Logo id={id} className={className} accessory={festive?.art.accessory} />)}
+      {festive ? <FestiveInfo festive={festive} /> : null}
+    </div>
+  );
   // Where the bottom bar shows, the top bar does not repeat it: DESIGN.md,
   // "The bottom bar (phone)" (#191, #449).
   const bottomNav = bottomNavShown(route, teacherUi);
@@ -548,7 +567,7 @@ export function Shell({
             {brand(<img src="/favicon.svg" alt="" className="size-7" />, "size-9 justify-center")}
           </div>
         ) : (
-          <div className="px-5 pb-3 pt-5">{brand(<Logo className="w-full" />)}</div>
+          <div className="px-5 pb-3 pt-5">{wordmark("w-full")}</div>
         )}
         {/* No search row here: Ctrl/⌘+K opens the palette from anywhere, and a
             permanent button for it took the top of the sidebar away from the
@@ -602,7 +621,7 @@ export function Shell({
             className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-line bg-canvas shadow-overlay focus:outline-none"
           >
             <div className="flex items-center justify-between px-3 pb-2 pt-4">
-              {brand(<Logo id={drawerTitleId} className="w-28" />)}
+              {wordmark("w-28", drawerTitleId)}
               <IconButton label={t("menu.closeMenu")} onClick={() => setDrawer(false)}>
                 <X />
               </IconButton>
@@ -640,7 +659,7 @@ export function Shell({
               <MenuIcon />
             </IconButton>
           )}
-          {brand(<Logo className="w-28" />)}
+          {wordmark("w-28")}
           <span className="flex-1" />
           {viewToggle(true)}
           <IconButton label={t("palette.open")} onClick={() => setPalette(true)}>

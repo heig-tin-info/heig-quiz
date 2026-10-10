@@ -1,0 +1,201 @@
+/*
+ * The festive touches (ADR-093), loaded with their drawings on a festive day
+ * only. Two parts: the accessory's entrance on the logo, and the ambient
+ * layer — three modes (fall, drift, burst), five seconds at most, played once
+ * a day. Nothing moves under `prefers-reduced-motion`: the layer is not even
+ * mounted (festive.tsx) and the accessory just sits there.
+ */
+
+/* The layer's own colours: soft, decoration only (DESIGN.md, Festive touches). */
+:root {
+  --fx-snow: #a9bfd4;
+  --fx-pink: #eaa3b8;
+  --fx-blue: #9ec7e6;
+  --fx-yellow: #efcf78;
+  --fx-green: #9ed6a7;
+  --fx-lilac: #c3a9e0;
+  --fx-ink: #b9b3a8;
+}
+html.dark {
+  --fx-snow: #e6edf5;
+  --fx-pink: #d98aa1;
+  --fx-blue: #7fb3da;
+  --fx-yellow: #d9b75c;
+  --fx-green: #7cc189;
+  --fx-lilac: #a98ccc;
+  --fx-ink: #4a4640;
+}
+
+/* --- The accessory, inside one bubble's group of the logo --- */
+
+.quiz-logo .festive-accessory {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.festive-text {
+  font: 600 11px var(--font-mono);
+  fill: currentColor;
+}
+.festive-tape {
+  fill: var(--canvas);
+  stroke: currentColor;
+  stroke-width: 0.7;
+}
+.festive-bit {
+  font: 600 5.5px var(--font-mono);
+  fill: currentColor;
+  text-anchor: middle;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .festive-enter-drop { animation: festive-drop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s both; }
+  .festive-enter-pop { animation: festive-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s both; }
+  .festive-enter-fade { transform-origin: 50% 50%; animation: festive-fade 0.6s ease-out 0.35s both; }
+  .festive-enter-slide { animation: festive-slide 0.8s cubic-bezier(0.2, 0.8, 0.3, 1) 0.35s both; }
+  .festive-enter-land { animation: festive-land 1.2s cubic-bezier(0.2, 0.8, 0.3, 1) 0.35s both; }
+  .festive-enter-type .festive-text {
+    animation: festive-type calc(var(--n) * 90ms) steps(var(--n)) 0.35s both;
+  }
+  .festive-enter-type .festive-caret {
+    animation: festive-caret 0.5s steps(1) calc(0.35s + var(--n) * 90ms) 6 both;
+  }
+  .festive-enter-ignite .festive-hilt {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: festive-fade 0.35s ease-out 0.35s both;
+  }
+  .festive-enter-ignite .festive-blade {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation:
+      festive-ignite 0.35s cubic-bezier(0.2, 0.9, 0.3, 1) 0.8s both,
+      festive-hum 0.1s linear 1.15s 8 alternate;
+  }
+  .festive-spin {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: festive-spin 2.2s cubic-bezier(0.2, 0.7, 0.3, 1) 0.35s both;
+  }
+  .quiz-logo .festive-wings {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: festive-flap 0.11s linear 0.35s 11 alternate;
+  }
+}
+/* Under reduced motion the caret would sit there forever: it is the motion. */
+@media (prefers-reduced-motion: reduce) {
+  .festive-caret { display: none; }
+}
+.festive-blade {
+  filter: drop-shadow(0 0 1.2px #39ff88) drop-shadow(0 0 3px #39ff88);
+}
+
+@keyframes festive-drop { from { transform: translateY(-30px) rotate(-10deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes festive-pop { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes festive-fade { from { transform: scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes festive-slide { from { transform: translateX(26px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes festive-land { from { transform: translate(-30px, -26px) rotate(-25deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes festive-type { from { clip-path: inset(-30% 100% -30% 0); } to { clip-path: inset(-30% 0 -30% 0); } }
+@keyframes festive-caret { 0% { fill-opacity: 1; } 50%, 100% { fill-opacity: 0; } }
+@keyframes festive-ignite { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes festive-hum { to { opacity: 0.82; } }
+@keyframes festive-spin { from { transform: rotate(var(--turn)); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes festive-flap { to { transform: scaleX(0.45); } }
+
+/* --- The ambient layer: behind every surface (Z.festiveBehind), a burst over the page (Z.festive) --- */
+
+.festive-layer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.festive-sprite {
+  position: absolute;
+  width: var(--s);
+  height: var(--s);
+  color: var(--c);
+}
+.festive-sprite > span,
+.festive-sprite svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.festive-glyph {
+  font: 700 var(--s) / 1 var(--font-mono);
+  white-space: nowrap;
+}
+.festive-confetti {
+  display: block;
+  width: 60%;
+  height: 100%;
+  border-radius: 1.5px;
+  background: currentColor;
+}
+.festive-cell {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  font: 600 calc(var(--s) * 0.6) / 1 var(--font-mono);
+}
+
+.festive-fall .festive-sprite {
+  left: var(--x);
+  top: calc(var(--s) * -1.5);
+  animation: festive-fall var(--d) linear var(--delay) both;
+}
+.festive-drift .festive-sprite {
+  left: var(--x);
+  top: var(--y);
+  animation: festive-drift var(--d) linear var(--delay) both;
+}
+.festive-burst .festive-sprite {
+  left: var(--ox);
+  top: var(--oy);
+  animation: festive-burst var(--d) var(--delay) both;
+}
+@keyframes festive-fall {
+  0% { transform: none; opacity: 0; }
+  12%, 75% { opacity: 1; }
+  100% { transform: translateY(75vh); opacity: 0; }
+}
+@keyframes festive-drift {
+  0% { transform: none; opacity: 0; }
+  15%, 80% { opacity: 1; }
+  100% { transform: translateX(40vw); opacity: 0; }
+}
+@keyframes festive-burst {
+  0% {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.15, 0.75, 0.35, 1);
+  }
+  35% {
+    transform: translate(calc(var(--dx) * 0.7 - 50%), calc(var(--dy) - 50%)) rotate(calc(var(--r) * 0.4));
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.55, 0, 0.9, 0.6);
+  }
+  100% {
+    transform: translate(calc(var(--dx) - 50%), calc(var(--dy) + 75vh)) rotate(var(--r));
+    opacity: 0;
+  }
+}
+
+.festive-move-sway { animation: festive-sway 1.2s ease-in-out infinite alternate; }
+.festive-move-waddle { animation: festive-waddle 0.45s ease-in-out infinite alternate; }
+.festive-move-flutter { animation: festive-flutter 0.16s linear infinite alternate; }
+.festive-move-spin { animation: festive-turn 4s linear infinite; }
+.festive-move-twinkle { animation: festive-twinkle 0.9s ease-in-out infinite alternate; }
+@keyframes festive-sway {
+  from { transform: translateX(calc(var(--sway) * -1)) rotate(calc(var(--r) * -1)); }
+  to { transform: translateX(var(--sway)) rotate(var(--r)); }
+}
+@keyframes festive-waddle { from { transform: rotate(-9deg); } to { transform: rotate(9deg) translateY(-2px); } }
+@keyframes festive-flutter { to { transform: scaleX(0.5); } }
+@keyframes festive-turn { to { transform: rotate(360deg); } }
+@keyframes festive-twinkle { from { opacity: 0.25; transform: scale(0.7); } to { opacity: 1; transform: none; } }
