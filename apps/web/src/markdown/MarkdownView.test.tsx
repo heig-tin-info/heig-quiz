@@ -254,6 +254,21 @@ describe("MarkdownView — content", () => {
     expect(body.querySelector("li")).toHaveClass("md-task");
   });
 
+  it("keeps a task box on the line of its text, in a loose list too", () => {
+    const body = view("- [x] first\n\n- [ ] second");
+    const items = body.querySelectorAll("li");
+    expect(items).toHaveLength(2);
+    for (const li of items) {
+      expect(li).toHaveClass("md-task");
+    }
+    expect(items[0]!.querySelector("p")?.textContent?.trim()).toBe("first");
+  });
+
+  it("does not tag an item for a checkbox nested in a table", () => {
+    const body = view("- item\n\n  | a |\n  | --- |\n  | <input type=\"checkbox\"> |");
+    expect(body.querySelector("li")).not.toHaveClass("md-task");
+  });
+
   it("renders nothing at all for empty source", () => {
     const { container } = renderWithProviders(<MarkdownView source={"   \n  "} />);
     expect(container.querySelector(".md-body")).toBeNull();

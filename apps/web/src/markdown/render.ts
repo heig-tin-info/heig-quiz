@@ -416,7 +416,10 @@ function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHo
     if (input.getAttribute("type") !== "checkbox") input.remove();
     else {
       input.setAttribute("disabled", "");
-      input.parentElement?.classList.add("md-task");
+      // Tag the item, not the paragraph a loose list wraps it in; a box nested deeper (a table cell) tags nothing.
+      const host = input.parentElement;
+      const item = host?.tagName === "LI" ? host : host?.tagName === "P" && host.parentElement?.tagName === "LI" ? host.parentElement : null;
+      item?.classList.add("md-task");
     }
   }
 
