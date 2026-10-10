@@ -21,9 +21,10 @@
  *      publication). It is the cheap FILTER, priced on what re2js is known
  *      to do.
  *   3. The measured build time is the INVARIANT, whatever re2js does that
- *      the estimate does not price: a build that takes longer than
- *      {@link SINGLE_BUILD_MS} is refused and never retried, and a question
- *      stops building once its builds have taken {@link CONFIG_BUILD_MS}.
+ *      the estimate does not price: a pattern whose build took longer than
+ *      {@link SINGLE_BUILD_MS} is refused at publication (graded all the
+ *      same: the build is done), and a question stops building once its
+ *      builds have taken {@link CONFIG_BUILD_MS}.
  *   4. The compiled program: at most {@link MAX_PROGRAM_SIZE} instructions,
  *      so one match costs at most that many steps per input character.
  *   5. Its weight in memory (`weightOf`), per pattern and for the whole
@@ -88,7 +89,8 @@ export interface StoredPattern {
 /** Why a pattern cannot be published, or `null` when it compiles within every bound. */
 export function patternProblem(pattern: string, flags = DEFAULT_REGEX_FLAGS): PatternProblem | null {
   const entry = compiled(pattern, flags);
-  return typeof entry === "string" ? entry : null;
+  if (typeof entry.compiled === "string") return entry.compiled;
+  return entry.slow ? "too_complex" : null;
 }
 
 /**
@@ -118,8 +120,8 @@ export function configPatternProblems(patterns: readonly StoredPattern[]): "too_
  * normalizes and truncates). A refused pattern never matches.
  */
 export function testPattern(candidate: string, pattern: string, flags: string): boolean {
-  const entry = compiled(pattern, flags);
-  return typeof entry !== "string" && entry.test(candidate);
+  const { compiled: re } = compiled(pattern, flags);
+  return typeof re !== "string" && re.test(candidate);
 }
 
 // ---------------------------------------------------------------------------
@@ -149,11 +151,14 @@ export const PATTERN_WEIGHT_LIMIT = 250_000;
 export const CACHE_WEIGHT_LIMIT = 48_000_000;
 
 /**
- * The longest one build may take, measured: ten times the slowest build the
- * estimate admits (about 2 ms on Node 24, some twenty times more under test
- * coverage), so that a pause of the process does not refuse a legitimate
- * pattern, while what re2js does that the estimate does not price is cut
- * there. The refusal is cached like any other: the build is never retried.
+ * The longest one build may take, measured, for a pattern to be published:
+ * about ten times the slowest first build the estimate admits (some 5–6 ms
+ * warm, 12 ms first after a start on re2js 2.8.6, twenty times more under
+ * test coverage), so that a pause of the process does not refuse a
+ * legitimate pattern, while what re2js does that the estimate does not price
+ * is refused there. A slow build is not thrown away: grading uses it, and
+ * publication refuses the pattern until the entry is evicted or the process
+ * restarts.
  */
 export const SINGLE_BUILD_MS = 50;
 /**
@@ -169,6 +174,8 @@ export const buildClock = { now: (): number => performance.now() };
 interface Entry {
   compiled: RE2JS | PatternProblem;
   weight: number;
+  /** Its build took longer than {@link SINGLE_BUILD_MS}: refused at publication, still used to grade. */
+  slow?: boolean;
 }
 
 /**
@@ -180,18 +187,20 @@ interface Entry {
 const cache = new Map<string, Entry>();
 let cacheWeight = 0;
 
-function compiled(pattern: string, flags: string): RE2JS | PatternProblem {
+function compiled(pattern: string, flags: string): Entry {
   // The length prefix keeps `flags + pattern` unambiguous whatever either holds.
   const key = `${flags.length}:${flags}${pattern}`;
   const hit = cache.get(key);
   if (hit !== undefined) {
     cache.delete(key);
     cache.set(key, hit);
-    return hit.compiled;
+    return hit;
   }
   const start = buildClock.now();
-  let entry = compile(pattern, flags);
-  if (buildClock.now() - start > SINGLE_BUILD_MS) entry = { compiled: "too_complex", weight: 0 };
+  const entry = compile(pattern, flags);
+  // Refusing a build already finished saves nothing, and a published
+  // matcher that suddenly never matched would grade right answers wrong.
+  if (buildClock.now() - start > SINGLE_BUILD_MS) entry.slow = true;
   entry.weight += ENTRY_WEIGHT + 2 * key.length;
   cache.set(key, entry);
   cacheWeight += entry.weight;
@@ -200,7 +209,7 @@ function compiled(pattern: string, flags: string): RE2JS | PatternProblem {
     cache.delete(oldest);
     cacheWeight -= old.weight;
   }
-  return entry.compiled;
+  return entry;
 }
 
 /**
@@ -347,7 +356,7 @@ const MAX_FOLD = 0x1e943;
  * Microseconds, measured on Node 24 with re2js 2.8.6: an instruction, a
  * property escape (merged with the folding table under `i`), a class range
  * copied into the one-pass matcher, a folded code point. The worst pattern the
- * caps above admit costs about 5 ms to build.
+ * caps above admit costs about 5–6 ms to build.
  */
 const COST_PER_INSTRUCTION = 1;
 const COST_PER_PROPERTY = { folded: 200, plain: 40 };

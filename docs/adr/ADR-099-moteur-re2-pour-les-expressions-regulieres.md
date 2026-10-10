@@ -41,7 +41,8 @@ blanks, each acceptable alone, built on every draft save.
    the bound below, at most 2 000 code points folded one by one, at most ten
    Unicode property escapes written, at most 50 000 class ranges copied by
    repetitions (a property counting as a thousand) — so the slowest pattern
-   accepted builds in about 2 ms; the compiled program at most 500
+   accepted builds in about 5–6 ms warm, 12 ms the first time after a start
+   (re2js 2.8.6); the compiled program at most 500
    instructions; its weight in memory (its instructions, class runes and
    one-pass tables) at most 250 kB. re2js's prefilter for alternations of
    literals is dropped (it only rules out unanchored searches early, and
@@ -56,13 +57,15 @@ blanks, each acceptable alone, built on every draft save.
    refuses past 25 ms (`regex.config_too_complex`), building none of them.
 4. **The measured time is the invariant, the estimate the filter.** The
    estimate prices what re2js is known to do; whatever it does that the
-   estimate misses is cut by the clock: a build over 50 ms is refused as too
-   complex (and never retried), and a question stops building once its
-   builds have taken 100 ms, refused as `regex.config_too_complex`. Both are
-   about ten and four times what the estimate admits, a margin so that a
-   pause of the process or a coverage run does not refuse a legitimate
-   pattern. A draft save thus costs at most about 150 ms, however re2js
-   evolves.
+   estimate misses is cut by the clock. A pattern whose build took over
+   50 ms (about ten times the slowest first build the estimate admits) is
+   refused at publication as too complex until the entry is evicted or the
+   process restarts; the build is kept, and grading uses it. A question
+   stops building once its builds have taken 100 ms, refused as
+   `regex.config_too_complex`. The margins keep a pause of the process or a
+   coverage run from refusing a legitimate pattern. A draft save thus costs
+   at most 100 ms of builds plus one build whose length the estimate bounds
+   (about 5–6 ms warm, 12 ms the first after a start, on re2js 2.8.6).
 5. **No computed regex.** A cloze regex blank of a parameterized question
    may not hold a `[[…]]` reference (`cloze.computed_regex_key`), as a
    `short` text or regex key may not (ADR-056 §10, `short.computed_text_key`):
@@ -90,11 +93,11 @@ blanks, each acceptable alone, built on every draft save.
 - A rare legitimate pattern is refused as too complex (a CJK range under `i`,
   `.{0,300}`, eleven Unicode classes); the teacher drops the flag or narrows
   the repetition.
-- The measured guard trades a little determinism for a hard ceiling: a
-  build stalled past 50 ms (ten times the costliest the estimate admits) is
-  refused for the life of the process, including at grading. Only a stall
-  of the whole process does that to a legitimate pattern; a restart lifts it.
-- The residual cost is the cold build: about 2 ms for the slowest pattern,
+- The measured guard never changes a grade: a build that took over 50 ms
+  (a stall of the process, a slower host, a cold start) still grades with
+  the program it built. It only refuses that pattern at publication, until
+  the entry is evicted or the process restarts; republishing later passes.
+- The residual cost is the cold build: about 5–6 ms for the slowest pattern,
   25 ms for the costliest question, paid once per process and per pattern
   (after a restart, or when a question's patterns change), and a question's
   compiled patterns (at most 12.5 MB) fit the cache four times over, so

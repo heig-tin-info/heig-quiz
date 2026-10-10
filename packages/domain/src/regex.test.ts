@@ -142,7 +142,7 @@ describe("what a build may cost, read before the build", () => {
   });
 
   it("builds the slowest pattern it accepts", () => {
-    // About 2 ms; coverage, always on in this package, slows it some twentyfold.
+    // About 5–6 ms warm; coverage, always on in this package, slows it some twentyfold.
     expect(elapsed(() => expect(patternProblem(unseen("\\p{Ll}".repeat(10)), "i")).toBeNull())).toBeLessThan(100);
   });
 
@@ -196,7 +196,7 @@ describe("the measured build time, whatever the estimate missed", () => {
     };
   }
 
-  it("refuses a pattern whose build took too long, and never builds it again", () => {
+  it("refuses at publication a pattern whose build took too long, and grades with it all the same", () => {
     const stop = steppingClock(SINGLE_BUILD_MS + 1);
     const pattern = unseen("cheap");
     try {
@@ -204,9 +204,10 @@ describe("the measured build time, whatever the estimate missed", () => {
     } finally {
       stop();
     }
-    // Cached: the clock stopped, the refusal stays.
+    // Cached: the clock stopped, publication still refuses it, never builds it again…
     expect(patternProblem(pattern)).toBe("too_complex");
-    expect(testPattern("cheap", pattern, "i")).toBe(false);
+    // …and grading keeps the build already paid for: a right answer stays right.
+    expect(testPattern("cheap", pattern, "i")).toBe(true);
   });
 
   it("stops building a question's patterns once their builds took the budget", () => {
