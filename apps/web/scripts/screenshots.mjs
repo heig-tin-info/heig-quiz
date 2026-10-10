@@ -1228,6 +1228,8 @@ const scenes = [
     } },
 
   { name: "editor-mcq", role: "teacher", path: "/questions/q2" },
+  { name: "editor-suggest-concepts", role: "teacher", path: "/questions/q2", fold: true, act: async (p) => { await p.getByRole("button", { name: /suggest concepts|suggérer des notions/i }).click(); await p.getByRole("dialog").getByRole("checkbox").first().check(); await p.waitForTimeout(600); } },
+  { name: "editor-suggest-concepts-create", role: "teacher", path: "/questions/q2", act: async (p) => { await p.getByRole("button", { name: /suggest concepts|suggérer des notions/i }).click(); await p.getByRole("dialog").getByRole("button", { name: /^(Create…|Créer…)$/ }).click(); await p.waitForTimeout(600); } },
   // Opened from the grading screen: the trail is that page's own, then the question.
   { name: "editor-from-grading", role: "teacher", path: "/questions/q2?fromGrading=11111111-1111-4111-8111-111111111111" },
   // A choice emptied: the autosave's issue, on the field and named under the list.

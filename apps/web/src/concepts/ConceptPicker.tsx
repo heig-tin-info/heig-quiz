@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Info, Plus, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { CONCEPT_LANGS, ConceptCreate, ConceptExists, type Concept, type ConceptList } from "@quiz/contracts";
+import { CONCEPT_LANGS, ConceptCreate, ConceptExists, type Concept, type ConceptList, type NewConceptName } from "@quiz/contracts";
 import { CONCEPT_LABEL_MAX, CONCEPT_QUALIFIER_MAX, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
 
 import { api, ApiError, wordedRefusal } from "../api";
@@ -59,6 +59,7 @@ export function ConceptPicker({
   poolConceptIds = NO_POOL,
   disabled,
   label,
+  prefill,
 }: {
   /** The ids of the question's concepts, in order. */
   value: readonly string[];
@@ -69,6 +70,11 @@ export function ConceptPicker({
   disabled?: boolean;
   /** The field's label when "Concepts" would repeat the heading around it (the course's Settings). */
   label?: string;
+  /**
+   * A label to create (Suggest concepts): opens the create form with it, once
+   * per object. The teacher still presses Create.
+   */
+  prefill?: NewConceptName | null;
 }) {
   const t = useT();
   const { locale } = useI18n();
@@ -160,6 +166,14 @@ export function ConceptPicker({
       }
     },
   });
+
+  useEffect(() => {
+    if (!prefill) return;
+    setDraft({ label: prefill.label, qualifier: prefill.qualifier });
+    setCreateError(null);
+    setNotice(null);
+    setQuery("");
+  }, [prefill]);
 
   const openDraft = () => {
     const split = splitQualifiedLabel(typed);

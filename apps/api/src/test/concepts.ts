@@ -22,6 +22,7 @@ export async function seedConcept(
   en: ConceptSide = null,
   status: "proposed" | "validated" | "merged" = "validated",
   mergedInto: string | null = null,
+  extra: { createdAt?: Date; description?: string } = {},
 ): Promise<string> {
   const id = randomUUID();
   const side = (s: ConceptSide) => ({ label: s?.[0] ?? null, qualifier: s?.[1] ?? "" });
@@ -38,6 +39,8 @@ export async function seedConcept(
     labelEn: e.label,
     qualifierEn: e.qualifier,
     keyEn: e.label === null ? null : qualifiedConceptKey(e.label, e.qualifier),
+    ...(extra.createdAt ? { createdAt: extra.createdAt } : {}),
+    ...(extra.description ? { descriptionFr: extra.description, descriptionEn: extra.description } : {}),
   });
   return id;
 }

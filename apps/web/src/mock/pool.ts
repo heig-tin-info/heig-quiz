@@ -5,6 +5,7 @@ import {
   type ParametersDraft,
   type QuestionReview,
   type QuestionStats,
+  type ConceptSuggestions,
   type ReviewList,
   type ZodIssueLite,
 } from "@quiz/contracts";
@@ -2852,6 +2853,28 @@ on("POST", "/app/api/questions/:id/generate", (m, body) => {
       ? body.explanation
       : "Une variable locale non initialisée a une valeur indéterminée : la lire est un comportement indéfini.";
   return { config, explanation, ...(program ? { incomplete: "runner_unavailable" } : {}) };
+});
+// "Suggest concepts" (ADR-081 sixth addendum §6): canned, from the vocabulary.
+// Two concepts the question does not hold, one close-only "did you mean" and
+// one new label, so that the screenshots show every kind of row.
+on("POST", "/app/api/questions/:id/suggest-concepts", (m): ConceptSuggestions => {
+  const q = questionOr404(m.groups!.id!);
+  const fr = typeof document !== "undefined" && document.documentElement.lang === "fr";
+  const free = conceptRefs(seedConceptIds(["Pointeur", "Tableau", "Allocation dynamique", "Fuite mémoire"])).filter(
+    (c) => !q.concepts.includes(c.id),
+  );
+  const reasons = fr
+    ? ["L'énoncé la mentionne directement.", "Les choix s'appuient dessus.", "Une notion voisine que la formulation évoque."]
+    : ["The statement mentions it directly.", "The choices rely on it.", "A neighbouring idea the wording hints at."];
+  const [first, second, third] = free;
+  return {
+    existing: [
+      ...(first ? [{ concept: first, reason: reasons[0]! }] : []),
+      ...(second ? [{ concept: second, reason: reasons[1]! }] : []),
+      ...(third ? [{ concept: third, reason: reasons[2]!, asked: { label: fr ? "Allocation mémoire" : "Memory allocation", qualifier: "" } }] : []),
+    ],
+    created: [{ label: fr ? "Déréférencement" : "Dereferencing", qualifier: "", reason: fr ? "Le concept central de la question manque au vocabulaire." : "The question's central idea is missing from the vocabulary." }],
+  };
 });
 function poolReviewList(poolId: string): ReviewList {
   const latest = liveQuestions(poolId).filter((q) => q.versions.length > 0 && !UNREVIEWED_TYPES.has(q.type));

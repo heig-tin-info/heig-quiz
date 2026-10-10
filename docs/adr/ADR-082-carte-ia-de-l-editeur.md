@@ -7,6 +7,10 @@ Accepted (2026-10-08, decisions of the product owner on issue #556).
 Scope: where the LLM actions of one question live in the question editor,
 and what the editor shows of a review.
 
+Amended (2026-10-10, #599 step 8a): §2's condition for drawing the card now
+counts every action, "Suggest concepts" included (see the amendment at the
+end).
+
 Relations: amends [ADR-059](ADR-059-generer-la-reponse.md) §6 (the place of
 "Generate answers") and [ADR-060](ADR-060-revue-llm-des-questions.md) §1
 (the place of "Review now"). What the two actions do is unchanged.
@@ -52,6 +56,21 @@ teacher's call — and had no common place.
    "Review now" the card shows the call's result at once, with no toast.
 5. **Later actions** of the same family (a concept suggestion, ADR-081 §7, #557) land in the same
    card.
+
+## Amendment 2026-10-10: Suggest concepts joins the card
+
+Accepted with the product owner's reading of §5 (issue #599, step 8a).
+
+- **The action.** "Suggest concepts" (ADR-081 sixth addendum §6) is a
+  `secondary` button in the AI card, after "Review now", behind its own
+  hairline. Its dialog lists existing concepts to tick and new labels to
+  create; a new label opens the create form of the Properties panel's concept
+  picker, filled in, which stays the only place a concept is created.
+- **§2 amended.** The card is drawn whenever ANY of its actions applies: the
+  wand (a type with a generator), the review (a published version of a
+  reviewed type), or Suggest concepts. Suggest needs only a model and a
+  writer, so with a model the card is drawn for every type and every state of
+  a question, and is absent only without a model or for a reader.
 
 ## Consequences
 

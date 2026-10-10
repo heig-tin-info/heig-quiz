@@ -975,12 +975,22 @@ describe("QuestionEditor — the AI card (ADR-082)", () => {
     await waitFor(() => expect(within(aside).queryByText("Answers suggested by the AI")).toBeNull());
   }, 20_000);
 
+  it("offers Suggest concepts in the card even where the type has no wand and nothing is published", async () => {
+    mockFetch(routes(mcqDetail(), { "GET /app/api/generate/availability": ok({ available: true, types: [] }) }));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const aside = await card();
+    expect(within(aside).getByRole("button", { name: "Suggest concepts" })).toBeEnabled();
+    expect(within(aside).queryByRole("button", { name: "Generate answers" })).toBeNull();
+    expect(within(aside).queryByRole("button", { name: "Review now" })).toBeNull();
+  });
+
   it("is absent without a model", async () => {
     const { calls } = mockFetch(routes(published(FINDINGS), NO_MODEL));
     renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
     await settled(calls);
     expect(screen.queryByRole("heading", { name: "AI" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Review now" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Suggest concepts" })).toBeNull();
   });
 
   it("is absent for a reader", async () => {

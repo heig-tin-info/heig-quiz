@@ -82,6 +82,7 @@ import {
   AliasCollision,
   ConceptExists,
   ConceptList,
+  ConceptSuggestions,
   ConceptDuplicatesAi,
   ConceptWriteRefusal,
   KioskStation,
@@ -1041,6 +1042,22 @@ describe("the mock's concept creation (ADR-081, third addendum §5)", () => {
 
   it("answers an invalid body with 400 validation", async () => {
     expect((await post({ lang: "fr", label: "--" })).status).toBe(400);
+  });
+});
+
+describe("the mock's Suggest concepts (ADR-081 sixth addendum §6)", () => {
+  it("answers the contract's ConceptSuggestions, with a did-you-mean and a new label, for a question it knows", async () => {
+    const res = await fetch(`/app/api/questions/${questionIds[0]}/suggest-concepts`, { method: "POST", body: JSON.stringify({ config: {} }) });
+    expect(res.status).toBe(200);
+    const out = ConceptSuggestions.parse(await res.json());
+    expect(out.existing.length).toBeGreaterThan(0);
+    expect(out.created).toHaveLength(1);
+    expect(out.existing.some((e) => e.asked !== undefined)).toBe(true);
+  });
+
+  it("is a 404 for a question it does not know", async () => {
+    const res = await fetch("/app/api/questions/00000000-0000-4000-8000-00000000dead/suggest-concepts", { method: "POST", body: JSON.stringify({ config: {} }) });
+    expect(res.status).toBe(404);
   });
 });
 

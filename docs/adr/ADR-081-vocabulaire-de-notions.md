@@ -504,9 +504,9 @@ Settled with the product owner (comment of 2026-10-10 on #599, steps 7–9)
 after a review of the spec. It makes §8 precise. Delivery, in dependency
 order: 7a the course's list (this addendum's §1–§4, implemented), 7b the pool
 filter by course, 7c relations with the merge-cycle policy, 7d coverage in
-the filters, 8a Suggest concepts, 9a the teacher's mastery on the course's
+the filters, 8a Suggest concepts (implemented, §6), 9a the teacher's mastery on the course's
 concepts, 9b the student's mastery (its own ADR first). §5 onwards is the
-decided plan, not yet built; only 7a is.
+decided plan, not yet built, except 7a and 8a.
 
 1. **A plain list.** A course declares a set of concepts: no chapter, level,
    weight or order (they would be columns of the table, not another model).
@@ -553,12 +553,53 @@ decided plan, not yet built; only 7a is.
    loser and the winner and lists them in its audit; a merge that would close
    a longer cycle is refused (409 `concept_merge_cycle`) naming the path;
    never a silent deletion.
-6. **Suggest concepts (8a, not built).** It sends the draft's statement and
+6. **Suggest concepts (8a, built).** It sends the draft's statement and
    choices plus the labels and qualifiers of every live concept (no
    descriptions, no creators); at most five existing concepts and two new
    labels come back, and a new label goes through the explicit create form.
-   Hidden when no model is configured. Building it adds a sentence to
-   [open question 43](../spec/06-questions-ouvertes.md) (the data sent).
+   Hidden when no model is configured. Open question 43 carries the sentence
+   on the data sent. It lives in the editor's AI card
+   ([ADR-082](ADR-082-carte-ia-de-l-editeur.md) §5 and its amendment of
+   2026-10-10), not beside the picker. As built:
+   - **Route and access.** `POST /app/api/questions/:id/suggest-concepts`
+     `{ config }` (contracts `SuggestConceptsRequest`, strict), a pool
+     contributor's like the "Generate answers" wand (a reader 403, an
+     outsider 404); the question's type is the server's. Ten calls a minute
+     per teacher (`LLM_CALLS_PER_MINUTE`), then the gateway's daily cap;
+     errors are `llmArms`'. A draft whose text is empty is a 400
+     `statement_empty` before any model is asked (the wand's own refusal,
+     kept for an excerpt-less draft too).
+   - **Purpose and model.** A new purpose `suggest` in `LLM_PURPOSES` (a text
+     column, no migration), on the default model of the settings: choosing
+     among hundreds of bilingual labels is a judgement the fast model would
+     make worse, and the call is rare and asked for by a person.
+   - **Payload.** The draft's excerpt, cut at 6 000 characters: the model
+     excerpt of the pool description (`questionExcerpt`, built for prompts)
+     read from the type's student view, never from the key. It is the top-level
+     `prompt` (or a cloze's `template`, blanks shown as `___`) and the `text`
+     or `label` of the items of the view's top-level lists: a multiple-choice
+     question's choices (without which are correct), a categorize question's
+     columns and cards, a program's template segments. Never the internal
+     name, the explanation, the answer key, a short answer's accepted
+     answers or a hidden case. A draft that does not parse, or has no
+     statement, sends nothing (400 `statement_empty`). Then one
+     line `cN | fr: label (qualifier) | en: label` per live concept
+     not already on the question (validated first, then oldest, at most
+     1 000), with no id, description, alias, count or creator.
+   - **Reply, validated against the vocabulary read again after the call.**
+     Indexes the call did not send are dropped; a concept merged meanwhile is
+     followed to its winner; one already on the question, a repeat, or an
+     empty reason is dropped; at most five existing. Each "new" label goes
+     through the resolver: one exact match (label or alias) becomes that
+     existing suggestion, a close match only becomes a "did you mean"
+     existing suggestion (`asked` carries what the model typed), an
+     ambiguous one is dropped, a key on the stop list is discarded, and what
+     is left is a new label (at most two, one per key).
+   - **Nothing is stored** and no concept is created: the `llm_calls` row is
+     the only trace. The editor ticks the existing concepts (the question's
+     own concept write, like the picker) and a new label opens the picker's
+     create form filled in. A new label travels as `{ label, qualifier }`,
+     each within its maximum, and so does the `asked` of a "did you mean".
 7. **Mastery (9a, 9b, not built).** The teacher's mastery shows the course's
    concepts with coverage, "no evidence" rows and an "outside the course"
    bucket, with no student by concept matrix in v1. The student's mastery

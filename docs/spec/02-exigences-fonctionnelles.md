@@ -55,7 +55,7 @@ Every requirement is identified `F-AREA-nn`, with its original planning phase P1
 
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
-| F-QST-01 | A question carries a type, an internal name visible to the teacher only, its concepts — taken from the vocabulary shared by the whole instance, never free strings — and a difficulty from 1 to 5 (amended by [ADR-081](../adr/ADR-081-vocabulaire-de-notions.md)). | P1 | M |
+| F-QST-01 | A question carries a type, an internal name visible to the teacher only, its concepts — taken from the vocabulary shared by the whole instance, never free strings — and a difficulty from 1 to 5 (amended by [ADR-081](../adr/ADR-081-vocabulaire-de-notions.md)). On demand and only with a model configured, the editor suggests up to five existing concepts and two new labels for the open draft; the teacher ticks, and a new label goes through the explicit create form (ADR-081 sixth addendum §6). | P1 | M |
 | F-QST-02 | The editor works on the draft. Every change is saved automatically. | P1 | M |
 | F-QST-03 | Publishing validates the draft against the type's schema and creates version N+1 with an optional change note. The draft stays equal to the published version until the next change. | P1 | M |
 | F-QST-04 | The version history can be browsed with a diff of the configuration. A version may be restored into the draft. | P1 | S |

@@ -5,6 +5,7 @@ import {
   ConceptNotFound,
   ConceptWriteRefusal,
   type CategoryNode,
+  type NewConceptName,
   type QuestionMeta,
   type QuestionPatch,
 } from "@quiz/contracts";
@@ -45,6 +46,7 @@ export function MetaPanel({
   categories,
   poolName,
   poolConceptIds,
+  conceptPrefill,
   disabled,
 }: {
   meta: QuestionMeta;
@@ -52,6 +54,8 @@ export function MetaPanel({
   poolName: string;
   /** The concepts the pool already uses: the picker offers them first. */
   poolConceptIds?: readonly string[] | undefined;
+  /** A suggested new concept (the AI card's Suggest concepts): opens the picker's create form with it. */
+  conceptPrefill?: NewConceptName | null;
   disabled?: boolean;
 }) {
   const t = useT();
@@ -139,6 +143,7 @@ export function MetaPanel({
           onChange={(ids) => saveConcepts.mutate(ids)}
           {...(poolConceptIds ? { poolConceptIds } : {})}
           {...(disabled ? { disabled } : {})}
+          prefill={conceptPrefill ?? null}
         />
         {conceptError ? <ErrorText role="alert">{conceptError}</ErrorText> : null}
       </div>

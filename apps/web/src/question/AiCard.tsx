@@ -1,10 +1,12 @@
 import { CircleCheck, CircleX, PenLine, ScanSearch, Sparkles, Undo2, WandSparkles, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { QuestionDetail, QuestionReview } from "@quiz/contracts";
+import type { NewConceptName, QuestionDetail, QuestionReview } from "@quiz/contracts";
 
 import { AppLink } from "../AppLink";
+import { SuggestConcepts } from "../concepts/SuggestConcepts";
 import { useT } from "../i18n";
+import { useLlmAvailability } from "../llmAvailability";
 import { FindingRow } from "../pool/ReviewTab";
 import type { Navigate } from "../router";
 import { Button, Card, cx, RelativeTime, SectionHeading, textLink } from "../ui";
@@ -15,10 +17,11 @@ import { useReviewNow } from "./reviewNow";
  * The LLM actions of a question, in one card of the editor's aside, above
  * "Properties" (ADR-082): "Generate answers" (ADR-059) with its Undo, and
  * "Review now" (ADR-060) with the review of the latest published version,
- * read-only — Fix and Ignore stay in the pool's "LLM review" tab.
+ * read-only — Fix and Ignore stay in the pool's "LLM review" tab — and
+ * "Suggest concepts" (ADR-081 sixth addendum §6, ADR-082 §5), which any type
+ * and any state of the question has.
  *
- * Absent, not disabled, when neither action applies: no model, a reader, a
- * type without a generator that has no review either. Every button is
+ * Absent, not disabled, when no action applies: no model or a reader. Every button is
  * `secondary`: Publish stays the screen's one primary action.
  */
 export function AiCard({
@@ -26,15 +29,22 @@ export function AiCard({
   wand,
   readOnly,
   navigate,
+  draftConfig,
+  onCreateConcept,
 }: {
   data: QuestionDetail;
   wand: Wand;
   readOnly: boolean;
   navigate: Navigate;
+  /** The editor's draft config, saved or not: what Suggest concepts reads. */
+  draftConfig: unknown;
+  /** A new concept the model suggested: the editor opens the picker's create form with it. */
+  onCreateConcept: (name: NewConceptName) => void;
 }) {
   const t = useT();
   const review = useReviewNow(data, readOnly);
-  if (!wand.enabled && !review) return null;
+  const suggest = useLlmAvailability().data?.available === true && !readOnly;
+  if (!wand.enabled && !review && !suggest) return null;
 
   return (
     <Card className="space-y-4 p-4">
@@ -81,6 +91,12 @@ export function AiCard({
           <Button variant="secondary" className="w-full" loading={review.pending} onClick={review.run}>
             {review.pending ? null : <ScanSearch />} {t("review.now")}
           </Button>
+        </div>
+      ) : null}
+
+      {suggest ? (
+        <div className={cx(wand.enabled || review ? "border-t border-line pt-4" : "")}>
+          <SuggestConcepts meta={data.meta} config={draftConfig} onCreate={onCreateConcept} />
         </div>
       ) : null}
     </Card>
