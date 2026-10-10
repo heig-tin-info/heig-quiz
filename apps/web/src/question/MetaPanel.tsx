@@ -11,6 +11,7 @@ import {
 
 import { api, ApiError, apiErrorMessage } from "../api";
 import { ConceptPicker } from "../concepts/ConceptPicker";
+import { SuggestConcepts } from "../concepts/SuggestConcepts";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
 import { Card, ErrorText, Field, FieldLabel, SectionHeading, Segmented, Select } from "../ui";
@@ -45,6 +46,7 @@ export function MetaPanel({
   categories,
   poolName,
   poolConceptIds,
+  draftConfig,
   disabled,
 }: {
   meta: QuestionMeta;
@@ -52,6 +54,8 @@ export function MetaPanel({
   poolName: string;
   /** The concepts the pool already uses: the picker offers them first. */
   poolConceptIds?: readonly string[] | undefined;
+  /** The editor's draft config, saved or not: what Suggest concepts reads. Undefined until it loads. */
+  draftConfig?: unknown;
   disabled?: boolean;
 }) {
   const t = useT();
@@ -61,6 +65,8 @@ export function MetaPanel({
   /** The picker's list while its save is in flight; null: the question's own. */
   const [concepts, setConcepts] = useState<string[] | null>(null);
   const [conceptError, setConceptError] = useState<string | null>(null);
+  /** A suggested new label, handed to the picker's create form. */
+  const [prefill, setPrefill] = useState<{ label: string } | null>(null);
 
   const send = (body: QuestionPatch) =>
     api(`/app/api/questions/${meta.id}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -139,6 +145,17 @@ export function MetaPanel({
           onChange={(ids) => saveConcepts.mutate(ids)}
           {...(poolConceptIds ? { poolConceptIds } : {})}
           {...(disabled ? { disabled } : {})}
+          prefill={prefill}
+        />
+        <SuggestConcepts
+          questionId={meta.id}
+          config={draftConfig}
+          disabled={disabled}
+          onAdd={(ids) => {
+            const held = concepts ?? meta.concepts.map((c) => c.id);
+            saveConcepts.mutate([...held, ...ids.filter((id) => !held.includes(id))]);
+          }}
+          onCreate={(label) => setPrefill({ label })}
         />
         {conceptError ? <ErrorText role="alert">{conceptError}</ErrorText> : null}
       </div>

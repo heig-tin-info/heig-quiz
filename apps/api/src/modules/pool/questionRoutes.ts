@@ -9,6 +9,7 @@ import {
   DraftPut,
   BoolFlag,
   GenerateRequest,
+  SuggestConceptsRequest,
   IdParam,
   PublishBody,
   QuestionCreate,
@@ -27,7 +28,9 @@ import { actorOf } from "../../audit.js";
 import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
 import { rateLimited, readerLang } from "../http.js";
 import { poolChanged } from "./events.js";
-import { generateAnswers, generatorTypes } from "./generate.js";
+import { GenerateRefusal, generateAnswers, generatorTypes } from "./generate.js";
+import { draftTextOf } from "./config.js";
+import { suggestConcepts, SUGGEST_DRAFT_MAX } from "../concept/service.js";
 import * as service from "./service.js";
 import { LLM_CALLS_PER_MINUTE } from "../llm/service.js";
 import { coreFailure, type PoolRouteContext } from "./routeContext.js";
@@ -171,6 +174,33 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
           explanation: body.explanation,
           item: body.item,
           userId: req.user!.id,
+        });
+      },
+    ),
+  );
+
+  /**
+   * "Suggest concepts" (ADR-081 sixth addendum §6): the draft's text, as the
+   * type searches it, against the vocabulary; nothing is stored. A
+   * contributor's, like the wand, and under the same per-minute guard.
+   */
+  const suggestions = new Budget();
+  app.post(
+    "/app/api/questions/:id/suggest-concepts",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: SuggestConceptsRequest, load: onQuestion("contributor") },
+      async ({ req, reply, body, scope }) => {
+        const draft = draftTextOf(scope.question.type, body.config).slice(0, SUGGEST_DRAFT_MAX);
+        if (draft === "") throw new GenerateRefusal("statement_empty");
+        if (!suggestions.spend(`suggest:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
+          return rateLimited(reply, BUDGET_RETRY_AFTER_S);
+        }
+        return suggestConcepts(app.db, app.llmGateway, {
+          questionId: scope.question.id,
+          draft,
+          userId: req.user!.id,
+          lang: readerLang(req),
         });
       },
     ),

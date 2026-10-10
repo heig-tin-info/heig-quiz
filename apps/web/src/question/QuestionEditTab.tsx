@@ -178,6 +178,7 @@ export function QuestionEditTab({
           categories={pool?.categories ?? []}
           poolName={pool?.pool.name ?? "—"}
           poolConceptIds={pool?.concepts.map((c) => c.concept.id)}
+          draftConfig={draft?.config}
           disabled={readOnly}
         />
         {/* Where the type's own settings land, under "Properties". Empty

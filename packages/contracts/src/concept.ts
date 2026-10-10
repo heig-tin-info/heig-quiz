@@ -110,6 +110,34 @@ export const ConceptDuplicatesAi = z.object({
 });
 export type ConceptDuplicatesAi = z.infer<typeof ConceptDuplicatesAi>;
 
+/**
+ * "Suggest concepts" (ADR-081 sixth addendum §6): the editor's draft, saved
+ * or not, as `POST /questions/:id/generate` takes it (the question's type is
+ * the server's). The reply: at most five existing concepts and two new
+ * labels, each with a reason in the reader's language. Nothing is stored.
+ * An `existing` suggestion carries `asked` when the model proposed a NEW label
+ * that is only close to this concept ("did you mean"): the label it typed.
+ */
+export const CONCEPT_SUGGEST_EXISTING_MAX = 5;
+export const CONCEPT_SUGGEST_NEW_MAX = 2;
+export const SuggestConceptsRequest = z.object({ config: z.unknown() }).strict();
+export type SuggestConceptsRequest = z.infer<typeof SuggestConceptsRequest>;
+export const ConceptSuggestions = z.object({
+  existing: z
+    .array(
+      z.object({
+        concept: ConceptRef,
+        reason: z.string().min(1).max(CONCEPT_AI_REASON_MAX),
+        asked: z.string().optional(),
+      }),
+    )
+    .max(CONCEPT_SUGGEST_EXISTING_MAX),
+  created: z
+    .array(z.object({ label: z.string().min(1).max(CONCEPT_LABEL_MAX), reason: z.string().min(1).max(CONCEPT_AI_REASON_MAX) }))
+    .max(CONCEPT_SUGGEST_NEW_MAX),
+});
+export type ConceptSuggestions = z.infer<typeof ConceptSuggestions>;
+
 /** A label must hold a letter or a digit, so that its key is never empty. */
 const ConceptLabel = z
   .string()
