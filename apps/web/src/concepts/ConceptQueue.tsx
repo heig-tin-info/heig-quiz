@@ -3,7 +3,6 @@ import { BookMarked, Check, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { CONCEPT_LANGS, type AdminConcept, type AdminConceptList, type ConceptLang } from "@quiz/contracts";
-import { probableDuplicates } from "@quiz/domain";
 
 import { api, refusalCodeOf } from "../api";
 import { useI18n, useT } from "../i18n";
@@ -21,8 +20,9 @@ import {
   Segmented,
   Skeleton,
 } from "../ui";
-import { ConceptDuplicates } from "./ConceptDuplicates";
+import { ConceptDuplicates, duplicatePairs } from "./ConceptDuplicates";
 import { ConceptSheet } from "./ConceptSheet";
+import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 
@@ -60,21 +60,21 @@ export function ConceptQueue() {
   const proposed = all?.filter((c) => c.status === "proposed").length ?? 0;
   const q = typed.trim();
   const rows = useMemo(() => {
-    const byStatus = (all ?? []).filter((c) => filter === "all" || filter === "duplicates" || c.status === filter);
+    if (filter === "duplicates") return [];
+    const byStatus = (all ?? []).filter((c) => filter === "all" || c.status === filter);
     if (q === "") return byStatus;
     // The proposed ones stay ahead of the validated ones, as without a search (the picker's `first`).
     const proposedIds = new Set(byStatus.filter((c) => c.status === "proposed").map((c) => c.id));
     return rankConcepts(q, byStatus, locale, proposedIds);
   }, [all, filter, q, locale]);
 
-  const found = useMemo(() => probableDuplicates(all ?? []), [all]);
+  const found = useMemo(() => duplicatePairs(all ?? []), [all]);
   // Under a search, the pairs of which a concept matches.
   const pairs = useMemo(() => {
     if (q === "") return found;
     const matched = new Set(rankConcepts(q, all ?? [], locale).map((c) => c.id));
-    return found.filter((p) => matched.has(p.a) || matched.has(p.b));
+    return found.filter((p) => matched.has(p.a.id) || matched.has(p.b.id));
   }, [found, all, q, locale]);
-  const duplicates = found.length;
   const edited = all?.find((c) => c.id === editing);
 
   const validate = useMutation({
@@ -105,7 +105,7 @@ export function ConceptQueue() {
             { value: "validated", label: t("admin.concepts.filter.validated") },
             {
               value: "duplicates",
-              label: duplicates > 0 ? t("admin.concepts.filter.duplicatesCount", { n: duplicates }) : t("admin.concepts.filter.duplicates"),
+              label: found.length > 0 ? t("admin.concepts.filter.duplicatesCount", { n: found.length }) : t("admin.concepts.filter.duplicates"),
             },
           ]}
         />
@@ -185,9 +185,7 @@ function ConceptRow({
       <div className="min-w-0 flex-1 basis-60 space-y-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-semibold">{name}</span>
-          <Badge tone={c.status === "validated" ? "green" : "amber"}>
-            {c.status === "validated" ? t("admin.concepts.status.validated") : t("admin.concepts.status.proposed")}
-          </Badge>
+          <ConceptStatusBadge status={c.status} />
           {missing.map((lang) => (
             <Badge key={lang} tone="red">
               {lang === "fr" ? t("admin.concepts.missing.fr") : t("admin.concepts.missing.en")}

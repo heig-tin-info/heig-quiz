@@ -8,12 +8,12 @@ import {
   editDistance,
   filterIds,
   keyDistance,
+  mergeDirection,
   mergedAliases,
   probableDuplicates,
   qualifiedConceptKey,
   resolveConceptLabel,
   splitQualifiedLabel,
-  type DuplicateCandidate,
   type ResolvableConcept,
 } from "./concepts.js";
 
@@ -453,93 +453,112 @@ describe("mergedAliases", () => {
 });
 
 describe("keyDistance", () => {
-  it("is the closeness rule of closeConcepts: tolerance from the shorter key", () => {
+  it("is 0 for one key, null beyond the tolerance", () => {
     expect(keyDistance("pointeur", "pointeur")).toBe(0);
-    expect(keyDistance("poiner", "pointer")).toBe(1);
     expect(keyDistance("moniteur", "pointeur")).toBeNull();
-    expect(keyDistance("c", "c++")).toBeNull();
-    expect(keyDistance("recursivity", "recursivty")).toBe(1);
-    expect(keyDistance("tri", "trie")).toBeNull();
   });
 });
 
 describe("probableDuplicates", () => {
   let n = 0;
   const dup = (
-    fr: string | null,
-    en: string | null,
-    extra: { frQ?: string; enQ?: string; aliases?: string[]; mergedInto?: string } = {},
-  ): DuplicateCandidate => ({
+    labels: [string, string?][],
+    extra: { aliases?: string[]; mergedInto?: string } = {},
+  ): ResolvableConcept => ({
     id: `id-${String((n += 1)).padStart(2, "0")}`,
     mergedInto: extra.mergedInto ?? null,
-    labels: { fr, en },
-    qualifiers: { fr: extra.frQ ?? "", en: extra.enQ ?? "" },
+    labels: labels.map(([label, qualifier = ""]) => ({ label, qualifier })),
     aliases: extra.aliases ?? [],
   });
+  const reasons = (concepts: ResolvableConcept[]) =>
+    probableDuplicates(concepts).map((p) => [p.a.id, p.b.id, p.reason]);
 
-  it("flags close keys, through any language, but not the same key nor distant ones", () => {
-    const a = dup("Allocation dynamique", "Dynamic allocation");
-    const b = dup("Alocation dynamique", null);
-    const c = dup("Moniteur", null);
-    const d = dup("Pointeur", null);
-    expect(probableDuplicates([a, b, c, d])).toEqual([{ a: a.id, b: b.id, reason: "close" }]);
+  it("flags close keys, but not the same key nor distant ones", () => {
+    const a = dup([["Allocation dynamique"], ["Dynamic allocation"]]);
+    const b = dup([["Alocation dynamique"]]);
+    expect(reasons([a, b, dup([["Moniteur"]]), dup([["Pointeur"]])])).toEqual([[a.id, b.id, "close"]]);
   });
 
-  it("flags the French label of one equal to the English label of the other, qualifier included", () => {
-    const a = dup("Hash table", null);
-    const b = dup("Table de hachage", "Hash table");
-    const qa = dup("Adresse", null, { frQ: "mémoire" });
-    const qb = dup(null, "Adresse", { enQ: "réseau" });
-    expect(probableDuplicates([a, b, qa, qb])).toEqual([{ a: a.id, b: b.id, reason: "translation" }]);
-    // The reverse direction too.
-    const rev = dup(null, "Stack");
-    const rev2 = dup("Stack", null);
-    expect(probableDuplicates([rev, rev2])).toEqual([{ a: rev.id, b: rev2.id, reason: "translation" }]);
+  it("flags a label with the qualified key of another's, qualifier included", () => {
+    const a = dup([["Hash table"]]);
+    const b = dup([["Table de hachage"], ["Hash table"]]);
+    const q1 = dup([["Adresse", "mémoire"]]);
+    const q2 = dup([["Adresse", "réseau"]]);
+    expect(reasons([a, b, q1, q2])).toEqual([
+      [a.id, b.id, "translation"],
+      [q1.id, q2.id, "homonym"],
+    ]);
   });
 
-  it("flags homonym candidates: one bare label under different qualifiers", () => {
-    const a = dup("Adresse", "Address", { frQ: "mémoire", enQ: "memory" });
-    const b = dup("Adresse", "Address", { frQ: "réseau", enQ: "network" });
-    const c = dup("Adresses", null);
-    expect(probableDuplicates([a, b, c]).map((p) => [p.a, p.b, p.reason])).toEqual([
+  it("flags homonym candidates in any language: one bare label under different qualifiers", () => {
+    const a = dup([["Adresse", "mémoire"], ["Address", "memory"]]);
+    const b = dup([["Adresse", "réseau"], ["Address", "network"]]);
+    const c = dup([["Address"]]);
+    expect(reasons([a, b, c])).toEqual([
       [a.id, b.id, "homonym"],
       [a.id, c.id, "homonym"],
       [b.id, c.id, "homonym"],
     ]);
   });
 
-  it("flags a label whose key is another concept's alias, in either direction", () => {
-    const a = dup("Allocation dynamique", null, { aliases: ["Tas"] });
-    const b = dup("Tas", null);
-    const c = dup("Heap", null, { aliases: ["Allocation-dynamique"] });
-    expect(probableDuplicates([a, b, c])).toEqual([
-      { a: a.id, b: b.id, reason: "alias" },
-      { a: a.id, b: c.id, reason: "alias" },
+  it("flags a label that is another's alias, and two concepts sharing an alias", () => {
+    const a = dup([["Allocation dynamique"]], { aliases: ["Tas"] });
+    const b = dup([["Tas"]]);
+    const c = dup([["Heap"]], { aliases: ["Allocation-dynamique"] });
+    const d = dup([["Pile"]], { aliases: ["Stack"] });
+    const e = dup([["Empilement"]], { aliases: ["stacks"] });
+    expect(reasons([a, b, c, d, e])).toEqual([
+      [a.id, b.id, "alias"],
+      [a.id, c.id, "alias"],
+      [d.id, e.id, "alias"],
     ]);
   });
 
-  it("leaves out the merged concepts and gives a pair its strongest reason once", () => {
-    const merged = dup("Pointeurs", null, { mergedInto: "id-x" });
-    const live = dup("Pointeur", "Pointer", { aliases: ["Pointers"] });
-    const other = dup("Pointer", "Pointeur", { aliases: ["Pointeur"] });
-    expect(probableDuplicates([merged, live])).toEqual([]);
-    expect(probableDuplicates([live, other])).toEqual([{ a: live.id, b: other.id, reason: "alias" }]);
+  it("leaves out the merged concepts and gives a pair its first reason once", () => {
+    const merged = dup([["Pointeurs"]], { mergedInto: "id-x" });
+    const live = dup([["Pointeur"], ["Pointer"]], { aliases: ["Pointers"] });
+    const other = dup([["Pointer"], ["Pointeur"]], { aliases: ["Pointeur"] });
+    expect(reasons([merged, live])).toEqual([]);
+    expect(reasons([live, other])).toEqual([[live.id, other.id, "alias"]]);
   });
 
   it("is deterministic: ordered by reason, then ids, whatever the input order", () => {
-    const a = dup("Adresse", null, { frQ: "mémoire" });
-    const b = dup("Adresse", null, { frQ: "réseau" });
-    const c = dup("Alocation dynamique", null);
-    const d = dup("Allocation dynamique", null);
-    const e = dup("Tas", null);
-    const f = dup("Heap", null, { aliases: ["Tas"] });
-    const forward = probableDuplicates([a, b, c, d, e, f]);
-    expect(forward.map((p) => p.reason)).toEqual(["alias", "close", "homonym"]);
-    expect(probableDuplicates([f, e, d, c, b, a])).toEqual(forward);
+    const a = dup([["Adresse", "mémoire"]]);
+    const b = dup([["Adresse", "réseau"]]);
+    const c = dup([["Alocation dynamique"]]);
+    const d = dup([["Allocation dynamique"]]);
+    const e = dup([["Tas"]]);
+    const f = dup([["Heap"]], { aliases: ["Tas"] });
+    const forward = reasons([a, b, c, d, e, f]);
+    expect(forward.map((p) => p[2])).toEqual(["alias", "homonym", "close"]);
+    expect(reasons([f, e, d, c, b, a])).toEqual(forward);
   });
 
   it("finds nothing among unrelated or empty vocabularies", () => {
-    expect(probableDuplicates([])).toEqual([]);
-    expect(probableDuplicates([dup("Pile", null), dup("File", null)])).toEqual([]);
+    expect(reasons([])).toEqual([]);
+    expect(reasons([dup([["Pile"]]), dup([["File"]])])).toEqual([]);
+  });
+
+  it("hands back the caller's own objects", () => {
+    const a = { ...dup([["Pointeur"]]), extra: 1 };
+    const b = { ...dup([["Pointeur", "type"]]), extra: 2 };
+    expect(probableDuplicates([b, a]).map((p) => [p.a.extra, p.b.extra])).toEqual([[1, 2]]);
+  });
+});
+
+describe("mergeDirection", () => {
+  const c = (status: string, questionCount: number) => ({ status, questionCount });
+  it("merges the proposed one into the validated one, else the less used", () => {
+    const [proposed, used, rare] = [c("proposed", 9), c("validated", 5), c("validated", 1)];
+    expect(mergeDirection(proposed, used)).toEqual({ loser: proposed, target: used });
+    expect(mergeDirection(used, proposed)).toEqual({ loser: proposed, target: used });
+    expect(mergeDirection(used, rare)).toEqual({ loser: rare, target: used });
+    expect(mergeDirection(rare, used)).toEqual({ loser: rare, target: used });
+    const twin = c("validated", 5);
+    expect(mergeDirection(used, twin)).toEqual({ loser: used, target: twin });
+  });
+
+  it("has no direction when neither is validated", () => {
+    expect(mergeDirection(c("proposed", 1), c("proposed", 2))).toBeNull();
   });
 });

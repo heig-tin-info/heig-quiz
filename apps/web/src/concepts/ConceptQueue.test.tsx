@@ -367,24 +367,19 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       await waitFor(() => expect(calls.find((c) => c.url.endsWith("/merge"))?.body).toEqual({ into: pointer.id, keepAsAlias: false }));
     });
 
-    it("merges the less used of two validated concepts, and not the other way", async () => {
-      const used = concept(20, { status: "validated", labels: { fr: "Allocation mémoire", en: "Memory allocation" }, questionCount: 9, deletable: false });
-      const rare = concept(21, { status: "validated", labels: { fr: "Alocation mémoire", en: "Memory alocation" }, questionCount: 1, deletable: false });
-      mockFetch({ [LIST]: ok(page([used, rare])) });
-      await open();
-      expect(screen.getByRole("button", { name: /merge memory alocation into memory allocation/i })).toBeInTheDocument();
-      expect(screen.getAllByText("9 questions")).toHaveLength(1);
-    });
-
     it("offers no merge for homonym candidates, and none while neither is validated", async () => {
       mockFetch({ [LIST]: ok(page([memory, network, hash, hashEn])) });
       await open();
-      const rows = screen.getAllByRole("listitem").filter((li) => li.querySelector(":scope > div"));
+      // The pair's own row comes before the concept lines nested in it.
+      const rows = screen.getAllByRole("listitem");
       const homonyms = rows.find((li) => within(li).queryByText("Same label"));
       expect(homonyms).toBeDefined();
       expect(within(homonyms!).queryByRole("button", { name: /merge/i })).toBeNull();
       expect(within(homonyms!).getByText(/check the qualifiers/i)).toBeInTheDocument();
       const translation = rows.find((li) => within(li).queryByText("Translation"));
+      // Each concept shows the label that matches, with its language.
+      expect(within(translation!).getByText("Hash table (FR)")).toBeInTheDocument();
+      expect(within(translation!).getByText("Hash table (EN)")).toBeInTheDocument();
       expect(within(translation!).queryByRole("button", { name: /merge/i })).toBeNull();
       expect(within(translation!).getByText(/validate one of them/i)).toBeInTheDocument();
     });

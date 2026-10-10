@@ -395,92 +395,89 @@ export function filterIds(resolution: LabelResolution): string[] {
 }
 
 /**
- * A concept as the duplicate check reads it: the shape of the contracts'
- * `Concept`, so a caller hands it over as it is.
+ * Why two concepts are flagged (ADR-081 fifth addendum §4), in precedence
+ * order: a pair carries the first reason that holds.
+ * - `alias`: a name of one (label or alias) has the key of an alias of the
+ *   other, so the typed word is ambiguous for every teacher. This is
+ *   {@link checkAlias}'s collision, seen from both concepts;
+ * - `translation`: a label of one has the same qualified key as a label of
+ *   the other (the per-language unique index makes that a French label
+ *   against an English one);
+ * - `homonym`: the same bare label under different qualifiers. Often
+ *   legitimate: the admin checks the qualifiers, a merge is not proposed;
+ * - `close`: two labels a few edits apart ({@link keyDistance}, the
+ *   resolver's own rule), but not the same.
  */
-export interface DuplicateCandidate {
-  id: string;
-  mergedInto: string | null;
-  labels: Record<ConceptLanguage, string | null>;
-  qualifiers: Record<ConceptLanguage, string>;
-  aliases: readonly string[];
-}
-
-/**
- * Why two concepts are flagged (ADR-081 fifth addendum §4), strongest first
- * (a pair carries the first that holds):
- * - `alias`: a label of one has the key of an alias of the other, so the
- *   typed word is ambiguous for every teacher;
- * - `translation`: the French label of one has the key (qualifier included)
- *   of the English label of the other, or the reverse;
- * - `homonym`: the same bare label in one language under different
- *   qualifiers. Often legitimate: the admin checks the qualifiers, a merge
- *   is not proposed;
- * - `close`: two labels, in any language, are a few edits apart
- *   ({@link keyDistance}, the resolver's own rule), but not the same.
- */
-export const DUPLICATE_REASONS = ["alias", "translation", "close", "homonym"] as const;
+export const DUPLICATE_REASONS = ["alias", "translation", "homonym", "close"] as const;
 export type DuplicateReason = (typeof DUPLICATE_REASONS)[number];
 
-export interface DuplicatePair {
-  /** The two concepts' ids, in ascending order. */
-  a: string;
-  b: string;
-  reason: DuplicateReason;
-}
-
+/** A concept's keys, computed once. */
 interface Keyed {
-  id: string;
-  /** Per language: the bare key and the qualified key of the label. */
-  sides: { lang: ConceptLanguage; bare: string; full: string }[];
-  aliasKeys: Set<string>;
+  /** Each label: its bare key and its qualified key. */
+  labels: { bare: string; full: string }[];
+  aliases: Set<string>;
 }
 
-function reasonOf(x: Keyed, y: Keyed): DuplicateReason | null {
-  const aliased = (from: Keyed, to: Keyed) => from.sides.some((s) => to.aliasKeys.has(s.bare));
-  if (aliased(x, y) || aliased(y, x)) return "alias";
-  const crossed = (test: (s: Keyed["sides"][number], o: Keyed["sides"][number]) => boolean) =>
-    x.sides.some((s) => y.sides.some((o) => test(s, o)));
-  if (crossed((s, o) => s.lang !== o.lang && s.full === o.full)) return "translation";
-  if (crossed((s, o) => s.lang === o.lang && s.bare === o.bare && s.full !== o.full)) return "homonym";
-  if (crossed((s, o) => (keyDistance(s.bare, o.bare) ?? 0) > 0)) return "close";
-  return null;
-}
+const TESTS: Record<DuplicateReason, (x: Keyed, y: Keyed) => boolean> = {
+  alias: (x, y) => {
+    const names = (k: Keyed) => new Set([...k.labels.map((l) => l.bare), ...k.aliases]);
+    const [nx, ny] = [names(x), names(y)];
+    return [...x.aliases].some((a) => ny.has(a)) || [...y.aliases].some((a) => nx.has(a));
+  },
+  translation: (x, y) => x.labels.some((l) => y.labels.some((o) => l.full === o.full)),
+  homonym: (x, y) => x.labels.some((l) => y.labels.some((o) => l.bare === o.bare && l.full !== o.full)),
+  close: (x, y) => x.labels.some((l) => y.labels.some((o) => (keyDistance(l.bare, o.bare) ?? 0) > 0)),
+};
 
 /**
  * The pairs of concepts that are probably one (ADR-081 fifth addendum §4),
  * computed from labels, qualifiers and aliases alone: no model, nothing
  * stored. Merged concepts are left out. At most one pair, with its first
- * {@link DuplicateReason}, per two concepts; ordered by reason, then ids.
+ * {@link DuplicateReason}, per two concepts; ordered by reason, then ids,
+ * the lower id first.
  *
- * Every pair is compared (a label's key is computed once), so the cost is
- * quadratic in the vocabulary: meant for hundreds of concepts, which the
+ * Every pair is compared (a concept's keys are computed once), so the cost
+ * is quadratic in the vocabulary: meant for hundreds of concepts, which the
  * vocabulary is (tens of thousands of comparisons).
  */
-export function probableDuplicates(concepts: readonly DuplicateCandidate[]): DuplicatePair[] {
-  const keyed: Keyed[] = concepts
+export function probableDuplicates<C extends ResolvableConcept>(
+  concepts: readonly C[],
+): { a: C; b: C; reason: DuplicateReason }[] {
+  const live = concepts
     .filter((c) => !c.mergedInto)
-    .map((c) => ({
-      id: c.id,
-      sides: (["fr", "en"] as const).flatMap((lang) => {
-        const label = c.labels[lang];
-        return label === null
-          ? []
-          : [{ lang, bare: conceptKey(label), full: qualifiedConceptKey(label, c.qualifiers[lang]) }];
-      }),
-      aliasKeys: new Set(c.aliases.map(conceptKey)),
-    }))
-    .sort((p, q) => (p.id < q.id ? -1 : 1));
-  const out: DuplicatePair[] = [];
-  for (let i = 0; i < keyed.length; i++) {
-    for (let j = i + 1; j < keyed.length; j++) {
-      const reason = reasonOf(keyed[i]!, keyed[j]!);
-      if (reason) out.push({ a: keyed[i]!.id, b: keyed[j]!.id, reason });
+    .sort((p, q) => (p.id < q.id ? -1 : 1))
+    .map((concept) => ({
+      concept,
+      keys: {
+        labels: concept.labels.map((l) => ({ bare: conceptKey(l.label), full: qualifiedConceptKey(l.label, l.qualifier) })),
+        aliases: new Set(concept.aliases.map(conceptKey)),
+      } satisfies Keyed,
+    }));
+  const out: { a: C; b: C; reason: DuplicateReason }[] = [];
+  for (const [i, x] of live.entries()) {
+    for (const y of live.slice(i + 1)) {
+      const reason = DUPLICATE_REASONS.find((r) => TESTS[r](x.keys, y.keys));
+      if (reason) out.push({ a: x.concept, b: y.concept, reason });
     }
   }
   const rank = (r: DuplicateReason) => DUPLICATE_REASONS.indexOf(r);
   // `sort` is stable and the pairs came in id order.
   return out.sort((p, q) => rank(p.reason) - rank(q.reason));
+}
+
+/**
+ * Which of two probable duplicates goes into the other (a merge target is
+ * validated, fifth addendum §2), or null when neither can be the target.
+ * With two validated ones the less used goes; the first on a tie.
+ */
+export function mergeDirection<C extends { status: string; questionCount: number }>(
+  a: C,
+  b: C,
+): { loser: C; target: C } | null {
+  if (a.status !== "validated" && b.status !== "validated") return null;
+  if (a.status !== "validated") return { loser: a, target: b };
+  if (b.status !== "validated") return { loser: b, target: a };
+  return b.questionCount < a.questionCount ? { loser: b, target: a } : { loser: a, target: b };
 }
 
 /** The longest label, and qualifier, a concept takes (the contracts' bound). */

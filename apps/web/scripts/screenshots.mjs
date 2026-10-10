@@ -1568,7 +1568,10 @@ const scenes = [
       await p.getByRole("checkbox", { name: /as an alias of/i }).check({ force: true });
     } },
   // Probable duplicates (fifth addendum, PR4a): the filter's pairs, one per reason, then a merge opened with its target chosen.
-  { name: "admin-concepts-duplicates", role: "admin", path: "/admin?tab=concepts", act: (p) => p.getByRole("radio", { name: /^duplicates/i }).check({ force: true }) },
+  { name: "admin-concepts-duplicates", role: "admin", path: "/admin?tab=concepts", act: async (p) => {
+      await p.getByRole("radio", { name: /^duplicates/i }).check({ force: true });
+      await skipCoach(p);
+    } },
   { name: "admin-concepts-duplicates-merge", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
       await p.getByRole("radio", { name: /^duplicates/i }).check({ force: true });
       await p.getByRole("button", { name: /^merge dynamic alocation into/i }).click();
