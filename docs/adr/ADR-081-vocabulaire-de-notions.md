@@ -632,36 +632,23 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
    `ConceptPicker` and the bulk bar's rank the concepts of those courses
    first, beside the pool's own (`first` set), so a pool ranks concepts one way.
 9. **The teacher's mastery on the course's concepts (9a, as built).**
-   `GET /classrooms/:id/drill/mastery` (staff of the classroom, the drill
-   teacher routes' own access and 404/403) now answers
-   `DrillClassroomMastery`: `declared`, `concepts`, `outside`. No migration,
-   no student by concept matrix, nothing for a student.
+   `GET /classrooms/:id/drill/mastery` answers `DrillClassroomMastery`
+   (`packages/contracts/src/drill.ts` owns the shape). No migration, no
+   student by concept matrix, nothing for a student.
    - **Coverage in one place.** `coverage(db, conceptIds)` in
-     `concept/courseConcepts.ts` gives, for each concept, the concepts it
-     covers, itself included (today only itself). `conceptsCoveredByCourse`
-     and the mastery both go through it; **7d widens this one function** to
-     the narrower concepts and every reader follows (the pool filter, the
-     picker, this mastery; 9b will).
-   - **Counting.** One read of the classroom's reviewed cards by concept,
-     rolled up in memory. A card counts toward **every** listed concept that
-     covers one of its question's concepts (the cards of a concept are
-     counted once per line, the students likewise, the retrievability is the
-     FSRS mean now of those cards). A listed concept no card counts toward is
-     a line with `retrievability: null` and 0 cards: "No evidence yet",
-     never drawn as 0 %. A card no listed concept covers, or whose question
-     has no concept, falls in `outside` (distinct cards and students, their
-     mean, and a line per concept, `concept: null` for none); `outside` is
-     null when nothing is outside. Lines are weakest first, the lines
-     without evidence last. Only reviewed cards that are not suspended count:
-     a card whose evaluation no longer lets its key reach the student
-     (`keyReleased`, the rule that serves it: a withdrawn release) is left
-     out, which ADR-098 §7 will apply to the student's side too. Two more
-     constant-size reads (the evaluations and the latest attempts) carry it.
-   - **No list, flat view.** A course listing no concept gets
-     `declared: false` and the former flat per-concept lines (`concept: null`
-     gathering the questions without any); the screen says to declare the
-     course's concepts in its Settings.
-   - **Web.** The Drill tab's section reads "Mastery on the course's
-     concepts" with bars as before, a no-evidence line in muted italics
-     without bar, and "Outside the course's list" as a folded card.
-
+     `concept/courseConcepts.ts` gives, per concept, the concepts it covers
+     (itself today). `conceptsCoveredByCourse` and the mastery use it; **7d
+     widens this one function**, and 9b will follow.
+   - **Counting** is the pure `drillMastery` of `@quiz/domain`, callable for
+     one student by 9b: a card counts toward **every** listed concept that
+     covers one of its question's concepts; a listed concept nothing counts
+     toward is a line without evidence (null, never 0 %); cards no listed
+     concept covers, or without concept, go to an outside bucket, line by
+     concept.
+   - **Flat fallback.** A course listing no concept gets the flat
+     per-concept view, and the screen says to declare them in its Settings.
+   - **Suspended cards are excluded**, through `keyOpen` of `drill/review.ts`,
+     the one loader of "may this card's key reach its student" that also
+     serves the drill. Kept on the teacher side so the teacher and the
+     student (ADR-098 §7) agree, **pending the product owner's
+     confirmation**.

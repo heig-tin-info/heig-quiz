@@ -248,13 +248,8 @@ export type DrillConceptMastery = z.infer<typeof DrillConceptMastery>;
 export const DrillClassroomMastery = z.object({
   declared: z.boolean(),
   concepts: z.array(DrillConceptMastery),
-  outside: z
-    .object({
-      cards: z.number().int(),
-      students: z.number().int(),
-      retrievability: z.number(),
-      concepts: z.array(DrillConceptMastery),
-    })
+  outside: DrillConceptMastery.omit({ concept: true })
+    .extend({ retrievability: z.number(), concepts: z.array(DrillConceptMastery) })
     .nullable(),
 });
 export type DrillClassroomMastery = z.infer<typeof DrillClassroomMastery>;

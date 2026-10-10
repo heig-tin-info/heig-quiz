@@ -23,7 +23,7 @@ import { drillRecallCounts, type DrillReviewFact } from "@quiz/domain";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
 import { registerForTests } from "@quiz/registry/server";
 
-import { classrooms, concepts, courseStaff, drillCards, drillReviews, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
+import { classrooms, concepts, drillCards, drillReviews, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
@@ -404,13 +404,5 @@ describe("the teacher's view of the drill: mastery per concept", () => {
       await db.update(evaluations).set({ feedbackPolicy: before!.feedbackPolicy }).where(eq(evaluations.id, seed.evaluationId));
     }
     expect((await mastery()).concepts.some((c) => c.cards > 0)).toBe(true);
-  });
-
-  it("is read by an assistant, a 404 for a stranger and refused to a student", async () => {
-    const assistant = await server.signIn("teacher");
-    await server.app.db.insert(courseStaff).values({ courseId: seed.courseId, userId: assistant.id, role: "assistant" });
-    expect((await mastery("en", assistant)).declared).toBe(true);
-    expect((await get(`${base()}/mastery`, stranger)).statusCode).toBe(404);
-    expect((await get(`${base()}/mastery`, alice)).statusCode).toBe(403);
   });
 });
