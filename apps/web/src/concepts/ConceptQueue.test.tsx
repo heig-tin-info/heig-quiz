@@ -83,6 +83,15 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("keeps the proposed concepts ahead of the validated ones under a search", async () => {
+    const both = concept(4, { labels: { fr: "Pointeur nul", en: "Null pointer" } });
+    mockFetch({ [LIST]: ok(page([both, validated])) });
+    renderWithProviders(<ConceptQueue />);
+    await userEvent.type(await screen.findByRole("searchbox", { name: /search a concept/i }), "pointe");
+    await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(2));
+    expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("Null pointer");
+  });
+
   it("deletes an unused concept from its sheet, after a confirmation", async () => {
     const { calls } = mockFetch({
       [LIST]: ok(page([ready])),

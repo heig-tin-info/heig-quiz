@@ -12,6 +12,7 @@ import { concepts, questionConcepts } from "../../db/schema.js";
  * here and there.
  */
 export function conceptReferenced(id: PgColumn): SQL<boolean> {
+  // Drizzle renders an aliased table without its source: `alias(concepts, "merged")` and the raw `as "merged"` below must match.
   const merged = alias(concepts, "merged");
   return sql<boolean>`(exists (select 1 from ${questionConcepts} where ${eq(questionConcepts.conceptId, id)})
     or exists (select 1 from ${concepts} as "merged" where ${eq(merged.mergedInto, id)}))`;

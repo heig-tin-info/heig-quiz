@@ -1,8 +1,7 @@
 /**
  * `GET /admin/concepts`, the curation queue (ADR-081 fifth addendum): the
  * admin alone, `proposed` first, the instance-wide count of live questions
- * (a number, even for a pool the admin cannot reach), what `deletable` says,
- * the filters and the paging.
+ * (a number, even for a pool the admin cannot reach) and what `deletable` says.
  */
 import { randomUUID } from "node:crypto";
 

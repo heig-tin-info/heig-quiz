@@ -58,7 +58,9 @@ export function ConceptQueue() {
     const byStatus = (all ?? []).filter((c) => filter === "all" || c.status === filter);
     if (q === "") return byStatus;
     const byId = new Map(byStatus.map((c) => [c.id, c]));
-    return rankConcepts(q, byStatus, locale).flatMap((c) => byId.get(c.id) ?? []);
+    // The proposed ones stay ahead of the validated ones, as without a search (the picker's `first`).
+    const proposedIds = new Set(byStatus.filter((c) => c.status === "proposed").map((c) => c.id));
+    return rankConcepts(q, byStatus, locale, proposedIds).flatMap((c) => byId.get(c.id) ?? []);
   }, [all, filter, q, locale]);
   const edited = all?.find((c) => c.id === editing);
 
@@ -120,16 +122,16 @@ export function ConceptQueue() {
       ) : (
         <Card>
           <ul className="divide-y divide-line">
-              {rows.map((c) => (
-                <ConceptRow
-                  key={c.id}
-                  concept={c}
-                  validating={validate.isPending && validate.variables === c.id}
-                  failed={validate.isError && validate.variables === c.id ? validate.error : null}
-                  onValidate={() => validate.mutate(c.id)}
-                  onEdit={() => setEditing(c.id)}
-                />
-              ))}
+            {rows.map((c) => (
+              <ConceptRow
+                key={c.id}
+                concept={c}
+                validating={validate.isPending && validate.variables === c.id}
+                failed={validate.isError && validate.variables === c.id ? validate.error : null}
+                onValidate={() => validate.mutate(c.id)}
+                onEdit={() => setEditing(c.id)}
+              />
+            ))}
           </ul>
         </Card>
       )}
