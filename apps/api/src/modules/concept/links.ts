@@ -167,8 +167,8 @@ async function createAll(
 
 /**
  * Share-locks `ids` in id order, and answers the ones that are not merged.
- * Every writer of links and the merge (`merge.ts`, `FOR UPDATE` in id order)
- * lock in the same order, so none deadlocks with another.
+ * Every writer of links and the merge (`merge.ts`, `FOR UPDATE` in id order) lock in id order,
+ * so merges and writers do not deadlock among themselves; a chained merge racing a writer may abort one side (40P01), never corrupting data.
  */
 async function lockConcepts(tx: Db | Tx, ids: readonly string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
