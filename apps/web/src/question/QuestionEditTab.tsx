@@ -1,7 +1,7 @@
 import { AlertTriangle, MessageCircleQuestion } from "lucide-react";
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
-import type { Asset, PoolDetail, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
+import type { Asset, NewConceptName, PoolDetail, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
 import { PARAMETERIZED_TYPES } from "@quiz/domain";
 
 import { api } from "../api";
@@ -61,6 +61,8 @@ export function QuestionEditTab({
    * exist on the first render and a ref would never tell the editor it does.
    */
   const [scoringSlot, setScoringSlot] = useState<HTMLDivElement | null>(null);
+  /** A concept the AI card suggested to create: the properties panel's picker opens its form with it. */
+  const [conceptPrefill, setConceptPrefill] = useState<NewConceptName | null>(null);
 
   const uploadAsset = useCallback(
     async (file: File): Promise<string> => {
@@ -172,13 +174,22 @@ export function QuestionEditTab({
       <aside aria-label={t("aside.questionMeta")} className="space-y-5">
         {/* Above "Properties": what the AI can do for this question. On a
             narrow screen the aside follows the explanation, and so does it. */}
-        {draft ? <AiCard data={data} wand={wand} readOnly={readOnly} navigate={navigate} /> : null}
+        {draft ? (
+          <AiCard
+            data={data}
+            wand={wand}
+            readOnly={readOnly}
+            navigate={navigate}
+            draftConfig={draft.config}
+            onCreateConcept={setConceptPrefill}
+          />
+        ) : null}
         <MetaPanel
           meta={data.meta}
           categories={pool?.categories ?? []}
           poolName={pool?.pool.name ?? "—"}
           poolConceptIds={pool?.concepts.map((c) => c.concept.id)}
-          draftConfig={draft?.config}
+          conceptPrefill={conceptPrefill}
           disabled={readOnly}
         />
         {/* Where the type's own settings land, under "Properties". Empty

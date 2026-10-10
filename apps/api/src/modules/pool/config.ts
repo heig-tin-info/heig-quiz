@@ -297,25 +297,6 @@ export function searchTextOf(type: string, internalName: string, config: unknown
   return `${internalName} ${fromType}`.trim().slice(0, 20_000);
 }
 
-/**
- * The text of a draft that is read to a model (Suggest concepts): what the
- * type searches (statement, choices) once the draft validates; otherwise the
- * statement alone (`prompt`, or `text` for a cloze), because the raw fallback
- * of {@link searchTextOf} would carry the settings too.
- */
-export function draftTextOf(type: string, config: unknown): string {
-  try {
-    const t = typeOf(type);
-    return t.searchText((t.keylessConfigSchema ?? t.configSchema).parse(config)).trim();
-  } catch {
-    const raw = typeof config === "object" && config !== null ? (config as Record<string, unknown>) : {};
-    return [raw.prompt, raw.text]
-      .filter((v): v is string => typeof v === "string")
-      .join("\n")
-      .trim();
-  }
-}
-
 /** Every string found in a JSON value, concatenated. Bounded by the caller. */
 function plainText(value: unknown, depth = 0): string {
   if (depth > 6) return "";

@@ -19,7 +19,7 @@ import {
   type StatsReset,
 } from "@quiz/contracts";
 
-import { registeredServerIds } from "@quiz/registry/server";
+import { questionType, registeredServerIds } from "@quiz/registry/server";
 
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import { iso, isoOrNull } from "../../clock.js";
@@ -29,7 +29,7 @@ import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
 import { rateLimited, readerLang } from "../http.js";
 import { poolChanged } from "./events.js";
 import { GenerateRefusal, generateAnswers, generatorTypes } from "./generate.js";
-import { draftTextOf } from "./config.js";
+import { questionExcerpt } from "./excerpt.js";
 import { suggestConcepts, SUGGEST_DRAFT_MAX } from "../concept/service.js";
 import * as service from "./service.js";
 import { LLM_CALLS_PER_MINUTE } from "../llm/service.js";
@@ -180,20 +180,26 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
   );
 
   /**
-   * "Suggest concepts" (ADR-081 sixth addendum §6): the draft's text, as the
-   * type searches it, against the vocabulary; nothing is stored. A
-   * contributor's, like the wand, and under the same per-minute guard.
+   * "Suggest concepts" (ADR-081 sixth addendum §6): the draft's student-view
+   * excerpt (statement and choices, no answer key) against the vocabulary;
+   * nothing is stored. A contributor's, like the wand, and under the same
+   * per-minute guard (its own counter per teacher).
    */
-  const suggestions = new Budget();
   app.post(
     "/app/api/questions/:id/suggest-concepts",
     { preHandler: requireTeacher },
     teacher(
       { params: IdParam, body: SuggestConceptsRequest, load: onQuestion("contributor") },
       async ({ req, reply, body, scope }) => {
-        const draft = draftTextOf(scope.question.type, body.config).slice(0, SUGGEST_DRAFT_MAX);
-        if (draft === "") throw new GenerateRefusal("statement_empty");
-        if (!suggestions.spend(`suggest:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
+        const type = scope.question.type;
+        const draft = questionExcerpt(
+          type,
+          { config: body.config, configVersion: questionType(type).configVersion, variables: null },
+          SUGGEST_DRAFT_MAX,
+        );
+        // No excerpt: no statement, or a draft that does not parse yet — the wand's own refusal.
+        if (draft === null) throw new GenerateRefusal("statement_empty");
+        if (!generations.spend(`suggest:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
           return rateLimited(reply, BUDGET_RETRY_AFTER_S);
         }
         return suggestConcepts(app.db, app.llmGateway, {

@@ -558,21 +558,31 @@ decided plan, not yet built, except 7a and 8a.
    descriptions, no creators); at most five existing concepts and two new
    labels come back, and a new label goes through the explicit create form.
    Hidden when no model is configured. Open question 43 carries the sentence
-   on the data sent. As built:
+   on the data sent. It lives in the editor's AI card
+   ([ADR-082](ADR-082-carte-ia-de-l-editeur.md) §5 and its amendment of
+   2026-10-10), not beside the picker. As built:
    - **Route and access.** `POST /app/api/questions/:id/suggest-concepts`
      `{ config }` (contracts `SuggestConceptsRequest`, strict), a pool
      contributor's like the "Generate answers" wand (a reader 403, an
      outsider 404); the question's type is the server's. Ten calls a minute
      per teacher (`LLM_CALLS_PER_MINUTE`), then the gateway's daily cap;
      errors are `llmArms`'. A draft whose text is empty is a 400
-     `statement_empty` before any model is asked.
+     `statement_empty` before any model is asked (the wand's own refusal,
+     kept for an excerpt-less draft too).
    - **Purpose and model.** A new purpose `suggest` in `LLM_PURPOSES` (a text
      column, no migration), on the default model of the settings: choosing
      among hundreds of bilingual labels is a judgement the fast model would
      make worse, and the call is rare and asked for by a person.
-   - **Payload.** The draft's text, cut at 6 000 characters: what the type
-     searches (statement and choices; for an invalid draft, `prompt` or
-     `text` alone), never the internal name or the explanation; then one
+   - **Payload.** The draft's excerpt, cut at 6 000 characters: the model
+     excerpt of the pool description (`questionExcerpt`, built for prompts)
+     read from the type's student view, never from the key. It is the top-level
+     `prompt` (or a cloze's `template`, blanks shown as `___`) and the `text`
+     or `label` of the items of the view's top-level lists: a multiple-choice
+     question's choices (without which are correct), a categorize question's
+     columns and cards, a program's template segments. Never the internal
+     name, the explanation, the answer key, a short answer's accepted
+     answers or a hidden case. A draft that does not parse, or has no
+     statement, sends nothing (400 `statement_empty`). Then one
      line `cN | fr: label (qualifier) | en: label` per live concept
      not already on the question (validated first, then oldest, at most
      1 000), with no id, description, alias, count or creator.
@@ -588,7 +598,8 @@ decided plan, not yet built, except 7a and 8a.
    - **Nothing is stored** and no concept is created: the `llm_calls` row is
      the only trace. The editor ticks the existing concepts (the question's
      own concept write, like the picker) and a new label opens the picker's
-     create form filled in.
+     create form filled in. A new label travels as `{ label, qualifier }`,
+     each within its maximum, and so does the `asked` of a "did you mean".
 7. **Mastery (9a, 9b, not built).** The teacher's mastery shows the course's
    concepts with coverage, "no evidence" rows and an "outside the course"
    bucket, with no student by concept matrix in v1. The student's mastery

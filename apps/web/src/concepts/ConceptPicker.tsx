@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Info, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { CONCEPT_LANGS, ConceptCreate, ConceptExists, type Concept, type ConceptList } from "@quiz/contracts";
+import { CONCEPT_LANGS, ConceptCreate, ConceptExists, type Concept, type ConceptList, type NewConceptName } from "@quiz/contracts";
 import { CONCEPT_LABEL_MAX, CONCEPT_QUALIFIER_MAX, qualifiedConceptKey, splitQualifiedLabel } from "@quiz/domain";
 
 import { api, ApiError, wordedRefusal } from "../api";
@@ -74,7 +74,7 @@ export function ConceptPicker({
    * A label to create (Suggest concepts): opens the create form with it, once
    * per object. The teacher still presses Create.
    */
-  prefill?: { label: string } | null;
+  prefill?: NewConceptName | null;
 }) {
   const t = useT();
   const { locale } = useI18n();
@@ -169,7 +169,7 @@ export function ConceptPicker({
 
   useEffect(() => {
     if (!prefill) return;
-    setDraft(splitQualifiedLabel(prefill.label) ?? { label: prefill.label, qualifier: "" });
+    setDraft({ label: prefill.label, qualifier: prefill.qualifier });
     setCreateError(null);
     setNotice(null);
     setQuery("");

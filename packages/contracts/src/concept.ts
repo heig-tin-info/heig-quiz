@@ -116,10 +116,13 @@ export type ConceptDuplicatesAi = z.infer<typeof ConceptDuplicatesAi>;
  * the server's). The reply: at most five existing concepts and two new
  * labels, each with a reason in the reader's language. Nothing is stored.
  * An `existing` suggestion carries `asked` when the model proposed a NEW label
- * that is only close to this concept ("did you mean"): the label it typed.
+ * that is only close to this concept ("did you mean"): the name it typed.
  */
 export const CONCEPT_SUGGEST_EXISTING_MAX = 5;
 export const CONCEPT_SUGGEST_NEW_MAX = 2;
+/** A label to create, as the picker's form takes it: label and qualifier apart, each within its maximum. */
+export const NewConceptName = z.object({ label: z.string().min(1).max(CONCEPT_LABEL_MAX), qualifier: z.string().max(CONCEPT_QUALIFIER_MAX) });
+export type NewConceptName = z.infer<typeof NewConceptName>;
 export const SuggestConceptsRequest = z.object({ config: z.unknown() }).strict();
 export type SuggestConceptsRequest = z.infer<typeof SuggestConceptsRequest>;
 export const ConceptSuggestions = z.object({
@@ -128,12 +131,12 @@ export const ConceptSuggestions = z.object({
       z.object({
         concept: ConceptRef,
         reason: z.string().min(1).max(CONCEPT_AI_REASON_MAX),
-        asked: z.string().optional(),
+        asked: NewConceptName.optional(),
       }),
     )
     .max(CONCEPT_SUGGEST_EXISTING_MAX),
   created: z
-    .array(z.object({ label: z.string().min(1).max(CONCEPT_LABEL_MAX), reason: z.string().min(1).max(CONCEPT_AI_REASON_MAX) }))
+    .array(NewConceptName.extend({ reason: z.string().min(1).max(CONCEPT_AI_REASON_MAX) }))
     .max(CONCEPT_SUGGEST_NEW_MAX),
 });
 export type ConceptSuggestions = z.infer<typeof ConceptSuggestions>;

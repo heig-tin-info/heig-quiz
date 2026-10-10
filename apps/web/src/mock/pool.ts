@@ -2871,9 +2871,9 @@ on("POST", "/app/api/questions/:id/suggest-concepts", (m): ConceptSuggestions =>
     existing: [
       ...(first ? [{ concept: first, reason: reasons[0]! }] : []),
       ...(second ? [{ concept: second, reason: reasons[1]! }] : []),
-      ...(third ? [{ concept: third, reason: reasons[2]!, asked: fr ? "Allocation mémoire" : "Memory allocation" }] : []),
+      ...(third ? [{ concept: third, reason: reasons[2]!, asked: { label: fr ? "Allocation mémoire" : "Memory allocation", qualifier: "" } }] : []),
     ],
-    created: [{ label: fr ? "Déréférencement" : "Dereferencing", reason: fr ? "Le concept central de la question manque au vocabulaire." : "The question's central idea is missing from the vocabulary." }],
+    created: [{ label: fr ? "Déréférencement" : "Dereferencing", qualifier: "", reason: fr ? "Le concept central de la question manque au vocabulaire." : "The question's central idea is missing from the vocabulary." }],
   };
 });
 function poolReviewList(poolId: string): ReviewList {
