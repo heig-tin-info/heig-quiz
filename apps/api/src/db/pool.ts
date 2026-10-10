@@ -322,10 +322,10 @@ export const assets = pgTable(
 );
 
 /**
- * Which assets a published version references — the garbage-collection root.
- * TODO(WP7): filled at publication by scanning the markdown of the config for
- * `asset:<uuid>` references. Nothing writes it in the MVP, and nothing
- * collects garbage yet either.
+ * Which assets a published version references. Filled at publication by
+ * `questionWrite.ts` (scan of the config and explanation for `asset:<uuid>`
+ * references); read by `assetReachableBy`, the student's access to an image.
+ * No garbage collector reads it yet.
  */
 export const questionVersionAssets = pgTable(
   "question_version_assets",

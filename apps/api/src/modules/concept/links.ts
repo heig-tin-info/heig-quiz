@@ -53,12 +53,11 @@ export async function droppedKeys(db: Db | Tx): Promise<Map<string, TagDropReaso
   const rows = await db
     .select({ tag: conceptTagSortings.tag, reason: conceptTagSortings.dropReason })
     .from(conceptTagSortings)
-    .where(eq(conceptTagSortings.decision, "drop"))
     .orderBy(conceptTagSortings.tag, conceptTagSortings.poolId);
   const keys = new Map<string, TagDropReason>();
   for (const { tag, reason } of rows) {
     const key = conceptKey(tag);
-    if (key && reason && !keys.has(key)) keys.set(key, reason);
+    if (key && !keys.has(key)) keys.set(key, reason);
   }
   return keys;
 }

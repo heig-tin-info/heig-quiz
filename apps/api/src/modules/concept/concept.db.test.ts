@@ -158,7 +158,7 @@ describe("resolving a typed label", () => {
     await server.app.db.insert(pools).values({ id: poolId, name: "Dropped tags", ownerId: teacher.id });
     await server.app.db
       .insert(conceptTagSortings)
-      .values({ poolId, tag: "lecture-de-code", decision: "drop", dropReason: "task_kind", decidedAt: new Date() });
+      .values({ poolId, tag: "lecture-de-code", dropReason: "task_kind" });
     const [dropped, other, qualified] = await resolve("Lecture de code", "inconnu total", "Lecture de code (cours)");
     expect(dropped).toEqual({ input: "Lecture de code", kind: "dropped", reason: "task_kind" });
     expect(other).toMatchObject({ kind: "unknown" });

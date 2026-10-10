@@ -544,9 +544,7 @@ describe("the concepts of a question (ADR-081 third addendum)", () => {
     await db.insert(conceptTagSortings).values({
       poolId,
       tag: "week-03",
-      decision: "drop",
       dropReason: "organisational",
-      decidedAt: new Date(),
     });
     const error = await refused(id, ["Week 03"], true);
     expect(error).toMatchObject({ code: "concept_dropped", status: 422 });
