@@ -458,9 +458,13 @@ const noGroup = (e: RepoEntry, groupMode: boolean): boolean =>
   groupMode && e.kind === "student" && e.student.enrollmentId !== null;
 /** A student whose seat left the roster: a repository kept, no roster line any more. */
 const leftRoster = (e: RepoEntry): boolean => e.kind === "student" && e.student.enrollmentId === null;
-/** The repository of a row that is still the project's to act on (`actionable`): provisioned, not deleted, not archived. */
-const liveRepo = (e: RepoEntry, p: Pick<ProjectDetail, "archivedAt">): ProjectRepoView | null =>
-  e.repo !== null && actionable(e.repo, p) ? e.repo : null;
+/**
+ * The repository of a row that exists: provisioned and not deleted. The
+ * figures describe the repositories, archived project or not (what can still
+ * be acted on is `actionable`, which the sheet reads).
+ */
+const liveRepo = (e: RepoEntry): ProjectRepoView | null =>
+  e.repo !== null && e.repo.provisionStatus === "ok" && !e.repo.flags.deleted ? e.repo : null;
 
 /** Whether `repo` is ready: provisioned, its invitation accepted or none (in group mode: provisioned). */
 const isReady = (repo: ProjectRepoView, groupMode: boolean): boolean =>
@@ -474,7 +478,7 @@ const isPending = (repo: ProjectRepoView, groupMode: boolean): boolean =>
  * figure and the rows it opens never disagree. Always false for the staff's
  * test repository.
  */
-function matches(e: RepoEntry, filter: RepoFilter, p: Pick<ProjectDetail, "groupMode" | "archivedAt">): boolean {
+function matches(e: RepoEntry, filter: RepoFilter, p: Pick<ProjectDetail, "groupMode">): boolean {
   if (!counted(e)) return false;
   const { groupMode } = p;
   const { repo } = e;
@@ -484,9 +488,9 @@ function matches(e: RepoEntry, filter: RepoFilter, p: Pick<ProjectDetail, "group
     case "notAccepted":
       return repo === null && !noGroup(e, groupMode);
     case "noCommit":
-      return liveRepo(e, p)?.commits === 0;
+      return liveRepo(e)?.commits === 0;
     case "ciFail":
-      return liveRepo(e, p)?.ciStatus === "fail";
+      return liveRepo(e)?.ciStatus === "fail";
     case "toVerify":
       return repo !== null && repo.flags.toVerify;
     case "alerts":
@@ -498,7 +502,7 @@ function matches(e: RepoEntry, filter: RepoFilter, p: Pick<ProjectDetail, "group
 export function filterEntries(
   entries: RepoEntry[],
   filter: RepoFilter | null,
-  p: Pick<ProjectDetail, "groupMode" | "archivedAt">,
+  p: Pick<ProjectDetail, "groupMode">,
 ): RepoEntry[] {
   return filter === null ? entries : entries.filter((e) => matches(e, filter, p));
 }
@@ -529,11 +533,11 @@ export interface ProjectTally {
   own: { n: number; later: number; lastLater: string | null };
 }
 
-export function projectTally(p: Pick<ProjectDetail, "groupMode" | "rows" | "deadlineAt" | "archivedAt">): ProjectTally {
+export function projectTally(p: Pick<ProjectDetail, "groupMode" | "rows" | "deadlineAt">): ProjectTally {
   const entries = repoEntries(p).filter(counted);
   const n = (filter: RepoFilter) => entries.filter((e) => matches(e, filter, p)).length;
   const repos = entries.flatMap((e) => (e.repo ? [e.repo] : []));
-  const live = entries.flatMap((e) => liveRepo(e, p) ?? []);
+  const live = entries.flatMap((e) => liveRepo(e) ?? []);
   const own = repos.filter((r) => r.deadlineAt !== null);
   const later = own.map((r) => r.deadlineAt!).filter((d) => d > p.deadlineAt).sort();
   return {
