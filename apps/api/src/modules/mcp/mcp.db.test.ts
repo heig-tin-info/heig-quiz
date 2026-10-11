@@ -177,6 +177,15 @@ describe("the question-type guide", () => {
     expect(checkConfig(type, guide.example)).toBeNull();
   });
 
+  it("reports a pattern RE2 refuses before anything is published (ADR-099)", () => {
+    const example = (describeQuestionType("short") as unknown as { example: Record<string, unknown> }).example;
+    const config = { ...example, matchers: [{ kind: "regex", pattern: "a(?=b)", flags: "i", points: 1 }] };
+    expect(checkConfig("short", config)).toEqual([{ path: "matchers.0.pattern", message: "regex.unsupported" }]);
+    expect(checkConfig("cloze", { configVersion: 2, text: "{{/(a)\\1/}}" })).toEqual([
+      { path: "text", message: "regex.unsupported" },
+    ]);
+  });
+
   it("gives a diagram example that passes the publication checks too (a reference, one kind)", () => {
     const type = questionType("diagram");
     const config = type.configSchema.parse((describeQuestionType("diagram") as { example: unknown }).example);

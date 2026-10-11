@@ -44,7 +44,6 @@ describe("ShortConfigSchema", () => {
     ["no matcher at all", { ...base(), matchers: [] }],
     ["twenty-one matchers", { ...base(), matchers: Array.from({ length: 21 }, (_, i) => ({ kind: "exact", value: `v${i}` })) }],
     ["an unknown matcher kind", { ...base(), matchers: [{ kind: "fuzzy", value: "x" }] }],
-    ["a regex that cannot compile (decision D10)", { ...base(), matchers: [{ kind: "regex", pattern: "a(" }] }],
     ["a regex flag outside imsu", { ...base(), matchers: [{ kind: "regex", pattern: "a", flags: "g" }] }],
     ["a pattern longer than 300 characters", { ...base(), matchers: [{ kind: "regex", pattern: "a".repeat(301) }] }],
     ["an empty prompt", { ...base(), prompt: "" }],
@@ -68,13 +67,10 @@ describe("ShortConfigSchema", () => {
     });
   }
 
-  it("reports an uncompilable pattern on the matcher that carries it", () => {
-    const result = ShortConfigSchema.safeParse({
-      ...base(),
-      matchers: [{ kind: "exact", value: "a" }, { kind: "regex", pattern: "a(" }],
-    });
-    expect(result.error?.issues[0]?.path).toEqual(["matchers", 1, "pattern"]);
-    expect(result.error?.issues[0]?.message).toBe("short.invalid_pattern");
+  it("reads a pattern RE2 refuses: publication refuses it, a read never does (ADR-099)", () => {
+    for (const pattern of ["a(", "(a)\\1", "a(?=b)", "(?:.?){999}"]) {
+      expect(ShortConfigSchema.safeParse({ ...base(), matchers: [{ kind: "regex", pattern }] }).success).toBe(true);
+    }
   });
 
   it("applies the documented defaults", () => {

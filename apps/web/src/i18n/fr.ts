@@ -2851,7 +2851,15 @@ export const fr: Record<keyof Dict, string> = {
     "Placez au moins une carte dans une colonne : une question faite uniquement de distracteurs n'a pas de réponse.",
   "issue.cloze.no_blank": "Écrivez au moins un trou, entre {{ et }}.",
   "issue.cloze.too_many_blanks": "Trop de trous dans ce texte.",
-  "issue.short.invalid_pattern": "Cette expression régulière ne compile pas.",
+  "issue.regex.invalid": "Cette expression régulière ne compile pas.",
+  "issue.regex.invalid_flags": "Une expression régulière n'accepte que les options i, m, s et u, chacune une fois au plus.",
+  "issue.regex.unsupported":
+    "Cette expression régulière utilise une syntaxe propre à JavaScript (référence arrière comme \\1, assertion avant ou arrière comme (?=…) ou (?<=…), échappement \\u), que la correction ne prend pas en charge : les motifs suivent la syntaxe RE2.",
+  "issue.regex.too_complex": "Cette expression régulière est trop complexe : réduisez ses répétitions ou ses plages de caractères.",
+  "issue.regex.config_too_complex":
+    "Ensemble, les expressions régulières de cette question sont trop complexes : simplifiez-en quelques-unes, à commencer par leurs classes Unicode (\\p{…}).",
+  "issue.cloze.computed_regex_key":
+    "Un trou à expression régulière ne peut pas contenir de référence [[…]] : confiez la valeur calculée à un trou numérique ({{#[[x]]}}).",
   "issue.short.integer_expected": "Cette question n'accepte que des nombres entiers.",
   "issue.short.length_range": "La longueur maximale est inférieure à la longueur minimale.",
   "issue.short.number_range": "Le maximum est inférieur au minimum.",

@@ -1,14 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  ALLOWED_REGEX_FLAGS,
   applyTextOptions,
-  compileFullMatch,
   describeMatcher,
   foldCase,
-  InvalidMatcherPattern,
-  isValidPattern,
-  MAX_INPUT_LENGTH,
-  MAX_PATTERN_LENGTH,
   matchDate,
   matchExact,
   matchNumber,
@@ -23,6 +17,7 @@ import {
   withinTolerance,
   type ShortMatcher,
 } from "./short.js";
+import { MAX_INPUT_LENGTH, MAX_PATTERN_LENGTH, patternProblem } from "./regex.js";
 
 describe("normalisation", () => {
   it("folds CRLF, exotic spaces and composed characters", () => {
@@ -58,30 +53,41 @@ describe("exact matcher", () => {
   });
 });
 
-describe("regex matcher (D10)", () => {
+describe("regex matcher (D10, on RE2)", () => {
   it("anchors as a full match", () => {
     expect(matchRegex("abc", "b")).toBe(false);
     expect(matchRegex("abc", "a.c")).toBe(true);
   });
 
-  it("rejects a pattern over 300 characters and forbidden flags", () => {
-    const long = "a".repeat(MAX_PATTERN_LENGTH + 1);
-    expect(() => compileFullMatch(long)).toThrow(InvalidMatcherPattern);
-    expect(() => compileFullMatch("a", "g")).toThrow(/flags must match/);
-    expect(ALLOWED_REGEX_FLAGS.test("imsu")).toBe(true);
-    expect(isValidPattern(long)).toBe(false);
-  });
-
-  it("reports an uncompilable pattern at publication time and never matches at grading time", () => {
-    expect(() => compileFullMatch("([a-")).toThrow(InvalidMatcherPattern);
-    expect(isValidPattern("([a-")).toBe(false);
-    expect(isValidPattern("^[0-9a-f]+$", "i")).toBe(true);
-    expect(matchRegex("abc", "([a-")).toBe(false);
-  });
-
   it("truncates the input to 500 characters before testing", () => {
     expect(matchRegex("a".repeat(MAX_INPUT_LENGTH), "a+")).toBe(true);
     expect(matchRegex(`${"a".repeat(MAX_INPUT_LENGTH)}b`, "a+b")).toBe(false);
+  });
+
+  it("never matches with a pattern RE2 refuses, whatever the answer", () => {
+    for (const pattern of ["([a-", "(a)\\1", "a(?=b)", "a".repeat(MAX_PATTERN_LENGTH + 1)]) {
+      expect(matchRegex("aa", pattern)).toBe(false);
+      expect(matchRegex("ab", pattern)).toBe(false);
+    }
+    expect(matchRegex("a", "a", "g")).toBe(false);
+  });
+
+  it("keeps ordinary patterns, the flags and Unicode input matching as before", () => {
+    expect(matchRegex("Galilée", "galil[ée]e")).toBe(true);
+    expect(matchRegex("GALILÉE", "galilée", "i")).toBe(true);
+    expect(matchRegex("GALILÉE", "galilée", "")).toBe(false);
+    expect(matchRegex("Galilee", "galilée", "i")).toBe(false);
+    expect(matchRegex("192.168.0.1", "\\d{1,3}(\\.\\d{1,3}){3}", "")).toBe(true);
+    expect(matchRegex("the mitochondria", "(the )?mitochondri(a|on)")).toBe(true);
+    expect(matchRegex("a\nb", "a.b", "")).toBe(false);
+    expect(matchRegex("a\nb", "a.b", "s")).toBe(true);
+    expect(matchRegex("foo\nbar", "bar", "m")).toBe(true);
+    expect(matchRegex("Ωμέγα", "\\p{L}+", "u")).toBe(true);
+    expect(matchRegex("😀", ".", "u")).toBe(true);
+    expect(matchRegex("x/y", "x\\/y", "")).toBe(true);
+    expect(matchRegex("ab", "(?<first>a)b", "")).toBe(true);
+    expect(matchRegex("\\pL", "\\\\pL", "")).toBe(true);
+    expect(patternProblem("^[0-9a-f]+$", "imsu")).toBeNull();
   });
 });
 

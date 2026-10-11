@@ -2852,7 +2852,15 @@ export const en = {
     "Put at least one card in a column: a question of distractors only has no answer.",
   "issue.cloze.no_blank": "Write at least one blank, between {{ and }}.",
   "issue.cloze.too_many_blanks": "Too many blanks in this text.",
-  "issue.short.invalid_pattern": "This regular expression cannot be compiled.",
+  "issue.regex.invalid": "This regular expression cannot be compiled.",
+  "issue.regex.invalid_flags": "A regular expression takes no flags other than i, m, s and u, each at most once.",
+  "issue.regex.unsupported":
+    "This regular expression uses JavaScript-only syntax (backreferences such as \\1, lookaround such as (?=…) or (?<=…), \\u escapes), which grading does not support: patterns follow the RE2 syntax.",
+  "issue.regex.too_complex": "This regular expression is too complex: reduce its repetitions or its character ranges.",
+  "issue.regex.config_too_complex":
+    "Together, the regular expressions of this question are too complex: simplify some of them, starting with their Unicode classes (\\p{…}).",
+  "issue.cloze.computed_regex_key":
+    "A regular expression blank cannot hold a [[…]] reference: give the computed value to a number blank ({{#[[x]]}}).",
   "issue.short.integer_expected": "This question only takes whole numbers.",
   "issue.short.length_range": "The maximum length is below the minimum length.",
   "issue.short.number_range": "The maximum is below the minimum.",

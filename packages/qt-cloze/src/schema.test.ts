@@ -46,8 +46,6 @@ describe("ClozeConfigSchema", () => {
     ["an empty text", base("")],
     ["an unterminated blank", base("La loi de {{Newton")],
     ["an empty blank", base("La loi de {{}}.")],
-    ["a blank whose regex cannot compile", base("{{/a(/}}")],
-    ["a regex flag outside imsu", base("{{/a/g}}")],
     ["a malformed number blank", base("{{#3,14:x}}")],
     ["fifty-one blanks", base("{{a}}".repeat(51))],
     ["a future configVersion", { ...base("{{a}}"), configVersion: 3 }],

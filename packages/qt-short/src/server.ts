@@ -5,6 +5,7 @@
  */
 import { ConfigMigrationError, tallyKeys, type ParameterSample, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
 import { formatStep } from "@quiz/domain";
+import { CONFIG_TOO_COMPLEX_KEY, configPatternProblems, PATTERN_PROBLEM_KEY } from "@quiz/domain/regex";
 import { describeMatcher } from "@quiz/domain/short";
 import { toCanonical } from "./canonical.js";
 import { shortGenerator } from "./generate.js";
@@ -138,6 +139,20 @@ function stamped(config: unknown): ShortConfig {
   return { ...(config as object), configVersion: SHORT_CONFIG_VERSION } as ShortConfig;
 }
 
+/**
+ * The regex matchers RE2 refuses (ADR-099): first all of them together
+ * against the build budget of one question, read on the text, then each.
+ */
+function regexIssues(config: ShortConfig): PublicationIssue[] {
+  const regexes = config.matchers.flatMap((matcher, index) => (matcher.kind === "regex" ? [{ ...matcher, index }] : []));
+  const problems = configPatternProblems(regexes);
+  if (problems === "too_costly") return [{ path: ["matchers"], message: CONFIG_TOO_COMPLEX_KEY }];
+  return regexes.flatMap((matcher, i) => {
+    const problem = problems[i];
+    return problem ? [{ path: ["matchers", matcher.index, "pattern"], message: PATTERN_PROBLEM_KEY[problem] }] : [];
+  });
+}
+
 export const shortServer: QuestionTypeServer<
   ShortConfig,
   ShortAnswer,
@@ -214,9 +229,11 @@ export const shortServer: QuestionTypeServer<
    * Phase 2 is not here: an `llm` matcher round-trips through a draft and an
    * import, but a question holding one is refused at publication, one issue
    * per matcher so the editor points at it (`matchShort` never matches it).
+   * A regex RE2 refuses is refused here too, and only here (ADR-099): an
+   * old version holding one stays readable, the matcher never matching.
    */
-  publicationIssues: (config) =>
-    config.matchers.flatMap((matcher, index) => {
+  publicationIssues: (config) => [
+    ...config.matchers.flatMap((matcher, index): PublicationIssue[] => {
       if (matcher.kind === "llm") return [{ path: ["matchers", index], message: "short.llm_not_available" }];
       if (matcher.kind !== "number") return [];
       // A `[[…]]` left in a key: only a question without variables gets here
@@ -226,6 +243,8 @@ export const shortServer: QuestionTypeServer<
         isReference(matcher[field]) ? [{ path: ["matchers", index, field], message: "short.unresolved_reference" }] : [],
       );
     }),
+    ...regexIssues(config),
+  ],
 
   /**
    * ADR-056 §10: a parameterized question's key is a NUMBER. A computed

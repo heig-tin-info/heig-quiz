@@ -1,6 +1,7 @@
 /** The contract surface of `clozeServer`. */
 import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
+import { buildClock } from "@quiz/domain/regex";
 import { describe, expect, it } from "vitest";
 import { toCanonical } from "./canonical.js";
 import { config, SECRET_CONFIG } from "./test/fixtures.js";
@@ -47,6 +48,85 @@ describe("the contract", () => {
     const indexed = clozeServer.searchText(SECRET_CONFIG);
     expect(indexed).toContain(SECRET_CONFIG.text);
     expect(indexed).toContain("pascal");
+  });
+});
+
+/**
+ * Milliseconds a call takes, the best of three. The bounds below must also
+ * hold under coverage (CI's coverage job runs this package with it, some
+ * twenty times slower): the refusals are read on the text and stay fast.
+ */
+function elapsed(call: () => unknown): number {
+  let best = Infinity;
+  for (let run = 0; run < 3; run++) {
+    const start = performance.now();
+    call();
+    best = Math.min(best, performance.now() - start);
+  }
+  return best;
+}
+
+/** `count` regex blanks of `pattern`, each unseen by the cache of compiled patterns. */
+let fresh = 0;
+const blanks = (count: number, pattern: string) =>
+  Array.from({ length: count }, () => `{{/(?:${pattern})(?:x${fresh++})?/i}}`).join(" ");
+
+describe("regex blanks RE2 refuses (ADR-099)", () => {
+  it("are refused at publication, one issue per blank", () => {
+    const issues = clozeServer.publicationIssues!(
+      config("{{/(a)\\1/}} {{/ok/}} {{/a(?=b)/i}} {{/(?:.?){999}/}} {{/a/g}} {{/([a-/}}"),
+    );
+    expect(issues.map((issue) => issue.message)).toEqual([
+      "regex.unsupported",
+      "regex.unsupported",
+      "regex.too_complex",
+      "regex.invalid_flags",
+      "regex.invalid",
+    ]);
+    expect(issues.every((issue) => issue.path.join(".") === "text")).toBe(true);
+    expect(clozeServer.publicationIssues!(config("{{/galil[ée]e/i}} {{Newton}}"))).toEqual([]);
+  });
+
+  it("compile nothing on a read, however many there are", () => {
+    // Folding `[Ā-\u{10FFFF}]` under `i` took some 35 ms per copy when built.
+    const text = blanks(300, "[Ā-\u{10FFFF}]");
+    expect(elapsed(() => ClozeConfigSchema.safeParse({ configVersion: CLOZE_CONFIG_VERSION, text }))).toBeLessThan(50);
+  });
+
+  it("cost one question a bounded build: refused together past the budget, before any build", () => {
+    // Each acceptable alone; built together, half a second on every draft save.
+    const costly = config(blanks(50, "\\p{Ll}".repeat(10)));
+    expect(
+      elapsed(() =>
+        expect(clozeServer.publicationIssues!(costly)).toEqual([{ path: ["text"], message: "regex.config_too_complex" }]),
+      ),
+    ).toBeLessThan(10);
+  });
+
+  it("publish a question under the budget", () => {
+    // About 25 ms to build. The measured guard of `@quiz/domain/regex` would
+    // refuse it under coverage, twenty times slower: its clock is stopped here,
+    // the estimate alone decides, and the bound is loose.
+    const realNow = buildClock.now;
+    buildClock.now = () => 0;
+    try {
+      expect(
+        elapsed(() => {
+          const under = config(`${blanks(5, "\\p{Ll}".repeat(10))} ${blanks(45, "(the )?[a-zà-ÿ]{2,30}")}`);
+          expect(clozeServer.publicationIssues!(under)).toEqual([]);
+        }),
+      ).toBeLessThan(1000);
+    } finally {
+      buildClock.now = realNow;
+    }
+  });
+
+  it("hold no [[…]] reference in a parameterized question (ADR-056 §10)", () => {
+    expect(clozeServer.parameterIssues!({ text: "{{/a[[h]]/i}} {{#[[h]]}}" })).toEqual([
+      { path: ["text"], message: "cloze.computed_regex_key" },
+    ]);
+    expect(clozeServer.parameterIssues!({ text: "{{/a+/i}} {{#[[h]]}}" })).toEqual([]);
+    expect(clozeServer.parameterIssues!(null)).toEqual([]);
   });
 });
 

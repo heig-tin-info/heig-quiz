@@ -19,9 +19,7 @@
  */
 import { shuffle, streamSeed } from "@quiz/core/rng";
 import {
-  ALLOWED_REGEX_FLAGS,
   applyTextOptions,
-  isValidPattern,
   matchExact,
   matchNumber,
   matchRegex,
@@ -202,10 +200,16 @@ function parseNumberBlank(rest: string, head: BlankHead): ClozeBlank | string {
   };
 }
 
-/** A regular expression, refused when its flags or its pattern are not allowed. */
-function parseRegexBlank(pattern: string, flags: string, head: BlankHead): ClozeBlank | string {
-  if (!ALLOWED_REGEX_FLAGS.test(flags)) return "cloze.invalid_regex_flags";
-  if (!isValidPattern(pattern, flags)) return "cloze.invalid_regex";
+/**
+ * A regular expression, whatever its pattern and flags: whether RE2 accepts
+ * them is a PUBLICATION matter (`patternProblem`, the type's
+ * `publicationIssues`), never the parse's. The parse is also every read's —
+ * the student's view, grading — and a version published under JavaScript's
+ * engine must stay readable: its refused pattern keeps its blank, its
+ * numbering and its sentinel (rendered literally, it would reach the
+ * student), and simply never matches. Nor does a read compile anything.
+ */
+function parseRegexBlank(pattern: string, flags: string, head: BlankHead): ClozeBlank {
   return { ...head, kind: "regex", pattern, flags };
 }
 

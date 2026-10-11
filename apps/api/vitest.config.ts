@@ -26,11 +26,11 @@ export default defineConfig({
     hookTimeout: 120_000,
     maxWorkers,
     // The demo world is a development script, never served. The import's
-    // command line only parses flags; its steps (`src/import-classroom/`)
-    // are measured.
+    // and the regex audit's command lines only parse flags; their steps
+    // (`src/import-classroom/`, `src/regex-audit/`) are measured.
     coverage: {
       ...coverage,
-      exclude: [...coverage.exclude, "src/seed.ts", "src/seed/**", "src/import-classroom.ts"],
+      exclude: [...coverage.exclude, "src/seed.ts", "src/seed/**", "src/import-classroom.ts", "src/regex-audit.ts"],
     },
   },
 });

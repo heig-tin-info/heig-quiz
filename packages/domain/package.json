@@ -26,6 +26,7 @@
   "dependencies": {
     "@quiz/core": "workspace:*",
     "mathjs": "15.2.0",
+    "re2js": "2.8.6",
     "ts-fsrs": "^5.4.2"
   }
 }
