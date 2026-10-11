@@ -17,6 +17,7 @@ import { brainstormClient } from "@quiz/qt-brainstorm/client";
 import { categorizeClient } from "@quiz/qt-categorize/client";
 import { clozeClient } from "@quiz/qt-cloze/client";
 import { diagramClient } from "@quiz/qt-diagram/client";
+import { mathClient } from "@quiz/qt-math/client";
 import { mcqClient } from "@quiz/qt-mcq/client";
 import { richClient } from "@quiz/qt-rich/client";
 import { shortClient } from "@quiz/qt-short/client";
@@ -36,6 +37,7 @@ export const clientRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeClien
     categorize: categorizeClient,
     diagram: diagramClient,
     brainstorm: brainstormClient,
+    math: mathClient,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */

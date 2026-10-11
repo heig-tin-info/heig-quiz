@@ -89,6 +89,12 @@ function short(answer: unknown): AnswerText | null {
   return { kind: "text", ...clip(answer.text.trim()) };
 }
 
+/** A math answer is its LaTeX, read like a short answer's text. */
+function math(answer: unknown): AnswerText | null {
+  if (!isRecord(answer) || typeof answer.latex !== "string") return null;
+  return short({ text: answer.latex });
+}
+
 /**
  * Cards sorted into columns: one line per column that holds a card, "Integer:
  * int, size_t", in the student's display order of the columns and the order
@@ -164,6 +170,8 @@ export function answerText(type: string, student: unknown, answer: unknown): Ans
       return code(answer);
     case "categorize":
       return categorize(student, answer);
+    case "math":
+      return math(answer);
     default:
       return null;
   }

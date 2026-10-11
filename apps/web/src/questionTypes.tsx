@@ -52,6 +52,14 @@ import {
   shortReviewStrings,
 } from "@quiz/qt-short/client";
 import {
+  MATH_PROBLEM_KEYS,
+  mathEditorStrings,
+  mathGradingStrings,
+  mathPlayerStrings,
+  mathProblemStrings,
+  mathReviewStrings,
+} from "@quiz/qt-math/client";
+import {
   richEditorStrings,
   richGradingStrings,
   richPlayerStrings,
@@ -218,10 +226,23 @@ const mcqIssueStrings = (t: TFunction) => ({
 });
 
 /** The keys of `mcqEditorStrings` the two mappings above answer for. */
+export { MATH_PROBLEM_KEYS };
+
 export const MCQ_HOST_MAPPED_KEYS = Object.keys({
   ...mcqPolicyStrings(((k) => String(k)) as TFunction),
   ...mcqIssueStrings(((k) => String(k)) as TFunction),
 });
+
+/**
+ * The sentences a `math` field says when an expression cannot be read: the
+ * editor (a key), the player (the answer) and the review say the same ones,
+ * so they are worded once under `qt.math.problem.*` and mapped onto the
+ * three dictionaries, as the MCQ policies are.
+ */
+const mathProblemStringsT = (t: TFunction) => translated(t, mathProblemStrings, "qt.math.problem");
+/** A `math` dictionary minus the shared problem keys, which `qt.math.problem.*` answers for. */
+const withoutProblems = <T extends object>(defaults: T): Partial<T> =>
+  Object.fromEntries(Object.entries(defaults).filter(([key]) => !(MATH_PROBLEM_KEYS as string[]).includes(key))) as Partial<T>;
 
 export const editorStrings = {
   mcq: (t: TFunction) => ({
@@ -246,6 +267,7 @@ export const editorStrings = {
   categorize: (t: TFunction) => translated(t, categorizeEditorStrings, "qt.categorize.e"),
   diagram: (t: TFunction) => translated(t, diagramEditorStrings, "qt.diagram.e"),
   brainstorm: (t: TFunction) => translated(t, brainstormEditorStrings, "qt.brainstorm.e"),
+  math: (t: TFunction) => ({ ...translated(t, withoutProblems(mathEditorStrings), "qt.math.e"), ...mathProblemStringsT(t) }),
 };
 
 /**
@@ -309,6 +331,7 @@ export const playerStrings = {
   categorize: (t: TFunction) => translated(t, categorizePlayerStrings, "qt.categorize.p"),
   diagram: (t: TFunction) => translated(t, diagramPlayerStrings, "qt.diagram.p"),
   brainstorm: (t: TFunction) => translated(t, brainstormPlayerStrings, "qt.brainstorm.p"),
+  math: (t: TFunction) => ({ ...translated(t, withoutProblems(mathPlayerStrings), "qt.math.p"), ...mathProblemStringsT(t) }),
 };
 
 export const reviewStrings = {
@@ -327,6 +350,7 @@ export const reviewStrings = {
   categorize: (t: TFunction) => translated(t, categorizeReviewStrings, "qt.categorize.r"),
   diagram: (t: TFunction) => translated(t, diagramReviewStrings, "qt.diagram.r"),
   brainstorm: (t: TFunction) => translated(t, brainstormReviewStrings, "qt.brainstorm.r"),
+  math: (t: TFunction) => ({ ...translated(t, withoutProblems(mathReviewStrings), "qt.math.r"), ...mathProblemStringsT(t) }),
 };
 
 /**
@@ -349,6 +373,7 @@ export const gradingStrings: Record<QuestionTypeId, (t: TFunction) => Record<str
   rich: (t) => translated(t, richGradingStrings, "qt.rich.g"),
   diagram: (t) => translated(t, diagramGradingStrings, "qt.diagram.g"),
   brainstorm: (t) => translated(t, brainstormGradingStrings, "qt.brainstorm.g"),
+  math: (t) => translated(t, mathGradingStrings, "qt.math.g"),
 };
 
 // --- Hosts -----------------------------------------------------------------

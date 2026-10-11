@@ -833,6 +833,50 @@ const ELECTRONICS_POOL: PoolSpec = {
       },
     },
     {
+      internalName: "elec-parallele-formule",
+      type: "math",
+      category: DC,
+      difficulty: 2,
+      concepts: ["résistances", "régime continu"],
+      explanation:
+        "Deux résistances en parallèle : les conductances s'ajoutent, " +
+        "donc R = 1 / (1/R₁ + 1/R₂) = R₁R₂ / (R₁ + R₂). Les deux formes sont acceptées.",
+      // Any equivalent form passes (ADR-102): the key is compared by value at
+      // sample points, never by its spelling.
+      config: {
+        configVersion: 1,
+        prompt:
+          "Donnez la résistance équivalente $R$ de deux résistances $R_1$ et $R_2$ montées " +
+          "en **parallèle**, en fonction de $R_1$ et $R_2$.",
+        symbols: [
+          { name: "R_1", min: 1, max: 1000 },
+          { name: "R_2", min: 1, max: 1000 },
+        ],
+        answers: [{ value: "\\frac{R_1 R_2}{R_1+R_2}", points: 1 }],
+      },
+    },
+    {
+      internalName: "elec-loi-ohm-courbe",
+      type: "math",
+      category: DC,
+      difficulty: 1,
+      concepts: ["loi d'Ohm", "régime continu"],
+      explanation: "I = U / R, avec R = 2,2 kΩ : la droite tracée a pour pente 1/2200 A/V.",
+      // The graph demo: the target curve is the key drawn as points, and the
+      // student's expression is drawn over it as they type (plot: target).
+      config: {
+        configVersion: 1,
+        prompt:
+          "La courbe en pointillé donne le courant $I$ (en ampères) traversant une résistance de " +
+          "2,2 kΩ en fonction de la tension $U$ (en volts). Donnez $I(U)$ et superposez votre " +
+          "fonction à la courbe.",
+        symbols: [{ name: "U", min: 0, max: 12 }],
+        answers: [{ value: "\\frac{U}{2200}", points: 1 }],
+        tolerance: 0.001,
+        plot: "target",
+      },
+    },
+    {
       internalName: "elec-pont-diviseur",
       type: "mcq",
       category: DC,

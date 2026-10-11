@@ -66,6 +66,7 @@ Every requirement is identified `F-AREA-nn`, with its original planning phase P1
 | F-QST-09 | The editor offers a preview of the player exactly as the student will see it, with the possibility to answer and to see the grading. | P1 | M |
 | F-QST-10 | A question with random values (parameterized) declares variables as one-line expressions with a format, and an optional condition. `[[expr]]` in the statement, the key and the explanation is evaluated with values drawn from the attempt's seed, stored the first time the item is served. See [04-types-de-questions.md](04-types-de-questions.md) §4.3 and ADR-056. | P2 | M |
 | F-QST-11 | Deleting a question hides it from the pool. It is still resolved by past evaluations. Permanent deletion is possible only when no evaluation references it. | P1 | M |
+| F-QST-12 | A `math` question takes a formula typed in a math field and accepts it in any form that takes the same values as an accepted answer at sample points drawn in the declared variables' intervals; the field's rules are told while typing, and an optional graph draws the expression. See [04-types-de-questions.md](04-types-de-questions.md) §4.16 and [ADR-102](../adr/ADR-102-type-expression-mathematique.md). | P2 | M |
 
 ## F-EVAL Configuring an evaluation
 

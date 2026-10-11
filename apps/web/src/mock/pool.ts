@@ -89,7 +89,9 @@ import { codeimageConfig, codeimageStudentView, codeimageTryDetails } from "./co
  * so the mock calls it rather than restating it.
  */
 import { richServer } from "@quiz/qt-rich/server";
+import { mathServer } from "@quiz/qt-math/server";
 import type { RichConfig } from "@quiz/qt-rich/client";
+import type { MathConfig } from "@quiz/qt-math/client";
 /* `categorize` likewise: its `toStudent` drops the key, its grade is the real one. */
 import { categorizeServer } from "@quiz/qt-categorize/server";
 import { brainstormServer } from "@quiz/qt-brainstorm/server";
@@ -133,7 +135,7 @@ interface MockVersion {
 export interface MockQuestion {
   id: string;
   poolId: string;
-  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize" | "diagram" | "brainstorm";
+  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize" | "diagram" | "brainstorm" | "math";
   internalName: string;
   categoryId: string | null;
   difficulty: number;
@@ -1918,6 +1920,8 @@ export function studentView(q: MockQuestion, config: Record<string, unknown>): u
       return codeimageStudentView(config);
     case "rich":
       return richServer.toStudent(config as RichConfig, { seed: 0, itemId: q.id, shuffle: false });
+    case "math":
+      return mathServer.toStudent(config as MathConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "categorize":
       return categorizeServer.toStudent(config as CategorizeConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "diagram":
@@ -2051,6 +2055,8 @@ export function solutionOf(q: MockQuestion): unknown {
       return { reference: config.reference ?? null };
     case "rich":
       return richServer.toSolution(config as RichConfig, { seed: 0, itemId: q.id, shuffle: false });
+    case "math":
+      return mathServer.toSolution(config as MathConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "categorize":
       return categorizeServer.toSolution(config as CategorizeConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "diagram":
@@ -2762,6 +2768,8 @@ export function emptyConfig(type: MockQuestion["type"]): Record<string, unknown>
       return { ...diagramServer.emptyDraft() };
     case "brainstorm":
       return { ...brainstormServer.emptyDraft() };
+    case "math":
+      return { ...mathServer.emptyDraft() };
     case "circuit":
       return {
         configVersion: 1,

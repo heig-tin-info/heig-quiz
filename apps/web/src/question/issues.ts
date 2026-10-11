@@ -61,6 +61,15 @@ const KNOWN: Record<string, keyof Dict> = {
   "codeimage.target_value": "issue.codeimage.target_value",
   "diagram.reference_missing": "issue.diagram.reference_missing",
   "diagram.kind_mismatch": "issue.diagram.kind_mismatch",
+  "math.duplicate_symbol": "issue.math.duplicate_symbol",
+  "math.reserved_symbol": "issue.math.reserved_symbol",
+  "math.symbol_range": "issue.math.symbol_range",
+  "math.plot_one_symbol": "issue.math.plot_one_symbol",
+  "math.key_empty": "issue.math.key_empty",
+  "math.key_syntax": "issue.math.key_syntax",
+  "math.key_unknown_symbol": "issue.math.key_unknown_symbol",
+  "math.key_unsupported": "issue.math.key_unsupported",
+  "math.key_undefined": "issue.math.key_undefined",
 };
 
 /** The generic zod codes, by what they measured: `too_small` of a string, of an array… */
