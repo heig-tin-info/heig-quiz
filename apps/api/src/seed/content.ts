@@ -337,6 +337,29 @@ const ESSAYS = {
     "d'où l'erreur au lancement.",
 };
 
+/*
+ * The warehouse robot (docs/04 §4.17): the wall follower reaches the dock in
+ * every warehouse below, hidden ones included, which publication checks
+ * (`blocks.reference_fails_case`). The starter goes straight ahead: it
+ * reaches the first dock and hits a rack in every other warehouse, which is
+ * what "Test on every warehouse" is there to show.
+ */
+const WALL_FOLLOWER = [
+  {
+    kind: "repeat_until_dock",
+    body: [
+      {
+        kind: "if_sensor",
+        sensor: "free",
+        where: "front",
+        then: [{ kind: "forward" }],
+        else: [{ kind: "turn", dir: "right" }],
+      },
+    ],
+  },
+];
+const straightAhead = (times: number) => [{ kind: "repeat", times, body: [{ kind: "forward" }] }];
+
 // ---------------------------------------------------------------------------
 // Pool 1 — Programmation C (attached to PRG1)
 // ---------------------------------------------------------------------------
@@ -771,6 +794,40 @@ const C_POOL: PoolSpec = {
           "- **1 pt** : corps et incrément dans la boucle, retour de `s` sur la branche « non ».",
       },
     },
+    {
+      internalName: "prg1-robot-entrepot",
+      type: "blocks",
+      category: TYPES,
+      difficulty: 2,
+      concepts: ["boucles", "structures de contrôle"],
+      explanation:
+        "Compter les cases ne marche que dans l'entrepôt qu'on voit. Longer le mur à droite " +
+        "(avancer tant que la voie est libre, sinon tourner à droite) mène au quai dans chacun " +
+        "de ces entrepôts, ceux qui sont cachés compris.",
+      // Graded at once and final (ADR-103): every warehouse is run by the
+      // same interpreter the player animates with. Two warehouses are hidden,
+      // so a program that only counts cells fails at grading.
+      config: {
+        configVersion: 1,
+        prompt:
+          "Le robot de l'entrepôt doit rejoindre le **quai de chargement** sans heurter un " +
+          "rayonnage. Votre programme sera exécuté dans **plusieurs entrepôts** dont il ne connaît " +
+          "pas le plan : servez-vous de ses capteurs plutôt que de compter les cases. Chaque " +
+          "déplacement consomme une unité de batterie ; tourner est gratuit.",
+        world: { kind: "warehouse" },
+        toolbox: ["forward", "turn", "repeat", "repeat_until_dock", "if_sensor"],
+        starter: straightAhead(7),
+        referenceSolution: WALL_FOLLOWER,
+        cases: [
+          { name: "Allée dégagée", map: ["..#..#..", "........", ">......D", "...#..#.", "........", "........"], battery: 40, visible: true, points: 1 },
+          { name: "Rayonnage sur l'allée", map: ["......D.", ">..#....", "........", "........"], battery: 40, visible: true, points: 1 },
+          { name: "Quai au nord", map: ["^...D", ".#.#.", "....."], battery: 20, visible: true, points: 1 },
+          { name: "Entrepôt en L", map: ["........", "..#..#..", "...#.#..", ">.##...D", "........"], battery: 60, visible: false, points: 1 },
+          { name: "Quai au sud-ouest", map: ["......", ".#..#.", ".....v", "...#..", "D....."], battery: 30, visible: false, points: 1 },
+        ],
+        allOrNothing: false,
+      },
+    },
   ],
 };
 
@@ -1053,6 +1110,7 @@ export const EVALUATIONS: EvaluationSpec[] = [
       "elec-filtre-rc-passe-bas",
       "prg1-redaction-pile",
       "prg1-organigramme-somme",
+      "prg1-robot-entrepot",
     ],
     // The circuit is electronics in a C test: the natural bonus question.
     bonus: ["elec-filtre-rc-passe-bas"],
@@ -1089,6 +1147,7 @@ export const PAPERS: PaperSpec[] = [
       "elec-filtre-rc-passe-bas": { schematic: RC_LOW_PASS },
       "prg1-redaction-pile": { text: ESSAYS.complete },
       "prg1-organigramme-somme": { scene: SUM_FLOW_RIGHT },
+      "prg1-robot-entrepot": { program: WALL_FOLLOWER },
     },
   },
   {
@@ -1112,6 +1171,8 @@ export const PAPERS: PaperSpec[] = [
       "elec-filtre-rc-passe-bas": { schematic: rcLowPass("1.59k", "10n") },
       "prg1-redaction-pile": { text: ESSAYS.partial },
       "prg1-organigramme-somme": { scene: SUM_FLOW_NO_INCREMENT },
+      // Counting cells: the first warehouse only, a rack hit in every other.
+      "prg1-robot-entrepot": { program: straightAhead(8) },
     },
   },
   {
@@ -1138,6 +1199,8 @@ export const PAPERS: PaperSpec[] = [
       "prg1-redaction-pile": { text: ESSAYS.brief },
       // Opened, touched and put back: the starter as it was, a validated 0.
       "prg1-organigramme-somme": { scene: SUM_FLOW_STARTER },
+      // Opened and left as the starter: stored as the empty program, unanswered.
+      "prg1-robot-entrepot": { program: [] },
     },
   },
   {

@@ -83,8 +83,8 @@ What gets built:
   students already claimed, and Léa's time accommodation so the extra-time
   path is always exercised;
 - the pool **Programmation C**, attached to PRG1, three categories,
-  fifteen published questions (multiple choice, short answer, cloze, code,
-  code image, essay, categorize, diagram), among them the Parsons problem of
+  sixteen published questions (multiple choice, short answer, cloze, code,
+  code image, essay, categorize, diagram, blocks), among them the Parsons problem of
   [Teaching recipes](../guide/recipes.md#parsons-problems);
 - the pool **Électronique**, attached to PRG1 too, five published questions
   (a circuit among them), shared with the admin persona as a contributor so
@@ -98,13 +98,13 @@ What gets built:
 | Quiz d'entraînement | exercise | `lobby`, waiting for students |
 | Test 0 — bases du C | exam, 45 min | `closed`, graded, **not released** |
 
-*Test 0* has already run: ten questions, one or more of every type (multiple
+*Test 0* has already run: eleven questions, one or more of every type (multiple
 choice, short answer, cloze, code, categorize, code image, circuit, essay,
-diagram),
+diagram, blocks),
 answered by five of the six students (Gabriel is absent, Chloé never handed
 in, so closing the evaluation expired one attempt), right, partly right,
 wrong or left empty. The real grading pass graded every answer: the
-deterministic types (categorize included) are validated; the code, code image
+deterministic types (categorize and blocks included) are validated; the code, code image
 and circuit answers are proposals with the reason `runner_unavailable`, since
 the seed never has a runner; the essays are AI proposals with a confidence
 (high, medium, low) when `LLM_PROVIDER=stub`, as `.env.example` sets it, and
@@ -141,7 +141,7 @@ Two consequences:
   with a queue (`project.dispatch`, M3-05b).
 
 To start over, delete the directory. That is also how an existing database
-gets a newer demo world, such as the ten-question "Test 0": the seed only
+gets a newer demo world, such as the eleven-question "Test 0": the seed only
 adds what is missing and never rewrites an evaluation that already exists.
 
 ```bash
