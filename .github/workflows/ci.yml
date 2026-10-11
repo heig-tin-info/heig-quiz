@@ -267,17 +267,14 @@ jobs:
   # deploy script predates the digest would read it as part of the token
   # and fail its login, so the PO sets it once every checkout the CI
   # deploys to runs this version (deployment.md §4, *Deploying by digest*),
-  # a gate to drop from this file then.
-  # Every deploy job runs on a push to main only, whatever its `needs`, and
-  # its environment (staging, production) is restricted to `main` in the
-  # repository settings as well (deployment.md §4, *The environments*).
+  # a gate to drop from this file then (#747). While it is set, a missing
+  # digest fails the step instead of falling back to the tag.
   # Without its key a job no-ops, so the pipeline stays green until keys are
   # provisioned; the codespace steps also wait for the REPOSITORY variable
   # CODESPACE_DEPLOY=1, set at the switch (apps/codespace/deploy/RUNBOOK.md),
   # a gate to drop from this file once the switch has run.
   deploy-staging:
     needs: image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: staging
@@ -296,6 +293,7 @@ jobs:
       DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
       CODESPACE_DEPLOY: ${{ vars.CODESPACE_DEPLOY }}
       STAGING_URL: ${{ vars.STAGING_URL || 'https://quiz.dev.chevallier.io' }}
+      DEPLOY_BY_DIGEST: ${{ vars.DEPLOY_BY_DIGEST }}
       IMAGE_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz || '' }}
       CODESPACE_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz_codespace || '' }}
     steps:
@@ -319,7 +317,9 @@ jobs:
           # No fallback account: an unset variable fails the deploy loudly,
           # and never falls back to production's account.
           DEPLOY_USER: ${{ vars.STAGING_DEPLOY_USER }}
-        run: ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.STAGING_DEPLOY_USER is not set}"@"$DEPLOY_HOST" "$GITHUB_SHA${IMAGE_DIGEST:+ $IMAGE_DIGEST} $GHCR_TOKEN"
+        run: |
+          [ "$DEPLOY_BY_DIGEST" != 1 ] || [ -n "$IMAGE_DIGEST" ] || { echo "::error::DEPLOY_BY_DIGEST is set and the image job gave no digest"; exit 1; }
+          ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.STAGING_DEPLOY_USER is not set}"@"$DEPLOY_HOST" "$GITHUB_SHA${IMAGE_DIGEST:+ $IMAGE_DIGEST} $GHCR_TOKEN"
       # The gate: a staging that does not come up healthy (a migration that
       # fails on production-shaped data, a crash at boot) stops the promotion.
       - name: Staging answers healthy
@@ -339,12 +339,13 @@ jobs:
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != '' && env.CODESPACE_DEPLOY == '1'
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "codespace staging $GITHUB_SHA${CODESPACE_DIGEST:+ $CODESPACE_DIGEST} $GHCR_TOKEN"
+        run: |
+          [ "$DEPLOY_BY_DIGEST" != 1 ] || [ -n "$CODESPACE_DIGEST" ] || { echo "::error::DEPLOY_BY_DIGEST is set and the image job gave no digest"; exit 1; }
+          ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "codespace staging $GITHUB_SHA${CODESPACE_DIGEST:+ $CODESPACE_DIGEST} $GHCR_TOKEN"
 
   deploy-production:
     # `image` for its digests: a job reads the outputs of its direct needs only.
     needs: [image, deploy-staging]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # The approval gate: the job waits here until a required reviewer of the
     # `production` environment approves it (repository settings).
@@ -368,6 +369,7 @@ jobs:
       DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
       DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
       DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
+      DEPLOY_BY_DIGEST: ${{ vars.DEPLOY_BY_DIGEST }}
       IMAGE_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz || '' }}
       RUNNER_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz_runner || '' }}
     steps:
@@ -396,6 +398,7 @@ jobs:
           # any other value forces nothing (docs/development/deployment.md §5).
           DEPLOY_FORCE_SHA: ${{ vars.DEPLOY_FORCE_SHA }}
         run: |
+          [ "$DEPLOY_BY_DIGEST" != 1 ] || [ -n "$IMAGE_DIGEST" ] || { echo "::error::DEPLOY_BY_DIGEST is set and the image job gave no digest"; exit 1; }
           force=
           if [ "$DEPLOY_FORCE_SHA" = "$GITHUB_SHA" ]; then
             force="force "
@@ -407,7 +410,9 @@ jobs:
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "$GITHUB_SHA${RUNNER_DIGEST:+ $RUNNER_DIGEST} $GHCR_TOKEN"
+        run: |
+          [ "$DEPLOY_BY_DIGEST" != 1 ] || [ -n "$RUNNER_DIGEST" ] || { echo "::error::DEPLOY_BY_DIGEST is set and the image job gave no digest"; exit 1; }
+          ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "$GITHUB_SHA${RUNNER_DIGEST:+ $RUNNER_DIGEST} $GHCR_TOKEN"
 
   # The production portal (code.chevallier.io), a job of its own after the
   # application and the runner, so that a refusal of its live-session guard
@@ -420,7 +425,7 @@ jobs:
   # deploy is off.
   deploy-codespace-prod:
     needs: [image, deploy-production]
-    if: vars.CODESPACE_DEPLOY == '1' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: vars.CODESPACE_DEPLOY == '1'
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -435,6 +440,7 @@ jobs:
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
       DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
+      DEPLOY_BY_DIGEST: ${{ vars.DEPLOY_BY_DIGEST }}
       CODESPACE_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz_codespace || '' }}
     steps:
       - name: Skip when the deploy key is not configured
@@ -446,6 +452,7 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CODESPACE_FORCE_SHA: ${{ vars.CODESPACE_FORCE_SHA }}
         run: |
+          [ "$DEPLOY_BY_DIGEST" != 1 ] || [ -n "$CODESPACE_DIGEST" ] || { echo "::error::DEPLOY_BY_DIGEST is set and the image job gave no digest"; exit 1; }
           mkdir -p ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519

@@ -1,13 +1,14 @@
 /**
- * What a staging refresh does to production's data once restored
- * (ADR-028, N-SEC-18, M2-06; audit M9, L17): `scripts/staging-pseudonymize.sql`
- * then `scripts/staging-scrub.sql`, the very files `staging-refresh.sh`
- * pipes into psql, run here against the real migrations. A refresh from a
- * dump holding installations leaves no production installation reachable,
- * no project nor group move the ticker would drive, no delivery to replay
- * and no queued job; a refresh from a dump holding people and secrets
- * leaves none of their names, addresses, external ids or secrets anywhere
- * in the database, except the accounts of the keep list, untouched.
+ * What production's data goes through on its way to staging (ADR-028,
+ * N-SEC-18, M2-06; audit M9, L17): `scripts/staging-pseudonymize.sql`, which
+ * `staging-export.sh` pipes into production's scratch copy, then
+ * `scripts/staging-scrub.sql`, which `staging-refresh.sh` pipes into the
+ * restored copy, run here against the real migrations. A copy holding
+ * installations leaves no production installation reachable, no project nor
+ * group move the ticker would drive, no delivery to replay and no queued
+ * job; a copy holding people and secrets leaves none of their names,
+ * addresses, external ids or secrets in any table, except the accounts of
+ * the keep list, untouched.
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -97,18 +98,20 @@ describe("staging-scrub.sql", () => {
 });
 
 /**
- * Every row of every table of the public schema, as one text: what a
+ * Every row of every table of every non-system schema, as one text: what a
  * person who can read the staging database could read. A bytea shows as
  * its hex, so a marker is looked for in both forms.
  */
 async function everything(pg: PGlite): Promise<string> {
-  const tables = await pg.query<{ name: string }>(
-    "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY 1",
+  const tables = await pg.query<{ schema: string; name: string }>(
+    `SELECT table_schema AS schema, table_name AS name FROM information_schema.tables
+     WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') AND table_schema NOT LIKE 'pg\\_%'
+     ORDER BY 1, 2`,
   );
   const parts: string[] = [];
-  for (const { name } of tables.rows) {
-    const rows = await pg.query<{ dump: string | null }>(`SELECT json_agg(t ORDER BY t::text)::text AS dump FROM "${name}" t`);
-    parts.push(`${name}: ${rows.rows[0]?.dump ?? ""}`);
+  for (const { schema, name } of tables.rows) {
+    const rows = await pg.query<{ dump: string | null }>(`SELECT json_agg(t ORDER BY t::text)::text AS dump FROM "${schema}"."${name}" t`);
+    parts.push(`${schema}.${name}: ${rows.rows[0]?.dump ?? ""}`);
   }
   return parts.join("\n");
 }
@@ -146,14 +149,19 @@ const MARKERS = [
   "GUEST-TOKEN-MARKER",
   "TEAMS-TOKEN-MARKER",
   "aad-bob-REAL",
+  "Les Martinez",
+  "Team Durandal",
+  "Projet Duboisier",
+  "WEBHOOK-ERROR-MARKER",
+  "TASK-MESSAGE-MARKER",
 ];
 
 describe("staging-pseudonymize.sql, then staging-scrub.sql", () => {
   it("leaves no name, address, external id nor secret of production, keeps the keep list's accounts, and is idempotent", async () => {
     const { client: pg } = await testDatabase();
     const [alice, bob, po] = [randomUUID(), randomUUID(), randomUUID()];
-    const [course, classroom, evaluation, org, project, repo] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
-    const [aliceRow, chloeRow, poRow, device] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    const [course, classroom, classroom2, evaluation, org, project, repo] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    const [aliceRow, aliceRow2, chloeRow, poRow, device, groupSet] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     const exec = (sql: string, params: unknown[] = []) => pg.query(sql, params);
 
     // People. Alice is a student with a second address, an avatar, IdP
@@ -174,9 +182,12 @@ describe("staging-pseudonymize.sql, then staging-scrub.sql", () => {
     );
     await exec(
       `INSERT INTO teacher_grants (id, email, created_by, created_at) VALUES
-       ($1, 'bob.durand@heig-vd.ch', $3, now() - interval '1 hour'), ($2, 'dora.grant@heig-vd.ch', $3, now())`,
-      [randomUUID(), randomUUID(), po],
+       ($1, 'bob.durand@heig-vd.ch', $3, now() - interval '1 hour'), ($2, 'dora.grant@heig-vd.ch', $3, now()),
+       ($4, 'p.owner@hes-so.ch', $3, now() - interval '2 hours')`,
+      [randomUUID(), randomUUID(), po, randomUUID()],
     );
+    // A secondary address of the kept account: its grant stays with it.
+    await exec(`INSERT INTO user_emails (user_id, email, source, verified) VALUES ($1, 'p.owner@hes-so.ch', 'mail', true)`, [po]);
     await exec(`INSERT INTO avatars (user_id, data, content_type) VALUES ($1, convert_to('AVATAR-PHOTO-MARKER', 'UTF8'), 'image/png')`, [alice]);
     await exec(
       `INSERT INTO user_idp_claims (user_id, claims, affiliations) VALUES
@@ -203,6 +214,23 @@ describe("staging-pseudonymize.sql, then staging-scrub.sql", () => {
        ($2, $4, 'Duboisier', 'Chloé', 'chloe.dubois@heig-vd.ch', NULL, NULL),
        ($3, $4, 'Proprietaria', 'Paula', 'paula.owner@heig-vd.ch', $6, 'kept note')`,
       [aliceRow, chloeRow, poRow, classroom, alice, po],
+    );
+    // Another class, where Alice is on the roster under her second address
+    // and has not claimed it yet.
+    await exec(`INSERT INTO classrooms (id, course_id, name, period) VALUES ($1, $2, 'B', '2026-B')`, [classroom2, course]);
+    await exec(`INSERT INTO enrollments (id, classroom_id, nom, prenom, email) VALUES ($1, $2, 'Martinez', 'Alice', 'a.martinez@hes-so.ch')`, [
+      aliceRow2,
+      classroom2,
+    ]);
+    // Groups named after their members.
+    await exec(`INSERT INTO group_sets (id, classroom_id, name, created_by, created_at) VALUES ($1, $2, 'Les Martinez et cie', $3, now())`, [
+      groupSet,
+      classroom,
+      bob,
+    ]);
+    await exec(
+      `INSERT INTO student_groups (id, set_id, name, position, created_at) VALUES ($1, $3, 'Team Durandal', 0, now()), ($2, $3, 'Group 1', 1, now())`,
+      [randomUUID(), randomUUID(), groupSet],
     );
     await exec(`INSERT INTO github_organizations (id, login, github_org_id, installation_id) VALUES ($1, 'heig-prod', 1, 11)`, [org]);
     await exec(
@@ -242,10 +270,15 @@ describe("staging-pseudonymize.sql, then staging-scrub.sql", () => {
       alice,
     ]);
     await exec(
-      `INSERT INTO webhook_deliveries (delivery_id, event, payload, received_at) VALUES
-       ($1, 'push', '{"sender":{"login":"alicemartin-gh","email":"alice.martin@heig-vd.ch"}}', now())`,
+      `INSERT INTO webhook_deliveries (delivery_id, event, payload, received_at, error) VALUES
+       ($1, 'push', '{"sender":{"login":"alicemartin-gh","email":"alice.martin@heig-vd.ch"}}', now(), 'WEBHOOK-ERROR-MARKER alicemartin-gh')`,
       [randomUUID()],
     );
+    await exec(`INSERT INTO scheduled_tasks (key, interval_minutes, last_message) VALUES ('marker', 60, 'TASK-MESSAGE-MARKER bob.durand@heig-vd.ch')`);
+    await exec(`INSERT INTO project_groups (id, project_id, name, slug, position) VALUES ($1, $2, 'Projet Duboisier', 'projet-duboisier', 0)`, [
+      randomUUID(),
+      project,
+    ]);
 
     // Secrets kept in rows (audit L17).
     // The migrations seed the one settings row.
@@ -295,14 +328,26 @@ describe("staging-pseudonymize.sql, then staging-scrub.sql", () => {
         { id: bob, oidc_sub: `staging:${bob}`, email: "teacher-1@example.invalid", given_name: "Teacher", family_name: "1" },
       ]);
       expect((await exec("SELECT email FROM user_emails WHERE user_id = $1", [bob])).rows).toEqual([{ email: "teacher-1@example.invalid" }]);
+      // The kept account's grant, under its second address, stays.
       expect((await exec("SELECT email FROM teacher_grants ORDER BY email")).rows).toEqual([
-        { email: "grant-2@example.invalid" },
+        { email: "grant-3@example.invalid" },
+        { email: "p.owner@hes-so.ch" },
         { email: "teacher-1@example.invalid" },
       ]);
-      expect((await exec("SELECT email, nom, prenom, note FROM enrollments WHERE id = ANY($1) ORDER BY email", [[aliceRow, chloeRow]])).rows).toEqual([
-        { email: "enrollment-1@example.invalid", nom: "1", prenom: "Enrollment", note: null },
-        { email: "student-1@example.invalid", nom: "1", prenom: "Student", note: null },
-      ]);
+      // Alice's unclaimed row of the other class, under her second address, is hers.
+      const roster = (await exec("SELECT id, email, nom, prenom, note FROM enrollments WHERE id = ANY($1)", [[aliceRow, aliceRow2, chloeRow]])).rows;
+      expect(roster).toHaveLength(3);
+      expect(roster).toEqual(
+        expect.arrayContaining([
+          { id: chloeRow, email: expect.stringMatching(/^enrollment-\d@example\.invalid$/), nom: expect.stringMatching(/^\d$/), prenom: "Enrollment", note: null },
+          { id: aliceRow, email: "student-1@example.invalid", nom: "1", prenom: "Student", note: null },
+          { id: aliceRow2, email: "student-1@example.invalid", nom: "1", prenom: "Student", note: null },
+        ]),
+      );
+      // Groups by number, a swap with an existing "Group 1" included.
+      expect((await exec("SELECT name FROM student_groups ORDER BY position")).rows).toEqual([{ name: "Group 1" }, { name: "Group 2" }]);
+      expect((await exec("SELECT name, slug FROM project_groups")).rows).toEqual([{ name: "Group 1", slug: "group-1" }]);
+      expect((await exec("SELECT name FROM group_sets")).rows).toEqual([{ name: "Groups 1" }]);
       expect((await exec("SELECT github_user_id::text AS id, login FROM github_accounts WHERE user_id = $1", [alice])).rows).toEqual([
         { id: "-1", login: "github-user-1" },
       ]);

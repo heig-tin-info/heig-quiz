@@ -1,5 +1,5 @@
 -- What scripts/staging-refresh.sh runs in the staging database right after
--- restoring production's dump and pseudonymizing it
+-- restoring production's dump, pseudonymized before it left production
 -- (scripts/staging-pseudonymize.sql; ADR-028), and what
 -- apps/api/src/stagingScrub.db.test.ts runs against the real migrations.
 -- Secrets that live outside the database (the App key, the webhook and

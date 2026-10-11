@@ -5,9 +5,9 @@
 Accepted (2026-09-26, asked for by the product owner after the move to
 Hetzner). Amended 2026-09-28: staging runs as its own account (see *Update
 2026-09-28*). Amended 2026-10-11 (security audit M8, M9, L17): the copy is
-pseudonymized and the inbox emptied after each refresh, which replaces the
-"not anonymized" decision of §3; the deploys pull the image by digest
-(see *Update 2026-10-11*).
+pseudonymized before it leaves production, which replaces the "not
+anonymized" decision of §3; the deploys pull the image by digest (see
+*Update 2026-10-11*).
 
 Note (2026-10-06, M2-06, [ADR-035](ADR-035-fusion-de-classroom.md)): the
 refresh of §3 also forgets every GitHub installation, archives every
@@ -133,7 +133,8 @@ ADR-027 (a delegated session), not a development login turned back on.
 - **A staging database rebuilt on every deploy.** It would test every
   migration against fresh data, but erase every test set up by hand.
 - **Anonymizing the copy.** Rejected for now (§3); `staging-refresh.sh` is
-  the one place it would go. (Adopted as a pseudonymization on 2026-10-11.)
+  the one place it would go. (Adopted as a pseudonymization on 2026-10-11,
+  at the export rather than the refresh.)
 - **Automatic promotion after the health check.** A green `/healthz` says the
   process boots, not that the change is right, and nothing should reach
   production during an exam without someone choosing it.
@@ -173,49 +174,26 @@ holding nothing of production's.
 
 ## Update 2026-10-11
 
-The 2026-10 security audit (M9) asked §3 again: main's unapproved code ran
-against production's real names, addresses and grades, and the last full
-export stayed in `/srv/staging-inbox` until the next one. Since the account
-split of 2026-09-28 the premise of §3 (same account, so no added exposure)
-no longer holds either. §3 changes as follows; the login allowlist stays.
+§3's "not anonymized" decision is replaced (security audit M9): staging runs
+main's unapproved code, and since the account split of 2026-09-28 its
+premise (same account, no added exposure) no longer held. The copy is now
+**pseudonymized on production's side, before it reaches the inbox**:
+`staging-export.sh` copies production into a scratch database of
+production's PostgreSQL, rewrites who people are there
+(`scripts/staging-pseudonymize.sql`, whose header lists what is replaced
+and what is kept), dumps that copy alone and drops it. Pseudonymizing the
+restored copy on staging instead was rejected: the originals would survive
+in its dead tuples and WAL, readable by that unapproved code. Grades,
+answers and content stay real; the login allowlist stays. A keep list
+(`STAGING_KEEP_EMAILS` in `.env.prod`) leaves the testers' accounts as they
+are; anyone else who signs in on staging gets a new, empty account. The
+`audit_log` trigger (ADR-003 §5) is lifted for that rewrite, on the scratch
+copy only. One exception, `--keep-identities`, serves the heig-classroom
+cutover rehearsal, whose copies are deleted the same day. The scrub also
+empties the secrets kept in rows (audit L17). This concerns the staging copy
+only: pseudonymizing production's accounts is still not a requirement
+(ADR-003, #681).
 
-- **The copy is pseudonymized.** `staging-refresh.sh` runs
-  `scripts/staging-pseudonymize.sql` on the restored copy, before the scrub
-  and before the application starts on it. Who people are is replaced, not
-  what they did: names, addresses, edu-ID and OIDC subjects, GitHub and
-  Teams identities become deterministic fakes (`student-12@example.invalid`),
-  and the free text that names people beside the content (IdP claims,
-  avatars, roster notes, audit and webhook payloads, notifications, guest
-  pseudonyms) is emptied. Grades, answers and content stay, with the free
-  text people wrote in them. The trigger that keeps `audit_log` append-only
-  (ADR-003 §5) is lifted for that rewrite, inside its transaction, on the
-  copy only: it guards production's record, and staging's copy is not it.
-- **A keep list** leaves the accounts that must work on staging untouched:
-  `STAGING_KEEP_EMAILS`, the super administrator and the full addresses of
-  `LOGIN_ALLOWLIST`. Anyone else who signs in on staging gets a new, empty
-  account: a login finds its account by `oidc_sub`, which the fakes replace.
-- **One exception**: the refresh of the heig-classroom cutover rehearsal
-  keeps the real identities (`--keep-identities`), because the import
-  matches people by their addresses and edu-ID identifiers; that copy is
-  deleted the same day (docs/merge/10-cutover-runbook.md §5.1).
-- **The export does not outlive the refresh.** A successful refresh empties
-  the inbox's files (group-writable for that; the directory stays read-only
-  to `srvstg`); a failed one keeps them, and says so, for a retry.
-
-The scrub (§3) also empties the secrets kept in rows (audit L17): the
-encrypted LLM key, kiosk station credentials and pairing codes, poll
-guests' tokens, Teams link tokens. Both scripts are tested against the real
-migrations (`apps/api/src/stagingScrub.db.test.ts`), by markers searched for
-in every table.
-
-This concerns the staging COPY only. Production keeps its data as it is:
-pseudonymizing production's accounts is not a Quiz requirement (ADR-003's
-2026-10-09 amendment, issue #681), and nothing here changes that.
-
-§2 (build once, promote the same sha) now pins the bytes as well (audit M8):
-the CI's `image` job publishes each image's digest, and the deploys pull
-`<image>:<sha>@sha256:<digest>`, which a tag moved since the build cannot
-redirect; `.env.image` keeps both. Third-party actions are pinned by commit
-and the image is built without a shared layer cache. The procedure, the
-switch-on gate and the environment settings are in
-[deployment.md §4](../development/deployment.md#4-continuous-deployment).
+§2 now pins the bytes too (audit M8): the deploys pull
+`<image>:<sha>@sha256:<digest>`, the digest the CI's `image` job pushed
+([deployment.md §4](../development/deployment.md#4-continuous-deployment)).

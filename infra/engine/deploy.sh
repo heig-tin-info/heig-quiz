@@ -68,19 +68,19 @@ if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
     QUIZ_DEPLOY_FORCE=1
     request="${BASH_REMATCH[1]}"
   fi
-  digest='(sha256:[0-9a-f]{64}[[:space:]]+)?'
+  digest='((sha256:[0-9a-f]{64})[[:space:]]+)?'
   if [[ "$request" =~ ^(runner|codespace)[[:space:]]+([a-z]+)[[:space:]]+([0-9a-f]{40})[[:space:]]+$digest([^[:space:]]+)$ ]]; then
     QUIZ_DEPLOY_COMPONENT="${BASH_REMATCH[1]}"
     QUIZ_DEPLOY_INSTANCE="${BASH_REMATCH[2]}"
     QUIZ_DEPLOY_SHA="${BASH_REMATCH[3]}"
-    QUIZ_DEPLOY_DIGEST="${BASH_REMATCH[4]%%[[:space:]]*}"
-    token="${BASH_REMATCH[5]}"
+    QUIZ_DEPLOY_DIGEST="${BASH_REMATCH[5]}"
+    token="${BASH_REMATCH[6]}"
   elif [[ "$request" =~ ^([0-9a-f]{40})[[:space:]]+$digest([^[:space:]]+)$ ]]; then
     QUIZ_DEPLOY_COMPONENT=runner
     QUIZ_DEPLOY_INSTANCE=prod
     QUIZ_DEPLOY_SHA="${BASH_REMATCH[1]}"
-    QUIZ_DEPLOY_DIGEST="${BASH_REMATCH[2]%%[[:space:]]*}"
-    token="${BASH_REMATCH[3]}"
+    QUIZ_DEPLOY_DIGEST="${BASH_REMATCH[3]}"
+    token="${BASH_REMATCH[4]}"
   else
     echo "deploy: malformed request (expected: [force] <component> <instance> <sha> [<digest>] <token>)" >&2
     exit 2
@@ -94,10 +94,6 @@ else
   QUIZ_DEPLOY_INSTANCE="${QUIZ_DEPLOY_INSTANCE:-prod}"
   QUIZ_DEPLOY_DIGEST="${QUIZ_DEPLOY_DIGEST:-}"
   export QUIZ_DEPLOY_COMPONENT QUIZ_DEPLOY_INSTANCE QUIZ_DEPLOY_DIGEST
-fi
-if [ -n "$QUIZ_DEPLOY_DIGEST" ] && ! [[ "$QUIZ_DEPLOY_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-  echo "deploy: malformed image digest" >&2
-  exit 2
 fi
 
 # What each key may deploy. Checked before the login, and again by the copy

@@ -174,18 +174,19 @@ organization under *Mapping*: that output is the list to start from.
 (agent):
 
 ```bash
-/srv/quiz/scripts/staging-export.sh
 h exec -T postgres pg_dump -Fc -U hgc hgc > /srv/staging-inbox/.hgc.dump.part \
   && chmod 640 /srv/staging-inbox/.hgc.dump.part && mv /srv/staging-inbox/.hgc.dump.part /srv/staging-inbox/hgc.dump
 install -m 640 -g srvstg /srv/quiz/merge/mapping.json /srv/staging-inbox/mapping.json
+# --keep-identities, after hgc.dump (it is refused without it): the import
+# matches people by address and edu-ID identifier, which a normal export
+# pseudonymizes (ADR-028, update 2026-10-11).
+/srv/quiz/scripts/staging-export.sh --keep-identities
 ```
 
 Then as srvstg (owner):
 
 ```bash
-# --keep-identities: the import matches people by address and edu-ID
-# identifier, which a normal refresh pseudonymizes (ADR-028, 2026-10-11).
-~/quiz-staging/scripts/staging-refresh.sh --keep-identities
+~/quiz-staging/scripts/staging-refresh.sh
 s exec -T postgres psql -U quiz -d postgres -v ON_ERROR_STOP=1 \
   -c 'DROP DATABASE IF EXISTS hgc_cutover WITH (FORCE)' -c 'CREATE DATABASE hgc_cutover OWNER quiz'
 s exec -T postgres pg_restore -U quiz -d hgc_cutover --no-owner --role=quiz --exit-on-error < /srv/staging-inbox/hgc.dump
@@ -679,10 +680,13 @@ the account boundaries protect it.
 | production cutover directory | `/srv/quiz/merge` (dumps, mapping, reports) | agent (srv) | E, step 3, once the encrypted final dump is verified (it keeps what must be kept) | `rm -rf /srv/quiz/merge` |
 
 The staging import also wrote classroom's data into staging's own Quiz
-database. Two steps remove it the same day:
+database, which the `--keep-identities` export left with production's real
+identities, and that export's `quiz.dump` stays in the inbox. Two steps
+remove both the same day, after the inbox copies above:
 
-1. The agent (srv) runs `/srv/quiz/scripts/staging-export.sh`, so that
-   the inbox holds a fresh production copy without the import.
+1. The agent (srv) runs `/srv/quiz/scripts/staging-export.sh` (no flag), so
+   that the inbox holds a fresh, pseudonymized production copy without the
+   import.
 2. The owner (srvstg) runs `~/quiz-staging/scripts/staging-refresh.sh`.
 
 ## 6. Appendix A: announcements
@@ -744,7 +748,7 @@ the day before T0. The owner works as `srvstg` unless a step says otherwise.
 
 1. Agent (srv): the dumps and the mapping into the inbox (§1.3, *Staging
    dry run*, first block). Note the time: it stands for C1.
-2. `staging-refresh.sh --keep-identities`, then `hgc_cutover` restored (§1.3, second block,
+2. `staging-refresh.sh` (of the `--keep-identities` export), then `hgc_cutover` restored (§1.3, second block,
    up to `pg_restore`). Time it as C2.
 3. `imp s ~/merge --dry-run`, then `imp s ~/merge --apply --final --window-hours "$W"` (O5). Time
    both. The dump comes from a running classroom, so the STATE checks see

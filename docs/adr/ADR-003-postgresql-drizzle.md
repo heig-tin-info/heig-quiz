@@ -35,6 +35,8 @@ mechanism (NFR-09), revocable sessions (AU-06), a durable job queue and a simple
    trigger; `TRUNCATE` fires no such trigger and nothing truncates the table. Quiz has no
    account pseudonymization routine (issue #681, backlog); if one is ever specified, it
    decides whether it must rewrite identity fields here and how it passes the trigger.
+   (Scoped amendment 2026-10-11: the staging copy is pseudonymized on a scratch database,
+   the trigger lifted there only, never on production's record: ADR-028, *Update 2026-10-11*.)
 
 ## Consequences
 

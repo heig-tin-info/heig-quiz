@@ -539,16 +539,18 @@ checkouts on the application VM (`grep -c QUIZ_DEPLOY_DIGEST deploy.sh` in
 `/home/srvstg/quiz-staging` and `/srv/quiz`) and the runner VM's
 (`/opt/quiz-runner`, and `/opt/quiz-engine-staging` when
 `CODESPACE_DEPLOY=1`; `grep -c QUIZ_DEPLOY_DIGEST infra/engine/deploy.sh`).
-Then `gh variable set DEPLOY_BY_DIGEST --repo heig-tin-info/heig-quiz --body 1`;
-the gate leaves `ci.yml` once it is set for good. A checkout left behind
-(the staging engine while the portal deploy is off) must be brought forward
-by one deploy without the variable before it is switched on again.
+Then `gh variable set DEPLOY_BY_DIGEST --repo heig-tin-info/heig-quiz --body 1`.
+While it is set, a deploy step whose digest is missing fails instead of
+falling back to the tag. The gate leaves `ci.yml` once it is set for good
+(#747). A checkout left behind (the staging engine while the portal deploy
+is off) must be brought forward by one deploy without the variable before
+it is switched on again.
 
 ### The environments
 
-The deploy jobs name their environment (`staging`, `production`) and run on
-a push to `main` only, whatever their `needs`; what keeps them there is in
-the repository settings, which no file can set. As of 2026-10-11 they hold
+The deploy jobs name their environment (`staging`, `production`) and run
+after `image`, which runs on a push to `main` only; what keeps a deploy on
+`main` is in the repository settings, which no file can set. As of 2026-10-11 they hold
 the following; check them after any change of administrators
 (*Settings → Environments*):
 
@@ -1193,7 +1195,7 @@ cat /sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/cgroup.c
 cd ~ && git clone https://github.com/heig-tin-info/heig-quiz.git quiz-staging && cd quiz-staging
 mkdir -p secrets assets
 cp .env.staging.example .env.staging && chmod 600 .env.staging
-nano .env.staging   # POSTGRES_PASSWORD, COOKIE_SECRET (new values), OIDC_CLIENT_ID, LOGIN_ALLOWLIST, STAGING_KEEP_EMAILS
+nano .env.staging   # POSTGRES_PASSWORD, COOKIE_SECRET (new values), OIDC_CLIENT_ID, LOGIN_ALLOWLIST
 
 # As root: the edu-ID key, copied once (srvstg cannot read production's copy).
 sudo install -o srvstg -g srvstg -m 600 /srv/quiz/secrets/eduid-private-key.pem /home/srvstg/quiz-staging/secrets/
@@ -1227,68 +1229,50 @@ production's.
 
 ### Refreshing the data
 
-The copy travels one way, from production into `/srv/staging-inbox`, a
-directory `srvstg` can read and not write. The two files in it are
-group-writable (`660`), so that the refresh can EMPTY them once it is done;
-`srvstg` still cannot create, rename or remove a file there:
+The copy travels one way, from production into `/srv/staging-inbox`, which
+`srvstg` can read and not write, and it is pseudonymized BEFORE it gets
+there (ADR-028, *Update 2026-10-11*):
 
 ```bash
-# 1. As srv: a dump taken now and the question images, into the inbox.
-/srv/quiz/scripts/staging-export.sh
-# 2. As srvstg: restore them; the inbox is emptied when this succeeds.
-~/quiz-staging/scripts/staging-refresh.sh --keep-list  # who will keep their account (changes nothing)
+# 1. As srv: a pseudonymized dump taken now and the question images, into the inbox.
+/srv/quiz/scripts/staging-export.sh                  # keep list: STAGING_KEEP_EMAILS of .env.prod
+/srv/quiz/scripts/staging-export.sh --keep a@b,c@d   # this keep list instead
+# 2. As srvstg: restore them.
 ~/quiz-staging/scripts/staging-refresh.sh              # the inbox's copy
-~/quiz-staging/scripts/staging-refresh.sh <file>       # that dump, images unchanged, file left alone
+~/quiz-staging/scripts/staging-refresh.sh <file>       # that dump, images unchanged
 ```
 
+The export copies production's database into a scratch database of
+production's own PostgreSQL (`staging_export`), runs
+`scripts/staging-pseudonymize.sql` on it, dumps that copy alone and drops
+it: no real identity reaches the inbox, nor staging. What it replaces and
+what it keeps is that file's header. The accounts of the keep list
+(`STAGING_KEEP_EMAILS` in `.env.prod`, comma-separated, or `--keep`) are
+left as they are: put there whoever tests on staging, since anyone else who
+signs in there gets a new, empty account. The export prints the list
+(`kept as they are: …`) and the number of accounts kept and pseudonymized.
+Before the first real refresh, run it with `--keep <your address>` and check
+those two lines.
+
 Never on deploy: a refresh wipes whatever a test had prepared. It restores
-the dump into a recreated database, then:
+the dump into a recreated database, empties every credential and secret
+production issued and forgets its GitHub installations and live projects
+(`scripts/staging-scrub.sql`: staging's own App never acts on a production
+organization, N-SEC-18; a tester unarchives the project under test; enter
+staging's own LLM key in the admin screen), unpacks the question images,
+and starts the app, which migrates the copy forward: the very migration
+production will run next. It doubles as the restore test of §6. The inbox
+keeps only the latest copy; each export overwrites it. Both SQL files are
+tested against the real migrations by `apps/api/src/stagingScrub.db.test.ts`.
 
-1. **pseudonymizes it** (`scripts/staging-pseudonymize.sql`): every account
-   becomes `student-<n>@example.invalid` / "Student" "<n>" (by role), with an
-   OIDC subject no identity provider issues (`staging:<id>`), no edu-ID
-   identifier and no picture; an unclaimed roster row becomes
-   `enrollment-<n>@example.invalid`, a teacher grant follows its teacher (or
-   becomes `grant-<n>@…`), a GitHub identity becomes `github-user-<n>` with a
-   negative id, a student repository `<org>/repo-<id>`, a poll guest
-   "Guest <n>"; IdP claims (the affiliations stay), avatars, Teams links,
-   roster notes, audit and webhook payloads and notifications are emptied
-   (the audit trigger is lifted for that, on the copy only). Grades,
-   answers, questions, journals and projects stay;
-2. **leaves the keep list as it is**: the accounts of `STAGING_KEEP_EMAILS`
-   (in `.env.staging`, or the environment for one run), of
-   `SUPER_ADMIN_EMAIL` and of the full addresses of `LOGIN_ALLOWLIST` (not
-   its `@domain` entries), with their roster rows, GitHub account and
-   history. Put there whoever tests on staging: anyone else who signs in
-   gets a NEW, empty account (a login finds its account by its OIDC
-   subject, which the pseudonymization replaced) — a student account to
-   walk a flow is made by enrolling it, as in production;
-3. **scrubs it** (`scripts/staging-scrub.sql`): empties sessions, launch
-   tickets, API tokens, OAuth requests and grants, kiosk pairings and Teams
-   link tokens (nothing production issued works here), the encrypted LLM
-   key (enter staging's own in the admin screen), kiosk station credentials
-   (a station attests again) and poll guests' tokens; forgets every GitHub
-   installation, archives every project and stops its group moves, closes
-   the copied webhook deliveries and drops production's queued jobs
-   (staging's own App never acts on a production organization, N-SEC-18; a
-   tester unarchives the project under test);
+`--keep-identities` exports the real copy, for the heig-classroom cutover
+rehearsal only (docs/merge/10-cutover-runbook.md §1.3): it is refused unless
+that rehearsal's `hgc.dump` is in the inbox, and its copies are deleted the
+same day (§5.1 there).
 
-then unpacks the question images, starts the app, which migrates the copy
-forward (the very migration production will run next), and empties the
-inbox's two files. It doubles as the restore test of §6. A refresh that
-fails says so and leaves the inbox as it was, for a retry; empty it by hand
-(as `srv`, `rm -f /srv/staging-inbox/*`) if the copy is abandoned. Both SQL
-files are tested against the real migrations by
-`apps/api/src/stagingScrub.db.test.ts`.
-
-`--keep-identities` skips step 1 (and so step 2), loudly: it exists for the
-heig-classroom cutover rehearsal, whose import matches people by their real
-addresses (docs/merge/10-cutover-runbook.md §1.3), and its copy is deleted
-the same day. Nothing else uses it.
-
-Once, after 2026-10-11 (the export made before then is mode `640`, which
-`srvstg` cannot empty; the refresh warns about it): as `srv`,
-`rm -f /srv/staging-inbox/quiz.dump /srv/staging-inbox/assets.tar`.
+Once, after 2026-10-11: as `srv`,
+`rm -f /srv/staging-inbox/quiz.dump /srv/staging-inbox/assets.tar` (the last
+export before then is a full, real copy).
 
 ### Exam days
 
@@ -1342,6 +1326,7 @@ configuration.
 | `OIDC_CLIENT_SECRET` | unset | with a private key configured the secret is never sent and is not checked; without one, `client_secret` authentication applies and the `not-for-production` placeholder is refused |
 | `SUPER_ADMIN_EMAIL` | one address | the only account managed through the environment; teachers are managed from the admin screen |
 | `LOGIN_ALLOWLIST` | unset (staging: the testers' addresses) | when set, only these addresses and the super administrator may sign in |
+| `STAGING_KEEP_EMAILS` | `.env.prod` only: the testers' addresses | read by `scripts/staging-export.sh`, never by the app: the accounts the staging copy keeps unpseudonymized (§8) |
 | `SEB_CONFIG_KEY_ENFORCE` | `1` in production and staging (proof B, 2026-10-10); unset (`0`) in development | the Config Key header on every request of a Safe Exam Browser session ([ADR-051](../adr/ADR-051-postes-kiosque-attestes.md) §3): off, a mismatch is only audited (`auth.seb_config_key_mismatch`); on (production), the request is anonymous. The launch refuses a bad header either way |
 | `SEB_EXTRA_ALLOWED_HOSTS` | unset (empty) | hosts every `.seb` lets SEB reach beside Quiz (and, for a project, the workspace portal): comma-separated host names, `*` wildcards, no scheme (D21, M6-07). Empty keeps an evaluation's file as ADR-027 pinned it |
 | `KIOSK_ATTESTATION` | unset (`off`) until the stations are set up, then `google` | the attested kiosk stations ([ADR-051](../adr/ADR-051-postes-kiosque-attestes.md), [setup](kiosk.md)): `off`, the kiosk routes answer 404 and exams are not offered the setting; `mock`, the development fixture, is refused: the process does not start |

@@ -87,19 +87,12 @@ if [[ "$request" =~ ^force[[:space:]]+(.+)$ ]]; then
 fi
 export QUIZ_DEPLOY_FORCE
 token="$request"
-if [[ "$request" =~ ^([0-9a-f]{40})[[:space:]]+(sha256:[0-9a-f]{64})[[:space:]]+(.+)$ ]]; then
+if [[ "$request" =~ ^([0-9a-f]{40})[[:space:]]+((sha256:[0-9a-f]{64})[[:space:]]+)?([^[:space:]]+)$ ]]; then
   export QUIZ_DEPLOY_SHA="${BASH_REMATCH[1]}"
-  QUIZ_DEPLOY_DIGEST="${BASH_REMATCH[2]}"
-  token="${BASH_REMATCH[3]}"
-elif [[ "$request" =~ ^([0-9a-f]{40})[[:space:]]+(.+)$ ]]; then
-  export QUIZ_DEPLOY_SHA="${BASH_REMATCH[1]}"
-  token="${BASH_REMATCH[2]}"
+  QUIZ_DEPLOY_DIGEST="${BASH_REMATCH[3]}"
+  token="${BASH_REMATCH[4]}"
 fi
 export QUIZ_DEPLOY_DIGEST="${QUIZ_DEPLOY_DIGEST:-}"
-if [ -n "$QUIZ_DEPLOY_DIGEST" ] && ! [[ "$QUIZ_DEPLOY_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-  echo "deploy: malformed image digest" >&2
-  exit 2
-fi
 
 # Optional GHCR login (private package): the token is piped straight to
 # docker login's stdin, and discarded after.
