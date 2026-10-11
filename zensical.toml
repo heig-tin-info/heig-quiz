@@ -9,10 +9,13 @@ Copyright &copy; 2026 HEIG-VD, TIN department
 """
 
 # Everything on the site is in English (CLAUDE.md, invariant 1): the product
-# specification was translated from its French original and lives under
-# Development, next to the decision records and the archived MVP plan. The
-# Guide is the user documentation of the platform; its screenshots come in a
-# light and a dark variant (docs/development/screenshots.md).
+# specification was translated from its French original. The navigation is
+# one tab per audience (docs/development/documentation.md): the Guide for
+# teachers and students, Operations for whoever hosts the platform, and
+# Developers, last, for contributors and agents, with the specification, the
+# decision records and the classroom merge as collapsed groups. The archived
+# pages (`history/`, the audits, the phase-1 plan) are built but listed
+# nowhere: they are reached only through the links of the current pages.
 nav = [
   { "Home" = "index.md" },
   { "Guide" = [
@@ -37,49 +40,52 @@ nav = [
     { "Administration" = "guide/admin.md" },
     { "Data protection" = "guide/data-protection.md" },
   ] },
-  { "Development" = [
-    { "Local setup" = "development/index.md" },
-    { "Repository layout" = "development/repository.md" },
+  { "Operations" = [
     { "Deployment" = "development/deployment.md" },
     { "Installing on a new Ubuntu server" = "development/new-server.md" },
     { "GitHub App" = "development/github-app.md" },
     { "Microsoft Teams setup" = "development/teams.md" },
     { "Kiosk stations (Chromebooks)" = "development/kiosk.md" },
+  ] },
+  { "Developers" = [
+    { "Local setup" = "development/index.md" },
+    { "Repository layout" = "development/repository.md" },
     { "Architecture" = "development/architecture.md" },
     { "Writing the documentation" = "development/documentation.md" },
     { "Screenshots" = "development/screenshots.md" },
-    { "Specification" = [
-      { "Reading index" = "spec/README.md" },
-      { "0. Scope and objectives" = "spec/00-cadre-et-perimetre.md" },
-      { "1. Glossary and domain model" = "spec/01-glossaire-et-domaine.md" },
-      { "2. Functional requirements" = "spec/02-exigences-fonctionnelles.md" },
-      { "3. Non-functional requirements" = "spec/03-exigences-non-fonctionnelles.md" },
-      { "4. Question types" = "spec/04-types-de-questions.md" },
-      { "5. Architecture" = "spec/05-architecture.md" },
-      { "6. Open questions" = "spec/06-questions-ouvertes.md" },
-      { "7. Reuse of heig-classroom" = "spec/07-reutilisation-heig-classroom.md" },
-      { "8. Two-level experience" = "spec/08-experience-deux-niveaux.md" },
-    ] },
-    { "Decisions" = "adr/README.md" },
-    { "Classroom merge" = [
-      { "Overview" = "merge/README.md" },
-      { "Progress" = "merge/PROGRESS.md" },
-      { "1. Strategy" = "merge/01-strategy.md" },
-      { "2. Data and migration" = "merge/02-data-and-migration.md" },
-      { "3. GitHub and projects" = "merge/03-github-projects.md" },
-      { "4. Journal" = "merge/04-journal.md" },
-      { "5. Web" = "merge/05-web.md" },
-      { "6. Workspace, SEB, infrastructure" = "merge/06-codespace-seb-infra.md" },
-      { "7. Incompatibilities" = "merge/07-incompatibilities.md" },
-      { "8. Decisions" = "merge/08-decisions.md" },
-      { "9. Task cards" = "merge/09-tasks.md" },
-      { "9. Task cards, delivered" = "merge/history/09-tasks-delivered.md" },
-      { "Production measurements" = "merge/measures-2026-09-28.md" },
-    ] },
-    { "Archive" = [
-      { "Simplification audit, 2026-10-06" = "audits/2026-10-06-simplification.md" },
-      { "MVP plan (phase 1, D1–D20)" = "PLAN-MVP.md" },
-      { "MVP plan, full text" = "history/PLAN-MVP.md" },
+    { "Reference" = [
+      { "Specification" = [
+        { "Reading index" = "spec/README.md" },
+        { "0. Scope and objectives" = "spec/00-cadre-et-perimetre.md" },
+        { "1. Glossary and domain model" = "spec/01-glossaire-et-domaine.md" },
+        { "2. Functional requirements" = "spec/02-exigences-fonctionnelles.md" },
+        { "3. Non-functional requirements" = "spec/03-exigences-non-fonctionnelles.md" },
+        { "4. Question types" = "spec/04-types-de-questions.md" },
+        { "5. Architecture" = "spec/05-architecture.md" },
+        { "6. Open questions" = "spec/06-questions-ouvertes.md" },
+        { "7. Reuse of heig-classroom" = "spec/07-reutilisation-heig-classroom.md" },
+        { "8. Two-level experience" = "spec/08-experience-deux-niveaux.md" },
+        { "Data model reference" = "spec/reference/data-model.md" },
+      ] },
+      { "Decisions" = [
+        { "Topic index" = "adr/README.md" },
+        { "Template of a record" = "adr/TEMPLATE.md" },
+      ] },
+      { "Classroom merge" = [
+        { "Overview" = "merge/README.md" },
+        { "Progress" = "merge/PROGRESS.md" },
+        { "1. Strategy" = "merge/01-strategy.md" },
+        { "2. Data and migration" = "merge/02-data-and-migration.md" },
+        { "3. GitHub and projects" = "merge/03-github-projects.md" },
+        { "4. Journal" = "merge/04-journal.md" },
+        { "5. Web" = "merge/05-web.md" },
+        { "6. Workspace, SEB, infrastructure" = "merge/06-codespace-seb-infra.md" },
+        { "7. Incompatibilities" = "merge/07-incompatibilities.md" },
+        { "8. Decisions" = "merge/08-decisions.md" },
+        { "9. Task cards" = "merge/09-tasks.md" },
+        { "10. Cutover runbook" = "merge/10-cutover-runbook.md" },
+        { "Production measurements" = "merge/measures-2026-09-28.md" },
+      ] },
     ] },
   ] },
 ]
