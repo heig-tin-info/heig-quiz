@@ -13,7 +13,8 @@
  * secondary read under the day's one action.
  */
 import type { DrillClassroom, DrillLevel } from "@quiz/contracts";
-import { DRILL_LEVEL_MIN_CARDS } from "@quiz/domain";
+import { DRILL_CALIBRATION_MIN_N } from "@quiz/domain";
+import { badge } from "@quiz/ui";
 import { Tag } from "lucide-react";
 
 import { refName } from "../concepts/names";
@@ -51,8 +52,8 @@ export function ConceptMastery({ room }: { room: DrillClassroom }) {
             </div>
             {row.level === null ? (
               <span
-                title={t("drill.concepts.noData.help", { n: DRILL_LEVEL_MIN_CARDS })}
-                className="inline-flex h-5.5 shrink-0 items-center whitespace-nowrap rounded-full border border-dashed border-line-strong px-2 text-xs font-medium text-fg-muted"
+                title={t("drill.concepts.noData.help", { n: DRILL_CALIBRATION_MIN_N })}
+                className={badge("neutral", "border border-dashed border-line-strong bg-transparent")}
               >
                 {t("drill.concepts.noData")}
               </span>
@@ -62,7 +63,7 @@ export function ConceptMastery({ room }: { room: DrillClassroom }) {
           </div>
         ))}
       </Card>
-      <p className="px-1 text-xs text-fg-faint">{t("drill.concepts.note", { n: DRILL_LEVEL_MIN_CARDS })}</p>
+      <p className="px-1 text-xs text-fg-faint">{t("drill.concepts.note", { n: DRILL_CALIBRATION_MIN_N })}</p>
     </section>
   );
 }

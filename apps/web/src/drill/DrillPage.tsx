@@ -113,9 +113,9 @@ export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
     <div className="space-y-8">
       <PageHeader title={t("nav.drill")} description={t("drill.subtitle")} />
       {day()}
-      {/* ADR-098: a read, no action. One section per classroom; a course without concepts draws none. */}
-      {hasRooms ? rooms.data!.map((room) => <ConceptMastery key={room.classroomId} room={room} />) : null}
       {hasRooms ? <DrillClassrooms rooms={rooms.data!} /> : null}
+      {/* Secondary reads, after the switches, so the page does not jump as they arrive. ADR-098: the levels on the course's concepts, one section per classroom, none for a course without. */}
+      {hasRooms ? rooms.data!.map((room) => <ConceptMastery key={room.classroomId} room={room} />) : null}
       {/* Secondary, after the switches: what the statements on the cards add up to (ADR-085 §8). */}
       {hasRooms ? <DrillCalibration /> : null}
     </div>

@@ -130,8 +130,9 @@ the rules: the band cut-offs of §3 and the section's place on the drill page (�
   (`StudentConceptMastery`, `packages/contracts/src/drill.ts`).
 - The rule is pure, in `packages/domain/src/drillLevel.ts`: `drillLevel` (the cut-offs
   `DRILL_LEVEL_GETTING_FROM` 0.7 and `DRILL_LEVEL_SOLID_FROM` 0.9) and `studentConceptLevels`, which
-  rolls the cards up with `drillMastery`. `DRILL_LEVEL_MIN_CARDS` is `DRILL_CALIBRATION_MIN_N`, so
-  the 5 of §2 is the calibration's constant, not a second one.
+  rolls the cards up with `drillMastery`. The 5 of §2 is `DRILL_CALIBRATION_MIN_N`, used directly.
+  The teacher's read and this one share one card loader (`drill/masteryCards.ts`), which returns
+  concept ids only; the student exit labels the course's validated concepts alone.
 - A classroom whose drill is off or archived answers `declared: false` like a course without a
   validated concept; the page draws nothing in both cases. The rows follow the label order of the
   course's concepts (the same order as the teacher's list).

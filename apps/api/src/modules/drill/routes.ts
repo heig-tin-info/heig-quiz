@@ -100,8 +100,9 @@ export async function drillPlugin(app: FastifyInstance) {
    * ADR-098: the caller's own level on each concept their course declares.
    * The classroom is loaded through `readableClassroom` with the STUDENT
    * payload forced, so a teacher in the student view and an impersonation
-   * session read their own / the impersonated seat; a `seb` or `kiosk`
-   * session and anyone off the classroom get the 404 of a missing one.
+   * session read their own / the impersonated seat. Portal sessions only: a
+   * `seb` or `kiosk` session is refused with a 401 before the route (as the
+   * gradebook's is), and anyone off the classroom gets the 404 of a missing one.
    */
   app.get(
     "/app/api/student/classrooms/:id/drill/mastery",

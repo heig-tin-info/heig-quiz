@@ -20,7 +20,7 @@
  *     their reviews with it (the cascade of 28 (a));
  *   - each read is a bounded number of queries, whatever the class size.
  */
-import { and, eq, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type {
   ConceptLang,
@@ -42,7 +42,6 @@ import {
   drillProgressRange,
   drillMastery,
   drillWeekStarts,
-  type MasteryCard,
   type MasteryLine,
 } from "@quiz/domain";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
@@ -58,7 +57,7 @@ import {
   questions,
 } from "../../db/schema.js";
 import { byLabel, courseConceptsOf, coverage, toConceptRef } from "../concept/service.js";
-import { keyOpen } from "./review.js";
+import { reviewedMasteryCards } from "./masteryCards.js";
 
 const DAY_MS = 86_400_000;
 
@@ -234,38 +233,19 @@ export async function classroomMastery(
   now: Date,
   lang: ConceptLang,
 ): Promise<DrillClassroomMastery> {
-  const [rows, listed] = await Promise.all([
-    db
-      .select({ card: drillCards, concept: concepts })
-      .from(drillCards)
-      .innerJoin(enrollments, and(studentSeat(classroom.id), eq(enrollments.userId, drillCards.userId)))
-      .leftJoin(questionConcepts, eq(questionConcepts.questionId, drillCards.questionId))
-      .leftJoin(concepts, eq(concepts.id, questionConcepts.conceptId))
-      .where(and(eq(drillCards.classroomId, classroom.id), isNotNull(drillCards.lastReviewAt))),
+  const [cards, listed] = await Promise.all([
+    reviewedMasteryCards(db, classroom.id, now),
     courseConceptsOf(db, classroom.courseId, lang),
   ]);
+  // The labels of the concepts the cards meet outside the course's list: this
+  // read names them (the teacher's "outside" bucket); the student's never does.
   const refs = new Map<string, ConceptRef>(listed.map((c) => [c.id, c]));
-  const found = new Map<string, { card: (typeof rows)[number]["card"]; conceptIds: string[] }>();
-  for (const { card, concept } of rows) {
-    const entry = found.get(card.id) ?? { card, conceptIds: [] };
-    if (concept) {
-      entry.conceptIds.push(concept.id);
-      if (!refs.has(concept.id)) refs.set(concept.id, toConceptRef(concept, lang));
+  const unknown = [...new Set(cards.flatMap((c) => c.conceptIds))].filter((id) => !refs.has(id));
+  if (unknown.length > 0) {
+    for (const row of await db.select().from(concepts).where(inArray(concepts.id, unknown))) {
+      refs.set(row.id, toConceptRef(row, lang));
     }
-    found.set(card.id, entry);
   }
-  const open = await keyOpen(
-    db,
-    [...found.values()].map((e) => e.card),
-  );
-  const cards: MasteryCard[] = [...found.values()]
-    .filter((e) => open(e.card))
-    .map((e) => ({
-      id: e.card.id,
-      userId: e.card.userId,
-      retrievability: drillRetrievability(e.card, now),
-      conceptIds: e.conceptIds,
-    }));
 
   const listedIds = listed.map((c) => c.id);
   const rollup = drillMastery(cards, listedIds, await coverage(db, listedIds), (a, b) =>

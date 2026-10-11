@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  DRILL_LEVEL_GETTING_FROM,
-  DRILL_LEVEL_MIN_CARDS,
-  DRILL_LEVEL_SOLID_FROM,
-  drillLevel,
-  studentConceptLevels,
-} from "./drillLevel.js";
+import { DRILL_LEVEL_GETTING_FROM, DRILL_LEVEL_SOLID_FROM, drillLevel, studentConceptLevels } from "./drillLevel.js";
 import type { MasteryCard } from "./drillMastery.js";
 
 const cards = (n: number, retrievability: number, ...conceptIds: string[]): MasteryCard[] =>
@@ -24,21 +18,13 @@ describe("drillLevel", () => {
     expect(drillLevel(0.9)).toBe("solid");
     expect(drillLevel(1)).toBe("solid");
   });
-
-  it("shares the calibration's threshold of 5", () => {
-    expect(DRILL_LEVEL_MIN_CARDS).toBe(5);
-  });
 });
 
 describe("studentConceptLevels", () => {
   it("gives a level from 5 cards only, else no data, with the count", () => {
     const out = studentConceptLevels(
       [...cards(5, 0.95, "a"), ...cards(4, 0.1, "b")],
-      [
-        { id: "a", validated: true },
-        { id: "b", validated: true },
-        { id: "idle", validated: true },
-      ],
+      ["a", "b", "idle"],
       self("a", "b", "idle"),
     );
     expect(out).toEqual([
@@ -48,15 +34,11 @@ describe("studentConceptLevels", () => {
     ]);
   });
 
-  it("keeps the order of the list, not the level, and drops a proposed concept", () => {
+  it("keeps the order of the list, not the level", () => {
     const out = studentConceptLevels(
-      [...cards(5, 0.2, "a"), ...cards(5, 0.8, "b"), ...cards(5, 0.1, "p")],
-      [
-        { id: "b", validated: true },
-        { id: "p", validated: false },
-        { id: "a", validated: true },
-      ],
-      self("a", "b", "p"),
+      [...cards(5, 0.2, "a"), ...cards(5, 0.8, "b")],
+      ["b", "a"],
+      self("a", "b"),
     );
     expect(out.map((l) => [l.conceptId, l.level])).toEqual([
       ["b", "getting"],
@@ -67,7 +49,7 @@ describe("studentConceptLevels", () => {
   it("rolls a card up through coverage and counts nothing outside the list", () => {
     const out = studentConceptLevels(
       [...cards(5, 0.95, "narrow"), ...cards(3, 0.1, "elsewhere")],
-      [{ id: "wide", validated: true }],
+      ["wide"],
       new Map([["wide", ["wide", "narrow"]]]),
     );
     expect(out).toEqual([{ conceptId: "wide", cards: 5, level: "solid" }]);

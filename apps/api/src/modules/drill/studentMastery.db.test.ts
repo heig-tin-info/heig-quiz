@@ -19,8 +19,11 @@ import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { classrooms, concepts, drillCards, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
-import { reload, seedLive, type Seeded } from "../../test/live.js";
-import { applyState } from "../evaluation/service.js";
+import { kioskStation } from "../../test/kiosk.js";
+import { publishQuestion, reload, seedLive, type Seeded } from "../../test/live.js";
+import { addItems, applyState, byId, createEvaluation, setAllowDrill } from "../evaluation/service.js";
+import { loadConfig, typeOf } from "../pool/config.js";
+import { releaseResults, unreleaseResults } from "../results/service.js";
 import * as live from "../live/service.js";
 
 type Headers = Record<string, string>;
@@ -47,14 +50,17 @@ const LABELS = {
   proposed: "Proposed secret label",
   foreign: "Foreign secret label",
 };
+/** The exam of ADR-098 §7: its questions and its cards, never to appear in an answer. */
+const exam = { questionIds: [] as string[], cardIds: [] as string[] };
 /** The raw numbers the answer must not contain. */
 const raw: number[] = [];
 
-async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string }) {
+async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; deviceId?: string }) {
   const session = await createSession(server.app.db, userId, 8, {
     kind: auth.kind,
     actorUserId: auth.actorUserId ?? null,
     evaluationId: auth.evaluationId ?? null,
+    deviceId: auth.deviceId ?? null,
     projectId: null,
   });
   return { cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`, "x-csrf-token": session.csrf };
@@ -195,16 +201,6 @@ describe("the student's concept mastery: the rule", () => {
     expect(levelOf(body, ids.few).concept.label).toBe(LABELS.few);
   });
 
-  it("reads 'getting there' between the cuts", async () => {
-    const rs = [];
-    for (let i = 0; i < 5; i++) rs.push(await setState(alice.id, i, 1.5, 3));
-    const mean = rs.reduce((a, b) => a + b, 0) / rs.length;
-    expect(mean).toBeGreaterThanOrEqual(0.7);
-    expect(mean).toBeLessThan(0.9);
-    expect(levelOf((await read(alice.headers)).body, ids.solid).level).toBe("getting");
-    for (let i = 0; i < 5; i++) await setState(alice.id, i, 1000, 1);
-  });
-
   it("counts reviewed cards only", async () => {
     await setState(alice.id, 4, 5, null);
     expect(levelOf((await read(alice.headers)).body, ids.solid)).toMatchObject({ cards: 4, level: null });
@@ -239,6 +235,68 @@ describe("the student's concept mastery: the rule", () => {
     expect((await putConcepts([])).statusCode).toBe(200);
     expect((await read(alice.headers)).body).toEqual(nothing);
     expect((await putConcepts(ALL())).statusCode).toBe(200);
+  });
+});
+
+describe("the student's concept mastery: an exam on a course concept (ADR-098 §7)", () => {
+  /** The cards of the exam's questions for Alice and Bob, reviewed a day ago and strong. */
+  async function reviewExamCards() {
+    const db = server.app.db;
+    for (const userId of [alice.id, bob.id]) {
+      for (const questionId of exam.questionIds) {
+        const [card] = await db
+          .select()
+          .from(drillCards)
+          .where(and(eq(drillCards.userId, userId), eq(drillCards.questionId, questionId)));
+        exam.cardIds.push(card!.id);
+        await db
+          .update(drillCards)
+          .set({ stability: 1000, difficulty: 5, reps: 2, lastReviewAt: new Date(new Date(NOW).getTime() - 86_400_000) })
+          .where(eq(drillCards.id, card!.id));
+      }
+    }
+  }
+  const idle = async () => levelOf((await read(alice.headers)).body, ids.idle);
+
+  it("counts nothing until its results are released, then five cards, and nothing again once the release is withdrawn", async () => {
+    const db = server.app.db;
+    const now = server.clock.now();
+    for (let i = 0; i < 5; i++) {
+      exam.questionIds.push(await publishQuestion(db, seed.poolId, teacher.id, `exam-secret-${i}`));
+    }
+    await db.insert(questionConcepts).values(exam.questionIds.map((questionId) => ({ questionId, conceptId: ids.idle })));
+    const created = await createEvaluation(db, {
+      classroomId: seed.classroomId,
+      title: "Exam on a course concept",
+      mode: "exam",
+      createdBy: teacher.id,
+    });
+    await addItems(
+      db,
+      (await byId(db, created.id))!,
+      exam.questionIds,
+      (type, version) => typeOf(type).defaultPoints(loadConfig(type, version)),
+      { attemptCount: 0 },
+    );
+    await setAllowDrill(db, await reload(db, created.id), true, now);
+    let evaluation = await applyState(db, await reload(db, created.id), "running", now);
+    for (const userId of [alice.id, bob.id]) {
+      const participant = (await live.participantOf(db, evaluation, userId))!;
+      const attempt = await live.beginAttempt(db, evaluation, await live.ensureAttempt(db, evaluation, participant, now), participant, now);
+      expect(attempt).toBeTruthy();
+    }
+    evaluation = await live.closeEvaluation(db, evaluation, now);
+
+    // Closed, not released: no card, no count.
+    expect(await idle()).toMatchObject({ cards: 0, level: null });
+
+    await releaseResults(db, await reload(db, created.id), now);
+    await reviewExamCards();
+    expect(await idle()).toMatchObject({ cards: 5, level: "solid" });
+
+    // Withdrawn: the cards stay, suspended, and count for nothing.
+    await unreleaseResults(db, await reload(db, created.id), now);
+    expect(await idle()).toMatchObject({ cards: 0, level: null });
   });
 });
 
@@ -297,6 +355,15 @@ describe("the student's concept mastery: the leak test (05 §5.7)", () => {
     for (const userId of seed.studentIds) {
       for (let i = 0; i < 6; i++) expect(text).not.toContain((await cardOf(userId, i)).id);
     }
+    // The exam's cards, unreleased then withdrawn (ADR-098 §7, §9): their questions, names and cards, and no effect on a level.
+    expect(exam.questionIds).toHaveLength(5);
+    expect(text).not.toContain("exam-secret");
+    for (const id of [...exam.questionIds, ...exam.cardIds]) expect(text).not.toContain(id);
+    expect(body.concepts.map((c) => [c.concept.id, c.cards])).toEqual(
+      expect.arrayContaining([[ids.idle, 0]]),
+    );
+    // An impersonation session reads exactly what the student reads.
+    if (_name === "an impersonation session") expect(text).toBe((await read(alice.headers)).text);
     // (d) the raw numbers of retrievability.
     expect(raw.length).toBeGreaterThan(0);
     for (const r of raw) expect(text).not.toContain(String(r).slice(0, 6));
@@ -309,10 +376,6 @@ describe("the student's concept mastery: the leak test (05 §5.7)", () => {
     expect(body.concepts.every((c) => c.cards === 0 && c.level === null)).toBe(true);
   });
 
-  it("an impersonation session reads exactly what the student reads", async () => {
-    const as = await sessionOf(alice.id, { kind: "impersonation", actorUserId: admin.id });
-    expect((await read(as)).text).toBe((await read(alice.headers)).text);
-  });
 });
 
 describe("the student's concept mastery: access", () => {
@@ -322,10 +385,17 @@ describe("the student's concept mastery: access", () => {
     expect((await get(url(), {})).statusCode).toBe(401);
   });
 
-  it("refuses a seb and a kiosk session", async () => {
-    for (const kind of ["seb", "kiosk"] as const) {
-      const confined = await sessionOf(alice.id, { kind, evaluationId: seed.evaluationId });
-      expect([401, 404]).toContain((await get(url(), confined)).statusCode);
-    }
+  it("refuses a seb and a kiosk session with a 401 (portal sessions only)", async () => {
+    const seb = await sessionOf(alice.id, { kind: "seb", evaluationId: seed.evaluationId });
+    expect((await get(url(), seb)).statusCode).toBe(401);
+    // A kiosk session counts for nothing without its station's cookie beside it, and nothing with it.
+    const station = await kioskStation(server.app);
+    const kiosk = await sessionOf(alice.id, { kind: "kiosk", evaluationId: seed.evaluationId, deviceId: station.deviceId });
+    expect((await get(url(), { ...kiosk, cookie: `${kiosk.cookie}; ${station.cookie}` })).statusCode).toBe(401);
+  });
+
+  it("is a 404 to an impersonation of a student with no seat in the classroom", async () => {
+    const as = await sessionOf(outsider.id, { kind: "impersonation", actorUserId: admin.id });
+    expect((await get(url(), as)).statusCode).toBe(404);
   });
 });
