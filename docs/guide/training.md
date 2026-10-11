@@ -29,7 +29,7 @@ Hand in, then **Back to teacher view** in the banner. The mission is done once y
 
 ## Mission 2: Run a class
 
-**Le quiz en direct** is a draft in Exam mode, Live: the three configuration steps are yours to read (see [Evaluations](evaluations.md)). Open it from **Activities** and go through them; at **Modalité**, give it a time limit per student (ten minutes is enough), since a live exam must end by itself; on **Launch**, the checklist says what blocks the start and what deserves a look, beside a preview of the waiting room.
+**Le quiz en direct** is a draft in Exam mode, Live: the three configuration steps are yours to read (see [Evaluations](evaluations.md)). Open it from **Activities** and go through them; at **Format**, give it a time limit per student (ten minutes is enough), since a live exam must end by itself; on **Launch**, the checklist says what blocks the start and what deserves a look, beside a preview of the waiting room.
 
 1. **Open the waiting room**: you are on the dashboard (see [Running an evaluation](live.md)).
 2. Open a second tab on the platform and switch it to the student view; the view is per tab, so the dashboard stays a teacher's. Enter the waiting room from the student's home.

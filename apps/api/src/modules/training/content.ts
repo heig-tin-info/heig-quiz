@@ -159,19 +159,24 @@ export const TRAINING_CONTENT: TrainingContent = {
       category: WELCOME,
       difficulty: 1,
       explanation:
-        "Le sommaire des questions, à gauche du lecteur, les liste toutes et dit lesquelles ont " +
-        "une réponse ; vous pouvez y revenir dans l'ordre que vous voulez parce que cet exercice " +
-        "est en navigation libre — un réglage de l'étape « Modalité », où un examen peut au " +
-        "contraire interdire le retour en arrière.",
+        "Le sommaire des questions — à gauche du lecteur, ou en bandeau sur un petit écran — " +
+        "les liste toutes dans l'ordre de l'évaluation et dit lesquelles ont une réponse ; vous " +
+        "pouvez y circuler comme vous voulez parce que le réglage « Navigation » de cet " +
+        "exercice est « Libre » ; « Sans retour », à l'étape « Modalité », interdirait de " +
+        "revenir en arrière.",
+      // The key is this question's own position in the welcome quiz, which a
+      // copy keeps: an added question goes at the end (`evaluation/items.ts`)
+      // and the item order is never shuffled by default. Pinned by the test.
       config: {
         configVersion: 3,
         prompt:
           "Regardez le **sommaire** du lecteur, qui liste les questions de ce quiz et vous " +
-          "laisse passer de l'une à l'autre. Combien de questions ce quiz compte-t-il ?",
+          "laisse passer de l'une à l'autre. À quelle position cette question se trouve-t-elle " +
+          "dans la liste ?",
         kind: "number",
-        placeholder: "un nombre de questions",
+        placeholder: "une position",
         constraints: { min: 1, integer: true },
-        matchers: [{ kind: "number", value: 7, tolerance: 0 }],
+        matchers: [{ kind: "number", value: 2, tolerance: 0 }],
       },
     },
     {
@@ -207,7 +212,7 @@ export const TRAINING_CONTENT: TrainingContent = {
         "Le serveur tient l'horloge, enregistre et corrige ; l'enseignant décide, valide et " +
         "publie ; l'étudiant répond. Cette question est notée « Par carte » : une carte mal " +
         "placée ne coûte que sa part. La question peut aussi laisser l'évaluation choisir " +
-        "entre « Par carte » et « Tout ou rien ».",
+        "entre « Par carte » et « Exact ».",
       // ADR-036: the ids are opaque on purpose — the student's view carries
       // them, so they must say nothing about where a card goes.
       config: {
@@ -249,8 +254,7 @@ export const TRAINING_CONTENT: TrainingContent = {
         "L'enseignant déclare les symboles et leur intervalle, une ou plusieurs réponses " +
         "acceptées, et une tolérance. Le barème de l'évaluation applique cette formule, " +
         "arrondie au dixième et plafonnée à 6.",
-      // The key is compared by value at sample points (ADR-102); `\cdot` is
-      // explicit because the parser reads no juxtaposed coefficient.
+      // The key is compared by value at sample points (ADR-102).
       config: {
         configVersion: 1,
         prompt:
@@ -434,7 +438,7 @@ export const TRAINING_CONTENT: TrainingContent = {
       target: "draft",
       // The two hand-graded types, then two automatically graded ones of the
       // welcome quiz, so the grading panel shows validated and pending answers
-      // side by side. Not the short: its key is the welcome quiz's own count.
+      // side by side. Not the short: its key is its position in the welcome quiz.
       questions: [
         "init-consigne-avant-un-quiz",
         "init-vie-d-une-evaluation",

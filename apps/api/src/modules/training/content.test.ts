@@ -42,6 +42,10 @@ describe("the training content", () => {
     expect(welcome.mode).toBe("exercise");
     expect(welcome.target).toBe("scheduled");
     expect(welcome.questions.map((name) => byName.get(name)!.type)).toEqual(WELCOME_TYPES);
+    // The short asks for its own position in the navigator: its key IS that position.
+    const shortIndex = welcome.questions.findIndex((name) => byName.get(name)!.type === "short");
+    const short = byName.get(welcome.questions[shortIndex]!)!.config as { matchers: { value: number }[] };
+    expect(short.matchers[0]!.value).toBe(shortIndex + 1);
 
     const live = evaluations.find((e) => e.key === "live")!;
     expect(live.mode).toBe("exam");
