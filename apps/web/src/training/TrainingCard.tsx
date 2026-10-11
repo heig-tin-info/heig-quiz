@@ -46,7 +46,7 @@ const stateOf = (status: TrainingStatus, key: TrainingMission) =>
 const nextMission = (status: TrainingStatus) => TRAINING_MISSIONS.find((key) => stateOf(status, key) === "todo");
 
 /** Whether every required mission is done: the training is complete (ADR-105 §4). */
-export function trainingComplete(status: TrainingStatus): boolean {
+function trainingComplete(status: TrainingStatus): boolean {
   return TRAINING_MISSIONS.every((key) => key === TRAINING_OPTIONAL || stateOf(status, key) === "done");
 }
 

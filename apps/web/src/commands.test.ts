@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { CalendarRange, Library } from "lucide-react";
+import { render } from "@testing-library/react";
+import { CalendarRange, Eye, Library } from "lucide-react";
+import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -13,6 +15,7 @@ import {
   type CommandContext,
 } from "./commands";
 import { screenCommandsContext } from "./assist/context";
+import { useScreenCommands } from "./screenCommands";
 import { DICTS, loadLocale, type Locale, type TFunction } from "./i18n";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
 
@@ -261,10 +264,16 @@ describe("buildCommands: help", () => {
 
   it("never hands the training command to the assistant, which reads the mounted screen's commands only (ADR-080 §10)", () => {
     // It provisions a course on first use. The assistant's context is built
-    // from `screenCommands()`, never from the global list this builds.
+    // from the mounted screen's registry, never from the global list this
+    // builds: a screen is mounted here so the registry is not trivially empty.
+    function Screen() {
+      useScreenCommands([{ id: "screen:try", label: "Try it", icon: Eye, group: "action", effect: "none", run: vi.fn() }]);
+      return null;
+    }
+    render(createElement(Screen));
     const commands = buildCommands(makeContext({ onTraining: vi.fn() }));
-    expect(ids(commands)).toContain("help:training-course");
-    expect(screenCommandsContext().map((c) => c.id)).not.toContain("help:training-course");
+    expect(ids(commands)).toEqual(expect.arrayContaining(["screen:try", "help:training-course"]));
+    expect(screenCommandsContext().map((c) => c.id)).toEqual(["screen:try"]);
   });
 
   it("turns each topic into a command that opens it", () => {

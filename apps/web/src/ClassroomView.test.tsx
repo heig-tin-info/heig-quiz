@@ -537,6 +537,17 @@ describe("ClassroomView: the training classroom's card (ADR-105 §4)", () => {
     expect(calls.some((c) => c.url.endsWith("/self-enroll"))).toBe(false);
   });
 
+  it("steps the empty list's New evaluation down too, so the tab has exactly one accent (invariant 2)", async () => {
+    mockFetch({ ...trainingRoutes(trainingStatus()), [`GET ${EVALUATIONS}`]: ok([]) });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    expect(await screen.findByRole("button", { name: "Show me the button" })).toBeVisible();
+    await screen.findByText("No evaluation yet");
+    await waitFor(() => {
+      const accented = screen.getAllByRole("button").filter((b) => classesOf(b).includes("bg-accent"));
+      expect(accented.map((b) => b.textContent)).toEqual(["Show me the button"]);
+    });
+  });
+
   it("shows no card on another classroom", async () => {
     mockFetch({
       [`GET ${ROOM}`]: ok(makeClassroomDetail()),

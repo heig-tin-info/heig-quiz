@@ -434,6 +434,7 @@ export function ClassroomView({
               navigate={navigate}
               onNew={() => setLayer("evaluation")}
               newProject={newProjectAction(id, github.isSuccess ? github.data : undefined, navigate, openConnect, t)}
+              newVariant={cardAccent ? "secondary" : "primary"}
             />
             {/* M3-10: the projects, a group of their own under the evaluations. */}
             <ProjectGroup classroomId={id} navigate={navigate} />
