@@ -37,6 +37,7 @@ import type {
   PreviewItemStatus,
   PreviewSolution,
   RunnerResultEvent,
+  SimulateResult,
 } from "@quiz/contracts";
 import {
   RunnerBusy,
@@ -72,6 +73,7 @@ import * as live from "../live/service.js";
 import {
   runButton,
   runnableView,
+  simulateResult,
   visibleRunRequest,
   visibleRunResult,
 } from "../live/visibleRun.js";
@@ -324,7 +326,7 @@ export async function simulatePreview(
     answer: unknown;
     now: Date;
   },
-): Promise<RunnerOutcome> {
+): Promise<SimulateResult> {
   const { evaluation, now } = input;
   const { joined, type, config, view, student } = await previewItem(db, evaluation, input.itemId, input.seed);
   // The second test is implied by the first; it is there for TypeScript's narrowing.
@@ -345,11 +347,15 @@ export async function simulatePreview(
   if (built === null) {
     throw new PreviewError("nothing_to_run", 422, { message: "this answer has nothing to run yet" });
   }
+  let outcome: RunnerOutcome;
   try {
-    return await input.runner.run({ ...built, priority: "interactive" });
+    outcome = await input.runner.run({ ...built, priority: "interactive" });
   } catch (error) {
     throw runnerDown(error) ?? error;
   }
+  // The student's answer, reduced exactly as the student's own route reduces
+  // it: the preview player reads the one shape (audit L11).
+  return simulateResult(type, config, outcome);
 }
 
 // --- Grading ------------------------------------------------------------------

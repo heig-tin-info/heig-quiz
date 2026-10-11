@@ -8,11 +8,17 @@
  * every verdict rule is unit-testable against a fixture `RunnerOutcome`.
  *
  * This module is imported by BOTH entry points: `parseSimulation` is what the
- * player calls on the outcome of the student's own Simulate button, so
- * nothing here may reach for `node:`. Anything server-only belongs in
- * `server.ts`.
+ * player calls on the answer of the student's own Simulate button, once
+ * `interactiveOutcome` has reduced it on the server, so nothing here may
+ * reach for `node:`. Anything server-only belongs in `server.ts`.
  */
-import type { FinalizeContext, GradeContext, GradeResult, GradedResult } from "@quiz/core/server";
+import type {
+  FinalizeContext,
+  GradeContext,
+  GradeResult,
+  GradedResult,
+  InteractiveOutcome,
+} from "@quiz/core/server";
 import { RunnerRequest, zeroGrade, type RunnerOutcome } from "@quiz/core/server";
 import { round2 } from "@quiz/domain/round";
 
@@ -27,6 +33,7 @@ import {
 } from "./spice.js";
 import {
   DB_FLOOR,
+  SeriesSet,
   totalStimulusPoints,
   type AcSeries,
   type BodeTolerance,
@@ -34,7 +41,6 @@ import {
   type CircuitConfig,
   type CircuitDetails,
   type CircuitStudent,
-  type SeriesSet,
   type StimulusDetail,
   type TranSeries,
 } from "./schema.js";
@@ -136,22 +142,27 @@ export function buildRunnerRequest(
 }
 
 /**
- * The request behind the student's Simulate button: the VISIBLE stimuli only,
- * and the reference decks only when the teacher publishes the expected curve.
- * `null` when there is nothing to run.
+ * The layout of the student's Simulate button: the VISIBLE stimuli only, and
+ * the reference decks only when the teacher publishes the expected curve.
+ * One rule for the request and for the reading of its outcome.
  */
+function interactiveOptions(config: CircuitConfig): BuildRequestOptions {
+  return {
+    priority: "interactive",
+    stimulusIndexes: config.stimuli.flatMap((s, i) => (s.visible ? [i] : [])),
+    withReference: config.showExpected,
+  };
+}
+
+/** The request behind the student's Simulate button; `null` when there is nothing to run. */
 export function interactiveRequest(
   config: CircuitConfig,
   answer: CircuitAnswer,
 ): RunnerRequest | null {
   if (isEmptyAnswer(answer)) return null;
-  const visible = config.stimuli.flatMap((s, i) => (s.visible ? [i] : []));
-  if (visible.length === 0) return null;
-  return buildRunnerRequest(config, answer, {
-    priority: "interactive",
-    stimulusIndexes: visible,
-    withReference: config.showExpected,
-  }).request;
+  const options = interactiveOptions(config);
+  if (options.stimulusIndexes.length === 0) return null;
+  return buildRunnerRequest(config, answer, options).request;
 }
 
 // ---------------------------------------------------------------------------
@@ -324,24 +335,53 @@ function readCase<K extends AnalysisKind>(
 }
 
 /**
- * The outcome of {@link interactiveRequest}, read with the SAME layout rule:
- * the visible stimuli of the student view, in order, then the reference decks
- * when the teacher publishes them. The student view is the only thing the
- * browser has, which is why this takes it rather than the config.
+ * The server half of the Simulate button's answer (audit L11): the student's
+ * decks go back RAW — their log is theirs to read — and each reference deck
+ * is reduced to its decimated curve, `null` when it printed none. The
+ * reference's own output never leaves: ngspice quotes the deck it refused,
+ * and the deck is the key. Any case past the layout is dropped.
+ */
+export function interactiveOutcome(
+  config: CircuitConfig,
+  outcome: RunnerOutcome,
+): InteractiveOutcome {
+  const layout = caseLayout(config, interactiveOptions(config));
+  const own = layout.filter((entry) => entry.role === "student").length;
+  const reference = layout.flatMap((entry, i) => {
+    const stimulus = config.stimuli[entry.stimulusIndex];
+    if (entry.role !== "reference" || stimulus === undefined) return [];
+    return [readCase(outcome.cases[i], stimulus.analysis.kind).run?.series ?? null];
+  });
+  return {
+    compile: outcome.compile,
+    cases: outcome.cases.slice(0, own),
+    ...(reference.length === 0 ? {} : { reference }),
+  };
+}
+
+/** A reduced reference curve, as the browser receives it; anything else is no curve. */
+const curveOf = (reduced: unknown): SeriesSet | null => {
+  const parsed = SeriesSet.safeParse(reduced);
+  return parsed.success ? parsed.data : null;
+};
+
+/**
+ * The answer of the Simulate button, read with the SAME layout rule: the
+ * visible stimuli of the student view, in order, and beside them the
+ * reference curves {@link interactiveOutcome} reduced when the teacher
+ * publishes them. The student view is the only thing the browser has, which
+ * is why this takes it rather than the config.
  */
 export function parseSimulation(
   student: CircuitStudent,
-  outcome: RunnerOutcome,
+  outcome: InteractiveOutcome,
 ): SimulationResult[] {
-  const n = student.visibleStimuli.length;
   return student.visibleStimuli.map((stimulus, k) => {
-    const kind = stimulus.analysis.kind;
-    const read = readCase(outcome.cases[k], kind);
-    const reference = student.showExpected ? readCase(outcome.cases[n + k], kind) : null;
+    const read = readCase(outcome.cases[k], stimulus.analysis.kind);
     return {
       name: stimulus.name,
       series: read.run?.series ?? null,
-      expected: reference?.run?.series ?? null,
+      expected: curveOf(outcome.reference?.[k]),
       ...(read.reason === undefined ? {} : { reason: read.reason }),
       ...(read.log === undefined ? {} : { log: read.log }),
     };

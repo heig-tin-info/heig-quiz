@@ -24,7 +24,7 @@ import { useMemo, useState } from "react";
 
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { PlayerProps } from "@quiz/core/client";
-import type { RunOutcome } from "@quiz/core/server";
+import type { SimulateOutcome } from "@quiz/core/server";
 
 import { Plot, SchematicEditor, SchematicView, type CanvasStrings } from "./canvas/index.js";
 import { parseSimulation, type SimulationResult } from "./grade.js";
@@ -39,11 +39,13 @@ import { strip } from "./styles.js";
 interface CircuitPlayerProps extends PlayerProps<CircuitStudent, CircuitAnswer> {
   /**
    * Runs the VISIBLE stimuli and resolves with the runner's outcome, whose
-   * cases are those stimuli in order. The host posts to
-   * `POST /attempts/:id/simulate`, which assembles the netlist server-side
-   * (invariant 14); nothing about the simulation is ever stored in the answer.
+   * cases are those stimuli in order, and the reference curves the server
+   * reduced beside them when the question publishes them (audit L11). The
+   * host posts to `POST /attempts/:id/simulate`, which assembles the netlist
+   * server-side (invariant 14); nothing about the simulation is ever stored
+   * in the answer.
    */
-  onSimulate?: ((answer: CircuitAnswer) => Promise<RunOutcome>) | undefined;
+  onSimulate?: ((answer: CircuitAnswer) => Promise<SimulateOutcome>) | undefined;
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean | undefined;
   strings?: Partial<CircuitPlayerStrings> | undefined;

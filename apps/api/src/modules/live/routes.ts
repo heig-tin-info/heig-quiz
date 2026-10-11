@@ -36,6 +36,7 @@ import {
   type FlagResponse,
   type ResetAttemptResponse,
   type RunAccepted,
+  type SimulateResult,
   type SkipResponse,
   type SubmitResponse,
 } from "@quiz/contracts";
@@ -430,7 +431,8 @@ export async function livePlugin(app: FastifyInstance) {
   /**
    * The student's Simulate button (ADR-019). Generic: any question type that
    * implements `interactiveRequest` gets this route, and the outcome comes
-   * back raw for the client half of that type to read.
+   * back for the client half of that type to read — raw for the student's
+   * own cases, the teacher's reduced by the type (audit L11).
    *
    * `200` and not `202`: there is no SSE frame behind it, so the response is
    * the delivery. With `RUNNER_MODE=stub` it answers `503
@@ -449,7 +451,7 @@ export async function livePlugin(app: FastifyInstance) {
         answer: body.answer,
         now,
       });
-      return reply.code(200).send(outcome);
+      return reply.code(200).send(outcome satisfies SimulateResult);
     }),
   );
 

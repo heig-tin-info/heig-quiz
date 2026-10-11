@@ -550,7 +550,7 @@ function tryDrawReference({ id, flush }: TryContext): TryAdapter {
  * editor screen never branches on a type id.
  *
  * (The student player's `simulateCircuit` is not one of these: it posts to
- * `POST /attempts/:id/simulate`, answers a raw `RunnerOutcome` and maps the
+ * `POST /attempts/:id/simulate`, answers a `SimulateResult` and maps the
  * attempt's 429 budget — a different route with a different contract.)
  */
 export function tryAdapterFor(type: string, context: TryContext): TryAdapter | undefined {

@@ -8,8 +8,8 @@
  */
 import { useCallback } from "react";
 
-import type { RunAccepted, RunnerResultEvent } from "@quiz/contracts";
-import type { RunOutcome, RunnerOutcome } from "@quiz/core/server";
+import type { RunAccepted, RunnerResultEvent, SimulateResult } from "@quiz/contracts";
+import type { RunOutcome, RunnerOutcome, SimulateOutcome } from "@quiz/core/server";
 
 import { ApiError, api } from "../api";
 
@@ -67,7 +67,7 @@ export function runBody(
  * (N-SEC-07), which tells the student to wait, not that running is off.
  * Anything else is a real failure the player shows in red.
  */
-async function withRefusals(call: () => Promise<RunOutcome>): Promise<RunOutcome> {
+async function withRefusals<T>(call: () => Promise<T>): Promise<T | "unavailable" | "rate_limited"> {
   try {
     return await call();
   } catch (error) {
@@ -88,10 +88,12 @@ export const postRun = (url: string, body: unknown): Promise<RunOutcome> =>
  * `…/simulate`: the student's own button of a type that builds its own
  * request (ADR-019) — the `circuit` player's "Simulate", and the backend half
  * of a `codeimage` "Run" (ADR-021). Only the server may turn a schematic into
- * a SPICE netlist (invariant 14), so its answer is already the runner's.
+ * a SPICE netlist (invariant 14), so its answer is already the runner's: the
+ * student's own cases raw, a circuit's reference decks as the curves the
+ * server read out of them (audit L11).
  */
-export const postSimulate = (url: string, body: unknown): Promise<RunOutcome> =>
-  withRefusals(() => post<RunnerOutcome>(url, body));
+export const postSimulate = (url: string, body: unknown): Promise<SimulateOutcome> =>
+  withRefusals(() => post<SimulateResult>(url, body));
 
 export function useAttemptRun(attemptId: string): RunFn {
   return useCallback<RunFn>(

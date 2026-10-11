@@ -32,8 +32,8 @@ import {
   type PreviewCorrection,
   type PreviewSolution,
   type RunAccepted,
+  type SimulateResult,
 } from "@quiz/contracts";
-import type { RunnerOutcome } from "@quiz/core/server";
 
 import { loadEvaluation, loadTemplate, teacherGuard } from "../guards.js";
 import { teacherRoute } from "../http.js";
@@ -159,7 +159,7 @@ export async function previewPlugin(app: FastifyInstance) {
     options,
     teacher(
       { params: IdParam, body: PreviewSimulateBody, load: staffEvaluation },
-      ({ req, now, body, scope }): Promise<RunnerOutcome> =>
+      ({ req, now, body, scope }): Promise<SimulateResult> =>
         service.simulatePreview(app.db, {
           runner: app.runner,
           evaluation: scope.evaluation,

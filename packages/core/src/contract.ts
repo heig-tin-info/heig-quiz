@@ -22,6 +22,17 @@ import type { RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
 export const ANSWER_SUMMARY_MAX = 24;
 
 /**
+ * The answer of the generic Simulate route (`SimulateResult` in
+ * `@quiz/contracts`): the runner's outcome with the student's own cases raw
+ * and, when the type ran something of the teacher's beside them, that part
+ * reduced by `QuestionTypeServer.interactiveOutcome` to the type's own shape.
+ */
+export type InteractiveOutcome = RunnerOutcome & { reference?: unknown[] };
+
+/** A Simulate button's answer as a player receives it: like `RunOutcome`, the outcome or why there is none. */
+export type SimulateOutcome = InteractiveOutcome | "unavailable" | "rate_limited";
+
+/**
  * The four types of the MVP (PLAN-MVP §0), plus `circuit` — the two-port
  * schematic of docs/spec/04 §4.11, brought forward from phase 3 with a
  * simulation path (`packages/qt-circuit`) — and `codeimage`, the variant of
@@ -568,16 +579,38 @@ export interface QuestionTypeServer<
    * there is nothing to run for this answer (an empty schematic).
    *
    * `POST /attempts/:id/simulate` runs it with `priority: "interactive"` and
-   * hands the `RunnerOutcome` back untouched; the client half of the type
-   * reads it. `POST /attempts/:id/run` takes its cases from it too, so which
-   * case is visible is the type's to say, never guessed from a case name.
-   * A type without this hook has no interactive run of its own.
+   * hands the outcome back through {@link interactiveOutcome}; the client
+   * half of the type reads it. `POST /attempts/:id/run` takes its cases from
+   * it too, so which case is visible is the type's to say, never guessed
+   * from a case name. A type without this hook has no interactive run of its
+   * own.
+   *
+   * Amended 2026-10-11 (audit L11): the outcome is raw for the student's own
+   * cases only; a case that runs the teacher's work (a `circuit` reference
+   * deck) is reduced by the type before it leaves the server.
    */
   interactiveRequest?(
     config: TConfig,
     answer: TAnswer,
     ctx: FinalizeContext,
   ): RunnerRequest | null;
+
+  /**
+   * What `POST /attempts/:id/simulate` hands back of the outcome of
+   * {@link interactiveRequest}, run under the same `config` (audit L11,
+   * ADR-019 §6 as amended 2026-10-11).
+   *
+   * The student's OWN cases go back raw, in `cases`, in request order: their
+   * stdout and stderr are the student's to read. A case that runs the
+   * teacher's work — a `circuit` reference deck, published only as a curve —
+   * never does: an engine's failure log quotes the input it choked on, so it
+   * is taken out of `cases` and reduced to what the client half draws, in
+   * `reference`, in the type's own shape. The live module reads neither.
+   *
+   * Omitting the hook hands the outcome back whole, which is right only for
+   * a type whose request runs nothing but the student's own work.
+   */
+  interactiveOutcome?(config: TConfig, outcome: RunnerOutcome): InteractiveOutcome;
 
   /** Second half of a `pending: runner` grading. Pure, so it is unit-testable without a runner. */
   finalizeRunner?(
