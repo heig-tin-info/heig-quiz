@@ -375,7 +375,7 @@ export async function findSessionUser(
   // window, so the per-request cost stays nil. A kind with a fixed lifetime
   // never slides (ADR-027).
   let renewedTo: Date | null = null;
-  const ttlMs = FIXED_HOURS[row.auth.kind] === null ? (opts?.renewTtlHours ?? 0) * 3_600_000 : 0;
+  const ttlMs = FIXED_HOURS[row.auth.kind] === null ? (opts.renewTtlHours ?? 0) * 3_600_000 : 0;
   const renewal = Math.min(Date.now() + ttlMs, bound);
   if (ttlMs > 0 && row.expiresAt.getTime() - Date.now() < ttlMs / 2 && renewal > row.expiresAt.getTime()) {
     renewedTo = new Date(renewal);

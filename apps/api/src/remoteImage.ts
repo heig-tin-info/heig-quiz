@@ -30,7 +30,8 @@ export interface RemoteImage {
 
 /** The cap of one picture: an avatar drawn at most 48 px, at 2x, is far below. */
 export const REMOTE_IMAGE_MAX_BYTES = 256 * 1024;
-const TYPES: ReadonlySet<string> = new Set<string>(AvatarMime.options);
+/** `AvatarMime` as a set: the one list of picture types, an upload's and a fetched one's (B-19). */
+export const PICTURE_TYPES: ReadonlySet<string> = new Set<string>(AvatarMime.options);
 const TIMEOUT_MS = 5_000;
 
 /** Whether `hostname` (a URL's) names a machine of the public DNS: no IP literal, no local name. */
@@ -49,7 +50,7 @@ export async function fetchImage(url: string): Promise<RemoteImage | null> {
   if (!res.ok) return null;
   const bytes = await readCapped(res, REMOTE_IMAGE_MAX_BYTES);
   const mime = bytes === null ? undefined : sniffImage(bytes)?.mime;
-  return bytes !== null && mime !== undefined && TYPES.has(mime) ? { bytes, mime } : null;
+  return bytes !== null && mime !== undefined && PICTURE_TYPES.has(mime) ? { bytes, mime } : null;
 }
 
 /** How long a fetched picture is kept: a new one shows within a day, with no refresh job. */
@@ -58,19 +59,19 @@ const TTL_MS = 24 * 3_600_000;
 const MAX_ENTRIES = 500;
 
 /**
- * The pictures of one kind, in this process's memory by key: no column and
+ * The pictures of one kind, in this process's memory by address: no column and
  * no migration, a restart only refetches; concurrent reads share one fetch.
  * A failure is NOT kept — the next request asks again — so a transient
  * error never hides a picture for the TTL; the price is one bounded request
  * per view of a picture that stays broken.
  */
-export function remoteImageCache<K>() {
-  const entries = new Map<K, { at: number; image: Promise<RemoteImage | null> }>();
+export function remoteImageCache() {
+  const entries = new Map<string, { at: number; image: Promise<RemoteImage | null> }>();
   return {
-    async get(key: K, url: string, now: number, log: FastifyBaseLogger): Promise<RemoteImage | null> {
-      const hit = entries.get(key);
+    async get(url: string, now: number, log: FastifyBaseLogger): Promise<RemoteImage | null> {
+      const hit = entries.get(url);
       if (hit && now - hit.at < TTL_MS) return hit.image;
-      entries.delete(key);
+      entries.delete(url);
       if (entries.size >= MAX_ENTRIES) entries.delete(entries.keys().next().value!);
       const entry = {
         at: now,
@@ -79,9 +80,9 @@ export function remoteImageCache<K>() {
           return null;
         }),
       };
-      entries.set(key, entry);
+      entries.set(url, entry);
       const image = await entry.image;
-      if (!image && entries.get(key) === entry) entries.delete(key);
+      if (!image && entries.get(url) === entry) entries.delete(url);
       return image;
     },
     /** Test hook. */

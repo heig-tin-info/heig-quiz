@@ -4,18 +4,15 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, isNotNull, like, or } from "drizzle-orm";
 import { z } from "zod";
 
-import { AvatarMime } from "@quiz/contracts";
-
 import { audit } from "../audit.js";
 import type { Db } from "../db/client.js";
 import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
-import { remoteImageCache, type RemoteImage } from "../remoteImage.js";
+import { PICTURE_TYPES, remoteImageCache, type RemoteImage } from "../remoteImage.js";
 import { callerOf, seesUser, type Caller } from "./guards.js";
 import { INERT_IMAGE_HEADERS, sniffImage } from "./pool/assets.js";
 
-/** `AvatarMime` is the one list (B-19); `app.ts` parses the same set. */
-const ACCEPTED: ReadonlySet<string> = new Set<string>(AvatarMime.options);
+/** An upload's cap; `PICTURE_TYPES` (`remoteImage.ts`) is the one list of types, as `app.ts` parses it (B-19). */
 const MAX_BYTES = 1_000_000; // cropped to 256x256 client-side: ~30-80 KB in practice
 
 /** The IdP's picture is served only from an https address (`remoteImage.ts` refuses any other). */
@@ -77,19 +74,17 @@ export async function findVisibleAvatar(db: Db, caller: Caller, userId: string) 
   return row ?? null;
 }
 
-/** {@link findVisibleAvatar} without the image: whether the caller sees a picture of that user. */
+/**
+ * Whether the caller sees a picture of that user: {@link findVisibleAvatar}
+ * itself, ONE query — its one caller (a legacy link's redirect) is rare
+ * enough that reading an upload's bytes for it costs nothing worth a second.
+ */
 export async function seesAvatar(db: Db, caller: Caller, userId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: users.id })
-    .from(users)
-    .leftJoin(avatars, eq(avatars.userId, users.id))
-    .where(visiblePicture(caller, userId))
-    .limit(1);
-  return row !== undefined;
+  return (await findVisibleAvatar(db, caller, userId)) !== null;
 }
 
 /** The IdP's pictures, by address, fetched and kept under the one policy of `remoteImage.ts`. */
-const idpPictures = remoteImageCache<string>();
+const idpPictures = remoteImageCache();
 
 /**
  * Uploaded avatar (cropped client-side, circular preview). Takes precedence
@@ -102,7 +97,7 @@ export async function avatarPlugin(app: FastifyInstance) {
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req, reply) => {
       const contentType = req.headers["content-type"] ?? "";
-      if (!ACCEPTED.has(contentType)) {
+      if (!PICTURE_TYPES.has(contentType)) {
         return reply
           .code(415)
           .send({ error: "unsupported_type", message: "Expected JPEG, PNG or WebP" });
@@ -177,7 +172,7 @@ export async function avatarPlugin(app: FastifyInstance) {
         ? null
         : row.data !== null && row.contentType !== null
           ? { bytes: row.data, mime: row.contentType }
-          : await idpPictures.get(row.pictureUrl!, row.pictureUrl!, app.clock.now().getTime(), req.log);
+          : await idpPictures.get(row.pictureUrl!, app.clock.now().getTime(), req.log);
       // No picture and a picture the caller may not see answer alike (#318).
       if (!picture) return reply.code(404).send({ error: "not_found" });
       return reply

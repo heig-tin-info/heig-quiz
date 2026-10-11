@@ -84,7 +84,7 @@ interface Healed {
 /** The last healing of each organization, by row id; the promise is shared by concurrent reads. */
 const healed = new Map<string, { at: number; result: Promise<Healed> }>();
 /** Avatars by GitHub's organization id (below). */
-const avatars = remoteImageCache<number>();
+const avatars = remoteImageCache();
 
 /** Test hook: every cache of this module emptied. */
 export function resetGithubCaches(): void {
@@ -926,7 +926,7 @@ export async function orgAvatar(
     .where(and(eq(githubOrganizations.id, orgId), accessWhere(caller, seesOrg(caller.id))));
   if (!org || org.githubOrgId === null) return null;
   const id = org.githubOrgId;
-  return avatars.get(id, `https://avatars.githubusercontent.com/u/${id}?s=${AVATAR_SIZE}&v=4`, now.getTime(), log);
+  return avatars.get(`https://avatars.githubusercontent.com/u/${id}?s=${AVATAR_SIZE}&v=4`, now.getTime(), log);
 }
 
 // ---------------------------------------------------------------- what projects read of a classroom's link
