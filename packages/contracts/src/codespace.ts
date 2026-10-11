@@ -20,13 +20,14 @@ export const WorkMode = z.enum(WORK_MODES);
 export type WorkMode = z.infer<typeof WorkMode>;
 
 /**
- * The two issuers accepted during the transition (docs/merge/06 §6.2):
- * heig-classroom's own, and Quiz's. The portal accepts both; Quiz signs
- * with its own.
+ * The two issuers of a launch token accepted during the transition
+ * (docs/merge/06 §6.2): heig-classroom's own, and Quiz's. Quiz signs with
+ * its own, and a service token comes from Quiz only (ADR-078, amendment of
+ * 2026-10-11).
  */
 export const CODESPACE_ISSUERS = ["heig-classroom", "heig-quiz"] as const;
 export type CodespaceIssuer = (typeof CODESPACE_ISSUERS)[number];
-export const QUIZ_CODESPACE_ISSUER: CodespaceIssuer = "heig-quiz";
+export const QUIZ_CODESPACE_ISSUER = "heig-quiz" satisfies CodespaceIssuer;
 
 /** The portal's own issuer: its service calls, and the two git relay routes it calls on Quiz (ADR-078). */
 export const PORTAL_ISSUER = "heig-codespace";
@@ -34,7 +35,6 @@ export const PORTAL_ISSUER = "heig-codespace";
 /** The portal's two audiences: a student launch, and server-to-server calls. */
 export const LAUNCH_AUDIENCE = "heig-codespace";
 export const SERVICE_AUDIENCE = "heig-codespace-api";
-export const PLATFORM_SERVICE_AUDIENCE = "heig-classroom-api";
 
 /** Lifetimes in seconds: a launch token is single use (`jti`) and short. */
 export const LAUNCH_TOKEN_TTL_SECONDS = 300;
@@ -174,21 +174,20 @@ export const LaunchTokenClaims = z.object({
 export type LaunchTokenClaims = z.infer<typeof LaunchTokenClaims>;
 
 /**
- * Service token (2 min) for the platform's calls to the portal
- * (`PUT /api/assignments/:id`, `GET /api/assignments/:id/sessions`). Since
- * audit L25 (ADR-078, amendment of 2026-10-11) it authorizes ONE request:
- * `method`, `path` (path and query) and, with a body, `bodyHash` (SHA-256 of
- * its bytes, base64url) are `@quiz/domain`'s `requestBinding` of it, and
- * the portal consumes its `jti` once. An unbound token is refused.
+ * Service token (2 min) for Quiz's calls to the portal
+ * (`PUT /api/assignments/:id`, `GET /api/assignments/:id/sessions`). It
+ * authorizes ONE request, `@quiz/domain`'s `requestBinding` of it, and the
+ * portal consumes its `jti` once (audit L25, ADR-078's amendment of
+ * 2026-10-11, which owns the rule).
  */
 export const ServiceTokenClaims = z
   .object({
-    iss: z.enum([...CODESPACE_ISSUERS, PORTAL_ISSUER]),
-    aud: z.enum([SERVICE_AUDIENCE, PLATFORM_SERVICE_AUDIENCE]),
+    iss: z.literal(QUIZ_CODESPACE_ISSUER),
+    aud: z.literal(SERVICE_AUDIENCE),
     iat: z.number(),
     exp: z.number(),
     jti: z.string().min(1).max(200),
-    method: z.string().min(1),
+    method: z.enum(["GET", "PUT"]),
     path: z.string().startsWith("/"),
     bodyHash: z.string().min(1).optional(),
   })
@@ -229,10 +228,9 @@ const gitRequestClaims = <A extends string>(aud: A) =>
     userId: z.uuid(),
     repository: RepositoryFullName,
   });
-const shortLived = lifetimeWithin(GIT_REQUEST_TTL_SECONDS);
 
 /** `POST /app/codespace/git-token`: an installation token on ONE repository. */
-export const GitTokenRequestClaims = gitRequestClaims(GIT_TOKEN_AUDIENCE).refine(shortLived, "a request lives one minute at most");
+export const GitTokenRequestClaims = gitRequestClaims(GIT_TOKEN_AUDIENCE).refine(lifetimeWithin(GIT_REQUEST_TTL_SECONDS), "a request lives one minute at most");
 export type GitTokenRequestClaims = z.infer<typeof GitTokenRequestClaims>;
 
 /** A head the portal is about to push: a ref and a full sha (SHA-1 or SHA-256). */
@@ -245,7 +243,7 @@ export type RelayHead = z.infer<typeof RelayHead>;
 /** `POST /app/codespace/relay-heads`: the heads of the next relay push, declared before it (204). */
 export const RelayHeadsClaims = gitRequestClaims(RELAY_HEADS_AUDIENCE)
   .extend({ heads: z.array(RelayHead).min(1).max(RELAY_HEADS_MAX) })
-  .refine(shortLived, "a request lives one minute at most");
+  .refine(lifetimeWithin(GIT_REQUEST_TTL_SECONDS), "a request lives one minute at most");
 export type RelayHeadsClaims = z.infer<typeof RelayHeadsClaims>;
 
 /**

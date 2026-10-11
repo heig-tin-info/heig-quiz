@@ -37,6 +37,7 @@ import {
   completionScript,
   ensureWorkspace,
   identityScript,
+  remoteUrl,
   type EnsureWorkspaceResult,
   type GitIdentity,
 } from "./workspace.js";
@@ -436,9 +437,11 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
   }
 
   /**
-   * Completes the workspace **from inside the container**, when `:U` has given
-   * ownership of it to the container's UID range and the portal can no longer
-   * write there (resumption of a session whose first seeding had failed).
+   * Completes the workspace **from inside the container**, as the student,
+   * whenever the host did not seed it: a `.git` was already there, which the
+   * host never touches (audit L23), or `work/` is no longer the portal's
+   * alone (`ensureWorkspace`). The script leaves a repository with a commit
+   * alone.
    *
    * No secret gets in: the `fetch` goes to `portal.internal:9418`, which the
    * source IP address authenticates (invariant 1).
@@ -452,13 +455,14 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     session: SessionRow,
     workspace: EnsureWorkspaceResult,
   ): Promise<void> {
-    if (!workspace.needsContainer || !workspace.branch) return;
+    if (!workspace.needsContainer) return;
     const name = session.containerName ?? engine.containerName(session.id);
+    const origin = remoteUrl(opts.gitRemoteHost, opts.gitRemotePort, session.id);
     try {
-      const out = await engine.exec(name, ["sh", "-lc", completionScript(workspace.branch)]);
+      const out = await engine.exec(name, ["sh", "-lc", completionScript(origin, workspace.branch)]);
       log.info(
         { sessionId: session.id, branch: workspace.branch, head: out.trim().split("\n").pop() },
-        "workspace completed inside the container (resumption)",
+        "workspace completed inside the container",
       );
     } catch (err) {
       log.warn(
@@ -473,8 +477,8 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
   }
 
   /**
-   * Sets the git identity **inside the container** when the host can no longer
-   * write to `work/.git/config` (same constraint as `finishWorkspace`).
+   * Sets the git identity **inside the container**, in a repository the host
+   * did not create (same reason as `finishWorkspace`).
    *
    * No secret gets in: a student's name and an academic address. A failure is
    * logged and closes nothing — the `GIT_*` variables set at `podman run` are
@@ -545,11 +549,11 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       state: "running",
       lastSeen: new Date(),
     });
-    // Resumption of a volume whose `work/` already belongs to the container:
-    // this is the only moment when completion is possible, the container having
-    // just been born. Identity first: it conditions every commit to come.
-    if (workspace.needsIdentity) await ensureIdentityInContainer(updated, identity);
+    // A workspace the host did not seed: completed now, the container having
+    // just been born, then its identity (the completion may have created the
+    // repository the identity goes into).
     await finishWorkspace(updated, workspace);
+    if (workspace.needsIdentity) await ensureIdentityInContainer(updated, identity);
     return { session: updated, healthyInMs };
   }
 

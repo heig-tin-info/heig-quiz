@@ -51,8 +51,8 @@ Start button, its teacher dashboard and its YAML seed (all removed, below).
   relays nothing; `github` is the unconfigured forge (public clone URLs,
   no relay) and `forgejo` the development one, both refused in production.
 - `PLATFORM_URL` replaces `CLASSROOM_URL` (still read as an alias); launch
-  and service tokens are accepted from both issuers, `heig-classroom` and
-  `heig-quiz`.
+  tokens are accepted from both issuers, `heig-classroom` and `heig-quiz`,
+  service tokens from `heig-quiz` only (ADR-078, amendment of 2026-10-11).
 - `src/seb/` moved onto `packages/seb` at M6-07 (D21): the platform builds
   every `.seb`; the portal keeps the `/launch` check (`verify.ts`, the
   Config Key from the token's `seb` claim, Browser Exam Keys optional) and
@@ -132,13 +132,9 @@ channel divergence for its containers.
    once, on `GET /launch`.
 7. **A launch token is used only once.** Its `jti` is consumed by inserting
    a row into `launch_tokens_used` before any other check: the primary key
-   is the guarantee. A token refused for any other reason is burnt. A row
-   outlives its token's `exp` by the HS256 skew plus a minute
-   (`JTI_RETENTION_AFTER_EXP_MS`), never less, and a token signed for longer
-   than its lifetime is refused (audit M11). **A service token is used only
-   once too, for one request**: bound to its method, path and body hash,
-   its `jti` consumed in the same table (audit L25, ADR-078 amendment of
-   2026-10-11); an unbound one is refused.
+   is the guarantee. A token refused for any other reason is burnt. A
+   service token is single use too, and bound to its request; the purge and
+   lifetime rules: [ADR-078, amendment of 2026-10-11](../../docs/adr/ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use).
 8. **The quota is per teacher, across all assignments**, counted on
    `sessions.teacherId` in the live states. Resuming a live session does
    not consult it.
@@ -157,16 +153,14 @@ channel divergence for its containers.
     `SEB_EXTRA_ALLOWED_HOSTS`; the student's Config Key reaches `/launch`
     signed in the launch token (`seb` claim). An exam token without it is
     refused.
-13. **The portal never runs git on a `.git` it did not create** (audit
-    L23). A `.git` in `work/` may be the student's, and its hooks, config
-    or `alternates` would run as the portal: `inspectWorkspace` reads it as
-    plain files (no symlink followed, no FIFO opened), and completing or
-    configuring an existing repository goes through `engine.exec`, inside
-    the container. Host-side git runs only on the repository the same call
-    has just created, with hooks and fsmonitor off. The staging repositories
-    are the portal's own; a push into one is capped by
-    `receive.maxInputSize` (audit M11; the disk quotas themselves are the
-    VM's, deploy/RUNBOOK.md, Disk).
+13. **The host never reads nor runs git on a student's `.git`** (audit
+    L23). Of `work/.git` the host knows one thing, whether it exists
+    (`inspectWorkspace`, an `lstat`); it reads none of its contents. Host
+    git runs only on the repository the same call creates, in a `work/` the
+    portal's uid owns and no group nor other may write. Everything else —
+    an existing `.git` of any kind, or a `work/` already the container's —
+    is completed and configured inside the container (`completionScript`,
+    `identityScript`, through `engine.exec`), as the student.
 
 ## Commands
 

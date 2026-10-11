@@ -351,29 +351,13 @@ VM, not in the repository:
 ### The service API's door (audit L25): the owner's checklist
 
 `PUT /api/assignments/:id` and `GET /api/assignments/:id/sessions` are on
-the public site. Since 2026-10-11 a service token is single use and bound to
-its request (method, path, body; ADR-078's amendment), so one seen in
-transit serves no second call. Only Quiz's application VM calls them, so the
-site can also refuse everyone else, before `reverse_proxy` (the addresses are
-deployment.md §1's; confirm that staging's application calls from them too):
+the public site; a service token is single use and bound to its request
+(ADR-078, amendment of 2026-10-11). Only Quiz's application VM calls them:
 
-```caddyfile
-	@service_elsewhere {
-		path /api/*
-		not remote_ip 128.140.71.35 2a01:4f8:1c19:1164::1
-	}
-	respond @service_elsewhere 404
-```
-
-- [ ] Added to `deploy/Caddyfile`, the template, by a pull request: every
-  deploy reinstalls `/etc/caddy/conf.d/quiz-codespace-<i>.caddy` from it
-  (`install.sh`, `cs_install_instance`), so a hand edit on the VM lasts
-  until the next deploy.
-- [ ] `curl -si https://code-dev.chevallier.io/api/assignments/x/sessions`
-  from a workstation answers 404; the staff's workspace list in Quiz still
-  loads (the application VM gets through).
-
-`smoke.mjs` calls the loopback port and is not affected.
+- [ ] A Caddy allow-list on `/api/*` for the application VM's addresses, in
+  `deploy/Caddyfile` (every deploy reinstalls the site from that template,
+  so a hand edit on the VM does not last): the snippet and what to confirm
+  first are issue #744.
 
 ### Backup and restore
 

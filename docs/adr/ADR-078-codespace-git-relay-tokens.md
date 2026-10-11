@@ -459,8 +459,14 @@ Quiz, whose rules stand (below).
   sends (`portalCall`, `modules/codespace/service.ts`) and by the portal
   from the request it received (its service routes parse JSON as bytes, any
   other content type is a 415); `bindingMismatch` compares them. The shape is
-  `ServiceTokenClaims` of `@quiz/contracts`; an unbound token is refused, so
-  heig-classroom's service tokens no longer open these routes.
+  `ServiceTokenClaims` of `@quiz/contracts`: `iss` is `heig-quiz` and `aud`
+  `heig-codespace-api`, nothing else, `method` `GET` or `PUT`. An unbound
+  token is refused.
+- **heig-classroom no longer signs service tokens for this portal.** Its own
+  portal has been stopped since the M6-04 switch and never served a real
+  class (`apps/codespace/deploy/RUNBOOK.md`, The switch, step 4); its launch tokens
+  stay accepted for the transition (docs/merge/06 §6.2), its service tokens
+  are refused.
 - **Single use.** Once the binding holds, the portal consumes the `jti` in
   `launch_tokens_used`, the launch tokens' table (the primary key is the
   guarantee); a replay is a 401. Quiz signs a fresh token for every call,
@@ -483,15 +489,19 @@ Quiz, whose rules stand (below).
   launches are unaffected. `deploy/smoke.mjs` signs bound tokens.
 - **§2's route is unchanged.** The portal's requests to Quiz were bound from
   the start (the request is the token, a distinct audience per route, an
-  empty body); their `jti` stays logged, not consumed. Consuming it would
-  need a table on Quiz's side. A replay within the minute would hand whoever
-  captured the request (TLS broken, or a leaked log) the installation token
-  §2 grants the portal for that repository. Left open.
-- **The owner's part** (`apps/codespace/deploy/RUNBOOK.md`, Day to day): the
-  Caddy site may refuse `/api/*` to anyone but the application VM, and the
-  disk the volumes share with the portal's database needs a quota per volume,
-  a partition of its own for the database and a free-space alert. In code,
-  a push into a staging repository is capped by `receive.maxInputSize`.
+  empty body); their `jti` stays logged, not consumed. Consuming it needs a
+  table and a migration on Quiz's side: until then a request captured in
+  transit (TLS broken, a leaked log) replays for about 90 s and mints the
+  `contents: write` installation token §2 grants for that repository.
+  Open: [#743](https://github.com/heig-tin-info/heig-quiz/issues/743).
+- **The disk (audit M11).** In code, one push into a staging repository is
+  capped by `receive.maxInputSize` (100 MiB, `RECEIVE_MAX_INPUT_BYTES`). The
+  rest is the owner's checklist (`apps/codespace/deploy/RUNBOOK.md`, Disk):
+  a quota per work volume (XFS project quota or a bounded volume), the
+  portal's SQLite on a partition of its own, a free-space alert.
+- **The door (audit L25).** Only the application VM calls the service
+  routes; a Caddy allow-list on `/api/*` waits for the owner to confirm the
+  addresses: [#744](https://github.com/heig-tin-info/heig-quiz/issues/744).
 
 ## Alternatives considered
 

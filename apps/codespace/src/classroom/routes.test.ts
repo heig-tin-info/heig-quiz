@@ -10,7 +10,7 @@
  */
 import cookie from "@fastify/cookie";
 import { CodespaceSessionSummary } from "@quiz/contracts";
-import { requestBinding, signHs256 } from "@quiz/domain";
+import { HS256_SKEW_SECONDS, requestBinding, signHs256 } from "@quiz/domain";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -23,8 +23,6 @@ import { createPushEventStore } from "../git/index.js";
 import { createSebVerifier } from "../seb/index.js";
 import type { SessionManager, StartOptions, StartResult } from "../sessions/manager.js";
 import { findAssignment } from "../sessions/store.js";
-
-import { HS256_SKEW_SECONDS } from "@quiz/domain";
 
 import { JTI_RETENTION_AFTER_EXP_MS, classroomRoutes, consumeJti } from "./routes.js";
 
@@ -66,7 +64,7 @@ async function serviceToken(
   jtiCounter += 1;
   return signHs256(
     {
-      iss: "heig-classroom",
+      iss: "heig-quiz",
       aud: "heig-codespace-api",
       iat: now(),
       exp: now() + 120,
@@ -233,7 +231,7 @@ describe("PUT /api/assignments/:id", () => {
 
   it("401 with a signature made with another secret", async () => {
     const forged = await signHs256(
-      { iss: "heig-classroom", aud: "heig-codespace-api", iat: now(), exp: now() + 120, jti: "forged", ...(await requestBinding("PUT", "/api/assignments/a-lab", JSON.stringify(syncBody()))) },
+      { iss: "heig-quiz", aud: "heig-codespace-api", iat: now(), exp: now() + 120, jti: "forged", ...(await requestBinding("PUT", "/api/assignments/a-lab", JSON.stringify(syncBody()))) },
       "another-secret-of-thirty-two-chars",
     );
     expect((await put(syncBody(), forged)).statusCode).toBe(401);
@@ -248,9 +246,9 @@ describe("PUT /api/assignments/:id", () => {
     expect((await put(syncBody(), { iss: "heig-codespace" })).statusCode).toBe(401);
   });
 
-  it("accepts both issuers of the transition, heig-classroom and heig-quiz", async () => {
+  it("accepts Quiz's service tokens, not heig-classroom's", async () => {
+    expect((await put(syncBody(), { iss: "heig-classroom" })).statusCode).toBe(401);
     expect((await put(syncBody())).statusCode).toBe(200);
-    expect((await put(syncBody(), { iss: "heig-quiz" })).statusCode).toBe(200);
   });
 
   it("401 on a replayed token: its jti serves once (audit L25)", async () => {
@@ -267,8 +265,8 @@ describe("PUT /api/assignments/:id", () => {
     // The body was changed in transit: refused.
     const token = await serviceToken("PUT", "/api/assignments/a-lab", syncBody({ quota: { maxActiveSessions: 2 } }));
     expect((await put(syncBody({ quota: { maxActiveSessions: 200 } }), token)).statusCode).toBe(401);
-    // An unbound token, as heig-classroom signs one: refused.
-    const unbound = await signHs256({ iss: "heig-classroom", aud: "heig-codespace-api", iat: now(), exp: now() + 120, jti: "unbound" }, SECRET);
+    // An unbound token, as Quiz signed one before: refused.
+    const unbound = await signHs256({ iss: "heig-quiz", aud: "heig-codespace-api", iat: now(), exp: now() + 120, jti: "unbound" }, SECRET);
     expect((await put(syncBody(), unbound)).statusCode).toBe(401);
     // Nothing reached the database.
     expect(findAssignment(h.db, "a-lab")).toBeUndefined();

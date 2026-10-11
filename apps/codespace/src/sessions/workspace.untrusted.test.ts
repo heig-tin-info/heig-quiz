@@ -1,12 +1,11 @@
 /**
  * Audit L23: a `.git` in `work/` may be the student's, crafted to run code
- * as the portal (hooks, `core.fsmonitor`, `include.path`, `alternates`). The
- * portal reads what it needs of it as plain files and never runs git on it;
- * what must be done in it is done in the container.
+ * or read files as the portal (hooks, `core.fsmonitor`, `include.path`,
+ * `alternates`, symlinks). The host reads nothing of it and runs no git on
+ * it: it only asks whether one exists, and leaves the rest to the container.
  *
  * `git` is the real one, wrapped to record every call `workspace.ts` makes.
  */
-import { execFileSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,7 +30,8 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "l23-"));
   work = join(root, "work");
   marker = join(root, "PWNED");
-  await mkdir(work);
+  await mkdir(work, { mode: 0o755 });
+  await chmod(work, 0o755);
 });
 
 afterEach(async () => {
@@ -40,35 +40,28 @@ afterEach(async () => {
 
 const exists = (path: string) => stat(path).then(() => true, () => false);
 
-/** A shell script that, run by anything, leaves the marker. */
-async function payload(): Promise<string> {
-  const script = join(root, "payload.sh");
-  await writeFile(script, `#!/bin/sh\ntouch ${JSON.stringify(marker)}\n`, "utf8");
-  await chmod(script, 0o755);
-  return script;
-}
-
 /**
- * The student's crafted repository: a hook on every checkout and commit, a
- * filesystem monitor, an included config that names them again, and an
- * `alternates` pointing out of the volume. Unborn, unless `commit`.
+ * The student's crafted repository: a hook on every checkout, commit and
+ * index change, a filesystem monitor and a pager that leave the marker, an
+ * included config, and `alternates` pointing out of the volume.
  */
 async function craftedRepo(opts: { commit?: boolean } = {}): Promise<void> {
   await git(["init", "-q", "--initial-branch=main", work], { env: FIXTURE_ENV });
   if (opts.commit) {
     await writeFile(join(work, "main.c"), "int main(void){return 0;}\n", "utf8");
-    await git(["-C", work, "add", "-A"], { env: FIXTURE_ENV });
+    await git(["-C", work, "add", "main.c"], { env: FIXTURE_ENV });
     await git(["-C", work, "commit", "-q", "-m", "work"], { env: FIXTURE_ENV });
   }
-  const script = await payload();
+  const script = join(root, "payload.sh");
+  await writeFile(script, `#!/bin/sh\ntouch ${JSON.stringify(marker)}\n`, "utf8");
+  await chmod(script, 0o755);
   for (const hook of ["post-checkout", "pre-commit", "reference-transaction", "post-index-change"]) {
     await writeFile(join(work, ".git", "hooks", hook), `#!/bin/sh\nexec ${script}\n`, "utf8");
     await chmod(join(work, ".git", "hooks", hook), 0o755);
   }
   await writeFile(join(root, "included"), `[core]\n\tfsmonitor = ${script}\n`, "utf8");
-  const config = join(work, ".git", "config");
   await writeFile(
-    config,
+    join(work, ".git", "config"),
     `[core]\n\tfsmonitor = ${script}\n\tpager = ${script}\n[include]\n\tpath = ${join(root, "included")}\n`,
     { flag: "a" },
   );
@@ -80,99 +73,69 @@ function gitCallsOnWork(): string[][] {
   return vi.mocked(git).mock.calls.map(([args]) => args).filter((args) => args.some((a) => a.includes(work)));
 }
 
-describe("inspectWorkspace reads the student's .git as plain files", () => {
-  it("never runs git, never runs the student's hooks or config, and still reads HEAD", async () => {
+describe("inspectWorkspace looks at work/.git's presence, nothing else", () => {
+  it("absent, a directory, a gitdir: file, a symlink: present or not, never read nor followed", async () => {
+    expect(await inspectWorkspace(work)).toEqual({ present: false, owned: true });
+    await symlink(join(root, "nowhere"), join(work, ".git"));
+    expect(await inspectWorkspace(work)).toEqual({ present: true, owned: true });
+    await rm(join(work, ".git"));
+    await writeFile(join(work, ".git"), `gitdir: ${root}\n`);
+    expect(await inspectWorkspace(work)).toEqual({ present: true, owned: true });
+    await rm(join(work, ".git"));
     await craftedRepo({ commit: true });
     vi.mocked(git).mockClear();
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: true, branch: "main" });
+    expect(await inspectWorkspace(work)).toEqual({ present: true, owned: true });
     expect(vi.mocked(git)).not.toHaveBeenCalled();
     expect(await exists(marker)).toBe(false);
   });
 
-  it("an unborn branch, a packed ref, a detached HEAD, and no .git at all", async () => {
-    expect(await inspectWorkspace(work)).toEqual({ present: false, born: false, branch: null });
-    await git(["init", "-q", "--initial-branch=trunk", work]);
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: false, branch: "trunk" });
-    const sha = "a".repeat(40);
-    await writeFile(join(work, ".git", "packed-refs"), `# pack-refs with: peeled fully-peeled sorted\n${sha} refs/heads/trunk\n`);
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: true, branch: "trunk" });
-    await writeFile(join(work, ".git", "HEAD"), `${sha}\n`);
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: true, branch: null });
-  });
-
-  it("a branch in a directory reads its loose ref there, and nowhere above", async () => {
-    await git(["init", "-q", "--initial-branch=feature/x", work]);
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: false, branch: "feature/x" });
-    await mkdir(join(work, ".git", "refs", "heads", "feature"), { recursive: true });
-    await writeFile(join(work, ".git", "refs", "heads", "feature", "x"), `${"b".repeat(64)}\n`);
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: true, branch: "feature/x" });
-    // A branch that would climb out of `refs/heads/`: not judged, left alone.
-    await writeFile(join(work, ".git", "HEAD"), "ref: refs/heads/../../config\n");
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: true, branch: null });
-  });
-
-  it("whatever is not a plain repository is the student's, left alone and never followed", async () => {
-    // `.git` a symlink to another repository of the host.
-    const elsewhere = join(root, "elsewhere");
-    await git(["init", "-q", elsewhere]);
-    await symlink(join(elsewhere, ".git"), join(work, ".git"));
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: true, branch: null });
-    await rm(join(work, ".git"));
-    // `.git` a `gitdir:` file.
-    await writeFile(join(work, ".git"), `gitdir: ${join(elsewhere, ".git")}\n`);
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: true, branch: null });
-    await rm(join(work, ".git"));
-    // `HEAD` a symlink to a file of the host that reads as a ref.
-    await git(["init", "-q", "--initial-branch=main", work]);
-    await writeFile(join(root, "fake-head"), "ref: refs/heads/main\n");
-    await rm(join(work, ".git", "HEAD"));
-    await symlink(join(root, "fake-head"), join(work, ".git", "HEAD"));
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: true, branch: null });
-    // `HEAD` a FIFO: the read does not block on it.
-    await rm(join(work, ".git", "HEAD"));
-    execFileSync("mkfifo", [join(work, ".git", "HEAD")]);
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: true, branch: null });
-    // A reftable repository: HEAD names `.invalid`.
-    await rm(join(work, ".git", "HEAD"));
-    await writeFile(join(work, ".git", "HEAD"), "ref: refs/heads/.invalid\n");
-    expect(await inspectWorkspace(work)).toEqual({ present: true, born: true, branch: null });
+  it("work/ is the portal's alone only when no group nor other may write it, and it is no symlink", async () => {
+    await chmod(work, 0o775);
+    expect((await inspectWorkspace(work)).owned).toBe(false);
+    await chmod(work, 0o757);
+    expect((await inspectWorkspace(work)).owned).toBe(false);
+    await chmod(work, 0o755);
+    const link = join(root, "link");
+    await symlink(work, link);
+    expect((await inspectWorkspace(link)).owned).toBe(false);
   });
 });
 
-describe("ensureWorkspace on an existing .git", () => {
-  async function staging(): Promise<{ dir: string; gitDir: string; workDir: string }> {
+describe("ensureWorkspace never runs git on a .git it did not create", () => {
+  const options = async () => {
     const source = await makeSourceRepo({ dir: join(root, "src"), files: { "lab.c": "int x;\n" } });
-    return { dir: root, gitDir: source.gitDir, workDir: work };
-  }
-  const options = async () => ({
-    paths: await staging(),
-    sessionId: "s1",
-    gitRemoteHost: "portal.internal",
-    gitRemotePort: 9418,
-    identity: { name: "Sacha Student", email: "sacha@heig-vd.ch" },
-  });
+    return {
+      paths: { dir: root, gitDir: source.gitDir, workDir: work },
+      sessionId: "s1",
+      gitRemoteHost: "portal.internal",
+      gitRemotePort: 9418,
+      identity: { name: "Sacha Student", email: "sacha@heig-vd.ch" },
+    };
+  };
 
-  it("an unborn crafted repository, even one the portal could write, is completed in the container", async () => {
-    await craftedRepo();
+  for (const commit of [false, true]) {
+    it(`a crafted ${commit ? "born" : "unborn"} repository, in a work/ the portal could write, goes to the container`, async () => {
+      await craftedRepo({ commit });
+      const opts = await options();
+      vi.mocked(git).mockClear();
+      // Before audit L23 the host fetched and checked out an unborn one here,
+      // and the student's post-checkout hook and fsmonitor ran as the portal.
+      expect(await ensureWorkspace(opts)).toEqual({ created: false, branch: "main", needsContainer: true, needsIdentity: true });
+      expect(gitCallsOnWork()).toEqual([]);
+      expect(await exists(marker)).toBe(false);
+    });
+  }
+
+  it("no .git, but a work/ others may write: the container seeds it, not the host", async () => {
+    await chmod(work, 0o777);
     const opts = await options();
     vi.mocked(git).mockClear();
-    // Before audit L23 the host fetched and checked out here, and the
-    // student's post-checkout hook and fsmonitor ran as the portal.
     expect(await ensureWorkspace(opts)).toEqual({ created: false, branch: "main", needsContainer: true, needsIdentity: true });
     expect(gitCallsOnWork()).toEqual([]);
-    expect(await exists(marker)).toBe(false);
+    expect(await exists(join(work, ".git"))).toBe(false);
   });
 
-  it("a born crafted repository is left alone, its identity set in the container", async () => {
-    await craftedRepo({ commit: true });
-    const opts = await options();
-    vi.mocked(git).mockClear();
-    expect(await ensureWorkspace(opts)).toEqual({ created: false, branch: "main", needsContainer: false, needsIdentity: true });
-    expect(gitCallsOnWork()).toEqual([]);
-    expect(await exists(marker)).toBe(false);
-  });
-
-  it("a repository the portal creates is seeded from the host, hooks and fsmonitor disabled", async () => {
+  it("no .git in the portal's own work/: seeded from the host, hooks and fsmonitor off", async () => {
     const opts = await options();
     vi.mocked(git).mockClear();
     expect(await ensureWorkspace(opts)).toEqual({ created: true, branch: "main", needsContainer: false, needsIdentity: false });

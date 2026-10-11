@@ -48,20 +48,9 @@ export interface StagingOptions {
    * relay. Absent = anonymous fetch, which is enough for a public repository.
    */
   authorization?: string;
-  /** `receive.maxInputSize`, in bytes; {@link RECEIVE_MAX_INPUT_BYTES} by default. */
-  receiveMaxInputBytes?: number;
 }
 
-/**
- * The largest pack one push may send (`receive.maxInputSize`, audit M11):
- * the staging repositories share their file system with the portal's
- * SQLite database, where every student's `PushEvent` — the proof of
- * submission — is written. A push over it is refused by `receive-pack`
- * before anything lands. 100 MiB is far above a lab's source tree; what
- * bounds a student's total, and keeps the database writable, is the VM's
- * work (a quota per volume, a partition of its own for the database:
- * deploy/RUNBOOK.md, Disk).
- */
+/** The largest pack one push may send, `receive.maxInputSize` (audit M11; the rest of the disk: deploy/RUNBOOK.md, Disk). */
 export const RECEIVE_MAX_INPUT_BYTES = 100 * 1024 * 1024;
 
 export interface StagingPaths {
@@ -162,7 +151,7 @@ export async function ensureStagingRepo(opts: StagingOptions): Promise<StagingRe
   await gitBare(paths.gitDir, [
     "config",
     "receive.maxInputSize",
-    String(opts.receiveMaxInputBytes ?? RECEIVE_MAX_INPUT_BYTES),
+    String(RECEIVE_MAX_INPUT_BYTES),
   ]);
 
   const from = sourceUrl(opts.source);

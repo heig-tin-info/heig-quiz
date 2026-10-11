@@ -108,6 +108,12 @@ describe("LaunchTokenClaims", () => {
 describe("ServiceTokenClaims", () => {
   const claims = { iss: "heig-quiz", aud: SERVICE_AUDIENCE, iat: 1, exp: 121, jti: "j", method: "PUT", path: "/api/assignments/a1", bodyHash: "h" };
 
+  it("comes from Quiz only, for the portal's two methods", () => {
+    expect(ServiceTokenClaims.safeParse({ ...claims, iss: "heig-classroom" }).success).toBe(false);
+    expect(ServiceTokenClaims.safeParse({ ...claims, iss: PORTAL_ISSUER }).success).toBe(false);
+    expect(ServiceTokenClaims.safeParse({ ...claims, method: "POST" }).success).toBe(false);
+  });
+
   it("is bound to one request, with a jti, for two minutes at most", () => {
     expect(ServiceTokenClaims.safeParse(claims).success).toBe(true);
     const { bodyHash: _none, ...get } = claims;

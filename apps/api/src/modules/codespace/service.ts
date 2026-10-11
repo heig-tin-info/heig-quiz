@@ -156,6 +156,7 @@ async function portalCall(
     exp: iat + SERVICE_TOKEN_TTL_SECONDS,
     jti: randomUUID(),
     ...(await requestBinding(method, url.pathname + url.search, body)),
+    method,
   };
   const token = await signHs256({ ...claims }, config.CODESPACE_LAUNCH_SECRET);
   return fetch(url, {

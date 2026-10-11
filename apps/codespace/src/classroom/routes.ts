@@ -9,8 +9,9 @@
  *
  * The plugin is **not registered** when `CODESPACE_LAUNCH_SECRET` is empty: the
  * three routes then answer 404 and the portal opens no session at all (it has
- * no login of its own). Both issuers of the contract, `heig-classroom` and
- * `heig-quiz`, are accepted during the transition (`CODESPACE_ISSUERS`).
+ * no login of its own). A launch token from either issuer of the transition,
+ * `heig-classroom` or `heig-quiz` (`CODESPACE_ISSUERS`), is accepted; a
+ * service token from Quiz only.
  *
  * Two invariants play out here and nowhere else:
  *
@@ -34,6 +35,7 @@ import {
   CodespaceAssignmentSync,
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
+  QUIZ_CODESPACE_ISSUER,
   SERVICE_AUDIENCE,
   ServiceTokenClaims,
   isSafeId,
@@ -212,7 +214,7 @@ async function classroomRoutesImpl(
   async function serviceTokenRefusal(request: FastifyRequest, token: string): Promise<string | null> {
     const verdict = await verifyHs256(token, secret, {
       audience: SERVICE_AUDIENCE,
-      issuer: CODESPACE_ISSUERS,
+      issuer: QUIZ_CODESPACE_ISSUER,
       requireJti: true,
     });
     if (!verdict.ok) return verdict.reason;

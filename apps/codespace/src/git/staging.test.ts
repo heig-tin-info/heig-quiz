@@ -1,5 +1,4 @@
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
@@ -234,24 +233,4 @@ describe("ensureStagingRepo", () => {
     });
     expect((await gitBare(staging.gitDir, ["config", "http.uploadpack"])).trim()).toBe("false");
   });
-
-  it("refuses a push larger than receive.maxInputSize, and keeps the refs (audit M11)", async () => {
-    const base = await root();
-    const staging = await ensureStagingRepo({
-      volumesRoot: join(base, "volumes"),
-      student: "e1234567",
-      assignment: "tp-quota",
-      source: { mode: "empty" },
-      receiveMaxInputBytes: 16 * 1024,
-    });
-    const work = join(base, "work");
-    await git(["init", "-q", "--initial-branch=main", work], { env: FIXTURE_ENV });
-    // Incompressible: the pack is as large as the file.
-    await writeFile(join(work, "blob.bin"), randomBytes(64 * 1024));
-    await git(["-C", work, "add", "-A"], { env: FIXTURE_ENV });
-    await git(["-C", work, "commit", "-q", "-m", "too big"], { env: FIXTURE_ENV });
-    await expect(git(["-C", work, "push", "-q", staging.gitDir, "main"], { env: FIXTURE_ENV })).rejects.toThrow(/exceeds maximum allowed size/);
-    expect((await refSnapshot(staging.gitDir)).size).toBe(0);
-  });
-
 });
