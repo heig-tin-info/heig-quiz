@@ -43,18 +43,18 @@ export const isMachineReason = (value: unknown): value is MachineReason =>
   typeof value === "string" && (MACHINE_REASONS as readonly string[]).includes(value);
 
 /**
+ * The reasons that wait for the runner: absent (D14) or saturated on the
+ * last try (ADR-101). The progress counts them as pending on the runner.
+ */
+export const RUNNER_WAITING_REASONS = ["runner_unavailable", "runner_busy"] as const satisfies readonly MachineReason[];
+
+/**
  * The reasons a new pass may clear: the runner or a grader was away or
  * failed. The others are the question's own fault (a reference that fails,
  * an unreadable configuration, no model configured) and only an edit of the
  * question or of the platform settles them, so the panel does not offer a
  * pass for them.
  */
-/**
- * The reasons that wait for the runner: absent (D14) or saturated on the
- * last try (ADR-101). The progress counts them as pending on the runner.
- */
-export const RUNNER_WAITING_REASONS = ["runner_unavailable", "runner_busy"] as const satisfies readonly MachineReason[];
-
 export const RETRYABLE_REASONS = [
   "runner_unavailable",
   "runner_error",

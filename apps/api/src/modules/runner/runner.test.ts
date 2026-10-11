@@ -7,7 +7,7 @@
  * and a mock would be a restatement of the code it checks.
  */
 import Fastify, { type FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   RunnerBusy,
@@ -173,16 +173,33 @@ describe("HttpRunner", () => {
     expect(await runnerAt().run(REQUEST)).toEqual(OUTCOME);
   });
 
+  /** Fifteen cases of 2 s: 20 s build + 15 × (2 s + 2 s grace) + 3 × 2 s uploads = 86 s. */
+  const fifteen = {
+    ...REQUEST,
+    limits: { ...REQUEST.limits, timeMs: 2000 },
+    cases: Array.from({ length: 15 }, (_, i) => ({ name: `c${i}`, args: [], stdin: "" })),
+  };
+
   it("caps an interactive request's budget at the ceiling, which the runner enforces (ADR-101)", async () => {
     bodies = [];
-    const fifteen = {
-      ...REQUEST,
-      priority: "interactive" as const,
-      limits: { ...REQUEST.limits, timeMs: 2000 },
-      cases: Array.from({ length: 15 }, (_, i) => ({ name: `c${i}`, args: [], stdin: "" })),
-    };
-    await runnerAt().run(fifteen);
-    expect(bodies).toEqual([{ ...fifteen, budgetMs: 30_000 }]);
+    const interactive = { ...fifteen, priority: "interactive" as const };
+    await runnerAt().run(interactive);
+    expect(bodies).toEqual([{ ...interactive, budgetMs: 30_000 }]);
+  });
+
+  it("gives a grading request its full budget, and waits for it past the queue allowance (ADR-101)", async () => {
+    bodies = [];
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    try {
+      await runnerAt().run(fifteen);
+      // Never the interactive ceiling: a grading run is cut by its own budget only.
+      expect(bodies).toEqual([{ ...fifteen, budgetMs: 86_000 }]);
+      // The API waits the budget plus the grading queue's 60 s allowance.
+      expect(timeout).toHaveBeenCalledTimes(1);
+      expect(timeout.mock.calls[0]![0]).toBeGreaterThanOrEqual(86_000 + 60_000);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 
   it("sends the shared token as a bearer on both routes, and nothing without one", async () => {
