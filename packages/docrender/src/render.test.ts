@@ -304,9 +304,9 @@ describe("math", () => {
     // The TeX source survives in the MathML annotation; what is DRAWN is capped.
     expect(huge.html).toContain("border-top-width:10em");
     expect(huge.html).not.toMatch(/(?:width|height)[:=]"?1000em/);
-    // Past 500 expansions: a math error, not minutes of rendering.
-    const bomb = renderPage(`$\\def\\a{xx}${"\\a".repeat(600)}$\n`, ctx());
-    expect(codes(bomb.warnings)).toEqual(["math_error"]);
+    // Past 500 expansions without a definition (70 `\iff`, 8 each): the belt.
+    const long = renderPage(`$x${" \\iff x".repeat(70)}$\n`, ctx());
+    expect(codes(long.warnings)).toEqual(["math_error"]);
     // A six-line aligned proof (about 70 expansions) renders.
     const proof = renderPage(
       String.raw`$$\begin{aligned} (p \implies q) &\iff (\neg p \lor q) \\ &\iff (q \lor \neg p) \\ &\iff (\neg\neg q \lor \neg p) \\ &\iff (\neg q \implies \neg p) \\ x \neq y &\iff \neg(x = y) \\ f(x) &= \int_0^1 g(t)\,dt \neq 0 \end{aligned}$$` + "\n",
@@ -314,6 +314,30 @@ describe("math", () => {
     );
     expect(proof.warnings).toEqual([]);
     expect(proof.html).toContain("katex-display");
+  });
+
+  it("refuses a formula that defines a macro, at once (audit L15)", () => {
+    const start = performance.now();
+    // 499 calls to a 1000-character macro: ~290 s of KaTeX if it got there.
+    const bomb = renderPage(`$\\def\\a{${"x".repeat(1000)}}${"\\a".repeat(499)}$\n`, ctx());
+    expect(performance.now() - start).toBeLessThan(50);
+    expect(codes(bomb.warnings)).toEqual(["math_error"]);
+    expect(bomb.html).toContain('<code class="md-math-error">');
+    const command = renderPage("$$\n\\newcommand{\\a}{x}\\a\n$$\n", ctx());
+    expect(codes(command.warnings)).toEqual(["math_error"]);
+  });
+
+  it("renders a 4 KB formula without definitions in bounded time, and a too-deep one as an error", () => {
+    // The costliest 4 KB shapes measured (`KATEX_LIMITS`): ~110 ms each.
+    for (const [open, close, depth] of [["\\frac{", "}{x}", 409], ["\\overbrace{", "}^{a}", 255]] as const) {
+      const start = performance.now();
+      const p = renderPage(`$${open.repeat(depth)}x${close.repeat(depth)}$\n`, ctx());
+      expect(performance.now() - start).toBeLessThan(1000);
+      expect(p.warnings).toEqual([]);
+    }
+    // Past the call stack: a warning, not a failed synchronisation.
+    const deep = renderPage(`$${"\\sqrt{".repeat(3000)}x${"}".repeat(3000)}$\n`, ctx());
+    expect(codes(deep.warnings)).toEqual(["math_error"]);
   });
 
   it("does not let a formula smuggle a link in", () => {

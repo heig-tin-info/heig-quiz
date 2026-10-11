@@ -1332,6 +1332,8 @@ export const en = {
   "md.formula.loading": "Loading the formula editor…",
   "md.formula.preview": "Preview",
   "md.formula.empty": "Nothing to preview yet.",
+  "md.formula.refusedMacro": "A formula cannot define macros (\\def, \\newcommand…)",
+  "md.formula.refusedDepth": "This formula is nested too deeply to display",
   "md.formula.insert": "Insert",
   "md.uploading": "Uploading…",
   "md.newLine": "New line",

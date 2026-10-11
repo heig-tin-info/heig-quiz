@@ -2,6 +2,7 @@ import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { renderWithProviders } from "../test/render";
+import { DEFAULT_FORMULA_LABELS, formulaHtml } from "./formula";
 import { MarkdownView } from "./MarkdownView";
 import { assetMarkdown, assetUrl, assetWidth, renderMarkdown, withAssetWidth } from "./render";
 
@@ -198,28 +199,67 @@ describe("MarkdownView — content", () => {
 
   /*
    * Audit L15: an essay is rendered on the grader's screen, and a formula
-   * must not be able to grow over it. KaTeX caps what the author sizes
-   * (`maxSize`), refuses a macro bomb (`maxExpand`), and `\Huge` is an
-   * absolute size that nesting does not compound.
+   * must not be able to grow over it nor freeze it. KaTeX caps what the
+   * author sizes (`maxSize`), `\Huge` is an absolute size that nesting does
+   * not compound, a macro definition never reaches KaTeX, and `maxExpand`
+   * stays as a belt.
    */
-  it("bounds a formula: sizes capped, macro bombs refused, sizing not compounded", () => {
+  it("bounds a formula's size: dimensions capped, sizing not compounded", () => {
     const rule = view("$\\rule{1000em}{1000em}$");
     expect(rule.querySelector(".katex-rule")?.getAttribute("style")).toContain("border-top-width:10em");
     // The source survives as the MathML annotation; nothing DRAWN is 1000em.
     expect(rule.innerHTML).not.toMatch(/(?:width|height)[:=]"?1000em/);
 
-    // Past 500 expansions: refused, shown as its source in the error colour.
-    const bomb = view(`$\\def\\a{xx}${"\\a".repeat(600)}$`);
-    expect(bomb.querySelector(".katex-error")).not.toBeNull();
+    const huge = view(`$${"{\\Huge ".repeat(12)}x${"}".repeat(12)}$`);
+    expect(huge.querySelectorAll(".katex-sizing")).toHaveLength(1);
+  });
+
+  it("refuses a formula that defines a macro, at once, saying why", () => {
+    const start = performance.now();
+    // 499 calls to a 1000-character macro: ~290 s of KaTeX if it got there.
+    const bomb = view(`$\\def\\a{${"x".repeat(1000)}}${"\\a".repeat(499)}$`);
+    expect(performance.now() - start).toBeLessThan(50);
+    const error = bomb.querySelector(".katex-error");
+    expect(error).toHaveAttribute("title", "A formula cannot define macros (\\def, \\newcommand…)");
+    expect(error?.textContent).toContain("\\def\\a");
     expect(bomb.querySelector(".katex-html")).toBeNull();
 
-    // A long derivation (about 70 expansions: `\iff` costs 8, `\implies` 10) renders.
+    for (const tex of ["\\newcommand{\\a}{x}\\a", "\\global\\let\\a=x", "\\renewcommand{\\frac}{x}"]) {
+      expect(view(`$${tex}$`).querySelector(".katex-error")).not.toBeNull();
+    }
+    // `\\` (a line break) followed by `def` is not `\def`.
+    expect(view("$$\\begin{aligned} a \\\\def \\end{aligned}$$").querySelector(".katex-error")).toBeNull();
+  });
+
+  it("renders a long derivation, and refuses one past 500 expansions", () => {
+    // About 70 expansions: `\iff` costs 8, `\implies` 10.
     const proof = view(LOGIC_PROOF);
     expect(proof.querySelector(".katex-error")).toBeNull();
     expect(proof.querySelector(".md-math-display .katex-html")).not.toBeNull();
+    // 70 `\iff`: 560 expansions, no definition — the belt.
+    expect(view(`$x${" \\iff x".repeat(70)}$`).querySelector(".katex-error")).not.toBeNull();
+  });
 
-    const huge = view(`$${"{\\Huge ".repeat(12)}x${"}".repeat(12)}$`);
-    expect(huge.querySelectorAll(".katex-sizing")).toHaveLength(1);
+  it("renders a 4 KB formula without definitions in bounded time", () => {
+    // The two costliest 4 KB shapes measured (`KATEX_LIMITS`): ~110 ms of
+    // KaTeX each in Node. Timed on `formulaHtml`, the KaTeX half: jsdom
+    // parses the resulting HTML some fifty times slower than a browser does.
+    for (const [open, close, depth] of [["\\frac{", "}{x}", 409], ["\\overbrace{", "}^{a}", 255]] as const) {
+      const tex = `${open.repeat(depth)}x${close.repeat(depth)}`;
+      expect(tex.length).toBeLessThanOrEqual(4096);
+      const start = performance.now();
+      const html = formulaHtml(tex, false, DEFAULT_FORMULA_LABELS);
+      expect(performance.now() - start).toBeLessThan(1000);
+      expect(html).toContain("katex-html");
+    }
+  });
+
+  it("shows a formula nested past the call stack as an error, not a crash", () => {
+    const body = view(`$${"\\sqrt{".repeat(3000)}x${"}".repeat(3000)}$`);
+    expect(body.querySelector(".katex-error")).toHaveAttribute(
+      "title",
+      "This formula is nested too deeply to display",
+    );
   });
 
   /*

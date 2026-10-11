@@ -1327,6 +1327,8 @@ export const fr: Record<keyof Dict, string> = {
   "md.formula.loading": "Chargement de l'éditeur de formules…",
   "md.formula.preview": "Aperçu",
   "md.formula.empty": "Rien à prévisualiser pour l'instant.",
+  "md.formula.refusedMacro": "Une formule ne peut pas définir de macros (\\def, \\newcommand…)",
+  "md.formula.refusedDepth": "Cette formule est trop imbriquée pour être affichée",
   "md.formula.insert": "Insérer",
   "md.uploading": "Envoi…",
   "md.newLine": "Nouvelle ligne",

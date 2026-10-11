@@ -1,13 +1,12 @@
 import DOMPurify from "dompurify";
-import katex from "katex";
 import { Marked, type Tokens } from "marked";
 
 import { decodeEntities } from "@quiz/docrender/entities";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
-import { KATEX_LIMITS } from "@quiz/docrender/katex";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 
 import { escapableStart, referenceAt } from "./delimiters";
+import { DEFAULT_FORMULA_LABELS, formulaHtml, type FormulaLabels } from "./formula";
 
 /*
  * Markdown -> sanitised HTML for content a student reads: question prompts,
@@ -237,7 +236,7 @@ const LITERAL = new Set(["CODE", "PRE", "KBD", "SAMP"]);
  * Replaces `$…$` and `$$…$$` inside one text node with KaTeX output. Returns
  * true when it changed something, so the caller can skip untouched nodes.
  */
-function renderMathIn(node: Text, doc: Document): boolean {
+function renderMathIn(node: Text, doc: Document, labels: FormulaLabels): boolean {
   const text = node.data;
   if (!text.includes("$")) return false;
   MATH.lastIndex = 0;
@@ -251,16 +250,10 @@ function renderMathIn(node: Text, doc: Document): boolean {
     const tex = (match[1] ?? match[2] ?? "").trim();
     const host = doc.createElement("span");
     host.className = display ? "md-math md-math-display" : "md-math";
-    // `throwOnError: false` renders the offending source in the error colour
+    // A broken or refused formula renders its source in the error colour
     // instead of taking the whole prompt down: a half-written formula must
-    // not blank the question a student is reading. The limits keep a
-    // formula's size and macro expansion bounded (audit L15, `KATEX_LIMITS`).
-    host.innerHTML = katex.renderToString(tex, {
-      displayMode: display,
-      throwOnError: false,
-      output: "htmlAndMathml",
-      ...KATEX_LIMITS,
-    });
+    // not blank the question a student is reading (`formula.ts`).
+    host.innerHTML = formulaHtml(tex, display, labels);
     frag.append(host);
     last = match.index + match[0].length;
     match = MATH.exec(text);
@@ -386,7 +379,12 @@ function linkKind(href: string): "internal" | "external" | "dead" {
 }
 
 /** Walks the sanitised tree and applies steps 3 and 4 above. */
-function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHoles | null) {
+function postProcess(
+  root: HTMLElement,
+  codeBlockLabel: string,
+  holes: EncodedHoles | null,
+  formula: FormulaLabels,
+) {
   const doc = root.ownerDocument;
   if (holes) placeHoles(root, holes);
 
@@ -458,7 +456,7 @@ function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHo
   });
   const texts: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n as Text);
-  for (const node of texts) renderMathIn(node, doc);
+  for (const node of texts) renderMathIn(node, doc, formula);
 }
 
 /**
@@ -469,6 +467,7 @@ function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHo
  * `codeBlockLabel` is the accessible name given to each fenced block, which
  * is a focusable scroll region (W10). It is passed in rather than read from
  * `t()` here: this module is pure, and its tests read the HTML, not a locale.
+ * So are the reasons a refused formula gives (`formula`).
  */
 export function renderMarkdown(
   source: string,
@@ -479,6 +478,8 @@ export function renderMarkdown(
      * `<span data-cloze-hole="<index>">` for the host to fill.
      */
     holes?: boolean;
+    /** Why a formula was not drawn (`useFormulaLabels`). */
+    formula?: FormulaLabels;
   } = {},
 ): string {
   if (!source.trim()) return "";
@@ -493,6 +494,6 @@ export function renderMarkdown(
     ALLOW_DATA_ATTR: false,
     RETURN_DOM: true,
   }) as unknown as HTMLElement;
-  postProcess(body, codeBlockLabel, holes);
+  postProcess(body, codeBlockLabel, holes, options.formula ?? DEFAULT_FORMULA_LABELS);
   return body.innerHTML;
 }

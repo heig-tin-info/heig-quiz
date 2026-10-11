@@ -7,6 +7,7 @@ import type { RichTextProps } from "@quiz/core/client";
 import { useT } from "../i18n";
 import { areaClass, cx } from "../ui";
 import { ImageToolsContext } from "./ImageView";
+import { useFormulaLabels } from "./MarkdownView";
 import "./richtext.css";
 import { LinkPrompt, RichTextOverlays } from "./RichTextPopovers";
 import { RichTextSourcePane, SourceToggle } from "./RichTextSource";
@@ -131,6 +132,7 @@ export function RichText({
     openCreatedHole,
     longForm,
     imageUrl,
+    formulaLabels: useFormulaLabels(),
   });
   const marks = useRichTextMarks(editor);
   const selectionPreview = useHoleSelectionPreview(editor, holes);

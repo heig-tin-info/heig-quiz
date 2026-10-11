@@ -10,6 +10,7 @@ import { protectHolePipes, restoreHolePipes } from "./clozeHole";
 import { CodeBlockView } from "./CodeBlockView";
 import { ImageView } from "./ImageView";
 import { handleRichTextKeyDown, isMathNode, type RichTextKeyDeps } from "./richTextKeys";
+import type { FormulaLabels } from "./formula";
 import type { ImageUrl } from "./imageUrl";
 import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
 import { emptyClozeHoles } from "./useClozeHole";
@@ -52,6 +53,8 @@ export interface RichTextEditorOptions {
   longForm: boolean;
   /** Resolves an image's `src` for display (tiptap.ts `imageUrl`). */
   imageUrl: ImageUrl | undefined;
+  /** Why a formula atom was not drawn (tiptap.ts `formulaLabels`). */
+  formulaLabels: FormulaLabels;
 }
 
 /**
@@ -216,6 +219,7 @@ export function useRichTextEditor(o: RichTextEditorOptions) {
       inline: o.inline,
       cloze: o.holes,
       ...(o.imageUrl === undefined ? {} : { imageUrl: o.imageUrl }),
+      formulaLabels: o.formulaLabels,
       // The picture's own toolbar (rotate, size, delete) lives in the node
       // view; `ImageToolsContext` in RichText.tsx is how it reaches this
       // field's uploader, which is what a rotation writes its result through.

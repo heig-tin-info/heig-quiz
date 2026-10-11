@@ -1,11 +1,10 @@
-import katex from "katex";
 import { Keyboard } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-import { KATEX_LIMITS } from "@quiz/docrender/katex";
-
 import { useT } from "../i18n";
 import { areaClass, Button, cx, Modal, Segmented, Spinner, TextInput } from "../ui";
+import { formulaHtml } from "./formula";
+import { useFormulaLabels } from "./MarkdownView";
 import "./formula.css";
 
 /*
@@ -17,7 +16,7 @@ import "./formula.css";
  * fraction — and the LaTeX box below is the same formula as source, for the
  * teacher who already knows what they want. Either one edits the other, and
  * the KaTeX preview underneath is what the STUDENT will see, rendered by the
- * very renderer the player uses (`render.ts`).
+ * very function the player's renderer uses (`formula.ts`).
  *
  * The LaTeX box takes the focus, not the visual field: the teachers of this
  * school write `\sqrt{2}` faster than they can find a square root on a
@@ -135,19 +134,11 @@ export function FormulaDialog({
     mf.value = latex;
   }, [latex]);
 
-  const preview = useMemo(() => {
-    if (latex.trim() === "") return null;
-    try {
-      return katex.renderToString(latex, {
-        displayMode: display,
-        throwOnError: false,
-        output: "htmlAndMathml",
-        ...KATEX_LIMITS,
-      });
-    } catch {
-      return null;
-    }
-  }, [latex, display]);
+  const labels = useFormulaLabels();
+  const preview = useMemo(
+    () => (latex.trim() === "" ? null : formulaHtml(latex, display, labels)),
+    [latex, display, labels],
+  );
 
   const toggleKeyboard = () => {
     const vk = virtualKeyboard();

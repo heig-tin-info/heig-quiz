@@ -40,21 +40,36 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { BlockMath, InlineMath } from "@tiptap/extension-mathematics";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 
-import { KATEX_LIMITS } from "@quiz/docrender/katex";
-
 import { clozeHoleExtensions } from "./clozeHole";
 import { ParamExpr } from "./paramExpr";
 import { CodeHighlight } from "./codeHighlight";
+import { DEFAULT_FORMULA_LABELS, formulaHtml, type FormulaLabels } from "./formula";
 import { REFUSED, type ImageUrl } from "./imageUrl";
 import { assetUrl, assetWidth } from "./render";
 
 
 /**
- * KaTeX behaves here as in the student view: a broken formula shows, it never
- * throws, and it renders under the same bounds (`KATEX_LIMITS`) — so a
- * formula the student view would refuse is refused while it is written.
+ * A formula atom draws through `formulaHtml`, as the student view does: a
+ * broken formula shows and never throws, it renders under the same bounds,
+ * and a macro definition is refused while it is written exactly as it will
+ * be when read (audit L15). The extension's own node view called KaTeX
+ * directly; this is the same element (classes, `data-type`, `data-latex`)
+ * without its click option, which no field sets.
  */
-const KATEX_OPTIONS = { throwOnError: false, ...KATEX_LIMITS } as const;
+function formulaNodeView(display: boolean, labels: FormulaLabels): NodeViewRenderer {
+  return ({ node, editor }) => {
+    const latex = typeof node.attrs.latex === "string" ? node.attrs.latex : "";
+    const dom = document.createElement(display ? "div" : "span");
+    dom.className = "tiptap-mathematics-render";
+    if (editor.isEditable) dom.classList.add("tiptap-mathematics-render--editable");
+    dom.dataset.type = display ? "block-math" : "inline-math";
+    dom.setAttribute("data-latex", latex);
+    const target = display ? dom.appendChild(document.createElement("div")) : dom;
+    if (display) target.className = "block-math-inner";
+    target.innerHTML = formulaHtml(latex, display, labels);
+    return { dom };
+  };
+}
 
 /**
  * What an INLINE field (one choice of an mcq) lets the keyboard build: the
@@ -537,6 +552,8 @@ export interface RichTextSchemaOptions {
   cloze?: boolean;
   /** Resolves an image's `src` for display (the journal's relative paths). */
   imageUrl?: ImageUrl;
+  /** Why a formula atom was not drawn, in the field's language (`useFormulaLabels`). */
+  formulaLabels?: FormulaLabels;
 }
 
 /**
@@ -553,6 +570,7 @@ export function richTextExtensions({
   inline = false,
   cloze = false,
   imageUrl,
+  formulaLabels = DEFAULT_FORMULA_LABELS,
 }: RichTextSchemaOptions = {}): AnyExtension[] {
   const base = assetImage(imageUrl);
   const image = imageNodeView ? base.extend({ addNodeView: imageNodeView }) : base;
@@ -575,8 +593,8 @@ export function richTextExtensions({
     // instead, like the keywords around it.
     CodeHighlight.configure({ holes: cloze }),
     image.configure({ allowBase64: false }),
-    InlineMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
-    BlockMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
+    InlineMathTyping.extend({ addNodeView: () => formulaNodeView(false, formulaLabels) }),
+    BlockMathTyping.extend({ addNodeView: () => formulaNodeView(true, formulaLabels) }),
     // GFM task lists. StarterKit does not carry them and `render.ts` does, so
     // without these two a `- [x] done` in a prompt came back a plain bullet —
     // a silent loss on the next autosave.

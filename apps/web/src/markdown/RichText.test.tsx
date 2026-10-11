@@ -123,6 +123,21 @@ describe("RichText — it shows the markdown, it does not print it", () => {
     expect(screen.getByText("External image, not shown: pixel")).toBeInTheDocument();
     expect(screen.getByText("External image, not shown")).toBeInTheDocument();
   });
+
+  it("refuses a formula that defines a macro, as the student view does (audit L15)", async () => {
+    const { container } = renderWithProviders(
+      <Host initial={"Before $\\def\\a{xx}\\a\\a$ and $x^2$ after"} />,
+    );
+    await waitFor(() => expect(container.querySelectorAll("[data-type='inline-math']")).toHaveLength(2));
+    const [refused, fine] = Array.from(container.querySelectorAll("[data-type='inline-math']"));
+    expect(refused?.querySelector(".katex-error")).toHaveAttribute(
+      "title",
+      "A formula cannot define macros (\\def, \\newcommand…)",
+    );
+    expect(refused?.querySelector(".katex-html")).toBeNull();
+    expect(fine?.querySelector(".katex-html")).not.toBeNull();
+    expect(fine).toHaveAttribute("data-latex", "x^2");
+  });
 });
 
 describe("RichText — what it tells its host", () => {
