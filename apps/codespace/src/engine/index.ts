@@ -95,8 +95,6 @@ export interface EngineOptions {
   memory: string;
   cpus: string;
   pidsLimit: number;
-  /** `crun` by default; `runsc` (gVisor) remains a parameter, cf. analyse.md D2. */
-  runtime?: string;
   /**
    * `--cgroup-parent=<slice>` (`CODESPACE_CGROUP_PARENT`, M6-05:
    * `codespace.slice` on the engine VM, below the runner's weight). Validated
@@ -256,7 +254,6 @@ export function createEngine(opts: EngineOptions): Engine {
       "--cpus",
       opts.cpus,
       ...(opts.cgroupParent ? [`--cgroup-parent=${opts.cgroupParent}`] : []),
-      ...(opts.runtime ? ["--runtime", opts.runtime] : []),
       // --- closed network, invariant 2 -------------------------------------
       "--network",
       opts.network,

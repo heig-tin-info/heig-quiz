@@ -52,7 +52,7 @@ Two pitfalls on the development workstation:
 
 The legal argument is real but premature. gVisor adds ptrace compatibility to be proven, a second runtime configuration to maintain and to test before every exam, on a system that has not yet run a single lab session. The baseline hardening (per-container userns, no capabilities, seccomp, read-only root, no network) already sets the bar at a kernel exploit, outside the threat model of section 9.
 
-The engine module does expose the runtime as an option (`EngineOptions.runtime` in `src/engine/index.ts`, passed straight through as `--runtime`), but **nothing wires it to configuration yet**: there is no environment variable for it, so switching to gVisor would still be a code change today. Wiring it is all that is asked of the engine in v1.
+The runtime is the Podman service's default runtime: a `--remote` client cannot choose one (it rejects `--runtime` as an unknown flag), so the engine passes none, and switching to gVisor means making `runsc` the default runtime of the Podman service the portal talks to, as ADR-016's amendment of 2026-10-11 does for the runner (issue #737).
 
 ### D3. Repository provisioning: consume heig-classroom, reimplement nothing
 
