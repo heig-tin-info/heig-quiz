@@ -673,9 +673,10 @@ shared vCPU: on an exam day, stop it (§8, *Exam days*).
 Renaming a session cookie ends every session at once: the browsers keep
 the old cookie, the new image no longer reads it. The `__Host-` prefix of
 audit L8 (`__Host-quiz_session`, `__Host-quiz_csrf`, N-SEC-01) is such a
-change. Every student and teacher signs in again after it; the old cookies
-are expired on their next request. Merge and approve it **outside exam
-hours**: the live-evaluation guard above does not cover a take-home
+change. Every student and teacher signs in again after it, and a sign-in
+started before the deploy and finished after it fails once with
+`400 login_state` (its stash cookie was renamed too): starting again works.
+Merge and approve it **outside exam hours**: the live-evaluation guard above does not cover a take-home
 exercise nor a project (it reads evaluations only), and never force it
 with `DEPLOY_FORCE_SHA`. A rollback to an image of before the change signs
 everyone out a second time, for the same reason.

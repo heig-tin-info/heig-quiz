@@ -24,7 +24,7 @@ audited — was open (06, row 24).
 
 The issue proposed opening the student's session in a NEW TAB, the
 teacher's untouched in the original one. That cannot work: the session is
-one cookie for the whole origin (`quiz_session`, `__Host-quiz_session` over https since audit L8, `path: /`). A session opened
+one cookie for the whole origin (`quiz_session`, `path: /`). A session opened
 in a new tab replaces the teacher's in every tab: the original tab then acts
 as the student, and "End" signs the teacher out.
 

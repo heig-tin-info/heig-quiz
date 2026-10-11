@@ -58,7 +58,7 @@ export type SessionKind = (typeof SESSION_KINDS)[number];
  * `Domain`, so no sibling host under the same parent domain (the codespace
  * portal, staging, a neighbour) can set, shadow or fixate it. Browsers refuse
  * a `__Host-` cookie that is not `Secure`, so development over plain http
- * keeps the bare name. The one rule for the API, the SPA and the scripts.
+ * keeps the bare name. The one rule for the API and the SPA.
  */
 export function cookieName(base: string, secure: boolean): string {
   return secure ? `__Host-${base}` : base;

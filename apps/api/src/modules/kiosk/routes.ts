@@ -7,7 +7,7 @@
  *     `quiz_kiosk` cookie — its identity, never a user's. These routes serve
  *     no session kind at all (`sessions: []`): a user session riding along is
  *     anonymous here. They are public POSTs, under the same double-submit
- *     rule as the poll's (`csrfRefused`);
+ *     rule as the poll's (`app.csrfRefused`);
  *   - an ADMIN, who names, retires and reactivates stations. The registry is
  *     platform-wide and admin-only: anyone else gets a 404 (invariant 6);
  *   - the PAIRING (ADR-051 §7, RFC 8628): the station asks for a code and
@@ -45,7 +45,7 @@ import type { AppConfig } from "../../config.js";
 import { delegated, endStationSessions } from "../../auth/session.js";
 import { users } from "../../db/schema.js";
 import { adminGuard, loadEvaluation, teacherGuard } from "../guards.js";
-import { csrfRefused, emptyBody, invalid, notFound, rateLimited, sendFailure, teacherRoute } from "../http.js";
+import { emptyBody, invalid, notFound, rateLimited, sendFailure, teacherRoute } from "../http.js";
 import { AttestationUnavailable } from "./attestation.js";
 import { FixedWindowLimiter } from "../../limiter.js";
 import { PairRateLimited, approvePairing, issuePairing, pollPairing, previewPairing } from "./pairing.js";
@@ -113,7 +113,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   // =========================================================================
 
   app.post("/app/api/kiosk/attest/challenge", { config: STATION }, async (req, reply) => {
-    const refused = throttled(req, reply) ?? csrfRefused(req, reply);
+    const refused = throttled(req, reply) ?? app.csrfRefused(req, reply);
     if (refused) return refused;
     try {
       return { challenge: await app.kioskAttestor!.challenge() } satisfies KioskChallenge;
@@ -131,7 +131,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   });
 
   app.post("/app/api/kiosk/attest/verify", { config: STATION }, async (req, reply) => {
-    const refused = throttled(req, reply) ?? csrfRefused(req, reply);
+    const refused = throttled(req, reply) ?? app.csrfRefused(req, reply);
     if (refused) return refused;
     const body = KioskAttestVerify.safeParse(emptyBody(req.body));
     if (!body.success) return invalid(reply, body.error);
@@ -205,7 +205,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   };
 
   app.post("/app/api/kiosk/device_authorization", { config: STATION }, async (req, reply) => {
-    const refused = throttled(req, reply) ?? csrfRefused(req, reply);
+    const refused = throttled(req, reply) ?? app.csrfRefused(req, reply);
     if (refused) return refused;
     const station = await pairableStation(req, reply);
     if (!station) return reply;
@@ -233,7 +233,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
    * (ADR-051 §7): a non-null actor is an impersonation, read-only.
    */
   app.post("/app/api/kiosk/token", { config: STATION }, async (req, reply) => {
-    const refused = csrfRefused(req, reply);
+    const refused = app.csrfRefused(req, reply);
     if (refused) return refused;
     const body = KioskTokenRequest.safeParse(emptyBody(req.body));
     if (!body.success) return invalid(reply, body.error);

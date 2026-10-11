@@ -139,9 +139,10 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   const provider = new OidcProvider(config, app.log);
   const secure = config.NODE_ENV === "production";
   /**
-   * The name of a first-party cookie on this instance: `__Host-` prefixed
-   * whenever it is `Secure` (audit L8, `cookieName`). Decorated as
-   * `app.cookieName`, what every other module reads a cookie by.
+   * The session pair's names, and the sign-in stash's: `__Host-` prefixed
+   * whenever they are `Secure` (audit L8, `cookieName`). Decorated as
+   * `app.cookieName` for the tests' cookie headers; the kiosk, guest and
+   * GitHub-link cookies are path-scoped and read by their bare names.
    */
   const named = (base: string) => cookieName(base, secure);
   const sessionCookie = named(SESSION_COOKIE);
@@ -175,20 +176,6 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     reply.clearCookie(sessionCookie, { path: "/", secure });
     reply.clearCookie(csrfCookie, { path: "/", secure });
   };
-
-  /**
-   * The bare names a browser may still hold from before the `__Host-`
-   * prefix (audit L8): never read, since a fallback would let a sibling
-   * host's cookie stand in for ours, and expired on the first request that
-   * shows one, so the browser stops sending it. Nothing to do where the
-   * names did not change (development).
-   */
-  const legacyCookies = secure ? [SESSION_COOKIE, CSRF_COOKIE] : [];
-  app.addHook("onRequest", async (req, reply) => {
-    for (const legacy of legacyCookies) {
-      if (req.cookies[legacy] !== undefined) reply.clearCookie(legacy, { path: "/", secure });
-    }
-  });
 
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
@@ -284,17 +271,28 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   });
 
   // --- Reusable guards ---
+  /**
+   * The double-submit check: the CSRF cookie, when the browser holds one,
+   * must equal the header; a session without its CSRF cookie is refused
+   * (audit L8), the pair being set and cleared together. A browser with
+   * neither has nothing to steal and is let through: the public POSTs (the
+   * poll's join and vote, a kiosk station's attestation) call it as it is.
+   * The bare names of before the prefix are never read: a fallback would
+   * let a sibling host's cookie stand in for ours.
+   */
+  const csrfRefused = (req: FastifyRequest, reply: FastifyReply): FastifyReply | null => {
+    const cookie = req.cookies[csrfCookie];
+    const passes = cookie ? cookie === req.headers[CSRF_HEADER] : req.authVia !== "session";
+    return passes ? null : reply.code(403).send({ error: "csrf" });
+  };
+  app.decorate("csrfRefused", csrfRefused);
+
   app.decorate("requireSession", async (req: FastifyRequest, reply: FastifyReply) => {
     if (!req.user) return reply.code(401).send({ error: "unauthenticated" });
     // Double-submit anti-CSRF on every mutation. A bearer token is exempt:
     // a browser never attaches one on its own, which is the whole attack.
-    // A session without its CSRF cookie is refused like a wrong header.
     if (req.authVia === "session" && !SAFE_METHODS.includes(req.method)) {
-      const cookie = req.cookies[csrfCookie];
-      const header = req.headers[CSRF_HEADER];
-      if (!cookie || cookie !== header) {
-        return reply.code(403).send({ error: "csrf" });
-      }
+      return csrfRefused(req, reply) ?? undefined;
     }
     return undefined;
   });
@@ -548,6 +546,8 @@ declare module "fastify" {
     internalCallSecret: string;
     /** The name a first-party cookie of `base` takes on this instance (`cookieName` of `@quiz/contracts`, audit L8). */
     cookieName: (base: string) => string;
+    /** The double-submit check of every write, the public POSTs' included: a 403 `csrf` sent, or null. */
+    csrfRefused: (req: FastifyRequest, reply: FastifyReply) => FastifyReply | null;
   }
 }
 

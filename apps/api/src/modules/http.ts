@@ -22,10 +22,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { z } from "zod";
 
-import { issuesOf, CSRF_COOKIE, CSRF_HEADER } from "@quiz/contracts";
+import { issuesOf } from "@quiz/contracts";
 import type { Locale } from "@quiz/domain";
 
-import { SESSION_COOKIE } from "../auth/session.js";
 
 /** `400 validation` with the issues an editor can underline. */
 export function invalid(reply: FastifyReply, error: z.ZodError) {
@@ -78,23 +77,6 @@ export function sendCsv(reply: FastifyReply, filename: string, csv: string) {
     .type("text/csv; charset=utf-8")
     .header("content-disposition", `attachment; filename="${filename}"`)
     .send(csv);
-}
-
-/**
- * The double-submit check, for a public POST that has no session to require
- * (the poll's join and vote, a kiosk station's attestation). A browser that
- * holds the CSRF cookie is signed in somewhere on this origin, and a
- * cross-site POST must not be able to act through it; a browser with neither
- * that cookie nor a session cookie has nothing to steal and is let through.
- * A session cookie without its CSRF cookie is refused (audit L8): the pair
- * is set and cleared together, so one alone is not ours to trust. The names
- * are the instance's (`app.cookieName`, `__Host-` over https).
- */
-export function csrfRefused(req: FastifyRequest, reply: FastifyReply): FastifyReply | null {
-  const named = req.server.cookieName;
-  const cookie = req.cookies[named(CSRF_COOKIE)];
-  const passes = cookie ? cookie === req.headers[CSRF_HEADER] : !req.cookies[named(SESSION_COOKIE)];
-  return passes ? null : reply.code(403).send({ error: "csrf" });
 }
 
 // ---------------------------------------------------------------------------

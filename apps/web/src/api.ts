@@ -18,13 +18,12 @@ import { configKey, meKey } from "./queryKeys";
  * widens nothing.
  */
 export function csrfToken(cookies: string = document.cookie): string {
-  const jar = new Map(
-    cookies
-      .split("; ")
-      .filter((pair) => pair.includes("="))
-      .map((pair) => [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)] as const),
-  );
-  return jar.get(cookieName(CSRF_COOKIE, true)) ?? jar.get(cookieName(CSRF_COOKIE, false)) ?? "";
+  const pairs = cookies.split("; ");
+  for (const name of [cookieName(CSRF_COOKIE, true), cookieName(CSRF_COOKIE, false)]) {
+    const pair = pairs.find((p) => p.startsWith(`${name}=`));
+    if (pair) return pair.slice(name.length + 1);
+  }
+  return "";
 }
 
 export class ApiError extends Error {

@@ -45,7 +45,7 @@ export const walkUrl = (path: string) =>
 export const everyRoute = (server: TestServer): { method: Method; path: string }[] =>
   routesOf(server.app.printRoutes({ commonPrefix: false }));
 
-/** The session cookies a response set, and its CSRF header. */
+/** The session cookies a response set, and its CSRF header: their bare names, a test server's (not `production`). */
 export function sessionCookies(res: LightMyRequestResponse): Record<string, string> {
   const jar = Object.fromEntries(res.cookies.map((c) => [c.name, c.value]));
   return {

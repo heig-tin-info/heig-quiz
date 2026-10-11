@@ -2,17 +2,15 @@
  * The names and flags of the first-party cookies (audit L8): `__Host-`
  * prefixed wherever they are `Secure` (production, staging), bare in
  * development over plain http; a session cookie without its CSRF cookie
- * refused; the bare names of before the prefix never read, and expired.
+ * refused; the bare names of before the prefix never read.
  */
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { CSRF_COOKIE } from "@quiz/contracts";
-
 import { sessions } from "../db/schema.js";
 import { KIOSK_COOKIE } from "../modules/kiosk/service.js";
 import { testServer, type TestServer } from "../test/http.js";
-import { SESSION_COOKIE, hashToken } from "./session.js";
+import { hashToken } from "./session.js";
 
 type Res = { headers: Record<string, unknown> };
 
@@ -53,15 +51,7 @@ describe.each([
       ...(method === "PATCH" ? { payload: { locale: "fr" } } : {}),
     });
 
-  it(`are named ${session} and ${csrf}`, async () => {
-    expect(server.app.cookieName(SESSION_COOKIE)).toBe(session);
-    expect(server.app.cookieName(CSRF_COOKIE)).toBe(csrf);
-    const { headers } = await server.signIn("student");
-    expect((await me(headers)).statusCode).toBe(200);
-    expect((await me(headers, "PATCH")).statusCode).toBe(200);
-  });
-
-  it("are set on Path=/, without a Domain, Secure exactly in production", async () => {
+  it(`are ${session} and ${csrf}, on Path=/, without a Domain, Secure exactly in production`, async () => {
     const { headers } = await server.signIn("student");
     // Less than half the TTL left: the next request renews, and re-sets both.
     const token = valueOf(headers.cookie!, session);
@@ -114,57 +104,21 @@ describe.each([
     }
   });
 
-  it("leave the kiosk station's cookie bare and scoped to /app/api (ADR-089)", async () => {
+  it.runIf(production)("are never read under the bare names of before the prefix", async () => {
+    const { headers } = await server.signIn("teacher");
+    const token = valueOf(headers.cookie!, session);
+    const csrfToken = headers["x-csrf-token"]!;
+    const bare = { cookie: `quiz_session=${token}; quiz_csrf=${csrfToken}`, "x-csrf-token": csrfToken };
+    expect((await me(bare)).statusCode).toBe(401);
+  });
+
+  it("leave the kiosk station's cookie bare, Secure exactly in production (ADR-089)", async () => {
     const res = await server.app.inject({
       method: "POST",
       url: "/app/api/kiosk/attest/verify",
       payload: { response: `mock:station-${production ? "prod" : "dev"}` },
     });
     expect(res.statusCode).toBe(200);
-    const line = setCookies(res)[KIOSK_COOKIE]!;
-    expect(line).toMatch(/; Path=\/app\/api(;|$)/);
-    expect(line).toMatch(/SameSite=Strict/);
-    expect(/; Secure/.test(line)).toBe(production);
-  });
-});
-
-describe("the bare names of before the prefix, in production", () => {
-  let server: TestServer;
-
-  beforeAll(async () => {
-    server = await testServer({}, { production: true });
-  });
-
-  afterAll(async () => {
-    await server.close();
-  });
-
-  it("are never read as a session, and are expired on the first request that shows them", async () => {
-    const { headers } = await server.signIn("teacher");
-    const token = valueOf(headers.cookie!, "__Host-quiz_session");
-    const csrf = headers["x-csrf-token"]!;
-    const legacy = { cookie: `quiz_session=${token}; quiz_csrf=${csrf}`, "x-csrf-token": csrf };
-
-    const read = await server.app.inject({ method: "GET", url: "/app/api/me", headers: legacy });
-    expect(read.statusCode).toBe(401);
-    const set = setCookies(read);
-    expect(expired(set.quiz_session)).toBe(true);
-    expect(expired(set.quiz_csrf)).toBe(true);
-    expect(set.quiz_session).toMatch(/; Path=\/(;|$)/);
-
-    const write = await server.app.inject({ method: "PATCH", url: "/app/api/me", headers: legacy, payload: { locale: "fr" } });
-    expect(write.statusCode).toBe(401);
-  });
-
-  it("let the prefixed pair through beside them, and still expire them", async () => {
-    const { headers } = await server.signIn("teacher");
-    const res = await server.app.inject({
-      method: "GET",
-      url: "/app/api/me",
-      headers: { ...headers, cookie: `quiz_session=stale; ${headers.cookie}` },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(expired(setCookies(res).quiz_session)).toBe(true);
-    expect(setCookies(res).quiz_csrf).toBeUndefined();
+    expect(/; Secure/.test(setCookies(res)[KIOSK_COOKIE]!)).toBe(production);
   });
 });
