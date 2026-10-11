@@ -33,9 +33,13 @@ classroom `origin/main` (`ab98cc0`, the journal commit). Paths are written:
 - `C:` — heig-classroom (`apps/server/src/...` unless the path says
   otherwise). A read-only reference checkout is made with
   `git -C ~/heig-classroom fetch && git -C ~/heig-classroom worktree add --detach <scratch>/classroom origin/main`.
-  Never edit `~/heig-classroom` from a merge task: classroom stays in
-  production until the cutover, and its fixes are cherry-picked forward
-  (see "Classroom keeps living" in [`01-strategy.md`](01-strategy.md)).
+  Never edit `~/heig-classroom` from a merge task. Until the cutover
+  classroom stayed in production and its fixes were cherry-picked forward
+  (see "Classroom keeps living" in [`01-strategy.md`](01-strategy.md));
+  **since 2026-10-11 (M8-07) it no longer runs**: `classroom.chevallier.io`
+  redirects to Quiz, its CI is disabled, and the checkout is evidence only.
+  What remains of its stack until E is listed on the
+  [M9-01 card](09-tasks.md#m9-01-point-of-no-return-and-decommission).
 
 ## Rules for the agents working on the merge
 

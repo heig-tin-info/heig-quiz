@@ -30,9 +30,13 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
   exists (registered by hand); staging's, `heig-quiz-staging`, exists
   since 2026-10-06 (M2-06). Teachers create their Quiz classrooms; the
   merge then writes the correspondence table (D22).
-- **Classroom sync point**: `a676c8c` (classroom `origin/main`,
-  2026-10-06). A classroom commit after it touching a ported file must be
-  forwarded (see strategy §1.2, principle 6). Check with
+- **Classroom sync point — closed 2026-10-11**: classroom's last commit
+  in production was `f572758` (`images.txt`, runbook §1.7), its CI is
+  disabled and its data was imported at C3 from the dump of 07:08 UTC;
+  nothing is forwarded any more. The last sync point was `a676c8c`
+  (classroom `origin/main`, 2026-10-06). A classroom commit after it
+  touching a ported file had to be forwarded (see strategy §1.2,
+  principle 6), checked with
   `git -C ~/heig-classroom fetch && git -C ~/heig-classroom log --oneline a676c8c..origin/main`.
   Moved from `ab98cc0` with nothing to forward: `f572758` (#48/#50, delete
   an assignment nobody accepted) — Quiz already deletes a project's rows

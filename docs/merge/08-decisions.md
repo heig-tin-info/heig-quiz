@@ -294,6 +294,7 @@ Status values: `open`, `settled`, `superseded`.
   no deadline and no evaluation; announced a week and a day ahead.
 - Blocks: M8-07.
 - **Status**: settled 2026-10-01 (product owner, conversation): **during the semester, as soon as possible (target: the week of 2026-10-05)**, not at the intersemester — while classroom still holds little work. A student whose GitHub account is linked in heig-classroom has nothing to do: the import carries the link (spec 06 no. 45); the others link it in Quiz (F-GH-05); each teacher installs Quiz's App and connects their classrooms by hand from the classroom's Settings (F-GH-02), so the import creates no organization link. A deadline, a live evaluation or a live workspace session still excludes the hour of the switch.
+- **Done (2026-10-11, merge task M8-07)**: Sunday 2026-10-11, 09:00 Europe/Zurich, at short notice, after the rehearsal of the day before (M8-06). Freeze C1→C8 from 07:07 to 07:50 UTC, the import itself 18 s; `--window-hours 12` because Prog-A's Labo-02 was due that evening (runbook O5); the self-paced exercises running in Quiz and the owner's two online test projects were accepted as non-blocking. The record is the M8-07 row of [`PROGRESS.md`](PROGRESS.md).
 
 ### D21 — Unified SEB design
 - **Suggested**: `packages/seb`; the platform builds every `.seb`; a `seb`
@@ -327,6 +328,8 @@ Status values: `open`, `settled`, `superseded`.
   that said otherwise is amended.
 
 ## Taken with the journal-first reordering (2026-09-30)
+
+- **Applied (2026-10-11, M8-07)**: the mapping of `/srv/quiz/merge/mapping.json` carried 8 classrooms into their Quiz classrooms (Prog-A, ProgOO-A, PythonGE2-A, Prog-C-2026-2027, TraiSignAp, VisIndus, MI-2026, Prog-D) and dropped the 5 test or archived ones; the roster options of the runbook's O8 (`--assistants staff --missing-students enroll`) placed every student and assistant, at the price of 19 MI-2026 lines flagged for their teacher.
 
 ### D23 — Quiz's own GitHub App
 - **Question**: the plan reused classroom's App at the cutover, which kept

@@ -200,6 +200,22 @@ the tick with 100 due projects) was deferred (product owner, 2026-10-06).
 ### M9-01 — Point of no return and decommission
 - **Goal**: §6.5 E; redirects to 308 (the runbook's §5: 308 keeps the
   method, 301 may not); issue #143 closed.
+- **State since the cutover (2026-10-11, M8-07)**: classroom's `app`
+  container is stopped with `restart=no`, its `postgres` and `backup`
+  containers still run (the nightly dump at 19:54 UTC continues), its CI
+  workflow is disabled, `classroom.chevallier.io` serves the 302 fragment,
+  and `/srv/quiz/merge` holds the pre-migration dumps, the mapping, the
+  reports and the scratch database `hgc_cutover`. The runbook's §5 says
+  what leaves and in which order.
+- **Documentation to update in the same PR** (it describes that stack as
+  present): `docs/development/deployment.md` (heig-classroom on `:3000`
+  and the VM table, the shared edu-ID key copied from
+  `/srv/heig-classroom/secrets`, the backup sources and the night's
+  timetable, the `DEPLOY_HOST` CNAME on `classroom.chevallier.io`),
+  [`README.md`](README.md) of this directory (the reference checkout),
+  the `Classroom sync point` bullet of [`PROGRESS.md`](PROGRESS.md), and
+  the runbook's checklist. The merge directory itself stays as the record;
+  its archiving is a later decision.
 
 ## Loose ends recorded on delivered cards
 
