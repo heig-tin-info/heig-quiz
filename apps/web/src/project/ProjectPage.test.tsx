@@ -107,9 +107,8 @@ describe("the page's states", () => {
 
   // M3-14j (pilot): a roster of no student but the teacher's test repository (ADR-077) is a table of that one row, counted nowhere.
   it("draws the teacher's test repository when no student is in the roster", async () => {
-    const counts = { students: 0, accepted: 0, groups: 0, live: 0, frozen: 0, toVerify: 0, alerts: 0 };
     const teacherRow = { ...makeProject().rows[0]!, repo: makeRepo(1), staff: true };
-    routes(makeProject({ rows: [teacherRow], counts }));
+    routes(makeProject({ rows: [teacherRow], counts: { live: 0, frozen: 0 } }));
     renderPage();
     const region = await screen.findByRole("region", { name: "Repositories" });
     expect(within(region).queryByText("No student in the roster")).toBeNull();

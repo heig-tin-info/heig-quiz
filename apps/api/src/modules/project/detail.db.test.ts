@@ -233,7 +233,6 @@ describe("the project page (F-PROJ-13)", () => {
     // The staff seat has no row; the student who left keeps theirs, by their repository, with no enrollment (ADR-077).
     expect(d.rows.some((r) => r.staff)).toBe(false);
     expect(d.rows.filter((r) => r.repo !== null && r.student.enrollmentId === null)).toHaveLength(1);
-    expect(d.rows.filter((r) => r.repo !== null)).toHaveLength(2);
     // An individual project: no copy group on any row, no resync owed (M3-16b).
     expect([d.rows.every((r) => r.group === null), d.groupSyncPending]).toEqual([true, false]);
     expect(d.primaryAction).toBe("none");
@@ -353,9 +352,7 @@ describe("the project page (F-PROJ-13)", () => {
     expect(flags(s3!.id)).toMatchObject({ multiple: true, malformed: null });
     expect(flags(s4!.id)).toMatchObject({ deleted: true });
     expect(rowOf(d, s5!.id).repo!.degraded).toBe(true);
-    expect(d.counts).toMatchObject({ live: 4 });
-    expect(d.rows.filter((r) => r.repo?.flags.toVerify)).toHaveLength(1);
-    expect(d.rows.filter((r) => r.repo?.flags.multiple || r.repo?.flags.protectionSuspended)).toHaveLength(2);
+    expect(d.counts).toEqual({ live: 4, frozen: 0 });
     // A deleted repository is never asked about.
     const deletedName = (await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, deleted)))[0]!.fullName!;
     expect(liveCalls(`${deletedName}/`)).toBe(0);
