@@ -1,6 +1,6 @@
 [project]
 site_name = "HEIG Quiz"
-site_description = "A quiz platform for HEIG-VD teachers: question pools, live evaluations with a server-side clock, automatic grading with sandboxed code execution, live polls."
+site_description = "An open-source LMS for STEM courses: question pools, live evaluations on a server-side clock, code and circuits graded in a sandbox, assisted grading, live polls, spaced practice."
 site_author = "Yves Chevallier"
 site_url = "https://heig-tin-info.github.io/heig-quiz/"
 repo_url = "https://github.com/heig-tin-info/heig-quiz"
