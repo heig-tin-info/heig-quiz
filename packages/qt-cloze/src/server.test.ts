@@ -119,14 +119,11 @@ describe("regex blanks RE2 refuses (ADR-099)", () => {
   });
 
   it("publish a question under the budget", () => {
-    // About 25 ms to build, twenty times more under coverage: with the clock
-    // stopped (top of the file), the estimate alone decides, and the bound is loose.
-    expect(
-      elapsed(() => {
-        const under = config(`${blanks(5, "\\p{Ll}".repeat(10))} ${blanks(45, "(the )?[a-zà-ÿ]{2,30}")}`);
-        expect(clozeServer.publicationIssues!(under)).toEqual([]);
-      }),
-    ).toBeLessThan(1000);
+    // With the clock stopped (top of the file) the estimate alone decides, so
+    // the proof is the empty issue list; wall time is not asserted here (the
+    // Coverage job slows builds twentyfold and made a 1 s bound flake).
+    const under = config(`${blanks(5, "\\p{Ll}".repeat(10))} ${blanks(45, "(the )?[a-zà-ÿ]{2,30}")}`);
+    expect(clozeServer.publicationIssues!(under)).toEqual([]);
   });
 
   it("hold no [[…]] reference in a parameterized question (ADR-056 §10)", () => {
