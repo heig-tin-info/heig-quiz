@@ -27,7 +27,7 @@ export async function trainingPlugin(app: FastifyInstance) {
     const now = app.clock.now();
     const userId = req.user!.id;
     try {
-      const result = await provision(app.db, { userId, lang: readerLang(req), now, actor: actorOf(req) });
+      const result = await provision(app.db, { userId, lang: readerLang(req), now, actor: actorOf(req), log: req.log });
       if (result.created) publish("courses", [`teacher:${userId}`]);
       return reply.code(result.created ? 201 : 200).send(result);
     } catch (error) {

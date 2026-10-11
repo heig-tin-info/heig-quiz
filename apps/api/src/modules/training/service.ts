@@ -17,7 +17,8 @@
  */
 import { isDeepStrictEqual } from "node:util";
 
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import type { FastifyBaseLogger } from "fastify";
 
 import type { Locale } from "@quiz/domain";
 import { clockChoiceOf, currentOrNextSemester, semesterMonths } from "@quiz/domain";
@@ -33,11 +34,17 @@ import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { isUniqueViolation, type Db } from "../../db/client.js";
 import {
+  apiTokens,
+  assistConversations,
+  attempts,
   classrooms,
+  coursePools,
   courseStaff,
   courses,
   evaluations,
   isStaffAttempt,
+  oauthClients,
+  oauthGrants,
   pools,
   questionVersions,
   questions,
@@ -220,16 +227,12 @@ const CLASSROOM_NAME = "Initiation";
  */
 async function courseOf(db: Db, userId: string): Promise<CourseRow | null> {
   const [row] = await db
-    .select()
+    .select({ course: courses })
     .from(courses)
-    .where(
-      and(
-        eq(courses.trainingFor, userId),
-        sql`EXISTS (SELECT 1 FROM ${courseStaff} WHERE ${courseStaff.courseId} = ${courses.id} AND ${courseStaff.userId} = ${userId})`,
-      ),
-    )
+    .innerJoin(courseStaff, and(eq(courseStaff.courseId, courses.id), eq(courseStaff.userId, userId)))
+    .where(eq(courses.trainingFor, userId))
     .limit(1);
-  return row ?? null;
+  return row?.course ?? null;
 }
 
 /** The course's oldest classroom: the one the provisioning made, unless the teacher deleted it. */
@@ -305,11 +308,15 @@ async function instantiate(
   await live.startEvaluation(db, row, ctx.now);
 }
 
+/** The request's logger, or the app's: where an undo that failed is told. */
+type Log = Pick<FastifyBaseLogger, "error">;
+
 interface BuildInput {
   userId: string;
   lang: Locale;
   now: Date;
   content: TrainingContent;
+  log: Log;
 }
 
 /**
@@ -334,24 +341,42 @@ async function buildClassroom(
     periodStart: months.start,
     periodEnd: months.end,
   });
-  await poolService.setCoursePools(db, course.id, [...links, { poolId: pool.id, mode: "read" }], undefined, {
-    id: input.userId,
-    role: "teacher",
-    reach: "seats",
-  });
-  // The published questions of the pool, by name, once for both evaluations.
-  const published = await questionsOf(db, pool.id);
-  const idsOf = (names: readonly string[]) =>
-    names.map((name) => published.get(name.toLowerCase())).flatMap((q) => (q?.latest ? [q.row.id] : []));
-  for (const spec of input.content.evaluations) {
-    await instantiate(db, spec, idsOf(spec.questions), {
-      classroomId: room.id,
-      userId: input.userId,
-      periodEnd: months.end,
-      now: input.now,
+  try {
+    await poolService.setCoursePools(db, course.id, [...links, { poolId: pool.id, mode: "read" }], undefined, {
+      id: input.userId,
+      role: "teacher",
+      reach: "seats",
     });
+    // The published questions of the pool, by name, once for both evaluations.
+    const published = await questionsOf(db, pool.id);
+    const idsOf = (names: readonly string[]) =>
+      names.map((name) => published.get(name.toLowerCase())).flatMap((q) => (q?.latest ? [q.row.id] : []));
+    for (const spec of input.content.evaluations) {
+      await instantiate(db, spec, idsOf(spec.questions), {
+        classroomId: room.id,
+        userId: input.userId,
+        periodEnd: months.end,
+        now: input.now,
+      });
+    }
+  } catch (err) {
+    // A classroom without its evaluations would be what the next call answers: it goes with the failure.
+    await discard(() => orgService.deleteClassroom(db, room.id), input.log, { classroomId: room.id }, err);
+    throw err;
   }
   return room.id;
+}
+
+/**
+ * Undoes a write of a failed provisioning. Its own failure is logged with
+ * the original error and never replaces it: the caller rethrows the cause.
+ */
+async function discard(undo: () => Promise<void>, log: Log, subject: Record<string, string>, cause: unknown): Promise<void> {
+  try {
+    await undo();
+  } catch (err) {
+    log.error({ err, cause, ...subject }, "training: a failed provisioning could not be undone");
+  }
 }
 
 /** `training.provision`, once per course built — at the provisioning, and at a rebuild (`rebuilt: true`). */
@@ -377,7 +402,7 @@ async function traceProvision(db: Db, actor: AuditActor, course: CourseRow, clas
  */
 export async function provision(
   db: Db,
-  input: { userId: string; lang: Locale; now: Date; actor: AuditActor; content?: TrainingContent },
+  input: { userId: string; lang: Locale; now: Date; actor: AuditActor; log: Log; content?: TrainingContent },
 ): Promise<TrainingProvisionResponse> {
   const content = input.content ?? TRAINING_CONTENT;
   const pool = await installedPool(db);
@@ -405,15 +430,17 @@ export async function provision(
   let classroomId: string;
   try {
     classroomId = await buildClassroom(db, course, pool, build, []);
-    if (!(await orgService.claimTrainingCourse(db, course.id, input.userId))) {
-      // The same teacher's other call claimed first: theirs is the course.
-      await orgService.deleteCourse(db, course.id);
-      return found((await courseOf(db, input.userId))!);
-    }
   } catch (err) {
     // No half-built course survives: unmarked, it would be an ordinary course of the teacher's.
-    await orgService.deleteCourse(db, course.id).catch(() => {});
+    await discard(() => orgService.deleteCourse(db, course.id), input.log, { courseId: course.id }, err);
     throw err;
+  }
+  if (!(await orgService.claimTrainingCourse(db, course.id, input.userId))) {
+    // The same teacher's other call claimed first: theirs is the course, this one goes.
+    await orgService.deleteCourse(db, course.id);
+    const theirs = await courseOf(db, input.userId);
+    if (!theirs) throw new Error("training: the course was claimed by another call but is unreadable");
+    return found(theirs);
   }
   await traceProvision(db, input.actor, course, classroomId, input.now, false);
   return { courseId: course.id, classroomId, created: true };
@@ -436,25 +463,38 @@ const ALL_TODO: Missions = { student: "todo", run: "todo", own: "todo", tools: "
  *     of theirs; `unavailable` when the LLM gateway is off AND OAuth has no client.
  */
 async function missionsOf(db: Db, courseId: string, userId: string, llmEnabled: boolean): Promise<Missions> {
-  // Each fact is one EXISTS over the owning modules' tables, named in full: in
-  // a projection drizzle writes a column reference unqualified, which the
-  // joins below would make ambiguous. The one shared definition of a staff
+  // Each fact is an EXISTS over the owning modules' tables, as select builders
+  // so the compiler checks every column. The one shared definition of a staff
   // attempt (`isStaffAttempt`, db/live.ts) is reused as it is.
-  const inCourse = sql`evaluations.classroom_id IN (SELECT classrooms.id FROM classrooms WHERE classrooms.course_id = ${courseId})`;
+  const one = { one: sql`1` };
+  const classroomsOfCourse = db.select({ id: classrooms.id }).from(classrooms).where(eq(classrooms.courseId, courseId));
+  const inCourse = inArray(evaluations.classroomId, classroomsOfCourse);
+  const fact = (query: Parameters<typeof exists>[0]) => exists(query).mapWith(Boolean);
   const [facts] = await db
     .select({
-      student: sql<boolean>`EXISTS (SELECT 1 FROM attempts JOIN evaluations ON evaluations.id = attempts.evaluation_id
-        WHERE ${inCourse} AND evaluations.mode = 'exercise' AND attempts.user_id = ${userId} AND attempts.state = 'submitted' AND ${isStaffAttempt})`,
-      released: sql<boolean>`EXISTS (SELECT 1 FROM evaluations WHERE ${inCourse} AND evaluations.released_at IS NOT NULL)`,
-      ownQuestion: sql<boolean>`EXISTS (SELECT 1 FROM questions
-        JOIN course_pools ON course_pools.pool_id = questions.pool_id AND course_pools.course_id = ${courseId} AND course_pools.mode = 'edit'
-        JOIN question_versions ON question_versions.question_id = questions.id AND question_versions.number IS NOT NULL
-        WHERE questions.deleted_at IS NULL)`,
-      template: sql<boolean>`EXISTS (SELECT 1 FROM evaluations WHERE evaluations.course_id = ${courseId} AND evaluations.revision IS NOT NULL)`,
-      toolUsed: sql<boolean>`EXISTS (SELECT 1 FROM api_tokens WHERE api_tokens.user_id = ${userId})
-        OR EXISTS (SELECT 1 FROM oauth_grants WHERE oauth_grants.user_id = ${userId})
-        OR EXISTS (SELECT 1 FROM assist_conversations WHERE assist_conversations.user_id = ${userId})`,
-      oauthClient: sql<boolean>`EXISTS (SELECT 1 FROM oauth_clients)`,
+      student: fact(
+        db
+          .select(one)
+          .from(attempts)
+          .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
+          .where(and(inCourse, eq(evaluations.mode, "exercise"), eq(attempts.userId, userId), eq(attempts.state, "submitted"), isStaffAttempt)),
+      ),
+      released: fact(db.select(one).from(evaluations).where(and(inCourse, isNotNull(evaluations.releasedAt)))),
+      ownQuestion: fact(
+        db
+          .select(one)
+          .from(questions)
+          .innerJoin(coursePools, and(eq(coursePools.poolId, questions.poolId), eq(coursePools.courseId, courseId), eq(coursePools.mode, "edit")))
+          .innerJoin(questionVersions, and(eq(questionVersions.questionId, questions.id), isNotNull(questionVersions.number)))
+          .where(isNull(questions.deletedAt)),
+      ),
+      template: fact(db.select(one).from(evaluations).where(and(eq(evaluations.courseId, courseId), isNotNull(evaluations.revision)))),
+      toolUsed: or(
+        exists(db.select(one).from(apiTokens).where(eq(apiTokens.userId, userId))),
+        exists(db.select(one).from(oauthGrants).where(eq(oauthGrants.userId, userId))),
+        exists(db.select(one).from(assistConversations).where(eq(assistConversations.userId, userId))),
+      )!.mapWith(Boolean),
+      oauthClient: fact(db.select(one).from(oauthClients)),
     })
     .from(users)
     .where(eq(users.id, userId));

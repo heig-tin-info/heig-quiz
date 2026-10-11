@@ -40,6 +40,7 @@ const NOW = new Date("2026-10-11T10:00:00.000Z");
 const config = { SUPER_ADMIN_EMAIL: ADMIN_EMAIL };
 
 let db: Db;
+let log: { error: (...args: unknown[]) => void };
 let adminId: string;
 
 async function makeUser(role: "admin" | "teacher", email = `${role}-${randomUUID().slice(0, 8)}@heig.test`): Promise<string> {
@@ -60,7 +61,7 @@ async function installed(content: TrainingContent = trainingFixture(), email = A
 }
 
 const provisionFor = (userId: string, lang: "fr" | "en" = "fr", content = trainingFixture()) =>
-  provision(db, { userId, lang, now: NOW, actor: actorOf(userId), content });
+  provision(db, { userId, lang, now: NOW, actor: actorOf(userId), log, content });
 
 async function publishedVersions(internalName: string): Promise<number> {
   const [q] = await db.select({ id: questions.id }).from(questions).where(eq(questions.internalName, internalName));
@@ -79,6 +80,7 @@ const trainingPoolRow = async () => (await db.select().from(pools).where(eq(pool
 beforeAll(async () => {
   const app = await testApp();
   db = app.db;
+  log = app.log;
   adminId = await makeUser("admin", ADMIN_EMAIL);
 });
 
@@ -234,8 +236,8 @@ describe("provision (§1)", () => {
   });
 
   it("repeated calls at once of one teacher yield one course: the mark is the last write, the losers delete their own", async () => {
-    // PGlite serialises the calls, so the race itself is not exercised here: what is pinned is that
-    // the claim decides and that no second course survives, whichever call claims.
+    // The three calls start before any claim: each builds a course of its own, the first claim wins,
+    // the two losers delete theirs and answer the winner's (PGlite serialises statements, not calls).
     const other = await makeUser("teacher");
     const results = await Promise.all([provisionFor(other, "en"), provisionFor(other, "en"), provisionFor(other, "en")]);
     expect(new Set(results.map((r) => r.courseId)).size).toBe(1);
