@@ -2,8 +2,10 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { pseudoCode } from "@quiz/qt-blocks/client";
+
 import { useT } from "../i18n";
-import { questionType } from "../questionTypes";
+import { blocksCanvasStringsOf, questionType } from "../questionTypes";
 import { cx, Z } from "../ui";
 import { answerText, CODE_LINES, isEmptyAnswerText, type AnswerText } from "./answerText";
 import { useAttemptInspect } from "./useAttemptInspect";
@@ -258,7 +260,7 @@ function typeSummary(entry: { item: { type: string }; studentConfig: unknown; an
   }
 }
 
-function AnswerTextView({ text }: { text: AnswerText }) {
+export function AnswerTextView({ text }: { text: AnswerText }) {
   const t = useT();
   switch (text.kind) {
     case "choices":
@@ -309,5 +311,21 @@ function AnswerTextView({ text }: { text: AnswerText }) {
           ) : null}
         </>
       );
+    case "blocks": {
+      const lines = pseudoCode(text.program, blocksCanvasStringsOf(t)).split("\n");
+      return (
+        <>
+          <p className="mb-1 text-xs text-fg-muted">
+            {t(text.count === 1 ? "qt.blocks.p.blockCount.one" : "qt.blocks.p.blockCount", { n: text.count })}
+          </p>
+          <pre className="overflow-hidden whitespace-pre font-mono text-xs leading-snug">
+            {lines.slice(0, CODE_LINES).join("\n")}
+          </pre>
+          {lines.length > CODE_LINES ? (
+            <p className="mt-1 text-xs text-fg-faint">{t("live.tip.more", { n: CODE_LINES })}</p>
+          ) : null}
+        </>
+      );
+    }
   }
 }

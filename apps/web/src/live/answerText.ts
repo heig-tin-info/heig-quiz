@@ -19,6 +19,9 @@
  * Nothing here decides whether an answer is right: no solution is read.
  */
 
+import { programStats, type Stmt } from "@quiz/domain/blocks";
+import { BlocksAnswer } from "@quiz/qt-blocks/client";
+
 /** How many lines of a program the tooltip shows before its ellipsis. */
 export const CODE_LINES = 20;
 /** How many characters of free text, so a pasted essay cannot fill the screen. */
@@ -32,7 +35,12 @@ export type AnswerText =
   /** Free text, whitespace kept. */
   | { kind: "text"; text: string; truncated: boolean }
   /** What the student wrote in the editable regions of a program. */
-  | { kind: "code"; lines: string[]; truncated: boolean };
+  | { kind: "code"; lines: string[]; truncated: boolean }
+  /**
+   * A program of blocks: how many, and the program itself, which the view
+   * spells in the canvas's words (`qt.blocks.c.*`), translated.
+   */
+  | { kind: "blocks"; count: number; program: Stmt[] };
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -138,6 +146,18 @@ function code(answer: unknown): AnswerText | null {
 }
 
 /**
+ * A program of blocks, parsed by the type's own answer schema (it measures
+ * the program before recursing into it). No verdict: the dashboard's payload
+ * carries no grading, and running the visible warehouses here would answer
+ * "is it right?" while the screen's results may be hidden.
+ */
+function blocks(answer: unknown): AnswerText | null {
+  const parsed = BlocksAnswer.safeParse(answer);
+  if (!parsed.success) return null;
+  return { kind: "blocks", count: programStats(parsed.data.program).nodes, program: parsed.data.program };
+}
+
+/**
  * The common indentation removed: a region sits inside a function body, and
  * four columns of nothing are four columns of a small tooltip lost.
  */
@@ -172,6 +192,8 @@ export function answerText(type: string, student: unknown, answer: unknown): Ans
       return categorize(student, answer);
     case "math":
       return math(answer);
+    case "blocks":
+      return blocks(answer);
     default:
       return null;
   }
@@ -188,5 +210,7 @@ export function isEmptyAnswerText(text: AnswerText): boolean {
       return text.text === "";
     case "code":
       return text.lines.length === 0;
+    case "blocks":
+      return text.count === 0;
   }
 }

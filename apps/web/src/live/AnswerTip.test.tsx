@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AttemptInspect, DashboardView, ServerEvent } from "@quiz/contracts";
+import type { Stmt } from "@quiz/domain/blocks";
 
 import { initialGrid } from "../realtime/grid";
 import { elapse, flowingClock } from "../test/clock";
@@ -10,7 +11,7 @@ import { resetEventStream } from "../realtime/useEventStream";
 import { EVALUATION_ID, id, makeDashboard, makeEvaluationDetail } from "../test/live-fixtures";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { attemptInspectKey, dashboardKey } from "../queryKeys";
-import { ANSWER_TIP_DELAY } from "./AnswerTip";
+import { ANSWER_TIP_DELAY, AnswerTextView } from "./AnswerTip";
 import { LiveDashboard } from "./LiveDashboard";
 import { LIVE_TOGGLES_KEY } from "./toggles";
 
@@ -368,4 +369,15 @@ describe("InspectModal under live frames", () => {
     await waitFor(() => expect(inspectCalls(calls)).toBe(2));
     expect(list.scrollTop).toBe(1234);
   }, 30_000);
+});
+
+describe("AnswerTextView", () => {
+  it("spells a program of blocks in the reader's language, after its count", () => {
+    const program: Stmt[] = [{ kind: "repeat", times: 3, body: [{ kind: "forward" }, { kind: "turn", dir: "left" }] }];
+    const { container } = renderWithProviders(<AnswerTextView text={{ kind: "blocks", count: 3, program }} />, {
+      locale: "fr",
+    });
+    expect(screen.getByText("3 blocs")).toBeInTheDocument();
+    expect(container.querySelector("pre")?.textContent).toBe("répéter 3 fois\n  avancer\n  tourner à gauche");
+  });
 });

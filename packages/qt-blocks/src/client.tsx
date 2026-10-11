@@ -48,5 +48,6 @@ export {
   blocksPlayerStrings,
   blocksReviewStrings,
 } from "./strings.js";
-export { emptyBlocksDraft, isBlocksAnswered } from "./schema.js";
-export type { BlocksAnswer, BlocksConfig, BlocksDetails, BlocksSolution, BlocksStudent } from "./schema.js";
+export { pseudoCode } from "./pseudo.js";
+export { BlocksAnswer, emptyBlocksDraft, isBlocksAnswered } from "./schema.js";
+export type { BlocksConfig, BlocksDetails, BlocksSolution, BlocksStudent } from "./schema.js";
