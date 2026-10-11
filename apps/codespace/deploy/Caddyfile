@@ -44,6 +44,23 @@
 		}
 	}
 
+	# The service API answers Quiz's application VM only (#744, audit L25).
+	# `/api/*` holds the portal's service routes and nothing else: `PUT
+	# /api/assignments/:id` and `GET /api/assignments/:id/sessions`
+	# (src/classroom/routes.ts), which only Quiz's API calls, with a service
+	# token. `/launch`, the proxy `/s/<session>/…` and the pages stay public.
+	# The addresses are the application VM's egress, IPv4 and IPv6, from which
+	# both production and staging Quiz call (docs/development/deployment.md
+	# §1, its A and AAAA); when that VM moves, change them here too, beside
+	# apps/runner/deploy/Caddyfile. `deploy/smoke.mjs` calls the
+	# loopback port, not this site. src/classroom/caddyfile.test.ts holds this
+	# matcher to the portal's route table and to deployment.md.
+	@service_elsewhere {
+		path /api/*
+		not remote_ip 128.140.71.35 2a01:4f8:1c19:1164::1
+	}
+	respond @service_elsewhere 403
+
 	reverse_proxy 127.0.0.1:@PORT@ {
 		# code-server sends long frames; no buffering on the stream.
 		flush_interval -1

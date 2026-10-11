@@ -227,6 +227,7 @@ node /opt/quiz-runner/apps/codespace/deploy/smoke.mjs prod --port 3110          
 node /opt/quiz-runner/apps/codespace/deploy/smoke.mjs staging --port 3120 --launch  # + a real session
 podman ps --filter label=heig-codespace.session --format '{{.Names}} {{.Labels}}'
 grep -c 'token=ey' /var/log/caddy/quiz-codespace-staging.log            # 0
+curl -s -o /dev/null -w '%{http_code}\n' https://code-dev.chevallier.io/api/assignments/x/sessions  # 403: only Quiz's VM passes
 CS_INSTANCE=staging /usr/local/lib/quiz-codespace/infra/net/test.sh     # the network assertions on cs1
 ```
 
@@ -348,16 +349,21 @@ VM, not in the repository:
 - [ ] **A free-space alert** on both file systems (say, under 15 %), in the
   VM's monitoring, before a push is refused.
 
-### The service API's door (audit L25): the owner's checklist
+### The service API's door (audit L25)
 
 `PUT /api/assignments/:id` and `GET /api/assignments/:id/sessions` are on
 the public site; a service token is single use and bound to its request
 (ADR-078, amendment of 2026-10-11). Only Quiz's application VM calls them:
 
-- [ ] A Caddy allow-list on `/api/*` for the application VM's addresses, in
-  `deploy/Caddyfile` (every deploy reinstalls the site from that template,
-  so a hand edit on the VM does not last): the snippet and what to confirm
-  first are issue #744.
+- [x] A Caddy allow-list on `/api/*` for the application VM's addresses
+  (#744): the `@service_elsewhere` matcher of `deploy/Caddyfile` answers
+  403 to every other address. The addresses, IPv4 and IPv6, are the
+  application VM's (deployment.md §1); production and staging Quiz both call
+  from it. Every deploy reinstalls the site from the template, so a hand edit
+  on the VM does not last: when that VM moves, change the template, beside
+  `apps/runner/deploy/Caddyfile`. `smoke.mjs` calls the loopback port and is
+  not affected; §11's `curl` checks the door, and the staff's workspace list
+  in Quiz (staging, then prod) proves that Quiz still gets through.
 
 ### Backup and restore
 

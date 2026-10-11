@@ -199,7 +199,8 @@ enough on its own. `/health` is guarded on purpose: a token the API got wrong
 shows up as a runner `down` in `/healthz`, not as one that says `up` and
 refuses every run. If the application VM moves again, add its new address to
 that line (in the repository and in `/etc/caddy/conf.d/quiz-runner.caddy` on
-the code VM) and to the host firewall's sets (below, applied by hand) before
+the code VM), to the codespace portal's `@service_elsewhere` matcher (below)
+and to the host firewall's sets (below, applied by hand) before
 the switch, as the 2026-09-25 migration did.
 
 The runner holds one secret, that token, and nothing else: it reaches no
@@ -223,7 +224,11 @@ The layout, the switch from classroom's portal, the live-session guard of
 a prod deploy and the smoke checks are
 [`apps/codespace/deploy/RUNBOOK.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md);
 the application side is two variables per environment, `CODESPACE_URL` and
-`CODESPACE_LAUNCH_SECRET` (`.env.prod`, `.env.staging`).
+`CODESPACE_LAUNCH_SECRET` (`.env.prod`, `.env.staging`). The portal's
+service API (`/api/*`, which only Quiz's API calls) answers the application
+VM's two addresses (§1) and 403 to every other one: the `@service_elsewhere`
+matcher of `apps/codespace/deploy/Caddyfile`, reinstalled by every portal
+deploy (#744). Production and staging Quiz both call from that VM.
 
 ### Setting up the runner VM
 
@@ -1053,7 +1058,10 @@ The answer is computed at most once every 5 s, whoever asks, so the public
 route is no lever on the database or the runner (audit L21). Anyone reads
 `status` and `attention`; the `checks` object and `uptimeSeconds` are for a
 request with `Authorization: Bearer $METRICS_TOKEN` or an administrator's
-session. They report, in coarse words only
+session (`Cache-Control: no-store`: the answer depends on the caller). A
+browser whose session a deploy ended (*A deploy that signs everyone out*)
+reads the public answer until it signs in again, even though a tab opened
+before the deploy still looks signed in. The checks report, in coarse words only
 ([ADR-055](../adr/ADR-055-etat-du-systeme.md)):
 
 | Field | Values | Meaning |

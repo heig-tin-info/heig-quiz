@@ -14,6 +14,9 @@
  *   GitHub down is a 503 naming its status only;
  * - `POST /app/codespace/relay-heads`: the same checks, the rows recorded,
  *   idempotent;
+ * - single use (#743): a replayed request of either route is a 401, nothing
+ *   minted nor audited twice, concurrent presentations included; its `jti`
+ *   kept while `verifyHs256` accepts it, then purged;
  * - the attribution (§6): a push of Quiz's App whose head was declared is
  *   the student's (receipt, last commit, its run the score), an undeclared
  *   one — and a declared head that is one of the App's own commits — stays
@@ -36,13 +39,14 @@ import {
   RELAY_HEADS_PATH,
   workspaceStartPath,
 } from "@quiz/contracts";
-import { GRADING_WORKFLOW_PATH, signHs256 } from "@quiz/domain";
+import { GRADING_WORKFLOW_PATH, HS256_SKEW_SECONDS, signHs256 } from "@quiz/domain";
 
 import {
   auditLog,
   botCommits,
   classrooms,
   codespaceLaunches,
+  codespaceRelayJtis,
   codespaceRelays,
   githubAccounts,
   githubClassroomLinks,
@@ -59,6 +63,7 @@ import { appKey, fakeGithub, json, orgsRoute, signedDelivery, type Route } from 
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive, type Seeded } from "../../test/live.js";
 import { repoWorld } from "../project/testing.js";
+import { purgeRelayJtis, RELAY_JTI_RETENTION_AFTER_EXP_MS } from "./relay.js";
 
 const key = appKey();
 const gh = fakeGithub();
@@ -418,6 +423,77 @@ describe("POST /app/codespace/git-token (ADR-078 §2)", () => {
     await server.app.db.update(githubOrganizations).set({ suspendedAt: new Date(NOW) }).where(eq(githubOrganizations.login, f.room.org));
     expect(refused(await askToken(f))).toEqual([503, "github_unavailable"]);
     expect(logLines.some((l) => l.includes("GitHub unavailable") && l.includes("502"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------- single use (#743)
+
+describe("a relay request is served once (ADR-078, amendment of 2026-10-11, #743)", () => {
+  const issuedAudits = (projectId: string) =>
+    server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "codespace.git_token_issued"), eq(auditLog.subjectId, projectId)));
+
+  it("refuses a replayed token request with a 401: no second token minted, no second audit row", async () => {
+    const f = await launched();
+    minted.length = 0;
+    logLines.length = 0;
+    const token = await requestToken(GIT_TOKEN_AUDIENCE, { projectId: f.project.id, userId: f.student.id, repository: f.repo.fullName! });
+    expect((await post(GIT_TOKEN_PATH, token)).statusCode).toBe(200);
+    expect(refused(await post(GIT_TOKEN_PATH, token))).toEqual([401, "unauthorized"]);
+    expect(minted).toHaveLength(1);
+    expect(await issuedAudits(f.project.id)).toHaveLength(1);
+    expect(logLines.some((l) => l.includes("codespace.git-token refused") && l.includes('"replayed":true'))).toBe(true);
+    // A fresh request of the same portal still goes through.
+    expect((await askToken(f)).statusCode).toBe(200);
+  });
+
+  it("refuses a replayed declaration with a 401", async () => {
+    const f = await launched();
+    const heads = [{ ref: "refs/heads/main", sha: "c".repeat(40) }];
+    const token = await requestToken(RELAY_HEADS_AUDIENCE, { projectId: f.project.id, userId: f.student.id, repository: f.repo.fullName! }, { heads });
+    expect((await post(RELAY_HEADS_PATH, token)).statusCode).toBe(204);
+    expect(refused(await post(RELAY_HEADS_PATH, token))).toEqual([401, "unauthorized"]);
+  });
+
+  it("serves exactly one of two concurrent presentations of the same request", async () => {
+    const f = await launched();
+    minted.length = 0;
+    const token = await requestToken(GIT_TOKEN_AUDIENCE, { projectId: f.project.id, userId: f.student.id, repository: f.repo.fullName! });
+    const answers = await Promise.all([post(GIT_TOKEN_PATH, token), post(GIT_TOKEN_PATH, token)]);
+    expect(answers.map((r) => r.statusCode).sort()).toEqual([200, 401]);
+    expect(minted).toHaveLength(1);
+    expect(await issuedAudits(f.project.id)).toHaveLength(1);
+  });
+
+  it("spends a request refused further on: the portal signs a fresh one per call", async () => {
+    const f = await launched();
+    mintStatus = 502;
+    const token = await requestToken(GIT_TOKEN_AUDIENCE, { projectId: f.project.id, userId: f.student.id, repository: f.repo.fullName! });
+    expect(refused(await post(GIT_TOKEN_PATH, token))).toEqual([503, "github_unavailable"]);
+    mintStatus = null;
+    expect(refused(await post(GIT_TOKEN_PATH, token))).toEqual([401, "unauthorized"]);
+  });
+
+  it("keeps a consumed jti for as long as verifyHs256 accepts its request, then purges it", async () => {
+    const f = await launched();
+    const token = await requestToken(GIT_TOKEN_AUDIENCE, { projectId: f.project.id, userId: f.student.id, repository: f.repo.fullName! });
+    const { jti, exp } = JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString()) as { jti: string; exp: number };
+    expect((await post(GIT_TOKEN_PATH, token)).statusCode).toBe(200);
+    // The last second the signature still holds: another call purges first, the replay is still refused.
+    server.clock.set(new Date((exp + HS256_SKEW_SECONDS) * 1000).toISOString());
+    expect((await askToken(f)).statusCode).toBe(200);
+    expect(refused(await post(GIT_TOKEN_PATH, token))).toEqual([401, "unauthorized"]);
+    const rowOf = async () => (await server.app.db.select().from(codespaceRelayJtis).where(eq(codespaceRelayJtis.jti, jti)))[0];
+    expect(await rowOf()).toBeDefined();
+    // The retention's edge keeps it; a millisecond later it goes.
+    const edge = exp * 1000 + RELAY_JTI_RETENTION_AFTER_EXP_MS;
+    expect(RELAY_JTI_RETENTION_AFTER_EXP_MS).toBe((HS256_SKEW_SECONDS + 60) * 1000);
+    await purgeRelayJtis(server.app.db, new Date(edge));
+    expect(await rowOf()).toBeDefined();
+    await purgeRelayJtis(server.app.db, new Date(edge + 1));
+    expect(await rowOf()).toBeUndefined();
   });
 });
 
