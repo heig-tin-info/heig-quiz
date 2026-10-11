@@ -22,7 +22,7 @@ after the cutover (D09, settled 2026-10-01).
 runner.** Scope: point 4 below and the addendum above; the runner's own
 deploy steps are unchanged.
 (a) *One dispatcher, two checkouts* (the staging half replaced on
-2026-10-11, audit H4, below: the staging key reaches a frozen dispatcher,
+2026-10-11, audit H4, below: an approved key reaches a frozen dispatcher,
 not a checkout). `infra/engine/deploy.sh` is the
 engine VM's forced command for both components, with a scope fixed by the
 `authorized_keys` line: the production key runs the dispatcher of
@@ -76,8 +76,8 @@ commit changing what production runs under), not attacks. The switch from
 heig-classroom's portal and the operations are
 `apps/codespace/deploy/RUNBOOK.md`. The portal holds no GitHub App key
 (`FORGE_KIND=none`, root invariant 15).
-(f) *Risk accepted by the owner (2026-10-07; mitigated on 2026-10-11,
-audit H4, below: its deploy-time half removed, the portal's half open):*
+(f) *Risk accepted by the owner (2026-10-07; closed on 2026-10-11, audit
+H4, below):*
 the staging key deploys
 every commit of `main` before approval and runs that commit's scripts as
 root on the VM that hosts the production runner and portal, and the
@@ -139,41 +139,51 @@ absent on both sides. (e) A program's stderr or exit code only triggers a
 (f) The runner binds `127.0.0.1` by default and refuses a bind outside the
 loopback without `RUNNER_TOKEN`.
 
-**Amended (2026-10-11, security audit H4, mitigated): the staging key
-reaches a frozen dispatcher.** Scope: the staging half of the M6-04
-amendment's (a), and its (f); production's path is unchanged. The owner
-chose this over a separate staging VM. H4 is mitigated, not closed: the
-deploy-time path is gone, the portal's path (e) stays open.
-(a) *Nothing of a commit runs at a staging deploy.* Every commit of `main`
-reaches the staging key before approval, on the VM that holds the
-production runner and portal, their secrets and the rootful socket. So the
-staging key's forced command is a copy of `infra/engine/staging-dispatch.sh`
-the operator installs by hand outside any checkout, root's, that no deploy
-rewrites: it pulls the portal image by digest and restarts the staging
-quadlet, and runs, sources and writes no file of a commit (its request and
-steps: its header; a shell test in `checks` holds it to them).
-`infra/engine/deploy.sh` refuses the staging scope; the staging checkout is
-retired.
-(b) *Who writes the staging instance's files*: its quadlet, Caddy site and
+**Amended (2026-10-11, security audit H4): the staging portal deploys only
+once approved, through a frozen dispatcher.** Scope: the staging half of
+the M6-04 amendment's (a), and its (f); production's path is unchanged. The
+owner chose this over a separate staging VM.
+(a) *An approval before anything of a commit reaches this VM.* Every commit
+of `main` reaches the `staging` environment before approval, and this VM
+holds the production runner and portal, their secrets and the rootful
+socket. So the `staging` key no longer reaches it: the staging portal is
+deployed by its own CI job, in a `staging-portal` environment with the
+same required reviewers and `main`-only rule as `production`, and by a key
+that environment alone holds. GitHub releases an environment's secret only
+to an approved job, so no workflow of an unapproved run, whatever it says,
+can reach this VM; an environment created unprotected on first use holds no
+key, so the job then deploys nothing. Nothing waits for that job: an
+unapproved staging portal never blocks a promotion.
+(b) *The frozen dispatcher, defence in depth.* That key's forced command is
+a copy of `infra/engine/staging-dispatch.sh` the operator installs by hand
+outside any checkout, root's, that no deploy rewrites: it pulls the portal
+image by digest and restarts the staging quadlet, and runs, sources and
+writes no file of a commit (its request and steps: its header; a shell test
+in `checks` holds it to them). An approved key still cannot make this VM
+run a repository script. `infra/engine/deploy.sh` refuses the staging
+scope; the staging checkout is retired.
+(c) *Who writes the staging instance's files*: its quadlet, Caddy site and
 seccomp profile come from approved commits only, written by every `prod`
 portal deploy and by `bootstrap.sh`; the next staging restart picks them
 up. The dispatcher itself is an operator's step (`deployment.md` §4), like
 the host firewall; a production deploy warns when the checkout's copy
 differs from the installed one.
-(c) *Production keeps running its commit's scripts as root*: the approval of
+(d) *Production keeps running its commit's scripts as root*: the approval of
 the `production` environment is what makes that commit trusted on this VM.
-(d) *Rejected*: `deploy.sh` delegating its staging scope to the frozen
+(e) *Closed, under two conditions the repository cannot enforce*: the
+staging portal's image still runs with the rootful Podman socket (the fixed
+quadlet), so an image that reaches this VM is root-equivalent on it; the
+approval gate is what keeps an unapproved one away. It holds while the
+`staging-portal` environment keeps its required reviewers and `main` rule
+and is the only place its key lives (`deployment.md` §4, *The
+environments*), and while a reviewer approves only a sha they would promote
+to production.
+(f) *Rejected*: `deploy.sh` delegating its staging scope to the frozen
 script, since the staging key would still start a file of the tree; a
-separate staging VM (the owner's choice, for now).
-(e) *Still open*: the staging portal's image is built from every commit of
-`main` and the fixed quadlet mounts the rootful Podman socket into it, so
-an unapproved commit's portal can still start a container with the host's
-privileges. This amendment removes the deploy-time path (a repository script
-run as root before approval), not that one. The smallest closure would be an
-approval gate on the staging portal's deploy, so that no unapproved image
-reaches the socket (the owner is deciding); the others are a staging portal
-without the rootful socket (a rootless engine of its own, under a dedicated
-account) or on another host.
+separate staging VM, or a staging portal on a rootless engine of its own
+(the owner's choice, for now); a gate in the workflow alone, without
+moving the key, since an unapproved run's workflow could use the `staging`
+key directly.
 
 ## Context
 

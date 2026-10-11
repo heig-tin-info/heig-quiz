@@ -5,7 +5,7 @@
 # root's authorized_keys pins the production CI key to this file, in the
 # production checkout, which only ever moves to approved commits:
 #   command="/opt/quiz-runner/infra/engine/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@quiz
-# A key can only deploy, never open a shell. The staging key reaches
+# A key can only deploy, never open a shell. The staging-portal key reaches
 # staging-dispatch.sh instead; a `staging` scope is refused here.
 #
 # The CI's SSH command lands in $SSH_ORIGINAL_COMMAND, matched strictly and
@@ -42,7 +42,7 @@ scope="${1:-}"
 case "$scope" in
   production) ;;
   staging)
-    echo "deploy: the staging scope is the frozen dispatcher's, /usr/local/libexec/quiz-engine/staging-dispatch.sh: re-point the staging key there (deployment.md §4, The frozen staging dispatcher)" >&2
+    echo "deploy: the staging scope is the frozen dispatcher's, /usr/local/libexec/quiz-engine/staging-dispatch.sh: the staging-portal key goes there (deployment.md §4, The frozen staging dispatcher)" >&2
     exit 2
     ;;
   *) echo "deploy: unknown scope '$scope' (production)" >&2; exit 2 ;;

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # The FROZEN staging dispatcher of the engine VM, code.chevallier.io: the
-# only command the CI's staging key reaches there. Why it runs nothing of a
-# commit: ADR-016, amendment of 2026-10-11 (audit H4). Installed by hand
-# outside any checkout, never by a deploy: deployment.md §4, *The frozen
-# staging dispatcher*.
-#   command="/usr/local/libexec/quiz-engine/staging-dispatch.sh",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
+# only command the CI's staging-portal key (released to approved jobs only)
+# reaches there. Why: ADR-016, amendment of 2026-10-11 (audit H4).
+# Installed by hand outside any checkout, never by a deploy: deployment.md
+# §4, *The frozen staging dispatcher*.
+#   command="/usr/local/libexec/quiz-engine/staging-dispatch.sh",restrict ssh-ed25519 AAAA… ci-deploy-staging-portal@quiz
 #
 # The request, in $SSH_ORIGINAL_COMMAND, matched strictly and never eval'd:
 #   codespace staging <sha> <digest> <token>

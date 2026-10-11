@@ -169,7 +169,7 @@ precondition of the 4 h RTO ([ADR-010](../adr/ADR-010-stockage-secrets.md)).
 | the slices | `quiz-runner.slice`, `codespace.slice` in `/etc/systemd/system/` | `infra/engine/*.slice`, installed by the deploys (below) |
 | the host input policy | `table inet host`, `/etc/quiz-engine/host.nft` included by `/etc/nftables.conf` | `infra/engine/host.nft`, applied by hand with `infra/engine/nft-apply.sh` (below) |
 | the codespace backup export | `/usr/local/lib/quiz-codespace/backup-export.sh`, root's forced command for the backup key | `apps/codespace/deploy/backup-export.sh` (below) |
-| the frozen staging dispatcher | `/usr/local/libexec/quiz-engine/staging-dispatch.sh`, root's forced command for the staging key | `infra/engine/staging-dispatch.sh`, installed by hand (§4, *The frozen staging dispatcher*) |
+| the frozen staging dispatcher | `/usr/local/libexec/quiz-engine/staging-dispatch.sh`, root's forced command for the staging-portal key | `infra/engine/staging-dispatch.sh`, installed by hand (§4, *The frozen staging dispatcher*) |
 
 `quiz-runner.container` is a Podman quadlet: `systemd` generates
 `quiz-runner.service` from it at `daemon-reload`, and `deploy.sh` installs it
@@ -493,7 +493,12 @@ workspace serves a real class.
    `vars.STAGING_DEPLOY_USER` (`srvstg`), then a wait of up to 150 s for
    `https://quiz.dev.chevallier.io/healthz` to answer 200. A staging that
    does not come up healthy (a migration that fails on production-shaped
-   data, a crash at boot) stops the promotion.
+   data, a crash at boot) stops the promotion. Beside it, after it,
+   **deploy-staging-portal**, in the `staging-portal` environment, waits for
+   a reviewer's approval, then deploys the staging codespace portal on the
+   runner VM with `STAGING_PORTAL_SSH_KEY` (*The frozen staging dispatcher*
+   below). Nothing waits for it: an unapproved staging portal never blocks
+   a promotion.
 4. **deploy-production**, in the `production` environment: it waits for a
    required reviewer's approval (Actions → the run → *Review deployments*),
    then deploys the SAME sha with the `DEPLOY_SSH_KEY` key (a secret of the
@@ -555,7 +560,8 @@ without the variable before it is switched on again.
 
 ### The environments
 
-The deploy jobs name their environment (`staging`, `production`) and run
+The deploy jobs name their environment (`staging`, `staging-portal`,
+`production`) and run
 after `image`, which runs on a push to `main` only; what keeps a deploy on
 `main` is in the repository settings, which no file can set. As of 2026-10-11 they hold
 the following; check them after any change of administrators
@@ -563,18 +569,42 @@ the following; check them after any change of administrators
 
 - `staging`: *Deployment branches and tags* → *Selected branches and tags*,
   one rule, the branch `main` (no tag). Its one secret,
-  `STAGING_DEPLOY_SSH_KEY`.
+  `STAGING_DEPLOY_SSH_KEY`, which reaches the application VM only.
+- `staging-portal` (audit H4): the same single `main` branch rule and the
+  same *Required reviewers* as `production`; its one secret,
+  `STAGING_PORTAL_SSH_KEY`, the only key the runner VM accepts for the
+  staging portal. The protection is MANDATORY and must exist before the
+  secret does: GitHub creates an environment named by a job on its first
+  run, unprotected, but such an environment holds no secret, so the job
+  deploys nothing until the PO has created it as below. Never put the key
+  at the repository level or in `staging`.
 - `production`: the same single `main` branch rule; *Required reviewers*,
   the people who approve a promotion; its one secret, `DEPLOY_SSH_KEY`.
-  Recommended, not yet set: untick *Allow administrators to bypass
-  configured protection rules*, so that an administrator's click cannot skip
-  the approval; *Prevent self-review* only when two reviewers are
-  available, or no promotion of one's own merge could be approved.
+  Recommended, not yet set (for `staging-portal` too): untick *Allow
+  administrators to bypass configured protection rules*, so that an
+  administrator's click cannot skip the approval; *Prevent self-review*
+  only when two reviewers are available, or no promotion of one's own merge
+  could be approved.
 - No repository-level secret: a key at the repository level reaches every
   job of every workflow, pull requests' included. The deploy hosts, users
   and host keys are repository VARIABLES (not secret), and so are
   `CODESPACE_DEPLOY`, `DEPLOY_BY_DIGEST`, `DEPLOY_FORCE_SHA` and
   `CODESPACE_FORCE_SHA`.
+
+Creating `staging-portal` (the PO, once, protection FIRST, then the key):
+*Settings → Environments → New environment* → `staging-portal`; tick
+*Required reviewers* and add production's reviewers; *Deployment branches
+and tags* → *Selected branches and tags* → add the rule `main` (branch);
+save. Then, from a workstation:
+
+```bash
+gh api repos/heig-tin-info/heig-quiz/environments/staging-portal \
+  --jq '[.protection_rules[].type], .deployment_branch_policy'   # ["required_reviewers","branch_policy"], custom policies
+ssh-keygen -t ed25519 -f ci_staging_portal -N "" -C ci-deploy-staging-portal@quiz
+gh secret set STAGING_PORTAL_SSH_KEY --env staging-portal --repo heig-tin-info/heig-quiz < ci_staging_portal
+cat ci_staging_portal.pub      # for the runner VM's operator (The frozen staging dispatcher)
+shred -u ci_staging_portal
+```
 
 A job inherits the workflow's read-only token and adds only what it needs:
 `packages: write` for `image`, `packages: read` for the deploys (their
@@ -593,13 +623,15 @@ command="/srv/quiz/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@
 command="/home/srvstg/quiz-staging/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
 # /root/.ssh/authorized_keys on the runner VM
 command="/opt/quiz-runner/infra/engine/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@quiz
-command="/usr/local/libexec/quiz-engine/staging-dispatch.sh",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
+command="/usr/local/libexec/quiz-engine/staging-dispatch.sh",restrict ssh-ed25519 AAAA… ci-deploy-staging-portal@quiz
 ```
 
 On the runner VM the production key reaches `infra/engine/deploy.sh` in
 production's checkout, which deploys the runner and the codespace portal's
-`prod` instance from an approved commit (M6-04). The staging key reaches
-only the frozen staging dispatcher (below). The request forms are in each
+`prod` instance from an approved commit (M6-04). The staging-portal key,
+released only to an approved job, reaches only the frozen staging
+dispatcher (below); the staging key does not reach this VM at all. The
+request forms are in each
 script's header; the switch and the portal's
 operations are
 [`apps/codespace/deploy/RUNBOOK.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md).
@@ -663,45 +695,62 @@ a workflow artifact to `gh run download` and `docker load` on the VM.
 
 ### The frozen staging dispatcher
 
-The staging key's forced command on the runner VM is
+The staging portal's forced command on the runner VM is
 `/usr/local/libexec/quiz-engine/staging-dispatch.sh`, a copy of
-`infra/engine/staging-dispatch.sh` installed by hand and never by a deploy:
-its header holds the request and the steps, ADR-016's amendment of
-2026-10-11 (audit H4) the reasons and what it leaves open.
+`infra/engine/staging-dispatch.sh` installed by hand and never by a deploy,
+reached by `STAGING_PORTAL_SSH_KEY`, the secret of the approved
+`staging-portal` environment (*The environments*): its header holds the
+request and the steps, ADR-016's amendment of 2026-10-11 (audit H4) the
+reasons.
 
-**Installing it, once**, as root on the runner VM, right after the merge
-that brings it: until then the portal step of `deploy-staging` fails (the
-new `deploy.sh` refuses the staging scope); re-run it afterwards. Read the
-file before installing it: the staging key runs it as root.
+**The switch, once, in this order.**
 
-```bash
-cd /opt/quiz-runner && git fetch --quiet origin main
-git show origin/main:infra/engine/staging-dispatch.sh > /root/staging-dispatch.sh
-less /root/staging-dispatch.sh
-install -d -o root -g root -m 0755 /usr/local/libexec/quiz-engine
-install -o root -g root -m 0755 /root/staging-dispatch.sh /usr/local/libexec/quiz-engine/staging-dispatch.sh
-rm /root/staging-dispatch.sh
-stat -c '%U:%G %a %n' /usr/local/libexec /usr/local/libexec/quiz-engine /usr/local/libexec/quiz-engine/staging-dispatch.sh   # root:root, 755 each
-# The staging instance's files, rewritten from production's (approved) checkout:
-# the ones in place came from a staging commit. Idempotent, the env file is kept.
-/opt/quiz-runner/apps/codespace/deploy/bootstrap.sh staging
-# Re-point the staging key.
-cp -a /root/.ssh/authorized_keys /root/.ssh/authorized_keys.before-h4
-sed -i 's|command="/opt/quiz-engine-staging/infra/engine/deploy.sh staging"|command="/usr/local/libexec/quiz-engine/staging-dispatch.sh"|' /root/.ssh/authorized_keys
-grep -c 'quiz-engine-staging' /root/.ssh/authorized_keys                                   # 0
-grep -c 'command="/usr/local/libexec/quiz-engine/staging-dispatch.sh",restrict' /root/.ssh/authorized_keys   # 1
-rm -rf /opt/quiz-engine-staging        # nothing reads it any more
-# The first deploy: re-run the failed deploy-staging job, or by hand with that run's
-# sha and quiz-codespace digest (its summary) and a PAT with read:packages, typed
-# rather than left on the command line:
-read -rs PAT
-SSH_ORIGINAL_COMMAND="codespace staging <sha> sha256:<digest> $PAT" /usr/local/libexec/quiz-engine/staging-dispatch.sh; unset PAT
-```
+1. *Before the merge, the PO*: create `staging-portal`, protected, then
+   its key (*The environments*). Hand the public half to the operator.
+2. *Before the merge, the operator* (root on the runner VM): withdraw the
+   `staging` key, which every unapproved run holds. The staging portal
+   stops deploying until step 4.
 
-Undoing the re-pointing, `cp -a /root/.ssh/authorized_keys.before-h4
-/root/.ssh/authorized_keys`, only helps while `main` does not yet hold this
-change: after it, the old forced command lands on a `deploy.sh` that
-refuses the staging scope, so fix forward.
+   ```bash
+   cp -a /root/.ssh/authorized_keys /root/.ssh/authorized_keys.before-h4
+   sed -i '/ci-deploy-staging@quiz$/d' /root/.ssh/authorized_keys
+   grep -c 'ci-deploy-staging@quiz' /root/.ssh/authorized_keys      # 0
+   ```
+
+3. *The merge.* Its `deploy-staging-portal` job waits for an approval: do
+   not approve it before step 4.
+4. *After the merge, the operator*: install the dispatcher from
+   `origin/main`, reading it first (an approved key runs it as root),
+   rewrite the staging instance's files from production's approved checkout
+   (the ones in place came from a staging commit), and pin the new key.
+
+   ```bash
+   cd /opt/quiz-runner && git fetch --quiet origin main
+   git show origin/main:infra/engine/staging-dispatch.sh > /root/staging-dispatch.sh
+   less /root/staging-dispatch.sh
+   install -d -o root -g root -m 0755 /usr/local/libexec/quiz-engine
+   install -o root -g root -m 0755 /root/staging-dispatch.sh /usr/local/libexec/quiz-engine/staging-dispatch.sh
+   rm /root/staging-dispatch.sh
+   stat -c '%U:%G %a %n' /usr/local/libexec /usr/local/libexec/quiz-engine /usr/local/libexec/quiz-engine/staging-dispatch.sh   # root:root, 755 each
+   /opt/quiz-runner/apps/codespace/deploy/bootstrap.sh staging     # idempotent, the env file is kept
+   printf 'command="/usr/local/libexec/quiz-engine/staging-dispatch.sh",restrict %s\n' '<ci_staging_portal.pub>' >> /root/.ssh/authorized_keys
+   grep -c 'ci-deploy-staging-portal@quiz' /root/.ssh/authorized_keys    # 1
+   rm -rf /opt/quiz-engine-staging        # nothing reads it any more
+   ```
+
+5. *The PO*: approve the waiting `deploy-staging-portal` (or re-run it).
+   By hand instead, with that run's sha and quiz-codespace digest (its
+   summary) and a PAT with read:packages, typed rather than left on the
+   command line:
+
+   ```bash
+   read -rs PAT
+   SSH_ORIGINAL_COMMAND="codespace staging <sha> sha256:<digest> $PAT" /usr/local/libexec/quiz-engine/staging-dispatch.sh; unset PAT
+   ```
+
+Never restore `authorized_keys.before-h4`: it holds the `staging` key's
+root line. To stop the staging portal's deploys, delete the
+`ci-deploy-staging-portal@quiz` line; nothing else depends on it.
 
 **When the dispatcher changes** (a production deploy warns): read
 `diff /usr/local/libexec/quiz-engine/staging-dispatch.sh <(git -C /opt/quiz-runner show HEAD:infra/engine/staging-dispatch.sh)`,
