@@ -86,8 +86,8 @@ What gets built:
   sixteen published questions (multiple choice, short answer, cloze, code,
   code image, essay, categorize, diagram, blocks), among them the Parsons problem of
   [Teaching recipes](../guide/recipes.md#parsons-problems);
-- the pool **Électronique**, attached to PRG1 too, five published questions
-  (a circuit among them), shared with the admin persona as a contributor so
+- the pool **Électronique**, attached to PRG1 too, seven published questions
+  (a circuit and two math expressions among them), shared with the admin persona as a contributor so
   the demo shows a pool from the colleague's side too;
 - four evaluations in PRG1-2026:
 

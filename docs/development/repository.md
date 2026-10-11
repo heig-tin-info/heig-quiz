@@ -157,7 +157,7 @@ projection, `client.tsx` exports the lazy components.
 `packages/registry` is the one place the API and the web app learn which
 question types exist. `src/server.ts` maps `mcq`, `short`, `cloze`,
 `code`, `circuit`, `codeimage`, `rich`, `categorize`, `diagram`,
-`brainstorm` and `blocks` to their `*Server` objects; `src/client.ts` does the same for
+`brainstorm`, `math` and `blocks` to their `*Server` objects; `src/client.ts` does the same for
 the components. Registering a type is an import and an entry in each map. The
 registry depends on `core` and on the `qt-*` packages; nothing inside `core`
 may depend on the registry, or the package graph would cycle (decision D1

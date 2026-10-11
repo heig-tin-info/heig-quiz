@@ -48,7 +48,7 @@ executed, and sits beside Moodle for the rest.
 
 | Area | What you get |
 | --- | --- |
-| **Questions** | Eleven types: multiple choice, short answer, fill in the blanks, code, code that draws, electronic circuits, essay, categorize, diagram, blocks that steer a robot, and brainstorm for polls |
+| **Questions** | Twelve types: multiple choice, short answer, fill in the blanks, code, code that draws, electronic circuits, essay, categorize, diagram, blocks that steer a robot, math expressions, and brainstorm for polls |
 | **Parameterized questions** | Every student draws their own values; the expected answer is computed for each of them |
 | **Question pools** | Categories, concepts, difficulty, published versions, shared with colleagues |
 | **Exams and exercises** | Server-side clock, every keystroke saved, extra time and accommodations, Safe Exam Browser and kiosk stations |
@@ -83,11 +83,12 @@ and students already hold an edu-ID**:
 
 ### Questions you write once and reuse for years
 
-- **Eleven question types**: multiple choice, short answer, fill in the
+- **Twelve question types**: multiple choice, short answer, fill in the
   blanks, **code** run against test cases, **code judged by the picture it
   draws**, **electronic circuits graded by simulation**, categorize (cards
   dragged into columns), essay, diagram, **blocks** that steer a warehouse
-  robot through visible and hidden warehouses, and brainstorm for the polls.
+  robot through visible and hidden warehouses, math expressions accepted in
+  any equivalent form, and brainstorm for the polls.
 - **Parameterized questions**: write `[[R]]` instead of a value, and every
   student gets numbers of their own, graded against a key of their own.
 - **Question pools** with categories, concepts, difficulty and a history of
@@ -239,8 +240,8 @@ Open <http://localhost:5173>, click **Dev login** and pick a persona:
 | Léa Rochat | student | a seat with a 25 % extra-time accommodation |
 | Noah, Emma, Louis, Chloé, Gabriel | students | ordinary seats |
 
-The seed builds a course, its classroom and six students, twenty-one published
-questions of ten types across two pools, and four evaluations: a draft,
+The seed builds a course, its classroom and six students, twenty-three published
+questions of eleven types across two pools, and four evaluations: a draft,
 one scheduled in two days, an exercise waiting in its lobby, and
 **Test 0 — bases du C**, already run and graded but not released, so the
 grading table has proposals waiting for you. Sign in as Prof Démo, open it,
