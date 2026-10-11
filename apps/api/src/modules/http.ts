@@ -22,7 +22,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { z } from "zod";
 
-import { issuesOf, CSRF_COOKIE, CSRF_HEADER } from "@quiz/contracts";
+import { issuesOf } from "@quiz/contracts";
 import type { Locale } from "@quiz/domain";
 
 
@@ -77,20 +77,6 @@ export function sendCsv(reply: FastifyReply, filename: string, csv: string) {
     .type("text/csv; charset=utf-8")
     .header("content-disposition", `attachment; filename="${filename}"`)
     .send(csv);
-}
-
-/**
- * The double-submit check, for a public POST that has no session to require
- * (the poll's join and vote, a kiosk station's attestation). A browser that
- * holds a `quiz_csrf` cookie is signed in somewhere on this origin, and a
- * cross-site POST must not be able to act through it; a browser with no such
- * cookie has nothing to steal and is let through.
- */
-export function csrfRefused(req: FastifyRequest, reply: FastifyReply): FastifyReply | null {
-  const cookie = req.cookies[CSRF_COOKIE];
-  if (!cookie) return null;
-  if (cookie === req.headers[CSRF_HEADER]) return null;
-  return reply.code(403).send({ error: "csrf" });
 }
 
 // ---------------------------------------------------------------------------

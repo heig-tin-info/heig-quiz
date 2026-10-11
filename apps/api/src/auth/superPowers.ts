@@ -19,7 +19,7 @@ import { iso } from "../clock.js";
 import { sessions } from "../db/schema.js";
 import { adminGuard, ownSessionGuard } from "../modules/guards.js";
 import { accessRevoked } from "../modules/realtime/bus.js";
-import { SESSION_COOKIE, SUPER_POWERS_MS, hashToken, superPowersEnded } from "./session.js";
+import { SUPER_POWERS_MS, superPowersEnded } from "./session.js";
 
 const PATH = "/app/api/me/super-powers";
 
@@ -28,8 +28,8 @@ export async function superPowersRoutes(app: FastifyInstance) {
   // Powers (`mayHoldSuperPowers`): `403 session_required` for a Bearer
   // token, a delegated or a confined session.
   const guard = [adminGuard(app), ownSessionGuard(app)];
-  const thisSession = (req: FastifyRequest) =>
-    eq(sessions.sidHash, hashToken(req.cookies[SESSION_COOKIE] ?? ""));
+  // The session the request came with, as resolved by the auth plugin (`ownSessionGuard` made sure there is one).
+  const thisSession = (req: FastifyRequest) => eq(sessions.sidHash, req.sid ?? "");
 
   /**
    * On, for one hour by the server's clock. Never extended: while they run,

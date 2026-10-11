@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { connection } from "./realtime/connection";
-import { api, ApiError, apiErrorMessage } from "./api";
+import { api, ApiError, apiErrorMessage, csrfToken } from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -23,6 +23,31 @@ describe("api", () => {
     await expect(api("/x")).resolves.toEqual({ a: 1 });
     reply(200, "");
     await expect(api("/x")).rejects.toThrow();
+  });
+
+  it("sends the CSRF cookie's value in the header of a write, never of a read", async () => {
+    const sent: Headers[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      sent.push(new Headers(init.headers));
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal("document", { cookie: "other=1; quiz_csrf=dev-token" });
+    await api("/x", { method: "POST" });
+    await api("/x");
+    expect(sent.map((h) => h.get("x-csrf-token"))).toEqual(["dev-token", null]);
+  });
+});
+
+describe("csrfToken", () => {
+  it("reads __Host-quiz_csrf over https, and prefers it to a bare quiz_csrf a sibling host planted (audit L8)", () => {
+    expect(csrfToken("__Host-quiz_csrf=ours; quiz_csrf=planted")).toBe("ours");
+    expect(csrfToken("quiz_csrf=planted; __Host-quiz_csrf=ours")).toBe("ours");
+  });
+
+  it("reads quiz_csrf in development, and nothing without one", () => {
+    expect(csrfToken("theme=dark; quiz_csrf=a=b")).toBe("a=b");
+    expect(csrfToken("theme=dark; xquiz_csrf=no")).toBe("");
+    expect(csrfToken("")).toBe("");
   });
 });
 

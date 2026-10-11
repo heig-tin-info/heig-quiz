@@ -53,7 +53,9 @@ no `dashboard.attempt` for one; no guest reaches the grade table or the CSV.
 Guest identity is a random 32-byte `quiz_guest` cookie, HttpOnly, SameSite=Lax,
 Secure outside development, path `/app/api/p`, 12 hours. Only
 `sha256(token:evaluationId)` is stored. Public writes require the matching CSRF
-header when a `quiz_csrf` cookie exists. Login return paths are same-origin paths
+header when the CSRF cookie exists, and are refused when the session cookie comes
+without it (audit L8, 2026-10-11; `__Host-quiz_csrf` over https, `quiz_csrf` in
+development, N-SEC-01). Login return paths are same-origin paths
 validated by `safeReturnTo`, carried in the signed OIDC stash, never trusted URLs.
 
 ### Questions and retrieval

@@ -47,11 +47,19 @@ export interface TestServer {
   close: () => Promise<void>;
 }
 
-/** `env` adds to (or overrides) the test configuration, e.g. the `TEAMS_*` variables. */
-export async function testServer(env: Record<string, string> = {}): Promise<TestServer> {
+/**
+ * `env` adds to (or overrides) the test configuration, e.g. the `TEAMS_*`
+ * variables. `production` runs the app under `NODE_ENV=production` all the
+ * same, which `loadConfig` refuses over PGlite (invariant 3): for what only
+ * production does, such as its `Secure`, `__Host-` cookies (audit L8).
+ */
+export async function testServer(
+  env: Record<string, string> = {},
+  opts: { production?: boolean } = {},
+): Promise<TestServer> {
   const clock = new TestClock();
   const dir = await mkdtemp(join(tmpdir(), "quiz-api-"));
-  const config = loadConfig({
+  const loaded = loadConfig({
     NODE_ENV: "test",
     DATABASE_URL: `pglite://${join(dir, "db")}`,
     ASSETS_DIR: join(dir, "assets"),
@@ -64,6 +72,7 @@ export async function testServer(env: Record<string, string> = {}): Promise<Test
     LOG_LEVEL: "fatal",
     ...env,
   });
+  const config = opts.production ? { ...loaded, NODE_ENV: "production" as const } : loaded;
   // The real migration chain, as `server.ts` applies it at boot, run once
   // per test run and copied into this server's directory (test/template.ts).
   await (await migratedPglite(join(dir, "db"))).close();
@@ -90,7 +99,7 @@ export async function testServer(env: Record<string, string> = {}): Promise<Test
       return {
         id,
         headers: {
-          cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`,
+          cookie: `${app.cookieName(SESSION_COOKIE)}=${session.token}; ${app.cookieName(CSRF_COOKIE)}=${session.csrf}`,
           "x-csrf-token": session.csrf,
         },
       };

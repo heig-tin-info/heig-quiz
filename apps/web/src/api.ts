@@ -1,7 +1,7 @@
 /** Portal API client: session cookies + double-submit CSRF header. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { CSRF_COOKIE, CSRF_HEADER, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
+import { CSRF_COOKIE, CSRF_HEADER, cookieName, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
 
 import { connection } from "./realtime/connection";
 
@@ -9,13 +9,21 @@ import type { Dict } from "./i18n/en";
 import { translateNow } from "./i18n/current";
 import { configKey, meKey } from "./queryKeys";
 
-function csrfToken(): string {
-  return (
-    document.cookie
-      .split("; ")
-      .find((c) => c.startsWith(`${CSRF_COOKIE}=`))
-      ?.slice(CSRF_COOKIE.length + 1) ?? ""
-  );
+/**
+ * The CSRF cookie's value, for the header of a write: `__Host-quiz_csrf`
+ * where the API runs `Secure` (production, staging), `quiz_csrf` in
+ * development (`cookieName`, audit L8). The prefixed name wins: a bare
+ * cookie a sibling host planted never stands in for ours. The server only
+ * ever compares the header with its own cookie, so reading both names here
+ * widens nothing.
+ */
+export function csrfToken(cookies: string = document.cookie): string {
+  const pairs = cookies.split("; ");
+  for (const name of [cookieName(CSRF_COOKIE, true), cookieName(CSRF_COOKIE, false)]) {
+    const pair = pairs.find((p) => p.startsWith(`${name}=`));
+    if (pair) return pair.slice(name.length + 1);
+  }
+  return "";
 }
 
 export class ApiError extends Error {
