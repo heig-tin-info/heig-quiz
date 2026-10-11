@@ -573,7 +573,18 @@ export type AuditAction =
   | "teacher.grant"
   /** An administrator changed a teacher's workspace grant (ADR-047 §4; `payload`: the fields changed). */
   | "teacher.codespace_grant"
-  | "teacher.revoke";
+  | "teacher.revoke"
+  /**
+   * The training course (ADR-105). `install`: the `training.install` task
+   * created or updated the content's public pool (a system action; subject
+   * the pool; `payload.questions` the created, updated and unchanged
+   * counts, `payload.poolCreated`); a run that changed nothing is not
+   * traced. `provision`: a teacher provisioned their own training course
+   * (subject the course; `payload.classroomId`, `payload.code`); the
+   * idempotent second call writes nothing and traces nothing.
+   */
+  | "training.install"
+  | "training.provision";
 
 /**
  * Append-only audit log (NFR-05, AU-42). The trigger of migration 0096

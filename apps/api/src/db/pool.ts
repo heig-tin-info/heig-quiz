@@ -79,12 +79,19 @@ export const pools = pgTable(
       .notNull()
       .references(() => users.id),
     isPersonal: boolean("is_personal").notNull().default(false),
+    /**
+     * The ONE public pool of the training content (ADR-105 §2): the
+     * `training.install` task finds it by this mark, never by its name, and
+     * `pools_training_uq` keeps it to one per instance.
+     */
+    isTraining: boolean("is_training").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("pools_owner_idx").on(t.ownerId),
     uniqueIndex("pools_personal_uq").on(t.ownerId).where(sql`${t.isPersonal}`),
+    uniqueIndex("pools_training_uq").on(t.isTraining).where(sql`${t.isTraining}`),
   ],
 );
 

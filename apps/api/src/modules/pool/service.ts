@@ -29,6 +29,7 @@ export {
   asStatic,
   isParameterized,
   loadConfig,
+  saveConfig,
   typeOf,
   type StaticVersion,
 } from "./config.js";
