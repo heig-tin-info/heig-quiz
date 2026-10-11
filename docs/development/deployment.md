@@ -50,6 +50,70 @@ turns HTTP/3 off (`servers { protocols h1 h2 }`, 2026-10-08): Caddy advertised
 `Alt-Svc` header stalled on every request after the first one, so the
 workspace never opened. A reinstall of the code VM keeps that block.
 
+### Human access
+
+Each human has an account of their own on each VM (`ycr`, `tmz` on the
+application VM), in the `sudo` group, with a password used for `sudo`
+only. Nobody signs in as root or as a service account: root reaches a
+shell through `sudo` or the Hetzner console, production through
+`sudo machinectl shell srv@` (the login session carries the rootless
+Docker socket; a plain `sudo -iu srv` does not) and staging through
+`sudo machinectl shell srvstg@`. The `sudo` journal then says who did
+what, which a shared root session never does. A drop-in in
+`/etc/ssh/sshd_config.d/`, loaded before `sshd_config` (OpenSSH keeps
+the first value it reads), pins the policy on each VM:
+
+```text
+# /etc/ssh/sshd_config.d/10-hardening.conf, application VM
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+MaxAuthTries 3
+AllowUsers ycr tmz srv srvstg
+
+# /etc/ssh/sshd_config.d/00-quiz-hardening.conf, runner VM
+PermitRootLogin forced-commands-only
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+MaxAuthTries 3
+AllowUsers ycr root
+```
+
+The runner VM's `forced-commands-only` is the exact fit for its
+`authorized_keys`: the two CI keys carry a `command=` (*Forced commands*,
+§4) and keep deploying as root, while a root key without one, leaked or
+planted, opens nothing. `root` stays in that `AllowUsers` for the same
+reason; on the application VM the CI keys sit on `srv` and `srvstg`, so
+root is closed outright. The service accounts' `authorized_keys` hold the
+CI line and, on `srv`, the operator's own keys, kept on purpose so that
+the agents' `ssh srv` checks still work: that is the one shared sign-in
+left, and it goes the day the checks run as a human.
+
+`fail2ban` watches `sshd` on both VMs through the journal (`backend =
+systemd` in `/etc/fail2ban/jail.local`: Ubuntu 24.04 and later ship no
+`/var/log/auth.log`), five failures in ten minutes for an hour's ban;
+`fail2ban-client status sshd` lists the current bans. The Hetzner Cloud
+firewall admits 22, 80 and 443 inbound (and 8443 on the runner VM), and
+the runner VM's own `nftables` table narrows that further (*The host
+firewall*, §3). Port 22 stays open to the world because GitHub's runners
+deploy from changing addresses; the keys, not the network, are the
+barrier. A `/etc/update-motd.d/00-quiz` on each VM greets a sign-in
+with the account to switch to, the paths that matter and the page to
+read, instead of Ubuntu's advertisements (`10-help-text` and
+`50-motd-news` lose their execute bit).
+
+**Changing the policy.** Edit the drop-in, `sshd -t`, then
+`systemctl reload ssh`, all from a session kept open; prove the change
+from a second terminal before closing the first: the human account signs
+in and `sudo -i` works, `ssh root@<vm>` is refused, and the next CI
+deploy (an approval of `deploy-staging-portal` is the cheapest) still
+runs its forced command. A human key is ed25519, one per workstation,
+passphrase-protected and loaded in an agent (`ssh-keygen -p` adds a
+passphrase to an existing key); it is removed from every `authorized_keys`
+the day the workstation goes. Adding a human: `adduser`, the `sudo`
+group, their key in `~/.ssh/authorized_keys` (0600), their name in
+`AllowUsers`, reload.
+
 ## 1. DNS
 
 `quiz.chevallier.io` is a CNAME to `portal.heig.chevallier.io` (A
@@ -96,7 +160,7 @@ Production runs as the service account `srv`, which owns `/srv` and runs
 **rootless Docker** in its systemd user session (socket
 `/run/user/1000/docker.sock`, lingering enabled so the containers restart at
 boot; there is no root Docker daemon). A human reaches it with
-`sudo machinectl shell srv@`. Its sudo covers exactly two commands,
+`sudo machinectl shell srv@` (*Human access*, above). Its sudo covers exactly two commands,
 `caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` and
 `systemctl reload caddy`; `/etc/caddy/conf.d/` is group-writable by `srv`.
 
