@@ -22,6 +22,9 @@ import { railSteps, type CheckpointStatus, type RailStep } from "./projectPage";
 
 const STATUS_TONE: Record<CheckpointStatus, Tone> = { dispatched: "green", void: "zinc", scheduled: "amber" };
 
+/** A date: never broken, never cut. */
+const When = ({ iso }: { iso: string }) => <span className="whitespace-nowrap tabular-nums">{isoDateTime(iso)}</span>;
+
 /** One step of the rail: a marker on the line, a title, its date and the lines that qualify it. */
 function Step({
   title,
@@ -82,7 +85,7 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
       case "published":
         return (
           <Step key={key} title={t("project.rail.published")} done={step.done}>
-            <p className="tabular-nums xl:whitespace-nowrap">{step.at ? isoDateTime(step.at) : t("project.rail.atPublication")}</p>
+            <p>{step.at ? <When iso={step.at} /> : t("project.rail.atPublication")}</p>
           </Step>
         );
       case "checkpoint": {
@@ -110,7 +113,7 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
             }
           >
             {/* A checkpoint counted from a deadline not set yet has no date: only its D-n. */}
-            {dated ? <p className="whitespace-nowrap tabular-nums">{isoDateTime(c.dueAt)}</p> : null}
+            {dated ? <p><When iso={c.dueAt} /></p> : null}
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {c.offsetDays !== null ? (
                 <span className="whitespace-nowrap tabular-nums">{t("project.checkpoint.offsetLabel", { n: -c.offsetDays })}</span>
@@ -132,9 +135,9 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
       case "deadline":
         return (
           <Step key={key} title={t("project.deadline")} done={step.done}>
-            <p className="tabular-nums xl:whitespace-nowrap">
+            <p>
               {"at" in step
-                ? isoDateTime(step.at)
+                ? <When iso={step.at} />
                 : step.afterDays === 1
                   ? t("project.rail.afterPublication.one")
                   : t("project.rail.afterPublication", { n: step.afterDays })}
@@ -153,7 +156,7 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
       case "release":
         return (
           <Step key={key} title={t("project.rail.release")} done={step.at !== null}>
-            <p className="tabular-nums">{step.at ? isoDateTime(step.at) : t("project.rail.toCome")}</p>
+            <p>{step.at ? <When iso={step.at} /> : t("project.rail.toCome")}</p>
           </Step>
         );
     }

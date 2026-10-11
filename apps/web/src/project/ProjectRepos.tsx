@@ -138,6 +138,19 @@ function CommitCell({ repo }: { repo: ProjectRepoView | null }) {
  * flags fold into one count. The review tag (M3-12b) says nothing while it
  * is trivially pending.
  */
+/** The repository's own deadline: the sentence from `@2xl`, the date alone (the sentence for a screen reader) where the column is narrow. */
+function OwnDeadlineBadge({ at }: { at: string }) {
+  const t = useT();
+  const { date } = isoDateParts(at);
+  return (
+    <Badge tone="amber">
+      <span className="@2xl:hidden">{date}</span>
+      <span className="sr-only @2xl:hidden">{t("project.repo.ownDeadline", { date })}</span>
+      <span className="hidden @2xl:inline">{t("project.repo.ownDeadline", { date })}</span>
+    </Badge>
+  );
+}
+
 function StateCell({ repo }: { repo: ProjectRepoView }) {
   const t = useT();
   const flags = repoFlags(repo);
@@ -163,17 +176,7 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
           {t("project.frozen.provisional")}
         </Badge>
       ) : null}
-      {repo.deadlineAt !== null ? (
-        <>
-          {/* A phone's State column is too narrow for the sentence: the date alone, the sentence in its title. */}
-          <span className="@2xl:hidden" title={t("project.repo.ownDeadline", { date: isoDateParts(repo.deadlineAt).date })}>
-            <Badge tone="amber">{isoDateParts(repo.deadlineAt).date}</Badge>
-          </span>
-          <span className="hidden @2xl:contents">
-            <Badge tone="amber">{t("project.repo.ownDeadline", { date: isoDateParts(repo.deadlineAt).date })}</Badge>
-          </span>
-        </>
-      ) : null}
+      {repo.deadlineAt !== null ? <OwnDeadlineBadge at={repo.deadlineAt} /> : null}
       {review ? <Badge tone={review.tone}>{t(review.key)}</Badge> : null}
       <SyncBadge repo={repo} />
       {/* Wrappers, not classes on the badges: a badge's own `inline-flex` would win over `hidden`. */}

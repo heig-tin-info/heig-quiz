@@ -148,9 +148,12 @@ export function repoFlags(repo: ProjectRepoView): RepoFlag[] {
   return flags;
 }
 
-/** A repository the deadline and lock routes act on: provisioned, not deleted, its project not archived. */
+/** A repository that exists: provisioned and not deleted. */
+const exists = (repo: ProjectRepoView): boolean => repo.provisionStatus === "ok" && !repo.flags.deleted;
+
+/** A repository the deadline and lock routes act on: it exists, its project not archived. */
 export const actionable = (repo: ProjectRepoView, project: Pick<ProjectDetail, "archivedAt">): boolean =>
-  repo.provisionStatus === "ok" && !repo.flags.deleted && project.archivedAt === null;
+  exists(repo) && project.archivedAt === null;
 
 /**
  * The state of a repository's final review (F-PROJ-11, M3-08b's `review`):
@@ -464,7 +467,7 @@ const leftRoster = (e: RepoEntry): boolean => e.kind === "student" && e.student.
  * be acted on is `actionable`, which the sheet reads).
  */
 const liveRepo = (e: RepoEntry): ProjectRepoView | null =>
-  e.repo !== null && e.repo.provisionStatus === "ok" && !e.repo.flags.deleted ? e.repo : null;
+  e.repo !== null && exists(e.repo) ? e.repo : null;
 
 /** Whether `repo` is ready: provisioned, its invitation accepted or none (in group mode: provisioned). */
 const isReady = (repo: ProjectRepoView, groupMode: boolean): boolean =>

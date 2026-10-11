@@ -193,8 +193,10 @@ const SEEDS: {
   durationMinutes?: number;
   /** A locked project whose release is still awaited: `graded` on the lists (ADR-104). */
   unreleased?: true;
-  /** `?pjstates=1`: the state the page draws differently, one project each (see the scenes of `screenshots.mjs`). */
-  variant?: "archived" | "nobody" | "ungraded" | "nodistribution";
+  /** `?pjstates=1`: what differs from a plain project (archived, graded `none`, no distribution), one seed each. */
+  summary?: Partial<ProjectSummary>;
+  /** `?pjstates=1`: nobody accepted yet. */
+  noRepos?: true;
 }[] = [
   { id: "pj-draft", title: "Labo 3 — listes chaînées", state: "draft", start: 7 * D, deadline: 21 * D },
   // A draft published by hand, its deadline a duration: the list shows no date at all (M3-14a).
@@ -214,10 +216,10 @@ const SEEDS: {
   // `?pjstates=1`: the states nobody could look at — archived, nobody accepted, graded `none`, a draft with no distribution.
   ...(flags.pjstates
     ? [
-        { id: "pj-archived", title: "Labo 6 — archivé", state: "published" as const, start: -30 * D, deadline: 14 * D, variant: "archived" as const },
-        { id: "pj-nobody", title: "Labo 7 — personne n'a accepté", state: "published" as const, start: -1 * D, deadline: 14 * D, variant: "nobody" as const },
-        { id: "pj-ungraded", title: "Labo 8 — sans note", state: "published" as const, start: -7 * D, deadline: 7 * D, variant: "ungraded" as const },
-        { id: "pj-nodist", title: "Labo 9 — sans distribution", state: "draft" as const, start: 7 * D, deadline: 21 * D, variant: "nodistribution" as const },
+        { id: "pj-archived", title: "Labo 6 — archivé", state: "published" as const, start: -30 * D, deadline: 14 * D, summary: { archivedAt: iso(-3 * D) } },
+        { id: "pj-nobody", title: "Labo 7 — personne n'a accepté", state: "published" as const, start: -1 * D, deadline: 14 * D, noRepos: true as const },
+        { id: "pj-ungraded", title: "Labo 8 — sans note", state: "published" as const, start: -7 * D, deadline: 7 * D, summary: { gradingMode: "none" as const } },
+        { id: "pj-nodist", title: "Labo 9 — sans distribution", state: "draft" as const, start: 7 * D, deadline: 21 * D, summary: { distribution: null } },
       ]
     : []),
 ];
@@ -495,6 +497,11 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
           i === 5 ? { points: frozenRun.points, max: frozenRun.max } : { points: final?.points ?? null, max: final?.max ?? null };
       }
     }
+    // Graded `none`: no run is scored (F-PROJ-09).
+    if (project.gradingMode !== "auto") {
+      runs.length = 0;
+      Object.assign(base, { currentRunId: null, ciStatus: "none" });
+    }
     repos.push(base);
   });
   // One repository whose student left the roster since.
@@ -615,9 +622,7 @@ function seeded(): MockProject[] {
     // `?groups=1`: the draft is a group project with no set yet; the group seeds follow the pairs.
     if (flags.groups && seed.id === "pj-draft") summary.groupMode = true;
     if (seed.groupSet) Object.assign(summary, { groupMode: true, groupSetId: seed.groupSet });
-    if (seed.variant === "archived") summary.archivedAt = iso(-3 * D);
-    if (seed.variant === "ungraded") summary.gradingMode = "none";
-    if (seed.variant === "nodistribution") summary.distribution = null;
+    Object.assign(summary, seed.summary);
     const following = seed.groupSet ? setGroupsOf(seed.groupSet).map((g) => ({ ...g, stopped: false })) : [];
     const copy = seed.groupSet && seed.state === "locked" ? driftedCopy(following) : null;
     const project: MockProject = {
@@ -627,7 +632,7 @@ function seeded(): MockProject[] {
       releasedAt: seed.state === "locked" && !flags.unreleased && !seed.groupSet && !seed.unreleased ? iso(-5 * D) : null,
       repos: seed.groupSet
         ? seedGroupRepos(seed, summary, copy ?? following, classroomRoster(room.id))
-        : seed.variant === "nobody"
+        : seed.noRepos
           ? []
           : seedRepos(seed, summary, classroomRoster(room.id)),
       checkpoints: [],
@@ -641,8 +646,11 @@ function seeded(): MockProject[] {
           : { aheadAt: null, aheadCommits: null, syncedAt: null, inProgressReads: 0 },
     };
     const deadline = new Date(summary.deadlineAt);
+    // Graded `none`: no checkpoint fires (F-PROJ-09).
     project.checkpoints =
-      seed.state === "published"
+      summary.gradingMode !== "auto"
+        ? []
+        : seed.state === "published"
         ? [
             { id: `${seed.id}-cp1`, name: "milestone-1", dueAt: checkpointDueAt(deadline, -7).toISOString(), offsetDays: -7, dispatchedAt: iso(-1 * H) },
             { id: `${seed.id}-cp2`, name: "milestone-2", dueAt: checkpointDueAt(deadline, -2).toISOString(), offsetDays: -2, dispatchedAt: null },
@@ -654,11 +662,6 @@ function seeded(): MockProject[] {
               { id: `${seed.id}-cp2`, name: "final-check", dueAt: iso(seed.deadline + D), offsetDays: null, dispatchedAt: null },
             ]
           : [];
-    // Graded `none`: no run is scored, no checkpoint fires (F-PROJ-09).
-    if (seed.variant === "ungraded") {
-      project.checkpoints = [];
-      for (const r of project.repos) Object.assign(r, { runs: [], currentRunId: null, ciStatus: "none" });
-    }
     PROJECTS.set(seed.id, project);
   }
   return SEEDS.map((s) => PROJECTS.get(s.id)!);
