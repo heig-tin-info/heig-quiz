@@ -348,7 +348,7 @@
       "name": "editor-blocks",
       "caption": "The editor of a blocks question: the toolbox, the starter and reference programs, the warehouses.",
       "persona": "teacher",
-      "path": "/questions/e6367378-1311-42db-8596-9eaf47d2ce2d",
+      "path": "/questions/3fd94e5f-66df-4e9c-81dd-2099359d001b",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -363,8 +363,8 @@
         "light": "editor-blocks-light.png",
         "dark": "editor-blocks-dark.png"
       },
-      "takenAt": "2026-10-11T15:28:52.547Z",
-      "commit": "0f33caa1",
+      "takenAt": "2026-10-11T17:06:43.701Z",
+      "commit": "c6a52de2",
       "base": "http://localhost:3100"
     },
     {
@@ -486,7 +486,7 @@
       "name": "try-blocks",
       "caption": "A blocks question as the student gets it: the workspace with the starter, then the warehouses tested.",
       "persona": "teacher",
-      "path": "/questions/e6367378-1311-42db-8596-9eaf47d2ce2d?tab=try",
+      "path": "/questions/3fd94e5f-66df-4e9c-81dd-2099359d001b?tab=try",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -501,8 +501,8 @@
         "light": "try-blocks-light.png",
         "dark": "try-blocks-dark.png"
       },
-      "takenAt": "2026-10-11T15:28:52.547Z",
-      "commit": "0f33caa1",
+      "takenAt": "2026-10-11T17:06:43.701Z",
+      "commit": "c6a52de2",
       "base": "http://localhost:3100"
     },
     {
