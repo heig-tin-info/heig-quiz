@@ -341,7 +341,7 @@ const ESSAYS = {
  * The warehouse robot (docs/04 §4.17): the wall follower reaches the dock in
  * every warehouse below, hidden ones included, which publication checks
  * (`blocks.reference_fails_case`). The starter goes straight ahead: it
- * reaches the first dock and hits a rack in every other warehouse, which is
+ * reaches the first dock and collides in every other warehouse, which is
  * what "Test on every warehouse" is there to show.
  */
 const WALL_FOLLOWER = [
@@ -1171,7 +1171,7 @@ export const PAPERS: PaperSpec[] = [
       "elec-filtre-rc-passe-bas": { schematic: rcLowPass("1.59k", "10n") },
       "prg1-redaction-pile": { text: ESSAYS.partial },
       "prg1-organigramme-somme": { scene: SUM_FLOW_NO_INCREMENT },
-      // Counting cells: the first warehouse only, a rack hit in every other.
+      // Counting cells: the first warehouse only, a collision in every other.
       "prg1-robot-entrepot": { program: straightAhead(8) },
     },
   },
