@@ -20,6 +20,8 @@ const project = (n: number, over: Partial<ProjectActivitySummary> = {}): Project
   id: `00000000-0000-4000-8000-00000000000${n}`,
   title: `Labo ${n}`,
   state: "published",
+  // The phase follows the state unless a test refines a locked one (ADR-104).
+  phase: over.state ?? "published",
   classroom: ROOM,
   startAt: "2026-09-21T08:00:00.000Z",
   deadlineAt: "2026-10-05T22:00:00.000Z",
@@ -92,6 +94,26 @@ describe("the classroom's Projects group", () => {
     expect(titles().at(-1)).toBe("Undated");
   });
 
+  it("reads the badge from the phase: a locked project is graded in amber, released in outline green (ADR-104)", async () => {
+    mockFetch({
+      [`GET ${PROJECTS}`]: ok([
+        project(1, { title: "Waiting", state: "locked" }),
+        project(2, { title: "Graded", state: "locked", phase: "graded" }),
+        project(3, { title: "Released", state: "locked", phase: "released" }),
+      ]),
+    });
+    renderGroup();
+    const region = await screen.findByRole("region", { name: "Projects" });
+    const row = (title: string) => within(within(region).getByText(title).closest("tr")!);
+    const waiting = row("Waiting").getByText("locked").className;
+    expect(waiting).not.toContain("text-warning");
+    expect(waiting).not.toContain("ring-current");
+    expect(row("Graded").getByText("graded").className).toContain("text-warning");
+    expect(row("Released").getByText("released").className).toContain("ring-current");
+    // Over, whatever the phase: no timer.
+    expect(within(region).queryByText(/closes in/)).toBeNull();
+  });
+
   it("links the repositories in sight on the row, without opening the project (M3-14a, M3-14h)", async () => {
     mockFetch({
       [`GET ${PROJECTS}`]: ok([
@@ -151,10 +173,19 @@ describe("the classroom's Projects group", () => {
   });
 
   it("speaks French", async () => {
-    mockFetch({ [`GET ${PROJECTS}`]: ok([project(1, { state: "locked" })]) });
+    mockFetch({
+      [`GET ${PROJECTS}`]: ok([
+        project(1, { state: "locked" }),
+        project(2, { state: "locked", phase: "graded" }),
+        project(3, { state: "locked", phase: "released" }),
+      ]),
+    });
     renderGroup("fr");
     const region = await screen.findByRole("region", { name: "Projets" });
     expect(within(region).getByText("verrouillé")).toBeInTheDocument();
+    // Never "publié", which names a published project (ADR-104).
+    expect(within(region).getByText("corrigé")).toBeInTheDocument();
+    expect(within(region).getByText("rendu")).toBeInTheDocument();
     expect(within(region).getByRole("columnheader", { name: /Échéance/ })).toBeInTheDocument();
   });
 });

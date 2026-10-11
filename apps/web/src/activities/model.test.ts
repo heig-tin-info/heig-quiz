@@ -46,6 +46,7 @@ function project(over: Partial<ProjectActivitySummary> = {}): ProjectActivitySum
     id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
     title: `P${n}`,
     state: "published",
+    phase: over.state ?? "published",
     classroom: { id: "00000000-0000-4000-8000-0000000000aa", name: "PRG1-2026", courseCode: "PRG1" },
     startAt: "2026-09-21T08:00:00.000Z",
     deadlineAt: "2026-10-05T22:00:00.000Z",

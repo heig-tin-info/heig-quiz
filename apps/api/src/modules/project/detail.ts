@@ -42,7 +42,7 @@ import {
   type ProjectSlotScore,
   type ProjectStudent,
 } from "@quiz/contracts";
-import { changedAfterRelease, projectPrimaryAction, resolveFinalScore, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
+import { changedAfterRelease, projectPhase, projectPrimaryAction, resolveFinalScore, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
@@ -444,20 +444,26 @@ export async function projectDetail(
   const counts = releaseCounts(project, repos);
   // ONE predicate for the primary action and the page's Sync button: the sync's own `ahead` (M3-07).
   const sync = projectSyncState(project, repos, now);
+  // The readiness of the release, as the primary action and the phase read it (ADR-104); the lists count the same
+  // repositories (`STUDENT_REPO`, `repos.ts`) through `resolveFinalScore` too (`phaseCounts`, `views.ts`).
+  const readiness = {
+    state: project.state,
+    gradingMode: project.gradingMode,
+    ...counts,
+    // Over the live repositories only: a non-live one never freezes, so its score to verify is released as none.
+    unverified: liveRepos.filter((repo) => views.get(repo.id)!.scores.final?.toVerify === true).length,
+    released: project.releasedAt !== null,
+  };
   return {
     ...(await projectSummary(db, project, now)),
+    phase: projectPhase(readiness),
     releasedAt: isoOrNull(project.releasedAt),
     groupsDrifted: await groupsDrifted(db, project, now),
     groupSyncPending: groupSyncOwed(project),
     primaryAction: projectPrimaryAction({
-      state: project.state,
+      ...readiness,
       archived: project.archivedAt !== null,
-      gradingMode: project.gradingMode,
       sourceAhead: sync.ahead !== null,
-      ...counts,
-      // Over the live repositories only: a non-live one never freezes, so its score to verify is released as none.
-      unverified: liveRepos.filter((repo) => views.get(repo.id)!.scores.final?.toVerify === true).length,
-      released: project.releasedAt !== null,
       changedAfterRelease: accepted.filter((v) => v.flags.changedAfterRelease).length,
     }),
     sync,

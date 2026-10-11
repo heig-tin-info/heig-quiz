@@ -18,7 +18,7 @@ import { activityBucket, isLiveNow, type ActivityBucket } from "@quiz/domain";
 
 import { evaluationHome, evaluationStateLabel, evaluationTimerAt, stateStyle } from "../evaluation/common";
 import type { TFunction } from "../i18n";
-import { projectStateLabel, projectStateStyle, projectTimerAt } from "../project/common";
+import { projectPhaseLabel, projectPhaseStyle, projectTimerAt } from "../project/common";
 import type { Route } from "../router";
 import type { BadgeStyle } from "../ui";
 
@@ -158,8 +158,9 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
     },
     // The project page (M3-12).
     home: (a) => ({ view: "project", id: a.id }),
-    stateLabel: (a, t) => projectStateLabel(a.state, t),
-    stateStyle: (a) => projectStateStyle(a.state),
+    // The badge reads the PHASE (ADR-104); the buckets, the sorting and the gantt keep reading the state.
+    stateLabel: (a, t) => projectPhaseLabel(a.phase, t),
+    stateStyle: (a) => projectPhaseStyle(a.phase),
     timerAt: projectTimerAt,
   },
 };

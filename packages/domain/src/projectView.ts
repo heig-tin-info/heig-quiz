@@ -71,6 +71,34 @@ export function scoresFinal(p: Pick<PrimaryActionInput, "gradingMode" | "live" |
   return p.gradingMode === "auto" && p.live > 0 && p.frozen === p.live && p.unverified === 0;
 }
 
+// ---------------------------------------------------------------- the staff's phase (ADR-104)
+
+/**
+ * What the staff's badge says of a project (ADR-104, product owner
+ * 2026-10-11): the state, with `locked` refined by what happened since the
+ * deadline — `graded` once the scores are final ({@link scoresFinal}) and
+ * the release awaited, `released` once the staff released them. The
+ * database stops at `locked`; the phase is derived, never stored.
+ */
+export const PROJECT_PHASES = ["draft", "published", "locked", "graded", "released"] as const;
+export type ProjectPhase = (typeof PROJECT_PHASES)[number];
+
+export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode" | "live" | "frozen" | "unverified" | "released">;
+
+/**
+ * The state first: a project moved back to `published` by a later deadline
+ * is `published`, whatever its kept `releasedAt` says (F-PROJ-09). Then
+ * `released` as soon as it was, even when a score changed since (the page's
+ * primary action says a re-release waits; the list does not). Then `graded`
+ * on {@link scoresFinal}, so a project graded `none`, or one with a score
+ * still to verify, stays `locked`.
+ */
+export function projectPhase(p: ProjectPhaseInput): ProjectPhase {
+  if (p.state !== "locked") return p.state;
+  if (p.released) return "released";
+  return scoresFinal(p) ? "graded" : "locked";
+}
+
 /**
  * Publish for a draft; Release once the scores are final and not yet
  * released, or changed since; Sync when the source is ahead; nothing for an

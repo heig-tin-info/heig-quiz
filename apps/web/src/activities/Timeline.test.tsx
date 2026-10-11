@@ -58,6 +58,7 @@ const LAB: ProjectActivitySummary = {
   id: id("project", 1),
   title: "Labo 2 — pointeurs",
   state: "published",
+  phase: "published",
   classroom: ROOM,
   startAt: liveAt(-7 * DAYS),
   deadlineAt: liveAt(7 * DAYS),

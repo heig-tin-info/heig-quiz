@@ -28,6 +28,7 @@ import {
   GRADE_RUN_PARSE_STATUSES,
   PROJECT_GRADING_MODES,
   PROJECT_PATCH_FIELDS,
+  PROJECT_PHASES,
   PROJECT_PRIMARY_ACTIONS,
   PROJECT_REVIEW_REASONS,
   PROJECT_REVIEW_STATUSES,
@@ -47,6 +48,16 @@ import { GroupConfirm } from "./group.js";
 /** F-PROJ-03: `draft` → `published` → `locked` (at the deadline). */
 export const ProjectState = z.enum(PROJECT_STATES);
 export type ProjectState = z.infer<typeof ProjectState>;
+
+/**
+ * What the staff's badge says (ADR-104, `projectPhase` of `@quiz/domain`):
+ * the state, with `locked` refined into `locked` (scores not final),
+ * `graded` (final, the release awaited) and `released`. Derived by the
+ * server from the frozen repositories and the release; never stored, never
+ * a student's.
+ */
+export const ProjectPhase = z.enum(PROJECT_PHASES);
+export type ProjectPhase = z.infer<typeof ProjectPhase>;
 
 /** F-PROJ-02: one commit per branch after the hand-out overlay, or the history as it is. */
 export const SOURCE_STRATEGIES = ["squash", "whole"] as const;
@@ -135,7 +146,10 @@ export const ProjectActivitySummary = z.object({
   kind: z.literal("project"),
   id: z.uuid(),
   title: z.string(),
+  /** The stored state: what the buckets, the sorting and the gantt read. */
   state: ProjectState,
+  /** What the badge says ({@link ProjectPhase}): the state, `locked` refined by the freeze and the release. */
+  phase: ProjectPhase,
   classroom: z.object({ id: z.uuid(), name: z.string(), courseCode: z.string() }),
   /**
    * Null while nothing is fixed: a draft published by hand has no start, and
@@ -940,6 +954,8 @@ export type ProjectSyncAccepted = z.infer<typeof ProjectSyncAccepted>;
  * archived) and how many of them are definitively frozen, the rows to
  * verify, the rows with an alert (`multiple`, or protection suspended).
  * `primaryAction` is the server's (`projectPrimaryAction`, `@quiz/domain`).
+ * `phase` is the header badge's word, the same as the list's
+ * ({@link ProjectPhase}, from the same counts as `primaryAction`).
  * `liveStale`: some live state was served stale, or not read in time —
  * refetch shortly. `sync`: the source's sync ({@link ProjectSyncState}).
  * Rows: the roster by name, then the repositories whose student left it.
@@ -952,6 +968,7 @@ export type ProjectSyncAccepted = z.infer<typeof ProjectSyncAccepted>;
  * `counts.groups`: the groups of a group project's copy (0 otherwise).
  */
 export const ProjectDetail = ProjectSummary.extend({
+  phase: ProjectPhase,
   releasedAt: z.iso.datetime().nullable(),
   groupsDrifted: z.boolean(),
   groupSyncPending: z.boolean(),

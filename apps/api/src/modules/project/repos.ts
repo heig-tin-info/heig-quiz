@@ -5,7 +5,7 @@
  * a push as the module's handlers read it, shared by a student
  * repository's (`webhooks.ts`) and a source's (`sync.ts`).
  */
-import { and, eq, inArray, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -54,21 +54,32 @@ export function provisioningNow(repo: Pick<RepoRow, "provisionStatus" | "provisi
 type ProjectRow = typeof projects.$inferSelect;
 
 /**
- * The STUDENT repositories of `project`: every one but those of a user who
- * now holds a staff seat of the classroom — a staff seat is never a
- * student's (ADR-018). A group's repository is its members' whoever
- * created it (`user_id`, N-SEC-20): always one. The one set the page's
- * rows and counts, and the release, read (M3-08a, M3-08b).
+ * A STUDENT repository, over a `project_repos` row joined to its project:
+ * every one but those of a user who now holds a staff seat of the
+ * classroom — a staff seat is never a student's (ADR-018), and its test
+ * repository (ADR-077) is in no count. A group's repository is its members'
+ * whoever created it (`user_id`, N-SEC-20): always one. The ONE predicate
+ * behind {@link studentRepos} and the lists' phase counts (`views.ts`).
  */
-export async function studentRepos(db: Db | Tx, project: Pick<ProjectRow, "id" | "classroomId">): Promise<RepoRow[]> {
-  const staff = db
-    .select({ userId: enrollments.userId })
-    .from(enrollments)
-    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, true), isNotNull(enrollments.userId)));
-  return db
-    .select()
+export const STUDENT_REPO = or(
+  isNotNull(projectRepos.groupId),
+  notExists(
+    sql`(SELECT 1 FROM ${enrollments} WHERE ${enrollments.classroomId} = ${projects.classroomId}
+      AND ${enrollments.staff} AND ${enrollments.userId} = ${projectRepos.userId})`,
+  ),
+)!;
+
+/**
+ * The student repositories of `project` ({@link STUDENT_REPO}): the one set
+ * the page's rows and counts, and the release, read (M3-08a, M3-08b).
+ */
+export async function studentRepos(db: Db | Tx, project: Pick<ProjectRow, "id">): Promise<RepoRow[]> {
+  const rows = await db
+    .select({ repo: projectRepos })
     .from(projectRepos)
-    .where(and(eq(projectRepos.projectId, project.id), or(isNotNull(projectRepos.groupId), notInArray(projectRepos.userId, staff))));
+    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+    .where(and(eq(projectRepos.projectId, project.id), STUDENT_REPO));
+  return rows.map((r) => r.repo);
 }
 
 /** A project repository with what its events need: its project and the course of its staff. */
