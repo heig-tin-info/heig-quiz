@@ -58,7 +58,7 @@ import {
 } from "../../github/app.js";
 import { DomainError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
-import { classroomStaffIds, staffAccess, type Caller } from "../guards.js";
+import { accessWhere, classroomStaffIds, staffAccess, type Caller } from "../guards.js";
 import { sniffImage } from "../pool/assets.js";
 import { installationChanged } from "./events.js";
 
@@ -745,15 +745,20 @@ export async function connectClassroom(
       .insert(githubClassroomLinks)
       .values({ classroomId: room.id, ...link })
       .onConflictDoUpdate({ target: githubClassroomLinks.classroomId, set: link });
-    const wrote =
-      via === null
-        ? []
-        : await tx
-            .insert(githubOrgGrants)
-            .values({ orgId: org.id, courseId: room.courseId, grantedBy: caller.id, grantedAt: input.now })
-            .onConflictDoNothing()
-            .returning({ orgId: githubOrgGrants.orgId });
-    return { org, previousOrgId: current?.orgId ?? null, granted: wrote.length > 0 ? via : null };
+    let granted: GrantVia | null = null;
+    if (via !== null) {
+      const grant = { orgId: org.id, courseId: room.courseId, grantedBy: caller.id, grantedAt: input.now };
+      const wrote = await tx.insert(githubOrgGrants).values(grant).onConflictDoNothing().returning({ orgId: githubOrgGrants.orgId });
+      if (wrote.length > 0) granted = via;
+      // Another connect wrote it meanwhile: it must still be there, share-locked
+      // until this link commits; a revocation that took it away first is
+      // undone by this grant, so a link never stands without one.
+      else if (!(await isGranted(tx, org.id, room.courseId, true))) {
+        await tx.insert(githubOrgGrants).values(grant);
+        granted = via;
+      }
+    }
+    return { org, previousOrgId: current?.orgId ?? null, granted };
   });
 }
 
@@ -903,6 +908,17 @@ export interface OrgAvatar {
   bytes: Buffer;
   mime: string;
 }
+/**
+ * The caller sees the organization (ADR-100): it is granted to a course
+ * where they hold a seat, or a classroom of such a course is connected to
+ * it. On a query with `github_organizations` in scope.
+ */
+function seesOrg(userId: string): SQL {
+  return sql`(EXISTS (SELECT 1 FROM ${githubOrgGrants} g WHERE g.org_id = ${githubOrganizations.id} AND ${staffAccess(userId, sql`g.course_id`)})
+    OR EXISTS (SELECT 1 FROM ${githubClassroomLinks} l JOIN ${classrooms} c ON c.id = l.classroom_id
+      WHERE l.org_id = ${githubOrganizations.id} AND ${staffAccess(userId, sql`c.course_id`)}))`;
+}
+
 /** What is served: the uploaded avatars' list (`AvatarMime`), the bytes matching the declared type. */
 const AVATAR_TYPES: ReadonlySet<string> = new Set<string>(AvatarMime.options);
 export const AVATAR_MAX_BYTES = 256 * 1024;
@@ -913,13 +929,14 @@ const AVATAR_SIZE = 96;
 export async function orgAvatar(
   db: Db,
   orgId: string,
+  caller: Caller,
   now: Date,
   log: FastifyBaseLogger,
 ): Promise<OrgAvatar | null> {
   const [org] = await db
     .select({ githubOrgId: githubOrganizations.githubOrgId })
     .from(githubOrganizations)
-    .where(eq(githubOrganizations.id, orgId));
+    .where(and(eq(githubOrganizations.id, orgId), accessWhere(caller, seesOrg(caller.id))));
   if (!org || org.githubOrgId === null) return null;
   const key = org.githubOrgId;
   const hit = avatars.get(key);

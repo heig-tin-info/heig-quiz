@@ -64,8 +64,11 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
   /**
    * An organization's avatar, fetched and cached by the server and served
    * from here: the browser never loads it from GitHub, and is never
-   * redirected there. The staff's, like the classroom's sheet that names
-   * it: a student gets 403.
+   * redirected there. A teacher's, for an organization granted to one of
+   * their courses or connected to one of its classrooms (ADR-100; every one
+   * with Super Powers), the 404 of a missing one otherwise; a student gets
+   * 403. One the sheet offers only because the teacher owns it is drawn by
+   * its initials.
    */
   app.get(
     "/app/api/github/orgs/:id/avatar",
@@ -73,7 +76,7 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
     async (req, reply) => {
       const params = IdParam.safeParse(req.params);
       if (!params.success) return notFound(reply);
-      const image = await service.orgAvatar(app.db, params.data.id, app.clock.now(), req.log);
+      const image = await service.orgAvatar(app.db, params.data.id, callerOf(req), app.clock.now(), req.log);
       if (!image) return notFound(reply);
       return reply
         .type(image.mime)

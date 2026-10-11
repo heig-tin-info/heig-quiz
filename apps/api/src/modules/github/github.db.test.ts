@@ -493,6 +493,12 @@ describe("an organization's grant to a course (ADR-100)", () => {
     const [entry] = await audits("github_org.grant", courseB);
     expect(entry!.payload).toMatchObject({ orgId: spare.id, via: "super_powers" });
     expect(entry!.actorUserId).toBe(admin.id);
+    // With them, an organization that is not there is a 404, an uninstalled one a 409.
+    const uninstalled = await orgRow({ login: "heig-admin-uninstalled", githubOrgId: 1306 });
+    expect((await connect(room, admin, randomUUID())).statusCode).toBe(404);
+    const refusedUninstalled = await connect(room, admin, uninstalled.id);
+    expect([refusedUninstalled.statusCode, refusedUninstalled.json().error]).toEqual([409, "app_not_installed"]);
+    expect((await grantsOf(courseB)).map((g) => g.orgId)).not.toContain(uninstalled.id);
     // Without them, an admin is off the course's staff like anyone: the 404.
     expect((await connect(room, await server.signIn("admin"), org.id)).statusCode).toBe(404);
   });
@@ -687,6 +693,8 @@ describe("an organization's avatar", () => {
 
   beforeAll(async () => {
     org = await orgRow({ login: "heig-avatar", githubOrgId: 1001, installationId: 141 });
+    // The course's (ADR-100): only its staff see it.
+    await grant(org.id);
   });
 
   it("is fetched by the server and served from here, inert, cached", async () => {
@@ -732,6 +740,12 @@ describe("an organization's avatar", () => {
         headers: { "content-type": "image/png" },
       });
     expect((await get(teacher)).statusCode).toBe(404);
+  });
+
+  it("is a 404 to a teacher whose courses neither are granted the organization nor connect to it", async () => {
+    const res = await get(outsider);
+    expect(res.statusCode).toBe(404);
+    expect(gh.calls).toEqual([]);
   });
 
   it("is the staff's, like the listing: a student is refused", async () => {

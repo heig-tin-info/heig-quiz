@@ -80,7 +80,11 @@ from the query, so anything written there is spoofable. Spec 05's sentence
    owner can serve themselves); every one to an admin with Super Powers. A
    teacher offered none reads, in the sheet, one line: "Ask an organization
    owner or an administrator"; "Connect to GitHub" stays the section's one
-   primary action. There is no request workflow.
+   primary action. There is no request workflow. An organization's avatar
+   (`GET /app/api/github/orgs/:id/avatar`) is served to a teacher only for
+   an organization granted to one of their courses or connected to one of
+   its classrooms (every one with Super Powers); anything else is the 404 of
+   a missing one, and the web draws the initials.
 5. **Inside a granted organization, the grant is the boundary.** The staff
    of a course granted an organization can make the App read **every**
    repository of it: D27 shrinks from "the platform" to "the courses
