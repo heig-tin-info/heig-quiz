@@ -110,6 +110,10 @@ services:
       - -c
       - |
         while true; do
+          # After a reboot this container may start before PostgreSQL accepts
+          # connections (restart: always ignores depends_on): wait, never dump
+          # into a failure that only the next day's run would correct.
+          until pg_isready -q -h postgres -U quiz; do sleep 5; done
           file="quiz-$$(date +%F).dump"
           if pg_dump -Fc -h postgres -U quiz quiz > "/backups/$$file.tmp" \
             && mv "/backups/$$file.tmp" "/backups/$$file"; then
