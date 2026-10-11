@@ -587,6 +587,8 @@ describe("grading a preview", () => {
 
     // The final grading runs the WHOLE request, the hidden case included.
     expect(fake.requests.at(-1)!.cases.map((c) => c.name)).toEqual(["visible-1", SECRETS.hiddenCase]);
+    // A teacher waits for it: interactive, never the background grading's queue (ADR-101).
+    expect(fake.requests.at(-1)!.priority).toBe("interactive");
 
     // The full correction, whatever the feedback policy: key and explanation —
     // the key in the coordinates of the choices the player showed (ADR-097).

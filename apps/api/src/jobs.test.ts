@@ -6,7 +6,7 @@
 import type { FastifyInstance } from "fastify";
 import { describe, expect, it, vi } from "vitest";
 
-import { GRADING_EVALUATION_QUEUE, InProcessQueue, type JobQueue } from "./jobs.js";
+import { GRADING_EVALUATION_QUEUE, InProcessQueue, type JobQueue, type JobTry } from "./jobs.js";
 import { enqueueEvaluationGrading, registerGradingJobs } from "./modules/grading/jobs.js";
 
 const silent = () => {};
@@ -29,6 +29,16 @@ describe("the in-process queue", () => {
     await queue.send("q", { id: "close" });
     release();
     await vi.waitFor(() => expect(seen).toEqual(["first", "retake", "retake", "close"]));
+  });
+});
+
+describe("the last try, as a handler sees it (ADR-101)", () => {
+  it("is every try on the in-process queue, which never retries", async () => {
+    const queue = new InProcessQueue(true, log);
+    const tries: JobTry[] = [];
+    await queue.work<{ id: string }>("q", async (_data, job) => void tries.push(job));
+    await queue.send("q", { id: "a" });
+    await vi.waitFor(() => expect(tries).toEqual([{ lastTry: true }]));
   });
 });
 

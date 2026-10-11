@@ -160,20 +160,31 @@ describe("the pg-boss adapter", () => {
     expect(instance.send).toHaveBeenLastCalledWith("system.task", { key: "sessions.purge" }, {});
   });
 
-  it("hands each job of a batch to the handler, in order", async () => {
+  it("hands each job of a batch to the handler, in order, with whether it is the last try (ADR-101)", async () => {
     const { queue, instance } = await started(true);
-    const seen: string[] = [];
-    await queue.work<{ id: string }>("q", async ({ id }) => void seen.push(id));
+    const seen: [string, boolean][] = [];
+    await queue.work<{ id: string }>("q", async ({ id }, job) => void seen.push([id, job.lastTry]));
     expect(instance.work).toHaveBeenCalledTimes(1);
     const [name, options, batchHandler] = instance.work.mock.calls[0] as [
       string,
       object,
-      (jobs: { data: { id: string } }[]) => Promise<void>,
+      (jobs: { data: { id: string }; retryCount: number; retryLimit: number }[]) => Promise<void>,
     ];
     expect(name).toBe("q");
-    expect(options).toEqual({});
-    await batchHandler([{ data: { id: "a" } }, { data: { id: "b" } }]);
-    expect(seen).toEqual(["a", "b"]);
+    // Without the metadata, a job carries no retry count at all.
+    expect(options).toEqual({ includeMetadata: true });
+    await batchHandler([
+      { data: { id: "first" }, retryCount: 0, retryLimit: 2 },
+      { data: { id: "second" }, retryCount: 1, retryLimit: 2 },
+      { data: { id: "third" }, retryCount: 2, retryLimit: 2 },
+      { data: { id: "never retried" }, retryCount: 0, retryLimit: 0 },
+    ]);
+    expect(seen).toEqual([
+      ["first", false],
+      ["second", false],
+      ["third", true],
+      ["never retried", true],
+    ]);
   });
 
   it("never registers a worker in a process that does not run them", async () => {

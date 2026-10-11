@@ -33,7 +33,7 @@ import type {
   GradingState,
   Verdict,
 } from "@quiz/contracts";
-import { reasonOf } from "@quiz/contracts";
+import { reasonOf, RUNNER_WAITING_REASONS } from "@quiz/contracts";
 import {
   attemptTotal,
   isBatchable,
@@ -384,7 +384,7 @@ export async function progressOf(db: Db, evaluationId: string): Promise<GradingP
     }
     const reason = reasonOf(row.details);
     if (reason === "llm_not_configured") llm += 1;
-    else if (reason === "runner_unavailable") runner += 1;
+    else if ((RUNNER_WAITING_REASONS as readonly (string | null)[]).includes(reason)) runner += 1;
     else failed += 1;
   }
   return { done, total, pending: { runner, llm }, failed };

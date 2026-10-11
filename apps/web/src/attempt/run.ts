@@ -24,7 +24,9 @@ export type RunFn = (
 
 /** The SSE result shape is not the runner's; the player speaks the latter. */
 export function toOutcome(result: RunnerResultEvent["result"]): RunnerOutcome | "unavailable" {
-  if (result.status === "unavailable" || result.status === "busy") return "unavailable";
+  if (result.status === "unavailable") return "unavailable";
+  // Saturation is not "no runner": try again in a moment (ADR-101).
+  if (result.status === "busy") throw new Error("runner busy");
   if (result.status === "error") throw new Error(result.message);
   return {
     compile: { ok: result.compile.ok, stdout: "", stderr: result.compile.stderr, ms: 0 },
@@ -65,17 +67,23 @@ export function runBody(
  * configuration (decision D14) — the player says so in one line and the
  * answer is still saved and still graded — and 429 is the per-attempt budget
  * (N-SEC-07), which tells the student to wait, not that running is off.
+ * A 503 whose reason is `busy` is neither: the runner, or the evaluation's
+ * share of it, is saturated (ADR-101). It stays thrown, so the player says
+ * "try again in a moment" and no browser runner stands in.
  * Anything else is a real failure the player shows in red.
  */
 async function withRefusals<T>(call: () => Promise<T>): Promise<T | "unavailable" | "rate_limited"> {
   try {
     return await call();
   } catch (error) {
-    if (error instanceof ApiError && error.status === 503) return "unavailable";
+    if (error instanceof ApiError && error.status === 503 && !isBusy(error)) return "unavailable";
     if (error instanceof ApiError && error.status === 429) return "rate_limited";
     throw error;
   }
 }
+
+const isBusy = (error: ApiError): boolean =>
+  (error.body as { reason?: unknown } | null)?.reason === "busy";
 
 const post = <T>(url: string, body: unknown) =>
   api<T>(url, { method: "POST", body: JSON.stringify(body) });

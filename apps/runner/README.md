@@ -180,7 +180,8 @@ CI before production is switched (below).
 
 ## How a request is served
 
-1. The two queues (`interactive` before `grading`, `RUNNER_CONCURRENCY`
+1. The two queues (`interactive` before `grading`, except a grading request
+   that has waited 10 s, which goes first: ADR-101; `RUNNER_CONCURRENCY`
    containers at a time) hand the request to `execute.ts`, or answer `429`
    with a `Retry-After` past `RUNNER_QUEUE_MAX`.
 2. One container is created with the flags above, `sleep <ttl>` its only
@@ -198,6 +199,17 @@ CI before production is switched (below).
    clock. Both streams are capped at `min(limits.outputKb, RUNNER_MAX_OUTPUT_KB)`,
    and `truncated` says so.
 
+   The request has a budget too, from the moment it starts running:
+   `requestBudgetMs` of `@quiz/core` over this runner's ceilings (the build,
+   every case at `timeMs` plus the grace, the uploads, capped by
+   `RUNNER_REQUEST_TIMEOUT_MS`), and capped by the request's own `budgetMs`
+   when the API sent one (the API owns that value). A case that could not end
+   before it does not start, and a container is not rebuilt past it: the
+   remaining cases come back timed out, like a case the reaper killed. The
+   container's ttl is that budget plus 5 s (ADR-101). The four budget
+   defaults are `@quiz/core`'s `RUNNER_BUDGET_DEFAULTS`, which the API budgets
+   against: raising one here does not lengthen an API request's budget.
+
    `cases[].args` follows the program in that argv (`caseArgv` in
    `execute.ts`): `timeout -s KILL <s> ./program <arg…>`, or
    `… python3 main.py <arg…>` for an interpreted language, so the case's
@@ -209,8 +221,8 @@ CI before production is switched (below).
    container, in C and in Python.
 6. The container is destroyed in a `finally`.
 
-A client that goes away before its answer (the API gives up after
-`RUNNER_TIMEOUT_MS`) takes its request with it: waiting, it leaves the queue;
+A client that goes away before its answer (the API gives up past its queue
+allowance plus the request's budget) takes its request with it: waiting, it leaves the queue;
 running, its container is removed at once — the same `remove` as a case past
 its deadline — and no further step starts. A slot never serves a run nobody
 will read.
@@ -439,7 +451,7 @@ Everything is in `src/config.ts`, validated at startup.
 | `RUNNER_WORKDIR_MB` | 32 | Size of the `/work` and `/tmp` tmpfs. |
 | `RUNNER_COMPILE_TIMEOUT_MS` | 20 000 | Budget of the build step. |
 | `RUNNER_CASE_GRACE_MS` | 2000 | How long past a case's deadline the service waits. |
-| `RUNNER_REQUEST_TIMEOUT_MS` | 120 000 | Ceiling on a whole request, all cases together. |
+| `RUNNER_REQUEST_TIMEOUT_MS` | 120 000 | Ceiling on a whole request, its build and all cases together; a request's `budgetMs` may only lower it. |
 
 The three `RUNNER_MAX_*` ceilings default to the upper bounds of
 `RunnerRequest.limits` (`packages/core/src/runner.ts`), so a fresh deployment

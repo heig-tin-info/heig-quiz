@@ -42,8 +42,72 @@ export const RunnerRequest = z.object({
     .max(50),
   /** "interactive" (student clicked Run) or "grading" (background). Maps to the runner's two queues. */
   priority: z.enum(["interactive", "grading"]).default("grading"),
+  /**
+   * The most this request may take once it runs, queue wait excluded, in ms
+   * (ADR-101). The runner starts no case that could end past it and reports
+   * the rest as timed out: an overrun is a result, never a dropped call. The
+   * API sets it ({@link requestBudgetMs}, a Run click capped lower); absent,
+   * the runner's own ceiling applies. Optional both ways: the API and the
+   * runner deploy separately, and an older runner drops the field.
+   */
+  budgetMs: z.number().int().min(1000).max(600_000).optional(),
 });
 export type RunnerRequest = z.infer<typeof RunnerRequest>;
+
+/** The four knobs of a request's budget; the runner reads them from its environment. */
+export interface RunnerBudgetLimits {
+  /** Ceiling on one case's `limits.timeMs` (`RUNNER_MAX_TIME_MS`). */
+  maxTimeMs: number;
+  /** Budget of the build step (`RUNNER_COMPILE_TIMEOUT_MS`). */
+  compileTimeoutMs: number;
+  /** Past a case's deadline, before the service destroys the container (`RUNNER_CASE_GRACE_MS`). */
+  caseGraceMs: number;
+  /** Ceiling on a whole request (`RUNNER_REQUEST_TIMEOUT_MS`). */
+  requestTimeoutMs: number;
+}
+
+/**
+ * The runner's defaults: `apps/runner/src/config.ts` defaults to these, and
+ * the API budgets against them, so each value is written once. A runner
+ * configured with higher ceilings still gets the API's budget (`budgetMs`).
+ */
+export const RUNNER_BUDGET_DEFAULTS: RunnerBudgetLimits = {
+  maxTimeMs: 20_000,
+  compileTimeoutMs: 20_000,
+  caseGraceMs: 2_000,
+  requestTimeoutMs: 120_000,
+};
+
+/** One upload or `podman exec` round trip, in the budget. */
+const ROUND_TRIP_MS = 2000;
+
+/**
+ * Past a request's budget: the container's removal and the answer's way back.
+ * The runner's container lives this long past the budget, and the API waits
+ * this long past it too.
+ */
+export const RUNNER_TTL_SLACK_MS = 5000;
+
+/**
+ * The most a request may take once it runs, in ms: the build, then every
+ * case at its full budget plus the grace, plus the uploads and the slack a
+ * `podman exec` round trip costs; capped by the request ceiling and by the
+ * request's own `budgetMs`. One formula for the container's lifetime (the
+ * runner's `containerTtlSeconds`), the runner's case deadline and the API's
+ * wait (ADR-101).
+ */
+export function requestBudgetMs(
+  request: Pick<RunnerRequest, "action" | "cases" | "files" | "limits" | "budgetMs">,
+  limits: RunnerBudgetLimits = RUNNER_BUDGET_DEFAULTS,
+): number {
+  const cases = request.action === "check" ? 0 : request.cases.length;
+  const timeMs = Math.min(request.limits.timeMs, limits.maxTimeMs);
+  const budget =
+    limits.compileTimeoutMs +
+    cases * (timeMs + limits.caseGraceMs) +
+    (request.files.length + 2) * ROUND_TRIP_MS;
+  return Math.min(budget, limits.requestTimeoutMs, request.budgetMs ?? Number.POSITIVE_INFINITY);
+}
 
 /** One case of a run, as the runner reports it. */
 export const RunnerCase = z.object({

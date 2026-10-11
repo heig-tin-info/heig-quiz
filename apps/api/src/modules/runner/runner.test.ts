@@ -7,7 +7,7 @@
  * and a mock would be a restatement of the code it checks.
  */
 import Fastify, { type FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   RunnerBusy,
@@ -109,6 +109,7 @@ describe("HttpRunner", () => {
   let url: string;
   let hits: string[] = [];
   let auths: Array<string | undefined> = [];
+  let bodies: unknown[] = [];
 
   beforeAll(async () => {
     server = Fastify();
@@ -116,7 +117,10 @@ describe("HttpRunner", () => {
       hits.push(req.url);
       auths.push(req.headers.authorization);
     });
-    server.post("/run", async (_req, reply) => reply.send(OUTCOME));
+    server.post("/run", async (req, reply) => {
+      bodies.push(req.body);
+      return reply.send(OUTCOME);
+    });
     server.post("/garbage/run", async (_req, reply) => reply.send({ nothing: "useful" }));
     // Past the 32 MB cap: a runner that streams without end.
     server.post("/huge/run", async (_req, reply) =>
@@ -157,16 +161,50 @@ describe("HttpRunner", () => {
     await server.close();
   });
 
-  const runnerAt = (path = "", timeoutMs = 2000, retries = 1) =>
-    new HttpRunner({ url: `${url}${path}`, timeoutMs, retries });
+  const runnerAt = (path = "", waitMs?: number, retries = 1) =>
+    new HttpRunner({
+      url: `${url}${path}`,
+      interactiveCeilingMs: 30_000,
+      retries,
+      ...(waitMs === undefined ? {} : { waitMs: () => waitMs }),
+    });
 
   it("returns the parsed outcome on 200", async () => {
     expect(await runnerAt().run(REQUEST)).toEqual(OUTCOME);
   });
 
+  /** Fifteen cases of 2 s: 20 s build + 15 × (2 s + 2 s grace) + 3 × 2 s uploads = 86 s. */
+  const fifteen = {
+    ...REQUEST,
+    limits: { ...REQUEST.limits, timeMs: 2000 },
+    cases: Array.from({ length: 15 }, (_, i) => ({ name: `c${i}`, args: [], stdin: "" })),
+  };
+
+  it("caps an interactive request's budget at the ceiling, which the runner enforces (ADR-101)", async () => {
+    bodies = [];
+    const interactive = { ...fifteen, priority: "interactive" as const };
+    await runnerAt().run(interactive);
+    expect(bodies).toEqual([{ ...interactive, budgetMs: 30_000 }]);
+  });
+
+  it("gives a grading request its full budget, and waits for it past the queue allowance (ADR-101)", async () => {
+    bodies = [];
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    try {
+      await runnerAt().run(fifteen);
+      // Never the interactive ceiling: a grading run is cut by its own budget only.
+      expect(bodies).toEqual([{ ...fifteen, budgetMs: 86_000 }]);
+      // The API waits the budget plus the grading queue's 60 s allowance.
+      expect(timeout).toHaveBeenCalledTimes(1);
+      expect(timeout.mock.calls[0]![0]).toBeGreaterThanOrEqual(86_000 + 60_000);
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
   it("sends the shared token as a bearer on both routes, and nothing without one", async () => {
     auths = [];
-    const withToken = new HttpRunner({ url, timeoutMs: 2000, token: "s3cret" });
+    const withToken = new HttpRunner({ url, interactiveCeilingMs: 30_000, token: "s3cret" });
     await withToken.run(REQUEST);
     await withToken.health();
     expect(auths).toEqual(["Bearer s3cret", "Bearer s3cret"]);
@@ -177,7 +215,7 @@ describe("HttpRunner", () => {
   });
 
   it("ignores a trailing slash in the configured URL", async () => {
-    expect(await new HttpRunner({ url: `${url}///`, timeoutMs: 2000 }).run(REQUEST)).toEqual(
+    expect(await new HttpRunner({ url: `${url}///`, interactiveCeilingMs: 30_000 }).run(REQUEST)).toEqual(
       OUTCOME,
     );
   });
@@ -221,7 +259,7 @@ describe("HttpRunner", () => {
 
   it("does not retry when the caller asked for no retry", async () => {
     hits = [];
-    await expect(runnerAt("/down", 2000, 0).run(REQUEST)).rejects.toBeInstanceOf(
+    await expect(runnerAt("/down", undefined, 0).run(REQUEST)).rejects.toBeInstanceOf(
       RunnerUnavailable,
     );
     expect(hits).toHaveLength(1);
@@ -245,15 +283,12 @@ describe("HttpRunner", () => {
     });
   });
 
-  it("maps a timeout to unavailable", async () => {
-    await expect(runnerAt("/slow", 50).run(REQUEST)).rejects.toMatchObject({
-      code: "runner_unavailable",
-      reason: "timeout",
-    });
+  it("maps a timeout to busy: the runner bounds the run, so the time went to the queue (ADR-101)", async () => {
+    await expect(runnerAt("/slow", 50).run(REQUEST)).rejects.toBeInstanceOf(RunnerBusy);
   });
 
   it("maps a closed port to unavailable", async () => {
-    const dead = new HttpRunner({ url: "http://127.0.0.1:1", timeoutMs: 1000 });
+    const dead = new HttpRunner({ url: "http://127.0.0.1:1", interactiveCeilingMs: 30_000 });
     await expect(dead.run(REQUEST)).rejects.toMatchObject({ reason: "unreachable" });
   });
 
@@ -280,7 +315,7 @@ describe("HttpRunner", () => {
       reason: "bad_response",
     });
     expect(
-      await new HttpRunner({ url: "http://127.0.0.1:1", timeoutMs: 1000 }).health(),
+      await new HttpRunner({ url: "http://127.0.0.1:1", interactiveCeilingMs: 30_000 }).health(),
     ).toMatchObject({ ok: false, reason: "unreachable" });
   });
 

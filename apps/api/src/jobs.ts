@@ -157,8 +157,18 @@ interface WorkOptions {
   localConcurrency?: number;
 }
 
+/**
+ * What a handler knows of the try it is running, beside the job's data: a
+ * handler that would rather retry than settle for a degraded answer can tell
+ * whether a retry is still coming (ADR-101: the runner's queue wait).
+ */
+export interface JobTry {
+  /** No retry follows a failure of this try: pg-boss's `retryCount` reached its `retryLimit`. */
+  lastTry: boolean;
+}
+
 interface JobHandler<T> {
-  (data: T): Promise<void>;
+  (data: T, job: JobTry): Promise<void>;
 }
 
 /** The slice of pg-boss the application actually uses. */
@@ -182,8 +192,12 @@ class PgBossQueue implements JobQueue {
   }
   async work<T extends object>(name: string, handler: JobHandler<T>, options?: WorkOptions) {
     if (!this.runWorkers) return;
-    await this.boss.work<T>(name, { ...options }, async (jobs) => {
-      for (const job of jobs) await handler(job.data);
+    // The metadata carries `retryCount` and `retryLimit`: the try's rank.
+    const metadata = { ...options, includeMetadata: true as const };
+    await this.boss.work<T, void, typeof metadata>(name, metadata, async (jobs) => {
+      for (const job of jobs) {
+        await handler(job.data, { lastTry: job.retryCount >= job.retryLimit });
+      }
     });
   }
   async stop() {
@@ -238,7 +252,8 @@ export class InProcessQueue implements JobQueue {
         const handler = this.handlers.get(job.name);
         if (handler) {
           try {
-            await (handler as JobHandler<object>)(job.data);
+            // Every try is the last one here: see the catch below.
+            await (handler as JobHandler<object>)(job.data, { lastTry: true });
           } catch (err) {
             // No retry, no dead letter: the durable queue is the one that
             // owes those guarantees, and it is not this one.

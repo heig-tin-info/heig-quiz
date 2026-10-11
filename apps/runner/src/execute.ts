@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
+import {
+  RUNNER_TTL_SLACK_MS,
+  requestBudgetMs,
+  type RunnerOutcome,
+  type RunnerRequest,
+} from "@quiz/core/server";
 
 import type { RunnerConfig } from "./config.js";
 import type { Engine, ExecResult } from "./engine.js";
@@ -105,15 +110,23 @@ export function effectiveLimits(
   };
 }
 
-/** How long the container is allowed to exist, in seconds. */
+/**
+ * The budget of a request on this deployment, in ms: the formula of
+ * `@quiz/core` (ADR-101) over this runner's own ceilings, and the request's
+ * `budgetMs` when the API sent one.
+ */
+export function budgetMs(request: RunnerRequest, config: RunnerConfig): number {
+  return requestBudgetMs(request, {
+    maxTimeMs: config.RUNNER_MAX_TIME_MS,
+    compileTimeoutMs: config.RUNNER_COMPILE_TIMEOUT_MS,
+    caseGraceMs: config.RUNNER_CASE_GRACE_MS,
+    requestTimeoutMs: config.RUNNER_REQUEST_TIMEOUT_MS,
+  });
+}
+
+/** How long the container is allowed to exist, in seconds: the budget and its slack. */
 export function containerTtlSeconds(request: RunnerRequest, config: RunnerConfig): number {
-  const cases = request.action === "check" ? 0 : request.cases.length;
-  const budget =
-    config.RUNNER_COMPILE_TIMEOUT_MS +
-    cases * (effectiveLimits(request, config).timeMs + config.RUNNER_CASE_GRACE_MS) +
-    // The uploads, plus the slack a `podman exec` round trip costs.
-    (request.files.length + 2) * 2000;
-  return Math.ceil(Math.min(budget, config.RUNNER_REQUEST_TIMEOUT_MS) / 1000) + 5;
+  return Math.ceil((budgetMs(request, config) + RUNNER_TTL_SLACK_MS) / 1000);
 }
 
 /**
@@ -143,6 +156,8 @@ export async function executeRequest(
   deps: ExecuteDeps,
 ): Promise<RunnerOutcome> {
   const { engine, config } = deps;
+  // The request's budget runs from here, its build included (ADR-101).
+  const deadline = Date.now() + budgetMs(request, config);
   const files = prepareFiles(request.files);
   const plan = planFor(
     request.language,
@@ -214,12 +229,15 @@ export async function executeRequest(
 
     const cases: RunnerOutcome["cases"] = [];
     // The whole request has a budget too: a hundred cases of two seconds must
-    // not hold a slot of the queue for three minutes.
-    const deadline = Date.now() + config.RUNNER_REQUEST_TIMEOUT_MS;
+    // not hold a slot of the queue for three minutes, and a Run click's
+    // fifteen infinite loops answer within the API's wait (ADR-101). A case
+    // starts only if it can end before the deadline; the rest are reported
+    // timed out, which is the program's verdict, not a failed call.
+    const caseCost = limits.timeMs + config.RUNNER_CASE_GRACE_MS;
 
     for (const testCase of request.cases) {
       stopIfAborted();
-      if (Date.now() > deadline) {
+      if (Date.now() + caseCost > deadline) {
         cases.push(dead(limits.timeMs));
         continue;
       }
@@ -246,10 +264,12 @@ export async function executeRequest(
       // Either the service's clock fired — and then the in-container reaper
       // failed, so the container is not to be trusted — or the container died
       // under the OOM killer. Both mean: destroy it, build a fresh one, and
-      // keep the remaining cases honest.
+      // keep the remaining cases honest. No rebuild once no case could run
+      // after it: the rest are past the budget anyway.
       if (result.timedOut || result.containerGone) {
         await engine.remove(name);
-        const restarted = await start().catch(() => null);
+        const restarted =
+          Date.now() + caseCost > deadline ? null : await start().catch(() => null);
         if (restarted === null || !restarted.ok) {
           while (cases.length < request.cases.length) cases.push(dead(limits.timeMs));
           break;

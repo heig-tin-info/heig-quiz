@@ -18,6 +18,8 @@ import {
 } from "@quiz/core/server";
 import { compilesPerMinute } from "@quiz/domain";
 
+import { Slots } from "../../budget.js";
+import { RUNS_PER_EVALUATION } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { typeOf } from "../pool/config.js";
 import type { EvaluationRecord } from "../evaluation/service.js";
@@ -125,21 +127,25 @@ async function attemptRunContext<T>(
 }
 
 /**
- * The attempts with a run in flight. The journal-counted budget is
- * count-then-insert, so parallel requests of one attempt would all read the
- * same count and all pass; one run at a time per attempt closes that race,
- * and keeps one student from filling the runner's few slots. In memory: the
- * API is one process (ADR-001), like the SSE bus and the preview budget.
+ * The runs in flight, by attempt and by evaluation. The journal-counted
+ * budget is count-then-insert, so parallel requests of one attempt would all
+ * read the same count and all pass; one run at a time per attempt closes
+ * that race, and keeps one student from filling the runner's few slots. A
+ * few runs at a time per evaluation (N-SEC-07, ADR-101) keep one class's
+ * infinite loops from filling them all, and from starving another class.
+ * In memory: the API is one process (ADR-001), like the SSE bus and the
+ * preview budget.
  */
-const inFlight = new Set<string>();
+const inFlight = new Slots();
+const perEvaluation = new Slots();
 
 async function oneAtATime<R>(attemptId: string, run: () => Promise<R>): Promise<R> {
-  if (inFlight.has(attemptId)) throw new RateLimited(1);
-  inFlight.add(attemptId);
+  const release = inFlight.take(attemptId, 1);
+  if (release === null) throw new RateLimited(1);
   try {
     return await run();
   } finally {
-    inFlight.delete(attemptId);
+    release();
   }
 }
 
@@ -153,28 +159,46 @@ export function simulateAnswer(db: Db, input: SimulateInput) {
   return oneAtATime(input.attempt.id, () => simulateAnswerNow(db, input));
 }
 
+/** The two inputs every student run shares. */
+interface RunnerInput {
+  runner: RunnerService;
+  /**
+   * Interactive runs of the evaluation at once (`RUNNER_RUNS_PER_EVALUATION`);
+   * {@link RUNS_PER_EVALUATION} when the caller names none.
+   */
+  runsPerEvaluation?: number | undefined;
+}
+
 /**
  * Journals a student's run (nothing student-supplied: the file names are the
  * type's, invariant 14), then runs it; a busy or absent runner is the 503.
+ * The evaluation's cap is checked first: a refused run is "busy", journals
+ * nothing and so spends nothing of the student's budget.
  */
 async function runForStudent(
   db: Db,
-  input: { runner: RunnerService; attempt: AttemptRecord; request: RunnerRequest; now: Date },
+  input: RunnerInput & { attempt: AttemptRecord; request: RunnerRequest; now: Date },
   details: Record<string, unknown>,
 ): Promise<{ requestId: string; outcome: RunnerOutcome }> {
-  const requestId = randomUUID();
-  await logAttemptEvent(db, input.attempt.id, "run", { ...details, requestId }, input.now);
+  const release = perEvaluation.take(
+    input.attempt.evaluationId,
+    input.runsPerEvaluation ?? RUNS_PER_EVALUATION,
+  );
+  if (release === null) throw new RunnerDown("busy");
   try {
+    const requestId = randomUUID();
+    await logAttemptEvent(db, input.attempt.id, "run", { ...details, requestId }, input.now);
     return { requestId, outcome: await input.runner.run(input.request) };
   } catch (error) {
     if (error instanceof RunnerBusy) throw new RunnerDown("busy");
     if (error instanceof RunnerUnavailable) throw new RunnerDown(error.reason);
     throw error;
+  } finally {
+    release();
   }
 }
 
-interface RunInput {
-  runner: RunnerService;
+interface RunInput extends RunnerInput {
   evaluation: EvaluationRecord;
   attempt: AttemptRecord;
   itemId: string;
@@ -239,8 +263,7 @@ async function runVisibleCasesNow(
   return { requestId, result };
 }
 
-interface SimulateInput {
-  runner: RunnerService;
+interface SimulateInput extends RunnerInput {
   evaluation: EvaluationRecord;
   attempt: AttemptRecord;
   itemId: string;

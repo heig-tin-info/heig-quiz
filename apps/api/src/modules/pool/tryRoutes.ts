@@ -22,7 +22,9 @@ import {
   type GradedResult,
 } from "@quiz/core/server";
 
+import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import { questions } from "../../db/schema.js";
+import { rateLimited } from "../http.js";
 import { answerFromStudent, studentSolutionViewOf, studentViewOf, teacherPreviewView } from "../live/service.js";
 import { isParameterized, loadConfig, tryLoadConfig, typeOf } from "./config.js";
 import { exampleInstance, explanationOrNull, parameterIssues, previewInstances } from "./instance.js";
@@ -30,8 +32,17 @@ import type { VersionRecord } from "./shared.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 
+/**
+ * Tries per minute and teacher, every try counted (ADR-101): a try may run a
+ * program with all its cases on the runner the students share, so it spends
+ * a budget, as the preview's gradings do. Far above what a person clicking
+ * "Grade" does.
+ */
+const TRIES_PER_MINUTE = 10;
+
 export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, teacher, onQuestion } = ctx;
+  const tries = new Budget();
 
   /**
    * The config of `"draft"` or of a published number, migrated and parsed,
@@ -166,7 +177,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
 
   /**
    * Teacher rehearsal (F-QST-09): the answer is graded in process and
-   * nothing is persisted. A `pending: runner` grading is forwarded to the
+   * nothing is persisted, {@link TRIES_PER_MINUTE} a minute. A `pending: runner` grading is forwarded to the
    * runner when there is one, and degrades to `runner_unavailable`
    * otherwise (decision D14) — never to a 500.
    */
@@ -176,7 +187,10 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     { preHandler: requireTeacher, config: { readOnly: true } },
     teacher(
       { params: IdParam, body: TryBody, optionalBody: true, load: onQuestion() },
-      async ({ reply, body, scope }) => {
+      async ({ req, reply, body, scope }) => {
+        if (!tries.spend(req.user!.id, TRIES_PER_MINUTE, app.clock.now())) {
+          return rateLimited(reply, BUDGET_RETRY_AFTER_S);
+        }
         try {
           const loaded = await configOf(reply, scope.question, body.source);
           if (!loaded) return reply;
@@ -211,7 +225,9 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           if (!t.finalizeRunner) {
             return { status: "runner_unavailable", reason: "not_configured" } satisfies TryResult;
           }
-          const outcome = await runner.run(result.request);
+          // A person waits for it: interactive, under the interactive
+          // ceiling, never a background grading's queue (ADR-101).
+          const outcome = await runner.run({ ...result.request, priority: "interactive" });
           const final = t.finalizeRunner(
             loaded.config,
             answer,

@@ -435,6 +435,32 @@ describe("POST /questions/:id/try (F-QST-09)", () => {
     expect(refused.statusCode).toBe(403);
   });
 
+  it("spends ten tries a minute per teacher, then answers 429 (ADR-101)", async () => {
+    const id = await createQuestion("tried-often");
+    await server.app.inject({
+      method: "PUT",
+      url: `/app/api/questions/${id}/draft`,
+      headers: owner.headers,
+      payload: { config: { statement: "Capital of France?", answer: "Paris" } },
+    });
+    // A fresh window: the tries of the tests above are a minute old.
+    server.clock.advance(61_000);
+    const tryIt = () =>
+      server.app.inject({
+        method: "POST",
+        url: `/app/api/questions/${id}/try`,
+        headers: owner.headers,
+        payload: { source: "draft", answer: "Paris" },
+      });
+    for (let i = 0; i < 10; i += 1) expect((await tryIt()).statusCode).toBe(200);
+    const limited = await tryIt();
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toEqual({ error: "rate_limited" });
+    expect(limited.headers["retry-after"]).toBe("60");
+    server.clock.advance(61_000);
+    expect((await tryIt()).statusCode).toBe(200);
+  });
+
   it("emits no refresh hint for a preview or a try: a read behind a POST", async () => {
     const id = await createQuestion("silent-read");
     const hints: string[] = [];

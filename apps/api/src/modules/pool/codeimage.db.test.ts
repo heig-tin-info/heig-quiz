@@ -125,6 +125,8 @@ describe("codeimage: the target is required to publish, never to try (D16)", () 
     expect(body.points).toBe(0);
     expect(requests).toHaveLength(1);
     expect(requests[0]!.cases).toEqual([{ name: "image", args: [], stdin: "" }]);
+    // A teacher waits for it: interactive, never the background grading's queue (ADR-101).
+    expect(requests[0]!.priority).toBe("interactive");
   });
 
   it("tries a draft whose target is STALE after a resize, reading it as no target", async () => {

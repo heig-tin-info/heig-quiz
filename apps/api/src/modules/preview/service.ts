@@ -421,8 +421,9 @@ async function gradeItem(
     if (first.kind === "graded") return settle(first);
     if (first.via === "llm") return ungraded("llm_unavailable");
     if (!type.finalizeRunner) return ungraded("runner_unavailable");
-    // The WHOLE request, hidden cases included: this is the final grading.
-    const outcome = await runner.run(first.request);
+    // The WHOLE request, hidden cases included: this is the final grading,
+    // but a teacher waits for it, so it runs interactive (ADR-101).
+    const outcome = await runner.run({ ...first.request, priority: "interactive" });
     return settle(type.finalizeRunner(config, answer, { ...ctx, finalizeState: first.finalizeState }, outcome));
   } catch (error) {
     if (error instanceof RunnerUnavailable || error instanceof RunnerBusy) {
