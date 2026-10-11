@@ -4,26 +4,33 @@
  * the content, the provisioning over HTTP, and the progress card (§4) whose
  * four missions flip on real service calls — including the staff seat's
  * released grade on the feedback path (`releasedGradesOf`, the live tally,
- * since a staff attempt is frozen in no snapshot).
+ * since a staff attempt is frozen in no snapshot). The shipped content is
+ * replaced by the test fixture, so the task installs two questions and the
+ * provisioning opens a welcome quiz that holds them.
  */
+import { createHash, randomBytes } from "node:crypto";
+
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { CSRF_COOKIE, type TrainingStatus } from "@quiz/contracts";
 
-import { SESSION_COOKIE, createSession } from "../../auth/session.js";
-import { evaluations, oauthClients, questions } from "../../db/schema.js";
+import { SESSION_COOKIE, createSession, type NewSession } from "../../auth/session.js";
+import { evaluations, oauthClients, userEmails } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { evaluationRows } from "../../test/grades.js";
+import { kioskStation } from "../../test/kiosk.js";
 import { publishQuestion, reload } from "../../test/live.js";
-import { TRAINING_SHORT, trainingFixture } from "../../test/training.js";
+import { TRAINING_SHORT } from "../../test/training.js";
 import * as evaluationService from "../evaluation/service.js";
 import { saveAsTemplate } from "../evaluation/templates.js";
 import { runEvaluationGrading } from "../grading/jobs.js";
 import * as live from "../live/service.js";
 import * as poolService from "../pool/service.js";
 import { releaseResults } from "../results/service.js";
-import { install, trainingPool } from "./service.js";
+import { trainingPool } from "./service.js";
+
+vi.mock("./content.js", async () => ({ TRAINING_CONTENT: (await import("../../test/training.js")).trainingFixture() }));
 
 const ADMIN_EMAIL = "admin@heig.test";
 type Headers = Record<string, string>;
@@ -45,43 +52,65 @@ async function statusOf(headers = teacher.headers): Promise<TrainingStatus> {
 
 const missions = (s: TrainingStatus) => Object.fromEntries(s.missions.map((m) => [m.key, m.state]));
 
+/** A session of another kind for `userId`, as its cookie headers. */
+async function sessionOf(userId: string, auth: Partial<NewSession> & Pick<NewSession, "kind">): Promise<Headers> {
+  const s = await createSession(server.app.db, userId, 8, { actorUserId: null, evaluationId: null, projectId: null, ...auth });
+  return {
+    cookie: `${server.app.cookieName(SESSION_COOKIE)}=${s.token}; ${server.app.cookieName(CSRF_COOKIE)}=${s.csrf}`,
+    "x-csrf-token": s.csrf,
+  };
+}
+
+/** An OAuth access token of `headers`'s teacher (ADR-023): the real register → consent → exchange. */
+async function oauthBearer(headers: Headers): Promise<string> {
+  const issuer = "http://localhost:3000";
+  const redirect = "https://claude.ai/api/mcp/auth_callback";
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const client = (await post("/app/oauth/register", {}, { redirect_uris: [redirect], client_name: "Claude", token_endpoint_auth_method: "none" })).json() as {
+    client_id: string;
+  };
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: client.client_id,
+    redirect_uri: redirect,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    state: "xyz",
+    scope: "quiz",
+    resource: `${issuer}/app/api/mcp`,
+  });
+  const start = await server.app.inject({ method: "GET", url: `/app/oauth/authorize?${params}` });
+  const id = (start.headers.location as string).split("/").pop()!;
+  const decision = await post(`/app/api/oauth/requests/${id}/decision`, headers, { approve: true });
+  const code = new URL((decision.json() as { redirectTo: string }).redirectTo).searchParams.get("code")!;
+  const exchanged = await server.app.inject({
+    method: "POST",
+    url: "/app/oauth/token",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    payload: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirect,
+      code_verifier: verifier,
+      client_id: client.client_id,
+      resource: `${issuer}/app/api/mcp`,
+    }).toString(),
+  });
+  expect(exchanged.statusCode, exchanged.body).toBe(200);
+  return (exchanged.json() as { access_token: string }).access_token;
+}
+
 beforeAll(async () => {
   server = await testServer({ SUPER_ADMIN_EMAIL: ADMIN_EMAIL });
   server.clock.set("2026-10-11T10:00:00.000Z");
   admin = await server.signIn("admin", ADMIN_EMAIL);
+  // The install resolves the super admin through verified addresses, as a sign-in records them.
+  await server.app.db.insert(userEmails).values({ userId: admin.id, email: ADMIN_EMAIL, source: "login", verified: true });
   teacher = await server.signIn("teacher");
   student = await server.signIn("student");
 });
 afterAll(() => server.close());
-
-describe("who reaches the training routes (§1)", () => {
-  it("a student, a personal API token and an impersonation session are refused", async () => {
-    const token = (await post("/app/api/me/tokens", (await server.signIn("teacher")).headers, { name: "t" })).json() as { token: string };
-    const s = await createSession(server.app.db, teacher.id, 8, {
-      kind: "impersonation",
-      actorUserId: admin.id,
-      evaluationId: null,
-      projectId: null,
-    });
-    const impersonation = {
-      cookie: `${server.app.cookieName(SESSION_COOKIE)}=${s.token}; ${server.app.cookieName(CSRF_COOKIE)}=${s.csrf}`,
-      "x-csrf-token": s.csrf,
-    };
-    // An impersonation session's write is refused by the session layer first (ADR-034); its read by the route's guard.
-    const callers: [string, Headers, Record<"GET" | "POST", string>][] = [
-      ["student", student.headers, { GET: "forbidden", POST: "forbidden" }],
-      ["token", { authorization: `Bearer ${token.token}` }, { GET: "session_required", POST: "session_required" }],
-      ["impersonation", impersonation, { GET: "session_required", POST: "impersonation_read_only" }],
-    ];
-    for (const [who, headers, errors] of callers) {
-      for (const method of ["GET", "POST"] as const) {
-        const res = await server.app.inject({ method, url: "/app/api/training", headers });
-        expect([res.statusCode, res.json().error], `${who} ${method}`).toEqual([403, errors[method]]);
-      }
-    }
-    expect((await get("/app/api/training", admin.headers)).statusCode).toBe(200);
-  });
-});
 
 describe("before the install", () => {
   it("reports nothing installed, no course, every mission to do; provisioning is refused", async () => {
@@ -106,34 +135,15 @@ describe("the training.install admin task (§2)", () => {
     expect(list.map((t) => t.key)).toContain("training.install");
     const res = await post("/app/api/admin/tasks/training.install/run", admin.headers);
     expect(res.statusCode, res.body).toBe(200);
-    // The shipped content (a stub until the content PR): the pool, no question yet.
-    expect(res.json()).toMatchObject({ key: "training.install", lastStatus: "ok", lastMessage: "0 created, 0 updated, 0 unchanged" });
+    expect(res.json()).toMatchObject({ key: "training.install", lastStatus: "ok", lastMessage: "2 created, 0 updated, 0 unchanged" });
     expect((await statusOf()).installed).toBe(true);
-    // The fixture's questions join the SAME pool: found by its mark, not its name.
-    const result = await install(server.app.db, { SUPER_ADMIN_EMAIL: ADMIN_EMAIL }, server.clock.now(), trainingFixture());
-    expect(result.questions).toEqual({ created: 2, updated: 0, unchanged: 0 });
+    expect((await trainingPool(server.app.db))!.ownerId).toBe(admin.id);
   });
 });
 
 describe("provisioning over HTTP and the four missions (§1, §4)", () => {
   let courseId: string;
   let classroomId: string;
-
-  it("provisions once: 201 then 200 with the same course", async () => {
-    const first = await post("/app/api/training", { ...teacher.headers, "accept-language": "fr" });
-    expect(first.statusCode, first.body).toBe(201);
-    const body = first.json() as { courseId: string; classroomId: string; created: boolean };
-    expect(body.created).toBe(true);
-    ({ courseId, classroomId } = body);
-    const second = await post("/app/api/training", teacher.headers);
-    expect(second.statusCode).toBe(200);
-    expect(second.json()).toEqual({ courseId, classroomId, created: false });
-    const s = await statusOf();
-    const liveQuiz = (await server.app.db.select().from(evaluations).where(and(eq(evaluations.classroomId, classroomId), eq(evaluations.mode, "exam"))))[0]!;
-    expect(s.course).toEqual({ id: courseId, classroomId, liveEvaluationId: liveQuiz.id });
-    // No LLM gateway and no OAuth client in this server: the fourth mission cannot be done.
-    expect(missions(s)).toEqual({ student: "todo", run: "todo", own: "todo", tools: "unavailable" });
-  });
 
   const evaluationTitled = async (title: string) => {
     const [row] = await server.app.db
@@ -143,24 +153,57 @@ describe("provisioning over HTTP and the four missions (§1, §4)", () => {
     return row!;
   };
 
-  it("the quizzes hold the fixture's questions, as the shipped content will; the welcome quiz opens", async () => {
-    // The route provisions from the shipped content, a stub without a question until the content PR:
-    // its two quizzes are empty, the welcome one left a draft. What `provision` does with questions is
-    // pinned by `service.db.test.ts`; here the quizzes are filled the same way so the missions can run.
-    const db = server.app.db;
-    const pool = (await trainingPool(db))!;
-    const ids = (await db.select({ id: questions.id }).from(questions).where(eq(questions.poolId, pool.id))).map((q) => q.id);
-    expect(ids).toHaveLength(2);
-    const points = (type: string, version: Parameters<typeof poolService.exampleConfig>[1]) =>
-      poolService.typeOf(type).defaultPoints(poolService.exampleConfig(type, version));
-    for (const title of ["Le quiz d'accueil", "Le quiz en direct"]) {
-      await evaluationService.addItems(db, await evaluationTitled(title), ids, points, { attemptCount: 0 });
+  it("provisions once: 201 then 200 with the same course; the welcome quiz is open", async () => {
+    const first = await post("/app/api/training", { ...teacher.headers, "accept-language": "fr" });
+    expect(first.statusCode, first.body).toBe(201);
+    const body = first.json() as { courseId: string; classroomId: string; created: boolean };
+    expect(body.created).toBe(true);
+    ({ courseId, classroomId } = body);
+    const second = await post("/app/api/training", teacher.headers);
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual({ courseId, classroomId, created: false });
+    const s = await statusOf();
+    const liveQuiz = await evaluationTitled("Le quiz en direct");
+    expect(s.course).toEqual({ id: courseId, classroomId, liveEvaluationId: liveQuiz.id });
+    expect(await evaluationTitled("Le quiz d'accueil")).toMatchObject({ state: "running", mode: "exercise" });
+    // No LLM gateway and no OAuth client in this server: the fourth mission cannot be done.
+    expect(missions(s)).toEqual({ student: "todo", run: "todo", own: "todo", tools: "unavailable" });
+  });
+
+  it("a student, a personal token, an OAuth token, an impersonation, a seb and a kiosk session are refused (§1)", async () => {
+    const other = await server.signIn("teacher");
+    const token = (await post("/app/api/me/tokens", other.headers, { name: "t" })).json() as { token: string };
+    const oauth = await oauthBearer(other.headers);
+    const welcome = await evaluationTitled("Le quiz d'accueil");
+    const station = await kioskStation(server.app);
+    const kiosk = await sessionOf(student.id, { kind: "kiosk", evaluationId: welcome.id, deviceId: station.deviceId });
+    // An impersonation session's write is refused by the session layer first (ADR-034); its read by the route's guard.
+    // An OAuth token's audience is the MCP endpoint, and a seb or kiosk session is confined to its evaluation's
+    // routes (ADR-027, ADR-051): the session layer refuses them everywhere else, as nobody.
+    const callers: [string, Headers, Record<"GET" | "POST", [number, string]>][] = [
+      ["student", student.headers, { GET: [403, "forbidden"], POST: [403, "forbidden"] }],
+      ["token", { authorization: `Bearer ${token.token}` }, { GET: [403, "session_required"], POST: [403, "session_required"] }],
+      ["oauth", { authorization: `Bearer ${oauth}` }, { GET: [401, "unauthenticated"], POST: [401, "unauthenticated"] }],
+      [
+        "impersonation",
+        await sessionOf(teacher.id, { kind: "impersonation", actorUserId: admin.id }),
+        { GET: [403, "session_required"], POST: [403, "impersonation_read_only"] },
+      ],
+      ["seb", await sessionOf(student.id, { kind: "seb", evaluationId: welcome.id }), { GET: [401, "unauthenticated"], POST: [401, "unauthenticated"] }],
+      ["kiosk", { ...kiosk, cookie: `${kiosk.cookie}; ${station.cookie}` }, { GET: [401, "unauthenticated"], POST: [401, "unauthenticated"] }],
+    ];
+    try {
+      for (const [who, headers, expected] of callers) {
+        for (const method of ["GET", "POST"] as const) {
+          const res = await server.app.inject({ method, url: "/app/api/training", headers });
+          expect([res.statusCode, res.json().error], `${who} ${method}`).toEqual(expected[method]);
+        }
+      }
+      expect((await get("/app/api/training", admin.headers)).statusCode).toBe(200);
+    } finally {
+      // The OAuth client registered above goes, grant and token with it: mission 4 starts from nothing.
+      await server.app.db.delete(oauthClients);
     }
-    let welcome = await evaluationTitled("Le quiz d'accueil");
-    expect(welcome).toMatchObject({ state: "draft", mode: "exercise" });
-    evaluationService.guardTransition(welcome, "running", { items: await evaluationService.itemRows(db, welcome.id), attemptCount: 0, now: server.clock.now() });
-    welcome = await live.startEvaluation(db, welcome, server.clock.now());
-    expect(welcome.state).toBe("running");
   });
 
   /** The seated teacher enters and hands in, as a student does (ADR-018). */

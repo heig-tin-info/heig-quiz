@@ -89,6 +89,7 @@ export {
   vacateSeats,
 } from "./members.js";
 export { poolsOfCourse, setCoursePools } from "./coursePools.js";
+export { createPublished, ensureCategory, questionByName, type PublishedQuestionSpec } from "./ensure.js";
 export {
   listSubscribers,
   announceRetired,

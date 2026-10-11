@@ -43,9 +43,11 @@ export const courses = pgTable(
      * course: its name and code are editable like any other's. Unique, so a
      * second provisioning for the same teacher finds the first — the
      * constraint IS the idempotence, as `pools_personal_uq` is for the
-     * personal pool. Written by the `training` module through `createCourse`.
+     * personal pool. Written by the `org` service alone (`claimTrainingCourse`,
+     * the last write of a provisioning; cleared with the teacher's seat): a
+     * deleted account unmarks the course and never deletes it.
      */
-    trainingFor: uuid("training_for").references(() => users.id, { onDelete: "cascade" }),
+    trainingFor: uuid("training_for").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

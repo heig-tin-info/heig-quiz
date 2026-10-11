@@ -108,6 +108,8 @@ export {
   coursePoolIds,
   inLinkedPool,
   listCoursePools,
+  latestPublished,
+  defaultPoints,
   addItems,
   patchItem,
   deleteItem,

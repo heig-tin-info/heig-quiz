@@ -815,7 +815,7 @@ export const fr: Record<keyof Dict, string> = {
   "admin.task.integrity.purge": "Rétention du journal d'examen",
   "admin.task.integrity.purge.desc": "Supprime l'historique des sorties de page et des collages venus de l'extérieur des évaluations fermées depuis six mois dont les notes n'ont jamais été publiées.",
   "admin.task.training.install": "Contenu du cours d'initiation",
-  "admin.task.training.install.desc": "Installe les questions du cours d'initiation dans sa banque publique et publie une nouvelle version de celles qui ont changé ; rien ne bouge dans les quiz déjà créés à partir d'elles.",
+  "admin.task.training.install.desc": "Installe les questions du cours d'initiation dans sa banque publique et republie la version livrée de celles qui diffèrent — une version publiée à la main dans cette banque est annulée ; rien ne bouge dans les quiz déjà créés à partir d'elles. S'exécute chaque jour.",
   "admin.kiosk": "Postes kiosque",
   "admin.kiosk.hint":
     "Les Chromebooks de l'école qui se sont attestés. Nommez un poste pour que les étudiants puissent s'y appairer ; retirez-le pour le mettre hors service.",
