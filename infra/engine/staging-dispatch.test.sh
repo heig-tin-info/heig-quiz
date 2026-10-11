@@ -159,6 +159,14 @@ expect "valid: the token is on no argv and in no output" token_nowhere
 run "codespace   staging	$t_sha  $t_digest $t_token"
 expect "valid: any run of blanks between the words" rc_is 0
 
+# GitHub's token alphabet is not ours to guess (2026-10-11: a real token
+# failed the strict [A-Za-z0-9_]+): any non-blank token is accepted, and a
+# shell substitution as token is passed verbatim, never evaluated.
+odd_token="\$(id).-+/="
+run "codespace staging $t_sha $t_digest $odd_token"
+expect "valid: a token with punctuation, verbatim on stdin" \
+	[ "$(cat "$work/stdin")" = "$odd_token" ]
+
 # --- 5. Refused requests: exit 2, before any command, the token in no output.
 refused_cleanly() { rc_is 2 && log_empty && token_nowhere; }
 refused() {
@@ -172,7 +180,6 @@ refused "another instance" "codespace prod $t_sha $t_digest $t_token"
 refused "the runner's bare form" "$t_sha $t_digest $t_token"
 refused "an uppercase sha" "codespace staging ${t_sha^^} $t_digest $t_token"
 refused "another digest algorithm" "codespace staging $t_sha sha512:${t_digest#sha256:} $t_token"
-refused "a substitution as token" "codespace staging $t_sha $t_digest \$(id)"
 refused "a trailing word" "codespace staging $t_sha $t_digest $t_token extra"
 refused "a second line" "codespace staging $t_sha $t_digest $t_token
 codespace staging $t_sha $t_digest $t_token"

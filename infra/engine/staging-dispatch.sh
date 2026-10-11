@@ -12,7 +12,8 @@
 #               tag :<sha>); never checked out, never fetched
 #     <digest>  sha256:<64 lowercase hex>, what the CI's image job pushed for
 #               quiz-codespace; MANDATORY, the pull is never by tag
-#     <token>   an ephemeral GHCR token ([A-Za-z0-9_]+), piped to
+#     <token>   an ephemeral GHCR token (any non-blank characters: its
+#               alphabet is GitHub's, not ours), never evaluated, piped to
 #               `podman login`, never on argv
 # The words of infra/engine/deploy.sh's M6-04 form, with the digest
 # mandatory and no `force` (staging has no live-session guard). Anything
@@ -49,7 +50,7 @@ pd() { podman --remote --url "$PODMAN_URL" "$@"; }
 # parse_request <request>: sets sha, digest and token, or says why not and
 # returns 1. The request is never echoed: it holds the token.
 parse_request() {
-	local re='^codespace[[:space:]]+staging[[:space:]]+([0-9a-f]{40})[[:space:]]+(sha256:[0-9a-f]{64})[[:space:]]+([A-Za-z0-9_]+)$'
+	local re='^codespace[[:space:]]+staging[[:space:]]+([0-9a-f]{40})[[:space:]]+(sha256:[0-9a-f]{64})[[:space:]]+([^[:space:]]+)$'
 	if [[ "$1" =~ $re ]]; then
 		sha="${BASH_REMATCH[1]}"
 		digest="${BASH_REMATCH[2]}"
