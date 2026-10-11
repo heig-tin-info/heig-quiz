@@ -5,6 +5,7 @@ import {
   CircleHelp,
   ClipboardCheck,
   Code2,
+  Compass,
   FolderTree,
   GitBranch,
   GraduationCap,
@@ -56,6 +57,13 @@ export interface Command {
   group: CommandGroupId;
   /** Extra text the fuzzy match sees but the row does not show. */
   keywords?: string;
+  /**
+   * What running it does to the platform's data, for the teacher assistant
+   * (ADR-080 §10): required on a screen's command (`ScreenCommand`), which
+   * is what the assistant is offered; a global command carries it only when
+   * it writes, so that it can never be folded in as effect-free.
+   */
+  effect?: "none" | "write";
   run: () => void;
 }
 
@@ -92,6 +100,12 @@ export interface CommandContext {
    * the Shell owns — the palette has no sheet of its own to open.
    */
   onStartPoll?: () => void;
+  /**
+   * Provisions or opens the teacher's training course (ADR-105 §5). Absent
+   * for a student, in the student view, and while the content is not
+   * installed.
+   */
+  onTraining?: () => void;
 }
 
 /** Id prefix of the per-classroom commands; the cap below recognizes them by it. */
@@ -383,6 +397,21 @@ export function buildCommands(ctx: CommandContext): Command[] {
       run: () => openExternal(SOURCES_URL),
     },
   );
+
+  if (ctx.onTraining) {
+    const openTraining = ctx.onTraining;
+    commands.push({
+      id: "help:training-course",
+      label: t("menu.training"),
+      hint: t("training.paletteHint"),
+      icon: Compass,
+      group: "help",
+      keywords: "training initiation onboarding tutorial formation missions",
+      // It creates a course on first use: never the assistant's to run (ADR-080 §10).
+      effect: "write",
+      run: () => openTraining(),
+    });
+  }
 
   for (const { topic, title } of ctx.helpTopics) {
     commands.push({

@@ -29,6 +29,7 @@ export function NewActivity({
   navigate,
   onEvaluation,
   onConnect,
+  secondary = false,
 }: {
   classroomId: string;
   /** The classroom's GitHub read, once it succeeded. */
@@ -38,12 +39,19 @@ export function NewActivity({
   onEvaluation: () => void;
   /** Opens the Settings' connect sheet (`ClassroomView`'s `openConnect`). */
   onConnect: () => void;
+  /**
+   * Steps down from the tab's primary: on the training classroom, while a
+   * mission remains, the progress card's button is the screen's one accent
+   * (ADR-105 §4).
+   */
+  secondary?: boolean;
 }) {
   const t = useT();
+  const variant = secondary ? "secondary" : "primary";
   const project = newProjectAction(classroomId, github, navigate, onConnect, t);
   if (!project) {
     return (
-      <Button onClick={onEvaluation}>
+      <Button variant={variant} onClick={onEvaluation}>
         <Plus /> {t("eval.new")}
       </Button>
     );
@@ -57,7 +65,7 @@ export function NewActivity({
       label={t("activity.new")}
       items={items}
       trigger={
-        <Button>
+        <Button variant={variant}>
           <Plus /> {t("activity.new")} <ChevronDown />
         </Button>
       }

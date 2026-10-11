@@ -247,6 +247,19 @@ describe("buildCommands: the theme and language actions", () => {
 });
 
 describe("buildCommands: help", () => {
+  it("offers the training course in the Help group only when there is one, marked as a write (ADR-105 §5, ADR-080 §10)", () => {
+    const onTraining = vi.fn();
+    const training = need(buildCommands(makeContext({ onTraining })), "help:training-course");
+    expect(training.group).toBe("help");
+    expect(training.label).toBe("Training course");
+    // It provisions a course on first use: the assistant must never run it.
+    expect(training.effect).toBe("write");
+    training.run();
+    expect(onTraining).toHaveBeenCalledTimes(1);
+    expect(pick(buildCommands(makeContext()), "help:training-course")).toBeUndefined();
+    expect(need(buildCommands(makeContext({ onTraining, locale: "fr" })), "help:training-course").label).toBe("Cours d'initiation");
+  });
+
   it("turns each topic into a command that opens it", () => {
     const openHelp = vi.fn();
     const commands = buildCommands(

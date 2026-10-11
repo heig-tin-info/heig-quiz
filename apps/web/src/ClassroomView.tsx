@@ -38,6 +38,8 @@ import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
 import { useSearchParam, type Navigate, type Route } from "./router";
 import { useScreenCommands } from "./screenCommands";
+import { useTrainingStatus } from "./training/api";
+import { TrainingCard, trainingComplete } from "./training/TrainingCard";
 import {
   Badge,
   Button,
@@ -83,6 +85,11 @@ import { useClassroom } from "./course/parts";
  * header's slot and leads straight to the new set's page. So are the Grades
  * (F-GBOOK, M5-04, `/classrooms/:id/grades`): the gradebook's matrix, whose
  * primary, "Export CSV", takes the header's slot.
+ *
+ * The training classroom (ADR-105 §4) carries its progress card above the
+ * activities, for the teacher it was provisioned for: while one of its
+ * three required missions remains, the card's button is the tab's one accent
+ * and "New ▾" steps down to secondary; the other tabs keep their primary.
  */
 
 type RouteTab = "journal" | "groups" | "grades" | "settings";
@@ -210,6 +217,11 @@ export function ClassroomView({
 
   const crumbs = useClassroomCrumbs(id);
   const room = useClassroom(id);
+  // ADR-105: the card is this classroom's only when the status names it;
+  // every other classroom reads the same cached status and shows nothing.
+  const training = useTrainingStatus();
+  const trainingStatus = training.data?.course?.classroomId === id ? training.data : undefined;
+  const missionPending = trainingStatus !== undefined && !trainingComplete(trainingStatus);
   /**
    * The teacher takes a (staff) seat in their own classroom, to walk the
    * student flow without a second account. It stays out of the headcount.
@@ -330,6 +342,7 @@ export function ClassroomView({
                 navigate={navigate}
                 onEvaluation={() => setLayer("evaluation")}
                 onConnect={openConnect}
+                secondary={missionPending}
               />
             ) : tab === "groups" && !data.archivedAt ? (
               <Button loading={newSet.isPending} onClick={createSet}>
@@ -402,6 +415,9 @@ export function ClassroomView({
           </section>
         ) : tab === "evaluations" ? (
           <div className="space-y-8">
+            {trainingStatus ? (
+              <TrainingCard classroomId={id} status={trainingStatus} hasSeat={seat !== undefined} navigate={navigate} />
+            ) : null}
             {/* WP8: evaluation + dashboard */}
             <EvaluationList
               classroomId={id}

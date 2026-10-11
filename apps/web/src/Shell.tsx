@@ -29,6 +29,7 @@ import { PoolNavTree, usePoolNavState } from "./pool/PoolNav";
 import { ShortcutKeys, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
 import { SECTION_ROOTS } from "./Trail";
+import { useOpenTraining, useTrainingStatus } from "./training/api";
 import {
   Button,
   cx,
@@ -474,6 +475,11 @@ export function Shell({
   // teacher can jump to, on the key the pool screens already use.
   const pools = usePools({ enabled: teacherUi });
   const projects = usePaletteProjects(teacherUi, palette);
+  // ADR-105 §5: the training course, in the account menu and the palette,
+  // for a teacher in the teacher UI while the content is installed.
+  const training = useTrainingStatus({ enabled: teacherUi });
+  const openTraining = useOpenTraining(navigate);
+  const onTraining = teacherUi && training.data?.installed ? openTraining.open : undefined;
   const themeChoice = useThemeChoice();
   const resolvedTheme = useResolvedTheme();
   const { open: openHelp } = useHelp();
@@ -527,6 +533,7 @@ export function Shell({
       {...(place === "topbar" && bottomNav ? {} : { onOpenSettings: () => navigate({ view: "settings" }) })}
       studentView={studentView}
       onToggleStudentView={onToggleStudentView}
+      onTraining={onTraining}
       notifications={{ navigate }}
     />
   );
@@ -706,6 +713,7 @@ export function Shell({
           helpTopics={topics}
           signOut={signOut}
           onStartPoll={teacherUi ? () => navigate({ view: "polls" }) : undefined}
+          onTraining={onTraining}
         />
       ) : null}
 

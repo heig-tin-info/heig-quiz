@@ -4,6 +4,7 @@ import {
   Bell,
   BookOpen,
   Code2,
+  Compass,
   GitCommitHorizontal,
   GraduationCap,
   LogOut,
@@ -182,9 +183,9 @@ export function ViewModeToggle({
 }
 
 /**
- * Account menu: settings, the teacher/student view switch, theme, the two
- * external links and sign-out. One trigger for the sidebar (full row) and
- * the mobile top bar (avatar only).
+ * Account menu: settings, the teacher/student view switch, the training
+ * course (ADR-105 §5), theme, the two external links and sign-out. One
+ * trigger for the sidebar (full row) and the mobile top bar (avatar only).
  */
 export function UserMenu({
   me,
@@ -193,6 +194,7 @@ export function UserMenu({
   onOpenSettings,
   studentView,
   onToggleStudentView,
+  onTraining,
   notifications,
 }: {
   me: Me;
@@ -207,6 +209,12 @@ export function UserMenu({
   onOpenSettings?: () => void;
   studentView?: boolean;
   onToggleStudentView?: () => void;
+  /**
+   * Provisions or opens the teacher's training course (ADR-105 §5). Absent
+   * for a student, in the student view, and while the content is not
+   * installed: the entry then does not exist.
+   */
+  onTraining?: () => void;
   /**
    * The inbox, for every account (a student is told of a released result): an
    * item that opens the panel, and the unread count on the avatar. It used to
@@ -253,6 +261,7 @@ export function UserMenu({
           },
         ]
       : []),
+    ...(onTraining ? [{ label: t("menu.training"), icon: Compass, onSelect: onTraining }] : []),
     {
       label: theme === "dark" ? t("menu.lightTheme") : t("menu.darkTheme"),
       icon: theme === "dark" ? Sun : Moon,

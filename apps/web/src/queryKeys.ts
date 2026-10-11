@@ -82,6 +82,12 @@ export const teamsTabKey = ["teams-tab"] as const;
 // --- Courses and classrooms --------------------------------------------------
 
 export const coursesKey = ["courses"] as const;
+/**
+ * The caller's training course and the state of its missions (ADR-105): a
+ * key of its own, derived server-side from the data, so the provisioning and
+ * the courses refresh it explicitly rather than by prefix.
+ */
+export const trainingKey = ["training"] as const;
 export const courseKey = (id: string) => ["course", id] as const;
 /**
  * `GET /courses/:id/templates` (ADR-031): under the course, so a course

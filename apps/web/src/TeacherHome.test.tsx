@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -14,6 +14,15 @@ import { mockFetch, ok, renderWithProviders } from "./test/render";
  */
 
 const COURSES = "/app/api/courses";
+const TRAINING = "/app/api/training";
+
+/** The training status (ADR-105): installed, no course yet, every mission to do. */
+const trainingStatus = (over: { installed?: boolean; course?: { id: string; classroomId: string } | null } = {}) => ({
+  installed: true,
+  course: null,
+  missions: ["student", "run", "own", "tools"].map((key) => ({ key, state: "todo" })),
+  ...over,
+});
 
 describe("TeacherHome", () => {
   it("lists each course with its classrooms and headcount", async () => {
@@ -344,5 +353,43 @@ describe("TeacherHome in a private window", () => {
     // The remembered view falls back to cards, and picking one still works.
     await userEvent.click(screen.getByRole("radio", { name: "List" }));
     expect(screen.getByRole("radio", { name: "List" })).toBeChecked();
+  });
+
+  it("offers the training course under the one action of the empty home, and opens it once provisioned (ADR-105 §5)", async () => {
+    const navigate = vi.fn();
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([]),
+      [`GET ${TRAINING}`]: ok(trainingStatus()),
+      [`POST ${TRAINING}`]: ok({ courseId: "c-init", classroomId: "r-init", created: true }),
+    });
+    renderWithProviders(<TeacherHome navigate={navigate} />);
+
+    expect(await screen.findByText("First time here?")).toBeVisible();
+    // A text link, not a second button: the one accent stays on New course.
+    const link = screen.getByRole("button", { name: "Start with the training course" });
+    expect(link.className).not.toMatch(/bg-accent/);
+    expect(screen.getAllByRole("button", { name: /New course/ })).toHaveLength(1);
+    await userEvent.click(link);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r-init" }));
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual([TRAINING]);
+  });
+
+  it("offers no training line while the content is not installed, nor once the course exists", async () => {
+    mockFetch({
+      [`GET ${COURSES}`]: ok([]),
+      [`GET ${TRAINING}`]: ok(trainingStatus({ installed: false })),
+    });
+    const first = renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+    expect(await screen.findByText("No courses yet")).toBeVisible();
+    expect(screen.queryByText("First time here?")).toBeNull();
+    first.unmount();
+
+    mockFetch({
+      [`GET ${COURSES}`]: ok([]),
+      [`GET ${TRAINING}`]: ok(trainingStatus({ course: { id: "c-init", classroomId: "r-init" } })),
+    });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+    expect(await screen.findByText("No courses yet")).toBeVisible();
+    expect(screen.queryByText("First time here?")).toBeNull();
   });
 });

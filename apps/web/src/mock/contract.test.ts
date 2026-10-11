@@ -35,6 +35,7 @@ import {
   LlmAvailability,
   AssistAvailability,
   AssistConversation,
+  TrainingStatus,
   AssistConversationSummary,
   AssistReply,
   ReviewList,
@@ -486,6 +487,8 @@ const CHECKED: Case[] = [
   one("/app/api/admin/system", "/app/api/admin/system", SystemStatus),
   one("/app/api/admin/llm", "/app/api/admin/llm", LlmSettings),
   one("/app/api/generate/availability", "/app/api/generate/availability", LlmAvailability),
+  // The training course (ADR-105): installed, no course yet, without a flag.
+  one("/app/api/training", "/app/api/training", TrainingStatus),
   // The teacher assistant's development stub (ADR-080).
   one("/app/api/assist/availability", "/app/api/assist/availability", AssistAvailability),
   each("/app/api/assist/conversations", "/app/api/assist/conversations", AssistConversationSummary),
