@@ -1,5 +1,8 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import katex from "katex";
+import { describe, expect, it, vi } from "vitest";
+
+import { FormulaBudget } from "@quiz/docrender/katex";
 
 import { FORMULA_LABELS } from "../test/formula";
 import { renderWithProviders } from "../test/render";
@@ -223,19 +226,40 @@ describe("MarkdownView — content", () => {
     }
   });
 
-  it("refuses a formula whose HTML is past the cap, saying why", () => {
-    // 800 aligned rows: ~1.2 MB of KaTeX HTML, above FORMULA_HTML_MAX (1 MB).
-    const rows = "a &= \\frac{b}{c} \\\\ ".repeat(800);
-    const big = view(`$$\\begin{aligned}${rows}\\end{aligned}$$`);
+  it("refuses a formula past FORMULA_SOURCE_MAX before KaTeX sees it", () => {
+    const spy = vi.spyOn(katex, "renderToString");
+    try {
+      const long = view(`$${"x".repeat(5000)}$`);
+      expect(long.querySelector(".katex-error")).toHaveAttribute("title", FORMULA_LABELS.tooLarge);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("refuses a formula whose HTML is past FORMULA_HTML_MAX, saying why", () => {
+    // A 2 KB matrix row of 2000 cells: ~1.16 MB of KaTeX HTML, above 1 MB.
+    const big = view(`$$\\begin{matrix}${"&".repeat(2000)}\\end{matrix}$$`);
     expect(big.querySelector(".katex-error")).toHaveAttribute("title", FORMULA_LABELS.tooLarge);
     expect(big.querySelector(".katex-html")).toBeNull();
-    // The largest legitimate 4 KB shape measured (583 KB) stays under it.
+    // 255 nested `\overbrace` (583 KB), the largest nest measured, stays under it.
     const nest = `${"\\overbrace{".repeat(255)}x${"}^{a}".repeat(255)}`;
-    expect(formulaHtml(nest, false, FORMULA_LABELS)).toContain("katex-html");
+    expect(formulaHtml(nest, false, FORMULA_LABELS, new FormulaBudget())).toContain("katex-html");
+  });
+
+  it("keeps a body's formulas until FORMULA_HTML_BUDGET, then refuses the rest", () => {
+    // Three 1 700-cell rows, ~965 KB each: two fit the body's 2 MB, the third does not.
+    const row = `$$\\begin{matrix}${"&".repeat(1700)}\\end{matrix}$$`;
+    const host = document.createElement("div");
+    host.innerHTML = renderMarkdown([row, row, row].join("\n\n"), "Code", { formula: FORMULA_LABELS });
+    const formulas = Array.from(host.querySelectorAll(".md-math"));
+    expect(formulas.map((f) => f.querySelector(".katex-html") !== null)).toEqual([true, true, false]);
+    expect(formulas[2]?.querySelector(".katex-error")).toHaveAttribute("title", FORMULA_LABELS.tooLarge);
   });
 
   it("shows a formula nested past the call stack as an error, not a crash", () => {
-    const body = view(`$${"\\sqrt{".repeat(3000)}x${"}".repeat(3000)}$`);
+    // 1000 nested superscripts: 4 KB, under FORMULA_SOURCE_MAX, past the stack.
+    const body = view(`$${"x^{".repeat(1000)}x${"}".repeat(1000)}$`);
     expect(body.querySelector(".katex-error")).toHaveAttribute(
       "title",
       "This formula is nested too deeply to display",

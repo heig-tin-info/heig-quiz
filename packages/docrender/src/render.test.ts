@@ -1,5 +1,6 @@
 import { JournalWarning } from "@quiz/contracts";
-import { describe, expect, it } from "vitest";
+import katex from "katex";
+import { describe, expect, it, vi } from "vitest";
 
 import { splitFrontMatter } from "./frontMatter.js";
 import { renderPage, type RenderContext } from "./render.js";
@@ -324,16 +325,37 @@ describe("math", () => {
     expect(codes(renderPage("$$\\tag{x}\\df@tag$$\n", ctx()).warnings)).toEqual(["math_error"]);
   });
 
+  it("refuses a formula past FORMULA_SOURCE_MAX before KaTeX sees it", () => {
+    const spy = vi.spyOn(katex, "renderToString");
+    try {
+      const long = renderPage(`$${"x".repeat(5000)}$\n`, ctx());
+      expect(codes(long.warnings)).toEqual(["math_error"]);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("refuses a formula whose HTML is past FORMULA_HTML_MAX", () => {
-    // 800 aligned rows: ~1.2 MB of KaTeX HTML, above the 1 MB cap.
-    const rows = "a &= \\frac{b}{c} \\\\ ".repeat(800);
-    const big = renderPage(`$$\\begin{aligned}${rows}\\end{aligned}$$\n`, ctx());
+    // A 2 KB matrix row of 2000 cells: ~1.16 MB of KaTeX HTML, above 1 MB.
+    const big = renderPage(`$$\\begin{matrix}${"&".repeat(2000)}\\end{matrix}$$\n`, ctx());
     expect(codes(big.warnings)).toEqual(["math_error"]);
     expect(big.html).not.toContain("katex");
   });
 
+  it("keeps a page's formulas until FORMULA_HTML_BUDGET, then refuses the rest", () => {
+    // Three 1 700-cell rows, ~965 KB each: two fit the page's 2 MB, the third does not.
+    const row = `$$\\begin{matrix}${"&".repeat(1700)}\\end{matrix}$$\n`;
+    const page = renderPage([row, row, row].join("\n"), ctx());
+    expect(page.html.match(/katex-display/g)).toHaveLength(2);
+    expect(codes(page.warnings)).toEqual(["math_error"]);
+    // The budget is the page's: the next page starts afresh.
+    expect(renderPage(row, ctx()).warnings).toEqual([]);
+  });
+
   it("reports a formula nested past the call stack, without failing the page", () => {
-    const deep = renderPage(`$${"\\sqrt{".repeat(3000)}x${"}".repeat(3000)}$\n`, ctx());
+    // 1000 nested superscripts: 4 KB, under FORMULA_SOURCE_MAX, past the stack.
+    const deep = renderPage(`$${"x^{".repeat(1000)}x${"}".repeat(1000)}$\n`, ctx());
     expect(codes(deep.warnings)).toEqual(["math_error"]);
   });
 

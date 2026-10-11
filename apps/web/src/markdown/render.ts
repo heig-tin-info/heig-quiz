@@ -3,6 +3,7 @@ import { Marked, type Tokens } from "marked";
 
 import { decodeEntities } from "@quiz/docrender/entities";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
+import { FormulaBudget } from "@quiz/docrender/katex";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 
 import { escapableStart, referenceAt } from "./delimiters";
@@ -236,7 +237,12 @@ const LITERAL = new Set(["CODE", "PRE", "KBD", "SAMP"]);
  * Replaces `$…$` and `$$…$$` inside one text node with KaTeX output. Returns
  * true when it changed something, so the caller can skip untouched nodes.
  */
-function renderMathIn(node: Text, doc: Document, labels: FormulaLabels): boolean {
+function renderMathIn(
+  node: Text,
+  doc: Document,
+  labels: FormulaLabels,
+  budget: FormulaBudget,
+): boolean {
   const text = node.data;
   if (!text.includes("$")) return false;
   MATH.lastIndex = 0;
@@ -253,7 +259,7 @@ function renderMathIn(node: Text, doc: Document, labels: FormulaLabels): boolean
     // A broken or refused formula renders its source in the error colour
     // instead of taking the whole prompt down: a half-written formula must
     // not blank the question a student is reading (`formula.ts`).
-    host.innerHTML = formulaHtml(tex, display, labels);
+    host.innerHTML = formulaHtml(tex, display, labels, budget);
     frag.append(host);
     last = match.index + match[0].length;
     match = MATH.exec(text);
@@ -456,7 +462,10 @@ function postProcess(
   });
   const texts: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n as Text);
-  for (const node of texts) renderMathIn(node, doc, formula);
+  // One budget for the whole body (`FORMULA_HTML_BUDGET`): a formula past it
+  // is refused, however many came before it.
+  const budget = new FormulaBudget();
+  for (const node of texts) renderMathIn(node, doc, formula, budget);
 }
 
 /**

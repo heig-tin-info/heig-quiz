@@ -26,7 +26,8 @@
  *   calls x the body of a macro, 499 calls to a 1000-character `\def`
  *   (2 KB) rendered for ~290 s; 250 calls to the `\df@tag` that `\tag{…}`
  *   defines, 3.7 KB, wrote 64 MB of HTML in 1.4 s — is closed by
- *   {@link forbiddenCommand}, and what is left by {@link FORMULA_HTML_MAX}.
+ *   {@link forbiddenCommand}, and what is left by {@link FORMULA_SOURCE_MAX},
+ *   {@link FORMULA_HTML_MAX} and {@link FORMULA_HTML_BUDGET}.
  *
  * Deep nesting (~500 `\sqrt`, `\boxed` or superscripts) overflows the call
  * stack in ~40 ms: a `RangeError` that `throwOnError: false` does not catch,
@@ -35,20 +36,67 @@
 export const KATEX_LIMITS = { maxSize: 10, maxExpand: 500 } as const;
 
 /**
+ * The longest formula source KaTeX is handed, in characters; a longer one is
+ * refused before it is parsed. KaTeX's time and output follow the source:
+ * an `array` row of N `&` built 4.6 MB in 245 ms at 8 KB, 57 MB in 3.5 s at
+ * 100 KB — and an essay may be 50 000 characters, a journal page 500 000.
+ * 4 KB is far above what a course formula needs (a six-line aligned proof
+ * is ~300 characters).
+ */
+export const FORMULA_SOURCE_MAX = 4096;
+
+/**
  * The most HTML one formula may produce, in UTF-16 code units: a renderer
  * that gets more shows the formula as refused instead of inserting it, so an
  * expansion path nobody foresaw cannot put megabytes into the grader's page
- * or the journal. KaTeX 0.18.7 (`htmlAndMathml`), 4 KB formulas without
- * definitions or internal names, measured: 255 nested `\overbrace` 583 KB
- * (the largest found; ~30 ms in Node, 16 + 247 ms of KaTeX, DOM and layout
- * in Chromium), 400 nested `\sqrt` 407 KB, 300 nested `\xrightarrow` 396 KB,
- * 409 nested `\frac` 379 KB, 203 aligned rows 300 KB, a 254-row matrix
- * 234 KB, 4096 plain letters 48 KB. 1 MB is above all of them and far
- * below the 64 MB the `\df@tag` path reached. The cap bounds what reaches
- * the page, not KaTeX's own time, which for these shapes stayed under
- * ~110 ms in Node (a cold first call is the slowest).
+ * or the journal. KaTeX 0.18.7 (`htmlAndMathml`), formulas of at most
+ * {@link FORMULA_SOURCE_MAX} without definitions or internal names,
+ * measured: a `matrix` or `array` row of `&` is the largest, ~575
+ * characters a cell — 1 700 cells (1.7 KB) write 989 KB, 4 000 (4 KB)
+ * 2.3 MB, refused here; then 255 nested `\overbrace` 583 KB (~30 ms in Node,
+ * 16 + 247 ms of KaTeX, DOM and layout in Chromium), 400 nested `\sqrt`
+ * 407 KB, 409 nested `\frac` 379 KB, 203 aligned rows 300 KB, 4096 plain
+ * letters 48 KB. Every shape measured stayed under ~110 ms of KaTeX in Node
+ * (a cold first call is the slowest).
  */
 export const FORMULA_HTML_MAX = 1024 * 1024;
+
+/**
+ * The most formula HTML one rendered body may hold: one `renderMarkdown`
+ * call in the web app, one journal page. Past it, the next formulas of that
+ * body are refused like a formula past {@link FORMULA_HTML_MAX}: 28 formulas
+ * just under the cap in one 50 KB answer would otherwise put 27 MB in the
+ * grader's page. Two of the largest legitimate formulas fit.
+ */
+export const FORMULA_HTML_BUDGET = 2 * 1024 * 1024;
+
+/**
+ * Why a formula must not reach KaTeX — a forbidden command, or a source past
+ * {@link FORMULA_SOURCE_MAX} — or null. Every renderer asks before KaTeX.
+ */
+export function refusedBeforeKatex(tex: string): "command" | "size" | null {
+  if (forbiddenCommand(tex) !== null) return "command";
+  return tex.length > FORMULA_SOURCE_MAX ? "size" : null;
+}
+
+/**
+ * What one rendered body may still spend on formula HTML. One per body,
+ * created by the renderer that owns the body and threaded through it — never
+ * a module global, which would let one page starve the next.
+ */
+export class FormulaBudget {
+  private left = FORMULA_HTML_BUDGET;
+
+  /**
+   * Whether `html` may be inserted: under {@link FORMULA_HTML_MAX} and what
+   * the body has left. Spends it when it may.
+   */
+  admit(html: string): boolean {
+    if (html.length > FORMULA_HTML_MAX || html.length > this.left) return false;
+    this.left -= html.length;
+    return true;
+  }
+}
 
 /**
  * A command that defines or aliases a macro (`\global` prefixes them), a

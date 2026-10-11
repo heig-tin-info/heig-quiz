@@ -40,6 +40,8 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { BlockMath, InlineMath } from "@tiptap/extension-mathematics";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 
+import { FormulaBudget } from "@quiz/docrender/katex";
+
 import { clozeHoleExtensions } from "./clozeHole";
 import { ParamExpr } from "./paramExpr";
 import { CodeHighlight } from "./codeHighlight";
@@ -54,7 +56,10 @@ import { assetUrl, assetWidth } from "./render";
  * and a macro definition is refused while it is written exactly as it will
  * be when read (audit L15). The extension's own node view called KaTeX
  * directly; this is the same element (classes, `data-type`, `data-latex`)
- * without its click option, which no field sets.
+ * without its click option, which no field sets. Each atom gets a fresh
+ * `FormulaBudget`: node views are rebuilt on every edit, so a budget shared
+ * across them would run out as the teacher types. One atom is still held to
+ * `FORMULA_SOURCE_MAX` and `FORMULA_HTML_MAX`.
  */
 function formulaNodeView(display: boolean, labels: FormulaLabels): NodeViewRenderer {
   return ({ node, editor }) => {
@@ -66,7 +71,7 @@ function formulaNodeView(display: boolean, labels: FormulaLabels): NodeViewRende
     dom.setAttribute("data-latex", latex);
     const target = display ? dom.appendChild(document.createElement("div")) : dom;
     if (display) target.className = "block-math-inner";
-    target.innerHTML = formulaHtml(latex, display, labels);
+    target.innerHTML = formulaHtml(latex, display, labels, new FormulaBudget());
     return { dom };
   };
 }

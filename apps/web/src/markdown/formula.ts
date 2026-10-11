@@ -1,16 +1,17 @@
 import katex from "katex";
 
 import { escapeHtml } from "@quiz/docrender/highlight";
-import { FORMULA_HTML_MAX, forbiddenCommand, KATEX_LIMITS } from "@quiz/docrender/katex";
+import { type FormulaBudget, KATEX_LIMITS, refusedBeforeKatex } from "@quiz/docrender/katex";
 
 /*
  * One formula as HTML, the same way wherever the web app draws one: the
  * student view (`render.ts`), the editor's formula atoms (`tiptap.ts`) and
  * the formula dialog's preview. A formula is someone else's text — a
  * co-author's, a student's essay on the grader's screen — so it renders
- * under `KATEX_LIMITS`, a macro definition or an internal command never
- * reaches KaTeX at all, and what KaTeX returns is inserted only up to
- * `FORMULA_HTML_MAX` (audit L15, `@quiz/docrender/katex`).
+ * under `KATEX_LIMITS`, a macro definition, an internal command or a source
+ * past `FORMULA_SOURCE_MAX` never reaches KaTeX at all, and what KaTeX
+ * returns is inserted only as far as the body's `FormulaBudget` admits it
+ * (audit L15, `@quiz/docrender/katex`).
  */
 
 /** Why a formula was not drawn, in the reader's language (`useFormulaLabels`). */
@@ -19,7 +20,7 @@ export interface FormulaLabels {
   macro: string;
   /** It nests deeper than the call stack goes. */
   tooDeep: string;
-  /** Its HTML is past `FORMULA_HTML_MAX`. */
+  /** Its source or its HTML is too large, alone or with the body's other formulas. */
   tooLarge: string;
 }
 
@@ -29,10 +30,17 @@ export interface FormulaLabels {
  * parse: the source in the error colour, the reason as its title. A parse
  * error takes that path inside KaTeX (`throwOnError: false`); a stack
  * overflow does not (only `ParseError` is caught there), and would otherwise
- * take the whole page down.
+ * take the whole page down. `budget` is the body's: one per rendered
+ * markdown, a fresh one for a formula drawn on its own.
  */
-export function formulaHtml(tex: string, display: boolean, labels: FormulaLabels): string {
-  if (forbiddenCommand(tex) !== null) return refused(tex, labels.macro);
+export function formulaHtml(
+  tex: string,
+  display: boolean,
+  labels: FormulaLabels,
+  budget: FormulaBudget,
+): string {
+  const before = refusedBeforeKatex(tex);
+  if (before !== null) return refused(tex, before === "command" ? labels.macro : labels.tooLarge);
   let html: string;
   try {
     html = katex.renderToString(tex, {
@@ -45,7 +53,7 @@ export function formulaHtml(tex: string, display: boolean, labels: FormulaLabels
     // Anything else KaTeX did not foresee: its source, no reason to give.
     return refused(tex, e instanceof RangeError ? labels.tooDeep : null);
   }
-  return html.length > FORMULA_HTML_MAX ? refused(tex, labels.tooLarge) : html;
+  return budget.admit(html) ? html : refused(tex, labels.tooLarge);
 }
 
 function refused(tex: string, reason: string | null): string {

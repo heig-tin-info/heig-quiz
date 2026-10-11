@@ -1,7 +1,14 @@
 import katex from "katex";
 import { describe, expect, it } from "vitest";
 
-import { FORMULA_HTML_MAX, forbiddenCommand, KATEX_LIMITS } from "./katex.js";
+import {
+  FORMULA_HTML_MAX,
+  FORMULA_SOURCE_MAX,
+  FormulaBudget,
+  forbiddenCommand,
+  KATEX_LIMITS,
+  refusedBeforeKatex,
+} from "./katex.js";
 
 /** A formula as every renderer of the platform draws one. */
 const render = (tex: string, displayMode = false) =>
@@ -20,7 +27,7 @@ describe("KATEX_LIMITS and FORMULA_HTML_MAX (audit L15)", () => {
     expect(() => render(`x${" \\iff x".repeat(70)}`)).toThrow(/Too many expansions/);
   });
 
-  it("renders the costliest 4 KB shapes measured in bounded time, under the HTML cap", () => {
+  it("renders the costliest 4 KB nests measured in bounded time, under the HTML cap", () => {
     // The bound leaves a loaded CI room; measured, a cold call stays under ~110 ms.
     for (const [open, close, depth] of [["\\frac{", "}{x}", 409], ["\\overbrace{", "}^{a}", 255]] as const) {
       const tex = `${open.repeat(depth)}x${close.repeat(depth)}`;
@@ -31,6 +38,30 @@ describe("KATEX_LIMITS and FORMULA_HTML_MAX (audit L15)", () => {
       expect(html).toContain("katex-html");
       expect(html.length).toBeLessThanOrEqual(FORMULA_HTML_MAX);
     }
+  });
+});
+
+describe("refusedBeforeKatex and FormulaBudget (audit L15)", () => {
+  it("refuses a forbidden command or a source past FORMULA_SOURCE_MAX, and nothing else", () => {
+    expect(refusedBeforeKatex("\\def\\a{x}")).toBe("command");
+    expect(refusedBeforeKatex("x".repeat(FORMULA_SOURCE_MAX + 1))).toBe("size");
+    expect(refusedBeforeKatex("x".repeat(FORMULA_SOURCE_MAX))).toBeNull();
+  });
+
+  it("refuses a matrix row whose HTML is past FORMULA_HTML_MAX", () => {
+    // ~575 characters a cell: 2000 cells (2 KB of source) write ~1.16 MB.
+    const html = render(`\\begin{matrix}${"&".repeat(2000)}\\end{matrix}`);
+    expect(html.length).toBeGreaterThan(FORMULA_HTML_MAX);
+    expect(new FormulaBudget().admit(html)).toBe(false);
+  });
+
+  it("admits a body's formulas until FORMULA_HTML_BUDGET, each budget on its own", () => {
+    // 1700 cells: ~965 KB, under the cap; two fit the 2 MB budget, a third does not.
+    const html = render(`\\begin{matrix}${"&".repeat(1700)}\\end{matrix}`);
+    expect(html.length).toBeLessThanOrEqual(FORMULA_HTML_MAX);
+    const budget = new FormulaBudget();
+    expect([budget.admit(html), budget.admit(html), budget.admit(html)]).toEqual([true, true, false]);
+    expect(new FormulaBudget().admit(html)).toBe(true);
   });
 });
 

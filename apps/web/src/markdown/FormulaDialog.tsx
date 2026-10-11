@@ -1,6 +1,8 @@
 import { Keyboard } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { FormulaBudget } from "@quiz/docrender/katex";
+
 import { useT } from "../i18n";
 import { areaClass, Button, cx, Modal, Segmented, Spinner, TextInput } from "../ui";
 import { formulaHtml } from "./formula";
@@ -136,7 +138,7 @@ export function FormulaDialog({
 
   const labels = useFormulaLabels();
   const preview = useMemo(
-    () => (latex.trim() === "" ? null : formulaHtml(latex, display, labels)),
+    () => (latex.trim() === "" ? null : formulaHtml(latex, display, labels, new FormulaBudget())),
     [latex, display, labels],
   );
 
