@@ -527,7 +527,7 @@ describe("a teacher's staff seat accepts an individual project (ADR-077)", () =>
     // The staff page: a badged row, in no count.
     const detail = await call("GET", `/app/api/projects/${project.id}`, teacher.headers);
     const body = detail.json();
-    expect(body.counts).toMatchObject({ students: 1, accepted: 0, live: 0, frozen: 0 });
+    expect(body.counts).toEqual({ live: 0, frozen: 0 });
     expect(body.rows.filter((r: { staff: boolean }) => r.staff)).toHaveLength(1);
     expect(body.rows.find((r: { staff: boolean }) => r.staff).repo.fullName).toBe(fullName);
     expect(body.rows.filter((r: { staff: boolean }) => !r.staff).every((r: { repo: unknown }) => r.repo === null)).toBe(true);

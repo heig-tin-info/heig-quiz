@@ -439,8 +439,6 @@ export async function projectDetail(
     }
   }
 
-  // Counted over the students' repositories only: a test repository is no acceptance (ADR-077).
-  const accepted = repos.map((repo) => views.get(repo.id)!);
   const counts = releaseCounts(project, repos);
   // ONE predicate for the primary action and the page's Sync button: the sync's own `ahead` (M3-07).
   const sync = projectSyncState(project, repos, now);
@@ -464,17 +462,11 @@ export async function projectDetail(
       ...readiness,
       archived: project.archivedAt !== null,
       sourceAhead: sync.ahead !== null,
-      changedAfterRelease: accepted.filter((v) => v.flags.changedAfterRelease).length,
+      // Over the students' repositories only: a test repository is no acceptance (ADR-077).
+      changedAfterRelease: repos.filter((repo) => views.get(repo.id)!.flags.changedAfterRelease).length,
     }),
     sync,
-    counts: {
-      students: roster.filter((s) => !s.staff).length,
-      accepted: accepted.length,
-      groups: copy.size,
-      ...counts,
-      toVerify: accepted.filter((v) => v.flags.toVerify).length,
-      alerts: accepted.filter((v) => v.flags.multiple || v.flags.protectionSuspended).length,
-    },
+    counts,
     liveStale: !complete || [...live.values()].some((read) => read.stale),
     rows,
   };

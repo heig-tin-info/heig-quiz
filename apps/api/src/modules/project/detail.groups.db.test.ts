@@ -3,7 +3,7 @@
  * M3-16b), on the group repositories' world (`groupTesting.ts`): each row
  * carries the copy group its student is in, a student in no group of the
  * copy has a row of their own, R1's group kept with no member is a row of
- * its repository; `counts.groups` and `groupSyncPending` (R2).
+ * its repository; `groupSyncPending` (R2).
  */
 import { randomUUID } from "node:crypto";
 
@@ -46,7 +46,7 @@ describe("the project page of a group project (M3-16b)", () => {
       [dan!.login]: [null, null],
     });
     expect(before.rows.every((r) => r.group === null || r.group.stopped === false)).toBe(true);
-    expect([before.counts.groups, before.groupSyncPending, before.groupsDrifted]).toEqual([3, false, false]);
+    expect([before.groupSyncPending, before.groupsDrifted]).toEqual([false, false]);
 
     // After the deadline the copy stops; the set moves Ben to Group 2 and deletes Group 1.
     server.clock.set("2026-10-13T00:00:00.000Z");
@@ -77,7 +77,6 @@ describe("the project page of a group project (M3-16b)", () => {
       [cid!.login]: ["Group 2", b],
       [dan!.login]: [null, null],
     });
-    expect(after.counts.groups).toBe(3);
   });
 
   it("counts a group repository's commits over its own receipts, as each member's view does (M3-14m)", async () => {

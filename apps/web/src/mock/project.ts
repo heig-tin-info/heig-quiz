@@ -985,15 +985,7 @@ function detailOf(p: MockProject): ProjectDetail {
   if (pending) p.resyncReads -= 1;
   const readiness = readinessOf(p);
   const views = rows.map((r) => r.repo).filter((r): r is ProjectRepoView => r !== null);
-  const counts = {
-    students: roster.length,
-    accepted: p.repos.length,
-    groups: copy.length,
-    live: readiness.live,
-    frozen: readiness.frozen,
-    toVerify: views.filter((r) => r.flags.toVerify).length,
-    alerts: views.filter((r) => r.flags.multiple || r.flags.protectionSuspended).length,
-  };
+  const counts = { live: readiness.live, frozen: readiness.frozen };
   const detail: ProjectDetail = {
     ...p.summary,
     phase: projectPhase(readiness),

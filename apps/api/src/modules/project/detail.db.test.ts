@@ -229,7 +229,10 @@ describe("the project page (F-PROJ-13)", () => {
 
     const d = await detail(w.projectId);
     expect(d.rows).toHaveLength(4);
-    expect(d.counts).toEqual({ students: 3, accepted: 2, groups: 0, live: 2, frozen: 0, toVerify: 0, alerts: 0 });
+    expect(d.counts).toEqual({ live: 2, frozen: 0 });
+    // The staff seat has no row; the student who left keeps theirs, by their repository, with no enrollment (ADR-077).
+    expect(d.rows.some((r) => r.staff)).toBe(false);
+    expect(d.rows.filter((r) => r.repo !== null && r.student.enrollmentId === null)).toHaveLength(1);
     // An individual project: no copy group on any row, no resync owed (M3-16b).
     expect([d.rows.every((r) => r.group === null), d.groupSyncPending]).toEqual([true, false]);
     expect(d.primaryAction).toBe("none");
@@ -274,7 +277,7 @@ describe("the project page (F-PROJ-13)", () => {
       [promoted.id, true],
     ]);
     expect(d.rows.find((r) => r.repo?.id === promotedRepo)?.staff).toBe(true);
-    expect(d.counts).toMatchObject({ students: 1, accepted: 1, live: 1, frozen: 1 });
+    expect(d.counts).toEqual({ live: 1, frozen: 1 });
   });
 
   it("counts the student's commits as their own card does (M3-14m): bots and late pushes out, no GitHub call needed", async () => {
@@ -349,7 +352,7 @@ describe("the project page (F-PROJ-13)", () => {
     expect(flags(s3!.id)).toMatchObject({ multiple: true, malformed: null });
     expect(flags(s4!.id)).toMatchObject({ deleted: true });
     expect(rowOf(d, s5!.id).repo!.degraded).toBe(true);
-    expect(d.counts).toMatchObject({ accepted: 5, live: 4, toVerify: 1, alerts: 2 });
+    expect(d.counts).toEqual({ live: 4, frozen: 0 });
     // A deleted repository is never asked about.
     const deletedName = (await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, deleted)))[0]!.fullName!;
     expect(liveCalls(`${deletedName}/`)).toBe(0);

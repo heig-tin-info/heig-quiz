@@ -61,7 +61,7 @@ describe("the header's sentence", () => {
   });
 
   it("tells a locked project not yet frozen from one frozen, and a released one", () => {
-    const counts = { students: 2, accepted: 2, groups: 0, live: 2, frozen: 1, toVerify: 0, alerts: 0 };
+    const counts = { live: 2, frozen: 1 };
     expect(statusKey(makeProject({ state: "locked", counts }))).toBe("project.status.lockedFreezing");
     expect(statusKey(makeProject({ state: "locked", counts: { ...counts, frozen: 2 }, gradingMode: "none" }))).toBe(
       "project.status.locked",
@@ -602,7 +602,7 @@ describe("the lifecycle rail's steps", () => {
       deadlineAppliedAt: PAST,
       releasedAt: PAST,
       rows: [row(1, frozen)],
-      counts: { students: 1, accepted: 1, groups: 0, live: 1, frozen: 1, toVerify: 0, alerts: 0 },
+      counts: { live: 1, frozen: 1 },
     });
     const steps = railSteps(released, []);
     expect(steps.at(-1)).toEqual({ kind: "release", at: PAST });

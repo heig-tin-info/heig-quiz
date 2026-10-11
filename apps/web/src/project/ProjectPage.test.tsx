@@ -98,7 +98,7 @@ describe("the page's states", () => {
   });
 
   it("shows the empty roster with the way to add students", async () => {
-    routes(makeProject({ rows: [], counts: { students: 0, accepted: 0, groups: 0, live: 0, frozen: 0, toVerify: 0, alerts: 0 } }));
+    routes(makeProject({ rows: [], counts: { live: 0, frozen: 0 } }));
     const { navigate } = renderPage();
     expect(await screen.findByText("No student in the roster")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Add students" }));
@@ -107,9 +107,8 @@ describe("the page's states", () => {
 
   // M3-14j (pilot): a roster of no student but the teacher's test repository (ADR-077) is a table of that one row, counted nowhere.
   it("draws the teacher's test repository when no student is in the roster", async () => {
-    const counts = { students: 0, accepted: 0, groups: 0, live: 0, frozen: 0, toVerify: 0, alerts: 0 };
     const teacherRow = { ...makeProject().rows[0]!, repo: makeRepo(1), staff: true };
-    routes(makeProject({ rows: [teacherRow], counts }));
+    routes(makeProject({ rows: [teacherRow], counts: { live: 0, frozen: 0 } }));
     renderPage();
     const region = await screen.findByRole("region", { name: "Repositories" });
     expect(within(region).queryByText("No student in the roster")).toBeNull();
@@ -628,7 +627,7 @@ const frozenProject = (over: Partial<ProjectDetail> = {}) =>
     deadlineAt: PAST,
     deadlineAppliedAt: PAST,
     rows: [row(1, frozenRepo(1)), row(2, null)],
-    counts: { students: 2, accepted: 1, groups: 0, live: 1, frozen: 1, toVerify: 0, alerts: 0 },
+    counts: { live: 1, frozen: 1 },
     editable: ["name", "deadlineAt", "protectedFiles"],
     ...over,
   });
@@ -651,7 +650,7 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
         row(2, null, {}, null),
         row(3, orphan, { enrollmentId: null }, g2),
       ],
-      counts: { students: 3, accepted: 2, groups: 2, live: 2, frozen: 0, toVerify: 0, alerts: 0 },
+      counts: { live: 2, frozen: 0 },
       ...over,
     });
   const consequence = (n: number, kind: "lose" | "join", over: Record<string, unknown> = {}) => ({
