@@ -16,11 +16,11 @@ import type {
 } from "@quiz/contracts";
 import { activityBucket, isLiveNow, type ActivityBucket } from "@quiz/domain";
 
-import { evaluationHome, evaluationStateLabel, stateTone } from "../evaluation/common";
+import { evaluationHome, evaluationStateLabel, evaluationTimerAt, stateStyle } from "../evaluation/common";
 import type { TFunction } from "../i18n";
-import { projectStateLabel, projectStateTone } from "../project/common";
+import { projectStateLabel, projectStateStyle, projectTimerAt } from "../project/common";
 import type { Route } from "../router";
-import type { Tone } from "../ui";
+import type { BadgeStyle } from "../ui";
 
 /** The three ages of an activity (`activityBucket`, shared with the server). */
 export type Bucket = ActivityBucket;
@@ -88,7 +88,10 @@ export interface ActivityKindSpec<A extends ActivitySummary> {
   /** Where a click on its row leads. */
   home(a: A): Route;
   stateLabel(a: A, t: TFunction): string;
-  stateTone(a: A): Tone;
+  /** Its badge's tone and face (ADR-104). */
+  stateStyle(a: A): BadgeStyle;
+  /** The deadline a staff table's badge counts down to, or null (`evaluationTimerAt`, `projectTimerAt`). */
+  timerAt(a: A): string | null;
 }
 
 /** Its closing time, or once over the instant it actually closed. */
@@ -136,7 +139,8 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
     span: evaluationSpan,
     home: evaluationHome,
     stateLabel: (a, t) => evaluationStateLabel(a.state, t),
-    stateTone: (a) => stateTone(a.state),
+    stateStyle: (a) => stateStyle(a.state),
+    timerAt: evaluationTimerAt,
   },
   project: {
     type: () => "project",
@@ -155,7 +159,8 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
     // The project page (M3-12).
     home: (a) => ({ view: "project", id: a.id }),
     stateLabel: (a, t) => projectStateLabel(a.state, t),
-    stateTone: (a) => projectStateTone(a.state),
+    stateStyle: (a) => projectStateStyle(a.state),
+    timerAt: projectTimerAt,
   },
 };
 
@@ -170,6 +175,8 @@ export const typeOf = (a: ActivitySummary): ActivityType => kindOf(a).type(a);
 export const anchorOf = (a: ActivitySummary): string | null => kindOf(a).anchor(a);
 export const closesOf = (a: ActivitySummary): string | null => kindOf(a).closes(a);
 export const closedByHand = (a: ActivitySummary): boolean => kindOf(a).closedByHand(a);
+/** The deadline the badge of a staff table counts down to, each kind's own rule (ADR-104). */
+export const timerAt = (a: ActivitySummary): string | null => kindOf(a).timerAt(a);
 export const isLive = (a: ActivitySummary, now: number): boolean => kindOf(a).live(a, now);
 
 const time = (iso: string | null) => (iso === null ? null : new Date(iso).getTime());

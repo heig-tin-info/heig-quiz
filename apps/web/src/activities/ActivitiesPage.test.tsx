@@ -313,6 +313,8 @@ describe("ActivitiesPage", () => {
       const table = screen.getByRole("table");
       const row = within(table).getByText("Labo 2 — pointeurs").closest("tr")!;
       expect(within(row).getByText("published")).toBeInTheDocument();
+      // No timer in its badge here (ADR-104): the Closing column already says the distance.
+      expect(within(row).queryByText(/closes in/)).toBeNull();
       // Its repositories are links on the row (M3-14a, M3-14h), no menu.
       expect(within(row).getByRole("link", { name: "Source repository" })).toBeInTheDocument();
       expect(within(row).queryByRole("button", { name: /Actions/ })).toBeNull();

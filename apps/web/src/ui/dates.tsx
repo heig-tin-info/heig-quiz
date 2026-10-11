@@ -1,6 +1,9 @@
+import { Timer } from "lucide-react";
+import type { ReactNode } from "react";
+
 import type { DateFormat } from "@quiz/contracts";
 
-import { useI18n, useT, type Locale } from "../i18n";
+import { useI18n, useT, type Locale, type TFunction } from "../i18n";
 import { cx, Tip, useNow } from "./layers";
 
 // Dates: the account's date format, absolute and relative times.
@@ -125,13 +128,69 @@ export function relativeTime(
 export function RelativeTime({ iso, className = "" }: { iso: string; className?: string }) {
   const t = useT();
   const { locale } = useI18n();
-  const now = useNow(60_000);
+  const now = useNow(MINUTE);
+  return (
+    <Stamp iso={iso} className={className}>
+      {relativeTime(iso, now, locale, t)}
+    </Stamp>
+  );
+}
+
+const MINUTE = 60_000;
+
+/**
+ * A moment written as something else (a distance, a time left): the full
+ * local date-time in a `Tip` on hover and focus, the machine-readable value
+ * in `<time>`, focusable because a tooltip nobody can reach is not there.
+ */
+function Stamp({ iso, className = "", children }: { iso: string; className?: string; children: ReactNode }) {
   return (
     <Tip label={isoDateTime(iso)}>
       <time dateTime={iso} tabIndex={0} className={cx("tabular-nums", className)}>
-        {relativeTime(iso, now, locale, t)}
+        {children}
       </time>
     </Tip>
+  );
+}
+
+/**
+ * The time left before `iso`, compact, in the largest unit that is not zero:
+ * "4 d", "3 h", "35 min" — to the minute, never a second, so the number on
+ * a row is the one a teacher would say. Floored, never rounded up: a badge
+ * never promises more than what is left. Never negative either: a deadline
+ * just passed (the server's +3 s grace of invariant 5, a project's lock within
+ * the minute, F-PROJ-09) reads "<1 min" until the state catches up. Pure,
+ * so it is testable; {@link TimeLeft} feeds it the clock.
+ */
+export function timeLeft(iso: string, now: number, t: TFunction): string {
+  const minutes = Math.floor((new Date(iso).getTime() - now) / MINUTE);
+  if (minutes < 1) return t("time.left.underMinute");
+  if (minutes < 60) return t("time.left.minutes", { n: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t("time.left.hours", { n: hours });
+  return t("time.left.days", { n: Math.floor(hours / 24) });
+}
+
+/**
+ * The time left on a deadline, as a timer glyph and {@link timeLeft}'s
+ * figure inside a state badge (ADR-104), on a {@link Stamp} like
+ * {@link RelativeTime}, with the sentence ("closes in 3 h") for a screen
+ * reader, so the icon is never the only thing that says what the number is.
+ * Ticks by itself on the shared minute timer of `useNow`, never the page.
+ * Nothing for a null `iso`, so a badge composes "label, then the time left
+ * if any" in one line.
+ */
+export function TimeLeft({ iso, className = "" }: { iso: string | null; className?: string }) {
+  const t = useT();
+  const now = useNow(MINUTE);
+  if (iso === null) return null;
+  const left = timeLeft(iso, now, t);
+  return (
+    <Stamp iso={iso} className={cx("inline-flex items-center gap-0.5", className)}>
+      <Timer aria-hidden className="size-3" />
+      <span aria-hidden>{left}</span>
+      <span className="sr-only">{t("time.closesIn", { time: left })}</span>
+    </Stamp>
   );
 }
 

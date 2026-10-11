@@ -17,26 +17,41 @@ import { isDebriefOpen, isEvaluationOpen, isEvaluationOver } from "@quiz/domain"
 import { gradingLinks } from "../grading";
 import type { Dict, TFunction } from "../i18n";
 import type { Route } from "../router";
-import type { IconType, MenuItem, Tone } from "../ui";
+import type { BadgeStyle, IconType, MenuItem } from "../ui";
 
 /**
- * Green is running, amber is "waiting for you", zinc is at rest. The accent
- * is NOT used: a badge in the brand red would compete with the one primary
- * action of whatever screen it sits on.
+ * The staff's colour grammar for a state (ADR-104), shared with a project's
+ * (`project/common.ts`): green is open to the students, amber is the staff's
+ * own correction or publication awaited, zinc is at rest, and the outline
+ * is finished with nothing awaited — released, still green, as nothing of
+ * it is red. The accent is NOT used: a badge in the brand red would compete
+ * with the one primary action of whatever screen it sits on. "Open to the
+ * students" is also what {@link evaluationTimerAt} encodes; the two are kept
+ * apart on purpose — the timer is never derived from the colour.
  */
-const STATE_TONE: Record<EvaluationState, Tone> = {
-  draft: "zinc",
-  scheduled: "zinc",
-  lobby: "amber",
-  running: "green",
-  paused: "amber",
-  closed: "zinc",
-  grading: "amber",
-  released: "green",
+const STATE_STYLE: Record<EvaluationState, BadgeStyle> = {
+  draft: { tone: "zinc" },
+  scheduled: { tone: "zinc" },
+  lobby: { tone: "amber" },
+  running: { tone: "green" },
+  paused: { tone: "amber" },
+  closed: { tone: "zinc" },
+  grading: { tone: "amber" },
+  released: { tone: "green", variant: "outline" },
 };
 
-export function stateTone(state: EvaluationState): Tone {
-  return STATE_TONE[state];
+export function stateStyle(state: EvaluationState): BadgeStyle {
+  return STATE_STYLE[state];
+}
+
+/**
+ * The deadline the badge of a staff table counts down to (ADR-104): only
+ * while the students are in (`running`). A lobby or a pause runs nothing
+ * out, and once over there is nothing left to count. Null where there is no
+ * clock to show. The green of {@link stateStyle} says the same thing.
+ */
+export function evaluationTimerAt(e: Pick<EvaluationSummary, "state" | "closesAt">): string | null {
+  return e.state === "running" ? e.closesAt : null;
 }
 
 export function evaluationStateLabel(state: EvaluationState, t: TFunction): string {

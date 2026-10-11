@@ -1,7 +1,7 @@
 import { CircleCheck, CircleHelp, CircleX, Loader2, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { badge, type BadgeTone } from "@quiz/ui";
+import { badge, type BadgeTone, type BadgeVariant } from "@quiz/ui";
 
 import { useT } from "../i18n";
 import { cx, type IconType } from "./layers";
@@ -156,20 +156,31 @@ const BADGE_TONES: Record<Tone, BadgeTone> = {
   accent: "accent",
 };
 
+/**
+ * How a state's badge is drawn: its tone and its face (`soft` by default,
+ * `outline` for a state that is finished and asks nothing, ADR-104). The
+ * state tables (`evaluation/common.ts`, `project/common.ts`) answer one of
+ * these per state, which a call site spreads into {@link Badge}.
+ */
+export interface BadgeStyle {
+  tone: Tone;
+  variant?: BadgeVariant;
+}
+
 /** Status pill. A status is a badge; a plain count is text. */
 export function Badge({
   tone,
+  variant,
   icon: Icon,
   children,
   className = "",
-}: {
-  tone: Tone;
+}: BadgeStyle & {
   icon?: IconType;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <span className={badge(BADGE_TONES[tone], className)}>
+    <span className={badge(BADGE_TONES[tone], className, variant)}>
       {Icon ? <Icon className="size-3" /> : null}
       {children}
     </span>

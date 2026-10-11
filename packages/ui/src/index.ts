@@ -43,6 +43,7 @@ export {
   table,
   textareaClass,
   type BadgeTone,
+  type BadgeVariant,
   type ButtonSize,
   type ButtonVariant,
   type ControlSize,

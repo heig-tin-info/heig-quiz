@@ -16,7 +16,6 @@ import {
   Dash,
   isoDateTime,
   QueryError,
-  RelativeTime,
   SectionHeading,
   T,
   TableHead,
@@ -102,19 +101,13 @@ export function ProjectGroup({
                   <td className={T.td}>
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold">{row.title}</span>
-                      <StateBadge row={row} />
+                      {/* The time left rides in the badge (`projectTimerAt`, ADR-104); the deadline cell keeps the date alone. */}
+                      <StateBadge row={row} timer />
                     </span>
                   </td>
                   <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>{row.startAt === null ? <Dash /> : isoDateTime(row.startAt)}</td>
                   <td className={`${T.td} tabular-nums text-fg-muted`}>
-                    {row.deadlineAt === null ? (
-                      <Dash />
-                    ) : (
-                      <span className="flex flex-wrap items-baseline gap-x-2">
-                        {isoDateTime(row.deadlineAt)}
-                        {row.state === "published" ? <RelativeTime iso={row.deadlineAt} className="text-fg-faint" /> : null}
-                      </span>
-                    )}
+                    {row.deadlineAt === null ? <Dash /> : isoDateTime(row.deadlineAt)}
                   </td>
                   <td className={`${T.td} text-right`} onClick={(e) => e.stopPropagation()}>
                     <ActivityMenu row={row} navigate={navigate} />

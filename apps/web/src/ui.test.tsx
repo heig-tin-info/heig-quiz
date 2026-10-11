@@ -30,6 +30,8 @@ import {
   QueryError,
   RelativeTime,
   relativeTime,
+  TimeLeft,
+  timeLeft,
   Ring,
   Segmented,
   Select,
@@ -1889,6 +1891,59 @@ describe("relativeTime", () => {
   it("speaks French when the locale does", () => {
     expect(relativeTime(at(-5 * 60_000), now, "fr", tf)).toBe("il y a 5 minutes");
     expect(relativeTime(at(2 * 3_600_000), now, "fr", tf)).toBe("dans 2 heures");
+  });
+});
+
+/*
+ * The time left on a deadline, compact, in a state badge (ADR-104). Pure
+ * like `relativeTime`: the clock and the words come in.
+ */
+describe("timeLeft", () => {
+  const now = Date.parse("2026-09-21T12:00:00.000Z");
+  const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+  const WORDS: Record<string, string> = {
+    "time.left.days": "{n} d",
+    "time.left.hours": "{n} h",
+    "time.left.minutes": "{n} min",
+    "time.left.underMinute": "<1 min",
+  };
+  const en = ((key: string, vars?: Record<string, string | number>) =>
+    WORDS[key]!.replace("{n}", String(vars?.n))) as Parameters<typeof timeLeft>[2];
+  const HOUR = 3_600_000;
+
+  it("says the largest unit that is not zero, floored to the minute", () => {
+    expect(timeLeft(at(4 * 24 * HOUR + 5 * HOUR), now, en)).toBe("4 d");
+    expect(timeLeft(at(3 * HOUR + 59 * 60_000), now, en)).toBe("3 h");
+    expect(timeLeft(at(35 * 60_000 + 59_000), now, en)).toBe("35 min");
+    expect(timeLeft(at(24 * HOUR), now, en)).toBe("1 d");
+    expect(timeLeft(at(60 * 60_000), now, en)).toBe("1 h");
+  });
+
+  it("never goes under a minute, nor negative: a deadline in its grace reads the same as one about to pass", () => {
+    expect(timeLeft(at(59_000), now, en)).toBe("<1 min");
+    expect(timeLeft(at(0), now, en)).toBe("<1 min");
+    expect(timeLeft(at(-3_000), now, en)).toBe("<1 min");
+    expect(timeLeft(at(-2 * 24 * HOUR), now, en)).toBe("<1 min");
+  });
+});
+
+describe("TimeLeft", () => {
+  it("shows the figure beside its glyph, says what it is to a screen reader, and keeps the stamp", () => {
+    const iso = new Date(Date.now() + 3 * 3_600_000 + 30_000).toISOString();
+    renderWithProviders(<TimeLeft iso={iso} />);
+    const figure = screen.getByText("3 h");
+    expect(figure).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByText("closes in 3 h")).toHaveClass("sr-only");
+    const time = figure.closest("time")!;
+    expect(time).toHaveAttribute("datetime", iso);
+    expect(time).toHaveAttribute("tabindex", "0");
+    expect(time.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("speaks French when the locale does", () => {
+    renderWithProviders(<TimeLeft iso={new Date(Date.now() + 2 * 86_400_000 + 60_000).toISOString()} />, { locale: "fr" });
+    expect(screen.getByText("2 j")).toBeInTheDocument();
+    expect(screen.getByText("ferme dans 2 j")).toBeInTheDocument();
   });
 });
 

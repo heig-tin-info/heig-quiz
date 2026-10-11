@@ -59,8 +59,9 @@ describe("the classroom's Projects group", () => {
     expect(calls.every((c) => c.method === "GET")).toBe(true);
   });
 
-  it("shows a dash for a date not fixed yet, sorted last, and the time left of a published project only (M3-14a)", async () => {
-    const inThreeDays = new Date(Date.now() + 3 * 86_400_000).toISOString();
+  it("shows a dash for a date not fixed yet, sorted last, and the time left in the badge of a published project only (ADR-104)", async () => {
+    // An hour past three days: the badge floors to the minute, and the render is not instant.
+    const inThreeDays = new Date(Date.now() + 3 * 86_400_000 + 3_600_000).toISOString();
     mockFetch({
       [`GET ${PROJECTS}`]: ok([
         project(1, { title: "Undated", state: "draft", startAt: null, deadlineAt: null }),
@@ -74,9 +75,15 @@ describe("the classroom's Projects group", () => {
     const row = (title: string) => within(region).getByText(title).closest("tr")!;
     expect(within(row("Undated")).getAllByText("—")).toHaveLength(2);
     expect(within(row("Planned")).queryByText("—")).toBeNull();
-    expect(within(row("Running")).getByText("in 3 days")).toBeInTheDocument();
-    expect(within(row("Planned")).queryByText(/^in /)).toBeNull();
-    expect(within(row("Done")).queryByText(/ago|^in /)).toBeNull();
+    // The time left rides inside the state badge, with its sentence for a
+    // screen reader; the deadline cell keeps the date alone (no "in 3 days").
+    const running = within(row("Running"));
+    expect(running.getByText("3 d")).toBeInTheDocument();
+    expect(running.getByText("closes in 3 d")).toBeInTheDocument();
+    expect(running.getByText("published").closest("span")).toContainElement(running.getByText("3 d"));
+    expect(running.queryByText(/^in /)).toBeNull();
+    expect(within(row("Planned")).queryByText(/closes in/)).toBeNull();
+    expect(within(row("Done")).queryByText(/closes in|ago|^in /)).toBeNull();
     // Sorted by start, the undated one goes last in both directions.
     const titles = () => within(region).getAllByRole("row").slice(1).map((r) => r.querySelector(".font-semibold")?.textContent);
     await userEvent.click(within(region).getByRole("button", { name: /Start/ }));

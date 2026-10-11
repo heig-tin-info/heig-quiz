@@ -15,6 +15,7 @@ import {
   RelativeTime,
   T,
   TableHead,
+  TimeLeft,
   Tip,
   useSortableTable,
   type Column,
@@ -30,6 +31,7 @@ import {
   isoWeek,
   kindOf,
   mondayOf,
+  timerAt,
   typeOf,
   weeksOf,
   type ActivityType,
@@ -77,11 +79,21 @@ export function classroomLabel(row: ActivitySummary, t: TFunction): string {
     : t("activities.noClassroom");
 }
 
-/** The state of a row, either kind's: the Activities' views and the classroom's Projects group. */
-export function StateBadge({ row }: { row: ActivitySummary }) {
+/**
+ * The state of a row, either kind's: the Activities' views and the
+ * classroom's Projects group. `timer` adds the time left inside the pill
+ * ({@link timerAt}) — for the two tables of a classroom's Activities tab,
+ * where no other column counts down (ADR-104).
+ */
+export function StateBadge({ row, timer = false }: { row: ActivitySummary; timer?: boolean }) {
   const t = useT();
   const kind = kindOf(row);
-  return <Badge tone={kind.stateTone(row)}>{kind.stateLabel(row, t)}</Badge>;
+  return (
+    <Badge {...kind.stateStyle(row)}>
+      {kind.stateLabel(row, t)}
+      {timer ? <TimeLeft iso={timerAt(row)} /> : null}
+    </Badge>
+  );
 }
 
 const dateOrDash = (iso: string | null) => (iso === null ? "—" : <RelativeTime iso={iso} />);

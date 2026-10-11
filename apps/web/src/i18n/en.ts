@@ -1255,6 +1255,12 @@ export const en = {
   "dur.hourMinSec": "{h} h {m} min {s} s",
   "dur.dayHour": "{d} d {h} h",
   "time.now": "just now",
+  // The time left inside a state badge (ui/dates.tsx `TimeLeft`, ADR-104).
+  "time.left.days": "{n} d",
+  "time.left.hours": "{n} h",
+  "time.left.minutes": "{n} min",
+  "time.left.underMinute": "<1 min",
+  "time.closesIn": "closes in {time}",
 
   // --- Live primitives (ui/live.tsx) ---
   "countdown.remaining": "{time} remaining",
@@ -4996,8 +5002,8 @@ export const en = {
   "activities.timeline.focus": "Focus on what is in progress",
   "activities.timeline.empty.title": "Nothing dated yet",
   "activities.timeline.empty.body": "Activities appear on the timeline once they have an opening date or have started.",
-  "activities.timeline.legend.live": "in the room",
-  "activities.timeline.legend.waiting": "waiting room, paused, open project",
+  "activities.timeline.legend.live": "open to students",
+  "activities.timeline.legend.waiting": "waiting room, paused",
   "activities.timeline.legend.scheduled": "scheduled",
   "activities.timeline.legend.draft": "draft",
   "activities.timeline.legend.ended": "over",

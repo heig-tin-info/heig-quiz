@@ -5,7 +5,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { ActivitySummary, EvaluationActivitySummary } from "@quiz/contracts";
 
 import { api } from "../api";
-import { evaluationHome, evaluationStateLabel, stateTone } from "../evaluation/common";
+import { evaluationHome, evaluationStateLabel, stateStyle } from "../evaluation/common";
 import { useT } from "../i18n";
 import { activitiesKey } from "../queryKeys";
 import type { Route } from "../router";
@@ -302,7 +302,7 @@ function LiveNow({
                 </div>
               </div>
               <span className="flex shrink-0 flex-wrap items-center gap-2 pl-7 sm:pl-0">
-                <Badge tone={stateTone(row.state)}>{evaluationStateLabel(row.state, t)}</Badge>
+                <Badge {...stateStyle(row.state)}>{evaluationStateLabel(row.state, t)}</Badge>
                 <Button size="sm" variant="secondary" onClick={() => navigate(evaluationHome(row))}>
                   {row.mode === "poll" ? t("poll.openProjection") : t("eval.dashboard")}
                 </Button>
