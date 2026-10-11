@@ -35,6 +35,10 @@ These are the files a student must not change. `criteria.yml`, `README.md` and `
 
 When a push by anyone but Quiz (a student, or a workflow's own commit) touches a protected file on a handed-out branch, Quiz answers with a **restore commit** that puts the distribution repository's current version back. The student's work is never rewritten, only covered, and they are told which files were restored. Beyond five restores in an hour on one repository, Quiz stops restoring and flags the repository **protected files in conflict**; scores captured meanwhile are marked **to verify**. You re-enable the protection by hand from the repository's sheet. A new list applies to the next pushes only.
 
+## Configure a draft
+
+A draft's page is a form, written as you go: there is no Save. **Work handed out** recalls the source, the branches and the history, which are fixed. **Publication and deadline** holds the three things most projects need: publish by hand or at a start, and the deadline, either a date or a number of days counted from the publication. A scheduled start must lie ahead; the start and the deadline are saved together once both are filled, and a refusal is said under the field it concerns. **Groups** turns on group work and chooses the group set. Everything else (grace, what happens at the deadline, grading, protected files, where students work) is folded under **Advanced options**, and the lifecycle rail below lets you set the review checkpoints before publishing; before a manual publication it shows no date, since none is set yet. Once published, the page becomes the dashboard described below.
+
 ## Publish
 
 On the project page, **Publish** is the primary action of a draft. It starts the project now, or leaves the schedule to do it. A group project cannot be published while a claimed student is in no group.

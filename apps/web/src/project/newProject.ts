@@ -5,6 +5,7 @@
  * each refusal of the server is said. `NewProjectPage.tsx` draws them.
  */
 import {
+  MINUTES_PER_DAY,
   PROJECT_DEFAULTS,
   ProjectCreate,
   ProjectRefusal,
@@ -58,7 +59,7 @@ export const emptyDraft = (): ProjectDraft => ({
   sourceStrategy: PROJECT_DEFAULTS.sourceStrategy,
   deadlineStrategy: PROJECT_DEFAULTS.deadlineStrategy,
   gradingMode: PROJECT_DEFAULTS.gradingMode,
-  scaleKind: "linear",
+  scaleKind: PROJECT_DEFAULTS.scaleKind,
   protectedFiles: null,
   groupMode: false,
   groupSetId: null,
@@ -103,7 +104,7 @@ function rawBody(draft: ProjectDraft, detail: ProjectSourceDetail | undefined): 
     publishMode: draft.publishMode,
     ...(draft.publishMode === "scheduled" ? { startAt: fromLocalInput(draft.startLocal) ?? undefined } : {}),
     ...(byDuration(draft)
-      ? { durationMinutes: days === undefined ? Number.NaN : days * 1440 }
+      ? { durationMinutes: days === undefined ? Number.NaN : days * MINUTES_PER_DAY }
       : { deadlineAt: fromLocalInput(draft.deadlineLocal) ?? undefined }),
     graceMinutes: count(draft.graceMinutes) ?? Number.NaN,
     sourceStrategy: draft.sourceStrategy,
@@ -195,6 +196,8 @@ export function refusalPlace(error: unknown): RefusalPlace | null {
         : { at: "field", field: "source", message: "project.refusal.sourceNotFound" };
     case "deadline_past":
       return { at: "field", field: "deadline", message: "project.refusal.deadlinePast" };
+    case "start_past":
+      return { at: "field", field: "start", message: "project.refusal.startPast" };
     case "duplicate_slug":
       return { at: "field", field: "name", message: "project.refusal.duplicateSlug" };
     case "distribution_failed":

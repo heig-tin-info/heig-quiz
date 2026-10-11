@@ -74,6 +74,7 @@ import {
   checkpointDueAt,
   checkpointRefusal,
   editableProjectFields,
+  patchedDraftDates,
   projectListDates,
   projectPhase,
   projectPrimaryAction,
@@ -81,6 +82,7 @@ import {
   reviewState,
   scoreGrade,
   teacherScoreMax,
+  type ProjectDatesChange,
 } from "@quiz/domain";
 
 import {
@@ -1080,8 +1082,31 @@ on("PATCH", "/app/api/projects/:id", (m, raw) => {
       throw refuse(409, code, `${field} cannot change now`);
     }
   }
-  if (body.deadlineAt !== undefined) {
-    if (Date.parse(body.deadlineAt) <= now) throw refuse(422, "deadline_past", "The deadline has passed");
+  // The dates the patch leaves: the rule of the API's `patchProject` (`patchedDraftDates`).
+  const changed: ProjectDatesChange = {};
+  if (body.publishMode !== undefined && body.publishMode !== s.publishMode) changed.publishMode = body.publishMode;
+  if (body.startAt !== undefined && body.startAt !== s.startAt) changed.startAt = new Date(body.startAt);
+  if (body.deadlineAt !== undefined && body.deadlineAt !== s.deadlineAt) changed.deadlineAt = new Date(body.deadlineAt);
+  if (body.durationMinutes !== undefined && body.durationMinutes !== s.durationMinutes) changed.durationMinutes = body.durationMinutes;
+  const dates = patchedDraftDates(
+    { publishMode: s.publishMode, startAt: new Date(s.startAt), deadlineAt: new Date(s.deadlineAt), durationMinutes: s.durationMinutes },
+    changed,
+    new Date(now),
+  );
+  if (!dates.ok) {
+    const refusals = {
+      deadline_past: [422, "The deadline has passed"],
+      start_past: [422, "The start has passed"],
+      duration_needs_manual: [400, "A duration only applies to a manual publication"],
+      deadline_before_start: [400, "The deadline must come after the start"],
+    } as const;
+    const [status, message] = refusals[dates.refusal];
+    throw refuse(status, status === 400 ? "validation" : dates.refusal, message);
+  }
+  if (body.publishMode !== undefined) s.publishMode = body.publishMode;
+  s.startAt = dates.startAt.toISOString();
+  if (body.durationMinutes !== undefined) s.durationMinutes = body.durationMinutes;
+  if (dates.deadlineAt.getTime() !== Date.parse(s.deadlineAt)) {
     // The reopen (F-PROJ-09): the project and the repositories at its deadline.
     if (s.state === "locked") {
       s.state = "published";
@@ -1097,8 +1122,7 @@ on("PATCH", "/app/api/projects/:id", (m, raw) => {
         r.archived = false;
       }
     }
-    s.deadlineAt = body.deadlineAt;
-    s.durationMinutes = null;
+    s.deadlineAt = dates.deadlineAt.toISOString();
     for (const c of p.checkpoints) {
       if (c.offsetDays !== null && c.dispatchedAt === null) c.dueAt = checkpointDueAt(new Date(s.deadlineAt), c.offsetDays).toISOString();
     }

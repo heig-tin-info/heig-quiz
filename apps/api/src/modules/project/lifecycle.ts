@@ -26,12 +26,14 @@ import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
 import {
+  patchedDraftDates,
   PROJECT_PATCH_FIELDS,
   projectFieldRefusal,
   repoName,
   SLUG_MAX,
   slugify,
   workModeRefusal,
+  type ProjectDatesChange,
   type ProjectPatchField,
   type WorkModeName,
 } from "@quiz/domain";
@@ -182,7 +184,8 @@ async function buildDistribution(
  * `POST /app/api/classrooms/:id/projects` (F-PROJ-01, F-PROJ-02): a draft
  * with its distribution repository. Refused before anything is written:
  * `not_connected`, `app_not_installed`, `source_not_found`,
- * `deadline_past`, `unknown_group_set`, `duplicate_slug`; after:
+ * `deadline_past`, `start_past` (a scheduled start already passed),
+ * `unknown_group_set`, `duplicate_slug`; after:
  * `distribution_failed`, the row deleted and nothing on GitHub. A group
  * set named is copied as soon as the row exists (ADR-070 §4), so the set's
  * writes keep the copy in step while the distribution is built.
@@ -191,6 +194,10 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
   const { body, now } = input;
   const dates = draftDates(body, now);
   if (dates.deadlineAt.getTime() <= now.getTime()) throw new ProjectError("deadline_past", "The deadline has passed");
+  // A start in the past would be published at the next tick, with the class notified (a patch: `patchedDraftDates`).
+  if (body.publishMode === "scheduled" && dates.startAt.getTime() <= now.getTime()) {
+    throw new ProjectError("start_past", "The start has passed");
+  }
   const groupSetId = body.groupSetId ?? null;
   const { org, client } = await classroomClient(db, config, input.classroomId);
   const { source, branches } = await readSource(db, client, org, body.sourceRepo, body.branches, input.caller);
@@ -334,21 +341,24 @@ export async function patchProject(
     if (changed.groupMode === true && next.workMode !== "free") {
       throw new ProjectError("work_mode_group", "A project in the online workspace cannot be a group project");
     }
-    // A duration on a manual draft keeps a provisional deadline, so that the
-    // lists stay meaningful; Publish counts it again from the publication.
-    if (changed.durationMinutes !== undefined && next.durationMinutes !== null) {
-      next.deadlineAt = new Date(now.getTime() + next.durationMinutes * 60_000);
-      changed.deadlineAt = next.deadlineAt;
+    // The dates the patch leaves (`patchedDraftDates`: the provisional
+    // deadline of a duration, the start reset by a return to manual, a start
+    // and a deadline that lie ahead, a deadline after the start).
+    const dates = patchedDraftDates(project, changed as ProjectDatesChange, now);
+    if (!dates.ok) {
+      switch (dates.refusal) {
+        case "deadline_past":
+          throw new ProjectError("deadline_past", "The deadline has passed");
+        case "start_past":
+          throw new ProjectError("start_past", "The start has passed");
+        case "duration_needs_manual":
+          throw new DomainError("validation", 400, "A duration only applies to a manual publication");
+        case "deadline_before_start":
+          throw new DomainError("validation", 400, "The deadline must come after the start");
+      }
     }
-    if (changed.deadlineAt !== undefined && next.deadlineAt.getTime() <= now.getTime()) {
-      throw new ProjectError("deadline_past", "The deadline has passed");
-    }
-    if (next.publishMode === "scheduled" && next.durationMinutes !== null) {
-      throw new DomainError("validation", 400, "A duration only applies to a manual publication");
-    }
-    if (next.deadlineAt.getTime() <= next.startAt.getTime()) {
-      throw new DomainError("validation", 400, "The deadline must come after the start");
-    }
+    if (dates.startAt.getTime() !== project.startAt.getTime()) changed.startAt = dates.startAt;
+    if (dates.deadlineAt.getTime() !== project.deadlineAt.getTime()) changed.deadlineAt = dates.deadlineAt;
     if (Object.keys(changed).length === 0) return project;
     const { deadlineAt: movedTo, ...others } = changed;
     let row = project;

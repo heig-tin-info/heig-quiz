@@ -1927,9 +1927,41 @@ surfaces, so its rules are written here.
 
 ## The project page (staff)
 
-`/projects/:id` for the course's staff (F-PROJ-13). Once published it reads as
-a dashboard, top to bottom: the header, four tiles, the lifecycle rail, the
-repositories, what is live of the workspace, and the folded Settings.
+`/projects/:id` for the course's staff (F-PROJ-13), in two faces: before
+publication one configures, after it one watches.
+
+A **draft is a form** (`ProjectDraftForm`, F-PROJ-01, F-PROJ-03): under the
+header, sections in the order a teacher decides, each a `Card` under a
+`SectionHeading`, every field written as soon as it is set through the page's
+one `PATCH` (`editable` gates each control; a write under way or an archived
+project holds them all). *Work handed out*: facts only (source, distribution
+or "being built", branches, history, whether the source moved on), fixed at
+creation — to change them, delete the draft and create it again; a missing
+distribution repository is a warning saying so. *Publication and deadline*:
+the three things a novice reads — manual or scheduled, and the dates. A
+scheduled draft's start and deadline are written TOGETHER, once both are
+filled (switching the mode writes nothing); a manual one's deadline is a date
+or a number of days from the publication (switching the kind writes nothing).
+What the server refuses (`start_past`, `deadline_past`) is said under the
+field it concerns and the pair stays on screen; the browser's zone is named
+when it is not the school's. *Groups*: a switch (written at once; off clears
+the set, no confirmation) over the set picker, held with a sentence while the
+workspace mode is online. *Advanced options*: one folded `Disclosure` (a `zinc`
+count of what differs from the defaults) with the grace (0 allowed), the
+deadline strategy, the grading mode and scale, the protected files and the
+work mode. The **lifecycle rail** stays under them while graded `auto`, so the
+checkpoints are set before Publish — and it shows no date the draft does not
+have: on a MANUAL draft Published says "at publication", and a deadline
+counted in days says "n days after publication" with a J−n checkpoint only its
+"D−n"; a deadline that is a date (manual or scheduled) is shown with its
+checkpoints' dates. No tiles,
+no table of repositories, no live workspace: nobody can accept a draft
+(ADR-077 §1). With no Source tile, **Sync** (the source is ahead) is a
+secondary button of the header, beside Publish.
+
+A **published project reads as a dashboard**, top to bottom: the header, four
+tiles, the lifecycle rail, the repositories, what is live of the workspace, and
+the folded Settings.
 
 - **Header**: title, state, the status sentence and the ONE primary button the
   server names (Publish / Sync / Release). No counts line: the figures live in
@@ -1971,7 +2003,8 @@ repositories, what is live of the workspace, and the folded Settings.
   with the source (CI, review, teacher) as faint text under it.
 - **Settings** stay editable after publication but are demoted: a folded
   `Disclosure` at the bottom (strategy, protected files, work mode) with the
-  count of protected files beside its title. A draft's sits above the tiles instead and opens by default.
+  count of protected files beside its title. A draft has no such card: its
+  settings are the form above.
 - Archived: every write disabled. Group mode: counts per group.
 
 ## The pool's concept heat (Concepts tab, "Heat")

@@ -77,3 +77,59 @@ export function projectFieldRefusal(
 export function editableProjectFields(project: ProjectLifeLike, now: Date): ProjectPatchField[] {
   return PROJECT_PATCH_FIELDS.filter((field) => projectFieldRefusal(project, field, now) === null);
 }
+
+// ---------------------------------------------------------------- a draft's dates
+
+/** Why a patch leaves the dates incoherent: the first two are 422s, the others 400s. */
+export type PatchedDatesRefusal = "deadline_past" | "start_past" | "duration_needs_manual" | "deadline_before_start";
+
+/** The dates and the publication of a project, as stored. */
+export interface ProjectDatesLike {
+  publishMode: "manual" | "scheduled";
+  startAt: Date;
+  deadlineAt: Date;
+  durationMinutes: number | null;
+}
+
+/** What a patch CHANGES of them (a field whose value is the stored one is left out). */
+export type ProjectDatesChange = Partial<ProjectDatesLike>;
+
+/**
+ * The dates a patch leaves (F-PROJ-03), or why it cannot:
+ *
+ * - a duration on a manual draft keeps a provisional deadline, `now` plus
+ *   the duration (Publish counts it again);
+ * - back to a manual publication, the start is the publication's: it becomes
+ *   `now`, so no phantom scheduled start blocks a later deadline;
+ * - a deadline moved, or kept through the switch to manual, must lie ahead
+ *   (`deadline_past`): a stale scheduled draft is not flipped to manual;
+ * - a scheduled start must lie ahead when the mode or the start changed
+ *   (`start_past`), else the ticker would publish it at the next tick;
+ * - a duration only goes with a manual publication, and the deadline comes
+ *   after the start.
+ *
+ * `now` is the server's clock (invariant 5).
+ */
+export function patchedDraftDates(
+  project: ProjectDatesLike,
+  changed: ProjectDatesChange,
+  now: Date,
+): { ok: true; startAt: Date; deadlineAt: Date } | { ok: false; refusal: PatchedDatesRefusal } {
+  const publishMode = changed.publishMode ?? project.publishMode;
+  const durationMinutes = changed.durationMinutes === undefined ? project.durationMinutes : changed.durationMinutes;
+  const toManual = changed.publishMode === "manual";
+  let startAt = changed.startAt ?? project.startAt;
+  let deadlineAt = changed.deadlineAt ?? project.deadlineAt;
+  if (changed.durationMinutes !== undefined && durationMinutes !== null) {
+    deadlineAt = new Date(now.getTime() + durationMinutes * 60_000);
+  }
+  if (toManual) startAt = now;
+  const deadlineMoved = changed.deadlineAt !== undefined || toManual;
+  if (deadlineMoved && deadlineAt.getTime() <= now.getTime()) return { ok: false, refusal: "deadline_past" };
+  if (publishMode === "scheduled" && durationMinutes !== null) return { ok: false, refusal: "duration_needs_manual" };
+  if (publishMode === "scheduled" && (changed.publishMode !== undefined || changed.startAt !== undefined) && startAt.getTime() <= now.getTime()) {
+    return { ok: false, refusal: "start_past" };
+  }
+  if (deadlineAt.getTime() <= startAt.getTime()) return { ok: false, refusal: "deadline_before_start" };
+  return { ok: true, startAt, deadlineAt };
+}

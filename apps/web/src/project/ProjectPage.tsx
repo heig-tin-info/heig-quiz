@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Archive, ArchiveRestore, RefreshCw, Rocket, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, Rocket, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -36,8 +36,10 @@ import {
 } from "../ui";
 import { projectPhaseLabel, projectPhaseStyle } from "./common";
 import { FIELD_ID } from "./newProject";
+import { ProjectDraftForm } from "./ProjectDraftForm";
 import { ProjectGroupSet } from "./ProjectGroupSet";
 import { projectNotices, projectNoticeToast } from "./projectNotices";
+import { SyncButton } from "./parts";
 import { ProjectOverview } from "./ProjectOverview";
 import { ProjectRail } from "./ProjectRail";
 import { ProjectRepos } from "./ProjectRepos";
@@ -45,6 +47,7 @@ import { ProjectSettings } from "./ProjectSettings";
 import { ProjectWorkspace } from "./ProjectWorkspace";
 import {
   hasFellBack,
+  offersSync,
   projectRefetchInterval,
   projectStatus,
   refusalMessage,
@@ -52,20 +55,29 @@ import {
   groupSetPageOf,
   unassignedStudents,
   type RepoFilter,
+  type WriteProject,
   type UnassignedStudent,
 } from "./projectPage";
 import { RepoSheet } from "./RepoSheet";
 
 /**
- * The staff's project page (F-PROJ-13, M3-12), `/projects/:id`: a dashboard.
- * The header — its name (renamed in place), its state, what is happening and
+ * The staff's project page (F-PROJ-13, M3-12), `/projects/:id`, in two
+ * faces: before publication one configures, after it one watches.
+ *
+ * A DRAFT is a form (`ProjectDraftForm`, F-PROJ-01, F-PROJ-03): the work
+ * handed out, the publication and the deadline, the groups, "Advanced
+ * options" and the lifecycle rail, every field written as it is set. No
+ * tiles and no table: nobody can accept a draft (ADR-077 §1). With no Source
+ * tile, Sync (the source is ahead) is a secondary button of the header.
+ *
+ * A PUBLISHED project is a dashboard. The header — its name (renamed in place), its state, what is happening and
  * the ONE primary action the server names —, four tiles (the acceptance as a
  * ring, the deadline edited in place, the progress, the source and its sync;
  * their sub-figures filter the table), the lifecycle rail with the review
  * checkpoints, one row per student of the roster with their repository (per
  * group in a group project, M3-16b, with its drift and *Resync*), the live
  * workspace, and the settings still open to change (F-PROJ-03) in a folded
- * card at the bottom (open on a draft). A row opens its repository's sheet:
+ * card at the bottom. A row opens its repository's sheet:
  * the history of its runs, its scores and the teacher's, its own deadline and
  * its lock. See DESIGN.md › The project page (staff).
  *
@@ -132,6 +144,13 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       await refresh();
     },
   });
+  /** The page's one write: a refusal is a toast, unless the caller said it in place (`WriteProject`). */
+  const write: WriteProject = (body, onError) =>
+    patch.mutate(body, {
+      onError: (error) => {
+        if (onError?.(error) !== true) failed(error);
+      },
+    });
   const publish = useMutation({
     mutationFn: () => api<ProjectSummary>(`/app/api/projects/${id}/publish`, { method: "POST" }),
     onSuccess: async () => {
@@ -261,19 +280,10 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   /** The set's page, coming back here (`?fromProject=<id>`): where the students in no group are placed. */
   const setPage = groupSetPageOf(project);
   const { sync } = project;
-  /** Sync as the header's primary, when the server names it; beside Publish or Release it is the source tile's button. */
-  const primarySync = (
-    <Button
-      data-coach="project.primary"
-      onClick={() => syncNow.mutate()}
-      loading={syncNow.isPending || sync.inProgress}
-    >
-      <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
-    </Button>
+  const isDraft = project.state === "draft";
+  const syncButton = (variant: "primary" | "secondary", coach: "project.primary" | "project.sync") => (
+    <SyncButton sync={sync} onSync={() => syncNow.mutate()} syncing={syncNow.isPending} variant={variant} coach={coach} />
   );
-
-  const settings = <ProjectSettings project={project} patch={patch} />;
-  const settingsFirst = project.state === "draft";
 
   return (
     <div className="space-y-8">
@@ -313,6 +323,10 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         }
         actions={
           <span className="flex flex-wrap items-center gap-2">
+            {/* A draft has no Source tile: Sync, when the source is ahead and is not the primary, sits beside Publish. */}
+            {isDraft && project.primaryAction !== "sync" && offersSync(project) && !archived
+              ? syncButton("secondary", "project.sync")
+              : null}
             {project.primaryAction === "publish" ? (
               <Button
                 data-coach="project.primary"
@@ -331,7 +345,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
                 <Send /> {t(again ? "project.release.again" : "project.release")}
               </Button>
             ) : project.primaryAction === "sync" ? (
-              primarySync
+              syncButton("primary", "project.primary")
             ) : null}
           </span>
         }
@@ -392,21 +406,25 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         </Alert>
       ) : null}
 
-      {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
-      {/* A draft's page is still the settings' place: open on top, until its own redesign. */}
-      {settingsFirst ? settings : null}
-      <ProjectOverview
-        project={project}
-        patch={patch}
-        filter={filter}
-        onFilter={setFilter}
-        onSync={() => syncNow.mutate()}
-        syncing={syncNow.isPending}
-      />
-      <ProjectRail project={project} />
-      <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
-      <ProjectWorkspace projectId={project.id} archived={archived} />
-      {settingsFirst ? null : settings}
+      {isDraft ? (
+        <ProjectDraftForm project={project} patch={patch} write={write} navigate={navigate} />
+      ) : (
+        <>
+          {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
+          <ProjectOverview
+            project={project}
+            patch={patch}
+            filter={filter}
+            onFilter={setFilter}
+            onSync={() => syncNow.mutate()}
+            syncing={syncNow.isPending}
+          />
+          <ProjectRail project={project} />
+          <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
+          <ProjectWorkspace projectId={project.id} archived={archived} />
+          <ProjectSettings project={project} pending={patch.isPending} write={write} />
+        </>
+      )}
 
       {openRepo ? <RepoSheet project={project} repoId={openRepo} onClose={() => setOpenRepo(null)} /> : null}
     </div>

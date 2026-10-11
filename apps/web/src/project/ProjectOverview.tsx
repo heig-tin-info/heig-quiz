@@ -1,5 +1,4 @@
 import type { UseMutationResult } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ProjectDetail, ProjectPatch, ProjectSummary } from "@quiz/contracts";
@@ -10,7 +9,6 @@ import { DateField } from "../evaluation/TimingStep";
 import { useT, type TFunction } from "../i18n";
 import {
   Badge,
-  Button,
   cx,
   FieldError,
   fieldErrorProps,
@@ -21,7 +19,7 @@ import {
   type RingPart,
 } from "../ui";
 import { foreignZone } from "./newProject";
-import { RepoLink } from "./parts";
+import { RepoLink, SyncButton } from "./parts";
 import {
   deadlineDesc,
   deadlinePassed,
@@ -36,7 +34,7 @@ import {
 const DEADLINE_ID = "project-deadline";
 
 /** A tile's row of facts: a muted name on the left, its value on the right. */
-function Facts({ rows }: { rows: [label: string, value: ReactNode][] }) {
+export function Facts({ rows }: { rows: [label: string, value: ReactNode][] }) {
   return (
     <dl className="space-y-1">
       {rows.map(([label, value]) => (
@@ -315,9 +313,7 @@ function SourceTile({
       ) : null}
       {/* The header's secondary Sync moved here; as the primary action it stays in the header. */}
       {offersSync(project) && project.archivedAt === null ? (
-        <Button variant="secondary" size="sm" data-coach="project.sync" onClick={onSync} loading={syncing || sync.inProgress}>
-          <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
-        </Button>
+        <SyncButton sync={sync} onSync={onSync} syncing={syncing} size="sm" coach="project.sync" />
       ) : null}
     </Stat>
   );

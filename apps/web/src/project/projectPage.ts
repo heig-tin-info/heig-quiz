@@ -7,6 +7,8 @@
  * page meets. `ProjectPage.tsx` and its sections draw them.
  */
 import {
+  MINUTES_PER_DAY,
+  PROJECT_DEFAULTS,
   ProjectReleaseRefusal,
   ProjectUnassigned,
   type ProjectAcceptErrorCode,
@@ -14,6 +16,7 @@ import {
   type ProjectDetail,
   type ProjectDetailGroup,
   type ProjectErrorCode,
+  type ProjectPatch,
   type ProjectRepoReview,
   type ProjectRepoView,
   type ProjectStudent,
@@ -26,6 +29,7 @@ import { isVoidCheckpoint, reopens } from "@quiz/domain";
 
 import { ApiError, refusalCodeOf, wordedRefusal } from "../api";
 import { studentName } from "../group/groupRules";
+import { draftView } from "./draftPatch";
 import type { Dict, TFunction } from "../i18n";
 import type { RouteOf } from "../router";
 import type { Tone } from "../ui";
@@ -112,7 +116,7 @@ export function hasFellBack(p: ProjectDetail): boolean {
  */
 export function deadlineDesc(p: ProjectDetail, zone: string | null, t: TFunction): string | undefined {
   if (p.state === "draft" && p.durationMinutes !== null) {
-    return t("project.deadline.byDuration", { days: Math.round(p.durationMinutes / 1440) });
+    return t("project.deadline.byDuration", { days: Math.round(p.durationMinutes / MINUTES_PER_DAY) });
   }
   if (p.state === "locked") return t("project.deadline.reopenDesc");
   return zone ? t("project.zone", { zone }) : undefined;
@@ -330,6 +334,7 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   not_draft: "project.refusal.notDraft",
   distribution_missing: "project.refusal.distributionMissing",
   deadline_past: "project.refusal.deadlinePast",
+  start_past: "project.refusal.startPast",
   strategy_frozen: "project.refusal.strategyFrozen",
   publish_mode_frozen: "project.refusal.publishModeFrozen",
   repo_unavailable: "project.refusal.repoUnavailable",
@@ -577,11 +582,17 @@ export function commitTone(repo: Pick<ProjectRepoView, "commits" | "lastCommit" 
  * the deadline left void (never firing) and the Release. A project graded
  * `none` has neither checkpoints nor a Release step; `checkpoints` is empty
  * while the query has not answered.
+ *
+ * A MANUAL draft has no start yet (Publish sets it): its Published step has
+ * no date (`at` null: "at publication"). One by duration has no deadline
+ * either, so its Deadline step says its days (`afterDays`) and a checkpoint
+ * counted from it (J−n) is not `dated`; a deadline that is a date, and a
+ * scheduled draft's planned dates, are shown. "Provisional" is `draftView`'s.
  */
 export type RailStep =
-  | { kind: "published"; at: string; done: boolean }
-  | { kind: "checkpoint"; checkpoint: ReviewCheckpoint; status: CheckpointStatus }
-  | { kind: "deadline"; at: string; done: boolean }
+  | { kind: "published"; at: string | null; done: boolean }
+  | { kind: "checkpoint"; checkpoint: ReviewCheckpoint; status: CheckpointStatus; dated: boolean }
+  | ({ kind: "deadline"; done: boolean } & ({ at: string } | { afterDays: number }))
   | {
       kind: "freeze";
       graceMinutes: number;
@@ -593,14 +604,23 @@ export type RailStep =
 
 export function railSteps(p: ProjectDetail, checkpoints: ReviewCheckpoint[]): RailStep[] {
   const graded = p.gradingMode === "auto";
+  const draft = p.state === "draft" ? draftView(p) : null;
+  const manualDraft = draft?.publishMode === "manual";
+  const afterDays = draft?.kind === "duration" && manualDraft ? draft.days : null;
   const tally = projectTally(p);
   const byDue = (graded ? checkpoints : [])
-    .map((checkpoint) => ({ checkpoint, status: checkpointStatus(checkpoint, p.deadlineAt) }))
+    .map((checkpoint) => ({
+      checkpoint,
+      status: checkpointStatus(checkpoint, p.deadlineAt),
+      dated: !(afterDays !== null && checkpoint.offsetDays !== null),
+    }))
     .sort((a, b) => a.checkpoint.dueAt.localeCompare(b.checkpoint.dueAt));
   return [
-    { kind: "published", at: p.startAt, done: p.state !== "draft" },
+    { kind: "published", at: manualDraft ? null : p.startAt, done: p.state !== "draft" },
     ...byDue.filter((c) => c.status !== "void").map((c): RailStep => ({ kind: "checkpoint", ...c })),
-    { kind: "deadline", at: p.deadlineAt, done: deadlinePassed(p) },
+    afterDays !== null
+      ? { kind: "deadline", afterDays, done: deadlinePassed(p) }
+      : { kind: "deadline", at: p.deadlineAt, done: deadlinePassed(p) },
     {
       kind: "freeze",
       graceMinutes: p.graceMinutes,
@@ -612,3 +632,24 @@ export function railSteps(p: ProjectDetail, checkpoints: ReviewCheckpoint[]): Ra
     ...(graded ? [{ kind: "release", at: p.releasedAt } satisfies RailStep] : []),
   ];
 }
+
+/**
+ * How many settings under a draft's "Advanced options" differ from the
+ * defaults (the badge beside its title, so a folded card never hides a change).
+ */
+export function advancedCount(
+  p: Pick<ProjectDetail, "graceMinutes" | "deadlineStrategy" | "gradingMode" | "gradingScale">,
+): number {
+  return [
+    p.graceMinutes !== PROJECT_DEFAULTS.graceMinutes,
+    p.deadlineStrategy !== PROJECT_DEFAULTS.deadlineStrategy,
+    p.gradingMode !== PROJECT_DEFAULTS.gradingMode,
+    p.gradingMode === "auto" && p.gradingScale.kind !== PROJECT_DEFAULTS.scaleKind,
+  ].filter(Boolean).length;
+}
+
+/**
+ * A write of the page's one `PATCH`. A refusal is a toast, unless `onError`
+ * said it in place and returned true.
+ */
+export type WriteProject = (body: ProjectPatch, onError?: (error: unknown) => boolean | void) => void;

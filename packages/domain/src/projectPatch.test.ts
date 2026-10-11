@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { editableProjectFields, PROJECT_PATCH_FIELDS, projectFieldRefusal, type ProjectLifeLike } from "./projectPatch.js";
+import {
+  editableProjectFields,
+  patchedDraftDates,
+  PROJECT_PATCH_FIELDS,
+  projectFieldRefusal,
+  type ProjectDatesLike,
+  type ProjectLifeLike,
+} from "./projectPatch.js";
 
 const NOW = new Date("2026-10-02T10:00:00Z");
 const LATER = new Date("2026-10-20T22:00:00Z");
@@ -41,5 +48,37 @@ describe("projectFieldRefusal (F-PROJ-03)", () => {
     expect(projectFieldRefusal(project({ state: "locked", deadlineAt: EARLIER }), "deadlineAt", NOW)).toBeNull();
     expect(projectFieldRefusal(project({ state: "locked" }), "deadlineAt", NOW)).toBeNull();
     expect(editableProjectFields(project({ state: "locked", deadlineAt: EARLIER }), NOW)).toEqual(["name", "deadlineAt", "protectedFiles"]);
+  });
+});
+
+describe("patchedDraftDates (F-PROJ-03)", () => {
+  const manual: ProjectDatesLike = { publishMode: "manual", startAt: EARLIER, deadlineAt: LATER, durationMinutes: null };
+  const scheduled: ProjectDatesLike = { publishMode: "scheduled", startAt: new Date("2026-10-10T08:00:00Z"), deadlineAt: LATER, durationMinutes: null };
+  const FUTURE = new Date("2026-10-05T08:00:00Z");
+
+  it("keeps a provisional deadline for a duration, from now", () => {
+    expect(patchedDraftDates(manual, { durationMinutes: 90 }, NOW)).toEqual({
+      ok: true,
+      startAt: EARLIER,
+      deadlineAt: new Date(NOW.getTime() + 90 * 60_000),
+    });
+  });
+
+  it("refuses a switch to scheduled that has no start ahead, and a start moved to the past", () => {
+    expect(patchedDraftDates(manual, { publishMode: "scheduled" }, NOW)).toEqual({ ok: false, refusal: "start_past" });
+    expect(patchedDraftDates(scheduled, { startAt: EARLIER }, NOW)).toEqual({ ok: false, refusal: "start_past" });
+    expect(patchedDraftDates(manual, { publishMode: "scheduled", startAt: FUTURE }, NOW)).toEqual({ ok: true, startAt: FUTURE, deadlineAt: LATER });
+  });
+
+  it("resets the start to now when back to manual", () => {
+    expect(patchedDraftDates(scheduled, { publishMode: "manual" }, NOW)).toEqual({ ok: true, startAt: NOW, deadlineAt: LATER });
+  });
+
+  it("refuses a kept deadline that is not ahead on the switch to manual, a past deadline, a duration with a schedule, a deadline before the start", () => {
+    const stale = { ...scheduled, startAt: EARLIER, deadlineAt: new Date("2026-10-02T09:00:00Z") };
+    expect(patchedDraftDates(stale, { publishMode: "manual" }, NOW)).toEqual({ ok: false, refusal: "deadline_past" });
+    expect(patchedDraftDates(manual, { deadlineAt: EARLIER }, NOW)).toEqual({ ok: false, refusal: "deadline_past" });
+    expect(patchedDraftDates({ ...manual, durationMinutes: 60 }, { publishMode: "scheduled" }, NOW)).toEqual({ ok: false, refusal: "duration_needs_manual" });
+    expect(patchedDraftDates(scheduled, { deadlineAt: FUTURE }, NOW)).toEqual({ ok: false, refusal: "deadline_before_start" });
   });
 });

@@ -1,51 +1,89 @@
-import { useQuery, type UseMutationResult } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import type { ProjectDetail, ProjectPatch, ProjectPatchField, ProjectSourceDetail, ProjectSummary } from "@quiz/contracts";
+import type { ProjectDetail, ProjectSourceDetail } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
 import { projectSourceKey } from "../queryKeys";
-import { Badge, Disclosure, Segmented, SettingRow } from "../ui";
-import { repoShortName } from "./projectPage";
+import { Badge, Disclosure, SettingRow } from "../ui";
+import { repoShortName, type WriteProject } from "./projectPage";
+import { DeadlineStrategyRow } from "./ProjectSettingRows";
 import { ProtectedFiles } from "./ProtectedFiles";
 import { WorkModeSetting } from "./ProjectWorkspace";
 
 /**
- * The settings of a project (F-PROJ-03) that a published project rarely
- * changes: what happens at the deadline, the protected files and where the
- * students work — in a folded card at the bottom of the page, with a count
- * of the protected files beside its title. They stay editable, each written
- * as soon as the teacher sets it, through the page's one `PATCH`; what
- * `editable` does not name is drawn disabled: the server decides, the screen
- * follows (`projectFieldRefusal`). The deadline itself is edited in its tile
- * (`ProjectOverview`), the name in the header.
- *
- * A draft keeps the card open: its page is still the settings' place until
- * its own redesign.
+ * The protected files on offer (F-PROJ-01): the source's suggestions, and a
+ * file protected today that the source no longer suggests stays on the list.
  */
-export function ProjectSettings({
-  project,
-  patch,
-}: {
-  project: ProjectDetail;
-  patch: UseMutationResult<ProjectSummary, Error, ProjectPatch>;
-}) {
-  const t = useT();
-  const [open, setOpen] = useState(project.state === "draft");
-  const can = (field: ProjectPatchField) => project.editable.includes(field);
-  const busy = patch.isPending || project.archivedAt !== null;
-
-  // The source's suggestions are the protected files on offer (F-PROJ-01); a
-  // file protected today that the source no longer suggests stays on the list.
+export function useProtectedSuggestions(project: ProjectDetail, enabled: boolean): string[] {
   const sourceRepo = repoShortName(project.source.fullName);
   const source = useQuery<ProjectSourceDetail>({
     queryKey: projectSourceKey(project.classroomId, sourceRepo),
-    enabled: can("protectedFiles") && open,
+    enabled: project.editable.includes("protectedFiles") && enabled,
     queryFn: () =>
       api(`/app/api/classrooms/${project.classroomId}/projects/sources/${encodeURIComponent(sourceRepo)}`),
   });
-  const suggested = [...new Set([...(source.data?.suggestedProtected ?? []), ...project.protectedFiles])];
+  return [...new Set([...(source.data?.suggestedProtected ?? []), ...project.protectedFiles])];
+}
+
+/** The protected files: an editor while `editable` names them, the list otherwise. */
+export function ProtectedFilesRow({
+  project,
+  disabled,
+  suggested,
+  onChange,
+}: {
+  project: ProjectDetail;
+  disabled: boolean;
+  suggested: string[];
+  onChange: (protectedFiles: string[]) => void;
+}) {
+  const t = useT();
+  return (
+    <SettingRow stacked title={t("project.protected")} desc={t("project.protected.desc")}>
+      {project.editable.includes("protectedFiles") ? (
+        <fieldset disabled={disabled} className="min-w-0">
+          <ProtectedFiles suggested={suggested} value={project.protectedFiles} onChange={onChange} />
+        </fieldset>
+      ) : project.protectedFiles.length > 0 ? (
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[13px] text-fg-muted">
+          {project.protectedFiles.map((path) => (
+            <li key={path}>{path}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[13px] text-fg-muted">{t("project.protected.none")}</p>
+      )}
+    </SettingRow>
+  );
+}
+
+/**
+ * The settings of a PUBLISHED project (F-PROJ-03) that it rarely changes:
+ * what happens at the deadline, the protected files and where the students
+ * work — in a folded card at the bottom of the page, with a count of the
+ * protected files beside its title. They stay editable, each written as soon
+ * as the teacher sets it, through the page's one `PATCH`; what `editable`
+ * does not name is drawn disabled: the server decides, the screen follows
+ * (`projectFieldRefusal`). The deadline itself is edited in its tile
+ * (`ProjectOverview`), the name in the header. A draft has its own form
+ * (`ProjectDraftForm`).
+ */
+export function ProjectSettings({
+  project,
+  pending,
+  write,
+}: {
+  project: ProjectDetail;
+  /** A write is under way. */
+  pending: boolean;
+  write: WriteProject;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const busy = pending || project.archivedAt !== null;
+  const suggested = useProtectedSuggestions(project, open);
   const protectedCount = project.protectedFiles.length;
 
   return (
@@ -63,43 +101,17 @@ export function ProjectSettings({
         ) : null
       }
     >
-      <SettingRow
-        title={t("project.deadlineStrategy")}
-        desc={t(`project.deadlineStrategy.desc.${project.deadlineStrategy}`)}
-      >
-        <Segmented
-          name="deadlineStrategy"
-          label={t("project.deadlineStrategy")}
-          value={project.deadlineStrategy}
-          disabled={busy || !can("deadlineStrategy")}
-          onChange={(deadlineStrategy) => patch.mutate({ deadlineStrategy })}
-          options={[
-            { value: "lock", label: t("project.deadlineStrategy.lock") },
-            { value: "commit", label: t("project.deadlineStrategy.commit") },
-          ]}
-        />
-      </SettingRow>
-
-      <SettingRow stacked title={t("project.protected")} desc={t("project.protected.desc")}>
-        {can("protectedFiles") ? (
-          <fieldset disabled={busy} className="min-w-0">
-            <ProtectedFiles
-              suggested={suggested}
-              value={project.protectedFiles}
-              onChange={(protectedFiles) => patch.mutate({ protectedFiles })}
-            />
-          </fieldset>
-        ) : project.protectedFiles.length > 0 ? (
-          <ul className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[13px] text-fg-muted">
-            {project.protectedFiles.map((path) => (
-              <li key={path}>{path}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-[13px] text-fg-muted">{t("project.protected.none")}</p>
-        )}
-      </SettingRow>
-
+      <DeadlineStrategyRow
+        value={project.deadlineStrategy}
+        disabled={busy || !project.editable.includes("deadlineStrategy")}
+        onChange={(deadlineStrategy) => write({ deadlineStrategy })}
+      />
+      <ProtectedFilesRow
+        project={project}
+        disabled={busy}
+        suggested={suggested}
+        onChange={(protectedFiles) => write({ protectedFiles })}
+      />
       <WorkModeSetting projectId={project.id} archived={project.archivedAt !== null} />
     </Disclosure>
   );

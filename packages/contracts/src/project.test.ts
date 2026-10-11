@@ -159,7 +159,7 @@ describe("ProjectCreate and ProjectPatch (F-PROJ-01, F-PROJ-03, M3-02)", () => {
       protectedFiles: [],
       groupMode: false,
     });
-    expect(PROJECT_DEFAULTS).toEqual({ graceMinutes: 30, sourceStrategy: "squash", deadlineStrategy: "lock", gradingMode: "auto", publishMode: "manual" });
+    expect(PROJECT_DEFAULTS).toEqual({ graceMinutes: 30, sourceStrategy: "squash", deadlineStrategy: "lock", gradingMode: "auto", publishMode: "manual", scaleKind: "linear" });
   });
 
   it("asks a manual publication for a deadline or a duration, a scheduled one for both dates", () => {

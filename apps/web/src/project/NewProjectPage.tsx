@@ -44,6 +44,7 @@ import {
   type ProjectField,
 } from "./newProject";
 import { ProjectAdvanced } from "./ProjectAdvanced";
+import { DurationDaysField } from "./ProjectSettingRows";
 
 /** The fields under "Advanced options": a message there unfolds it. */
 const ADVANCED_FIELDS: readonly ProjectField[] = ["grace", "groupSet"];
@@ -310,21 +311,11 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
                   />
                 ) : null}
                 {byDuration(draft) ? (
-                  <div className="flex flex-col gap-1">
-                    <Field
-                      id={FIELD_ID.duration}
-                      label={t("project.duration")}
-                      type="number"
-                      min={1}
-                      max={400}
-                      width="w-32"
-                      className="text-right tabular-nums"
-                      value={draft.durationDays}
-                      onChange={(e) => update({ durationDays: e.target.value })}
-                      {...fieldErrorProps(FIELD_ID.duration, message("duration"))}
-                    />
-                    <FieldError id={FIELD_ID.duration}>{message("duration")}</FieldError>
-                  </div>
+                  <DurationDaysField
+                    value={draft.durationDays}
+                    onChange={(e) => update({ durationDays: e.target.value })}
+                    message={message("duration")}
+                  />
                 ) : (
                   <DateInput
                     field="deadline"
