@@ -343,7 +343,7 @@ const scenes = [
   {
     // The player of a blocks question needs no runner: the Try tab shows it
     // as a student gets it, and the visible warehouses run in the browser.
-    name: "player-blocks",
+    name: "try-blocks",
     caption: "A blocks question as the student gets it: the workspace with the starter, then the warehouses tested.",
     persona: "teacher",
     path: (w) => `/questions/${w.questions.blocks.id}?tab=try`,

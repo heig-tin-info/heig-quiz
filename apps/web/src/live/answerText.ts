@@ -11,7 +11,8 @@
  *
  * No type exposes a full textual rendering through the registry, so the
  * shapes are read here, DEFENSIVELY: the payload is `unknown` on the wire,
- * and a shape this function does not recognise gives `null`. The caller then
+ * a type whose answer is a tree (a program of blocks) is parsed by its own
+ * schema, and a shape this function does not recognise gives `null`. The caller then
  * falls back on the type's optional client `summarize` — only a type whose
  * answer cannot be read as text implements it (the circuit, a schematic) —
  * and else on the cell's summary. A tooltip is never worth an exception.
@@ -19,7 +20,7 @@
  * Nothing here decides whether an answer is right: no solution is read.
  */
 
-import { programStats, type Stmt } from "@quiz/domain/blocks";
+import type { Stmt } from "@quiz/domain/blocks";
 import { BlocksAnswer } from "@quiz/qt-blocks/client";
 
 /** How many lines of a program the tooltip shows before its ellipsis. */
@@ -36,11 +37,8 @@ export type AnswerText =
   | { kind: "text"; text: string; truncated: boolean }
   /** What the student wrote in the editable regions of a program. */
   | { kind: "code"; lines: string[]; truncated: boolean }
-  /**
-   * A program of blocks: how many, and the program itself, which the view
-   * spells in the canvas's words (`qt.blocks.c.*`), translated.
-   */
-  | { kind: "blocks"; count: number; program: Stmt[] };
+  /** A program of blocks, which the view spells in the canvas's words (`qt.blocks.c.*`), translated. */
+  | { kind: "blocks"; program: Stmt[] };
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -154,7 +152,7 @@ function code(answer: unknown): AnswerText | null {
 function blocks(answer: unknown): AnswerText | null {
   const parsed = BlocksAnswer.safeParse(answer);
   if (!parsed.success) return null;
-  return { kind: "blocks", count: programStats(parsed.data.program).nodes, program: parsed.data.program };
+  return { kind: "blocks", program: parsed.data.program };
 }
 
 /**
@@ -211,6 +209,6 @@ export function isEmptyAnswerText(text: AnswerText): boolean {
     case "code":
       return text.lines.length === 0;
     case "blocks":
-      return text.count === 0;
+      return text.program.length === 0;
   }
 }

@@ -98,7 +98,7 @@ describe("answerText (#94)", () => {
     expect(answerText("categorize", student, { columns: [] })).toBeNull();
   });
 
-  it("counts a program of blocks and keeps it for the view to spell, never a verdict", () => {
+  it("keeps a program of blocks for the view to spell, never a verdict", () => {
     const program = [
       {
         kind: "repeat_until_dock",
@@ -108,7 +108,7 @@ describe("answerText (#94)", () => {
     // The visible warehouses travel in the student view; nothing of them is read.
     const student = { visibleCases: [{ name: "A", map: [">.D", "...", "..."], battery: 5, points: 1 }] };
     const text = answerText("blocks", student, { program });
-    expect(text).toEqual({ kind: "blocks", count: 4, program });
+    expect(text).toEqual({ kind: "blocks", program });
     expect(isEmptyAnswerText(text!)).toBe(false);
     expect(isEmptyAnswerText(answerText("blocks", student, { program: [] })!)).toBe(true);
     // A shape the type's schema refuses, a program too deep included, is not read.

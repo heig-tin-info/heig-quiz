@@ -372,12 +372,11 @@ describe("InspectModal under live frames", () => {
 });
 
 describe("AnswerTextView", () => {
-  it("spells a program of blocks in the reader's language, after its count", () => {
+  it("spells a program of blocks in the reader's language, as a program", () => {
     const program: Stmt[] = [{ kind: "repeat", times: 3, body: [{ kind: "forward" }, { kind: "turn", dir: "left" }] }];
-    const { container } = renderWithProviders(<AnswerTextView text={{ kind: "blocks", count: 3, program }} />, {
+    const { container } = renderWithProviders(<AnswerTextView text={{ kind: "blocks", program }} />, {
       locale: "fr",
     });
-    expect(screen.getByText("3 blocs")).toBeInTheDocument();
     expect(container.querySelector("pre")?.textContent).toBe("répéter 3 fois\n  avancer\n  tourner à gauche");
   });
 });

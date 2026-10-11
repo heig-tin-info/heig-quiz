@@ -364,7 +364,7 @@
         "dark": "editor-blocks-dark.png"
       },
       "takenAt": "2026-10-11T15:28:52.547Z",
-      "commit": "6106b630",
+      "commit": "0f33caa1",
       "base": "http://localhost:3100"
     },
     {
@@ -483,7 +483,7 @@
       "base": "http://localhost:3100"
     },
     {
-      "name": "player-blocks",
+      "name": "try-blocks",
       "caption": "A blocks question as the student gets it: the workspace with the starter, then the warehouses tested.",
       "persona": "teacher",
       "path": "/questions/e6367378-1311-42db-8596-9eaf47d2ce2d?tab=try",
@@ -498,11 +498,11 @@
       "state": "As seeded: the published question “prg1-robot-entrepot”.",
       "phase": "seeded",
       "files": {
-        "light": "player-blocks-light.png",
-        "dark": "player-blocks-dark.png"
+        "light": "try-blocks-light.png",
+        "dark": "try-blocks-dark.png"
       },
       "takenAt": "2026-10-11T15:28:52.547Z",
-      "commit": "6106b630",
+      "commit": "0f33caa1",
       "base": "http://localhost:3100"
     },
     {

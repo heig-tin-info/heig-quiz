@@ -318,15 +318,6 @@ The **Reference solution** is your own program, assembled on the same workspace.
 
 **Warehouses** are the test cases, one to eight. Each has a **Name**, its **Points**, its **Battery** (the forward moves allowed, from 1 to 200; a turn is free) and **Hidden**. **Width** and **Height** go from 3 to 12 cells, and the grid under them is the map: with the **Racks** tool a click adds or removes a rack, with **Start** a click places the robot and a click on it turns it, with **Dock** a click moves the dock. **Add a warehouse** starts from a small corridor. **All or nothing**, under **Scoring**, gives the points only when the robot reaches the dock in every warehouse.
 
-Behind the grid, a map is a list of rows of equal length, which is how it is written through the API or by an assistant over MCP: `.` is floor, `#` a rack, one of `^`, `>`, `v`, `<` the robot's start and the way it faces (`^` towards the first row), and `D` the dock, exactly one start and one dock:
-
-```text
-..#..#..
-........
->......D
-...#..#.
-```
-
 ### How it is graded
 
 Each warehouse runs the program from the robot's start. A forward move costs one unit of battery, a turn nothing. A run ends in one of five ways: **Dock reached**, the only one that passes; **Collision**, the robot moved into a rack or out of the warehouse; **Battery empty**; **Endless loop**, the program kept running, turning or testing, far longer than its battery allows; **Stopped short**, the program ended elsewhere. The points of the question are the sum of the points of the warehouses whose run reached the dock, or all of them or nothing under **All or nothing**. The length of the path is never rewarded: a robot that wanders and arrives scores like one that goes straight.
@@ -336,8 +327,8 @@ The grade is computed the moment the evaluation closes and arrives validated: th
 ### What the student sees
 
 <figure markdown="span">
-  ![The player of a blocks question after testing](../assets/screenshots/player-blocks-light.png#only-light)
-  ![The player of a blocks question after testing](../assets/screenshots/player-blocks-dark.png#only-dark)
+  ![The player of a blocks question after testing](../assets/screenshots/try-blocks-light.png#only-light)
+  ![The player of a blocks question after testing](../assets/screenshots/try-blocks-dark.png#only-dark)
   <figcaption>The player with the starter as it is, after Test on every warehouse: the first warehouse reached, a collision in the two others, and the two hidden warehouses announced with their points.</figcaption>
 </figure>
 

@@ -312,20 +312,9 @@ export function AnswerTextView({ text }: { text: AnswerText }) {
         </>
       );
     case "blocks": {
+      // Spelled in the canvas's words, then shown exactly as a program is.
       const lines = pseudoCode(text.program, blocksCanvasStringsOf(t)).split("\n");
-      return (
-        <>
-          <p className="mb-1 text-xs text-fg-muted">
-            {t(text.count === 1 ? "qt.blocks.p.blockCount.one" : "qt.blocks.p.blockCount", { n: text.count })}
-          </p>
-          <pre className="overflow-hidden whitespace-pre font-mono text-xs leading-snug">
-            {lines.slice(0, CODE_LINES).join("\n")}
-          </pre>
-          {lines.length > CODE_LINES ? (
-            <p className="mt-1 text-xs text-fg-faint">{t("live.tip.more", { n: CODE_LINES })}</p>
-          ) : null}
-        </>
-      );
+      return <AnswerTextView text={{ kind: "code", lines: lines.slice(0, CODE_LINES), truncated: lines.length > CODE_LINES }} />;
     }
   }
 }
