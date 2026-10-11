@@ -912,6 +912,10 @@ const scenes = [
   // The diagram item (docs/04 §4.14): the canvas inline under the prompt, then
   // expanded over the page, under the bar with the clock and the way back.
   { name: "player-diagram", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 9) },
+  // The blocks item (docs/04 §4.17): the starter in the workspace, then every visible warehouse tested.
+  { name: "player-blocks", role: "student", path: `${TAKE}?scene=running`, settle: 3000, act: (p) => openQuestion(p, 10) },
+  { name: "player-blocks-tested", role: "student", path: `${TAKE}?scene=running`, settle: 3000, act: async (p) => { await openQuestion(p, 10); await p.getByRole("button", { name: /^(Test on every warehouse|Tester sur tous les entrepôts)$/ }).click(); await p.getByRole("button", { name: /Rayonnage sur l'allée/ }).click(); await p.getByRole("button", { name: /^(Step|Pas à pas)$/ }).click(); await p.getByRole("button", { name: /^(Step|Pas à pas)$/ }).click(); await p.waitForTimeout(500); } },
+  { name: "player-blocks-code", role: "student", path: `${TAKE}?scene=running`, settle: 3000, act: async (p) => { await openQuestion(p, 10); await p.getByText(/^Code$/).click(); await p.waitForTimeout(400); } },
   // The focused canvas lends its keys to the side column, under Alt + ← → (issue #549).
   { name: "player-circuit-shortcuts", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openQuestion(p, 5); await focusCanvas(p); } },
   { name: "player-diagram-expanded", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openQuestion(p, 9); await p.getByRole("button", { name: /^(Expand|Agrandir)$/ }).click(); await p.waitForTimeout(400); } },
@@ -1314,6 +1318,9 @@ const scenes = [
   { name: "editor-circuit-expanded", role: "teacher", path: "/questions/q8", fold: true, settle: 2000, act: async (p) => { await p.getByRole("button", { name: /^(Expand|Agrandir)$/ }).first().click(); await p.waitForTimeout(400); } },
   { name: "editor-rich", role: "teacher", path: "/questions/q17", settle: 3000 },
   { name: "editor-categorize", role: "teacher", path: "/questions/q18", settle: 3000 },
+  // The blocks editor (docs/04 §4.17): toolbox, starter, reference, warehouses on their grids; then the reference checked.
+  { name: "editor-blocks", role: "teacher", path: "/questions/q-blocks", settle: 4000 },
+  { name: "editor-blocks-checked", role: "teacher", path: "/questions/q-blocks", settle: 4000, act: async (p) => { await p.getByRole("button", { name: /^(Check the reference|Vérifier la référence)$/ }).click(); await p.waitForTimeout(400); } },
   // The diagram (ADR-046): published, so its kind is shown locked; the new draft's grid is `editor-diagram-new`.
   { name: "editor-diagram", role: "teacher", path: "/questions/q19", settle: 3000 },
   // The reference diagram expanded, text tab and all (the starter has a button of its own).
@@ -1369,7 +1376,8 @@ const scenes = [
   // evaluations the classroom list shows.
   // One scene per question type of the table (ADR-044): the closed
   // evaluation holds, in order, code, mcq, circuit, short, rich, categorize,
-  // codeimage and diagram (`itemSource` in src/mock/evaluation.ts).
+  // codeimage and diagram (`itemSource` in src/mock/evaluation.ts), then the
+  // parameterized question and the blocks one (`mock/grading.ts`).
   { name: "grading", role: "teacher", path: "/evaluations/closed/grading" },
   { name: "grading-code-expanded", role: "teacher", path: "/evaluations/closed/grading", act: async (p) => {
       await p.locator('[role="button"][aria-expanded="false"]').first().click();
@@ -1382,6 +1390,9 @@ const scenes = [
   { name: "grading-codeimage", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 6) },
   { name: "grading-diagram", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 7) },
   { name: "grading-diagram-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 7); await openRow(p, 1); } },
+  // The blocks question, appended last after the parameterized one (docs/04 §4.17): the program column, then a review in the panel.
+  { name: "grading-blocks", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 10) },
+  { name: "grading-blocks-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 10); await openRow(p, 1); } },
   // ADR-056 §9: the parameterized question, the closed evaluation's tenth —
   // the question as written on the key's row, the rows by verdict, an
   // answer's own values and key, and the variables on the key's panel.

@@ -39,7 +39,7 @@ export const sameItemText = (text: string): string => text.trim().toLowerCase().
  * numbered ("Choice 2"). A type whose field fits none adds one here, and
  * its English and French strings beside the others.
  */
-export const ASSIST_TEXT_LABELS = ["statement", "choice", "column", "card"] as const;
+export const ASSIST_TEXT_LABELS = ["statement", "choice", "column", "card", "case"] as const;
 export type AssistTextLabel = (typeof ASSIST_TEXT_LABELS)[number];
 
 export const GENERATE_INCOMPLETE = ["runner_unavailable", "draft_invalid", "compile_failed", "partial"] as const;

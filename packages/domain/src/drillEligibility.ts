@@ -7,7 +7,7 @@
 import type { GradeResult, QuestionTypeId } from "@quiz/core/server";
 
 /** The product scope of v1 (ADR-041 §3). */
-export const DRILL_TYPES = ["mcq", "short", "cloze", "categorize"] as const satisfies readonly QuestionTypeId[];
+export const DRILL_TYPES = ["mcq", "short", "cloze", "categorize", "blocks"] as const satisfies readonly QuestionTypeId[];
 
 /** True when a question of `type`, graded as `result`, can be a drill card. */
 export function isDrillEligible(type: string, result: GradeResult): boolean {

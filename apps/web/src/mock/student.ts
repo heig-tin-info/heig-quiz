@@ -37,6 +37,7 @@ import {
   scene,
 } from "./runtime";
 import {
+  BLOCKS_CONFIG,
   CATEGORIZE_CONFIG,
   DIAGRAM_CONFIG,
   RC_STUDENT,
@@ -50,6 +51,8 @@ import { categorizeServer } from "@quiz/qt-categorize/server";
 import type { CategorizeConfig } from "@quiz/qt-categorize/client";
 import { diagramServer } from "@quiz/qt-diagram/server";
 import type { DiagramConfig } from "@quiz/qt-diagram/client";
+import { blocksServer } from "@quiz/qt-blocks/server";
+import type { BlocksConfig } from "@quiz/qt-blocks/client";
 import { pollOfTeacher, teacherPolls } from "./poll";
 import { hasMockJournal } from "./journal";
 import { hasStudentGroups, studentGroupSetCards } from "./groups";
@@ -116,7 +119,7 @@ const STUDENT_HANDED_IN_ATTEMPT = "22222222-2222-4222-8222-222222222225";
  * questions still waiting for a grading: points only, no grade (F-RES-04).
  */
 export const STUDENT_EARLY_ATTEMPT = "22222222-2222-4222-8222-222222222226";
-const studentItem = (n: number) => `aaaaaaaa-0000-4000-8000-00000000000${n}`;
+const studentItem = (n: number) => `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 /** The evaluation's state follows the scene; everything else is fixed. */
 const studentEvaluationState = () =>
@@ -125,6 +128,20 @@ const studentEvaluationState = () =>
     : scene === "paused"
       ? ("paused" as const)
       : ("running" as const);
+
+/** The type of the attempt's question n, at index n − 1. */
+const STUDENT_TYPES = [
+  "mcq",
+  "cloze",
+  "short",
+  "code",
+  "circuit",
+  "codeimage",
+  "rich",
+  "categorize",
+  "diagram",
+  "blocks",
+] as const;
 
 /** One question of each MVP type, in French, as `toStudent` would publish it. */
 const studentPayloads: Record<number, unknown> = {
@@ -298,6 +315,12 @@ const studentPayloads: Record<number, unknown> = {
    * reference — the type's own `toStudent`.
    */
   9: diagramServer.toStudent(DIAGRAM_CONFIG as DiagramConfig, { seed: 0, itemId: "9", shuffle: false }),
+  /*
+   * The `blocks` item (docs/04 §4.17): the visible warehouses and the
+   * starter; the hidden warehouses as a count, never their maps — the type's
+   * own `toStudent`.
+   */
+  10: blocksServer.toStudent(BLOCKS_CONFIG as BlocksConfig, { seed: 0, itemId: "10", shuffle: false }),
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
@@ -451,30 +474,13 @@ export const studentAttemptView = (): AttemptView => ({
     pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
-  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5, 6, 7, 8, 9]).map((n) => {
+  items: (scene === "single" ? [1] : STUDENT_TYPES.map((_, i) => i + 1)).map((n) => {
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
       position: n - 1,
       points: n === 4 ? 5 : n === 5 || n === 7 ? 3 : n === 3 ? 1 : 2,
-      type:
-        n === 1
-          ? "mcq"
-          : n === 2
-            ? "cloze"
-            : n === 3
-              ? "short"
-              : n === 4
-                ? "code"
-                : n === 5
-                  ? "circuit"
-                  : n === 6
-                    ? "codeimage"
-                    : n === 7
-                      ? "rich"
-                      : n === 8
-                        ? "categorize"
-                        : "diagram",
+      type: STUDENT_TYPES[n - 1]!,
       milestone: n === 3,
       // The circuit, a bonus question (ADR-052): the player's label.
       bonus: n === 5,

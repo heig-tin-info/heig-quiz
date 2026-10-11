@@ -1415,6 +1415,60 @@ line or two long; the code and circuit reviews open with it as a
 `sectionTitle`, runner badges beside it, over a long review. Both go
 through `pointsOrDash`: an answer nobody graded reads `—`, never `0`.
 
+## The blocks workspace (`qt-blocks`, ADR-103)
+
+The `blocks` question is the one surface drawn by a library we do not
+style with Tailwind: Blockly paints its blocks into SVG from a theme object
+and parses its block colours itself, so the block hues and the hat's are
+VALUES in `packages/qt-blocks/src/blocklyBundle.ts` (`BLOCK_COLOURS`), one
+set per colour scheme. Everything else of its theme (workspace, flyout,
+grid, scrollbar, insertion marker) is read from the app's tokens on
+`<html>` when the workspace is built, and the workspace is rebuilt when
+`html.dark` (or `lang`) flips. What a theme cannot say (the flyout's group
+labels, its hairline) is CSS on the app's variables, registered by the same
+file.
+
+| Role | Light | Dark | Why |
+| --- | --- | --- | --- |
+| Movement blocks | `#55606f` | `#7d8796` | A cool slate: the plain verbs of the robot, the quietest hue of the three |
+| Control blocks | `#a35810` | `#c07a2a` | `warning`'s hue: a loop changes the flow, the way the amber band changes a grade |
+| Sensors blocks | `#1268a0` | `#3f8ec4` | `info`'s hue, "a set of possibilities": a sensor's `if` is a fork of two |
+| The hat "when the robot starts" | `#726d64` | `#6b665e` | `fg-faint`'s warm gray: the frame of the program, never one of its kinds; white ink holds 5:1 on it |
+| Workspace | `surface` | `surface` | The program is the content of the card it sits in |
+| Flyout (the palette) | `surface-2` | `surface-2` | A recessed panel, one level below, like every tool tray |
+| Grid dots, flyout hairline | `line` | `line` | The separation language |
+
+A block's two shades (`colourSecondary`, `colourTertiary`) are its colour
+scaled ×1.25 and ×0.8. The renderer is zelos (rounded, the shape students
+know from Scratch); the font is Manrope 600 at 12 px; the flyout's group
+labels are the 11 px uppercase caption in `fg-muted`. The accent is NOT a
+block colour: on the player's screen it stays the one primary, "Test on
+every warehouse".
+
+- The player stacks the workspace (full width, 540 px, the permanent palette
+  in three labelled groups, `Blocks | Code` above it and the block count at
+  its right) over the **Simulation** card: its title and one-line hint, the
+  primary in its header; under them the map with its battery meter and the
+  secondary Run here / Step / Reset, and the table of warehouses beside it
+  from 40 rem of the card's own width (a container query), under it below.
+- The map (`WarehouseMap.tsx`) is monochrome on `surface-2` with `line`
+  cells: racks `fg-faint` at 60 % with two shelf lines in `surface-2`, the
+  dock a dashed `info` cell on `info-soft` labelled in mono, the robot an
+  `fg` rounded square whose `surface` chevron points where it faces, the
+  trail `fg-faint` dots at 45 %. `danger` only for a robot that hit
+  something. The robot glides 200 ms per move, not at all under reduced
+  motion. Cell 44 viewBox units, scaled to the column.
+- The table keeps the app's table rules with 8 px side padding (four
+  columns in half a card), a 5 px-a-cell thumbnail with a hairline beside
+  the name, the verdict a `Verdict` badge, `—` before a run.
+- The Code tab is a `lockedBlock` of the generated JavaScript: shown, never
+  run (the CSP has no `unsafe-eval`).
+- Without Blockly (a chunk that failed, jsdom), every workspace is the same
+  `lockedBlock` holding the program as indented text, and a caption says why.
+- The teacher's grid over a map is a 32 px button per cell on `surface-2`
+  with `line` hairlines, the same glyphs as the map, and a segmented tool
+  (Racks / Start / Dock) above it.
+
 ## Projection (the poll on a beamer)
 
 One screen of the product is not read at arm's length, and it is the only

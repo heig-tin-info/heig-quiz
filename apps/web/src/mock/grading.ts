@@ -18,6 +18,7 @@ import {
 } from "@quiz/domain";
 import type { GradingConfidence, GradingSource, GradingState } from "@quiz/contracts";
 import type { AnyQuestionTypeServer, ItemAggregate } from "@quiz/core/server";
+import { blocksServer } from "@quiz/qt-blocks/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
 import { shortServer } from "@quiz/qt-short/server";
@@ -50,6 +51,8 @@ import {
   studentAttemptPixels,
 } from "./codeimage";
 import {
+  BLOCKS_ANSWER,
+  BLOCKS_STRAIGHT_ANSWER,
   CATEGORIZE_ANSWER,
   CircuitStimulusLike,
   DIAGRAM_ANSWER,
@@ -166,6 +169,60 @@ const cellKey = (attemptId: string, itemId: string) => `${attemptId}:${itemId}`;
 const FALL: MockQuestion | undefined = questions.find((q) => q.id === "q-fall");
 
 const isFall = (q: { id: string }) => q.id === "q-fall";
+
+/*
+ * The blocks question (`q-blocks`, docs/04 §4.17), appended to the `closed`
+ * evaluation after the falling ball for the same reason: its answers come
+ * from each attempt's `ability`, never from `rand()`, so nothing else the
+ * mock draws moves, and no scene's question index either.
+ */
+const BLOCKS: MockQuestion | undefined = questions.find((q) => q.id === "q-blocks");
+
+/**
+ * A question appended to the `closed` evaluation, graded in a pass of its own
+ * that draws nothing from `rand()`: what differs is its item id's suffix, its
+ * points, each attempt's answer (`null`: blank) and whether a grading is left
+ * to validate.
+ */
+interface Appended {
+  question: MockQuestion;
+  suffix: string;
+  points: number;
+  answer: (attempt: MockAttempt, attemptIndex: number, key: string) => unknown;
+  proposed: (key: string) => boolean;
+}
+
+const APPENDED: Appended[] = [
+  ...(FALL
+    ? [
+        {
+          question: FALL,
+          suffix: "00000000fa11",
+          points: 2,
+          // One student left it blank; the others answered from their own values.
+          answer: (attempt: MockAttempt, attemptIndex: number, key: string) =>
+            attemptIndex === 2 ? null : { text: fallAnswer(fallValues(attempt.id), attempt.ability, fallHash(key)) },
+          // A few left to validate while the evaluation is being graded.
+          proposed: (key: string) => fallHash(key) % 5 === 0,
+        },
+      ]
+    : []),
+  ...(BLOCKS
+    ? [
+        {
+          question: BLOCKS,
+          suffix: "0000000b10c5",
+          points: 3,
+          // One student left it blank; the able half read the sensors, the rest counted cells.
+          answer: (attempt: MockAttempt, attemptIndex: number) =>
+            attemptIndex === 3 ? null : attempt.ability >= 0.6 ? BLOCKS_ANSWER : BLOCKS_STRAIGHT_ANSWER,
+          // Validated at once: the run is the grade (ADR-103 §2).
+          proposed: () => false,
+        },
+      ]
+    : []),
+];
+const isAppended = (q: { id: string }) => APPENDED.some((a) => a.question.id === q.id);
 
 interface FallValues {
   h: number;
@@ -414,7 +471,7 @@ function buildGradingWorld(
     items.forEach((item, itemIndex) => {
       const q = questions.find((x) => x.id === item.questionId)!;
       // Its own pass below: nothing of `rand()` is spent on it.
-      if (isFall(q)) return;
+      if (isAppended(q)) return;
       const config = publishedConfig(q);
       const key = cellKey(attempt.id, item.id);
       // Two students in thirty left this question untouched.
@@ -542,36 +599,38 @@ function buildGradingWorld(
     });
   });
 
-  for (const item of items.filter((i) => i.questionId === FALL?.id)) {
-    for (const [attemptIndex, attempt] of attempts.entries()) {
-      const key = cellKey(attempt.id, item.id);
-      const n = fallHash(key);
-      // One student left it blank; the others answered from their own values.
-      const answer = attemptIndex === 2 ? null : { text: fallAnswer(fallValues(attempt.id), attempt.ability, n) };
-      if (answer) answers.set(key, answer);
-      const graded = answer
-        ? (tryAnswer(FALL!, attemptConfig(FALL!, attempt.id), answer) as { points: number; details: unknown })
-        : { points: 0, details: null };
-      gradings.set(key, [
-        {
-          id: `g${(gradingSeq += 1)}`,
-          answerId: answer ? `${key}-ans` : null,
-          attemptId: attempt.id,
-          itemId: item.id,
-          points: graded.points * item.points,
-          maxPoints: item.points,
-          source: "auto",
-          // A few left to validate while the evaluation is being graded.
-          state: !options.allValidated && n % 5 === 0 && graded.points > 0 ? "proposed" : "validated",
-          details: graded.details,
-          confidence: !options.allValidated && n % 5 === 0 && graded.points > 0 ? "high" : null,
-          comment: null,
-          gradedBy: null,
-          gradedAt: iso(-2 * H + attemptIndex * 1000),
-          supersedesId: null,
-          regradeNote: null,
-        },
-      ]);
+  for (const appended of APPENDED) {
+    const q = appended.question;
+    for (const item of items.filter((i) => i.questionId === q.id)) {
+      for (const [attemptIndex, attempt] of attempts.entries()) {
+        const key = cellKey(attempt.id, item.id);
+        const answer = appended.answer(attempt, attemptIndex, key);
+        if (answer !== null) answers.set(key, answer);
+        const graded =
+          answer === null
+            ? { points: 0, details: null }
+            : (tryAnswer(q, attemptConfig(q, attempt.id), answer) as { points: number; details: unknown });
+        const proposed = !options.allValidated && graded.points > 0 && appended.proposed(key);
+        gradings.set(key, [
+          {
+            id: `g${(gradingSeq += 1)}`,
+            answerId: answer === null ? null : `${key}-ans`,
+            attemptId: attempt.id,
+            itemId: item.id,
+            points: graded.points * item.points,
+            maxPoints: item.points,
+            source: "auto",
+            state: proposed ? "proposed" : "validated",
+            details: graded.details,
+            confidence: proposed ? "high" : null,
+            comment: null,
+            gradedBy: null,
+            gradedAt: iso(-2 * H + attemptIndex * 1000),
+            supersedesId: null,
+            regradeNote: null,
+          },
+        ]);
+      }
     }
   }
 
@@ -587,19 +646,20 @@ const gradingWorlds: MockGradingWorld[] = [];
 {
   const closed = evaluations.find((e) => e.state === "closed");
   const released = evaluations.find((e) => e.state === "released");
-  // The parameterized question, the closed evaluation's last item (ADR-056 §9).
-  if (closed && FALL && closed.items.length > 0) {
+  // The appended questions, the closed evaluation's last items, in order (`APPENDED`).
+  for (const { question, suffix, points } of APPENDED) {
+    if (!closed || closed.items.length === 0) break;
     closed.items.push({
       ...closed.items.at(-1)!,
-      id: "iiiiiiii-0000-4000-8000-00000000fa11",
+      id: `iiiiiiii-0000-4000-8000-${suffix}`,
       position: closed.items.length,
-      points: 2,
+      points,
       milestone: false,
       bonus: false,
-      questionId: FALL.id,
-      questionVersionId: "vvvvvvvv-0000-4000-8000-00000000fa11",
-      type: "short",
-      internalName: FALL.internalName,
+      questionId: question.id,
+      questionVersionId: `vvvvvvvv-0000-4000-8000-${suffix}`,
+      type: question.type,
+      internalName: question.internalName,
       versionNumber: 1,
       latestVersionNumber: 1,
       deprecated: false,
@@ -999,6 +1059,7 @@ const DEBRIEF_TYPES: Record<string, AnyQuestionTypeServer | undefined> = {
   mcq: mcqServer,
   short: shortServer,
   cloze: clozeServer,
+  blocks: blocksServer,
 };
 
 function attemptAggregate(type: string, answer: unknown, details: unknown): ItemAggregate {

@@ -85,6 +85,13 @@ import {
   brainstormReviewStrings,
 } from "@quiz/qt-brainstorm/client";
 import {
+  blocksCanvasStrings,
+  blocksEditorStrings,
+  blocksGradingStrings,
+  blocksPlayerStrings,
+  blocksReviewStrings,
+} from "@quiz/qt-blocks/client";
+import {
   clozeEditorStrings,
   clozeGradingStrings,
   clozePlayerStrings,
@@ -268,6 +275,7 @@ export const editorStrings = {
   diagram: (t: TFunction) => translated(t, diagramEditorStrings, "qt.diagram.e"),
   brainstorm: (t: TFunction) => translated(t, brainstormEditorStrings, "qt.brainstorm.e"),
   math: (t: TFunction) => ({ ...translated(t, withoutProblems(mathEditorStrings), "qt.math.e"), ...mathProblemStringsT(t) }),
+  blocks: (t: TFunction) => translated(t, blocksEditorStrings, "qt.blocks.e"),
 };
 
 /**
@@ -301,6 +309,13 @@ export const diagramCanvasStrings = (t: TFunction): DiagramStrings =>
   translated(t, DIAGRAM_CANVAS_STRINGS, "qt.diagram.c");
 
 /**
+ * The `blocks` world's words (`qt.blocks.c.*`): the block labels, the run's
+ * verdicts and the warehouse, which the editor, the player, the review and
+ * the grading column all draw (ADR-103 §9).
+ */
+export const blocksCanvasStringsOf = (t: TFunction) => translated(t, blocksCanvasStrings, "qt.blocks.c");
+
+/**
  * The canvas dictionary a type's surfaces take beside their `strings`
  * (`canvasStrings`), for the types that have a canvas. Every host — the
  * editor and the review here, the player's `QuestionHost` — reads this one
@@ -309,6 +324,7 @@ export const diagramCanvasStrings = (t: TFunction): DiagramStrings =>
 export const CANVAS_STRINGS_OF: Partial<Record<QuestionTypeId, (t: TFunction) => unknown>> = {
   circuit: circuitCanvasStrings,
   diagram: diagramCanvasStrings,
+  blocks: blocksCanvasStringsOf,
 };
 
 /** The `canvasStrings` prop of a type's surface, or no prop at all. */
@@ -332,6 +348,7 @@ export const playerStrings = {
   diagram: (t: TFunction) => translated(t, diagramPlayerStrings, "qt.diagram.p"),
   brainstorm: (t: TFunction) => translated(t, brainstormPlayerStrings, "qt.brainstorm.p"),
   math: (t: TFunction) => ({ ...translated(t, withoutProblems(mathPlayerStrings), "qt.math.p"), ...mathProblemStringsT(t) }),
+  blocks: (t: TFunction) => translated(t, blocksPlayerStrings, "qt.blocks.p"),
 };
 
 export const reviewStrings = {
@@ -351,6 +368,7 @@ export const reviewStrings = {
   diagram: (t: TFunction) => translated(t, diagramReviewStrings, "qt.diagram.r"),
   brainstorm: (t: TFunction) => translated(t, brainstormReviewStrings, "qt.brainstorm.r"),
   math: (t: TFunction) => ({ ...translated(t, withoutProblems(mathReviewStrings), "qt.math.r"), ...mathProblemStringsT(t) }),
+  blocks: (t: TFunction) => translated(t, blocksReviewStrings, "qt.blocks.r"),
 };
 
 /**
@@ -374,6 +392,17 @@ export const gradingStrings: Record<QuestionTypeId, (t: TFunction) => Record<str
   diagram: (t) => translated(t, diagramGradingStrings, "qt.diagram.g"),
   brainstorm: (t) => translated(t, brainstormGradingStrings, "qt.brainstorm.g"),
   math: (t) => translated(t, mathGradingStrings, "qt.math.g"),
+  /*
+   * The column spells the program and names itself in the canvas's words, so
+   * it takes the canvas dictionary the surfaces take (`CANVAS_STRINGS_OF`),
+   * translated once there, with its own few words on top. The package's
+   * `blocksGradingDictionary` is the same union of English defaults: this is
+   * its translation, not a second dictionary.
+   */
+  blocks: (t) => ({
+    ...(CANVAS_STRINGS_OF.blocks!(t) as Record<string, string>),
+    ...translated(t, blocksGradingStrings, "qt.blocks.g"),
+  }),
 };
 
 // --- Hosts -----------------------------------------------------------------

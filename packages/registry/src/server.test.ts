@@ -1,5 +1,6 @@
 import { ConfigMigrationError, UnknownQuestionType, type StudentView } from "@quiz/core/server";
 import { findStudentLeaks, type StudentLeakFixture } from "@quiz/core/testing";
+import { blocksLeakFixture } from "@quiz/qt-blocks/testing";
 import { brainstormLeakFixture } from "@quiz/qt-brainstorm/testing";
 import { categorizeLeakFixture } from "@quiz/qt-categorize/testing";
 import { circuitLeakFixture } from "@quiz/qt-circuit/testing";
@@ -16,9 +17,23 @@ import { QUESTION_TYPE_IDS, questionType, registeredServerIds, serverRegistry } 
 
 /**
  * The four MVP types, `circuit` (docs/spec/04 §4.11), `codeimage` (§4.9),
- * `rich` (§4.8), `categorize` (§4.13), `diagram` (§4.14) and `math` (§4.16), brought forward.
+ * `rich` (§4.8), `categorize` (§4.13), `diagram` (§4.14) and `math` (§4.16),
+ * brought forward, `brainstorm` (ADR-071) and `blocks` (§4.17).
  */
-const REGISTERED = ["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize", "diagram", "brainstorm", "math"] as const;
+const REGISTERED = [
+  "mcq",
+  "short",
+  "cloze",
+  "code",
+  "circuit",
+  "codeimage",
+  "rich",
+  "categorize",
+  "diagram",
+  "brainstorm",
+  "math",
+  "blocks",
+] as const;
 type RegisteredId = (typeof REGISTERED)[number];
 
 /**
@@ -39,6 +54,7 @@ const CONFIG_VERSIONS: Record<RegisteredId, number> = {
   diagram: 1,
   brainstorm: 1,
   math: 1,
+  blocks: 1,
 };
 
 /**
@@ -61,6 +77,7 @@ const LEAK_FIXTURES: Record<RegisteredId, StudentLeakFixture> = {
   diagram: diagramLeakFixture,
   brainstorm: brainstormLeakFixture,
   math: mathLeakFixture,
+  blocks: blocksLeakFixture,
 };
 
 /**
@@ -93,7 +110,7 @@ describe("the static registries", () => {
     expect(() => questionType("drawing")).toThrow(UnknownQuestionType);
   });
 
-  it("expose the eleven ids", () => {
+  it("expose the twelve ids", () => {
     expect(QUESTION_TYPE_IDS).toEqual([...REGISTERED]);
     expect(Object.keys(serverRegistry)).toEqual([...REGISTERED]);
   });

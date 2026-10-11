@@ -48,6 +48,13 @@ import {
 } from "@quiz/qt-diagram/client";
 import { diagramStrings } from "@quiz/diagram/client";
 import {
+  blocksCanvasStrings,
+  blocksEditorStrings,
+  blocksGradingStrings,
+  blocksPlayerStrings,
+  blocksReviewStrings,
+} from "@quiz/qt-blocks/client";
+import {
   EDITOR_STRINGS,
   GRADING_STRINGS,
   IMAGE_EDITOR_STRINGS,
@@ -68,6 +75,7 @@ import {
 
 import { DICTS, type Locale, type TFunction } from "./i18n";
 import {
+  blocksCanvasStringsOf,
   circuitCanvasStrings,
   circuitKindLabels,
   diagramCanvasStrings,
@@ -148,6 +156,12 @@ const DICTIONARIES: [string, object][] = [
   ["qt.math.g", mathGradingStrings],
   // The problem sentences of the three `math` surfaces, worded once.
   ["qt.math.problem", mathProblemStrings],
+  ["qt.blocks.e", blocksEditorStrings],
+  ["qt.blocks.p", blocksPlayerStrings],
+  ["qt.blocks.r", blocksReviewStrings],
+  ["qt.blocks.g", blocksGradingStrings],
+  // The world's words: block labels, verdicts, the warehouse (ADR-103 §9).
+  ["qt.blocks.c", blocksCanvasStrings],
 ];
 
 /**
@@ -242,6 +256,7 @@ describe("question type strings", () => {
     ["circuit canvas", circuitCanvasStrings],
     ["diagram canvas", diagramCanvasStrings],
     ["circuit component kinds", circuitKindLabels],
+    ["blocks canvas", blocksCanvasStringsOf],
   ] as const;
   const rawKey = /^(qt|mcq|issue)\.[\w.]+$/;
   const sentences = (strings: object) =>

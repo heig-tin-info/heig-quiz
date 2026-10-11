@@ -19,6 +19,8 @@ import { countsAsCompleted,
   round2,
   splitTemplate,
 } from "@quiz/domain";
+import type { BlocksAnswer, BlocksConfig } from "@quiz/qt-blocks/client";
+import { blocksServer } from "@quiz/qt-blocks/server";
 import type {
   EvaluationTiming,
   FeedbackWhen,
@@ -41,6 +43,8 @@ import {
   rand,
 } from "./runtime";
 import {
+  BLOCKS_ANSWER,
+  BLOCKS_STRAIGHT_ANSWER,
   CATEGORIZE_ANSWER,
   DIAGRAM_ANSWER,
   MockQuestion,
@@ -135,7 +139,10 @@ function itemSource(): MockQuestion[] {
   const codeimage = published.filter((q) => q.type === "codeimage");
   // The diagram comes eighth (docs/04 §4.14), after the picture.
   const diagram = published.filter((q) => q.type === "diagram");
-  const rest = primary.filter((q) => !["rich", "categorize", "codeimage", "diagram"].includes(q.type));
+  // The blocks question (docs/04 §4.17) is no part of this list: the closed
+  // evaluation gets it last, after the parameterized one (`mock/grading.ts`),
+  // so no item and no draw of the others moves.
+  const rest = primary.filter((q) => !["rich", "categorize", "codeimage", "diagram", "blocks"].includes(q.type));
   if (primary.length === 0) return published;
   return [
     ...rest.slice(0, 2),
@@ -232,6 +239,9 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
     // Half drawn from the starter, or the reference itself.
     case "diagram":
       return wrong ? DIAGRAM_ANSWER : { scene: config.reference };
+    // Counting cells, or reading the sensors.
+    case "blocks":
+      return wrong ? BLOCKS_STRAIGHT_ANSWER : BLOCKS_ANSWER;
   }
 }
 
@@ -290,6 +300,9 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
       const { scene } = answer as { scene: { nodes: unknown[]; links: unknown[] } };
       return `${scene.nodes.length} · ${scene.links.length}`;
     }
+    // The type's own `summarizeAnswer`: the number of blocks.
+    case "blocks":
+      return blocksServer.summarizeAnswer!(frozenConfig(q) as unknown as BlocksConfig, answer as BlocksAnswer);
     // A poll's alone: no evaluation of the mock holds one.
     case "brainstorm":
       return "";
