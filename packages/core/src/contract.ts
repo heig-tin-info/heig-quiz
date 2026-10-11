@@ -32,8 +32,10 @@ export const ANSWER_SUMMARY_MAX = 24;
  * `diagram` — a diagram of a chosen notation, graded by hand in v1, §4.14
  * (`packages/qt-diagram`, ADR-046), and `brainstorm` — short ideas a poll
  * gathers into a bubble cloud, with no key (`packages/qt-brainstorm`, ADR-071),
- * and `math` — a mathematical expression, compared to the key by sampling,
- * §4.16 (`packages/qt-math`, ADR-102).
+ * `math` — a mathematical expression, compared to the key by sampling,
+ * §4.16 (`packages/qt-math`, ADR-102), and `blocks` — a block program that
+ * drives a warehouse robot, graded by the pure interpreter of
+ * `@quiz/domain/blocks` (`packages/qt-blocks`, ADR-103).
  */
 export const QUESTION_TYPE_IDS = [
   "mcq",
@@ -47,6 +49,7 @@ export const QUESTION_TYPE_IDS = [
   "diagram",
   "brainstorm",
   "math",
+  "blocks",
 ] as const;
 export type QuestionTypeId = (typeof QUESTION_TYPE_IDS)[number];
 

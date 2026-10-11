@@ -70,6 +70,24 @@ const KNOWN: Record<string, keyof Dict> = {
   "math.key_unknown_symbol": "issue.math.key_unknown_symbol",
   "math.key_unsupported": "issue.math.key_unsupported",
   "math.key_undefined": "issue.math.key_undefined",
+  "blocks.program_too_long": "issue.blocks.program_too_long",
+  "blocks.program_too_deep": "issue.blocks.program_too_deep",
+  // The map keys are `MapErrorKey` of `@quiz/domain/blocks` (ADR-103, amendment D16).
+  "blocks.map_too_small": "issue.blocks.map_too_small",
+  "blocks.map_too_large": "issue.blocks.map_too_large",
+  "blocks.map_bad_char": "issue.blocks.map_bad_char",
+  "blocks.map_not_rectangular": "issue.blocks.map_not_rectangular",
+  "blocks.map_no_start": "issue.blocks.map_no_start",
+  "blocks.map_two_starts": "issue.blocks.map_two_starts",
+  "blocks.map_no_dock": "issue.blocks.map_no_dock",
+  "blocks.map_two_docks": "issue.blocks.map_two_docks",
+  "blocks.battery_out_of_range": "issue.blocks.battery_out_of_range",
+  "blocks.no_case": "issue.blocks.no_case",
+  "blocks.too_many_cases": "issue.blocks.too_many_cases",
+  "blocks.starter_outside_toolbox": "issue.blocks.starter_outside_toolbox",
+  "blocks.reference_outside_toolbox": "issue.blocks.reference_outside_toolbox",
+  "blocks.reference_missing": "issue.blocks.reference_missing",
+  "blocks.reference_fails_case": "issue.blocks.reference_fails_case",
 };
 
 /** The generic zod codes, by what they measured: `too_small` of a string, of an array… */

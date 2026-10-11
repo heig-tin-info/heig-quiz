@@ -17,13 +17,14 @@ const pendingLlm: GradeResult = {
 };
 
 describe("isDrillEligible", () => {
-  it("scopes v1 to four types", () => {
-    expect(DRILL_TYPES).toEqual(["mcq", "short", "cloze", "categorize"]);
+  it("scopes v1 to five types", () => {
+    expect(DRILL_TYPES).toEqual(["mcq", "short", "cloze", "categorize", "blocks"]);
   });
 
   it("takes a v1 type whose grading is automatic and final", () => {
     expect(isDrillEligible("mcq", graded())).toBe(true);
     expect(isDrillEligible("categorize", graded("validated"))).toBe(true);
+    expect(isDrillEligible("blocks", graded("validated"))).toBe(true);
   });
 
   it("refuses a grading that waits: an LLM, or a proposal for the teacher", () => {

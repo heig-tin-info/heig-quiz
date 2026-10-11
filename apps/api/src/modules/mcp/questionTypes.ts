@@ -218,6 +218,47 @@ const GUIDES: Record<string, TypeGuide> = {
       rubric: "- **1 pt** : trois états, l'état initial vers Fermée.\n- **1 pt** : les quatre transitions, avec la garde du code.",
     },
   },
+  blocks: {
+    summary:
+      "Blocks: the student assembles a program of blocks that drives a warehouse robot to the loading dock, tested in several warehouses, some hidden.",
+    rules: [
+      "`prompt` is Markdown. Say that the program runs in several warehouses the robot does not know, so it must read its sensors rather than count cells.",
+      'A program is a list of statements: `{ "kind": "forward" }`; `{ "kind": "turn", "dir": "left" | "right" }`; `{ "kind": "repeat", "times": 1..40, "body": [...] }`; `{ "kind": "repeat_until_dock", "body": [...] }`; `{ "kind": "if_sensor", "sensor": "free" | "blocked", "where": "front" | "left" | "right", "then": [...], "else": [...] }`. At most 200 statements, nested at most 16 deep.',
+      "A warehouse map is a list of rows of equal length, 3 to 12 rows of 3 to 12 cells: `.` floor, `#` rack, one of `^ > v <` the robot's start and the way it faces (`^` towards row 0), `D` the dock — exactly one start and one dock.",
+      "Each case has a `name`, a `map`, a `battery` (forward moves allowed, a whole number from 1 to 200; a turn is free), `visible` and `points`. 1 to 8 cases. A hidden case is graded but never shown to the student: write at least one, so a program that only counts cells fails.",
+      "`toolbox` lists the blocks the student may use (all five by default); `starter` is an optional program preloaded for the student. Both `starter` and `referenceSolution` may only use toolbox blocks.",
+      "`referenceSolution` is REQUIRED to publish, and must reach the dock in EVERY case, hidden ones included: check each map against it before sending. The classic wall follower below solves maps whose dock lies along the robot's route around the walls.",
+      "Grading: the points of each case whose run reaches the dock (a collision, an empty battery or an endless loop fails the case); `allOrNothing: true` gives the points only when every case passes.",
+    ],
+    example: {
+      configVersion: 1,
+      prompt:
+        "Le robot de l'entrepôt doit rejoindre le **quai de chargement** sans heurter un rayonnage. Votre programme sera exécuté dans plusieurs entrepôts dont il ne connaît pas le plan : servez-vous de ses capteurs.",
+      world: { kind: "warehouse" },
+      toolbox: ["forward", "turn", "repeat", "repeat_until_dock", "if_sensor"],
+      starter: [],
+      cases: [
+        { name: "Allée dégagée", map: ["..#..#..", "........", ">......D", "...#..#."], battery: 40, visible: true, points: 1 },
+        { name: "Rayonnage sur l'allée", map: ["......D", ">..#...", "......."], battery: 40, visible: true, points: 1 },
+        { name: "caché A", map: ["^...D", ".#.#.", "....."], battery: 20, visible: false, points: 1 },
+      ],
+      referenceSolution: [
+        {
+          kind: "repeat_until_dock",
+          body: [
+            {
+              kind: "if_sensor",
+              sensor: "free",
+              where: "front",
+              then: [{ kind: "forward" }],
+              else: [{ kind: "turn", dir: "right" }],
+            },
+          ],
+        },
+      ],
+      allOrNothing: false,
+    },
+  },
   circuit: {
     summary: "Circuit: the student draws a schematic, graded by an ngspice simulation.",
     rules: [
