@@ -244,9 +244,10 @@ describe("the one primary action", () => {
 });
 
 describe("the teacher's tour (M7-01)", () => {
-  it("finds every step's anchor on a draft whose source is ahead, with a repository to open", async () => {
+  it("finds every step's anchor on a published project whose source is ahead, with a repository to open", async () => {
     routes(
-      makeDraft({
+      makeProject({
+        primaryAction: "release",
         rows: [row(1, makeRepo(1)), row(2, null)],
         sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null },
       }),
@@ -256,6 +257,15 @@ describe("the teacher's tour (M7-01)", () => {
     const tour = TOURS.find((t) => t.id === "project")!;
     expect(tour.audience).toBe("teacher");
     for (const step of tour.steps) expect(document.querySelector(step.target), step.id).not.toBeNull();
+  });
+
+  it("keeps the primary, the sync and the checkpoints anchors on a draft, which has no repository to show (the tour skips them)", async () => {
+    routes(makeDraft({ sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null } }));
+    renderPage();
+    await screen.findByRole("button", { name: "Sync" });
+    const tour = TOURS.find((t) => t.id === "project")!;
+    const present = tour.steps.filter((step) => document.querySelector(step.target) !== null).map((step) => step.id);
+    expect(present).toEqual(["project.primary", "project.checkpoints", "project.sync"]);
   });
 
   it("points the primary step at Sync when Sync is the primary action, and keeps one anchor each", async () => {
@@ -1267,12 +1277,6 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
     expect(await screen.findByRole("radiogroup", { name: "Where students work" })).toBeInTheDocument();
   });
 
-  it("opens the Settings of a draft", async () => {
-    routes(makeDraft());
-    renderPage();
-    expect(await screen.findByRole("button", { name: /Settings/ })).toHaveAttribute("aria-expanded", "true");
-  });
-
   it("moves Sync into the source tile beside another primary; the header keeps the one primary action", async () => {
     routes(
       makeProject({
@@ -1336,5 +1340,185 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
     expect(await within(rail).findByText("never fires")).toBeInTheDocument();
     expect(within(rail).queryByRole("button", { name: "Add a checkpoint" })).toBeNull();
     expect(within(rail).getByRole("button", { name: "Delete checkpoint late" })).toBeInTheDocument();
+  });
+});
+
+describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
+  const WORKSPACE = `GET ${BASE}/workspace`;
+  const workspace = (mode: "free" | "online") =>
+    ok({ mode, allowed: mode === "free" ? ["free", "online"] : ["free"], refusal: null, syncedAt: null, syncError: null });
+  const whenAt = (local: string) => new Date(local).toISOString();
+  const fill = (label: string, value: string) => {
+    const field = screen.getByLabelText(label);
+    fireEvent.change(field, { target: { value } });
+    fireEvent.blur(field);
+  };
+
+  it("is a form, not the dashboard: the work, the publication, the groups, the advanced options and the rail", async () => {
+    routes(makeDraft());
+    renderPage();
+    expect(await screen.findByTestId("project-draft-form")).toBeInTheDocument();
+    for (const name of ["Work handed out", "Publication and deadline", "Groups", "Lifecycle"]) {
+      expect(screen.getByRole("heading", { name })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("button", { name: /Advanced options/ })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("project-tiles")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Repositories" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Settings/ })).toBeNull();
+    // The facts fixed at creation, and the way to change them.
+    expect(screen.getByText(/delete this draft and create it again/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /prg1-labo-02-pointeurs/ })).toBeInTheDocument();
+  });
+
+  it("says the distribution repository is missing, and that the draft must be created again", async () => {
+    routes(makeDraft({ distribution: null }));
+    renderPage();
+    expect(await screen.findByText("The students' repository was not built")).toBeInTheDocument();
+    expect(screen.getByText("being built")).toBeInTheDocument();
+  });
+
+  it("offers Sync in the header, a secondary button, where the draft's source is ahead", async () => {
+    routes(makeDraft({ sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null } }));
+    renderPage();
+    const sync = await screen.findByRole("button", { name: "Sync" });
+    expect(sync).toHaveAttribute("data-coach", "project.sync");
+    expect(screen.getByText("source 2 commits ahead")).toBeInTheDocument();
+  });
+
+  it("switches to a scheduled publication without writing, then writes the three fields once both dates are filled", async () => {
+    const { calls } = routes(makeDraft({ durationMinutes: 7 * 1440 }), { [`PATCH ${BASE}`]: ok({}) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("radio", { name: "At the start" }));
+    expect(writes(calls)).toHaveLength(0);
+    fill("Start", "2099-06-01T08:00");
+    expect(writes(calls)).toHaveLength(0);
+    fill("Deadline", "2099-06-08T23:59");
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({
+      publishMode: "scheduled",
+      startAt: whenAt("2099-06-01T08:00"),
+      deadlineAt: whenAt("2099-06-08T23:59"),
+      durationMinutes: null,
+    });
+  });
+
+  it("says a start already past under the start field and keeps the pair on screen", async () => {
+    routes(makeDraft({ durationMinutes: 7 * 1440 }), {
+      [`PATCH ${BASE}`]: fail(422, { error: "start_past", message: "The start has passed" }),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("radio", { name: "At the start" }));
+    fill("Start", "2020-01-01T08:00");
+    fill("Deadline", "2099-06-08T23:59");
+    const start = screen.getByLabelText("Start");
+    expect(await screen.findByText("The start must be in the future.")).toBeInTheDocument();
+    expect(start).toHaveAttribute("aria-invalid", "true");
+    expect(start).toHaveValue("2020-01-01T08:00");
+    expect(screen.getByLabelText("Deadline")).toHaveValue("2099-06-08T23:59");
+  });
+
+  it("goes back to manual with the mode alone", async () => {
+    const { calls } = routes(
+      makeDraft({ publishMode: "scheduled", startAt: AHEAD, deadlineAt: new Date(Date.parse(AHEAD) + 86_400_000).toISOString() }),
+      { [`PATCH ${BASE}`]: ok({}) },
+    );
+    renderPage();
+    await userEvent.click(await screen.findByRole("radio", { name: "By hand" }));
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({ publishMode: "manual" });
+  });
+
+  it("counts a manual deadline in days on leaving the field, and sends no date with it", async () => {
+    const { calls } = routes(makeDraft(), { [`PATCH ${BASE}`]: ok({}) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("radio", { name: "A duration" }));
+    expect(writes(calls)).toHaveLength(0);
+    fill("Duration in days", "14");
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({ durationMinutes: 14 * 1440 });
+  });
+
+  it("turns a duration into a date: the date and a null duration", async () => {
+    const { calls } = routes(makeDraft({ durationMinutes: 7 * 1440 }), { [`PATCH ${BASE}`]: ok({}) });
+    renderPage();
+    expect(await screen.findByLabelText("Duration in days")).toHaveValue(7);
+    await userEvent.click(screen.getByRole("radio", { name: "A date" }));
+    expect(writes(calls)).toHaveLength(0);
+    fill("Deadline", "2099-06-08T23:59");
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({ deadlineAt: whenAt("2099-06-08T23:59"), durationMinutes: null });
+  });
+
+  it("writes nothing for days out of bounds, and says so", async () => {
+    const { calls } = routes(makeDraft({ durationMinutes: 7 * 1440 }), { [`PATCH ${BASE}`]: ok({}) });
+    renderPage();
+    await screen.findByLabelText("Duration in days");
+    fill("Duration in days", "500");
+    expect(await screen.findByText("Enter a number of days, from 1 to 400.")).toBeInTheDocument();
+    expect(writes(calls)).toHaveLength(0);
+  });
+
+  it("holds the group switch, with a sentence, while the project works online", async () => {
+    routes(makeDraft(), { [WORKSPACE]: workspace("online") });
+    renderPage();
+    const group = await screen.findByRole("switch", { name: "Work in groups" });
+    await waitFor(() => expect(group).toBeDisabled());
+    expect(screen.getByText(/cannot be a group project/)).toBeInTheDocument();
+  });
+
+  it("writes the group mode at once, the platform without the portal leaving it free", async () => {
+    const { calls } = routes(makeDraft(), { [`PATCH ${BASE}`]: ok({}) });
+    renderPage();
+    const group = await screen.findByRole("switch", { name: "Work in groups" });
+    await userEvent.click(group);
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({ groupMode: true });
+  });
+
+  it("folds the grace, the strategy, the grading, the scale, the protected files and the work mode under Advanced options", async () => {
+    const { calls } = routes(makeDraft({ graceMinutes: 10 }), {
+      [WORKSPACE]: workspace("free"),
+      [`PATCH ${BASE}`]: ok({}),
+    });
+    renderPage();
+    const advanced = await screen.findByRole("button", { name: /Advanced options/ });
+    // Something differs from the defaults: the count stays in view.
+    expect(advanced).toHaveTextContent("1");
+    expect(screen.queryByLabelText("Grace")).toBeNull();
+    await userEvent.click(advanced);
+    expect(screen.getByLabelText("Grace")).toHaveValue(10);
+    for (const name of ["Lock", "Mark", "Automatic", "None", "Linear", "Score is the grade"]) {
+      expect(screen.getByRole("radio", { name })).toBeEnabled();
+    }
+    expect(await screen.findByRole("checkbox", { name: "README.md" })).toBeInTheDocument();
+    expect(await screen.findByRole("radiogroup", { name: "Where students work" })).toBeInTheDocument();
+
+    // A grace of 0 is allowed; each is one PATCH.
+    fill("Grace", "0");
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({ graceMinutes: 0 });
+    await userEvent.click(screen.getByRole("radio", { name: "Score is the grade" }));
+    await waitFor(() => expect(writes(calls)).toHaveLength(2));
+    expect(writes(calls)[1]!.body).toEqual({ gradingScale: { kind: "score_is_grade", rounding: "nearest" } });
+  });
+
+  it("draws every control disabled for an archived draft, and what `editable` does not name", async () => {
+    routes(makeDraft({ archivedAt: PAST, editable: ["name"] }));
+    renderPage();
+    expect(await screen.findByRole("radio", { name: "By hand" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Work in groups" })).toBeDisabled();
+  });
+
+  it("shows no provisional date on the rail of a manual draft", async () => {
+    routes(makeDraft({ durationMinutes: 7 * 1440 }), {
+      [`GET ${BASE}/checkpoints`]: ok([makeCheckpoint(1, { name: "mid", offsetDays: -3 })]),
+    });
+    renderPage();
+    const rail = await screen.findByRole("region", { name: "Lifecycle" });
+    expect(await within(rail).findByText("mid")).toBeInTheDocument();
+    const steps = within(rail).getAllByRole("listitem").map((li) => li.textContent);
+    expect(steps[0]).toMatch(/^Publishedat publication/);
+    expect(steps[1]).toMatch(/^midD−3/);
+    expect(steps[2]).toMatch(/^Deadline7 days after publication/);
   });
 });

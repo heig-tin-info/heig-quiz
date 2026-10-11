@@ -95,6 +95,15 @@ async function readSource(
   return { source, branches };
 }
 
+/**
+ * A scheduled start must lie ahead (`422 start_past`, F-PROJ-03): one in the
+ * past would be published at the next tick, with the class notified. One rule
+ * for the create and the patch.
+ */
+function assertStartAhead(startAt: Date, now: Date): void {
+  if (startAt.getTime() <= now.getTime()) throw new ProjectError("start_past", "The start has passed");
+}
+
 /** The draft's dates: a manual publication starts at its publication, and counts its duration from there. */
 function draftDates(body: ProjectCreate, now: Date): { startAt: Date; deadlineAt: Date } {
   if (body.publishMode === "scheduled") return { startAt: new Date(body.startAt!), deadlineAt: new Date(body.deadlineAt!) };
@@ -182,7 +191,8 @@ async function buildDistribution(
  * `POST /app/api/classrooms/:id/projects` (F-PROJ-01, F-PROJ-02): a draft
  * with its distribution repository. Refused before anything is written:
  * `not_connected`, `app_not_installed`, `source_not_found`,
- * `deadline_past`, `unknown_group_set`, `duplicate_slug`; after:
+ * `deadline_past`, `start_past` (a scheduled start already passed),
+ * `unknown_group_set`, `duplicate_slug`; after:
  * `distribution_failed`, the row deleted and nothing on GitHub. A group
  * set named is copied as soon as the row exists (ADR-070 §4), so the set's
  * writes keep the copy in step while the distribution is built.
@@ -191,6 +201,7 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
   const { body, now } = input;
   const dates = draftDates(body, now);
   if (dates.deadlineAt.getTime() <= now.getTime()) throw new ProjectError("deadline_past", "The deadline has passed");
+  if (body.publishMode === "scheduled") assertStartAhead(dates.startAt, now);
   const groupSetId = body.groupSetId ?? null;
   const { org, client } = await classroomClient(db, config, input.classroomId);
   const { source, branches } = await readSource(db, client, org, body.sourceRepo, body.branches, input.caller);
@@ -345,6 +356,15 @@ export async function patchProject(
     }
     if (next.publishMode === "scheduled" && next.durationMinutes !== null) {
       throw new DomainError("validation", 400, "A duration only applies to a manual publication");
+    }
+    // Back to a manual publication, the start is the publication's: no
+    // phantom scheduled start stays to block a deadline later.
+    if (changed.publishMode === "manual") {
+      next.startAt = now;
+      changed.startAt = now;
+    }
+    if (next.publishMode === "scheduled" && (changed.publishMode !== undefined || changed.startAt !== undefined)) {
+      assertStartAhead(next.startAt, now);
     }
     if (next.deadlineAt.getTime() <= next.startAt.getTime()) {
       throw new DomainError("validation", 400, "The deadline must come after the start");

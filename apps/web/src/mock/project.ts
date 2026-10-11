@@ -1080,8 +1080,25 @@ on("PATCH", "/app/api/projects/:id", (m, raw) => {
       throw refuse(409, code, `${field} cannot change now`);
     }
   }
+  // A draft's publication (F-PROJ-03): a scheduled start must lie ahead, back to manual resets it, a duration keeps a provisional deadline.
+  if (body.deadlineAt !== undefined && Date.parse(body.deadlineAt) <= now) throw refuse(422, "deadline_past", "The deadline has passed");
+  const mode = body.publishMode ?? s.publishMode;
+  const startAt = body.publishMode === "manual" && s.publishMode !== "manual" ? iso(0) : (body.startAt ?? s.startAt);
+  const durationMinutes = body.durationMinutes === undefined ? s.durationMinutes : body.durationMinutes;
+  if (mode === "scheduled" && (body.publishMode !== undefined || body.startAt !== undefined) && Date.parse(startAt) <= now) {
+    throw refuse(422, "start_past", "The start has passed");
+  }
+  if (mode === "scheduled" && durationMinutes !== null) throw refuse(400, "validation", "A duration only applies to a manual publication");
+  if (mode === "scheduled" && Date.parse(body.deadlineAt ?? s.deadlineAt) <= Date.parse(startAt)) {
+    throw refuse(400, "validation", "The deadline must come after the start");
+  }
+  s.publishMode = mode;
+  s.startAt = startAt;
+  if (body.durationMinutes != null) {
+    s.durationMinutes = body.durationMinutes;
+    s.deadlineAt = iso(body.durationMinutes * 60_000);
+  } else if (body.durationMinutes === null) s.durationMinutes = null;
   if (body.deadlineAt !== undefined) {
-    if (Date.parse(body.deadlineAt) <= now) throw refuse(422, "deadline_past", "The deadline has passed");
     // The reopen (F-PROJ-09): the project and the repositories at its deadline.
     if (s.state === "locked") {
       s.state = "published";

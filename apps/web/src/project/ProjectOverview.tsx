@@ -36,7 +36,7 @@ import {
 const DEADLINE_ID = "project-deadline";
 
 /** A tile's row of facts: a muted name on the left, its value on the right. */
-function Facts({ rows }: { rows: [label: string, value: ReactNode][] }) {
+export function Facts({ rows }: { rows: [label: string, value: ReactNode][] }) {
   return (
     <dl className="space-y-1">
       {rows.map(([label, value]) => (

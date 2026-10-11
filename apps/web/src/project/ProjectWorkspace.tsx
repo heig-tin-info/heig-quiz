@@ -43,7 +43,7 @@ const STATE_TONE: Record<CodespaceSessionState, Tone> = {
 };
 
 /** The workspace read, shared by the work-mode setting and the live section: one query, one cache entry. */
-function useWorkspace(projectId: string) {
+export function useWorkspace(projectId: string) {
   return useQuery<Workspace>({
     queryKey: projectWorkspaceKey(projectId),
     queryFn: () => api(`/app/api/projects/${projectId}/workspace`),

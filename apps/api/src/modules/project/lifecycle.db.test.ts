@@ -320,6 +320,8 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     const room = await connectedClassroom();
     const past = await call("POST", base(room.id), teacher.headers, { ...LAB, deadlineAt: "2026-10-01T00:00:00Z" });
     expect(refusal(past)).toEqual([422, "deadline_past"]);
+    const startPast = { ...LAB, publishMode: "scheduled", startAt: "2026-10-01T00:00:00Z" };
+    expect(refusal(await call("POST", base(room.id), teacher.headers, startPast))).toEqual([422, "start_past"]);
     const loose = await connectedClassroom({ connected: false });
     expect(refusal(await call("POST", base(loose.id), teacher.headers, LAB))).toEqual([409, "not_connected"]);
     for (const body of [
@@ -401,6 +403,27 @@ describe("patch (F-PROJ-03)", () => {
     expect(ProjectSummary.parse(dated.json()).deadlineAt).toBe(new Date(Date.parse(NOW) + 90 * 60_000).toISOString());
     expect((await patch(project.id, { publishMode: "scheduled" })).statusCode).toBe(400);
     expect(refusal(await patch(project.id, { deadlineAt: "2026-10-01T00:00:00Z" }))).toEqual([422, "deadline_past"]);
+  });
+
+  it("refuses a scheduled start already past, and resets the start when back to manual (F-PROJ-03)", async () => {
+    const room = await connectedClassroom();
+    const project = await create(room.id);
+    // A manual draft's stored start is its creation: switching alone would publish it at the next tick.
+    expect(refusal(await patch(project.id, { publishMode: "scheduled" }))).toEqual([422, "start_past"]);
+    expect(refusal(await patch(project.id, { publishMode: "scheduled", startAt: NOW, deadlineAt: IN_A_WEEK }))).toEqual([422, "start_past"]);
+    expect((await rowOf(project.id))!.publishMode).toBe("manual");
+
+    const scheduled = await patch(project.id, { publishMode: "scheduled", startAt: "2026-10-05T08:00:00Z", deadlineAt: IN_A_WEEK });
+    expect(scheduled.statusCode, scheduled.body).toBe(200);
+    expect(ProjectSummary.parse(scheduled.json())).toMatchObject({ publishMode: "scheduled", startAt: "2026-10-05T08:00:00.000Z" });
+    // A start moved to the past is refused too.
+    expect(refusal(await patch(project.id, { startAt: "2026-10-01T08:00:00Z" }))).toEqual([422, "start_past"]);
+
+    const back = await patch(project.id, { publishMode: "manual" });
+    expect(back.statusCode, back.body).toBe(200);
+    expect(ProjectSummary.parse(back.json())).toMatchObject({ publishMode: "manual", startAt: NOW, deadlineAt: IN_A_WEEK });
+    // The phantom start gone, an earlier deadline is no longer blocked by it.
+    expect((await patch(project.id, { deadlineAt: "2026-10-04T08:00:00Z" })).statusCode).toBe(200);
   });
 
   it("once published, opens the name, the protected files, the deadline and its strategy only", async () => {

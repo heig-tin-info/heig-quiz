@@ -82,11 +82,11 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
       case "published":
         return (
           <Step key={key} title={t("project.rail.published")} done={step.done}>
-            <p className="tabular-nums">{isoDateTime(step.at)}</p>
+            <p className="tabular-nums">{step.at ? isoDateTime(step.at) : t("project.rail.atPublication")}</p>
           </Step>
         );
       case "checkpoint": {
-        const { checkpoint: c, status } = step;
+        const { checkpoint: c, status, dated } = step;
         return (
           <Step
             key={c.id}
@@ -109,9 +109,11 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
               ) : null
             }
           >
+            {/* A checkpoint counted from a deadline not set yet has no date: only its D-n. */}
             <p className="tabular-nums">
-              {isoDateTime(c.dueAt)}
-              {c.offsetDays !== null ? ` · ${t("project.checkpoint.offsetLabel", { n: -c.offsetDays })}` : ""}
+              {dated ? isoDateTime(c.dueAt) : null}
+              {dated && c.offsetDays !== null ? " · " : null}
+              {c.offsetDays !== null ? t("project.checkpoint.offsetLabel", { n: -c.offsetDays }) : null}
             </p>
             <p>
               <Badge tone={STATUS_TONE[status]}>
@@ -131,7 +133,13 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
       case "deadline":
         return (
           <Step key={key} title={t("project.deadline")} done={step.done}>
-            <p className="tabular-nums">{isoDateTime(step.at)}</p>
+            <p className="tabular-nums">
+              {step.at
+                ? isoDateTime(step.at)
+                : step.afterDays === 1
+                  ? t("project.rail.afterPublication.one")
+                  : t("project.rail.afterPublication", { n: step.afterDays ?? 0 })}
+            </p>
           </Step>
         );
       case "freeze":

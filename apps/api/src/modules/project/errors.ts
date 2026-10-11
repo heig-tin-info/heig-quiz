@@ -20,6 +20,7 @@ const STATUS: Record<Code, number> = {
   distribution_failed: 502,
   distribution_missing: 409,
   deadline_past: 422,
+  start_past: 422,
   not_draft: 409,
   publish_mode_frozen: 409,
   strategy_frozen: 409,

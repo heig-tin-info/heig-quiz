@@ -381,6 +381,8 @@ export type ProjectSummary = z.infer<typeof ProjectSummary>;
  *   - `deadline_past` (422) — a deadline, or a repository's own deadline,
  *     at or before now; moving a deadline already applied to a later date
  *     is not refused: it reopens the project (F-PROJ-09, M3-05a);
+ *   - `start_past` (422) — a scheduled draft's start at or before now: it
+ *     would be published at the next tick (F-PROJ-03);
  *   - `repo_unavailable` — a repository's lock, unlock or own deadline
  *     asked of a repository that is not provisioned, or was deleted on
  *     GitHub (M3-05a);
@@ -436,6 +438,7 @@ export const PROJECT_REFUSALS = [
   "distribution_failed",
   "distribution_missing",
   "deadline_past",
+  "start_past",
   "not_draft",
   "publish_mode_frozen",
   "strategy_frozen",

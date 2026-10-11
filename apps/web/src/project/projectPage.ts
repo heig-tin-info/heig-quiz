@@ -330,6 +330,7 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   not_draft: "project.refusal.notDraft",
   distribution_missing: "project.refusal.distributionMissing",
   deadline_past: "project.refusal.deadlinePast",
+  start_past: "project.refusal.startPast",
   strategy_frozen: "project.refusal.strategyFrozen",
   publish_mode_frozen: "project.refusal.publishModeFrozen",
   repo_unavailable: "project.refusal.repoUnavailable",
@@ -577,11 +578,17 @@ export function commitTone(repo: Pick<ProjectRepoView, "commits" | "lastCommit" 
  * the deadline left void (never firing) and the Release. A project graded
  * `none` has neither checkpoints nor a Release step; `checkpoints` is empty
  * while the query has not answered.
+ *
+ * A MANUAL draft has no dates yet — its start and, by duration, its deadline
+ * are provisional, Publish sets them —: its Published step has no date (`at`
+ * null: "at publication"), a deadline by duration says its days
+ * (`afterDays`, no date), and a checkpoint counted from the deadline (J−n)
+ * is not `dated`. A scheduled draft shows its planned dates.
  */
 export type RailStep =
-  | { kind: "published"; at: string; done: boolean }
-  | { kind: "checkpoint"; checkpoint: ReviewCheckpoint; status: CheckpointStatus }
-  | { kind: "deadline"; at: string; done: boolean }
+  | { kind: "published"; at: string | null; done: boolean }
+  | { kind: "checkpoint"; checkpoint: ReviewCheckpoint; status: CheckpointStatus; dated: boolean }
+  | { kind: "deadline"; at: string | null; afterDays: number | null; done: boolean }
   | {
       kind: "freeze";
       graceMinutes: number;
@@ -593,14 +600,25 @@ export type RailStep =
 
 export function railSteps(p: ProjectDetail, checkpoints: ReviewCheckpoint[]): RailStep[] {
   const graded = p.gradingMode === "auto";
+  const provisional = p.state === "draft" && p.publishMode === "manual";
+  const byDuration = provisional && p.durationMinutes !== null;
   const tally = projectTally(p);
   const byDue = (graded ? checkpoints : [])
-    .map((checkpoint) => ({ checkpoint, status: checkpointStatus(checkpoint, p.deadlineAt) }))
+    .map((checkpoint) => ({
+      checkpoint,
+      status: checkpointStatus(checkpoint, p.deadlineAt),
+      dated: !(provisional && checkpoint.offsetDays !== null),
+    }))
     .sort((a, b) => a.checkpoint.dueAt.localeCompare(b.checkpoint.dueAt));
   return [
-    { kind: "published", at: p.startAt, done: p.state !== "draft" },
+    { kind: "published", at: provisional ? null : p.startAt, done: p.state !== "draft" },
     ...byDue.filter((c) => c.status !== "void").map((c): RailStep => ({ kind: "checkpoint", ...c })),
-    { kind: "deadline", at: p.deadlineAt, done: deadlinePassed(p) },
+    {
+      kind: "deadline",
+      at: byDuration ? null : p.deadlineAt,
+      afterDays: byDuration ? Math.round(p.durationMinutes! / 1440) : null,
+      done: deadlinePassed(p),
+    },
     {
       kind: "freeze",
       graceMinutes: p.graceMinutes,

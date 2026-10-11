@@ -36,6 +36,7 @@ import {
 } from "../ui";
 import { projectPhaseLabel, projectPhaseStyle } from "./common";
 import { FIELD_ID } from "./newProject";
+import { ProjectDraftForm } from "./ProjectDraftForm";
 import { ProjectGroupSet } from "./ProjectGroupSet";
 import { projectNotices, projectNoticeToast } from "./projectNotices";
 import { ProjectOverview } from "./ProjectOverview";
@@ -45,6 +46,7 @@ import { ProjectSettings } from "./ProjectSettings";
 import { ProjectWorkspace } from "./ProjectWorkspace";
 import {
   hasFellBack,
+  offersSync,
   projectRefetchInterval,
   projectStatus,
   refusalMessage,
@@ -57,15 +59,23 @@ import {
 import { RepoSheet } from "./RepoSheet";
 
 /**
- * The staff's project page (F-PROJ-13, M3-12), `/projects/:id`: a dashboard.
- * The header — its name (renamed in place), its state, what is happening and
+ * The staff's project page (F-PROJ-13, M3-12), `/projects/:id`, in two
+ * faces: before publication one configures, after it one watches.
+ *
+ * A DRAFT is a form (`ProjectDraftForm`, F-PROJ-01, F-PROJ-03): the work
+ * handed out, the publication and the deadline, the groups, "Advanced
+ * options" and the lifecycle rail, every field written as it is set. No
+ * tiles and no table: nobody can accept a draft (ADR-077 §1). With no Source
+ * tile, Sync (the source is ahead) is a secondary button of the header.
+ *
+ * A PUBLISHED project is a dashboard. The header — its name (renamed in place), its state, what is happening and
  * the ONE primary action the server names —, four tiles (the acceptance as a
  * ring, the deadline edited in place, the progress, the source and its sync;
  * their sub-figures filter the table), the lifecycle rail with the review
  * checkpoints, one row per student of the roster with their repository (per
  * group in a group project, M3-16b, with its drift and *Resync*), the live
  * workspace, and the settings still open to change (F-PROJ-03) in a folded
- * card at the bottom (open on a draft). A row opens its repository's sheet:
+ * card at the bottom. A row opens its repository's sheet:
  * the history of its runs, its scores and the teacher's, its own deadline and
  * its lock. See DESIGN.md › The project page (staff).
  *
@@ -272,8 +282,19 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
     </Button>
   );
 
-  const settings = <ProjectSettings project={project} patch={patch} />;
-  const settingsFirst = project.state === "draft";
+  const isDraft = project.state === "draft";
+  /** A draft has no Source tile: Sync, when the source is ahead and is not already the primary, sits beside Publish. */
+  const draftSync =
+    isDraft && project.primaryAction !== "sync" && offersSync(project) && !archived ? (
+      <Button
+        variant="secondary"
+        data-coach="project.sync"
+        onClick={() => syncNow.mutate()}
+        loading={syncNow.isPending || sync.inProgress}
+      >
+        <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
+      </Button>
+    ) : null;
 
   return (
     <div className="space-y-8">
@@ -313,6 +334,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         }
         actions={
           <span className="flex flex-wrap items-center gap-2">
+            {draftSync}
             {project.primaryAction === "publish" ? (
               <Button
                 data-coach="project.primary"
@@ -392,21 +414,25 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         </Alert>
       ) : null}
 
-      {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
-      {/* A draft's page is still the settings' place: open on top, until its own redesign. */}
-      {settingsFirst ? settings : null}
-      <ProjectOverview
-        project={project}
-        patch={patch}
-        filter={filter}
-        onFilter={setFilter}
-        onSync={() => syncNow.mutate()}
-        syncing={syncNow.isPending}
-      />
-      <ProjectRail project={project} />
-      <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
-      <ProjectWorkspace projectId={project.id} archived={archived} />
-      {settingsFirst ? null : settings}
+      {isDraft ? (
+        <ProjectDraftForm project={project} patch={patch} navigate={navigate} />
+      ) : (
+        <>
+          {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
+          <ProjectOverview
+            project={project}
+            patch={patch}
+            filter={filter}
+            onFilter={setFilter}
+            onSync={() => syncNow.mutate()}
+            syncing={syncNow.isPending}
+          />
+          <ProjectRail project={project} />
+          <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
+          <ProjectWorkspace projectId={project.id} archived={archived} />
+          <ProjectSettings project={project} patch={patch} />
+        </>
+      )}
 
       {openRepo ? <RepoSheet project={project} repoId={openRepo} onClose={() => setOpenRepo(null)} /> : null}
     </div>

@@ -609,6 +609,28 @@ describe("the lifecycle rail's steps", () => {
     expect(steps.find((s) => s.kind === "deadline")).toMatchObject({ done: true });
   });
 
+  it("shows no provisional date on a manual draft, and the planned dates on a scheduled one", () => {
+    const relative = makeCheckpoint(4, { name: "mid", offsetDays: -3 });
+    const fixed = makeCheckpoint(5, { name: "fixed", offsetDays: null });
+    const byDate = railSteps(makeProject({ state: "draft", publishMode: "manual", durationMinutes: null }), [relative, fixed]);
+    expect(byDate[0]).toEqual({ kind: "published", at: null, done: false });
+    // The deadline is a date the teacher gave; a checkpoint counted from it has none of its own yet.
+    expect(byDate.find((s) => s.kind === "deadline")).toMatchObject({ at: AHEAD, afterDays: null });
+    expect(byDate.filter((s) => s.kind === "checkpoint").map((s) => s.kind === "checkpoint" && [s.checkpoint.name, s.dated])).toEqual([
+      ["mid", false],
+      ["fixed", true],
+    ]);
+
+    const byDays = railSteps(makeProject({ state: "draft", publishMode: "manual", durationMinutes: 7 * 1440 }), []);
+    expect(byDays.find((s) => s.kind === "deadline")).toEqual({ kind: "deadline", at: null, afterDays: 7, done: false });
+
+    const planned = makeProject({ state: "draft", publishMode: "scheduled", durationMinutes: null });
+    const steps = railSteps(planned, [relative]);
+    expect(steps[0]).toEqual({ kind: "published", at: planned.startAt, done: false });
+    expect(steps.find((s) => s.kind === "deadline")).toMatchObject({ at: planned.deadlineAt, afterDays: null });
+    expect(steps.find((s) => s.kind === "checkpoint")).toMatchObject({ dated: true });
+  });
+
   it("goes back to an open freeze when the deadline is reopened, and says the later own deadlines", () => {
     const later = new Date(Date.parse(AHEAD) + 86_400_000).toISOString();
     const reopened = makeProject({

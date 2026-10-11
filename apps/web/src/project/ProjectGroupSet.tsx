@@ -14,9 +14,10 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { classroomGroupSetsKey, projectKey } from "../queryKeys";
 import type { Navigate } from "../router";
-import { Alert, Button, Card, SectionHeading } from "../ui";
+import { Alert, Button, Card, SectionHeading, SettingRow, Switch } from "../ui";
 import { FIELD_ID } from "./newProject";
 import { groupSetPageOf, offersResync, refusalMessage } from "./projectPage";
+import { useWorkspace } from "./ProjectWorkspace";
 
 /**
  * The group set a group project follows (ADR-070 §4, §7; M3-16a): a
@@ -34,6 +35,13 @@ import { groupSetPageOf, offersResync, refusalMessage } from "./projectPage";
  * arrivals without a repository and the rest, and Confirm sends the digest
  * back (a stale one names them again). A confirmed resync not applied yet
  * (`groupSyncPending`) is said under the set.
+ *
+ * On a DRAFT this is the page's Groups section (the draft form): a switch for
+ * the group mode written at once (off clears the set and its copy, no
+ * confirmation) over the picker, which appears with it. The switch is held
+ * with one sentence while the project works in the online workspace
+ * (`work_mode_group`, F-PROJ-06); a platform without the portal answers the
+ * workspace read with a 404, and the switch is then simply free.
  */
 export function ProjectGroupSet({
   project,
@@ -54,11 +62,10 @@ export function ProjectGroupSet({
   const refused = patch.variables?.groupSetId !== undefined && patch.isError ? refusalMessage(patch.error, t) : undefined;
   const setPage = groupSetPageOf(project);
   const resync = useResync(project);
+  const draft = project.state === "draft";
 
-  return (
-    <section aria-labelledby="project-group-set-heading" className="space-y-3">
-      <SectionHeading icon={UsersRound} title={<span id="project-group-set-heading">{t("project.groupSet")}</span>} />
-      <Card className="space-y-3 px-4 py-4">
+  const body = (
+    <>
         {editable ? (
           <>
             <p className="text-[13px] text-fg-muted">{t("project.groupSet.desc")}</p>
@@ -108,7 +115,23 @@ export function ProjectGroupSet({
             {t("project.resync.pending")}
           </p>
         ) : null}
-      </Card>
+    </>
+  );
+
+  return (
+    <section aria-labelledby="project-group-set-heading" className="space-y-3">
+      <SectionHeading
+        icon={UsersRound}
+        title={<span id="project-group-set-heading">{t(draft ? "project.groups" : "project.groupSet")}</span>}
+      />
+      {draft ? (
+        <Card className="divide-y divide-line px-4">
+          <GroupModeSwitch project={project} patch={patch} />
+          {project.groupMode ? <div className="space-y-3 py-4">{body}</div> : null}
+        </Card>
+      ) : (
+        <Card className="space-y-3 px-4 py-4">{body}</Card>
+      )}
       {offersResync(project) ? (
         <Alert
           tone="warning"
@@ -178,4 +201,32 @@ function useResync(project: ProjectDetail) {
     confirm: () => asked && send.mutate(asked.digest),
     cancel: () => setAsked(null),
   };
+}
+
+/**
+ * A draft's group mode (F-PROJ-06): written at once. Held, with the reason,
+ * while the project works in the online workspace — the server would refuse
+ * `work_mode_group` — and while `editable` does not name it.
+ */
+function GroupModeSwitch({
+  project,
+  patch,
+}: {
+  project: ProjectDetail;
+  patch: UseMutationResult<ProjectSummary, Error, ProjectPatch>;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const workspace = useWorkspace(project.id);
+  const online = workspace.data !== undefined && workspace.data.mode !== "free";
+  return (
+    <SettingRow title={t("project.draft.groups.switch")} desc={online ? t("project.draft.groups.online") : t("project.groups.desc")}>
+      <Switch
+        checked={project.groupMode}
+        label={t("project.draft.groups.switch")}
+        disabled={patch.isPending || online || project.archivedAt !== null || !project.editable.includes("groupMode")}
+        onChange={(groupMode) => patch.mutate({ groupMode }, { onError: (error) => toast(refusalMessage(error, t), "error") })}
+      />
+    </SettingRow>
+  );
 }
