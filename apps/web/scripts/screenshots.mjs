@@ -540,6 +540,9 @@ const scenes = [
   { name: "classroom-settings", role: "teacher", path: "/classrooms/r2/settings" },
   { name: "classroom-settings-github-connect", role: "teacher", path: "/classrooms/r2/settings?connect=1", fold: true },
   { name: "classroom-settings-github-connect-installed", role: "teacher", path: "/classrooms/r2/settings?connect=1&installed=0190d3c4-0000-7000-8000-00000000a002", fold: true },
+  // ADR-100: no organization open to the course, the row and the sheet say who opens one.
+  { name: "classroom-settings-github-not-granted", role: "teacher", path: "/classrooms/r2/settings?ghnogrant=1" },
+  { name: "classroom-settings-github-connect-not-granted", role: "teacher", path: "/classrooms/r2/settings?ghnogrant=1&connect=1", fold: true },
   // ADR-068: an assistant of the course keeps Archive and has no Delete.
   { name: "classroom-settings-assistant", role: "teacher", path: "/classrooms/r1/settings?assistant=1" },
   { name: "classroom-settings-github-installed", role: "teacher", path: "/classrooms/r1/settings" },

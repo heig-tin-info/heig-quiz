@@ -15,6 +15,7 @@ const org: GithubOrg = {
 
 const classroom: GithubClassroom = {
   link: { org, linkedAt: "2026-09-30T08:00:00.000Z", checks: { allRepositories: true, llmSecret: "unknown" } },
+  orgs: [],
   suggestedOrgId: null,
   installUrl: `https://github.com/apps/heig-quiz/installations/new?state=${ID}`,
 };

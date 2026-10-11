@@ -9,27 +9,23 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-import type { GithubAccountState, GithubClassroom, GithubOrg } from "@quiz/contracts";
+import type { GithubAccountState, GithubClassroom } from "@quiz/contracts";
 
 import { api, isNotFound } from "../api";
-import { classroomGithubKey, githubOrgsKey, meGithubKey } from "../queryKeys";
+import { classroomGithubKey, meGithubKey } from "../queryKeys";
 
 /** The route is not there: no App on this platform (or, for a classroom, not ours). */
 export const githubAbsent = isNotFound;
 
-/** `GET /classrooms/:id/github`: the link and its checks, re-read when the Settings open (F-GH-03). */
+/**
+ * `GET /classrooms/:id/github`: the link and its checks, re-read when the
+ * Settings open (F-GH-03), and the organizations its connect sheet offers
+ * (ADR-100).
+ */
 export function useClassroomGithub(id: string) {
   return useQuery<GithubClassroom>({
     queryKey: classroomGithubKey(id),
     queryFn: () => api(`/app/api/classrooms/${id}/github`),
-  });
-}
-
-/** `GET /github/orgs`: the organizations the App is installed on, for the connect sheet. */
-export function useGithubOrgs() {
-  return useQuery<GithubOrg[]>({
-    queryKey: githubOrgsKey,
-    queryFn: () => api("/app/api/github/orgs"),
   });
 }
 

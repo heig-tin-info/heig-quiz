@@ -61,7 +61,6 @@ import {
   EvaluationTemplate,
   GithubAccountState,
   GithubClassroom,
-  GithubOrg,
   GradeRunList,
   ProjectWorkspace,
   ProjectWorkspaceSessions,
@@ -553,7 +552,6 @@ const CHECKED: Case[] = [
   each("/app/api/classrooms/:id/journal/deleted", `/app/api/classrooms/${classroomId}/journal/deleted`, JournalDeletedPage),
   // GitHub (F-GH-01 to F-GH-05): the organizations, every classroom's link
   // (connected or not), and the persona's account.
-  each("/app/api/github/orgs", "/app/api/github/orgs", GithubOrg),
   ...courses
     .flatMap((c) => c.classrooms)
     .map((r) => one("/app/api/classrooms/:id/github", `/app/api/classrooms/${r.id}/github`, GithubClassroom)),

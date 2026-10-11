@@ -51,7 +51,8 @@ import {
 } from "../../db/schema.js";
 import { githubApp, githubStatus, unless404 } from "../../github/app.js";
 import { inviteCollaborator } from "../../github/collaborators.js";
-import { actsOn } from "../github/service.js";
+import { actsOn, offLimitsRepos } from "../github/service.js";
+import type { Caller } from "../guards.js";
 import { DomainError } from "../http.js";
 import { JournalError } from "./errors.js";
 import { journalChanged } from "./events.js";
@@ -248,8 +249,11 @@ committed here: a page cannot load one from another site.
 export const freshVersion = () => randomInt(1, 2 ** 30);
 
 /**
- * The row of a classroom's new journal, then the staff invited and the copy
- * requested. A row that appeared meanwhile (two tabs) wins: 409.
+ * The row of a classroom's new journal, then the copy requested. The staff
+ * are invited only to a repository Quiz created for this classroom
+ * (`journal.create`), never to one chosen with "use" (ADR-100 §6): an
+ * adopted repository's collaborators stay GitHub's business. A row that
+ * appeared meanwhile (two tabs) wins: 409.
  */
 async function attach(
   ctx: WriteContext,
@@ -275,7 +279,7 @@ async function attach(
     .returning({ classroomId: classroomJournals.classroomId });
   if (inserted.length === 0) throw new JournalError("journal_exists");
   await ctx.note(action, { mode: "github", fullName: repo.fullName, githubRepoId: repo.githubRepoId, ...where });
-  await inviteStaff(ctx, octokit, repo, room);
+  if (action === "journal.create") await inviteStaff(ctx, octokit, repo, room);
   await requestIngest(ctx.app, ctx.config, room.id);
   return staffJournal(ctx.app.db, room);
 }
@@ -322,15 +326,18 @@ export async function createJournal(ctx: WriteContext, room: Room, name: string 
 }
 
 /**
- * `POST /classrooms/:id/journal/use`: any repository of the classroom's
- * organization (D27), by name, on `ref` (its default branch otherwise) under
- * `rootPath`. GitHub follows a transferred repository to its new owner: one
- * whose owner is not the organization is not found, like a missing one.
+ * `POST /classrooms/:id/journal/use`: a repository of the classroom's
+ * organization (D27 as amended by ADR-100), by name, on `ref` (its default
+ * branch otherwise) under `rootPath`. GitHub follows a transferred
+ * repository to its new owner: one whose owner is not the organization is
+ * not found, like a missing one; so is one Quiz knows as another course's,
+ * a course where the caller holds no seat (`offLimitsRepos`).
  */
 export async function useJournal(
   ctx: WriteContext,
   room: Room,
   body: { name: string; ref?: string | undefined; rootPath?: string | undefined },
+  caller: Caller,
 ): Promise<JournalStaff> {
   const t = await targetOf(ctx.app.db, room.id);
   const org = connected(t);
@@ -341,7 +348,9 @@ export async function useJournal(
     const owned =
       repo !== null &&
       (org.githubOrgId !== null ? repo.ownerId === org.githubOrgId : repo.owner.toLowerCase() === org.login.toLowerCase());
-    if (!owned) throw new JournalError("repo_not_found");
+    if (!owned || (await offLimitsRepos(ctx.app.db, caller, [repo.githubRepoId])).size > 0) {
+      throw new JournalError("repo_not_found");
+    }
     const where = { ref: body.ref ?? repo.defaultBranch, rootPath: body.rootPath ?? "" };
     return attach(ctx, room, octokit, repo, where, "journal.use");
   });
@@ -399,12 +408,12 @@ async function permissionOf(octokit: Octokit, repo: ResolvedRepo, login: string)
 
 /**
  * Invites the course's staff who linked a GitHub account as collaborators
- * of the repository, `push` only — never `admin` nor `maintain` — so the
- * clone-and-push path works without anyone touching GitHub's settings
- * (F-JRN-02, F-JRN-03). Their CURRENT login, read by their account's
+ * of a repository Quiz just created for the classroom, `push` only — never
+ * `admin` nor `maintain` — so the clone-and-push path works without anyone
+ * touching GitHub's settings (F-JRN-02; never on "use", ADR-100 §6). Their CURRENT login, read by their account's
  * immutable id (`linkedLogin`): an invitation to a renamed login would reach
- * nobody. A member who already holds `push` or more on a repository chosen
- * with "use" is left as they are (`accepted`): GitHub's invitation SETS the
+ * nobody. A member who already holds `push` or more (an owner of the
+ * organization) is left as they are (`accepted`): GitHub's invitation SETS the
  * permission, and would lower an admin to `push`. One audit entry per member,
  * whatever came of it; a failure is logged and audited, and never fails the
  * creation or the choice.

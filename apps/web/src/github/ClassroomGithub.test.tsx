@@ -19,7 +19,6 @@ afterEach(() => {
 });
 
 const GITHUB = "/app/api/classrooms/r1/github";
-const ORGS = "/app/api/github/orgs";
 const INSTALL = "https://github.com/apps/heig-quiz/installations/new?state=r1";
 
 const org = (over: Partial<GithubOrg> & Pick<GithubOrg, "id" | "login">): GithubOrg => ({
@@ -33,9 +32,10 @@ const TIN = org({ id: "0190d3c4-0000-7000-8000-00000000a001", login: "heig-tin-i
 const EMB = org({ id: "0190d3c4-0000-7000-8000-00000000a002", login: "heig-emb-lab", plan: "free" });
 const GONE = org({ id: "0190d3c4-0000-7000-8000-00000000a003", login: "old-org", installed: false, status: "deleted" });
 
-const plain: GithubClassroom = { link: null, suggestedOrgId: EMB.id, installUrl: INSTALL };
+const plain: GithubClassroom = { link: null, orgs: [], suggestedOrgId: EMB.id, installUrl: INSTALL };
 const connected: GithubClassroom = {
   link: { org: TIN, linkedAt: "2026-09-01T00:00:00.000Z", checks: { allRepositories: true, llmSecret: "missing" } },
+  orgs: [],
   suggestedOrgId: null,
   installUrl: INSTALL,
 };
@@ -57,6 +57,30 @@ describe("the classroom's GitHub section", () => {
     expect(onConnecting).toHaveBeenCalledWith(true);
   });
 
+  it("says who can open an organization to the course when none is offered (ADR-100)", async () => {
+    mockFetch({ [`GET ${GITHUB}`]: ok(plain) });
+    renderSection();
+    expect(await screen.findByText("Ask an organization owner or an administrator.")).toBeVisible();
+    // Connect stays the one primary: the sheet still installs the App on an organization one owns.
+    expect(screen.getByRole("button", { name: "Connect to GitHub" })).toBeVisible();
+  });
+
+  it("says it in the sheet too, beside the way to install the App", async () => {
+    mockFetch({ [`GET ${GITHUB}`]: ok(plain) });
+    renderSection({ connecting: true });
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByText("No organization is open to this course yet.")).toBeVisible();
+    expect(within(sheet).getByText("Ask an organization owner or an administrator.")).toBeVisible();
+    expect(within(sheet).getByRole("link", { name: /Install the App on GitHub/ })).toHaveAttribute("href", INSTALL);
+  });
+
+  it("says nothing of it when an organization is offered", async () => {
+    mockFetch({ [`GET ${GITHUB}`]: ok({ ...plain, orgs: [EMB] }) });
+    renderSection();
+    await screen.findByText("Not connected");
+    expect(screen.queryByText("Ask an organization owner or an administrator.")).toBeNull();
+  });
+
   it("draws nothing on a platform without Quiz's App (404)", async () => {
     const { calls } = mockFetch({});
     renderSection();
@@ -67,8 +91,7 @@ describe("the classroom's GitHub section", () => {
 
   it("connects to the suggested organization, preselected and listed first", async () => {
     const { calls } = mockFetch({
-      [`GET ${GITHUB}`]: ok(plain),
-      [`GET ${ORGS}`]: ok([TIN, GONE, EMB]),
+      [`GET ${GITHUB}`]: ok({ ...plain, orgs: [TIN, GONE, EMB] }),
       [`PUT ${GITHUB}`]: ok({ ...connected, link: { ...connected.link!, org: EMB } }),
     });
     const onConnecting = renderSection({ connecting: true });
@@ -95,8 +118,7 @@ describe("the classroom's GitHub section", () => {
 
   it("preselects the organization the setup return names, once, and takes it out of the address", async () => {
     const { calls } = mockFetch({
-      [`GET ${GITHUB}`]: ok(plain),
-      [`GET ${ORGS}`]: ok([TIN, EMB]),
+      [`GET ${GITHUB}`]: ok({ ...plain, orgs: [TIN, EMB] }),
       [`PUT ${GITHUB}`]: ok(connected),
     });
     renderSection({ connecting: true, route: `/classrooms/r1/settings?connect=1&installed=${TIN.id}` });
@@ -110,7 +132,7 @@ describe("the classroom's GitHub section", () => {
 
   it("ignores an `installed` that is not a selectable organization of the list", async () => {
     for (const installed of [GONE.id, "0190d3c4-0000-7000-8000-00000000ffff"]) {
-      mockFetch({ [`GET ${GITHUB}`]: ok(plain), [`GET ${ORGS}`]: ok([TIN, GONE, EMB]) });
+      mockFetch({ [`GET ${GITHUB}`]: ok({ ...plain, orgs: [TIN, GONE, EMB] }) });
       const { unmount } = renderWithProviders(
         <ClassroomGithub room={makeClassroomDetail()} connecting onConnecting={vi.fn()} />,
         { route: `/classrooms/r1/settings?connect=1&installed=${installed}` },
@@ -157,8 +179,7 @@ describe("the classroom's GitHub section", () => {
 
   it("reports a refused connect once, under the list", async () => {
     mockFetch({
-      [`GET ${GITHUB}`]: ok(plain),
-      [`GET ${ORGS}`]: ok([EMB]),
+      [`GET ${GITHUB}`]: ok({ ...plain, orgs: [EMB] }),
       [`PUT ${GITHUB}`]: fail(409, { error: "app_not_installed", message: "not installed" }),
     });
     renderSection({ connecting: true });
@@ -170,8 +191,7 @@ describe("the classroom's GitHub section", () => {
 
   it("keeps Connect disabled until an organization is picked, and sends the one picked", async () => {
     const { calls } = mockFetch({
-      [`GET ${GITHUB}`]: ok({ ...plain, suggestedOrgId: null }),
-      [`GET ${ORGS}`]: ok([TIN, EMB]),
+      [`GET ${GITHUB}`]: ok({ ...plain, suggestedOrgId: null, orgs: [TIN, EMB] }),
       [`PUT ${GITHUB}`]: ok(connected),
     });
     renderSection({ connecting: true });

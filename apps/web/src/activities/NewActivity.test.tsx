@@ -17,7 +17,7 @@ import { fail, mockFetch, ok, renderWithProviders, type Reply } from "../test/re
 
 const ROOM = "/app/api/classrooms/r1";
 const INSTALL = "https://github.com/apps/heig-quiz/installations/new?state=r1";
-const plain: GithubClassroom = { link: null, suggestedOrgId: null, installUrl: INSTALL };
+const plain: GithubClassroom = { link: null, orgs: [], suggestedOrgId: null, installUrl: INSTALL };
 const connected: GithubClassroom = {
   link: {
     org: {
@@ -31,6 +31,7 @@ const connected: GithubClassroom = {
     linkedAt: "2026-09-01T00:00:00.000Z",
     checks: { allRepositories: true, llmSecret: "present" },
   },
+  orgs: [],
   suggestedOrgId: null,
   installUrl: INSTALL,
 };

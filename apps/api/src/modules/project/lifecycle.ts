@@ -43,6 +43,7 @@ import { codespaceProjects, enrollments, groupSets, projectGroupMembers, project
 import { githubStatus, type InstallationClient } from "../../github/app.js";
 import { createSquashedRepo } from "../../github/squash.js";
 import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
+import type { Caller } from "../guards.js";
 import { DomainError, notFoundError } from "../http.js";
 import { projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
 import { ProjectError } from "./errors.js";
@@ -65,8 +66,8 @@ export const MAX_SUFFIX = 20;
 export interface CreateInput {
   classroomId: string;
   body: ProjectCreate;
-  /** `created_by`: the account that asked. */
-  userId: string;
+  /** The account that asked (`created_by`), and its reach: the source must be one it may read (ADR-100). */
+  caller: Caller;
   actor: AuditActor;
   now: Date;
   log: FastifyBaseLogger;
@@ -82,8 +83,9 @@ async function readSource(
   org: InstalledOrg,
   name: string,
   asked: string[] | undefined,
+  caller: Caller,
 ): Promise<{ source: Source; branches: string[] }> {
-  const source = await fetchSource(db, client, org, name);
+  const source = await fetchSource(db, client, org, name, caller);
   if (!source) throw new ProjectError("source_not_found", `${name} is not a source of ${org.login}`);
   const branches = asked ?? [source.defaultBranch];
   const missing = branches.filter((b) => !source.branches.includes(b));
@@ -191,7 +193,7 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
   if (dates.deadlineAt.getTime() <= now.getTime()) throw new ProjectError("deadline_past", "The deadline has passed");
   const groupSetId = body.groupSetId ?? null;
   const { org, client } = await classroomClient(db, config, input.classroomId);
-  const { source, branches } = await readSource(db, client, org, body.sourceRepo, body.branches);
+  const { source, branches } = await readSource(db, client, org, body.sourceRepo, body.branches, input.caller);
 
   const values: Omit<typeof projects.$inferInsert, "id" | "slug"> = {
     classroomId: input.classroomId,
@@ -211,7 +213,7 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
     branches,
     protectedFiles: body.protectedFiles,
     gradingScale: body.gradingScale ?? defaultProjectGradingScale(),
-    createdBy: input.userId,
+    createdBy: input.caller.id,
     createdAt: now,
   };
   // The set checked under its lock in the draft's own transaction: a set

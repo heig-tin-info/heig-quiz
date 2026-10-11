@@ -40,11 +40,11 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   // reaches: every open evaluation, grading or results screen of it too.
   courses: [...EVALUATION_ROOTS, "courses", "pools", "pool", "admin-teachers"],
   // An archived classroom takes its evaluations out of the Activities. The
-  // GitHub setup return (M2-02) raises it too: the organizations the connect
-  // sheet offers, and the classroom's link (under `classroom`).
+  // GitHub setup return (M2-02) raises it too: the classroom's link and the
+  // organizations its connect sheet offers (under `classroom`, ADR-100).
   // An archived classroom's sets turn read-only (`group-sets`, M3-16a).
   // An archived classroom's gradebook turns read-only (`gradebook`, M5-04).
-  classrooms: ["courses", "course", "classroom", "student", "activities", "github", "group-sets", "gradebook"],
+  classrooms: ["courses", "course", "classroom", "student", "activities", "group-sets", "gradebook"],
   // A roster line added or removed is a student of every group set (ADR-070 §2).
   // A roster line is a row of the gradebook.
   roster: ["courses", "course", "classroom", "evaluations", "evaluation", "dashboard", "student", "group-sets", "gradebook"],

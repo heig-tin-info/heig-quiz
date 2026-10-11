@@ -158,12 +158,6 @@ export const groupSetKey = (id: string) => [...groupSetsKey, "set", id] as const
 export const gradebookRootKey = ["gradebook"] as const;
 export const classroomGradebookKey = (classroomId: string) => [...gradebookRootKey, "staff", classroomId] as const;
 export const studentGradebookKey = (classroomId: string) => [...gradebookRootKey, "student", classroomId] as const;
-/**
- * The organizations Quiz's App is installed on (the connect sheet's picker).
- * Its own root, which the `classrooms` hint names: an installation that
- * completes adds a row while the sheet is open.
- */
-export const githubOrgsKey = ["github", "orgs"] as const;
 /** The caller's GitHub account link (F-GH-05): under `meKey`, refreshed with the session. */
 export const meGithubKey = ["me", "github"] as const;
 /** Both payloads of a classroom's journal: what a create, a use or a removal invalidates. */

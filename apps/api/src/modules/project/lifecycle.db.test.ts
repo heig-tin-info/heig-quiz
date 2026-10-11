@@ -22,6 +22,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import {
   CSRF_COOKIE,
   ActivitySummary,
+  defaultProjectGradingScale,
   ProjectActivitySummary,
   ProjectErrorCode,
   ProjectSourceDetail,
@@ -726,6 +727,46 @@ describe("the organization's repository browser (M3-11)", () => {
     world.foreignOwner.add(`${room.login}/moved`);
     expect((await call("GET", `${base(room.id)}/sources/moved`, teacher.headers)).statusCode).toBe(404);
     expect((await call("GET", `${base(room.id)}/sources/lab-1-squashed`, teacher.headers)).statusCode).toBe(404);
+  });
+
+  it("hides and refuses a repository Quiz knows as a course the caller does not teach (ADR-100 §5)", async () => {
+    const room = await connectedClassroom();
+    // Another course's project (the outsider's) hands out `theirs`, a repository of the same organization.
+    world.source(room.login, "theirs", { main: { "README.md": "# Theirs" } });
+    const other = await seedLive(server.app.db, { teacherId: outsider.id, studentIds: [], questions: 0 });
+    const [linked] = await server.app.db
+      .select({ orgId: githubClassroomLinks.orgId })
+      .from(githubClassroomLinks)
+      .where(eq(githubClassroomLinks.classroomId, room.id));
+    await server.app.db.insert(projects).values({
+      id: randomUUID(),
+      classroomId: other.classroomId,
+      orgId: linked!.orgId,
+      name: "Theirs",
+      slug: "theirs",
+      startAt: new Date(NOW),
+      deadlineAt: new Date(IN_A_WEEK),
+      sourceRepoId: world.ids.get(`${room.login}/theirs`)!,
+      sourceFullName: `${room.login}/theirs`,
+      branches: ["main"],
+      protectedFiles: [],
+      gradingScale: defaultProjectGradingScale(),
+      createdBy: outsider.id,
+    });
+    const names = async () =>
+      ProjectSourceRepo.array()
+        .parse((await call("GET", `${base(room.id)}/sources`, teacher.headers)).json())
+        .map((r) => r.name);
+    expect(await names()).toEqual(["lab"]);
+    expect((await call("GET", `${base(room.id)}/sources/theirs`, teacher.headers)).statusCode).toBe(404);
+    expect(refusal(await call("POST", base(room.id), teacher.headers, { ...LAB, sourceRepo: "theirs" }))).toEqual([
+      422,
+      "source_not_found",
+    ]);
+    // A course the caller teaches too: allowed.
+    await server.app.db.insert(courseStaff).values({ courseId: other.courseId, userId: teacher.id });
+    expect((await names()).sort()).toEqual(["lab", "theirs"]);
+    expect((await call("GET", `${base(room.id)}/sources/theirs`, teacher.headers)).statusCode).toBe(200);
   });
 });
 

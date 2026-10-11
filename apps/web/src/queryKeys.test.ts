@@ -65,7 +65,6 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["projectCheckpointsKey", keys.projectCheckpointsKey("p1"), ["project", "p1", "checkpoints"]],
     ["projectWorkspaceKey", keys.projectWorkspaceKey("p1"), ["project", "p1", "workspace"]],
     ["projectWorkspaceSessionsKey", keys.projectWorkspaceSessionsKey("p1"), ["project", "p1", "workspace", "sessions"]],
-    ["githubOrgsKey", keys.githubOrgsKey, ["github", "orgs"]],
     ["meGithubKey", keys.meGithubKey, ["me", "github"]],
     ["poolsKey", keys.poolsKey, ["pools"]],
     ["evaluationPoolsKey", keys.evaluationPoolsKey("e1"), ["pools", "evaluation", "e1"]],

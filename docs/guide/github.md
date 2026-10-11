@@ -7,7 +7,7 @@ Projects, and a journal kept in a repository, live in your GitHub organization. 
 
 ## Install the App on the organization
 
-You need to be an **owner** of the GitHub organization. Quiz offers the installation from the classroom itself, so there is nothing to look for on GitHub:
+You need to be an **owner** of the GitHub organization, with your GitHub account [linked](#link-your-own-github-account) to Quiz, so that Quiz knows you as its owner. Quiz offers the installation from the classroom itself, so there is nothing to look for on GitHub:
 
 1. Open the classroom's **Settings** tab, **GitHub** section, and click **Connect to GitHub**.
 2. If your organization is not in the list, click **Install the App on GitHub** under *Not in the list?*. GitHub opens in the same tab.
@@ -17,10 +17,10 @@ You need to be an **owner** of the GitHub organization. Quiz offers the installa
 <figure markdown="span">
   ![The Connect to GitHub panel listing the organizations where the App is installed](../assets/screenshots/mock-classroom-settings-github-connect-light.png#only-light)
   ![The Connect to GitHub panel listing the organizations where the App is installed](../assets/screenshots/mock-classroom-settings-github-connect-dark.png#only-dark)
-  <figcaption>The panel lists the organizations where the App is installed; the organization of the course's other classrooms comes first, marked Suggested. (Mock data.)</figcaption>
+  <figcaption>The panel lists the organizations open to the course where the App is installed; the organization of the course's other classrooms comes first, marked Suggested. (Mock data.)</figcaption>
 </figure>
 
-A classroom is connected to **one** organization; two classrooms of the same course may use different ones. Any member of the course's staff can connect it.
+A classroom is connected to **one** organization; two classrooms of the same course may use different ones. The panel lists only the organizations **open to the course**, and those you own on GitHub. Connecting a classroom to an organization you own opens it to the whole course: from then on any member of the course's staff connects the course's other classrooms to it, this year and the next, without being an owner. An administrator can also open an organization to a course. If the panel lists none, ask an owner of the organization or an administrator.
 
 ## Check the connection
 
@@ -52,7 +52,7 @@ A student who has not linked a GitHub account still sees the projects of the cla
 
 ## Troubleshooting
 
-**The organization is not in the list.** The App is not installed on it, or you are not an owner. Use **Install the App on GitHub**; if you are not an owner, ask one to do it.
+**The organization is not in the list.** The App is not installed on it, or it is not open to the course and Quiz does not know you as its owner. If you own it, link your GitHub account in your Settings and open the panel again, or use **Install the App on GitHub**; otherwise ask an owner of the organization or an administrator to connect a classroom of the course, which opens it to the course.
 
 **"Quiz's GitHub App is not installed on this organization" on a project.** The App was uninstalled or lost access since the classroom was connected. Install it again from the classroom's settings. Nothing is deleted meanwhile, the project's writes are suspended, and the staff are notified.
 

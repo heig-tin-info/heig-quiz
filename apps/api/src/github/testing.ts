@@ -61,13 +61,15 @@ export interface FakeOrg {
   exists: boolean;
   /** The installation is suspended (`suspended_at` set). */
   suspended?: boolean;
+  /** The GitHub accounts that own the organization (`role: admin`, ADR-100). */
+  owners?: { id: number; login: string }[];
 }
 
 /**
  * The REST routes the `github` module's adapters call, answered from a
  * world of organizations the test mutates: installation tokens, the App's
- * installations (listing and by id), an organization's installation, plan
- * and LLM secret.
+ * installations (listing and by id), an organization's installation, plan,
+ * LLM secret, and its owners' memberships.
  */
 export function orgsRoute(orgs: () => FakeOrg[]): Route {
   const account = (o: FakeOrg) => ({ id: o.githubOrgId, login: o.login, type: "Organization" });
@@ -102,6 +104,11 @@ export function orgsRoute(orgs: () => FakeOrg[]): Route {
     if ((m = /^\/orgs\/([^/]+)\/installation$/.exec(path))) {
       const o = byLogin(m[1]!);
       return o?.installationId ? json(installation(o)) : undefined;
+    }
+    if ((m = /^\/orgs\/([^/]+)\/memberships\/([^/]+)$/.exec(path))) {
+      const login = decodeURIComponent(m[2]!).toLowerCase();
+      const owner = byLogin(m[1]!)?.owners?.find((o) => o.login.toLowerCase() === login);
+      return owner ? json({ state: "active", role: "admin", user: { id: owner.id, login: owner.login } }) : undefined;
     }
     if ((m = /^\/orgs\/([^/]+)\/actions\/secrets\/ANTHROPIC_API_KEY$/.exec(path))) {
       return byLogin(m[1]!)?.secret ? json({ name: "ANTHROPIC_API_KEY" }) : undefined;
