@@ -37,11 +37,10 @@ jobs:
     # Two legs, the same suite (apps/runner/README.md, On CI): `default` on
     # the system socket (crun), as production today; `runsc` on the runner's
     # own gVisor socket (deploy/install-gvisor.sh), before production switches.
+    # Both legs block (#736).
     name: podman (${{ matrix.runtime }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Advisory until the runsc leg has been green once: #736.
-    continue-on-error: ${{ matrix.runtime == 'runsc' }}
     strategy:
       fail-fast: false
       matrix:

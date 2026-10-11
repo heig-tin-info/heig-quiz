@@ -61,8 +61,10 @@ like Docker's default profile:
 
 `src/podman.int.test.ts` asserts it from a program in EVERY language: in C,
 C++, Python (`ctypes`) and Rust (`extern "C"`), `unshare`,
-`clone(CLONE_NEWUSER)`, `setns`, `mount`, `fsopen`, `keyctl` and `ptrace` fail,
-`clone3` is `ENOSYS`, and the language's own threads and `fork` still work;
+`clone(CLONE_NEWUSER)`, `clone3`, `setns`, `mount`, `fsopen`, `keyctl` and
+`ptrace` fail with the profile's own errno (`ENOSYS`, `setns`'s `EPERM`; under
+gVisor `EPERM` for all, see [gVisor](#gvisor)), and the language's own threads
+and `fork` still work;
 Node, which has no raw syscall, asks through busybox's `unshare` and `mount`
 (a `Worker` and `spawnSync` for threads and fork), and ngspice through a
 `.control` `shell` (`src/spice.int.test.ts`). The whole integration suite (C,
@@ -177,6 +179,20 @@ field of `RunnerHealth` that both sides tolerate absent:
 
 The `runsc` leg of `.github/workflows/runner-integration.yml` proves it on
 CI before production is switched (below).
+
+Under gVisor the profile is still in force, but its errnos are not. runsc
+compiles the OCI profile into the sentry's own filter
+(`runsc/specutils/seccomp`), and that conversion answers every
+`SCMP_ACT_ERRNO` with `EPERM`, as runc once did: `errnoRet` and
+`defaultErrnoRet` are ignored. Every call the profile refuses — `unshare`,
+`clone(CLONE_NEWUSER)`, `clone3`, `mount`, `fsopen`, `keyctl`, `ptrace` —
+answers `EPERM` instead of `ENOSYS` (busybox's `mount` words it "permission
+denied (are you root?)"), and the integration suite expects exactly that on
+the `runsc` leg and exactly the profile's own errnos on the `default` one.
+The one consequence is `clone3`: glibc falls back to `clone` on `ENOSYS`
+only, so a glibc image would lose its threads under gVisor. Every image is
+Alpine (musl, which never calls `clone3`), and the probe's thread and `fork`
+lines prove it in each language.
 
 ## How a request is served
 
@@ -388,10 +404,10 @@ hands the rootful socket to the job's user. The containers get the flags of
 The job has two legs. `default` drives the system socket (crun), as
 production does today. `runsc` runs `deploy/install-gvisor.sh` and the suite
 through the gVisor socket with `RUNNER_RUNTIME=runsc`: `proveRuntime` gates
-it, the seccomp probe must see the profile's own `EPERM`, and every other
-case runs under gVisor (systrap platform, no KVM needed). It is
-`continue-on-error` until it has been green once (tracking issue linked in
-the workflow).
+it, the seccomp probe must see the profile's own `EPERM`, the isolation
+probes gVisor's `EPERM` for every refusal ([gVisor](#gvisor)), and every
+other case runs under gVisor (systrap platform, no KVM needed). Both legs
+block: a red one fails the workflow (#736).
 
 ### The smoke test, against a live runner
 
