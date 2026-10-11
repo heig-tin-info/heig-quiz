@@ -162,9 +162,10 @@ expect "valid: any run of blanks between the words" rc_is 0
 # GitHub's token alphabet is not ours to guess (2026-10-11: a real token
 # failed the strict [A-Za-z0-9_]+): any non-blank token is accepted, and a
 # shell substitution as token is passed verbatim, never evaluated.
-run "codespace staging $t_sha $t_digest \$(id).-+/="
+odd_token="\$(id).-+/="
+run "codespace staging $t_sha $t_digest $odd_token"
 expect "valid: a token with punctuation, verbatim on stdin" \
-	[ "$(cat "$work/stdin")" = '$(id).-+/=' ]
+	[ "$(cat "$work/stdin")" = "$odd_token" ]
 
 # --- 5. Refused requests: exit 2, before any command, the token in no output.
 refused_cleanly() { rc_is 2 && log_empty && token_nowhere; }
