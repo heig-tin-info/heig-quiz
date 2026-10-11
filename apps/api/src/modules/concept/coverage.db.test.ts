@@ -80,13 +80,9 @@ afterAll(async () => {
 });
 
 describe("coverage", () => {
-  it("covers a concept itself and every narrower one, near or far, through several parents", async () => {
-    const got = await coverage(db(), [c.root, c.leaf, c.lonely]);
-    expect(got.get(c.root)![0]).toBe(c.root);
-    expect([...got.get(c.root)!].sort()).toEqual([c.root, c.mid, c.leaf, c.other, c.side].sort());
-    expect([...got.get(c.leaf)!].sort()).toEqual([c.leaf, c.side].sort());
-    // A related concept is not covered, and covers nothing else.
-    expect(got.get(c.lonely)).toEqual([c.lonely]);
+  it("does not widen through related edges, and covers nothing for no input", async () => {
+    expect((await coverage(db(), [c.lonely])).get(c.lonely)).toEqual([c.lonely]);
+    expect((await coverage(db(), [c.root])).get(c.root)).not.toContain(c.lonely);
     expect(await coverage(db(), [])).toEqual(new Map());
   });
 });

@@ -15,15 +15,15 @@
  */
 import { and, eq, inArray } from "drizzle-orm";
 
-import { narrowerDescendants } from "@quiz/domain";
+import { narrowerDescendantsOf } from "@quiz/domain";
 
 import type { ConceptLang, ConceptRef } from "@quiz/contracts";
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
-import { conceptRelations, concepts, courseConcepts } from "../../db/schema.js";
+import { concepts, courseConcepts } from "../../db/schema.js";
 import { byLabel, lockLinkSet } from "./links.js";
-import { toConceptRef } from "./row.js";
+import { loadEdges, toConceptRef } from "./row.js";
 
 /** The concepts of a course, labelled in `lang`, by label then id. */
 export async function courseConceptsOf(db: Db | Tx, courseId: string, lang: ConceptLang): Promise<ConceptRef[]> {
@@ -48,11 +48,8 @@ export async function courseConceptsOf(db: Db | Tx, courseId: string, lang: Conc
 export async function coverage(db: Db | Tx, conceptIds: readonly string[]): Promise<Map<string, string[]>> {
   const ids = [...new Set(conceptIds)];
   if (ids.length === 0) return new Map();
-  const broader = await db
-    .select({ concept: conceptRelations.conceptId, target: conceptRelations.targetId })
-    .from(conceptRelations)
-    .where(eq(conceptRelations.kind, "broader"));
-  return new Map(ids.map((id) => [id, [id, ...narrowerDescendants(broader, id)]]));
+  const narrower = narrowerDescendantsOf((await loadEdges(db)).broader, ids);
+  return new Map(ids.map((id) => [id, [id, ...narrower.get(id)!]]));
 }
 
 /** The union of {@link coverage}: every concept id the given ones cover together. */

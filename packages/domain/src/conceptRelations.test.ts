@@ -8,6 +8,7 @@ import {
   edgesOf,
   mergedRelations,
   narrowerDescendants,
+  narrowerDescendantsOf,
   relationsOf,
   type RelationEdge,
   type RelationEdges,
@@ -26,6 +27,7 @@ describe("broader closure", () => {
   it("reaches every descendant, the concept itself excluded", () => {
     expect(narrowerDescendants(diamond.broader, "a")).toEqual(["b", "c", "d", "e"]);
     expect(narrowerDescendants(diamond.broader, "e")).toEqual([]);
+    expect(narrowerDescendantsOf(diamond.broader, ["d", "e"])).toEqual(new Map([["d", ["e"]], ["e", []]]));
   });
   it("finds the shortest path up, or null", () => {
     const path = broaderPath(diamond.broader, "e", "a")!;
