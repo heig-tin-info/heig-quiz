@@ -426,6 +426,14 @@ describe("patch (F-PROJ-03)", () => {
     expect((await patch(project.id, { deadlineAt: "2026-10-04T08:00:00Z" })).statusCode).toBe(200);
   });
 
+  it("refuses to flip a stale scheduled draft to manual: its kept deadline is past (deadline_past)", async () => {
+    const room = await connectedClassroom();
+    const project = await create(room.id, { ...LAB, publishMode: "scheduled", startAt: "2026-10-05T08:00:00Z" });
+    server.clock.set("2026-10-12T00:00:00Z");
+    expect(refusal(await patch(project.id, { publishMode: "manual" }))).toEqual([422, "deadline_past"]);
+    expect((await rowOf(project.id))!.publishMode).toBe("scheduled");
+  });
+
   it("once published, opens the name, the protected files, the deadline and its strategy only", async () => {
     const room = await connectedClassroom();
     const project = await create(room.id);

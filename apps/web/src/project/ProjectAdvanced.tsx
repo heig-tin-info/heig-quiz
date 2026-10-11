@@ -1,62 +1,19 @@
-import type { ProjectSourceDetail } from "@quiz/contracts";
+import { PROJECT_GRACE_MAX_MINUTES, type ProjectSourceDetail } from "@quiz/contracts";
 
 import { GroupSetPicker } from "../group/GroupSetPicker";
 import { useT } from "../i18n";
-import { FieldError, fieldErrorProps, Segmented, SettingRow, Switch, ToggleChip, TextInput } from "../ui";
+import { SettingRow, Switch, ToggleChip } from "../ui";
 import { chosenBranches, chosenProtected, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
 import { ProtectedFiles } from "./ProtectedFiles";
-
-/**
- * A setting that is a count: the row's title names the input, its unit
- * stands after it, a refusal under the row.
- */
-function NumberRow({
-  field,
-  title,
-  desc,
-  unit,
-  min = 0,
-  max,
-  value,
-  message,
-  onChange,
-}: {
-  field: "grace";
-  title: string;
-  desc: string;
-  unit: string;
-  min?: number;
-  max: number;
-  value: string;
-  message: string | undefined;
-  onChange: (value: string) => void;
-}) {
-  const id = FIELD_ID[field];
-  return (
-    <div>
-      <SettingRow title={title} desc={desc}>
-        <TextInput
-          id={id}
-          type="number"
-          aria-label={title}
-          min={min}
-          max={max}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          size="sm"
-          className="w-20 text-right tabular-nums"
-          {...fieldErrorProps(id, message)}
-        />
-        <span className="text-[13px] text-fg-muted">{unit}</span>
-      </SettingRow>
-      {message ? (
-        <div className="pb-3">
-          <FieldError id={id}>{message}</FieldError>
-        </div>
-      ) : null}
-    </div>
-  );
-}
+import {
+  DeadlineKindRow,
+  DeadlineStrategyRow,
+  GradingModeRow,
+  NumberRow,
+  PublishModeRow,
+  ScaleRow,
+  SourceStrategyRow,
+} from "./ProjectSettingRows";
 
 /**
  * "Advanced options" of the new project (F-PROJ-01, docs/spec/08 §8.2):
@@ -110,97 +67,31 @@ export function ProjectAdvanced({
         </SettingRow>
       ) : null}
 
-      <SettingRow title={t("project.sourceStrategy")} desc={t(`project.sourceStrategy.desc.${draft.sourceStrategy}`)}>
-        <Segmented
-          name="sourceStrategy"
-          label={t("project.sourceStrategy")}
-          value={draft.sourceStrategy}
-          onChange={(sourceStrategy) => update({ sourceStrategy })}
-          options={[
-            { value: "squash", label: t("project.sourceStrategy.squash") },
-            { value: "whole", label: t("project.sourceStrategy.whole") },
-          ]}
-        />
-      </SettingRow>
+      <SourceStrategyRow value={draft.sourceStrategy} onChange={(sourceStrategy) => update({ sourceStrategy })} />
 
-      <SettingRow title={t("project.publishMode")}>
-        <Segmented
-          name="publishMode"
-          label={t("project.publishMode")}
-          value={draft.publishMode}
-          onChange={(publishMode) => update({ publishMode })}
-          options={[
-            { value: "manual", label: t("project.publishMode.manual") },
-            { value: "scheduled", label: t("project.publishMode.scheduled") },
-          ]}
-        />
-      </SettingRow>
+      <PublishModeRow value={draft.publishMode} onChange={(publishMode) => update({ publishMode })} />
 
       {draft.publishMode === "manual" ? (
-        <SettingRow title={t("project.deadlineKind")}>
-          <Segmented
-            name="deadlineKind"
-            label={t("project.deadlineKind")}
-            value={draft.deadlineKind}
-            onChange={(deadlineKind) => update({ deadlineKind })}
-            options={[
-              { value: "date", label: t("project.deadlineKind.date") },
-              { value: "duration", label: t("project.deadlineKind.duration") },
-            ]}
-          />
-        </SettingRow>
+        <DeadlineKindRow value={draft.deadlineKind} onChange={(deadlineKind) => update({ deadlineKind })} />
       ) : null}
 
-      <SettingRow title={t("project.deadlineStrategy")} desc={t(`project.deadlineStrategy.desc.${draft.deadlineStrategy}`)}>
-        <Segmented
-          name="deadlineStrategy"
-          label={t("project.deadlineStrategy")}
-          value={draft.deadlineStrategy}
-          onChange={(deadlineStrategy) => update({ deadlineStrategy })}
-          options={[
-            { value: "lock", label: t("project.deadlineStrategy.lock") },
-            { value: "commit", label: t("project.deadlineStrategy.commit") },
-          ]}
-        />
-      </SettingRow>
+      <DeadlineStrategyRow value={draft.deadlineStrategy} onChange={(deadlineStrategy) => update({ deadlineStrategy })} />
 
       <NumberRow
-        field="grace"
         title={t("project.grace")}
         desc={t("project.grace.desc")}
         unit={t("project.grace.unit")}
-        max={1440}
+        min={0}
+        max={PROJECT_GRACE_MAX_MINUTES}
         value={draft.graceMinutes}
         message={message("grace")}
-        onChange={(graceMinutes) => update({ graceMinutes })}
+        onChange={(e) => update({ graceMinutes: e.target.value })}
       />
 
-      <SettingRow title={t("project.gradingMode")}>
-        <Segmented
-          name="gradingMode"
-          label={t("project.gradingMode")}
-          value={draft.gradingMode}
-          onChange={(gradingMode) => update({ gradingMode })}
-          options={[
-            { value: "auto", label: t("project.gradingMode.auto") },
-            { value: "none", label: t("project.gradingMode.none") },
-          ]}
-        />
-      </SettingRow>
+      <GradingModeRow value={draft.gradingMode} onChange={(gradingMode) => update({ gradingMode })} />
 
       {draft.gradingMode === "auto" ? (
-        <SettingRow title={t("project.scale")} desc={t("project.scale.desc")}>
-          <Segmented
-            name="scale"
-            label={t("project.scale")}
-            value={draft.scaleKind}
-            onChange={(scaleKind) => update({ scaleKind })}
-            options={[
-              { value: "linear", label: t("project.scale.linear") },
-              { value: "score_is_grade", label: t("project.scale.score_is_grade") },
-            ]}
-          />
-        </SettingRow>
+        <ScaleRow value={draft.scaleKind} onChange={(scaleKind) => update({ scaleKind })} />
       ) : null}
 
       {detail && detail.suggestedProtected.length > 0 ? (

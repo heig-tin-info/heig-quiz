@@ -1950,9 +1950,11 @@ workspace mode is online. *Advanced options*: one folded `Disclosure` (a `zinc`
 count of what differs from the defaults) with the grace (0 allowed), the
 deadline strategy, the grading mode and scale, the protected files and the
 work mode. The **lifecycle rail** stays under them while graded `auto`, so the
-checkpoints are set before Publish — and on a MANUAL draft it shows no
-provisional date: Published says "at publication", the Deadline "n days after
-publication" when counted in days, a J−n checkpoint only its "D−n". No tiles,
+checkpoints are set before Publish — and it shows no date the draft does not
+have: on a MANUAL draft Published says "at publication", and a deadline
+counted in days says "n days after publication" with a J−n checkpoint only its
+"D−n"; a deadline that is a date (manual or scheduled) is shown with its
+checkpoints' dates. No tiles,
 no table of repositories, no live workspace: nobody can accept a draft
 (ADR-077 §1). With no Source tile, **Sync** (the source is ahead) is a
 secondary button of the header, beside Publish.

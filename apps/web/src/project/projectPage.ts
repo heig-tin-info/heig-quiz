@@ -7,6 +7,7 @@
  * page meets. `ProjectPage.tsx` and its sections draw them.
  */
 import {
+  PROJECT_DEFAULTS,
   ProjectReleaseRefusal,
   ProjectUnassigned,
   type ProjectAcceptErrorCode,
@@ -14,6 +15,7 @@ import {
   type ProjectDetail,
   type ProjectDetailGroup,
   type ProjectErrorCode,
+  type ProjectPatch,
   type ProjectRepoReview,
   type ProjectRepoView,
   type ProjectStudent,
@@ -26,6 +28,7 @@ import { isVoidCheckpoint, reopens } from "@quiz/domain";
 
 import { ApiError, refusalCodeOf, wordedRefusal } from "../api";
 import { studentName } from "../group/groupRules";
+import { draftView } from "./draftPatch";
 import type { Dict, TFunction } from "../i18n";
 import type { RouteOf } from "../router";
 import type { Tone } from "../ui";
@@ -579,16 +582,16 @@ export function commitTone(repo: Pick<ProjectRepoView, "commits" | "lastCommit" 
  * `none` has neither checkpoints nor a Release step; `checkpoints` is empty
  * while the query has not answered.
  *
- * A MANUAL draft has no dates yet — its start and, by duration, its deadline
- * are provisional, Publish sets them —: its Published step has no date (`at`
- * null: "at publication"), a deadline by duration says its days
- * (`afterDays`, no date), and a checkpoint counted from the deadline (J−n)
- * is not `dated`. A scheduled draft shows its planned dates.
+ * A MANUAL draft has no start yet (Publish sets it): its Published step has
+ * no date (`at` null: "at publication"). One by duration has no deadline
+ * either, so its Deadline step says its days (`afterDays`) and a checkpoint
+ * counted from it (J−n) is not `dated`; a deadline that is a date, and a
+ * scheduled draft's planned dates, are shown. "Provisional" is `draftView`'s.
  */
 export type RailStep =
   | { kind: "published"; at: string | null; done: boolean }
   | { kind: "checkpoint"; checkpoint: ReviewCheckpoint; status: CheckpointStatus; dated: boolean }
-  | { kind: "deadline"; at: string | null; afterDays: number | null; done: boolean }
+  | ({ kind: "deadline"; done: boolean } & ({ at: string } | { afterDays: number }))
   | {
       kind: "freeze";
       graceMinutes: number;
@@ -600,25 +603,23 @@ export type RailStep =
 
 export function railSteps(p: ProjectDetail, checkpoints: ReviewCheckpoint[]): RailStep[] {
   const graded = p.gradingMode === "auto";
-  const provisional = p.state === "draft" && p.publishMode === "manual";
-  const byDuration = provisional && p.durationMinutes !== null;
+  const draft = p.state === "draft" ? draftView(p) : null;
+  const manualDraft = draft?.publishMode === "manual";
+  const afterDays = draft?.kind === "duration" && manualDraft ? draft.days : null;
   const tally = projectTally(p);
   const byDue = (graded ? checkpoints : [])
     .map((checkpoint) => ({
       checkpoint,
       status: checkpointStatus(checkpoint, p.deadlineAt),
-      dated: !(provisional && checkpoint.offsetDays !== null),
+      dated: !(afterDays !== null && checkpoint.offsetDays !== null),
     }))
     .sort((a, b) => a.checkpoint.dueAt.localeCompare(b.checkpoint.dueAt));
   return [
-    { kind: "published", at: provisional ? null : p.startAt, done: p.state !== "draft" },
+    { kind: "published", at: manualDraft ? null : p.startAt, done: p.state !== "draft" },
     ...byDue.filter((c) => c.status !== "void").map((c): RailStep => ({ kind: "checkpoint", ...c })),
-    {
-      kind: "deadline",
-      at: byDuration ? null : p.deadlineAt,
-      afterDays: byDuration ? Math.round(p.durationMinutes! / 1440) : null,
-      done: deadlinePassed(p),
-    },
+    afterDays !== null
+      ? { kind: "deadline", afterDays, done: deadlinePassed(p) }
+      : { kind: "deadline", at: p.deadlineAt, done: deadlinePassed(p) },
     {
       kind: "freeze",
       graceMinutes: p.graceMinutes,
@@ -630,3 +631,24 @@ export function railSteps(p: ProjectDetail, checkpoints: ReviewCheckpoint[]): Ra
     ...(graded ? [{ kind: "release", at: p.releasedAt } satisfies RailStep] : []),
   ];
 }
+
+/**
+ * How many settings under a draft's "Advanced options" differ from the
+ * defaults (the badge beside its title, so a folded card never hides a change).
+ */
+export function advancedCount(
+  p: Pick<ProjectDetail, "graceMinutes" | "deadlineStrategy" | "gradingMode" | "gradingScale">,
+): number {
+  return [
+    p.graceMinutes !== PROJECT_DEFAULTS.graceMinutes,
+    p.deadlineStrategy !== PROJECT_DEFAULTS.deadlineStrategy,
+    p.gradingMode !== PROJECT_DEFAULTS.gradingMode,
+    p.gradingMode === "auto" && p.gradingScale.kind !== PROJECT_DEFAULTS.scaleKind,
+  ].filter(Boolean).length;
+}
+
+/**
+ * A write of the page's one `PATCH`. A refusal is a toast, unless `onError`
+ * said it in place and returned true.
+ */
+export type WriteProject = (body: ProjectPatch, onError?: (error: unknown) => boolean | void) => void;

@@ -10,6 +10,7 @@ import {
   deadlinePassed,
   filterEntries,
   projectTally,
+  advancedCount,
   railSteps,
   deadlineDesc,
   hasFellBack,
@@ -609,26 +610,28 @@ describe("the lifecycle rail's steps", () => {
     expect(steps.find((s) => s.kind === "deadline")).toMatchObject({ done: true });
   });
 
-  it("shows no provisional date on a manual draft, and the planned dates on a scheduled one", () => {
+  it("shows no date a manual draft does not have, and the dates it does", () => {
     const relative = makeCheckpoint(4, { name: "mid", offsetDays: -3 });
     const fixed = makeCheckpoint(5, { name: "fixed", offsetDays: null });
+    const dated = (steps: ReturnType<typeof railSteps>) =>
+      steps.flatMap((s) => (s.kind === "checkpoint" ? [[s.checkpoint.name, s.dated]] : []));
+
+    // A manual draft with a deadline that is a date: no start yet, but the deadline and the J-n dates are real.
     const byDate = railSteps(makeProject({ state: "draft", publishMode: "manual", durationMinutes: null }), [relative, fixed]);
     expect(byDate[0]).toEqual({ kind: "published", at: null, done: false });
-    // The deadline is a date the teacher gave; a checkpoint counted from it has none of its own yet.
-    expect(byDate.find((s) => s.kind === "deadline")).toMatchObject({ at: AHEAD, afterDays: null });
-    expect(byDate.filter((s) => s.kind === "checkpoint").map((s) => s.kind === "checkpoint" && [s.checkpoint.name, s.dated])).toEqual([
-      ["mid", false],
-      ["fixed", true],
-    ]);
+    expect(byDate.find((s) => s.kind === "deadline")).toEqual({ kind: "deadline", at: AHEAD, done: false });
+    expect(dated(byDate)).toEqual([["mid", true], ["fixed", true]]);
 
-    const byDays = railSteps(makeProject({ state: "draft", publishMode: "manual", durationMinutes: 7 * 1440 }), []);
-    expect(byDays.find((s) => s.kind === "deadline")).toEqual({ kind: "deadline", at: null, afterDays: 7, done: false });
+    // By duration there is no deadline: its days, and a J-n checkpoint without a date.
+    const byDays = railSteps(makeProject({ state: "draft", publishMode: "manual", durationMinutes: 7 * 1440 }), [relative, fixed]);
+    expect(byDays.find((s) => s.kind === "deadline")).toEqual({ kind: "deadline", afterDays: 7, done: false });
+    expect(dated(byDays)).toEqual([["mid", false], ["fixed", true]]);
 
     const planned = makeProject({ state: "draft", publishMode: "scheduled", durationMinutes: null });
     const steps = railSteps(planned, [relative]);
     expect(steps[0]).toEqual({ kind: "published", at: planned.startAt, done: false });
-    expect(steps.find((s) => s.kind === "deadline")).toMatchObject({ at: planned.deadlineAt, afterDays: null });
-    expect(steps.find((s) => s.kind === "checkpoint")).toMatchObject({ dated: true });
+    expect(steps.find((s) => s.kind === "deadline")).toEqual({ kind: "deadline", at: planned.deadlineAt, done: false });
+    expect(dated(steps)).toEqual([["mid", true]]);
   });
 
   it("goes back to an open freeze when the deadline is reopened, and says the later own deadlines", () => {
@@ -651,5 +654,15 @@ describe("deadlinePassed", () => {
     expect(deadlinePassed(makeProject({ deadlineAppliedAt: PAST }))).toBe(true);
     // A date in the past on an open project is not "passed" until the server says so.
     expect(deadlinePassed(makeProject({ deadlineAt: PAST }))).toBe(false);
+  });
+});
+
+describe("advancedCount", () => {
+  const defaults = { graceMinutes: 30, deadlineStrategy: "lock", gradingMode: "auto", gradingScale: { kind: "linear", rounding: "nearest" } } as const;
+  it("counts what differs from the defaults, the scale only while graded", () => {
+    expect(advancedCount(defaults)).toBe(0);
+    expect(advancedCount({ ...defaults, graceMinutes: 0, deadlineStrategy: "commit" })).toBe(2);
+    expect(advancedCount({ ...defaults, gradingScale: { kind: "score_is_grade", rounding: "nearest" } })).toBe(1);
+    expect(advancedCount({ ...defaults, gradingMode: "none", gradingScale: { kind: "score_is_grade", rounding: "nearest" } })).toBe(1);
   });
 });

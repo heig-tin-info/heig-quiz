@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Archive, ArchiveRestore, RefreshCw, Rocket, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, Rocket, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -39,6 +39,7 @@ import { FIELD_ID } from "./newProject";
 import { ProjectDraftForm } from "./ProjectDraftForm";
 import { ProjectGroupSet } from "./ProjectGroupSet";
 import { projectNotices, projectNoticeToast } from "./projectNotices";
+import { SyncButton } from "./parts";
 import { ProjectOverview } from "./ProjectOverview";
 import { ProjectRail } from "./ProjectRail";
 import { ProjectRepos } from "./ProjectRepos";
@@ -54,6 +55,7 @@ import {
   groupSetPageOf,
   unassignedStudents,
   type RepoFilter,
+  type WriteProject,
   type UnassignedStudent,
 } from "./projectPage";
 import { RepoSheet } from "./RepoSheet";
@@ -142,6 +144,13 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       await refresh();
     },
   });
+  /** The page's one write: a refusal is a toast, unless the caller said it in place (`WriteProject`). */
+  const write: WriteProject = (body, onError) =>
+    patch.mutate(body, {
+      onError: (error) => {
+        if (onError?.(error) !== true) failed(error);
+      },
+    });
   const publish = useMutation({
     mutationFn: () => api<ProjectSummary>(`/app/api/projects/${id}/publish`, { method: "POST" }),
     onSuccess: async () => {
@@ -271,30 +280,10 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   /** The set's page, coming back here (`?fromProject=<id>`): where the students in no group are placed. */
   const setPage = groupSetPageOf(project);
   const { sync } = project;
-  /** Sync as the header's primary, when the server names it; beside Publish or Release it is the source tile's button. */
-  const primarySync = (
-    <Button
-      data-coach="project.primary"
-      onClick={() => syncNow.mutate()}
-      loading={syncNow.isPending || sync.inProgress}
-    >
-      <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
-    </Button>
-  );
-
   const isDraft = project.state === "draft";
-  /** A draft has no Source tile: Sync, when the source is ahead and is not already the primary, sits beside Publish. */
-  const draftSync =
-    isDraft && project.primaryAction !== "sync" && offersSync(project) && !archived ? (
-      <Button
-        variant="secondary"
-        data-coach="project.sync"
-        onClick={() => syncNow.mutate()}
-        loading={syncNow.isPending || sync.inProgress}
-      >
-        <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
-      </Button>
-    ) : null;
+  const syncButton = (variant: "primary" | "secondary", coach: "project.primary" | "project.sync") => (
+    <SyncButton sync={sync} onSync={() => syncNow.mutate()} syncing={syncNow.isPending} variant={variant} coach={coach} />
+  );
 
   return (
     <div className="space-y-8">
@@ -334,7 +323,10 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         }
         actions={
           <span className="flex flex-wrap items-center gap-2">
-            {draftSync}
+            {/* A draft has no Source tile: Sync, when the source is ahead and is not the primary, sits beside Publish. */}
+            {isDraft && project.primaryAction !== "sync" && offersSync(project) && !archived
+              ? syncButton("secondary", "project.sync")
+              : null}
             {project.primaryAction === "publish" ? (
               <Button
                 data-coach="project.primary"
@@ -353,7 +345,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
                 <Send /> {t(again ? "project.release.again" : "project.release")}
               </Button>
             ) : project.primaryAction === "sync" ? (
-              primarySync
+              syncButton("primary", "project.primary")
             ) : null}
           </span>
         }
@@ -415,7 +407,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       ) : null}
 
       {isDraft ? (
-        <ProjectDraftForm project={project} patch={patch} navigate={navigate} />
+        <ProjectDraftForm project={project} patch={patch} write={write} navigate={navigate} />
       ) : (
         <>
           {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
@@ -430,7 +422,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
           <ProjectRail project={project} />
           <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
           <ProjectWorkspace projectId={project.id} archived={archived} />
-          <ProjectSettings project={project} patch={patch} />
+          <ProjectSettings project={project} pending={patch.isPending} write={write} />
         </>
       )}
 

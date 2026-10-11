@@ -3,14 +3,14 @@
  * named on GitHub, a score as points out of their maximum, the final score
  * with its grade and source, a CI status as a tag.
  */
-import type { ProjectRepoView, ProjectStudent } from "@quiz/contracts";
+import type { ProjectRepoView, ProjectStudent, ProjectSyncState } from "@quiz/contracts";
 
-import { GitPullRequest } from "lucide-react";
+import { GitPullRequest, RefreshCw } from "lucide-react";
 
 import { Grade } from "../Grade";
 import { studentName } from "../group/groupRules";
 import { useT, type Dict } from "../i18n";
-import { Badge, cx, Dash, GithubIcon, type Tone } from "../ui";
+import { Badge, Button, cx, Dash, GithubIcon, type Tone } from "../ui";
 import { repoHref, repoShortName, syncTag } from "./projectPage";
 
 /**
@@ -149,5 +149,33 @@ export function MemberList({ members, className }: { members: ProjectStudent[]; 
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The source's *Sync* (F-PROJ-12): a primary in the header when the server
+ * names it, a secondary beside Publish or Release, or the Source tile's.
+ * `coach` is the tour's anchor, one per page.
+ */
+export function SyncButton({
+  sync,
+  onSync,
+  syncing,
+  variant = "secondary",
+  size,
+  coach,
+}: {
+  sync: ProjectSyncState;
+  onSync: () => void;
+  syncing: boolean;
+  variant?: "primary" | "secondary";
+  size?: "sm";
+  coach: "project.primary" | "project.sync";
+}) {
+  const t = useT();
+  return (
+    <Button variant={variant} size={size} data-coach={coach} onClick={onSync} loading={syncing || sync.inProgress}>
+      <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
+    </Button>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { advancedCount, applyChange, draftPatch, draftView, type DraftView } from "./draftPatch";
+import { applyChange, draftPatch, draftView, type DraftView } from "./draftPatch";
 
 const START = "2026-10-20T08:00:00.000Z";
 const DEADLINE = "2026-10-27T22:00:00.000Z";
@@ -77,16 +77,5 @@ describe("a manual publication", () => {
     const toDate = applyChange(manualDays, { type: "kind", kind: "date" });
     expect(draftPatch(toDate, { type: "deadline", at: DEADLINE })).toEqual({ deadlineAt: DEADLINE, durationMinutes: null });
     expect(draftPatch(toDate, { type: "deadline", at: null })).toBeNull();
-  });
-});
-
-describe("advancedCount", () => {
-  const defaults = { graceMinutes: 30, deadlineStrategy: "lock", gradingMode: "auto", gradingScale: { kind: "linear", rounding: "nearest" } } as const;
-  it("counts what differs from the defaults", () => {
-    expect(advancedCount(defaults)).toBe(0);
-    expect(advancedCount({ ...defaults, graceMinutes: 0, deadlineStrategy: "commit" })).toBe(2);
-    expect(advancedCount({ ...defaults, gradingScale: { kind: "score_is_grade", rounding: "nearest" } })).toBe(1);
-    // Ungraded: the scale is not shown, so not counted.
-    expect(advancedCount({ ...defaults, gradingMode: "none", gradingScale: { kind: "score_is_grade", rounding: "nearest" } })).toBe(1);
   });
 });

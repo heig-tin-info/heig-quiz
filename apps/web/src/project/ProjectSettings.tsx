@@ -1,13 +1,14 @@
-import { useQuery, type UseMutationResult } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import type { DeadlineStrategy, ProjectDetail, ProjectPatch, ProjectSourceDetail, ProjectSummary } from "@quiz/contracts";
+import type { ProjectDetail, ProjectSourceDetail } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
 import { projectSourceKey } from "../queryKeys";
-import { Badge, Disclosure, Segmented, SettingRow } from "../ui";
-import { repoShortName } from "./projectPage";
+import { Badge, Disclosure, SettingRow } from "../ui";
+import { repoShortName, type WriteProject } from "./projectPage";
+import { DeadlineStrategyRow } from "./ProjectSettingRows";
 import { ProtectedFiles } from "./ProtectedFiles";
 import { WorkModeSetting } from "./ProjectWorkspace";
 
@@ -24,37 +25,6 @@ export function useProtectedSuggestions(project: ProjectDetail, enabled: boolean
       api(`/app/api/classrooms/${project.classroomId}/projects/sources/${encodeURIComponent(sourceRepo)}`),
   });
   return [...new Set([...(source.data?.suggestedProtected ?? []), ...project.protectedFiles])];
-}
-
-/** What happens at the deadline: a row of a draft's Advanced options and of a published project's Settings. */
-export function DeadlineStrategyRow({
-  project,
-  disabled,
-  onChange,
-}: {
-  project: ProjectDetail;
-  disabled: boolean;
-  onChange: (deadlineStrategy: DeadlineStrategy) => void;
-}) {
-  const t = useT();
-  return (
-    <SettingRow
-      title={t("project.deadlineStrategy")}
-      desc={t(`project.deadlineStrategy.desc.${project.deadlineStrategy}`)}
-    >
-      <Segmented
-        name="deadlineStrategy"
-        label={t("project.deadlineStrategy")}
-        value={project.deadlineStrategy}
-        disabled={disabled || !project.editable.includes("deadlineStrategy")}
-        onChange={onChange}
-        options={[
-          { value: "lock", label: t("project.deadlineStrategy.lock") },
-          { value: "commit", label: t("project.deadlineStrategy.commit") },
-        ]}
-      />
-    </SettingRow>
-  );
 }
 
 /** The protected files: an editor while `editable` names them, the list otherwise. */
@@ -102,14 +72,17 @@ export function ProtectedFilesRow({
  */
 export function ProjectSettings({
   project,
-  patch,
+  pending,
+  write,
 }: {
   project: ProjectDetail;
-  patch: UseMutationResult<ProjectSummary, Error, ProjectPatch>;
+  /** A write is under way. */
+  pending: boolean;
+  write: WriteProject;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const busy = patch.isPending || project.archivedAt !== null;
+  const busy = pending || project.archivedAt !== null;
   const suggested = useProtectedSuggestions(project, open);
   const protectedCount = project.protectedFiles.length;
 
@@ -128,12 +101,16 @@ export function ProjectSettings({
         ) : null
       }
     >
-      <DeadlineStrategyRow project={project} disabled={busy} onChange={(deadlineStrategy) => patch.mutate({ deadlineStrategy })} />
+      <DeadlineStrategyRow
+        value={project.deadlineStrategy}
+        disabled={busy || !project.editable.includes("deadlineStrategy")}
+        onChange={(deadlineStrategy) => write({ deadlineStrategy })}
+      />
       <ProtectedFilesRow
         project={project}
         disabled={busy}
         suggested={suggested}
-        onChange={(protectedFiles) => patch.mutate({ protectedFiles })}
+        onChange={(protectedFiles) => write({ protectedFiles })}
       />
       <WorkModeSetting projectId={project.id} archived={project.archivedAt !== null} />
     </Disclosure>

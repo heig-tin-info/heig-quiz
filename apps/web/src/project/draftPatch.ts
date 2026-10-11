@@ -7,7 +7,7 @@
  * days from the publication, and moving from one kind to the other writes
  * nothing until the new value is given. `ProjectDraftPublication.tsx` draws it.
  */
-import { PROJECT_DEFAULTS, type ProjectDetail, type ProjectPatch, type PublishMode } from "@quiz/contracts";
+import { ProjectPatch, type PublishMode, type ProjectDetail } from "@quiz/contracts";
 
 /** A manual publication's deadline: a date, or a number of days counted from the publication. */
 export type DeadlineKind = "date" | "duration";
@@ -29,9 +29,6 @@ export type DraftChange =
   | { type: "start"; at: string | null }
   | { type: "deadline"; at: string | null }
   | { type: "days"; days: number | null };
-
-export const MIN_DAYS = 1;
-export const MAX_DAYS = 400;
 
 const MINUTES_PER_DAY = 1440;
 
@@ -73,9 +70,9 @@ export function applyChange(view: DraftView, change: DraftChange): DraftView {
   }
 }
 
-/** Whole days within the server's bounds, or null. */
+/** Whole days the schema takes as a duration (`ProjectPatch`'s own bounds), or not. */
 export const validDays = (days: number | null): days is number =>
-  days !== null && Number.isInteger(days) && days >= MIN_DAYS && days <= MAX_DAYS;
+  days !== null && Number.isInteger(days) && ProjectPatch.shape.durationMinutes.safeParse(days * MINUTES_PER_DAY).success;
 
 /**
  * The patch `change` amounts to on `view`, or null while it is incomplete
@@ -103,19 +100,4 @@ export function draftPatch(view: DraftView, change: DraftChange): ProjectPatch |
   if (change.type === "mode") return view.publishMode === "manual" ? null : { publishMode: "manual" };
   if (next.kind === "duration") return change.type === "days" && validDays(next.days) ? { durationMinutes: next.days * MINUTES_PER_DAY } : null;
   return change.type === "deadline" && next.deadlineAt ? { deadlineAt: next.deadlineAt, durationMinutes: null } : null;
-}
-
-/**
- * How many settings under "Advanced options" differ from the defaults (the
- * badge beside its title, so a folded card never hides a change).
- */
-export function advancedCount(
-  p: Pick<ProjectDetail, "graceMinutes" | "deadlineStrategy" | "gradingMode" | "gradingScale">,
-): number {
-  return [
-    p.graceMinutes !== PROJECT_DEFAULTS.graceMinutes,
-    p.deadlineStrategy !== PROJECT_DEFAULTS.deadlineStrategy,
-    p.gradingMode !== PROJECT_DEFAULTS.gradingMode,
-    p.gradingMode === "auto" && p.gradingScale.kind !== "linear",
-  ].filter(Boolean).length;
 }

@@ -1417,38 +1417,6 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(screen.getByLabelText("Deadline")).toHaveValue("2099-06-08T23:59");
   });
 
-  it("goes back to manual with the mode alone", async () => {
-    const { calls } = routes(
-      makeDraft({ publishMode: "scheduled", startAt: AHEAD, deadlineAt: new Date(Date.parse(AHEAD) + 86_400_000).toISOString() }),
-      { [`PATCH ${BASE}`]: ok({}) },
-    );
-    renderPage();
-    await userEvent.click(await screen.findByRole("radio", { name: "By hand" }));
-    await waitFor(() => expect(writes(calls)).toHaveLength(1));
-    expect(writes(calls)[0]!.body).toEqual({ publishMode: "manual" });
-  });
-
-  it("counts a manual deadline in days on leaving the field, and sends no date with it", async () => {
-    const { calls } = routes(makeDraft(), { [`PATCH ${BASE}`]: ok({}) });
-    renderPage();
-    await userEvent.click(await screen.findByRole("radio", { name: "A duration" }));
-    expect(writes(calls)).toHaveLength(0);
-    fill("Duration in days", "14");
-    await waitFor(() => expect(writes(calls)).toHaveLength(1));
-    expect(writes(calls)[0]!.body).toEqual({ durationMinutes: 14 * 1440 });
-  });
-
-  it("turns a duration into a date: the date and a null duration", async () => {
-    const { calls } = routes(makeDraft({ durationMinutes: 7 * 1440 }), { [`PATCH ${BASE}`]: ok({}) });
-    renderPage();
-    expect(await screen.findByLabelText("Duration in days")).toHaveValue(7);
-    await userEvent.click(screen.getByRole("radio", { name: "A date" }));
-    expect(writes(calls)).toHaveLength(0);
-    fill("Deadline", "2099-06-08T23:59");
-    await waitFor(() => expect(writes(calls)).toHaveLength(1));
-    expect(writes(calls)[0]!.body).toEqual({ deadlineAt: whenAt("2099-06-08T23:59"), durationMinutes: null });
-  });
-
   it("writes nothing for days out of bounds, and says so", async () => {
     const { calls } = routes(makeDraft({ durationMinutes: 7 * 1440 }), { [`PATCH ${BASE}`]: ok({}) });
     renderPage();
@@ -1458,10 +1426,20 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(writes(calls)).toHaveLength(0);
   });
 
+  it("puts a refused switch back to manual on screen as the server stores it: scheduled", async () => {
+    const stale = makeDraft({ publishMode: "scheduled", startAt: AHEAD, deadlineAt: new Date(Date.parse(AHEAD) + 86_400_000).toISOString() });
+    routes(stale, { [`PATCH ${BASE}`]: fail(422, { error: "deadline_past", message: "The deadline has passed" }) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("radio", { name: "By hand" }));
+    expect(await screen.findByText("This deadline has already passed.")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "At the start" })).toBeChecked();
+    expect(screen.getByLabelText("Start")).toBeInTheDocument();
+  });
+
   it("holds the group switch, with a sentence, while the project works online", async () => {
     routes(makeDraft(), { [WORKSPACE]: workspace("online") });
     renderPage();
-    const group = await screen.findByRole("switch", { name: "Work in groups" });
+    const group = await screen.findByRole("switch", { name: "Groups" });
     await waitFor(() => expect(group).toBeDisabled());
     expect(screen.getByText(/cannot be a group project/)).toBeInTheDocument();
   });
@@ -1469,7 +1447,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
   it("writes the group mode at once, the platform without the portal leaving it free", async () => {
     const { calls } = routes(makeDraft(), { [`PATCH ${BASE}`]: ok({}) });
     renderPage();
-    const group = await screen.findByRole("switch", { name: "Work in groups" });
+    const group = await screen.findByRole("switch", { name: "Groups" });
     await userEvent.click(group);
     await waitFor(() => expect(writes(calls)).toHaveLength(1));
     expect(writes(calls)[0]!.body).toEqual({ groupMode: true });
@@ -1506,7 +1484,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     routes(makeDraft({ archivedAt: PAST, editable: ["name"] }));
     renderPage();
     expect(await screen.findByRole("radio", { name: "By hand" })).toBeDisabled();
-    expect(screen.getByRole("switch", { name: "Work in groups" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Groups" })).toBeDisabled();
   });
 
   it("shows no provisional date on the rail of a manual draft", async () => {

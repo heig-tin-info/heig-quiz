@@ -58,7 +58,7 @@ export const emptyDraft = (): ProjectDraft => ({
   sourceStrategy: PROJECT_DEFAULTS.sourceStrategy,
   deadlineStrategy: PROJECT_DEFAULTS.deadlineStrategy,
   gradingMode: PROJECT_DEFAULTS.gradingMode,
-  scaleKind: "linear",
+  scaleKind: PROJECT_DEFAULTS.scaleKind,
   protectedFiles: null,
   groupMode: false,
   groupSetId: null,
@@ -195,6 +195,8 @@ export function refusalPlace(error: unknown): RefusalPlace | null {
         : { at: "field", field: "source", message: "project.refusal.sourceNotFound" };
     case "deadline_past":
       return { at: "field", field: "deadline", message: "project.refusal.deadlinePast" };
+    case "start_past":
+      return { at: "field", field: "start", message: "project.refusal.startPast" };
     case "duplicate_slug":
       return { at: "field", field: "name", message: "project.refusal.duplicateSlug" };
     case "distribution_failed":

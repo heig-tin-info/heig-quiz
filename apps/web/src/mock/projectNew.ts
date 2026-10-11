@@ -126,6 +126,9 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
   const at = Date.now();
   const deadline = body.durationMinutes !== undefined ? at + body.durationMinutes * 60_000 : Date.parse(body.deadlineAt!);
   if (deadline <= at) throw new MockPayload(422, { error: "deadline_past", message: "The deadline has passed" });
+  if (body.publishMode === "scheduled" && body.startAt && Date.parse(body.startAt) <= at) {
+    throw new MockPayload(422, { error: "start_past", message: "The start has passed" });
+  }
   const source = flags.srcmissing ? undefined : sourcesOf(id).find((s) => s.repo.name === body.sourceRepo);
   if (!source) throw new MockPayload(422, { error: "source_not_found", message: "The source repository was not found" });
   if (body.groupSetId && !isSetOf(id, body.groupSetId)) {

@@ -14,10 +14,9 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { classroomGroupSetsKey, projectKey } from "../queryKeys";
 import type { Navigate } from "../router";
-import { Alert, Button, Card, SectionHeading, SettingRow, Switch } from "../ui";
+import { Alert, Button, Card, SectionHeading } from "../ui";
 import { FIELD_ID } from "./newProject";
 import { groupSetPageOf, offersResync, refusalMessage } from "./projectPage";
-import { useWorkspace } from "./ProjectWorkspace";
 
 /**
  * The group set a group project follows (ADR-070 §4, §7; M3-16a): a
@@ -35,13 +34,6 @@ import { useWorkspace } from "./ProjectWorkspace";
  * arrivals without a repository and the rest, and Confirm sends the digest
  * back (a stale one names them again). A confirmed resync not applied yet
  * (`groupSyncPending`) is said under the set.
- *
- * On a DRAFT this is the page's Groups section (the draft form): a switch for
- * the group mode written at once (off clears the set and its copy, no
- * confirmation) over the picker, which appears with it. The switch is held
- * with one sentence while the project works in the online workspace
- * (`work_mode_group`, F-PROJ-06); a platform without the portal answers the
- * workspace read with a 404, and the switch is then simply free.
  */
 export function ProjectGroupSet({
   project,
@@ -53,85 +45,14 @@ export function ProjectGroupSet({
   navigate: Navigate;
 }) {
   const t = useT();
-  const qc = useQueryClient();
-  const sets = useClassroomGroupSets(project.classroomId);
-  const set = sets.data?.find((s) => s.id === project.groupSetId);
-  const use = set?.usedBy.find((u) => u.id === project.id);
-  const editable = project.editable.includes("groupSetId") && project.archivedAt === null;
-  // A refused choice is said under the picker, in the page's words for it.
-  const refused = patch.variables?.groupSetId !== undefined && patch.isError ? refusalMessage(patch.error, t) : undefined;
-  const setPage = groupSetPageOf(project);
   const resync = useResync(project);
-  const draft = project.state === "draft";
-
-  const body = (
-    <>
-        {editable ? (
-          <>
-            <p className="text-[13px] text-fg-muted">{t("project.groupSet.desc")}</p>
-            <GroupSetPicker
-              id={FIELD_ID.groupSet}
-              classroomId={project.classroomId}
-              value={project.groupSetId}
-              disabled={patch.isPending}
-              onChange={(groupSetId) =>
-                patch.mutate(
-                  { groupSetId },
-                  {
-                    onError: (error) => {
-                      // A set deleted meanwhile: the list is read again.
-                      if (refusedWith(error, "unknown_group_set")) {
-                        void qc.invalidateQueries({ queryKey: classroomGroupSetsKey(project.classroomId) });
-                      }
-                    },
-                  },
-                )
-              }
-              message={refused}
-            />
-          </>
-        ) : null}
-        {set && setPage ? (
-          <div className="text-sm">
-            <AppLink
-              route={setPage}
-              navigate={navigate}
-              className="font-medium text-fg underline decoration-line-strong underline-offset-2"
-            >
-              {editable ? t("project.groupSet.open") : setLabel(set, t)}
-            </AppLink>
-            {/* A draft's copy follows by construction; a published one says whether it still does. */}
-            {project.state === "draft" ? null : (
-              <p className="mt-0.5 text-[13px] text-fg-muted">
-                {t(use?.follows === false ? "project.groupSet.stopped" : "project.groupSet.follows")}
-              </p>
-            )}
-          </div>
-        ) : editable ? null : (
-          <p className="text-sm text-fg-muted">{t("project.groupSet.none")}</p>
-        )}
-        {project.groupSyncPending ? (
-          <p className="text-[13px] text-fg-muted" role="status">
-            {t("project.resync.pending")}
-          </p>
-        ) : null}
-    </>
-  );
 
   return (
     <section aria-labelledby="project-group-set-heading" className="space-y-3">
-      <SectionHeading
-        icon={UsersRound}
-        title={<span id="project-group-set-heading">{t(draft ? "project.groups" : "project.groupSet")}</span>}
-      />
-      {draft ? (
-        <Card className="divide-y divide-line px-4">
-          <GroupModeSwitch project={project} patch={patch} />
-          {project.groupMode ? <div className="space-y-3 py-4">{body}</div> : null}
-        </Card>
-      ) : (
-        <Card className="space-y-3 px-4 py-4">{body}</Card>
-      )}
+      <SectionHeading icon={UsersRound} title={<span id="project-group-set-heading">{t("project.groupSet")}</span>} />
+      <Card className="space-y-3 px-4 py-4">
+        <GroupSetBody project={project} patch={patch} navigate={navigate} />
+      </Card>
       {offersResync(project) ? (
         <Alert
           tone="warning"
@@ -156,6 +77,85 @@ export function ProjectGroupSet({
         />
       ) : null}
     </section>
+  );
+}
+
+/**
+ * The group set a project follows, and the way to choose or open it: the
+ * body of the card of `ProjectGroupSet` and of a draft's Groups section
+ * (`ProjectDraftForm`).
+ */
+export function GroupSetBody({
+  project,
+  patch,
+  navigate,
+}: {
+  project: ProjectDetail;
+  patch: UseMutationResult<ProjectSummary, Error, ProjectPatch>;
+  navigate: Navigate;
+}) {
+  const t = useT();
+  const qc = useQueryClient();
+  const sets = useClassroomGroupSets(project.classroomId);
+  const set = sets.data?.find((s) => s.id === project.groupSetId);
+  const use = set?.usedBy.find((u) => u.id === project.id);
+  const editable = project.editable.includes("groupSetId") && project.archivedAt === null;
+  // A refused choice is said under the picker, in the page's words for it.
+  const refused = patch.variables?.groupSetId !== undefined && patch.isError ? refusalMessage(patch.error, t) : undefined;
+  const setPage = groupSetPageOf(project);
+
+  return (
+    <>
+      {editable ? (
+        <>
+          <p className="text-[13px] text-fg-muted">{t("project.groupSet.desc")}</p>
+          <GroupSetPicker
+            id={FIELD_ID.groupSet}
+            classroomId={project.classroomId}
+            value={project.groupSetId}
+            disabled={patch.isPending}
+            onChange={(groupSetId) =>
+              patch.mutate(
+                { groupSetId },
+                {
+                  onError: (error) => {
+                    // A set deleted meanwhile: the list is read again.
+                    if (refusedWith(error, "unknown_group_set")) {
+                      void qc.invalidateQueries({ queryKey: classroomGroupSetsKey(project.classroomId) });
+                    }
+                  },
+                },
+              )
+            }
+            message={refused}
+          />
+        </>
+      ) : null}
+      {set && setPage ? (
+        <div className="text-sm">
+          <AppLink
+            route={setPage}
+            navigate={navigate}
+            className="font-medium text-fg underline decoration-line-strong underline-offset-2"
+          >
+            {editable ? t("project.groupSet.open") : setLabel(set, t)}
+          </AppLink>
+          {/* A draft's copy follows by construction; a published one says whether it still does. */}
+          {project.state === "draft" ? null : (
+            <p className="mt-0.5 text-[13px] text-fg-muted">
+              {t(use?.follows === false ? "project.groupSet.stopped" : "project.groupSet.follows")}
+            </p>
+          )}
+        </div>
+      ) : editable ? null : (
+        <p className="text-sm text-fg-muted">{t("project.groupSet.none")}</p>
+      )}
+      {project.groupSyncPending ? (
+        <p className="text-[13px] text-fg-muted" role="status">
+          {t("project.resync.pending")}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -201,32 +201,4 @@ function useResync(project: ProjectDetail) {
     confirm: () => asked && send.mutate(asked.digest),
     cancel: () => setAsked(null),
   };
-}
-
-/**
- * A draft's group mode (F-PROJ-06): written at once. Held, with the reason,
- * while the project works in the online workspace — the server would refuse
- * `work_mode_group` — and while `editable` does not name it.
- */
-function GroupModeSwitch({
-  project,
-  patch,
-}: {
-  project: ProjectDetail;
-  patch: UseMutationResult<ProjectSummary, Error, ProjectPatch>;
-}) {
-  const t = useT();
-  const toast = useToast();
-  const workspace = useWorkspace(project.id);
-  const online = workspace.data !== undefined && workspace.data.mode !== "free";
-  return (
-    <SettingRow title={t("project.draft.groups.switch")} desc={online ? t("project.draft.groups.online") : t("project.groups.desc")}>
-      <Switch
-        checked={project.groupMode}
-        label={t("project.draft.groups.switch")}
-        disabled={patch.isPending || online || project.archivedAt !== null || !project.editable.includes("groupMode")}
-        onChange={(groupMode) => patch.mutate({ groupMode }, { onError: (error) => toast(refusalMessage(error, t), "error") })}
-      />
-    </SettingRow>
-  );
 }

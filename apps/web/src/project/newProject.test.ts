@@ -78,6 +78,11 @@ describe("where a refusal is said", () => {
       branches: ["x"],
     });
     expect(refused(422, { error: "deadline_past", message: "" })).toMatchObject({ field: "deadline" });
+    expect(refused(422, { error: "start_past", message: "" })).toMatchObject({
+      at: "field",
+      field: "start",
+      message: "project.refusal.startPast",
+    });
     expect(refused(409, { error: "duplicate_slug", message: "" })).toMatchObject({ field: "name" });
     expect(refused(502, { error: "distribution_failed", message: "" })).toMatchObject({ at: "form" });
   });

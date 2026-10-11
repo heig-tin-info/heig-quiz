@@ -134,11 +134,11 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
         return (
           <Step key={key} title={t("project.deadline")} done={step.done}>
             <p className="tabular-nums">
-              {step.at
+              {"at" in step
                 ? isoDateTime(step.at)
                 : step.afterDays === 1
                   ? t("project.rail.afterPublication.one")
-                  : t("project.rail.afterPublication", { n: step.afterDays ?? 0 })}
+                  : t("project.rail.afterPublication", { n: step.afterDays })}
             </p>
           </Step>
         );

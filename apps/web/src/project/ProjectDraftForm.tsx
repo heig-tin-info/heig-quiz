@@ -1,68 +1,69 @@
 import type { UseMutationResult } from "@tanstack/react-query";
-import { AlertTriangle, CalendarClock, FolderGit2 } from "lucide-react";
+import { AlertTriangle, CalendarClock, FolderGit2, UsersRound } from "lucide-react";
 import { useState } from "react";
 
-import type { ProjectDetail, ProjectPatch, ProjectSummary } from "@quiz/contracts";
+import {
+  PROJECT_GRACE_MAX_MINUTES,
+  ProjectPatch,
+  type ProjectDetail,
+  type ProjectSummary,
+} from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { useToast } from "../notify";
 import type { Navigate } from "../router";
-import { Alert, Badge, Card, Disclosure, FieldError, fieldErrorProps, Segmented, SectionHeading, SettingRow, TextInput } from "../ui";
-import { advancedCount } from "./draftPatch";
-import { FIELD_ID } from "./newProject";
+import { Alert, Badge, Card, Disclosure, SectionHeading, SettingRow, Switch, useNumberDraft } from "../ui";
 import { Facts } from "./ProjectOverview";
 import { ProjectDraftPublication, publicationKey } from "./ProjectDraftPublication";
-import { ProjectGroupSet } from "./ProjectGroupSet";
+import { GroupSetBody } from "./ProjectGroupSet";
 import { ProjectRail } from "./ProjectRail";
-import { DeadlineStrategyRow, ProtectedFilesRow, useProtectedSuggestions } from "./ProjectSettings";
-import { WorkModeSetting } from "./ProjectWorkspace";
-import { refusalMessage } from "./projectPage";
+import { DeadlineStrategyRow, GradingModeRow, NumberRow, ScaleRow } from "./ProjectSettingRows";
+import { ProtectedFilesRow, useProtectedSuggestions } from "./ProjectSettings";
+import { WorkModeSetting, useWorkspace } from "./ProjectWorkspace";
+import { advancedCount, type WriteProject } from "./projectPage";
 import { RepoLink } from "./parts";
-import { useNumberDraft } from "./useNumberDraft";
 
-const GRACE_MAX = 1440;
-
-/** The grace, in minutes: written when the teacher leaves the field or presses Enter; 0 is a grace of none. */
-function GraceRow({
-  project,
-  disabled,
-  onWrite,
-}: {
-  project: ProjectDetail;
-  disabled: boolean;
-  onWrite: (graceMinutes: number) => void;
-}) {
+/** The grace, in minutes: written when the teacher leaves the field; 0 is a grace of none. */
+function GraceRow({ value, disabled, onWrite }: { value: number; disabled: boolean; onWrite: (minutes: number) => void }) {
   const t = useT();
   const [invalid, setInvalid] = useState(false);
-  const input = useNumberDraft(project.graceMinutes, (n) => {
-    const ok = n !== null && Number.isInteger(n) && n >= 0 && n <= GRACE_MAX;
-    setInvalid(!ok);
-    if (ok) onWrite(n);
+  const input = useNumberDraft(value, (n) => {
+    const parsed = ProjectPatch.shape.graceMinutes.safeParse(n);
+    setInvalid(!parsed.success);
+    if (parsed.success && n !== null) onWrite(n);
   });
-  const message = invalid ? t("project.missing.grace") : undefined;
   return (
-    <div>
-      <SettingRow title={t("project.grace")} desc={t("project.grace.desc")}>
-        <TextInput
-          id={FIELD_ID.grace}
-          type="number"
-          aria-label={t("project.grace")}
-          min={0}
-          max={GRACE_MAX}
-          size="sm"
-          className="w-20 text-right tabular-nums"
-          disabled={disabled}
-          {...input}
-          {...fieldErrorProps(FIELD_ID.grace, message)}
-        />
-        <span className="text-[13px] text-fg-muted">{t("project.grace.unit")}</span>
-      </SettingRow>
-      {message ? (
-        <div className="pb-3">
-          <FieldError id={FIELD_ID.grace}>{message}</FieldError>
-        </div>
-      ) : null}
-    </div>
+    <NumberRow
+      title={t("project.grace")}
+      desc={t("project.grace.desc")}
+      unit={t("project.grace.unit")}
+      min={0}
+      max={PROJECT_GRACE_MAX_MINUTES}
+      disabled={disabled}
+      message={invalid ? t("project.missing.grace") : undefined}
+      {...input}
+    />
+  );
+}
+
+/**
+ * A draft's group mode (F-PROJ-06): written at once, off clears the set. Held,
+ * with the reason, while the project works in the online workspace — the
+ * server would refuse `work_mode_group`; a platform without the portal
+ * answers the workspace read with a 404, and the switch is then free.
+ */
+function GroupModeSwitch({ project, disabled, write }: { project: ProjectDetail; disabled: boolean; write: WriteProject }) {
+  const t = useT();
+  const workspace = useWorkspace(project.id);
+  const online = workspace.data !== undefined && workspace.data.mode !== "free";
+  return (
+    <SettingRow title={t("project.groups")} desc={online ? t("project.draft.groups.online") : t("project.groups.desc")}>
+      <Switch
+        checked={project.groupMode}
+        label={t("project.groups")}
+        disabled={disabled || online || !project.editable.includes("groupMode")}
+        onChange={(groupMode) => write({ groupMode })}
+      />
+    </SettingRow>
   );
 }
 
@@ -77,27 +78,26 @@ function GraceRow({
  * draft, not even a staff seat (ADR-077 §1).
  *
  * Every field is written as soon as it is set, through the page's one
- * `PATCH`; the server's `editable` names what may change, and everything is
- * held while a write is under way or the project is archived.
+ * `PATCH` (`write`); the server's `editable` names what may change, and
+ * everything is held while a write is under way or the project is archived.
  */
 export function ProjectDraftForm({
   project,
   patch,
+  write,
   navigate,
 }: {
   project: ProjectDetail;
   patch: UseMutationResult<ProjectSummary, Error, ProjectPatch>;
+  write: WriteProject;
   navigate: Navigate;
 }) {
   const t = useT();
-  const toast = useToast();
   const [open, setOpen] = useState(false);
   const disabled = patch.isPending || project.archivedAt !== null;
   const suggested = useProtectedSuggestions(project, open);
   const changed = advancedCount(project);
-  /** A write outside the publication block: its refusal, if any, is a toast. */
-  const write = (body: ProjectPatch) => patch.mutate(body, { onError: (error) => toast(refusalMessage(error, t), "error") });
-  const can = (field: "gradingMode" | "gradingScale" | "graceMinutes") => project.editable.includes(field);
+  const can = (field: "gradingMode" | "gradingScale" | "graceMinutes" | "deadlineStrategy") => project.editable.includes(field);
 
   return (
     <div className="max-w-3xl space-y-8" data-testid="project-draft-form">
@@ -138,10 +138,20 @@ export function ProjectDraftForm({
 
       <section aria-labelledby="draft-publication" className="space-y-3">
         <SectionHeading icon={CalendarClock} title={<span id="draft-publication">{t("project.draft.publication")}</span>} />
-        <ProjectDraftPublication key={publicationKey(project)} project={project} patch={patch} />
+        <ProjectDraftPublication key={publicationKey(project)} project={project} pending={patch.isPending} write={write} />
       </section>
 
-      <ProjectGroupSet project={project} patch={patch} navigate={navigate} />
+      <section aria-labelledby="draft-groups" className="space-y-3">
+        <SectionHeading icon={UsersRound} title={<span id="draft-groups">{t("project.groups")}</span>} />
+        <Card className="divide-y divide-line px-4">
+          <GroupModeSwitch project={project} disabled={disabled} write={write} />
+          {project.groupMode ? (
+            <div className="space-y-3 py-4">
+              <GroupSetBody project={project} patch={patch} navigate={navigate} />
+            </div>
+          ) : null}
+        </Card>
+      </section>
 
       <Disclosure
         title={t("eval.advanced")}
@@ -159,38 +169,26 @@ export function ProjectDraftForm({
       >
         <GraceRow
           key={project.graceMinutes}
-          project={project}
+          value={project.graceMinutes}
           disabled={disabled || !can("graceMinutes")}
           onWrite={(graceMinutes) => write({ graceMinutes })}
         />
-        <DeadlineStrategyRow project={project} disabled={disabled} onChange={(deadlineStrategy) => write({ deadlineStrategy })} />
-        <SettingRow title={t("project.gradingMode")}>
-          <Segmented
-            name="gradingMode"
-            label={t("project.gradingMode")}
-            value={project.gradingMode}
-            disabled={disabled || !can("gradingMode")}
-            onChange={(gradingMode) => write({ gradingMode })}
-            options={[
-              { value: "auto", label: t("project.gradingMode.auto") },
-              { value: "none", label: t("project.gradingMode.none") },
-            ]}
-          />
-        </SettingRow>
+        <DeadlineStrategyRow
+          value={project.deadlineStrategy}
+          disabled={disabled || !can("deadlineStrategy")}
+          onChange={(deadlineStrategy) => write({ deadlineStrategy })}
+        />
+        <GradingModeRow
+          value={project.gradingMode}
+          disabled={disabled || !can("gradingMode")}
+          onChange={(gradingMode) => write({ gradingMode })}
+        />
         {project.gradingMode === "auto" ? (
-          <SettingRow title={t("project.scale")} desc={t("project.scale.desc")}>
-            <Segmented
-              name="scale"
-              label={t("project.scale")}
-              value={project.gradingScale.kind}
-              disabled={disabled || !can("gradingScale")}
-              onChange={(kind) => write({ gradingScale: { ...project.gradingScale, kind } })}
-              options={[
-                { value: "linear", label: t("project.scale.linear") },
-                { value: "score_is_grade", label: t("project.scale.score_is_grade") },
-              ]}
-            />
-          </SettingRow>
+          <ScaleRow
+            value={project.gradingScale.kind}
+            disabled={disabled || !can("gradingScale")}
+            onChange={(kind) => write({ gradingScale: { ...project.gradingScale, kind } })}
+          />
         ) : null}
         <ProtectedFilesRow
           project={project}
