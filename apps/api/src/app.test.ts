@@ -234,5 +234,7 @@ describe("app (serving the built SPA)", () => {
     expect(directives.get("script-src")).toEqual(["'self'", "'wasm-unsafe-eval'"]);
     expect(directives.get("object-src")).toEqual(["'none'"]);
     expect(directives.get("frame-ancestors")).toEqual(["'self'"]);
+    // Every picture is ours, the IdP's and GitHub's included (audit 2026-10-10, §6).
+    expect(directives.get("img-src")).toEqual(["'self'", "data:", "blob:"]);
   });
 });

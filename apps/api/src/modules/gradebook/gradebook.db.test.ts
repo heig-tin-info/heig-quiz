@@ -34,6 +34,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import type { Db } from "../../db/client.js";
+import { subscribe } from "../../events.js";
 import {
   auditLog,
   classrooms,
@@ -434,6 +435,24 @@ describe("the staff's marks (D06, 2026-10-05)", () => {
     expect(res.statusCode, res.body).toBe(200);
     const cell = cellOf(GradebookStaff.parse(res.json()), 1, "X1");
     expect(cell).toMatchObject({ kind: "absent", grade: 1, source: "mark", mark: { kind: "absent", comment: SECRET, setBy: expect.any(String) } });
+    await call("DELETE", markUrl("evaluation", "X1", seats[1]!), teacher.headers);
+  });
+
+  it("hints the course's staff and the student, never the classroom's topic (audit 2026-10-10, §6)", async () => {
+    const topics: string[] = [];
+    const unsubscribe = subscribe((m) => {
+      if (m.kind === "hint") topics.push(...m.topics);
+    });
+    try {
+      const res = await call("PUT", markUrl("evaluation", "X1", seats[1]!), teacher.headers, { kind: "absent" });
+      expect(res.statusCode, res.body).toBe(200);
+      // The generic hint would be the `onResponse` hook's, after the answer is out.
+      for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      unsubscribe();
+    }
+    expect(topics).toContain(`course:${seed.courseId}`);
+    expect(topics.filter((t) => t.startsWith("classroom:"))).toEqual([]);
     await call("DELETE", markUrl("evaluation", "X1", seats[1]!), teacher.headers);
   });
 

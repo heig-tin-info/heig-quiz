@@ -157,7 +157,8 @@ describe("GET /app/api/admin/users (F-ADMIN-01)", () => {
     const rows = z.array(AdminUser).parse((await list(admin)).json());
     const row = (who: Actor) => rows.find((r) => r.id === who.id);
     expect(row(granted)?.avatarUrl).toMatch(uploaded(granted));
-    expect(row(staff)?.avatarUrl).toBe("https://idp.test/staff.png");
+    // The IdP's, served from here too (audit 2026-10-10, §6).
+    expect(row(staff)?.avatarUrl).toMatch(new RegExp(`^/app/api/users/${staff.id}/avatar\\?v=[0-9a-f]{12}$`));
     expect(row(student)?.avatarUrl).toBeNull();
     // And the admin, without Super Powers, fetches it: pictures follow the
     // role, not the reach (ADR-054 §2).

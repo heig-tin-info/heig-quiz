@@ -21,6 +21,7 @@ import { fakeShort } from "../test/fakeType.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { kioskStation } from "../test/kiosk.js";
 import { seedLive } from "../test/live.js";
+import { findReachableEvaluation } from "./guards.js";
 
 let server: TestServer;
 let restore: () => void;
@@ -108,5 +109,36 @@ describe("sitRefusal (ADR-051 §2)", () => {
     expect(outside.json().error).toBe("ip_not_allowed");
     const inRoom = await enter(evaluationId, { ...kiosk, "x-forwarded-for": "10.20.0.7" });
     expect(inRoom.statusCode).toBe(200);
+  });
+});
+
+describe("findReachableEvaluation: a draft is the staff's alone (audit 2026-10-10, §6)", () => {
+  it("answers a student who knows a draft's id the 404 of a stranger, and admits them from `scheduled` on", async () => {
+    const student = await server.signIn("student");
+    const teacher = await server.signIn("teacher");
+    const { evaluationId } = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id] });
+    const [draft] = await server.app.db
+      .select({ state: evaluations.state })
+      .from(evaluations)
+      .where(eq(evaluations.id, evaluationId));
+    expect(draft?.state).toBe("draft");
+    const watch = (subject: string) =>
+      server.app.inject({
+        method: "GET",
+        url: `/app/api/events?watch=${subject}:${evaluationId}`,
+        headers: student.headers,
+      });
+    expect((await enter(evaluationId, student.headers)).statusCode).toBe(404);
+    expect((await watch("lobby")).statusCode).toBe(404);
+    expect((await watch("evaluation")).statusCode).toBe(404);
+    // The staff still reach it: the preview and the dashboard read a draft.
+    const asTeacher = { id: teacher.id, role: "teacher", reach: "seats" } as const;
+    expect((await findReachableEvaluation(server.app.db, asTeacher, evaluationId))?.staff).toBe(true);
+    // From `scheduled` on, the student's card is on their home (ADR-092 §3).
+    const asStudent = { id: student.id, role: "student", reach: "seats" } as const;
+    for (const state of ["scheduled", "lobby", "running", "closed"] as const) {
+      await server.app.db.update(evaluations).set({ state }).where(eq(evaluations.id, evaluationId));
+      expect((await findReachableEvaluation(server.app.db, asStudent, evaluationId))?.staff, state).toBe(false);
+    }
   });
 });

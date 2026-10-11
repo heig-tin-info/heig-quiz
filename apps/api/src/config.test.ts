@@ -27,6 +27,12 @@ describe("loadConfig", () => {
     expect(config.TICK_MS).toBe(1000);
   });
 
+  it("bounds a session at 30 days, and refuses an idle timeout beyond the bound (audit 2026-10-10, §6)", () => {
+    expect(loadConfig({}).SESSION_MAX_AGE_HOURS).toBe(720);
+    expect(() => loadConfig({ SESSION_TTL_HOURS: "48", SESSION_MAX_AGE_HOURS: "24" })).toThrow(/SESSION_TTL_HOURS/);
+    expect(() => loadConfig({ SESSION_TTL_HOURS: "24", SESSION_MAX_AGE_HOURS: "24" })).not.toThrow();
+  });
+
   it("refuses the development login in production", () => {
     expect(() => loadConfig({ ...PROD, AUTH_DEV_LOGIN: "1" })).toThrow(/AUTH_DEV_LOGIN/);
     // Off, or absent, it boots.

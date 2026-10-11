@@ -33,10 +33,13 @@ import { csvFilename } from "../../csv.js";
 import { actorOf } from "../../audit.js";
 import { accessibleClassroom, callerOf, isCourseOwner, readableClassroom, teacherGuard } from "../guards.js";
 import { sendCsv, studentRoute, teacherRoute } from "../http.js";
+import { ownHints } from "../realtime/bus.js";
 import { gradebookCsv } from "./csv.js";
 import * as service from "./service.js";
 
 export async function gradebookPlugin(app: FastifyInstance) {
+  // Its hints are its own, never `classroom:` (`gradebook/events.ts`).
+  app.addHook("onRoute", ownHints);
   const requireTeacher = teacherGuard(app);
   const teacher = teacherRoute(app);
   const student = studentRoute(app);

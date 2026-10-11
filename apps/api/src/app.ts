@@ -192,10 +192,16 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // safe because they only refresh GETs), the admin teacher list (`admin`,
   // which reaches every administrator and not just the actor), and
   // `POST /pools`, whose brand-new pool has no `pool:<id>` subscriber yet.
+  //
+  // A route that publishes its own, better-addressed hints says so
+  // (`config.ownHints`, `realtime/bus.ts#ownHints`) and is skipped: a
+  // classroom's projects, group sets and gradebook hint the course's staff
+  // and the students concerned, NEVER `classroom:<id>`, which every student
+  // of the classroom hears (N-SEC-20; audit 2026-10-10, §6).
   app.addHook("onResponse", async (req, reply) => {
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
     if (reply.statusCode >= 400 || !req.user) return;
-    if (req.routeOptions.config.readOnly) return;
+    if (req.routeOptions.config.readOnly || req.routeOptions.config.ownHints) return;
     const pool = /^\/app\/api\/pools\/([0-9a-f-]{36})/.exec(req.url);
     const classroom = /^\/app\/api\/classrooms\/([0-9a-f-]{36})/.exec(req.url);
     const course = /^\/app\/api\/courses\/([0-9a-f-]{36})/.exec(req.url);
@@ -390,5 +396,7 @@ declare module "fastify" {
   interface FastifyContextConfig {
     /** A read served by a non-GET verb: no refresh hint on its response. */
     readOnly?: boolean;
+    /** The route publishes its own refresh hints: the generic one stays silent (`realtime/bus.ts#ownHints`). */
+    ownHints?: boolean;
   }
 }

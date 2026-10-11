@@ -28,7 +28,7 @@ import { WatchSubject, isStaffOnly, type ServerEvent } from "@quiz/contracts";
 import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { SITTING, delegated } from "../../auth/session.js";
+import { SITTING, confined, delegated } from "../../auth/session.js";
 import {
   accessWhere,
   callerOf,
@@ -409,8 +409,8 @@ export async function realtimePlugin(app: FastifyInstance) {
     let watch: Watch | null = null;
     let staff = me.role === "teacher" || me.role === "admin";
     let participant = false;
-    // A `seb` session streams its evaluation and nothing else (ADR-027).
-    if (raw === null && req.auth?.evaluationId) return reply.code(404).send({ error: "not_found" });
+    // A confined session streams its evaluation and nothing else (ADR-027, ADR-051).
+    if (raw === null && confined(req.auth)) return reply.code(404).send({ error: "not_found" });
     if (raw !== null) {
       // The grammar is a contract (`WatchSubject`), not a `split(":")`:
       // `attempt:not-a-uuid` used to reach the database and answer a 500.
@@ -430,7 +430,12 @@ export async function realtimePlugin(app: FastifyInstance) {
       participant = resolved.participant && !delegated(req.auth);
     }
 
-    const topics = await topicsOf(app, req);
+    // A confined session (`seb`, `kiosk`) hears its evaluation and nothing
+    // else (ADR-027, ADR-051): none of the user's topics, so no `classroom:`
+    // hint about the roster, the groups or the projects (N-SEC-20, audit
+    // 2026-10-10 §6). It always watches (the 404 above), so the topics below
+    // are never empty.
+    const topics = confined(req.auth) ? new Set<string>() : await topicsOf(app, req);
     if (watch?.kind === "evaluation" || watch?.kind === "lobby") {
       topics.add(`evaluation:${watch.evaluationId}`);
     }

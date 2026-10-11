@@ -131,7 +131,10 @@ then trusted for 6 h, including from any HTTP client holding its cookie.
   launch route keeps refusing a bad header in both modes, as today.
 - **Still no Browser Exam Key**, for the reason of ADR-027 §2. The
   header remains what ADR-027 says it is: it stops the accidental and the
-  lazy. The security boundary is the confined session.
+  lazy. The security boundary is the confined session. *Noted 2026-10-11:
+  the security audit of 2026-10-10 records this as finding M10 (the Config
+  Key spoofable without a Browser Exam Key); unchanged, an accepted risk —
+  a high-stakes exam sits on attested kiosk stations, not on SEB alone.*
 
 ### 4. Confined sessions: one at a time, strict cookie
 

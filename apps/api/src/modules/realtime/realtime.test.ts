@@ -9,8 +9,10 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { applyState } from "../evaluation/service.js";
+import { CSRF_COOKIE } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
+import { createSession, SESSION_COOKIE } from "../../auth/session.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -480,6 +482,40 @@ describe("what a student is allowed to receive (§4.8)", () => {
     bus.hint("notifications", [`user:${student.id}`, `classroom:${seed.classroomId}`]);
     await settle();
     expect(stream.text.match(/"type":"hint"/g)).toHaveLength(1);
+  });
+
+  /** Audit 2026-10-10, §6: a confined session hears its evaluation and nothing else (N-SEC-20). */
+  it("gives a seb session its evaluation's topics only, never the student's classroom or user topic", async () => {
+    const sitter = await server.signIn("student");
+    const exam = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [sitter.id],
+      questions: 1,
+      settings: { safeExamBrowser: true },
+    });
+    await applyState(server.app.db, await reload(server.app.db, exam.evaluationId), "lobby", server.clock.now());
+    const s = await createSession(server.app.db, sitter.id, 12, {
+      kind: "seb",
+      actorUserId: null,
+      evaluationId: exam.evaluationId,
+      projectId: null,
+    });
+    const sebHeaders = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}` };
+    const seb = await openStream(sebHeaders, `lobby:${exam.evaluationId}`);
+    const portal = await openStream(sitter.headers);
+    expect([seb.statusCode, portal.statusCode]).toEqual([200, 200]);
+    await settle();
+
+    bus.hint("roster", [`classroom:${exam.classroomId}`]);
+    bus.hint("notifications", [`user:${sitter.id}`]);
+    await settle();
+    expect(portal.text.match(/"type":"hint"/g)).toHaveLength(2);
+    expect(seb.text).not.toContain('"type":"hint"');
+
+    // Its own evaluation still reaches it.
+    bus.hint("evaluations", [`evaluation:${exam.evaluationId}`]);
+    await settle();
+    expect(seb.text.match(/"type":"hint"/g)).toHaveLength(1);
   });
 
   it("carries the inherited hint as an UNNAMED frame, for the shipped client", async () => {

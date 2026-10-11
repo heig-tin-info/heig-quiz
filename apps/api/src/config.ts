@@ -203,6 +203,13 @@ const EnvSchema = z.object({
    */
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(12),
   /**
+   * The absolute bound on a session, from its creation (audit 2026-10-10,
+   * §6): the sliding renewal never carries it past this, and a session that
+   * reached it is ended at its next request however recently it was used.
+   * 720 h = 30 days; at most a year.
+   */
+  SESSION_MAX_AGE_HOURS: z.coerce.number().int().min(1).max(8760).default(720),
+  /**
    * Code runner (PLAN-MVP §1.7, decision D14). `stub` everywhere until a
    * machine with Podman exists: `run()` throws `RunnerUnavailable`, grading
    * degrades to a proposed grade, and nothing blocks. `http` talks to the
@@ -519,6 +526,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (short.length > 0) {
       throw new Error(`Invalid configuration: ${short.join(", ")} must be at least ${SECRET_MIN} characters in production`);
     }
+  }
+  // An idle timeout longer than the absolute bound would never be reached:
+  // a configuration that says two contradictory things is refused.
+  if (parsed.data.SESSION_TTL_HOURS > parsed.data.SESSION_MAX_AGE_HOURS) {
+    throw new Error("Invalid configuration: SESSION_TTL_HOURS must not exceed SESSION_MAX_AGE_HOURS");
   }
   // A portal URL without a signing key would mint nothing the portal accepts
   // (or, worse, a guessable one): refused in development too. The answer

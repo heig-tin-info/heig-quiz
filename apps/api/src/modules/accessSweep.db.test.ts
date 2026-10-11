@@ -218,6 +218,11 @@ describe("every staff route of an object (invariant 6)", () => {
     for (const { method, name, real } of routes) {
       if (name === SEB_DOWNLOAD) continue;
       const w = method === "GET" ? shared : await world();
+      // A draft is the staff's alone (audit 2026-10-10, §6): the enrolled
+      // student enters an evaluation from `scheduled` on.
+      if (STUDENT_ROUTES.has(name) && name.includes("/evaluations/")) {
+        await server.app.db.update(evaluations).set({ state: "scheduled" }).where(eq(evaluations.id, w.ids.evaluations));
+      }
       const who = STUDENT_ROUTES.has(name) ? enrolled : name === IMPERSONATION ? admin : owner;
       const res = await call(method, real(w), who);
       if (res.statusCode === 404) unreached.push(`${name} ${res.body}`);

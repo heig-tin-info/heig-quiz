@@ -152,6 +152,11 @@ can compute it. It stops the accidental and the lazy — opening the file's
 URL in Chrome — not the determined. The server-side confinement below is the
 security boundary; SEB's own restrictions are not.
 
+*Noted 2026-10-11: the security audit of 2026-10-10 records exactly this
+limit as finding M10 (a Config Key header forged without a Browser Exam
+Key); the decision is unchanged — an accepted risk, and the high-stakes
+exams sit on attested kiosk stations (ADR-051).*
+
 ### 3. Typed sessions and default deny
 
 `sessions` gains `kind` (`portal` by default, so every existing row is what

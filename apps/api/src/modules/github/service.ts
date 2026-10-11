@@ -20,7 +20,6 @@ import type { FastifyBaseLogger } from "fastify";
 import { and, desc, eq, isNotNull, isNull, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
 
 import {
-  AvatarMime,
   GITHUB_ORG_NOT_ALLOWED,
   type GITHUB_CONNECT_REFUSALS,
   type GithubChecks,
@@ -31,9 +30,9 @@ import {
 
 import { audit } from "../../audit.js";
 import { linkedLogin } from "../../auth/linkedLogin.js";
-import { readCapped } from "../../cappedBody.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
+import { remoteImageCache, type RemoteImage } from "../../remoteImage.js";
 import {
   classroomJournals,
   classrooms,
@@ -59,7 +58,6 @@ import {
 import { DomainError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
 import { accessWhere, classroomStaffIds, staffAccess, type Caller } from "../guards.js";
-import { sniffImage } from "../pool/assets.js";
 import { installationChanged } from "./events.js";
 
 type OrgRow = typeof githubOrganizations.$inferSelect;
@@ -86,7 +84,7 @@ interface Healed {
 /** The last healing of each organization, by row id; the promise is shared by concurrent reads. */
 const healed = new Map<string, { at: number; result: Promise<Healed> }>();
 /** Avatars by GitHub's organization id (below). */
-const avatars = new Map<number, { at: number; image: Promise<OrgAvatar | null> }>();
+const avatars = remoteImageCache();
 
 /** Test hook: every cache of this module emptied. */
 export function resetGithubCaches(): void {
@@ -898,16 +896,9 @@ export async function completeSetup(
  * reaches GitHub (05-web §5.3, M1-04 `OrgAvatar`).
  *
  * DERIVED, not stored: the address is `avatars.githubusercontent.com/u/<id>`
- * from the immutable `github_org_id`, the image is fetched server-side and
- * kept in memory. No column and no migration; an organization that changes
- * its picture shows the new one within a day, with no refresh job; the keys
- * are the organizations' rows, a handful, and a restart only refetches. A
- * failed fetch is not kept: the next request tries again.
+ * from the immutable `github_org_id`, the image is fetched server-side under
+ * the one policy of `remoteImage.ts` and kept in its memory cache.
  */
-export interface OrgAvatar {
-  bytes: Buffer;
-  mime: string;
-}
 /**
  * The caller sees the organization (ADR-100): it is granted to a course
  * where they hold a seat, or a classroom of such a course is connected to
@@ -919,10 +910,6 @@ function seesOrg(userId: string): SQL {
       WHERE l.org_id = ${githubOrganizations.id} AND ${staffAccess(userId, sql`c.course_id`)}))`;
 }
 
-/** What is served: the uploaded avatars' list (`AvatarMime`), the bytes matching the declared type. */
-const AVATAR_TYPES: ReadonlySet<string> = new Set<string>(AvatarMime.options);
-export const AVATAR_MAX_BYTES = 256 * 1024;
-const AVATAR_TTL_MS = 24 * 3_600_000;
 /** The size asked of GitHub: the largest `OrgAvatar` drawn, at 2x. */
 const AVATAR_SIZE = 96;
 
@@ -932,41 +919,14 @@ export async function orgAvatar(
   caller: Caller,
   now: Date,
   log: FastifyBaseLogger,
-): Promise<OrgAvatar | null> {
+): Promise<RemoteImage | null> {
   const [org] = await db
     .select({ githubOrgId: githubOrganizations.githubOrgId })
     .from(githubOrganizations)
     .where(and(eq(githubOrganizations.id, orgId), accessWhere(caller, seesOrg(caller.id))));
   if (!org || org.githubOrgId === null) return null;
-  const key = org.githubOrgId;
-  const hit = avatars.get(key);
-  if (hit && now.getTime() - hit.at < AVATAR_TTL_MS) return hit.image;
-  const entry = {
-    at: now.getTime(),
-    image: downloadAvatar(key).catch((err: unknown) => {
-      log.warn({ err, githubOrgId: key }, "fetching an organization's avatar failed");
-      return null;
-    }),
-  };
-  avatars.set(key, entry);
-  const image = await entry.image;
-  if (!image && avatars.get(key) === entry) avatars.delete(key);
-  return image;
-}
-
-async function downloadAvatar(githubOrgId: number): Promise<OrgAvatar | null> {
-  const res = await fetch(
-    `https://avatars.githubusercontent.com/u/${githubOrgId}?s=${AVATAR_SIZE}&v=4`,
-    // Never followed elsewhere: the one host, or nothing.
-    { redirect: "error", signal: AbortSignal.timeout(5_000) },
-  );
-  if (!res.ok) return null;
-  const declared = (res.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
-  if (!AVATAR_TYPES.has(declared)) return null;
-  const bytes = await readCapped(res, AVATAR_MAX_BYTES);
-  // The bytes decide, not the header (as for an uploaded avatar).
-  if (!bytes || sniffImage(bytes)?.mime !== declared) return null;
-  return { bytes, mime: declared };
+  const id = org.githubOrgId;
+  return avatars.get(`https://avatars.githubusercontent.com/u/${id}?s=${AVATAR_SIZE}&v=4`, now.getTime(), log);
 }
 
 // ---------------------------------------------------------------- what projects read of a classroom's link
