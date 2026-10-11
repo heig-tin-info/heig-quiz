@@ -427,6 +427,15 @@ case "$OUT" in
   *) fail "code-server no longer sends CSP sandbox on /vscode-remote-resource" "$OUT" ;;
 esac
 
+# No notebook support (Containerfile 2b): a notebook's HTML output would run
+# script in a webview on the portal's origin as soon as the .ipynb is opened.
+EXTS=/usr/lib/code-server/lib/vscode/extensions
+cexec "test ! -e $EXTS/ipynb && test ! -e $EXTS/notebook-renderers" >/dev/null 2>&1 \
+  || fail "a bundled notebook extension is still present (ipynb or notebook-renderers)"
+NB=$(cexec "grep -l '\"notebooks\"' $EXTS/*/package.json /opt/code-server/extensions/*/package.json 2>/dev/null")
+[ -z "$NB" ] || fail "an installed extension contributes a notebook type" "$NB"
+ok "no notebook support: ipynb and notebook-renderers absent, no extension contributes a notebook type"
+
 for f in /run/code-server/User/settings.json /run/code-server/Machine/settings.json; do
   cexec "test -f $f" >/dev/null 2>&1 || fail "machine settings not copied into $f"
   for k in '"files.autoSave": "afterDelay"' '"files.autoSaveDelay": 1000' \

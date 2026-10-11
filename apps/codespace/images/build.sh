@@ -23,4 +23,4 @@ df -h /var/lib/containers 2>/dev/null | tail -n 1 || true
 t0=$(date +%s)
 pd build -t "$TAG" "$HERE/c-dev"
 echo "built $TAG in $(( $(date +%s) - t0 )) s"
-echo "acceptance (49 assertions, no AppArmor flag on a host without it): $HERE/c-dev/test.sh"
+echo "acceptance (53 assertions, no AppArmor flag on a host without it): $HERE/c-dev/test.sh"

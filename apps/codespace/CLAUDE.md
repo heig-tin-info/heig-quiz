@@ -167,7 +167,7 @@ channel divergence for its containers.
     `/absproxy/<port>/` (403), drops `Set-Cookie` and
     `Service-Worker-Allowed` from every upstream answer, and serves
     `/vscode-remote-resource` with `CSP: default-src 'none'; sandbox` and
-    `nosniff`. Gaps and the full fix: [ADR-047, amendment of 2026-10-11](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
+    `nosniff`; the student image ships no notebook support. Gaps and the full fix: [ADR-047, amendment of 2026-10-11](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
 
 ## Commands
 

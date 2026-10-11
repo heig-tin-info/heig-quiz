@@ -87,7 +87,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
   - § 4 the root filesystem is read-only, `CapEff` is zero, `NoNewPrivs` is 1, the seccomp filter is loaded and the AppArmor label is the `codespace` profile (skipped with a note on a host without AppArmor);
   - § 5 uid 1000 inside, host UID outside 0–65535, and two containers side by side get different host UIDs;
   - § 6 a fork bomb is capped by `--pids-limit 256`, the host and the neighbouring container are intact;
-  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme settings and their two bundled themes, the return URL's origin trusted (and nothing trusted without one), the port proxy refused (`/proxy/<port>/` and `/absproxy/<port>/` answer 403/404 with a listener on the port), `/vscode-remote-resource` still sent with CSP `sandbox`, neutralised gallery, no uncaught exception, toolchain binaries and man pages present;
+  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme settings and their two bundled themes, the return URL's origin trusted (and nothing trusted without one), the port proxy refused (`/proxy/<port>/` and `/absproxy/<port>/` answer 403/404 with a listener on the port), `/vscode-remote-resource` still sent with CSP `sandbox`, no notebook support (`ipynb` and `notebook-renderers` absent, no extension contributing a notebook type), neutralised gallery, no uncaught exception, toolchain binaries and man pages present;
   - § 8 `/etc/resolv.conf` comes from the image, with no nameserver, and resolution fails in under two seconds;
   - § 9 the container carries the seven portal variables and nothing else, the git identity works without a configuration file, and the VS Code server inherits the environment.
   - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`.
@@ -136,6 +136,17 @@ Verification done by running `code-server --help` inside the built image.
 `EXTENSIONS_GALLERY='{"serviceUrl":"","itemUrl":"","resourceUrlTemplate":""}'`
 is taken into account: the start-up log shows `Using custom extensions
 gallery`, and `test.sh` makes an assertion out of it.
+
+### No notebook support (2026-10-11, audit L24)
+
+The image deletes code-server's bundled `ipynb` and `notebook-renderers`
+extensions (`Containerfile` step 2b): a notebook's HTML output runs script
+in a webview on the portal's origin as soon as the `.ipynb` is opened.
+`ipynb` is the only bundled extension contributing a notebook type; without
+it the notebook editor fails on an `.ipynb` and offers the text editor. Deleting at build time, rather than
+`--disable-extension` in the entrypoint, leaves nothing to load or re-enable
+and is redone by every rebuild; `test.sh` § 7 asserts it. The remaining gaps
+are in [ADR-047's amendment of 2026-10-11](../../../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
 
 ## Machine settings
 
