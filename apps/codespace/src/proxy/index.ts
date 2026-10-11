@@ -15,7 +15,19 @@
  * is synchronous, so the `preHandler` — which, for its part, may await the
  * database and Podman — deposits the address in a cache that `getUpstream`
  * reads back.
+ *
+ * **One origin for every session (audit L24).** All sessions are served from
+ * the portal's one origin, so nothing a session serves may act on that origin
+ * as a whole. code-server runs with `--disable-proxy` (images/c-dev), and this
+ * proxy is the second layer: it refuses code-server's port proxy
+ * (`/proxy/<port>/`, `/absproxy/<port>/`), drops `Set-Cookie` and
+ * `Service-Worker-Allowed` from every answer, and serves
+ * `/vscode-remote-resource` (any file of the container, the student's
+ * included) only as a sandboxed, unsniffed resource. The full fix, a
+ * subdomain per session, is ADR-089's amendment of 2026-10-11.
  */
+import type { IncomingHttpHeaders } from "node:http";
+
 import httpProxy from "@fastify/http-proxy";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
@@ -73,10 +85,80 @@ export function isEntryRequest(url: string, sessionId: string): boolean {
   return path === `/s/${sessionId}` || path === `/s/${sessionId}/`;
 }
 
+/**
+ * The path code-server would route for a request under `/s/<id>`, read as
+ * leniently as any router could: percent-decoded, slashes collapsed, dot
+ * segments resolved, lower-cased (Express matches case-insensitively). It
+ * decides refusals and headers only; what is forwarded is the request as is.
+ */
+function upstreamPath(url: string): string {
+  const raw = (url.split("?", 1)[0] ?? "").replace(/^\/s\/[^/]*/, "");
+  let path = raw;
+  try {
+    path = decodeURIComponent(raw);
+  } catch {
+    // A malformed escape: judge the raw path.
+  }
+  return new URL(`/${path}`.replace(/\/+/g, "/"), "http://upstream").pathname.toLowerCase();
+}
+
+/** code-server's port proxy, `/proxy/<port>/…` and `/absproxy/<port>/…` (L24). */
+export function isPortProxyRequest(url: string): boolean {
+  return /^\/(abs)?proxy(\/|$)/.test(upstreamPath(url));
+}
+
+/**
+ * VS Code's remote resource route (`[/stable-<commit>]/vscode-remote-resource
+ * ?path=`): it serves any file of the container, `/work` included, with its
+ * own media type. The workbench fetches its themes and grammars there.
+ */
+export function isRemoteResourceRequest(url: string): boolean {
+  return upstreamPath(url).split("/").pop() === "vscode-remote-resource";
+}
+
+/**
+ * What every remote resource answer carries: the headers VS Code 1.137 sets
+ * itself (`default-src 'none'; sandbox`, `nosniff`), enforced here so that a
+ * student's HTML or SVG opened at that URL never runs on the portal's origin,
+ * whatever a later code-server sends. A fetch or an `<img>` ignores them.
+ */
+export const REMOTE_RESOURCE_HEADERS = {
+  "content-security-policy": "default-src 'none'; sandbox",
+  "x-content-type-options": "nosniff",
+} as const;
+
+/**
+ * The headers of code-server's answer as the browser gets them. `Set-Cookie`
+ * and `Service-Worker-Allowed` are dropped: a session must not set a cookie
+ * nor widen a service worker's scope on the origin every session shares (L24).
+ * Under `--auth none` code-server sets no cookie the workbench reads (VS
+ * Code's `vscode-tkn`, only on a `?tkn=`, is never checked without a
+ * connection token); its own PWA worker then fails to register, which the
+ * workbench logs and ignores.
+ *
+ * `Location`: the internal rewriting of @fastify/http-proxy is wrong for a
+ * parameterized prefix (see the registration below); absolute paths are
+ * rewritten here, relative ones (code-server's normal case) left alone.
+ */
+export function upstreamHeaders(
+  headers: IncomingHttpHeaders,
+  sessionId: string | undefined,
+  url: string,
+): IncomingHttpHeaders {
+  const { "set-cookie": _cookie, "service-worker-allowed": _worker, ...kept } = headers;
+  const location = kept.location;
+  if (typeof location === "string" && sessionId && location.startsWith("/") && !location.startsWith("//")) {
+    kept.location = `/s/${sessionId}${location}`;
+  }
+  return isRemoteResourceRequest(url) ? { ...kept, ...REMOTE_RESOURCE_HEADERS } : kept;
+}
+
 async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promise<void> {
   const { db, manager } = opts;
   /** sid → `http://<ip>:8080`. Filled by the `preHandler`, read by `getUpstream`. */
   const upstreams = new Map<string, string>();
+  /** Sessions whose port proxy refusal was logged: once each, not per request. */
+  const portProxyLogged = new Set<string>();
 
   app.decorateRequest("codespaceUpstream", null);
 
@@ -99,6 +181,18 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
         "sessionDeniedTitle",
         "sessionDeniedDetail",
       );
+    }
+
+    // code-server's port proxy would serve a student's program on the origin
+    // every session shares (audit L24). code-server runs with
+    // --disable-proxy; this refusal holds even if a later image forgot it.
+    if (isPortProxyRequest(request.url)) {
+      if (!portProxyLogged.has(sessionId)) {
+        if (portProxyLogged.size >= 10_000) portProxyLogged.clear();
+        portProxyLogged.add(sessionId);
+        request.log.warn({ sessionId, clientAddress: request.ip }, "proxy access refused: code-server port proxy");
+      }
+      return deny(reply, 403, "portProxyTitle", "portProxyDetail");
     }
 
     const assignment = findAssignment(db, session.assignmentId);
@@ -177,9 +271,9 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
     // empty string) by the *literal* prefix of the route, and
     // `"./?folder=/work".replace("", "/s/:sid")` produces
     // `"/s/:sid./?folder=/work"` — an unsubstituted `:sid`. We turn it off and
-    // rewrite it ourselves, touching only absolute paths: code-server serves
-    // everything relative (`serverBasePath: "."`), so the normal case does not
-    // even need to be rewritten.
+    // rewrite it ourselves in `upstreamHeaders`, touching only absolute paths:
+    // code-server serves everything relative (`serverBasePath: "."`), so the
+    // normal case does not even need to be rewritten.
     internalRewriteLocationHeader: false,
     replyOptions: {
       getUpstream(request) {
@@ -187,12 +281,8 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
         return upstreams.get(sessionId) ?? "http://127.0.0.1:1";
       },
       rewriteHeaders(headers, request) {
-        const location = headers["location"];
         const sessionId = (request?.params as { sid?: string } | undefined)?.sid;
-        if (typeof location === "string" && sessionId && location.startsWith("/") && !location.startsWith("//")) {
-          return { ...headers, location: `/s/${sessionId}${location}` };
-        }
-        return headers;
+        return upstreamHeaders(headers, sessionId, request?.url ?? "");
       },
     },
   });

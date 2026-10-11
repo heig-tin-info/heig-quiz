@@ -131,10 +131,33 @@ Verification done by running `code-server --help` inside the built image.
 | `--user-data-dir` | yes |
 | `--install-extension`, `--list-extensions`, `--force` | yes (build) |
 | `--link-protection-trusted-domains` | yes (`string[]`; see § Return link trusted) |
+| `--disable-proxy` | yes (see § Port proxy disabled) |
 
 `EXTENSIONS_GALLERY='{"serviceUrl":"","itemUrl":"","resourceUrlTemplate":""}'`
 is taken into account: the start-up log shows `Using custom extensions
 gallery`, and `test.sh` makes an assertion out of it.
+
+### Port proxy disabled (2026-10-11, audit L24)
+
+Every session is served from the portal's one origin (`/s/<session>/`), so
+code-server's port proxy (`/proxy/<port>/`, `/absproxy/<port>/` and the
+domain proxy) would put whatever a student's program serves on that shared
+origin: a page that registers an origin-wide service worker or plants
+cookies. Nothing in the product uses it (a C image, no web app to preview).
+`--disable-proxy` turns all three off: in 4.137.0, `--help` lists it,
+`out/node/routes/pathProxy.js` and `domainProxy.js` call
+`ensureProxyEnabled`, which answers 403, HTTP and websocket alike, and the
+start-up log says `Proxy disabled`. `test.sh` § 7 starts a listener on a
+port and asserts 403/404 on both routes; without the flag the same probe
+answers 200 with the listener's body. The portal refuses those paths too,
+and filters what code-server answers (`src/proxy/index.ts`; [ADR-089,
+amendment of 2026-10-11](../../../../docs/adr/ADR-089-kiosque-pour-l-espace-de-travail.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24)).
+
+`/vscode-remote-resource?path=` stays open: it serves any file of the
+container (the workbench reads its themes and grammars there), with its own
+media type, but VS Code 1.137 sends `Content-Security-Policy: default-src
+'none'; sandbox` and `nosniff` on it, which the portal enforces in turn and
+`test.sh` § 7 checks.
 
 ## Machine settings
 

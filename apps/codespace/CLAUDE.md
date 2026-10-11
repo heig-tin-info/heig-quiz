@@ -161,6 +161,15 @@ channel divergence for its containers.
     an existing `.git` of any kind, or a `work/` already the container's —
     is completed and configured inside the container (`completionScript`,
     `identityScript`, through `engine.exec`), as the student.
+14. **No session acts on the origin every session shares** (audit L24).
+    All sessions are `/s/<session>/` on one origin. code-server runs with
+    `--disable-proxy`, and the proxy refuses `/proxy/<port>/` and
+    `/absproxy/<port>/` itself, drops `Set-Cookie` and
+    `Service-Worker-Allowed` from every upstream answer, and serves
+    `/vscode-remote-resource` only with `CSP: default-src 'none'; sandbox`
+    and `nosniff` (`src/proxy/index.ts`). An image that needs to serve a
+    web application waits for a subdomain per session:
+    [ADR-089, amendment of 2026-10-11](../../docs/adr/ADR-089-kiosque-pour-l-espace-de-travail.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
 
 ## Commands
 

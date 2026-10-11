@@ -16,7 +16,16 @@ import type { ContainerInfo, Engine } from "../engine/index.js";
 import { EXAM_COOKIE, issueExamCookie } from "../seb/index.js";
 import { buildPortal, type Portal } from "../server.js";
 
-import { SESSION_COOKIE, cookieValue, isEntryRequest, parseCookieValue } from "./index.js";
+import {
+  REMOTE_RESOURCE_HEADERS,
+  SESSION_COOKIE,
+  cookieValue,
+  isEntryRequest,
+  isPortProxyRequest,
+  isRemoteResourceRequest,
+  parseCookieValue,
+  upstreamHeaders,
+} from "./index.js";
 
 const EXAM_SECRET = "a-test-secret-long-enough-2";
 const TOKEN = "test-session-token";
@@ -143,6 +152,95 @@ describe("entry request", () => {
     expect(isEntryRequest("/s/s1", "s1")).toBe(true);
     expect(isEntryRequest("/s/s1/?folder=/work", "s1")).toBe(true);
     expect(isEntryRequest("/s/s1/static/out/vs/workbench.js", "s1")).toBe(false);
+  });
+});
+
+describe("one origin for every session (audit L24)", () => {
+  it.each([
+    "/s/s1/proxy/8080/",
+    "/s/s1/proxy/8080",
+    "/s/s1/absproxy/5000/index.html?x=1",
+    "/s/s1/PROXY/8080/",
+    "/s/s1//proxy/8080/",
+    "/s/s1/%70roxy/8080/",
+    "/s/s1/./proxy/8080/",
+    "/s/s1/x/../proxy/8080/",
+    "/s/s1/x/%2e%2e/absproxy/8080/",
+    "/s/s1/proxy%2F8080/",
+  ])("%s is code-server's port proxy", (url) => {
+    expect(isPortProxyRequest(url)).toBe(true);
+  });
+
+  it.each([
+    "/s/s1/",
+    "/s/s1/?folder=/work",
+    "/s/s1/static/out/proxy.js",
+    "/s/s1/stable-abc/vscode-remote-resource?path=/proxy/1/",
+    "/s/s1/proxyfoo/8080/",
+    "/s/s1/healthz",
+  ])("%s is not", (url) => {
+    expect(isPortProxyRequest(url)).toBe(false);
+  });
+
+  it("recognizes the remote resource route, with or without the commit prefix", () => {
+    expect(isRemoteResourceRequest("/s/s1/vscode-remote-resource?path=/work/x.html")).toBe(true);
+    expect(isRemoteResourceRequest("/s/s1/stable-b11d/vscode-remote-resource?path=/x&tkn=")).toBe(true);
+    expect(isRemoteResourceRequest("/s/s1/vscode/VSCODE-REMOTE-RESOURCE?path=/x")).toBe(true);
+    expect(isRemoteResourceRequest("/s/s1/stable-b11d/static/out/vs/workbench.js")).toBe(false);
+    expect(isRemoteResourceRequest("/s/s1/?path=/vscode-remote-resource")).toBe(false);
+  });
+
+  it("drops Set-Cookie and Service-Worker-Allowed from every answer", () => {
+    const out = upstreamHeaders(
+      {
+        "content-type": "text/javascript",
+        "set-cookie": ["vscode-tkn=x; SameSite=Lax", "a=b; Path=/"],
+        "service-worker-allowed": "/",
+        etag: '"1"',
+      },
+      "s1",
+      "/s/s1/_static/out/browser/serviceWorker.js",
+    );
+    expect(out).toEqual({ "content-type": "text/javascript", etag: '"1"' });
+  });
+
+  it("still rewrites an absolute Location into the session, and only that", () => {
+    expect(upstreamHeaders({ location: "/login" }, "s1", "/s/s1/x").location).toBe("/s/s1/login");
+    expect(upstreamHeaders({ location: "./?folder=/work" }, "s1", "/s/s1/").location).toBe("./?folder=/work");
+    expect(upstreamHeaders({ location: "//evil.example/" }, "s1", "/s/s1/").location).toBe("//evil.example/");
+  });
+
+  it("serves a remote resource sandboxed and unsniffed, whatever code-server sent", () => {
+    const out = upstreamHeaders(
+      { "content-type": "text/html", "content-security-policy": "default-src *" },
+      "s1",
+      "/s/s1/stable-b11d/vscode-remote-resource?path=/work/x.html",
+    );
+    expect(out).toEqual({ "content-type": "text/html", ...REMOTE_RESOURCE_HEADERS });
+    expect(out["content-security-policy"]).toBe("default-src 'none'; sandbox");
+    // Any other route keeps its own policy: the workbench page needs its scripts.
+    const page = upstreamHeaders({ "content-security-policy": "script-src 'self'" }, "s1", "/s/s1/?folder=/work");
+    expect(page["content-security-policy"]).toBe("script-src 'self'");
+  });
+
+  it.each(["/s/s1/proxy/8080/", "/s/s1/absproxy/8080/x", "/s/s1/%70roxy/8080/"])(
+    "the portal refuses %s with a 403 before any upstream",
+    async (url) => {
+      const res = await portal.app.inject({
+        method: "GET",
+        url,
+        cookies: { [SESSION_COOKIE]: cookieValue("s1", TOKEN) },
+        headers: { "accept-language": "en" },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toContain("Port forwarding unavailable");
+    },
+  );
+
+  it("refuses the port proxy without a cookie as any other request: the session's 403", async () => {
+    const res = await portal.app.inject({ method: "GET", url: "/s/s1/proxy/8080/" });
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toContain("Session non autorisée");
   });
 });
 
