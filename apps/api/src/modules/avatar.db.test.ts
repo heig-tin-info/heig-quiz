@@ -5,9 +5,10 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { enrollments } from "../db/schema.js";
+import { enrollments, users } from "../db/schema.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { addStaff, createClassroom, createCourse } from "./org/service.js";
 import { createPool } from "./pool/service.js";
@@ -162,6 +163,50 @@ describe("avatar", () => {
     it("still answers 404 for someone with no picture, whoever asks", async () => {
       expect(await fetchAvatar(bare, bare)).toBe(404);
       expect(await fetchAvatar(bare, admin)).toBe(404);
+    });
+  });
+
+  describe("the IdP's picture, served from here (audit 2026-10-10, §6)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    /** A user whose IdP claim is `url`, with no upload; their own avatar route, fetched by themself. */
+    async function withPicture(url: string, answer: () => Response) {
+      const who = await server.signIn("teacher");
+      await server.app.db.update(users).set({ pictureUrl: url }).where(eq(users.id, who.id));
+      const fetched = vi.spyOn(globalThis, "fetch").mockImplementation(async () => answer());
+      const me = (await server.app.inject({ method: "GET", url: "/app/api/me", headers: who.headers })).json();
+      const res = await server.app.inject({ method: "GET", url: me.avatarUrl, headers: who.headers });
+      return { me, res, fetched };
+    }
+
+    it("is a same-origin address, and serves the bytes inert", async () => {
+      const { me, res, fetched } = await withPicture("https://idp.example/p/1.png", () => new Response(PNG));
+      expect(me.avatarUrl).toMatch(new RegExp(`^/app/api/users/${me.id}/avatar\\?v=[0-9a-f]{12}$`));
+      expect(fetched).toHaveBeenCalledOnce();
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-type"]).toBe("image/png");
+      expect(res.headers["x-content-type-options"]).toBe("nosniff");
+      expect(res.headers["content-security-policy"]).toBe("default-src 'none'; sandbox");
+    });
+
+    it("refuses what is not a JPEG, PNG or WebP by its bytes, whatever its declared type", async () => {
+      const html = () => new Response("<html><script>alert(1)</script></html>", { headers: { "content-type": "image/png" } });
+      expect((await withPicture("https://idp.example/p/2.png", html)).res.statusCode).toBe(404);
+      const svg = () => new Response('<svg xmlns="http://www.w3.org/2000/svg"/>', { headers: { "content-type": "image/svg+xml" } });
+      expect((await withPicture("https://idp.example/p/3.svg", svg)).res.statusCode).toBe(404);
+    });
+
+    it("refuses a body over the upload's cap", async () => {
+      const big = () => new Response(Buffer.concat([PNG, Buffer.alloc(1_000_001)]));
+      expect((await withPicture("https://idp.example/p/4.png", big)).res.statusCode).toBe(404);
+    });
+
+    it("never fetches an address that is not https", async () => {
+      const { res, fetched } = await withPicture("http://idp.example/p/5.png", () => new Response(PNG));
+      expect(res.statusCode).toBe(404);
+      expect(fetched).not.toHaveBeenCalled();
     });
   });
 });

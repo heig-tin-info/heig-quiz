@@ -1,12 +1,15 @@
-import type { FastifyInstance } from "fastify";
-import { and, eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
+
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { AvatarMime } from "@quiz/contracts";
 
 import { audit } from "../audit.js";
+import { readCapped } from "../cappedBody.js";
 import type { Db } from "../db/client.js";
-import { avatars } from "../db/schema.js";
+import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { callerOf, seesUser, type Caller } from "./guards.js";
 import { INERT_IMAGE_HEADERS, sniffImage } from "./pool/assets.js";
@@ -27,14 +30,21 @@ export function avatarUrl(userId: string, updatedAt: Date): string {
 /**
  * The picture a user is shown with: their upload, else the IdP's `picture`
  * claim, else null (the client draws initials). `userId` is null for an
- * unclaimed roster seat, which has neither.
+ * unclaimed roster seat, which has neither. Both are served from the same
+ * route, so a browser never loads an image from the IdP's host and the CSP
+ * admits no `https:` image (audit 2026-10-10, §6); `?v=` of the IdP's is a
+ * digest of its address, so a new claim busts the cache.
  */
 export function shownAvatar(
   userId: string | null,
   uploadedAt: Date | null | undefined,
   pictureUrl: string | null,
 ): string | null {
-  return uploadedAt && userId ? avatarUrl(userId, uploadedAt) : pictureUrl;
+  if (!userId) return null;
+  if (uploadedAt) return avatarUrl(userId, uploadedAt);
+  if (!pictureUrl) return null;
+  const version = createHash("sha256").update(pictureUrl).digest("hex").slice(0, 12);
+  return `/app/api/users/${userId}/avatar?v=${version}`;
 }
 
 /** The user's uploaded picture, if the caller may see that user; null alike for no picture and no right (#318). */
@@ -45,6 +55,66 @@ export async function findVisibleAvatar(db: Db, caller: Caller, userId: string) 
     .where(and(eq(avatars.userId, userId), seesUser(caller, userId)))
     .limit(1);
   return row ?? null;
+}
+
+/** The IdP's `picture` address of a user the caller may see (#318), or null. */
+async function findVisiblePicture(db: Db, caller: Caller, userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ pictureUrl: users.pictureUrl })
+    .from(users)
+    .where(and(eq(users.id, userId), isNotNull(users.pictureUrl), seesUser(caller, userId)))
+    .limit(1);
+  return row?.pictureUrl ?? null;
+}
+
+interface Picture {
+  bytes: Buffer;
+  mime: string;
+}
+
+/**
+ * The IdP's pictures, fetched by the server and kept in memory by their
+ * address (as the GitHub organizations' avatars, `github/service.ts`): no
+ * column and no migration; a restart only refetches. A picture is kept a
+ * day, a failure ten minutes, so a broken address is not fetched again for
+ * every row of a roster; the oldest entry goes past {@link PICTURES_MAX}.
+ */
+const pictures = new Map<string, { at: number; ttl: number; image: Promise<Picture | null> }>();
+const PICTURE_TTL_MS = 24 * 3_600_000;
+const PICTURE_FAILED_TTL_MS = 10 * 60_000;
+const PICTURES_MAX = 1_000;
+
+async function idpPicture(url: string, now: number, log: FastifyBaseLogger): Promise<Picture | null> {
+  const hit = pictures.get(url);
+  if (hit && now - hit.at < hit.ttl) return hit.image;
+  pictures.delete(url);
+  if (pictures.size >= PICTURES_MAX) pictures.delete(pictures.keys().next().value!);
+  const entry = {
+    at: now,
+    ttl: PICTURE_TTL_MS,
+    image: downloadPicture(url).catch((err: unknown) => {
+      log.warn({ err }, "fetching an IdP picture failed");
+      return null;
+    }),
+  };
+  pictures.set(url, entry);
+  const image = await entry.image;
+  if (!image) entry.ttl = PICTURE_FAILED_TTL_MS;
+  return image;
+}
+
+/**
+ * The validation of an upload, applied to what the IdP's address answers:
+ * https only, no redirect followed, at most {@link MAX_BYTES}, and the bytes
+ * decide the type — JPEG, PNG or WebP, never SVG nor anything else.
+ */
+async function downloadPicture(url: string): Promise<Picture | null> {
+  if (!URL.canParse(url) || new URL(url).protocol !== "https:") return null;
+  const res = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5_000) });
+  if (!res.ok) return null;
+  const bytes = await readCapped(res, MAX_BYTES);
+  const mime = bytes === null ? undefined : sniffImage(bytes)?.mime;
+  return bytes !== null && mime !== undefined && ACCEPTED.has(mime) ? { bytes, mime } : null;
 }
 
 /** {@link findVisibleAvatar} without the image: whether the caller sees a picture of that user. */
@@ -59,7 +129,8 @@ export async function seesAvatar(db: Db, caller: Caller, userId: string): Promis
 
 /**
  * Uploaded avatar (cropped client-side, circular preview). Takes precedence
- * over the OIDC `picture` claim; deletable to fall back to it.
+ * over the OIDC `picture` claim; deletable to fall back to it. Both are read
+ * at `/app/api/users/:uid/avatar`.
  */
 export async function avatarPlugin(app: FastifyInstance) {
   app.put(
@@ -136,14 +207,21 @@ export async function avatarPlugin(app: FastifyInstance) {
     async (req, reply) => {
       const params = UserParam.safeParse(req.params);
       if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const row = await findVisibleAvatar(app.db, callerOf(req), params.data.uid);
+      const caller = callerOf(req);
+      const row = await findVisibleAvatar(app.db, caller, params.data.uid);
+      // Else the IdP's picture, through here (audit 2026-10-10, §6).
+      const picture = row
+        ? { bytes: row.data, mime: row.contentType }
+        : await findVisiblePicture(app.db, caller, params.data.uid).then((url) =>
+            url === null ? null : idpPicture(url, app.clock.now().getTime(), req.log),
+          );
       // No picture and a picture the caller may not see answer alike (#318).
-      if (!row) return reply.code(404).send({ error: "not_found" });
+      if (!picture) return reply.code(404).send({ error: "not_found" });
       return reply
-        .type(row.contentType)
+        .type(picture.mime)
         .header("cache-control", "private, max-age=86400")
         .headers(INERT_IMAGE_HEADERS)
-        .send(row.data);
+        .send(picture.bytes);
     },
   );
 }

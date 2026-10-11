@@ -56,12 +56,12 @@ function policy({ frameAncestors, connect }: PageSources): string {
     // `data:`: the fonts the bundler inlines into our CSS (KaTeX's smallest,
     // Monaco's codicon font).
     "font-src": ["'self'", "data:"],
-    // `https:`: the OIDC `picture` claim is a URL on whatever host the IdP
-    // chose (the avatar fallback, `modules/avatar.ts`). `blob:`: the avatar
-    // editor previews the picked file (`URL.createObjectURL`). `data:`:
-    // Monaco's CSS draws its squiggles and glyphs as data-URL SVGs. An image
-    // cannot run script.
-    "img-src": ["'self'", "data:", "blob:", "https:"],
+    // No third party (audit 2026-10-10, §6): the IdP's `picture` and a GitHub
+    // organization's avatar are served from our origin (`modules/avatar.ts`,
+    // `github/service.ts`). `blob:`: the avatar editor previews the picked
+    // file (`URL.createObjectURL`). `data:`: Monaco's CSS draws its squiggles
+    // and glyphs as data-URL SVGs. An image cannot run script.
+    "img-src": ["'self'", "data:", "blob:"],
     // Our API and its SSE stream (ADR-005), plus what one page needs.
     "connect-src": ["'self'", ...connect],
     "object-src": ["'none'"],

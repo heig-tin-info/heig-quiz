@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import * as oidc from "openid-client";
 
 import type { AppConfig } from "../config.js";
+import { OIDC_CALLBACK_PATH } from "./paths.js";
 
 /**
  * Switch edu-ID publishes ALL of its attributes behind this single scope —
@@ -93,7 +94,7 @@ export class OidcProvider {
   }
 
   get redirectUri(): string {
-    return new URL("/app/auth/callback", this.app.PUBLIC_URL).href;
+    return new URL(OIDC_CALLBACK_PATH, this.app.PUBLIC_URL).href;
   }
 
   async beginLogin() {

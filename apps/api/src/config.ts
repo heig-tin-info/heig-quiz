@@ -203,6 +203,13 @@ const EnvSchema = z.object({
    */
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(12),
   /**
+   * The absolute bound on a session, from its creation (audit 2026-10-10,
+   * §6): the sliding renewal never carries it past this, and a session that
+   * reached it is ended at its next request however recently it was used.
+   * 720 h = 30 days; at most a year.
+   */
+  SESSION_MAX_AGE_HOURS: z.coerce.number().int().min(1).max(8760).default(720),
+  /**
    * Code runner (PLAN-MVP §1.7, decision D14). `stub` everywhere until a
    * machine with Podman exists: `run()` throws `RunnerUnavailable`, grading
    * degrades to a proposed grade, and nothing blocks. `http` talks to the

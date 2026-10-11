@@ -9,14 +9,20 @@
  *    (ADR-034), in the path;
  *  - `/teams/link?token=…`: the single-use token of a pending Teams link
  *    (ADR-030), in the query — the SPA page as the server serves it;
+ *  - `/app/auth/callback?code=…&state=…`: the authorization code the IdP
+ *    hands back at the end of a sign-in (OIDC), in the query (audit
+ *    2026-10-10, §6);
  *  - `/app/auth/github/callback?code=…`: the one-time code GitHub hands back
  *    at the end of an account link (M2-03), in the query;
  *  - `/pair?code=…` and `/app/api/pair/<code>`: a kiosk station's user code
  *    (ADR-051 §8), in the query of the phone's page and in the path of the
  *    route that reads it;
- *  - and any of them as the `next=` (or `returnTo=`) of a login round
+ *  - any of them as the `next=` (or `returnTo=`) of a login round
  *    trip, or the `return=` of a GitHub account link, which carries the page
- *    to come back to, token included.
+ *    to come back to, token included;
+ *  - and an OAuth token as a query parameter (`access_token`, `id_token`,
+ *    `refresh_token`), on whatever path: Quiz never puts one there, so one
+ *    that arrives is a client's mistake, not a reason to keep it.
  *
  * And the GitHub tokens (N-SEC-16) and the Anthropic API keys (ADR-058 §3),
  * wherever they appear in a text:
@@ -26,12 +32,13 @@
 import type { FastifyRequest } from "fastify";
 
 // The paths alone, from a file that imports nothing: every module logs.
-import { GITHUB_CALLBACK_PATH, IMPERSONATION_PATH, LAUNCH_PATH } from "./auth/paths.js";
+import { GITHUB_CALLBACK_PATH, IMPERSONATION_PATH, LAUNCH_PATH, OIDC_CALLBACK_PATH } from "./auth/paths.js";
 
 /** Everything after one of these prefixes is a secret. */
 const SECRET_PREFIXES: readonly string[] = [
   LAUNCH_PATH,
   IMPERSONATION_PATH,
+  OIDC_CALLBACK_PATH,
   GITHUB_CALLBACK_PATH,
   "/teams/link",
   "/app/api/pair/",
@@ -41,6 +48,8 @@ const PAIR_PAGE = /^\/pair\/*\?/;
 
 /** The query parameters that hold another URL of the app. */
 const RETURN_PARAMS: readonly string[] = ["next", "returnTo", "return"];
+/** The query parameters that are a secret themselves, wherever they appear. */
+const TOKEN_PARAMS: readonly string[] = ["access_token", "id_token", "refresh_token"];
 
 /** The part of `url` kept before the mask, or undefined when it carries no secret. */
 const secret = (url: string) =>
@@ -78,6 +87,12 @@ function redactSecretPages(url: string): string {
   for (const name of RETURN_PARAMS) {
     const value = params.get(name);
     if (value !== null && secret(value)) {
+      params.set(name, "…");
+      masked = true;
+    }
+  }
+  for (const name of TOKEN_PARAMS) {
+    if (params.has(name)) {
       params.set(name, "…");
       masked = true;
     }

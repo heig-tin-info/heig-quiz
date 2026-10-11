@@ -192,12 +192,20 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // safe because they only refresh GETs), the admin teacher list (`admin`,
   // which reaches every administrator and not just the actor), and
   // `POST /pools`, whose brand-new pool has no `pool:<id>` subscriber yet.
+  //
+  // A classroom's projects, group sets and gradebook address their own hints
+  // to the course's staff and to the `user:` topic of the students concerned
+  // (`project/events.ts`, `group/events.ts`, `gradebook/events.ts`), NEVER
+  // to `classroom:<id>`, which every student of the classroom hears
+  // (N-SEC-20; audit 2026-10-10, §6): the generic hint skips them.
   app.addHook("onResponse", async (req, reply) => {
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
     if (reply.statusCode >= 400 || !req.user) return;
     if (req.routeOptions.config.readOnly) return;
     const pool = /^\/app\/api\/pools\/([0-9a-f-]{36})/.exec(req.url);
-    const classroom = /^\/app\/api\/classrooms\/([0-9a-f-]{36})/.exec(req.url);
+    const classroom = /^\/app\/api\/classrooms\/([0-9a-f-]{36})(?!\/(?:projects|group-sets|gradebook)(?:[/?]|$))/.exec(
+      req.url,
+    );
     const course = /^\/app\/api\/courses\/([0-9a-f-]{36})/.exec(req.url);
     if (pool) publish("mutation", [`pool:${pool[1]}`]);
     else if (classroom) publish("mutation", [`classroom:${classroom[1]}`]);

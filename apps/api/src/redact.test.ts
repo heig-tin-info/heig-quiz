@@ -43,6 +43,19 @@ describe("the request log", () => {
     expect(redactUrl("/pair")).toBe("/pair");
   });
 
+  it("never writes the IdP's authorization code nor its state (audit 2026-10-10, §6)", () => {
+    const callback = `/app/auth/callback?code=${TOKEN}&state=st4te&session_state=x&iss=https%3A%2F%2Fidp.example`;
+    expect(redactUrl(callback)).toBe("/app/auth/callback…");
+    expect(redactUrl(`/app/auth/login?next=${encodeURIComponent(callback)}`)).not.toContain(TOKEN);
+  });
+
+  it("never writes an OAuth token passed as a query parameter, on any path", () => {
+    for (const name of ["access_token", "id_token", "refresh_token"]) {
+      const url = `/app/api/me?${name}=${TOKEN}&x=1`;
+      expect(redactUrl(url), name).toBe(`/app/api/me?${name}=%E2%80%A6&x=1`);
+    }
+  });
+
   it("leaves every other URL as it is", () => {
     for (const url of ["/app/api/me", "/app/auth/login?next=%2Fp%2FABC123", "/settings?tab=x"]) {
       expect(redactUrl(url)).toBe(url);

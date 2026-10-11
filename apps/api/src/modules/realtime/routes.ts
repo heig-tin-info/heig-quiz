@@ -28,7 +28,7 @@ import { WatchSubject, isStaffOnly, type ServerEvent } from "@quiz/contracts";
 import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { SITTING, delegated } from "../../auth/session.js";
+import { SITTING, confined, delegated } from "../../auth/session.js";
 import {
   accessWhere,
   callerOf,
@@ -430,7 +430,12 @@ export async function realtimePlugin(app: FastifyInstance) {
       participant = resolved.participant && !delegated(req.auth);
     }
 
-    const topics = await topicsOf(app, req);
+    // A confined session (`seb`, `kiosk`) hears its evaluation and nothing
+    // else (ADR-027, ADR-051): none of the user's topics, so no `classroom:`
+    // hint about the roster, the groups or the projects (N-SEC-20, audit
+    // 2026-10-10 §6). It always watches (the 404 above), so the topics below
+    // are never empty.
+    const topics = confined(req.auth) ? new Set<string>() : await topicsOf(app, req);
     if (watch?.kind === "evaluation" || watch?.kind === "lobby") {
       topics.add(`evaluation:${watch.evaluationId}`);
     }

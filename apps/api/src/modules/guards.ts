@@ -16,7 +16,7 @@
  * `course_staff` predicate, and they read the same seats.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, eq, isNull, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import { EvaluationSettings, type CourseRole, type PoolRole } from "@quiz/contracts";
 import {
@@ -1176,7 +1176,9 @@ export async function findManagedEvaluation(
  * which is what makes the teacher preview, the dashboard and the SSE stream
  * share one predicate — and so does the owner of a poll with no classroom
  * ({@link findManagedEvaluation}), whose projection listens on the stream.
- * Null when none holds.
+ * A `draft` is the staff's alone: a student who knows its id is answered
+ * like a stranger (the student home lists none either, `studentBoard`; a
+ * `scheduled` one is a card there, ADR-092 §3). Null when none holds.
  */
 export async function findReachableEvaluation(
   db: Db,
@@ -1196,7 +1198,7 @@ export async function findReachableEvaluation(
         eq(enrollments.userId, user.id),
       ),
     )
-    .where(eq(evaluations.id, evaluationId))
+    .where(and(eq(evaluations.id, evaluationId), ne(evaluations.state, "draft")))
     .limit(1);
   return student ? { evaluation: student.evaluation, staff: false } : null;
 }

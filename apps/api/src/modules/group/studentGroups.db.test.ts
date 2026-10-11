@@ -565,6 +565,20 @@ describe("the hints of a set (ADR-070 §9)", () => {
       expect.arrayContaining(students),
     );
   });
+
+  it("are not doubled by the generic hint on classroom: when a set is made under its classroom's path (audit 2026-10-10, §6)", async () => {
+    const room = await classroom("G");
+    const topics: string[] = [];
+    const off = subscribe((e) => {
+      if (e.kind === "hint") topics.push(...e.topics);
+    });
+    await newSet(room, "Nouvelle", null);
+    // The generic hint is the `onResponse` hook's, after the answer is out.
+    for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
+    off();
+    expect(topics).toContain(`course:${room.courseId}`);
+    expect(topics.filter((t) => t.startsWith("classroom:"))).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------- Activities and the tab

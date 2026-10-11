@@ -25,6 +25,7 @@ import { devLoginRoutes } from "./dev.js";
 import { impersonationRoutes } from "./impersonation.js";
 import { loginAdmits, signIn } from "./login.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
+import { OIDC_CALLBACK_PATH } from "./paths.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
 import { MCP_PATH } from "./oauth/service.js";
 import { oauthRoutes } from "./oauth/routes.js";
@@ -235,9 +236,16 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // would sign every teacher out mid-flow and turn our 5xx into 401.
     const found = await findSessionUser(app.db, token, {
       renewTtlHours: config.SESSION_TTL_HOURS,
+      maxAgeHours: config.SESSION_MAX_AGE_HOURS,
       now: app.clock.now(),
     });
-    if (!found) return;
+    // A cookie the server no longer honours (unknown, expired, past its
+    // absolute bound) is cleared, as a sign-out clears it: the browser stops
+    // presenting a dead token, and the client sees the anonymous answer.
+    if (!found) {
+      clearSessionCookies(reply);
+      return;
+    }
     // Default deny (ADR-027): on a route that does not serve its kind, the
     // session is not there at all — anonymous, so a 401 wherever a session
     // is required, and public routes and static files unaffected.
@@ -358,7 +366,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     return reply.redirect(url, 303);
   });
 
-  app.get("/app/auth/callback", async (req, reply) => {
+  app.get(OIDC_CALLBACK_PATH, async (req, reply) => {
     const raw = req.cookies[loginStashCookie];
     const unsigned = raw ? req.unsignCookie(raw) : { valid: false as const, value: null };
     if (!unsigned.valid || !unsigned.value) {

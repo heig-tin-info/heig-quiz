@@ -11,5 +11,8 @@ export const IMPERSONATION_PATH = "/app/auth/as/";
 /** The Safe Exam Browser launch ticket (ADR-027): `<path><secret>`. */
 export const LAUNCH_PATH = "/app/auth/seb/";
 
+/** The IdP's return (OIDC): its query carries the authorization code and the state. */
+export const OIDC_CALLBACK_PATH = "/app/auth/callback";
+
 /** GitHub's OAuth return (M2-03): its query carries the code. */
 export const GITHUB_CALLBACK_PATH = "/app/auth/github/callback";

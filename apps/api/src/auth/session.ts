@@ -306,15 +306,22 @@ async function supersede(tx: Tx, userId: string, auth: NewSession & { kind: Trus
   return gone;
 }
 
+/**
+ * The session a request presents, or null when there is none to honour: an
+ * unknown token, or a row past its end — its idle expiry, or its absolute
+ * bound (`maxAgeHours` from its creation, audit 2026-10-10 §6), which no
+ * activity moves — deleted on the way.
+ */
 export async function findSessionUser(
   db: Db,
   token: string,
-  opts?: { renewTtlHours?: number; now?: Date },
+  opts?: { renewTtlHours?: number; maxAgeHours?: number; now?: Date },
 ) {
   const rows = await db
     .select({
       user: users,
       expiresAt: sessions.expiresAt,
+      createdAt: sessions.createdAt,
       sidHash: sessions.sidHash,
       auth: {
         kind: sessions.kind,
@@ -332,7 +339,9 @@ export async function findSessionUser(
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  if (row.expiresAt.getTime() <= Date.now()) {
+  // The end no renewal passes: creation plus the bound (none when not given).
+  const bound = opts?.maxAgeHours ? row.createdAt.getTime() + opts.maxAgeHours * 3_600_000 : Infinity;
+  if (Math.min(row.expiresAt.getTime(), bound) <= Date.now()) {
     await endSessions(db, eq(sessions.sidHash, row.sidHash), "expired");
     return null;
   }
@@ -360,14 +369,16 @@ export async function findSessionUser(
     }
   }
   // Sliding renewal: once less than half the TTL remains, push the expiry
-  // back to a full TTL. Active users stay signed in indefinitely; an idle
-  // session still dies after SESSION_TTL_HOURS. At most one UPDATE per
-  // half-TTL window, so the per-request cost stays nil. A kind with a fixed
-  // lifetime never slides (ADR-027).
+  // back to a full TTL, never past the absolute bound. Active users stay
+  // signed in until that bound (SESSION_MAX_AGE_HOURS); an idle session
+  // still dies after SESSION_TTL_HOURS. At most one UPDATE per half-TTL
+  // window, so the per-request cost stays nil. A kind with a fixed lifetime
+  // never slides (ADR-027).
   let renewedTo: Date | null = null;
   const ttlMs = FIXED_HOURS[row.auth.kind] === null ? (opts?.renewTtlHours ?? 0) * 3_600_000 : 0;
-  if (ttlMs > 0 && row.expiresAt.getTime() - Date.now() < ttlMs / 2) {
-    renewedTo = new Date(Date.now() + ttlMs);
+  const renewal = Math.min(Date.now() + ttlMs, bound);
+  if (ttlMs > 0 && row.expiresAt.getTime() - Date.now() < ttlMs / 2 && renewal > row.expiresAt.getTime()) {
+    renewedTo = new Date(renewal);
     await db
       .update(sessions)
       .set({ expiresAt: renewedTo })

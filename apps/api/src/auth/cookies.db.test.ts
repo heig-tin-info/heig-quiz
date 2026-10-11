@@ -104,6 +104,36 @@ describe.each([
     }
   });
 
+  it("end a session past its absolute bound however recently used, and clear both (audit 2026-10-10, §6)", async () => {
+    const { headers } = await server.signIn("student");
+    const sidHash = hashToken(valueOf(headers.cookie!, session));
+    const day = 24 * 3_600_000;
+    // Signed in 31 days ago, used a minute ago: the sliding expiry is hours away.
+    await server.app.db
+      .update(sessions)
+      .set({ createdAt: new Date(Date.now() - 31 * day), expiresAt: new Date(Date.now() + 11 * 3_600_000) })
+      .where(eq(sessions.sidHash, sidHash));
+    const res = await me(headers);
+    expect(res.statusCode).toBe(401);
+    const set = setCookies(res);
+    for (const name of [session, csrf]) expect(expired(set[name]), name).toBe(true);
+    expect(await server.app.db.select().from(sessions).where(eq(sessions.sidHash, sidHash))).toEqual([]);
+  });
+
+  it("renew a session up to its absolute bound, never past it", async () => {
+    const { headers } = await server.signIn("student");
+    const sidHash = hashToken(valueOf(headers.cookie!, session));
+    const createdAt = new Date(Date.now() - 30 * 24 * 3_600_000 + 3_600_000);
+    // Less than half the TTL left, and the bound an hour away.
+    await server.app.db
+      .update(sessions)
+      .set({ createdAt, expiresAt: new Date(Date.now() + 1_800_000) })
+      .where(eq(sessions.sidHash, sidHash));
+    expect((await me(headers)).statusCode).toBe(200);
+    const [row] = await server.app.db.select().from(sessions).where(eq(sessions.sidHash, sidHash));
+    expect(row?.expiresAt.getTime()).toBe(createdAt.getTime() + 720 * 3_600_000);
+  });
+
   it.runIf(production)("are never read under the bare names of before the prefix", async () => {
     const { headers } = await server.signIn("teacher");
     const token = valueOf(headers.cookie!, session);
