@@ -1,6 +1,6 @@
 # The training course
 
-The training course is a course of your own, created on request, where you learn the platform by doing the loop it exists for: take a quiz as a student, run one in front of a class, write a question and put it in a test, then try the tools around. It holds one classroom, two quizzes already written, and a card that follows your progress. Nobody but you is in it: no student can ever see it, and nothing you do there counts anywhere.
+The training course is a course of your own, created on request, where you learn the platform by doing the loop it exists for: take a quiz as a student, run one in front of a class, write a question and put it in a test, then try the tools around. It holds one classroom, two quizzes already written, and a card that follows your progress. No student is ever in it, and nothing you do there counts anywhere.
 
 You are never graded. A teacher's own attempts are flagged *staff*, stay out of every statistic, and earn nothing; the quizzes are there to be looked at from both sides.
 
@@ -10,13 +10,11 @@ The first time you sign in, the **Courses** home is empty and offers **New cours
 
 If your home is not empty, because a colleague already put you on the staff of a course, the entry is **Training course** in the account menu at the bottom of the sidebar, and in the **Help** group of the command palette (`Ctrl+K`). Each of the three opens the same course: there is one per teacher, and asking again opens it rather than making a second one.
 
-The course is named for you and gets a free code of the form `INIT-1`. It is an ordinary course in every other respect: rename it, change its code, link pools to it, and delete it from its **Settings** tab like any other. Neither entry is shown while an administrator has not installed the training content on the platform.
+The course is named for you and gets a free code of the form `INIT-1`. It is an ordinary course in every other respect: rename it, change its code, link pools to it, and delete it from its **Settings** tab like any other. None of these entries is shown while an administrator has not installed the training content on the platform.
 
 ## The card
 
-At the top of the classroom's **Activities** tab, a card lists the four missions below, each **to do** or **done**. Its one highlighted action is the next mission to do, and it leads to the screen, or the control, where that mission happens; it never performs the gesture for you, because the point is to learn where the gesture is. While a mission remains, **New ▾** on that tab steps aside; the other tabs keep their own actions.
-
-The card stores nothing: each line is read from what you actually did, so it cannot be ticked by hand and cannot drift. Mission 4 is optional: the card says *all done* after the first three, and links back here.
+At the top of the classroom's **Activities** tab, a card lists the four missions below, each **to do** or **done**, read from what you actually did. Its one highlighted action is the next mission to do, and it leads to the screen, or the control, where that mission happens; it never performs the gesture for you, because the point is to learn where the gesture is. While a mission remains, **New ▾** on that tab steps aside; the other tabs keep their own actions. Mission 4 is optional: the card says *all done* after the first three, and links back here.
 
 ## Mission 1: Be a student
 
@@ -25,28 +23,18 @@ Two gestures take you to the student side, and you will need both later to rehea
 1. On the classroom page, click **Join as student**, beside the primary action. It gives you a seat in your own classroom, flagged *staff* (see [Courses and classrooms](classrooms.md#join-as-student)).
 2. In the account menu, choose **Switch to student view**. The classroom now shows what a student gets: **Le quiz d'accueil** is open, an exercise scheduled from the moment the course was created until the end of the classroom's period.
 
-Take it. Seven questions, one per type that the platform grades by itself, in free navigation, corrected as soon as each is validated, and you may retake it as often as you like. Each statement is about the platform, and its answer is on the screen around it; each correction says what you would configure to obtain the behaviour you just saw.
-
-| Question | What it shows |
-| --- | --- |
-| A multiple choice | What a student sees of a question, and what never leaves the server: the internal name, the concepts, the difficulty, the explanation before the correction. |
-| A short answer | The clock is the server's: how many seconds of grace a late write gets after the deadline. |
-| A fill in the blanks | The life of a question: published versions, numbered, never changed; the version an evaluation freezes. |
-| A categorize | Who does what during an evaluation: the student, the teacher, the server. |
-| A math expression | A result in percent; any equivalent spelling is accepted. |
-| A circuit | A resistor and a diode on a 5 V source, graded by simulation; **Simulate** shows the expected curve over yours. |
-| A code question | A hello world in C: **Run** it before validating, and watch the visible test case. |
+Take it. Seven questions, one per type that the platform grades by itself, in free navigation, corrected as soon as each is validated, and you may retake it as often as you like. Each statement is about the platform, its answer is on the screen around it, and its correction says what you would configure to obtain the behaviour you just saw. On a platform without a code runner, the circuit and the code question are graded as proposals rather than at once (see [When the runner is unavailable](grading.md#when-the-runner-is-unavailable)).
 
 Hand in, then **Back to teacher view** in the banner. The mission is done once you handed in an attempt.
 
 ## Mission 2: Run a class
 
-**Le quiz en direct** is a draft in Exam mode, Live: the three configuration steps are yours to read (see [Evaluations](evaluations.md)). Open it from **Activities** and go through them; on **Launch**, the checklist says what blocks the start and what deserves a look, beside a preview of the waiting room.
+**Le quiz en direct** is a draft in Exam mode, Live: the three configuration steps are yours to read (see [Evaluations](evaluations.md)). Open it from **Activities** and go through them; at **Modalité**, give it a time limit per student (ten minutes is enough), since a live exam must end by itself; on **Launch**, the checklist says what blocks the start and what deserves a look, beside a preview of the waiting room.
 
 1. **Open the waiting room**: you are on the dashboard (see [Running an evaluation](live.md)).
 2. Open a second tab on the platform and switch it to the student view; the view is per tab, so the dashboard stays a teacher's. Enter the waiting room from the student's home.
 3. **Start** on the dashboard. In the student tab, answer the four questions: an essay in two sentences, a flowchart of the life of an evaluation, and two questions of the welcome quiz again. Hand in.
-4. **Close** on the dashboard, then **Go to grading**. The multiple choice and the short answer arrive validated; the essay and the diagram wait for you, with the AI's proposal and its justification when the platform has a model (see [Grading and results](grading.md#essays-diagrams-and-ai-proposals)). Validate or adjust them.
+4. **Close** on the dashboard, then **Go to grading**. The multiple choice and the fill in the blanks arrive validated; the essay and the diagram wait for you, with the AI's proposal and its justification when the platform has a model (see [Grading and results](grading.md#essays-diagrams-and-ai-proposals)). Validate or adjust them.
 5. On the results page, **Publish results**. Back in the student tab, read the released grade and the feedback the policy allows.
 
 The mission is done once an evaluation of the course is released.
@@ -77,10 +65,6 @@ Delete the course from its **Settings** tab, then start again from the same entr
 
 ## What is not in it
 
-- **No roster.** The only seat is yours: a roster line admits a sign-in, so there are no fake students to invite.
-- **No Safe Exam Browser and no kiosk station.** Both need a configured client or station; the chapter on [Evaluations](evaluations.md#safe-exam-browser) describes them.
-- **No impersonation.** That is an administrator's tool, not a teacher's.
-- **No GitHub project.** It needs an organization connected to the classroom; see [Connecting GitHub](github.md).
-- **No poll.** A poll is one question thrown on the wall, launched from the sidebar; see [Live polls](polls.md).
+No roster (the only seat is yours, since a roster line admits a sign-in), no [Safe Exam Browser or kiosk station](evaluations.md#safe-exam-browser) (both need a configured client), no impersonation (an administrator's tool), no [GitHub project](github.md) (it needs an organization) and no [poll](polls.md) (one question on the wall, not a quiz).
 
 The questions of the training live in one public pool, **Prise en main de Quiz**, owned by the platform's administrator and linked to your course for reading. You will find it in the catalogue of public pools like any other, and its statements are about the platform, so they collide with no course of yours.

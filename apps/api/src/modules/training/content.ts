@@ -1,25 +1,21 @@
 /**
- * The training content (ADR-105 §2, §3): one public pool, its questions and
- * the two evaluations of the training course. Pure data, typed by
- * `./content-types.ts`; the `training.install` task writes it through the
- * ordinary pool services, and `./content.test.ts` parses every config with
- * its type's schema and its publication gate.
+ * The training content (ADR-105 §2, §3): the pool, its questions and the two
+ * evaluations of the training course, typed by `./content-types.ts`.
  *
  * The question text is French on purpose, as `seed/content.ts` is: it is
  * what a teacher reads on the screen, and content IS a UI string (invariant
  * 1). Everything around it stays English.
  *
- * Each statement teaches a GESTURE of the platform, and its answer is
- * discoverable on the screen around it; it points at the gesture, never at
- * its wording, so no key is a label of the interface (Assumption 5: the
- * English UI shows the same French statements, and the answer does not move).
+ * Each statement teaches a GESTURE of the platform, and its answer is read
+ * off the screen around it; it points at the gesture, never at its wording,
+ * so no key is a label of the interface (Assumption 5): every short key is a
+ * number, every cloze blank a number or a drop-down (`./content.test.ts`).
  * Each explanation says what the teacher would configure to obtain the
- * behaviour the question showed.
+ * behaviour the question showed, quoting the French labels of `fr.ts`.
  *
- * Every `internalName` is a STABLE key: the install is idempotent on it, and
- * renaming one creates a new question and orphans the old. The opaque ids of
- * the categorize cards and of the diagram scenes are written by hand, so a
- * second install writes the same config (ADR-036, ADR-046 §2).
+ * The opaque ids of the categorize cards and of the diagram scenes are
+ * written by hand, so a second install writes the same config (ADR-036,
+ * ADR-046 §2).
  */
 import type { TrainingContent } from "./content-types.js";
 
@@ -133,11 +129,10 @@ export const TRAINING_CONTENT: TrainingContent = {
       category: WELCOME,
       difficulty: 1,
       explanation:
-        "Seuls l'énoncé et ce qu'il faut pour répondre quittent le serveur : le nom interne, " +
-        "les concepts, la difficulté et l'explication restent côté enseignant, quelle que soit " +
-        "la configuration. L'explication n'apparaît qu'avec la correction, et seulement si la " +
-        "politique de feedback de l'évaluation la montre — c'est son réglage « Feedback », à " +
-        "l'étape Format. Dans l'éditeur, l'aperçu étudiant montre exactement ce qui part.",
+        "Le nom interne, les concepts et la difficulté ne quittent jamais le serveur, quelle que " +
+        "soit la configuration. L'explication n'apparaît qu'avec la correction, et seulement si " +
+        "le réglage « Retour à l'étudiant » de l'étape « Modalité » la montre. Dans l'éditeur, " +
+        "« Aperçu étudiant » montre exactement ce qui part.",
       // `true_false`: each choice is its own item, so the trainee sees a partial score.
       config: {
         configVersion: 2,
@@ -159,30 +154,24 @@ export const TRAINING_CONTENT: TrainingContent = {
       },
     },
     {
-      internalName: "init-delai-de-grace",
+      internalName: "init-compter-les-questions",
       type: "short",
       category: WELCOME,
-      difficulty: 2,
+      difficulty: 1,
       explanation:
-        "Trois secondes, pour le réseau, pas pour un clic tardif : au-delà, l'écriture est " +
-        "refusée même si l'écran affichait encore le compte à rebours. Rien à configurer, c'est " +
-        "une règle de la plateforme. Ce que vous réglez, c'est la durée (par étudiant ou " +
-        "commune) et le temps supplémentaire d'un étudiant ; depuis le tableau de bord, " +
-        "prolonger ou mettre en pause agit sur cette échéance du serveur, page de l'étudiant " +
-        "ouverte ou non.",
+        "Le sommaire des questions, à gauche du lecteur, les liste toutes et dit lesquelles ont " +
+        "une réponse ; vous pouvez y revenir dans l'ordre que vous voulez parce que cet exercice " +
+        "est en navigation libre — un réglage de l'étape « Modalité », où un examen peut au " +
+        "contraire interdire le retour en arrière.",
       config: {
         configVersion: 3,
         prompt:
-          "Le serveur tient l'horloge : à l'échéance, c'est lui qui ferme la tentative, pas " +
-          "votre navigateur. Combien de **secondes** de grâce accorde-t-il encore à une réponse " +
-          "déjà en route sur le réseau après l'échéance ?\n\n" +
-          "*Indice : le guide le dit au chapitre sur le déroulement d'une évaluation, et la " +
-          "page des étudiants aussi.*",
+          "Regardez le **sommaire** du lecteur, qui liste les questions de ce quiz et vous " +
+          "laisse passer de l'une à l'autre. Combien de questions ce quiz compte-t-il ?",
         kind: "number",
-        placeholder: "un nombre de secondes",
-        constraints: { min: 0, integer: true },
-        prefilters: { trim: true, lowercase: true },
-        matchers: [{ kind: "number", value: 3, tolerance: 0 }],
+        placeholder: "un nombre de questions",
+        constraints: { min: 1, integer: true },
+        matchers: [{ kind: "number", value: 7, tolerance: 0 }],
       },
     },
     {
@@ -193,11 +182,9 @@ export const TRAINING_CONTENT: TrainingContent = {
       explanation:
         "Chaque publication numérote une version et n'en modifie jamais une autre ; un " +
         "brouillon n'atteint jamais un étudiant. Une évaluation fige la version du moment où " +
-        "la question est ajoutée : quand une version plus récente existe, son étape Questions " +
-        "signale la version disponible et vous choisissez de mettre à jour ou non — ce que la " +
-        "mission 3 vous fera faire.",
-      // Two number blanks and two drop-downs: the words of the key are not
-      // labels of the interface (Assumption 5), and `content.test.ts` checks it.
+        "la question est ajoutée : quand une version plus récente existe, son étape " +
+        "« Questions » signale la version disponible et vous choisissez de mettre à jour ou " +
+        "non — ce que la mission 3 vous fera faire.",
       config: {
         configVersion: 2,
         caseSensitive: false,
@@ -207,7 +194,7 @@ export const TRAINING_CONTENT: TrainingContent = {
           "brouillon crée la version numéro {{#1}} ; corriger ensuite une faute et publier de " +
           "nouveau crée la version numéro {{#2}}, et la précédente reste intacte.\n\n" +
           "Quand une évaluation ajoute une question, elle en **fige** la version : si une " +
-          "version plus récente paraît, l'évaluation {{=garde|remplace}} la version figée et " +
+          "version plus récente paraît, l'évaluation {{remplace|=garde}} la version figée et " +
           "vous {{=propose|impose}} la mise à jour.",
       },
     },
@@ -218,9 +205,9 @@ export const TRAINING_CONTENT: TrainingContent = {
       difficulty: 1,
       explanation:
         "Le serveur tient l'horloge, enregistre et corrige ; l'enseignant décide, valide et " +
-        "publie ; l'étudiant répond. La notation d'un classement — par carte, ou tout ou rien " +
-        "— est celle de l'évaluation, sauf quand la question en fixe une ; ici une carte mal " +
-        "placée ne coûte que sa part.",
+        "publie ; l'étudiant répond. Cette question est notée « Par carte » : une carte mal " +
+        "placée ne coûte que sa part. La question peut aussi laisser l'évaluation choisir " +
+        "entre « Par carte » et « Tout ou rien ».",
       // ADR-036: the ids are opaque on purpose — the student's view carries
       // them, so they must say nothing about where a card goes.
       config: {
@@ -241,39 +228,40 @@ export const TRAINING_CONTENT: TrainingContent = {
           { id: "y1d5ob3x", text: "Valide les corrections proposées" },
           { id: "r8g2pe6k", text: "Ajoute cinq minutes à un étudiant" },
           { id: "e3t7nv2j", text: "Ferme la tentative à l'échéance" },
-          { id: "u0l6mc8s", text: "Compile et exécute le code" },
+          { id: "u0l6mc8s", text: "Corrige le code rendu" },
           { id: "c6w2xi4h", text: "Enregistre chaque réponse à mesure qu'elle est saisie" },
         ],
         ordered: false,
         shuffleCards: true,
         shuffleColumns: false,
-        policy: "inherit",
+        policy: "per_item",
       },
     },
     {
-      internalName: "init-resultat-en-pourcent",
+      internalName: "init-note-suisse",
       type: "math",
       category: WELCOME,
       difficulty: 1,
       explanation:
         "Toute écriture équivalente est acceptée : la réponse est comparée au corrigé par sa " +
         "valeur, en quelques points tirés au hasard dans les intervalles des symboles, jamais " +
-        "par son orthographe — $p \\cdot 100 / n$ ou $\\frac{p}{n} \\cdot 100$ passent aussi. " +
+        "par son orthographe — $1 + \\frac{5p}{n}$ ou $\\frac{n + 5p}{n}$ passent aussi. " +
         "L'enseignant déclare les symboles et leur intervalle, une ou plusieurs réponses " +
-        "acceptées, et une tolérance.",
+        "acceptées, et une tolérance. Le barème de l'évaluation applique cette formule, " +
+        "arrondie au dixième et plafonnée à 6.",
       // The key is compared by value at sample points (ADR-102); `\cdot` is
       // explicit because the parser reads no juxtaposed coefficient.
       config: {
         configVersion: 1,
         prompt:
-          "Les résultats d'une évaluation s'affichent en pourcentage. Un étudiant obtient $p$ " +
-          "points sur un total de $n$ : donnez son résultat en **pourcentage**, en fonction de " +
-          "$p$ et $n$.",
+          "La note suisse, de 1 à 6, se calcule à partir des points : un étudiant obtient $p$ " +
+          "points sur un total de $n$, et sa note vaut 1 pour aucun point, 6 pour tous. Donnez " +
+          "sa **note** en fonction de $p$ et $n$.",
         symbols: [
           { name: "p", min: 0, max: 20 },
           { name: "n", min: 20, max: 100 },
         ],
-        answers: [{ value: "\\frac{100 \\cdot p}{n}", points: 1 }],
+        answers: [{ value: "1 + 5 \\cdot \\frac{p}{n}", points: 1 }],
       },
     },
     {
@@ -285,9 +273,10 @@ export const TRAINING_CONTENT: TrainingContent = {
         "Un montage est noté par **simulation** : votre schéma et celui de référence sont " +
         "traduits en netlist côté serveur et simulés sous chaque stimulus, puis les tensions de " +
         "sortie sont comparées, à une tolérance près. Ici la tension aux bornes de la diode " +
-        "(environ 0,7 V) devait coïncider avec celle du montage de référence ; le réglage " +
-        "« montrer la sortie attendue » superpose la courbe de référence à la vôtre. Sans " +
-        "simulateur configuré, la note arrive comme une proposition que l'enseignant valide.",
+        "(environ 0,7 V entre son anode et sa cathode) devait coïncider avec celle du montage " +
+        "de référence ; le réglage « Montrer le signal attendu » superpose la courbe de " +
+        "référence à la vôtre. Sans simulateur configuré, la note arrive comme une proposition " +
+        "que l'enseignant valide.",
       /*
        * Graded by simulation, with the reference's output shown: what the
        * type does when a runner exists. A DC source makes a flat transient,
@@ -299,10 +288,12 @@ export const TRAINING_CONTENT: TrainingContent = {
         configVersion: 1,
         prompt:
           "Faites s'allumer une diode (la LED du montage, représentée par la diode au silicium " +
-          "de la palette) à partir de la pile de 5 V branchée sur l'entrée : une **résistance** " +
-          "de 1 kΩ en série avec la **diode**, l'anode côté résistance et la cathode à la masse. " +
-          "La sortie se prend aux bornes de la diode : `out+` sur son anode, `out-` étant la " +
-          "masse commune. Puis **simulez** pour lire la tension à ses bornes.",
+          "de la palette) avec la pile de 5 V branchée à gauche. Glissez une **résistance** et " +
+          "une **diode** dans la boîte, puis câblez : la borne du haut de l'entrée vers la " +
+          "résistance, la résistance vers la diode, la diode vers la borne du bas, qui est la " +
+          "masse. Le triangle de la diode doit pointer vers la masse. Reliez enfin les deux " +
+          "bornes de droite, où se lit la sortie, aux deux côtés de la diode, puis **Simuler** " +
+          "pour lire la tension à ses bornes.",
         palette: { kinds: ["R", "D", "GND"], maxComponents: 3 },
         supplies: { vcc: null, vee: null },
         commonGround: true,
@@ -331,10 +322,10 @@ export const TRAINING_CONTENT: TrainingContent = {
       explanation:
         "Le gabarit verrouille ce qui se trouve entre `@@lock` et `@@endlock` ; l'étudiant " +
         "n'édite que la zone libre, et la source envoyée au correcteur est reconstruite côté " +
-        "serveur. Le bouton d'essai exécute le programme dans le navigateur (réglage " +
-        "« exécution » de la question) ou sur le serveur ; la note, elle, vient toujours du " +
-        "serveur, cas visibles et cachés confondus. Dans l'éditeur, votre solution de " +
-        "référence sert à essayer la question avant de la publier.",
+        "serveur. Le bouton d'essai exécute le programme dans le navigateur ou sur le serveur " +
+        "(réglage « Essais de l'étudiant » de la question) ; la note, elle, vient toujours du " +
+        "serveur, cas visibles et cachés confondus. Dans l'éditeur, votre solution de référence " +
+        "sert à « Essayer » la question avant de la publier.",
       // The student's trials run in the browser (`runno`): the welcome quiz
       // needs no runner for the gesture it teaches, and the grade stays the server's.
       config: {
@@ -343,12 +334,12 @@ export const TRAINING_CONTENT: TrainingContent = {
         runtime: "runno",
         action: "run",
         prompt:
-          "Complétez le programme pour qu'il affiche exactement la ligne `Bonjour Quiz`. Avant " +
-          "de valider, **exécutez-le** : le cas de test visible vous dit tout de suite si la " +
-          "sortie est la bonne — c'est ce que vos étudiants feront.",
+          "Remplacez les points de suspension pour que le programme affiche exactement la ligne " +
+          "`Bonjour Quiz`. Avant de valider, **exécutez-le** : le cas de test visible vous dit " +
+          "tout de suite si la sortie est la bonne — c'est ce que vos étudiants feront.",
         template:
           "// @@lock\n#include <stdio.h>\n\nint main(void) {\n// @@endlock\n" +
-          "    // Affichez la ligne attendue\n" +
+          '    printf("...\\n");\n' +
           "// @@lock\n    return 0;\n}\n// @@endlock\n",
         referenceSolution: HELLO_SOLUTION,
         limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
@@ -359,7 +350,7 @@ export const TRAINING_CONTENT: TrainingContent = {
       },
     },
     // -----------------------------------------------------------------------
-    // The live quiz: the two hand-graded types (the mcq and the short above are reused)
+    // The live quiz: the two hand-graded types (two welcome questions are reused)
     // -----------------------------------------------------------------------
     {
       internalName: "init-consigne-avant-un-quiz",
@@ -367,13 +358,16 @@ export const TRAINING_CONTENT: TrainingContent = {
       category: LIVE,
       difficulty: 1,
       explanation:
-        "Une rédaction est notée à la main, à partir de la grille et de la réponse modèle que " +
-        "seul l'enseignant lit ; quand la plateforme dispose d'un modèle de langage, une " +
-        "proposition de note et sa justification vous attendent dans le panneau de correction, " +
-        "et vous la validez ou l'ajustez. Les conditions d'un quiz se déclarent aussi dans " +
-        "l'évaluation, à l'étape Format : les étudiants les lisent dans la salle d'attente.",
+        "Une rédaction est notée à la main, à partir de la grille, que seul l'enseignant lit, " +
+        "et de la réponse modèle, que l'étudiant ne voit que si le retour à l'étudiant montre " +
+        "le corrigé ; quand la plateforme dispose d'un modèle de langage, une proposition de " +
+        "note et sa justification vous attendent dans le panneau de correction, et vous la " +
+        "validez ou l'ajustez. Les conditions d'un quiz se déclarent aussi dans l'évaluation, " +
+        "sous « Conditions » à l'étape « Modalité » : les étudiants les lisent dans la salle " +
+        "d'attente.",
       // Graded by hand, with the LLM proposal when the gateway is configured
-      // (ADR-063): the rubric and the model answer are the grader's, never the student's.
+      // (ADR-063). The rubric is the grader's; the model answer reaches a
+      // student only under a shown key (ADR-037).
       config: {
         configVersion: 1,
         prompt:
@@ -425,10 +419,10 @@ export const TRAINING_CONTENT: TrainingContent = {
       target: "scheduled",
       questions: [
         "init-ce-que-voit-l-etudiant",
-        "init-delai-de-grace",
+        "init-compter-les-questions",
         "init-cycle-de-vie-d-une-question",
         "init-qui-fait-quoi",
-        "init-resultat-en-pourcent",
+        "init-note-suisse",
         "init-allumer-une-led",
         "init-bonjour-quiz",
       ],
@@ -438,13 +432,14 @@ export const TRAINING_CONTENT: TrainingContent = {
       title: "Le quiz en direct",
       mode: "exam",
       target: "draft",
-      // The two hand-graded types, then two of the welcome quiz's, so the
-      // grading panel shows validated and pending answers side by side.
+      // The two hand-graded types, then two automatically graded ones of the
+      // welcome quiz, so the grading panel shows validated and pending answers
+      // side by side. Not the short: its key is the welcome quiz's own count.
       questions: [
         "init-consigne-avant-un-quiz",
         "init-vie-d-une-evaluation",
         "init-ce-que-voit-l-etudiant",
-        "init-delai-de-grace",
+        "init-cycle-de-vie-d-une-question",
       ],
     },
   ],
