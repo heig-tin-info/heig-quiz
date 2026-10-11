@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # 1. Strategy
 
 ## 1.1 The target

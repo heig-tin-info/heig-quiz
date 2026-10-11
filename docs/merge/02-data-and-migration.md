@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # 2. Data model and migration
 
 Sources: classroom `C:db/schema.ts` (27 tables, one file, migrations up to

@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # 10. Cutover runbook (M8-05)
 
 The operator's sequence for switching heig-classroom off and Quiz on: what

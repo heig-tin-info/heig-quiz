@@ -1,4 +1,15 @@
+---
+search:
+  exclude: true
+---
+
 # Merging heig-classroom into Quiz
+
+> **Archived record (2026-10-11).** The cutover is done (M8-07): classroom
+> redirects to Quiz and its data is imported. These pages are kept as the
+> record of the merge and for the two tasks left, the observation period
+> and the decommission (M9-01, [`PROGRESS.md`](PROGRESS.md)); they are
+> listed in no tab of the site and excluded from its search.
 
 This folder is the working plan of the merge decided by
 [ADR-035](../adr/ADR-035-fusion-de-classroom.md): what is ported, in which

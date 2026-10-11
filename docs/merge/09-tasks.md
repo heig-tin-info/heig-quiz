@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # 9. Task cards
 
 One card = one branch = one PR. Ids are `M<phase>-<nn>`; `L-<nn>` are

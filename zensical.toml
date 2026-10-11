@@ -12,10 +12,11 @@ Copyright &copy; 2026 HEIG-VD, TIN department
 # specification was translated from its French original. The navigation is
 # one tab per audience (docs/development/documentation.md): the Guide for
 # teachers and students, Operations for whoever hosts the platform, and
-# Developers, last, for contributors and agents, with the specification, the
-# decision records and the classroom merge as collapsed groups. The archived
-# pages (`history/`, the audits, the phase-1 plan) are built but listed
-# nowhere: they are reached only through the links of the current pages.
+# Developers, last, for contributors and agents, with the specification and
+# the decision records as collapsed groups. The archived pages (`history/`,
+# the audits, the phase-1 plan, and since the cutover of 2026-10-11 the
+# classroom merge, `merge/`) are built but listed nowhere: they are reached
+# only through the links of the current pages.
 nav = [
   { "Home" = "index.md" },
   { "Guide" = [
@@ -70,21 +71,6 @@ nav = [
       { "Decisions" = [
         { "Topic index" = "adr/README.md" },
         { "Template of a record" = "adr/TEMPLATE.md" },
-      ] },
-      { "Classroom merge" = [
-        { "Overview" = "merge/README.md" },
-        { "Progress" = "merge/PROGRESS.md" },
-        { "1. Strategy" = "merge/01-strategy.md" },
-        { "2. Data and migration" = "merge/02-data-and-migration.md" },
-        { "3. GitHub and projects" = "merge/03-github-projects.md" },
-        { "4. Journal" = "merge/04-journal.md" },
-        { "5. Web" = "merge/05-web.md" },
-        { "6. Workspace, SEB, infrastructure" = "merge/06-codespace-seb-infra.md" },
-        { "7. Incompatibilities" = "merge/07-incompatibilities.md" },
-        { "8. Decisions" = "merge/08-decisions.md" },
-        { "9. Task cards" = "merge/09-tasks.md" },
-        { "10. Cutover runbook" = "merge/10-cutover-runbook.md" },
-        { "Production measurements" = "merge/measures-2026-09-28.md" },
       ] },
     ] },
   ] },

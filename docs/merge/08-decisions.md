@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # 8. Decisions
 
 The decisions that belong to the product owner. Each has a suggested answer;

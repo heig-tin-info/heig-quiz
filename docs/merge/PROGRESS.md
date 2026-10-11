@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # Merge progress
 
 The single source of truth for where the merge stands. Update it **in the

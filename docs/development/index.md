@@ -7,9 +7,11 @@ the code, [deployment](deployment.md) the two production machines,
 scratch, [Quiz's GitHub App](github-app.md) each environment's App (and an
 optional development one), and [writing the documentation](documentation.md)
 this site. The first three sit under the Operations tab of this site; the
-[specification](../spec/README.md), the [decision records](../adr/README.md)
-and the [classroom merge](../merge/README.md) are the collapsed groups of
-this one.
+[specification](../spec/README.md) and the [decision records](../adr/README.md)
+are the collapsed groups of this one. The [classroom merge](../merge/README.md)
+record (strategy, decisions, task cards, cutover runbook, progress) is
+archived since the cutover of 2026-10-11: built, listed in no tab, reached
+from here, from `CLAUDE.md` and from the pages that cite it.
 
 ## Prerequisites
 

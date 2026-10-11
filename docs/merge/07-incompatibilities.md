@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # 7. Incompatibilities and risks
 
 Every known point where classroom and Quiz disagree, with its resolution and
