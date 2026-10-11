@@ -375,6 +375,38 @@ export async function resolveOrgInstallation(
 }
 
 /**
+ * Is the GitHub account an active OWNER of the organization?
+ * `GET /orgs/{org}/memberships/{username}` through `octokit`, an
+ * installation client of that organization (the App's organization
+ * `members: read`). The immutable ids are compared — the member's with the
+ * linked account's, the organization's with the one Quiz holds — so a login
+ * taken over by someone else proves nothing (ADR-100). False on a 404 (not
+ * a member); any other failure throws.
+ */
+export async function isOrgOwner(
+  octokit: Octokit,
+  org: { login: string; githubOrgId: number | null },
+  account: { githubUserId: number; login: string },
+): Promise<boolean> {
+  const membership = await unless404(async () => {
+    const { data } = await octokit.request("GET /orgs/{org}/memberships/{username}", {
+      org: org.login,
+      username: account.login,
+      request: { retries: 0, ...HTTP_READ },
+    });
+    return data as { state?: string; role?: string; user?: { id?: number } | null; organization?: { id?: number } };
+  });
+  return (
+    membership !== null &&
+    membership.state === "active" &&
+    membership.role === "admin" &&
+    membership.user?.id === account.githubUserId &&
+    org.githubOrgId !== null &&
+    membership.organization?.id === org.githubOrgId
+  );
+}
+
+/**
  * GET /app/installations/{id} with the App JWT: null when GitHub does not
  * know the installation (404) or it is not an organization's; any other
  * failure throws. The one proof the setup return accepts (N-SEC-17).

@@ -241,12 +241,12 @@ describe("the invitations (D27)", () => {
     expect(invite.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("leaves a collaborator who already holds more than push as they are", async () => {
+  it("leaves a collaborator who already holds more than push as they are (an owner of the organization)", async () => {
     const room = await connectedClassroom();
-    const repo = repoOf(room.login, `admin-held-${nextId++}`, [{ path: "README.md", content: "# Home\n" }]);
-    const fullName = `${repo.owner}/${repo.name}`;
+    const name = `admin-held-${nextId++}`;
+    const fullName = `${room.login}/${name}`;
     world.collaborators.set(fullName, new Map([["prof", "admin"]]));
-    const res = await call("POST", `${base(room.id)}/use`, teacher.headers, { name: repo.name });
+    const res = await call("POST", base(room.id), teacher.headers, { mode: "github", name });
     expect(res.statusCode, res.body).toBe(201);
     expect(world.invitations.filter((i) => i.repo === fullName)).toEqual([]);
     expect(gh.calls).not.toContain(`PUT api.github.com/repos/${fullName}/collaborators/prof`);
@@ -271,7 +271,35 @@ describe("use a repository of the organization (F-JRN-03)", () => {
     expect(journal.repository).toMatchObject({ fullName: `${room.login}/shared-notes`, ref: "course", rootPath: "docs", syncStatus: "ok" });
     expect(journal.nav.map((n) => n.path)).toEqual(["010-intro.md"]);
     expect((await auditOf(room.id, "journal.use"))[0]!.payload).toMatchObject({ ref: "course", rootPath: "docs", githubRepoId: repo.id });
-    expect(world.invitations.some((i) => i.repo === `${room.login}/shared-notes` && i.login === "prof")).toBe(true);
+  });
+
+  it("invites nobody to a repository it did not create (ADR-100 §6)", async () => {
+    const { room, fullName } = await withJournal();
+    expect(world.invitations.filter((i) => i.repo === fullName)).toEqual([]);
+    expect(gh.calls.filter((c) => c.includes(`/repos/${fullName}/collaborators`))).toEqual([]);
+    expect(await auditOf(room.id, "journal.invite")).toEqual([]);
+  });
+
+  it("refuses a repository Quiz knows as a course the caller does not teach, as a missing one (ADR-100 §5)", async () => {
+    const room = await connectedClassroom();
+    // Another course's classroom (the outsider's), whose journal is a repository of the same organization.
+    const theirs = await seedLive(server.app.db, { teacherId: outsider.id, studentIds: [], questions: 0 });
+    const repo = repoOf(room.login, `their-journal-${nextId++}`, [{ path: "README.md", content: "# Theirs\n" }]);
+    await server.app.db.insert(classroomJournals).values({
+      classroomId: theirs.classroomId,
+      mode: "github",
+      githubRepoId: repo.id,
+      fullName: `${repo.owner}/${repo.name}`,
+      ref: "main",
+      createdBy: outsider.id,
+    });
+    const refused = await call("POST", `${base(room.id)}/use`, teacher.headers, { name: repo.name });
+    expect([refused.statusCode, refused.json().error]).toEqual([409, "repo_not_found"]);
+    expect(await rowOf(room.id)).toBeUndefined();
+    // A course the caller teaches too: last year's journal, reused (F-JRN-03).
+    await server.app.db.insert(courseStaff).values({ courseId: theirs.courseId, userId: teacher.id });
+    const reused = await call("POST", `${base(room.id)}/use`, teacher.headers, { name: repo.name });
+    expect(reused.statusCode, reused.body).toBe(201);
   });
 
   it("refuses a repository the organization does not hold: missing, or another's", async () => {

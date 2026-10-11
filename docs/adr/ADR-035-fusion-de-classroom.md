@@ -25,7 +25,9 @@ Classroom's ADRs imported with it: its ADR-011 as
 Follow-up decisions: [ADR-057](ADR-057-journal-two-modes.md) for the journal modes, [ADR-061](ADR-061-adoption-des-comptes-importes.md)
 for imported identities, [ADR-062](ADR-062-depot-de-distribution.md) for distribution repositories and
 [ADR-064](ADR-064-echeance-des-projets-baux.md) for project deadlines. These refine their respective scopes,
-not the whole merge decision.
+not the whole merge decision. Amended 2026-10-11: D27, settled with this
+record, is narrowed by [ADR-100](ADR-100-organisations-github-accordees-aux-cours.md)
+(an organization is granted to courses; the accepted risk is their staff's).
 
 ## Context
 

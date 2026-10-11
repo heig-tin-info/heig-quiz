@@ -431,6 +431,13 @@ Status values: `open`, `settled`, `superseded`.
   or choosing a repository also invites the staff with a linked GitHub
   account as collaborators, `push` only, each invitation audited
   (confirmed by the product owner 2026-09-30).
+- **Amended 2026-10-11** ([ADR-100](../adr/ADR-100-organisations-github-accordees-aux-cours.md),
+  audit H1): the accepted risk is the staff of **the courses granted that
+  organization**, no longer of any connected classroom of the platform; a
+  classroom connects only to an organization granted to its course. "Use"
+  treats a repository Quiz knows as a course the caller does not teach as
+  missing, and invites nobody: only a repository Quiz creates gets the
+  staff's invitations. (ADR-057 had already stopped the browser writes.)
 - Blocks: M4-03, M4-05.
 - **Status**: settled 2026-09-30 (product owner, conversation).
 

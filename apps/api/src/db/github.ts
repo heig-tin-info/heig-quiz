@@ -28,6 +28,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -37,7 +38,7 @@ import {
 import { GITHUB_ORG_STATUSES } from "@quiz/contracts";
 
 import { users } from "./auth.js";
-import { classrooms } from "./org.js";
+import { classrooms, courses } from "./org.js";
 
 /**
  * One organization known to Quiz's App (D23): learnt from the App's setup
@@ -94,6 +95,39 @@ export const githubClassroomLinks = pgTable(
   },
   // The classrooms of an organization: a rename, an uninstallation, a deletion.
   (t) => [index("github_classroom_links_org_idx").on(t.orgId)],
+);
+
+/**
+ * The organizations a course may connect its classrooms to (ADR-100): a
+ * classroom is connected only to an organization granted to its course. A
+ * row is written by the connect itself (`connectClassroom`), when the
+ * caller's linked GitHub account owns the organization or the caller holds
+ * Super Powers (ADR-054) — never by the App's setup return, which has no
+ * session. Several rows per course (two classrooms may use two
+ * organizations, F-GH-01); the grant outlives its classrooms and the years,
+ * and every seat of the course's staff, present or future, inherits it.
+ * Removed by an admin with Super Powers only, and never while a classroom
+ * of the course is still connected to the organization (the D28 pattern).
+ */
+export const githubOrgGrants = pgTable(
+  "github_org_grants",
+  {
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => githubOrganizations.id, { onDelete: "cascade" }),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    grantedBy: uuid("granted_by")
+      .notNull()
+      .references(() => users.id),
+    grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.orgId, t.courseId] }),
+    // A course's grants: the connect sheet's list.
+    index("github_org_grants_course_idx").on(t.courseId),
+  ],
 );
 
 /**

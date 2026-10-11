@@ -5,8 +5,9 @@
  * lazy healing of an organization, and its avatar. Ported from
  * heig-classroom's `modules/classrooms.ts` (sync point `ab98cc0`).
  *
- * This module owns `github_organizations` and `github_classroom_links`; it
- * reads `classroom_journals` by join (D28), inside its own transaction:
+ * This module owns `github_organizations`, `github_classroom_links` and
+ * `github_org_grants` (ADR-100); it reads `classroom_journals` by join (D28),
+ * inside its own transaction:
  * `github` never imports the `journal` module, which registers on it.
  *
  * Every GitHub read here serves an HTTP request, so it passes `HTTP_READ`:
@@ -20,6 +21,7 @@ import { and, desc, eq, isNotNull, isNull, ne, notInArray, or, sql, type SQL } f
 
 import {
   AvatarMime,
+  GITHUB_ORG_NOT_ALLOWED,
   type GITHUB_CONNECT_REFUSALS,
   type GithubChecks,
   type GithubClassroom,
@@ -28,21 +30,27 @@ import {
 } from "@quiz/contracts";
 
 import { audit } from "../../audit.js";
+import { linkedLogin } from "../../auth/linkedLogin.js";
 import { readCapped } from "../../cappedBody.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import {
   classroomJournals,
   classrooms,
+  githubAccounts,
   githubClassroomLinks,
   githubOrganizations,
+  githubOrgGrants,
   pushReceipts,
 } from "../../db/schema.js";
 import {
   fetchInstallation,
   fetchOrgLlmSecret,
   fetchOrgPlan,
+  githubStatus,
   HTTP_READ,
+  installationClient,
+  isOrgOwner,
   listInstalledOrgs,
   orgExistsOnGithub,
   resolveOrgInstallation,
@@ -50,7 +58,7 @@ import {
 } from "../../github/app.js";
 import { DomainError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
-import { classroomStaffIds } from "../guards.js";
+import { accessWhere, classroomStaffIds, staffAccess, type Caller } from "../guards.js";
 import { sniffImage } from "../pool/assets.js";
 import { installationChanged } from "./events.js";
 
@@ -339,14 +347,20 @@ async function refreshPlan(config: AppConfig, db: Db, org: OrgRow): Promise<OrgR
 // ---------------------------------------------------------------- listing
 
 /**
- * `GET /app/api/github/orgs`: the organizations where Quiz's App is
- * installed. GitHub's listing is authoritative and is written back on each
- * call (a new installation recorded, a vanished one cleared); when GitHub
- * fails, the stored rows answer.
+ * `GET /app/api/classrooms/:id/github/orgs`, what the connect sheet of a
+ * classroom offers (F-GH-02, ADR-100): the organizations Quiz's App acts on
+ * that are granted to the classroom's course, plus those the caller's
+ * linked GitHub account owns (who may grant them by connecting); all of
+ * them to a caller with Super Powers. Read when the sheet opens: GitHub's
+ * listing of the installations is authoritative and written back on each
+ * call; when GitHub fails, the stored rows answer, and an ownership GitHub
+ * could not confirm is not offered.
  */
-export async function installedOrgs(
+export async function connectableOrgs(
   db: Db,
   config: AppConfig,
+  room: Room,
+  caller: Caller,
   log: FastifyBaseLogger,
 ): Promise<GithubOrg[]> {
   try {
@@ -355,11 +369,58 @@ export async function installedOrgs(
     log.warn({ err }, "listing the GitHub App's installations failed");
   }
   const rows = await db
-    .select()
+    .select({ org: githubOrganizations, grantedTo: githubOrgGrants.courseId })
     .from(githubOrganizations)
+    .leftJoin(
+      githubOrgGrants,
+      and(eq(githubOrgGrants.orgId, githubOrganizations.id), eq(githubOrgGrants.courseId, room.courseId)),
+    )
     .where(ACTS)
     .orderBy(sql`lower(${githubOrganizations.login})`);
-  return rows.map(orgView);
+  if (caller.reach === "all") return rows.map((r) => orgView(r.org));
+  const [account] = rows.every((r) => r.grantedTo !== null)
+    ? []
+    : await db.select().from(githubAccounts).where(eq(githubAccounts.userId, caller.id));
+  const offered = await Promise.all(
+    rows.map(
+      (r) => r.grantedTo !== null || (account !== undefined && ownsOrg(db, config, installed(r.org)!, account, log)),
+    ),
+  );
+  return rows.filter((_, i) => offered[i]).map((r) => orgView(r.org));
+}
+
+/** Whether the organization is granted to the course (ADR-100); inside a connect, the row share-locked. */
+async function isGranted(db: Db | Tx, orgId: string, courseId: string, lock = false): Promise<boolean> {
+  const query = db
+    .select({ orgId: githubOrgGrants.orgId })
+    .from(githubOrgGrants)
+    .where(and(eq(githubOrgGrants.orgId, orgId), eq(githubOrgGrants.courseId, courseId)))
+    .limit(1);
+  return (await (lock ? query.for("share") : query)).length > 0;
+}
+
+/**
+ * Does the linked GitHub `account` (F-GH-05) own the organization? Its
+ * login as GitHub knows it today (`linkedLogin`, which follows a rename by
+ * the immutable id), then {@link isOrgOwner}, both through the
+ * installation. Any GitHub failure is a no, logged: an ownership GitHub did
+ * not confirm grants nothing (ADR-100).
+ */
+async function ownsOrg(
+  db: Db,
+  config: AppConfig,
+  org: InstalledOrg,
+  account: typeof githubAccounts.$inferSelect,
+  log: FastifyBaseLogger,
+): Promise<boolean> {
+  try {
+    const { octokit } = await installationClient(config, org.installationId);
+    const login = await linkedLogin(db, octokit, account.userId, account);
+    return typeof login === "string" && (await isOrgOwner(octokit, org, { githubUserId: account.githubUserId, login }));
+  } catch (err) {
+    log.warn({ status: githubStatus(err), org: org.login }, "reading an organization's ownership failed");
+    return false;
+  }
 }
 
 async function syncInstallations(db: Db, config: AppConfig): Promise<void> {
@@ -554,7 +615,7 @@ interface Room {
   courseId: string;
 }
 
-/** `GET /app/api/classrooms/:id/github`: the link, healed, and what the connect sheet offers. */
+/** `GET /app/api/classrooms/:id/github`: the link, healed, and what the connect sheet needs beside its list. */
 export async function classroomGithub(
   db: Db,
   config: AppConfig,
@@ -583,7 +644,9 @@ export async function classroomGithub(
 /**
  * The organization of the course's other classrooms (F-GH-02): the one most
  * of them use, the latest linked on a tie, among those the App is
- * installed on — the only ones the sheet can connect.
+ * installed on — the only ones the sheet can connect. (Granted to the
+ * course by construction: each of those classrooms was connected under a
+ * grant, ADR-100.)
  */
 async function suggestedOrg(db: Db, room: Room): Promise<string | null> {
   const [row] = await db
@@ -623,36 +686,157 @@ async function refuseWithJournal(tx: Tx, classroomId: string): Promise<void> {
   if (journal) throw refusal("journal_attached", "Remove the classroom's journal first");
 }
 
+/** How a connect granted its organization to the course (ADR-100), as `github_org.grant` says. */
+export type GrantVia = "owner" | "super_powers";
+
+/** A connect that wrote: the organization, the one it replaced, and the grant it wrote, if any. */
+export interface Connected {
+  org: OrgRow;
+  previousOrgId: string | null;
+  granted: GrantVia | null;
+}
+
 /**
  * Connects the classroom to an installed organization, or moves it to
  * another one (F-GH-01). Null when it already was: nothing written.
+ *
+ * The organization must be granted to the classroom's course (ADR-100). A
+ * connect writes that grant itself when the caller holds Super Powers
+ * (ADR-054), or when the caller's linked GitHub account owns the
+ * organization — asked of GitHub now, outside the transaction. Otherwise
+ * `403 org_not_allowed`, nothing written; to a caller who may not grant,
+ * that one answer covers an organization missing, uninstalled or not
+ * theirs alike. The grant is read again, share-locked, in the transaction
+ * that writes the link, so a revocation cannot slip in between.
  */
 export async function connectClassroom(
   db: Db,
-  input: { classroomId: string; orgId: string; userId: string; now: Date },
-): Promise<{ org: OrgRow; previousOrgId: string | null } | null> {
+  config: AppConfig,
+  input: { room: Room; orgId: string; caller: Caller; now: Date },
+  log: FastifyBaseLogger,
+): Promise<Connected | null> {
+  const { room, orgId, caller } = input;
+  const linked = async (tx: Db | Tx) =>
+    (
+      await tx
+        .select({ orgId: githubClassroomLinks.orgId })
+        .from(githubClassroomLinks)
+        .where(eq(githubClassroomLinks.classroomId, room.id))
+    )[0];
+  if ((await linked(db))?.orgId === orgId) return null;
+  const [org] = await db.select().from(githubOrganizations).where(eq(githubOrganizations.id, orgId));
+  const acting = org ? installed(org) : null;
+  let via: GrantVia | null = null;
+  if (!org || !(await isGranted(db, org.id, room.courseId))) {
+    if (caller.reach === "all") via = "super_powers";
+    else if (acting && (await callerOwns(db, config, acting, caller.id, log))) via = "owner";
+    else throw notAllowed();
+  }
+  if (!org) throw new DomainError("not_found", 404, "Unknown organization");
+  if (!acting) throw refusal("app_not_installed", "Quiz's GitHub App is not installed on this organization");
+
   return db.transaction(async (tx) => {
-    const [current] = await tx
-      .select({ orgId: githubClassroomLinks.orgId })
-      .from(githubClassroomLinks)
-      .where(eq(githubClassroomLinks.classroomId, input.classroomId));
-    if (current?.orgId === input.orgId) return null;
-    const [org] = await tx
-      .select()
-      .from(githubOrganizations)
-      .where(eq(githubOrganizations.id, input.orgId));
-    if (!org) throw new DomainError("not_found", 404, "Unknown organization");
-    if (!installed(org)) {
-      throw refusal("app_not_installed", "Quiz's GitHub App is not installed on this organization");
-    }
-    await refuseWithJournal(tx, input.classroomId);
-    const link = { orgId: org.id, linkedBy: input.userId, linkedAt: input.now };
+    const current = await linked(tx);
+    if (current?.orgId === orgId) return null;
+    if (via === null && !(await isGranted(tx, org.id, room.courseId, true))) throw notAllowed();
+    await refuseWithJournal(tx, room.id);
+    const link = { orgId: org.id, linkedBy: caller.id, linkedAt: input.now };
     await tx
       .insert(githubClassroomLinks)
-      .values({ classroomId: input.classroomId, ...link })
+      .values({ classroomId: room.id, ...link })
       .onConflictDoUpdate({ target: githubClassroomLinks.classroomId, set: link });
-    return { org, previousOrgId: current?.orgId ?? null };
+    let granted: GrantVia | null = null;
+    if (via !== null) {
+      const grant = { orgId: org.id, courseId: room.courseId, grantedBy: caller.id, grantedAt: input.now };
+      const wrote = await tx.insert(githubOrgGrants).values(grant).onConflictDoNothing().returning({ orgId: githubOrgGrants.orgId });
+      if (wrote.length > 0) granted = via;
+      // Another connect wrote it meanwhile: it must still be there, share-locked
+      // until this link commits; a revocation that took it away first is
+      // undone by this grant, so a link never stands without one.
+      else if (!(await isGranted(tx, org.id, room.courseId, true))) {
+        await tx.insert(githubOrgGrants).values(grant);
+        granted = via;
+      }
+    }
+    return { org, previousOrgId: current?.orgId ?? null, granted };
   });
+}
+
+/** The `403` of a connect to an organization the caller may not use (ADR-100). */
+function notAllowed(): DomainError {
+  return new DomainError(
+    GITHUB_ORG_NOT_ALLOWED,
+    403,
+    "This organization is not granted to this course: ask one of its owners or an administrator",
+  );
+}
+
+/** Does the caller's linked GitHub account, if any, own the organization ({@link ownsOrg})? */
+async function callerOwns(
+  db: Db,
+  config: AppConfig,
+  org: InstalledOrg,
+  userId: string,
+  log: FastifyBaseLogger,
+): Promise<boolean> {
+  const [account] = await db.select().from(githubAccounts).where(eq(githubAccounts.userId, userId));
+  return account !== undefined && ownsOrg(db, config, org, account, log);
+}
+
+/**
+ * Removes an organization's grant to a course (ADR-100; an admin with Super
+ * Powers, the route's guard): `409 classroom_connected` while a classroom of
+ * the course is connected to it, as D28 holds a link with its journal.
+ * False when there was no such grant. The row is deleted first, so a
+ * connect holding it share-locked finishes before the links are read, and
+ * one that comes after finds no grant.
+ */
+export async function revokeGrant(db: Db, courseId: string, orgId: string): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const gone = await tx
+      .delete(githubOrgGrants)
+      .where(and(eq(githubOrgGrants.orgId, orgId), eq(githubOrgGrants.courseId, courseId)))
+      .returning({ orgId: githubOrgGrants.orgId });
+    if (gone.length === 0) return false;
+    const [held] = await tx
+      .select({ id: classrooms.id })
+      .from(githubClassroomLinks)
+      .innerJoin(classrooms, eq(classrooms.id, githubClassroomLinks.classroomId))
+      .where(and(eq(githubClassroomLinks.orgId, orgId), eq(classrooms.courseId, courseId)))
+      .limit(1);
+    if (held) {
+      throw new DomainError("classroom_connected", 409, "Disconnect the course's classrooms from this organization first");
+    }
+    return true;
+  });
+}
+
+/**
+ * The GitHub repositories, among `ids`, that Quiz knows as a course's and
+ * that the caller may not reach (ADR-100 §5): a repository is known as a
+ * course's when it is a project's source, distribution or student
+ * repository, or a journal's, in one of the course's classrooms; it is off
+ * limits when every course it is known for is one where the caller holds no
+ * seat. A repository Quiz does not know is not: inside a granted
+ * organization the grant is the boundary. Nothing is off limits to a caller
+ * with Super Powers. Reads `project` and `journal` tables by join, as
+ * {@link purgeProjectReceipts} does.
+ */
+export async function offLimitsRepos(db: Db, caller: Caller, ids: number[]): Promise<Set<number>> {
+  if (caller.reach === "all" || ids.length === 0) return new Set();
+  const list = sql.join(
+    ids.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const result = await db.execute(sql`
+    SELECT k.repo_id FROM (
+      SELECT p.repo_id, p.classroom_id FROM (${PROJECT_REPO_REFS}) p WHERE p.repo_id IN (${list})
+      UNION SELECT j.github_repo_id, j.classroom_id FROM classroom_journals j WHERE j.github_repo_id IN (${list})
+    ) k
+    JOIN classrooms c ON c.id = k.classroom_id
+    GROUP BY k.repo_id
+    HAVING NOT bool_or(${staffAccess(caller.id, sql`c.course_id`)})`);
+  return new Set((result as unknown as { rows: { repo_id: number | string }[] }).rows.map((r) => Number(r.repo_id)));
 }
 
 /** Disconnects the classroom (F-GH-04); nothing on GitHub changes. The org it had, or null. */
@@ -674,7 +858,9 @@ export async function disconnectClassroom(db: Db, classroomId: string): Promise<
 /**
  * The App's Setup URL (N-SEC-17): the installation GitHub names is stored
  * only once the App's JWT confirms it; anything else stores nothing. It
- * links no classroom — the `PUT`, under `staffAccess`, does — and only
+ * links no classroom and grants no course (ADR-100): it has no session,
+ * and `state` and `installation_id` are whatever the browser sent — the
+ * `PUT`, under `staffAccess`, does both — and only
  * hints the staff of the organization's classrooms and of `state`'s.
  * Returns Quiz's id of the organization it recorded, or null when nothing
  * was (no installation, or one GitHub does not confirm).
@@ -722,6 +908,17 @@ export interface OrgAvatar {
   bytes: Buffer;
   mime: string;
 }
+/**
+ * The caller sees the organization (ADR-100): it is granted to a course
+ * where they hold a seat, or a classroom of such a course is connected to
+ * it. On a query with `github_organizations` in scope.
+ */
+function seesOrg(userId: string): SQL {
+  return sql`(EXISTS (SELECT 1 FROM ${githubOrgGrants} g WHERE g.org_id = ${githubOrganizations.id} AND ${staffAccess(userId, sql`g.course_id`)})
+    OR EXISTS (SELECT 1 FROM ${githubClassroomLinks} l JOIN ${classrooms} c ON c.id = l.classroom_id
+      WHERE l.org_id = ${githubOrganizations.id} AND ${staffAccess(userId, sql`c.course_id`)}))`;
+}
+
 /** What is served: the uploaded avatars' list (`AvatarMime`), the bytes matching the declared type. */
 const AVATAR_TYPES: ReadonlySet<string> = new Set<string>(AvatarMime.options);
 export const AVATAR_MAX_BYTES = 256 * 1024;
@@ -732,13 +929,14 @@ const AVATAR_SIZE = 96;
 export async function orgAvatar(
   db: Db,
   orgId: string,
+  caller: Caller,
   now: Date,
   log: FastifyBaseLogger,
 ): Promise<OrgAvatar | null> {
   const [org] = await db
     .select({ githubOrgId: githubOrganizations.githubOrgId })
     .from(githubOrganizations)
-    .where(eq(githubOrganizations.id, orgId));
+    .where(and(eq(githubOrganizations.id, orgId), accessWhere(caller, seesOrg(caller.id))));
   if (!org || org.githubOrgId === null) return null;
   const key = org.githubOrgId;
   const hit = avatars.get(key);
@@ -841,6 +1039,17 @@ export async function classroomInstallation(
 
 // ---------------------------------------------------------------- push receipts of a deletion
 
+/**
+ * Every GitHub repository a project references, with the project and its
+ * classroom (`repo_id`, `project_id`, `classroom_id`): its students' and
+ * groups' repositories, its distribution, its source. One list for what a
+ * deletion purges and for what a course's staff alone may read (ADR-100).
+ */
+const PROJECT_REPO_REFS = sql`
+  SELECT r.github_repo_id AS repo_id, p.id AS project_id, p.classroom_id FROM project_repos r JOIN projects p ON p.id = r.project_id WHERE r.github_repo_id IS NOT NULL
+  UNION SELECT p.distribution_repo_id, p.id, p.classroom_id FROM projects p WHERE p.distribution_repo_id IS NOT NULL
+  UNION SELECT p.source_repo_id, p.id, p.classroom_id FROM projects p`;
+
 /** The projects a deletion takes with it: one project, a classroom's, or a course's. */
 export type ProjectsGone = { projectId: string } | { classroomId: string } | { courseId: string };
 
@@ -863,10 +1072,7 @@ export async function purgeProjectReceipts(tx: Db | Tx, gone: ProjectsGone): Pro
         ? sql`SELECT p.id FROM projects p WHERE p.classroom_id = ${gone.classroomId}`
         : sql`SELECT p.id FROM projects p JOIN classrooms c ON c.id = p.classroom_id WHERE c.course_id = ${gone.courseId}`;
   /** Every repository id the projects `ids` reference. */
-  const referenced = (ids: SQL) => sql`
-    SELECT r.github_repo_id FROM project_repos r WHERE r.project_id IN (${ids}) AND r.github_repo_id IS NOT NULL
-    UNION SELECT p.distribution_repo_id FROM projects p WHERE p.id IN (${ids}) AND p.distribution_repo_id IS NOT NULL
-    UNION SELECT p.source_repo_id FROM projects p WHERE p.id IN (${ids})`;
+  const referenced = (ids: SQL) => sql`SELECT k.repo_id FROM (${PROJECT_REPO_REFS}) k WHERE k.project_id IN (${ids})`;
   const staying = sql`SELECT p.id FROM projects p WHERE p.id NOT IN (${goneIds})`;
   const deleted = await tx
     .delete(pushReceipts)

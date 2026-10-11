@@ -1,8 +1,9 @@
 /**
  * HTTP surface of the `github` module (spec 05 §5.11, F-GH-01 to F-GH-04):
- * the organizations where Quiz's App is installed, a classroom's link to one
- * of them, the App's setup return, an organization's avatar, and the
- * webhook intake (M2-04).
+ * a classroom's link to an organization where Quiz's App is installed, with
+ * the organizations its connect sheet offers; an organization's grant to a
+ * course (ADR-100); the App's setup return, an organization's avatar, and
+ * the webhook intake (M2-04).
  *
  * Registered only when Quiz's App is configured (`githubApp(config)`,
  * `app.ts`): without it none of these routes exists, so each is a 404 and
@@ -12,6 +13,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
   GithubConnectBody,
+  GithubGrantParams,
   GithubSetupQuery,
   GithubWebhookBody,
   GithubWebhookHeaders,
@@ -24,7 +26,7 @@ import { SETUP_PATH, WEBHOOK_PATH } from "../../github/manifest.js";
 import { verifySignature } from "../../github/signature.js";
 import { redactTokens } from "../../redact.js";
 import { FixedWindowLimiter } from "../../limiter.js";
-import { accessibleClassroom, teacherGuard } from "../guards.js";
+import { accessibleClassroom, accessibleCourse, adminGuard, callerOf, superPowersGuard, teacherGuard } from "../guards.js";
 import { notFound, rateLimited, teacherRoute } from "../http.js";
 import { INERT_IMAGE_HEADERS } from "../pool/assets.js";
 import { dispatchDelivery, storeDelivery } from "./deliveries.js";
@@ -40,6 +42,7 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
   const trace = tracer(app);
   const teacher = teacherRoute(app);
   const requireTeacher = teacherGuard(app);
+  const requireAdmin = adminGuard(app);
   const requireSession = (req: FastifyRequest, reply: FastifyReply) =>
     app.requireSession(req, reply);
   const setups = new FixedWindowLimiter(SETUPS_PER_WINDOW, SETUP_WINDOW_MS);
@@ -58,16 +61,14 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
       accessibleClassroom(app, req, reply, p),
   };
 
-  /** The organizations the connect sheet offers (F-GH-02). */
-  app.get("/app/api/github/orgs", { preHandler: requireTeacher }, async (req) =>
-    service.installedOrgs(app.db, config, req.log),
-  );
-
   /**
    * An organization's avatar, fetched and cached by the server and served
    * from here: the browser never loads it from GitHub, and is never
-   * redirected there. The staff's, like the listing that names it: a
-   * student gets 403.
+   * redirected there. A teacher's, for an organization granted to one of
+   * their courses or connected to one of its classrooms (ADR-100; every one
+   * with Super Powers), the 404 of a missing one otherwise; a student gets
+   * 403. One the sheet offers only because the teacher owns it is drawn by
+   * its initials.
    */
   app.get(
     "/app/api/github/orgs/:id/avatar",
@@ -75,7 +76,7 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
     async (req, reply) => {
       const params = IdParam.safeParse(req.params);
       if (!params.success) return notFound(reply);
-      const image = await service.orgAvatar(app.db, params.data.id, app.clock.now(), req.log);
+      const image = await service.orgAvatar(app.db, params.data.id, callerOf(req), app.clock.now(), req.log);
       if (!image) return notFound(reply);
       return reply
         .type(image.mime)
@@ -93,23 +94,49 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
     ),
   );
 
-  /** Connect, or change the organization (F-GH-01); 409 while a journal holds it (D28). */
+  /**
+   * The organizations the classroom's connect sheet offers (F-GH-02,
+   * ADR-100), read when it opens: those granted to the course, those the
+   * caller's linked GitHub account owns; all of them with Super Powers.
+   */
+  app.get(
+    "/app/api/classrooms/:id/github/orgs",
+    { preHandler: requireSession },
+    teacher(onClassroom, async ({ req, scope }) =>
+      service.connectableOrgs(app.db, config, scope.room, callerOf(req), req.log),
+    ),
+  );
+
+  /**
+   * Connect, or change the organization (F-GH-01): only to an organization
+   * granted to the course, a grant the connect writes itself for an owner
+   * of the organization or an admin with Super Powers (ADR-100), else 403
+   * `org_not_allowed`; 409 while a journal holds the link (D28).
+   */
   app.put(
     "/app/api/classrooms/:id/github",
     { preHandler: requireSession },
     teacher({ ...onClassroom, body: GithubConnectBody }, async ({ req, now, body, scope }) => {
-      const changed = await service.connectClassroom(app.db, {
-        classroomId: scope.room.id,
-        orgId: body.orgId,
-        userId: req.user!.id,
-        now,
-      });
+      const changed = await service.connectClassroom(
+        app.db,
+        config,
+        { room: scope.room, orgId: body.orgId, caller: callerOf(req), now },
+        req.log,
+      );
       if (changed) {
         await trace(req, "github_org.link", "classroom", scope.room.id, {
           orgId: changed.org.id,
           login: changed.org.login,
           previousOrgId: changed.previousOrgId,
         });
+        if (changed.granted) {
+          await trace(req, "github_org.grant", "course", scope.room.courseId, {
+            orgId: changed.org.id,
+            login: changed.org.login,
+            classroomId: scope.room.id,
+            via: changed.granted,
+          });
+        }
       }
       return service.classroomGithub(app.db, config, scope.room, now, req.log);
     }),
@@ -124,6 +151,29 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
       if (orgId) await trace(req, "github_org.unlink", "classroom", scope.room.id, { orgId });
       return reply.code(204).send();
     }),
+  );
+
+  /**
+   * Remove an organization's grant to a course (ADR-100): an admin with
+   * Super Powers only, who reaches every course; 409 `classroom_connected`
+   * while a classroom of the course is connected to it; 404 when there is
+   * no such grant. No page calls it yet: the administration's guide names it.
+   */
+  app.delete(
+    "/app/api/courses/:id/github/grants/:orgId",
+    { preHandler: [requireAdmin, superPowersGuard()] },
+    teacher(
+      {
+        params: GithubGrantParams,
+        load: (req: FastifyRequest, reply: FastifyReply, p: GithubGrantParams) =>
+          accessibleCourse(app, req, reply, p),
+      },
+      async ({ req, reply, params }) => {
+        if (!(await service.revokeGrant(app.db, params.id, params.orgId))) return notFound(reply);
+        await trace(req, "github_org.revoke", "course", params.id, { orgId: params.orgId });
+        return reply.code(204).send();
+      },
+    ),
   );
 
   /**

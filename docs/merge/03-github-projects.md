@@ -290,7 +290,10 @@ layers:
 
 - github: `/webhooks/github`, `/setup/github/installed`,
   `/app/auth/github/{link,callback,unlink}`, `GET /app/api/github/orgs`,
-  `GET|PUT|DELETE /app/api/classrooms/:id/github`.
+  `GET|PUT|DELETE /app/api/classrooms/:id/github`. *Amended 2026-10-11
+  ([ADR-100](../adr/ADR-100-organisations-github-accordees-aux-cours.md)): `GET /app/api/github/orgs` is replaced by
+  `GET /app/api/classrooms/:id/github/orgs`; a grant is removed through
+  `DELETE /app/api/courses/:id/github/grants/:orgId`.*
 - project (teacher): `GET|POST /app/api/classrooms/:id/projects`,
   `PATCH|DELETE /app/api/projects/:pid`, `POST
   /app/api/projects/:pid/{publish,archive,unarchive,sync,release}`,

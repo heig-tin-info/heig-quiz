@@ -146,6 +146,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-064 — A project's deadline: claims, leases and per-repository markers](ADR-064-echeance-des-projets-baux.md)
 - [ADR-073 — Syncing a project's source: a lease, one pull request per branch, the handed-out sha](ADR-073-synchronisation-de-la-source.md)
 - [ADR-074 — Gradebook: stored marks beside derived absence](ADR-074-carnet-de-notes-marques-stockees.md)
+- [ADR-100 — GitHub organizations are granted to courses: who may connect, what the staff may read](ADR-100-organisations-github-accordees-aux-cours.md)
 
 ## Maintaining a record
 

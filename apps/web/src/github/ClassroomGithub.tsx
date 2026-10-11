@@ -4,8 +4,11 @@
  *
  * Not connected: one row and "Connect to GitHub", the one accent of the
  * Settings tab (F-ORG-13), which opens the connect sheet — the organizations
- * the App is installed on, the course's own suggested first, and the way to
- * install it on another one. The install link leaves in the same tab and
+ * the server offers this classroom (ADR-100: granted to its course, or owned
+ * by the caller's linked GitHub account), read only while the sheet is open,
+ * the course's own suggested first; with none, who can open one (an owner of
+ * the organization or an administrator); and the way to install the App on
+ * another one. The install link leaves in the same tab and
  * GitHub's setup return comes back to this sheet with `?installed=<org>`,
  * which preselects the organization just recorded.
  *
@@ -49,7 +52,7 @@ import {
   Sheet,
   Skeleton,
 } from "../ui";
-import { githubAbsent, useClassroomGithub, useGithubOrgs } from "./api";
+import { githubAbsent, useClassroomGithub, useConnectableOrgs } from "./api";
 import { githubChecks, type CheckLine } from "./checks";
 
 export function ClassroomGithub({
@@ -203,7 +206,7 @@ function ConnectSheet({
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
-  const orgs = useGithubOrgs();
+  const orgs = useConnectableOrgs(room.id);
   // `installedId` only preselects an organization of the list that can be picked.
   const [picked, setPicked] = useState<string | null>(null);
   const list = orgs.data ?? [];
@@ -259,7 +262,9 @@ function ConnectSheet({
             <QueryError title={t("github.orgsFailed")} query={orgs} />
           ) : ordered.length === 0 ? (
             <Card>
-              <EmptyState icon={GithubIcon} title={t("github.orgsEmpty")} className="py-8" />
+              <EmptyState icon={GithubIcon} title={t("github.orgsEmpty")} className="py-8">
+                {t("github.notGranted")}
+              </EmptyState>
             </Card>
           ) : (
             <Card className="divide-y divide-line overflow-hidden">

@@ -6,8 +6,9 @@
  *
  * By default the classroom PRG1-2026 (`r1`) is connected to the course's
  * organization, every check green; the other classrooms are plain Quiz
- * classrooms (a link of `null`), and those of the same course are offered
- * that organization first. No avatar URL: an organization is drawn by its
+ * classrooms (a link of `null`) whose connect sheet offers both
+ * organizations (ADR-100: as if granted to their course), and those of the
+ * same course are offered PRG1-2026's first. No avatar URL: an organization is drawn by its
  * initials (`OrgAvatar`, M1-04) until the API serves a same-origin one.
  * A connect (PUT) and a disconnect (DELETE) change the link for the page's
  * life, as the API would; a disconnect of a classroom (or a connect elsewhere)
@@ -17,7 +18,8 @@
  * Scene flags: `?unlinked=1` (`flags.unlinked`), the persona has no linked
  * GitHub account (`GET /app/api/me/github`); `?ghwarn=1`, PRG1-2026's
  * organization is on the free plan and has no LLM secret; `?ghmissing=1`,
- * that organization no longer exists on GitHub.
+ * that organization no longer exists on GitHub; `?ghnogrant=1`, no
+ * organization is open to the classrooms not connected (the sheet lists none).
  */
 import type {
   GithubAccountState,
@@ -74,11 +76,6 @@ export const mockClassroomOrg = (id: string): GithubOrg | null => LINKS[id]?.org
 
 const INSTALL_URL = "https://github.com/apps/heig-quiz/installations/new";
 
-on("GET", "/app/api/github/orgs", () => {
-  if (role === "student") throw new MockError(403, "Forbidden");
-  return ORGS;
-});
-
 /** A classroom of the staff persona, or the 404 the API answers off the staff. */
 function staffRoom(id: string) {
   const room = rooms.find((r) => r.id === id);
@@ -97,6 +94,12 @@ function classroomGithub(id: string): GithubClassroom {
 }
 
 on("GET", "/app/api/classrooms/:id/github", (m) => classroomGithub(m.groups!.id!));
+
+/** The connect sheet's list (ADR-100): both organizations, as if granted to every course; none under `?ghnogrant=1`. */
+on("GET", "/app/api/classrooms/:id/github/orgs", (m) => {
+  staffRoom(m.groups!.id!);
+  return flags.ghnogrant ? [] : ORGS;
+});
 
 on("PUT", "/app/api/classrooms/:id/github", (m, body) => {
   const id = m.groups!.id!;

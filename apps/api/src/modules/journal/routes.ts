@@ -39,7 +39,7 @@ import {
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { githubApp } from "../../github/app.js";
-import { accessibleClassroom, readableClassroom } from "../guards.js";
+import { accessibleClassroom, callerOf, readableClassroom } from "../guards.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
 import { INERT_IMAGE_HEADERS } from "../pool/assets.js";
 import { JournalError } from "./errors.js";
@@ -183,12 +183,12 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
   );
 
   if (githubApp(config)) {
-    /** Use a repository of the organization (F-JRN-03, D27). */
+    /** Use a repository of the organization (F-JRN-03, D27, ADR-100): no invitation. */
     app.post(
       `${base}/use`,
       session,
       teacher({ ...onClassroom, body: JournalUse }, async ({ req, reply, body, scope }) =>
-        reply.code(201).send(await writes.useJournal(as(req, scope.room), scope.room, body)),
+        reply.code(201).send(await writes.useJournal(as(req, scope.room), scope.room, body, callerOf(req))),
       ),
     );
 

@@ -17,7 +17,8 @@ import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { projects } from "../../db/schema.js";
 import { githubStatus, HTTP_READ, installationClient, unless404, type InstallationClient } from "../../github/app.js";
-import { classroomInstallation, type InstalledOrg } from "../github/service.js";
+import { classroomInstallation, offLimitsRepos, type InstalledOrg } from "../github/service.js";
+import type { Caller } from "../guards.js";
 import { ProjectError } from "./errors.js";
 
 /** The platform's own repositories, never a source: `<slug>-squashed`, `<slug>-squashed-N`. */
@@ -52,9 +53,17 @@ export interface Source {
  * owner is checked by its immutable id); or one of the platform's own
  * distribution repositories, by its name or because a project holds it
  * (a project handed out from another's distribution would have its
- * solution-free copy as its source, and its receipts tangled with it).
+ * solution-free copy as its source, and its receipts tangled with it); or
+ * a repository Quiz knows as a course's where the caller holds no seat
+ * (`offLimitsRepos`, ADR-100 §5) — the 404 of a missing one.
  */
-export async function fetchSource(db: Db, client: InstallationClient, org: InstalledOrg, name: string): Promise<Source | null> {
+export async function fetchSource(
+  db: Db,
+  client: InstallationClient,
+  org: InstalledOrg,
+  name: string,
+  caller: Caller,
+): Promise<Source | null> {
   if (DISTRIBUTION.test(name)) return null;
   const data = await unless404(async () => {
     const { data } = await client.octokit.request("GET /repos/{owner}/{repo}", {
@@ -72,7 +81,7 @@ export async function fetchSource(db: Db, client: InstallationClient, org: Insta
   if (!sameOrg || DISTRIBUTION.test(data.name)) return null;
   const id = Number(data.id);
   const [held] = await db.select({ id: projects.id }).from(projects).where(eq(projects.distributionRepoId, id)).limit(1);
-  if (held) return null;
+  if (held || (await offLimitsRepos(db, caller, [id])).size > 0) return null;
   const branches = await client.octokit.paginate(client.octokit.rest.repos.listBranches, {
     owner: org.login,
     repo: data.name,
@@ -88,8 +97,12 @@ export async function fetchSource(db: Db, client: InstallationClient, org: Insta
   };
 }
 
-/** The organization's repositories, the most recently pushed first (one page of 100, as heig-classroom). */
-export async function listSources(db: Db, config: AppConfig, classroomId: string): Promise<ProjectSourceRepo[]> {
+/**
+ * The organization's repositories, the most recently pushed first (one page
+ * of 100, as heig-classroom), less those Quiz knows as a course's where the
+ * caller holds no seat (ADR-100 §5).
+ */
+export async function listSources(db: Db, config: AppConfig, classroomId: string, caller: Caller): Promise<ProjectSourceRepo[]> {
   const { org, client } = await classroomClient(db, config, classroomId);
   const { data } = await client.octokit.request("GET /orgs/{org}/repos", {
     org: org.login,
@@ -98,8 +111,9 @@ export async function listSources(db: Db, config: AppConfig, classroomId: string
     per_page: 100,
     request: HTTP_READ,
   });
+  const offLimits = await offLimitsRepos(db, caller, data.map((r) => Number(r.id)));
   return data
-    .filter((r) => !r.archived && !DISTRIBUTION.test(r.name))
+    .filter((r) => !r.archived && !DISTRIBUTION.test(r.name) && !offLimits.has(Number(r.id)))
     .map((r) => ({
       name: r.name,
       defaultBranch: r.default_branch ?? "main",
@@ -114,9 +128,10 @@ export async function sourceDetail(
   config: AppConfig,
   classroomId: string,
   name: string,
+  caller: Caller,
 ): Promise<ProjectSourceDetail | null> {
   const { org, client } = await classroomClient(db, config, classroomId);
-  const source = await fetchSource(db, client, org, name);
+  const source = await fetchSource(db, client, org, name, caller);
   if (!source) return null;
   let tree: ProjectSourceDetail["tree"] = [];
   let truncated = false;

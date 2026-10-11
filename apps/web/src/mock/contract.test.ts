@@ -554,10 +554,10 @@ const CHECKED: Case[] = [
   each("/app/api/classrooms/:id/journal/deleted", `/app/api/classrooms/${classroomId}/journal/deleted`, JournalDeletedPage),
   // GitHub (F-GH-01 to F-GH-05): the organizations, every classroom's link
   // (connected or not), and the persona's account.
-  each("/app/api/github/orgs", "/app/api/github/orgs", GithubOrg),
   ...courses
     .flatMap((c) => c.classrooms)
     .map((r) => one("/app/api/classrooms/:id/github", `/app/api/classrooms/${r.id}/github`, GithubClassroom)),
+  each("/app/api/classrooms/:id/github/orgs", "/app/api/classrooms/r2/github/orgs", GithubOrg),
   one("/app/api/me/github", "/app/api/me/github", GithubAccountState),
   // The projects (M3-10): every classroom's list, three rows on PRG1-2026.
   ...courses

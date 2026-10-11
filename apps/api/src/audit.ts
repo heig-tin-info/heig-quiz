@@ -168,6 +168,14 @@ export type AuditAction =
   | "github_org.link"
   | "github_org.unlink"
   /**
+   * ADR-100: an organization granted to a course by a connect (subject the
+   * course; `payload.orgId`, `login`, `classroomId`, `via`: `owner` — the
+   * caller's linked account owns the organization — or `super_powers`), or
+   * that grant removed by an admin with Super Powers (`revoke`: `orgId`).
+   */
+  | "github_org.grant"
+  | "github_org.revoke"
+  /**
    * Quiz's App found installed on an organization (subject the organization
    * row; `payload.installationId`, `payload.via`: `setup_url`, `listing`,
    * `healing`, `webhook`), or found uninstalled or suspended

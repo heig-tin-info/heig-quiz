@@ -99,7 +99,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       const row = await service.createProject(app.db, config, {
         classroomId: scope.room.id,
         body,
-        userId: req.user!.id,
+        caller: callerOf(req),
         actor: actorOf(req),
         now,
         log: req.log,
@@ -112,7 +112,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.get(
     "/app/api/classrooms/:id/projects/sources",
     session,
-    teacher(onClassroom, async ({ scope }) => service.listSources(app.db, config, scope.room.id)),
+    teacher(onClassroom, async ({ req, scope }) => service.listSources(app.db, config, scope.room.id, callerOf(req))),
   );
 
   app.get(
@@ -120,8 +120,8 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     session,
     teacher(
       { params: ProjectSourceParams, load: projectsClassroom.bind(null, app) },
-      async ({ reply, params, scope }) =>
-        (await service.sourceDetail(app.db, config, scope.room.id, params.repo)) ?? notFound(reply),
+      async ({ req, reply, params, scope }) =>
+        (await service.sourceDetail(app.db, config, scope.room.id, params.repo, callerOf(req))) ?? notFound(reply),
     ),
   );
 

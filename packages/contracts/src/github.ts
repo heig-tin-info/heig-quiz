@@ -91,6 +91,16 @@ export const GithubClassroom = z.object({
 export type GithubClassroom = z.infer<typeof GithubClassroom>;
 
 /**
+ * `GET /app/api/classrooms/:id/github/orgs` (staff) answers `GithubOrg[]`:
+ * the organizations the connect sheet offers (F-GH-02, ADR-100), where
+ * Quiz's App acts — those granted to the classroom's course, and those the
+ * caller's linked GitHub account owns; every one to an admin with Super
+ * Powers. Read when the sheet opens, never with the link.
+ */
+export const GithubConnectableOrgs = z.array(GithubOrg);
+export type GithubConnectableOrgs = z.infer<typeof GithubConnectableOrgs>;
+
+/**
  * `PUT /app/api/classrooms/:id/github` (staff): connect the classroom to an
  * organization where Quiz's App is installed, or change it (F-GH-01).
  * Refused `409` with one of {@link GITHUB_CONNECT_REFUSALS}.
@@ -106,6 +116,22 @@ export type GithubConnectBody = z.infer<typeof GithubConnectBody>;
  *     organization, or the organization no longer exists.
  */
 export const GITHUB_CONNECT_REFUSALS = ["journal_attached", "app_not_installed"] as const;
+
+/**
+ * The `403` of a connect (ADR-100): the organization is not granted to the
+ * classroom's course, the caller's linked GitHub account does not own it,
+ * and the caller holds no Super Powers. Nothing is written.
+ */
+export const GITHUB_ORG_NOT_ALLOWED = "org_not_allowed";
+
+/**
+ * `DELETE /app/api/courses/:id/github/grants/:orgId` (an admin with Super
+ * Powers, ADR-100): the organization's grant to the course removed; `409
+ * classroom_connected` while a classroom of the course is connected to it,
+ * `404` when there is no such grant.
+ */
+export const GithubGrantParams = z.object({ id: z.uuid(), orgId: z.uuid() });
+export type GithubGrantParams = z.infer<typeof GithubGrantParams>;
 
 /**
  * The query GitHub sends to the App's Setup URL, `/setup/github/installed`

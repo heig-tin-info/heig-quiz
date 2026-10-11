@@ -124,6 +124,8 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   // connect to an organization the App is not (or no longer) installed on.
   journal_attached: "error.githubJournalAttached",
   app_not_installed: "error.githubAppNotInstalled",
+  // ADR-100: an organization neither granted to the course nor owned by the caller.
+  org_not_allowed: "error.githubOrgNotAllowed",
   // F-PROJ-17, ADR-070 §5: a roster removal, unclaim or e-mail change whose
   // GitHub access GitHub refused to take away first.
   revoke_failed: "error.githubRevokeFailed",

@@ -7,6 +7,8 @@ Supersedes D25; amends D24, D27 and [ADR-049](ADR-049-journal-source-github.md):
 its body point 2 holds for the GitHub mode only, its addendum points 2 and 7
 are replaced. Amended 2026-10-09: ADR-049 is folded into this record (§7, and
 the [correspondence table](#correspondence-with-adr-049) at the end).
+Amended 2026-10-11 by [ADR-100](ADR-100-organisations-github-accordees-aux-cours.md)
+(§7, GitHub mode: which repositories, and the invitations).
 
 ## Context
 
@@ -210,7 +212,10 @@ addendum on 2026-09-30. What still holds, by mode:
     linked to that course's classrooms; every choice is audited
     (`journal.*`). Since this record the App writes only the seed
     `README.md` of a repository it creates (and would write the initial
-    commit of Move to GitHub, §3).
+    commit of Move to GitHub, §3). *Amended 2026-10-11 (ADR-100): the
+    organization is one granted to the classroom's course, so the reach is
+    that course's staff's; a repository Quiz knows as a course the caller
+    does not teach is refused as missing.*
   - **Creation never adopts an existing repository**: creating a journal
     makes a new repository; choosing an existing one is a separate,
     deliberate action (F-JRN-02, F-JRN-03). Move to GitHub targets a new
@@ -223,6 +228,9 @@ addendum on 2026-09-30. What still holds, by mode:
     chosen, with `push` only, never `admin` nor `maintain`, each invitation
     audited; a member who joins the staff or links an account later is not
     invited automatically (F-JRN-02, F-JRN-03). Students never are.
+    *Amended 2026-10-11 (ADR-100 §6): only when Quiz creates the
+    repository; a repository chosen with "use" gets no invitation, and the
+    ones sent before are not revoked by the platform.*
 
 ## Consequences
 

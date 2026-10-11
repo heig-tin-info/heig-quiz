@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 const GITHUB = "/app/api/classrooms/r1/github";
-const ORGS = "/app/api/github/orgs";
+const ORGS = "/app/api/classrooms/r1/github/orgs";
 const INSTALL = "https://github.com/apps/heig-quiz/installations/new?state=r1";
 
 const org = (over: Partial<GithubOrg> & Pick<GithubOrg, "id" | "login">): GithubOrg => ({
@@ -55,6 +55,23 @@ describe("the classroom's GitHub section", () => {
     expect(await screen.findByText("Not connected")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Connect to GitHub" }));
     expect(onConnecting).toHaveBeenCalledWith(true);
+  });
+
+  it("says who can open an organization to the course when the sheet offers none (ADR-100)", async () => {
+    const { calls } = mockFetch({ [`GET ${GITHUB}`]: ok(plain), [`GET ${ORGS}`]: ok([]) });
+    renderSection({ connecting: true });
+    const sheet = await screen.findByRole("dialog");
+    expect(await within(sheet).findByText("No organization is open to this course yet.")).toBeVisible();
+    expect(within(sheet).getByText("Ask an organization owner or an administrator.")).toBeVisible();
+    expect(within(sheet).getByRole("link", { name: /Install the App on GitHub/ })).toHaveAttribute("href", INSTALL);
+    expect(calls.filter((c) => c.url === ORGS)).toHaveLength(1);
+  });
+
+  it("asks for the sheet's organizations only once it is open", async () => {
+    const { calls } = mockFetch({ [`GET ${GITHUB}`]: ok(plain), [`GET ${ORGS}`]: ok([EMB]) });
+    renderSection();
+    await screen.findByText("Not connected");
+    expect(calls.some((c) => c.url === ORGS)).toBe(false);
   });
 
   it("draws nothing on a platform without Quiz's App (404)", async () => {
