@@ -63,7 +63,7 @@ import { courseConceptsOf, setCourseConcepts } from "../concept/service.js";
 import { invalid, notFound, readerLang, teacherRoute } from "../http.js";
 import { journalRemovalRefused } from "../journal/service.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
-import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
+import { importRoster, rosterView } from "./roster.js";
 import * as service from "./service.js";
 
 const RowsBody = z.object({
@@ -568,9 +568,9 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
         // Atomic import: nothing was written.
         return reply.code(400).send({ error: "roster_invalid", errors: parse.errors });
       }
+      // Nothing is attached here, even to an existing account: a line is
+      // claimed by its holder's own next request (ADR-053, addendum of 2026-10-11).
       await trace(req, "roster.import", "classroom", scope.room.id, { rows: parse.rows.length });
-      // Students already registered on the platform are attached immediately.
-      await claimForExistingUsers(app.db, scope.room.id, req.user!.id);
       return reply.code(200).send({ rows: parse.rows.length, ...summary });
     }),
   );
@@ -581,11 +581,10 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     teacher({ ...onEntry, body: EnrollmentPatch }, async ({ req, reply, now, body, scope: entry }) => {
       const email = body.email?.trim().toLowerCase();
       const emailChanged = email !== undefined && email !== entry.email;
-      // `409 duplicate_email`, `502 revoke_failed` (`rosterRefusal`). The
-      // claim below runs after the update committed.
+      // `409 duplicate_email`, `502 revoke_failed` (`rosterRefusal`). A line
+      // whose address changed waits, pending, for its new holder's own request.
       const updated = await service.updateEnrollment(app.db, entry, body, email, emailChanged, revocation(req, now));
       await trace(req, "roster.update", "enrollment", entry.id, { ...body, emailChanged });
-      if (emailChanged) await claimForExistingUsers(app.db, entry.classroomId, req.user!.id);
       return updated;
     }),
   );

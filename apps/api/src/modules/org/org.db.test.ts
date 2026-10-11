@@ -174,12 +174,14 @@ describe("the student_joined notification", () => {
     expect(before.some((n) => !n.read)).toBe(true);
     const unread = before.find((n) => !n.read);
     const email = `grace-${randomUUID().slice(0, 8)}@heig.test`;
-    await server.app.db
-      .insert(enrollments)
-      .values({ id: randomUUID(), classroomId, nom: "Hopper", prenom: "Grace", email });
     const watched = await watchers();
     const student = await signInStudent(email);
     const joiner = { id: student.id, stream: await openStream(student.headers) };
+    // Written after the joiner's stream ran its own claim pass, and straight
+    // into the table (no roster write): the sign-in claim below is the one.
+    await server.app.db
+      .insert(enrollments)
+      .values({ id: randomUUID(), classroomId, nom: "Hopper", prenom: "Grace", email });
     await settle();
 
     expect(await claimEnrollments(server.app.db, { id: student.id })).toBe(1);
@@ -310,14 +312,18 @@ describe("the roster_conflict notification", () => {
     );
   });
 
-  it("from an import: one entry with the count, to the staff but not the importer", async () => {
+  /** The account's own request, on its own portal session: where a claim pass runs (ADR-053, addendum of 2026-10-11). */
+  const ownRequest = async (who: { headers: Record<string, string> }) =>
+    expect((await server.app.inject({ method: "GET", url: "/app/api/me", headers: who.headers })).statusCode).toBe(200);
+
+  it("not from an import: the holders' own requests raise it, and every staff seat is told", async () => {
     const r = await room("CONF-C");
     const shared = `twin-${tag()}@heig.test`;
-    await account(`twin-a-${tag()}@gmail.test`, shared);
+    const twin = await account(`twin-a-${tag()}@gmail.test`, shared);
     await account(`twin-b-${tag()}@gmail.test`, shared);
     const priv = `tom-${tag()}@gmail.test`;
     const inst = `tom-${tag()}@heig.test`;
-    await account(priv, inst);
+    const tom = await account(priv, inst);
 
     const rows = [
       ["Nom", "Prénom", "E-mail"],
@@ -332,17 +338,29 @@ describe("the roster_conflict notification", () => {
       payload: { rows },
     });
     expect(imported.statusCode).toBe(200);
+    // The import ran no claim pass: nothing flagged, nobody told.
+    const flagged = await server.app.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.classroomId, r.id), eq(enrollments.conflictFlag, true)));
+    expect(flagged).toEqual([]);
+    expect(await told(colleague.id, r.id)).toEqual([]);
 
-    expect(await told(colleague.id, r.id)).toEqual([expected(r.id, "CONF-C", 3)]);
-    expect(await told(teacher.id, r.id)).toEqual([]);
+    await ownRequest(twin);
+    await ownRequest(tom);
+
+    // The pass is the student's: the importer is a staff seat like any other.
+    for (const staff of [teacher.id, colleague.id]) {
+      expect(await told(staff, r.id)).toEqual([expected(r.id, "CONF-C", 3)]);
+    }
     expect(await told(r.classmate.id, r.id)).toEqual([]);
     expect(JSON.stringify(await told(colleague.id, r.id))).not.toContain(shared);
   });
 
-  it("from an e-mail edit: one entry, to the staff but not the editor", async () => {
+  it("not from an e-mail edit: the holder's own request raises it", async () => {
     const r = await room("CONF-D");
     const shared = `pair-${tag()}@heig.test`;
-    await account(`pair-a-${tag()}@gmail.test`, shared);
+    const pair = await account(`pair-a-${tag()}@gmail.test`, shared);
     await account(`pair-b-${tag()}@gmail.test`, shared);
     const entry = await line(r.id, `typo-${tag()}@heig.test`);
 
@@ -353,32 +371,38 @@ describe("the roster_conflict notification", () => {
       payload: { email: shared },
     });
     expect(patched.statusCode).toBe(200);
+    expect(await told(colleague.id, r.id)).toEqual([]);
 
-    expect(await told(colleague.id, r.id)).toEqual([expected(r.id, "CONF-D", 1)]);
-    expect(await told(teacher.id, r.id)).toEqual([]);
+    await ownRequest(pair);
+    for (const staff of [teacher.id, colleague.id]) {
+      expect(await told(staff, r.id)).toEqual([expected(r.id, "CONF-D", 1)]);
+    }
   });
 
-  it("refreshes the staff's rosters, except the stream of whoever raised it", async () => {
+  it("refreshes the staff's rosters when a holder's request raises it", async () => {
     const r = await room("CONF-E");
     const shared = `hint-${tag()}@heig.test`;
-    await account(`hint-a-${tag()}@gmail.test`, shared);
+    const holder = await account(`hint-a-${tag()}@gmail.test`, shared);
     await account(`hint-b-${tag()}@gmail.test`, shared);
     const entry = await line(r.id, `typo-${tag()}@heig.test`);
-    const streams = {
-      teacher: await openStream(teacher.headers),
-      colleague: await openStream(colleague.headers),
-    };
-    await settle();
     await server.app.inject({
       method: "PATCH",
       url: `/app/api/classrooms/${r.id}/roster/${entry}`,
       headers: teacher.headers,
       payload: { email: shared },
     });
+    const streams = {
+      teacher: await openStream(teacher.headers),
+      colleague: await openStream(colleague.headers),
+    };
     await settle();
-    expect(streams.colleague.text).toContain('"kinds":["roster"]');
-    expect(streams.colleague.text).toContain('"kinds":["notifications"]');
-    expect(streams.colleague.text).not.toContain(shared);
+    await ownRequest(holder);
+    await settle();
+    for (const stream of Object.values(streams)) {
+      expect(stream.text).toContain('"kinds":["roster"]');
+      expect(stream.text).toContain('"kinds":["notifications"]');
+      expect(stream.text).not.toContain(shared);
+    }
     for (const s of Object.values(streams)) s.close();
   });
 });

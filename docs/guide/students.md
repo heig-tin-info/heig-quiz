@@ -6,7 +6,7 @@ This page is for you if a teacher sends you here. It walks through everything yo
 
 Open the platform and press **Sign in with Switch edu-ID**. You sign in with the account of your school; there is no separate password for the platform.
 
-Your teacher adds your school e-mail address to the class list. The seat is attached to your account the first time you sign in with a matching address: there is no code to enter and nothing to accept. If a classroom you expect is missing from your home, check that you signed in with the address your teacher used, and that this address is registered on your Switch edu-ID account.
+Your teacher adds your school e-mail address to the class list. The seat is attached to your account when you open the platform with a matching address — when you sign in, or on the next page you load if you are already signed in: there is no code to enter and nothing to accept, and nothing is attached before you come. If a classroom you expect is missing from your home, reload the page, then check that you signed in with the address your teacher used, and that this address is registered on your Switch edu-ID account.
 
 ## Your home
 

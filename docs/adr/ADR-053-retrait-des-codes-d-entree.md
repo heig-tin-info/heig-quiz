@@ -7,6 +7,9 @@ requests: the classroom join code (F-ORG-06) goes with this ADR, migration
 `0041_drop_join_code`; the access code of an exam or an exercise (F-EVAL-12)
 goes in a second one, with the CHECK of decision 3. Amends ADR-014, ADR-025,
 ADR-030, ADR-031 and ADR-032 (the last section lists what changes in each).
+Amended by the [addendum of 2026-10-11](#addendum-2026-10-11-a-line-is-attached-only-when-the-person-acts)
+(audit L4): a roster write attaches nobody; the claim runs at the person's
+sign-in or their next own request. It replaces the third Consequence.
 
 ## Context
 
@@ -121,6 +124,9 @@ CHECK, so nothing needs rewriting.
   self-service path into a classroom; the teacher adds the line, and the
   claim runs at the student's next sign-in (F-ORG-05), or at once when the
   account already exists, by the claim the roster import or edit runs.
+  *(No longer true: since the [addendum of 2026-10-11](#addendum-2026-10-11-a-line-is-attached-only-when-the-person-acts)
+  an import or an edit claims nothing; the claim runs at the student's
+  sign-in or their next own request.)*
 - PR #350 stays closed; its "Enter a code" field has only one kind of code
   left to take, the poll's, which has its own page (`/p/:code`).
 - MCP clients that sent `accessCode` to `update_evaluation` get it refused
@@ -156,3 +162,71 @@ CHECK, so nothing needs rewriting.
 - **ADR-032 (per-user course preferences).** Archiving a classroom no longer
   "closes its join code": there is none. The point of the ADR (a personal
   hide is not an archive) is unchanged.
+
+## Addendum 2026-10-11: a line is attached only when the person acts
+
+Decided by the product owner on 2026-10-11, after finding L4 of the
+2026-10-10 security audit. It replaces the third Consequence above; the rest
+stands.
+
+**Finding.** After every roster import and every e-mail edit, a reverse
+claim (`claimForExistingUsers`) attached each pending line to the existing
+account whose verified address matched. The staff's roster then showed the
+account's last sign-in, its id, its avatar and, in a classroom connected to
+GitHub, its GitHub login — of a person who never visited the course — and
+any address typed on a list linked someone's account to a classroom.
+
+**Decision.**
+
+1. **No staff write attaches an account.** The reverse claim is removed: an
+   import, a line added by hand (in the lobby too) or an e-mail edit leaves
+   the line pending, and a pending line carries nothing of any account
+   (`userId`, `lastLoginAt`, `avatarUrl`, `githubLogin` are null). A line
+   whose address two accounts hold is no longer flagged by the import; the
+   ambiguity is decided at claim time by the same rules as at sign-in
+   (AU-21), and the staff are told then.
+2. **The claim runs when the person acts**: at their sign-in, as before, and
+   at their next own request — the same `claimEnrollments`, on the verified
+   addresses the account already holds (the sign-in alone records new ones).
+   It runs in the session hook (`auth/plugin.ts`) for the account's own
+   `portal` session only: never an impersonation (ADR-034), a `seb` or
+   `kiosk` session (ADR-027, ADR-051), a personal or OAuth bearer token
+   (ADR-022, ADR-023), nor the assistant's token. It fires `student_joined`
+   (F-NOTIF-08) and the roster refresh hint to the staff, exactly as the
+   sign-in claim does.
+3. **Cheap by construction.** A session runs its pass at most once between
+   two roster writes that may make a line claimable (an import, and the
+   writes behind the GitHub revocation guard: an e-mail change, a revoked
+   claim, a removal), and only after one indexed query found a pending line
+   on one of its verified addresses. The guard is in memory (one process,
+   ADR-001, as the event bus), bounded, keyed by the session's stored hash,
+   forgotten at sign-out (`claimOnOwnRequest`, `org/roster.ts`); a restart
+   only costs each session its one query again. No migration.
+4. **Exam day.** A teacher adds a missing student's line from the lobby: the
+   import bumps the roster epoch, and the student's next request — a
+   refresh — claims it and lets them in.
+
+**Residual and scope.**
+
+- Lines attached by the reverse claim before this change stay attached: no
+  migration detaches them.
+- The heig-classroom import (`import-classroom/steps.ts`, `claimLines`)
+  carries over claims its source rosters had, which the person made there;
+  it is out of scope and unchanged. An imported placeholder account
+  (ADR-061) is never attached by a roster write any more: it gets its lines
+  at the sign-in that adopts it.
+- Login admission (issue #722) is not implemented here. When its ADR is
+  written, the roster line that counts as an invitation is **pending** at the
+  moment of the admission check: it must be matched by address, never read
+  through a claimed seat.
+
+**Product cost.** A student who has an account but never opens Quiz stays
+pending, exactly like a student without an account: they are not in the
+gradebook's roster of claimed seats and receive no e-mail reminder.
+`student_joined` now fires for every student at the start of term, as they
+first open Quiz, folded per classroom as before. A group project's repository
+created before a member's first request does not invite that member at
+creation: they are invited at their own *Accept* (F-PROJ-06). A revoked
+claim whose address still matches is claimed again at its holder's next
+request, where it used to wait for their next sign-in: to move a seat, the
+teacher changes its address.

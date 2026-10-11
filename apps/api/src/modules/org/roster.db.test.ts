@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../../db/client.js";
 import { classrooms, courses, enrollments, userEmails, users } from "../../db/schema.js";
 import { testDb } from "../../test/db.js";
-import { claimEnrollments, claimForExistingUsers } from "./roster.js";
+import { claimEnrollments, claimOnOwnRequest, rosterChanged } from "./roster.js";
 
 async function seedClassroom(db: Db) {
   const courseId = randomUUID();
@@ -139,26 +139,37 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
   });
 });
 
-describe("claimForExistingUsers (reverse claim)", () => {
-  it("attaches an existing account through its institutional address", async () => {
+describe("claimOnOwnRequest (ADR-053, addendum of 2026-10-11)", () => {
+  it("runs once per session, again after a roster write, and for a new session", async () => {
     const classroomId = await seedClassroom(db);
     const userId = await seedUser(db, "leoverdelaw@gmail.test", "leo.verdelaw@heig.test");
-    const enrollmentId = await seedEntry(db, classroomId, "leo.verdelaw@heig.test", "Verdelaw");
+    const session = randomUUID();
 
-    expect(await claimForExistingUsers(db, classroomId, randomUUID())).toBe(1);
-    expect((await entry(db, enrollmentId)).userId).toBe(userId);
+    expect(await claimOnOwnRequest(db, session, userId)).toBe(0);
+    const first = await seedEntry(db, classroomId, "leo.verdelaw@heig.test", "Verdelaw");
+    // No roster write since this session looked: it does not look again.
+    expect(await claimOnOwnRequest(db, session, userId)).toBe(0);
+    expect((await entry(db, first)).userId).toBeNull();
+
+    rosterChanged();
+    expect(await claimOnOwnRequest(db, session, userId)).toBe(1);
+    expect((await entry(db, first)).userId).toBe(userId);
+
+    const other = await seedClassroom(db);
+    const second = await seedEntry(db, other, "leoverdelaw@gmail.test", "Verdelaw");
+    expect(await claimOnOwnRequest(db, randomUUID(), userId)).toBe(1);
+    expect((await entry(db, second)).userId).toBe(userId);
   });
 
-  it("flags rather than picking when two accounts hold the entry's address", async () => {
+  it("lets the requests of one page load share one pass", async () => {
     const classroomId = await seedClassroom(db);
-    const shared = "twins@heig.test";
-    await seedUser(db, "twin-a@gmail.test", shared);
-    await seedUser(db, "twin-b@gmail.test", shared);
-    const enrollmentId = await seedEntry(db, classroomId, shared, "Twin");
+    const userId = await seedUser(db, "ines.gauthier@heig.test");
+    const enrollmentId = await seedEntry(db, classroomId, "ines.gauthier@heig.test", "Gauthier");
+    const session = randomUUID();
 
-    expect(await claimForExistingUsers(db, classroomId, randomUUID())).toBe(0);
-    const row = await entry(db, enrollmentId);
-    expect(row.userId).toBeNull();
-    expect(row.conflictFlag).toBe(true);
+    const passes = [claimOnOwnRequest(db, session, userId), claimOnOwnRequest(db, session, userId)];
+    expect(passes[0]).toBe(passes[1]);
+    expect(await Promise.all(passes)).toEqual([1, 1]);
+    expect((await entry(db, enrollmentId)).userId).toBe(userId);
   });
 });

@@ -71,6 +71,9 @@ export async function importRoster(
       else updated += 1;
     }
   });
+  // A line just added is claimed by its holder's next own request, not by
+  // this import (ADR-053, addendum of 2026-10-11).
+  rosterChanged();
   // Fine-grained insert/update counting will come with a real need; what
   // matters is atomicity and idempotent replay.
   return { parse, summary: { inserted, updated } };
@@ -95,8 +98,9 @@ interface RosterEvent {
  * and the classroom: no name, no address. Call it after the write has
  * committed.
  *
- * BEST-EFFORT: it runs inside a login (the claim at sign-in) and a roster
- * import, neither of which may fail because telling the staff did. A
+ * BEST-EFFORT: it runs inside a login and a person's own request (their
+ * claim), and inside the heig-classroom import, none of which may fail
+ * because telling the staff did. A
  * failure is logged and swallowed; the roster itself is already right.
  */
 async function tellStaff(db: Db, event: RosterEvent): Promise<void> {
@@ -141,8 +145,9 @@ export interface ClaimMatch {
 }
 
 /**
- * Settles one claim pass. The login claim and the reverse claim both end
- * here, so every conflict ends the same way (AU-21): an ambiguous match is
+ * Settles one claim pass. The person's own claim (at sign-in, or at their
+ * next own request: `claimOnOwnRequest`) and the heig-classroom import's
+ * both end here, so every conflict ends the same way (AU-21): an ambiguous match is
  * flagged; any other is attached, and flagged instead when the account
  * already holds a line of that classroom (UNIQUE(classroom_id, user_id)).
  *
@@ -225,9 +230,13 @@ export async function claimLines(db: Db, matches: ClaimMatch[], actorId: string)
 }
 
 /**
- * Automatic claim at login (AU-18, H3): every `pending` entry whose e-mail
- * is one of the account's known addresses (GH-11 — the login address, or an
- * institutional one asserted by edu-ID) is attached to the user.
+ * Automatic claim at login (AU-18, H3), and at the person's next own request
+ * (`claimOnOwnRequest`): every `pending` entry whose e-mail is one of the
+ * account's known addresses (GH-11 — the login address, or an institutional
+ * one asserted by edu-ID) is attached to the user. Only the person's own
+ * action runs it, never a staff write (ADR-053, addendum of 2026-10-11):
+ * attaching on a teacher's import would show the staff the account of
+ * someone who never came, and let any address on a list link it.
  *
  * Nothing is attached on an ambiguous match. Three ways to be ambiguous:
  * the entry's address is also held by another account; several entries of
@@ -283,54 +292,6 @@ export async function claimEnrollments(db: Db, user: { id: string }) {
 }
 
 /**
- * Reverse claim (after an import or an e-mail edit, by `actorId`): attaches
- * a classroom's `pending` entries to existing accounts, on the same address
- * set and the same ambiguity rules as the login claim.
- */
-export async function claimForExistingUsers(db: Db, classroomId: string, actorId: string) {
-  const rows = await db
-    .select({
-      entryId: enrollments.id,
-      userId: userEmails.userId,
-      classroomId: enrollments.classroomId,
-      classroomName: classrooms.name,
-      courseId: classrooms.courseId,
-    })
-    .from(enrollments)
-    .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
-    .innerJoin(
-      userEmails,
-      and(
-        sql`lower(${enrollments.email}) = ${userEmails.email}`,
-        eq(userEmails.verified, true),
-      ),
-    )
-    .where(and(eq(enrollments.classroomId, classroomId), isNull(enrollments.userId)));
-
-  // One entry claimed by two accounts, or one account claiming two entries
-  // of this classroom: ambiguous either way.
-  const usersPerEntry = new Map<string, Set<string>>();
-  const entriesPerUser = new Map<string, Set<string>>();
-  const link = (map: Map<string, Set<string>>, key: string, value: string) => {
-    const set = map.get(key) ?? new Set<string>();
-    set.add(value);
-    map.set(key, set);
-  };
-  for (const m of rows) {
-    link(usersPerEntry, m.entryId, m.userId);
-    link(entriesPerUser, m.userId, m.entryId);
-  }
-
-  const matches = rows.map((m) => ({
-    ...m,
-    ambiguous: usersPerEntry.get(m.entryId)!.size > 1 || entriesPerUser.get(m.userId)!.size > 1,
-  }));
-  return settleClaims(db, matches, actorId, (m) =>
-    publish("roster", [`classroom:${classroomId}`, `user:${m.userId}`]),
-  );
-}
-
-/**
  * Teacher's roster table: identity, claim status, accommodation, and the
  * student's linked GitHub login when the classroom is connected to GitHub
  * (05-web §5.1) — the stored login, followed on rename, never fetched here.
@@ -377,4 +338,73 @@ export async function rosterView(db: Db, classroomId: string) {
     lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
     avatarUrl: shownAvatar(r.userId, avatarAt, pictureUrl),
   }));
+}
+
+/**
+ * Bumped by every roster write after which a pending line may be claimable
+ * by someone it was not before: an import (a line added), and the writes of
+ * `afterRevocation` (an e-mail changed, a claim revoked, a line removed that
+ * held the account's seat). What `claimOnOwnRequest` compares, so a line a
+ * teacher adds in the lobby is claimed at its holder's next request.
+ */
+let rosterEpoch = 0;
+
+export function rosterChanged(): void {
+  rosterEpoch += 1;
+}
+
+/**
+ * The portal sessions that already ran their claim, with the roster epoch
+ * they ran it at — the pass itself, so the requests of one page load wait on
+ * one pass instead of each starting their own. In memory (one process,
+ * ADR-001, as the event bus), bounded: the oldest entry goes first, and a
+ * session it forgot only runs its cheap check once more.
+ */
+const claimedSessions = new Map<string, { epoch: number; pass: Promise<number> }>();
+const CLAIMED_SESSIONS_MAX = 10_000;
+
+/** Whether one of the account's verified addresses is on a pending line: one indexed query. */
+async function hasClaimableLine(db: Db, userId: string): Promise<boolean> {
+  const [hit] = await db
+    .select({ one: sql`1` })
+    .from(userEmails)
+    .innerJoin(
+      enrollments,
+      and(sql`lower(${enrollments.email}) = ${userEmails.email}`, isNull(enrollments.userId)),
+    )
+    .where(and(eq(userEmails.userId, userId), eq(userEmails.verified, true)))
+    .limit(1);
+  return hit !== undefined;
+}
+
+/**
+ * The claim at the person's own next request (ADR-053, addendum of
+ * 2026-10-11): `claimEnrollments`, on the addresses the account already
+ * holds, run by the auth hook for the account's OWN portal session only —
+ * never an impersonation, a `seb` or `kiosk` session, nor a bearer token.
+ * At most once per session between two roster writes (`rosterChanged`),
+ * and only when a line is there to claim. Resolves to the lines claimed.
+ */
+export function claimOnOwnRequest(db: Db, sessionId: string, userId: string): Promise<number> {
+  const epoch = rosterEpoch;
+  const known = claimedSessions.get(sessionId);
+  if (known?.epoch === epoch) return known.pass;
+  const pass = hasClaimableLine(db, userId).then((found) =>
+    found ? claimEnrollments(db, { id: userId }) : 0,
+  );
+  claimedSessions.delete(sessionId);
+  claimedSessions.set(sessionId, { epoch, pass });
+  if (claimedSessions.size > CLAIMED_SESSIONS_MAX) {
+    claimedSessions.delete(claimedSessions.keys().next().value!);
+  }
+  // A pass that failed is not remembered: the next request runs it again.
+  pass.catch(() => {
+    if (claimedSessions.get(sessionId)?.pass === pass) claimedSessions.delete(sessionId);
+  });
+  return pass;
+}
+
+/** A session that ended (sign-out) leaves the guard of `claimOnOwnRequest`. */
+export function forgetClaimedSession(sessionId: string): void {
+  claimedSessions.delete(sessionId);
 }

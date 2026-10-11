@@ -45,6 +45,7 @@ import { purgeProjectReceipts } from "../github/service.js";
 import { releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "../project/service.js";
 import { accessRevoked } from "../realtime/bus.js";
 import { rosterRefusal } from "./errors.js";
+import { rosterChanged } from "./roster.js";
 
 /** The account a new staff seat goes to, or the 409 body that refuses it. */
 export type Seatable = { id: string; email: string } | { error: "unknown_account" | "ambiguous_account"; message: string };
@@ -78,7 +79,7 @@ export async function resolveStaffInvitee(
   return body.userId !== undefined ? byPick(db, body.userId) : byAddress(db, body.email!);
 }
 
-export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
+export { claimEnrollments, claimLines, claimOnOwnRequest, forgetClaimedSession, type ClaimMatch } from "./roster.js";
 export {
   conditionOfCourse,
   conditionView,
@@ -562,10 +563,14 @@ export interface Revocation {
 async function afterRevocation<T>(db: Db, enrollmentId: string, ctx: Revocation, via: RevokeVia, write: (tx: Tx) => Promise<T>): Promise<T> {
   try {
     await revokeEnrollmentAccess(db, ctx.config, enrollmentId, { ...ctx, via });
-    return await db.transaction(async (tx) => {
+    const written = await db.transaction(async (tx) => {
       await releaseLine(tx, enrollmentId);
       return write(tx);
     });
+    // A line left pending, or a seat given up, may now be someone's to claim
+    // at their next own request (`claimOnOwnRequest`).
+    rosterChanged();
+    return written;
   } catch (err) {
     if (err instanceof RevokeFailed) throw rosterRefusal("revoke_failed", { repo: err.repo });
     throw err;

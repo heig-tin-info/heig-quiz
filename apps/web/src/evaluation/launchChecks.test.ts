@@ -53,7 +53,7 @@ describe("launchChecks: a ready evaluation", () => {
     expect(items).toMatchObject({ level: "ok", fix: { kind: "step", step: "questions" } });
     expect(items.title).toBe('launch.items {"n":2,"points":2}');
 
-    // Unlinked accounts are information, never a warning (nobody signed in yet).
+    // Unlinked accounts are information, never a warning (nobody attached yet).
     const roster = one(rows, "roster");
     expect(roster.level).toBe("ok");
     expect(roster.detail).toBe('launch.roster.unlinked {"n":2}');

@@ -81,19 +81,19 @@ Re-importing is safe. Existing seats keep their claim, names are refreshed, noth
 
 ## How students claim their seat
 
-There is no invitation code. A seat is **pending** until a student signs in with an address that matches it; at that moment it becomes **claimed** and the classroom appears on their home. Matching runs against every address the identity provider reveals for the account, not only the one they typed, so a student registered under a private address at edu-ID still claims a seat listed with the school address. The classroom's card on their side names the course, the period, the staff and their extra time, if any: see [For students](students.md).
+There is no invitation code. A seat is **pending** until the student opens Quiz themselves with an address that matches it: at their sign-in, or on the next page they load if they are already signed in. At that moment it becomes **claimed** and the classroom appears on their home. Importing a list or editing an address never attaches anyone on its own, even a student who already has an account: until they come, the row shows no last sign-in, no picture and no GitHub account. A student you add from the waiting room on exam day gets in by reloading the page. Matching runs against every address the identity provider reveals for the account, not only the one they typed, so a student registered under a private address at edu-ID still claims a seat listed with the school address. The classroom's card on their side names the course, the period, the staff and their extra time, if any: see [For students](students.md).
 
-When the matching is ambiguous, because the same student sits on two seats or an address belongs to two accounts, the seat is flagged **conflict** and nothing is attached on a guess. The course's teachers are told by a notification, counted per classroom, except the one whose import or edit raised it; edit or remove one of the rows to resolve it.
+When the matching is ambiguous, because the same student sits on two seats or an address belongs to two accounts, the seat is flagged **conflict** when that student opens Quiz, and nothing is attached on a guess. The course's teachers are told by a notification, counted per classroom; edit or remove one of the rows to resolve it.
 
 ## Editing a row
 
 The menu at the end of a row offers **Edit**, **Revoke claim** and **Remove from roster**.
 
-**Edit** opens the name, the address and the extra time in place. Changing the address revokes the claim: the seat goes back to pending, and the holder of the new address claims it at their next sign-in. The form warns you before you save.
+**Edit** opens the name, the address and the extra time in place. Changing the address revokes the claim: the seat goes back to pending, and the holder of the new address claims it the next time they open Quiz. The form warns you before you save.
 
 **Extra time** is a percentage of the nominal duration of every timed evaluation of this classroom, applied automatically when the attempt starts. A student at `+25%` on a 45-minute exam gets 56 minutes. On an exercise with a common deadline, the extension is the same percentage of the announced window, and that student's attempt closes that much later than the class. It comes from the import file when the sheet carries the column, and can be edited row by row.
 
-**Revoke claim** puts a seat back to pending without touching the name or the address. **Remove from roster** takes the student off the list; their past attempts and results are kept.
+**Revoke claim** puts a seat back to pending without touching the name or the address: the student it matches claims it again the next time they open Quiz, so change the address to give the seat to someone else. **Remove from roster** takes the student off the list; their past attempts and results are kept.
 
 ## Join as student
 
@@ -134,9 +134,9 @@ Your own GitHub account is linked from your **Settings** page, in its **GitHub**
 
 **A student does not see the classroom.** Their seat is still pending: the address they signed in with, or the addresses known to edu-ID for their account, do not match the one in the roster. Compare the two, correct the row, and ask them to sign in again.
 
-**The same student appears twice.** Two seats for one person are flagged **conflict** and neither is claimed. Remove the duplicate; the remaining seat is claimed at the next sign-in.
+**The same student appears twice.** Two seats for one person are flagged **conflict** and neither is claimed. Remove the duplicate; the remaining seat is claimed the next time the student opens Quiz.
 
-**I changed an address and the student lost the classroom.** Changing the address revokes the claim on purpose, so that a seat never stays attached to the wrong account. The student claims it again at their next sign-in with the new address.
+**I changed an address and the student lost the classroom.** Changing the address revokes the claim on purpose, so that a seat never stays attached to the wrong account. The student claims it again the next time they open Quiz with the new address.
 
 **A colleague cannot open my classroom.** Access follows the staff of the course, not the classroom. Add them with **Add a staff member** on the course page's **Members** tab.
 
