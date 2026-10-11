@@ -41,6 +41,16 @@ export const LAUNCH_TOKEN_TTL_SECONDS = 300;
 export const SERVICE_TOKEN_TTL_SECONDS = 120;
 
 /**
+ * A token's own lifetime, `exp - iat`, is positive and at most `ttl`: a
+ * token signed for longer is refused even before it expires (audit M11),
+ * so a consumed `jti` never has to be remembered past `ttl` plus the skew.
+ */
+const lifetimeWithin =
+  (ttl: number) =>
+  (c: { iat: number; exp: number }): boolean =>
+    c.exp > c.iat && c.exp - c.iat <= ttl;
+
+/**
  * An id that names a directory under the portal's volumes root: refused here
  * rather than at the first session start. (`.` and `..` are excluded.)
  */
@@ -160,16 +170,29 @@ export const LaunchTokenClaims = z.object({
   /** The target repository; null when it is not provisioned yet. */
   repo: CodespaceRepoRef.nullable(),
   seb: z.object({ configKey: ConfigKey }).optional(),
-});
+}).refine(lifetimeWithin(LAUNCH_TOKEN_TTL_SECONDS), "a launch token lives five minutes at most");
 export type LaunchTokenClaims = z.infer<typeof LaunchTokenClaims>;
 
-/** Service token (2 min) for server-to-server calls, either direction. */
-export const ServiceTokenClaims = z.object({
-  iss: z.enum([...CODESPACE_ISSUERS, PORTAL_ISSUER]),
-  aud: z.enum([SERVICE_AUDIENCE, PLATFORM_SERVICE_AUDIENCE]),
-  iat: z.number(),
-  exp: z.number(),
-});
+/**
+ * Service token (2 min) for the platform's calls to the portal
+ * (`PUT /api/assignments/:id`, `GET /api/assignments/:id/sessions`). Since
+ * audit L25 (ADR-078, amendment of 2026-10-11) it authorizes ONE request:
+ * `method`, `path` (path and query) and, with a body, `bodyHash` (SHA-256 of
+ * its bytes, base64url) are `@quiz/domain`'s `requestBinding` of it, and
+ * the portal consumes its `jti` once. An unbound token is refused.
+ */
+export const ServiceTokenClaims = z
+  .object({
+    iss: z.enum([...CODESPACE_ISSUERS, PORTAL_ISSUER]),
+    aud: z.enum([SERVICE_AUDIENCE, PLATFORM_SERVICE_AUDIENCE]),
+    iat: z.number(),
+    exp: z.number(),
+    jti: z.string().min(1).max(200),
+    method: z.string().min(1),
+    path: z.string().startsWith("/"),
+    bodyHash: z.string().min(1).optional(),
+  })
+  .refine(lifetimeWithin(SERVICE_TOKEN_TTL_SECONDS), "a service token lives two minutes at most");
 export type ServiceTokenClaims = z.infer<typeof ServiceTokenClaims>;
 
 // ---------------------------------------------------------- the git relay's tokens (ADR-078)
@@ -206,7 +229,7 @@ const gitRequestClaims = <A extends string>(aud: A) =>
     userId: z.uuid(),
     repository: RepositoryFullName,
   });
-const shortLived = (c: { iat: number; exp: number }) => c.exp - c.iat <= GIT_REQUEST_TTL_SECONDS && c.exp > c.iat;
+const shortLived = lifetimeWithin(GIT_REQUEST_TTL_SECONDS);
 
 /** `POST /app/codespace/git-token`: an installation token on ONE repository. */
 export const GitTokenRequestClaims = gitRequestClaims(GIT_TOKEN_AUDIENCE).refine(shortLived, "a request lives one minute at most");

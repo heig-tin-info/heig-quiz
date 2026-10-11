@@ -11,7 +11,9 @@
  * `iat`, `aud`, `iss` and, when asked, `jti`.
  *
  * Single use of a `jti` is the portal's business (it consumes the id), not
- * a property of this function.
+ * a property of this function. {@link requestBinding} and
+ * {@link bindingMismatch} tie a service token to the one HTTP request it
+ * authorizes (ADR-078, amendment of 2026-10-11).
  */
 
 const enc = new TextEncoder();
@@ -35,6 +37,12 @@ async function hmacKey(secret: string, usage: KeyUsage): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [usage]);
 }
 
+/**
+ * The default tolerance on `exp` and `iat`: a token stays accepted until
+ * `exp + 30 s`. Whoever consumes a `jti` keeps its row at least that long.
+ */
+export const HS256_SKEW_SECONDS = 30;
+
 export async function signHs256(claims: Record<string, unknown>, secret: string): Promise<string> {
   const header = b64url(enc.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
   const payload = b64url(enc.encode(JSON.stringify(claims)));
@@ -55,7 +63,7 @@ export interface VerifyHs256Options {
   requireJti?: boolean;
   /** Injectable clock (Unix seconds). */
   now?: () => number;
-  /** Tolerance in seconds on `exp` and `iat` (default 30). */
+  /** Tolerance in seconds on `exp` and `iat` (default {@link HS256_SKEW_SECONDS}). */
   skewSeconds?: number;
 }
 
@@ -96,7 +104,7 @@ export async function verifyHs256<T extends Record<string, unknown>>(
   const valid = await crypto.subtle.verify("HMAC", await hmacKey(secret, "verify"), signature, enc.encode(`${h}.${p}`));
   if (!valid) return { ok: false, reason: "bad-signature" };
   const now = opts.now?.() ?? Math.floor(Date.now() / 1000);
-  const skew = opts.skewSeconds ?? 30;
+  const skew = opts.skewSeconds ?? HS256_SKEW_SECONDS;
   const exp = claims["exp"];
   const iat = claims["iat"];
   if (typeof exp !== "number" || exp + skew < now) return { ok: false, reason: "expired" };
@@ -108,4 +116,44 @@ export async function verifyHs256<T extends Record<string, unknown>>(
   const jti = claims["jti"];
   if (opts.requireJti && (typeof jti !== "string" || jti === "")) return { ok: false, reason: "missing-jti" };
   return { ok: true, claims };
+}
+
+// ---------------------------------------------------------------- request binding
+
+/**
+ * The one HTTP request a service token authorizes: its method, its target
+ * (path and query, as the receiving server reads it) and, when it carries a
+ * body, the SHA-256 of the body's exact bytes in base64url. The caller signs
+ * these into the token's `method`, `path` and `bodyHash` claims; the receiver
+ * recomputes them from the request it got, so a captured token cannot be
+ * re-aimed at another route nor carry another body.
+ */
+export interface RequestBinding {
+  method: string;
+  path: string;
+  /** Absent for a request without a body (or an empty one). */
+  bodyHash?: string;
+}
+
+export async function requestBinding(
+  method: string,
+  path: string,
+  body?: string | Uint8Array | null,
+): Promise<RequestBinding> {
+  const bytes = typeof body === "string" ? enc.encode(body) : body;
+  if (!bytes || bytes.length === 0) return { method: method.toUpperCase(), path };
+  // A copy over a fresh ArrayBuffer: `digest` takes no view of a shared one.
+  const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
+  return { method: method.toUpperCase(), path, bodyHash: b64url(new Uint8Array(digest)) };
+}
+
+/** Null when the signed claims bind exactly `actual`; otherwise the first part that differs. */
+export function bindingMismatch(
+  claims: Record<string, unknown>,
+  actual: RequestBinding,
+): "method" | "path" | "body" | null {
+  if (claims["method"] !== actual.method) return "method";
+  if (claims["path"] !== actual.path) return "path";
+  if ((claims["bodyHash"] ?? null) !== (actual.bodyHash ?? null)) return "body";
+  return null;
 }

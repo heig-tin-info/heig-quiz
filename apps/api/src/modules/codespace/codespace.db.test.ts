@@ -34,10 +34,11 @@ import {
   ProjectWorkspace,
   ProjectWorkspaceSessions,
   SERVICE_AUDIENCE,
+  ServiceTokenClaims,
   type AdminTeacher,
   type SessionKind,
 } from "@quiz/contracts";
-import { verifyHs256 } from "@quiz/domain";
+import { bindingMismatch, requestBinding, verifyHs256 } from "@quiz/domain";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
@@ -101,6 +102,8 @@ interface PortalCall {
   path: string;
   authorization: string | null;
   body: unknown;
+  /** The body's exact text, as the portal hashes it. */
+  raw: string | null;
 }
 const portal = {
   calls: [] as PortalCall[],
@@ -115,7 +118,8 @@ async function portalFetch(url: URL, init: RequestInit): Promise<Response> {
   if (portal.down) throw new TypeError("fetch failed");
   const headers = new Headers(init.headers);
   const body = typeof init.body === "string" ? JSON.parse(init.body) : null;
-  portal.calls.push({ method: init.method ?? "GET", path: url.pathname, authorization: headers.get("authorization"), body });
+  const raw = typeof init.body === "string" ? init.body : null;
+  portal.calls.push({ method: init.method ?? "GET", path: url.pathname, authorization: headers.get("authorization"), body, raw });
   if (init.method === "PUT" && /^\/api\/assignments\/[^/]+$/.test(url.pathname)) {
     if (portal.putStatus !== 200) return json({ error: "nope" }, portal.putStatus);
     return json({ id: (body as { id: string }).id, configKey: null, sebLink: null });
@@ -124,6 +128,22 @@ async function portalFetch(url: URL, init: RequestInit): Promise<Response> {
     return typeof portal.sessions === "number" ? json({ error: "x" }, portal.sessions) : json(portal.sessions);
   }
   return json({ error: "not_found" }, 404);
+}
+
+/**
+ * The portal's own checks (audit L25): the token verifies, parses as the
+ * contract's, carries a `jti`, and binds exactly the request it rode on.
+ */
+async function expectBoundServiceToken(call: PortalCall): Promise<void> {
+  const verdict = await verifyHs256(call.authorization!.replace(/^Bearer /, ""), SECRET, {
+    audience: SERVICE_AUDIENCE,
+    issuer: "heig-quiz",
+    requireJti: true,
+    now: AT_NOW,
+  });
+  expect(verdict.ok).toBe(true);
+  const claims = ServiceTokenClaims.parse(verdict.ok ? verdict.claims : null);
+  expect(bindingMismatch(claims, await requestBinding(call.method, call.path, call.raw))).toBeNull();
 }
 
 const fetchStub = (input: string | URL | Request, init: RequestInit = {}) => {
@@ -373,12 +393,7 @@ describe("the sync (codespace.sync)", () => {
 
     const [put] = portal.calls;
     expect(put).toMatchObject({ method: "PUT", path: `/api/assignments/${lab.id}` });
-    const verdict = await verifyHs256(put!.authorization!.replace(/^Bearer /, ""), SECRET, {
-      audience: SERVICE_AUDIENCE,
-      issuer: "heig-quiz",
-      now: AT_NOW,
-    });
-    expect(verdict.ok).toBe(true);
+    await expectBoundServiceToken(put!);
     const body = CodespaceAssignmentSync.parse(put!.body);
     expect(body).toMatchObject({
       id: lab.id,
@@ -681,8 +696,7 @@ describe("the project's workspaces", () => {
       ["s3", null],
     ]);
     expect(read.body).not.toContain("x@heig.test");
-    const verdict = await verifyHs256(portal.calls.at(-1)!.authorization!.replace(/^Bearer /, ""), SECRET, { audience: SERVICE_AUDIENCE, issuer: "heig-quiz", now: AT_NOW });
-    expect(verdict.ok).toBe(true);
+    await expectBoundServiceToken(portal.calls.at(-1)!);
 
     portal.sessions = 404;
     expect(ProjectWorkspaceSessions.parse((await call("GET", `/app/api/projects/${lab.id}/workspace/sessions`, owner.headers)).json())).toEqual({ reachable: true, sessions: [] });

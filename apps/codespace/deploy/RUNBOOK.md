@@ -325,6 +325,56 @@ The VM's input policy (`table inet host`, beside this portal's
 A new port the portal must serve is a line in `infra/engine/host.nft`
 first; `CS_INSTANCE=<i> …/infra/net/test.sh` stays the network's test.
 
+### Disk (audit M11): the owner's checklist
+
+The work volumes, the staging repositories and the SQLite database (where
+each push's `PushEvent`, the proof of submission, is written) share
+`/srv/quiz-codespace/<i>`. The code bounds one push: `receive.maxInputSize`
+on every staging repository (`RECEIVE_MAX_INPUT_BYTES`, 100 MiB,
+`src/git/staging.ts`). It bounds nothing else: a student who fills their
+`/work`, or pushes 100 MiB a hundred times, fills the file system, and every
+student's next push is refused for want of room. What closes it is on the
+VM, not in the repository:
+
+- [ ] **A quota per work volume.** `/srv/quiz-codespace` on XFS mounted with
+  `prjquota`, one project per `<student>/<assignment>` directory
+  (`xfs_quota -x -c 'project -s …'`, `limit -p bhard=…`), set when a
+  volume is created; or each volume a fixed-size loop or LVM volume. The
+  portal creates the directories (`ensureStagingRepo`) and would need a
+  hook to set the project: until then, a quota on the whole
+  `volumes/` tree at least keeps the database's file system writable.
+- [ ] **The database on a partition of its own.** `/srv/quiz-codespace/<i>/var`
+  (`DATABASE_PATH`) on a file system the volumes cannot fill.
+- [ ] **A free-space alert** on both file systems (say, under 15 %), in the
+  VM's monitoring, before a push is refused.
+
+### The service API's door (audit L25): the owner's checklist
+
+`PUT /api/assignments/:id` and `GET /api/assignments/:id/sessions` are on
+the public site. Since 2026-10-11 a service token is single use and bound to
+its request (method, path, body; ADR-078's amendment), so one seen in
+transit serves no second call. Only Quiz's application VM calls them, so the
+site can also refuse everyone else, before `reverse_proxy` (the addresses are
+deployment.md §1's; confirm that staging's application calls from them too):
+
+```caddyfile
+	@service_elsewhere {
+		path /api/*
+		not remote_ip 128.140.71.35 2a01:4f8:1c19:1164::1
+	}
+	respond @service_elsewhere 404
+```
+
+- [ ] Added to `deploy/Caddyfile`, the template, by a pull request: every
+  deploy reinstalls `/etc/caddy/conf.d/quiz-codespace-<i>.caddy` from it
+  (`install.sh`, `cs_install_instance`), so a hand edit on the VM lasts
+  until the next deploy.
+- [ ] `curl -si https://code-dev.chevallier.io/api/assignments/x/sessions`
+  from a workstation answers 404; the staff's workspace list in Quiz still
+  loads (the application VM gets through).
+
+`smoke.mjs` calls the loopback port and is not affected.
+
 ### Backup and restore
 
 Both instances are exported daily by `backup-export.sh` and pulled by `srv`

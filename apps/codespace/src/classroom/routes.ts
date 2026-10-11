@@ -21,7 +21,9 @@
  *    Browser Exam Keys. The proxy will never see one.
  *  - **Single use.** The token's `jti` is consumed by an `INSERT` whose primary
  *    key is the guarantee; a replay cannot run alongside a first call, SQLite
- *    refuses the second row.
+ *    refuses the second row. A service token is single use too, and bound to
+ *    its request: method, path and the SHA-256 of its body (audit L25,
+ *    ADR-078 amendment of 2026-10-11).
  *
  * Nothing that is logged carries the token, its signature or a BEK.
  */
@@ -33,11 +35,12 @@ import {
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
   SERVICE_AUDIENCE,
+  ServiceTokenClaims,
   isSafeId,
   type CodespaceAssignmentSyncResult,
   type CodespaceSessionSummary,
 } from "@quiz/contracts";
-import { verifyHs256 } from "@quiz/domain";
+import { HS256_SKEW_SECONDS, bindingMismatch, requestBinding, verifyHs256 } from "@quiz/domain";
 import { eq, lt } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
@@ -147,13 +150,24 @@ export function upsertLaunchUser(db: Db, claims: LaunchTokenClaims): UserRow {
 }
 
 /**
- * Consumes a `jti`. Returns false if it had already been consumed: the primary
- * key of `launch_tokens_used` is the guarantee, not a read followed by a write.
- * Expired rows are purged along the way — beyond `exp`, `verifyHs256` already
- * refuses the token, and the row no longer prevents anything.
+ * How long a consumed `jti` outlives its token's `exp`: `verifyHs256`
+ * accepts a token until `exp + HS256_SKEW_SECONDS`, so a row purged at `exp`
+ * made a used link valid again for those seconds (audit M11). A minute more
+ * covers a clock step between the check and the purge.
+ */
+export const JTI_RETENTION_AFTER_EXP_MS = (HS256_SKEW_SECONDS + 60) * 1000;
+
+/**
+ * Consumes a `jti`, of a launch or a service token. Returns false if it had
+ * already been consumed: the primary key of `launch_tokens_used` is the
+ * guarantee, not a read followed by a write. Rows are purged along the way
+ * once `verifyHs256` refuses their token anyway, {@link JTI_RETENTION_AFTER_EXP_MS}
+ * after its `exp`.
  */
 export function consumeJti(db: Db, jti: string, expSeconds: number, now = new Date()): boolean {
-  db.delete(launchTokensUsed).where(lt(launchTokensUsed.exp, now)).run();
+  db.delete(launchTokensUsed)
+    .where(lt(launchTokensUsed.exp, new Date(now.getTime() - JTI_RETENTION_AFTER_EXP_MS)))
+    .run();
   try {
     db.insert(launchTokensUsed)
       .values({ jti, exp: new Date(expSeconds * 1000), usedAt: now })
@@ -174,129 +188,157 @@ async function classroomRoutesImpl(
   const secret = config.CODESPACE_LAUNCH_SECRET;
   const secure = config.NODE_ENV === "production";
 
-  /** Service token: `Authorization: Bearer <jwt>`, aud `heig-codespace-api`. */
+  /** The exact bytes of a service call's JSON body, which its token's `bodyHash` signs. */
+  const rawBodies = new WeakMap<FastifyRequest, Buffer>();
+
+  /**
+   * Service token: `Authorization: Bearer <jwt>`, aud `heig-codespace-api`,
+   * at most two minutes long (`ServiceTokenClaims`), bound to this very
+   * request — method, path and query, body — and single use: its `jti` is
+   * consumed once the binding holds, so a captured token serves neither a
+   * second time nor on another route (audit L25). Every refusal is the same
+   * 401; the log names the reason, never the token.
+   */
   async function serviceToken(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
     const header = request.headers.authorization ?? "";
     const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
-    if (token === "") {
-      await reply.code(401).send({ error: "unauthenticated" });
-      return false;
-    }
+    const refusal = token === "" ? "missing-token" : await serviceTokenRefusal(request, token);
+    if (refusal === null) return true;
+    if (refusal !== "missing-token") request.log.warn({ reason: refusal }, "service token refused");
+    await reply.code(401).send({ error: "unauthenticated" });
+    return false;
+  }
+
+  async function serviceTokenRefusal(request: FastifyRequest, token: string): Promise<string | null> {
     const verdict = await verifyHs256(token, secret, {
       audience: SERVICE_AUDIENCE,
       issuer: CODESPACE_ISSUERS,
+      requireJti: true,
     });
-    if (!verdict.ok) {
-      request.log.warn({ reason: verdict.reason }, "service token refused");
-      await reply.code(401).send({ error: "unauthenticated" });
-      return false;
-    }
-    return true;
+    if (!verdict.ok) return verdict.reason;
+    const claims = ServiceTokenClaims.safeParse(verdict.claims);
+    if (!claims.success) return "bad-claims";
+    const actual = await requestBinding(request.method, request.url, rawBodies.get(request));
+    const mismatch = bindingMismatch(claims.data, actual);
+    if (mismatch !== null) return `unbound-${mismatch}`;
+    return consumeJti(db, claims.data.jti, claims.data.exp) ? null : "jti-replayed";
   }
 
-  // --- PUT /api/assignments/:id --------------------------------------------
-  app.put<{ Params: { assignmentId: string } }>(
-    "/api/assignments/:assignmentId",
-    async (request, reply) => {
-      if (!(await serviceToken(request, reply))) return reply;
+  // The service routes in a context of their own, whose only body parser is
+  // JSON kept as bytes: the body hash is computed over what was received,
+  // and any other content type is a 415.
+  await app.register(async (api) => {
+    const parseJson = api.getDefaultJsonParser("error", "error");
+    api.removeAllContentTypeParsers();
+    api.addContentTypeParser("application/json", { parseAs: "buffer" }, (request, body, done) => {
+      rawBodies.set(request, body as Buffer);
+      parseJson(request, (body as Buffer).toString("utf8"), done);
+    });
 
-      const parsed = CodespaceAssignmentSync.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.code(400).send({
-          error: "invalid_body",
-          issues: parsed.error.issues.map((i) => ({
-            path: i.path.join("."),
-            message: i.message,
-          })),
-        });
-      }
-      const body: CodespaceAssignmentSync = parsed.data;
-      if (body.id !== request.params.assignmentId) {
-        return reply.code(400).send({ error: "id_mismatch" });
-      }
+    // --- PUT /api/assignments/:id --------------------------------------------
+    api.put<{ Params: { assignmentId: string } }>(
+      "/api/assignments/:assignmentId",
+      async (request, reply) => {
+        if (!(await serviceToken(request, reply))) return reply;
 
-      // An exam's Browser Exam Keys are optional (D21 point 5): none means
-      // the Config Key alone, which `/launch` checks against the student's
-      // own `.seb`, built by the platform (D21 point 2).
-      const mode = body.mode === "online_seb" ? ("exam" as const) : ("lab" as const);
+        const parsed = CodespaceAssignmentSync.safeParse(request.body);
+        if (!parsed.success) {
+          return reply.code(400).send({
+            error: "invalid_body",
+            issues: parsed.error.issues.map((i) => ({
+              path: i.path.join("."),
+              message: i.message,
+            })),
+          });
+        }
+        const body: CodespaceAssignmentSync = parsed.data;
+        if (body.id !== request.params.assignmentId) {
+          return reply.code(400).send({ error: "id_mismatch" });
+        }
 
-      const previous = findAssignment(db, body.id);
-      const sourceRef = splitRepoRef(body.sourceRepo.fullName);
-      if (!sourceRef) return reply.code(400).send({ error: "invalid_source_repo" });
+        // An exam's Browser Exam Keys are optional (D21 point 5): none means
+        // the Config Key alone, which `/launch` checks against the student's
+        // own `.seb`, built by the platform (D21 point 2).
+        const mode = body.mode === "online_seb" ? ("exam" as const) : ("lab" as const);
 
-      const row = {
-        id: body.id,
-        title: body.name,
-        mode,
-        image: body.image ?? config.CODESPACE_DEFAULT_IMAGE,
-        uploadPack: true,
-        // Invariant 6: the clone URL of the teacher's template, and nothing
-        // else, bootstraps an exam staging repository.
-        templateRepo: opts.repoUrl ? opts.repoUrl(sourceRef) : null,
-        // The target repository is no longer an attribute of the assignment:
-        // it arrives through the launch token, student by student
-        // (`sessions.targetRepo`).
-        targetRepo: null,
-        targetRepoPattern: null,
-        teacherId: body.teacher.id,
-        teacherEmail: body.teacher.email,
-        maxActiveSessions: body.quota.maxActiveSessions,
-        classroomId: body.classroomId,
-        classroomName: body.classroomName,
-        sourceRepo: body.sourceRepo,
-        opensAt: new Date(body.startAt),
-        closesAt: body.deadlineAt ? new Date(body.deadlineAt) : null,
-        // Teacher-side secrets (ADR-047 §7): stored, never logged.
-        beks: mode === "exam" ? body.browserExamKeys : [],
-        createdAt: previous?.createdAt ?? new Date(),
-      };
-      const { createdAt: _keep, ...updatable } = row;
-      db.insert(assignments)
-        .values(row)
-        .onConflictDoUpdate({ target: assignments.id, set: updatable })
-        .run();
+        const previous = findAssignment(db, body.id);
+        const sourceRef = splitRepoRef(body.sourceRepo.fullName);
+        if (!sourceRef) return reply.code(400).send({ error: "invalid_source_repo" });
 
-      request.log.info(
-        { assignmentId: body.id, mode, classroomId: body.classroomId },
-        previous ? "assignment updated from the platform" : "assignment synchronized from the platform",
-      );
-      // `CodespaceAssignmentSyncResult`, wire-compatible with heig-classroom:
-      // the portal serves no `.seb` any more (D21), so it has no Config Key
-      // nor link to announce.
-      const result: CodespaceAssignmentSyncResult = { id: body.id, configKey: null, sebLink: null };
-      return reply.code(200).send(result);
-    },
-  );
+        const row = {
+          id: body.id,
+          title: body.name,
+          mode,
+          image: body.image ?? config.CODESPACE_DEFAULT_IMAGE,
+          uploadPack: true,
+          // Invariant 6: the clone URL of the teacher's template, and nothing
+          // else, bootstraps an exam staging repository.
+          templateRepo: opts.repoUrl ? opts.repoUrl(sourceRef) : null,
+          // The target repository is no longer an attribute of the assignment:
+          // it arrives through the launch token, student by student
+          // (`sessions.targetRepo`).
+          targetRepo: null,
+          targetRepoPattern: null,
+          teacherId: body.teacher.id,
+          teacherEmail: body.teacher.email,
+          maxActiveSessions: body.quota.maxActiveSessions,
+          classroomId: body.classroomId,
+          classroomName: body.classroomName,
+          sourceRepo: body.sourceRepo,
+          opensAt: new Date(body.startAt),
+          closesAt: body.deadlineAt ? new Date(body.deadlineAt) : null,
+          // Teacher-side secrets (ADR-047 §7): stored, never logged.
+          beks: mode === "exam" ? body.browserExamKeys : [],
+          createdAt: previous?.createdAt ?? new Date(),
+        };
+        const { createdAt: _keep, ...updatable } = row;
+        db.insert(assignments)
+          .values(row)
+          .onConflictDoUpdate({ target: assignments.id, set: updatable })
+          .run();
 
-  // --- GET /api/assignments/:id/sessions -----------------------------------
-  app.get<{ Params: { assignmentId: string } }>(
-    "/api/assignments/:assignmentId/sessions",
-    async (request, reply) => {
-      if (!(await serviceToken(request, reply))) return reply;
-      const assignment = findAssignment(db, request.params.assignmentId);
-      if (!assignment) return reply.code(404).send({ error: "unknown_assignment" });
-      const summaries: CodespaceSessionSummary[] = assignmentSessionRows(
-        db,
-        assignment.id,
-      ).map(({ session, user, lastPushAt, rejectedPush }) => ({
-        sessionId: session.id,
-        // The platform's id, the one the caller matches with its own users.
-        // Every account is born from a launch token (`upsertLaunchUser`), so
-        // every subject carries the prefix.
-        userId: user.oidcSub.slice(CLASSROOM_SUB_PREFIX.length),
-        email: user.email,
-        state: session.state,
-        createdAt: session.createdAt.toISOString(),
-        lastSeenAt: session.lastSeen.toISOString(),
-        lastPushAt: lastPushAt ? lastPushAt.toISOString() : null,
-        // GitHub's refusal of the relay (ADR-078 §6), for the staff's workspace list.
-        rejectedPush: rejectedPush
-          ? { ref: rejectedPush.ref, at: rejectedPush.at.toISOString(), reason: rejectedPush.reason }
-          : null,
-      }));
-      return reply.code(200).send(summaries);
-    },
-  );
+        request.log.info(
+          { assignmentId: body.id, mode, classroomId: body.classroomId },
+          previous ? "assignment updated from the platform" : "assignment synchronized from the platform",
+        );
+        // `CodespaceAssignmentSyncResult`, wire-compatible with heig-classroom:
+        // the portal serves no `.seb` any more (D21), so it has no Config Key
+        // nor link to announce.
+        const result: CodespaceAssignmentSyncResult = { id: body.id, configKey: null, sebLink: null };
+        return reply.code(200).send(result);
+      },
+    );
+
+    // --- GET /api/assignments/:id/sessions -----------------------------------
+    api.get<{ Params: { assignmentId: string } }>(
+      "/api/assignments/:assignmentId/sessions",
+      async (request, reply) => {
+        if (!(await serviceToken(request, reply))) return reply;
+        const assignment = findAssignment(db, request.params.assignmentId);
+        if (!assignment) return reply.code(404).send({ error: "unknown_assignment" });
+        const summaries: CodespaceSessionSummary[] = assignmentSessionRows(
+          db,
+          assignment.id,
+        ).map(({ session, user, lastPushAt, rejectedPush }) => ({
+          sessionId: session.id,
+          // The platform's id, the one the caller matches with its own users.
+          // Every account is born from a launch token (`upsertLaunchUser`), so
+          // every subject carries the prefix.
+          userId: user.oidcSub.slice(CLASSROOM_SUB_PREFIX.length),
+          email: user.email,
+          state: session.state,
+          createdAt: session.createdAt.toISOString(),
+          lastSeenAt: session.lastSeen.toISOString(),
+          lastPushAt: lastPushAt ? lastPushAt.toISOString() : null,
+          // GitHub's refusal of the relay (ADR-078 §6), for the staff's workspace list.
+          rejectedPush: rejectedPush
+            ? { ref: rejectedPush.ref, at: rejectedPush.at.toISOString(), reason: rejectedPush.reason }
+            : null,
+        }));
+        return reply.code(200).send(summaries);
+      },
+    );
+  });
 
   // --- GET /launch?token=… -------------------------------------------------
   app.get<{ Querystring: { token?: string } }>("/launch", async (request, reply) => {
@@ -319,6 +361,7 @@ async function classroomRoutesImpl(
         verdict.reason,
       );
     }
+    // Five minutes at most (`exp - iat`, audit M11), besides the fields.
     const claimed = LaunchTokenClaims.safeParse(verdict.claims);
     if (!claimed.success) return refuse("launchIncomplete", "bad-claims");
     const claims: LaunchTokenClaims = claimed.data;

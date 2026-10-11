@@ -251,7 +251,7 @@ describe("resumption: empty staging repository, workspace to be completed", () =
     });
   }
 
-  it("re-seeds, sets the default branch and its tracking, and keeps the student's files", async () => {
+  it("re-seeds the staging repository, and completes the workspace in the container, never from the host", async () => {
     const { assignment, volumeDir } = await sessionWithoutRepo();
     await fillTheForge("master");
     engine.kill(engine.containerName(findAnySession(db, "student", "tp")!.id));
@@ -262,17 +262,14 @@ describe("resumption: empty staging repository, workspace to be completed", () =
     const work = join(volumeDir, "work");
     const refs = await refSnapshot(join(volumeDir, "staging.git"));
     expect([...refs.keys()]).toEqual(["refs/heads/master"]);
-    // Argument-less `git pull` and `git push` must work inside the container.
-    expect((await git(["-C", work, "branch", "--show-current"])).trim()).toBe("master");
-    expect(
-      (
-        await git(["-C", work, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
-      ).trim(),
-    ).toBe("origin/master");
-    expect((await git(["-C", work, "ls-files"])).split("\n").filter(Boolean).sort()).toEqual([
-      "Makefile",
-      "quadratic.c",
+    // `work/.git` existed: the host runs no git in it (audit L23), even while
+    // it could still write there. The default branch and its tracking are
+    // set by `completionScript`, inside the container.
+    expect(engine.execs.map((e) => e.argv[2])).toEqual([
+      identityScript({ name: "Sacha Student", email: "student@heig-vd.ch" }),
+      completionScript("master"),
     ]);
+    expect((await git(["-C", work, "ls-files"])).trim()).toBe("");
     // The file the student had written is still there, untracked.
     expect((await git(["-C", work, "status", "--porcelain"])).trim()).toBe("?? test");
   });
@@ -328,7 +325,10 @@ describe("resumption: empty staging repository, workspace to be completed", () =
     await manager.start(user, assignment);
 
     expect((await git(["-C", work, "rev-parse", "HEAD"])).trim()).toBe(sha);
-    expect(engine.execs).toEqual([]);
+    // Only the identity, in the container: no completion.
+    expect(engine.execs.map((e) => e.argv[2])).toEqual([
+      identityScript({ name: "Sacha Student", email: "student@heig-vd.ch" }),
+    ]);
   });
 });
 
@@ -357,6 +357,11 @@ describe("the student's git identity in work/.git/config", () => {
     engine.kill(engine.containerName(session.id));
     await makeManager().start(user, assignment);
     expect(await config(work, "user.name")).toBe("Pseudonym");
+    // An existing repository: its identity goes through the container's
+    // script, which overwrites nothing (below).
+    expect(engine.execs.map((e) => e.argv[2])).toEqual([
+      identityScript({ name: "Sacha Student", email: "student@heig-vd.ch" }),
+    ]);
   });
 
   it("goes through podman exec when work/ already belongs to the container", async () => {

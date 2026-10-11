@@ -7,7 +7,9 @@ Accepted (2026-10-07, product owner: option B below). Revised the same day after
 that last point (§7) confirmed by the product owner on 2026-10-07. Delivered by merge task M6-10
 ([task card](../merge/history/09-tasks-delivered.md#m6-10-git-relay-through-quiz-issued-scoped-tokens-adr-078),
 [progress](../merge/PROGRESS.md)). Amended 2026-10-09: deployment state left to PROGRESS.md (M6-10 done,
-staging checks pending).
+staging checks pending). Amended 2026-10-11 (security audit M11 and L25): the portal's service
+tokens are single use and bound to their request, and every token's lifetime is capped
+([amendment](#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use)).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -440,6 +442,56 @@ installed it, until the key is rotated.
   `pushedBy` in the `github` module, with tests that a declared relayed
   push is graded and that any other App push still is not; the relay's
   `refspecFor` without force and its `rejected` state, with tests.
+
+## Amendment 2026-10-11: service tokens bound to their request, single use
+
+Scope: the service tokens Quiz signs for the portal's two routes
+(`PUT /api/assignments/:id`, `GET /api/assignments/:id/sessions`, ADR-047),
+and the lifetime of every HS256 token of the boundary. Not §2's route on
+Quiz, whose rules stand (below).
+
+- **Bound to one request (audit L25).** A service token was a two-minute
+  bearer, reusable on either route by whoever saw it. It now also carries
+  `jti` (random), `method`, `path` (path and query, as the portal reads
+  `request.url`) and, when the request has a body, `bodyHash`: the SHA-256 of
+  the body's exact bytes, base64url. The three are `@quiz/domain`'s
+  `requestBinding` (pure, Web Crypto), computed by Quiz from the request it
+  sends (`portalCall`, `modules/codespace/service.ts`) and by the portal
+  from the request it received (its service routes parse JSON as bytes, any
+  other content type is a 415); `bindingMismatch` compares them. The shape is
+  `ServiceTokenClaims` of `@quiz/contracts`; an unbound token is refused, so
+  heig-classroom's service tokens no longer open these routes.
+- **Single use.** Once the binding holds, the portal consumes the `jti` in
+  `launch_tokens_used`, the launch tokens' table (the primary key is the
+  guarantee); a replay is a 401. Quiz signs a fresh token for every call,
+  retries included.
+- **Rows outlive the token (audit M11).** `verifyHs256` accepts a token
+  until `exp + 30 s` (`HS256_SKEW_SECONDS`); the purge deleted a consumed
+  `jti` at `exp`, so a used launch link served again for thirty seconds. A
+  row is now kept until `exp + 30 s + 60 s`.
+- **Lifetimes are capped by the contract.** `exp - iat` must be positive and
+  at most `LAUNCH_TOKEN_TTL_SECONDS` (300) for a launch token and
+  `SERVICE_TOKEN_TTL_SECONDS` (120) for a service token, as §2 already did
+  for the relay's requests (60): a token signed for longer is refused before
+  it expires, and the purge's bound holds for every row.
+- **Deploy skew.** No release accepts both forms. Both apps deploy from the
+  same commit, the application first (`deploy-staging`, then
+  `deploy-production` before `deploy-codespace-prod`, `.github/workflows/ci.yml`):
+  an old portal ignores the new claims, and a new portal only ever meets the
+  new Quiz. Rolling the application back alone leaves the sync and the
+  staff's workspace list refused (401) until the portal is rolled back too;
+  launches are unaffected. `deploy/smoke.mjs` signs bound tokens.
+- **§2's route is unchanged.** The portal's requests to Quiz were bound from
+  the start (the request is the token, a distinct audience per route, an
+  empty body); their `jti` stays logged, not consumed. Consuming it would
+  need a table on Quiz's side. A replay within the minute would hand whoever
+  captured the request (TLS broken, or a leaked log) the installation token
+  §2 grants the portal for that repository. Left open.
+- **The owner's part** (`apps/codespace/deploy/RUNBOOK.md`, Day to day): the
+  Caddy site may refuse `/api/*` to anyone but the application VM, and the
+  disk the volumes share with the portal's database needs a quota per volume,
+  a partition of its own for the database and a free-space alert. In code,
+  a push into a staging repository is capped by `receive.maxInputSize`.
 
 ## Alternatives considered
 

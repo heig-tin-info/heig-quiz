@@ -132,7 +132,13 @@ channel divergence for its containers.
    once, on `GET /launch`.
 7. **A launch token is used only once.** Its `jti` is consumed by inserting
    a row into `launch_tokens_used` before any other check: the primary key
-   is the guarantee. A token refused for any other reason is burnt.
+   is the guarantee. A token refused for any other reason is burnt. A row
+   outlives its token's `exp` by the HS256 skew plus a minute
+   (`JTI_RETENTION_AFTER_EXP_MS`), never less, and a token signed for longer
+   than its lifetime is refused (audit M11). **A service token is used only
+   once too, for one request**: bound to its method, path and body hash,
+   its `jti` consumed in the same table (audit L25, ADR-078 amendment of
+   2026-10-11); an unbound one is refused.
 8. **The quota is per teacher, across all assignments**, counted on
    `sessions.teacherId` in the live states. Resuming a live session does
    not consult it.
@@ -151,6 +157,16 @@ channel divergence for its containers.
     `SEB_EXTRA_ALLOWED_HOSTS`; the student's Config Key reaches `/launch`
     signed in the launch token (`seb` claim). An exam token without it is
     refused.
+13. **The portal never runs git on a `.git` it did not create** (audit
+    L23). A `.git` in `work/` may be the student's, and its hooks, config
+    or `alternates` would run as the portal: `inspectWorkspace` reads it as
+    plain files (no symlink followed, no FIFO opened), and completing or
+    configuring an existing repository goes through `engine.exec`, inside
+    the container. Host-side git runs only on the repository the same call
+    has just created, with hooks and fsmonitor off. The staging repositories
+    are the portal's own; a push into one is capped by
+    `receive.maxInputSize` (audit M11; the disk quotas themselves are the
+    VM's, deploy/RUNBOOK.md, Disk).
 
 ## Commands
 

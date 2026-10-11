@@ -7,9 +7,10 @@
  * (environment only, ADR-010) by `signHs256` of `@quiz/domain`.
  *
  *   - Quiz → portal: the project (`PUT /api/assignments/:id`, a 2-minute
- *     service token), sent by the `codespace.sync` job ({@link requestCodespaceSync})
- *     so that a portal restarting never fails a teacher's save; and the
- *     staff's read of its workspaces (`GET /api/assignments/:id/sessions`).
+ *     single-use service token bound to the request, {@link portalCall}),
+ *     sent by the `codespace.sync` job ({@link requestCodespaceSync}) so that
+ *     a portal restarting never fails a teacher's save; and the staff's read
+ *     of its workspaces (`GET /api/assignments/:id/sessions`).
  *   - student → portal: a 5-minute single-use launch token, minted by the
  *     start route (`routes.ts`, {@link launchToken}) and carried in a 303.
  *
@@ -45,7 +46,7 @@ import {
   type ServiceTokenClaims,
   type TeacherCodespaceGrant,
 } from "@quiz/contracts";
-import { isOnlineMode, quotaHolder, signHs256, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
+import { isOnlineMode, quotaHolder, requestBinding, signHs256, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -131,11 +132,38 @@ export async function projectWorkspace(
 
 // ---------------------------------------------------------------- tokens
 
-/** Bearer of a server-to-server call to the portal: two minutes. */
-export async function serviceToken(config: AppConfig, now: Date): Promise<string> {
+/**
+ * A server-to-server call to the portal. Its bearer is a two-minute
+ * service token bound to THIS request — method, path and query, the SHA-256
+ * of the exact body sent — with a fresh `jti` the portal consumes once
+ * (audit L25, ADR-078 amendment of 2026-10-11): a token seen in transit is
+ * worth neither a second call nor another route or body.
+ */
+async function portalCall(
+  config: AppConfig,
+  now: Date,
+  method: "GET" | "PUT",
+  path: string,
+  payload?: unknown,
+): Promise<Response> {
+  const url = new URL(`${config.CODESPACE_URL}${path}`);
+  const body = payload === undefined ? undefined : JSON.stringify(payload);
   const iat = Math.floor(now.getTime() / 1000);
-  const claims: ServiceTokenClaims = { iss: QUIZ_CODESPACE_ISSUER, aud: SERVICE_AUDIENCE, iat, exp: iat + SERVICE_TOKEN_TTL_SECONDS };
-  return signHs256({ ...claims }, config.CODESPACE_LAUNCH_SECRET);
+  const claims: ServiceTokenClaims = {
+    iss: QUIZ_CODESPACE_ISSUER,
+    aud: SERVICE_AUDIENCE,
+    iat,
+    exp: iat + SERVICE_TOKEN_TTL_SECONDS,
+    jti: randomUUID(),
+    ...(await requestBinding(method, url.pathname + url.search, body)),
+  };
+  const token = await signHs256({ ...claims }, config.CODESPACE_LAUNCH_SECRET);
+  return fetch(url, {
+    method,
+    headers: { authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
+    ...(body === undefined ? {} : { body }),
+    signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS),
+  });
 }
 
 /**
@@ -244,12 +272,7 @@ export async function runCodespaceSync(
   const now = app.clock.now();
   let response: Response;
   try {
-    response = await fetch(`${config.CODESPACE_URL}/api/assignments/${encodeURIComponent(projectId)}`, {
-      method: "PUT",
-      headers: { "content-type": "application/json", authorization: `Bearer ${await serviceToken(config, now)}` },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS),
-    });
+    response = await portalCall(config, now, "PUT", `/api/assignments/${encodeURIComponent(projectId)}`, payload);
   } catch (err) {
     const error = `portal unreachable: ${err instanceof Error ? err.message : String(err)}`;
     await recordSync(db, projectId, { error });
@@ -319,10 +342,7 @@ export async function projectSessions(
 ): Promise<ProjectWorkspaceSessions> {
   let listed: z.infer<typeof SessionList>;
   try {
-    const response = await fetch(`${config.CODESPACE_URL}/api/assignments/${encodeURIComponent(project.id)}/sessions`, {
-      headers: { authorization: `Bearer ${await serviceToken(config, app.clock.now())}` },
-      signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS),
-    });
+    const response = await portalCall(config, app.clock.now(), "GET", `/api/assignments/${encodeURIComponent(project.id)}/sessions`);
     if (response.status === 404) return { reachable: true, sessions: [] };
     if (!response.ok) throw new Error(`portal answered ${response.status}`);
     listed = SessionList.parse(await response.json());

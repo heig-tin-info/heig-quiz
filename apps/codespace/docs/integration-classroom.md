@@ -49,11 +49,19 @@ Three audiences, never interchangeable:
 
 | Token | `iss` | `aud` | Lifetime | Single use |
 | --- | --- | --- | --- | --- |
-| service (server → server) | `heig-classroom` | `heig-codespace-api` | short | no |
-| launch (carried by the student) | `heig-classroom` | `heig-codespace` | 5 min | **yes**, by `jti` |
+| service (server → server) | `heig-classroom` | `heig-codespace-api` | 2 min at most | **yes**, by `jti` (since 2026-10-11) |
+| launch (carried by the student) | `heig-classroom` | `heig-codespace` | 5 min at most | **yes**, by `jti` |
 
 A launch token presented to the service API gets 401; a service token
 presented to `/launch` gets 403. Two tests assert it.
+
+Since 2026-10-11 (audits M11 and L25, [ADR-078](../../../docs/adr/ADR-078-codespace-git-relay-tokens.md)'s
+amendment of that date) a token signed for longer than its lifetime
+(`exp - iat`) is refused, and a service token also carries `jti`, `method`,
+`path` (path and query) and, with a body, `bodyHash` (SHA-256 of the body's
+bytes, base64url): `@quiz/domain`'s `requestBinding`. The portal refuses a
+service token without them, so heig-classroom's unbound service tokens are
+no longer accepted; only Quiz signs bound ones.
 
 ### The student does not log in twice
 

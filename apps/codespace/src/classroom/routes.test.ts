@@ -10,7 +10,7 @@
  */
 import cookie from "@fastify/cookie";
 import { CodespaceSessionSummary } from "@quiz/contracts";
-import { signHs256 } from "@quiz/domain";
+import { requestBinding, signHs256 } from "@quiz/domain";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -24,7 +24,9 @@ import { createSebVerifier } from "../seb/index.js";
 import type { SessionManager, StartOptions, StartResult } from "../sessions/manager.js";
 import { findAssignment } from "../sessions/store.js";
 
-import { classroomRoutes, consumeJti } from "./routes.js";
+import { HS256_SKEW_SECONDS } from "@quiz/domain";
+
+import { JTI_RETENTION_AFTER_EXP_MS, classroomRoutes, consumeJti } from "./routes.js";
 
 const SECRET = "test-launch-secret-0123456789012345";
 const CLASSROOM = "http://classroom.test";
@@ -47,20 +49,35 @@ function testConfig(over: Record<string, string> = {}): AppConfig {
 
 const now = () => Math.floor(Date.now() / 1000);
 
-function serviceToken(over: Record<string, unknown> = {}): Promise<string> {
+let jtiCounter = 0;
+
+/**
+ * A service token as the platform signs one (audit L25): two minutes, a
+ * fresh `jti`, bound to the request it rides on — its method, its URL and
+ * the bytes of its JSON body, which `inject` serializes with
+ * `JSON.stringify` as the platform does.
+ */
+async function serviceToken(
+  method: string,
+  url: string,
+  body?: unknown,
+  over: Record<string, unknown> = {},
+): Promise<string> {
+  jtiCounter += 1;
   return signHs256(
     {
       iss: "heig-classroom",
       aud: "heig-codespace-api",
       iat: now(),
-      exp: now() + 300,
+      exp: now() + 120,
+      jti: `svc-${jtiCounter}`,
+      ...(await requestBinding(method, url, body === undefined ? undefined : JSON.stringify(body))),
       ...over,
     },
     SECRET,
   );
 }
 
-let jtiCounter = 0;
 function launchToken(over: Record<string, unknown> = {}, secret = SECRET): Promise<string> {
   jtiCounter += 1;
   return signHs256(
@@ -182,17 +199,29 @@ afterEach(async () => {
   h.handle.close();
 });
 
+/**
+ * `PUT /api/assignments/:id` with `auth`: a token as it is, none (`null`), or
+ * the claims to override in a fresh token bound to this very request.
+ */
 async function put(
   body: unknown,
-  token: string | null,
+  auth: string | null | Record<string, unknown> = {},
   id = "a-lab",
 ): Promise<{ statusCode: number; json: () => unknown }> {
+  const url = `/api/assignments/${id}`;
+  const token = auth === null || typeof auth === "string" ? auth : await serviceToken("PUT", url, body, auth);
   return h.app.inject({
     method: "PUT",
-    url: `/api/assignments/${id}`,
+    url,
     ...(token === null ? {} : { headers: { authorization: `Bearer ${token}` } }),
     payload: body as object,
   });
+}
+
+/** `GET /api/assignments/:id/sessions` with a fresh bound token, or the one given. */
+async function sessionsOf(id = "a-lab", token?: string): Promise<{ statusCode: number; json: () => unknown }> {
+  const url = `/api/assignments/${id}/sessions`;
+  return h.app.inject({ url, headers: { authorization: `Bearer ${token ?? (await serviceToken("GET", url))}` } });
 }
 
 // --- PUT /api/assignments/:id -----------------------------------------------
@@ -204,7 +233,7 @@ describe("PUT /api/assignments/:id", () => {
 
   it("401 with a signature made with another secret", async () => {
     const forged = await signHs256(
-      { iss: "heig-classroom", aud: "heig-codespace-api", iat: now(), exp: now() + 300 },
+      { iss: "heig-classroom", aud: "heig-codespace-api", iat: now(), exp: now() + 120, jti: "forged", ...(await requestBinding("PUT", "/api/assignments/a-lab", JSON.stringify(syncBody()))) },
       "another-secret-of-thirty-two-chars",
     );
     expect((await put(syncBody(), forged)).statusCode).toBe(401);
@@ -212,47 +241,74 @@ describe("PUT /api/assignments/:id", () => {
 
   it("401 with the right signature but the wrong audience", async () => {
     // A *launch* token must not open the service API.
-    const token = await serviceToken({ aud: "heig-codespace" });
-    expect((await put(syncBody(), token)).statusCode).toBe(401);
+    expect((await put(syncBody(), { aud: "heig-codespace" })).statusCode).toBe(401);
   });
 
   it("401 with an unexpected issuer", async () => {
-    const token = await serviceToken({ iss: "heig-codespace" });
-    expect((await put(syncBody(), token)).statusCode).toBe(401);
+    expect((await put(syncBody(), { iss: "heig-codespace" })).statusCode).toBe(401);
   });
 
   it("accepts both issuers of the transition, heig-classroom and heig-quiz", async () => {
-    expect((await put(syncBody(), await serviceToken())).statusCode).toBe(200);
-    expect((await put(syncBody(), await serviceToken({ iss: "heig-quiz" }))).statusCode).toBe(200);
+    expect((await put(syncBody())).statusCode).toBe(200);
+    expect((await put(syncBody(), { iss: "heig-quiz" })).statusCode).toBe(200);
   });
 
-  it("401 with an expired token", async () => {
-    const token = await serviceToken({ iat: now() - 7200, exp: now() - 3600 });
+  it("401 on a replayed token: its jti serves once (audit L25)", async () => {
+    const token = await serviceToken("PUT", "/api/assignments/a-lab", syncBody());
+    expect((await put(syncBody(), token)).statusCode).toBe(200);
     expect((await put(syncBody(), token)).statusCode).toBe(401);
   });
 
+  it("401 on a token bound to another route, method or body (audit L25)", async () => {
+    // Signed for another assignment's PUT: refused on this one.
+    expect((await put(syncBody(), await serviceToken("PUT", "/api/assignments/a-other", syncBody()))).statusCode).toBe(401);
+    // Signed for the GET of the sessions: refused on the PUT.
+    expect((await put(syncBody(), await serviceToken("GET", "/api/assignments/a-lab"))).statusCode).toBe(401);
+    // The body was changed in transit: refused.
+    const token = await serviceToken("PUT", "/api/assignments/a-lab", syncBody({ quota: { maxActiveSessions: 2 } }));
+    expect((await put(syncBody({ quota: { maxActiveSessions: 200 } }), token)).statusCode).toBe(401);
+    // An unbound token, as heig-classroom signs one: refused.
+    const unbound = await signHs256({ iss: "heig-classroom", aud: "heig-codespace-api", iat: now(), exp: now() + 120, jti: "unbound" }, SECRET);
+    expect((await put(syncBody(), unbound)).statusCode).toBe(401);
+    // Nothing reached the database.
+    expect(findAssignment(h.db, "a-lab")).toBeUndefined();
+    // The same body sent as another content type is not hashed: refused (415).
+    const raw = await h.app.inject({
+      method: "PUT",
+      url: "/api/assignments/a-lab",
+      headers: { authorization: `Bearer ${await serviceToken("PUT", "/api/assignments/a-lab", syncBody())}`, "content-type": "text/plain" },
+      payload: JSON.stringify(syncBody()),
+    });
+    expect(raw.statusCode).toBe(415);
+  });
+
+  it("401 on a token signed for longer than two minutes, or without a jti", async () => {
+    expect((await put(syncBody(), { exp: now() + 121 })).statusCode).toBe(401);
+    expect((await put(syncBody(), { jti: undefined })).statusCode).toBe(401);
+  });
+
+  it("401 with an expired token", async () => {
+    expect((await put(syncBody(), { iat: now() - 7200, exp: now() - 7100 })).statusCode).toBe(401);
+  });
+
   it("400 on a body that is not the contract's", async () => {
-    const token = await serviceToken();
-    const reply = await put(syncBody({ mode: "free" }), token);
+    const reply = await put(syncBody({ mode: "free" }));
     expect(reply.statusCode).toBe(400);
     expect((reply.json() as { error: string }).error).toBe("invalid_body");
   });
 
   it("400 if the body id and the URL id differ", async () => {
-    const token = await serviceToken();
-    const reply = await put(syncBody({ id: "a-other" }), token, "a-lab");
+    const reply = await put(syncBody({ id: "a-other" }), {}, "a-lab");
     expect(reply.statusCode).toBe(400);
   });
 
   it("400 if the id cannot name a volume directory", async () => {
-    const token = await serviceToken();
-    const reply = await put(syncBody({ id: "a$b" }), token, "a$b");
+    const reply = await put(syncBody({ id: "a$b" }), {}, "a$b");
     expect(reply.statusCode).toBe(400);
   });
 
   it("creates the assignment, translates the mode and sets the platform's fields", async () => {
-    const token = await serviceToken();
-    const reply = await put(syncBody(), token);
+    const reply = await put(syncBody());
     expect(reply.statusCode).toBe(200);
     expect(reply.json()).toEqual({ id: "a-lab", configKey: null, sebLink: null });
 
@@ -275,16 +331,14 @@ describe("PUT /api/assignments/:id", () => {
   });
 
   it("`image` from the body wins over the default image", async () => {
-    const token = await serviceToken();
-    await put(syncBody({ image: "codespace/python:1" }), token);
+    await put(syncBody({ image: "codespace/python:1" }));
     expect(findAssignment(h.db, "a-lab")?.image).toBe("codespace/python:1");
   });
 
   it("is idempotent: two identical PUTs, one row and the same answer", async () => {
-    const token = await serviceToken();
     const body = syncBody({ mode: "online_seb", browserExamKeys: ["bek-windows"] });
-    const first = await put(body, token);
-    const second = await put(body, token);
+    const first = await put(body);
+    const second = await put(body);
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
     expect(second.json()).toEqual(first.json());
@@ -292,16 +346,15 @@ describe("PUT /api/assignments/:id", () => {
     const rows = h.db.all<{ n: number }>("SELECT count(*) AS n FROM assignments");
     expect(rows[0]?.n).toBe(1);
     const created = findAssignment(h.db, "a-lab")?.createdAt;
-    await put(syncBody({ mode: "online_seb", browserExamKeys: ["bek-windows", "bek-mac"] }), token);
+    await put(syncBody({ mode: "online_seb", browserExamKeys: ["bek-windows", "bek-mac"] }));
     const after = findAssignment(h.db, "a-lab");
     expect(after?.beks).toEqual(["bek-windows", "bek-mac"]);
     expect(after?.createdAt).toEqual(created);
   });
 
   it("exam mode: Browser Exam Keys optional, no `.seb` of the portal's own (D21)", async () => {
-    const token = await serviceToken();
     // No key: the Config Key alone, the platform's default.
-    const reply = await put(syncBody({ mode: "online_seb", browserExamKeys: [] }), token);
+    const reply = await put(syncBody({ mode: "online_seb", browserExamKeys: [] }));
     expect(reply.statusCode).toBe(200);
     // The platform builds the `.seb`: the portal has no Config Key nor link to announce.
     expect(reply.json()).toEqual({ id: "a-lab", configKey: null, sebLink: null });
@@ -311,9 +364,8 @@ describe("PUT /api/assignments/:id", () => {
   });
 
   it("switching an exam assignment back to online mode drops its Browser Exam Keys", async () => {
-    const token = await serviceToken();
-    await put(syncBody({ mode: "online_seb", browserExamKeys: ["bek"] }), token);
-    await put(syncBody({ browserExamKeys: ["bek"] }), token);
+    await put(syncBody({ mode: "online_seb", browserExamKeys: ["bek"] }));
+    await put(syncBody({ browserExamKeys: ["bek"] }));
     const row = findAssignment(h.db, "a-lab");
     expect(row?.mode).toBe("lab");
     expect(row?.beks).toEqual([]);
@@ -326,24 +378,24 @@ describe("GET /api/assignments/:id/sessions", () => {
   it("401 without a service token, 404 on an unknown assignment", async () => {
     const anonymous = await h.app.inject({ url: "/api/assignments/a-lab/sessions" });
     expect(anonymous.statusCode).toBe(401);
-    const token = await serviceToken();
-    const missing = await h.app.inject({
-      url: "/api/assignments/a-unknown/sessions",
-      headers: { authorization: `Bearer ${token}` },
-    });
-    expect(missing.statusCode).toBe(404);
+    expect((await sessionsOf("a-unknown")).statusCode).toBe(404);
+  });
+
+  it("a token serves one read, of the assignment it names (audit L25)", async () => {
+    await put(syncBody());
+    const token = await serviceToken("GET", "/api/assignments/a-lab/sessions");
+    expect((await sessionsOf("a-lab", token)).statusCode).toBe(200);
+    expect((await sessionsOf("a-lab", token)).statusCode).toBe(401);
+    expect((await sessionsOf("a-lab", await serviceToken("GET", "/api/assignments/a-other/sessions"))).statusCode).toBe(401);
+    expect((await sessionsOf("a-lab", await serviceToken("GET", "/api/assignments/a-lab/sessions", { smuggled: true }))).statusCode).toBe(401);
   });
 
   it("returns the session summary with the platform's id, in the contract's shape", async () => {
-    const token = await serviceToken();
-    await put(syncBody(), token);
+    await put(syncBody());
     const launch = await h.app.inject({ url: `/launch?token=${await launchToken()}` });
     expect(launch.statusCode).toBe(303);
 
-    const reply = await h.app.inject({
-      url: "/api/assignments/a-lab/sessions",
-      headers: { authorization: `Bearer ${token}` },
-    });
+    const reply = await sessionsOf();
     expect(reply.statusCode).toBe(200);
     const list = reply.json() as Array<Record<string, unknown>>;
     expect(CodespaceSessionSummary.array().safeParse(list).success).toBe(true);
@@ -364,7 +416,7 @@ describe("GET /api/assignments/:id/sessions", () => {
     await store.markRejected(["p1"], "fetch first");
     const read = async () =>
       CodespaceSessionSummary.array().parse(
-        (await h.app.inject({ url: "/api/assignments/a-lab/sessions", headers: { authorization: `Bearer ${token}` } })).json(),
+        (await sessionsOf()).json(),
       )[0];
     expect((await read())?.rejectedPush).toEqual({ ref: "refs/heads/main", at: at.toISOString(), reason: "fetch first" });
     await store.insert([{ ...event, id: "p2", sha: "b".repeat(40), receivedAt: new Date(at.getTime() + 60_000) }]);
@@ -376,8 +428,7 @@ describe("GET /api/assignments/:id/sessions", () => {
 
 describe("GET /launch", () => {
   async function syncedAssignment(over: Record<string, unknown> = {}): Promise<void> {
-    const token = await serviceToken();
-    const reply = await put(syncBody(over), token, (over["id"] as string) ?? "a-lab");
+    const reply = await put(syncBody(over), {}, (over["id"] as string) ?? "a-lab");
     expect(reply.statusCode).toBe(200);
   }
 
@@ -430,6 +481,25 @@ describe("GET /launch", () => {
     expect(second.statusCode).toBe(403);
     expect(second.body).toContain("déjà servi");
     expect(h.starts).toHaveLength(1);
+  });
+
+  it("a used token stays refused through the skew window after its exp (audit M11)", async () => {
+    await syncedAssignment();
+    // Presented at exp + 10 s: `verifyHs256` still accepts it (skew 30 s).
+    const token = await launchToken({ iat: now() - 310, exp: now() - 10 });
+    expect((await h.app.inject({ url: `/launch?token=${token}` })).statusCode).toBe(303);
+    // The replay's own purge runs first: it must not sweep the row away.
+    const replay = await h.app.inject({ url: `/launch?token=${token}` });
+    expect(replay.statusCode).toBe(403);
+    expect(replay.body).toContain("déjà servi");
+    expect(h.starts).toHaveLength(1);
+  });
+
+  it("403 on a token signed for longer than five minutes", async () => {
+    await syncedAssignment();
+    const reply = await h.app.inject({ url: `/launch?token=${await launchToken({ exp: now() + 301 })}` });
+    expect(reply.statusCode).toBe(403);
+    expect(h.starts).toHaveLength(0);
   });
 
   it("403 on an assignment not synchronized from the platform", async () => {
@@ -603,8 +673,7 @@ describe("GET /launch", () => {
     const BEK_OTHER_VERSION = "e".repeat(64);
 
     async function syncedExam(browserExamKeys: string[] = [BEK_WIN]): Promise<void> {
-      const token = await serviceToken();
-      const reply = await put(syncBody({ mode: "online_seb", browserExamKeys }), token);
+      const reply = await put(syncBody({ mode: "online_seb", browserExamKeys }));
       expect(reply.statusCode).toBe(200);
     }
 
@@ -727,6 +796,22 @@ describe("consumeJti", () => {
     consumeJti(handle.db, "b", t + 300);
     const rows = handle.db.all<{ jti: string }>("SELECT jti FROM launch_tokens_used ORDER BY jti");
     expect(rows.map((r) => r.jti)).toEqual(["a", "b"]);
+    handle.close();
+  });
+
+  it("keeps a row while verifyHs256 may still accept its token: exp + skew, plus a minute (audit M11)", () => {
+    const handle = openDb(":memory:");
+    const t = 2_000_000_000;
+    const at = (seconds: number) => new Date(seconds * 1000);
+    expect(JTI_RETENTION_AFTER_EXP_MS).toBe((HS256_SKEW_SECONDS + 60) * 1000);
+    consumeJti(handle.db, "expired-10s-ago", t - 10, at(t));
+    consumeJti(handle.db, "expired-89s-ago", t - 89, at(t));
+    consumeJti(handle.db, "expired-91s-ago", t - 91, at(t));
+    consumeJti(handle.db, "fresh", t + 120, at(t));
+    const rows = handle.db.all<{ jti: string }>("SELECT jti FROM launch_tokens_used ORDER BY jti");
+    expect(rows.map((r) => r.jti)).toEqual(["expired-10s-ago", "expired-89s-ago", "fresh"]);
+    // Within the window, the replay is refused.
+    expect(consumeJti(handle.db, "expired-10s-ago", t - 10, at(t))).toBe(false);
     handle.close();
   });
 });
