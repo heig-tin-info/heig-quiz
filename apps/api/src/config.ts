@@ -216,9 +216,10 @@ const EnvSchema = z.object({
    * case included: sent as the request's `budgetMs`, which the runner
    * enforces by reporting the cases past it as timed out. A grading run gets
    * its full budget. The API waits that budget plus a queue allowance
-   * (`modules/runner/http.ts`, ADR-101).
+   * (`modules/runner/http.ts`, ADR-101). At least 26 s: a 20 s build and
+   * three round trips, or the ceiling would cut every build short.
    */
-  RUNNER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
+  RUNNER_TIMEOUT_MS: z.coerce.number().int().min(26_000).max(120_000).default(30_000),
   /**
    * Interactive runs of ONE evaluation in the runner at once (N-SEC-07's
    * per-evaluation limit, ADR-101): past it a student's Run answers "busy,

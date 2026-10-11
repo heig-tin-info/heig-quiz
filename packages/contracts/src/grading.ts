@@ -52,6 +52,7 @@ export {
   PASS_REASONS,
   reasonOf,
   RETRYABLE_REASONS,
+  RUNNER_WAITING_REASONS,
   type AiDetails,
   type MachineReason,
   type PassReason,

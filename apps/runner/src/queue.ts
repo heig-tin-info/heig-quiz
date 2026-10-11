@@ -9,10 +9,12 @@ import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
  * never starve a classroom — but a class running code must not starve the
  * grading either, or every hand-in's run waits out the API's patience
  * (audit M5). Hence the aging: a grading request that has waited
- * `agingMs` (10 s, well under the API's queue allowance) goes before the
- * interactive ones. The API sends one grading run at a time
- * (`GRADING_RUNNER_CONCURRENCY`), so an aged request costs the class one
- * slot for one run, never the pool (ADR-101, amending ADR-067 §5).
+ * {@link GRADING_AGING_MS} (well under the API's queue allowance) goes before
+ * the interactive ones. Only the background grading sends `grading`, at most
+ * `GRADING_RUNNER_CONCURRENCY` runs in flight (one by default); a teacher's
+ * try and preview are interactive, and rate-limited. So aged requests cost
+ * the class at most that many slots, never the pool (ADR-101, amending
+ * ADR-067 §5).
  *
  * Beyond `queueMax` waiting requests the answer is `429` with a `Retry-After`
  * (queue.ts never blocks a caller it cannot serve). The HTTP client of the API
@@ -43,8 +45,6 @@ export interface QueueOptions {
   concurrency: number;
   queueMax: number;
   run: (request: RunnerRequest, signal?: AbortSignal) => Promise<RunnerOutcome>;
-  /** {@link GRADING_AGING_MS} by default. */
-  agingMs?: number;
 }
 
 export interface QueueStats {
@@ -143,8 +143,7 @@ export class RunQueue {
    */
   private next(): Waiter | undefined {
     const oldest = this.waiting.grading[0];
-    const aged =
-      oldest !== undefined && Date.now() - oldest.queuedAt >= (this.options.agingMs ?? GRADING_AGING_MS);
+    const aged = oldest !== undefined && Date.now() - oldest.queuedAt >= GRADING_AGING_MS;
     if (aged) return this.waiting.grading.shift();
     return this.waiting.interactive.shift() ?? this.waiting.grading.shift();
   }

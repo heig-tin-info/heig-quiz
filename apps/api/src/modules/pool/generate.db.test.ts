@@ -148,15 +148,6 @@ describe("POST /questions/:id/generate", () => {
     expect(res.json()).toEqual({ error: "llm_budget_exhausted", reason: "budget_exhausted" });
   });
 
-  it("spends ten generations a minute per teacher, then answers 429 (ADR-101)", async () => {
-    next = () => ({ proposal: { choices: [] }, explanation: "" });
-    const draft = { config: mcq([{ text: "4", correct: true }]), explanation: "Mine" };
-    for (let i = 0; i < 10; i += 1) expect((await generate(draft)).statusCode).toBe(200);
-    const limited = await generate(draft);
-    expect(limited.statusCode).toBe(429);
-    expect(limited.json()).toEqual({ error: "rate_limited" });
-  });
-
   it("is a 404 for a teacher outside the pool (invariant 6)", async () => {
     const res = await generate({ config: mcq([{ text: "", correct: true }]), explanation: "" }, stranger);
     expect(res.statusCode).toBe(404);

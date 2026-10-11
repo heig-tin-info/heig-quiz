@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { requestBudgetMs, type RunnerOutcome, type RunnerRequest } from "@quiz/core/server";
+import {
+  RUNNER_TTL_SLACK_MS,
+  requestBudgetMs,
+  type RunnerOutcome,
+  type RunnerRequest,
+} from "@quiz/core/server";
 
 import type { RunnerConfig } from "./config.js";
 import type { Engine, ExecResult } from "./engine.js";
@@ -119,9 +124,9 @@ export function budgetMs(request: RunnerRequest, config: RunnerConfig): number {
   });
 }
 
-/** How long the container is allowed to exist, in seconds: the budget, and five seconds of slack. */
+/** How long the container is allowed to exist, in seconds: the budget and its slack. */
 export function containerTtlSeconds(request: RunnerRequest, config: RunnerConfig): number {
-  return Math.ceil(budgetMs(request, config) / 1000) + 5;
+  return Math.ceil((budgetMs(request, config) + RUNNER_TTL_SLACK_MS) / 1000);
 }
 
 /**
@@ -259,10 +264,12 @@ export async function executeRequest(
       // Either the service's clock fired — and then the in-container reaper
       // failed, so the container is not to be trusted — or the container died
       // under the OOM killer. Both mean: destroy it, build a fresh one, and
-      // keep the remaining cases honest.
+      // keep the remaining cases honest. No rebuild once no case could run
+      // after it: the rest are past the budget anyway.
       if (result.timedOut || result.containerGone) {
         await engine.remove(name);
-        const restarted = await start().catch(() => null);
+        const restarted =
+          Date.now() + caseCost > deadline ? null : await start().catch(() => null);
         if (restarted === null || !restarted.ok) {
           while (cases.length < request.cases.length) cases.push(dead(limits.timeMs));
           break;

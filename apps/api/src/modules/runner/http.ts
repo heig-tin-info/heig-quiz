@@ -28,6 +28,7 @@ import {
   RunnerHealth,
   RunnerOutcome,
   RunnerUnavailable,
+  RUNNER_TTL_SLACK_MS,
   requestBudgetMs,
   type RunnerRequest,
   type RunnerService,
@@ -64,20 +65,17 @@ const RETRYABLE = new Set([502, 503, 504]);
  * (ADR-101). A student at the Run button is told "busy" after a short wait; a
  * grading run waits past the runner's 10 s aging and one running request.
  */
-export const QUEUE_ALLOWANCE_MS = { interactive: 20_000, grading: 60_000 } as const;
-
-/** The container's removal and the round trip, past the budget (the runner's ttl slack). */
-const RESPONSE_SLACK_MS = 5_000;
+const QUEUE_ALLOWANCE_MS = { interactive: 20_000, grading: 60_000 } as const;
 
 /** The request as sent: its `budgetMs`, the interactive ceiling applied. */
-export function budgeted(req: RunnerRequest, interactiveCeilingMs: number): RunnerRequest & { budgetMs: number } {
+function budgeted(req: RunnerRequest, interactiveCeilingMs: number): RunnerRequest & { budgetMs: number } {
   const ceiling = req.priority === "interactive" ? interactiveCeilingMs : Number.POSITIVE_INFINITY;
   return { ...req, budgetMs: Math.min(requestBudgetMs(req), ceiling) };
 }
 
 /** How long the API waits for a budgeted request: its queue allowance, its budget, the slack. */
-export function callTimeoutMs(req: RunnerRequest & { budgetMs: number }): number {
-  return QUEUE_ALLOWANCE_MS[req.priority] + req.budgetMs + RESPONSE_SLACK_MS;
+function callTimeoutMs(req: RunnerRequest & { budgetMs: number }): number {
+  return QUEUE_ALLOWANCE_MS[req.priority] + req.budgetMs + RUNNER_TTL_SLACK_MS;
 }
 
 /** A health answer that says "nothing there", used for every failure path. */

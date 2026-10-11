@@ -203,9 +203,12 @@ CI before production is switched (below).
    `requestBudgetMs` of `@quiz/core` over this runner's ceilings (the build,
    every case at `timeMs` plus the grace, the uploads, capped by
    `RUNNER_REQUEST_TIMEOUT_MS`), and capped by the request's own `budgetMs`
-   when the API sent one (a Run click's is 30 s). A case that could not end
-   before it does not start: it comes back timed out, like a case the reaper
-   killed. The container's ttl is that budget plus 5 s (ADR-101).
+   when the API sent one (the API owns that value). A case that could not end
+   before it does not start, and a container is not rebuilt past it: the
+   remaining cases come back timed out, like a case the reaper killed. The
+   container's ttl is that budget plus 5 s (ADR-101). The four budget
+   defaults are `@quiz/core`'s `RUNNER_BUDGET_DEFAULTS`, which the API budgets
+   against: raising one here does not lengthen an API request's budget.
 
    `cases[].args` follows the program in that argv (`caseArgv` in
    `execute.ts`): `timeout -s KILL <s> ./program <arg…>`, or

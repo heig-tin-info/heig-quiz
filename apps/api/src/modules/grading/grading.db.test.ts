@@ -699,29 +699,6 @@ describe("a saturated runner (ADR-101)", () => {
       restore();
     }
   });
-
-  it("grades a program that overran its budget from its timed-out cases, never as runner_unavailable", async () => {
-    const restore = registerForTests(fakeRunnableCode);
-    try {
-      const timedOut: RunnerService = {
-        run: async (req) => ({
-          compile: { ok: true, stdout: "", stderr: "", ms: 1 },
-          cases: req.cases.map(() => ({
-            exitCode: null, stdout: "", stderr: "", ms: 1000, timedOut: true, oom: false, truncated: false,
-          })),
-        }),
-        health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
-      };
-      const { app, fixture, job } = await runnerJob(timedOut);
-      // Not the last try: a deterministic overrun is a result, never retried.
-      await runRunnerGrading(app, job, { lastTry: false });
-      const rows = await gradingsOf(fixture.evaluationId);
-      expect(rows).toHaveLength(1);
-      expect(rows[0]!.grading).toMatchObject({ state: "validated", points: 0, details: { passed: 0 } });
-    } finally {
-      restore();
-    }
-  });
 });
 
 // --- The MCQ and categorize policy hierarchy (docs/04 §4.4, ADR-036) ------

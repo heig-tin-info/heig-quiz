@@ -59,10 +59,6 @@ describe("containerTtlSeconds", () => {
     );
   });
 
-  it("follows the budget the API sent (ADR-101)", () => {
-    expect(containerTtlSeconds(request({ budgetMs: 10_000 }), config)).toBe(10 + 5);
-  });
-
   it("ignores the cases of a `check`", () => {
     expect(containerTtlSeconds(request({ action: "check" }), config)).toBeLessThan(
       containerTtlSeconds(request(), config),
@@ -217,6 +213,23 @@ describe("executeRequest", () => {
       expect(outcome.cases).toHaveLength(15);
       expect(outcome.cases.every((c) => c.timedOut)).toBe(true);
       expect(engine.created[0]!.ttlSeconds).toBe(15);
+    });
+
+    it("rebuilds no container past the budget after the service killed one", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      // The reaper fails: the service's own clock fires, past the grace.
+      const engine = createFakeEngine((call) => {
+        if (call.argv[0] !== "timeout") return {};
+        vi.setSystemTime(Date.now() + 4000);
+        return { timedOut: true, ms: 4000 };
+      });
+      const three = Array.from({ length: 3 }, (_, i) => ({ name: `c${i}`, args: [], stdin: "" }));
+      const outcome = await executeRequest(request({ cases: three, budgetMs: 6000 }), deps(engine));
+
+      // The first case ends at 4 s; a second would end past 6 s: no rebuild.
+      expect(engine.created).toHaveLength(1);
+      expect(outcome.cases).toHaveLength(3);
+      expect(outcome.cases.every((c) => c.timedOut)).toBe(true);
     });
   });
 

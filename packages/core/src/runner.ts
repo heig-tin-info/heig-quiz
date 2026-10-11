@@ -66,13 +66,27 @@ export interface RunnerBudgetLimits {
   requestTimeoutMs: number;
 }
 
-/** The runner's defaults (`apps/runner/src/config.ts`), which the API budgets against. */
+/**
+ * The runner's defaults: `apps/runner/src/config.ts` defaults to these, and
+ * the API budgets against them, so each value is written once. A runner
+ * configured with higher ceilings still gets the API's budget (`budgetMs`).
+ */
 export const RUNNER_BUDGET_DEFAULTS: RunnerBudgetLimits = {
   maxTimeMs: 20_000,
   compileTimeoutMs: 20_000,
   caseGraceMs: 2_000,
   requestTimeoutMs: 120_000,
 };
+
+/** One upload or `podman exec` round trip, in the budget. */
+const ROUND_TRIP_MS = 2000;
+
+/**
+ * Past a request's budget: the container's removal and the answer's way back.
+ * The runner's container lives this long past the budget, and the API waits
+ * this long past it too.
+ */
+export const RUNNER_TTL_SLACK_MS = 5000;
 
 /**
  * The most a request may take once it runs, in ms: the build, then every
@@ -91,7 +105,7 @@ export function requestBudgetMs(
   const budget =
     limits.compileTimeoutMs +
     cases * (timeMs + limits.caseGraceMs) +
-    (request.files.length + 2) * 2000;
+    (request.files.length + 2) * ROUND_TRIP_MS;
   return Math.min(budget, limits.requestTimeoutMs, request.budgetMs ?? Number.POSITIVE_INFINITY);
 }
 

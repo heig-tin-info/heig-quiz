@@ -33,11 +33,12 @@ import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 
 /**
- * Tries per minute and teacher (ADR-101): a try may run a program with all
- * its cases on the runner the students share, so it spends a budget, as the
- * preview's gradings do. Far above what a person clicking "Grade" does.
+ * Tries per minute and teacher, every try counted (ADR-101): a try may run a
+ * program with all its cases on the runner the students share, so it spends
+ * a budget, as the preview's gradings do. Far above what a person clicking
+ * "Grade" does.
  */
-export const TRIES_PER_MINUTE = 10;
+const TRIES_PER_MINUTE = 10;
 
 export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, teacher, onQuestion } = ctx;
@@ -187,7 +188,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     teacher(
       { params: IdParam, body: TryBody, optionalBody: true, load: onQuestion() },
       async ({ req, reply, body, scope }) => {
-        if (!tries.spend(`try:${req.user!.id}`, TRIES_PER_MINUTE, app.clock.now())) {
+        if (!tries.spend(req.user!.id, TRIES_PER_MINUTE, app.clock.now())) {
           return rateLimited(reply, BUDGET_RETRY_AFTER_S);
         }
         try {
@@ -224,7 +225,9 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           if (!t.finalizeRunner) {
             return { status: "runner_unavailable", reason: "not_configured" } satisfies TryResult;
           }
-          const outcome = await runner.run(result.request);
+          // A person waits for it: interactive, under the interactive
+          // ceiling, never a background grading's queue (ADR-101).
+          const outcome = await runner.run({ ...result.request, priority: "interactive" });
           const final = t.finalizeRunner(
             loaded.config,
             answer,

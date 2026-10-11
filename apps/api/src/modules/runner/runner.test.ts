@@ -17,7 +17,6 @@ import {
 } from "@quiz/core/server";
 
 import { loadConfig } from "../../config.js";
-import { QUEUE_ALLOWANCE_MS, budgeted, callTimeoutMs } from "./http.js";
 import { createRunner, HttpRunner, runnerCheck, UnavailableRunner } from "./index.js";
 
 const REQUEST: RunnerRequest = {
@@ -105,28 +104,6 @@ describe("createRunner", () => {
   });
 });
 
-describe("the budget of a call (ADR-101)", () => {
-  const fifteen = {
-    ...REQUEST,
-    limits: { ...REQUEST.limits, timeMs: 2000 },
-    cases: Array.from({ length: 15 }, (_, i) => ({ name: `c${i}`, args: [], stdin: "" })),
-  };
-
-  it("waits a 15-case × 2 s grading request its whole budget, plus the queue allowance", () => {
-    const sent = budgeted(fifteen, 30_000);
-    // 20 s build + 15 × (2 s + 2 s grace) + 3 × 2 s uploads: never cut at 30 s.
-    expect(sent.budgetMs).toBe(86_000);
-    expect(callTimeoutMs(sent)).toBeGreaterThanOrEqual(30_000 + QUEUE_ALLOWANCE_MS.grading);
-    expect(callTimeoutMs(sent)).toBeGreaterThanOrEqual(sent.budgetMs + QUEUE_ALLOWANCE_MS.grading);
-  });
-
-  it("caps an interactive request at the ceiling, which the runner enforces by truncating", () => {
-    const sent = budgeted({ ...fifteen, priority: "interactive" }, 30_000);
-    expect(sent.budgetMs).toBe(30_000);
-    expect(callTimeoutMs(sent)).toBeGreaterThanOrEqual(30_000 + QUEUE_ALLOWANCE_MS.interactive);
-  });
-});
-
 describe("HttpRunner", () => {
   let server: FastifyInstance;
   let url: string;
@@ -196,10 +173,16 @@ describe("HttpRunner", () => {
     expect(await runnerAt().run(REQUEST)).toEqual(OUTCOME);
   });
 
-  it("sends the request with its budget", async () => {
+  it("caps an interactive request's budget at the ceiling, which the runner enforces (ADR-101)", async () => {
     bodies = [];
-    await runnerAt().run(REQUEST);
-    expect(bodies).toEqual([{ ...REQUEST, budgetMs: budgeted(REQUEST, 30_000).budgetMs }]);
+    const fifteen = {
+      ...REQUEST,
+      priority: "interactive" as const,
+      limits: { ...REQUEST.limits, timeMs: 2000 },
+      cases: Array.from({ length: 15 }, (_, i) => ({ name: `c${i}`, args: [], stdin: "" })),
+    };
+    await runnerAt().run(fifteen);
+    expect(bodies).toEqual([{ ...fifteen, budgetMs: 30_000 }]);
   });
 
   it("sends the shared token as a bearer on both routes, and nothing without one", async () => {

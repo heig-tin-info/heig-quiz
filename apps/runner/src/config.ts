@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { BlockList, isIP } from "node:net";
 import { fileURLToPath } from "node:url";
 
+import { RUNNER_BUDGET_DEFAULTS } from "@quiz/core/server";
 import { z } from "zod";
 
 /**
@@ -129,19 +130,33 @@ const EnvSchema = z.object({
   /** Hard ceiling on the per-request `limits.memoryMb`, per container. */
   RUNNER_MAX_MEMORY_MB: z.coerce.number().int().min(16).max(8192).default(512),
   /** Hard ceiling on the per-request `limits.timeMs`, per case. */
-  RUNNER_MAX_TIME_MS: z.coerce.number().int().min(100).max(600_000).default(20_000),
+  RUNNER_MAX_TIME_MS: z.coerce.number().int().min(100).max(600_000).default(RUNNER_BUDGET_DEFAULTS.maxTimeMs),
   /** Size of the tmpfs mounted at /work. Source, objects and binary all live there. */
   RUNNER_WORKDIR_MB: z.coerce.number().int().min(4).max(512).default(32),
   /** Budget of the compilation step, which is not the budget of a test case. */
-  RUNNER_COMPILE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(20_000),
+  RUNNER_COMPILE_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1000)
+    .max(120_000)
+    .default(RUNNER_BUDGET_DEFAULTS.compileTimeoutMs),
   /**
    * How long the service waits past a case's own deadline before it stops
    * trusting the in-container `timeout` and destroys the container. The wall
    * clock is the service's, always (N-SEC-06).
    */
-  RUNNER_CASE_GRACE_MS: z.coerce.number().int().min(250).max(30_000).default(2000),
-  /** Ceiling on a whole request, all cases together. */
-  RUNNER_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(600_000).default(120_000),
+  RUNNER_CASE_GRACE_MS: z.coerce.number().int().min(250).max(30_000).default(RUNNER_BUDGET_DEFAULTS.caseGraceMs),
+  /**
+   * Ceiling on a whole request, its build and all cases together. The four
+   * defaults above it are `@quiz/core`'s, which the API budgets against
+   * (ADR-101): raising one here does not lengthen an API request's budget.
+   */
+  RUNNER_REQUEST_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1000)
+    .max(600_000)
+    .default(RUNNER_BUDGET_DEFAULTS.requestTimeoutMs),
 });
 
 export type RunnerConfig = Omit<z.infer<typeof EnvSchema>, "PODMAN_SOCKET" | "RUNNER_SECCOMP"> & {
