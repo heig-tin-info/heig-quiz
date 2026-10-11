@@ -2,201 +2,246 @@
 
 ## Status
 
-Proposed (2026-10-11, issue #776). The product owner's answers to the open points
-of the last section settle it; delivery progress lives in `docs/merge/PROGRESS.md` and `changes/`.
+Accepted (2026-10-11, issue #776: the product owner approved the proposal in session
+and left its open points to the implementation; the values taken are the
+**Assumptions** section, each marked as such until he confirms or changes it). The
+spec challenge of the same day corrected three claims of the first draft (no YAML
+import exists; a staff attempt earns no drill card and no statistic; a seat is per
+classroom). Delivery progress lives in `docs/merge/PROGRESS.md` and `changes/`.
 
-Scope: how a new teacher learns the platform by using it — what is provisioned
-for them, what content it holds, how their progress is shown — and nothing about
-what a student sees.
+Scope: how a new teacher learns the platform by using it — what is provisioned for
+them, what content it holds, how their progress is shown — and nothing about what a
+student sees.
 
 Relations: builds on [ADR-018](ADR-018-vue-etudiant-reelle.md) (the staff seat and
-the student view are the way to the student side; nothing here enrolls anyone
-otherwise), [ADR-095](ADR-095-catalogue-des-banques-publiques.md) (the training
-content is one public pool, linked `read`), [ADR-080](ADR-080-assistant-enseignant.md)
-(the guide chapter is what the assistant reads about it), [ADR-022](ADR-022-jetons-api-et-serveur-mcp.md)
-and [ADR-023](ADR-023-serveur-oauth-pour-mcp.md) (the MCP mission), spec 08 §8.2
-(the novice path). Adds a requirement F-ORG-17 (docs/spec/02) and open question 58
-(docs/spec/06) once accepted. Changes no rule of ADR-018, ADR-034, ADR-068 or ADR-095.
+the student view are the way to the student side; a staff attempt counts nowhere),
+[ADR-095](ADR-095-catalogue-des-banques-publiques.md) (the training content is one
+public pool, linked `read`), [ADR-013](ADR-013-partage-des-pools.md) §5 (a pool with
+no member keeps its owner), [ADR-080](ADR-080-assistant-enseignant.md) (the guide
+chapter is what the assistant reads; a palette command with an effect is never run
+by it, §10), [ADR-022](ADR-022-jetons-api-et-serveur-mcp.md) and
+[ADR-023](ADR-023-serveur-oauth-pour-mcp.md) (the MCP mission),
+[ADR-087](ADR-087-nouveautes-de-la-plateforme.md) §9 (What's new and the coach
+marks come first on a first visit), spec 08 §8.2 (the novice path). Adds F-ORG-17
+(docs/spec/02) and settles open question 58 (docs/spec/06). Amends `apps/web/DESIGN.md`
+("Empty state: one action") for the Courses home only: a text link may follow the
+one action. Changes no rule of ADR-018, ADR-025, ADR-034, ADR-041, ADR-068 or ADR-095.
 
 ## Context
 
-A teacher signs in for the first time and lands on an empty Courses home that
-says "Create a course". The guide (`docs/guide/getting-started.md`) explains
-the frame; nothing makes the teacher do the loop the platform exists for — write
-a question, launch it, watch the class, grade, release — nor shows them the
-student side of it, nor the tools around it (the assistant, MCP). Reading is
-not doing.
+A teacher signs in for the first time and lands on an empty Courses home that says
+"Create a course". The guide (`docs/guide/getting-started.md`) explains the frame;
+nothing makes the teacher do the loop the platform exists for — write a question,
+launch it, watch the class, grade, release — nor shows them the student side of it,
+nor the tools around it (the assistant, MCP). Reading is not doing.
 
-Two facts shape the answer. First, the teacher's default is the teacher view,
-and crossing to the student side is two existing gestures: a staff seat through
-**Join as student** on the classroom page, then **Switch to student view**
-(ADR-018). The seat is badged, counted in no statistic, and resettable
-(`DELETE /evaluations/:id/attempt`). A teacher needs both gestures later to
-rehearse their own exams, so the onboarding should teach them, not hide them.
-Second, a public pool linked `read` (ADR-095 §4) makes a course's staff readers
-of a colleague's questions without letting them edit, and its statistics keep
-growing: one central copy of the training content, never a copy per teacher.
+Three facts shape the answer. First, the teacher's default is the teacher view, and
+crossing to the student side is two existing gestures: a staff seat through **Join
+as student** on the classroom page, then **Switch to student view** (ADR-018). The
+seat is badged, counted in no statistic, resettable (`DELETE
+/evaluations/:id/attempt`), and it earns neither drill cards nor question statistics
+(`drill/lifecycle.ts`, `stats/service.ts`). A teacher needs both gestures later to
+rehearse their own exams, so the onboarding must make them do both, not do them for
+them. Second, a public pool linked `read` (ADR-095 §4) makes a course's staff readers
+of a colleague's questions without letting them edit: one central copy of the
+training content, never a copy per teacher. Third, there is no import or export of
+questions today: `canonical` is planned, not present (spec 05, `CLAUDE.md`); spec 08
+§8.3's "YAML export and import" describes that plan. The training content therefore
+ships as code, installed through the ordinary services, as `apps/api/src/seed/` does.
 
-Constraints: invariant 2 (one primary action per screen), invariant 4 (the
-training questions reach the teacher's student view through `toStudent` like
-any other), invariant 6 (the course is an ordinary course reached through
-`staffAccess`), the seed rule of `CLAUDE.md` (content installed through the
-ordinary services, never raw inserts), N-I18N-01 (UI strings in both
-languages), and issue #722 (a roster line admits a sign-in, so fake students
+Constraints: invariant 2 (one primary action per screen; the classroom page's is per
+tab, F-ORG-13, and `New ▾` on Activities), invariant 4 (the training questions reach
+the teacher's student view through `toStudent` like any other), invariant 6 (the
+course is an ordinary course reached through `staffAccess`), invariant 9 (new audit
+actions), the seed rule of `CLAUDE.md` (never raw inserts), N-I18N-01 (UI strings in
+both languages), `DESIGN.md` (an empty state has one action; coach marks play on a
+screen's first visit), issue #722 (a roster line admits a sign-in, so fake students
 are not a training material).
 
 ## Decision
 
 ### 1. One training course per teacher, provisioned by one action
 
-The empty state of the Courses home offers **Start with the training course**
-beside **New course** (a second button of the empty state, the page's one
-primary action staying **New course**; open point 2 may move it). The action
-calls `POST /training` (the `org` module), a portal session of a teacher or an
-admin, never a student, an API token or a delegated session. It creates, with
-the ordinary services:
+`POST /app/api/training` (module `training`; a portal session of a teacher or an
+admin, never a student, an API token or a delegated session) creates, with the
+ordinary services of `org`:
 
-- a course of kind `training` (`courses.kind`, enum `regular | training`,
-  default `regular`), named and coded by the service (name in the request's UI
-  language, code `INIT-<n>`, unique) with the caller as its only owner;
-- one classroom, the current period, drill enabled (F-DRILL-04), no roster;
-- the caller's staff seat in it, through the same service as Join as student;
-- a private empty pool "My first questions" owned by the caller, linked `edit`;
+- a course whose `training_for` column names the caller (`courses.training_for`,
+  nullable, references `users`, **unique**: the constraint is the idempotence, as
+  `pools_personal_uq` is for the personal pool; a second call returns the existing
+  course, `created: false`). The course is named and coded by the service — name in
+  the request's UI language, code `INIT-<n>` free at creation; both editable later as
+  any course's, the column alone marks it. The caller is its only owner;
+- one classroom, the current period (its `periodEnd` the end of the current
+  semester), no roster, no seat;
 - a `read` link to the public training pool (§2);
 - the two evaluations of §3, from the content definitions, in the states §3 names.
 
-Idempotent: a caller who already owns a training course gets its id back and
-nothing is created (`200`, the existing course). An assistant (ADR-068) is a
-teacher here and gets their own. A `training` course is an ordinary course
-everywhere else: `staffAccess`, F-ORG-12, deletion by its owner (F-ORG-09),
-which is how "Restart the training" works (delete, then provision again).
+Nothing else: no seat (mission 1 is the seat), no private pool (mission 3 is a
+pool). Refused `409 training_not_installed` while the content is not installed.
+Audited `training.provision`. A training course is an ordinary course everywhere
+else: `staffAccess`, F-ORG-12, its deletion by its owner (F-ORG-09), which is how
+"Restart the training" works (delete, then provision again; a pool the teacher made in
+mission 3 is theirs and stays). An assistant (ADR-068) is a teacher here and gets
+their own. An admin's course list under Super Powers shows every training course like
+any course (Assumption 4).
 
-### 2. The content: one public pool, shipped in the repository
+### 2. The content: one public pool, shipped as code, installed by an admin task
 
-The training content is ONE public pool owned by the platform (open point 1
-names the account), installed and updated from a folder of the repository in
-the YAML of the export format (spec 08 §8.3): the questions, and the two
-evaluation definitions (an ordered list of question keys, the settings of §3).
-An admin action, **Install or update the training content** on the
-administration page, runs the ordinary import: a changed question publishes a
-new version; the evaluations already instantiated keep their frozen versions
-and show "Update" (F-EVAL-03), so nothing moves under a teacher's feet.
-Teachers are readers of the pool: they cannot edit it, and its statistics
-accumulate across every training course. The pool is listed in the catalogue
-like any public pool and reached by `find_similar_questions` (ADR-095 §1);
-its statements are about the platform, so it collides with no course's
-content. Content is French (open point 5).
+The training content is ONE public pool, owned by the super admin's account
+(Assumption 1), marked `pools.is_training` (a partial unique index: one per
+instance; the install finds it by that mark, never by name). The questions and the
+two evaluation definitions are a TypeScript content module,
+`apps/api/src/modules/training/content.ts`, typed by `content-types.ts` and modelled on
+`seed/content.ts`: French statements, a stable `internalName` per question, a config
+validated by the type's schema at publish, no concept (ADR-081's vocabulary is the
+courses', not the platform's). It is installed by the admin task
+`training.install` (the task registry of the administration page, `POST
+/app/api/admin/tasks/:key/run`): a missing question is created and published; a
+question whose config or explanation differs from its latest published version gets a
+new published version; an unchanged one is left alone. Evaluations already
+instantiated keep their frozen versions and show "Update" (F-EVAL-03), so nothing
+moves under a teacher's feet. Audited `training.install`. Teachers are readers of the
+pool; it is listed in the catalogue like any public pool, under its owner's real name
+(ADR-095 §6), and reached by `find_similar_questions`; its statements are about the
+platform, so they collide with no course's content. This module gives way to
+`canonical` when that package lands; the content does not change, its carrier does.
 
 ### 3. Four missions, each on a real screen, none examined
 
-The teacher is never graded. The missions are the text of a guide chapter,
-*The training course* (`docs/guide/`), and of the training classroom's help
-topic; the card of §4 links to them. The word "quiz" names what the teacher
-takes as a student; "mission" names what they do as a teacher.
+The teacher is never graded: a staff attempt counts nowhere (ADR-018), neither in a
+statistic nor in the drill, and the record promises neither. The missions are the
+text of a guide chapter, *The training course* (`docs/guide/training.md`), and of the
+training classroom's help topic; the card of §4 links them. "Quiz" names what the
+teacher takes as a student; "mission" names what they do as a teacher.
 
-1. **Be a student** — "The welcome quiz": an exercise, Scheduled and open,
-   free navigation, immediate correction, retakes allowed (ADR-025), drill
-   on. One question per type (open point 4). A statement teaches a gesture
-   of the platform and its answer stays general-public, discoverable on the
-   screen around it (where the student-view switch is; the shortcut of the
-   palette; "a question reaches a student only once it is ___"); a code
-   question is a hello world with the trial button; a circuit question lights
-   an LED. The explanation, visible under the exercise's feedback policy,
-   says what the teacher would configure to obtain that behaviour. The
-   hand-in makes drill cards appear (F-DRILL-01). The seat exists already, so
-   the mission is one click: **Switch to student view**.
-2. **Run a class** — "The live quiz", a draft in Live mode: the three screens
-   and the start checklist with the waiting-room preview (F-EVAL-23); the
-   teacher opens the room, opens a second tab in the student view (the mode is
-   per tab, ADR-018), starts, answers, closes; grades the one free-text
-   question (with the LLM proposal when the gateway is configured, ADR-063);
-   releases; checks the released grade in the student view.
-3. **Make it yours** — in "My first questions": create a question with the
+1. **Be a student** — "The welcome quiz" (« Le quiz d'accueil »): an exercise,
+   Scheduled, open from the provisioning until the end of the classroom's period
+   (the ticker closes it then, F-EVAL-04; a restart provisions a fresh one), free
+   navigation, immediate correction, retakes allowed (ADR-025, which a staff seat
+   gets like a student). One question per automatically graded type present on
+   `main`: `mcq`, `short`, `cloze`, `categorize`, `math`, `circuit`, `code`. A
+   statement teaches a gesture of the platform and its answer is discoverable on
+   the screen around it; it points at the gesture, never at its wording, so a key
+   is never a UI label (Assumption 5). The explanation, visible under the
+   exercise's feedback policy, says what the teacher would configure to obtain
+   that behaviour. Two clicks before it: **Join as student** on the classroom page
+   (the coach anchor `classroom.join` already points at it), then **Switch to
+   student view**.
+2. **Run a class** — "The live quiz" (« Le quiz en direct »), a draft in Live mode:
+   the three screens and the start checklist with the waiting-room preview
+   (F-EVAL-23); the teacher opens the room, opens a second tab in the student view
+   (the mode is per tab, ADR-018), starts, answers, closes; grades the `rich`
+   question and the `diagram` question by hand (with the LLM proposal when the
+   gateway is configured, ADR-063); releases; reads the released grade in the
+   student view (the staff feedback page shows it through the live tally,
+   `releasedGradesOf`; pinned by a DB test).
+3. **Make it yours** — **New pool** on the pools page, **Link a pool** on the
+   training course's page (F-ORG-12), then in that pool: create a question with the
    wand (ADR-059), try it, publish it. Save the welcome quiz as a template
-   (F-EVAL-24), instantiate it, add the question, then edit the question to
-   meet the "newer version" badge (F-EVAL-03). Preview it (stateless), use
-   **Join as student** by hand this time on the instantiated quiz, take it,
-   reset one's own attempt.
-4. **The tools around** — ask the assistant "how do I give a student extra
-   time?" and let it open the roster (ADR-080 §10); create a personal token,
-   connect Claude through MCP (ADR-022, ADR-023), create a question from there
-   and find it in the pool. Journal, projects and groups are links to the
-   guide, not missions.
+   (F-EVAL-24), instantiate it, add the question, edit the question to meet the
+   "newer version" badge (F-EVAL-03), preview it (stateless), take it from the seat
+   of mission 1, reset one's own attempt.
+4. **The tools around** — ask the assistant "how do I give a student extra time?"
+   and let it open the roster (ADR-080 §10); create a personal token or connect
+   Claude through MCP (ADR-022, ADR-023), create a question from there and find it
+   in the pool. Journal, projects and groups are links to the guide, not missions.
 
-Out of the training: no roster (the only seat is the teacher's), no SEB or
-kiosk rehearsal (ADR-027, ADR-051), no impersonation (ADR-034), no GitHub
-project (an organisation is needed, ADR-100).
+Out of the training: no roster (the only seat is the teacher's), no SEB or kiosk
+rehearsal (ADR-027, ADR-051), no impersonation (ADR-034), no GitHub project (an
+organisation is needed, ADR-100), no poll type (`brainstorm` is a poll's), no blocks
+until that type merges (a content update then adds it).
 
 ### 4. A progress card derived from the data, never stored
 
-The training classroom's page carries, above Activities, a card of the four
-missions. Each line is a predicate on existing tables, computed by
-`GET /training` and never stored: a handed-in staff attempt on the welcome
-quiz; results released on the live quiz; a published question in the
-caller's private pool; a template in the course; a personal token or an OAuth
-client of the caller; an assistant conversation of the caller. The card's one
-accent is the next undone mission, which opens the screen where it happens;
-while a mission remains, the card holds the page's primary action and the
-classroom's own actions step one tier down (invariant 2; the training
-classroom has no student, so nothing of a run competes). All done: the card
-says so and links the guide; nothing else changes. A classroom of a `regular`
-course never shows it.
+`GET /app/api/training` returns whether the content is installed, the caller's
+training course (id, classroom id) or null, and the state of each mission —
+`todo`, `done` or `unavailable` — computed from existing tables and never stored:
 
-### 5. Where else it is offered
+| Mission | `done` when | `unavailable` when |
+|---|---|---|
+| 1 | a handed-in staff attempt of the caller on an exercise of the course | never |
+| 2 | a released evaluation of the course | never |
+| 3 | a published question in a pool linked `edit` to the course AND a template in the course | never |
+| 4 | an `api_tokens` or `oauth_grants` row of the caller, ever (revoked rows are kept), OR an assistant conversation of the caller (purged after 30 days, ADR-080 §6: the mission then reads `todo` again, which is harmless) | the LLM gateway is off AND OAuth has no client |
 
-A teacher whose home is not empty (invited on a colleague's course) finds
-**Training course** in the account menu and in the palette's Help group
-(open point 2); it provisions or opens the same course.
+Mission 4 is optional: "all done" is missions 1 to 3. The card shows on the training
+classroom's **Activities** tab only, to the teacher the course was provisioned for
+(`training_for`), above the activities. Its one accent is the next `todo` mission,
+and it leads to the screen or the control where the mission happens — it never
+performs the gesture (ADR-018: the switch stays secondary chrome, and doing it from
+the card would not teach where it is). While a `todo` mission remains, `New ▾` is
+secondary on that tab; the other tabs keep their own primary action (F-ORG-13). All
+done: the card says so and links the guide. The coach tour of the classroom plays as
+on any first visit, after What's new (ADR-087 §9); the card is content, not chrome,
+and competes with neither.
+
+### 5. Where it is offered
+
+The empty state of the Courses home keeps its one action, **New course**, and gains
+a text line under it: "First time here? Start with the training course"
+(Assumption 2; `DESIGN.md` amended for this screen). A teacher whose home is not
+empty (invited on a colleague's course) finds **Training course** in the account
+menu and in the palette's Help group; the palette command is declared with an effect,
+so the assistant never runs it (ADR-080 §10). Each provisions or opens the same
+course. Neither is shown while the content is not installed.
+
+## Assumptions (the product owner's open points, values taken on 2026-10-11)
+
+1. **The public training pool is owned by the super admin's account**
+   (`SUPER_ADMIN_EMAIL`). Nothing forbids it (ADR-013 §5, ADR-054); if that address
+   changes, the pool stays with the old account and the new admin edits it under
+   Super Powers. Alternative left open: a platform account of its own.
+2. **The empty state gains a text link, not a second button**; the account menu and
+   the palette carry the entry elsewhere.
+3. **Statements are about the platform**, not a neutral subject.
+4. **The admin's course list shows every training course** like any course. If they
+   pile up, a filter off by default may follow; it is not built now.
+5. **French content only**, with the English UI showing French statements; no key is
+   a UI label, so the language of the interface changes nothing to the answer.
+6. The welcome quiz holds the automatically graded types only; `rich` and `diagram`
+   are graded by hand in the live quiz; blocks joins by a content update.
 
 ## Consequences
 
-- Benefits: the first success in two minutes, on the real screens; the two
-  gestures to the student side are learned where they will be needed; the
-  content is maintained once, and its statistics show which statement
-  confuses teachers.
-- Costs: a migration (`courses.kind`), a provisioning service and its DB
-  test, the import action, two contracts (`POST /training`, `GET /training`),
-  the card, a guide chapter and a help topic, the content itself. The admin's
-  course list gains one course per teacher; a filter on kind may follow.
-- Risks: the training pool's grading of the free-text question consumes the
-  shared LLM cap (ADR-058 §5), one small call per teacher; the nightly review
-  (ADR-060) reviews the training questions like any other, which is wanted.
-- Nothing here touches a student: no student payload changes, no seat is
-  created for anyone but the caller.
+- Benefits: the first success in two gestures and one click, on the real screens;
+  the two gestures to the student side are learned where they will be needed; the
+  content is maintained once and reaches every training course.
+- Costs: a migration (`courses.training_for`, `pools.is_training`), the `training`
+  module (provision, status, install task) and its DB tests, two contracts, two
+  audit actions, the card and the two entries, a guide chapter and a help topic, the
+  content itself, a `DESIGN.md` amendment.
+- Risks: the live quiz's hand grading consumes the shared LLM cap (ADR-058 §5) when
+  the teacher asks for a proposal, one small call per teacher; the nightly review
+  (ADR-060) reviews the training questions like any other, which is wanted. A
+  teacher who deletes the super admin's pool cannot: only its owner can.
+- Nothing here touches a student: no student payload changes, no seat is created for
+  anyone.
 
 ## Alternatives considered
 
-- **One shared training classroom for every teacher.** Rejected: attempts and
-  edits of one teacher would land in another's screen, and the course's staff
-  would be every teacher of the instance.
-- **A course template instantiated per teacher.** Rejected: templates belong
-  to a course (F-EVAL-19), so the content would need a course of its own to
-  live in; the YAML folder is already the expert format, and the import
-  service exists.
-- **A copy of the questions per teacher.** Rejected: copies diverge, their
-  statistics restart, and an improved statement never reaches a teacher
-  already started (ADR-095 context).
-- **Stored progress (a checklist table).** Rejected: every line is a fact the
-  tables already hold; a stored flag would drift from them and need its own
-  writes, audit and reset.
-- **A guided tour overlay (tooltips in sequence).** Rejected: it teaches the
-  chrome, not the loop; it breaks on every layout change; and the platform's
-  per-screen help already names each control.
-- **Automatic provisioning at first sign-in.** Rejected: a teacher invited as
-  an assistant arrives with a course already; an unasked course on everyone's
-  home is noise, and the empty state is the moment the need is felt.
-
-## Open points for the product owner
-
-1. The owner of the public training pool: the super admin's account, or a
-   platform account of its own (which then appears as a pool owner in the
-   catalogue).
-2. Where the action lives for a teacher whose home is not empty: the account
-   menu, the palette, both; and whether the empty state's primary action
-   becomes the training course rather than New course.
-3. The topic of the questions: statements about the platform (proposed) or a
-   neutral general-public subject.
-4. One question per type, the heavy ones included (circuit, diagram, blocks,
-   math), or the four cards of the novice path (08 §8.2) plus one example
-   under "More".
-5. French content only, with the English UI showing French questions.
+- **One shared training classroom for every teacher.** Rejected: attempts and edits
+  of one teacher would land in another's screen, and the course's staff would be
+  every teacher of the instance.
+- **A course template instantiated per teacher.** Rejected: templates belong to a
+  course (F-EVAL-19), so the content would need a course of its own to live in.
+- **A YAML folder installed by an import.** Rejected for now: no import exists, and
+  `canonical` is planned after `ui-kit` (`CLAUDE.md`); building it here would jump
+  that order. The content module is the same data in code.
+- **A copy of the questions per teacher.** Rejected: copies diverge, and an improved
+  statement never reaches a teacher already started (ADR-095 context).
+- **A seat and a private pool at provisioning.** Rejected after the spec challenge:
+  a seat is per classroom and the button disappears once it exists, so a
+  provisioned seat removes the very gesture to teach; a private pool survives the
+  course's deletion and piles up at each restart, while creating and linking a pool
+  is a gesture worth teaching.
+- **A `courses.kind` enum.** Rejected: it marks a course but names no teacher, so it
+  gives neither idempotence nor "whose card is this"; `training_for` does both.
+- **Stored progress (a checklist table).** Rejected: every line is a fact the tables
+  already hold; a stored flag would drift from them and need its own writes, audit
+  and reset.
+- **A guided tour overlay.** Rejected as the vehicle: the coach marks already play a
+  tour per screen and teach the chrome; the missions teach the loop.
+- **Automatic provisioning at first sign-in.** Rejected: a teacher invited as an
+  assistant arrives with a course already; an unasked course on everyone's home is
+  noise, and the empty state is the moment the need is felt.
