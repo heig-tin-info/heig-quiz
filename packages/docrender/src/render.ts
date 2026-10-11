@@ -50,7 +50,7 @@ import { decodeEntities } from "./entities.js";
 import { asBoolean, oneLine, splitFrontMatter } from "./frontMatter.js";
 import { escapeHtml, highlight } from "./highlight.js";
 import { relativeHref, resolveRelative } from "./journalTree.js";
-import { forbiddenMacroDefinition, KATEX_LIMITS } from "./katex.js";
+import { FORMULA_HTML_MAX, forbiddenCommand, KATEX_LIMITS } from "./katex.js";
 import { taskTally } from "./tasks.js";
 
 export interface RenderContext {
@@ -350,14 +350,14 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
 /**
  * One formula. `throwOnError` is deliberately ON so the author gets a warning
  * instead of a red blob nobody reports; the broken source is kept visible as
- * code, which is what it is. A formula that defines a macro, or that runs
- * past `KATEX_LIMITS`' expansions or the call stack, is such an error; one
- * past its size is drawn at the cap.
+ * code, which is what it is. A formula that uses a forbidden command, runs
+ * past `KATEX_LIMITS`' expansions or the call stack, or produces more than
+ * `FORMULA_HTML_MAX`, is such an error; one past its size is drawn at the cap.
  */
 function math(source: string, display: boolean, warnings: JournalWarning[]): string {
-  if (forbiddenMacroDefinition(source) === null) {
+  if (forbiddenCommand(source) === null) {
     try {
-      return katex.renderToString(source, {
+      const html = katex.renderToString(source, {
         displayMode: display,
         throwOnError: true,
         strict: false,
@@ -365,8 +365,9 @@ function math(source: string, display: boolean, warnings: JournalWarning[]): str
         output: "htmlAndMathml",
         ...KATEX_LIMITS,
       });
+      if (html.length <= FORMULA_HTML_MAX) return html;
     } catch {
-      // Reported below, as a refused definition is.
+      // Reported below, as a refused command is.
     }
   }
   warnings.push({ code: "math_error", source });

@@ -8,5 +8,6 @@ export function useFormulaLabels(): FormulaLabels {
   const t = useT();
   const macro = t("md.formula.refusedMacro");
   const tooDeep = t("md.formula.refusedDepth");
-  return useMemo(() => ({ macro, tooDeep }), [macro, tooDeep]);
+  const tooLarge = t("md.formula.refusedSize");
+  return useMemo(() => ({ macro, tooDeep, tooLarge }), [macro, tooDeep, tooLarge]);
 }

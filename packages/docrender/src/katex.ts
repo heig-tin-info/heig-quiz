@@ -23,21 +23,32 @@
  *   Built-ins count too: a six-line aligned logic proof (`\iff` = 8,
  *   `\implies` = 10, `\neq` = 4) needs about 70, so 500 leaves a long
  *   derivation room. It is a belt: the blow-up it cannot stop on its own —
- *   calls x the body of a user-defined macro, 499 calls to a 1000-character
- *   `\def` (2 KB) rendered for ~290 s — is closed by
- *   {@link forbiddenMacroDefinition}.
+ *   calls x the body of a macro, 499 calls to a 1000-character `\def`
+ *   (2 KB) rendered for ~290 s; 250 calls to the `\df@tag` that `\tag{…}`
+ *   defines, 3.7 KB, wrote 64 MB of HTML in 1.4 s — is closed by
+ *   {@link forbiddenCommand}, and what is left by {@link FORMULA_HTML_MAX}.
  *
- * Without macro definitions, the cost follows the source. Measured on KaTeX
- * 0.18.7 for 4 KB formulas, worst case ~110 ms in Node (the server's journal)
- * and ~265 ms in Chromium, KaTeX plus DOM and layout (the grader's screen):
- * 255 nested `\overbrace` (580 KB of HTML; 16 + 247 ms in Chromium), 409
- * nested `\frac` (380 KB; 24 + 144 ms), 4096 plain letters (21 + 83 ms), 203
- * aligned rows or a 254-row matrix (under 60 ms). Deeper nesting (~500
- * `\sqrt`, `\boxed` or superscripts) overflows the call stack in ~40 ms: a
- * `RangeError` that `throwOnError: false` does not catch, so every caller
- * catches it.
+ * Deep nesting (~500 `\sqrt`, `\boxed` or superscripts) overflows the call
+ * stack in ~40 ms: a `RangeError` that `throwOnError: false` does not catch,
+ * so every caller catches it.
  */
 export const KATEX_LIMITS = { maxSize: 10, maxExpand: 500 } as const;
+
+/**
+ * The most HTML one formula may produce, in UTF-16 code units: a renderer
+ * that gets more shows the formula as refused instead of inserting it, so an
+ * expansion path nobody foresaw cannot put megabytes into the grader's page
+ * or the journal. KaTeX 0.18.7 (`htmlAndMathml`), 4 KB formulas without
+ * definitions or internal names, measured: 255 nested `\overbrace` 583 KB
+ * (the largest found; ~30 ms in Node, 16 + 247 ms of KaTeX, DOM and layout
+ * in Chromium), 400 nested `\sqrt` 407 KB, 300 nested `\xrightarrow` 396 KB,
+ * 409 nested `\frac` 379 KB, 203 aligned rows 300 KB, a 254-row matrix
+ * 234 KB, 4096 plain letters 48 KB. 1 MB is above all of them and far
+ * below the 64 MB the `\df@tag` path reached. The cap bounds what reaches
+ * the page, not KaTeX's own time, which for these shapes stayed under
+ * ~110 ms in Node (a cold first call is the slowest).
+ */
+export const FORMULA_HTML_MAX = 1024 * 1024;
 
 /**
  * A command that defines or aliases a macro (`\global` prefixes them), a
@@ -47,19 +58,23 @@ export const KATEX_LIMITS = { maxSize: 10, maxExpand: 500 } as const;
  * take that very `\def` as a command again (`\verb` with `\` as its
  * delimiter). So it refuses more than KaTeX would define: a line break
  * followed by "def" must be written `\\ def`.
+ *
+ * Or any control word with an `@`: KaTeX's internal names (`\df@tag`,
+ * which `\tag{…}` defines, `\current@color`…), which its lexer reads as
+ * commands like any other. No course formula calls one.
  */
-const MACRO_DEFINITION =
-  /\\(def|gdef|edef|xdef|let|futurelet|newcommand|renewcommand|providecommand|global)(?![A-Za-z@])/;
+const FORBIDDEN =
+  /\\(?:def|gdef|edef|xdef|let|futurelet|newcommand|renewcommand|providecommand|global)(?![A-Za-z@])|\\[A-Za-z]*@[A-Za-z@]*/;
 
 /**
- * The first command of `tex` that defines a macro (`"\\def"`), or null.
- * Every renderer calls it before KaTeX and refuses the formula when it
- * answers: a definition is the one way a short formula expands into an
- * unbounded one, and no course formula needs one (nothing in the repository's
- * content, seeds or guides uses any). It over-refuses rather than under: a
- * `\def` inside a comment, a `\verb` or after `\\` is refused too.
+ * The first command of `tex` a formula may not use (`"\\def"`,
+ * `"\\df@tag"`), or null. Every renderer calls it before KaTeX and refuses
+ * the formula when it answers: a definition, or a call to one KaTeX made, is
+ * the way a short formula expands into an unbounded one, and no course
+ * formula needs either (nothing in the repository's content, seeds or
+ * guides uses any). It over-refuses rather than under: a `\def` inside a
+ * comment, a `\verb` or after `\\` is refused too.
  */
-export function forbiddenMacroDefinition(tex: string): string | null {
-  const match = MACRO_DEFINITION.exec(tex);
-  return match ? `\\${match[1]}` : null;
+export function forbiddenCommand(tex: string): string | null {
+  return FORBIDDEN.exec(tex)?.[0] ?? null;
 }

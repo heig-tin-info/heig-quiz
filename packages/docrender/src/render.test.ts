@@ -320,6 +320,16 @@ describe("math", () => {
     for (const tex of ["\\verb\\!\\\\def\\a{x}\\a", "\\verb*\\q\\\\def\\a{x}\\a"]) {
       expect(codes(renderPage(`$${tex}$\n`, ctx()).warnings)).toEqual(["math_error"]);
     }
+    // `\tag{…}` defines `\df@tag`: calling it is an internal command, refused.
+    expect(codes(renderPage("$$\\tag{x}\\df@tag$$\n", ctx()).warnings)).toEqual(["math_error"]);
+  });
+
+  it("refuses a formula whose HTML is past FORMULA_HTML_MAX", () => {
+    // 800 aligned rows: ~1.2 MB of KaTeX HTML, above the 1 MB cap.
+    const rows = "a &= \\frac{b}{c} \\\\ ".repeat(800);
+    const big = renderPage(`$$\\begin{aligned}${rows}\\end{aligned}$$\n`, ctx());
+    expect(codes(big.warnings)).toEqual(["math_error"]);
+    expect(big.html).not.toContain("katex");
   });
 
   it("reports a formula nested past the call stack, without failing the page", () => {

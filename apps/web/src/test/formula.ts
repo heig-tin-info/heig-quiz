@@ -5,4 +5,5 @@ import type { FormulaLabels } from "../markdown/formula";
 export const FORMULA_LABELS: FormulaLabels = {
   macro: en["md.formula.refusedMacro"],
   tooDeep: en["md.formula.refusedDepth"],
+  tooLarge: en["md.formula.refusedSize"],
 };

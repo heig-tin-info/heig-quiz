@@ -4,6 +4,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { elapse, flowingClock } from "../test/clock";
+import { FORMULA_LABELS } from "../test/formula";
 import { renderWithProviders } from "../test/render";
 import { resetShortcuts, useActiveShortcuts } from "../shortcuts";
 import { modKey } from "../ui";
@@ -130,10 +131,7 @@ describe("RichText — it shows the markdown, it does not print it", () => {
     );
     await waitFor(() => expect(container.querySelectorAll("[data-type='inline-math']")).toHaveLength(2));
     const [refused, fine] = Array.from(container.querySelectorAll("[data-type='inline-math']"));
-    expect(refused?.querySelector(".katex-error")).toHaveAttribute(
-      "title",
-      "A formula cannot define macros (\\def, \\newcommand…)",
-    );
+    expect(refused?.querySelector(".katex-error")).toHaveAttribute("title", FORMULA_LABELS.macro);
     expect(refused?.querySelector(".katex-html")).toBeNull();
     expect(fine?.querySelector(".katex-html")).not.toBeNull();
     expect(fine).toHaveAttribute("data-latex", "x^2");

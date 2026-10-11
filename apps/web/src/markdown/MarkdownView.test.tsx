@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { FORMULA_LABELS } from "../test/formula";
 import { renderWithProviders } from "../test/render";
+import { formulaHtml } from "./formula";
 import { MarkdownView } from "./MarkdownView";
 import { assetMarkdown, assetUrl, assetWidth, renderMarkdown, withAssetWidth } from "./render";
 
@@ -211,14 +212,26 @@ describe("MarkdownView — content", () => {
     // 499 calls to a 1000-character macro: ~290 s of KaTeX if it got there.
     const bomb = view(`$\\def\\a{${"x".repeat(1000)}}${"\\a".repeat(499)}$`);
     const error = bomb.querySelector(".katex-error");
-    expect(error).toHaveAttribute("title", "A formula cannot define macros (\\def, \\newcommand…)");
+    expect(error).toHaveAttribute("title", FORMULA_LABELS.macro);
     expect(error?.textContent).toContain("\\def\\a");
     expect(bomb.querySelector(".katex-html")).toBeNull();
     expect(view("$\\newcommand{\\a}{x}\\a$").querySelector(".katex-error")).not.toBeNull();
-    // `\verb` with `\` as its delimiter hands KaTeX the `\def` after `\\`.
-    for (const tex of ["\\verb\\!\\\\def\\a{x}\\a", "\\verb*\\q\\\\def\\a{x}\\a"]) {
-      expect(view(`$${tex}$`).querySelector(".katex-html")).toBeNull();
+    // `\verb` with `\` as its delimiter hands KaTeX the `\def` after `\\`;
+    // `\tag{…}` defines `\df@tag`, an internal command.
+    for (const tex of ["\\verb\\!\\\\def\\a{x}\\a", "\\verb*\\q\\\\def\\a{x}\\a", "\\tag{x}\\df@tag"]) {
+      expect(view(`$$${tex}$$`).querySelector(".katex-html")).toBeNull();
     }
+  });
+
+  it("refuses a formula whose HTML is past the cap, saying why", () => {
+    // 800 aligned rows: ~1.2 MB of KaTeX HTML, above FORMULA_HTML_MAX (1 MB).
+    const rows = "a &= \\frac{b}{c} \\\\ ".repeat(800);
+    const big = view(`$$\\begin{aligned}${rows}\\end{aligned}$$`);
+    expect(big.querySelector(".katex-error")).toHaveAttribute("title", FORMULA_LABELS.tooLarge);
+    expect(big.querySelector(".katex-html")).toBeNull();
+    // The largest legitimate 4 KB shape measured (583 KB) stays under it.
+    const nest = `${"\\overbrace{".repeat(255)}x${"}^{a}".repeat(255)}`;
+    expect(formulaHtml(nest, false, FORMULA_LABELS)).toContain("katex-html");
   });
 
   it("shows a formula nested past the call stack as an error, not a crash", () => {
