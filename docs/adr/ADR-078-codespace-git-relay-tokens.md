@@ -7,7 +7,9 @@ Accepted (2026-10-07, product owner: option B below). Revised the same day after
 that last point (§7) confirmed by the product owner on 2026-10-07. Delivered by merge task M6-10
 ([task card](../merge/history/09-tasks-delivered.md#m6-10-git-relay-through-quiz-issued-scoped-tokens-adr-078),
 [progress](../merge/PROGRESS.md)). Amended 2026-10-09: deployment state left to PROGRESS.md (M6-10 done,
-staging checks pending).
+staging checks pending). Amended 2026-10-11 (security audit M11 and L25): the portal's service
+tokens are single use and bound to their request, and every token's lifetime is capped
+([amendment](#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use)).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -440,6 +442,66 @@ installed it, until the key is rotated.
   `pushedBy` in the `github` module, with tests that a declared relayed
   push is graded and that any other App push still is not; the relay's
   `refspecFor` without force and its `rejected` state, with tests.
+
+## Amendment 2026-10-11: service tokens bound to their request, single use
+
+Scope: the service tokens Quiz signs for the portal's two routes
+(`PUT /api/assignments/:id`, `GET /api/assignments/:id/sessions`, ADR-047),
+and the lifetime of every HS256 token of the boundary. Not §2's route on
+Quiz, whose rules stand (below).
+
+- **Bound to one request (audit L25).** A service token was a two-minute
+  bearer, reusable on either route by whoever saw it. It now also carries
+  `jti` (random), `method`, `path` (path and query, as the portal reads
+  `request.url`) and, when the request has a body, `bodyHash`: the SHA-256 of
+  the body's exact bytes, base64url. The three are `@quiz/domain`'s
+  `requestBinding` (pure, Web Crypto), computed by Quiz from the request it
+  sends (`portalCall`, `modules/codespace/service.ts`) and by the portal
+  from the request it received (its service routes parse JSON as bytes, any
+  other content type is a 415); `bindingMismatch` compares them. The shape is
+  `ServiceTokenClaims` of `@quiz/contracts`: `iss` is `heig-quiz` and `aud`
+  `heig-codespace-api`, nothing else, `method` `GET` or `PUT`. An unbound
+  token is refused.
+- **heig-classroom no longer signs service tokens for this portal.** Its own
+  portal has been stopped since the M6-04 switch and never served a real
+  class (`apps/codespace/deploy/RUNBOOK.md`, The switch, step 4); its launch tokens
+  stay accepted for the transition (docs/merge/06 §6.2), its service tokens
+  are refused.
+- **Single use.** Once the binding holds, the portal consumes the `jti` in
+  `launch_tokens_used`, the launch tokens' table (the primary key is the
+  guarantee); a replay is a 401. Quiz signs a fresh token for every call,
+  retries included.
+- **Rows outlive the token (audit M11).** `verifyHs256` accepts a token
+  until `exp + 30 s` (`HS256_SKEW_SECONDS`); the purge deleted a consumed
+  `jti` at `exp`, so a used launch link served again for thirty seconds. A
+  row is now kept until `exp + 30 s + 60 s`.
+- **Lifetimes are capped by the contract.** `exp - iat` must be positive and
+  at most `LAUNCH_TOKEN_TTL_SECONDS` (300) for a launch token and
+  `SERVICE_TOKEN_TTL_SECONDS` (120) for a service token, as §2 already did
+  for the relay's requests (60): a token signed for longer is refused before
+  it expires, and the purge's bound holds for every row.
+- **Deploy skew.** No release accepts both forms. Both apps deploy from the
+  same commit, the application first (`deploy-staging`, then
+  `deploy-production` before `deploy-codespace-prod`, `.github/workflows/ci.yml`):
+  an old portal ignores the new claims, and a new portal only ever meets the
+  new Quiz. Rolling the application back alone leaves the sync and the
+  staff's workspace list refused (401) until the portal is rolled back too;
+  launches are unaffected. `deploy/smoke.mjs` signs bound tokens.
+- **§2's route is unchanged.** The portal's requests to Quiz were bound from
+  the start (the request is the token, a distinct audience per route, an
+  empty body); their `jti` stays logged, not consumed. Consuming it needs a
+  table and a migration on Quiz's side: until then a request captured in
+  transit (TLS broken, a leaked log) replays for about 90 s and mints the
+  `contents: write` installation token §2 grants for that repository.
+  Open: [#743](https://github.com/heig-tin-info/heig-quiz/issues/743).
+- **The disk (audit M11).** In code, one push into a staging repository is
+  capped by `receive.maxInputSize` (100 MiB, `RECEIVE_MAX_INPUT_BYTES`). The
+  rest is the owner's checklist (`apps/codespace/deploy/RUNBOOK.md`, Disk):
+  a quota per work volume (XFS project quota or a bounded volume), the
+  portal's SQLite on a partition of its own, a free-space alert.
+- **The door (audit L25).** Only the application VM calls the service
+  routes; a Caddy allow-list on `/api/*` waits for the owner to confirm the
+  addresses: [#744](https://github.com/heig-tin-info/heig-quiz/issues/744).
 
 ## Alternatives considered
 

@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { FIXTURE_ENV, makeSourceRepo, tempDir } from "./fixtures.js";
 import { git, gitAuthEnv, gitBare } from "./gitRunner.js";
-import { ensureStagingRepo, refSnapshot, stagingHeadBranch, stagingPaths } from "./staging.js";
+import { RECEIVE_MAX_INPUT_BYTES, ensureStagingRepo, refSnapshot, stagingHeadBranch, stagingPaths } from "./staging.js";
 
 const roots: string[] = [];
 async function root(): Promise<string> {
@@ -52,6 +52,7 @@ describe("ensureStagingRepo", () => {
     expect(refs.get("refs/heads/main")).toBe(src.sha);
     expect((await gitBare(staging.gitDir, ["config", "http.receivepack"])).trim()).toBe("true");
     expect((await gitBare(staging.gitDir, ["config", "http.uploadpack"])).trim()).toBe("true");
+    expect((await gitBare(staging.gitDir, ["config", "receive.maxInputSize"])).trim()).toBe(String(RECEIVE_MAX_INPUT_BYTES));
     // HEAD points at a real branch, otherwise `git clone` checks nothing out.
     expect((await gitBare(staging.gitDir, ["symbolic-ref", "HEAD"])).trim()).toBe(
       "refs/heads/main",

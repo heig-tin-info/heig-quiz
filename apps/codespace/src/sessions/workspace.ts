@@ -5,30 +5,32 @@
  * **Timing matters.** This function runs *before* the `podman run`: after it,
  * the `:U` option has given `work/` to the UID range that `--userns=auto` drew
  * for the container, and the portal (uid `codespace`) can no longer create or
- * modify a file there — in particular not `work/.git/config`. This is the same
- * constraint as the one described in `shadow.ts`, seen from the write side.
+ * modify a file there. This is the same constraint as the one described in
+ * `shadow.ts`, seen from the write side.
  *
  * Consequence carried by `manager.ts`: the session id is **stable for the
  * lifetime of the volume**, because the `origin` remote written here contains
  * it and it will never be rewritten.
  *
- * Three states are distinguished, and that is the 2026-09-17 fix:
+ * **The host never reads nor runs git on a `.git` it did not create**
+ * (audit L23). A `.git` in `work/` may be the student's: its config
+ * (`core.fsmonitor`, `include.path`, a remote's `uploadpack`), its hooks, its
+ * `alternates` or a symlink under it would run code, or read files, as the
+ * portal. So the host looks at one thing, whether `work/.git` exists
+ * ({@link inspectWorkspace}, an `lstat`), and:
  *
- *  - `work/.git` absent → full seeding from the staging repository;
- *  - `work/.git` present but **with no commit at all** (the case of a session
- *    whose staging repository was empty at the first start, for lack of a token
- *    to fetch the student's private repository) → it is completed: fetch, local
- *    branch on the default branch, tracking `origin/<branch>`. The untracked
- *    files the student has already created are kept — `checkout -B` from an
- *    unborn branch does not touch them;
- *  - same case, but `work/` already belongs to the container: completion is
- *    impossible from the host and `manager.ts` does it through `engine.exec`
- *    after the start (`completionScript`).
- *
- * A repository that already carries at least one commit is **never** touched
- * again: the student owns their repository.
+ *  - `work/.git` absent, in a `work/` the portal owns and nobody else may
+ *    write → full seeding from the host, in the repository this call creates;
+ *  - anything else (a `.git` of any kind, or a `work/` already the
+ *    container's) → `manager.ts` plays {@link completionScript} through
+ *    `engine.exec` after the start, as the student. The script leaves a
+ *    repository that has a commit alone (the student owns it), creates one
+ *    if there is none, and completes an unborn one — the 2026-09-17 case, a
+ *    staging repository empty at the first start: fetch, local branch on the
+ *    default branch, tracking `origin/<branch>`, the student's untracked
+ *    files kept.
  */
-import { access, constants } from "node:fs/promises";
+import { constants, lstat, open } from "node:fs/promises";
 import { join } from "node:path";
 
 import { git, stagingHeadBranch, type StagingPaths } from "../git/index.js";
@@ -71,74 +73,63 @@ export function remoteUrl(host: string, port: number, sessionId: string): string
   return `http://${host}:${port}/git/${sessionId}`;
 }
 
-async function exists(path: string): Promise<boolean> {
-  return access(path).then(
-    () => true,
-    () => false,
-  );
-}
-
 /**
- * `work/` belongs to the container's UID range from the first `:U` on, and the
- * portal no longer writes there. This is measured rather than deduced from the
- * session state: an aborted `podman run` leaves a directory still ours.
- */
-async function writable(path: string): Promise<boolean> {
-  return access(path, constants.W_OK | constants.X_OK).then(
-    () => true,
-    () => false,
-  );
-}
-
-/**
- * `safe.directory`: after the first `:U`, `work/` no longer belongs to the
- * portal and git refuses to work there ("detected dubious ownership"). `HOME`
- * being already neutralised by `gitRunner`, there is no global configuration
- * where the exception could be set: it is set on the call itself.
+ * Git on the repository this call has just created in a `work/` the portal
+ * owns, and on no other. `safe.directory` is set on the call itself, `HOME`
+ * being neutralised by `gitRunner`; hooks and fsmonitor off are a belt: the
+ * repository has neither.
  */
 function gitWork(workDir: string, args: string[]): Promise<string> {
-  return git(["-c", `safe.directory=${workDir}`, "-C", workDir, ...args], { env: IDENTITY });
+  return git(
+    [
+      "-c",
+      `safe.directory=${workDir}`,
+      "-c",
+      "core.hooksPath=/dev/null",
+      "-c",
+      "core.fsmonitor=false",
+      "-C",
+      workDir,
+      ...args,
+    ],
+    { env: IDENTITY },
+  );
 }
 
 export interface WorkspaceState {
-  /** `work/.git` exists. */
+  /** `work/.git` exists, whatever it is (never followed). */
   present: boolean;
-  /** The portal can still write there (before the first `:U`). */
-  writable: boolean;
-  /** `HEAD` points at a commit. False for an unborn branch. */
-  born: boolean;
-  /** Current branch, even unborn. */
-  branch: string | null;
-  /** `@{upstream}` resolved, `null` if the branch has no tracking. */
-  upstream: string | null;
+  /**
+   * `work/` is a directory the portal's uid owns, writable by it and by no
+   * group nor other: nobody else can put a `.git` there between this look
+   * and the host's `git init` (audit L23). False once `:U` has given it to
+   * the container.
+   */
+  owned: boolean;
 }
 
-/** What the portal can read from `work/` without writing to it. */
-export async function inspectWorkspace(workDir: string): Promise<WorkspaceState> {
-  const present = await exists(join(workDir, ".git"));
-  const canWrite = await writable(workDir);
-  if (!present) {
-    return { present: false, writable: canWrite, born: false, branch: null, upstream: null };
+/** Whether `dir` itself (not a symlink) is the portal's alone. */
+async function portalOwned(dir: string): Promise<boolean> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(dir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    const { uid, mode } = await handle.stat();
+    return uid === process.getuid?.() && (mode & 0o200) !== 0 && (mode & 0o022) === 0;
+  } catch {
+    return false;
+  } finally {
+    await handle?.close().catch(() => undefined);
   }
-  const head = (
-    await gitWork(workDir, ["rev-parse", "--verify", "--quiet", "HEAD"]).catch(() => "")
-  ).trim();
-  const branch = (await gitWork(workDir, ["branch", "--show-current"]).catch(() => "")).trim();
-  const upstream = (
-    await gitWork(workDir, [
-      "rev-parse",
-      "--abbrev-ref",
-      "--symbolic-full-name",
-      "@{upstream}",
-    ]).catch(() => "")
-  ).trim();
-  return {
-    present: true,
-    writable: canWrite,
-    born: head !== "",
-    branch: branch === "" ? null : branch,
-    upstream: upstream === "" ? null : upstream,
-  };
+}
+
+/**
+ * What the host knows of `work/`, without reading anything of a `.git` in
+ * it: whether one exists (`lstat`, a symlink counts and is not followed),
+ * and whether `work/` is the portal's alone.
+ */
+export async function inspectWorkspace(workDir: string): Promise<WorkspaceState> {
+  const present = (await lstat(join(workDir, ".git")).catch(() => null)) !== null;
+  return { present, owned: await portalOwned(workDir) };
 }
 
 /** An arbitrary value, made harmless for `sh -lc`. */
@@ -147,10 +138,8 @@ export function shellQuote(value: string): string {
 }
 
 /**
- * Sets `user.name` / `user.email` in `work/.git/config`, **never overwriting**
- * what is already there: if the student has set their own, it stays. Called
- * from the host, hence only as long as `work/` belongs to us (before the first
- * `:U`).
+ * Sets `user.name` / `user.email` in `work/.git/config` of the repository this
+ * call has just created; an existing one gets {@link identityScript}.
  */
 async function writeIdentity(workDir: string, identity: GitIdentity): Promise<void> {
   const present = async (key: string): Promise<boolean> =>
@@ -164,8 +153,8 @@ async function writeIdentity(workDir: string, identity: GitIdentity): Promise<vo
 }
 
 /**
- * The same thing, played **inside the container** when `work/` no longer
- * belongs to us. No secret gets in: a name and an academic address.
+ * The same thing, played **inside the container** in a repository the host
+ * did not create. No secret gets in: a name and an academic address.
  *
  * The script exits without doing anything when `/work` is not a repository —
  * the case of an assignment without a staging repository — and touches nothing
@@ -186,10 +175,11 @@ export function identityScript(identity: GitIdentity): string {
 }
 
 /**
- * Completion script, played **inside the container** when `work/` no longer
- * belongs to us. It does what `ensureWorkspace` does from the host, with the
- * same guarantees:
+ * Completion script, played **inside the container**, as the student, in any
+ * workspace the host did not seed itself:
  *
+ *  - a repository with a commit is the student's: the script exits at once;
+ *  - no repository: one is created, `origin` set to the portal's channel;
  *  - `fetch origin` goes through `http://portal.internal:9418/git/<session>`,
  *    which the source IP address authenticates: **no secret enters the
  *    container** (invariant 1);
@@ -197,14 +187,25 @@ export function identityScript(identity: GitIdentity): string {
  *    has already written; it refuses rather than overwriting an untracked file
  *    the repository brings, and the message says so;
  *  - `--set-upstream-to` makes argument-less `git pull` and `git push` correct.
+ *
+ * `branch` null: the staging repository has no branch yet, nothing to fetch.
  */
-export function completionScript(branch: string): string {
-  return [
+export function completionScript(origin: string, branch: string | null): string {
+  const lines = [
     "set -e",
     "cd /work",
+    "git rev-parse -q --verify HEAD >/dev/null 2>&1 && exit 0",
+    "git rev-parse --git-dir >/dev/null 2>&1 || git init -q --initial-branch=main",
+    `git remote get-url origin >/dev/null 2>&1 || git remote add origin ${shellQuote(origin)}`,
+  ];
+  if (branch === null) return lines.join("\n");
+  const b = shellQuote(branch);
+  const tracking = shellQuote(`origin/${branch}`);
+  return [
+    ...lines,
     "git fetch -q origin '+refs/heads/*:refs/remotes/origin/*'",
-    `git checkout -q -B '${branch}' 'origin/${branch}'`,
-    `git branch -q --set-upstream-to='origin/${branch}' '${branch}'`,
+    `git checkout -q -B ${b} ${tracking}`,
+    `git branch -q --set-upstream-to=${tracking} ${b}`,
     "git --no-pager log --oneline -1",
   ].join("\n");
 }
@@ -212,20 +213,17 @@ export function completionScript(branch: string): string {
 export interface EnsureWorkspaceResult {
   /** `work/.git` was created by this call. */
   created: boolean;
-  /** An existing repository, without a commit, was filled by this call. */
-  completed: boolean;
-  /** Local branch set, with tracking. `null`: the staging repository is empty. */
+  /** Local branch set, or to set: the staging repository's. `null`: it is empty. */
   branch: string | null;
   /**
-   * Completion is still to be done and cannot be done from the host: `work/`
-   * already belongs to the container. `manager.ts` picks it up through
-   * `engine.exec` after the start.
+   * The host did not seed the workspace (a `.git` was there, or `work/` is no
+   * longer the portal's alone): `manager.ts` plays {@link completionScript}
+   * through `engine.exec` after the start.
    */
   needsContainer: boolean;
   /**
-   * The git identity is still to be set and cannot be set from the host, for
-   * the same reason. `manager.ts` then plays `identityScript` through
-   * `engine.exec`.
+   * The git identity is still to be set, for the same reason. `manager.ts`
+   * then plays `identityScript` through `engine.exec`.
    */
   needsIdentity: boolean;
 }
@@ -234,45 +232,18 @@ export async function ensureWorkspace(opts: WorkspaceOptions): Promise<EnsureWor
   const work = opts.paths.workDir;
   const origin = remoteUrl(opts.gitRemoteHost, opts.gitRemotePort, opts.sessionId);
   const state = await inspectWorkspace(work);
-
-  // The identity is set on a repository that already exists; for a repository
-  // created further down, it is written right after the `init`. It depends
-  // neither on the commits nor on the branch: a student whose workspace is
-  // complete must be able to commit, and that is precisely the case observed in
-  // production.
-  let needsIdentity = false;
-  if (opts.identity && state.present) {
-    if (state.writable) await writeIdentity(work, opts.identity);
-    else needsIdentity = true;
-  }
-
-  // A repository that carries commits belongs to the student: it is left alone.
-  if (state.present && state.born) {
-    return {
-      created: false,
-      completed: false,
-      branch: state.branch,
-      needsContainer: false,
-      needsIdentity,
-    };
-  }
-
   const branch = await stagingHeadBranch(opts.paths.gitDir);
-  if (state.present && branch === null) {
-    // Staging repository still without a ref (empty target repository in lab
-    // mode): nothing to set, the workspace stays the student's.
-    return { created: false, completed: false, branch: null, needsContainer: false, needsIdentity };
-  }
-  if (state.present && !state.writable) {
-    // Resumption of an already started session: `:U` gave `work/` to the container.
-    return { created: false, completed: false, branch, needsContainer: true, needsIdentity };
+
+  if (state.present || !state.owned) {
+    // Possibly the student's: everything is done in the container (audit
+    // L23), including the identity, which depends neither on the commits
+    // nor on the branch.
+    return { created: false, branch, needsContainer: true, needsIdentity: opts.identity !== undefined };
   }
 
-  if (!state.present) {
-    await git(["init", "-q", "--initial-branch=main", work], { env: IDENTITY });
-    await git(["-C", work, "remote", "add", "origin", origin], { env: IDENTITY });
-    if (opts.identity) await writeIdentity(work, opts.identity);
-  }
+  await git(["init", "-q", "--initial-branch=main", work], { env: IDENTITY });
+  await git(["-C", work, "remote", "add", "origin", origin], { env: IDENTITY });
+  if (opts.identity) await writeIdentity(work, opts.identity);
   // The content comes from the staging repository through the local path: the
   // portal has no reason to go through its own HTTP server to talk to itself.
   await gitWork(work, [
@@ -308,15 +279,6 @@ export async function ensureWorkspace(opts: WorkspaceOptions): Promise<EnsureWor
     // their branch every time.
     await gitWork(work, ["branch", "-q", `--set-upstream-to=${preferred}`, local]).catch(() => "");
   }
-  opts.log?.info(
-    { sessionId: opts.sessionId, origin, branch: local, completed: state.present },
-    state.present ? "workspace completed" : "workspace seeded",
-  );
-  return {
-    created: !state.present,
-    completed: state.present,
-    branch: local,
-    needsContainer: false,
-    needsIdentity,
-  };
+  opts.log?.info({ sessionId: opts.sessionId, origin, branch: local }, "workspace seeded");
+  return { created: true, branch: local, needsContainer: false, needsIdentity: false };
 }

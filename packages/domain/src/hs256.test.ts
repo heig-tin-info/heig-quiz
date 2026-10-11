@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { signHs256, verifyHs256 } from "./hs256.js";
+import { bindingMismatch, requestBinding, signHs256, verifyHs256 } from "./hs256.js";
 
 const secret = "a-test-secret-that-is-long-enough";
 const base = { iss: "heig-classroom", aud: "heig-codespace", iat: 1000, exp: 1300, jti: "j1", sub: "u1" };
@@ -79,5 +79,30 @@ describe("HS256", () => {
     expect(await verifyHs256(noJti, secret, { ...at(1100), requireJti: true })).toEqual({ ok: false, reason: "missing-jti" });
     expect(await verifyHs256(empty, secret, { ...at(1100), requireJti: true })).toEqual({ ok: false, reason: "missing-jti" });
     expect(await verifyHs256(await signHs256(base, secret), secret, { ...at(1100), requireJti: true })).toMatchObject({ ok: true });
+  });
+});
+
+describe("request binding", () => {
+  it("hashes the body's exact bytes, and omits the hash without a body", async () => {
+    const put = await requestBinding("put", "/api/assignments/a1", '{"id":"a1"}');
+    expect(put).toEqual({ method: "PUT", path: "/api/assignments/a1", bodyHash: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) });
+    // The same bytes as a string or a buffer: the same hash.
+    expect(await requestBinding("PUT", "/api/assignments/a1", new TextEncoder().encode('{"id":"a1"}'))).toEqual(put);
+    // SHA-256 of the empty string is never signed: an empty body is no body.
+    expect(await requestBinding("GET", "/x")).toEqual({ method: "GET", path: "/x" });
+    expect(await requestBinding("GET", "/x", "")).toEqual({ method: "GET", path: "/x" });
+  });
+
+  it("matches only the request it was signed for", async () => {
+    const signed = { ...(await requestBinding("POST", "/a", "{}")) } as Record<string, unknown>;
+    expect(bindingMismatch(signed, await requestBinding("POST", "/a", "{}"))).toBeNull();
+    expect(bindingMismatch(signed, await requestBinding("PUT", "/a", "{}"))).toBe("method");
+    expect(bindingMismatch(signed, await requestBinding("POST", "/b", "{}"))).toBe("path");
+    expect(bindingMismatch(signed, await requestBinding("POST", "/a", '{"x":1}'))).toBe("body");
+    expect(bindingMismatch(signed, await requestBinding("POST", "/a"))).toBe("body");
+    // Unbound claims bind nothing.
+    expect(bindingMismatch({}, await requestBinding("GET", "/a"))).toBe("method");
+    const get = { ...(await requestBinding("GET", "/a")) } as Record<string, unknown>;
+    expect(bindingMismatch(get, await requestBinding("GET", "/a", "smuggled"))).toBe("body");
   });
 });

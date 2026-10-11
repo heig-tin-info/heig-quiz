@@ -51,10 +51,10 @@ describe("tokens signed by heig-classroom", () => {
     expect(claims.seb).toBeUndefined();
   });
 
-  it("a service token verifies and parses", async () => {
+  it("a service token verifies, but no longer parses: it binds no request (audit L25)", async () => {
     const r = await verifyHs256(FIXTURE.service, FIXTURE.secret, { audience: SERVICE_AUDIENCE, issuer: CODESPACE_ISSUERS, now: NOW });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(ServiceTokenClaims.parse(r.claims).aud).toBe(SERVICE_AUDIENCE);
+    if (r.ok) expect(ServiceTokenClaims.safeParse(r.claims).success).toBe(false);
   });
 
   it("refuses the wrong secret, the wrong audience and an expired token", async () => {
@@ -97,6 +97,32 @@ describe("LaunchTokenClaims", () => {
     ]) {
       expect(LaunchTokenClaims.safeParse({ ...claims, ...bad }).success).toBe(false);
     }
+  });
+
+  it("refuses a lifetime over five minutes, or none (audit M11)", () => {
+    expect(LaunchTokenClaims.safeParse({ ...claims, iat: 1, exp: 302 }).success).toBe(false);
+    expect(LaunchTokenClaims.safeParse({ ...claims, iat: 1, exp: 1 }).success).toBe(false);
+  });
+});
+
+describe("ServiceTokenClaims", () => {
+  const claims = { iss: "heig-quiz", aud: SERVICE_AUDIENCE, iat: 1, exp: 121, jti: "j", method: "PUT", path: "/api/assignments/a1", bodyHash: "h" };
+
+  it("comes from Quiz only, for the portal's two methods", () => {
+    expect(ServiceTokenClaims.safeParse({ ...claims, iss: "heig-classroom" }).success).toBe(false);
+    expect(ServiceTokenClaims.safeParse({ ...claims, iss: PORTAL_ISSUER }).success).toBe(false);
+    expect(ServiceTokenClaims.safeParse({ ...claims, method: "POST" }).success).toBe(false);
+  });
+
+  it("is bound to one request, with a jti, for two minutes at most", () => {
+    expect(ServiceTokenClaims.safeParse(claims).success).toBe(true);
+    const { bodyHash: _none, ...get } = claims;
+    expect(ServiceTokenClaims.safeParse({ ...get, method: "GET" }).success).toBe(true);
+    for (const key of ["jti", "method", "path"]) {
+      expect(ServiceTokenClaims.safeParse({ ...claims, [key]: undefined }).success).toBe(false);
+    }
+    expect(ServiceTokenClaims.safeParse({ ...claims, path: "api/x" }).success).toBe(false);
+    expect(ServiceTokenClaims.safeParse({ ...claims, exp: 122 }).success).toBe(false);
   });
 });
 

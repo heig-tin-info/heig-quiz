@@ -8,9 +8,11 @@
  *   node apps/codespace/deploy/smoke.mjs <prod|staging> --port <n> --launch   # + a real session
  *
  * 1. GET /healthz on the loopback port;
- * 2. a service token signed here with the instance's CODESPACE_LAUNCH_SECRET:
- *    GET /api/assignments/m6-04-smoke/sessions answers 200 or 404, never 401
- *    (a 401 means the secret or the issuer is wrong, or the integration is off);
+ * 2. a service token signed here with the instance's CODESPACE_LAUNCH_SECRET,
+ *    single use and bound to its request as Quiz signs one (ADR-078, amendment
+ *    of 2026-10-11): GET /api/assignments/m6-04-smoke/sessions answers 200 or
+ *    404, never 401 (a 401 means the secret or the issuer is wrong, or the
+ *    integration is off);
  * 3. PUT /api/assignments/m6-04-smoke, a `lab` assignment on a PUBLIC
  *    repository (SMOKE_REPO, default octocat/Hello-World on master);
  * 4. with --launch: a launch token for a smoke student, GET /launch?token=…
@@ -22,7 +24,7 @@
  * The port is `--port <n>` (the instance's, deploy/lib.sh). Tokens are printed
  * nowhere.
  */
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 const instance = process.argv[2];
@@ -60,39 +62,50 @@ const ok = (message) => console.log(`ok    ${message}`);
 const ID = "m6-04-smoke";
 const [owner, name] = (process.env.SMOKE_REPO ?? "octocat/Hello-World").split("/");
 const branch = process.env.SMOKE_BRANCH ?? "master";
-const service = () =>
-  sign({ iss: "heig-quiz", aud: "heig-codespace-api", iat: now(), exp: now() + 120 });
+/** `@quiz/domain`'s `requestBinding`, restated: method, path, SHA-256 of the body's bytes. */
+const service = (method, path, body) =>
+  sign({
+    iss: "heig-quiz",
+    aud: "heig-codespace-api",
+    iat: now(),
+    exp: now() + 120,
+    jti: randomUUID(),
+    method,
+    path,
+    ...(body ? { bodyHash: createHash("sha256").update(body).digest("base64url") } : {}),
+  });
 
 const health = await fetch(`${base}/healthz`).catch((e) => fail(`/healthz: ${e.message}`));
 if (health.status !== 200) fail(`/healthz answered ${health.status}`);
 ok(`${base}/healthz`);
 
 const sessions = await fetch(`${base}/api/assignments/${ID}/sessions`, {
-  headers: { authorization: `Bearer ${service()}` },
+  headers: { authorization: `Bearer ${service("GET", `/api/assignments/${ID}/sessions`)}` },
 });
 if (![200, 404].includes(sessions.status)) {
   fail(`service token answered ${sessions.status} (401: wrong secret, or the integration is off)`);
 }
 ok(`service token accepted (${sessions.status})`);
 
+const syncBody = JSON.stringify({
+  id: ID,
+  slug: ID,
+  name: "M6-04 smoke",
+  classroomId: "m6-04-smoke",
+  classroomName: "M6-04 smoke",
+  mode: "online",
+  image: null,
+  sourceRepo: { fullName: `${owner}/${name}`, defaultBranch: branch },
+  browserExamKeys: [],
+  teacher: { id: "m6-04-smoke", email: "smoke@invalid.example" },
+  quota: { maxActiveSessions: 1 },
+  startAt: new Date(Date.now() - 3600_000).toISOString(),
+  deadlineAt: null,
+});
 const sync = await fetch(`${base}/api/assignments/${ID}`, {
   method: "PUT",
-  headers: { authorization: `Bearer ${service()}`, "content-type": "application/json" },
-  body: JSON.stringify({
-    id: ID,
-    slug: ID,
-    name: "M6-04 smoke",
-    classroomId: "m6-04-smoke",
-    classroomName: "M6-04 smoke",
-    mode: "online",
-    image: null,
-    sourceRepo: { fullName: `${owner}/${name}`, defaultBranch: branch },
-    browserExamKeys: [],
-    teacher: { id: "m6-04-smoke", email: "smoke@invalid.example" },
-    quota: { maxActiveSessions: 1 },
-    startAt: new Date(Date.now() - 3600_000).toISOString(),
-    deadlineAt: null,
-  }),
+  headers: { authorization: `Bearer ${service("PUT", `/api/assignments/${ID}`, syncBody)}`, "content-type": "application/json" },
+  body: syncBody,
 });
 if (sync.status !== 200) fail(`sync answered ${sync.status}: ${await sync.text()}`);
 ok(`assignment ${ID} synced (${owner}/${name})`);

@@ -325,6 +325,40 @@ The VM's input policy (`table inet host`, beside this portal's
 A new port the portal must serve is a line in `infra/engine/host.nft`
 first; `CS_INSTANCE=<i> …/infra/net/test.sh` stays the network's test.
 
+### Disk (audit M11): the owner's checklist
+
+The work volumes, the staging repositories and the SQLite database (where
+each push's `PushEvent`, the proof of submission, is written) share
+`/srv/quiz-codespace/<i>`. The code bounds one push: `receive.maxInputSize`
+on every staging repository (`RECEIVE_MAX_INPUT_BYTES`, 100 MiB,
+`src/git/staging.ts`). It bounds nothing else: a student who fills their
+`/work`, or pushes 100 MiB a hundred times, fills the file system, and every
+student's next push is refused for want of room. What closes it is on the
+VM, not in the repository:
+
+- [ ] **A quota per work volume.** `/srv/quiz-codespace` on XFS mounted with
+  `prjquota`, one project per `<student>/<assignment>` directory
+  (`xfs_quota -x -c 'project -s …'`, `limit -p bhard=…`), set when a
+  volume is created; or each volume a fixed-size loop or LVM volume. The
+  portal creates the directories (`ensureStagingRepo`) and would need a
+  hook to set the project: until then, a quota on the whole
+  `volumes/` tree at least keeps the database's file system writable.
+- [ ] **The database on a partition of its own.** `/srv/quiz-codespace/<i>/var`
+  (`DATABASE_PATH`) on a file system the volumes cannot fill.
+- [ ] **A free-space alert** on both file systems (say, under 15 %), in the
+  VM's monitoring, before a push is refused.
+
+### The service API's door (audit L25): the owner's checklist
+
+`PUT /api/assignments/:id` and `GET /api/assignments/:id/sessions` are on
+the public site; a service token is single use and bound to its request
+(ADR-078, amendment of 2026-10-11). Only Quiz's application VM calls them:
+
+- [ ] A Caddy allow-list on `/api/*` for the application VM's addresses, in
+  `deploy/Caddyfile` (every deploy reinstalls the site from that template,
+  so a hand edit on the VM does not last): the snippet and what to confirm
+  first are issue #744.
+
 ### Backup and restore
 
 Both instances are exported daily by `backup-export.sh` and pulled by `srv`

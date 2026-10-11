@@ -255,18 +255,20 @@ export type SessionRow = typeof sessions.$inferSelect;
 export type NewSessionRow = typeof sessions.$inferInsert;
 
 /**
- * Single use of launch tokens. One row per consumed `jti`; the primary key *is*
- * the guarantee — a second `INSERT` of the same `jti` fails, and it is that
- * refusal that `classroom/routes.ts` turns into a 403.
+ * Single use of launch tokens, and of service tokens since audit L25. One row
+ * per consumed `jti`; the primary key *is* the guarantee — a second `INSERT`
+ * of the same `jti` fails, and it is that refusal that `classroom/routes.ts`
+ * turns into a 403 (launch) or a 401 (service).
  *
- * `exp` is kept only for the purge: beyond it, the token is refused by
- * `verifyHs256` anyway, so the row has nothing left to prevent.
+ * `exp` is kept only for the purge, which waits until `verifyHs256` refuses
+ * the token anyway: `exp` plus the skew plus a minute
+ * (`JTI_RETENTION_AFTER_EXP_MS`, audit M11).
  */
 export const launchTokensUsed = sqliteTable(
   "launch_tokens_used",
   {
     jti: text("jti").primaryKey(),
-    /** The token's `exp`, in milliseconds. The row is purged after that. */
+    /** The token's `exp`, in milliseconds. The row is purged a while after it. */
     exp: integer("exp", { mode: "timestamp_ms" }).notNull(),
     usedAt: integer("used_at", { mode: "timestamp_ms" }).notNull(),
   },

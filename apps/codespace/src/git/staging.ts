@@ -50,6 +50,9 @@ export interface StagingOptions {
   authorization?: string;
 }
 
+/** The largest pack one push may send, `receive.maxInputSize` (audit M11; the rest of the disk: deploy/RUNBOOK.md, Disk). */
+export const RECEIVE_MAX_INPUT_BYTES = 100 * 1024 * 1024;
+
 export interface StagingPaths {
   /** `<VOLUMES_ROOT>/<student>/<assignment>` */
   dir: string;
@@ -145,6 +148,11 @@ export async function ensureStagingRepo(opts: StagingOptions): Promise<StagingRe
   // The relay reads the reflog to bound its work; a bare repo has none by
   // default and `for-each-ref` snapshots would be the only history.
   await gitBare(paths.gitDir, ["config", "core.logAllRefUpdates", "true"]);
+  await gitBare(paths.gitDir, [
+    "config",
+    "receive.maxInputSize",
+    String(RECEIVE_MAX_INPUT_BYTES),
+  ]);
 
   const from = sourceUrl(opts.source);
   let fetched = false;

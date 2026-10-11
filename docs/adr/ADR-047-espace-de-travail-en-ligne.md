@@ -12,6 +12,10 @@ sizes the VM, and from M6-07 it launches `online_seb` from a `seb`
 session; no SEB project opens to students before proof B is recorded. See
 [merge progress](../merge/PROGRESS.md).
 
+**Amended (2026-10-11, security audit M11 and L25):** the platform's service token is
+single use and bound to its request, and every token's lifetime is capped:
+[ADR-078's amendment of that date](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use).
+
 **Amended (2026-10-08, product owner): an administrator always holds the
 workspace grant.** Scope: amendment "M6-06" (B)'s last sentence, and (C)
 for an administrator. An account whose role is `admin` (`users.role`, the

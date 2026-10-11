@@ -17,7 +17,7 @@ container ──push──▶ portal 10.77.0.254:9418/git/<session>  (auth = sou
 | ----------------- | ---- |
 | `httpBackend.ts`  | Fastify plugin, IP check, upload-pack policy, CGI to `git http-backend` |
 | `cgi.ts`          | reading the CGI headers (`Status:` included) without buffering the body |
-| `staging.ts`      | creation and seeding of the bare staging repository (lab, exam, empty modes) |
+| `staging.ts`      | creation and seeding of the bare staging repository (lab, exam, empty modes); `receive.maxInputSize` caps one push (audit M11) |
 | `pushEvents.ts`   | `diffRefs`, `recordPush` (invariant 7), Drizzle store |
 | `relay.ts`        | background job, retry on error, never forced, `rejected` refs, token out of argv and off the disk |
 | `forge.ts`        | the `Forge` interface, the `forgejo` forge and the unconfigured `github` one |

@@ -49,11 +49,12 @@ Three audiences, never interchangeable:
 
 | Token | `iss` | `aud` | Lifetime | Single use |
 | --- | --- | --- | --- | --- |
-| service (server → server) | `heig-classroom` | `heig-codespace-api` | short | no |
-| launch (carried by the student) | `heig-classroom` | `heig-codespace` | 5 min | **yes**, by `jti` |
+| service (server → server) | `heig-quiz` only | `heig-codespace-api` | 2 min at most | **yes**, by `jti`, and bound to its request |
+| launch (carried by the student) | `heig-classroom` | `heig-codespace` | 5 min at most | **yes**, by `jti` |
 
 A launch token presented to the service API gets 401; a service token
-presented to `/launch` gets 403. Two tests assert it.
+presented to `/launch` gets 403. Two tests assert it. Since 2026-10-11 the
+service token's rules are [ADR-078's amendment of that date](../../../docs/adr/ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use).
 
 ### The student does not log in twice
 
