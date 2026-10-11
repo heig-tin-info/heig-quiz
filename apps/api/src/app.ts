@@ -12,7 +12,7 @@ import fastifyStatic from "@fastify/static";
 import { sql } from "drizzle-orm";
 import { collectDefaultMetrics, Gauge, Registry } from "prom-client";
 
-import { AvatarMime, type HealthProbe, type HealthResponse } from "@quiz/contracts";
+import { AvatarMime, type HealthProbe } from "@quiz/contracts";
 import type { Clock } from "./clock.js";
 import { githubLinkPlugin } from "./auth/githubLink.js";
 import { authPlugin } from "./auth/plugin.js";
@@ -70,7 +70,7 @@ import { resultsPlugin } from "./modules/results/routes.js";
 import { createRunner } from "./modules/runner/index.js";
 import { statsPlugin } from "./modules/stats/routes.js";
 import { registerSystemJobs } from "./modules/system/jobs.js";
-import { coarseHealth, HEALTHZ_CACHE_MS, seedScheduledTasks } from "./modules/system/service.js";
+import { healthz, seedScheduledTasks } from "./modules/system/service.js";
 import { startJobs, type JobQueue } from "./jobs.js";
 import { startTicker } from "./ticker.js";
 
@@ -348,45 +348,14 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   const scraper = (req: FastifyRequest) =>
     config.METRICS_TOKEN !== "" && sameSecret(req.headers.authorization ?? "", `Bearer ${config.METRICS_TOKEN}`);
 
-  // The probe's work — `SELECT 1`, the coarse checks, the runner's `/health` —
-  // runs at most once per window of the server's clock, shared by every
-  // caller inside it (audit L21): a public route is no lever on the database
-  // or the runner.
-  let probe: { at: number; value: Promise<HealthResponse> } | null = null;
-  const health = (): Promise<HealthResponse> => {
-    const now = app.clock.now().getTime();
-    if (probe === null || now - probe.at >= HEALTHZ_CACHE_MS) {
-      probe = { at: now, value: runProbe() };
-    }
-    return probe.value;
-  };
-  async function runProbe(): Promise<HealthResponse> {
-    const databaseOk = await checkDatabase();
-    // The runner never decides the overall status: `stub` is the default
-    // configuration and an unreachable runner only degrades code grading to a
-    // manual one (decision D14). A container must not be restarted for that.
-    // Coarse words only, from the checks that touch no table (ADR-055). None
-    // of them changes the HTTP status, which the deploy gate reads.
-    const coarse = await coarseHealth(app, config);
-    return {
-      status: databaseOk ? "ok" : "degraded",
-      attention: coarse.attention,
-      checks: {
-        database: databaseOk ? "up" : "down",
-        jobs: app.boss ? "up" : "down",
-        ...coarse.checks,
-      },
-      uptimeSeconds: Math.round(process.uptime()),
-    };
-  }
-
   /**
    * Public: the status and the probe's alarm (`HealthProbe`). The coarse
    * words are the scraper's and an administrator's (`HealthResponse`;
-   * ADR-055 as amended for audit L21).
+   * ADR-055 as amended for audit L21). The work behind it is `healthz`'s,
+   * memoised a few seconds.
    */
   app.get("/healthz", async (req, reply) => {
-    const body = await health();
+    const body = await healthz(app, config, checkDatabase);
     const detailed = scraper(req) || req.user?.role === "admin";
     const probeOnly: HealthProbe = { status: body.status, attention: body.attention };
     return reply.code(body.status === "ok" ? 200 : 503).send(detailed ? body : probeOnly);

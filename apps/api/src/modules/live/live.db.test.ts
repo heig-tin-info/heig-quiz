@@ -1072,7 +1072,7 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     const closed = await service.closeAttempt(db, evaluation, attempt, clock.now());
     expect(closed.state).toBe("expired");
     clock.advance(60_000);
-    const reopened = await service.reopenAttempt(db, evaluation, closed, clock.now(), { owner: false });
+    const { row: reopened } = await service.reopenAttempt(db, evaluation, closed, clock.now());
     expect(reopened.state).toBe("in_progress");
     // The clock restarts from the ORIGINAL start, not from the reopening.
     expect(reopened.deadlineAt!.getTime()).toBe(attempt.deadlineAt!.getTime());
@@ -1119,7 +1119,7 @@ describe.each([
     const submitted = await service.submitAttempt(db, current, shifted, clock.now());
     expect(submitted.state).toBe("submitted");
     clock.advance(60_000);
-    const reopened = await service.reopenAttempt(db, current, submitted, clock.now(), { owner: false });
+    const { row: reopened } = await service.reopenAttempt(db, current, submitted, clock.now());
     expect(reopened.state).toBe("in_progress");
     expect(reopened.deadlineAt!.getTime()).toBe(shifted.deadlineAt!.getTime());
   });
@@ -1193,7 +1193,7 @@ describe("the accommodation takes the announced window (D8, #253)", () => {
       (await service.attemptById(db, attempt.id))!,
       clock.now(),
     );
-    const reopened = await service.reopenAttempt(db, current, submitted, clock.now(), { owner: false });
+    const { row: reopened } = await service.reopenAttempt(db, current, submitted, clock.now());
     expect(reopened.bonusS).toBe(Math.round(bonusMs / 1000));
     expect(reopened.deadlineAt!.getTime()).toBe(current.closesAt!.getTime() + bonusMs);
   });
@@ -1806,7 +1806,7 @@ describe("dashboard read model (F-DASH-01..04)", () => {
       now: clock.now(),
       includeAnswers: false,
       includeResults: false,
-      owner: true,
+      caller: { id: "00000000-0000-4000-8000-000000000000", reach: "all" },
     });
     expect(view.rows).toHaveLength(2);
     expect(view.items).toHaveLength(2);
@@ -1823,7 +1823,7 @@ describe("dashboard read model (F-DASH-01..04)", () => {
       now: clock.now(),
       includeAnswers: true,
       includeResults: false,
-      owner: true,
+      caller: { id: "00000000-0000-4000-8000-000000000000", reach: "all" },
     });
     const cell = withAnswers.rows
       .find((r) => r.userId === seed.studentIds[0]!)!
@@ -1847,7 +1847,7 @@ describe("dashboard read model (F-DASH-01..04)", () => {
       now: clock.now(),
       includeAnswers: false,
       includeResults: false,
-      owner: true,
+      caller: { id: "00000000-0000-4000-8000-000000000000", reach: "all" },
     });
     expect(view.rows).toHaveLength(2);
     const pending = view.rows.find((r) => r.seatId === seatId)!;

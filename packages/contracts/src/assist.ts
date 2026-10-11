@@ -13,7 +13,7 @@ import {
 } from "@quiz/domain";
 import { ASSIST_TEXT_LABELS } from "@quiz/core/generate";
 
-import { LLM_CONFIG_MAX_CHARS } from "./llm.js";
+import { LlmDraftConfig } from "./llm.js";
 
 /** `true` when `A` and `B` are the same shape, `false` otherwise. */
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
@@ -85,9 +85,6 @@ export type AssistContext = z.infer<typeof AssistContext>;
 /** The context as an exchange stores it (`assist_exchanges.context`): the screen, never an id nor a command. */
 export const assistScreenOf = ({ route, helpTopic, locale }: AssistContext) => ({ route, helpTopic, locale });
 
-/** The longest editor draft a question may carry, as JSON: any model route's bound (audit L2). */
-export const ASSIST_MAX_EDITOR_CHARS = LLM_CONFIG_MAX_CHARS;
-
 /**
  * The question editor's open draft (ADR-080 P3, decision 2): its config and
  * its explanation, the teacher's own text, sent with a question asked from
@@ -96,11 +93,10 @@ export const ASSIST_MAX_EDITOR_CHARS = LLM_CONFIG_MAX_CHARS;
 export const AssistEditorDraft = z
   .object({
     questionId: z.uuid(),
-    config: z.unknown(),
+    config: LlmDraftConfig,
     explanation: z.string().max(20_000),
   })
-  .strict()
-  .refine((d) => JSON.stringify(d.config ?? null).length <= ASSIST_MAX_EDITOR_CHARS, { message: "draft_too_large" });
+  .strict();
 export type AssistEditorDraft = z.infer<typeof AssistEditorDraft>;
 
 /** `POST /app/api/assist/ask`: a question, in a conversation of the asker's or in a new one. */

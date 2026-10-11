@@ -18,6 +18,7 @@
 import { randomUUID } from "node:crypto";
 
 import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type {
   Grading,
@@ -922,13 +923,31 @@ export async function regradeItem(
 }
 
 /**
+ * The payload of a `grading.regrade` audit entry: written by the regrade
+ * route, and read back by {@link checkLlmRegradeBudget} — one shape, so a
+ * renamed key cannot silently reset the budgets.
+ */
+export const RegradeAudit = z.object({
+  itemId: z.string(),
+  note: z.string(),
+  toVersionNumber: z.number().nullable(),
+  modifiedAfterRelease: z.boolean(),
+  /** The re-grade asked the model again: what the budget counts. */
+  llm: z.literal(true).optional(),
+});
+export type RegradeAudit = z.infer<typeof RegradeAudit>;
+const REGRADE_KEY = RegradeAudit.keyof().enum;
+
+/**
  * Whether a re-grade of this item asks the model again — it did grade one of
  * its answers — and, then, the item's daily budget (audit L2): past
  * {@link LLM_REGRADES_PER_ITEM_PER_DAY} such re-grades today (Europe/Zurich,
  * the server's clock), `429 llm_budget_exhausted`. The count is the audit
- * log's: the regrade route records each one with `llm: true` and its instant.
+ * log's: the regrade route records each one with `llm: true`. Two re-grades
+ * of one item pressed at the same instant may both pass the count; the
+ * budget bounds a day, not a race (ADR-058, amendment of 2026-10-11).
  */
-export async function llmRegradeBudget(db: Db, evaluationId: string, itemId: string, now: Date): Promise<boolean> {
+export async function checkLlmRegradeBudget(db: Db, evaluationId: string, itemId: string, now: Date): Promise<boolean> {
   const [graded] = await db
     .select({ id: gradings.id })
     .from(gradings)
@@ -942,8 +961,8 @@ export async function llmRegradeBudget(db: Db, evaluationId: string, itemId: str
       and(
         eq(auditLog.action, "grading.regrade"),
         eq(auditLog.subjectId, evaluationId),
-        sql`${auditLog.payload}->>'itemId' = ${itemId}`,
-        sql`${auditLog.payload}->>'llm' = 'true'`,
+        sql`${auditLog.payload}->>${REGRADE_KEY.itemId} = ${itemId}`,
+        sql`${auditLog.payload}->>${REGRADE_KEY.llm} = 'true'`,
         sql`${auditLog.createdAt} >= date_trunc('day', ${now.toISOString()}::timestamptz, ${SCHOOL_TIME_ZONE})`,
       ),
     );

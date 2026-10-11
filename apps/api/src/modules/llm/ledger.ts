@@ -42,12 +42,19 @@ export const startOfDay = (now: Date) => startOf("day", now);
  * Today's estimated spend, calls in flight included at their worst case.
  * `purpose` narrows it to one purpose, and `unattributed` to its calls made
  * by no person: the night's review counts its own share so (ADR-060 §5),
- * the assistant its own, every teacher's together (ADR-080 §4).
+ * the assistant its own, every teacher's together (ADR-080 §4). `userId`
+ * narrows it to one person's calls and `exceptPurposes` leaves purposes
+ * out: a person's share (audit L2).
  */
 export async function spentToday(
   db: Db | Tx,
   now: Date,
-  only?: { purpose: LlmPurpose; unattributed?: boolean },
+  only: {
+    purpose?: LlmPurpose;
+    unattributed?: boolean;
+    userId?: string;
+    exceptPurposes?: readonly LlmPurpose[];
+  } = {},
 ): Promise<number> {
   const [row] = await db
     .select({ total: sum(llmCalls.costUsd) })
@@ -55,23 +62,10 @@ export async function spentToday(
     .where(
       and(
         gte(llmCalls.createdAt, startOf("day", now)),
-        ...(only ? [eq(llmCalls.purpose, only.purpose)] : []),
-        ...(only?.unattributed ? [isNull(llmCalls.userId)] : []),
-      ),
-    );
-  return Number(row?.total ?? 0);
-}
-
-/** What one person spent today, calls in flight at their worst case, the purposes their share leaves out aside (audit L2). */
-async function spentByUserToday(db: Tx, now: Date, userId: string): Promise<number> {
-  const [row] = await db
-    .select({ total: sum(llmCalls.costUsd) })
-    .from(llmCalls)
-    .where(
-      and(
-        gte(llmCalls.createdAt, startOf("day", now)),
-        eq(llmCalls.userId, userId),
-        notInArray(llmCalls.purpose, [...USER_SHARE_EXEMPT]),
+        ...(only.purpose ? [eq(llmCalls.purpose, only.purpose)] : []),
+        ...(only.unattributed ? [isNull(llmCalls.userId)] : []),
+        ...(only.userId ? [eq(llmCalls.userId, only.userId)] : []),
+        ...(only.exceptPurposes?.length ? [notInArray(llmCalls.purpose, [...only.exceptPurposes])] : []),
       ),
     );
   return Number(row?.total ?? 0);
@@ -104,8 +98,8 @@ export async function todayBudget(db: Db, now: Date): Promise<{ spentUsd: number
  * thrown and nothing reaches the provider; the day's first refusal is logged.
  *
  * `share`, the chat's share of the cap (ADR-080 §4, `shareAllows`), and
- * `userShare`, the person's (audit L2, `userShareAllows`: a call made for a
- * person, of a purpose their share counts), are checked first: their
+ * the person's share of a call made for a person (audit L2,
+ * `userShareAllows`), are checked first: their
  * refusal is the same `budget_exhausted` but writes nothing — the cap itself
  * was not reached, so the `llm.budget` check stays green.
  */
@@ -120,7 +114,6 @@ export async function reserveCall(
     worstCaseUsd: number;
     capUsd: number;
     share?: number | undefined;
-    userShare: number;
   },
 ): Promise<string> {
   const row = {
@@ -150,15 +143,12 @@ export async function reserveCall(
     }
     if (
       call.userId !== null &&
-      !USER_SHARE_EXEMPT.includes(call.purpose) &&
-      !userShareAllows(
-        {
-          spentUserUsd: await spentByUserToday(tx, call.now, call.userId),
-          worstCaseUsd: call.worstCaseUsd,
-          capUsd: call.capUsd,
-        },
-        call.userShare,
-      )
+      !userShareAllows({
+        purpose: call.purpose,
+        spentUserUsd: await spentToday(tx, call.now, { userId: call.userId, exceptPurposes: USER_SHARE_EXEMPT }),
+        worstCaseUsd: call.worstCaseUsd,
+        capUsd: call.capUsd,
+      })
     ) {
       return false;
     }

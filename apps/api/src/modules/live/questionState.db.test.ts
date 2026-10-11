@@ -201,7 +201,7 @@ describe("the review flag (issue #89)", () => {
       now,
       includeAnswers: false,
       includeResults: false,
-      owner: true,
+      caller: { id: "00000000-0000-4000-8000-000000000000", reach: "all" },
     });
     const mine = grid.rows.find((r) => r.userId === seed.studentIds[0]!)!;
     expect(mine.cells.find((c) => c.itemId === itemId)).toMatchObject({

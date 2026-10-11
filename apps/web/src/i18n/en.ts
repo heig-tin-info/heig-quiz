@@ -365,7 +365,6 @@ export const en = {
   "error.superPowersRequired": "This takes Super Powers. Switch them on in Settings first.",
   "error.ownerRequired": "Only a teacher of the course may do that.",
   "error.tokenExpiryRequired": "An administrator's token must expire: choose a lifetime.",
-  "error.keyShown": "The student has already seen the answer key: only a teacher of the course may reopen the attempt.",
   "error.lastOwner": "A course keeps at least one teacher: make someone else a teacher first.",
   "error.alreadyStaff": "This person is already on the staff of the course.",
   "error.impersonationReadOnly": "You are acting as a student, read only: nothing can be changed from this window.",

@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
@@ -35,6 +35,7 @@ import {
   serves,
   deleteSession,
   findSessionUser,
+  sameSecret,
   type NewSession,
   type SessionAuth,
   type SessionState,
@@ -176,8 +177,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   app.decorate("internalCallSecret", internalSecret);
   const isInternalCall = (req: FastifyRequest) => {
     const raw = req.headers[INTERNAL_CALL_HEADER];
-    if (typeof raw !== "string" || raw.length !== internalSecret.length) return false;
-    return timingSafeEqual(Buffer.from(raw), Buffer.from(internalSecret));
+    return typeof raw === "string" && sameSecret(raw, internalSecret);
   };
   app.addHook("preHandler", async (req, reply) => {
     // A bearer token is only ever read on the JSON API (ADR-022). When the

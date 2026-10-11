@@ -26,7 +26,8 @@ import {
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attemptEvents, attempts, enrollments, kioskDevices, sessions, users } from "../../db/schema.js";
+import { answers, attemptEvents, attempts, classrooms, enrollments, kioskDevices, sessions, users } from "../../db/schema.js";
+import { isCourseOwner, type Caller } from "../guards.js";
 import {
   gradeDefaults,
   seatsOf,
@@ -45,7 +46,7 @@ import {
 } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
 import { solutionView, studentView } from "./studentView.js";
-import { type AttemptRecord, type AnswerRecord, answersOf, reopenRefusal } from "./attempt.js";
+import { type AttemptRecord, type AnswerRecord, answersOf, reopenRefusal, reopenRole } from "./attempt.js";
 import { answerSummarizer, answeredBy, liveGrader, cellStatus } from "./autosave.js";
 import { incidentOut, incidentsFrom, incidentsOf, journalOn } from "./incidents.js";
 import { fullName } from "./names.js";
@@ -60,8 +61,8 @@ export async function dashboardView(
     now: Date;
     includeAnswers: boolean;
     includeResults: boolean;
-    /** The caller owns the course: the `key_shown` derogation of the reopening is theirs (audit L9). */
-    owner: boolean;
+    /** Who reads the grid: its Reopen is theirs to offer (`reopenRole`, audit L9). */
+    caller: Pick<Caller, "id" | "reach">;
   },
 ): Promise<DashboardView> {
   const items = await joinedItems(db, evaluation.id);
@@ -255,7 +256,7 @@ export async function dashboardView(
       pausedAt: isoOrNull(evaluation.pausedAt),
       closesAt: isoOrNull(evaluation.closesAt),
       serverNow: iso(input.now),
-      reopenable: reopenRefusal(evaluation, { owner: input.owner }) === null,
+      reopenable: reopenRefusal(evaluation) === null && (await mayReopenFinished(db, evaluation, input.caller)),
       journalOn: journalOn(evaluation),
     },
     items: items.map((i) => ({
@@ -504,4 +505,21 @@ function staffAnswer(
       itemId: entry.item.id,
     }),
   };
+}
+
+/**
+ * Whether the caller may reopen this evaluation's finished attempts: every
+ * member, unless the policy showed the key at the hand-in, which makes it
+ * the course owner's (`reopenRole`; every finished state reads the same,
+ * hence `submitted`).
+ */
+async function mayReopenFinished(db: Db, evaluation: EvaluationRecord, caller: Pick<Caller, "id" | "reach">) {
+  if (reopenRole(evaluation, "submitted") !== "owner") return true;
+  if (evaluation.classroomId === null) return false;
+  const [room] = await db
+    .select({ courseId: classrooms.courseId })
+    .from(classrooms)
+    .where(eq(classrooms.id, evaluation.classroomId))
+    .limit(1);
+  return room !== undefined && (await isCourseOwner(db, room.courseId, caller));
 }

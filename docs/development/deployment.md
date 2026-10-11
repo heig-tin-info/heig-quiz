@@ -1366,7 +1366,6 @@ configuration.
 | `LLM_PROVIDER` | unset (`none`) | AI grading proposals go through the gateway (`LLM_KEY_SECRET`, below) when it is on and holds a key, otherwise answers are graded by hand; `stub`, the development fake, makes the process refuse to start |
 | `LLM_KEY_SECRET` | `openssl rand -hex 32`, copied into the age vault | the master key that encrypts the Anthropic key entered in Administration › AI ([ADR-058](../adr/ADR-058-passerelle-llm.md)); empty turns the AI gateway off; under 32 characters, or containing `change-me`, the process does not start; a new value only means pasting the key again |
 | `LLM_DAILY_CAP_MAX_USD` | default `100` | the most the console may set as the AI daily spending cap |
-| `LLM_USER_DAILY_SHARE` | default `0.2` | the part of the daily cap one person may spend in a day, grading passes aside (audit L2); past it, their AI calls are refused like the cap's |
 | `BACKUP_STATUS_FILE` | `/app/backup-status/last.json`, set by compose | the `backup` service's report of its last dump (§6); empty: the System status says "not configured" |
 | `COMMIT_SHA`, `COMMIT_DATE` | baked into the image by CI | the commit the System status shows; never set by hand |
 | `LOG_LEVEL`, `WORKER_MODE` | `info`, `all` | `web`/`worker` would split the roles without a code change ([ADR-001](../adr/ADR-001-monolithe-modulaire.md)) |

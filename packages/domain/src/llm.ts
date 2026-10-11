@@ -97,17 +97,26 @@ export function isParis(answer: string): boolean {
  */
 export const USER_SHARE_EXEMPT: readonly LlmPurpose[] = ["grade"];
 
+/** The part of the day's cap one person may spend (audit L2), like the assistant's and the night's shares. */
+export const LLM_USER_DAY_SHARE = 0.2;
+
 /**
- * Whether a call made for a person may be reserved (audit L2): their own
- * spend today, the exempt purposes aside, stays within `share` of the cap,
- * so that no one teacher exhausts the institution's day. The cap's own
+ * Whether a call made for a person may be reserved (audit L2): a purpose
+ * the share leaves out always may; otherwise their own spend today, the
+ * exempt purposes aside, stays within {@link LLM_USER_DAY_SHARE} of the
+ * cap, so that no one teacher exhausts the institution's day. The cap's own
  * check still runs after.
  */
-export function userShareAllows(
-  day: { spentUserUsd: number; worstCaseUsd: number; capUsd: number },
-  share: number,
-): boolean {
-  return day.spentUserUsd + day.worstCaseUsd <= share * day.capUsd;
+export function userShareAllows(day: {
+  purpose: LlmPurpose;
+  spentUserUsd: number;
+  worstCaseUsd: number;
+  capUsd: number;
+}): boolean {
+  return (
+    USER_SHARE_EXEMPT.includes(day.purpose) ||
+    day.spentUserUsd + day.worstCaseUsd <= LLM_USER_DAY_SHARE * day.capUsd
+  );
 }
 
 /**

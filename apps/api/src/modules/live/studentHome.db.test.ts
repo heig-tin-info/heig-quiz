@@ -200,7 +200,7 @@ describe("the student home after a hand-in (issue #203)", () => {
     const submitted = await handIn(app, evaluation, student);
     expect((await cardOf(app, student, evaluation.id)).section).toBe("past");
 
-    await live.reopenAttempt(db, await reload(db, evaluation.id), submitted, app.clock.now(), { owner: false });
+    await live.reopenAttempt(db, await reload(db, evaluation.id), submitted, app.clock.now());
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "open",
       card: { attemptState: "in_progress", results: "pending" },

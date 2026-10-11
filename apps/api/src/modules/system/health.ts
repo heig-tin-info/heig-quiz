@@ -583,6 +583,42 @@ export async function coarseHealth(app: FastifyInstance, config: AppConfig): Pro
   return { attention, checks };
 }
 
+const probes = new WeakMap<FastifyInstance, { at: number; value: Promise<HealthResponse> }>();
+
+/**
+ * The answer of `/healthz` with its coarse words (the route decides who
+ * reads them, audit L21). The work — `databaseUp`'s `SELECT 1`, the coarse
+ * checks, the runner's `/health` — runs at most once per
+ * {@link HEALTHZ_CACHE_MS} of the server's clock, shared by every caller:
+ * a public route is no lever on the database or the runner. A clock set
+ * back starts a new window.
+ */
+export function healthz(
+  app: FastifyInstance,
+  config: AppConfig,
+  databaseUp: () => Promise<boolean>,
+): Promise<HealthResponse> {
+  const now = app.clock.now().getTime();
+  const probe = probes.get(app);
+  if (probe && now >= probe.at && now - probe.at < HEALTHZ_CACHE_MS) return probe.value;
+  const value = (async (): Promise<HealthResponse> => {
+    const databaseOk = await databaseUp();
+    // The runner never decides the overall status: `stub` is the default
+    // configuration and an unreachable runner only degrades code grading to a
+    // manual one (decision D14). A container must not be restarted for that.
+    // None of the coarse words changes the HTTP status, which the deploy gate reads.
+    const coarse = await coarseHealth(app, config);
+    return {
+      status: databaseOk ? "ok" : "degraded",
+      attention: coarse.attention,
+      checks: { database: databaseOk ? "up" : "down", jobs: app.boss ? "up" : "down", ...coarse.checks },
+      uptimeSeconds: Math.round(process.uptime()),
+    };
+  })();
+  probes.set(app, { at: now, value });
+  return value;
+}
+
 // --- The admin endpoint ---------------------------------------------------
 
 /** One status serves every admin tab for this long; Refresh (`fresh`) bypasses it. */

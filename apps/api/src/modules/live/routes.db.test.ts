@@ -12,12 +12,13 @@ import { and, eq, ne } from "drizzle-orm";
 import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
-import { attemptEvents, attempts, evaluations, gradings } from "../../db/schema.js";
+import { attemptEvents, attempts, auditLog, courseStaff, evaluations, gradings } from "../../db/schema.js";
 import { subscribe, type Topic } from "../../events.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
-import { applyState } from "../evaluation/service.js";
+import { applyState, joinedItems } from "../evaluation/service.js";
+import * as live from "./service.js";
 import { PASTES_PER_MINUTE } from "./integrity.js";
 
 let server: TestServer;
@@ -895,5 +896,73 @@ describe("pausing an exercise (#77)", () => {
     expect(paused.statusCode).toBe(409);
     expect(paused.json().error).toBe("illegal_transition");
     expect((await reload(server.app.db, own.evaluationId)).state).toBe("running");
+  });
+});
+
+describe("reopening once the key was shown (audit L9, ADR-068 §3)", () => {
+  it("is the course owner's alone, audited as a derogation; an assistant gets 403 owner_required", async () => {
+    const db = server.app.db;
+    const pupils = [await server.signIn("student"), await server.signIn("student")];
+    const own = await seedLive(db, {
+      teacherId: teacher.id,
+      studentIds: pupils.map((p) => p.id),
+      questions: 1,
+      mode: "exercise",
+      durationS: null,
+      settings: { timing: "manual", lobby: "skip" },
+    });
+    const policy = (showKey: boolean) =>
+      db
+        .update(evaluations)
+        .set({
+          feedbackPolicy: {
+            when: "immediate",
+            showAnswer: true,
+            showKey,
+            showExplanation: false,
+            showHiddenCaseNames: true,
+            showTeacherComment: true,
+          },
+        })
+        .where(eq(evaluations.id, own.evaluationId));
+    await policy(true);
+    const running = await applyState(db, await reload(db, own.evaluationId), "running", server.clock.now());
+    const [item] = await joinedItems(db, running.id);
+    const handIn = async (userId: string) => {
+      const evaluation = await reload(db, running.id);
+      const participant = (await live.participantOf(db, evaluation, userId))!;
+      const now = server.clock.now();
+      const attempt = await live.beginAttempt(db, evaluation, await live.ensureAttempt(db, evaluation, participant, now), participant, now);
+      await live.saveAnswer(db, { evaluation, attempt, itemId: item!.item.id, payload: "nope", revision: 1, now });
+      return live.submitAttempt(db, evaluation, attempt, now, server.app);
+    };
+    const [first, second] = [await handIn(pupils[0]!.id), await handIn(pupils[1]!.id)];
+    const assistant = await server.signIn("teacher");
+    await db.insert(courseStaff).values({ courseId: own.courseId, userId: assistant.id, role: "assistant" });
+    const reopen = (attemptId: string, headers: Record<string, string>) =>
+      post(`/app/api/evaluations/${running.id}/attempts/${attemptId}/reopen`, headers, {});
+    const reopenable = async (headers: Record<string, string>) =>
+      (await get(`/app/api/evaluations/${running.id}/dashboard`, headers)).json().evaluation.reopenable;
+    const audited = async (attemptId: string) =>
+      (await db.select().from(auditLog).where(and(eq(auditLog.action, "attempt.reopen"), eq(auditLog.subjectId, attemptId))))[0];
+    // The key is on the student's feedback page already.
+    expect((await get(`/app/api/attempts/${first.id}/feedback`, pupils[0]!.headers)).json()).toMatchObject({ available: true });
+
+    const refused = await reopen(first.id, assistant.headers);
+    expect([refused.statusCode, refused.json().error]).toEqual([403, "owner_required"]);
+    expect(await reopenable(assistant.headers)).toBe(false);
+    expect((await db.select().from(attempts).where(eq(attempts.id, first.id)))[0]!.state).toBe("submitted");
+
+    expect(await reopenable(teacher.headers)).toBe(true);
+    expect((await reopen(first.id, teacher.headers)).statusCode).toBe(200);
+    expect(await audited(first.id)).toMatchObject({
+      actorUserId: teacher.id,
+      payload: { evaluationId: running.id, derogation: "key_shown" },
+    });
+
+    // Without the key in the policy there is nothing to derogate from.
+    await policy(false);
+    expect((await reopen(second.id, assistant.headers)).statusCode).toBe(200);
+    expect((await audited(second.id))!.payload).toEqual({ evaluationId: running.id });
   });
 });

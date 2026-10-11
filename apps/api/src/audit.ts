@@ -634,17 +634,13 @@ function withAssistTool(req: FastifyRequest, payload: unknown): unknown {
   return payload;
 }
 
-/**
- * What {@link tracer} hands a route module: one line per audited write. `at`:
- * the server's instant, when a rule reads the entry back by time.
- */
+/** What {@link tracer} hands a route module: one line per audited write. */
 type Trace = (
   req: FastifyRequest,
   action: AuditAction,
   subjectType: string,
   subjectId: string,
   payload?: unknown,
-  at?: Date,
 ) => Promise<void>;
 
 /**
@@ -661,7 +657,7 @@ type Trace = (
  * the column is nullable and a public route could one day be audited.
  */
 export function tracer(app: FastifyInstance): Trace {
-  return (req, action, subjectType, subjectId, payload, at) => {
+  return (req, action, subjectType, subjectId, payload) => {
     const recorded = withAssistTool(req, payload);
     return audit(app.db, {
       ...actorOf(req),
@@ -669,7 +665,8 @@ export function tracer(app: FastifyInstance): Trace {
       subjectType,
       subjectId,
       ...(recorded === undefined ? {} : { payload: recorded }),
-      ...(at ? { at } : {}),
+      // The server's clock (invariant 5): a rule may read the entry back by time.
+      at: app.clock.now(),
     });
   };
 }

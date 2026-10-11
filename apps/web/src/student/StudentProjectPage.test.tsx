@@ -71,7 +71,10 @@ function render({ me = student, locale = "en" }: { me?: Me; locale?: Locale } = 
   return { ...r, navigate };
 }
 
-afterEach(() => sessionStorage.clear());
+afterEach(() => {
+  sessionStorage.clear();
+  vi.unstubAllGlobals();
+});
 
 describe("the page's states", () => {
   it("shows a skeleton while it loads", () => {
@@ -384,7 +387,6 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     await userEvent.click(open);
     await waitFor(() => expect(assign).toHaveBeenCalledWith(launch));
     expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual(["/app/api/projects/p1/workspace/start"]);
-    vi.unstubAllGlobals();
   });
 
   it("words the start route's refusal in place", async () => {
@@ -409,7 +411,6 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     vi.stubGlobal("location", { ...window.location, assign });
     await userEvent.click(within(dialog).getByRole("button", { name: "Download the workspace file" }));
     expect(assign).toHaveBeenCalledWith("/app/api/projects/p1/seb");
-    vi.unstubAllGlobals();
   });
 
   it("inside SEB, on the project's own session, opens the workspace as the page's one action", async () => {

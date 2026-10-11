@@ -236,6 +236,10 @@ describe("/healthz", () => {
     expect(await backup()).toBe("stale");
     server.clock.advance(1);
     expect(await backup()).toBe("ok");
+    // A clock set back starts a new window rather than serving the old one for ever.
+    await write(backupFile, Date.now() - 3 * 86_400_000);
+    server.clock.advance(-1);
+    expect(await backup()).toBe("stale");
   });
 
   it("words the backup as the worse of the dump and its off-site copy", async () => {

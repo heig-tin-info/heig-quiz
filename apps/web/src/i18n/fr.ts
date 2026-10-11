@@ -362,7 +362,6 @@ export const fr: Record<keyof Dict, string> = {
   "error.superPowersRequired": "Cette action demande les Super Powers. Activez-les d'abord dans les réglages.",
   "error.ownerRequired": "Seul un enseignant du cours peut faire cela.",
   "error.tokenExpiryRequired": "Le jeton d'un administrateur doit expirer : choisissez une durée.",
-  "error.keyShown": "L'étudiant a déjà vu le corrigé : seul un enseignant du cours peut rouvrir la tentative.",
   "error.lastOwner": "Un cours garde au moins un enseignant : nommez d'abord quelqu'un d'autre enseignant.",
   "error.alreadyStaff": "Cette personne fait déjà partie de l'équipe du cours.",
   "error.impersonationReadOnly": "Vous agissez en tant qu'étudiant, en lecture seule : rien ne peut être modifié depuis cette fenêtre.",

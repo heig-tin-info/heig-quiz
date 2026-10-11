@@ -191,7 +191,7 @@ describe("the position reports (ADR-039)", () => {
       now: now(),
       includeAnswers: false,
       includeResults: false,
-      owner: true,
+      caller: { id: "00000000-0000-4000-8000-000000000000", reach: "all" },
     });
     const cell = view.rows.find((r) => r.attemptId === w.attemptId)!.cells.find((c) => c.itemId === w.a);
     expect(cell?.status).toBe("seen");

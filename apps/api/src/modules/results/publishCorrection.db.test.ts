@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { EvaluationMode, FeedbackPolicy, RetakeSettings } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, auditLog, courseStaff, evaluations, gradings, questionVersions } from "../../db/schema.js";
+import { attempts, auditLog, evaluations, gradings, questionVersions } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -79,7 +79,7 @@ async function running(
   await setFeedback(seed.evaluationId, options.feedback ?? {});
   const evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", server.clock.now());
   const items = await joinedItems(db, evaluation.id);
-  return { evaluation, itemId: items[0]!.item.id, students, courseId: seed.courseId };
+  return { evaluation, itemId: items[0]!.item.id, students };
 }
 
 /** The policy is patchable while running; the fixture writes it directly. */
@@ -286,53 +286,6 @@ describe("POST /evaluations/:id/publish-correction (ADR-050)", () => {
     const [row] = await server.app.db.select().from(attempts).where(eq(attempts.id, handedIn.id));
     expect(row!.state).toBe("submitted");
     expect(await gradingsOf(handedIn.id)).toHaveLength(1);
-  });
-});
-
-describe("reopening once the key was shown (audit L9)", () => {
-  it("is the course owner's alone, audited as a derogation; an assistant is refused", async () => {
-    const built = await running({ feedback: { when: "immediate", showKey: true } });
-    const assistant = await server.signIn("teacher");
-    await server.app.db.insert(courseStaff).values({ courseId: built.courseId, userId: assistant.id, role: "assistant" });
-    const [first, second] = [
-      await sit(built, built.students[0].id, "nope"),
-      await sit(built, built.students[1].id, "nope"),
-    ];
-    const reopen = (attemptId: string, headers: Record<string, string>) =>
-      server.app.inject({
-        method: "POST",
-        url: `/app/api/evaluations/${built.evaluation.id}/attempts/${attemptId}/reopen`,
-        headers,
-        payload: {},
-      });
-    const reopenable = async (headers: Record<string, string>) =>
-      (await get(`/app/api/evaluations/${built.evaluation.id}/dashboard`, headers)).json().evaluation.reopenable;
-    // The key is on the student's feedback page already.
-    expect(await feedbackOf(first.id, built.students[0])).toMatchObject({ available: true });
-
-    const refused = await reopen(first.id, assistant.headers);
-    expect(refused.statusCode).toBe(409);
-    expect(refused.json()).toMatchObject({ error: "key_shown" });
-    expect(await reopenable(assistant.headers)).toBe(false);
-    const [still] = await server.app.db.select().from(attempts).where(eq(attempts.id, first.id));
-    expect(still!.state).toBe("submitted");
-
-    expect(await reopenable(teacher.headers)).toBe(true);
-    expect((await reopen(first.id, teacher.headers)).statusCode).toBe(200);
-    const [entry] = await server.app.db
-      .select()
-      .from(auditLog)
-      .where(and(eq(auditLog.action, "attempt.reopen"), eq(auditLog.subjectId, first.id)));
-    expect(entry).toMatchObject({ actorUserId: teacher.id, payload: { evaluationId: built.evaluation.id, derogation: "key_shown" } });
-
-    // Without the key in the policy there is nothing to derogate from.
-    await setFeedback(built.evaluation.id, { when: "immediate", showKey: false });
-    expect((await reopen(second.id, assistant.headers)).statusCode).toBe(200);
-    const [plain] = await server.app.db
-      .select()
-      .from(auditLog)
-      .where(and(eq(auditLog.action, "attempt.reopen"), eq(auditLog.subjectId, second.id)));
-    expect(plain!.payload).toEqual({ evaluationId: built.evaluation.id });
   });
 });
 

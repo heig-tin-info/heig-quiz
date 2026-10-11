@@ -102,7 +102,7 @@ describe("gitRunner", () => {
         "PATH",
       ]);
       expect(env).toMatchObject({ GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_TERMINAL_PROMPT: "0" });
-      expect(env.HOME).not.toBe(process.env.HOME);
+      expect(env.HOME).toBe("/nonexistent");
       expect(JSON.stringify(env)).not.toContain("leak-me");
       // Git reads no user configuration at all: not even an identity.
       await expect(plain.git(dir, "config", "--global", "--get", "user.name")).rejects.toThrow();

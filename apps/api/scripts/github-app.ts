@@ -30,7 +30,7 @@ import { parseArgs } from "node:util";
 import { Octokit } from "octokit";
 import { escapeHtml } from "@quiz/docrender/highlight";
 
-import { GITHUB_WEBHOOK_SECRET_MIN } from "../src/config.js";
+import { SECRET_MIN } from "../src/config.js";
 import { appManifest, envLines } from "../src/github/manifest.js";
 
 const USAGE =
@@ -99,12 +99,12 @@ const page = (body: string) =>
  */
 function checkWebhookSecret(secret: string | null): void {
   const length = secret?.length ?? 0;
-  if (length >= GITHUB_WEBHOOK_SECRET_MIN) {
-    console.log(`webhook secret: ${length} characters (config.ts asks for at least ${GITHUB_WEBHOOK_SECRET_MIN})`);
+  if (length >= SECRET_MIN) {
+    console.log(`webhook secret: ${length} characters (config.ts asks for at least ${SECRET_MIN})`);
     return;
   }
   console.error(
-    `webhook secret: GitHub's has ${length} characters, under the ${GITHUB_WEBHOOK_SECRET_MIN} config.ts asks for: ` +
+    `webhook secret: GitHub's has ${length} characters, under the ${SECRET_MIN} config.ts asks for: ` +
       "set a new one on the App (openssl rand -hex 32) and in GITHUB_WEBHOOK_SECRET (docs/development/github-app.md)",
   );
 }

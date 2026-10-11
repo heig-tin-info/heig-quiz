@@ -33,7 +33,6 @@ import {
   accessWhere,
   callerOf,
   findReachableEvaluation,
-  isCourseOwner,
   type Caller,
   myPools,
   sitRefusal,
@@ -343,15 +342,6 @@ async function snapshotOf(
   // A `lobby:` connection is in the room whoever opened it, so it gets the
   // lobby snapshot; `stream.staff` is already false for one (`resolveWatch`).
   if (stream.staff) {
-    // The Reopen the grid offers is the caller's (audit L9): an owner's derogation.
-    const [room] =
-      row.classroomId === null
-        ? []
-        : await app.db
-            .select({ courseId: classrooms.courseId })
-            .from(classrooms)
-            .where(eq(classrooms.id, row.classroomId))
-            .limit(1);
     return {
       type: "snapshot",
       serverNow: iso(now),
@@ -360,7 +350,7 @@ async function snapshotOf(
         now,
         includeAnswers: false,
         includeResults: false,
-        owner: room !== undefined && (await isCourseOwner(app.db, room.courseId, caller)),
+        caller,
       }),
     };
   }

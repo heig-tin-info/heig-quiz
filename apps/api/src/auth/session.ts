@@ -27,8 +27,7 @@ export function hashToken(token: string): string {
  * strings, so neither the content nor the length leaks through the timing.
  */
 export function sameSecret(presented: string, expected: string): boolean {
-  const digest = (value: string) => createHash("sha256").update(value).digest();
-  return timingSafeEqual(digest(presented), digest(expected));
+  return timingSafeEqual(Buffer.from(hashToken(presented)), Buffer.from(hashToken(expected)));
 }
 
 export function newToken(): string {

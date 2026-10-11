@@ -32,7 +32,10 @@ after the role check, and the rest of the API still takes it. An
 administrator cannot create such a token any more (`422
 token_expiry_required`; the settings offer them no "Never"). A teacher's
 token may still never expire. Super Powers keep refusing any token
-(ADR-054).
+(ADR-054). Known gap: two rules read the admin ROLE outside the
+administration routes — editing an approved concept (`patchConcept`) and
+seeing any account's picture (`seesUser`) — and an endless admin token
+keeps them; neither reaches a student's work.
 
 ## Context
 

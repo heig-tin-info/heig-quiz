@@ -63,7 +63,7 @@ export {
   submitAttempt,
   closeAttempt,
   reopenAttempt,
-  reopenRefusal,
+  reopenRole,
   studentHome,
   drawSeed,
   orderItems,

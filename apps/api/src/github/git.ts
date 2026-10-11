@@ -19,12 +19,9 @@
  *
  * That environment is git's WHOLE environment (audit L20): never the API's
  * (its database URL, its secrets), and no configuration but the call's own —
- * no system file, no global file, an empty home of the process's own.
+ * no system file, no global file, no home.
  */
 import { execFile } from "node:child_process";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { redactTokens } from "../redact.js";
 
@@ -51,19 +48,19 @@ export function credentialEnv(token: string): Record<string, string> {
   };
 }
 
-/** The empty home every git process of this one shares, made on first use. */
-let home: string | undefined;
-
 /**
  * The whole environment of a git process (audit L20): the `PATH` that finds
- * git, an empty `HOME`, no system nor global configuration, never a
- * terminal prompt — and `extra`, the call's credential when it has one.
+ * git, a `HOME` that does not exist, no system nor global configuration,
+ * never a terminal prompt — and `extra`, the call's credential when it has
+ * one. No proxy nor CA variable is passed: production reaches github.com
+ * directly and trusts the image's system store (no `HTTPS_PROXY`,
+ * `SSL_CERT_FILE` or `GIT_SSL_CAINFO` in the compose files); a deployment
+ * that needs one adds it here, by name.
  */
 export function gitEnv(extra: Record<string, string> = {}): Record<string, string> {
-  home ??= mkdtempSync(join(tmpdir(), "quiz-git-home-"));
   return {
     PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
-    HOME: home,
+    HOME: "/nonexistent",
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_CONFIG_GLOBAL: "/dev/null",
     // Never ask a terminal for a password when the token is refused.

@@ -47,7 +47,8 @@ what is sent to the provider to a new open question (docs/spec/06, row 43).
 only a guard against a loop: one teacher must not exhaust the institution's
 day. (a) **A person's share**: a call made for a person is reserved only if
 their own spend today (calls in flight at their worst case) stays within
-`LLM_USER_DAILY_SHARE` of the cap (environment, default 0.2), checked under
+`LLM_USER_DAY_SHARE` (0.2) of the cap, a constant of `@quiz/domain` like
+ADR-060's and ADR-080's shares, checked under
 the same lock before the cap, refused as `budget_exhausted` (so `429
 llm_budget_exhausted` on the screens) and, like ADR-080's share, written
 nowhere — the `llm.budget` check stays green. Grading (`grade`) is left out
@@ -55,8 +56,11 @@ nowhere — the `llm.budget` check stays green. Grading (`grade`) is left out
 evaluation's author and bounded by the students' answers. (b) **Re-grades**:
 an item the model graded is re-graded at most `LLM_REGRADES_PER_ITEM_PER_DAY`
 (3) times a day, each one sending every answer back to the model; the next
-is `429 llm_budget_exhausted` before anything changes (`llmRegradeBudget`,
-counted on the audit log's `grading.regrade` entries marked `llm`). (c)
+is `429 llm_budget_exhausted` before anything changes (`checkLlmRegradeBudget`,
+counted on the audit log's `grading.regrade` entries marked `llm`, whose
+payload shape `RegradeAudit` the writer and the count share). No lock spans
+the count and the entry: two re-grades of one item pressed at the same
+instant may both pass; the budget bounds a day, not a race. (c)
 **Payload**: the question configuration a model route takes (the wand, the
 concept suggestion, the assistant's editor draft) is at most
 `LLM_CONFIG_MAX_CHARS` (200 000) characters of JSON, refused by the contract.

@@ -165,7 +165,7 @@ describe("the connection test", () => {
     const other = new LlmGateway({
       db: server.app.db,
       clock: server.clock,
-      config: { LLM_KEY_SECRET: "another-master-key-0123456789abcdef", LLM_USER_DAILY_SHARE: 0.2 },
+      config: { LLM_KEY_SECRET: "another-master-key-0123456789abcdef" },
       provider: fake,
     });
     await expect(

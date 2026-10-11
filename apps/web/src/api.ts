@@ -166,8 +166,6 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   owner_required: "error.ownerRequired",
   // Audit L6: an administrator's token without a lifetime.
   token_expiry_required: "error.tokenExpiryRequired",
-  // Audit L9: an exercise attempt whose answer key the student has seen.
-  key_shown: "error.keyShown",
   last_owner: "error.lastOwner",
   already_staff: "error.alreadyStaff",
 };
