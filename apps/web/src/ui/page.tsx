@@ -485,7 +485,7 @@ export function Stat({
   aside?: ReactNode;
   icon?: IconType;
   onClick?: () => void;
-  /** A small picture beside the figure (a `Ring`); tile variant. */
+  /** A small picture beside the figure (a `RingChart`); tile variant. */
   visual?: ReactNode;
   /** The tile's body under the figure; makes the stat a tile, which is never a button. */
   children?: ReactNode;

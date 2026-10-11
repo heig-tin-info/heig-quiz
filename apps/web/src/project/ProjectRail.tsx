@@ -66,8 +66,8 @@ function Step({
  * review checkpoint → Deadline → Freeze → Release, left to right (top to
  * bottom on a phone). A checkpoint the deadline left void sits after the
  * freeze, greyed, "never fires", still deletable; a project graded `none`
- * has no checkpoints and no Release step. "Add a checkpoint" is offered
- * until the project is locked, archived or not.
+ * has no checkpoints and no Release step. "Add a checkpoint" is offered on a
+ * draft or a published project, never once locked or archived.
  */
 export function ProjectRail({ project }: { project: ProjectDetail }) {
   const t = useT();

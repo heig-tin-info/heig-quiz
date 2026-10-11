@@ -74,7 +74,7 @@ export function OutcomeBadge({ outcome }: { outcome: PollOutcome }) {
       sentence={text}
       hole={outcome.correct.percent}
       parts={[
-        { value: outcome.correct.rate, tone: "success", },
+        { value: outcome.correct.rate, tone: "success" },
         { value: outcome.incorrect.rate, tone: "warning" },
         { value: outcome.abstention?.rate ?? 0, tone: "faint" },
       ]}

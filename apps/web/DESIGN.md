@@ -1901,7 +1901,7 @@ repositories, what is live of the workspace, and the folded Settings.
   with the source (CI, review, teacher) as faint text under it.
 - **Settings** stay editable after publication but are demoted: a folded
   `Disclosure` at the bottom (strategy, protected files, work mode) with the
-  count of protected files beside its title. A draft's opens by default.
+  count of protected files beside its title. A draft's sits above the tiles instead and opens by default.
 - Archived: every write disabled. Group mode: counts per group.
 
 ## The pool's concept heat (Concepts tab, "Heat")

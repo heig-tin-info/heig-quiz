@@ -1293,7 +1293,7 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
     expect(within(rail).getByRole("button", { name: "Add a checkpoint" })).toBeInTheDocument();
   });
 
-  it("offers a new checkpoint on a draft (F-PROJ-01), not on a locked or an archived project", async () => {
+  it("offers a new checkpoint on a draft (F-PROJ-01)", async () => {
     routes(makeDraft());
     renderPage();
     const rail = await screen.findByRole("region", { name: "Lifecycle" });
