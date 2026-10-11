@@ -3,7 +3,7 @@
  * the browser, only its SHA-256 is persisted; a leak of the table does not
  * allow replaying a session. Invalidation = DELETE.
  */
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { and, eq, inArray, isNotNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
 
@@ -19,6 +19,16 @@ export const SESSION_COOKIE = "quiz_session";
 
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Whether a presented secret is the expected one, in constant time whatever
+ * their lengths (audit L19): their SHA-256 digests are compared, never the
+ * strings, so neither the content nor the length leaks through the timing.
+ */
+export function sameSecret(presented: string, expected: string): boolean {
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(presented), digest(expected));
 }
 
 export function newToken(): string {

@@ -34,6 +34,7 @@ import {
   ProjectSummary,
   RELAY_HEADS_AUDIENCE,
   RELAY_HEADS_PATH,
+  workspaceStartPath,
 } from "@quiz/contracts";
 import { GRADING_WORKFLOW_PATH, signHs256 } from "@quiz/domain";
 
@@ -212,9 +213,9 @@ const repoOf = async (projectId: string, userId: string) =>
   (await server.app.db.select().from(projectRepos).where(and(eq(projectRepos.projectId, projectId), eq(projectRepos.userId, userId))))[0]!;
 /** The student's launch through the start route (it records the launch, ADR-078 §6). */
 const launch = async (projectId: string, headers: Headers) => {
-  const res = await call("GET", `/app/codespace/start/${projectId}`, headers);
-  expect(res.statusCode, res.body).toBe(303);
-  expect(res.headers.location).toMatch(new RegExp(`^${PORTAL}/launch`));
+  const res = await call("POST", workspaceStartPath(projectId), headers);
+  expect(res.statusCode, res.body).toBe(200);
+  expect(res.json().url).toMatch(new RegExp(`^${PORTAL}/launch`));
 };
 
 /** A student who launched the workspace of a fresh online project: the fixture of most tests. */

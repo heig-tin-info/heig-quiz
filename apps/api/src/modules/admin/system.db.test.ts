@@ -1,7 +1,8 @@
 /**
  * The system status route (N-OPS-03, F-ADMIN-07, ADR-055) and the coarse
  * words `/healthz` gained, on a real application over PGlite. The route is
- * an administrator's; `/healthz` stays public, narrow, and 200 while the
+ * an administrator's; `/healthz` stays public, narrow (its words for an
+ * administrator or the scraper only, audit L21), and 200 while the
  * database answers whatever the coarse checks say.
  */
 import { randomUUID } from "node:crypto";
@@ -12,10 +13,11 @@ import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { HealthResponse, SYSTEM_CHECK_KEYS, SystemStatus, TestMailResult } from "@quiz/contracts";
+import { HealthProbe, HealthResponse, SYSTEM_CHECK_KEYS, SystemStatus, TestMailResult } from "@quiz/contracts";
 
 import { auditLog } from "../../db/schema.js";
 import { resetServiceRecords, tracked } from "../../serviceHealth.js";
+import { HEALTHZ_CACHE_MS } from "../system/service.js";
 import { testServer, type TestServer } from "../../test/http.js";
 
 let server: TestServer;
@@ -171,7 +173,13 @@ describe("GET /metrics (N-OPS-02)", () => {
 });
 
 describe("/healthz", () => {
+  // A new answer once the cache's window has passed (audit L21).
+  const nextWindow = () => server.clock.advance(HEALTHZ_CACHE_MS);
+  const probe = (headers?: Record<string, string>) =>
+    server.app.inject({ method: "GET", url: "/healthz", ...(headers ? { headers } : {}) });
+
   it("gains coarse words only, and stays 200 when a coarse check is bad", async () => {
+    nextWindow();
     const { mkdir } = await import("node:fs/promises");
     await mkdir(join(dir, "backup-status"), { recursive: true });
     await writeFile(
@@ -184,7 +192,7 @@ describe("/healthz", () => {
         size_bytes: 4242,
       }),
     );
-    const res = await server.app.inject({ method: "GET", url: "/healthz" });
+    const res = await probe(admin.headers);
     expect(res.statusCode).toBe(200);
     const body = HealthResponse.parse(res.json());
     expect(body).toMatchObject({
@@ -201,12 +209,44 @@ describe("/healthz", () => {
     );
   });
 
+  it("answers anyone else the status and the alarm alone (audit L21)", async () => {
+    const teacher = await server.signIn("teacher");
+    for (const headers of [undefined, teacher.headers]) {
+      const res = await probe(headers);
+      expect(res.statusCode).toBe(200);
+      expect(Object.keys(res.json()).sort()).toEqual(["attention", "status"]);
+      expect(HealthProbe.parse(res.json()).status).toBe("ok");
+    }
+  });
+
+  it("serves one answer to every caller for the cache's window", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(dir, "backup-status"), { recursive: true });
+    const offsite = join(dir, "backup-status", "offsite.json");
+    const write = (file: string, at: number) =>
+      writeFile(file, JSON.stringify({ finished_at: new Date(at).toISOString(), ok: true, exit_code: 0 }));
+    const backup = async () => HealthResponse.parse((await probe(admin.headers)).json()).checks.backup;
+    await write(backupFile, Date.now() - 3 * 86_400_000);
+    await write(offsite, Date.now());
+    nextWindow();
+    expect(await backup()).toBe("stale");
+    // The report changed; the window has not passed: the same word.
+    await write(backupFile, Date.now());
+    server.clock.advance(HEALTHZ_CACHE_MS - 1);
+    expect(await backup()).toBe("stale");
+    server.clock.advance(1);
+    expect(await backup()).toBe("ok");
+  });
+
   it("words the backup as the worse of the dump and its off-site copy", async () => {
     const { mkdir } = await import("node:fs/promises");
     await mkdir(join(dir, "backup-status"), { recursive: true });
     const fresh = (file: string) =>
       writeFile(file, JSON.stringify({ finished_at: new Date().toISOString(), ok: true, exit_code: 0 }));
-    const word = async () => HealthResponse.parse((await server.app.inject({ method: "GET", url: "/healthz" })).json());
+    const word = async () => {
+      nextWindow();
+      return HealthResponse.parse((await probe(admin.headers)).json());
+    };
     const offsite = join(dir, "backup-status", "offsite.json");
     await rm(offsite, { force: true });
     await fresh(backupFile);

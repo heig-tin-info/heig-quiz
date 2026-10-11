@@ -70,7 +70,7 @@ export class LlmGateway {
     private readonly deps: {
       db: Db;
       clock: Clock;
-      config: Pick<AppConfig, "LLM_KEY_SECRET">;
+      config: Pick<AppConfig, "LLM_KEY_SECRET" | "LLM_USER_DAILY_SHARE">;
       provider?: LlmProvider;
     },
   ) {}
@@ -156,6 +156,7 @@ export class LlmGateway {
     const { maxTokens, ...call } = meter;
     const id = await reserveCall(db, {
       ...call,
+      userShare: this.deps.config.LLM_USER_DAILY_SHARE,
       now: clock.now(),
       provider: this.provider.id,
       worstCaseUsd: llmWorstCaseUsd(meter.model, promptChars, maxTokens),

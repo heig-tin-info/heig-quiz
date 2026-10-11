@@ -164,6 +164,10 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   duplicate_code: "courses.codeTaken",
   // ADR-068: what only a course owner may do, the last owner, a second seat.
   owner_required: "error.ownerRequired",
+  // Audit L6: an administrator's token without a lifetime.
+  token_expiry_required: "error.tokenExpiryRequired",
+  // Audit L9: an exercise attempt whose answer key the student has seen.
+  key_shown: "error.keyShown",
   last_owner: "error.lastOwner",
   already_staff: "error.alreadyStaff",
 };

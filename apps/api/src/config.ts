@@ -263,6 +263,12 @@ const EnvSchema = z.object({
     .refine((s) => s === "" || s.length >= 32, "must be at least 32 characters"),
   /** The most the console may set as the daily spending cap, in USD (ADR-058 §5). */
   LLM_DAILY_CAP_MAX_USD: z.coerce.number().positive().default(100),
+  /**
+   * The part of the daily cap one person may spend in a day (audit L2), a
+   * fraction in (0, 1]: past it, their calls are refused as the cap's are.
+   * Grading passes are not counted (`USER_SHARE_EXEMPT` of `@quiz/domain`).
+   */
+  LLM_USER_DAILY_SHARE: z.coerce.number().gt(0).max(1).default(0.2),
 
   /**
    * Bearer token for `GET /metrics` (Prometheus, N-OPS). Empty — the default
@@ -391,6 +397,23 @@ export const CODESPACE_LAUNCH_SECRET_MIN = 32;
 /** The shortest webhook secret production accepts (N-SEC-16). */
 export const GITHUB_WEBHOOK_SECRET_MIN = 32;
 
+/** The shortest shared secret production accepts (audit L19), like the webhook secret above. */
+export const SECRET_MIN = 32;
+
+/**
+ * Production refusals of the short secrets (audit L19): the cookie signing
+ * key, and the runner and metrics bearers when they are in use. Every one in
+ * one message, so an operator fixes the file once.
+ */
+function shortSecrets(env: AppConfig): string[] {
+  const inUse = [
+    ["COOKIE_SECRET", env.COOKIE_SECRET],
+    ...(env.RUNNER_MODE === "http" ? [["RUNNER_TOKEN", env.RUNNER_TOKEN.trim()] as const] : []),
+    ...(env.METRICS_TOKEN === "" ? [] : [["METRICS_TOKEN", env.METRICS_TOKEN] as const]),
+  ] as const;
+  return inUse.filter(([, value]) => value.length < SECRET_MIN).map(([key]) => key);
+}
+
 /**
  * Production refusals of the GitHub App (N-SEC-16). No App id: GitHub is
  * off, nothing to refuse. With one, a key that cannot be read, a missing
@@ -500,6 +523,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // repository: refuse it at boot instead (N-SEC-16).
     const github = githubRefusal(parsed.data);
     if (github) throw new Error(`Invalid configuration: ${github}`);
+    const short = shortSecrets(parsed.data);
+    if (short.length > 0) {
+      throw new Error(`Invalid configuration: ${short.join(", ")} must be at least ${SECRET_MIN} characters in production`);
+    }
   }
   // A portal URL without a signing key would mint nothing the portal accepts
   // (or, worse, a guessable one): refused in development too. The answer

@@ -603,7 +603,7 @@ describe("the room restriction reads the address Caddy saw (H2)", () => {
     });
     await server.app.db
       .update(evaluations)
-      .set({ ipAllowlist: ["10.20."] })
+      .set({ ipAllowlist: ["10.20.0.0/16"] })
       .where(eq(evaluations.id, own.evaluationId));
     await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
 
@@ -637,6 +637,7 @@ describe("the room restriction reads the address Caddy saw (H2)", () => {
       studentIds: [learner.id],
       questions: 1,
     });
+    // A list stored before audit L10 holds a text prefix: read as its range.
     await server.app.db
       .update(evaluations)
       .set({ ipAllowlist: ["10.20."] })

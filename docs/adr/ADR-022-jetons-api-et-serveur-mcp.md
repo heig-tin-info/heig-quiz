@@ -24,6 +24,16 @@ as a template of the course by default; and the reading tool
 existing question before writing a new one — see the two addenda at the
 end of §C.
 
+**Amended 2026-10-11 (security audit L6, product owner's decision of
+2026-10-10), scope: §A.** Tokens stay admitted on the administration routes
+(the MCP tools depend on them), but only a token that expires: `adminGuard`
+answers a personal token made with no lifetime `403 token_expiry_required`,
+after the role check, and the rest of the API still takes it. An
+administrator cannot create such a token any more (`422
+token_expiry_required`; the settings offer them no "Never"). A teacher's
+token may still never expire. Super Powers keep refusing any token
+(ADR-054).
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,

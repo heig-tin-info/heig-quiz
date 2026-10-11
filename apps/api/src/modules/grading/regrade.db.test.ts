@@ -182,6 +182,31 @@ describe("regrade (F-GRADE-06, F-GRADE-09)", () => {
     expect(flipped.modifiedAfterRelease).toBe(true);
   });
 
+  it("re-grades an item the model graded a few times a day, any other at will (audit L2)", async () => {
+    const regrade = (evaluationId: string, itemId: string) =>
+      post(`/app/api/evaluations/${evaluationId}/items/${itemId}/regrade`, teacher.headers, { note: "again" });
+    const byModel = await graded();
+    const modelItem = byModel.items[0]!.item.id;
+    // As if the model had proposed the grade of an answer of the item.
+    await server.app.db.update(gradings).set({ source: "llm" }).where(eq(gradings.itemId, modelItem));
+    for (let i = 0; i < 3; i++) expect((await regrade(byModel.evaluation.id, modelItem)).statusCode).toBe(202);
+    const refused = await regrade(byModel.evaluation.id, modelItem);
+    expect([refused.statusCode, refused.json().error]).toEqual([429, "llm_budget_exhausted"]);
+    // Refused before anything changed: the standing gradings are the third pass's.
+    const notes = await server.app.db.select().from(auditLog).where(
+      and(eq(auditLog.action, "grading.regrade"), eq(auditLog.subjectId, byModel.evaluation.id)),
+    );
+    expect(notes.map((n) => (n.payload as { llm?: boolean }).llm)).toEqual([true, true, true]);
+    // The next day (Europe/Zurich), the budget is whole again.
+    server.clock.advance(86_400_000);
+    expect((await regrade(byModel.evaluation.id, modelItem)).statusCode).toBe(202);
+
+    const byRule = await graded();
+    for (let i = 0; i < 4; i++) {
+      expect((await regrade(byRule.evaluation.id, byRule.items[0]!.item.id)).statusCode).toBe(202);
+    }
+  });
+
   it("404s a regrade on an item that is not this evaluation's", async () => {
     const { evaluation } = await graded();
     const elsewhere = await graded();

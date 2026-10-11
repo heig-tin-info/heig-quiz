@@ -171,7 +171,8 @@ export async function purgeAssistTokens(db: Db, now: Date): Promise<number> {
  * The account a bearer token acts for, or null when the token is unknown,
  * revoked, expired, or belongs to an anonymised account. `audience` is the
  * one resource an OAuth access token may be used on; null for a personal
- * token, valid on the whole API.
+ * token, valid on the whole API. `expiresAt` null: a personal token that
+ * never expires, which the administration routes refuse (audit L6).
  */
 export async function findTokenUser(db: Db, token: string, now: Date = new Date()) {
   const [row] = await db
@@ -200,5 +201,5 @@ export async function findTokenUser(db: Db, token: string, now: Date = new Date(
         ),
       ),
     );
-  return { user: row.user, tokenId: row.tokenId, audience: row.audience };
+  return { user: row.user, tokenId: row.tokenId, audience: row.audience, expiresAt: row.expiresAt };
 }

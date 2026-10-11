@@ -71,7 +71,7 @@ Three buttons live in the header while the evaluation runs.
 
 **Extend** opens a menu with **+1 minutes**, **+5 minutes** and **+10 minutes**, each labelled **Extend for the whole class**. It pushes the deadline of every open attempt by that much, and a toast confirms `4 attempts extended by 5 minutes.`
 
-Each row has its own actions at the right: **Open the answers**, **+5 minutes for this student**, and **Close this attempt**, which asks **Close the attempt of Emma Favre? They stop being able to write.** A closed attempt shows **Reopen this attempt** instead, which hands the student back an open attempt with their answers intact; the confirmation reminds you that the deadline is recomputed from their original start, not from now, so pair it with **+5 minutes for this student** when they need time.
+Each row has its own actions at the right: **Open the answers**, **+5 minutes for this student**, and **Close this attempt**, which asks **Close the attempt of Emma Favre? They stop being able to write.** A closed attempt shows **Reopen this attempt** instead, which hands the student back an open attempt with their answers intact; the confirmation reminds you that the deadline is recomputed from their original start, not from now, so pair it with **+5 minutes for this student** when they need time. When the feedback shows the solution as soon as a paper is handed in, the student has already seen it: only a teacher of the course (not an assistant) can then reopen the attempt, and that reopening is recorded.
 
 **Close** ends the evaluation for everybody, after the confirmation **Close the evaluation for everybody? Open attempts are handed in as they are.** Every action here is propagated to the students within a second and logged.
 

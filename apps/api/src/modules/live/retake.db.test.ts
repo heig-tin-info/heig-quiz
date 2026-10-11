@@ -322,7 +322,7 @@ describe("a retake (F-EVAL-15)", () => {
   it("replaces reopening: a teacher reopens no attempt of such an exercise", async () => {
     const { app, seed, evaluation, items } = await exercise();
     const first = await sit(app, evaluation, items, seed.studentIds[0]!, [true, true]);
-    await expect(live.reopenAttempt(db, evaluation, first, app.clock.now())).rejects.toMatchObject({
+    await expect(live.reopenAttempt(db, evaluation, first, app.clock.now(), { owner: false })).rejects.toMatchObject({
       code: "retakes_enabled",
     });
   });
@@ -584,6 +584,7 @@ describe("the screens with several attempts", () => {
       now: app.clock.now(),
       includeAnswers: false,
       includeResults: false,
+      owner: true,
     });
     expect(view.evaluation.reopenable).toBe(false);
     const row = view.rows.find((r) => r.userId === student)!;
@@ -614,6 +615,7 @@ describe("the screens with several attempts", () => {
       now: app.clock.now(),
       includeAnswers: false,
       includeResults: false,
+      owner: true,
     });
     let row = view.rows.find((r) => r.userId === student)!;
     expect(row.attemptId).toBe(second.id);
@@ -628,6 +630,7 @@ describe("the screens with several attempts", () => {
       now: app.clock.now(),
       includeAnswers: false,
       includeResults: false,
+      owner: true,
     });
     row = view.rows.find((r) => r.userId === student)!;
     expect(row.cells.map((c) => c.flagged)).toEqual([false, true]);

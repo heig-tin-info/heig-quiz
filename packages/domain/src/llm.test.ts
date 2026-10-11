@@ -8,6 +8,7 @@ import {
   llmWorstCaseUsd,
   modelFor,
   shareAllows,
+  userShareAllows,
 } from "./llm.js";
 
 describe("llmCostUsd", () => {
@@ -74,3 +75,11 @@ describe("shareAllows", () => {
   });
 });
 
+describe("userShareAllows (audit L2)", () => {
+  it("keeps one person's day within their share of the cap", () => {
+    const day = { capUsd: 20, worstCaseUsd: 1 };
+    expect(userShareAllows({ ...day, spentUserUsd: 3 }, 0.2)).toBe(true);
+    expect(userShareAllows({ ...day, spentUserUsd: 3.01 }, 0.2)).toBe(false);
+    expect(userShareAllows({ ...day, spentUserUsd: 0 }, 1)).toBe(true);
+  });
+});

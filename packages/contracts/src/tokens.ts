@@ -10,7 +10,11 @@ import { z } from "zod";
 /** Every token starts with this, so a leaked one is recognisable by a secret scanner. */
 export const API_TOKEN_PREFIX = "quiz_pat_";
 
-/** The lifetimes the settings offer; `null` never expires. */
+/**
+ * The lifetimes the settings offer; `null` never expires — refused for an
+ * administrator, whose token must expire to reach the administration
+ * routes (`token_expiry_required`, audit L6).
+ */
 export const API_TOKEN_TTL_DAYS = [30, 90, 365] as const;
 
 export const ApiTokenCreate = z.object({

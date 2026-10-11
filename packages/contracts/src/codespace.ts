@@ -274,11 +274,12 @@ export type GitTokenError = z.infer<typeof GitTokenError>;
 // ---------------------------------------------------------- Quiz's own routes (M6-06)
 
 /**
- * The student's start route, `GET /app/codespace/start/:projectId` (ADR-047
- * §6, as amended 2026-10-07): a navigable GET, which Safe Exam Browser
- * follows too (from the project page its `.seb` opened, D21). Its refusals
- * other than the 404 come back to the student's project page as
- * `?workspace=<code>`:
+ * The student's start route, `POST /app/api/projects/:projectId/workspace/start`
+ * (ADR-047 §6, as amended 2026-10-07 and for audit L7): a write of the
+ * project page, Safe Exam Browser's too (from the project page its `.seb`
+ * opened, D21), never a navigation — a cross-site link must not launch. It
+ * answers {@link WorkspaceStart}; its refusals other than the 404 are `409 {
+ * error: <code> }`, which the page shows as `?workspace=<code>`:
  *   - `not_online` — the project is worked in the student's own tools;
  *   - `seb_required` — an `online_seb` project opens from its Safe Exam
  *     Browser session only (M6-07);
@@ -289,8 +290,16 @@ export type GitTokenError = z.infer<typeof GitTokenError>;
 export const WorkspaceStartRefusal = z.enum(WORKSPACE_START_REFUSALS);
 export type WorkspaceStartRefusal = z.infer<typeof WorkspaceStartRefusal>;
 
-/** The path of the start route of a project: what the student's *Open workspace* opens. */
-export const workspaceStartPath = (projectId: string): string => `/app/codespace/start/${encodeURIComponent(projectId)}`;
+/** The start route, as the server registers it. */
+export const WORKSPACE_START_ROUTE = "/app/api/projects/:id/workspace/start";
+
+/** The start route of a project: what the student's *Open workspace* POSTs to. */
+export const workspaceStartPath = (projectId: string): string =>
+  `/app/api/projects/${encodeURIComponent(projectId)}/workspace/start`;
+
+/** The start route's answer: the portal's `/launch?token=…`, where the page goes. Never cached. */
+export const WorkspaceStart = z.object({ url: z.url() });
+export type WorkspaceStart = z.infer<typeof WorkspaceStart>;
 
 /**
  * The student's `.seb` of an `online_seb` project (D21, M6-07): a one-time

@@ -46,6 +46,8 @@ import { SITTING, confined, delegated } from "../../auth/session.js";
 import { iso } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import {
+  callerOf,
+  isCourseOwner,
   loadEvaluation,
   loadEvaluationAttempt,
   ownAttempt,
@@ -468,11 +470,12 @@ export async function livePlugin(
   app.get(
     "/app/api/evaluations/:id/dashboard",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, query: DashboardQuery, load: staffEvaluation }, ({ now, query, scope }) =>
+    teacher({ params: IdParam, query: DashboardQuery, load: staffEvaluation }, async ({ req, now, query, scope }) =>
       service.dashboardView(app.db, scope.evaluation, {
         now,
         includeAnswers: query.includeAnswers,
         includeResults: query.results,
+        owner: await isCourseOwner(app.db, scope.classroom.courseId, callerOf(req)),
       }),
     ),
   );
@@ -597,8 +600,16 @@ export async function livePlugin(
     "/app/api/evaluations/:id/attempts/:attemptId/reopen",
     { preHandler: requireTeacher },
     teacher({ params: AttemptParam, load: staffEvaluationAttempt }, async ({ req, now, scope }) => {
-      const row = await service.reopenAttempt(app.db, scope.evaluation, scope.attempt, now);
-      await trace(req, "attempt.reopen", "attempt", row.id, { evaluationId: scope.evaluation.id });
+      const owner = await isCourseOwner(app.db, scope.courseId, callerOf(req));
+      // The course owner's derogation of audit L9: the refusal anyone else
+      // would get, written down with the reopening.
+      const derogation =
+        owner && service.reopenRefusal(scope.evaluation, { owner: false }, scope.attempt.state) === "key_shown";
+      const row = await service.reopenAttempt(app.db, scope.evaluation, scope.attempt, now, { owner });
+      await trace(req, "attempt.reopen", "attempt", row.id, {
+        evaluationId: scope.evaluation.id,
+        ...(derogation ? { derogation: "key_shown" } : {}),
+      });
       return {
         state: row.state,
         deadlineAt: row.deadlineAt === null ? null : iso(row.deadlineAt),

@@ -96,6 +96,21 @@ export const LlmUsage = z.object({
 });
 export type LlmUsage = z.infer<typeof LlmUsage>;
 
+// --- A question draft sent to a model --------------------------------------
+
+/**
+ * The longest question configuration a route that asks a model takes, as
+ * JSON (audit L2): far more than a real question holds, so that a request
+ * cannot turn one call into a large bill. Past it, `400` before any model
+ * is asked.
+ */
+export const LLM_CONFIG_MAX_CHARS = 200_000;
+
+/** A question configuration, as an editor holds it, within {@link LLM_CONFIG_MAX_CHARS}. */
+export const LlmDraftConfig = z
+  .unknown()
+  .refine((config) => JSON.stringify(config ?? null).length <= LLM_CONFIG_MAX_CHARS, { message: "config_too_large" });
+
 // --- "Generate answers" (ADR-059) -------------------------------------------
 
 /**
@@ -115,7 +130,7 @@ export type LlmAvailability = z.infer<typeof LlmAvailability>;
  */
 export const GenerateRequest = z
   .object({
-    config: z.unknown(),
+    config: LlmDraftConfig,
     explanation: z.string().max(20_000),
     item: z.number().int().min(0).max(100).optional(),
   })

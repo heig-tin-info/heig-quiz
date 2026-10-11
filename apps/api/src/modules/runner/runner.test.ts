@@ -84,12 +84,15 @@ describe("createRunner", () => {
       NODE_ENV: "production",
       DATABASE_URL: "postgres://quiz@db/quiz",
       OIDC_CLIENT_SECRET: "a-real-one",
-      COOKIE_SECRET: "a-real-cookie-secret",
+      COOKIE_SECRET: "a-real-cookie-secret-of-the-right-length",
       RUNNER_MODE: "http",
       RUNNER_URL: "https://r.example",
     };
+    const token = "r".repeat(32);
     expect(() => loadConfig(prod)).toThrow(/RUNNER_TOKEN/);
-    expect(loadConfig({ ...prod, RUNNER_TOKEN: " s3cret " }).RUNNER_TOKEN).toBe("s3cret");
+    // Audit L19: a brute-forceable token is refused too, trimmed first.
+    expect(() => loadConfig({ ...prod, RUNNER_TOKEN: ` ${"r".repeat(31)} ` })).toThrow(/RUNNER_TOKEN must be at least 32/);
+    expect(loadConfig({ ...prod, RUNNER_TOKEN: ` ${token} ` }).RUNNER_TOKEN).toBe(token);
     expect(loadConfig({ RUNNER_MODE: "http", RUNNER_URL: "http://localhost:3200" }).RUNNER_TOKEN).toBe("");
   });
 

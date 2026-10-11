@@ -6,10 +6,17 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, gte, isNull, sql, sum } from "drizzle-orm";
+import { and, eq, gte, isNull, notInArray, sql, sum } from "drizzle-orm";
 
 import type { LlmErrorCode, LlmUsage } from "@quiz/contracts";
-import { llmCostUsd, SCHOOL_TIME_ZONE, shareAllows, type LlmPurpose } from "@quiz/domain";
+import {
+  llmCostUsd,
+  SCHOOL_TIME_ZONE,
+  shareAllows,
+  USER_SHARE_EXEMPT,
+  userShareAllows,
+  type LlmPurpose,
+} from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
 import { llmCalls, llmSettings, users } from "../../db/schema.js";
@@ -55,6 +62,21 @@ export async function spentToday(
   return Number(row?.total ?? 0);
 }
 
+/** What one person spent today, calls in flight at their worst case, the purposes their share leaves out aside (audit L2). */
+async function spentByUserToday(db: Tx, now: Date, userId: string): Promise<number> {
+  const [row] = await db
+    .select({ total: sum(llmCalls.costUsd) })
+    .from(llmCalls)
+    .where(
+      and(
+        gte(llmCalls.createdAt, startOf("day", now)),
+        eq(llmCalls.userId, userId),
+        notInArray(llmCalls.purpose, [...USER_SHARE_EXEMPT]),
+      ),
+    );
+  return Number(row?.total ?? 0);
+}
+
 /**
  * Today against the cap: what was spent (calls in flight at their worst
  * case), the cap, and whether the cap already refused a call today — what the
@@ -81,10 +103,11 @@ export async function todayBudget(db: Db, now: Date): Promise<{ spentUsd: number
  * therefore cannot both slip under the cap. Otherwise `budget_exhausted` is
  * thrown and nothing reaches the provider; the day's first refusal is logged.
  *
- * `share`, the chat's share of the cap (ADR-080 §4, `shareAllows`), is
- * checked first: its refusal is
- * the same `budget_exhausted` but writes nothing — the cap itself was not
- * reached, so the `llm.budget` check stays green.
+ * `share`, the chat's share of the cap (ADR-080 §4, `shareAllows`), and
+ * `userShare`, the person's (audit L2, `userShareAllows`: a call made for a
+ * person, of a purpose their share counts), are checked first: their
+ * refusal is the same `budget_exhausted` but writes nothing — the cap itself
+ * was not reached, so the `llm.budget` check stays green.
  */
 export async function reserveCall(
   db: Db,
@@ -97,6 +120,7 @@ export async function reserveCall(
     worstCaseUsd: number;
     capUsd: number;
     share?: number | undefined;
+    userShare: number;
   },
 ): Promise<string> {
   const row = {
@@ -120,6 +144,20 @@ export async function reserveCall(
           capUsd: call.capUsd,
         },
         call.share,
+      )
+    ) {
+      return false;
+    }
+    if (
+      call.userId !== null &&
+      !USER_SHARE_EXEMPT.includes(call.purpose) &&
+      !userShareAllows(
+        {
+          spentUserUsd: await spentByUserToday(tx, call.now, call.userId),
+          worstCaseUsd: call.worstCaseUsd,
+          capUsd: call.capUsd,
+        },
+        call.userShare,
       )
     ) {
       return false;

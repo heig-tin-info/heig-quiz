@@ -14,6 +14,7 @@ BASE="${1:-${SMOKE_BASE_URL:-http://localhost:3000}}"
 JAR_DIR="$(mktemp -d)"
 TEACHER="$JAR_DIR/teacher.jar"
 STUDENT="$JAR_DIR/student.jar"
+ADMIN="$JAR_DIR/admin.jar"
 BODY="$JAR_DIR/body"
 STAMP="$(date +%s)"
 trap 'rm -rf "$JAR_DIR"' EXIT
@@ -74,6 +75,11 @@ wait_grading() {
 
 step "health"
 api "$TEACHER" GET /healthz; expect 200 "GET /healthz"
+[ "$(jq -r .status <"$BODY")" = "ok" ] || fail "healthz: status is not ok"
+# The coarse words are an administrator's (or the metrics scraper's) since
+# audit L21: the public answer is the status and the alarm alone.
+login "$ADMIN" admin
+api "$ADMIN" GET /healthz; expect 200 "GET /healthz (admin)"
 [ "$(jq -r .checks.database <"$BODY")" = "up" ] || fail "healthz: database is not up"
 # The code section below runs only against a real runner. `disabled` is the
 # ordinary answer of a machine with no container engine (decision D14) and

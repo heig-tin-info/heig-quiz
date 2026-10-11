@@ -35,6 +35,9 @@ import {
   ProjectWorkspaceSessions,
   SERVICE_AUDIENCE,
   ServiceTokenClaims,
+  WorkspaceStart,
+  WorkspaceStartRefusal,
+  workspaceStartPath,
   type AdminTeacher,
   type SessionKind,
 } from "@quiz/contracts";
@@ -232,7 +235,13 @@ const accept = async (projectId: string, who: Person) => {
   const res = await call("POST", `/app/api/student/projects/${projectId}/accept`, who.headers);
   expect(res.statusCode, res.body).toBe(200);
 };
-const start = (projectId: string, headers: Headers = {}) => call("GET", `/app/codespace/start/${projectId}`, headers);
+const start = (projectId: string, headers: Headers = {}) => call("POST", workspaceStartPath(projectId), headers);
+/** The portal URL a launch answers, and its token. */
+const launchUrl = async (projectId: string, headers: Headers) => {
+  const res = await start(projectId, headers);
+  expect(res.statusCode, res.body).toBe(200);
+  return new URL(WorkspaceStart.parse(res.json()).url);
+};
 const repoOf = async (projectId: string, userId: string) =>
   (await server.app.db.select().from(projectRepos).where(and(eq(projectRepos.projectId, projectId), eq(projectRepos.userId, userId))))[0]!;
 
@@ -478,11 +487,9 @@ describe("an online_seb project (D21)", () => {
     const sebHeaders = await sessionOf(student.id, { kind: "seb", projectId: exam.id, sebConfigKey: configKey });
 
     // From the portal: Safe Exam Browser is required, nothing is issued.
-    expect((await start(exam.id, student.headers)).headers.location).toBe(`/projects/${exam.id}?workspace=seb_required`);
+    expect((await start(exam.id, student.headers)).json()).toEqual({ error: "seb_required" });
 
-    const res = await start(exam.id, sebHeaders);
-    expect(res.statusCode).toBe(303);
-    const token = new URL(res.headers.location as string).searchParams.get("token")!;
+    const token = (await launchUrl(exam.id, sebHeaders)).searchParams.get("token")!;
     const verdict = await verifyHs256<Record<string, unknown>>(token, SECRET, { audience: LAUNCH_AUDIENCE, issuer: "heig-quiz", now: AT_NOW });
     const claims = LaunchTokenClaims.parse(verdict.ok ? verdict.claims : null);
     expect(claims).toMatchObject({ sub: student.id, assignmentId: exam.id, seb: { configKey } });
@@ -511,7 +518,7 @@ describe("an online_seb project (D21)", () => {
     const otherProject = await sessionOf(student.id, { kind: "seb", projectId: elsewhere.id, sebConfigKey: "c".repeat(64) });
     expect((await start(exam.id, otherProject)).statusCode).toBe(404);
     const evaluation = await sessionOf(student.id, { kind: "seb", evaluationId: room.evaluationId, sebConfigKey: "c".repeat(64) });
-    expect((await start(exam.id, evaluation)).headers.location).toMatch(/^\/app\/auth\/login\?/);
+    expect((await start(exam.id, evaluation)).statusCode).toBe(401);
     const issued = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.launch_issued"), eq(auditLog.subjectId, exam.id)));
     expect(issued).toEqual([]);
   });
@@ -519,8 +526,8 @@ describe("an online_seb project (D21)", () => {
 
 // ---------------------------------------------------------------- the start route
 
-describe("GET /app/codespace/start/:id", () => {
-  it("sends an anonymous visitor and a confined session through the sign-in, and 404s an impersonation and a stranger", async () => {
+describe("POST /app/api/projects/:id/workspace/start", () => {
+  it("answers 401 without a session it serves, 403 an impersonation, and 404s a token and a stranger", async () => {
     const student = await newStudent();
     const room = await connectedClassroom([student]);
     const lab = await project(room, "Start lab");
@@ -530,15 +537,14 @@ describe("GET /app/codespace/start/:id", () => {
     const stranger = await newStudent();
     const outsider = await grantedTeacher(true);
 
-    const anonymous = await start(lab.id);
-    expect([anonymous.statusCode, anonymous.headers.location]).toEqual([303, `/app/auth/login?next=${encodeURIComponent(`/app/codespace/start/${lab.id}`)}`]);
+    expect((await start(lab.id)).statusCode).toBe(401);
     for (const kind of ["seb", "kiosk"] as const) {
       const confined = await start(lab.id, await sessionOf(student.id, { kind, evaluationId: room.evaluationId }));
-      expect(confined.statusCode).toBe(303);
-      expect(confined.headers.location).toMatch(/^\/app\/auth\/login\?/);
+      expect(confined.statusCode).toBe(401);
     }
     const impersonation = await start(lab.id, await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id }));
-    expect(impersonation.statusCode).toBe(404);
+    // A session acting as a student writes nothing (ADR-034): refused before the route.
+    expect([impersonation.statusCode, impersonation.json().error]).toEqual([403, "impersonation_read_only"]);
     const { token } = await createApiToken(server.app.db, student.id, { name: "t", expiresInDays: null });
     expect((await start(lab.id, { authorization: `Bearer ${token}` })).statusCode).toBe(404);
     expect((await start(lab.id, stranger.headers)).statusCode).toBe(404);
@@ -549,7 +555,25 @@ describe("GET /app/codespace/start/:id", () => {
     expect(issued).toEqual([]);
   });
 
-  it("sends each refusal back to the project page: not online, SEB only, not accepted, closed", async () => {
+  it("cannot be launched by a cross-site request: a GET, or a POST without the CSRF header (audit L7)", async () => {
+    const student = await newStudent();
+    const room = await connectedClassroom([student]);
+    const lab = await project(room, "Cross-site lab");
+    await setMode(lab.id, "online");
+    await accept(lab.id, student);
+    const { "x-csrf-token": _, ...cookieOnly } = student.headers;
+    const forged = await start(lab.id, cookieOnly);
+    expect([forged.statusCode, forged.json().error]).toEqual([403, "csrf"]);
+    // The old navigable GET is gone (a 404 for the API's unknown routes).
+    expect((await call("GET", `/app/codespace/start/${lab.id}`, student.headers)).statusCode).toBe(404);
+    expect((await call("GET", workspaceStartPath(lab.id), student.headers)).statusCode).toBe(404);
+    const issued = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.launch_issued"), eq(auditLog.subjectId, lab.id)));
+    expect(issued).toEqual([]);
+    // The mode is not frozen: nothing was launched.
+    expect((await setMode(lab.id, "free")).statusCode).toBe(200);
+  });
+
+  it("answers each refusal the project page words: not online, SEB only, not accepted, closed", async () => {
     const student = await newStudent();
     const room = await connectedClassroom([student]);
     const free = await project(room, "Free start");
@@ -559,15 +583,15 @@ describe("GET /app/codespace/start/:id", () => {
     await setMode(lab.id, "online");
     const refusal = async (id: string) => {
       const res = await start(id, student.headers);
-      expect(res.statusCode).toBe(303);
-      return res.headers.location;
+      expect(res.statusCode).toBe(409);
+      return WorkspaceStartRefusal.parse(res.json().error);
     };
-    expect(await refusal(free.id)).toBe(`/projects/${free.id}?workspace=not_online`);
-    expect(await refusal(exam.id)).toBe(`/projects/${exam.id}?workspace=seb_required`);
-    expect(await refusal(lab.id)).toBe(`/projects/${lab.id}?workspace=not_accepted`);
+    expect(await refusal(free.id)).toBe("not_online");
+    expect(await refusal(exam.id)).toBe("seb_required");
+    expect(await refusal(lab.id)).toBe("not_accepted");
     await accept(lab.id, student);
     server.clock.set(new Date(new Date(DEADLINE).getTime() + 60_000));
-    expect(await refusal(lab.id)).toBe(`/projects/${lab.id}?workspace=closed`);
+    expect(await refusal(lab.id)).toBe("closed");
     // No launch was issued: the mode is still free to change.
     server.clock.set(NOW);
     expect((await setMode(lab.id, "free")).statusCode).toBe(200);
@@ -583,8 +607,9 @@ describe("GET /app/codespace/start/:id", () => {
     logLines.length = 0;
 
     const res = await start(lab.id, student.headers);
-    expect(res.statusCode).toBe(303);
-    const location = new URL(res.headers.location as string);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    const location = new URL(WorkspaceStart.parse(res.json()).url);
     expect(`${location.origin}${location.pathname}`).toBe(`${PORTAL}/launch`);
     const token = location.searchParams.get("token")!;
     const verdict = await verifyHs256<Record<string, unknown>>(token, SECRET, {
@@ -624,7 +649,7 @@ describe("GET /app/codespace/start/:id", () => {
     expect(state!.firstLaunchAt?.toISOString()).toBe(NOW);
 
     // A second launch is a new token, a new jti.
-    const again = new URL((await start(lab.id, student.headers)).headers.location as string).searchParams.get("token")!;
+    const again = (await launchUrl(lab.id, student.headers)).searchParams.get("token")!;
     expect(again).not.toBe(token);
 
     const frozen = await setMode(lab.id, "free");
@@ -656,9 +681,7 @@ describe("a staff test seat (ADR-077)", () => {
     accounts.set(githubUserId, login);
     await accept(lab.id, tester);
 
-    const res = await start(lab.id, tester.headers);
-    expect(res.statusCode).toBe(303);
-    expect(res.headers.location).toMatch(new RegExp(`^${PORTAL}/launch\\?token=`));
+    expect((await launchUrl(lab.id, tester.headers)).href).toMatch(new RegExp(`^${PORTAL}/launch\\?token=`));
     const issued = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.launch_issued"), eq(auditLog.subjectId, lab.id)));
     expect(issued.map((a) => a.actorUserId)).toEqual([tester.id]);
     // Not frozen: the owner may still change the mode.

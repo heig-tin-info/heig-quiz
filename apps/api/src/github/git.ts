@@ -16,8 +16,15 @@
  * clone's `.git/config` holds no credential (classroom wrote the token into
  * `remote.origin.url` under /tmp, where it outlived a crash), and neither
  * does `ps`.
+ *
+ * That environment is git's WHOLE environment (audit L20): never the API's
+ * (its database URL, its secrets), and no configuration but the call's own —
+ * no system file, no global file, an empty home of the process's own.
  */
 import { execFile } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { redactTokens } from "../redact.js";
 
@@ -41,8 +48,27 @@ export function credentialEnv(token: string): Record<string, string> {
     GIT_CONFIG_COUNT: "1",
     GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
     GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`,
+  };
+}
+
+/** The empty home every git process of this one shares, made on first use. */
+let home: string | undefined;
+
+/**
+ * The whole environment of a git process (audit L20): the `PATH` that finds
+ * git, an empty `HOME`, no system nor global configuration, never a
+ * terminal prompt — and `extra`, the call's credential when it has one.
+ */
+export function gitEnv(extra: Record<string, string> = {}): Record<string, string> {
+  home ??= mkdtempSync(join(tmpdir(), "quiz-git-home-"));
+  return {
+    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+    HOME: home,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
     // Never ask a terminal for a password when the token is refused.
     GIT_TERMINAL_PROMPT: "0",
+    ...extra,
   };
 }
 
@@ -51,7 +77,7 @@ function run(args: string[], env: Record<string, string>): Promise<string> {
     execFile(
       "git",
       args,
-      { env: { ...process.env, ...env }, maxBuffer: MAX_OUTPUT_BYTES },
+      { env: gitEnv(env), maxBuffer: MAX_OUTPUT_BYTES },
       (err, stdout) => {
         // execFile's message carries the command and its stderr: redact the
         // whole thing as a safety net and drop the original error, whose

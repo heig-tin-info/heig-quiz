@@ -88,6 +88,7 @@ import {
   countedAttempt,
   countedAttemptId,
   gradeReadable,
+  keyShownTo,
   releasedGradesOf,
   resultsState,
   scoreVisible,
@@ -132,6 +133,9 @@ const REFUSALS = {
   // ADR-050: a reopened student would rewrite their answers with the
   // correction in hand.
   correction_published: [409, "the correction of this exercise is published: no attempt is reopened"],
+  // Audit L9: the student has read the answer key; a course owner may still
+  // reopen (ADR-068), audited.
+  key_shown: [409, "the student has seen the answer key: only a course owner may reopen the attempt"],
   not_open: [409, "this evaluation is not open"],
   // `AnswerInvalid`.
   answer_invalid: [422],
@@ -191,16 +195,27 @@ export class RetakeRefused extends LiveError {
 }
 
 /**
- * Why no finished attempt of this evaluation may be reopened, whatever its
- * state: the rule `reopenAttempt` applies and the live grid reads
+ * Why a caller may not reopen a finished attempt (in `attemptState`) of this
+ * evaluation: the rule `reopenAttempt` applies and the live grid reads
  * (`DashboardView.evaluation.reopenable`), so the grid never offers a
  * refused Reopen.
+ *
+ * `key_shown` (audit L9): the policy has already shown the student the
+ * answer key (`keyShownTo`, the rule of their feedback page: an exercise in
+ * `immediate` with `showKey`). A course owner may still reopen it — the
+ * derogation of ADR-068, audited as such by the route; nobody else may. The
+ * two refusals before it have no derogation.
  */
+export type ReopenRefusal = "retakes_enabled" | "correction_published" | "key_shown";
+
 export function reopenRefusal(
   evaluation: EvaluationRecord,
-): "retakes_enabled" | "correction_published" | null {
+  caller: { owner: boolean },
+  attemptState = "submitted",
+): ReopenRefusal | null {
   if (retakesEnabled(evaluation)) return "retakes_enabled";
   if (evaluation.correctionPublishedAt !== null) return "correction_published";
+  if (!caller.owner && keyShownTo(evaluation, attemptState)) return "key_shown";
   return null;
 }
 
@@ -1404,14 +1419,14 @@ export async function reopenAttempt(
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
+  caller: { owner: boolean },
 ): Promise<AttemptRecord> {
   if (evaluation.state !== "running" && evaluation.state !== "paused") {
     throw new LiveError("evaluation_not_live");
   }
   if (attempt.state === "in_progress") return attempt;
-  const refused = reopenRefusal(evaluation);
-  if (refused === "retakes_enabled") throw new LiveError("retakes_enabled");
-  if (refused === "correction_published") throw new LiveError("correction_published");
+  const refused = reopenRefusal(evaluation, caller, attempt.state);
+  if (refused !== null) throw new LiveError(refused);
   const participant = await participantOfAttempt(db, evaluation, attempt);
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {
     startedAt: attempt.startedAt ?? now,

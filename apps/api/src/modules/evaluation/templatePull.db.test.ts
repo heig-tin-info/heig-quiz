@@ -97,7 +97,7 @@ async function world(): Promise<World> {
   const instanceId = made.evaluation.id;
   const patched = await call(teacher, "PATCH", `/app/api/evaluations/${instanceId}`, {
     opensAt: "2026-11-02T08:00:00.000Z",
-    ipAllowlist: ["10.1."],
+    ipAllowlist: ["10.1.0.0/16"],
     durationS: 3600,
     settings: { shuffleItems: true, requireFullscreen: true },
   });

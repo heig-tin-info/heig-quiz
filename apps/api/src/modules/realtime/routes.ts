@@ -33,6 +33,8 @@ import {
   accessWhere,
   callerOf,
   findReachableEvaluation,
+  isCourseOwner,
+  type Caller,
   myPools,
   sitRefusal,
   staffAccess,
@@ -309,6 +311,7 @@ async function snapshotOf(
   stream: Stream,
   watch: Watch,
   now: Date,
+  caller: Caller,
 ): Promise<ServerEvent | null> {
   const seq = stream.stateSeq;
   const evaluation = await app.db
@@ -340,6 +343,15 @@ async function snapshotOf(
   // A `lobby:` connection is in the room whoever opened it, so it gets the
   // lobby snapshot; `stream.staff` is already false for one (`resolveWatch`).
   if (stream.staff) {
+    // The Reopen the grid offers is the caller's (audit L9): an owner's derogation.
+    const [room] =
+      row.classroomId === null
+        ? []
+        : await app.db
+            .select({ courseId: classrooms.courseId })
+            .from(classrooms)
+            .where(eq(classrooms.id, row.classroomId))
+            .limit(1);
     return {
       type: "snapshot",
       serverNow: iso(now),
@@ -348,6 +360,7 @@ async function snapshotOf(
         now,
         includeAnswers: false,
         includeResults: false,
+        owner: room !== undefined && (await isCourseOwner(app.db, room.courseId, caller)),
       }),
     };
   }
@@ -529,7 +542,7 @@ export async function realtimePlugin(app: FastifyInstance) {
       announceLobby(app, watch.evaluationId);
     }
     if (watch !== null) {
-      const snapshot = await snapshotOf(app, stream, watch, app.clock.now());
+      const snapshot = await snapshotOf(app, stream, watch, app.clock.now(), callerOf(req));
       if (snapshot) sendNamed(stream, snapshot, Date.now());
     }
     return reply;

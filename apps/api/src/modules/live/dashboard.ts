@@ -56,7 +56,13 @@ import { itemInstance } from "../pool/service.js";
 export async function dashboardView(
   db: Db,
   evaluation: EvaluationRecord,
-  input: { now: Date; includeAnswers: boolean; includeResults: boolean },
+  input: {
+    now: Date;
+    includeAnswers: boolean;
+    includeResults: boolean;
+    /** The caller owns the course: the `key_shown` derogation of the reopening is theirs (audit L9). */
+    owner: boolean;
+  },
 ): Promise<DashboardView> {
   const items = await joinedItems(db, evaluation.id);
   const roster = await db
@@ -249,7 +255,7 @@ export async function dashboardView(
       pausedAt: isoOrNull(evaluation.pausedAt),
       closesAt: isoOrNull(evaluation.closesAt),
       serverNow: iso(input.now),
-      reopenable: reopenRefusal(evaluation) === null,
+      reopenable: reopenRefusal(evaluation, { owner: input.owner }) === null,
       journalOn: journalOn(evaluation),
     },
     items: items.map((i) => ({

@@ -138,6 +138,24 @@ describe("loadConfig", () => {
     ).toThrow(/COOKIE_SECRET/);
   });
 
+  it("refuses a short cookie secret, runner token or metrics token in production (audit L19)", () => {
+    const long = "s".repeat(32);
+    const short = "s".repeat(31);
+    expect(() => loadConfig({ ...PROD, COOKIE_SECRET: short })).toThrow(/COOKIE_SECRET must be at least 32/);
+    expect(() => loadConfig({ ...PROD, METRICS_TOKEN: short })).toThrow(/METRICS_TOKEN must be at least 32/);
+    const runner = { RUNNER_MODE: "http", RUNNER_URL: "https://r.example" };
+    expect(() => loadConfig({ ...PROD, ...runner, RUNNER_TOKEN: short })).toThrow(/RUNNER_TOKEN must be at least 32/);
+    // Every short one in one message.
+    expect(() => loadConfig({ ...PROD, COOKIE_SECRET: short, METRICS_TOKEN: short })).toThrow(
+      /COOKIE_SECRET, METRICS_TOKEN must be/,
+    );
+    // An unset metrics token (admin sessions only) and a runner in `stub` have nothing to measure.
+    expect(loadConfig({ ...PROD, RUNNER_TOKEN: "x" }).METRICS_TOKEN).toBe("");
+    expect(loadConfig({ ...PROD, ...runner, RUNNER_TOKEN: long, METRICS_TOKEN: long }).METRICS_TOKEN).toBe(long);
+    // Development keeps its floors.
+    expect(loadConfig({ COOKIE_SECRET: "s".repeat(16), METRICS_TOKEN: "m" }).METRICS_TOKEN).toBe("m");
+  });
+
   it("lets the development login through outside production", () => {
     expect(loadConfig({ NODE_ENV: "development", AUTH_DEV_LOGIN: "1" }).AUTH_DEV_LOGIN).toBe(true);
   });

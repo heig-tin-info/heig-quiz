@@ -179,7 +179,7 @@ from *Administration*.
 ## 8. Check it
 
 ```bash
-curl -s https://<your-host>/healthz | jq .   # 200: "database": "up", "jobs": "up"
+curl -s -H "Authorization: Bearer $METRICS_TOKEN" https://<your-host>/healthz | jq .   # 200: "database": "up", "jobs": "up"
 cat backup-status/last.json                  # after the first dump: "ok": true
 ```
 

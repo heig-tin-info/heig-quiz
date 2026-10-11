@@ -279,7 +279,9 @@ export async function gradingPlugin(app: FastifyInstance) {
   /**
    * Re-grades ONE item across every attempt. Optionally repoints the item at
    * a newer published version first; every grading the pass writes carries
-   * `regrade_note`, and the ones it replaces become `superseded`.
+   * `regrade_note`, and the ones it replaces become `superseded`. An item
+   * the model grades is re-graded a few times a day at most
+   * (`llmRegradeBudget`, audit L2).
    */
   app.post(
     "/app/api/evaluations/:id/items/:itemId/regrade",
@@ -289,6 +291,8 @@ export async function gradingPlugin(app: FastifyInstance) {
       async ({ req, reply, now, params, body, scope }) => {
         const item = await joinedItem(app.db, scope.evaluation.id, params.itemId);
         if (!item) return notFound(reply);
+        // Audit L2: a re-grade the model answers again has a daily budget per item.
+        const llm = await service.llmRegradeBudget(app.db, scope.evaluation.id, item.item.id, now);
 
         const note = await service.regradeItem(
           app.db,
@@ -307,12 +311,20 @@ export async function gradingPlugin(app: FastifyInstance) {
           regradeNote: note,
         });
         const modified = await markModifiedAfterRelease(app.db, scope.evaluation, now);
-        await trace(req, "grading.regrade", "evaluation", scope.evaluation.id, {
-          itemId: item.item.id,
-          note,
-          toVersionNumber: body.toVersionNumber ?? null,
-          modifiedAfterRelease: modified,
-        });
+        await trace(
+          req,
+          "grading.regrade",
+          "evaluation",
+          scope.evaluation.id,
+          {
+            itemId: item.item.id,
+            note,
+            toVersionNumber: body.toVersionNumber ?? null,
+            modifiedAfterRelease: modified,
+            ...(llm ? { llm: true } : {}),
+          },
+          now,
+        );
         events.gradingChanged(scope.evaluation);
         return reply
           .code(202)

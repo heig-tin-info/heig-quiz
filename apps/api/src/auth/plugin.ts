@@ -60,6 +60,12 @@ declare module "fastify" {
      */
     authVia: "session" | "token" | "assistant" | null;
     /**
+     * The bearer token of this request never expires (a personal token made
+     * with no lifetime): what the administration routes refuse
+     * (`adminGuard`, audit L6). False for anything else.
+     */
+    endlessToken: boolean;
+    /**
      * The assistant's tool a write of `authVia: "assistant"` runs
      * (`ASSIST_TOOL_HEADER`), for its audit entry; null otherwise.
      */
@@ -161,6 +167,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
   app.decorateRequest("authVia", null);
+  app.decorateRequest("endlessToken", false);
   app.decorateRequest("assistTool", null);
   app.decorateRequest("auth", null);
   app.decorateRequest("caller", null);
@@ -193,6 +200,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         if (path === MCP_PATH ? assistant : !isInternalCall(req)) return;
       }
       req.user = found.user;
+      req.endlessToken = found.expiresAt === null;
       if (found.audience === ASSIST_AUDIENCE) {
         req.authVia = "assistant";
         const tool = req.headers[ASSIST_TOOL_HEADER];

@@ -19,6 +19,7 @@ import {
   EVALUATION_MODES,
   EVALUATION_STATES,
   FEEDBACK_WHEN,
+  isIpRange,
   LOBBIES,
   MAX_CONDITION_LENGTH,
   MAX_CONDITIONS,
@@ -632,7 +633,15 @@ const EvaluationPatchFields = z.object({
   opensAt: z.iso.datetime().nullable().optional(),
   closesAt: z.iso.datetime().nullable().optional(),
   durationS: z.number().int().min(30).max(EVALUATION_DURATION_MAX_MINUTES * 60).nullable().optional(),
-  ipAllowlist: z.array(z.string().trim().min(1).max(64)).max(32).optional(),
+  /**
+   * F-EVAL-12: IP addresses and CIDR ranges (`192.168.1.0/24`,
+   * `2001:db8::/32`), matched on their bits by `ipAllowed` of
+   * `@quiz/domain`. A text prefix (`10.20.`) is refused (audit L10).
+   */
+  ipAllowlist: z
+    .array(z.string().trim().max(64).refine(isIpRange, { message: "an IP address or a CIDR range" }))
+    .max(32)
+    .optional(),
 });
 
 const somethingToUpdate = (b: object) => Object.keys(b).length > 0;

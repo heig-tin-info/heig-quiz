@@ -43,6 +43,24 @@ Amends:
 Defers N-DATA-05's "no-retention mode" and the data-protection review of
 what is sent to the provider to a new open question (docs/spec/06, row 43).
 
+**Amended 2026-10-11 (security audit L2), scope: §5.** The cap is no longer
+only a guard against a loop: one teacher must not exhaust the institution's
+day. (a) **A person's share**: a call made for a person is reserved only if
+their own spend today (calls in flight at their worst case) stays within
+`LLM_USER_DAILY_SHARE` of the cap (environment, default 0.2), checked under
+the same lock before the cap, refused as `budget_exhausted` (so `429
+llm_budget_exhausted` on the screens) and, like ADR-080's share, written
+nowhere — the `llm.budget` check stays green. Grading (`grade`) is left out
+(`USER_SHARE_EXEMPT` of `@quiz/domain`): a pass is billed to the
+evaluation's author and bounded by the students' answers. (b) **Re-grades**:
+an item the model graded is re-graded at most `LLM_REGRADES_PER_ITEM_PER_DAY`
+(3) times a day, each one sending every answer back to the model; the next
+is `429 llm_budget_exhausted` before anything changes (`llmRegradeBudget`,
+counted on the audit log's `grading.regrade` entries marked `llm`). (c)
+**Payload**: the question configuration a model route takes (the wand, the
+concept suggestion, the assistant's editor draft) is at most
+`LLM_CONFIG_MAX_CHARS` (200 000) characters of JSON, refused by the contract.
+
 Amended 2026-10-09: §2 says what the screen writes (`models.default` only) and how a call resolves its model (the purpose's own, the purpose's fixed model, the default, the platform's), as `modelFor` does.
 
 ## Context

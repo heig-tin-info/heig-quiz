@@ -179,7 +179,7 @@ describe("Quiz's own workspace routes (M6-06)", () => {
   });
 
   it("names the start route and its refusals", () => {
-    expect(workspaceStartPath("p/1")).toBe("/app/codespace/start/p%2F1");
+    expect(workspaceStartPath("p/1")).toBe("/app/api/projects/p%2F1/workspace/start");
     expect(WorkspaceStartRefusal.options).toEqual(["not_online", "seb_required", "not_accepted", "closed"]);
   });
 });

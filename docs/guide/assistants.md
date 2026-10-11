@@ -64,7 +64,7 @@ After **Allow**, you are back in the assistant, connected. It stays connected: i
 
 ## API tokens, for scripts and other clients
 
-Some clients cannot sign in by themselves: a script of your own, Claude Desktop configured by hand, the OpenAI API. They use a **personal API token** instead. Open **Settings › API tokens** and click **New token**. Give it a name you will recognise later and a lifetime: 30, 90 or 365 days, or never.
+Some clients cannot sign in by themselves: a script of your own, Claude Desktop configured by hand, the OpenAI API. They use a **personal API token** instead. Open **Settings › API tokens** and click **New token**. Give it a name you will recognise later and a lifetime: 30, 90 or 365 days, or never. An administrator's token always expires: the administration refuses one that never does.
 
 <figure markdown="span">
   ![The token creation dialog, showing the new token, the MCP server address and the Claude Code command](../assets/screenshots/settings-token-created-light.png#only-light)

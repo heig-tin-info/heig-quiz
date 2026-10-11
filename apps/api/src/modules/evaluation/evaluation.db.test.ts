@@ -639,10 +639,19 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
       method: "PATCH",
       url: base,
       headers: teacher.headers,
-      payload: { ipAllowlist: ["10.20."] },
+      payload: { ipAllowlist: ["10.20.0.0/16", "2001:db8::1"] },
     });
     expect(restricted.statusCode).toBe(200);
-    expect(restricted.json().evaluation.ipAllowlist).toEqual(["10.20."]);
+    expect(restricted.json().evaluation.ipAllowlist).toEqual(["10.20.0.0/16", "2001:db8::1"]);
+
+    // A text prefix is no range (audit L10): refused, never stored.
+    const prefix = await server.app.inject({
+      method: "PATCH",
+      url: base,
+      headers: teacher.headers,
+      payload: { ipAllowlist: ["10.20."] },
+    });
+    expect(prefix.statusCode).toBe(400);
 
     // A stale client's access code (ADR-053) is stripped: alone, it is
     // nothing to update, never a code stored.

@@ -537,13 +537,19 @@ export async function runChecks(
 // --- /healthz: the coarse words -------------------------------------------
 
 /**
- * The checks `/healthz` runs on every probe: memory, three small files and
+ * The checks `/healthz` runs, at most once per {@link HEALTHZ_CACHE_MS}: memory, three small files and
  * the runner's `/health`, no table. The container healthcheck gives the
  * route 5 s and the deploy gates on it, so they are bounded at 1 s all
  * together (they run side by side); a slow one reads as its worst word.
  */
 const COARSE: readonly SystemCheckKey[] = ["ticker", "disk", "backup", "offsite", "runner"];
 export const COARSE_TIMEOUT_MS = 1_000;
+/**
+ * How long one `/healthz` answer serves every caller (audit L21): the
+ * container healthcheck, the deploy gate and the external probe poll far
+ * less often, so none of them reads an older word than they would have.
+ */
+export const HEALTHZ_CACHE_MS = 5_000;
 
 export interface CoarseHealth {
   /** THE rule of the external probe's alarm (deployment.md §7): one place. */

@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { and, eq } from "drizzle-orm";
-import { defaultProjectGradingScale, CSRF_COOKIE } from "@quiz/contracts";
+import { defaultProjectGradingScale, CSRF_COOKIE, workspaceStartPath } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 import { CONFIG_KEY_HEADER } from "@quiz/seb";
 
@@ -500,22 +500,21 @@ describe("the seb session of a project (D21)", () => {
   });
 
   it("opens its project's workspace and no other's", async () => {
-    // No repository accepted in this world: the start route is reached, and refuses on the project page.
-    const own = await call("GET", `/app/codespace/start/${lab}`, seb);
-    expect([own.statusCode, own.headers.location]).toEqual([303, `/projects/${lab}?workspace=not_accepted`]);
-    expect((await call("GET", `/app/codespace/start/${otherLab}`, seb)).statusCode).toBe(404);
-    expect((await call("GET", `/app/codespace/start/${online}`, seb)).statusCode).toBe(404);
+    // No repository accepted in this world: the start route is reached, and refuses.
+    const start = (id: string, headers: Headers) => call("POST", workspaceStartPath(id), headers);
+    const own = await start(lab, seb);
+    expect([own.statusCode, own.json()]).toEqual([409, { error: "not_accepted" }]);
+    expect((await start(otherLab, seb)).statusCode).toBe(404);
+    expect((await start(online, seb)).statusCode).toBe(404);
     // From the portal, an online_seb project asks for Safe Exam Browser.
-    const portal = await call("GET", `/app/codespace/start/${lab}`, student.headers);
-    expect(portal.headers.location).toBe(`/projects/${lab}?workspace=seb_required`);
+    expect((await start(lab, student.headers)).json()).toEqual({ error: "seb_required" });
   });
 
   it("sits no evaluation, and an evaluation's seb session reaches no project", async () => {
     expect((await call("POST", `/app/api/evaluations/${exam.evaluationId}/attempt`, seb)).statusCode).toBe(401);
     const examSeb = await sebSession(other.evaluationId);
     expect((await call("GET", `/app/api/student/projects/${lab}`, examSeb)).statusCode).toBe(401);
-    const start = await call("GET", `/app/codespace/start/${lab}`, examSeb);
-    expect(start.headers.location).toMatch(/^\/app\/auth\/login\?/);
+    expect((await call("POST", workspaceStartPath(lab), examSeb)).statusCode).toBe(401);
   });
 
   it("is no session at all on every route that does not declare it", async () => {
