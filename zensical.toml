@@ -22,6 +22,7 @@ nav = [
   { "Guide" = [
     { "Overview" = "guide/index.md" },
     { "Getting started" = "guide/getting-started.md" },
+    { "The training course" = "guide/training.md" },
     { "Courses and classrooms" = "guide/classrooms.md" },
     { "Question pools" = "guide/pools.md" },
     { "Question types" = "guide/question-types.md" },
