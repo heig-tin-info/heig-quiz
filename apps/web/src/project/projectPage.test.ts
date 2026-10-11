@@ -7,6 +7,7 @@ import { AHEAD, makeCheckpoint, makeGroup, makeProject, makeRepo, PAST, row } fr
 import {
   checkpointStatus,
   commitTone,
+  deadlinePassed,
   filterEntries,
   projectTally,
   railSteps,
@@ -507,16 +508,21 @@ describe("the tiles' figures", () => {
       ["toVerify", 1],
       ["alerts", 2],
     ] as const) {
-      expect(filterEntries(entries, filter, false)).toHaveLength(n);
+      expect(filterEntries(entries, filter, project)).toHaveLength(n);
     }
   });
 
   it("keeps the staff's row under All only, and every row without a filter", () => {
     const entries = repoEntries(project);
-    expect(filterEntries(entries, null, false)).toHaveLength(10);
+    expect(filterEntries(entries, null, project)).toHaveLength(10);
     for (const filter of ["pending", "notAccepted", "noCommit", "ciFail", "toVerify", "alerts"] as const) {
-      expect(filterEntries(entries, filter, false).some((e) => e.kind === "student" && e.staff)).toBe(false);
+      expect(filterEntries(entries, filter, project).some((e) => e.kind === "student" && e.staff)).toBe(false);
     }
+  });
+
+  it("counts no commit nor CI failure on an archived project: no repository is live", () => {
+    const archived = makeProject({ rows, archivedAt: PAST });
+    expect(projectTally(archived).progress).toMatchObject({ pushed: 0, noCommit: 0, ciFail: 0 });
   });
 
   it("counts a group project per group, with a ring of two parts and an invitation that is nobody's", () => {
@@ -535,22 +541,21 @@ describe("the tiles' figures", () => {
     expect(tally.total).toBe(3);
     // One repository for the two members; the student in no group is said, not drawn.
     expect(tally.acceptance).toMatchObject({ ready: 1, pending: 0, none: 1, noGroup: 1 });
-    expect(filterEntries(repoEntries(grouped), "notAccepted", true).map((e) => e.label)).toEqual(["Groupe 2"]);
+    expect(filterEntries(repoEntries(grouped), "notAccepted", grouped).map((e) => e.label)).toEqual(["Groupe 2"]);
   });
 
-  it("counts the freeze, and the repositories with a later deadline of their own", () => {
+  it("counts the repositories with a later deadline of their own", () => {
     const later = new Date(Date.parse(AHEAD) + 86_400_000).toISOString();
     const earlier = new Date(Date.parse(AHEAD) - 86_400_000).toISOString();
     const tally = projectTally(
       makeProject({
         rows: [
-          row(1, makeRepo(1, { frozenAt: PAST, deadlineAt: later })),
+          row(1, makeRepo(1, { deadlineAt: later })),
           row(2, makeRepo(2, { deadlineAt: earlier })),
           row(3, makeRepo(3)),
         ],
       }),
     );
-    expect(tally.freeze).toEqual({ frozen: 1, live: 3 });
     expect(tally.own).toEqual({ n: 2, later: 1, lastLater: later });
   });
 });
@@ -596,10 +601,11 @@ describe("the lifecycle rail's steps", () => {
       deadlineAppliedAt: PAST,
       releasedAt: PAST,
       rows: [row(1, frozen)],
+      counts: { students: 1, accepted: 1, groups: 0, live: 1, frozen: 1, toVerify: 0, alerts: 0 },
     });
     const steps = railSteps(released, []);
     expect(steps.at(-1)).toEqual({ kind: "release", at: PAST });
-    expect(steps.find((s) => s.kind === "freeze")).toMatchObject({ done: true, frozen: 1, live: 1 });
+    expect(steps.find((s) => s.kind === "freeze")).toMatchObject({ done: true });
     expect(steps.find((s) => s.kind === "deadline")).toMatchObject({ done: true });
   });
 
@@ -613,5 +619,15 @@ describe("the lifecycle rail's steps", () => {
     const steps = railSteps(reopened, []);
     expect(steps.find((s) => s.kind === "deadline")).toMatchObject({ done: false });
     expect(steps.find((s) => s.kind === "freeze")).toMatchObject({ done: false, later: 1, lastLater: later });
+  });
+});
+
+describe("deadlinePassed", () => {
+  it("is the server's word: locked, or the deadline applied; never the date", () => {
+    expect(deadlinePassed(makeProject())).toBe(false);
+    expect(deadlinePassed(makeProject({ state: "locked" }))).toBe(true);
+    expect(deadlinePassed(makeProject({ deadlineAppliedAt: PAST }))).toBe(true);
+    // A date in the past on an open project is not "passed" until the server says so.
+    expect(deadlinePassed(makeProject({ deadlineAt: PAST }))).toBe(false);
   });
 });

@@ -1886,10 +1886,11 @@ repositories, what is live of the workspace, and the folded Settings.
   repository is counted by no figure and listed under All only. Alerts are the
   one red figure of the page.
 - **Lifecycle rail** (`ProjectRail`): Published → checkpoints → Deadline →
-  Freeze (`+ grace`, frozen k / n, later own deadlines) → Release, horizontal
+  Freeze (`+ grace`, later own deadlines) → Release, horizontal
   from `md`, vertical on a phone. Done steps have a filled marker. A void
   checkpoint follows the Freeze, greyed, "never fires", still deletable. Graded
-  `none`: no checkpoints and no Release. "Add a checkpoint" only while published.
+  `none`: no checkpoints and no Release. "Add a checkpoint" is offered until the project is locked (a draft takes
+  them too, F-PROJ-01). Archived: that, a checkpoint's deletion and Sync are withheld.
 - **Table**: no Deadline column — everyone shares it; a repository with its own
   gets an amber "own deadline <date>" badge in State. The commit cell is
   `sha · when · n commits`. "0 commits" is `warning` text; it turns `danger`

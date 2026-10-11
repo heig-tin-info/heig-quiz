@@ -10,7 +10,6 @@ import {
   Button,
   Card,
   cx,
-  isoDateParts,
   isoDateTime,
   QueryError,
   RelativeTime,
@@ -62,32 +61,28 @@ function Step({
   );
 }
 
-const date = (iso: string): string => {
-  const { date: d, time } = isoDateParts(iso);
-  return `${d} ${time}`;
-};
-
 /**
  * The project's lifecycle as a rail (F-PROJ-09, F-PROJ-11): Published → each
  * review checkpoint → Deadline → Freeze → Release, left to right (top to
  * bottom on a phone). A checkpoint the deadline left void sits after the
  * freeze, greyed, "never fires", still deletable; a project graded `none`
  * has no checkpoints and no Release step. "Add a checkpoint" is offered
- * while the project is published and not archived.
+ * until the project is locked, archived or not.
  */
 export function ProjectRail({ project }: { project: ProjectDetail }) {
   const t = useT();
   const { list, onDelete, openAdd, dialog } = useCheckpoints(project);
   const auto = project.gradingMode === "auto";
   const archived = project.archivedAt !== null;
-  const canAdd = auto && project.state === "published" && !archived;
+  // A draft takes checkpoints too (F-PROJ-01); a locked project's deadline is behind them.
+  const canAdd = auto && project.state !== "locked" && !archived;
 
   const stepOf = (step: RailStep, key: string): ReactNode => {
     switch (step.kind) {
       case "published":
         return (
           <Step key={key} title={t("project.rail.published")} done={step.done}>
-            <p className="tabular-nums">{date(step.at)}</p>
+            <p className="tabular-nums">{isoDateTime(step.at)}</p>
           </Step>
         );
       case "checkpoint": {
@@ -99,7 +94,7 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
             done={status === "dispatched"}
             muted={status === "void"}
             action={
-              status !== "dispatched" ? (
+              status !== "dispatched" && !archived ? (
                 <Actions
                   size="sm"
                   items={[
@@ -143,7 +138,6 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
         return (
           <Step key={key} title={t("project.rail.freeze")} done={step.done}>
             <p>{t("project.rail.grace", { n: step.graceMinutes })}</p>
-            <p className="tabular-nums">{t("project.rail.frozen", { k: step.frozen, n: step.live })}</p>
             {step.later > 0 && step.lastLater ? (
               <p>{t("project.rail.later", { n: step.later, date: isoDateTime(step.lastLater) })}</p>
             ) : null}
@@ -164,7 +158,6 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
       <SectionHeading
         icon={Flag}
         title={<span id="project-rail">{t("project.rail")}</span>}
-        count={auto ? list.data?.length : undefined}
         description={auto ? t("project.checkpoints.desc") : undefined}
         actions={
           canAdd ? (

@@ -1,7 +1,7 @@
 import type { PollOutcome } from "@quiz/contracts";
 
 import { useT, type TFunction as T } from "../i18n";
-import { RingChart, Tip } from "../ui";
+import { RingChart, ringFill, Tip } from "../ui";
 
 /**
  * How a question fared over its last runs, beside its row in the launcher's
@@ -41,12 +41,8 @@ export function outcomeText(t: T, outcome: PollOutcome): string | null {
   return `${parts.join(" · ")} (${runsLabel(t, outcome.runs)})`;
 }
 
-/** The swatch of the legend, the same token as the segment. */
-export const OUTCOME_FILLS = {
-  correct: "bg-success",
-  incorrect: "bg-warning",
-  abstention: "bg-fg-faint/50",
-} as const;
+/** The legend's words, on the ring's tones: one tone-to-class table, `ringFill`. */
+const OUTCOME_TONE = { correct: "success", incorrect: "warning", abstention: "faint" } as const;
 
 export function OutcomeBadge({ outcome }: { outcome: PollOutcome }) {
   const t = useT();
@@ -78,9 +74,9 @@ export function OutcomeBadge({ outcome }: { outcome: PollOutcome }) {
       sentence={text}
       hole={outcome.correct.percent}
       parts={[
-        { value: outcome.correct.rate, tone: "success", label: "" },
-        { value: outcome.incorrect.rate, tone: "warning", label: "" },
-        { value: outcome.abstention?.rate ?? 0, tone: "faint", label: "" },
+        { value: outcome.correct.rate, tone: "success", },
+        { value: outcome.incorrect.rate, tone: "warning" },
+        { value: outcome.abstention?.rate ?? 0, tone: "faint" },
       ]}
     />
   );
@@ -99,7 +95,7 @@ export function OutcomeLegend({ abstention }: { abstention: boolean }) {
       <span>{t("poll.outcome.legend")}</span>
       {items.map(([part, word]) => (
         <span key={part} className="inline-flex items-center gap-1.5">
-          <span className={`size-2 rounded-full ${OUTCOME_FILLS[part]}`} aria-hidden />
+          <span className={`size-2 rounded-full ${ringFill(OUTCOME_TONE[part])}`} aria-hidden />
           {word}
         </span>
       ))}

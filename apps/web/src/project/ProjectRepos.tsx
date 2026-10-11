@@ -218,7 +218,7 @@ export function ProjectRepos({
 }) {
   const t = useT();
   const entries = repoEntries(project);
-  const shown = filterEntries(entries, filter, project.groupMode);
+  const shown = filterEntries(entries, filter, project);
   const graded = project.gradingMode === "auto";
   const { sorted, sort, toggle } = useSortableTable<RepoEntry, SortKey>(
     shown,

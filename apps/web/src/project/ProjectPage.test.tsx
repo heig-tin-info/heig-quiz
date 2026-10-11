@@ -1161,6 +1161,7 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
     expect(within(grid).getByText("Deadline")).toBeInTheDocument();
     expect(within(grid).getByText("Lock")).toBeInTheDocument();
     expect(within(grid).getByText("30 min")).toBeInTheDocument();
+    expect(within(grid).getByText("0 / 1")).toBeInTheDocument();
     expect(within(grid).getByText("Progress")).toBeInTheDocument();
     expect(within(grid).getByText("Source")).toBeInTheDocument();
   });
@@ -1193,16 +1194,14 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
     expect(bodyRows(table)).toHaveLength(4);
   });
 
-  it("draws zero figures muted and disabled, and the alerts in the one red", async () => {
+  it("draws a zero figure disabled, and a figure with rows enabled", async () => {
     routes(makeProject({ rows: [row(1, makeRepo(1, { flags: { ...makeRepo(1).flags, multiple: true } }))] }));
     renderPage();
     await repoTable();
     const alerts = within(tiles()).getByRole("button", { name: /alerts/ });
     expect(alerts).toBeEnabled();
-    expect(alerts.className).toMatch(/text-danger/);
     const ciFail = within(tiles()).getByRole("button", { name: /CI failing/ });
     expect(ciFail).toBeDisabled();
-    expect(ciFail.className).toMatch(/text-fg-faint/);
   });
 
   it("has no Deadline column; a repository with its own deadline says so in its State cell", async () => {
@@ -1230,11 +1229,9 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
     renderPage();
     const rows = bodyRows(await repoTable());
     const count = (i: number) => within(rows[i]!).getByText(/commits?$/);
+    // The tone matrix is `commitTone`'s unit tests'; here only that the tone reaches the cell.
     expect(count(0).className).toMatch(/text-warning/);
     expect(count(1).className).toMatch(/text-danger/);
-    // A zero with a last commit stays amber, even past the deadline.
-    expect(count(2).className).toMatch(/text-warning/);
-    expect(count(3).className).toMatch(/text-fg-faint/);
     // One cell: sha, when, count.
     expect(rows[3]!.textContent).toMatch(/9a3f1c7.*11 commits/);
   });
@@ -1291,9 +1288,32 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
     expect(steps[0]).toMatch(/^Published/);
     expect(steps[1]).toMatch(/^soon/);
     expect(steps[2]).toMatch(/^Deadline/);
-    expect(steps[3]).toMatch(/^Freeze.*30 min grace.*frozen 0 \/ 1/);
+    expect(steps[3]).toMatch(/^Freeze.*30 min grace/);
     expect(steps[4]).toMatch(/^Release.*to come/);
     expect(within(rail).getByRole("button", { name: "Add a checkpoint" })).toBeInTheDocument();
+  });
+
+  it("offers a new checkpoint on a draft (F-PROJ-01), not on a locked or an archived project", async () => {
+    routes(makeDraft());
+    renderPage();
+    const rail = await screen.findByRole("region", { name: "Lifecycle" });
+    expect(await within(rail).findByRole("button", { name: "Add a checkpoint" })).toBeInTheDocument();
+  });
+
+  it("offers neither a new checkpoint, a deletion nor Sync on an archived project", async () => {
+    routes(
+      makeProject({
+        archivedAt: PAST,
+        sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null },
+      }),
+      { [`GET ${BASE}/checkpoints`]: ok([makeCheckpoint(1, { name: "soon" })]) },
+    );
+    renderPage();
+    const rail = await screen.findByRole("region", { name: "Lifecycle" });
+    expect(await within(rail).findByText("soon")).toBeInTheDocument();
+    expect(within(rail).queryByRole("button", { name: "Add a checkpoint" })).toBeNull();
+    expect(within(rail).queryByRole("button", { name: "Delete checkpoint soon" })).toBeNull();
+    expect(within(tiles()).queryByRole("button", { name: "Sync" })).toBeNull();
   });
 
   it("offers no new checkpoint on a locked project, and greys a void one that can still be deleted", async () => {

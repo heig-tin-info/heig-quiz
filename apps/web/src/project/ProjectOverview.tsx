@@ -7,7 +7,7 @@ import type { ProjectDetail, ProjectPatch, ProjectSummary } from "@quiz/contract
 import { refusedWith } from "../api";
 import { useConfirm } from "../confirm";
 import { DateField } from "../evaluation/TimingStep";
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import {
   Badge,
   Button,
@@ -24,6 +24,7 @@ import { foreignZone } from "./newProject";
 import { RepoLink } from "./parts";
 import {
   deadlineDesc,
+  deadlinePassed,
   isReopen,
   offersSync,
   projectTally,
@@ -89,13 +90,16 @@ function SubFigure({
   );
 }
 
-/** The acceptance: the ring's parts in their fixed order, the words of each in the sentence. */
-function acceptanceParts(tally: ProjectTally, groupMode: boolean, t: ReturnType<typeof useT>): RingPart[] {
+/**
+ * The acceptance: the ring's parts in their fixed order, and the words of each
+ * (the filters' own words for pending and not accepted) for its sentence.
+ */
+function acceptanceParts(tally: ProjectTally, groupMode: boolean, t: TFunction): { part: RingPart; word: string }[] {
   const { ready, pending, none } = tally.acceptance;
   return [
-    { value: ready, tone: "success", label: t("project.accept.ready") },
-    ...(groupMode ? [] : [{ value: pending, tone: "warning", label: t("project.accept.pending") } as const]),
-    { value: none, tone: "faint", label: t("project.accept.none") },
+    { part: { value: ready, tone: "success" }, word: t("project.accept.ready") },
+    ...(groupMode ? [] : [{ part: { value: pending, tone: "warning" }, word: t("project.filter.pending") } as const]),
+    { part: { value: none, tone: "faint" }, word: t("project.filter.notAccepted") },
   ];
 }
 
@@ -111,7 +115,7 @@ function AcceptanceTile({
   onFilter: (filter: RepoFilter | null) => void;
 }) {
   const t = useT();
-  const parts = acceptanceParts(tally, project.groupMode, t);
+  const shares = acceptanceParts(tally, project.groupMode, t);
   const { ready, provisionErrors, noGroup, leftRoster } = tally.acceptance;
   const words = [
     provisionErrors > 0 ? t("project.accept.error", { n: provisionErrors }) : null,
@@ -124,13 +128,16 @@ function AcceptanceTile({
       value={`${ready} / ${tally.total}`}
       visual={
         <RingChart
-          parts={parts}
+          parts={shares.map((s) => s.part)}
           total={tally.total}
           size={56}
           thickness={7}
           holeClassName="text-xs"
           hole={tally.total > 0 ? Math.round((ready / tally.total) * 100) : 0}
-          sentence={`${t("project.tile.accepted")}: ${parts.map((p) => `${p.value} ${p.label}`).join(" · ")}`}
+          sentence={t("project.accept.sentence", {
+            label: t("project.tile.accepted"),
+            parts: shares.map((s) => `${s.part.value} ${s.word}`).join(" · "),
+          })}
         />
       }
     >
@@ -165,7 +172,6 @@ function DeadlineTile({
   const t = useT();
   const confirm = useConfirm();
   const busy = patch.isPending || project.archivedAt !== null;
-  const passed = project.state === "locked" || project.deadlineAppliedAt !== null;
   const deadlineRefused =
     patch.variables?.deadlineAt !== undefined && refusedWith(patch.error, "deadline_past")
       ? t("project.refusal.deadlinePast")
@@ -195,19 +201,19 @@ function DeadlineTile({
     );
   };
 
+  const rows: [string, ReactNode][] = [
+    [t("project.grace"), `${project.graceMinutes} ${t("project.grace.unit")}`],
+    [t("project.tile.frozen"), `${project.counts.frozen} / ${project.counts.live}`],
+  ];
+  if (tally.own.n > 0) rows.push([t("project.tile.own"), String(tally.own.n)]);
+
   return (
     <Stat label={t("project.deadline")} value={<span className="text-[17px]">{isoDateTime(project.deadlineAt)}</span>}>
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        {passed ? t("project.deadline.passed") : <RelativeTime iso={project.deadlineAt} />}
+        {deadlinePassed(project) ? t("project.deadline.passed") : <RelativeTime iso={project.deadlineAt} />}
         <Badge tone="zinc">{t(`project.deadlineStrategy.${project.deadlineStrategy}`)}</Badge>
       </p>
-      <Facts
-        rows={[
-          [t("project.grace"), `${project.graceMinutes} ${t("project.grace.unit")}`],
-          [t("project.tile.frozen"), `${tally.freeze.frozen} / ${tally.freeze.live}`],
-          ...(tally.own.n > 0 ? ([[t("project.tile.own"), String(tally.own.n)]] as [string, ReactNode][]) : []),
-        ]}
-      />
+      <Facts rows={rows} />
       <div className="flex flex-col gap-1 pt-1">
         <DateField
           key={project.deadlineAt}
@@ -308,7 +314,7 @@ function SourceTile({
         </p>
       ) : null}
       {/* The header's secondary Sync moved here; as the primary action it stays in the header. */}
-      {offersSync(project) ? (
+      {offersSync(project) && project.archivedAt === null ? (
         <Button variant="secondary" size="sm" data-coach="project.sync" onClick={onSync} loading={syncing || sync.inProgress}>
           <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
         </Button>

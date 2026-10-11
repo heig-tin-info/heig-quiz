@@ -497,14 +497,10 @@ export function Stat({
         {label}
         {aside ? <span className="ml-auto pl-2 tabular-nums text-fg-faint">{aside}</span> : null}
       </span>
-      {visual ? (
-        <span className="mt-1.5 flex items-center justify-between gap-3">
-          <span className="block text-[22px] font-bold leading-none tabular-nums tracking-tight">{value}</span>
-          {visual}
-        </span>
-      ) : (
-        <span className="mt-1 block text-[22px] font-bold leading-none tabular-nums tracking-tight">{value}</span>
-      )}
+      <span className={cx("block", visual ? "mt-1.5 flex items-center justify-between gap-3" : "mt-1")}>
+        <span className="block text-[22px] font-bold leading-none tabular-nums tracking-tight">{value}</span>
+        {visual}
+      </span>
       {hint ? <span className="mt-1.5 block text-xs text-fg-faint">{hint}</span> : null}
     </>
   );

@@ -24,8 +24,6 @@ export type RingTone = "success" | "warning" | "danger" | "faint";
 export interface RingPart {
   value: number;
   tone: RingTone;
-  /** The word of the part, for a legend drawn beside the ring (see `RingLegend`). */
-  label: string;
 }
 
 const STROKE: Record<RingTone, string> = {
@@ -83,14 +81,14 @@ export function RingChart({
         style={{ width: size, height: size }}
       >
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
-          {drawn.map((part) => {
+          {drawn.map((part, i) => {
             const length = (part.value / whole) * circumference;
             const dash = Math.max(length - gap, 0.75);
             const offset = -start;
             start += length;
             return (
               <circle
-                key={part.tone}
+                key={i}
                 cx={size / 2}
                 cy={size / 2}
                 r={radius}
@@ -113,19 +111,5 @@ export function RingChart({
   );
 }
 
-/** The swatch of a legend, the same token as the segment. */
+/** The swatch of a legend: the same token as the segment. */
 export const ringFill = (tone: RingTone): string => FILL[tone];
-
-/** One line naming the parts' colours beside a ring: swatch, count and word, never the swatch alone. */
-export function RingLegend({ parts, className }: { parts: RingPart[]; className?: string }) {
-  return (
-    <ul className={cx("flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted", className)}>
-      {parts.map((part) => (
-        <li key={part.tone} className="inline-flex items-center gap-1.5">
-          <span className={cx("size-2 rounded-full", FILL[part.tone])} aria-hidden />
-          <span className="tabular-nums">{part.value}</span> {part.label}
-        </li>
-      ))}
-    </ul>
-  );
-}

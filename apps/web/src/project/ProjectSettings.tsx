@@ -58,7 +58,7 @@ export function ProjectSettings({
         protectedCount > 0 ? (
           <Badge tone="zinc">
             <span aria-hidden>{protectedCount}</span>
-            <span className="sr-only">{t("project.settings.count", { n: protectedCount })}</span>
+            <span className="sr-only">{protectedCount === 1 ? t("project.settings.count.one") : t("project.settings.count", { n: protectedCount })}</span>
           </Badge>
         ) : null
       }

@@ -273,6 +273,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   );
 
   const settings = <ProjectSettings project={project} patch={patch} />;
+  const settingsFirst = project.state === "draft";
 
   return (
     <div className="space-y-8">
@@ -392,7 +393,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
 
       {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
       {/* A draft's page is still the settings' place: open on top, until its own redesign. */}
-      {project.state === "draft" ? settings : null}
+      {settingsFirst ? settings : null}
       <ProjectOverview
         project={project}
         patch={patch}
@@ -404,7 +405,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       <ProjectRail project={project} />
       <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
       <ProjectWorkspace projectId={project.id} archived={archived} />
-      {project.state === "draft" ? null : settings}
+      {settingsFirst ? null : settings}
 
       {openRepo ? <RepoSheet project={project} repoId={openRepo} onClose={() => setOpenRepo(null)} /> : null}
     </div>

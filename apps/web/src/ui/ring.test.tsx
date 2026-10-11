@@ -2,13 +2,13 @@ import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { renderWithProviders } from "../test/render";
-import { RingChart, RingLegend, type RingPart } from "./ring";
+import { RingChart, ringFill, type RingPart } from "./ring";
 
 const parts: RingPart[] = [
-  { value: 26, tone: "success", label: "ready" },
-  { value: 3, tone: "warning", label: "pending" },
-  { value: 0, tone: "danger", label: "failed" },
-  { value: 1, tone: "faint", label: "none" },
+  { value: 26, tone: "success" },
+  { value: 3, tone: "warning" },
+  { value: 0, tone: "danger" },
+  { value: 1, tone: "faint" },
 ];
 const CIRCUMFERENCE = 2 * Math.PI * 15.5;
 
@@ -34,24 +34,23 @@ describe("RingChart", () => {
   });
 
   it("draws a single part with no gap, and nothing at all for an empty ring", () => {
-    const one = renderWithProviders(<RingChart parts={[{ value: 5, tone: "success", label: "a" }]} sentence="s" />);
+    const one = renderWithProviders(<RingChart parts={[{ value: 5, tone: "success" }]} sentence="s" />);
     const dash = one.container.querySelector("circle")!.getAttribute("stroke-dasharray")!.split(" ").map(Number);
     expect(dash[0]).toBeCloseTo(CIRCUMFERENCE, 3);
-    const none = renderWithProviders(<RingChart parts={[{ value: 0, tone: "success", label: "a" }]} sentence="s" />);
+    const none = renderWithProviders(<RingChart parts={[{ value: 0, tone: "success" }]} sentence="s" />);
     expect(none.container.querySelectorAll("circle")).toHaveLength(0);
   });
 
   it("leaves the rest of the ring empty when the total is larger than the parts", () => {
-    const { container } = renderWithProviders(<RingChart parts={[{ value: 1, tone: "success", label: "a" }]} total={4} sentence="s" />);
+    const { container } = renderWithProviders(<RingChart parts={[{ value: 1, tone: "success" }]} total={4} sentence="s" />);
     const [dash] = container.querySelector("circle")!.getAttribute("stroke-dasharray")!.split(" ").map(Number);
     expect(dash!).toBeCloseTo(CIRCUMFERENCE / 4, 3);
   });
 });
 
-describe("RingLegend", () => {
-  it("names every part with its count, never the swatch alone", () => {
-    renderWithProviders(<RingLegend parts={parts} />);
-    expect(screen.getByText(/ready/)).toHaveTextContent("26 ready");
-    expect(screen.getAllByRole("listitem")).toHaveLength(4);
+describe("ringFill", () => {
+  it("gives each tone the same token as its segment", () => {
+    expect(ringFill("success")).toBe("bg-success");
+    expect(ringFill("faint")).toBe("bg-fg-faint/50");
   });
 });
