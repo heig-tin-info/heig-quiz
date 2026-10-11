@@ -92,12 +92,10 @@ const EnvSchema = z.object({
    */
   RUNNER_USERNS_AUTO: z.enum(["auto", "true", "false"]).default("auto"),
   /**
-   * gVisor (N-SEC-06, ADR-016). `runsc` passes `--runtime runsc` to every
-   * container and is FAIL-CLOSED: the service refuses to start unless a
-   * hardened container runs under it (`proveRuntime`). `auto` (default) uses
-   * runsc only when it is already the engine's default runtime, and a
-   * production runner without it warns at startup and on every `/health`.
-   * `none` never passes the flag.
+   * gVisor (N-SEC-06; ADR-016, 2026-10-11). `runsc`: fail-closed through
+   * `proveRuntime`. `auto`: record the engine's runtime, warn at startup in
+   * production without gVisor. `none`: the explicit derogation, `auto`
+   * without that warning.
    */
   RUNNER_RUNTIME: z.enum(["auto", "none", "runsc"]).default("auto"),
   /**

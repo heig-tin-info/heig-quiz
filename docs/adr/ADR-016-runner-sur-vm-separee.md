@@ -105,9 +105,9 @@ never by a deploy.
 state, the bind address.** Scope: point 2 (what the sandbox containers run
 under) and the runner's own startup; invariants 10–14 are unchanged.
 (a) *gVisor is the Podman service's runtime, never a flag.* A `--remote`
-client cannot choose the runtime of a container (`podman run` has no
-`--runtime`; the global one is ignored remotely), so the `--runtime runsc` the
-runner used to append would have failed every run. gVisor is the default
+client cannot choose the runtime of a container: it rejects `--runtime` as an
+unknown flag, so the `--runtime runsc` the runner used to append would have
+failed every run. gVisor is the default
 runtime of a Podman service of the runner's own,
 `quiz-runner-podman.socket` (`/run/quiz-runner-podman/podman.sock`), whose
 `CONTAINERS_CONF_OVERRIDE` names a wrapper running `runsc --oci-seccomp` —
@@ -119,8 +119,10 @@ runner refuses to start unless the engine names runsc, a container created
 with the argv of a real run executes a command through `podman exec`, and
 that command sees another kernel release than the host's; the quadlet
 restarts it, `/healthz` reports it down, the ADR-055 alert fires. With `auto`
-(the default) a production runner without gVisor warns at startup and on
-every `/health`. The owner installs gVisor and flips the variable by hand;
+(the default) a production runner without gVisor warns once, at startup —
+not on every `/health`, which the API polls on each `/healthz`; `none` is
+the explicit derogation, without that warning. Fail-closed is opt-in by the
+owner's decision: the owner installs gVisor and flips the variable by hand;
 no deploy does (`apps/runner/README.md`, Switching production to gVisor).
 (c) *The proof before production*: the runner integration workflow has a
 `runsc` leg running the whole suite through that socket, non-blocking until

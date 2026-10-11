@@ -102,30 +102,6 @@ describe("GET /health", () => {
     expect(body).not.toHaveProperty("runtime");
     expect(RunnerHealth.safeParse(body).success).toBe(true);
   });
-
-  it("warns on every call when a production runner runs without gVisor", async () => {
-    const server = await start(createFakeEngine(), { NODE_ENV: "production", RUNNER_TOKEN: "t" });
-    const ok = { authorization: "Bearer t" };
-    for (let i = 0; i < 2; i++) {
-      const body = (await server.inject({ url: "/health", headers: ok })).json() as Record<string, unknown>;
-      expect(body.warning).toMatch(/gVisor is NOT in use: student code runs under crun/);
-      // A warning, not a failure: the runner still serves (PO, audit M6).
-      expect(body.ok).toBe(true);
-    }
-  });
-
-  it("does not warn under gVisor, nor outside production", async () => {
-    const engine = createFakeEngine();
-    const gvisor = { ...engine, capabilities: { ...engine.capabilities, runtime: "runsc" } };
-    const prod = await start(gvisor, { NODE_ENV: "production", RUNNER_TOKEN: "t" });
-    const body = (await prod.inject({ url: "/health", headers: { authorization: "Bearer t" } })).json();
-    expect(body).not.toHaveProperty("warning");
-    expect(body.runtime).toBe("runsc");
-    await app?.close();
-
-    const dev = (await (await start(createFakeEngine())).inject({ url: "/health" })).json();
-    expect(dev).not.toHaveProperty("warning");
-  });
 });
 
 describe("POST /run", () => {

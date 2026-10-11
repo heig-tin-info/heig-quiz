@@ -1,10 +1,6 @@
-# The rootful Podman service behind quiz-runner-podman.socket: the system's
-# podman.service, with one difference — CONTAINERS_CONF_OVERRIDE makes runsc
-# (gVisor, with --oci-seccomp) its default runtime (containers.conf beside
-# this file). Same storage, same images, same /etc/subuid as the system
-# service; only the runtime of the containers it creates differs. Installed by
-# apps/runner/deploy/install-gvisor.sh as
-# /etc/systemd/system/quiz-runner-podman.service.
+# The system's podman.service, with runsc as its default runtime
+# (containers.conf beside this file). Installed by
+# apps/runner/deploy/install-gvisor.sh; why and how: apps/runner/README.md, gVisor.
 [Unit]
 Description=Podman API service of the quiz runner (gVisor)
 Documentation=https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md

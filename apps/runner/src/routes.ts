@@ -35,11 +35,6 @@ export interface RouteDeps {
   config: RunnerConfig;
   engine: Engine;
   queue: RunQueue;
-  /**
-   * `gvisorWarning`'s line, repeated on every `GET /health` so that a
-   * production runner without gVisor never goes quiet about it.
-   */
-  warning?: string | null;
 }
 
 /** The image list barely changes; asking Podman on every /health does not pay. */
@@ -78,8 +73,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     return cache;
   }
 
-  app.get("/health", async (request): Promise<RunnerHealth & Record<string, unknown>> => {
-    if (deps.warning) request.log.warn(deps.warning);
+  app.get("/health", async (): Promise<RunnerHealth & Record<string, unknown>> => {
     const found = await languages();
     const stats = queue.stats();
     const reason =
@@ -96,7 +90,6 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       ...(runtime === null ? {} : { runtime }),
       // Beyond the contract, for the admin health panel and for a human
       // curling the service. `RunnerHealth.safeParse` drops them silently.
-      ...(deps.warning ? { warning: deps.warning } : {}),
       running: stats.running,
       concurrency: stats.concurrency,
       queueMax: stats.queueMax,

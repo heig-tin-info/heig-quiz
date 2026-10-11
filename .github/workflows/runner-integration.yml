@@ -34,28 +34,28 @@ concurrency:
 
 jobs:
   podman:
-    # Two legs, the same suite. `default`: the system socket, whose runtime is
-    # crun — what production runs today. `runsc`: the runner's own gVisor
-    # socket, set up by apps/runner/deploy/install-gvisor.sh — the script the
-    # operator runs on the engine VM — with RUNNER_RUNTIME=runsc, so the
-    # fail-closed startup gate, the seccomp profile under `--oci-seccomp`,
-    # `--userns=auto`, the cgroup limits, `podman exec` and the OOM verdict
-    # are proven under gVisor BEFORE production is switched to it (ADR-016,
-    # amendment of 2026-10-11). The runsc leg does not fail the workflow until
-    # it has been green on GitHub once; then `continue-on-error` goes.
+    # Two legs, the same suite (apps/runner/README.md, On CI): `default` on
+    # the system socket (crun), as production today; `runsc` on the runner's
+    # own gVisor socket (deploy/install-gvisor.sh), before production switches.
     name: podman (${{ matrix.runtime }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Advisory until the runsc leg has been green once: #736.
     continue-on-error: ${{ matrix.runtime == 'runsc' }}
     strategy:
       fail-fast: false
       matrix:
-        runtime: [default, runsc]
+        include:
+          - runtime: default
+            socket: /run/podman/podman.sock
+            runner_runtime: auto
+          - runtime: runsc
+            socket: /run/quiz-runner-podman/podman.sock
+            runner_runtime: runsc
     env:
       PODMAN_SOCKET: /run/podman/podman.sock
       PODMAN_REMOTE_URL: unix:///run/podman/podman.sock
-      # `auto` on the default leg, exactly as in production today.
-      RUNNER_RUNTIME: ${{ matrix.runtime == 'runsc' && 'runsc' || 'auto' }}
+      RUNNER_RUNTIME: ${{ matrix.runner_runtime }}
     defaults:
       run:
         shell: bash
@@ -111,7 +111,7 @@ jobs:
       # hardened container runs under gVisor (`proveRuntime`).
       - name: Integration suite
         env:
-          PODMAN_SOCKET: ${{ matrix.runtime == 'runsc' && '/run/quiz-runner-podman/podman.sock' || '/run/podman/podman.sock' }}
+          PODMAN_SOCKET: ${{ matrix.socket }}
         run: RUNNER_INTEGRATION_STRICT=1 pnpm --filter @quiz/runner test:integration
 
       # What the engine said, when something went wrong: the runtime's own

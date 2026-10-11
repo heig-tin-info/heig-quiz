@@ -107,13 +107,10 @@ podman --remote --url unix://<socket> run -d
   quiz-runner-<lang>:latest sleep <ttl>
 ```
 
-There is no `--runtime` in that list, and there cannot be: `podman run` has
-no such flag, and the global `--runtime` is ignored by a `--remote` client
-(only `--url`, `--identity`, `--log-level` and `--connection` are). Until the
-security audit of 2026-10 (M6) the list carried `[--runtime runsc]`, which
-would have failed every run with `unknown flag: --runtime`. gVisor is the
-runtime of the Podman SERVICE the runner talks to, or nothing — see
-[gVisor](#gvisor) below.
+There is no `--runtime` in that list: a `--remote` client rejects it
+(`unknown flag: --runtime`; remotely only `--url`, `--identity`,
+`--log-level` and `--connection` are honoured). gVisor is the runtime of the
+Podman service the runner talks to — see [gVisor](#gvisor).
 
 `--cgroup-parent` is an addition, never a relaxation: it places the
 container in a systemd slice (its CPU and IO weight, its protected memory)
@@ -153,44 +150,33 @@ host whose Podman service is not running, not the normal path.
 
 ### gVisor
 
-N-SEC-06 requires gVisor (`runsc`): the student's program then talks to
-gVisor's own kernel, not the host's. Since a `--remote` client cannot choose
-the runtime of a container, gVisor has to be the **default runtime of the
-Podman service** the runner's `PODMAN_SOCKET` reaches. On the engine VM that
-cannot be the system socket, which also serves the workspace portal
-(`apps/codespace`), so the runner gets a service of its own:
-`deploy/install-gvisor.sh` installs
+N-SEC-06 requires gVisor (`runsc`); why it is a Podman service and not a
+flag is ADR-016 (amendment of 2026-10-11). `deploy/install-gvisor.sh`
+(gVisor release **20261005**, `runsc=20261005.0`, signing key checked by
+fingerprint) installs:
 
-- the `runsc` package from gVisor's apt repository;
-- `/usr/local/libexec/quiz-runner/runsc`, a wrapper that runs runsc with
-  **`--oci-seccomp`**: without that flag runsc ignores the OCI spec's seccomp
-  profile, and `--security-opt seccomp=…` (invariant 12) would be configured,
-  not applied. With it, gVisor applies the profile inside the sandbox;
+- the `runsc` package, from gVisor's dated apt channel;
+- `/usr/local/libexec/quiz-runner/runsc`, which runs runsc with
+  **`--oci-seccomp`** — without it runsc ignores the OCI seccomp profile;
 - `quiz-runner-podman.socket` (`/run/quiz-runner-podman/podman.sock`) and its
-  service, the system's `podman system service` with
-  `CONTAINERS_CONF_OVERRIDE=/etc/quiz-runner/containers.conf`, whose
-  `[engine] runtime = "runsc"` names the wrapper (`deploy/gvisor/`). Same
-  storage, same images, same `/etc/subuid` as the system service.
+  service: the system's `podman system service` with
+  `CONTAINERS_CONF_OVERRIDE=/etc/quiz-runner/containers.conf`, whose default
+  runtime is that wrapper (`deploy/gvisor/`). Same storage, images and
+  `/etc/subuid` as the system service, which keeps crun for the workspace
+  portal.
 
-What the runner does with it is `RUNNER_RUNTIME` (`src/probe.ts`):
+`RUNNER_RUNTIME` (`src/probe.ts`) decides what the runner makes of it; every
+value reports the engine's runtime as `runtime` in `GET /health`, an optional
+field of `RunnerHealth` that both sides tolerate absent:
 
-| `RUNNER_RUNTIME` | At startup | `GET /health` |
-| --- | --- | --- |
-| `runsc` | **fail-closed**: refuses to start unless the engine names `runsc` as its runtime AND a container created with the argv of a real run (`containerArgs`) runs `uname -r` through `podman exec` AND that answer is not the host's kernel release (`proveRuntime`) | `runtime: "runsc"` |
-| `auto` (default), `none` | records the engine's runtime; in production without gVisor, logs a warning | `runtime: "<engine's runtime>"`; in production without gVisor, a `warning` line and a log line on every call |
+| `RUNNER_RUNTIME` | At startup |
+| --- | --- |
+| `runsc` | **fail-closed** (`proveRuntime`): refuses to start unless the engine names runsc, a container built from `containerArgs` runs `uname -r` through `podman exec`, and that release is not the host's. One `fatal` line; the quadlet restarts it, `/healthz` reports it down, the ADR-055 alert fires |
+| `auto` (default) | records the engine's runtime; in production without gVisor, one warning |
+| `none` | the explicit derogation: as `auto`, without the warning |
 
-`runtime` is an optional field of `RunnerHealth` (`packages/core`): the API
-and the runner deploy separately, and either side tolerates its absence. A
-refusal to start is one `fatal` log line naming the cause; the quadlet
-restarts the service, `/healthz` reports the runner down and the status alert
-of ADR-055 fires — a runner that cannot do gVisor never says `up` while every
-run fails. `none` is kept for configurations that set it and now means the
-same as `auto`: the engine decides.
-
-The CI proves it before production does: the `runsc` leg of
-`.github/workflows/runner-integration.yml` runs `install-gvisor.sh` on the
-GitHub runner and the whole integration suite through the gVisor socket with
-`RUNNER_RUNTIME=runsc` (below).
+The `runsc` leg of `.github/workflows/runner-integration.yml` proves it on
+CI before production is switched (below).
 
 ## How a request is served
 
@@ -251,15 +237,12 @@ container down with it, the container is rebuilt and the remaining cases still
 run.
 
 **Whether the container is gone is Podman's answer, never the program's**
-(security audit L12). The program shares its stderr with `podman exec` and
-picks its own exit code, so Podman's messages ("no such container", "can only
-create exec sessions on running containers"…), exit 125 and exit 137 only
-make the engine ask `podman container inspect --format {{.State.Running}}`;
-that answer alone blanks the stderr, flags the case `oom` and rebuilds the
-container. A program that prints those words keeps its stderr and its
-container (`src/engine.test.ts`, `src/podman.int.test.ts`). A program that
-kills itself with SIGKILL, or exits 137, before its deadline is still
-reported `oom` on its own case — the only case it can mislabel.
+(audit L12). The program shares its stderr with `podman exec` and picks its
+own exit code, so Podman's messages, exit 125 and exit 137 only make the
+engine ask `podman container inspect --format {{.State.Running}}`; that
+answer alone blanks the stderr, flags the case `oom` and rebuilds the
+container. A program that exits 137 before its deadline is still reported
+`oom`, on its own case only.
 
 **`cases[].timeMs` on the wire.** `RunnerRequest` carries one budget for the
 whole request (`limits.timeMs`) and no per-case one: `buildRunnerRequest` in
@@ -391,16 +374,12 @@ hands the rootful socket to the job's user. The containers get the flags of
 `containerArgs()`, unchanged.
 
 The job has two legs. `default` drives the system socket (crun), as
-production does today. `runsc` runs `deploy/install-gvisor.sh` — the
-operator's own script — and the suite through `/run/quiz-runner-podman/podman.sock`
-with `RUNNER_RUNTIME=runsc`: `proveRuntime` gates the whole suite, every
-container runs under gVisor (systrap platform, no KVM needed), the seccomp
-probe must see the profile's own `EPERM` (gVisor's answer to
-`perf_event_open` without the profile is not `EPERM`), a program must see
-another kernel release than the host's, and `--userns=auto`, the cgroup
-limits, `podman exec`, the OOM verdict and the impersonation cases run as on
-the other leg. The `runsc` leg is `continue-on-error` until it has been green
-on GitHub once; it has never run on a workstation of this project.
+production does today. `runsc` runs `deploy/install-gvisor.sh` and the suite
+through the gVisor socket with `RUNNER_RUNTIME=runsc`: `proveRuntime` gates
+it, the seccomp probe must see the profile's own `EPERM`, and every other
+case runs under gVisor (systrap platform, no KVM needed). It is
+`continue-on-error` until it has been green once (tracking issue linked in
+the workflow).
 
 ### The smoke test, against a live runner
 
@@ -452,7 +431,7 @@ Everything is in `src/config.ts`, validated at startup.
 | `RUNNER_IMAGE_PREFIX` / `_TAG` | `quiz-runner` / `latest` | `quiz-runner-c:latest`. |
 | `RUNNER_SECCOMP` | the profile shipped here | Resolved by the Podman server (above). |
 | `RUNNER_USERNS_AUTO` | auto | Probed once at startup. |
-| `RUNNER_RUNTIME` | auto | `runsc`: fail-closed on gVisor; `auto`/`none`: the engine's runtime, a warning in production without gVisor ([gVisor](#gvisor)). |
+| `RUNNER_RUNTIME` | auto | `runsc` fail-closed, `auto` warns in production without gVisor, `none` derogates ([gVisor](#gvisor)). |
 | `RUNNER_CGROUP_PARENT` | empty | A slice unit name (`quiz-runner.slice`, set by the quadlet): `--cgroup-parent=<slice>`; empty, no flag. |
 | `RUNNER_MAX_OUTPUT_KB` | 256 | Ceiling on `limits.outputKb`, per stream and per case. |
 | `RUNNER_MAX_MEMORY_MB` | 512 | Ceiling on `limits.memoryMb`, per container. |
@@ -510,8 +489,7 @@ systemctl daemon-reload && systemctl restart quiz-runner
 journalctl -u quiz-runner -n 20             # "podman engine ready" with runtime runsc, or the fatal line
 ```
 
-The quadlet drop-in mounts the gVisor socket into the service and orders it
-after `quiz-runner-podman.socket`; the system socket and the workspace portal
-are untouched. Until then, the runner's journal and its `/health` say, on
-every call, that gVisor is not in use. The way back is to remove the drop-in
-and the two lines, then reload and restart.
+The drop-in mounts the gVisor socket and orders the runner after it; the
+system socket and the workspace portal are untouched. To re-run the script
+after the switch, stop `quiz-runner` first. The way back is to remove the
+drop-in and the two lines, then reload and restart.

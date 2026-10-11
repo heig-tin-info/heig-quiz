@@ -164,21 +164,19 @@ describe("probeEngine", () => {
 describe("gvisorWarning", () => {
   const caps = (runtime: string | null) => ({ ...FAKE_CAPABILITIES, runtime });
 
-  it("speaks up in production without gVisor, naming the runtime in use", () => {
+  it("speaks up under `auto` in production without gVisor, naming the runtime in use", () => {
     const prod = testConfig({ NODE_ENV: "production" });
     expect(gvisorWarning(prod, caps("crun"))).toMatch(
-      /gVisor is NOT in use: student code runs under crun \(RUNNER_RUNTIME=auto\)/,
+      /gVisor is NOT in use: student code runs under crun\./,
     );
     expect(gvisorWarning(prod, caps(null))).toMatch(/an unnamed runtime/);
-    // An explicit `none` is a choice, and still not N-SEC-06: it says so too.
-    expect(gvisorWarning({ ...prod, RUNNER_RUNTIME: "none" }, caps("crun"))).toMatch(
-      /RUNNER_RUNTIME=none/,
-    );
   });
 
-  it("is silent under gVisor, and outside production", () => {
-    expect(gvisorWarning(testConfig({ NODE_ENV: "production" }), caps("runsc"))).toBeNull();
+  it("is silent under gVisor, outside production, and under the explicit derogation `none`", () => {
+    const prod = testConfig({ NODE_ENV: "production" });
+    expect(gvisorWarning(prod, caps("runsc"))).toBeNull();
     expect(gvisorWarning(testConfig(), caps("crun"))).toBeNull();
+    expect(gvisorWarning({ ...prod, RUNNER_RUNTIME: "none" }, caps("crun"))).toBeNull();
   });
 });
 
@@ -212,7 +210,7 @@ describe("proveRuntime", () => {
   it("refuses an engine whose runtime is not runsc, before starting anything", async () => {
     const engine = createFakeEngine();
     await expect(proveRuntime(engine, RUNSC, HOST)).rejects.toThrow(
-      /runs crun, not runsc; a --remote client cannot choose the runtime/,
+      /runs crun, not runsc; a --remote client rejects --runtime/,
     );
     expect(engine.created).toEqual([]);
   });

@@ -111,15 +111,6 @@ describe("containerArgs", () => {
     expect(plain.some((arg) => arg.startsWith("--cgroup-parent"))).toBe(false);
   });
 
-  it("never asks for a runtime: a --remote client cannot, and `podman run` has no such flag", () => {
-    // gVisor is the Podman SERVICE's default runtime or nothing; passing
-    // `--runtime` here made every `podman run` fail with "unknown flag"
-    // (audit M6). `proveRuntime` checks what the service really runs.
-    const gvisor = engine({ capabilities: { ...FAKE_CAPABILITIES, runtime: "runsc" } });
-    expect(gvisor.containerArgs(CREATE)).toEqual(engine().containerArgs(CREATE));
-    expect(gvisor.containerArgs(CREATE).some((arg) => arg.startsWith("--runtime"))).toBe(false);
-  });
-
   it("never mounts anything from the host", () => {
     const args = engine().containerArgs(CREATE);
     expect(args).not.toContain("-v");
@@ -337,14 +328,8 @@ describe("exec, against a fake podman", () => {
 
 /**
  * Whether the container is gone is Podman's answer, never the program's
- * (security audit L12). The program writes to the same stderr Podman does and
- * picks its own exit code, so "no such container", 125 or 137 only make the
- * engine ASK — `podman container inspect` — and that answer alone blanks the
- * stderr, flags the case and makes `execute.ts` rebuild the container.
- *
- * The fake `podman` runs the "program" for an `exec` (so its stderr and exit
- * code are the test's to choose), answers `container inspect` from a state
- * file, and records every argv.
+ * (audit L12, README). The fake `podman` runs the "program" of an `exec`,
+ * answers `container inspect` from a state file, and records every argv.
  */
 describe("a container that is gone, as Podman says it", () => {
   function fakePodman(): {
@@ -406,17 +391,11 @@ describe("a container that is gone, as Podman says it", () => {
     });
     // The words raised the question; Podman, over the same socket, answered it.
     expect(podman.calls().slice(1)).toEqual([INSPECT]);
-  });
 
-  it("takes the words of a program that exits 1 for what they are", async () => {
-    const podman = fakePodman();
-    podman.state("running");
-    const result = await program(
-      podman,
-      "echo 'can only create exec sessions on running containers' >&2; exit 1",
-    );
-    expect(result).toMatchObject({ exitCode: 1, containerGone: false });
-    expect(result.stderr).toContain("can only create exec sessions");
+    // The same with exit 1: the words alone raise it too.
+    const one = await program(podman, "echo 'can only create exec sessions on running containers' >&2; exit 1");
+    expect(one).toMatchObject({ exitCode: 1, containerGone: false });
+    expect(one.stderr).toContain("can only create exec sessions");
   });
 
   it("asks about a SIGKILL, and believes the answer either way", async () => {

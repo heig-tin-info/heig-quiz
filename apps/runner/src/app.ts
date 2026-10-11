@@ -50,8 +50,7 @@ export async function buildApp({ config, engine }: AppDeps): Promise<FastifyInst
   }
   const theEngine = resolved;
 
-  // gVisor, fail-closed when it was asked for: a runner that cannot start a
-  // hardened container under runsc does not start at all (ADR-016, audit M6).
+  // gVisor, fail-closed when RUNNER_RUNTIME=runsc (README, gVisor).
   try {
     await proveRuntime(theEngine, config);
   } catch (error) {
@@ -80,6 +79,6 @@ export async function buildApp({ config, engine }: AppDeps): Promise<FastifyInst
     run: (request, signal) => executeRequest(request, { engine: theEngine, config, signal }),
   });
 
-  registerRoutes(app, { config, engine: theEngine, queue, warning });
+  registerRoutes(app, { config, engine: theEngine, queue });
   return app;
 }
