@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # 3. GitHub and projects
 
 Classroom's GitHub side is about 6 000 lines with about 150 tests, in two

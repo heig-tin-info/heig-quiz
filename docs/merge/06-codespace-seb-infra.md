@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # 6. Online workspace, SEB, infrastructure and cutover
 
 ## 6.1 Current topology

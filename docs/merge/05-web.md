@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # 5. Web
 
 ## 5.1 Where each classroom screen lands

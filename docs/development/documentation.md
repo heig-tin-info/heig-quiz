@@ -39,10 +39,12 @@ The `nav` array of `zensical.toml` controls the site navigation: one tab
 per audience. **Guide** is for teachers and students; **Operations** for
 whoever hosts the platform (deployment, a new server, the GitHub App,
 Teams, the kiosk stations); **Developers**, last, for contributors and
-agents, with the specification, the decision records and the classroom
-merge as collapsed groups under "Reference" (zensical takes a `README.md`
-that is a direct child of a group as that group's index page, which is why
-each of the three is a group of its own). A page that is built but listed nowhere is
+agents, with the specification and the decision records as collapsed
+groups under "Reference" (zensical takes a `README.md` that is a direct
+child of a group as that group's index page, which is why each is a group
+of its own). The classroom merge record (`merge/`) left the nav with the
+cutover of 2026-10-11 and follows the archive rule below; the
+[developer index](index.md) keeps its entry link. A page that is built but listed nowhere is
 reached only through the links of the current pages: the ADR records,
 through the [decision index](../adr/README.md), and every archived page
 (below). Links between

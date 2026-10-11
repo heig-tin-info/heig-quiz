@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # 4. The journal
 
 The journal is a classroom's course documentation, written by the staff,
