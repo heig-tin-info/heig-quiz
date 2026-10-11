@@ -352,13 +352,17 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
    * Public: the status and the probe's alarm (`HealthProbe`). The coarse
    * words are the scraper's and an administrator's (`HealthResponse`;
    * ADR-055 as amended for audit L21). The work behind it is `healthz`'s,
-   * memoised a few seconds.
+   * memoised a few seconds. The answer depends on the credential, so no
+   * cache keeps one caller's for another (`no-store`).
    */
   app.get("/healthz", async (req, reply) => {
     const body = await healthz(app, config, checkDatabase);
     const detailed = scraper(req) || req.user?.role === "admin";
     const probeOnly: HealthProbe = { status: body.status, attention: body.attention };
-    return reply.code(body.status === "ok" ? 200 : 503).send(detailed ? body : probeOnly);
+    return reply
+      .code(body.status === "ok" ? 200 : 503)
+      .header("cache-control", "no-store")
+      .send(detailed ? body : probeOnly);
   });
 
   /**

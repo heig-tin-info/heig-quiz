@@ -260,3 +260,43 @@ describe("/healthz", () => {
     expect(await word()).toMatchObject({ checks: { backup: "ok" } });
   });
 });
+
+describe("/healthz under production's cookies (audit L21, L8)", () => {
+  // Production names the session `__Host-quiz_session` (audit L8): the
+  // administrator's browser session must still reach the coarse words.
+  const token = "m".repeat(32);
+  let prod: TestServer;
+  beforeAll(async () => {
+    prod = await testServer({ METRICS_TOKEN: token }, { production: true });
+  });
+  afterAll(async () => {
+    await prod.close();
+  });
+  const probe = (headers: Record<string, string> = {}) =>
+    prod.app.inject({ method: "GET", url: "/healthz", headers });
+
+  it("gives an admin session and the metrics bearer the checks, never to be cached", async () => {
+    const boss = await prod.signIn("admin");
+    expect(boss.headers.cookie).toContain("__Host-quiz_session=");
+    for (const headers of [boss.headers, { authorization: `Bearer ${token}` }]) {
+      const res = await probe(headers);
+      expect(res.statusCode).toBe(200);
+      expect(HealthResponse.parse(res.json()).checks.database).toBe("up");
+      expect(res.headers["cache-control"]).toBe("no-store");
+    }
+  });
+
+  it("answers a teacher, an anonymous caller and a session cookie of before the prefix the probe alone", async () => {
+    const teacher = await prod.signIn("teacher");
+    const boss = await prod.signIn("admin");
+    // The bare name a browser signed in before the prefix's deploy still
+    // holds: never read, so that browser is anonymous until it signs in again.
+    const bare = { cookie: boss.headers.cookie!.replaceAll("__Host-", "") };
+    for (const headers of [teacher.headers, {}, bare]) {
+      const res = await probe(headers);
+      expect(res.statusCode).toBe(200);
+      expect(Object.keys(res.json()).sort()).toEqual(["attention", "status"]);
+      expect(res.headers["cache-control"]).toBe("no-store");
+    }
+  });
+});
