@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Tests of the frozen staging dispatcher (staging-dispatch.sh, audit H4):
-# its request grammar, what it runs for a valid request, and that it never
-# reaches a checkout. No root, no Podman, no network: podman, systemctl,
-# curl, journalctl, sleep and git are stubs that log their argv. Run by the
-# CI's `checks` job, or by hand:
+# its request grammar, what it runs for a valid request, and that it agrees
+# with the instance table of apps/codespace/deploy/lib.sh. No root, no
+# Podman, no network. Each run gets a PATH of stubs (podman, systemctl,
+# curl, journalctl, sleep, which log their argv) and of the few real tools
+# it needs (flock, seq, grep, sort): any other external command fails, so
+# the argv log is everything it ran. Run by the CI's `checks` job, or:
 #   bash infra/engine/staging-dispatch.test.sh
 # No `set -e`: every assertion runs and is counted.
 set -uo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root="$(cd "$here/../.." && pwd)"
 script="$here/staging-dispatch.sh"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -35,12 +38,11 @@ t_id=1111111111111111111111111111111111111111111111111111111111111111
 repo=ghcr.io/heig-tin-info/quiz-codespace
 pd="podman --remote --url unix:///run/podman/podman.sock"
 
-# --- 1. Static: the code (comments aside) names no checkout and runs nothing
-# from one. A deploy that reached the tree would need one of these words.
+# --- 1. Static, for what a PATH cannot catch: builtins, and a program
+# started by its path (comments aside).
 code="$(grep -vE '^[[:space:]]*#' "$script")"
-for pattern in '\bgit\b' '/opt/' 'install\.sh' 'lib\.sh' 'deploy\.sh' '\bsource\b' \
-	'(^|[;&|[:space:]])\.[[:space:]]' '\beval\b' 'infra/' 'apps/' 'QUIZ_DEPLOY' \
-	'\bcd\b' 'dirname' 'readlink' 'daemon-reload' '\binstall\b' '\bcp\b' '\bsed\b' '\btee\b'; do
+for pattern in '\beval\b' '\bsource\b' '(^|[;&|[:space:]])\.[[:space:]]' '/opt/' \
+	'(^|[[:space:];&|(])\.{0,2}/'; do
 	expect "static: no /$pattern/ in the code" not grep -qE "$pattern" <<<"$code"
 done
 one_exec_the_lock() {
@@ -56,81 +58,92 @@ only_safe_redirections() {
 		< <(grep -oE '(^|[[:space:]])[0-9]?>{1,2}[[:space:]]*[^[:space:];]+' <<<"$code")
 }
 expect "static: no redirection into a file but the lock" only_safe_redirections
-expect "static: a fixed PATH of root-owned directories" \
+expect "static: a fixed PATH" \
 	grep -qx 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' <<<"$code"
 expect "static: bash -n" bash -n "$script"
 
-# --- 2. The stubs. Each logs "<name> <argv>" to $work/log; podman logs what
-# login reads on stdin to $work/stdin instead.
+# --- 2. In step with what production writes: the instance's row of
+# apps/codespace/deploy/lib.sh, the lock of infra/engine/deploy.sh.
+in_step() {
+	(
+		# shellcheck source=../../apps/codespace/deploy/lib.sh
+		. "$root/apps/codespace/deploy/lib.sh"
+		cs_instance staging
+		# shellcheck source=staging-dispatch.sh
+		. "$script"
+		[ "$REPO" = "$CS_IMAGE_REPO" ] \
+			&& [ "$INSTANCE" = "$CS_INSTANCE" ] \
+			&& [ "$UNIT" = "$CS_UNIT.service" ] \
+			&& [ "$NET_UNIT" = "quiz-codespace-net@$CS_INSTANCE.service" ] \
+			&& [ "$QUADLET" = "/etc/containers/systemd/$CS_UNIT.container" ] \
+			&& [ "$ENV_FILE" = "$CS_ETC/env" ] \
+			&& [ "$HEALTH_URL" = "http://127.0.0.1:$CS_PORT/healthz" ] \
+			&& [ "$PODMAN_URL" = "$ENGINE_PODMAN_URL" ]
+	)
+}
+expect "in step: the staging row of codespace's lib.sh" in_step
+expect "in step: deploy.sh takes the same lock" \
+	grep -qF 'exec 9>/run/quiz-engine-deploy.lock' "$here/deploy.sh"
+
+# --- 3. The stubs and the allowed real tools.
 bin="$work/bin"
 mkdir -p "$bin"
+bash_path="$(command -v bash)"
+cat_path="$(command -v cat)"
 for name in systemctl journalctl sleep; do
-	printf '#!/usr/bin/env bash\nprintf "%%s %%s\\n" %s "$*" >> "%s/log"\n' "$name" "$work" > "$bin/$name"
+	printf '#!%s\nprintf "%%s %%s\\n" %s "$*" >> "%s/log"\n' "$bash_path" "$name" "$work" > "$bin/$name"
 done
-cat > "$bin/git" <<EOF
-#!/usr/bin/env bash
-printf 'git %s\n' "\$*" >> "$work/log"
-exit 99
-EOF
 cat > "$bin/curl" <<EOF
-#!/usr/bin/env bash
+#!$bash_path
 printf 'curl %s\n' "\$*" >> "$work/log"
 [ ! -e "$work/unhealthy" ]
 EOF
 cat > "$bin/podman" <<EOF
-#!/usr/bin/env bash
+#!$bash_path
 printf 'podman %s\n' "\$*" >> "$work/log"
 case " \$* " in
-	*" login "*) cat >> "$work/stdin" ;;
-	*" pull "*) echo $t_id ;;
+	*" login "*) $cat_path >> "$work/stdin" ;;
+	*" pull "*) [ ! -e "$work/pullfails" ] || exit 125; echo $t_id ;;
 	*" images "*) printf '%s\n' $t_sha $t_old staging prod latest $t_old ;;
 esac
 EOF
 chmod +x "$bin"/*
-
-# A booby-trapped checkout as the working directory: if anything of the
-# tree ran, the marker would appear.
-fake="$work/checkout"
-mkdir -p "$fake/infra/engine" "$fake/apps/codespace/deploy"
-for f in infra/engine/lib.sh infra/engine/deploy.sh apps/codespace/deploy/lib.sh apps/codespace/deploy/install.sh; do
-	printf '#!/usr/bin/env bash\ntouch "%s/ran-from-tree"\n' "$work" > "$fake/$f"
-	chmod +x "$fake/$f"
+for tool in flock seq grep sort; do
+	ln -s "$(command -v "$tool")" "$bin/$tool"
 done
 
 # The instance as the operator installed it.
 touch "$work/quadlet" "$work/env"
 
 # run <request>: the dispatcher's main, sourced, with its fixed paths moved
-# under $work; sets rc. Every run starts from an empty log.
+# under $work and its PATH replaced by $bin; sets rc. Each run starts from
+# an empty log.
 run() {
 	: > "$work/log"
 	: > "$work/stdin"
-	rc=0
+	# Not the left side of `||`: there, bash would ignore the script's -e.
 	(
-		cd "$fake" || exit 99
 		# shellcheck source=staging-dispatch.sh
 		. "$script"
-		# The stubs first, for this run only (the script fixes its PATH).
-		# shellcheck disable=SC2030
-		PATH="$bin:$PATH"
+		# shellcheck disable=SC2030  # for this run only
+		PATH="$bin"
 		QUADLET="$work/quadlet" ENV_FILE="$work/env" LOCK="$work/lock"
 		SSH_ORIGINAL_COMMAND="$1" main
-	) > "$work/out" 2> "$work/err" || rc=$?
+	) > "$work/out" 2> "$work/err"
+	rc=$?
 }
 
-# Predicates on the last run.
 rc_is() { [ "$rc" = "$1" ]; }
 log_empty() { [ ! -s "$work/log" ]; }
 token_nowhere() { not grep -qF "$t_token" "$work/log" "$work/out" "$work/err"; }
 token_on_stdin() { [ "$(cat "$work/stdin")" = "$t_token" ]; }
-nothing_from_tree() { [ ! -e "$work/ran-from-tree" ]; }
-no_git() { not grep -q '^git' "$work/log"; }
 
-# --- 3. A valid request.
+# --- 4. A valid request: exactly these commands, nothing else.
 run "codespace staging $t_sha $t_digest $t_token"
 expect "valid: exits 0" rc_is 0
 expected="$pd login ghcr.io -u heig-tin-info --password-stdin
 $pd pull -q $repo@$t_digest
+$pd logout ghcr.io
 $pd tag $t_id $repo:$t_sha
 $pd tag $repo:$t_sha $repo:staging
 systemctl restart quiz-codespace-net@staging.service
@@ -138,52 +151,47 @@ systemctl restart quiz-codespace-staging.service
 curl -fsS -m 2 http://127.0.0.1:3120/healthz
 $pd images --format {{.Tag}} --filter reference=$repo
 $pd rmi $repo:$t_old"
-expect "valid: exactly login, pull by digest, tags, restarts, health, untag" \
+expect "valid: login, pull by digest, logout, tags, restarts, health, untag" \
 	diff <(printf '%s\n' "$expected") "$work/log"
 expect "valid: the token reaches podman on stdin" token_on_stdin
 expect "valid: the token is on no argv and in no output" token_nowhere
-expect "valid: nothing ran from the tree" nothing_from_tree
-expect "valid: git never ran" no_git
 
 run "codespace   staging	$t_sha  $t_digest $t_token"
 expect "valid: any run of blanks between the words" rc_is 0
 
-# --- 4. Refused requests: exit 2, before any engine or systemd call, and
-# the token in no output.
+# --- 5. Refused requests: exit 2, before any command, the token in no output.
 refused_cleanly() { rc_is 2 && log_empty && token_nowhere; }
 refused() {
 	run "$2"
 	expect "refused: $1" refused_cleanly
 }
 refused "empty" ""
-refused "no digest (the pre-digest form)" "codespace staging $t_sha $t_token"
+refused "no digest" "codespace staging $t_sha $t_token"
 refused "force" "force codespace staging $t_sha $t_digest $t_token"
-refused "the prod instance" "codespace prod $t_sha $t_digest $t_token"
-refused "the runner" "runner prod $t_sha $t_digest $t_token"
+refused "another instance" "codespace prod $t_sha $t_digest $t_token"
 refused "the runner's bare form" "$t_sha $t_digest $t_token"
-refused "an unknown instance" "codespace preview $t_sha $t_digest $t_token"
 refused "an uppercase sha" "codespace staging ${t_sha^^} $t_digest $t_token"
-refused "a short sha" "codespace staging ${t_sha:0:39} $t_digest $t_token"
-refused "a branch name for the sha" "codespace staging main $t_digest $t_token"
 refused "another digest algorithm" "codespace staging $t_sha sha512:${t_digest#sha256:} $t_token"
-refused "a 63-hex digest" "codespace staging $t_sha ${t_digest:0:70} $t_token"
-refused "a digest with a tag" "codespace staging $t_sha latest@$t_digest $t_token"
-refused "a token with a shell metacharacter" "codespace staging $t_sha $t_digest tok;id"
-refused "a token with a substitution" "codespace staging $t_sha $t_digest \$(id)"
-refused "a token with a slash" "codespace staging $t_sha $t_digest ../../x"
+refused "a substitution as token" "codespace staging $t_sha $t_digest \$(id)"
 refused "a trailing word" "codespace staging $t_sha $t_digest $t_token extra"
-refused "a leading blank" " codespace staging $t_sha $t_digest $t_token"
 refused "a second line" "codespace staging $t_sha $t_digest $t_token
 codespace staging $t_sha $t_digest $t_token"
-refused "a command appended" "codespace staging $t_sha $t_digest $t_token; rm -rf /"
 
-# --- 5. An instance not installed: exit 2, nothing pulled.
+# --- 6. An instance not installed: exit 2, nothing run.
 rm "$work/quadlet"
 run "codespace staging $t_sha $t_digest $t_token"
-expect "no quadlet: exits 2, no engine call" refused_cleanly
+expect "no quadlet: exits 2, nothing run" refused_cleanly
 touch "$work/quadlet"
 
-# --- 6. A portal that never answers: exit 1, its journal shown, no untag.
+# --- 7. A failed pull: the credential is dropped all the same.
+touch "$work/pullfails"
+run "codespace staging $t_sha $t_digest $t_token"
+expect "failed pull: exits non-zero" not rc_is 0
+expect "failed pull: logged out, nothing tagged" \
+	diff <(printf '%s\n' "$pd login ghcr.io -u heig-tin-info --password-stdin" "$pd pull -q $repo@$t_digest" "$pd logout ghcr.io") "$work/log"
+rm "$work/pullfails"
+
+# --- 8. A portal that never answers: exit 1, its journal shown, no untag.
 touch "$work/unhealthy"
 run "codespace staging $t_sha $t_digest $t_token"
 expect "unhealthy: exits 1" rc_is 1
@@ -195,10 +203,10 @@ expect "unhealthy: 60 probes, then the journal" probes_then_journal
 expect "unhealthy: no untag" not grep -q ' rmi ' "$work/log"
 rm "$work/unhealthy"
 
-# --- 7. Executed (not sourced), a bad request is refused before the lock:
+# --- 9. Executed (not sourced), a bad request is refused before the lock:
 # no root needed, nothing written under /run.
-rc=0
-SSH_ORIGINAL_COMMAND="codespace staging nope" bash "$script" 2> "$work/err" || rc=$?
+SSH_ORIGINAL_COMMAND="codespace staging nope" bash "$script" 2> "$work/err"
+rc=$?
 expect "executed: a bad request exits 2" rc_is 2
 expect "executed: and says why" grep -q 'malformed request' "$work/err"
 

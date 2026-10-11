@@ -1,10 +1,9 @@
 # Shared by install.sh (every prod deploy) and bootstrap.sh (once per
-# instance, and whenever the staging instance's files must change): the
-# closed table of the portal instances on the engine VM, and the two
-# installation steps. Sourced, not executed; runs as root from production's
-# checkout, /opt/quiz-runner, at an approved commit. Nothing of a checkout
-# runs for a staging deploy (infra/engine/staging-dispatch.sh). RUNBOOK.md
-# says when.
+# instance): the closed table of the portal instances on the engine VM, and
+# the two installation steps. Sourced, not executed; runs as root from
+# production's checkout, /opt/quiz-runner, at an approved commit. RUNBOOK.md
+# says when. infra/engine/staging-dispatch.sh holds a frozen copy of the
+# staging row (its test checks they agree).
 #
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the values are read by the scripts that source this file
@@ -51,9 +50,8 @@ cs_instance() {
 # nftables table, the AppArmor profile, the shadow snapshot and backup export
 # scripts, the systemd templates and the VM's two slices (shared with the
 # runner's deploy, as is the drift warning of the manual pieces). Written by
-# bootstrap.sh and by a prod deploy, both from production's approved
-# checkout; a staging deploy writes nothing (ADR-016, amendment of
-# 2026-10-11).
+# bootstrap.sh and by a prod deploy only, both from production's approved
+# checkout.
 cs_install_host() {
 	install -d -m 0755 "$CS_LIB/infra/net" "$CS_LIB/infra/nft"
 	install -m 0755 "$CS_APP"/infra/net/{common,setup,teardown,test}.sh "$CS_LIB/infra/net/"

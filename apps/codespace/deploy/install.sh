@@ -4,15 +4,15 @@
 # commit. Run by the production dispatcher infra/engine/deploy.sh (as root,
 # after the registry login and the checkout of an approved sha):
 #   apps/codespace/deploy/install.sh prod
-# The staging instance is never deployed from a checkout: its deploy is the
-# frozen dispatcher's (infra/engine/staging-dispatch.sh, ADR-016's amendment
-# of 2026-10-11), and its files are installed by bootstrap.sh.
+# The staging portal is deployed by infra/engine/staging-dispatch.sh, never
+# from a checkout.
 #
 # 1. the live-session guard, 2. pull the CI's image of this sha and tag it
 # :prod, the tag the quadlet runs, 3. install the host-level files and the
 # instance's files, 4. replay the instance's network setup, restart the
-# portal and wait for its /healthz, 5. untag older sha tags. The student
-# image is NOT touched: it is built on the VM on purpose (images/build.sh).
+# portal and wait for its /healthz, 5. write the staging instance's files,
+# 6. untag older sha tags. The student image is NOT touched: it is built on
+# the VM on purpose (images/build.sh).
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/../../.."
@@ -76,6 +76,16 @@ for i in $(seq 1 60); do
 	fi
 	sleep 1
 done
+
+# The staging instance's quadlet, Caddy site and seccomp profile, from this
+# approved commit: no staging deploy writes them (infra/engine/
+# staging-dispatch.sh); its next restart picks them up. Skipped until the
+# staging instance is bootstrapped. In subshells: cs_instance rebinds CS_*.
+if (cs_instance staging && [ -f "$CS_ETC/env" ]); then
+	(cs_instance staging; cs_install_instance)
+	systemctl daemon-reload
+	systemctl reload caddy
+fi
 
 student="$(cs_student_image)"
 if ! pd image exists "$student"; then

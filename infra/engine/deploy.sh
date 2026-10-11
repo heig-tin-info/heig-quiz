@@ -5,13 +5,8 @@
 # root's authorized_keys pins the production CI key to this file, in the
 # production checkout, which only ever moves to approved commits:
 #   command="/opt/quiz-runner/infra/engine/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@quiz
-# A key can only deploy, never open a shell.
-#
-# The STAGING key does not reach this file (ADR-016, amendment of
-# 2026-10-11, audit H4): it is pinned to the frozen dispatcher the operator
-# installed outside any checkout, /usr/local/libexec/quiz-engine/staging-dispatch.sh
-# (versioned as infra/engine/staging-dispatch.sh), which runs nothing from
-# a commit. A `staging` scope is refused here.
+# A key can only deploy, never open a shell. The staging key reaches
+# staging-dispatch.sh instead; a `staging` scope is refused here.
 #
 # The CI's SSH command lands in $SSH_ORIGINAL_COMMAND, matched strictly and
 # never eval'd:
@@ -32,13 +27,11 @@
 #
 # The checkout moves to the deployed sha, detached, and the component's own
 # steps run from it (apps/runner/deploy/install.sh,
-# apps/codespace/deploy/install.sh prod): the approval of the production
-# environment is what makes that commit trusted. Moving the checkout
-# rewrites THIS file while bash still reads the old copy, so the script
-# hands over to the new copy exactly once, the login done, the request in
-# the environment. One deploy at a time on the VM: a lock under /run,
-# shared with the staging dispatcher (both drive the same engine and
-# systemd).
+# apps/codespace/deploy/install.sh prod). Moving the checkout rewrites THIS
+# file while bash still reads the old copy, so the script hands over to the
+# new copy exactly once, the login done, the request in the environment.
+# One deploy at a time on the VM: a lock under /run, shared with the
+# staging dispatcher (both drive the same engine and systemd).
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/../.."

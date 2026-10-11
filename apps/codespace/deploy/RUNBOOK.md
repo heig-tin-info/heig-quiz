@@ -45,18 +45,14 @@ never used by a real class; step 3 lists live sessions anyway).
 - A run of `main` containing M6-04 has pushed
   `ghcr.io/heig-tin-info/quiz-codespace:<sha>`. Call that full sha `SHA`.
 
-### 2. The two checkouts
+### 2. The checkout
 
 Production's checkout is the runner's, `/opt/quiz-runner`; its next
-approved deploy moves it, or do it now. Staging got a clone of its own,
-which only the staging key moved (until 2026-10-11: the frozen staging
-dispatcher of step 8 replaced it, and nothing reads the clone any more):
+approved deploy moves it, or do it now:
 
 ```bash
 cd /opt/quiz-runner && git fetch --quiet origin main && git checkout --quiet --detach "$SHA"
-git clone --quiet https://github.com/heig-tin-info/heig-quiz.git /opt/quiz-engine-staging
-cd /opt/quiz-engine-staging && git checkout --quiet --detach "$SHA"
-ls /opt/quiz-runner/infra/engine/deploy.sh /opt/quiz-engine-staging/infra/engine/deploy.sh
+ls /opt/quiz-runner/infra/engine/deploy.sh
 ```
 
 ### 3. Back up classroom's portal
@@ -166,16 +162,13 @@ sed -i 's|command="/opt/quiz-runner/apps/runner/deploy/deploy.sh"|command="/opt/
 
 Then add the staging key, whose public half is the one in
 `/home/srvstg/.ssh/authorized_keys` on the application VM
-(`ci-deploy-staging@quiz`). The two lines:
+(`ci-deploy-staging@quiz`), once its dispatcher is installed (deployment.md
+§4, *The frozen staging dispatcher*). The two lines:
 
 ```text
 command="/opt/quiz-runner/infra/engine/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@quiz
 command="/usr/local/libexec/quiz-engine/staging-dispatch.sh",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
 ```
-
-(Since 2026-10-11, audit H4: the staging key's line names the frozen
-dispatcher, installed by hand, never the staging checkout of step 2;
-deployment.md §4, *The frozen staging dispatcher*.)
 
 Why the runner's deploys keep working before and after this edit, and the
 follow-up it enables: the header of `infra/engine/deploy.sh`.

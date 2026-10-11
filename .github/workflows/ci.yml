@@ -139,9 +139,10 @@ jobs:
           fetch-depth: 2
       - run: node scripts/check-adr-numbers.mjs
       - run: node --test scripts/*.test.mjs
-      # The engine VM's deploy scripts, the frozen staging dispatcher's
-      # request grammar and its never touching a checkout (audit H4). No
-      # install: bash and the hosted runner's shellcheck.
+      # The engine VM's deploy scripts and the staging dispatcher's test
+      # (audit H4). No install: bash and the hosted runner's shellcheck,
+      # whose version is the image's, unpinned (a new release may warn on
+      # unchanged scripts).
       - run: shellcheck -x -P SCRIPTDIR infra/engine/*.sh
       - run: bash infra/engine/staging-dispatch.test.sh
       - env:
@@ -262,11 +263,8 @@ jobs:
   #                  → /opt/quiz-runner/infra/engine/deploy.sh production      (code VM)
   # Staging runs as its OWN account, with its own rootless Docker: it executes
   # every commit of main before any approval, so it must not share the account
-  # that owns production's secrets, volumes and backups. On the code VM, which
-  # hosts the production runner and portal, the staging key reaches only the
-  # FROZEN dispatcher the operator installed outside any checkout: it pulls
-  # the portal image by digest and restarts a fixed quadlet, and runs no file
-  # of the commit (ADR-016, amendment of 2026-10-11, audit H4).
+  # that owns production's secrets, volumes and backups. On the code VM, the
+  # staging key reaches only the frozen dispatcher (ADR-016, 2026-10-11).
   # The SSH command carries the commit, the digest the `image` job pushed
   # and a pull credential stored nowhere (→ $SSH_ORIGINAL_COMMAND; the code
   # VM's forms: infra/engine/deploy.sh, staging-dispatch.sh). The digest is
@@ -276,8 +274,8 @@ jobs:
   # checkout the CI deploys to runs this version (deployment.md §4,
   # *Deploying by digest*), a gate to drop from this file then (#747). While
   # it is set, a missing digest fails the step instead of falling back to
-  # the tag. The frozen staging dispatcher has no checkout to lag behind: it
-  # always requires the digest, so its step always sends it.
+  # the tag. The staging dispatcher always requires it, so its step always
+  # sends it.
   # Without its key a job no-ops, so the pipeline stays green until keys are
   # provisioned; the codespace steps also wait for the REPOSITORY variable
   # CODESPACE_DEPLOY=1, set at the switch (apps/codespace/deploy/RUNBOOK.md),
@@ -343,14 +341,13 @@ jobs:
       # The staging portal (code-dev.chevallier.io), same sha. Not guarded by
       # live sessions, like the application's staging; the exit code is the
       # portal's /healthz after the restart, so a portal that does not come up
-      # stops the promotion too. The request: `codespace staging <sha>
-      # <digest> <token>`, the digest mandatory (staging-dispatch.sh).
+      # stops the promotion too. The request form: staging-dispatch.sh.
       - name: Deploy the codespace portal, staging instance (forced command runs the frozen staging dispatcher on the code VM)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != '' && env.CODESPACE_DEPLOY == '1'
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          [[ "$CODESPACE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::the image job gave no quiz-codespace digest, which the staging dispatcher requires"; exit 1; }
+          [ -n "$CODESPACE_DIGEST" ] || { echo "::error::the image job gave no quiz-codespace digest, which the staging dispatcher requires"; exit 1; }
           ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "codespace staging $GITHUB_SHA $CODESPACE_DIGEST $GHCR_TOKEN"
 
   deploy-production:

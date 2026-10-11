@@ -76,8 +76,9 @@ commit changing what production runs under), not attacks. The switch from
 heig-classroom's portal and the operations are
 `apps/codespace/deploy/RUNBOOK.md`. The portal holds no GitHub App key
 (`FORGE_KIND=none`, root invariant 15).
-(f) *Risk accepted by the owner (2026-10-07; its first half closed on
-2026-10-11, audit H4, below, the second still open):* the staging key deploys
+(f) *Risk accepted by the owner (2026-10-07; mitigated on 2026-10-11,
+audit H4, below: its deploy-time half removed, the portal's half open):*
+the staging key deploys
 every commit of `main` before approval and runs that commit's scripts as
 root on the VM that hosts the production runner and portal, and the
 staging portal mounts the rootful Podman socket, which is root-equivalent.
@@ -138,25 +139,26 @@ absent on both sides. (e) A program's stderr or exit code only triggers a
 (f) The runner binds `127.0.0.1` by default and refuses a bind outside the
 loopback without `RUNNER_TOKEN`.
 
-**Amended (2026-10-11, security audit H4): the staging key reaches a frozen
-dispatcher.** Scope: the staging half of the M6-04 amendment's (a), and its
-(f); production's path is unchanged. The owner chose this over a separate
-staging VM.
-(a) *Nothing of a commit runs at a staging deploy.* The staging key's forced
-command is `/usr/local/libexec/quiz-engine/staging-dispatch.sh`, a copy of
-`infra/engine/staging-dispatch.sh` the operator installs by hand, root's,
-in a directory only root may write, and that no deploy rewrites. It accepts
-`codespace staging <sha> <digest> <token>` alone, the digest mandatory,
-pulls the portal image by that digest, tags it, restarts the staging
-quadlet and waits for its health, under the VM's deploy lock. It runs no
-`git`, no `install.sh`, sources nothing and writes no unit; a shell test in
-`checks` holds it to its grammar and to that. `infra/engine/deploy.sh`
-refuses the staging scope; the staging checkout is retired.
-(b) *What a staging deploy no longer installs*: the staging quadlet, Caddy
-site and seccomp profile are those `bootstrap.sh staging` wrote from
-production's checkout, an approved commit; a change to them, or to the
-dispatcher, is an operator's step (`deployment.md` §4), like the host
-firewall, and a production deploy warns when the checkout's dispatcher
+**Amended (2026-10-11, security audit H4, mitigated): the staging key
+reaches a frozen dispatcher.** Scope: the staging half of the M6-04
+amendment's (a), and its (f); production's path is unchanged. The owner
+chose this over a separate staging VM. H4 is mitigated, not closed: the
+deploy-time path is gone, the portal's path (e) stays open.
+(a) *Nothing of a commit runs at a staging deploy.* Every commit of `main`
+reaches the staging key before approval, on the VM that holds the
+production runner and portal, their secrets and the rootful socket. So the
+staging key's forced command is a copy of `infra/engine/staging-dispatch.sh`
+the operator installs by hand outside any checkout, root's, that no deploy
+rewrites: it pulls the portal image by digest and restarts the staging
+quadlet, and runs, sources and writes no file of a commit (its request and
+steps: its header; a shell test in `checks` holds it to them).
+`infra/engine/deploy.sh` refuses the staging scope; the staging checkout is
+retired.
+(b) *Who writes the staging instance's files*: its quadlet, Caddy site and
+seccomp profile come from approved commits only, written by every `prod`
+portal deploy and by `bootstrap.sh`; the next staging restart picks them
+up. The dispatcher itself is an operator's step (`deployment.md` §4), like
+the host firewall; a production deploy warns when the checkout's copy
 differs from the installed one.
 (c) *Production keeps running its commit's scripts as root*: the approval of
 the `production` environment is what makes that commit trusted on this VM.
@@ -167,9 +169,11 @@ separate staging VM (the owner's choice, for now).
 `main` and the fixed quadlet mounts the rootful Podman socket into it, so
 an unapproved commit's portal can still start a container with the host's
 privileges. This amendment removes the deploy-time path (a repository script
-run as root before approval), not that one. Closing it means a staging
-portal without the rootful socket (an engine of its own, rootless, under a
-dedicated account) or on another host.
+run as root before approval), not that one. The smallest closure would be an
+approval gate on the staging portal's deploy, so that no unapproved image
+reaches the socket (the owner is deciding); the others are a staging portal
+without the rootful socket (a rootless engine of its own, under a dedicated
+account) or on another host.
 
 ## Context
 
