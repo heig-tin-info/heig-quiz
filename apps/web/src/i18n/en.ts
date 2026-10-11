@@ -1122,6 +1122,8 @@ export const en = {
   "oauth.invalid.invalid_redirect_uri": "The assistant asked to send the answer to an address it did not register. The portal refused, for your safety.",
   "oauth.invalid.invalid_client_metadata": "The assistant's description could not be read. Try again in a moment.",
   "oauth.invalid.temporarily_unavailable": "Too many connection attempts came from your network. Try again in an hour.",
+  "oauth.invalid.unsupported_response_type": "The assistant asked for a kind of sign-in the portal does not offer. Update the assistant, then start the connection again.",
+  "oauth.invalid.invalid_target": "The assistant asked for access to another address than the portal's assistant connector. Check the address of the connector in your assistant.",
 
   "palette.open": "Search",
   "palette.openClassroom": "Open classroom {name}",

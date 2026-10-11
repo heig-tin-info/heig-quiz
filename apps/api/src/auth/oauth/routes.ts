@@ -36,7 +36,7 @@ import type { AppConfig } from "../../config.js";
 import { FixedWindowLimiter } from "../../limiter.js";
 import { invalid, notFound } from "../../modules/http.js";
 import { sessionTeacherGuard } from "../tokenRoutes.js";
-import { ClientRefused, redirectMatches, registerClient, resolveClient } from "./clients.js";
+import { ClientRefused, redirectMatches, redirectsErrors, registerClient, resolveClient } from "./clients.js";
 import {
   MCP_PATH,
   OAuthError,
@@ -149,8 +149,14 @@ export async function oauthRoutes(app: FastifyInstance, config: AppConfig) {
     }
     if (!redirectMatches(client.redirectUris, q.redirect_uri)) return refuse(reply, "invalid_redirect_uri");
 
-    // From here the client and its redirect are trusted: errors go back to it.
+    // An error goes back to the client only when a host we chose vouches for
+    // its redirect URI (a CIMD client); a self-registered client's is any
+    // https address, so its errors are said here, before anybody signed in
+    // (RFC 9700 §4.11.2, audit M4). After the consent screen, `decide` sends
+    // the answer back whoever the client is.
+    const vouched = redirectsErrors(client, allowedHosts);
     const back = (error: string, description: string) => {
+      if (!vouched) return refuse(reply, error);
       const url = new URL(q.redirect_uri);
       url.searchParams.set("error", error);
       url.searchParams.set("error_description", description);

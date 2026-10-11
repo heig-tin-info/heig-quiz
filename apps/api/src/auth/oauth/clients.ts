@@ -124,6 +124,17 @@ async function fetchDocument(url: URL): Promise<ClientMetadataDocument> {
 }
 
 /**
+ * Whether an authorization error may be sent to this client's redirect URI
+ * before anybody consented (RFC 9700 §4.11.2, audit M4): only a CIMD client
+ * whose document host is still in `OAUTH_CIMD_HOSTS` — its redirect URIs are
+ * vouched for by a host we chose. A self-registered client is anyone's, and
+ * its redirect URI any https address.
+ */
+export function redirectsErrors(client: OAuthClient, allowedHosts: readonly string[]): boolean {
+  return client.kind === "cimd" && documentUrl(client.id, allowedHosts) !== null;
+}
+
+/**
  * The client behind a `client_id`: a registered one, or a metadata document
  * (fetched, or served from the cache while it is under a day old).
  */

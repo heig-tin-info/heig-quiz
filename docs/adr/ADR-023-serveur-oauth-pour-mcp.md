@@ -7,6 +7,16 @@ ADR-022: "I want Claude to connect through claude.ai or chat.openai"). It
 completes ADR-022, whose MCP endpoint only took a personal token pasted into
 a header.
 
+**Amended 2026-10-11 (security audit M4, RFC 9700 §4.11.2), scope: §D, where
+an authorization error goes.** A self-registered client may name any https
+redirect URI, so sending it an error before anybody signed in made the portal
+an open redirect (a link on the institutional domain bouncing to an edu-ID
+look-alike). An authorization error now goes back to the client only when it
+is a CIMD client whose document host is still in `OAUTH_CIMD_HOSTS`
+(`redirectsErrors`, `auth/oauth/clients.ts`), or after the consent screen
+(the teacher's denial, `decide`); every other error is said on
+`/oauth/authorize/invalid?reason=`.
+
 ## Context
 
 claude.ai (web, desktop, mobile) and ChatGPT connect to a remote MCP server
@@ -98,6 +108,9 @@ token management, consent is refused to a token-authenticated caller.
 A request whose client or redirect URI cannot be trusted is never sent back
 to that redirect URI: the browser lands on `/oauth/authorize/invalid?reason=`.
 Every later error goes back to the client with `error`, `state` and `iss`.
+*Amended 2026-10-11 (see Status): only a CIMD client of an allowed host, or a
+request answered on the consent screen, gets its error back; a
+self-registered client's error lands on the invalid page too.*
 
 ### E. CIMD only from known hosts
 

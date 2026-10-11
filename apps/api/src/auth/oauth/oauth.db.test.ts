@@ -268,9 +268,10 @@ describe("the whole flow, with a registered client", () => {
     expect(res.body.error).toBe("invalid_grant");
   });
 
-  it("sends a denial back as access_denied", async () => {
+  it("sends a denial back as access_denied, even to a self-registered client: it went through the consent screen", async () => {
     const { body: client } = await register();
     const { back } = await consent(client.client_id, pkce().challenge, { approve: false });
+    expect(back!.origin + back!.pathname).toBe(REDIRECT);
     expect(back!.searchParams.get("error")).toBe("access_denied");
     expect(back!.searchParams.get("code")).toBeNull();
   });
@@ -292,15 +293,39 @@ describe("refusals", () => {
     expect(res.headers.location).toBe("/oauth/authorize/invalid?reason=invalid_redirect_uri");
   });
 
-  it("sends a request without PKCE back to the client with an error", async () => {
+  it("says a self-registered client's error on its own page, never at the client's address (RFC 9700 §4.11.2)", async () => {
     const { body: client } = await register();
     const res = await inject({
       method: "GET",
       url: authorizeUrl({ response_type: "code", client_id: client.client_id, redirect_uri: REDIRECT, state: "s" }),
     });
-    const back = new URL(res.headers.location as string);
-    expect(back.searchParams.get("error")).toBe("invalid_request");
-    expect(back.searchParams.get("state")).toBe("s");
+    expect(res.statusCode).toBe(303);
+    expect(res.headers.location).toBe("/oauth/authorize/invalid?reason=invalid_request");
+  });
+
+  // Audit M4's repro: anyone registers a client whose redirect URI is any
+  // https address, then links to an authorization request it makes fail.
+  it("never bounces a visitor with no session to a self-registered address", async () => {
+    const LURE = "https://edu-id.phishing.example/login";
+    const { body: client } = await register([LURE]);
+    const failing = [
+      { response_type: "token", client_id: client.client_id, redirect_uri: LURE },
+      { response_type: "code", client_id: client.client_id, redirect_uri: LURE },
+      {
+        response_type: "code",
+        client_id: client.client_id,
+        redirect_uri: LURE,
+        code_challenge: pkce().challenge,
+        code_challenge_method: "S256",
+        resource: "https://elsewhere.example/mcp",
+      },
+    ];
+    for (const params of failing) {
+      const res = await inject({ method: "GET", url: authorizeUrl(params) });
+      const location = String(res.headers.location ?? "");
+      expect(location.startsWith("/oauth/authorize/invalid?reason="), location).toBe(true);
+      expect(location).not.toContain("phishing");
+    }
   });
 
   it("meters authorization requests per address: past the limit, nothing is stored (audit L5)", async () => {
@@ -373,6 +398,24 @@ describe("a client identified by its metadata document (CIMD)", () => {
       client_id: CLIENT_ID,
     });
     expect(res.status).toBe(200);
+  });
+
+  it("sends an error back to the client, its redirect being vouched for by its host", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ client_id: CLIENT_ID, client_name: "Claude Code", redirect_uris: ["http://localhost/callback"] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const res = await inject({
+      method: "GET",
+      url: authorizeUrl({ response_type: "code", client_id: CLIENT_ID, redirect_uri: "http://localhost:40001/callback", state: "s" }),
+    });
+    const back = new URL(res.headers.location as string);
+    expect(back.origin).toBe("http://localhost:40001");
+    expect(back.searchParams.get("error")).toBe("invalid_request");
+    expect(back.searchParams.get("state")).toBe("s");
+    expect(back.searchParams.get("iss")).toBe(ISSUER);
   });
 
   it("never fetches a document from a host off the list", async () => {

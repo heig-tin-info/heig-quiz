@@ -22,7 +22,14 @@ export function OAuthConsent({ id, me }: { id: string; me: Me | null }) {
   const t = useT();
   if (id === "invalid") {
     const reason = new URLSearchParams(window.location.search).get("reason") ?? "invalid_request";
-    const known = ["invalid_client", "invalid_redirect_uri", "invalid_client_metadata", "temporarily_unavailable"].includes(reason);
+    const known = [
+      "invalid_client",
+      "invalid_redirect_uri",
+      "invalid_client_metadata",
+      "temporarily_unavailable",
+      "unsupported_response_type",
+      "invalid_target",
+    ].includes(reason);
     return (
       <GateCard
         icon={<TriangleAlert className="mx-auto size-8 text-warning" />}
