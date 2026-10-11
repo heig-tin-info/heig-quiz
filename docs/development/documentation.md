@@ -35,9 +35,17 @@ pnpm docs:build               # zensical build: the static site in site/ (gitign
 | `docs/PLAN-MVP.md` | the decisions D1–D20 of the phase-1 plan; the full plan is archived in `docs/history/PLAN-MVP.md` |
 | `docs/assets/screenshots/` | the screenshots, two files per image ([screenshots](screenshots.md)) |
 
-The `nav` array of `zensical.toml` controls the site navigation. The ADR
-records are reached through the [decision index](../adr/README.md), so their
-individual links are maintained there instead of in a second navigation list. Links between
+The `nav` array of `zensical.toml` controls the site navigation: one tab
+per audience. **Guide** is for teachers and students; **Operations** for
+whoever hosts the platform (deployment, a new server, the GitHub App,
+Teams, the kiosk stations); **Developers**, last, for contributors and
+agents, with the specification, the decision records and the classroom
+merge as collapsed groups under "Reference" (zensical takes a `README.md`
+that is a direct child of a group as that group's index page, which is why
+each of the three is a group of its own). A page that is built but listed nowhere is
+reached only through the links of the current pages: the ADR records,
+through the [decision index](../adr/README.md), and every archived page
+(below). Links between
 pages are relative Markdown links to the `.md` file
 (`../spec/05-architecture.md`, `deployment.md#rollback`); zensical rewrites
 them at build time and warns about a target that does not exist, which is
@@ -49,7 +57,12 @@ Current specs and consolidated ADRs state the rules an agent should apply.
 Move long delivery chronicles and superseded alternatives into `history/`
 only with a link back to the current source and a clear historical notice.
 Archived pages use `search: { exclude: true }` in YAML front matter so the
-site search does not present obsolete instructions alongside current ones.
+site search does not present obsolete instructions alongside current ones,
+and they are never listed in the `nav`: the repository is public, so an
+archive is public whatever the site does, and the one lever is
+discoverability. They stay in the repository because the sources cite them
+(the "PLAN-MVP §x.y" comments, the former ADR addenda) and an agent in a
+worktree or a shallow clone cannot resolve such a citation from git history.
 Preserve existing URLs and section anchors as pointers when consolidating.
 2026-10-09: an anchor list into `history/` may be reduced to a correspondence
 table of the cited sections plus bare compatibility anchors.

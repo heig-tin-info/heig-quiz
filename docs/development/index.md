@@ -6,7 +6,10 @@ the code, [deployment](deployment.md) the two production machines,
 [installing on a new Ubuntu server](new-server.md) a new instance from
 scratch, [Quiz's GitHub App](github-app.md) each environment's App (and an
 optional development one), and [writing the documentation](documentation.md)
-this site.
+this site. The first three sit under the Operations tab of this site; the
+[specification](../spec/README.md), the [decision records](../adr/README.md)
+and the [classroom merge](../merge/README.md) are the collapsed groups of
+this one.
 
 ## Prerequisites
 

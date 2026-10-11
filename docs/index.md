@@ -19,15 +19,14 @@ person, with the code runner on a virtual machine of its own.
 
     [:octicons-arrow-right-24: Start with the overview](guide/index.md)
 
--   :material-code-braces: **Development**
+-   :material-server: **Operations**
 
     ---
 
-    Running the platform locally, the repository layout, deployment, the
-    documentation itself, and the product specification with the
-    architecture decision records.
+    Hosting the platform: deploying a release, installing a new server,
+    the GitHub App, Microsoft Teams and the kiosk stations.
 
-    [:octicons-arrow-right-24: Local setup](development/index.md)
+    [:octicons-arrow-right-24: Deployment](development/deployment.md)
 
 </div>
 
@@ -50,6 +49,10 @@ A Fastify monolith over PostgreSQL, a React single-page application, Switch
 edu-ID for identity, server-sent events keeping every open view live, code
 run in the browser through WebAssembly for the trial and in hardened Podman
 containers for the grade.
+
+Contributors and agents start from the [developer documentation](development/index.md):
+local setup, the repository layout, the product specification and the
+architecture decision records.
 
 !!! info "Source"
 
