@@ -151,11 +151,18 @@ internal bridge).
 13. **Podman in `--remote`**, always
     `podman --remote --url unix://<socket> …`. Without `--remote` the binary
     silently falls back to local rootless mode and every isolation test
-    measures something else. Production is the ROOTFUL socket
-    (`/run/podman/podman.sock`, `--userns=auto` always available); a
-    development workstation is the user one, where `--userns=auto` is probed
-    once at startup and dropped with a log line when the engine cannot do it.
-    gVisor (`--runtime runsc`) on top when the host has it.
+    measures something else. Production is a ROOTFUL socket
+    (`/run/podman/podman.sock`, or the runner's own gVisor service
+    `/run/quiz-runner-podman/podman.sock` once switched; `--userns=auto`
+    always available); a development workstation is the user one, where
+    `--userns=auto` is probed once at startup and dropped with a log line
+    when the engine cannot do it. gVisor is never a flag of `containerArgs`:
+    a `--remote` client rejects `--runtime`. It is the default runtime of
+    the runner's own rootful Podman service
+    (`apps/runner/deploy/install-gvisor.sh`, runsc with `--oci-seccomp`),
+    and `RUNNER_RUNTIME=runsc` makes the runner refuse to start unless a
+    container built from `containerArgs` runs under it (`proveRuntime`,
+    ADR-016 amendment of 2026-10-11).
 14. **The source sent to the runner is rebuilt server-side** from the
     template and the student's editable regions — never taken as-is. A
     project's source is fetched by the server at the frozen sha, never
