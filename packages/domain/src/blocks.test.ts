@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   BATTERY_MAX,
   formatMap,
+  HEADINGS,
   MapError,
   MAP_SIZE,
   parseMap,
@@ -149,7 +150,7 @@ describe("runProgram: sensors", () => {
   const branch = (sensor: "free" | "blocked", where: "front" | "left" | "right", map = boxed) => {
     const run = runProgram([ifs(sensor, where, [L], [R])], map, 5);
     expect(run.events[0]).toMatchObject({ op: "test", path: [0] });
-    expect(run.events[1]!.path).toEqual([0, 0]);
+    expect(run.events[1]!.path).toEqual([0, run.events[1]!.pose.heading === (map.start.heading + 3) % 4 ? 0 : 1, 0]);
     return run.events[1]!.pose.heading === (map.start.heading + 3) % 4 ? "then" : "else";
   };
 
@@ -172,6 +173,17 @@ describe("runProgram: sensors", () => {
     expect(branch("free", "left", corner)).toBe("then");
     // Facing east, the dock just ahead.
     expect(branch("free", "front", parseMap(["...", ">D.", "..."]))).toBe("then");
+  });
+
+  it("names the branch in a path: 0 for then, 1 for else", () => {
+    // Repeated twice: the front is free (then: forward), then blocked by the rack (else: turn).
+    const run = runProgram([rep(2, ifs("free", "front", [F], [L]))], parseMap(["....", ">.#D", "...."]), 5);
+    expect(run.events.map((e) => `${e.op}@${e.path.join(".")}`)).toEqual([
+      "test@0.0",
+      "forward@0.0.0.0",
+      "test@0.0",
+      "turn@0.0.1.0",
+    ]);
   });
 
   it("an empty branch runs nothing", () => {
@@ -249,6 +261,10 @@ describe("simulate", () => {
 });
 
 describe("parseMap and formatMap", () => {
+  it("writes each heading with the glyph HEADINGS gives it", () => {
+    expect([0, 1, 2, 3].map((h) => parseMap([`${HEADINGS[h]}.D`, "...", "..."]).start.heading)).toEqual([0, 1, 2, 3]);
+  });
+
   it("reads the cells, the start and its heading, the dock", () => {
     const map = parseMap(["..#.", ">..D", "#..."]);
     expect(map).toMatchObject({ width: 4, height: 3, start: { x: 0, y: 1, heading: 1 }, dock: { x: 3, y: 1 } });

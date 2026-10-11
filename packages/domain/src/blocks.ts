@@ -27,7 +27,9 @@
  *                       of the robot: `free` is inside the map and not a rack
  *                       (the dock is free), `blocked` is its negation.
  *
- * A program that ends anywhere but the dock ends with `short`.
+ * A program that ends anywhere but the dock ends with `short`. Each event
+ * names its statement by a `NodePath`; inside an `if_sensor` the path names
+ * the branch too (0 `then`, 1 `else`), so a client highlights the very block.
  *
  * THE BUDGET (ADR-103 §4). Every node visit and every loop iteration costs
  * one step, so nested empty loops are as bounded as anything else. Beyond
@@ -173,7 +175,8 @@ export class MapError extends Error {
 
 /** Sides of a map, in cells. */
 export const MAP_SIZE = { min: 3, max: 12 } as const;
-const HEADINGS = "^>v<";
+/** The start cell's glyph for each heading: `HEADINGS[heading]`. */
+export const HEADINGS = "^>v<";
 const CELL = /^[.#^>v<D]*$/;
 
 const cellKey = (x: number, y: number) => `${x},${y}`;
@@ -221,7 +224,13 @@ export function formatMap(map: GridMap): string[] {
 // The interpreter
 // ---------------------------------------------------------------------------
 
-/** Indices into the program and its bodies: `[2, 0]` is the first statement of the third one's body. */
+/**
+ * Where a statement sits: indices into the program and its bodies. `[2, 0]`
+ * is the first statement of the body of the third statement (a `repeat` or a
+ * `repeat_until_dock`). An `if_sensor` has two bodies, so a statement inside
+ * one gains the branch first: `[...ifPath, 0, n]` is the n-th statement of
+ * `then`, `[...ifPath, 1, n]` the n-th of `else`.
+ */
 export type NodePath = readonly number[];
 
 /**
@@ -235,7 +244,9 @@ export type RunEvent = {
   pose: { x: number; y: number; heading: Heading };
 };
 
-export type RunReason = "dock" | "collision" | "battery" | "loop" | "short";
+/** How a run can end: the one list of the reasons. */
+export const RUN_REASONS = ["dock", "collision", "battery", "loop", "short"] as const;
+export type RunReason = (typeof RUN_REASONS)[number];
 
 /** How a run ended. */
 export interface RunVerdict {
@@ -338,8 +349,8 @@ export function* simulate(
       case "if_sensor": {
         const cell = ahead(SIDE[stmt.where]);
         yield event("test", path);
-        const branch = free(cell.x, cell.y) === (stmt.sensor === "free") ? stmt.then : stmt.else;
-        return yield* block(branch, path);
+        const taken = free(cell.x, cell.y) === (stmt.sensor === "free") ? 0 : 1;
+        return yield* block(taken === 0 ? stmt.then : stmt.else, [...path, taken]);
       }
     }
   }
