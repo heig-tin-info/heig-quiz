@@ -80,7 +80,7 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
   const [showHidden, setShowHidden] = useState(false);
   const courses = useCourses();
   const training = useTrainingStatus();
-  const openTraining = useOpenTraining(navigate);
+  const openTraining = useOpenTraining(navigate, training.data?.course);
   const offerTraining = training.data?.installed === true && training.data.course === null;
   const all = courses.data ?? [];
   const hiddenCount = all.filter((c) => c.hidden).length;

@@ -12,6 +12,7 @@ import {
   type Command,
   type CommandContext,
 } from "./commands";
+import { screenCommandsContext } from "./assist/context";
 import { DICTS, loadLocale, type Locale, type TFunction } from "./i18n";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
 
@@ -247,17 +248,23 @@ describe("buildCommands: the theme and language actions", () => {
 });
 
 describe("buildCommands: help", () => {
-  it("offers the training course in the Help group only when there is one, marked as a write (ADR-105 §5, ADR-080 §10)", () => {
+  it("offers the training course in the Help group only when there is one (ADR-105 §5)", () => {
     const onTraining = vi.fn();
     const training = need(buildCommands(makeContext({ onTraining })), "help:training-course");
     expect(training.group).toBe("help");
     expect(training.label).toBe("Training course");
-    // It provisions a course on first use: the assistant must never run it.
-    expect(training.effect).toBe("write");
     training.run();
     expect(onTraining).toHaveBeenCalledTimes(1);
     expect(pick(buildCommands(makeContext()), "help:training-course")).toBeUndefined();
     expect(need(buildCommands(makeContext({ onTraining, locale: "fr" })), "help:training-course").label).toBe("Cours d'initiation");
+  });
+
+  it("never hands the training command to the assistant, which reads the mounted screen's commands only (ADR-080 §10)", () => {
+    // It provisions a course on first use. The assistant's context is built
+    // from `screenCommands()`, never from the global list this builds.
+    const commands = buildCommands(makeContext({ onTraining: vi.fn() }));
+    expect(ids(commands)).toContain("help:training-course");
+    expect(screenCommandsContext().map((c) => c.id)).not.toContain("help:training-course");
   });
 
   it("turns each topic into a command that opens it", () => {

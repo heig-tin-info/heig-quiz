@@ -13,7 +13,7 @@ mène là où la mission se joue — il ne fait jamais le geste à votre place.
 
 ## 1. Être étudiant
 
-Cliquez **Rejoindre comme étudiant** sur cette page : vous obtenez une place
+Cliquez **S'inscrire comme étudiant** sur cette page : vous obtenez une place
 dans votre propre classe, marquée *staff*. Ouvrez ensuite le menu de votre
 compte et **Passer en vue étudiant** : le portail devient ce qu'un étudiant
 voit. Faites le quiz d'accueil : une question par type, chacune sur un geste
@@ -35,7 +35,7 @@ Sur la page des banques, **Nouvelle banque**. Sur la page du cours
 d'initiation, **Lier une banque**. Dans votre banque, créez une question
 avec la baguette, essayez-la, publiez-la. Enregistrez le quiz d'accueil
 comme modèle, instanciez-le, ajoutez votre question, puis modifiez la
-question et voyez apparaître le badge « nouvelle version ». Prévisualisez le
+question et voyez apparaître le badge « version plus récente ». Prévisualisez le
 quiz, faites-le depuis la place de la mission 1, réinitialisez votre propre
 tentative.
 

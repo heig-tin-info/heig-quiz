@@ -12,7 +12,7 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ClassroomPatch, type ClassroomDetail } from "@quiz/contracts";
 import type { ClassroomQueryTab } from "@quiz/domain";
@@ -39,7 +39,7 @@ import { RosterTable } from "./RosterTable";
 import { useSearchParam, type Navigate, type Route } from "./router";
 import { useScreenCommands } from "./screenCommands";
 import { useTrainingStatus } from "./training/api";
-import { TrainingCard, trainingComplete } from "./training/TrainingCard";
+import { TrainingCard, trainingAccent } from "./training/TrainingCard";
 import {
   Badge,
   Button,
@@ -87,9 +87,10 @@ import { useClassroom } from "./course/parts";
  * primary, "Export CSV", takes the header's slot.
  *
  * The training classroom (ADR-105 §4) carries its progress card above the
- * activities, for the teacher it was provisioned for: while one of its
- * three required missions remains, the card's button is the tab's one accent
- * and "New ▾" steps down to secondary; the other tabs keep their primary.
+ * activities, for the teacher it was provisioned for: while `trainingAccent`
+ * names a mission, its button is the tab's one accent and "New ▾" steps down
+ * to secondary; the other tabs keep their primary. The card leads mission 1
+ * to this page's own "Join as student", which the page brings into view.
  */
 
 type RouteTab = "journal" | "groups" | "grades" | "settings";
@@ -221,7 +222,12 @@ export function ClassroomView({
   // every other classroom reads the same cached status and shows nothing.
   const training = useTrainingStatus();
   const trainingStatus = training.data?.course?.classroomId === id ? training.data : undefined;
-  const missionPending = trainingStatus !== undefined && !trainingComplete(trainingStatus);
+  const joinButton = useRef<HTMLButtonElement>(null);
+  /** Brings "Join as student" into view and under focus (jsdom has no `scrollIntoView`). */
+  const revealJoin = () => {
+    joinButton.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    joinButton.current?.focus();
+  };
   /**
    * The teacher takes a (staff) seat in their own classroom, to walk the
    * student flow without a second account. It stays out of the headcount.
@@ -295,6 +301,9 @@ export function ClassroomView({
         (r) => r.userId === mine.id || r.email.toLowerCase() === mine.email.toLowerCase(),
       )
     : undefined;
+  const seated = seat !== undefined;
+  // ADR-105 §4: the one rule the card shares, so the two never disagree.
+  const cardAccent = trainingStatus !== undefined && trainingAccent(trainingStatus, seated) !== null;
 
   return (
     <div className="space-y-6">
@@ -321,6 +330,7 @@ export function ClassroomView({
                 roster's staff badge shows the seat. */}
             {seat ? null : (
               <Button
+                ref={joinButton}
                 variant="secondary"
                 data-coach="classroom.join"
                 loading={join.isPending}
@@ -342,7 +352,7 @@ export function ClassroomView({
                 navigate={navigate}
                 onEvaluation={() => setLayer("evaluation")}
                 onConnect={openConnect}
-                secondary={missionPending}
+                variant={cardAccent ? "secondary" : "primary"}
               />
             ) : tab === "groups" && !data.archivedAt ? (
               <Button loading={newSet.isPending} onClick={createSet}>
@@ -416,7 +426,7 @@ export function ClassroomView({
         ) : tab === "evaluations" ? (
           <div className="space-y-8">
             {trainingStatus ? (
-              <TrainingCard classroomId={id} status={trainingStatus} hasSeat={seat !== undefined} navigate={navigate} />
+              <TrainingCard status={trainingStatus} onStudent={seated ? undefined : revealJoin} navigate={navigate} />
             ) : null}
             {/* WP8: evaluation + dashboard */}
             <EvaluationList

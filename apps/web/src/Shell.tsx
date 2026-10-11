@@ -478,7 +478,7 @@ export function Shell({
   // ADR-105 §5: the training course, in the account menu and the palette,
   // for a teacher in the teacher UI while the content is installed.
   const training = useTrainingStatus({ enabled: teacherUi });
-  const openTraining = useOpenTraining(navigate);
+  const openTraining = useOpenTraining(navigate, training.data?.course);
   const onTraining = teacherUi && training.data?.installed ? openTraining.open : undefined;
   const themeChoice = useThemeChoice();
   const resolvedTheme = useResolvedTheme();

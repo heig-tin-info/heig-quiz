@@ -6,6 +6,7 @@ import { applyTheme, getThemeChoice } from "./theme";
 import { TeacherHome } from "./TeacherHome";
 import { makeClassroomSummary, makeCourseSummary } from "./test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "./test/render";
+import { coursesKey } from "./queryKeys";
 
 /*
  * Teacher home: the courses, each with its classrooms. The page has ONE
@@ -17,7 +18,9 @@ const COURSES = "/app/api/courses";
 const TRAINING = "/app/api/training";
 
 /** The training status (ADR-105): installed, no course yet, every mission to do. */
-const trainingStatus = (over: { installed?: boolean; course?: { id: string; classroomId: string } | null } = {}) => ({
+const trainingStatus = (
+  over: { installed?: boolean; course?: { id: string; classroomId: string; liveEvaluationId: string | null } | null } = {},
+) => ({
   installed: true,
   course: null,
   missions: ["student", "run", "own", "tools"].map((key) => ({ key, state: "todo" })),
@@ -367,7 +370,7 @@ describe("TeacherHome in a private window", () => {
     expect(await screen.findByText("First time here?")).toBeVisible();
     // A text link, not a second button: the one accent stays on New course.
     const link = screen.getByRole("button", { name: "Start with the training course" });
-    expect(link.className).not.toMatch(/bg-accent/);
+    expect(link.className.split(" ")).not.toContain("bg-accent");
     expect(screen.getAllByRole("button", { name: /New course/ })).toHaveLength(1);
     await userEvent.click(link);
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r-init" }));
@@ -386,10 +389,34 @@ describe("TeacherHome in a private window", () => {
 
     mockFetch({
       [`GET ${COURSES}`]: ok([]),
-      [`GET ${TRAINING}`]: ok(trainingStatus({ course: { id: "c-init", classroomId: "r-init" } })),
+      [`GET ${TRAINING}`]: ok(trainingStatus({ course: { id: "c-init", classroomId: "r-init", liveEvaluationId: null } })),
     });
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);
     expect(await screen.findByText("No courses yet")).toBeVisible();
     expect(screen.queryByText("First time here?")).toBeNull();
+  });
+
+  it("reads the status again after a course mutation, so a deleted training course is provisioned anew", async () => {
+    const navigate = vi.fn();
+    let course: { id: string; classroomId: string; liveEvaluationId: string | null } | null = {
+      id: "c-init",
+      classroomId: "r-init",
+      liveEvaluationId: null,
+    };
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([]),
+      [`GET ${TRAINING}`]: () => ok(trainingStatus({ course })),
+      [`POST ${TRAINING}`]: ok({ courseId: "c-new", classroomId: "r-new", created: true }),
+    });
+    const { queryClient } = renderWithProviders(<TeacherHome navigate={navigate} />);
+    expect(await screen.findByText("No courses yet")).toBeVisible();
+    expect(screen.queryByText("First time here?")).toBeNull();
+    // The course is deleted elsewhere: every course mutation refreshes the
+    // courses' key, which the status lives under (`trainingKey`).
+    course = null;
+    await queryClient.invalidateQueries({ queryKey: coursesKey });
+    await userEvent.click(await screen.findByRole("button", { name: "Start with the training course" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r-new" }));
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual([TRAINING]);
   });
 });

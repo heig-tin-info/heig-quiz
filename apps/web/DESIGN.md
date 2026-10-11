@@ -988,10 +988,8 @@ live in `ui/state.ts`, each written once.
   never a refusal. A student who has not signed in carries a faint
   `CircleDashed`. Read-only (an archived classroom): plain chips, no menu.
 - Empty state: icon in a `surface-2` circle, title, one line, one action.
-  One exception, the Courses home (ADR-105 §5): under its one action a
-  text line may offer the training course — a line in the muted body size,
-  not a second button, shown only while the content is installed and the
-  teacher has no training course yet.
+  One exception, the Courses home: a text line under the one action — muted
+  `text-sm`, a `textLink`, never a button (when: ADR-105 §5).
 - PageSkeleton: the loading state of a whole page, in ONE shape — a 32 px
   title bar, optionally the 36 px tabs/toolbar row under it, then a 256 px
   block, optionally under a 96 px summary strip for a page that opens on
@@ -2219,9 +2217,7 @@ moves to a floating action button at the bottom right under `lg`
   that is not a creation — the polls launcher's "Launch" stays in its header.
   On the courses home and the pools, while the list is empty, the screen
   passes no `primary` at all: the empty state's button is the one action,
-  and there is no FAB. The courses home's empty state may carry a text link
-  to the training course under that button (ADR-105 §5): a line, never a
-  second accent. A pool's FAB is on its Questions tab only.
+  and there is no FAB. A pool's FAB is on its Questions tab only.
 - **Shape.** A 56 px `rounded-full` in the `accent` fill (it IS the screen's
   primary, the one red fill), `on-fill` ink, the overlay shadow: a floating
   layer. 16 px from the right edge, 16 px above the bottom bar

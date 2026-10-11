@@ -123,7 +123,6 @@ export const FLAG_NAMES = [
   "whatsnew",
   "training",
   "trainingdone",
-  "notraining",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;

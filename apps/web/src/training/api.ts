@@ -26,26 +26,23 @@ export function useTrainingStatus(options: ReadOptions = {}) {
 /**
  * Provisions the caller's training course, or opens the one they have: the
  * ONE gesture behind the Courses home's line, the account menu's entry and
- * the palette's command (ADR-105 §5). A second call returns the existing
- * course, so the three doors lead to the same classroom. The courses are
- * refreshed too: a course appeared on the home and in the sidebar.
+ * the palette's command (ADR-105 §5). `course` is the status the caller
+ * already reads; a second provisioning returns the existing course, so the
+ * three doors lead to the same classroom. Away first, then the courses
+ * (the status lives under their key): the classroom page is what the
+ * teacher asked for, and the list redraws behind it.
  */
-export function useOpenTraining(navigate: (r: Route) => void) {
+export function useOpenTraining(navigate: (r: Route) => void, course: TrainingStatus["course"] | undefined) {
   const qc = useQueryClient();
   const toastError = useErrorToast();
-  const status = useTrainingStatus({ enabled: false });
   const provision = useMutation({
     mutationFn: () => api<TrainingProvisionResponse>("/app/api/training", { method: "POST" }),
-    onSuccess: async (made) => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: trainingKey }),
-        qc.invalidateQueries({ queryKey: coursesKey }),
-      ]);
+    onSuccess: (made) => {
       navigate({ view: "classroom", id: made.classroomId });
+      void qc.invalidateQueries({ queryKey: coursesKey });
     },
     onError: toastError("training.provisionFailed"),
   });
-  const course = status.data?.course;
   return {
     open: () => {
       if (course) navigate({ view: "classroom", id: course.classroomId });

@@ -6222,7 +6222,7 @@ export const fr: Record<keyof Dict, string> = {
   "training.card.title": "Vos quatre missions",
   "training.card.description": "Chacune se joue sur un vrai écran ; rien n'est noté.",
   "training.mission.student.title": "Être étudiant",
-  "training.mission.student.text": "Rejoignez la classe comme étudiant, passez en vue étudiant et faites le quiz d'accueil.",
+  "training.mission.student.text": "Inscrivez-vous comme étudiant, passez en vue étudiant et faites le quiz d'accueil.",
   "training.mission.run.title": "Animer une classe",
   "training.mission.run.text": "Ouvrez la salle d'attente du quiz en direct, lancez-le, corrigez à la main, publiez les notes.",
   "training.mission.own.title": "À vous de jouer",

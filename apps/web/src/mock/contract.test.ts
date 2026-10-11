@@ -488,6 +488,8 @@ const CHECKED: Case[] = [
   one("/app/api/admin/llm", "/app/api/admin/llm", LlmSettings),
   one("/app/api/generate/availability", "/app/api/generate/availability", LlmAvailability),
   // The training course (ADR-105): installed, no course yet, without a flag.
+  // The flagged scenes (`?training=1`) name the mock's course and classroom
+  // by their non-uuid ids (`c1`, `r1`), which the schema would refuse.
   one("/app/api/training", "/app/api/training", TrainingStatus),
   // The teacher assistant's development stub (ADR-080).
   one("/app/api/assist/availability", "/app/api/assist/availability", AssistAvailability),

@@ -57,13 +57,6 @@ export interface Command {
   group: CommandGroupId;
   /** Extra text the fuzzy match sees but the row does not show. */
   keywords?: string;
-  /**
-   * What running it does to the platform's data, for the teacher assistant
-   * (ADR-080 §10): required on a screen's command (`ScreenCommand`), which
-   * is what the assistant is offered; a global command carries it only when
-   * it writes, so that it can never be folded in as effect-free.
-   */
-  effect?: "none" | "write";
   run: () => void;
 }
 
@@ -100,11 +93,7 @@ export interface CommandContext {
    * the Shell owns — the palette has no sheet of its own to open.
    */
   onStartPoll?: () => void;
-  /**
-   * Provisions or opens the teacher's training course (ADR-105 §5). Absent
-   * for a student, in the student view, and while the content is not
-   * installed.
-   */
+  /** The training course (ADR-105 §5): `UserMenu`'s `onTraining`, the same door. */
   onTraining?: () => void;
 }
 
@@ -399,7 +388,8 @@ export function buildCommands(ctx: CommandContext): Command[] {
   );
 
   if (ctx.onTraining) {
-    const openTraining = ctx.onTraining;
+    // It creates a course on first use. A global command never reaches the
+    // assistant, which reads the mounted screen's commands only (ADR-080 §10).
     commands.push({
       id: "help:training-course",
       label: t("menu.training"),
@@ -407,9 +397,7 @@ export function buildCommands(ctx: CommandContext): Command[] {
       icon: Compass,
       group: "help",
       keywords: "training initiation onboarding tutorial formation missions",
-      // It creates a course on first use: never the assistant's to run (ADR-080 §10).
-      effect: "write",
-      run: () => openTraining(),
+      run: ctx.onTraining,
     });
   }
 
