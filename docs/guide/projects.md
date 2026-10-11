@@ -39,16 +39,18 @@ When a push by anyone but Quiz (a student, or a workflow's own commit) touches a
 
 On the project page, **Publish** is the primary action of a draft. It starts the project now, or leaves the schedule to do it. A group project cannot be published while a claimed student is in no group.
 
-Once published, only these change: the name, the deadline (never to a past date), what happens at the deadline (until it passes) and the protected files. Students then **accept** the project, and each gets a repository `<project>-<login>` with push access.
+Once published, only these change: the name, the deadline (never to a past date), what happens at the deadline (until it passes) and the protected files. The deadline is edited in its tile; the strategy and the protected files are in the folded **Settings** at the bottom of the page. Students then **accept** the project, and each gets a repository `<project>-<login>` with push access.
 
 ## The project page
 
-One row per student (or group): the repository, the invitation state, the last commit, the CI status, the scores, and flags such as *locked*, *after the deadline*, *to verify*, *deleted on GitHub* or *access to revoke*. A row opens a sheet with the runs, the invitation (with **Resend**) and the repository's own deadline. The page refreshes by itself and never waits for GitHub: the live state is cached and shown as stale when GitHub is slow.
+Once published, the page is a dashboard. Four tiles sit under the header: **Accepted** (a ring and "26 / 30"), **Deadline** (the date, how long is left, the strategy, the grace, how many repositories are frozen, and the field to move it), **Progress** (how many students pushed, with the figures to look at: no commit, CI failing, to verify, alerts) and **Source** (the repositories, the history, the sync). A figure in a tile is a button: it narrows the table below to the repositories it counts, and **Show all** brings the others back. Under the tiles, the lifecycle rail shows the review checkpoints between the publication and the deadline, then the freeze and the release.
+
+The table has one row per student (or group): the repository, the last commit with its count (**0 commits** is amber, and red once the deadline has passed with nothing received), the CI status, the score, and flags such as *locked*, *to verify*, *deleted on GitHub* or *access to revoke*. A repository with its own deadline says so in its State cell. A row opens a sheet with the runs, the invitation (with **Resend**) and the repository's own deadline. The page refreshes by itself and never waits for GitHub: the live state is cached and shown as stale when GitHub is slow.
 
 <figure markdown="span">
-  ![The project page with its settings and one row per student](../assets/screenshots/mock-project-light.png#only-light)
-  ![The project page with its settings and one row per student](../assets/screenshots/mock-project-dark.png#only-dark)
-  <figcaption>A published project: settings, repositories and review checkpoints. (Mock data.)</figcaption>
+  ![The project page: four tiles, the lifecycle rail and one row per student](../assets/screenshots/mock-project-light.png#only-light)
+  ![The project page: four tiles, the lifecycle rail and one row per student](../assets/screenshots/mock-project-dark.png#only-dark)
+  <figcaption>A published project: tiles, lifecycle rail and repositories. (Mock data.)</figcaption>
 </figure>
 
 <figure markdown="span">

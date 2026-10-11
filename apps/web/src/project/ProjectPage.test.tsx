@@ -196,8 +196,9 @@ describe("the one primary action", () => {
     await screen.findByRole("heading", { level: 1 });
     expect(screen.queryByRole("button", { name: /Publish/ })).toBeNull();
     expect(status()).toMatch(/^Open until /);
-    // The counts, under the sentence.
-    expect(screen.getByText(/2 students · 1 accepted · 0 of 1 frozen/)).toBeInTheDocument();
+    // The counts left the header for the tiles.
+    expect(screen.queryByText(/2 students · 1 accepted/)).toBeNull();
+    expect(within(screen.getByTestId("project-tiles")).getByText("1 / 2")).toBeInTheDocument();
   });
 
   it("publishes, then refreshes the page and the lists", async () => {
@@ -385,12 +386,13 @@ describe("the settings", () => {
   it("writes the deadline when the field is left, the strategy on change, the protected files on a tick", async () => {
     const { calls } = routes(makeProject(), { [`PATCH ${BASE}`]: ok({}) });
     renderPage();
-    const deadline = await screen.findByLabelText("Deadline");
+    const deadline = await screen.findByLabelText("Change the deadline");
     fireEvent.change(deadline, { target: { value: "2099-06-01T23:59" } });
     fireEvent.blur(deadline);
     await waitFor(() => expect(writes(calls)).toHaveLength(1));
     expect(writes(calls)[0]!.body).toEqual({ deadlineAt: new Date("2099-06-01T23:59").toISOString() });
 
+    await userEvent.click(screen.getByRole("button", { name: /Settings/ }));
     await userEvent.click(screen.getByRole("radio", { name: "Mark" }));
     await waitFor(() => expect(writes(calls)).toHaveLength(2));
     expect(writes(calls)[1]!.body).toEqual({ deadlineStrategy: "commit" });
@@ -407,15 +409,16 @@ describe("the settings", () => {
     routes(makeProject({ state: "locked", editable: ["name", "deadlineAt", "protectedFiles"] }));
     renderPage();
     await screen.findByRole("heading", { level: 1 });
+    await userEvent.click(screen.getByRole("button", { name: /Settings/ }));
     expect(screen.getByRole("radio", { name: "Lock" })).toBeDisabled();
-    expect(screen.getByLabelText("Deadline")).toBeEnabled();
+    expect(screen.getByLabelText("Change the deadline")).toBeEnabled();
   });
 
   it("says a past deadline under the field, and puts the stored one back", async () => {
     const stored = makeProject();
     routes(stored, { [`PATCH ${BASE}`]: fail(422, { error: "deadline_past", message: "The deadline has passed" }) });
     renderPage();
-    const deadline = await screen.findByLabelText("Deadline");
+    const deadline = await screen.findByLabelText("Change the deadline");
     fireEvent.change(deadline, { target: { value: "2020-01-01T10:00" } });
     fireEvent.blur(deadline);
     expect(await screen.findByText("This deadline has already passed.")).toBeInTheDocument();
@@ -435,7 +438,7 @@ describe("the settings", () => {
       { [`PATCH ${BASE}`]: ok({}) },
     );
     renderPage();
-    const deadline = await screen.findByLabelText("Deadline");
+    const deadline = await screen.findByLabelText("Change the deadline");
     fireEvent.change(deadline, { target: { value: "2099-06-01T23:59" } });
     fireEvent.blur(deadline);
     const dialog = await screen.findByRole("dialog");
@@ -661,7 +664,8 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
     expect(within(rows[0]!).getByText("access to revoke")).toBeInTheDocument();
     expect(within(rows[1]!).getByText("No member")).toBeInTheDocument();
     expect(within(rows[2]!).getByText("no group")).toBeInTheDocument();
-    expect(screen.getByText(/2 groups/)).toBeInTheDocument();
+    // Counted per group, the staff's test row apart: two groups with a repository, one student in none.
+    expect(within(screen.getByTestId("project-tiles")).getByText(/^\d+ \/ 3$/)).toBeInTheDocument();
     // A group's sheet: titled by the group, its members listed, whether it follows the set.
     await userEvent.click(rows[0]!);
     const sheet = await screen.findByRole("dialog", { name: "Groupe 1" });
@@ -1022,7 +1026,7 @@ describe("the review checkpoints", () => {
       [`DELETE ${BASE}/checkpoints/${makeCheckpoint(3).id}`]: noContent(),
     });
     renderPage();
-    const region = await screen.findByRole("region", { name: "Review checkpoints" });
+    const region = await screen.findByRole("region", { name: "Lifecycle" });
     expect(await within(region).findByText("sent", { exact: false })).toBeInTheDocument();
     expect(within(region).getByText("void")).toBeInTheDocument();
     expect(within(region).getByText("scheduled")).toBeInTheDocument();
@@ -1060,7 +1064,7 @@ describe("the review checkpoints", () => {
       [`POST ${BASE}/checkpoints`]: fail(422, { error: "due_after_deadline", message: "" }),
     });
     renderPage();
-    const region = await screen.findByRole("region", { name: "Review checkpoints" });
+    const region = await screen.findByRole("region", { name: "Lifecycle" });
     await userEvent.click(await within(region).findByRole("button", { name: "Delete checkpoint milestone-1" }));
     await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(await screen.findByText(/already sent to some repositories/)).toBeInTheDocument();
@@ -1076,7 +1080,10 @@ describe("the review checkpoints", () => {
     routes(makeProject({ gradingMode: "none" }));
     renderPage();
     await screen.findByRole("heading", { level: 1 });
-    expect(screen.queryByRole("region", { name: "Review checkpoints" })).toBeNull();
+    // The rail stays (Published, Deadline, Freeze), without a checkpoint nor a Release step.
+    const rail = screen.getByRole("region", { name: "Lifecycle" });
+    expect(within(rail).queryByRole("button", { name: "Add a checkpoint" })).toBeNull();
+    expect(within(rail).queryByText("Release")).toBeNull();
   });
 });
 
@@ -1115,9 +1122,9 @@ describe("in French", () => {
     expect(status()).toMatch(/^Ouvert jusqu'au /);
     expect(screen.getByText("publié")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Dépôts" })).toBeInTheDocument();
-    expect(screen.getByText("à vérifier")).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).getByText("à vérifier")).toBeInTheDocument();
     expect(screen.getByText("non accepté")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Jalons de revue" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Déroulement" })).toBeInTheDocument();
   });
 
   it("offers the release, the review's state and the teacher's score in French", async () => {
@@ -1136,5 +1143,189 @@ describe("in French", () => {
     expect(within(sheet).getAllByText("Score de l'enseignant").length).toBeGreaterThan(0);
     expect(within(sheet).getByRole("button", { name: "Enregistrer" })).toBeInTheDocument();
     expect(within(sheet).getByText("Revue finale")).toBeInTheDocument();
+  });
+});
+
+describe("the dashboard (tiles, filter, rail, folded settings)", () => {
+  const tiles = () => screen.getByTestId("project-tiles");
+  const repoTable = async () => (await screen.findByRole("region", { name: "Repositories" })).querySelector("table")!;
+  const bodyRows = (table: HTMLElement) => within(table).getAllByRole("row").slice(1);
+
+  it("draws the acceptance as a ring with its figure, and the other three tiles", async () => {
+    routes(makeProject());
+    renderPage();
+    const grid = await screen.findByTestId("project-tiles");
+    expect(within(grid).getByText("1 / 2")).toBeInTheDocument();
+    // Never colour alone: the ring is named by the shares in words.
+    expect(within(grid).getByRole("img", { name: "Accepted: 1 ready · 0 pending · 1 not accepted" })).toBeInTheDocument();
+    expect(within(grid).getByText("Deadline")).toBeInTheDocument();
+    expect(within(grid).getByText("Lock")).toBeInTheDocument();
+    expect(within(grid).getByText("30 min")).toBeInTheDocument();
+    expect(within(grid).getByText("0 / 1")).toBeInTheDocument();
+    expect(within(grid).getByText("Progress")).toBeInTheDocument();
+    expect(within(grid).getByText("Source")).toBeInTheDocument();
+  });
+
+  it("filters the table with a tile's sub-figure, and 'Show all' clears it; the staff's row is under All only", async () => {
+    const staff = { ...row(3, makeRepo(3, { commits: 0, lastCommit: null })), staff: true };
+    routes(
+      makeProject({
+        rows: [row(1, makeRepo(1)), row(2, makeRepo(2, { commits: 0, lastCommit: null })), row(4, null), staff],
+      }),
+    );
+    renderPage();
+    const table = await repoTable();
+    expect(bodyRows(table)).toHaveLength(4);
+    const button = within(tiles()).getByRole("button", { name: /no commit/ });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    // One student without a commit; the teacher's test repository is not counted.
+    expect(button).toHaveTextContent("1");
+    await userEvent.click(button);
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(bodyRows(table)).toHaveLength(1);
+    expect(screen.getByTestId("project-filter")).toHaveTextContent("Showing: no commit");
+    await userEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(bodyRows(table)).toHaveLength(4);
+    expect(screen.queryByTestId("project-filter")).toBeNull();
+    // Pressing the same figure again also clears it.
+    await userEvent.click(within(tiles()).getByRole("button", { name: /not accepted/ }));
+    expect(bodyRows(table)).toHaveLength(1);
+    await userEvent.click(within(tiles()).getByRole("button", { name: /not accepted/ }));
+    expect(bodyRows(table)).toHaveLength(4);
+  });
+
+  it("draws a zero figure disabled, and a figure with rows enabled", async () => {
+    routes(makeProject({ rows: [row(1, makeRepo(1, { flags: { ...makeRepo(1).flags, multiple: true } }))] }));
+    renderPage();
+    await repoTable();
+    const alerts = within(tiles()).getByRole("button", { name: /alerts/ });
+    expect(alerts).toBeEnabled();
+    const ciFail = within(tiles()).getByRole("button", { name: /CI failing/ });
+    expect(ciFail).toBeDisabled();
+  });
+
+  it("has no Deadline column; a repository with its own deadline says so in its State cell", async () => {
+    routes(makeProject({ rows: [row(1, makeRepo(1, { deadlineAt: AHEAD })), row(2, makeRepo(2))] }));
+    renderPage();
+    const table = await repoTable();
+    expect(within(table).queryByRole("columnheader", { name: /Deadline/ })).toBeNull();
+    const rows = bodyRows(table);
+    expect(rows[0]!.textContent).toMatch(/own deadline \d{4}/);
+    expect(rows[1]!.textContent).not.toMatch(/own deadline/);
+    expect(within(tiles()).getByText("With their own deadline")).toBeInTheDocument();
+  });
+
+  it("says '0 commits' in amber, and in red once the deadline was applied with nothing received", async () => {
+    routes(
+      makeProject({
+        rows: [
+          row(1, makeRepo(1, { commits: 0, lastCommit: null })),
+          row(2, makeRepo(2, { commits: 0, lastCommit: null, deadlineAppliedAt: PAST })),
+          row(3, makeRepo(3, { commits: 0, deadlineAppliedAt: PAST })),
+          row(4, makeRepo(4)),
+        ],
+      }),
+    );
+    renderPage();
+    const rows = bodyRows(await repoTable());
+    const count = (i: number) => within(rows[i]!).getByText(/commits?$/);
+    // The tone matrix is `commitTone`'s unit tests'; here only that the tone reaches the cell.
+    expect(count(0).className).toMatch(/text-warning/);
+    expect(count(1).className).toMatch(/text-danger/);
+    // One cell: sha, when, count.
+    expect(rows[3]!.textContent).toMatch(/9a3f1c7.*11 commits/);
+  });
+
+  it("keeps the Score column off a project graded none", async () => {
+    routes(makeProject({ gradingMode: "none" }));
+    renderPage();
+    expect(within(await repoTable()).queryByRole("columnheader", { name: /Score/ })).toBeNull();
+  });
+
+  it("holds the strategy, the protected files and the work mode in the folded Settings", async () => {
+    routes(makeProject(), {
+      [`GET ${BASE}/workspace`]: ok({ mode: "free", allowed: ["free", "online"], refusal: null, syncedAt: null, syncError: null }),
+    });
+    renderPage();
+    const settings = await screen.findByRole("button", { name: /Settings/ });
+    expect(settings).toHaveAttribute("aria-expanded", "false");
+    // The count of what is protected stays in view folded.
+    expect(settings).toHaveTextContent("2");
+    expect(screen.queryByRole("radio", { name: "Mark" })).toBeNull();
+    await userEvent.click(settings);
+    expect(screen.getByRole("radio", { name: "Mark" })).toBeEnabled();
+    expect(await screen.findByRole("checkbox", { name: "README.md" })).toBeInTheDocument();
+    expect(await screen.findByRole("radiogroup", { name: "Where students work" })).toBeInTheDocument();
+  });
+
+  it("opens the Settings of a draft", async () => {
+    routes(makeDraft());
+    renderPage();
+    expect(await screen.findByRole("button", { name: /Settings/ })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("moves Sync into the source tile beside another primary; the header keeps the one primary action", async () => {
+    routes(
+      makeProject({
+        primaryAction: "release",
+        state: "locked",
+        sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null },
+      }),
+    );
+    renderPage();
+    const sync = await within(await screen.findByTestId("project-tiles")).findByRole("button", { name: "Sync" });
+    expect(sync).toHaveAttribute("data-coach", "project.sync");
+    expect(document.querySelectorAll('[data-coach="project.primary"]')).toHaveLength(1);
+    expect(within(tiles()).getByText("source 2 commits ahead")).toBeInTheDocument();
+  });
+
+  it("lists the checkpoints on the rail between Published and Deadline, with Release to come", async () => {
+    routes(makeProject(), { [`GET ${BASE}/checkpoints`]: ok([makeCheckpoint(1, { name: "soon" })]) });
+    renderPage();
+    const rail = await screen.findByRole("region", { name: "Lifecycle" });
+    expect(await within(rail).findByText("soon")).toBeInTheDocument();
+    const steps = within(rail).getAllByRole("listitem").map((li) => li.textContent);
+    expect(steps[0]).toMatch(/^Published/);
+    expect(steps[1]).toMatch(/^soon/);
+    expect(steps[2]).toMatch(/^Deadline/);
+    expect(steps[3]).toMatch(/^Freeze.*30 min grace/);
+    expect(steps[4]).toMatch(/^Release.*to come/);
+    expect(within(rail).getByRole("button", { name: "Add a checkpoint" })).toBeInTheDocument();
+  });
+
+  it("offers a new checkpoint on a draft (F-PROJ-01)", async () => {
+    routes(makeDraft());
+    renderPage();
+    const rail = await screen.findByRole("region", { name: "Lifecycle" });
+    expect(await within(rail).findByRole("button", { name: "Add a checkpoint" })).toBeInTheDocument();
+  });
+
+  it("offers neither a new checkpoint, a deletion nor Sync on an archived project", async () => {
+    routes(
+      makeProject({
+        archivedAt: PAST,
+        sync: { ahead: { pushedAt: PAST, commits: 2 }, inProgress: false, syncedAt: null, last: null },
+      }),
+      { [`GET ${BASE}/checkpoints`]: ok([makeCheckpoint(1, { name: "soon" })]) },
+    );
+    renderPage();
+    const rail = await screen.findByRole("region", { name: "Lifecycle" });
+    expect(await within(rail).findByText("soon")).toBeInTheDocument();
+    expect(within(rail).queryByRole("button", { name: "Add a checkpoint" })).toBeNull();
+    expect(within(rail).queryByRole("button", { name: "Delete checkpoint soon" })).toBeNull();
+    expect(within(tiles()).queryByRole("button", { name: "Sync" })).toBeNull();
+  });
+
+  it("offers no new checkpoint on a locked project, and greys a void one that can still be deleted", async () => {
+    routes(makeProject({ state: "locked" }), {
+      [`GET ${BASE}/checkpoints`]: ok([
+        makeCheckpoint(1, { name: "late", dueAt: new Date(Date.now() + 30 * 86_400_000).toISOString(), offsetDays: null }),
+      ]),
+    });
+    renderPage();
+    const rail = await screen.findByRole("region", { name: "Lifecycle" });
+    expect(await within(rail).findByText("never fires")).toBeInTheDocument();
+    expect(within(rail).queryByRole("button", { name: "Add a checkpoint" })).toBeNull();
+    expect(within(rail).getByRole("button", { name: "Delete checkpoint late" })).toBeInTheDocument();
   });
 });

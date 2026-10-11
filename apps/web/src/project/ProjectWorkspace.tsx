@@ -42,29 +42,29 @@ const STATE_TONE: Record<CodespaceSessionState, Tone> = {
   failed: "red",
 };
 
-/**
- * The project's online workspace (ADR-047 as amended 2026-10-07, M6-06), on
- * the staff's project page: where the students work — chosen by an owner
- * of the course whose account has the workspace grant, until a workspace
- * was opened (the server says which modes the caller may set, and why not
- * the others: `allowed`, `refusal`) —, the last update the portal received
- * with a *Resync*, and the workspaces open now, live from the portal.
- *
- * Nothing at all when the feature is off: the route is then a 404, and so
- * is the section. A secondary surface: the page's primary action stays the
- * header's.
- */
-export function ProjectWorkspace({ projectId, archived }: { projectId: string; archived: boolean }) {
-  const t = useT();
-  const qc = useQueryClient();
-  const toast = useToast();
-  const workspace = useQuery<Workspace>({
+/** The workspace read, shared by the work-mode setting and the live section: one query, one cache entry. */
+function useWorkspace(projectId: string) {
+  return useQuery<Workspace>({
     queryKey: projectWorkspaceKey(projectId),
     queryFn: () => api(`/app/api/projects/${projectId}/workspace`),
     // The 404 of a platform without the portal is an answer, not a failure to retry.
     retry: (count, error) => !isNotFound(error) && count < 2,
   });
-  const failed = (error: unknown) => toast(refusalMessage(error, t), "error");
+}
+
+/**
+ * Where the students work (ADR-047 as amended 2026-10-07, M6-06): a setting
+ * of the project, in the page's folded Settings. Chosen by an owner of the
+ * course whose account has the workspace grant, until a workspace was
+ * opened — the server says which modes the caller may set, and why not the
+ * others: `allowed`, `refusal`. Nothing at all when the feature is off (the
+ * route is then a 404).
+ */
+export function WorkModeSetting({ projectId, archived }: { projectId: string; archived: boolean }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const workspace = useWorkspace(projectId);
   const setMode = useMutation({
     mutationFn: (mode: WorkMode) =>
       api<Workspace>(`/app/api/projects/${projectId}/workspace/mode`, {
@@ -76,8 +76,65 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
       // The page itself only: the answer IS the workspace now.
       void qc.invalidateQueries({ queryKey: projectKey(projectId), exact: true });
     },
-    onError: failed,
+    onError: (error) => toast(refusalMessage(error, t), "error"),
   });
+
+  if (isNotFound(workspace.error)) return null;
+  const ws = workspace.data;
+  if (workspace.isLoading) return <Skeleton className="my-3 h-16 w-full" />;
+  if (workspace.isError || !ws) {
+    return (
+      <div className="py-3">
+        <QueryError title={t("project.workspace")} query={workspace} />
+      </div>
+    );
+  }
+  const changeable = !archived && ws.allowed.length > 1;
+  const options = WORK_MODES.filter((m) => !changeable || ws.allowed.includes(m)).map((value) => ({
+    value,
+    label: t(`project.workspace.mode.${value}`),
+  }));
+
+  return (
+    // Title and description above, the three long options below: they wrap on a phone instead of overflowing.
+    <div className="space-y-2.5 py-3" data-testid="project-work-mode">
+      <div>
+        <p id="project-work-mode" className="text-sm font-medium text-fg">
+          {t("project.workspace.mode")}
+        </p>
+        <p className="mt-0.5 text-[13px] text-fg-muted">{t(`project.workspace.mode.desc.${ws.mode}`)}</p>
+        {ws.refusal && !archived ? (
+          <p className="mt-1 text-[13px] text-fg-faint" data-testid="workspace-refusal">
+            {t(`project.workspace.refusal.${ws.refusal}`)}
+          </p>
+        ) : null}
+      </div>
+      <Segmented
+        name="workMode"
+        labelledBy="project-work-mode"
+        value={setMode.isPending && setMode.variables ? setMode.variables : ws.mode}
+        disabled={!changeable || setMode.isPending}
+        wrap
+        onChange={(mode) => setMode.mutate(mode)}
+        options={options}
+      />
+    </div>
+  );
+}
+
+/**
+ * The project's online workspace, live (ADR-047, M6-06), on the staff's
+ * page under the repositories: the last update the portal received with a
+ * *Resync*, the sync's error, and the workspaces open now, live from the
+ * portal. Drawn only while students work online (the mode itself is a
+ * setting, `WorkModeSetting`), and nothing at all when the feature is off
+ * (404). A secondary surface: the page's primary action stays the header's.
+ */
+export function ProjectWorkspace({ projectId, archived }: { projectId: string; archived: boolean }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const workspace = useWorkspace(projectId);
   const resync = useMutation({
     mutationFn: () =>
       api<ProjectWorkspaceSyncAccepted>(`/app/api/projects/${projectId}/workspace/sync`, { method: "POST" }),
@@ -85,74 +142,36 @@ export function ProjectWorkspace({ projectId, archived }: { projectId: string; a
       toast(t("project.workspace.resynced"), "success");
       void qc.invalidateQueries({ queryKey: projectWorkspaceKey(projectId) });
     },
-    onError: failed,
+    onError: (error) => toast(refusalMessage(error, t), "error"),
   });
 
-  if (isNotFound(workspace.error)) return null;
   const ws = workspace.data;
-  const changeable = ws !== undefined && !archived && ws.allowed.length > 1;
-  const options = WORK_MODES.filter((m) => !changeable || ws!.allowed.includes(m)).map((value) => ({
-    value,
-    label: t(`project.workspace.mode.${value}`),
-  }));
+  if (!ws || ws.mode === "free") return null;
 
   return (
     <section aria-labelledby="project-workspace" className="space-y-3" data-testid="project-workspace">
       <SectionHeading icon={Laptop} title={<span id="project-workspace">{t("project.workspace")}</span>} />
-      {workspace.isLoading ? (
-        <Skeleton className="h-24 w-full" />
-      ) : workspace.isError || !ws ? (
-        <QueryError title={t("project.workspace")} query={workspace} />
-      ) : (
-        <>
-          <Card className="divide-y divide-line px-4">
-            {/* Title and description above, the three long options below: they wrap on a phone instead of overflowing. */}
-            <div className="space-y-2.5 py-3">
-              <div>
-                <p id="project-work-mode" className="text-sm font-medium text-fg">
-                  {t("project.workspace.mode")}
-                </p>
-                <p className="mt-0.5 text-[13px] text-fg-muted">{t(`project.workspace.mode.desc.${ws.mode}`)}</p>
-                {ws.refusal && !archived ? (
-                  <p className="mt-1 text-[13px] text-fg-faint" data-testid="workspace-refusal">
-                    {t(`project.workspace.refusal.${ws.refusal}`)}
-                  </p>
-                ) : null}
-              </div>
-              <Segmented
-                name="workMode"
-                labelledBy="project-work-mode"
-                value={setMode.isPending && setMode.variables ? setMode.variables : ws.mode}
-                disabled={!changeable || setMode.isPending}
-                wrap
-                onChange={(mode) => setMode.mutate(mode)}
-                options={options}
-              />
-            </div>
-            {ws.mode !== "free" ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 py-3 text-[13px]">
-                <span className="text-fg-muted" data-testid="workspace-sync">
-                  {ws.syncedAt
-                    ? t("project.workspace.synced", { date: isoDateTime(ws.syncedAt) })
-                    : t("project.workspace.notSynced")}
-                </span>
-                <Button variant="secondary" size="sm" onClick={() => resync.mutate()} loading={resync.isPending} disabled={archived}>
-                  <RefreshCw /> {t("project.workspace.resync")}
-                </Button>
-              </div>
-            ) : null}
-          </Card>
-          {/* The portal's own words are a technical detail, on hover: the sentence is ours. */}
-          {ws.mode !== "free" && ws.syncError ? (
-            <Alert tone="warning" icon={AlertTriangle} title={t("project.workspace.syncError")}>
-              <span title={ws.syncError} data-testid="workspace-sync-error">
-                {t("project.workspace.syncError.body")}
-              </span>
-            </Alert>
-          ) : null}
-          {ws.mode !== "free" ? <WorkspaceSessions projectId={projectId} /> : null}
-        </>
-      )}
+      <Card className="px-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 py-3 text-[13px]">
+          <span className="text-fg-muted" data-testid="workspace-sync">
+            {ws.syncedAt
+              ? t("project.workspace.synced", { date: isoDateTime(ws.syncedAt) })
+              : t("project.workspace.notSynced")}
+          </span>
+          <Button variant="secondary" size="sm" onClick={() => resync.mutate()} loading={resync.isPending} disabled={archived}>
+            <RefreshCw /> {t("project.workspace.resync")}
+          </Button>
+        </div>
+      </Card>
+      {/* The portal's own words are a technical detail, on hover: the sentence is ours. */}
+      {ws.syncError ? (
+        <Alert tone="warning" icon={AlertTriangle} title={t("project.workspace.syncError")}>
+          <span title={ws.syncError} data-testid="workspace-sync-error">
+            {t("project.workspace.syncError.body")}
+          </span>
+        </Alert>
+      ) : null}
+      <WorkspaceSessions projectId={projectId} />
     </section>
   );
 }

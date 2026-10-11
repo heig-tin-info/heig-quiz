@@ -458,6 +458,11 @@ export function Fact({ label, children }: { label: ReactNode; children: ReactNod
  * Key figure: a small label over a large tabular number. With `onClick` it
  * is a button that leads to what it counts (the Activities summary), with
  * the hover of an interactive `Card`.
+ *
+ * With `children` it is a tile (DESIGN.md › The project page): the figure,
+ * then what qualifies it below — sub-figures, a legend line, a button of
+ * their own. A tile holds focusable things, so it never takes `onClick`; its
+ * `visual` (a ring) sits beside the figure.
  */
 export function Stat({
   label,
@@ -466,6 +471,8 @@ export function Stat({
   aside,
   icon: Icon,
   onClick,
+  visual,
+  children,
 }: {
   label: ReactNode;
   value: ReactNode;
@@ -478,6 +485,10 @@ export function Stat({
   aside?: ReactNode;
   icon?: IconType;
   onClick?: () => void;
+  /** A small picture beside the figure (a `RingChart`); tile variant. */
+  visual?: ReactNode;
+  /** The tile's body under the figure; makes the stat a tile, which is never a button. */
+  children?: ReactNode;
 }) {
   const body = (
     <>
@@ -486,11 +497,22 @@ export function Stat({
         {label}
         {aside ? <span className="ml-auto pl-2 tabular-nums text-fg-faint">{aside}</span> : null}
       </span>
-      <span className="mt-1 block text-[22px] font-bold leading-none tabular-nums tracking-tight">{value}</span>
+      <span className={cx("block", visual ? "mt-1.5 flex items-center justify-between gap-3" : "mt-1")}>
+        <span className="block text-[22px] font-bold leading-none tabular-nums tracking-tight">{value}</span>
+        {visual}
+      </span>
       {hint ? <span className="mt-1.5 block text-xs text-fg-faint">{hint}</span> : null}
     </>
   );
   const box = "rounded-card border border-line bg-surface px-4 py-3";
+  if (children) {
+    return (
+      <div className={cx(box, "flex min-w-0 flex-col")}>
+        {body}
+        <div className="mt-3 space-y-1.5 text-[13px] text-fg-muted">{children}</div>
+      </div>
+    );
+  }
   return onClick ? (
     <button
       type="button"

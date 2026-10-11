@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { ProjectWorkspace as Workspace, ProjectWorkspaceSessions } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
-import { ProjectWorkspace } from "./ProjectWorkspace";
+import { ProjectWorkspace, WorkModeSetting } from "./ProjectWorkspace";
 
 /*
  * The project's online workspace on the staff's page (ADR-047 as amended
@@ -45,7 +45,13 @@ const sessions: ProjectWorkspaceSessions = {
     },
   ],
 };
-const render = () => renderWithProviders(<ProjectWorkspace projectId="p1" archived={false} />);
+const render = () =>
+  renderWithProviders(
+    <>
+      <WorkModeSetting projectId="p1" archived={false} />
+      <ProjectWorkspace projectId="p1" archived={false} />
+    </>,
+  );
 
 describe("the project's workspace section", () => {
   it("is not there at all on a platform without the portal (the route's 404)", async () => {

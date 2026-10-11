@@ -555,6 +555,13 @@ live in `ui/state.ts`, each written once.
   name that says the action; it stops the row's click, and it is shown only
   where the fix would be accepted.
 - Card: `surface` + hairline + 16 px radius; padding 16–20.
+- Stat: a small muted label over a large tabular figure (22 px bold), on the
+  card's surface. Alone it is a key figure, a button when it leads
+  somewhere (the Activities summary). **The tile variant** takes `children`:
+  what qualifies the figure sits under it (sub-figures, a legend line, a
+  button of its own) and `visual` puts a small picture (a ring) beside the
+  figure. A tile holds focusable things, so it is never itself a button;
+  see "The project page (staff)".
 - Disclosure: a folded card (`src/ui/disclosure.tsx`), for the part of a
   settings page a teacher rarely touches (an evaluation's Conditions and
   Advanced options). The header row is ONE button the width of the card —
@@ -1842,6 +1849,60 @@ surfaces, so its rules are written here.
   nothing.
 - The ring sits BESIDE the pressable part of the row, not inside it: a
   focusable thing nested in a button is one control too many.
+- The ring is drawn by `RingChart` (`ui/ring.tsx`, parts in order, `total`
+  optional, the figure in the hole, one sentence for the bubble and the
+  accessible name); the launcher's `OutcomeBadge` and the project page's
+  acceptance both use it. (`Ring` of `ui/live.tsx` is the single-value
+  countdown ring, a different primitive.)
+
+## The project page (staff)
+
+`/projects/:id` for the course's staff (F-PROJ-13). Once published it reads as
+a dashboard, top to bottom: the header, four tiles, the lifecycle rail, the
+repositories, what is live of the workspace, and the folded Settings.
+
+- **Header**: title, state, the status sentence and the ONE primary button the
+  server names (Publish / Sync / Release). No counts line: the figures live in
+  the tiles. Nothing in a tile is `primary`.
+- **Four tiles** (`ProjectOverview`, the `Stat` tile variant; 4 columns from
+  `lg`, 2×2 at `sm`, one column on a phone):
+  *Accepted* — a 56 px ring beside "26 / 30", parts in fixed order: ready
+  `success`, pending `warning`, not accepted `fg-faint` at 50 %. A group
+  project's ring has two parts (an invitation is one member's). A provisioning
+  error, a student in no group and a repository whose student left are not
+  parts: they are said in a line of words. *Deadline* — the date, its relative
+  line ("passed" is the server's word, never the browser's clock), the strategy
+  as a zinc badge, grace, frozen k / n, how many have their own deadline, and
+  the field that edits it (the reopen confirmation and `deadline_past` are
+  unchanged). *Progress* — "n pushed". *Source* — the repositories, branches,
+  history, publication, scoring, the sync state, the last sync and Sync
+  (secondary) when `offersSync`.
+- **Sub-figures filter the table.** "n pending", "n not accepted" (Accepted)
+  and "n no commit", "n CI failing", "n to verify", "n alerts" (Progress) are
+  small `aria-pressed` buttons; a zero is muted and disabled unless it is the
+  filter in force. Pressing the active one clears it, and a line above the
+  table says "Showing: <filter> · Show all". The figure and the rows it opens
+  come from one rule (`projectPage.ts`, `matches`). The staff's test
+  repository is counted by no figure and listed under All only. Alerts are the
+  one red figure of the page.
+- **Lifecycle rail** (`ProjectRail`): Published → checkpoints → Deadline →
+  Freeze (`+ grace`, later own deadlines) → Release, horizontal
+  from `md`, vertical on a phone. Done steps have a filled marker. A void
+  checkpoint follows the Freeze, greyed, "never fires", still deletable. Graded
+  `none`: no checkpoints and no Release. "Add a checkpoint" is offered until the project is locked (a draft takes
+  them too, F-PROJ-01). Archived: that, a checkpoint's deletion and Sync are withheld.
+- **Table**: no Deadline column — everyone shares it; a repository with its own
+  gets an amber "own deadline <date>" badge in State. The commit cell is
+  `sha · when · n commits`. "0 commits" is `warning` text; it turns `danger`
+  only once the repository's deadline was applied with no commit and no last
+  commit received: before the freeze the work may still come, after it there
+  is nothing left to wait for, and red is kept for what is certain. A zero with
+  a last commit stays amber. The score is bold points over the grade as text,
+  with the source (CI, review, teacher) as faint text under it.
+- **Settings** stay editable after publication but are demoted: a folded
+  `Disclosure` at the bottom (strategy, protected files, work mode) with the
+  count of protected files beside its title. A draft's sits above the tiles instead and opens by default.
+- Archived: every write disabled. Group mode: counts per group.
 
 ## The pool's concept heat (Concepts tab, "Heat")
 

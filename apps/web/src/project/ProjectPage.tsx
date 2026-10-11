@@ -35,34 +35,39 @@ import {
   type MenuItem,
 } from "../ui";
 import { projectStateLabel, projectStateTone } from "./common";
-import { ProjectCheckpoints } from "./ProjectCheckpoints";
 import { FIELD_ID } from "./newProject";
 import { ProjectGroupSet } from "./ProjectGroupSet";
 import { projectNotices, projectNoticeToast } from "./projectNotices";
+import { ProjectOverview } from "./ProjectOverview";
+import { ProjectRail } from "./ProjectRail";
 import { ProjectRepos } from "./ProjectRepos";
 import { ProjectSettings } from "./ProjectSettings";
 import { ProjectWorkspace } from "./ProjectWorkspace";
 import {
   hasFellBack,
-  offersSync,
   projectRefetchInterval,
   projectStatus,
   refusalMessage,
   releaseRefusal,
   groupSetPageOf,
   unassignedStudents,
+  type RepoFilter,
   type UnassignedStudent,
 } from "./projectPage";
 import { RepoSheet } from "./RepoSheet";
 
 /**
- * The staff's project page (F-PROJ-13, M3-12), `/projects/:id`: the header
- * — its name (renamed in place), its state, what is happening and the ONE
- * primary action the server names —, the settings still open to change
- * (F-PROJ-03), one row per student of the roster with their repository (per
- * group in a group project, M3-16b, with its drift and *Resync*), and
- * the review checkpoints. A row opens its repository's sheet: the history
- * of its runs, its scores and the teacher's, its own deadline and its lock.
+ * The staff's project page (F-PROJ-13, M3-12), `/projects/:id`: a dashboard.
+ * The header — its name (renamed in place), its state, what is happening and
+ * the ONE primary action the server names —, four tiles (the acceptance as a
+ * ring, the deadline edited in place, the progress, the source and its sync;
+ * their sub-figures filter the table), the lifecycle rail with the review
+ * checkpoints, one row per student of the roster with their repository (per
+ * group in a group project, M3-16b, with its drift and *Resync*), the live
+ * workspace, and the settings still open to change (F-PROJ-03) in a folded
+ * card at the bottom (open on a draft). A row opens its repository's sheet:
+ * the history of its runs, its scores and the teacher's, its own deadline and
+ * its lock. See DESIGN.md › The project page (staff).
  *
  * The primary action is `primaryAction`, decided by the server and never
  * derived here: Publish and Release are buttons — Release disabled, with a
@@ -89,6 +94,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const toast = useToast();
   const confirm = useConfirm();
   const [openRepo, setOpenRepo] = useState<string | null>(null);
+  /** The tile sub-figure narrowing the repositories' table, or null for all of them. */
+  const [filter, setFilter] = useState<RepoFilter | null>(null);
   const [unassigned, setUnassigned] = useState<UnassignedStudent[] | null>(null);
   /** Publish refused `409 no_group_set`: said above the page, pointing at the picker, until a set is chosen. */
   const [noSet, setNoSet] = useState(false);
@@ -254,27 +261,19 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   /** The set's page, coming back here (`?fromProject=<id>`): where the students in no group are placed. */
   const setPage = groupSetPageOf(project);
   const { sync } = project;
-  const counts = [
-    t("project.counts.students", { n: project.counts.students }),
-    ...(project.groupMode ? [t("project.counts.groups", { n: project.counts.groups })] : []),
-    t("project.counts.accepted", { n: project.counts.accepted }),
-    t("project.counts.frozen", { n: project.counts.frozen, live: project.counts.live }),
-    ...(project.counts.toVerify > 0 ? [t("project.counts.toVerify", { n: project.counts.toVerify })] : []),
-    ...(project.counts.alerts > 0 ? [t("project.counts.alerts", { n: project.counts.alerts })] : []),
-    // The source ahead (F-PROJ-12): with its commits when the handed-out sha is known.
-    ...(sync.ahead ? [sync.ahead.commits === null ? t("project.counts.aheadUnknown") : t("project.counts.ahead", { n: sync.ahead.commits })] : []),
-  ];
-  /** Sync: the primary button when the server names it, a secondary one beside Publish or Release while the source is ahead. */
-  const syncButton = (variant: "primary" | "secondary") => (
+  /** Sync as the header's primary, when the server names it; beside Publish or Release it is the source tile's button. */
+  const primarySync = (
     <Button
-      variant={variant}
-      data-coach={variant === "primary" ? "project.primary" : "project.sync"}
+      data-coach="project.primary"
       onClick={() => syncNow.mutate()}
       loading={syncNow.isPending || sync.inProgress}
     >
       <RefreshCw /> {t(sync.inProgress ? "project.sync.inProgress" : "project.sync")}
     </Button>
   );
+
+  const settings = <ProjectSettings project={project} patch={patch} />;
+  const settingsFirst = project.state === "draft";
 
   return (
     <div className="space-y-8">
@@ -303,23 +302,16 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         description={
           <>
             <p data-testid="project-status">{t(status.key, { date: isoDateTime(status.date) })}</p>
-            <p className="mt-0.5 tabular-nums text-fg-faint">{counts.join(" · ")}</p>
             {/* ADR-070's R2 (M3-16b): the release waits for a confirmed resync of the groups. */}
             {releaseWaits ? (
               <p className="mt-0.5 text-fg-muted" data-testid="project-release-waits">
                 {t("project.release.waitsResync")}
               </p>
             ) : null}
-            {sync.syncedAt && sync.last ? (
-              <p className="mt-0.5 tabular-nums text-fg-faint" data-testid="project-sync-last">
-                {t("project.sync.last", { date: isoDateTime(sync.syncedAt), ...sync.last })}
-              </p>
-            ) : null}
           </>
         }
         actions={
           <span className="flex flex-wrap items-center gap-2">
-            {offersSync(project) ? syncButton("secondary") : null}
             {project.primaryAction === "publish" ? (
               <Button
                 data-coach="project.primary"
@@ -338,7 +330,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
                 <Send /> {t(again ? "project.release.again" : "project.release")}
               </Button>
             ) : project.primaryAction === "sync" ? (
-              syncButton("primary")
+              primarySync
             ) : null}
           </span>
         }
@@ -400,10 +392,20 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
       ) : null}
 
       {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
-      <ProjectSettings project={project} patch={patch} />
+      {/* A draft's page is still the settings' place: open on top, until its own redesign. */}
+      {settingsFirst ? settings : null}
+      <ProjectOverview
+        project={project}
+        patch={patch}
+        filter={filter}
+        onFilter={setFilter}
+        onSync={() => syncNow.mutate()}
+        syncing={syncNow.isPending}
+      />
+      <ProjectRail project={project} />
+      <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
       <ProjectWorkspace projectId={project.id} archived={archived} />
-      <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} />
-      {project.gradingMode === "auto" ? <ProjectCheckpoints project={project} /> : null}
+      {settingsFirst ? null : settings}
 
       {openRepo ? <RepoSheet project={project} repoId={openRepo} onClose={() => setOpenRepo(null)} /> : null}
     </div>

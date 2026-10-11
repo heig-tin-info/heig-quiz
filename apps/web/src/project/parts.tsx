@@ -63,18 +63,27 @@ export const SCORE_SOURCE_KEY: Record<NonNullable<ProjectRepoView["scores"]["fin
   ci: "project.col.ci",
 };
 
-/** A final score as the table writes it: points out of their maximum, the grade, and where it comes from. */
+/**
+ * A final score as the table writes it: the points out of their maximum in
+ * bold tabular text, the grade as text beside them (never a badge), and under
+ * them, as faint text, where the score comes from (CI, review, teacher) —
+ * visible, not only a tooltip (I42).
+ */
 export function Score({ score }: { score: ProjectRepoView["scores"]["final"] }) {
   const t = useT();
   if (!score) return <Dash />;
   return (
-    <span className="inline-flex flex-wrap items-baseline justify-end gap-x-2">
-      <Points points={score.points} max={score.max} />
-      {score.grade ? (
-        <span className="font-semibold tabular-nums">
-          <Grade value={score.grade.grade} />
+    <span className="inline-flex flex-col items-end leading-tight">
+      <span className="inline-flex items-baseline gap-x-2">
+        <span className="font-semibold">
+          <Points points={score.points} max={score.max} />
         </span>
-      ) : null}
+        {score.grade ? (
+          <span className="tabular-nums text-fg-muted">
+            <Grade value={score.grade.grade} />
+          </span>
+        ) : null}
+      </span>
       <span className="text-xs text-fg-faint">{t(SCORE_SOURCE_KEY[score.source])}</span>
     </span>
   );
