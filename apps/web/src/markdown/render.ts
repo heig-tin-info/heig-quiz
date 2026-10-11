@@ -1,12 +1,13 @@
 import DOMPurify from "dompurify";
-import katex from "katex";
 import { Marked, type Tokens } from "marked";
 
 import { decodeEntities } from "@quiz/docrender/entities";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
+import { FormulaBudget } from "@quiz/docrender/katex";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 
 import { escapableStart, referenceAt } from "./delimiters";
+import { formulaHtml, type FormulaLabels } from "./formula";
 
 /*
  * Markdown -> sanitised HTML for content a student reads: question prompts,
@@ -236,7 +237,12 @@ const LITERAL = new Set(["CODE", "PRE", "KBD", "SAMP"]);
  * Replaces `$…$` and `$$…$$` inside one text node with KaTeX output. Returns
  * true when it changed something, so the caller can skip untouched nodes.
  */
-function renderMathIn(node: Text, doc: Document): boolean {
+function renderMathIn(
+  node: Text,
+  doc: Document,
+  labels: FormulaLabels,
+  budget: FormulaBudget,
+): boolean {
   const text = node.data;
   if (!text.includes("$")) return false;
   MATH.lastIndex = 0;
@@ -250,14 +256,10 @@ function renderMathIn(node: Text, doc: Document): boolean {
     const tex = (match[1] ?? match[2] ?? "").trim();
     const host = doc.createElement("span");
     host.className = display ? "md-math md-math-display" : "md-math";
-    // `throwOnError: false` renders the offending source in the error colour
+    // A broken or refused formula renders its source in the error colour
     // instead of taking the whole prompt down: a half-written formula must
-    // not blank the question a student is reading.
-    host.innerHTML = katex.renderToString(tex, {
-      displayMode: display,
-      throwOnError: false,
-      output: "htmlAndMathml",
-    });
+    // not blank the question a student is reading (`formula.ts`).
+    host.innerHTML = formulaHtml(tex, display, labels, budget);
     frag.append(host);
     last = match.index + match[0].length;
     match = MATH.exec(text);
@@ -363,8 +365,32 @@ function placeHoles(root: HTMLElement, holes: EncodedHoles) {
   }
 }
 
+/**
+ * Where a link goes, decided on the URL the browser will follow and never on
+ * the text of the href (audit L16): `//evil.example` and `/\evil.example` (a
+ * backslash is a slash to a URL parser) start like a path and lead to
+ * another host. The href is resolved against the page: `internal` when it
+ * stays on the app's origin or is a `mailto:` (it opens no tab), `external`
+ * when it leaves the origin, `dead` when nothing can follow it.
+ */
+function linkKind(href: string): "internal" | "external" | "dead" {
+  if (href === "") return "dead";
+  let url: URL;
+  try {
+    url = new URL(href, globalThis.location.href);
+  } catch {
+    return "dead";
+  }
+  return url.protocol === "mailto:" || url.origin === globalThis.location.origin ? "internal" : "external";
+}
+
 /** Walks the sanitised tree and applies steps 3 and 4 above. */
-function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHoles | null) {
+function postProcess(
+  root: HTMLElement,
+  codeBlockLabel: string,
+  holes: EncodedHoles | null,
+  formula: FormulaLabels,
+) {
   const doc = root.ownerDocument;
   if (holes) placeHoles(root, holes);
 
@@ -395,16 +421,17 @@ function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHo
   }
 
   // A link out of the app opens in its own tab and carries no referrer. A
-  // relative one (an asset, another page) keeps the current tab. An <a> whose
-  // href the allow-list refused (a `javascript:` URL) becomes plain text:
-  // leaving it underlined and red would promise a link that does nothing.
+  // link to the app itself (an asset, another page) keeps the current tab.
+  // An <a> whose href the allow-list refused (a `javascript:` URL), or that
+  // no URL parser reads, becomes plain text: leaving it underlined and red
+  // would promise a link that does nothing.
   for (const a of Array.from(root.querySelectorAll("a"))) {
-    const href = a.getAttribute("href") ?? "";
-    if (href === "") {
+    const kind = linkKind(a.getAttribute("href") ?? "");
+    if (kind === "dead") {
       a.replaceWith(...Array.from(a.childNodes));
       continue;
     }
-    if (/^https?:/i.test(href)) {
+    if (kind === "external") {
       a.setAttribute("target", "_blank");
       a.setAttribute("rel", "noreferrer noopener");
     }
@@ -435,7 +462,10 @@ function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHo
   });
   const texts: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n as Text);
-  for (const node of texts) renderMathIn(node, doc);
+  // One budget for the whole body (`FORMULA_HTML_BUDGET`): a formula past it
+  // is refused, however many came before it.
+  const budget = new FormulaBudget();
+  for (const node of texts) renderMathIn(node, doc, formula, budget);
 }
 
 /**
@@ -446,6 +476,7 @@ function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHo
  * `codeBlockLabel` is the accessible name given to each fenced block, which
  * is a focusable scroll region (W10). It is passed in rather than read from
  * `t()` here: this module is pure, and its tests read the HTML, not a locale.
+ * So are the reasons a refused formula gives (`formula`).
  */
 export function renderMarkdown(
   source: string,
@@ -456,7 +487,9 @@ export function renderMarkdown(
      * `<span data-cloze-hole="<index>">` for the host to fill.
      */
     holes?: boolean;
-  } = {},
+    /** Why a formula was not drawn (`useFormulaLabels`). */
+    formula: FormulaLabels;
+  },
 ): string {
   if (!source.trim()) return "";
   const holes = options.holes === true ? encodeHoles(source) : null;
@@ -470,6 +503,6 @@ export function renderMarkdown(
     ALLOW_DATA_ATTR: false,
     RETURN_DOM: true,
   }) as unknown as HTMLElement;
-  postProcess(body, codeBlockLabel, holes);
+  postProcess(body, codeBlockLabel, holes, options.formula);
   return body.innerHTML;
 }

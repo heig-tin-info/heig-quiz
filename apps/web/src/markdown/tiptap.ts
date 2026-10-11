@@ -40,15 +40,41 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { BlockMath, InlineMath } from "@tiptap/extension-mathematics";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 
+import { FormulaBudget } from "@quiz/docrender/katex";
+
 import { clozeHoleExtensions } from "./clozeHole";
 import { ParamExpr } from "./paramExpr";
 import { CodeHighlight } from "./codeHighlight";
+import { formulaHtml, type FormulaLabels } from "./formula";
 import { REFUSED, type ImageUrl } from "./imageUrl";
 import { assetUrl, assetWidth } from "./render";
 
 
-/** KaTeX behaves here as in the student view: a broken formula shows, it never throws. */
-const KATEX_OPTIONS = { throwOnError: false } as const;
+/**
+ * A formula atom draws through `formulaHtml`, as the student view does: a
+ * broken formula shows and never throws, it renders under the same bounds,
+ * and a macro definition is refused while it is written exactly as it will
+ * be when read (audit L15). The extension's own node view called KaTeX
+ * directly; this is the same element (classes, `data-type`, `data-latex`)
+ * without its click option, which no field sets. Each atom gets a fresh
+ * `FormulaBudget`: node views are rebuilt on every edit, so a budget shared
+ * across them would run out as the teacher types. One atom is still held to
+ * `FORMULA_SOURCE_MAX` and `FORMULA_HTML_MAX`.
+ */
+function formulaNodeView(display: boolean, labels: FormulaLabels): NodeViewRenderer {
+  return ({ node, editor }) => {
+    const latex = typeof node.attrs.latex === "string" ? node.attrs.latex : "";
+    const dom = document.createElement(display ? "div" : "span");
+    dom.className = "tiptap-mathematics-render";
+    if (editor.isEditable) dom.classList.add("tiptap-mathematics-render--editable");
+    dom.dataset.type = display ? "block-math" : "inline-math";
+    dom.setAttribute("data-latex", latex);
+    const target = display ? dom.appendChild(document.createElement("div")) : dom;
+    if (display) target.className = "block-math-inner";
+    target.innerHTML = formulaHtml(latex, display, labels, new FormulaBudget());
+    return { dom };
+  };
+}
 
 /**
  * What an INLINE field (one choice of an mcq) lets the keyboard build: the
@@ -83,9 +109,12 @@ export const INLINE_INPUT_RULES = [
  * the picture the teacher just dropped. So the attribute keeps the canonical
  * `asset:` form — that is what `renderMarkdown` serializes and what is stored —
  * and only the rendered `src` is resolved to the same-origin endpoint. A URL
- * that is not an asset is left alone and simply does not load, which is what
- * the student view does with it too (`render.ts`) — unless the host resolves
- * it: the journal's images are RELATIVE paths beside the page (F-JRN-11), which
+ * that is not an asset is REFUSED, exactly as the student view drops it
+ * (`render.ts`): no `src` reaches the DOM, so nothing is fetched — an external
+ * picture in a shared pool would otherwise be a tracking pixel on every
+ * co-author who opens the question (audit L14). The reference stays in the
+ * markdown as written. The one exception is what the host resolves itself:
+ * the journal's images are RELATIVE paths beside the page (F-JRN-11), which
  * `imageUrl` turns into the journal's asset route.
  */
 const assetImage = (imageUrl?: ImageUrl) => Image.extend({
@@ -99,20 +128,19 @@ const assetImage = (imageUrl?: ImageUrl) => Image.extend({
           element.getAttribute("data-asset") ?? element.getAttribute("src"),
         renderHTML: (attributes: Record<string, unknown>) => {
           const src = typeof attributes.src === "string" ? attributes.src : "";
-          const hosted = imageUrl?.(src) ?? null;
+          // The host's URL, else the asset's, else refused.
+          const shown = imageUrl?.(src) ?? assetUrl(src) ?? REFUSED;
           // Refused: no `src` at all, so nothing is fetched; the reference
           // travels in `data-asset`, which the parser reads back.
-          if (hosted === REFUSED) return { "data-asset": src, "data-refused": "" };
-          if (hosted !== null) return { src: hosted, "data-asset": src };
-          const resolved = assetUrl(src);
-          if (resolved === null) return { src };
-          // The WIDTH lives in the reference too (`asset:<id>?w=50`), and it
-          // is rendered as the student's own class so a copy of the editor's
-          // HTML looks like the question. The editor itself draws through the
-          // node view below, which sizes the FRAME rather than the picture.
+          if (shown === REFUSED) return { "data-asset": src, "data-refused": "" };
+          // The WIDTH lives in an asset reference too (`asset:<id>?w=50`), and
+          // it is rendered as the student's own class so a copy of the
+          // editor's HTML looks like the question (100, no class, for any
+          // other src). The editor itself draws through the node view below,
+          // which sizes the FRAME rather than the picture.
           const width = assetWidth(src);
           return {
-            src: resolved,
+            src: shown,
             "data-asset": src,
             ...(width === 100 ? {} : { class: `md-img-${width}` }),
           };
@@ -529,6 +557,8 @@ export interface RichTextSchemaOptions {
   cloze?: boolean;
   /** Resolves an image's `src` for display (the journal's relative paths). */
   imageUrl?: ImageUrl;
+  /** Why a formula atom was not drawn, in the field's language (`useFormulaLabels`). */
+  formulaLabels: FormulaLabels;
 }
 
 /**
@@ -545,7 +575,8 @@ export function richTextExtensions({
   inline = false,
   cloze = false,
   imageUrl,
-}: RichTextSchemaOptions = {}): AnyExtension[] {
+  formulaLabels,
+}: RichTextSchemaOptions): AnyExtension[] {
   const base = assetImage(imageUrl);
   const image = imageNodeView ? base.extend({ addNodeView: imageNodeView }) : base;
   const code = codeBlockNodeView
@@ -567,8 +598,8 @@ export function richTextExtensions({
     // instead, like the keywords around it.
     CodeHighlight.configure({ holes: cloze }),
     image.configure({ allowBase64: false }),
-    InlineMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
-    BlockMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
+    InlineMathTyping.extend({ addNodeView: () => formulaNodeView(false, formulaLabels) }),
+    BlockMathTyping.extend({ addNodeView: () => formulaNodeView(true, formulaLabels) }),
     // GFM task lists. StarterKit does not carry them and `render.ts` does, so
     // without these two a `- [x] done` in a prompt came back a plain bullet —
     // a silent loss on the next autosave.

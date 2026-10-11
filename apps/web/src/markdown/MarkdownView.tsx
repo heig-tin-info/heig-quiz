@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useT } from "../i18n";
 import { cx } from "../ui";
 import { renderMarkdown } from "./render";
+import { useFormulaLabels } from "./useFormulaLabels";
 
 /**
  * Renders untrusted markdown — a question prompt, a choice, an explanation, a
@@ -41,14 +42,12 @@ export function MarkdownView({
 }) {
   const t = useT();
   const codeLabel = t("markdown.codeBlock");
+  const formula = useFormulaLabels();
   const Element = inline ? "span" : Tag;
-  const html = useMemo(
-    () =>
-      inline
-        ? unwrapParagraph(renderMarkdown(source, codeLabel))
-        : renderMarkdown(source, codeLabel),
-    [source, inline, codeLabel],
-  );
+  const html = useMemo(() => {
+    const out = renderMarkdown(source, codeLabel, { formula });
+    return inline ? unwrapParagraph(out) : out;
+  }, [source, inline, codeLabel, formula]);
   if (!html) return null;
   return (
     <Element

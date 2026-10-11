@@ -18,6 +18,7 @@ import {
   useRichTextShortcuts,
 } from "./RichTextToolbar";
 import { useClozeHole, useHoleSelectionPreview } from "./useClozeHole";
+import { useFormulaLabels } from "./useFormulaLabels";
 import { useFormulaTarget } from "./useFormulaTarget";
 import { useImageUpload } from "./useImageUpload";
 import type { ImageUrl } from "./imageUrl";
@@ -92,6 +93,7 @@ export function RichText({
   onSourceChange,
 }: RichTextHostProps) {
   const t = useT();
+  const formulaLabels = useFormulaLabels();
   const auto = useId();
   const fieldId = id ?? auto;
   const file = useRef<HTMLInputElement>(null);
@@ -131,6 +133,7 @@ export function RichText({
     openCreatedHole,
     longForm,
     imageUrl,
+    formulaLabels,
   });
   const marks = useRichTextMarks(editor);
   const selectionPreview = useHoleSelectionPreview(editor, holes);

@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { highlight, tokenize } from "@quiz/docrender/highlight";
 
+import { FORMULA_LABELS } from "../test/formula";
 import { codeHighlightKey } from "./codeHighlight";
 import { richTextExtensions } from "./tiptap";
 
@@ -25,7 +26,7 @@ document.elementFromPoint ??= () => null;
 function editorFor(markdown: string): Editor {
   return new Editor({
     element: document.createElement("div"),
-    extensions: richTextExtensions(),
+    extensions: richTextExtensions({ formulaLabels: FORMULA_LABELS }),
     content: markdown,
     contentType: "markdown",
   });

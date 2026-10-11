@@ -28,6 +28,10 @@
       "types": "./dist/journalTree.d.ts",
       "default": "./dist/journalTree.js"
     },
+    "./katex": {
+      "types": "./dist/katex.d.ts",
+      "default": "./dist/katex.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

@@ -217,8 +217,8 @@ describe("F-JRN-09: an image outside the journal is never fetched", () => {
     });
     const surface = await openEditor();
     expect(document.querySelector('img[src^="http"], img[src^="//"]')).toBeNull();
-    expect(within(surface).getByText("Image outside the journal, not shown: logo")).toBeInTheDocument();
-    expect(within(surface).getByText("Image outside the journal, not shown")).toBeInTheDocument();
+    expect(within(surface).getByText("External image, not shown: logo")).toBeInTheDocument();
+    expect(within(surface).getByText("External image, not shown")).toBeInTheDocument();
     expect(saveButton()).toBeDisabled();
     // A field changed: the body, images included, goes back as it was read.
     await userEvent.type(screen.getByLabelText("Title"), "T");
