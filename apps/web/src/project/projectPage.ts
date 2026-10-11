@@ -466,7 +466,7 @@ const leftRoster = (e: RepoEntry): boolean => e.kind === "student" && e.student.
  * figures describe the repositories, archived project or not (what can still
  * be acted on is `actionable`, which the sheet reads).
  */
-const liveRepo = (e: RepoEntry): ProjectRepoView | null =>
+const existingRepo = (e: RepoEntry): ProjectRepoView | null =>
   e.repo !== null && exists(e.repo) ? e.repo : null;
 
 /** Whether `repo` is ready: provisioned, its invitation accepted or none (in group mode: provisioned). */
@@ -491,9 +491,9 @@ function matches(e: RepoEntry, filter: RepoFilter, p: Pick<ProjectDetail, "group
     case "notAccepted":
       return repo === null && !noGroup(e, groupMode);
     case "noCommit":
-      return liveRepo(e)?.commits === 0;
+      return existingRepo(e)?.commits === 0;
     case "ciFail":
-      return liveRepo(e)?.ciStatus === "fail";
+      return existingRepo(e)?.ciStatus === "fail";
     case "toVerify":
       return repo !== null && repo.flags.toVerify;
     case "alerts":
@@ -540,7 +540,7 @@ export function projectTally(p: Pick<ProjectDetail, "groupMode" | "rows" | "dead
   const entries = repoEntries(p).filter(counted);
   const n = (filter: RepoFilter) => entries.filter((e) => matches(e, filter, p)).length;
   const repos = entries.flatMap((e) => (e.repo ? [e.repo] : []));
-  const live = entries.flatMap((e) => liveRepo(e) ?? []);
+  const existing = entries.flatMap((e) => existingRepo(e) ?? []);
   const own = repos.filter((r) => r.deadlineAt !== null);
   const later = own.map((r) => r.deadlineAt!).filter((d) => d > p.deadlineAt).sort();
   return {
@@ -554,7 +554,7 @@ export function projectTally(p: Pick<ProjectDetail, "groupMode" | "rows" | "dead
       leftRoster: entries.filter(leftRoster).length,
     },
     progress: {
-      pushed: live.filter((r) => r.commits > 0).length,
+      pushed: existing.filter((r) => r.commits > 0).length,
       noCommit: n("noCommit"),
       ciFail: n("ciFail"),
       toVerify: n("toVerify"),
