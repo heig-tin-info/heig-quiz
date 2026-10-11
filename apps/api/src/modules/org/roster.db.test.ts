@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../../db/client.js";
 import { classrooms, courses, enrollments, userEmails, users } from "../../db/schema.js";
 import { testDb } from "../../test/db.js";
-import { claimEnrollments, claimOnOwnRequest, rosterChanged } from "./roster.js";
+import { claimEnrollments } from "./roster.js";
 
 async function seedClassroom(db: Db) {
   const courseId = randomUUID();
@@ -136,40 +136,5 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
     const row = await entry(db, enrollmentId);
     expect(row.userId).toBeNull();
     expect(row.conflictFlag).toBe(true);
-  });
-});
-
-describe("claimOnOwnRequest (ADR-053, addendum of 2026-10-11)", () => {
-  it("runs once per session, again after a roster write, and for a new session", async () => {
-    const classroomId = await seedClassroom(db);
-    const userId = await seedUser(db, "leoverdelaw@gmail.test", "leo.verdelaw@heig.test");
-    const session = randomUUID();
-
-    expect(await claimOnOwnRequest(db, session, userId)).toBe(0);
-    const first = await seedEntry(db, classroomId, "leo.verdelaw@heig.test", "Verdelaw");
-    // No roster write since this session looked: it does not look again.
-    expect(await claimOnOwnRequest(db, session, userId)).toBe(0);
-    expect((await entry(db, first)).userId).toBeNull();
-
-    rosterChanged();
-    expect(await claimOnOwnRequest(db, session, userId)).toBe(1);
-    expect((await entry(db, first)).userId).toBe(userId);
-
-    const other = await seedClassroom(db);
-    const second = await seedEntry(db, other, "leoverdelaw@gmail.test", "Verdelaw");
-    expect(await claimOnOwnRequest(db, randomUUID(), userId)).toBe(1);
-    expect((await entry(db, second)).userId).toBe(userId);
-  });
-
-  it("lets the requests of one page load share one pass", async () => {
-    const classroomId = await seedClassroom(db);
-    const userId = await seedUser(db, "ines.gauthier@heig.test");
-    const enrollmentId = await seedEntry(db, classroomId, "ines.gauthier@heig.test", "Gauthier");
-    const session = randomUUID();
-
-    const passes = [claimOnOwnRequest(db, session, userId), claimOnOwnRequest(db, session, userId)];
-    expect(passes[0]).toBe(passes[1]);
-    expect(await Promise.all(passes)).toEqual([1, 1]);
-    expect((await entry(db, enrollmentId)).userId).toBe(userId);
   });
 });

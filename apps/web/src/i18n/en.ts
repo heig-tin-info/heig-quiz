@@ -514,7 +514,7 @@ export const en = {
   "roster.revoke": "Revoke claim",
   "roster.revokeConfirm": "Revoke {name}'s claim?",
   "roster.revokeBody":
-    "The seat goes back to pending; the student claims it again on their next sign-in.",
+    "The seat goes back to pending; the student claims it again the next time they open Quiz. Change the address to give the seat to someone else.",
   "roster.remove": "Remove from roster",
   "roster.removeConfirm": "Remove {name}?",
   "roster.removeBody": "The student leaves the roster. Their past results are kept.",
@@ -529,7 +529,7 @@ export const en = {
   "roster.join": "Join as student",
 
   "import.title": "Add students",
-  "import.subtitle": "Last name, first name and e-mail — the student claims the seat on first sign-in",
+  "import.subtitle": "Last name, first name and e-mail — the student claims the seat when they open Quiz",
   "import.fromFile": "From a file",
   "import.drop": "Drop an Excel or CSV file here, or click to browse",
   "import.dropHint":
@@ -4009,7 +4009,7 @@ export const en = {
   "live.row.online": "connected",
   "live.row.offline": "offline",
   "live.row.never": "never connected",
-  "live.row.unclaimed": "has not opened Quiz yet: not yet attached",
+  "live.row.unclaimed": "has not opened Quiz yet",
   "live.row.submitted": "handed in",
   "live.row.expired": "closed",
   "player.suspended.title": "This station is suspended",
@@ -5223,7 +5223,7 @@ export const en = {
   "groups.group.deleteConfirm.title": "Delete “{name}”?",
   "groups.group.deleteConfirm.body": "Its students, if any, go back to “No group”.",
   "groups.over": "Above the maximum size ({max})",
-  "groups.unclaimed": "Not yet attached: has not opened Quiz yet",
+  "groups.unclaimed": "Has not opened Quiz yet",
   "groups.moveTo": "Move {name} to…",
   "groups.dropHere": "Move here",
   "groups.dropInto": "Move into {group}",

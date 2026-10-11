@@ -510,7 +510,7 @@ export const fr: Record<keyof Dict, string> = {
   "roster.revoke": "Annuler le rattachement",
   "roster.revokeConfirm": "Annuler le rattachement de {name} ?",
   "roster.revokeBody":
-    "La place repasse en attente ; l'étudiant la reprend à sa prochaine connexion.",
+    "La place repasse en attente ; l'étudiant la reprend la prochaine fois qu'il ouvre Quiz. Changez l'adresse pour donner la place à quelqu'un d'autre.",
   "roster.remove": "Retirer de la liste",
   "roster.removeConfirm": "Retirer {name} ?",
   "roster.removeBody": "L'étudiant quitte la liste. Ses résultats passés sont conservés.",
@@ -526,7 +526,7 @@ export const fr: Record<keyof Dict, string> = {
 
   "import.title": "Ajouter des étudiants",
   "import.subtitle":
-    "Nom, prénom et adresse e-mail — l'étudiant reprend sa place à sa première connexion",
+    "Nom, prénom et adresse e-mail — l'étudiant reprend sa place quand il ouvre Quiz",
   "import.fromFile": "Depuis un fichier",
   "import.drop": "Déposez un fichier Excel ou CSV ici, ou cliquez pour parcourir",
   "import.dropHint":
@@ -4002,7 +4002,7 @@ export const fr: Record<keyof Dict, string> = {
   "live.row.online": "connecté",
   "live.row.offline": "hors ligne",
   "live.row.never": "jamais connecté",
-  "live.row.unclaimed": "n’a pas encore ouvert Quiz : pas encore rattaché",
+  "live.row.unclaimed": "n’a pas encore ouvert Quiz",
   "live.row.submitted": "rendu",
   "live.row.expired": "clôturé",
   "player.suspended.title": "Ce poste est suspendu",
@@ -5215,7 +5215,7 @@ export const fr: Record<keyof Dict, string> = {
   "groups.group.deleteConfirm.title": "Supprimer « {name} » ?",
   "groups.group.deleteConfirm.body": "Ses étudiants, s'il y en a, reviennent dans « Sans groupe ».",
   "groups.over": "Au-delà de la taille maximale ({max})",
-  "groups.unclaimed": "Pas encore rattaché : n'a pas encore ouvert Quiz",
+  "groups.unclaimed": "N'a pas encore ouvert Quiz",
   "groups.moveTo": "Déplacer {name} vers…",
   "groups.dropHere": "Déplacer ici",
   "groups.dropInto": "Déplacer dans {group}",
