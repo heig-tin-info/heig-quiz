@@ -1119,6 +1119,9 @@ export const fr: Record<keyof Dict, string> = {
   "oauth.invalid.invalid_client": "Cet assistant n'est pas connu du portail. Ajoutez à nouveau le connecteur depuis votre assistant.",
   "oauth.invalid.invalid_redirect_uri": "L'assistant a demandé d'envoyer la réponse à une adresse qu'il n'a pas déclarée. Le portail a refusé, par sécurité.",
   "oauth.invalid.invalid_client_metadata": "La description de l'assistant n'a pas pu être lue. Réessayez dans un instant.",
+  "oauth.invalid.temporarily_unavailable": "Trop de tentatives de connexion sont venues de votre réseau. Réessayez dans une heure.",
+  "oauth.invalid.unsupported_response_type": "L'assistant a demandé un mode de connexion que le portail ne propose pas. Mettez l'assistant à jour, puis relancez la connexion.",
+  "oauth.invalid.invalid_target": "L'assistant a demandé l'accès à une autre adresse que celle du connecteur du portail. Vérifiez l'adresse du connecteur dans votre assistant.",
 
   "palette.open": "Rechercher",
   "palette.openClassroom": "Ouvrir la classe {name}",

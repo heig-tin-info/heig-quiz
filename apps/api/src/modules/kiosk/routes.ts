@@ -98,12 +98,12 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   };
 
   /** What a station did, audited with no actor: a station is not a person. */
-  const stationAudit = (action: AuditAction, deviceId: string | null, payload?: object) =>
+  const stationAudit = (action: AuditAction, deviceId: string, payload?: object) =>
     audit(app.db, {
       actorType: "system",
       action,
       subjectType: "kiosk_device",
-      subjectId: deviceId ?? "unknown",
+      subjectId: deviceId,
       at: app.clock.now(),
       ...(payload ? { payload } : {}),
     });
@@ -170,8 +170,15 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       return { station: { label: device.label, status: device.status } } satisfies KioskAttested;
     }
 
-    await stationAudit("kiosk.attest_failed", known?.id ?? null, { reason: verdict.reason });
-    if (known) await recordAttempt(app.db, known.id, verdict.reason, now);
+    // A failure is audited for a known station only: an unknown caller is
+    // anyone, with no session, and its failures would be the audit log's
+    // free resource (audit L5, N-SEC-09). It is logged instead.
+    if (known) {
+      await stationAudit("kiosk.attest_failed", known.id, { reason: verdict.reason });
+      await recordAttempt(app.db, known.id, verdict.reason, now);
+    } else {
+      req.log.info({ reason: verdict.reason, ip: req.ip }, "kiosk attestation failed for an unknown caller, not audited");
+    }
     return reply.code(403).send({ error: "not_attested" });
   });
 

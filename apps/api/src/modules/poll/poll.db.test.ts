@@ -377,7 +377,7 @@ describe("the public page (F-AUTH-05)", () => {
     expect(view.statusCode).toBe(200);
     const body = view.json();
     expect(body).toMatchObject({ code, state: "running", solution: null });
-    expect(body.me).toMatchObject({ identified: false, loginRequired: false, joined: false });
+    expect(body.me).toMatchObject({ identified: false, joined: false });
     expect(body.question.student.choices).toHaveLength(3);
     // Invariant 4: the public view is a student payload like any other.
     const serialized = JSON.stringify(body.question.student);
@@ -595,14 +595,6 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
     namedId = created.json().evaluation.id;
   });
 
-  it("sends a browser with no session to the login", async () => {
-    const refused = await post(`/app/api/p/${named}/join`);
-    expect(refused.statusCode).toBe(401);
-    expect(refused.json()).toMatchObject({ error: "login_required", next: `/p/${named}` });
-    expect(guestCookieOf(refused)).toBeNull();
-    expect((await get(`/app/api/p/${named}`)).json().me.loginRequired).toBe(true);
-  });
-
   it("refuses a signed-in account that holds no seat on the roster, and writes nothing", async () => {
     const read = await get(`/app/api/p/${named}`, outsider.headers);
     expect(read.statusCode).toBe(403);
@@ -631,7 +623,7 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
   it("lets a student of the roster join and answer, by name", async () => {
     const joined = await post(`/app/api/p/${named}/join`, rostered.headers);
     expect(joined.statusCode).toBe(200);
-    expect(joined.json().me).toMatchObject({ identified: true, joined: true, loginRequired: false });
+    expect(joined.json().me).toMatchObject({ identified: true, joined: true });
     expect(joined.json().settings.anonymous).toBe(false);
     const answered = await post(`/app/api/p/${named}/answer`, rostered.headers, {
       payload: { selected: [0] },
@@ -650,6 +642,40 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
     expect(joined.statusCode).toBe(200);
     const view = await get(`/app/api/evaluations/${namedId}/poll`, teacher.headers);
     expect(view.json().tally).toMatchObject({ joined: 2, answered: 1 });
+  });
+
+  // Audit L3 (05 §5.7): with the key revealed and the votes shown, a browser
+  // with no session — a guest of an anonymous poll included — is sent to the
+  // login on every public route, and reads nothing of the poll: no statement,
+  // no choice, no vote, no key.
+  it("sends a browser with no session to the login, and leaks nothing of a revealed poll", async () => {
+    const anonymous = await post("/app/api/polls", teacher.headers, { audience: ANYONE, questionId });
+    const guest = guestCookieOf(await post(`/app/api/p/${anonymous.json().evaluation.code}/join`));
+    expect(guest).toBeTruthy();
+    const shown = await post(`/app/api/evaluations/${namedId}/poll/reveal`, teacher.headers, {
+      revealed: true,
+      votes: true,
+    });
+    expect(shown.statusCode).toBe(200);
+    // The rostered student does read all of it: the leak check below is worth something.
+    const own = await get(`/app/api/p/${named}`, rostered.headers);
+    expect(own.json().solution).toEqual({ correct: [0] });
+    expect(own.json().tally).toMatchObject({ answered: 1 });
+
+    for (const headers of [{}, { cookie: `${GUEST_COOKIE}=${guest}` }]) {
+      const responses = [
+        await get(`/app/api/p/${named}`, headers),
+        await post(`/app/api/p/${named}/join`, headers),
+        await post(`/app/api/p/${named}/answer`, headers, { payload: { selected: [0] } }),
+      ];
+      for (const res of responses) {
+        expect(res.statusCode).toBe(401);
+        expect(Object.keys(res.json()).sort()).toEqual(["error", "message"]);
+        expect(res.json().error).toBe("login_required");
+        expect(guestCookieOf(res)).toBeNull();
+      }
+    }
+    await post(`/app/api/evaluations/${namedId}/poll/reveal`, teacher.headers, { revealed: false, votes: false });
   });
 
   it("refuses a signed-in browser whose CSRF header does not match its cookie", async () => {
@@ -689,6 +715,8 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
     expect(released.json().error).toBe("not_releasable");
     const [row] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, namedId));
     expect(row!.releasedAt).toBeNull();
+    // Ended, it is still nobody's to read without a session.
+    expect((await get(`/app/api/p/${named}`)).statusCode).toBe(401);
   });
 });
 

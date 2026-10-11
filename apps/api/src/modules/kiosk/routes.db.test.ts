@@ -151,13 +151,12 @@ describe("the station's attestation (ADR-051 §5)", () => {
     expect((await station(credential)).statusCode).toBe(200);
   });
 
-  it("audits a failure of an unknown caller without a device", async () => {
-    const before = (await audits("kiosk.attest_failed", "unknown")).length;
+  it("never audits a failure of an unknown caller (audit L5)", async () => {
+    const before = (await audits("kiosk.attest_failed")).length;
     const res = await attest({ response: "not-a-mock-response" }, "x".repeat(43));
     expect(res.statusCode).toBe(403);
-    const after = await audits("kiosk.attest_failed", "unknown");
-    expect(after).toHaveLength(before + 1);
-    expect(after.at(-1)!.payload).toEqual({ reason: "refused" });
+    expect((await attest({ response: "mock:refuse" })).statusCode).toBe(403);
+    expect(await audits("kiosk.attest_failed")).toHaveLength(before);
   });
 
   it("never writes a response, a challenge or a cookie to the audit", async () => {

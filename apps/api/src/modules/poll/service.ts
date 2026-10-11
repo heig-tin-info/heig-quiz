@@ -857,7 +857,7 @@ export async function publicView(
   db: Db,
   scope: PollScope,
   state: PollState,
-  viewer: Viewer & { loggedIn: boolean },
+  viewer: Viewer,
 ): Promise<PollPublicView> {
   const { evaluation, item } = scope;
   const settings = pollSettingsOf(scope);
@@ -886,7 +886,6 @@ export async function publicView(
     tally: settings.votes ? { ...(await tallyOf(db, evaluation)), pending: 0 } : null,
     me: {
       identified: viewer.userId !== null || viewer.guestId !== null,
-      loginRequired: !viewer.loggedIn && !settings.anonymous,
       joined: attempt !== null,
       answer,
     },

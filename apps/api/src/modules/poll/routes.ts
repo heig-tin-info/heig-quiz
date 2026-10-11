@@ -450,8 +450,9 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
    * addendum 2026-09-27), not a 404: the code is on the wall of the room, so
    * the poll's existence is no secret — what is withheld is its content, and
    * the reason is the one thing the reader can act on (sign in with another
-   * account). A browser with no session is told to sign in first
-   * (`me.loginRequired`), as before.
+   * account). A browser with no session is `401 login_required`, and reads
+   * nothing of the poll either: neither its statement, nor its votes, nor its
+   * revealed key (ADR-014, audit L3).
    */
   async function publicRequest<B extends z.ZodType | undefined = undefined>(
     req: FastifyRequest,
@@ -471,14 +472,15 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       return null;
     }
     const found = await service.byCode(app.db, params.data.code, now);
-    if (
-      found &&
-      !isOwnedPoll(found.evaluation) &&
-      req.user &&
-      !(await findReachableEvaluation(app.db, callerOf(req), found.evaluation.id))
-    ) {
-      reply.code(403).send({ error: "not_on_roster", message: "This poll is for the students of its classroom" });
-      return null;
+    if (found && !isOwnedPoll(found.evaluation)) {
+      if (!req.user) {
+        reply.code(401).send({ error: "login_required", message: "This poll is for the students of its classroom" });
+        return null;
+      }
+      if (!(await findReachableEvaluation(app.db, callerOf(req), found.evaluation.id))) {
+        reply.code(403).send({ error: "not_on_roster", message: "This poll is for the students of its classroom" });
+        return null;
+      }
     }
     const scope = found && (await service.scopeOf(app.db, found.evaluation));
     if (!found || !scope) {
@@ -488,11 +490,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     const token = req.cookies[service.GUEST_COOKIE];
     const guest =
       req.user || !token ? null : await live.guestByToken(app.db, found.evaluation.id, token);
-    const viewer: service.Viewer & { loggedIn: boolean } = {
-      userId: req.user?.id ?? null,
-      guestId: guest?.id ?? null,
-      loggedIn: Boolean(req.user),
-    };
+    const viewer: service.Viewer = { userId: req.user?.id ?? null, guestId: guest?.id ?? null };
     return {
       scope,
       state: found.state,
@@ -510,8 +508,8 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   /**
    * Joining. A session joins as itself — for a classroom's poll, only when
    * it sits on the roster or the staff (`publicRequest`); a browser with no
-   * session joins as a guest when the poll is anonymous, and is told to sign
-   * in otherwise.
+   * session joins as a guest, the poll being then an anonymous one
+   * (`publicRequest` told it to sign in otherwise).
    */
   app.post("/app/api/p/:code/join", async (req, reply) => {
     const now = app.clock.now();
@@ -522,16 +520,8 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       // Nothing to join any more; the page still shows the question.
       return service.publicView(app.db, scope, found.state, viewer);
     }
-    const settings = service.pollSettingsOf(scope);
-    if (!viewer.loggedIn && !settings.anonymous) {
-      return reply.code(401).send({
-        error: "login_required",
-        message: "This poll is for the students of its classroom",
-        next: `/p/${scope.evaluation.accessCode}`,
-      });
-    }
     try {
-      if (viewer.loggedIn) {
+      if (viewer.userId !== null) {
         await service.join(app.db, scope.evaluation, { userId: viewer.userId, guestId: null }, now);
       } else {
         // The cookie IS the identity: minted here, once per browser, and

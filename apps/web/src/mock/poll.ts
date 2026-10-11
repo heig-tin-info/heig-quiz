@@ -309,11 +309,18 @@ function moderationOn(poll: MockPoll): boolean {
 }
 
 /**
- * A classroom's poll lets in its roster and its staff, signed in; anybody
- * else signed in is refused before reading anything, like the API does.
+ * A classroom's poll lets in its roster and its staff, signed in; a browser
+ * with no session is sent to sign in, and anybody else signed in is refused,
+ * both before reading anything, like the API does.
  */
-function refuseOffRoster(poll: MockPoll): void {
-  if (!poll.anonymous && poll.offRoster === true && me !== null) {
+function refuseOutsider(poll: MockPoll): void {
+  if (!poll.anonymous && me === null) {
+    throw new MockPayload(401, {
+      error: "login_required",
+      message: "This poll is for the students of its classroom",
+    });
+  }
+  if (!poll.anonymous && poll.offRoster === true) {
     throw new MockPayload(403, {
       error: "not_on_roster",
       message: "This poll is for the students of its classroom",
@@ -345,7 +352,6 @@ function revealedOn(poll: MockPoll): boolean {
 
 function pollPublicView(poll: MockPoll): PollPublicView {
   const revealed = revealedOn(poll);
-  const loginRequired = !poll.anonymous && me === null;
   return {
     code: poll.code,
     state: poll.state,
@@ -355,12 +361,7 @@ function pollPublicView(poll: MockPoll): PollPublicView {
     // payload a participant must not be able to read early (invariant 4).
     solution: revealed ? poll.solution : null,
     tally: votesOn(poll) ? publicTally(poll) : null,
-    me: {
-      identified: !loginRequired,
-      loginRequired,
-      joined: !loginRequired && poll.joined,
-      answer: poll.answer,
-    },
+    me: { identified: true, joined: poll.joined, answer: poll.answer },
   };
 }
 
@@ -374,15 +375,13 @@ function publicTally(poll: MockPoll): PollPublicView["tally"] {
 
 on("GET", "/app/api/p/:code", (m) => {
   const poll = pollOr404(m.groups!.code!);
-  refuseOffRoster(poll);
+  refuseOutsider(poll);
   return pollPublicView(poll);
 });
 
 on("POST", "/app/api/p/:code/join", (m) => {
   const poll = pollOr404(m.groups!.code!);
-  refuseOffRoster(poll);
-  if (!poll.anonymous && me === null)
-    throw new MockError(401, "login_required");
+  refuseOutsider(poll);
   poll.joined = true;
   return pollPublicView(poll);
 });
@@ -390,9 +389,7 @@ on("POST", "/app/api/p/:code/join", (m) => {
 on("POST", "/app/api/p/:code/answer", (m, body) => {
   const poll = pollOr404(m.groups!.code!);
   if (poll.state === "ended") throw new MockError(410, "This poll has ended.");
-  refuseOffRoster(poll);
-  if (!poll.anonymous && me === null)
-    throw new MockError(401, "login_required");
+  refuseOutsider(poll);
   poll.joined = true;
   poll.answer = body.payload ?? null;
   return pollPublicView(poll);

@@ -31,7 +31,7 @@ function view(patch: Partial<PollPublicView> = {}): PollPublicView {
     question: { type: "mcq", student: mcqStudent },
     solution: null,
     tally: null,
-    me: { identified: true, loginRequired: false, joined: true, answer: null },
+    me: { identified: true, joined: true, answer: null },
     ...patch,
   };
 }
@@ -76,12 +76,11 @@ describe("the poll participant page", () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign, search: "" });
     render({
-      [`GET ${URL}`]: ok(
-        view({
-          settings: { anonymous: false, revealed: false, votes: false, moderation: false, ai: false },
-          me: { identified: false, loginRequired: true, joined: false, answer: null },
-        }),
-      ),
+      // The server sends nothing of a classroom's poll to a browser with no session.
+      [`GET ${URL}`]: fail(401, {
+        error: "login_required",
+        message: "This poll is for the students of its classroom",
+      }),
       "GET /app/api/config": ok({ devLogin: false }),
     });
 
@@ -94,7 +93,7 @@ describe("the poll participant page", () => {
 
   it("joins by itself, with no click, when the poll takes guests", async () => {
     const { calls } = render({
-      [`GET ${URL}`]: ok(view({ me: { identified: true, loginRequired: false, joined: false, answer: null } })),
+      [`GET ${URL}`]: ok(view({ me: { identified: true, joined: false, answer: null } })),
       [`POST ${URL}/join`]: ok(view()),
     });
 
@@ -104,7 +103,7 @@ describe("the poll participant page", () => {
   it("sends the answer the type built, once, and then says so", async () => {
     const { calls } = render({
       [`GET ${URL}`]: ok(view()),
-      [`POST ${URL}/answer`]: ok(view({ me: { identified: true, loginRequired: false, joined: true, answer: { selected: [0] } } })),
+      [`POST ${URL}/answer`]: ok(view({ me: { identified: true, joined: true, answer: { selected: [0] } } })),
     });
 
     // Nothing to send until the question has been answered.
@@ -144,7 +143,7 @@ describe("the poll participant page", () => {
         view({
           settings: { anonymous: true, revealed: true, votes: false, moderation: false, ai: false },
           solution: { correct: [0] },
-          me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
+          me: { identified: true, joined: true, answer: { selected: [1] } },
         }),
       ),
     });
@@ -182,7 +181,7 @@ describe("the poll participant page", () => {
           state: "ended",
           settings: { anonymous: true, revealed: true, votes: false, moderation: false, ai: false },
           solution: { correct: [0] },
-          me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
+          me: { identified: true, joined: true, answer: { selected: [1] } },
         }),
       ),
     });
@@ -212,7 +211,7 @@ describe("the poll participant page", () => {
         view({
           settings: { anonymous: true, revealed: false, votes: true, moderation: false, ai: false },
           tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [], ideas: [], pending: 0 },
-          me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
+          me: { identified: true, joined: true, answer: { selected: [1] } },
         }),
       ),
     });
@@ -235,7 +234,7 @@ describe("the poll participant page", () => {
           settings: { anonymous: true, revealed: false, votes: true, moderation: false, ai: false },
           solution: null,
           tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [], ideas: [], pending: 0 },
-          me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
+          me: { identified: true, joined: true, answer: { selected: [1] } },
         }),
       ),
     });
@@ -255,7 +254,7 @@ describe("the poll participant page", () => {
       [`GET ${URL}`]: ok(
         view({
           state: "ended",
-          me: { identified: true, loginRequired: false, joined: true, answer: { selected: [0] } },
+          me: { identified: true, joined: true, answer: { selected: [0] } },
         }),
       ),
     });
@@ -300,7 +299,7 @@ describe("a brainstorm on the participant page (ADR-071)", () => {
   });
 
   const brainstorm = (answer: unknown) =>
-    view({ question: { type: "brainstorm", student: { prompt: "Un être vivant ?", maxIdeas: 3 } }, me: { identified: true, loginRequired: false, joined: true, answer } });
+    view({ question: { type: "brainstorm", student: { prompt: "Un être vivant ?", maxIdeas: 3 } }, me: { identified: true, joined: true, answer } });
 
   it("sends each idea as it is added, with no Send button, one request at a time", async () => {
     const { calls } = render({
