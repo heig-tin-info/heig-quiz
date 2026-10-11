@@ -67,9 +67,14 @@ admin, never a student, an API token or a delegated session) creates, with the
 ordinary services of `org`:
 
 - a course whose `training_for` column names the caller (`courses.training_for`,
-  nullable, references `users`, **unique**: the constraint is the idempotence, as
-  `pools_personal_uq` is for the personal pool; a second call returns the existing
-  course, `created: false`). The course is named and coded by the service — name in
+  nullable, references `users` with `set null`, **unique**: the constraint is the
+  idempotence, as `pools_personal_uq` is for the personal pool; a second call
+  returns the existing course, `created: false`). The course is the caller's only
+  while they hold a staff seat on it (invariant 6): the `org` module clears
+  `training_for` when that seat is removed, the course lives on as an ordinary
+  course of its remaining staff, and the teacher may provision a new one. A
+  deleted classroom is rebuilt by the next call, which keeps the course's other
+  pool links and audits the rebuild. The course is named and coded by the service — name in
   the request's UI language, code `INIT-<n>` free at creation; both editable later as
   any course's, the column alone marks it. The caller is its only owner;
 - one classroom, the current period (its `periodEnd` the end of the current
@@ -97,9 +102,15 @@ two evaluation definitions are a TypeScript content module,
 validated by the type's schema at publish, no concept (ADR-081's vocabulary is the
 courses', not the platform's). It is installed by the admin task
 `training.install` (the task registry of the administration page, `POST
-/app/api/admin/tasks/:key/run`): a missing question is created and published; a
-question whose config or explanation differs from its latest published version gets a
-new published version; an unchanged one is left alone. Evaluations already
+/app/api/admin/tasks/:key/run`, which also runs it daily so a deployed content
+update reaches the pool without a click): a missing question is created and
+published; a question whose config or explanation differs from its latest published
+version gets a new published version; an unchanged one is left alone. A run with no
+question in the content installs nothing, and a run with no super admin account
+skips with a message. The pool is made public when it is created and never
+re-published by the task: an unpublication (ADR-095 §5) is deliberate, and
+"installed" means the pool exists AND is public, so the entries of §5 disappear
+and provisioning refuses until an admin publishes it again. Evaluations already
 instantiated keep their frozen versions and show "Update" (F-EVAL-03), so nothing
 moves under a teacher's feet. Audited `training.install`. Teachers are readers of the
 pool; it is listed in the catalogue like any public pool, under its owner's real name
@@ -191,7 +202,8 @@ assistant is never offered (it reads the mounted screen's commands only, ADR-080
 not installed. "All done" and the demotion of `New ▾` follow one pure rule shared by
 the card and the page, so the two can never disagree; when mission 1 is next and the
 teacher already holds a seat, the card shows a hint in words and `New ▾` keeps its
-accent.
+accent; likewise when mission 2 is next and the live quiz was deleted, the row keeps
+its text and no button.
 
 ## Assumptions (the product owner's open points, values taken on 2026-10-11)
 
