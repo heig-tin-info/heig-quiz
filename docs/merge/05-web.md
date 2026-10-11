@@ -127,7 +127,9 @@ classroom without it is a plain Quiz classroom. The Settings tab's
 **GitHub** section:
 
 1. pick an organization where Quiz's App (D23) is installed
-   (`GET /app/api/github/orgs`) or install it
+   (`GET /app/api/github/orgs`; *amended 2026-10-11 by
+   [ADR-100](../adr/ADR-100-organisations-github-accordees-aux-cours.md): `GET /app/api/classrooms/:id/github/orgs`, the
+   organizations granted to the course or owned by the teacher*) or install it
    (`installations/new?state=<classroomId>`; needs org-owner rights and "All
    repositories"); the status turns green by SSE (*amended 2026-10-06, M3-14
    pilot finding 1: the install is a same-tab round trip; the setup return

@@ -61,17 +61,24 @@ export interface FakeOrg {
   exists: boolean;
   /** The installation is suspended (`suspended_at` set). */
   suspended?: boolean;
-  /** The GitHub accounts that own the organization (`role: admin`, ADR-100). */
-  owners?: { id: number; login: string }[];
+  /**
+   * The organization's members as `GET /orgs/{org}/memberships/{username}`
+   * answers (ADR-100): an owner is `role: admin` (the default) and `state:
+   * active` (the default).
+   */
+  members?: { id: number; login: string; role?: "admin" | "member"; state?: "active" | "pending" }[];
+  /** The membership read fails with this status (a GitHub outage). */
+  membershipStatus?: number;
 }
 
 /**
  * The REST routes the `github` module's adapters call, answered from a
  * world of organizations the test mutates: installation tokens, the App's
  * installations (listing and by id), an organization's installation, plan,
- * LLM secret, and its owners' memberships.
+ * LLM secret, its members, and the accounts `users` names by id (`GET
+ * /user/{id}`, how a linked account's login is read today).
  */
-export function orgsRoute(orgs: () => FakeOrg[]): Route {
+export function orgsRoute(orgs: () => FakeOrg[], users: () => Map<number, string> = () => new Map()): Route {
   const account = (o: FakeOrg) => ({ id: o.githubOrgId, login: o.login, type: "Organization" });
   const installation = (o: FakeOrg) => ({
     id: o.installationId,
@@ -106,9 +113,22 @@ export function orgsRoute(orgs: () => FakeOrg[]): Route {
       return o?.installationId ? json(installation(o)) : undefined;
     }
     if ((m = /^\/orgs\/([^/]+)\/memberships\/([^/]+)$/.exec(path))) {
+      const o = byLogin(m[1]!);
+      if (o?.membershipStatus) return json({ message: "GitHub failed" }, o.membershipStatus);
       const login = decodeURIComponent(m[2]!).toLowerCase();
-      const owner = byLogin(m[1]!)?.owners?.find((o) => o.login.toLowerCase() === login);
-      return owner ? json({ state: "active", role: "admin", user: { id: owner.id, login: owner.login } }) : undefined;
+      const member = o?.members?.find((x) => x.login.toLowerCase() === login);
+      return member
+        ? json({
+            state: member.state ?? "active",
+            role: member.role ?? "admin",
+            user: { id: member.id, login: member.login },
+            organization: account(o!),
+          })
+        : undefined;
+    }
+    if ((m = /^\/user\/(\d+)$/.exec(path))) {
+      const login = users().get(Number(m[1]));
+      return login ? json({ id: Number(m[1]), login }) : undefined;
     }
     if ((m = /^\/orgs\/([^/]+)\/actions\/secrets\/ANTHROPIC_API_KEY$/.exec(path))) {
       return byLogin(m[1]!)?.secret ? json({ name: "ANTHROPIC_API_KEY" }) : undefined;

@@ -375,34 +375,34 @@ export async function resolveOrgInstallation(
 }
 
 /**
- * Is the GitHub account `githubUserId` (whose login Quiz holds as `login`)
- * an active OWNER of the organization? `GET /orgs/{org}/memberships/{username}`
- * through the installation (the App's organization `members: read`), the
- * immutable id compared, so a login taken over by someone else proves
- * nothing. False on a 404 (not a member, or a login renamed since: a false
- * negative only); any other failure throws (ADR-100).
+ * Is the GitHub account an active OWNER of the organization?
+ * `GET /orgs/{org}/memberships/{username}` through `octokit`, an
+ * installation client of that organization (the App's organization
+ * `members: read`). The immutable ids are compared — the member's with the
+ * linked account's, the organization's with the one Quiz holds — so a login
+ * taken over by someone else proves nothing (ADR-100). False on a 404 (not
+ * a member); any other failure throws.
  */
 export async function isOrgOwner(
-  config: AppConfig,
-  installationId: number,
-  orgLogin: string,
+  octokit: Octokit,
+  org: { login: string; githubOrgId: number | null },
   account: { githubUserId: number; login: string },
-  read: ReadOptions = {},
 ): Promise<boolean> {
-  const { octokit } = await installationClient(config, installationId);
   const membership = await unless404(async () => {
     const { data } = await octokit.request("GET /orgs/{org}/memberships/{username}", {
-      org: orgLogin,
+      org: org.login,
       username: account.login,
-      request: { retries: 0, ...read },
+      request: { retries: 0, ...HTTP_READ },
     });
-    return data as { state?: string; role?: string; user?: { id?: number } | null };
+    return data as { state?: string; role?: string; user?: { id?: number } | null; organization?: { id?: number } };
   });
   return (
     membership !== null &&
     membership.state === "active" &&
     membership.role === "admin" &&
-    membership.user?.id === account.githubUserId
+    membership.user?.id === account.githubUserId &&
+    org.githubOrgId !== null &&
+    membership.organization?.id === org.githubOrgId
   );
 }
 

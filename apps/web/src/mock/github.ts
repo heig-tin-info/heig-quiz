@@ -86,16 +86,20 @@ function staffRoom(id: string) {
 function classroomGithub(id: string): GithubClassroom {
   const room = staffRoom(id);
   const sibling = rooms.find((r) => r.courseId === room.courseId && r.id !== id && LINKS[r.id]);
-  const link = LINKS[id] ?? null;
   return {
-    link,
-    orgs: link || flags.ghnogrant ? [] : ORGS,
+    link: LINKS[id] ?? null,
     suggestedOrgId: sibling ? LINKS[sibling.id]!.org.id : null,
     installUrl: `${INSTALL_URL}?state=${id}`,
   };
 }
 
 on("GET", "/app/api/classrooms/:id/github", (m) => classroomGithub(m.groups!.id!));
+
+/** The connect sheet's list (ADR-100): both organizations, as if granted to every course; none under `?ghnogrant=1`. */
+on("GET", "/app/api/classrooms/:id/github/orgs", (m) => {
+  staffRoom(m.groups!.id!);
+  return flags.ghnogrant ? [] : ORGS;
+});
 
 on("PUT", "/app/api/classrooms/:id/github", (m, body) => {
   const id = m.groups!.id!;

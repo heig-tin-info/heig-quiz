@@ -52,7 +52,7 @@ A student who has not linked a GitHub account still sees the projects of the cla
 
 ## Troubleshooting
 
-**The organization is not in the list.** The App is not installed on it, or it is not open to the course and Quiz does not know you as its owner. If you own it, link your GitHub account in your Settings and open the panel again, or use **Install the App on GitHub**; otherwise ask an owner of the organization or an administrator to connect a classroom of the course, which opens it to the course.
+**The organization is not in the list.** The App is not installed on it, or it is not open to the course and Quiz does not know you as its owner. If you own it, link your GitHub account in your Settings and open the panel again, or use **Install the App on GitHub**; otherwise ask an owner of the organization or an administrator to connect a classroom of the course, which opens it to the course. Connecting to an organization that is not open to the course is refused with the same message, whatever the reason.
 
 **"Quiz's GitHub App is not installed on this organization" on a project.** The App was uninstalled or lost access since the classroom was connected. Install it again from the classroom's settings. Nothing is deleted meanwhile, the project's writes are suspended, and the staff are notified.
 

@@ -168,13 +168,6 @@ export type AuditAction =
   | "github_org.link"
   | "github_org.unlink"
   /**
-   * A connect refused because the organization is not granted to the
-   * classroom's course and the caller could not grant it (ADR-100): subject
-   * the classroom, `payload.orgId`, `payload.login`, `payload.reason`
-   * (`org_not_allowed`). Nothing written.
-   */
-  | "github_org.link_refused"
-  /**
    * ADR-100: an organization granted to a course by a connect (subject the
    * course; `payload.orgId`, `login`, `classroomId`, `via`: `owner` — the
    * caller's linked account owns the organization — or `super_powers`), or

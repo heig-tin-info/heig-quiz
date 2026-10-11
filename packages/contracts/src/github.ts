@@ -79,13 +79,6 @@ export type GithubClassroomLink = z.infer<typeof GithubClassroomLink>;
  */
 export const GithubClassroom = z.object({
   link: GithubClassroomLink.nullable(),
-  /**
-   * The organizations the connect sheet offers (F-GH-02, ADR-100), where
-   * Quiz's App acts: those granted to the classroom's course, and those the
-   * caller's linked GitHub account owns; every one to an admin with Super
-   * Powers. Empty once the classroom is connected.
-   */
-  orgs: z.array(GithubOrg),
   /** The organization of the course's other classrooms, suggested first (F-GH-02); null if none. */
   suggestedOrgId: z.uuid().nullable(),
   /**
@@ -96,6 +89,16 @@ export const GithubClassroom = z.object({
   installUrl: z.url({ protocol: /^https$/, hostname: /^github\.com$/ }),
 });
 export type GithubClassroom = z.infer<typeof GithubClassroom>;
+
+/**
+ * `GET /app/api/classrooms/:id/github/orgs` (staff) answers `GithubOrg[]`:
+ * the organizations the connect sheet offers (F-GH-02, ADR-100), where
+ * Quiz's App acts — those granted to the classroom's course, and those the
+ * caller's linked GitHub account owns; every one to an admin with Super
+ * Powers. Read when the sheet opens, never with the link.
+ */
+export const GithubConnectableOrgs = z.array(GithubOrg);
+export type GithubConnectableOrgs = z.infer<typeof GithubConnectableOrgs>;
 
 /**
  * `PUT /app/api/classrooms/:id/github` (staff): connect the classroom to an

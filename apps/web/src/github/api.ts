@@ -9,7 +9,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-import type { GithubAccountState, GithubClassroom } from "@quiz/contracts";
+import type { GithubAccountState, GithubClassroom, GithubConnectableOrgs } from "@quiz/contracts";
 
 import { api, isNotFound } from "../api";
 import { classroomGithubKey, meGithubKey } from "../queryKeys";
@@ -17,15 +17,23 @@ import { classroomGithubKey, meGithubKey } from "../queryKeys";
 /** The route is not there: no App on this platform (or, for a classroom, not ours). */
 export const githubAbsent = isNotFound;
 
-/**
- * `GET /classrooms/:id/github`: the link and its checks, re-read when the
- * Settings open (F-GH-03), and the organizations its connect sheet offers
- * (ADR-100).
- */
+/** `GET /classrooms/:id/github`: the link and its checks, re-read when the Settings open (F-GH-03). */
 export function useClassroomGithub(id: string) {
   return useQuery<GithubClassroom>({
     queryKey: classroomGithubKey(id),
     queryFn: () => api(`/app/api/classrooms/${id}/github`),
+  });
+}
+
+/**
+ * `GET /classrooms/:id/github/orgs`: the organizations the classroom's
+ * connect sheet offers (ADR-100), read only while the sheet is open. Under
+ * the classroom's GitHub key, so the setup return's hint refreshes it.
+ */
+export function useConnectableOrgs(id: string) {
+  return useQuery<GithubConnectableOrgs>({
+    queryKey: [...classroomGithubKey(id), "orgs"],
+    queryFn: () => api(`/app/api/classrooms/${id}/github/orgs`),
   });
 }
 

@@ -54,24 +54,33 @@ from the query, so anything written there is spoofable. Spec 05's sentence
      the linked one); or
    - the caller is an admin with active Super Powers (ADR-054).
 
-   Otherwise the connect is refused `403 org_not_allowed`, nothing written.
-   A grant written is audited `github_org.grant` (subject the course,
-   `via: owner | super_powers`); a refusal `github_org.link_refused`
-   (subject the classroom). A GitHub failure while asking is a refusal: an
-   ownership GitHub did not confirm grants nothing.
+   Otherwise the connect is refused `403 org_not_allowed`, nothing written;
+   to a caller who may not grant, that one answer also covers an
+   organization missing or uninstalled, so the refusal tells nothing of
+   other organizations. The linked login is read as GitHub knows it today
+   (`linkedLogin`, by the account's immutable id), and the membership's
+   user id and organization id must both match. A GitHub failure while
+   asking is a refusal: an ownership GitHub did not confirm grants nothing.
+   A grant written is audited `github_org.grant` (subject the course;
+   `orgId`, `login`, `classroomId`, `via: owner | super_powers`); a refusal
+   is a 403 in the access log, with no audit entry. The grant is read again,
+   share-locked, in the transaction that writes the link, and a revocation
+   deletes it before it reads the links, so neither can slip past the
+   other.
 3. **Revocation.** `DELETE /app/api/courses/:id/github/grants/:orgId`, an
    admin with Super Powers only; refused `409 classroom_connected` while a
    classroom of the course is still connected to that organization (the
    pattern of D28); audited `github_org.revoke`. No administration page:
    the route is named in the administration guide.
 4. **The sheet's list is the classroom's.** `GET /app/api/github/orgs` is
-   removed. `GET /app/api/classrooms/:id/github` carries `orgs`: the
-   organizations the App acts on that are granted to the classroom's course,
-   plus those the caller's linked account owns (so an owner can serve
-   themselves); every one to an admin with Super Powers; none once the
-   classroom is connected. A teacher offered none keeps "Connect to GitHub"
-   as the accent and reads one line: "Ask an organization owner or an
-   administrator". There is no request workflow.
+   removed. `GET /app/api/classrooms/:id/github/orgs`, read only while the
+   connect sheet is open (never with the link, which every classroom page
+   reads), answers the organizations the App acts on that are granted to the
+   classroom's course, plus those the caller's linked account owns (so an
+   owner can serve themselves); every one to an admin with Super Powers. A
+   teacher offered none reads, in the sheet, one line: "Ask an organization
+   owner or an administrator"; "Connect to GitHub" stays the section's one
+   primary action. There is no request workflow.
 5. **Inside a granted organization, the grant is the boundary.** The staff
    of a course granted an organization can make the App read **every**
    repository of it: D27 shrinks from "the platform" to "the courses
@@ -117,17 +126,16 @@ from the query, so anything written there is spoofable. Spec 05's sentence
   which the manifest already asks for (`apps/api/src/github/manifest.ts`);
   an installation that has not approved it answers 403, and the owner is
   then refused until an admin connects.
-- The sheet's list costs GitHub calls: the installations' listing, once a
-  minute whoever asks, and one membership read per installed organization
-  not granted, per linked account, kept a minute; a connect asks afresh.
+- Opening the sheet costs GitHub calls: the installations' listing, and,
+  for a teacher with a linked account, one login read and one membership
+  read per installed organization not granted to the course. Nothing is
+  kept between opens; a connect asks afresh.
 - Residual risk, accepted: inside a granted organization, every member of
   the course's staff makes the App read any repository Quiz does not know as
   another course's — a repository created outside Quiz, or one of a course
   that no longer exists in Quiz, included. The staff of two courses granted
   the same organization share that reach; the defence in depth of §5 only
   hides the repositories Quiz knows to be the other course's.
-- A renamed GitHub account is not recognized as an owner until its link
-  follows the rename (a false negative only: GitHub's id is compared).
 
 ## Alternatives considered
 

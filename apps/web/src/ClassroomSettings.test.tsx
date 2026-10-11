@@ -181,7 +181,6 @@ describe("the classroom's Settings tab", () => {
       [`GET ${ROOM}/evaluations`]: ok([]),
       [`GET ${ROOM}/github`]: ok({
         link: null,
-        orgs: [],
         suggestedOrgId: null,
         installUrl: "https://github.com/apps/heig-quiz/installations/new?state=r1",
       }),

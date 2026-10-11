@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NotificationPayload, type GithubClassroom } from "@quiz/contracts";
+import { NotificationPayload, type GithubClassroom, type GithubOrg } from "@quiz/contracts";
 
 import {
   auditLog,
@@ -45,6 +45,8 @@ const png = () => new Response(PNG, { status: 200, headers: { "content-type": "i
 const gh = fakeGithub();
 const key = appKey();
 let orgs: FakeOrg[] = [];
+/** GitHub's accounts by id (`GET /user/{id}`): how a linked account's login is read today. */
+const users = new Map<number, string>();
 let avatar: () => Response = png;
 
 const installedOrg = (githubOrgId: number, login: string, installationId: number, more: Partial<FakeOrg> = {}): FakeOrg => ({
@@ -151,7 +153,7 @@ beforeEach(() => {
   orgs = [];
   avatar = png;
   gh.reset();
-  gh.routes = [orgsRoute(() => orgs), avatarRoute(() => avatar())];
+  gh.routes = [orgsRoute(() => orgs, () => users), avatarRoute(() => avatar())];
 });
 
 // ---------------------------------------------------------------- tests
@@ -166,6 +168,7 @@ describe("without Quiz's App", () => {
         ["DELETE", `/app/api/courses/${id}/github/grants/${id}`],
         ["GET", `/app/api/github/orgs/${id}/avatar`],
         ["GET", `/app/api/classrooms/${id}/github`],
+        ["GET", `/app/api/classrooms/${id}/github/orgs`],
         ["PUT", `/app/api/classrooms/${id}/github`],
         ["DELETE", `/app/api/classrooms/${id}/github`],
         ["GET", `/setup/github/installed?installation_id=1&state=${id}`],
@@ -266,9 +269,9 @@ describe("the organizations a classroom's sheet offers", () => {
     await grant(listed.id);
     await grant(stale.id);
     const room = await classroom("listed");
-    const res = await call("GET", `/app/api/classrooms/${room}/github`, teacher);
+    const res = await call("GET", `/app/api/classrooms/${room}/github/orgs`, teacher);
     expect(res.statusCode).toBe(200);
-    const list = res.json<GithubClassroom>().orgs;
+    const list = res.json<GithubOrg[]>();
     expect(list.find((o) => o.id === listed.id)).toMatchObject({
       installed: true,
       status: "active",
@@ -309,6 +312,7 @@ describe("a classroom's link", () => {
     for (const who of [outsider, student]) {
       expect((await call("PUT", `/app/api/classrooms/${room}/github`, who, { orgId: installed.id })).statusCode).toBe(404);
       expect((await call("GET", `/app/api/classrooms/${room}/github`, who)).statusCode).toBe(404);
+      expect((await call("GET", `/app/api/classrooms/${room}/github/orgs`, who)).statusCode).toBe(404);
       expect((await call("DELETE", `/app/api/classrooms/${room}/github`, who)).statusCode).toBe(404);
     }
     expect(await linkedOrgOf(room)).toBeUndefined();
@@ -344,8 +348,9 @@ describe("a classroom's link", () => {
     expect(res.json<GithubClassroom>().suggestedOrgId).toBe(installed.id);
   });
 
-  it("refuses an organization the App is not installed on", async () => {
+  it("refuses an organization granted to the course that the App is not installed on", async () => {
     const bare = await orgRow({ login: "heig-uninstalled", githubOrgId: 803 });
+    await grant(bare.id);
     const res = await call("PUT", `/app/api/classrooms/${room}/github`, teacher, { orgId: bare.id });
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ error: "app_not_installed" });
@@ -395,9 +400,11 @@ describe("an organization's grant to a course (ADR-100)", () => {
   const grantsOf = (course: string) =>
     server.app.db.select().from(githubOrgGrants).where(eq(githubOrgGrants.courseId, course));
   const sheet = async (room: string, who: Caller) =>
-    (await call("GET", `/app/api/classrooms/${room}/github`, who)).json<GithubClassroom>().orgs.map((o) => o.id);
+    (await call("GET", `/app/api/classrooms/${room}/github/orgs`, who)).json<GithubOrg[]>().map((o) => o.id);
   const connect = (room: string, who: Caller, orgId = org.id) =>
     call("PUT", `/app/api/classrooms/${room}/github`, who, { orgId });
+  const refused = async (res: { statusCode: number; json: () => { error?: unknown } }) =>
+    expect([res.statusCode, res.json().error]).toEqual([403, "org_not_allowed"]);
 
   beforeAll(async () => {
     [profA, profB] = await Promise.all([server.signIn("teacher"), server.signIn("teacher")]);
@@ -406,30 +413,51 @@ describe("an organization's grant to a course (ADR-100)", () => {
     courseB = (await createCourse(server.app.db, { name: "Grants B", code: "GRB1" }, profB.id))!.id;
     org = await orgRow({ login: "heig-granted", githubOrgId: 1301, installationId: 301 });
     spare = await orgRow({ login: "heig-spare", githubOrgId: 1302, installationId: 302 });
-    // profA's linked GitHub account (F-GH-05).
+    // profA's linked GitHub account (F-GH-05), whose login GitHub knows as `prof-a`.
     await server.app.db.insert(githubAccounts).values({ userId: profA.id, githubUserId: 9001, login: "prof-a" });
+    users.set(9001, "prof-a");
   });
   beforeEach(() => {
     orgs = [installedOrg(1301, "heig-granted", 301), installedOrg(1302, "heig-spare", 302)];
   });
 
-  it("refuses a teacher of the course who neither owns the organization nor has it granted, audited", async () => {
+  it("refuses a teacher of the course who does not own the organization, granted to nobody", async () => {
     const room = await roomOf(courseA, "grant-refused");
     expect(await sheet(room, profA)).toEqual([]);
-    const res = await connect(room, profA);
-    expect([res.statusCode, res.json().error]).toEqual([403, "org_not_allowed"]);
-    // The login is someone else's now: GitHub's member is another account.
-    orgs[0]!.owners = [{ id: 1, login: "prof-a" }];
-    expect((await connect(room, profA)).statusCode).toBe(403);
+    await refused(await connect(room, profA));
+    // A member who is not an owner, an invitation still pending, a login now
+    // someone else's: GitHub's answer proves no ownership.
+    for (const member of [
+      { id: 9001, login: "prof-a", role: "member" as const },
+      { id: 9001, login: "prof-a", state: "pending" as const },
+      { id: 1, login: "prof-a" },
+    ]) {
+      orgs[0]!.members = [member];
+      expect(await sheet(room, profA)).toEqual([]);
+      await refused(await connect(room, profA));
+    }
     expect(await linkedOrgOf(room)).toBeUndefined();
     expect(await grantsOf(courseA)).toEqual([]);
-    const refused = await audits("github_org.link_refused", room);
-    expect(refused).toHaveLength(2);
-    expect(refused[0]!.payload).toMatchObject({ orgId: org.id, reason: "org_not_allowed" });
+  });
+
+  it("fails closed when GitHub fails while reading the ownership", async () => {
+    const room = await roomOf(courseA, "grant-github-down");
+    orgs[0]!.members = [{ id: 9001, login: "prof-a" }];
+    orgs[0]!.membershipStatus = 500;
+    await refused(await connect(room, profA));
+    expect(gh.calls).toContain("GET api.github.com/orgs/heig-granted/memberships/prof-a");
+    expect(await linkedOrgOf(room)).toBeUndefined();
+    expect(await grantsOf(courseA)).toEqual([]);
+  });
+
+  it("answers an organization missing, uninstalled or not granted alike to a caller who may not grant", async () => {
+    const room = await roomOf(courseA, "grant-uniform");
+    const uninstalled = await orgRow({ login: "heig-not-installed", githubOrgId: 1305 });
+    for (const orgId of [randomUUID(), uninstalled.id, spare.id]) await refused(await connect(room, profA, orgId));
   });
 
   it("lets an owner of the organization connect, which grants it to the course, audited", async () => {
-    orgs[0]!.owners = [{ id: 9001, login: "prof-a" }];
+    orgs[0]!.members = [{ id: 9001, login: "prof-a" }];
     const room = await roomOf(courseA, "grant-owner");
     expect(await sheet(room, profA)).toEqual([org.id]);
     const res = await connect(room, profA);
@@ -438,10 +466,10 @@ describe("an organization's grant to a course (ADR-100)", () => {
     expect(gh.calls).toContain("GET api.github.com/orgs/heig-granted/memberships/prof-a");
     expect(await grantsOf(courseA)).toMatchObject([{ orgId: org.id, grantedBy: profA.id }]);
     const [entry] = await audits("github_org.grant", courseA);
-    expect(entry!.payload).toMatchObject({ orgId: org.id, login: "heig-granted", classroomId: room, via: "owner" });
+    expect(entry!.payload).toEqual({ orgId: org.id, login: "heig-granted", classroomId: room, via: "owner" });
   });
 
-  it("connects any other classroom of the course with no further check, for an assistant added since too", async () => {
+  it("connects any other classroom of the course with no further check, never another course's", async () => {
     const assistant = await server.signIn("teacher");
     await addStaff(server.app.db, courseA, assistant.id, "assistant");
     const room = await roomOf(courseA, "grant-sibling");
@@ -451,13 +479,10 @@ describe("an organization's grant to a course (ADR-100)", () => {
     connectedA.push(room);
     expect(gh.calls.filter((c) => c.includes("/memberships/"))).toEqual([]);
     expect(await audits("github_org.grant", courseA)).toHaveLength(1);
-  });
-
-  it("refuses a teacher of another course: the grant is the course's", async () => {
-    const room = await roomOf(courseB, "grant-other-course");
-    expect(await sheet(room, profB)).toEqual([]);
-    const res = await connect(room, profB);
-    expect([res.statusCode, res.json().error]).toEqual([403, "org_not_allowed"]);
+    // The grant is the course's: a teacher of another course gets nothing of it.
+    const theirs = await roomOf(courseB, "grant-other-course");
+    expect(await sheet(theirs, profB)).toEqual([]);
+    await refused(await connect(theirs, profB));
     expect(await grantsOf(courseB)).toEqual([]);
   });
 
@@ -474,7 +499,7 @@ describe("an organization's grant to a course (ADR-100)", () => {
 
   it("is never written by the App's setup return", async () => {
     const room = await roomOf(courseB, "grant-setup");
-    orgs.push(installedOrg(1303, "heig-setup-grant", 303, { owners: [{ id: 9001, login: "prof-a" }] }));
+    orgs.push(installedOrg(1303, "heig-setup-grant", 303, { members: [{ id: 9001, login: "prof-a" }] }));
     const before = await server.app.db.select().from(githubOrgGrants);
     const res = await call("GET", `/setup/github/installed?installation_id=303&setup_action=install&state=${room}`, profA);
     expect(res.statusCode).toBe(303);
@@ -493,8 +518,9 @@ describe("an organization's grant to a course (ADR-100)", () => {
     }
     expect((await call("DELETE", url, admin)).statusCode).toBe(204);
     expect(await grantsOf(courseA)).toEqual([]);
-    expect((await audits("github_org.revoke", courseA))[0]!.payload).toMatchObject({ orgId: org.id });
+    expect((await audits("github_org.revoke", courseA))[0]!.payload).toEqual({ orgId: org.id });
     expect((await call("DELETE", url, admin)).statusCode).toBe(404);
+    expect((await call("DELETE", `/app/api/courses/${randomUUID()}/github/grants/${org.id}`, admin)).statusCode).toBe(404);
   });
 
   it("is given by the migration to each course for the organizations its classrooms are connected to", async () => {
@@ -503,7 +529,7 @@ describe("an organization's grant to a course (ADR-100)", () => {
     await link(room, legacy.id);
     const migration = readFileSync(new URL("../../../drizzle/0106_github_org_grants.sql", import.meta.url), "utf8");
     const dataStep = migration.split("--> statement-breakpoint").at(-1)!;
-    expect(dataStep).toContain("INSERT INTO");
+    expect(dataStep.trimStart().startsWith("-- ADR-100 §7")).toBe(true);
     for (let i = 0; i < 2; i += 1) await server.app.db.execute(sql.raw(dataStep));
     const granted = (await grantsOf(courseB)).filter((g) => g.orgId === legacy.id);
     expect(granted).toMatchObject([{ grantedBy: teacher.id }]);
@@ -614,7 +640,7 @@ describe("the lazy healing", () => {
     // The listing: kept too, and not offered to connect, granted or not.
     await grant(org.id);
     const other = await classroom("heal-suspended-other");
-    const listed = (await call("GET", `/app/api/classrooms/${other}/github`, teacher)).json<GithubClassroom>().orgs;
+    const listed = (await call("GET", `/app/api/classrooms/${other}/github/orgs`, teacher)).json<GithubOrg[]>();
     expect(listed.map((o) => o.id)).not.toContain(org.id);
     expect(await orgById(org.id)).toMatchObject({ installationId: 171 });
     expect(await lost(teacher.id)).toEqual([]);

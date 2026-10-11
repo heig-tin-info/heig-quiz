@@ -5831,6 +5831,7 @@ export const fr: Record<keyof Dict, string> = {
   "github.pickOrgHint": "Les organisations ouvertes à ce cours où l'app GitHub de Quiz est installée, et celles dont vous êtes propriétaire sur GitHub.",
   "github.orgsEmpty": "Aucune organisation n'est encore ouverte à ce cours.",
   "github.notGranted": "Demandez à un propriétaire de l'organisation ou à un administrateur.",
+  "github.orgsFailed": "Impossible de charger les organisations",
   "github.suggested": "Suggérée",
   "github.org.notInstalled": "App non installée",
   "github.org.deleted": "Supprimée sur GitHub",

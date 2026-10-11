@@ -5,9 +5,10 @@
  * Not connected: one row and "Connect to GitHub", the one accent of the
  * Settings tab (F-ORG-13), which opens the connect sheet — the organizations
  * the server offers this classroom (ADR-100: granted to its course, or owned
- * by the caller's linked GitHub account), the course's own suggested first,
- * and the way to install the App on another one. With none to offer, the row
- * says who can open one: an owner of the organization or an administrator. The install link leaves in the same tab and
+ * by the caller's linked GitHub account), read only while the sheet is open,
+ * the course's own suggested first; with none, who can open one (an owner of
+ * the organization or an administrator); and the way to install the App on
+ * another one. The install link leaves in the same tab and
  * GitHub's setup return comes back to this sheet with `?installed=<org>`,
  * which preselects the organization just recorded.
  *
@@ -49,8 +50,9 @@ import {
   SectionHeading,
   SettingRow,
   Sheet,
+  Skeleton,
 } from "../ui";
-import { githubAbsent, useClassroomGithub } from "./api";
+import { githubAbsent, useClassroomGithub, useConnectableOrgs } from "./api";
 import { githubChecks, type CheckLine } from "./checks";
 
 export function ClassroomGithub({
@@ -88,15 +90,7 @@ export function ClassroomGithub({
   } else if (github.data.link === null) {
     body = (
       <Card className="px-5">
-        <SettingRow
-          title={t("github.notConnected")}
-          desc={
-            <>
-              {t("github.notConnectedDesc")}
-              {github.data.orgs.length === 0 ? <span className="mt-1 block">{t("github.notGranted")}</span> : null}
-            </>
-          }
-        >
+        <SettingRow title={t("github.notConnected")} desc={t("github.notConnectedDesc")}>
           <Button onClick={() => onConnecting(true)}>
             <GithubIcon /> {t("github.connect")}
           </Button>
@@ -212,9 +206,10 @@ function ConnectSheet({
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const orgs = useConnectableOrgs(room.id);
   // `installedId` only preselects an organization of the list that can be picked.
   const [picked, setPicked] = useState<string | null>(null);
-  const list = github.orgs;
+  const list = orgs.data ?? [];
   const installed = list.find((o) => o.id === installedId && selectable(o));
   const effectivePick = picked ?? installed?.id ?? github.suggestedOrgId;
 
@@ -261,7 +256,11 @@ function ConnectSheet({
         <fieldset className="space-y-2">
           <legend className="text-sm font-semibold">{t("github.pickOrg")}</legend>
           <p className="text-[13px] text-fg-muted">{t("github.pickOrgHint")}</p>
-          {ordered.length === 0 ? (
+          {orgs.isLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : orgs.isError ? (
+            <QueryError title={t("github.orgsFailed")} query={orgs} />
+          ) : ordered.length === 0 ? (
             <Card>
               <EmptyState icon={GithubIcon} title={t("github.orgsEmpty")} className="py-8">
                 {t("github.notGranted")}

@@ -5848,6 +5848,7 @@ export const en = {
   "github.pickOrgHint": "The organizations open to this course where Quiz's GitHub App is installed, and those you own on GitHub.",
   "github.orgsEmpty": "No organization is open to this course yet.",
   "github.notGranted": "Ask an organization owner or an administrator.",
+  "github.orgsFailed": "Could not load the organizations",
   "github.suggested": "Suggested",
   "github.org.notInstalled": "App not installed",
   "github.org.deleted": "Deleted on GitHub",

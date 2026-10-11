@@ -61,6 +61,7 @@ import {
   EvaluationTemplate,
   GithubAccountState,
   GithubClassroom,
+  GithubOrg,
   GradeRunList,
   ProjectWorkspace,
   ProjectWorkspaceSessions,
@@ -555,6 +556,7 @@ const CHECKED: Case[] = [
   ...courses
     .flatMap((c) => c.classrooms)
     .map((r) => one("/app/api/classrooms/:id/github", `/app/api/classrooms/${r.id}/github`, GithubClassroom)),
+  each("/app/api/classrooms/:id/github/orgs", "/app/api/classrooms/r2/github/orgs", GithubOrg),
   one("/app/api/me/github", "/app/api/me/github", GithubAccountState),
   // The projects (M3-10): every classroom's list, three rows on PRG1-2026.
   ...courses
