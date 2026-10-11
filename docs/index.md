@@ -1,11 +1,16 @@
 # HEIG Quiz
 
-A quiz platform for HEIG-VD teachers. Question pools with categories, concepts
-and published versions; evaluations run live on a server-side clock, with a
-projector dashboard and automatic grading, including code executed in a
-sandbox; live polls answered from a phone through a QR code. One
-application server, one PostgreSQL, one repository, operable by one
-person, with the code runner on a virtual machine of its own.
+An open-source learning management system built around assessment, for
+courses in science, technology, engineering and mathematics (STEM).
+Question pools with categories, concepts and published versions;
+evaluations run live on a server-side clock, with a projector dashboard
+and automatic grading, including code executed in a sandbox and circuits
+graded by simulation; live polls answered from a phone through a QR code;
+a classroom journal and spaced-repetition practice between the exams. Born
+at HEIG-VD and open to every school whose teachers and students hold a
+Switch edu-ID. One application server, one PostgreSQL, one repository,
+operable by one person, with the code runner on a virtual machine of its
+own.
 
 <div class="grid cards" markdown>
 

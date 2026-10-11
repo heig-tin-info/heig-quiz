@@ -2,11 +2,12 @@
 
 <h1><img src="apps/web/src/assets/quiz.svg" alt="Quiz" width="360"></h1>
 
-**The teaching platform for Swiss higher education: write your questions once,
-run exams live, grade in one pass, and keep students practising.**
+**The open-source LMS for STEM courses: questions that compile, simulate
+and compute, exams run live on the server's clock, grading in one pass,
+and practice between the exams.**
 
-Switch edu-ID sign-in · French and English · light and dark themes ·
-self-hosted on one VM
+Made for Swiss higher education · Switch edu-ID sign-in · French and English ·
+light and dark themes · self-hosted on one VM
 
 [![CI](https://github.com/heig-tin-info/heig-quiz/actions/workflows/ci.yml/badge.svg)](https://github.com/heig-tin-info/heig-quiz/actions/workflows/ci.yml)
 [![Docs](https://github.com/heig-tin-info/heig-quiz/actions/workflows/docs.yml/badge.svg)](https://heig-tin-info.github.io/heig-quiz/)
@@ -26,6 +27,41 @@ self-hosted on one VM
 </picture>
 
 <p align="center"><sub>The live dashboard of an exam: every answer saved as it is typed, every verdict computed on the fly.</sub></p>
+
+## What Quiz is
+
+Quiz is a learning management system built around assessment, for courses
+in science, technology, engineering and mathematics (STEM). A general LMS
+asks a question and compares a string. Quiz compiles the student's program
+and runs it against test cases in a hardened container, simulates the
+circuit they drew, judges the picture their code plotted, and gives every
+student numbers of their own in a parameterized exercise. Around those
+questions sit the pieces a course needs for a semester: classrooms with
+their rosters, live exams and polls, assisted grading, released results,
+a classroom journal, spaced-repetition practice and graded GitHub projects.
+
+It does not replace a campus-wide LMS: there is no course catalogue, no
+forum, no SCORM. Quiz runs the courses where the answers have to be
+executed, and sits beside Moodle for the rest.
+
+### At a glance
+
+| Area | What you get |
+| --- | --- |
+| **Questions** | Ten types: multiple choice, short answer, fill in the blanks, code, code that draws, electronic circuits, essay, categorize, diagram, and brainstorm for polls |
+| **Parameterized questions** | Every student draws their own values; the expected answer is computed for each of them |
+| **Question pools** | Categories, concepts, difficulty, published versions, shared with colleagues |
+| **Exams and exercises** | Server-side clock, every keystroke saved, extra time and accommodations, Safe Exam Browser and kiosk stations |
+| **Programming** | Editor in the browser, visible test cases, trial runs in WebAssembly, the grade from network-less hardened containers |
+| **Grading** | Deterministic types graded at the close; AI proposals with their confidence for essays and diagrams, validated by the teacher |
+| **Live supervision** | A real-time dashboard: who is connected, who answered what, extra time for one student or the class |
+| **Analysis** | Success rate and discrimination per question; grades exported to CSV on the Swiss 1–6 scale |
+| **Practice** | Spaced-repetition drill (FSRS) drawn from the course's pools |
+| **Interaction** | Live polls on the projector, answered from a phone through a QR code |
+| **Classroom journal** | The course documentation, written in the app or kept in a GitHub repository, shown page by page from the date you choose |
+| **Identity** | Switch edu-ID over OpenID Connect; no accounts to create, no passwords to reset |
+| **Integrations** | Notifications in the app, by e-mail and in Microsoft Teams; API tokens and an MCP server; GitHub projects *(rolling out)* |
+| **Deployment** | Self-hosted on one VM: one Fastify server, one PostgreSQL, a separate hardened code runner |
 
 ## Made for every school that signs in with edu-ID
 
@@ -47,10 +83,10 @@ and students already hold an edu-ID**:
 
 ### Questions you write once and reuse for years
 
-- **Nine question types**: multiple choice, short answer, fill in the
+- **Ten question types**: multiple choice, short answer, fill in the
   blanks, **code** run against test cases, **code judged by the picture it
   draws**, **electronic circuits graded by simulation**, categorize (cards
-  dragged into columns), essay and diagram.
+  dragged into columns), essay, diagram, and brainstorm for the polls.
 - **Parameterized questions**: write `[[R]]` instead of a value, and every
   student gets numbers of their own, graded against a key of their own.
 - **Question pools** with categories, concepts, difficulty and a history of
