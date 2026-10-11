@@ -155,6 +155,15 @@ Rebuild it from Quiz's sources, then run its acceptance test:
 /opt/quiz-runner/apps/codespace/images/c-dev/test.sh
 ```
 
+**Rebuild it after any change under `images/c-dev/`** (for instance
+2026-10-11, `--disable-proxy`, audit L24): the deploys never touch it. One
+build covers both instances: they run the same tag from the one rootful
+store. Build from the production checkout, `/opt/quiz-runner`, once the
+production deploy has moved it to a commit with the change, with the two
+commands above; building from `/opt/quiz-engine-staging` would put an
+unapproved commit's image under production's new sessions. A running session
+keeps the image it started with until its container restarts.
+
 ### 8. The CI keys
 
 ```bash

@@ -16,15 +16,8 @@
  * database and Podman — deposits the address in a cache that `getUpstream`
  * reads back.
  *
- * **One origin for every session (audit L24).** All sessions are served from
- * the portal's one origin, so nothing a session serves may act on that origin
- * as a whole. code-server runs with `--disable-proxy` (images/c-dev), and this
- * proxy is the second layer: it refuses code-server's port proxy
- * (`/proxy/<port>/`, `/absproxy/<port>/`), drops `Set-Cookie` and
- * `Service-Worker-Allowed` from every answer, and serves
- * `/vscode-remote-resource` (any file of the container, the student's
- * included) only as a sandboxed, unsniffed resource. The full fix, a
- * subdomain per session, is ADR-089's amendment of 2026-10-11.
+ * Audit L24: what a session may serve on the origin every session shares is
+ * portal invariant 14 (CLAUDE.md) and ADR-047's amendment of 2026-10-11.
  */
 import type { IncomingHttpHeaders } from "node:http";
 
@@ -86,59 +79,34 @@ export function isEntryRequest(url: string, sessionId: string): boolean {
 }
 
 /**
- * The path code-server would route for a request under `/s/<id>`, read as
- * leniently as any router could: percent-decoded, slashes collapsed, dot
- * segments resolved, lower-cased (Express matches case-insensitively). It
- * decides refusals and headers only; what is forwarded is the request as is.
+ * code-server's port proxy, `/proxy/<port>/…` and `/absproxy/<port>/…`.
+ * Express routes it on the raw path, case-insensitively, decoding nothing;
+ * @fastify/http-proxy refuses a `..` or `//` destination. Never throws.
  */
-function upstreamPath(url: string): string {
-  const raw = (url.split("?", 1)[0] ?? "").replace(/^\/s\/[^/]*/, "");
-  let path = raw;
-  try {
-    path = decodeURIComponent(raw);
-  } catch {
-    // A malformed escape: judge the raw path.
-  }
-  return new URL(`/${path}`.replace(/\/+/g, "/"), "http://upstream").pathname.toLowerCase();
-}
-
-/** code-server's port proxy, `/proxy/<port>/…` and `/absproxy/<port>/…` (L24). */
 export function isPortProxyRequest(url: string): boolean {
-  return /^\/(abs)?proxy(\/|$)/.test(upstreamPath(url));
+  return /^\/s\/[^/]+\/+(abs)?proxy(\/|$)/i.test(url.split("?", 1)[0] ?? "");
 }
 
 /**
  * VS Code's remote resource route (`[/stable-<commit>]/vscode-remote-resource
- * ?path=`): it serves any file of the container, `/work` included, with its
- * own media type. The workbench fetches its themes and grammars there.
+ * ?path=`), which serves any file of the container with its own media type.
+ * A miss only falls back to VS Code's own, identical, headers.
  */
 export function isRemoteResourceRequest(url: string): boolean {
-  return upstreamPath(url).split("/").pop() === "vscode-remote-resource";
+  return (url.split("?", 1)[0] ?? "").split("/").pop() === "vscode-remote-resource";
 }
 
-/**
- * What every remote resource answer carries: the headers VS Code 1.137 sets
- * itself (`default-src 'none'; sandbox`, `nosniff`), enforced here so that a
- * student's HTML or SVG opened at that URL never runs on the portal's origin,
- * whatever a later code-server sends. A fetch or an `<img>` ignores them.
- */
-export const REMOTE_RESOURCE_HEADERS = {
+/** Sandboxed and unsniffed: a document opened there runs no script. */
+const REMOTE_RESOURCE_HEADERS = {
   "content-security-policy": "default-src 'none'; sandbox",
   "x-content-type-options": "nosniff",
 } as const;
 
 /**
- * The headers of code-server's answer as the browser gets them. `Set-Cookie`
- * and `Service-Worker-Allowed` are dropped: a session must not set a cookie
- * nor widen a service worker's scope on the origin every session shares (L24).
- * Under `--auth none` code-server sets no cookie the workbench reads (VS
- * Code's `vscode-tkn`, only on a `?tkn=`, is never checked without a
- * connection token); its own PWA worker then fails to register, which the
- * workbench logs and ignores.
- *
- * `Location`: the internal rewriting of @fastify/http-proxy is wrong for a
- * parameterized prefix (see the registration below); absolute paths are
- * rewritten here, relative ones (code-server's normal case) left alone.
+ * code-server's answer headers as the browser gets them: no `Set-Cookie`, no
+ * `Service-Worker-Allowed` (code-server's only cookie, `vscode-tkn`, is never
+ * read without a connection token; its no-op PWA worker stops registering).
+ * An absolute `Location` is rewritten into the session (see `internalRewriteLocationHeader`).
  */
 export function upstreamHeaders(
   headers: IncomingHttpHeaders,
@@ -157,8 +125,6 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
   const { db, manager } = opts;
   /** sid → `http://<ip>:8080`. Filled by the `preHandler`, read by `getUpstream`. */
   const upstreams = new Map<string, string>();
-  /** Sessions whose port proxy refusal was logged: once each, not per request. */
-  const portProxyLogged = new Set<string>();
 
   app.decorateRequest("codespaceUpstream", null);
 
@@ -183,15 +149,9 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
       );
     }
 
-    // code-server's port proxy would serve a student's program on the origin
-    // every session shares (audit L24). code-server runs with
-    // --disable-proxy; this refusal holds even if a later image forgot it.
+    // Invariant 14: code-server runs with --disable-proxy; this holds if an image forgets it.
     if (isPortProxyRequest(request.url)) {
-      if (!portProxyLogged.has(sessionId)) {
-        if (portProxyLogged.size >= 10_000) portProxyLogged.clear();
-        portProxyLogged.add(sessionId);
-        request.log.warn({ sessionId, clientAddress: request.ip }, "proxy access refused: code-server port proxy");
-      }
+      request.log.warn({ sessionId, clientAddress: request.ip }, "proxy access refused: code-server port proxy");
       return deny(reply, 403, "portProxyTitle", "portProxyDetail");
     }
 

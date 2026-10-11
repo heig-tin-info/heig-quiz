@@ -8,10 +8,8 @@ points are assumed defaults the owner may amend at review; points 7 and 8
 flag two weaker guarantees for the owner's attention. Nothing is
 implemented, and implementation waits for proof B (§9).
 Since 2026-10-11 its "GET start route" is `POST /app/api/projects/:id/workspace/start` (ADR-047, audit L7).
-Amended 2026-10-11 (audit L24): code-server's port proxy is off and the
-portal keeps a session from acting on the origin every session shares
-([amendment](#amendment-2026-10-11-one-origin-for-every-session-audit-l24)),
-which replaces the "Same-site exposure" consequence below.
+Amended 2026-10-11 (audit L24): the "Same-site exposure" consequence points
+to [ADR-047's amendment](ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
 
 Scope: how a student works in the online workspace of an `online_seb`
 project from an attested kiosk station, across the two hosts of Quiz and
@@ -212,12 +210,12 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
 - The extension and its `externally_connectable` stay limited to Quiz's
   origins. The Admin console's URL allowlist gains the portal's origin;
   `docs/development/kiosk.md` changes when this ships, not before.
-- Same-site exposure: *amended 2026-10-11, see [the
-  amendment](#amendment-2026-10-11-one-origin-for-every-session-audit-l24);
-  the port proxy this point accepted is now off.* The portal's host is
-  same-site with Quiz. Quiz's double-submit CSRF and the confinement of the
-  session to the project bound what a page there could do, and the iframe's
-  sandbox keeps it from navigating the station.
+- Same-site exposure: the portal's host is same-site with Quiz; what a
+  session may serve there is [ADR-047's amendment of
+  2026-10-11](ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
+  Quiz's double-submit CSRF and the confinement of the session to the
+  project bound it, and the iframe's sandbox keeps that content from
+  navigating the station.
 - `00` §0.6 ("fallback stations for an exam") becomes "for an exam or a
   supervised project" when this ADR is accepted; the spec edit lands with
   acceptance. N-SEC-10's blocking exception applies at launch.
@@ -241,62 +239,3 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
 - **Widening `quiz_kiosk`'s path and adding `kiosk` to the GET start
   route.** Viable, but a GET passes a suspended station and escapes CSRF;
   the POST of point 4 gets both from the existing guards.
-
-## Amendment 2026-10-11: one origin for every session (audit L24)
-
-Scope: what a workspace session may serve on the portal's origin. Every
-session is `https://<portal>/s/<session>/…`, one origin for all of them, on
-the SEB, kiosk and lab paths alike. Not the portal's own pages nor Quiz's
-CSRF, which stand.
-
-The "Same-site exposure" consequence accepted that code-server's port proxy
-serves student content there. The security audit of 2026-10-10 (L24) showed
-what that allows beyond Quiz: such a page shares the origin of every other
-session, so it can register a service worker for the whole origin and set
-cookies on it, and the portal passed code-server's `Set-Cookie` and
-`Service-Worker-Allowed` through untouched. Nothing in the product uses the
-port proxy (the image is a C toolchain; no guide, spec or flow previews a
-web application). The product owner chose the short fix on 2026-10-11:
-
-1. **code-server runs with `--disable-proxy`** (`apps/codespace/images/c-dev/entrypoint.sh`).
-   Checked on 4.137.0: the flag answers 403 on `/proxy/<port>/`,
-   `/absproxy/<port>/` and the domain proxy, websockets included;
-   `images/c-dev/test.sh` § 7 asserts it against a live listener, which
-   the same probe reaches (200) without the flag.
-2. **The portal refuses those paths itself** (`src/proxy/index.ts`,
-   `isPortProxyRequest`): after the session cookie, before any upstream, a
-   403 page, logged once per session. The path is judged as leniently as a
-   router could read it (decoded, slashes collapsed, dot segments resolved,
-   any case), so a later image that lost the flag is still covered.
-3. **No upstream answer sets a cookie or widens a worker's scope**
-   (`upstreamHeaders`): `Set-Cookie` and `Service-Worker-Allowed` are
-   dropped from everything code-server answers. Under `--auth none`
-   code-server sets no cookie the workbench reads (VS Code's `vscode-tkn`,
-   set only on a `?tkn=`, is never checked without a connection token);
-   code-server's own worker, a no-op for PWA installation, no longer
-   registers, which the workbench logs and ignores.
-4. **`/vscode-remote-resource` is served sandboxed.** That route serves any
-   file of the container, `/work` included, with its own media type: a
-   student's `x.html` comes back as `text/html`. The workbench needs it
-   (themes, icon themes, grammars: fetched JSON), so the portal keeps it
-   and sets `Content-Security-Policy: default-src 'none'; sandbox` and
-   `X-Content-Type-Options: nosniff` on every answer of that route, which a
-   fetch or an `<img>` ignores and a document opened there obeys: no
-   script, an opaque origin. VS Code 1.137 already sends exactly these two
-   headers; the portal enforces them whatever a later version sends, and
-   `test.sh` notices if code-server stops.
-
-Verified on 2026-10-11 with the image built from this repository
-(code-server 4.137.0, VS Code 1.137.0): a real portal proxying a real
-container, driven by Chromium, loads the workbench with its extension host,
-serves the remote resources, registers no service worker, refuses both
-proxy paths, and runs no script in a student's HTML opened at the resource
-URL.
-
-**The full fix is a subdomain per session** (`<session>.<portal host>`, a
-wildcard certificate and a cookie per host): each session its own origin,
-so nothing one serves can reach another. It is the condition for any future
-image that must serve a web application from the container (a web course,
-a notebook); until then, an image that needs the port proxy is refused by
-this amendment, not enabled by a flag.
-

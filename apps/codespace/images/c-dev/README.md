@@ -87,7 +87,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
   - § 4 the root filesystem is read-only, `CapEff` is zero, `NoNewPrivs` is 1, the seccomp filter is loaded and the AppArmor label is the `codespace` profile (skipped with a note on a host without AppArmor);
   - § 5 uid 1000 inside, host UID outside 0–65535, and two containers side by side get different host UIDs;
   - § 6 a fork bomb is capped by `--pids-limit 256`, the host and the neighbouring container are intact;
-  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme settings and their two bundled themes, the return URL's origin trusted (and nothing trusted without one), neutralised gallery, no uncaught exception, toolchain binaries and man pages present;
+  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme settings and their two bundled themes, the return URL's origin trusted (and nothing trusted without one), the port proxy refused (`/proxy/<port>/` and `/absproxy/<port>/` answer 403/404 with a listener on the port), `/vscode-remote-resource` still sent with CSP `sandbox`, neutralised gallery, no uncaught exception, toolchain binaries and man pages present;
   - § 8 `/etc/resolv.conf` comes from the image, with no nameserver, and resolution fails in under two seconds;
   - § 9 the container carries the seven portal variables and nothing else, the git identity works without a configuration file, and the VS Code server inherits the environment.
   - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`.
@@ -131,33 +131,11 @@ Verification done by running `code-server --help` inside the built image.
 | `--user-data-dir` | yes |
 | `--install-extension`, `--list-extensions`, `--force` | yes (build) |
 | `--link-protection-trusted-domains` | yes (`string[]`; see § Return link trusted) |
-| `--disable-proxy` | yes (see § Port proxy disabled) |
+| `--disable-proxy` | yes (audit L24: [ADR-047, amendment of 2026-10-11](../../../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24)) |
 
 `EXTENSIONS_GALLERY='{"serviceUrl":"","itemUrl":"","resourceUrlTemplate":""}'`
 is taken into account: the start-up log shows `Using custom extensions
 gallery`, and `test.sh` makes an assertion out of it.
-
-### Port proxy disabled (2026-10-11, audit L24)
-
-Every session is served from the portal's one origin (`/s/<session>/`), so
-code-server's port proxy (`/proxy/<port>/`, `/absproxy/<port>/` and the
-domain proxy) would put whatever a student's program serves on that shared
-origin: a page that registers an origin-wide service worker or plants
-cookies. Nothing in the product uses it (a C image, no web app to preview).
-`--disable-proxy` turns all three off: in 4.137.0, `--help` lists it,
-`out/node/routes/pathProxy.js` and `domainProxy.js` call
-`ensureProxyEnabled`, which answers 403, HTTP and websocket alike, and the
-start-up log says `Proxy disabled`. `test.sh` § 7 starts a listener on a
-port and asserts 403/404 on both routes; without the flag the same probe
-answers 200 with the listener's body. The portal refuses those paths too,
-and filters what code-server answers (`src/proxy/index.ts`; [ADR-089,
-amendment of 2026-10-11](../../../../docs/adr/ADR-089-kiosque-pour-l-espace-de-travail.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24)).
-
-`/vscode-remote-resource?path=` stays open: it serves any file of the
-container (the workbench reads its themes and grammars there), with its own
-media type, but VS Code 1.137 sends `Content-Security-Policy: default-src
-'none'; sandbox` and `nosniff` on it, which the portal enforces in turn and
-`test.sh` § 7 checks.
 
 ## Machine settings
 

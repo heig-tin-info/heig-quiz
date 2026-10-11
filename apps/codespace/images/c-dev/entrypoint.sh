@@ -40,12 +40,8 @@ case "${CODESPACE_RETURN_URL:-}" in
   http://* | https://*) set -- --link-protection-trusted-domains "${CODESPACE_RETURN_URL%/}" ;;
 esac
 
-# --disable-proxy: code-server's port proxy (/proxy/<port>/, /absproxy/<port>/
-# and the domain proxy) would serve whatever a student's program listens on
-# from the portal's origin, shared by every session (audit L24, ADR-089
-# amendment of 2026-10-11). Nothing in the product uses it; the portal also
-# refuses those paths (src/proxy/index.ts). Verified on code-server 4.137.0
-# (`code-server --help`, out/node/http.js ensureProxyEnabled).
+# --disable-proxy: no port proxy on the origin every session shares (portal
+# invariant 14, audit L24); verified on 4.137.0 by test.sh § 7.
 exec code-server \
   --auth none \
   --disable-proxy \
