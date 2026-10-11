@@ -65,6 +65,10 @@ describe("engine.runArgs — invariant 3, the hardening comes from run-hardened.
     });
   }
 
+  it("passes no --runtime: a --remote client rejects it, the service's default runtime decides", () => {
+    expect(args.some((a) => a === "--runtime" || a.startsWith("--runtime="))).toBe(false);
+  });
+
   it("mounts the /tmp tmpfs", () => {
     expect(hasOption(args, "--tmpfs", "/tmp")).toBe(true);
   });
