@@ -426,7 +426,8 @@ const NAMESPACES_JS =
   "function attempt(name, argv) {\n" +
   '  const r = spawnSync(argv[0], argv.slice(1), { encoding: "utf8" });\n' +
   '  const said = `${r.stderr ?? ""}${r.error ?? ""}`;\n' +
-  "  const errno = /not implemented/i.test(said) ? 38 : /not permitted/i.test(said) ? 1 : 0;\n" +
+  // busybox's `mount` words EPERM "permission denied (are you root?)".
+  "  const errno = /not implemented/i.test(said) ? 38 : /not permitted|are you root/i.test(said) ? 1 : 0;\n" +
   "  console.log(`${name} ${r.status === 0 ? 0 : -1} ${errno}`);\n" +
   "}\n" +
   'attempt("unshare-user", ["unshare", "-U", "true"]);\n' +
@@ -437,18 +438,33 @@ const NAMESPACES_JS =
 
 /** Every name a raw-syscall probe prints, and must see refused. */
 const DENIED = [
-  "unshare-user", "unshare-net", "clone-user", "setns", "mount", "fsopen", "keyctl", "ptrace",
+  "unshare-user", "unshare-net", "clone-user", "clone3", "setns", "mount", "fsopen", "keyctl",
+  "ptrace",
 ] as const;
 
-const ISOLATION: Record<
-  (typeof PROGRAMMING)[number],
-  { source: string; denied: readonly string[]; rawSyscalls: boolean }
-> = {
-  c: { source: NAMESPACES, denied: DENIED, rawSyscalls: true },
-  cpp: { source: NAMESPACES, denied: DENIED, rawSyscalls: true },
-  python: { source: NAMESPACES_PY, denied: DENIED, rawSyscalls: true },
-  rust: { source: NAMESPACES_RS, denied: DENIED, rawSyscalls: true },
-  js: { source: NAMESPACES_JS, denied: ["unshare-user", "unshare-net", "mount"], rawSyscalls: false },
+const EPERM = 1;
+const ENOSYS = 38;
+
+/**
+ * The errno a denied call gets, exactly: the filter answered, the kernel never
+ * saw the call.
+ *
+ * Under crun it is the profile's own: the default action's ENOSYS — which
+ * `clone3` needs, glibc falling back to `clone` on that answer only — and the
+ * EPERM of `setns`'s rule. Under gVisor it is EPERM for every one: runsc
+ * compiles the OCI profile into the sentry's own filter
+ * (`runsc/specutils/seccomp`), answers every `SCMP_ACT_ERRNO` with EPERM and
+ * ignores `errnoRet` and `defaultErrnoRet` (README, gVisor). Refused either
+ * way, by the same profile.
+ */
+const refusal = (name: string): number => (GVISOR || name === "setns" ? EPERM : ENOSYS);
+
+const ISOLATION: Record<(typeof PROGRAMMING)[number], { source: string; denied: readonly string[] }> = {
+  c: { source: NAMESPACES, denied: DENIED },
+  cpp: { source: NAMESPACES, denied: DENIED },
+  python: { source: NAMESPACES_PY, denied: DENIED },
+  rust: { source: NAMESPACES_RS, denied: DENIED },
+  js: { source: NAMESPACES_JS, denied: ["unshare-user", "unshare-net", "mount"] },
 };
 
 for (const language of PROGRAMMING) {
@@ -468,12 +484,10 @@ for (const language of PROGRAMMING) {
           }),
       );
       for (const name of probe.denied) {
-        // EPERM or ENOSYS: the filter answered; the kernel never saw the call.
-        expect(results[name], `${name}\n${stdout}${outcome.cases[0]!.stderr}`).toMatchObject({ rc: -1 });
-        expect([1, 38], name).toContain(results[name]!.errno);
-      }
-      if (probe.rawSyscalls) {
-        expect(results.clone3).toEqual({ rc: -1, errno: 38 });
+        expect(results[name], `${name}\n${stdout}${outcome.cases[0]!.stderr}`).toEqual({
+          rc: -1,
+          errno: refusal(name),
+        });
       }
       expect(results.pthread, stdout).toEqual({ rc: 0, errno: 0 });
       expect(results.fork, stdout).toEqual({ rc: 0, errno: 0 });

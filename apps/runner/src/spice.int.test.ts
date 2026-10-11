@@ -25,6 +25,8 @@ const host = integrationHost();
 announce(host, "the spice suite", "spice");
 
 const config = host.config;
+/** The CI's gVisor leg (`refusal` in `podman.int.test.ts`). */
+const GVISOR = config.RUNNER_RUNTIME === "runsc";
 let engine: Engine;
 
 beforeAll(async () => {
@@ -195,7 +197,9 @@ describe.skipIf(!host.has("spice"))("spice in a real container", () => {
     // ngspice has no syscall of its own to ask with; `shell` is its door to
     // the rest of the image (busybox's `unshare` and `mount`), so the negative
     // isolation probe of `podman.int.test.ts` is asked through it. The
-    // message is the filter's: ENOSYS, or `setns`'s EPERM.
+    // message is the filter's: ENOSYS under crun; EPERM under gVisor, whose
+    // conversion of the profile answers EPERM to every refusal, and which
+    // busybox's `mount` words "permission denied (are you root?)".
     const probeNetlist = [
       "* namespace attempt",
       "V1 a 0 1",
@@ -215,7 +219,11 @@ describe.skipIf(!host.has("spice"))("spice in a real container", () => {
     );
     const output = `${outcome.cases[0]!.stdout}${outcome.cases[0]!.stderr}`;
     expect(output).toContain("probe-done");
-    const refusals = output.match(/(unshare|mount)\b.*(Function not implemented|Operation not permitted)/g);
+    const refusals = output.match(
+      GVISOR
+        ? /(unshare|mount)\b.*(Operation not permitted|permission denied \(are you root\?\))/g
+        : /(unshare|mount)\b.*Function not implemented/g,
+    );
     expect(refusals, output).toHaveLength(3);
   });
 });

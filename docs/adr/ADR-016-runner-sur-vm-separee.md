@@ -125,8 +125,11 @@ the explicit derogation, without that warning. Fail-closed is opt-in by the
 owner's decision: the owner installs gVisor and flips the variable by hand;
 no deploy does (`apps/runner/README.md`, Switching production to gVisor).
 (c) *The proof before production*: the runner integration workflow has a
-`runsc` leg running the whole suite through that socket, non-blocking until
-first green. (d) `RunnerHealth` carries an optional `runtime`, tolerated
+`runsc` leg running the whole suite through that socket; it blocks like the
+`default` leg since it first ran green (#736). Under gVisor the profile's
+refusals answer EPERM, never its ENOSYS: runsc's conversion of an OCI
+profile ignores `errnoRet` and `defaultErrnoRet`, and the suite expects
+exactly that on that leg. (d) `RunnerHealth` carries an optional `runtime`, tolerated
 absent on both sides. (e) A program's stderr or exit code only triggers a
 `podman container inspect`, whose answer alone says the container is gone.
 (f) The runner binds `127.0.0.1` by default and refuses a bind outside the
