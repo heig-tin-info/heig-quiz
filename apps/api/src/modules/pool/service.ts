@@ -29,6 +29,7 @@ export {
   asStatic,
   isParameterized,
   loadConfig,
+  saveConfig,
   typeOf,
   type StaticVersion,
 } from "./config.js";
@@ -88,6 +89,7 @@ export {
   vacateSeats,
 } from "./members.js";
 export { poolsOfCourse, setCoursePools } from "./coursePools.js";
+export { createPublished, ensureCategory, questionByName, type PublishedQuestionSpec } from "./ensure.js";
 export {
   listSubscribers,
   announceRetired,

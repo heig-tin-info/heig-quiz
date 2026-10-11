@@ -69,6 +69,7 @@ import { realtimePlugin } from "./modules/realtime/routes.js";
 import { resultsPlugin } from "./modules/results/routes.js";
 import { createRunner } from "./modules/runner/index.js";
 import { statsPlugin } from "./modules/stats/routes.js";
+import { trainingPlugin } from "./modules/training/routes.js";
 import { registerSystemJobs } from "./modules/system/jobs.js";
 import { healthz, seedScheduledTasks } from "./modules/system/service.js";
 import { startJobs, type JobQueue } from "./jobs.js";
@@ -247,6 +248,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // The vocabulary of concepts (ADR-081): the registry alone, connected to nothing yet.
   await app.register(conceptPlugin);
   await app.register(drillPlugin);
+  // The training course of a new teacher (ADR-105): provisioned on request, its progress derived.
+  await app.register(trainingPlugin);
   // The drill listens to the release and to the end of an attempt (ADR-041
   // §1): wired here, once, never by an import's side effect.
   registerDrillHooks();

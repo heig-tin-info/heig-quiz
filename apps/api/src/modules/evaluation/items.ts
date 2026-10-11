@@ -15,7 +15,7 @@ import {
   questionVersions,
   questions,
 } from "../../db/schema.js";
-import { listPools } from "../pool/service.js";
+import { exampleConfig, listPools, typeOf } from "../pool/service.js";
 import {
   type EvaluationRecord,
   type DbOrTx,
@@ -91,6 +91,15 @@ export async function latestPublished(
   for (const row of rows) if (!out.has(row.questionId)) out.set(row.questionId, row);
   return out;
 }
+
+/**
+ * F-EVAL-02: the type decides an item's default weight, from the config it
+ * owns — this module never looks inside a config. A parameterized question's
+ * structure is its example instance's (ADR-056). THE `defaultPoints` every
+ * caller of {@link addItems} hands it: the routes, the seed, the training.
+ */
+export const defaultPoints = (type: string, version: typeof questionVersions.$inferSelect): number =>
+  typeOf(type).defaultPoints(exampleConfig(type, version));
 
 async function nextPosition(db: DbOrTx, evaluationId: string): Promise<number> {
   const [row] = await db

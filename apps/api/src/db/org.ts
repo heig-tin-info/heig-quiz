@@ -26,18 +26,33 @@ import { users } from "./auth.js";
  * A course (`Programmation C`, code `PRG1`): the unit a question pool and a
  * teaching staff hang off. Classrooms are its per-semester instances.
  */
-export const courses = pgTable("courses", {
-  id: uuid("id").primaryKey(),
-  name: text("name").notNull(),
-  /** Short school code (`PRG1`), unique across the instance. */
-  code: text("code").notNull().unique(),
-  /** A lucide icon name (`cpu`), drawn as a pool's is; null shows the default. */
-  icon: text("icon"),
-  /** The icon's colour, a `PoolColor` name (`teal`); null is grey, the default. */
-  color: text("color", { enum: POOL_COLORS }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const courses = pgTable(
+  "courses",
+  {
+    id: uuid("id").primaryKey(),
+    name: text("name").notNull(),
+    /** Short school code (`PRG1`), unique across the instance. */
+    code: text("code").notNull().unique(),
+    /** A lucide icon name (`cpu`), drawn as a pool's is; null shows the default. */
+    icon: text("icon"),
+    /** The icon's colour, a `PoolColor` name (`teal`); null is grey, the default. */
+    color: text("color", { enum: POOL_COLORS }),
+    /**
+     * The teacher this course is the training course of (ADR-105 §1,
+     * F-ORG-17); null for every ordinary course. The column alone marks the
+     * course: its name and code are editable like any other's. Unique, so a
+     * second provisioning for the same teacher finds the first — the
+     * constraint IS the idempotence, as `pools_personal_uq` is for the
+     * personal pool. Written by the `org` service alone (`claimTrainingCourse`,
+     * the last write of a provisioning; cleared with the teacher's seat): a
+     * deleted account unmarks the course and never deletes it.
+     */
+    trainingFor: uuid("training_for").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("courses_training_for_uq").on(t.trainingFor)],
+);
 
 /**
  * Teaching staff of a course. A seat is what REACHES the course: THE access

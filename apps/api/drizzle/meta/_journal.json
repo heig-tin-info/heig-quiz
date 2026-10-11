@@ -757,6 +757,13 @@
       "when": 1791708038492,
       "tag": "0107_relay_jtis",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1791746512677,
+      "tag": "0108_training_course",
+      "breakpoints": true
     }
   ]
 }

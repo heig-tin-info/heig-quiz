@@ -816,6 +816,8 @@ export const en = {
   "admin.task.assist.purge.desc": "Deletes the help assistant's messages older than 30 days, and its expired per-question access tokens.",
   "admin.task.integrity.purge": "Exam journal retention",
   "admin.task.integrity.purge.desc": "Deletes the record of leaving the page and pasting from outside of the evaluations closed six months ago whose grades were never released.",
+  "admin.task.training.install": "Training course content",
+  "admin.task.training.install.desc": "Installs the questions of the training course into its public pool and republishes the shipped version of any that differ — a version published by hand in that pool is reverted; nothing moves in the quizzes already made from them. Runs daily.",
   "admin.kiosk": "Kiosk stations",
   "admin.kiosk.hint":
     "The school's Chromebooks that attested themselves. Name a station to let students pair with it; retire one to take it out of service.",

@@ -9,7 +9,7 @@
  * Everything is keyed on stable names — the pool name, the question's
  * `internalName`, the evaluation title — so a second run creates nothing.
  */
-import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import { ANSWER_COORDINATES } from "@quiz/contracts";
@@ -18,12 +18,10 @@ import { PERSONAS, devSub } from "../auth/dev.js";
 import type { Db } from "../db/client.js";
 import {
   attempts,
-  categories,
   evaluations,
   gradings,
   pools,
   questionVersions,
-  questions,
   users,
 } from "../db/schema.js";
 import type { AuditActor } from "../audit.js";
@@ -31,7 +29,6 @@ import * as conceptService from "../modules/concept/service.js";
 import * as evaluationService from "../modules/evaluation/service.js";
 import { runEvaluationGrading } from "../modules/grading/jobs.js";
 import * as live from "../modules/live/service.js";
-import { typeOf } from "../modules/pool/config.js";
 import * as poolService from "../modules/pool/service.js";
 import {
   CLOSED_TITLE,
@@ -55,12 +52,6 @@ interface DemoCounts {
 
 const MINUTE = 60_000;
 
-/** F-EVAL-02: the type decides an item's default weight, from its own config. */
-const defaultPoints = (
-  type: string,
-  version: typeof questionVersions.$inferSelect,
-): number => typeOf(type).defaultPoints(poolService.exampleConfig(type, version));
-
 // ---------------------------------------------------------------------------
 // Pools, categories, questions
 // ---------------------------------------------------------------------------
@@ -72,29 +63,6 @@ async function poolIdByName(db: Db, ownerId: string, name: string): Promise<stri
     .where(and(eq(pools.ownerId, ownerId), eq(pools.name, name)))
     .limit(1);
   return row?.id ?? null;
-}
-
-async function categoryIdByName(db: Db, poolId: string, name: string): Promise<string | null> {
-  const [row] = await db
-    .select({ id: categories.id })
-    .from(categories)
-    .where(and(eq(categories.poolId, poolId), eq(categories.name, name)))
-    .limit(1);
-  return row?.id ?? null;
-}
-
-async function questionByName(db: Db, poolId: string, internalName: string) {
-  const [row] = await db
-    .select()
-    .from(questions)
-    .where(
-      and(
-        eq(questions.poolId, poolId),
-        sql`lower(${questions.internalName}) = lower(${internalName})`,
-      ),
-    )
-    .limit(1);
-  return row ?? null;
 }
 
 async function isPublished(db: Db, questionId: string): Promise<boolean> {
@@ -118,37 +86,22 @@ async function ensureQuestion(
   spec: QuestionSpec,
   ctx: { poolId: string; teacherId: string; categoryId: string | null },
 ): Promise<{ id: string; created: boolean }> {
-  const existing = await questionByName(db, ctx.poolId, spec.internalName);
+  const existing = await poolService.questionByName(db, ctx.poolId, spec.internalName);
   if (existing) {
     if (!(await isPublished(db, existing.id))) {
       await poolService.publishQuestion(db, existing, { userId: ctx.teacherId });
     }
     return { id: existing.id, created: false };
   }
-
-  const { id } = await poolService.createQuestion(db, {
-    poolId: ctx.poolId,
-    type: spec.type,
-    internalName: spec.internalName,
-    categoryId: ctx.categoryId,
-    createdBy: ctx.teacherId,
-  });
-  const row = (await questionByName(db, ctx.poolId, spec.internalName))!;
-  // The French labels of the seed's vocabulary (`ensureConcepts`), resolved like a teacher's input.
-  await poolService.patchQuestion(
+  // The French labels of the seed's vocabulary (`ensureConcepts`), resolved like
+  // a teacher's input; a config the type refuses throws `DraftInvalid`.
+  const row = await poolService.createPublished(
     db,
-    row,
-    { difficulty: spec.difficulty, concepts: spec.concepts },
+    ctx.poolId,
+    { ...spec, categoryId: ctx.categoryId, changeNote: "Version initiale (seed)" },
     { userId: ctx.teacherId, lang: "fr", actor: seedActor(ctx.teacherId) },
   );
-  await poolService.putDraft(db, row, { config: spec.config, explanation: spec.explanation });
-  // Throws `DraftInvalid` when the demo config does not satisfy the type's
-  // schema — which is exactly the feedback the author of `content.ts` needs.
-  await poolService.publishQuestion(db, row, {
-    userId: ctx.teacherId,
-    changeNote: "Version initiale (seed)",
-  });
-  return { id, created: true };
+  return { id: row.id, created: true };
 }
 
 /** The seed acts as the demo teacher, as the application would audit them. */
@@ -215,11 +168,8 @@ async function ensurePool(
 
   const categoryIds = new Map<string, string>();
   for (const name of spec.categories) {
-    let id = await categoryIdByName(db, poolId, name);
-    if (!id) {
-      id = (await poolService.createCategory(db, poolId, { name })).id;
-      counts.categories += 1;
-    }
+    const { id, created } = await poolService.ensureCategory(db, poolId, name);
+    if (created) counts.categories += 1;
     categoryIds.set(name, id);
   }
 
@@ -385,7 +335,7 @@ async function ensureEvaluation(
   const questionIds = spec.questions
     .map((name) => ctx.questionIds.get(name))
     .filter((id): id is string => id !== undefined);
-  const items = await evaluationService.addItems(db, row, questionIds, defaultPoints, {
+  const items = await evaluationService.addItems(db, row, questionIds, evaluationService.defaultPoints, {
     attemptCount: 0,
   });
   const bonusIds = new Set((spec.bonus ?? []).map((name) => ctx.questionIds.get(name)));

@@ -78,6 +78,7 @@ export const SCHEDULED_TASK_KEYS = [
   "llm.domain",
   "assist.purge",
   "integrity.purge",
+  "training.install",
 ] as const;
 export type ScheduledTaskKey = (typeof SCHEDULED_TASK_KEYS)[number];
 

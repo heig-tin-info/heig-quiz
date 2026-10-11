@@ -246,6 +246,23 @@ export async function createCourse(
 }
 
 /**
+ * Marks a course as `userId`'s training course (ADR-105 §1): the LAST write
+ * of a provisioning, so a course is a training course only once whole, and
+ * the claim itself — `courses_training_for_uq` — answers `false` when that
+ * teacher's exists already; the caller then discards the course it built.
+ * The mark follows the teacher's seat: `changeStaffSeat` clears it with it.
+ */
+export async function claimTrainingCourse(db: Db, courseId: string, userId: string): Promise<boolean> {
+  try {
+    await db.update(courses).set({ trainingFor: userId }).where(eq(courses.id, courseId));
+    return true;
+  } catch (err) {
+    if (isUniqueViolation(err, "courses_training_for_uq")) return false;
+    throw err;
+  }
+}
+
+/**
  * Renames a course, its name or its code, or changes its icon and colour
  * (null puts the default back). `null` when the new code is
  * already another course's: the code is unique across the instance, and the
@@ -391,8 +408,16 @@ export async function changeStaffSeat(
     const refused = staffChangeRefusal({ owners, targetRole: target.role, next });
     if (refused) return { refused };
     const seat = and(eq(courseStaff.courseId, courseId), eq(courseStaff.userId, userId));
-    if (next === "remove") await tx.delete(courseStaff).where(seat);
-    else if (next !== target.role) await tx.update(courseStaff).set({ role: next }).where(seat);
+    if (next === "remove") {
+      await tx.delete(courseStaff).where(seat);
+      // ADR-105 §1: a training course is its teacher's through their seat. Without
+      // it the course stays its remaining staff's, unmarked, and the teacher may
+      // provision a new one.
+      await tx
+        .update(courses)
+        .set({ trainingFor: null })
+        .where(and(eq(courses.id, courseId), eq(courses.trainingFor, userId)));
+    } else if (next !== target.role) await tx.update(courseStaff).set({ role: next }).where(seat);
     return { refused: null, from: target.role };
   });
   if (next === "remove" && outcome.refused === null) accessRevoked([userId]);

@@ -235,6 +235,8 @@ export async function createPool(
     ownerId: string;
     icon?: string | null | undefined;
     color?: PoolColor | null | undefined;
+    /** The training content's pool (ADR-105 §2): one per instance, `pools_training_uq`. */
+    isTraining?: boolean | undefined;
   },
 ) {
   const [row] = await db
@@ -246,6 +248,7 @@ export async function createPool(
       color: input.color ?? null,
       isPublic: input.isPublic ?? false,
       ownerId: input.ownerId,
+      isTraining: input.isTraining ?? false,
     })
     .returning();
   // A new pool has no member and no linked course: it is public or private, never shared.
