@@ -1,22 +1,17 @@
 #!/usr/bin/env bash
-# The deploy dispatcher of the engine VM, code.chevallier.io (ADR-016, M6-04
-# amendment): ONE forced command for the two components it hosts, the code
-# runner and the online workspace portal. root's authorized_keys pins each CI
-# key to the dispatcher of ITS OWN checkout and to one scope:
+# The PRODUCTION deploy dispatcher of the engine VM, code.chevallier.io
+# (ADR-016, M6-04 amendment): ONE forced command for the two components it
+# hosts, the code runner and the online workspace portal's prod instance.
+# root's authorized_keys pins the production CI key to this file, in the
+# production checkout, which only ever moves to approved commits:
 #   command="/opt/quiz-runner/infra/engine/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@quiz
-#   command="/opt/quiz-engine-staging/infra/engine/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
-# A key can only deploy, never open a shell. The production checkout only
-# ever moves to approved commits; the staging checkout moves to every commit
-# of main. The staging key still runs that commit's scripts as root on this
-# VM: the scope and the separate checkout keep it from deploying production
-# BY MISTAKE, they do not contain an attacker (risk accepted by the owner,
-# ADR-016, M6-04 amendment).
+# A key can only deploy, never open a shell. The staging-portal key reaches
+# staging-dispatch.sh instead; a `staging` scope is refused here.
 #
 # The CI's SSH command lands in $SSH_ORIGINAL_COMMAND, matched strictly and
 # never eval'd:
 #   [force] <component> <instance> <sha> [<digest>] <token>
 #       runner prod, codespace prod     the production scope
-#       codespace staging                the staging scope
 #   <sha> [<digest>] <token>
 #       the runner, the form the pre-M6-04 apps/runner/deploy/deploy.sh took
 #       and the one the CI still sends it.
@@ -32,11 +27,11 @@
 #
 # The checkout moves to the deployed sha, detached, and the component's own
 # steps run from it (apps/runner/deploy/install.sh,
-# apps/codespace/deploy/install.sh <instance>). Moving the checkout rewrites
-# THIS file while bash still reads the old copy, so the script hands over to
-# the new copy exactly once, the login done, the request in the environment.
-# One deploy at a time on the VM (a lock under /run, shared by both
-# checkouts: both drive the same engine, systemd and Caddy).
+# apps/codespace/deploy/install.sh prod). Moving the checkout rewrites THIS
+# file while bash still reads the old copy, so the script hands over to the
+# new copy exactly once, the login done, the request in the environment.
+# One deploy at a time on the VM: a lock under /run, shared with the
+# staging dispatcher (both drive the same engine and systemd).
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/../.."
@@ -45,8 +40,12 @@ cd "$(dirname "$(readlink -f "$0")")/../.."
 
 scope="${1:-}"
 case "$scope" in
-  production | staging) ;;
-  *) echo "deploy: unknown scope '$scope' (production | staging)" >&2; exit 2 ;;
+  production) ;;
+  staging)
+    echo "deploy: the staging scope is the frozen dispatcher's, /usr/local/libexec/quiz-engine/staging-dispatch.sh: the staging-portal key goes there (deployment.md §4, The frozen staging dispatcher)" >&2
+    exit 2
+    ;;
+  *) echo "deploy: unknown scope '$scope' (production)" >&2; exit 2 ;;
 esac
 
 # The descriptor survives the re-exec, and so does the lock.
@@ -96,10 +95,10 @@ else
   export QUIZ_DEPLOY_COMPONENT QUIZ_DEPLOY_INSTANCE QUIZ_DEPLOY_DIGEST
 fi
 
-# What each key may deploy. Checked before the login, and again by the copy
-# a hand-over reaches.
+# What the production key may deploy. Checked before the login, and again
+# by the copy a hand-over reaches.
 case "$scope:$QUIZ_DEPLOY_COMPONENT:$QUIZ_DEPLOY_INSTANCE" in
-  production:runner:prod | production:codespace:prod | staging:codespace:staging) ;;
+  production:runner:prod | production:codespace:prod) ;;
   *)
     echo "deploy: the $scope key may not deploy '$QUIZ_DEPLOY_COMPONENT $QUIZ_DEPLOY_INSTANCE'" >&2
     exit 2

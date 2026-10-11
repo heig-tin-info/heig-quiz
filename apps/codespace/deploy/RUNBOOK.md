@@ -2,8 +2,9 @@
 
 Two instances of `@quiz/codespace`, `prod` and `staging`, on the engine VM
 `code.chevallier.io`, beside the code runner, deployed by the CI through the
-VM's dispatcher (`infra/engine/deploy.sh`). The decisions and their reasons
-are the M6-04 amendment of
+VM's production dispatcher (`infra/engine/deploy.sh`) and its frozen
+staging dispatcher (`infra/engine/staging-dispatch.sh`, installed by hand).
+The decisions and their reasons are the M6-04 and 2026-10-11 amendments of
 [ADR-016](../../../docs/adr/ADR-016-runner-sur-vm-separee.md); the rest of the
 VM is §3 of [the deployment runbook](../../../docs/development/deployment.md).
 
@@ -15,7 +16,7 @@ The values (names, ports, platform URLs) are in `deploy/lib.sh`
 
 | What | Where |
 | --- | --- |
-| Checkout the deploy runs from | prod: `/opt/quiz-runner` (approved commits only); staging: `/opt/quiz-engine-staging` |
+| What the deploy runs | prod: `infra/engine/deploy.sh` from the checkout `/opt/quiz-runner` (approved commits only); staging: the frozen `/usr/local/libexec/quiz-engine/staging-dispatch.sh`, no checkout ([deployment.md §4](../../../docs/development/deployment.md#the-frozen-staging-dispatcher)) |
 | Portal (quadlet) | `/etc/containers/systemd/quiz-codespace-<i>.container` → `quiz-codespace-<i>.service` |
 | Image the quadlet runs | `ghcr.io/heig-tin-info/quiz-codespace:<i>` (the deployed sha, retagged) |
 | Environment, secrets | `/etc/quiz-codespace/<i>/env` (0600) |
@@ -44,17 +45,14 @@ never used by a real class; step 3 lists live sessions anyway).
 - A run of `main` containing M6-04 has pushed
   `ghcr.io/heig-tin-info/quiz-codespace:<sha>`. Call that full sha `SHA`.
 
-### 2. The two checkouts
+### 2. The checkout
 
 Production's checkout is the runner's, `/opt/quiz-runner`; its next
-approved deploy moves it, or do it now. Staging gets a clone of its own,
-which only the staging key ever moves:
+approved deploy moves it, or do it now:
 
 ```bash
 cd /opt/quiz-runner && git fetch --quiet origin main && git checkout --quiet --detach "$SHA"
-git clone --quiet https://github.com/heig-tin-info/heig-quiz.git /opt/quiz-engine-staging
-cd /opt/quiz-engine-staging && git checkout --quiet --detach "$SHA"
-ls /opt/quiz-runner/infra/engine/deploy.sh /opt/quiz-engine-staging/infra/engine/deploy.sh
+ls /opt/quiz-runner/infra/engine/deploy.sh
 ```
 
 ### 3. Back up classroom's portal
@@ -171,13 +169,14 @@ cp -a /root/.ssh/authorized_keys /root/.ssh/authorized_keys.before-m6-04
 sed -i 's|command="/opt/quiz-runner/apps/runner/deploy/deploy.sh"|command="/opt/quiz-runner/infra/engine/deploy.sh production"|' /root/.ssh/authorized_keys
 ```
 
-Then add the staging key, whose public half is the one in
-`/home/srvstg/.ssh/authorized_keys` on the application VM
-(`ci-deploy-staging@quiz`). The two lines:
+Then add the staging portal's key (`ci-deploy-staging-portal@quiz`, the
+secret of the `staging-portal` environment), never the application's
+`ci-deploy-staging@quiz`: deployment.md §4, *The frozen staging
+dispatcher*. The two lines:
 
 ```text
 command="/opt/quiz-runner/infra/engine/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@quiz
-command="/opt/quiz-engine-staging/infra/engine/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
+command="/usr/local/libexec/quiz-engine/staging-dispatch.sh",restrict ssh-ed25519 AAAA… ci-deploy-staging-portal@quiz
 ```
 
 Why the runner's deploys keep working before and after this edit, and the
@@ -216,13 +215,14 @@ vault (ADR-010).
 gh variable set CODESPACE_DEPLOY --repo heig-tin-info/heig-quiz --body 1
 ```
 
-The next push to `main` deploys staging, and production after its
-approvals (`deploy-production`, then `deploy-codespace-prod`). Or now, on
+The next push to `main` deploys both instances after their approvals
+(staging: `deploy-staging-portal`; production: `deploy-production`, then
+`deploy-codespace-prod`). Or now, on
 the VM, with a token that can read the package (a PAT with `read:packages`):
 
 ```bash
 SSH_ORIGINAL_COMMAND="codespace prod $SHA <token>" /opt/quiz-runner/infra/engine/deploy.sh production
-SSH_ORIGINAL_COMMAND="codespace staging $SHA <token>" /opt/quiz-engine-staging/infra/engine/deploy.sh staging
+SSH_ORIGINAL_COMMAND="codespace staging $SHA sha256:<digest> <token>" /usr/local/libexec/quiz-engine/staging-dispatch.sh
 ```
 
 Once both instances run, the `CODESPACE_DEPLOY` gate can go: remove the
@@ -260,8 +260,10 @@ ls /etc/codespace /root/classroom-codespace     # no .pem anywhere
 ## Rollback
 
 **A bad portal release**: re-run an older run's `deploy-codespace-prod` (or
-`deploy-staging`) job: same sha, image re-pulled by its sha. The dispatcher
-refuses a sha from before M6-04 (it has no dispatcher). The migrations only
+`deploy-staging-portal`) job: same sha, image re-pulled by its digest. The
+production dispatcher refuses a sha from before M6-04 (it has no
+dispatcher); the staging one checks out nothing, so any run whose image
+job gave a digest redeploys. The migrations only
 go forward: a release older than the newest `drizzle/` cannot read a newer
 schema.
 

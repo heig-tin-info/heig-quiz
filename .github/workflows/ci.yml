@@ -139,6 +139,12 @@ jobs:
           fetch-depth: 2
       - run: node scripts/check-adr-numbers.mjs
       - run: node --test scripts/*.test.mjs
+      # The engine VM's deploy scripts and the staging dispatcher's test
+      # (audit H4). No install: bash and the hosted runner's shellcheck,
+      # whose version is the image's, unpinned (a new release may warn on
+      # unchanged scripts).
+      - run: shellcheck -x -P SCRIPTDIR infra/engine/*.sh
+      - run: bash infra/engine/staging-dispatch.test.sh
       - env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && 'HEAD^1' || '' }}
         run: node scripts/check-changes.mjs ${BASE:+--base "$BASE"}
@@ -251,24 +257,26 @@ jobs:
   #
   # Each VM's authorized_keys pins a CI key to a script (forced commands) —
   # a key can ONLY deploy, never open a shell:
-  #   staging key    → ~/quiz-staging/deploy.sh staging           (app VM, srvstg)
-  #                  → /opt/quiz-engine-staging/infra/engine/deploy.sh staging (code VM)
-  #   production key → /srv/quiz/deploy.sh production             (app VM, srv)
-  #                  → /opt/quiz-runner/infra/engine/deploy.sh production      (code VM)
+  #   staging key        → ~/quiz-staging/deploy.sh staging       (app VM, srvstg)
+  #   staging-portal key → /usr/local/libexec/quiz-engine/staging-dispatch.sh (code VM)
+  #   production key     → /srv/quiz/deploy.sh production         (app VM, srv)
+  #                      → /opt/quiz-runner/infra/engine/deploy.sh production  (code VM)
   # Staging runs as its OWN account, with its own rootless Docker: it executes
   # every commit of main before any approval, so it must not share the account
-  # that owns production's secrets, volumes and backups. On the code VM the
-  # staging key has its own checkout and scope, but is root there (risk
-  # accepted by the owner, ADR-016's M6-04 amendment).
+  # that owns production's secrets, volumes and backups. The code VM hosts
+  # production: its staging portal deploys only once approved, with a key
+  # only the approved `staging-portal` environment holds (ADR-016, 2026-10-11).
   # The SSH command carries the commit, the digest the `image` job pushed
   # and a pull credential stored nowhere (→ $SSH_ORIGINAL_COMMAND; the code
-  # VM's forms: infra/engine/deploy.sh). The digest is sent only while the
-  # REPOSITORY variable DEPLOY_BY_DIGEST is 1: a VM still at a commit whose
-  # deploy script predates the digest would read it as part of the token
-  # and fail its login, so the PO sets it once every checkout the CI
-  # deploys to runs this version (deployment.md §4, *Deploying by digest*),
-  # a gate to drop from this file then (#747). While it is set, a missing
-  # digest fails the step instead of falling back to the tag.
+  # VM's forms: infra/engine/deploy.sh, staging-dispatch.sh). The digest is
+  # sent only while the REPOSITORY variable DEPLOY_BY_DIGEST is 1: a VM still
+  # at a commit whose deploy script predates the digest would read it as
+  # part of the token and fail its login, so the PO sets it once every
+  # checkout the CI deploys to runs this version (deployment.md §4,
+  # *Deploying by digest*), a gate to drop from this file then (#747). While
+  # it is set, a missing digest fails the step instead of falling back to
+  # the tag. The staging dispatcher always requires it, so its step always
+  # sends it.
   # Without its key a job no-ops, so the pipeline stays green until keys are
   # provisioned; the codespace steps also wait for the REPOSITORY variable
   # CODESPACE_DEPLOY=1, set at the switch (apps/codespace/deploy/RUNBOOK.md),
@@ -289,13 +297,9 @@ jobs:
       DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
       DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
-      DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
-      DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
-      CODESPACE_DEPLOY: ${{ vars.CODESPACE_DEPLOY }}
       STAGING_URL: ${{ vars.STAGING_URL || 'https://quiz.dev.chevallier.io' }}
       DEPLOY_BY_DIGEST: ${{ vars.DEPLOY_BY_DIGEST }}
       IMAGE_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz || '' }}
-      CODESPACE_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz_codespace || '' }}
     steps:
       - name: Skip when the staging key is not configured
         if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_HOST == ''
@@ -307,9 +311,6 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" >> ~/.ssh/known_hosts
-          if [ -n "$DEPLOY_RUNNER_HOST" ]; then
-            printf '%s %s\n' "$DEPLOY_RUNNER_HOST" "$DEPLOY_RUNNER_HOST_KEY" >> ~/.ssh/known_hosts
-          fi
       - name: Deploy to staging (forced command runs ~/quiz-staging/deploy.sh staging)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
         env:
@@ -331,17 +332,60 @@ jobs:
           done
           echo "::error::$STAGING_URL/healthz did not answer 200 within 150 s"
           exit 1
-      # The staging portal (code-dev.chevallier.io), same sha. Not guarded by
-      # live sessions, like the application's staging; the exit code is the
-      # portal's /healthz after the restart, so a portal that does not come up
-      # stops the promotion too.
-      - name: Deploy the codespace portal, staging instance (forced command runs infra/engine/deploy.sh staging on the code VM)
-        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != '' && env.CODESPACE_DEPLOY == '1'
+
+  # The staging portal (code-dev.chevallier.io), same sha, ONCE APPROVED: its
+  # image is unapproved code that runs beside production on the code VM with
+  # the rootful Podman socket (ADR-016, amendment of 2026-10-11, audit H4).
+  # Its `staging-portal` environment requires a reviewer, as `production`
+  # does, and alone holds the key the code VM pins to the frozen staging
+  # dispatcher (STAGING_PORTAL_SSH_KEY): a job of an unapproved run, whatever
+  # its workflow says, never gets that key. Fail-safe by construction: an
+  # environment GitHub creates on first use has no secret, so the job no-ops
+  # until the PO has created it, protected, and put the key in it
+  # (deployment.md §4, *The environments*).
+  # Nothing waits for it: deploy-production needs deploy-staging only, so an
+  # unapproved staging portal never blocks a promotion. Its own concurrency
+  # group, cancelling: a job waiting for approval holds its group, and the
+  # newest run's portal replaces an older one left unapproved (the engine
+  # VM's deploys are serialised by its lock anyway). Skipped outright, with
+  # no approval asked, while the portal deploy is off (CODESPACE_DEPLOY, a
+  # REPOSITORY variable, readable before the job enters its environment).
+  deploy-staging-portal:
+    needs: [image, deploy-staging]
+    if: vars.CODESPACE_DEPLOY == '1'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging-portal
+      url: https://code-dev.chevallier.io
+    permissions:
+      contents: read
+      packages: read
+    concurrency:
+      group: staging-portal-deploy
+      cancel-in-progress: true
+    env:
+      DEPLOY_SSH_KEY: ${{ secrets.STAGING_PORTAL_SSH_KEY }}
+      DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
+      DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
+      CODESPACE_DIGEST: ${{ needs.image.outputs.quiz_codespace }}
+    steps:
+      - name: Skip when the staging-portal key is not configured
+        if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_RUNNER_HOST == ''
+        run: echo "::notice::STAGING_PORTAL_SSH_KEY (environment staging-portal)/DEPLOY_RUNNER_HOST not set — staging portal deploy skipped."
+      # Not guarded by live sessions, like the application's staging; the exit
+      # code is the portal's /healthz after the restart. The request form:
+      # staging-dispatch.sh.
+      - name: Deploy the codespace portal, staging instance (forced command runs the frozen staging dispatcher on the code VM)
+        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_RUNNER_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          [ "$DEPLOY_BY_DIGEST" != 1 ] || [ -n "$CODESPACE_DIGEST" ] || { echo "::error::DEPLOY_BY_DIGEST is set and the image job gave no digest"; exit 1; }
-          ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "codespace staging $GITHUB_SHA${CODESPACE_DIGEST:+ $CODESPACE_DIGEST} $GHCR_TOKEN"
+          [ -n "$CODESPACE_DIGEST" ] || { echo "::error::the image job gave no quiz-codespace digest, which the staging dispatcher requires"; exit 1; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s %s\n' "$DEPLOY_RUNNER_HOST" "$DEPLOY_RUNNER_HOST_KEY" >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "codespace staging $GITHUB_SHA $CODESPACE_DIGEST $GHCR_TOKEN"
 
   deploy-production:
     # `image` for its digests: a job reads the outputs of its direct needs only.

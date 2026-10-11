@@ -8,7 +8,7 @@
 # Once per instance, before its first deploy (RUNBOOK.md says when). It never
 # overwrites what holds a secret: the instance's env file is written only
 # when absent. It does NOT deploy the portal (the CI does, through
-# infra/engine/deploy.sh) and builds no image.
+# infra/engine/deploy.sh and staging-dispatch.sh) and builds no image.
 #
 #   1. checks: root, the rootful socket, the `containers` subordinate range
 #   2. persistent br_netfilter (without it the ICC rule is inoperative)
