@@ -108,7 +108,8 @@ export function ImageView({
   const hosted = imageUrl?.(src) ?? null;
   // A refused picture has no asset either: no size, no rotation, only removal.
   const url = hosted === REFUSED ? null : assetUrl(src);
-  const shown = hosted ?? url ?? src;
+  // Neither the host's nor an asset: never fetched (audit L14, see `tiptap.ts`).
+  const shown = hosted ?? url ?? REFUSED;
   const width = assetWidth(src);
 
   const editable = editor.isEditable;
@@ -153,8 +154,8 @@ export function ImageView({
           URL, exactly as the node's own `renderHTML` does: it is what the
           parser reads back, and what a test can assert the markdown on. */}
       {shown === REFUSED ? (
-        // Never fetched (an external picture in the journal): its alt text,
-        // in a frame that says what it is, and the reference kept as is.
+        // Never fetched (an external picture, here or in the journal): its
+        // alt text, in a frame that says what it is, and the reference kept as is.
         <span
           data-asset={src}
           className="inline-flex items-center gap-2 rounded-field border border-dashed border-line-strong px-3 py-2 text-xs text-fg-muted"

@@ -50,6 +50,7 @@ import { decodeEntities } from "./entities.js";
 import { asBoolean, oneLine, splitFrontMatter } from "./frontMatter.js";
 import { escapeHtml, highlight } from "./highlight.js";
 import { relativeHref, resolveRelative } from "./journalTree.js";
+import { FormulaBudget, KATEX_LIMITS, refusedBeforeKatex } from "./katex.js";
 import { taskTally } from "./tasks.js";
 
 export interface RenderContext {
@@ -180,6 +181,8 @@ const EXTERNAL = /^(https?|mailto):/i;
 export function renderPage(source: string, ctx: RenderContext): RenderedPage {
   const { frontMatter, body, warnings: fmWarnings } = splitFrontMatter(cleanSource(source));
   const warnings: JournalWarning[] = [...fmWarnings];
+  // What this page may still spend on formula HTML (`FORMULA_HTML_BUDGET`).
+  const budget = new FormulaBudget();
   const referenced = new Set<string>();
   const toc: JournalTocEntry[] = [];
   const ids = new Set<string>();
@@ -311,7 +314,7 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
           const m = /^\$\$([\s\S]+?)\$\$(?:[ \t]*(?:\r?\n|$))/.exec(src);
           return m ? { type: "blockMath", raw: m[0], text: m[1]!.trim() } : undefined;
         },
-        renderer: (token: Tokens.Generic) => math(String(token.text ?? ""), true, warnings),
+        renderer: (token: Tokens.Generic) => math(String(token.text ?? ""), true, warnings, budget),
       },
       {
         name: "inlineMath",
@@ -324,7 +327,7 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
           const m = /^\$((?:[^$\\\n]|\\.)+?)\$/.exec(src);
           return m ? { type: "inlineMath", raw: m[0], text: m[1]! } : undefined;
         },
-        renderer: (token: Tokens.Generic) => math(String(token.text ?? ""), false, warnings),
+        renderer: (token: Tokens.Generic) => math(String(token.text ?? ""), false, warnings, budget),
       },
     ],
   });
@@ -349,20 +352,33 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
 /**
  * One formula. `throwOnError` is deliberately ON so the author gets a warning
  * instead of a red blob nobody reports; the broken source is kept visible as
- * code, which is what it is.
+ * code, which is what it is. A formula `refusedBeforeKatex` names, that runs
+ * past `KATEX_LIMITS`' expansions or the call stack, or that the page's
+ * `budget` does not admit (`FORMULA_HTML_MAX`, `FORMULA_HTML_BUDGET`) is such
+ * an error; one past its size is drawn at the cap.
  */
-function math(source: string, display: boolean, warnings: JournalWarning[]): string {
-  try {
-    return katex.renderToString(source, {
-      displayMode: display,
-      throwOnError: true,
-      strict: false,
-      trust: false,
-      output: "htmlAndMathml",
-    });
-  } catch {
-    warnings.push({ code: "math_error", source });
-    const cls = display ? "md-math-error md-math-block" : "md-math-error";
-    return `<code class="${cls}">${escapeHtml(source)}</code>`;
+function math(
+  source: string,
+  display: boolean,
+  warnings: JournalWarning[],
+  budget: FormulaBudget,
+): string {
+  if (refusedBeforeKatex(source, budget) === null) {
+    try {
+      const html = katex.renderToString(source, {
+        displayMode: display,
+        throwOnError: true,
+        strict: false,
+        trust: false,
+        output: "htmlAndMathml",
+        ...KATEX_LIMITS,
+      });
+      if (budget.admit(html)) return html;
+    } catch {
+      // Reported below, as a refused command is.
+    }
   }
+  warnings.push({ code: "math_error", source });
+  const cls = display ? "md-math-error md-math-block" : "md-math-error";
+  return `<code class="${cls}">${escapeHtml(source)}</code>`;
 }

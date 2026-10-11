@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 
 import { instantiate } from "@quiz/domain/parameters";
 
+import { FORMULA_LABELS } from "../test/formula";
 import { protectHolePipes, restoreHolePipes } from "./clozeHole";
 import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
 
@@ -38,7 +39,7 @@ document.elementFromPoint ??= () => null;
 function roundTrip(markdown: string, inline = false): string {
   const editor = new Editor({
     element: document.createElement("div"),
-    extensions: richTextExtensions({ inline }),
+    extensions: richTextExtensions({ inline, formulaLabels: FORMULA_LABELS }),
     enableInputRules: inline ? [...INLINE_INPUT_RULES] : true,
     content: markdown,
     contentType: "markdown",
@@ -206,7 +207,7 @@ describe("an inline field drops nothing", () => {
 function editorFor(markdown = "", inline = false): Editor {
   return new Editor({
     element: document.createElement("div"),
-    extensions: richTextExtensions({ inline }),
+    extensions: richTextExtensions({ inline, formulaLabels: FORMULA_LABELS }),
     enableInputRules: inline ? [...INLINE_INPUT_RULES] : true,
     content: markdown,
     contentType: "markdown",
@@ -591,7 +592,7 @@ describe("round trip — tables", () => {
 function holeTrip(markdown: string): string {
   const editor = new Editor({
     element: document.createElement("div"),
-    extensions: richTextExtensions({ cloze: true }),
+    extensions: richTextExtensions({ cloze: true, formulaLabels: FORMULA_LABELS }),
     // The two boundaries `RichText` applies, and for the reason it applies
     // them: a `|` inside a hole must not reach the markdown TABLE lexer.
     content: protectHolePipes(markdown),
@@ -667,7 +668,7 @@ describe("round trip — cloze holes", () => {
   it("builds a chip, not five characters, and one per hole", () => {
     const editor = new Editor({
       element: document.createElement("div"),
-      extensions: richTextExtensions({ cloze: true }),
+      extensions: richTextExtensions({ cloze: true, formulaLabels: FORMULA_LABELS }),
       content: "a {{=x|y}} b",
       contentType: "markdown",
     });
@@ -685,7 +686,7 @@ describe("round trip — cloze holes", () => {
     expect(roundTrip("{{Newton}}")).toBe("{{Newton}}");
     const editor = new Editor({
       element: document.createElement("div"),
-      extensions: richTextExtensions({}),
+      extensions: richTextExtensions({ formulaLabels: FORMULA_LABELS }),
       content: "{{Newton}}",
       contentType: "markdown",
     });
@@ -701,7 +702,7 @@ describe("round trip — cloze holes", () => {
   it("turns `{{` into an empty hole as it is typed, and leaves `\\{{` literal", () => {
     const editor = new Editor({
       element: document.createElement("div"),
-      extensions: richTextExtensions({ cloze: true }),
+      extensions: richTextExtensions({ cloze: true, formulaLabels: FORMULA_LABELS }),
       content: "",
       contentType: "markdown",
     });

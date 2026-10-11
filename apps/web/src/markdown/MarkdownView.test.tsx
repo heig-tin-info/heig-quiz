@@ -1,7 +1,12 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import katex from "katex";
+import { describe, expect, it, vi } from "vitest";
 
+import { FormulaBudget } from "@quiz/docrender/katex";
+
+import { FORMULA_LABELS } from "../test/formula";
 import { renderWithProviders } from "../test/render";
+import { formulaHtml } from "./formula";
 import { MarkdownView } from "./MarkdownView";
 import { assetMarkdown, assetUrl, assetWidth, renderMarkdown, withAssetWidth } from "./render";
 
@@ -52,6 +57,14 @@ describe("MarkdownView — sanitisation", () => {
     expect(body.textContent).toContain("pixel");
   });
 
+  it("drops a protocol-relative image, which is another host too (audit L14)", () => {
+    const body = view(
+      '![a](//evil.example/p.png)\n\n<img src="//evil.example/q.png"><img src="/\\evil.example/r.png">',
+    );
+    expect(body.querySelectorAll("img")).toHaveLength(0);
+    expect(body.innerHTML).not.toContain("evil.example");
+  });
+
   it("refuses a data: URI image", () => {
     const body = view("![x](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)");
     expect(body.querySelector("img")).toBeNull();
@@ -81,6 +94,49 @@ describe("MarkdownView — sanitisation", () => {
     expect(link).toHaveAttribute("href", "https://example.org/a");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link.getAttribute("rel")).toContain("noreferrer");
+  });
+});
+
+/*
+ * Audit L16: whether a link leaves the app is decided on the URL the browser
+ * will follow, not on how the href starts. `//host` and `/\host` look like
+ * paths and are other hosts.
+ */
+describe("MarkdownView — where a link goes", () => {
+  const link = (source: string) => view(source).querySelector("a");
+  const external = (a: Element | null, href: string) => {
+    expect(a).toHaveAttribute("href", href);
+    expect(a).toHaveAttribute("target", "_blank");
+    expect(a?.getAttribute("rel")).toBe("noreferrer noopener");
+  };
+  const internal = (a: Element | null, href: string) => {
+    expect(a).toHaveAttribute("href", href);
+    expect(a).not.toHaveAttribute("target");
+    expect(a).not.toHaveAttribute("rel");
+  };
+
+  it("treats a protocol-relative link as the external link it is", () => {
+    external(link("[x](//evil.example/a)"), "//evil.example/a");
+  });
+
+  it("treats a backslash after the slash the same way", () => {
+    external(link('<a href="/\\evil.example/b">x</a>'), "/\\evil.example/b");
+    // In markdown, marked percent-encodes the backslash: a path of the app.
+    internal(link("[x](/\\evil.example/a)"), "/%5Cevil.example/a");
+  });
+
+  it("opens an absolute link to another host in its own tab", () => {
+    external(link("[x](https://evil.example)"), "https://evil.example");
+  });
+
+  it("keeps a link to the app itself in the current tab, as written", () => {
+    internal(link("[x](/app/pools)"), "/app/pools");
+    internal(link("[x](#part-2)"), "#part-2");
+    internal(link(`[x](${location.origin}/app/pools)`), `${location.origin}/app/pools`);
+  });
+
+  it("leaves a mailto: link alone", () => {
+    internal(link("[x](mailto:prof@heig-vd.ch)"), "mailto:prof@heig-vd.ch");
   });
 });
 
@@ -140,6 +196,89 @@ describe("MarkdownView — content", () => {
     expect(body.querySelector(".md-math-display")).not.toBeNull();
     // KaTeX's own markup survived sanitisation (it is produced after it).
     expect(body.innerHTML).toContain("katex-html");
+  });
+
+  /*
+   * Audit L15: an essay is rendered on the grader's screen, and a formula
+   * must not be able to grow over it nor freeze it. What `KATEX_LIMITS` and
+   * the macro scan hold is tested in `@quiz/docrender/katex`; these check
+   * that this renderer goes through them.
+   */
+  it("caps a formula's dimensions", () => {
+    const rule = view("$\\rule{1000em}{1000em}$");
+    expect(rule.querySelector(".katex-rule")?.getAttribute("style")).toContain("border-top-width:10em");
+    // The source survives as the MathML annotation; nothing DRAWN is 1000em.
+    expect(rule.innerHTML).not.toMatch(/(?:width|height)[:=]"?1000em/);
+  });
+
+  it("refuses a formula that defines a macro, saying why", () => {
+    // 499 calls to a 1000-character macro: ~290 s of KaTeX if it got there.
+    const bomb = view(`$\\def\\a{${"x".repeat(1000)}}${"\\a".repeat(499)}$`);
+    const error = bomb.querySelector(".katex-error");
+    expect(error).toHaveAttribute("title", FORMULA_LABELS.macro);
+    expect(error?.textContent).toContain("\\def\\a");
+    expect(bomb.querySelector(".katex-html")).toBeNull();
+    expect(view("$\\newcommand{\\a}{x}\\a$").querySelector(".katex-error")).not.toBeNull();
+    // `\verb` with `\` as its delimiter hands KaTeX the `\def` after `\\`;
+    // `\tag{…}` defines `\df@tag`, an internal command.
+    for (const tex of ["\\verb\\!\\\\def\\a{x}\\a", "\\verb*\\q\\\\def\\a{x}\\a", "\\tag{x}\\df@tag"]) {
+      expect(view(`$$${tex}$$`).querySelector(".katex-html")).toBeNull();
+    }
+  });
+
+  it("refuses a formula past FORMULA_SOURCE_MAX before KaTeX sees it", () => {
+    const spy = vi.spyOn(katex, "renderToString");
+    try {
+      const long = view(`$${"x".repeat(5000)}$`);
+      expect(long.querySelector(".katex-error")).toHaveAttribute("title", FORMULA_LABELS.tooLarge);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("refuses a formula whose HTML is past FORMULA_HTML_MAX, saying why", () => {
+    // A 2 KB matrix row of 2000 cells: ~1.16 MB of KaTeX HTML, above 1 MB.
+    const big = view(`$$\\begin{matrix}${"&".repeat(2000)}\\end{matrix}$$`);
+    expect(big.querySelector(".katex-error")).toHaveAttribute("title", FORMULA_LABELS.tooLarge);
+    expect(big.querySelector(".katex-html")).toBeNull();
+    // 255 nested `\overbrace` (583 KB), the largest nest measured, stays under it.
+    const nest = `${"\\overbrace{".repeat(255)}x${"}^{a}".repeat(255)}`;
+    expect(formulaHtml(nest, false, FORMULA_LABELS, new FormulaBudget())).toContain("katex-html");
+  });
+
+  it("keeps a body's formulas until FORMULA_HTML_BUDGET, then refuses the rest", () => {
+    // Three 1 700-cell rows, ~965 KB each: two fit the body's 2 MB, the third does not.
+    const row = `$$\\begin{matrix}${"&".repeat(1700)}\\end{matrix}$$`;
+    const host = document.createElement("div");
+    host.innerHTML = renderMarkdown([row, row, row].join("\n\n"), "Code", { formula: FORMULA_LABELS });
+    const formulas = Array.from(host.querySelectorAll(".md-math"));
+    expect(formulas.map((f) => f.querySelector(".katex-html") !== null)).toEqual([true, true, false]);
+    expect(formulas[2]?.querySelector(".katex-error")).toHaveAttribute("title", FORMULA_LABELS.tooLarge);
+  });
+
+  it("stops calling KaTeX once a body's budget is spent", () => {
+    // 4 KB rows of 4000 cells, ~2.3 MB each: the first spends the body.
+    const row = `$$\\begin{matrix}${"&".repeat(4000)}\\end{matrix}$$`;
+    const spy = vi.spyOn(katex, "renderToString");
+    try {
+      const host = document.createElement("div");
+      const source = Array.from({ length: 6 }, () => row).join("\n\n");
+      host.innerHTML = renderMarkdown(source, "Code", { formula: FORMULA_LABELS });
+      expect(host.querySelectorAll(".katex-error")).toHaveLength(6);
+      expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("shows a formula nested past the call stack as an error, not a crash", () => {
+    // 1000 nested superscripts: 4 KB, under FORMULA_SOURCE_MAX, past the stack.
+    const body = view(`$${"x^{".repeat(1000)}x${"}".repeat(1000)}$`);
+    expect(body.querySelector(".katex-error")).toHaveAttribute(
+      "title",
+      "This formula is nested too deeply to display",
+    );
   });
 
   /*
@@ -272,7 +411,7 @@ describe("MarkdownView — content", () => {
   it("renders nothing at all for empty source", () => {
     const { container } = renderWithProviders(<MarkdownView source={"   \n  "} />);
     expect(container.querySelector(".md-body")).toBeNull();
-    expect(renderMarkdown("")).toBe("");
+    expect(renderMarkdown("", "Code", { formula: FORMULA_LABELS })).toBe("");
   });
 
   it("takes the dense variant and an inline host when asked", () => {

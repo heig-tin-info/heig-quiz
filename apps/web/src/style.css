@@ -541,8 +541,31 @@ html.dark {
    every one of them into an empty line — a bulleted list came out as items
    floating in blank space (issue #100). `pre` keeps its own `white-space`
    from the user agent. The editing surface wears `.md-body` too, and
-   ProseMirror needs its `pre-wrap`: it is left alone. */
-.md-body:not(.ProseMirror) { white-space: normal; }
+   ProseMirror needs its `pre-wrap`: it is left alone.
+
+   What the body draws stays inside the body (audit L15). KaTeX caps a
+   formula's positive sizes (`KATEX_LIMITS`), but not a negative one: a
+   `\kern{-40em}` in an essay would push what follows out of the answer
+   and over the grader's own screen, the list of answers beside it
+   included. Paint containment clips it to the block the content belongs
+   to. What is merely WIDE — a long inline formula, a matrix — used to
+   spill visibly past the column; clipped, it would be unreadable, so the
+   body scrolls sideways instead. Vertically it clips: KaTeX's struts
+   overhang by a pixel, and a scrollbar for that would be noise. The
+   editing surface is left out of both: a selected image or formula draws
+   its ring outside itself. */
+.md-body:not(.ProseMirror) {
+  white-space: normal;
+  contain: paint;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+/* The span form (`MarkdownView as="span"`, the reviews a grader reads)
+   holds nothing but blocks — marked writes paragraphs — so it lays out as a
+   block already; saying so is what lets the containment above apply, since
+   an inline box cannot be contained. `.md-inline` unwraps its paragraph to
+   flow inside a label and stays inline. */
+span.md-body:not(.md-inline) { display: block; }
 /* A cloze text holds fields in its lines: the size, and the line height of a
    field (h-8) plus air, as the package's own fallback renderer had them
    (`text-base leading-9`) — in a paragraph, a tight list item and a table

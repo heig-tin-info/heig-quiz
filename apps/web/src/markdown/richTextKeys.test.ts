@@ -3,6 +3,7 @@ import type { Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { FORMULA_LABELS } from "../test/formula";
 import { handleRichTextKeyDown, type RichTextKeyDeps } from "./richTextKeys";
 import { richTextExtensions } from "./tiptap";
 
@@ -36,7 +37,11 @@ function setup(
   opts: { inline?: boolean; cloze?: boolean; caret?: number; node?: number } = {},
 ) {
   const editor = new Editor({
-    extensions: richTextExtensions({ inline: opts.inline ?? false, cloze: opts.cloze ?? false }),
+    extensions: richTextExtensions({
+      inline: opts.inline ?? false,
+      cloze: opts.cloze ?? false,
+      formulaLabels: FORMULA_LABELS,
+    }),
     content: markdown,
     ...(typeof markdown === "string" ? { contentType: "markdown" as const } : {}),
   });

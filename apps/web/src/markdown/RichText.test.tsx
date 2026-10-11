@@ -4,6 +4,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { elapse, flowingClock } from "../test/clock";
+import { FORMULA_LABELS } from "../test/formula";
 import { renderWithProviders } from "../test/render";
 import { resetShortcuts, useActiveShortcuts } from "../shortcuts";
 import { modKey } from "../ui";
@@ -108,6 +109,32 @@ describe("RichText — it shows the markdown, it does not print it", () => {
     const img = container.querySelector("img");
     expect(img).toHaveAttribute("src", "/app/api/assets/a1b2");
     expect(img).toHaveAttribute("data-asset", "asset:a1b2");
+  });
+
+  it("never fetches a picture that is not an asset: no src, its alt text instead (audit L14)", async () => {
+    // A co-author of a shared pool must not be able to plant a tracking pixel.
+    const { container } = renderWithProviders(
+      <Host
+        initial={"![pixel](https://evil.example/p.png)\n\n![](//evil.example/q.png)\n\n![x](data:image/png;base64,AAAA)"}
+      />,
+    );
+    await waitFor(() => expect(container.querySelector("[data-asset]")).not.toBeNull());
+    expect(container.querySelector("img[src]")).toBeNull();
+    expect(container.innerHTML).not.toMatch(/src="[^"]*(?:evil\.example|data:)/);
+    expect(screen.getByText("External image, not shown: pixel")).toBeInTheDocument();
+    expect(screen.getByText("External image, not shown")).toBeInTheDocument();
+  });
+
+  it("refuses a formula that defines a macro, as the student view does (audit L15)", async () => {
+    const { container } = renderWithProviders(
+      <Host initial={"Before $\\def\\a{xx}\\a\\a$ and $x^2$ after"} />,
+    );
+    await waitFor(() => expect(container.querySelectorAll("[data-type='inline-math']")).toHaveLength(2));
+    const [refused, fine] = Array.from(container.querySelectorAll("[data-type='inline-math']"));
+    expect(refused?.querySelector(".katex-error")).toHaveAttribute("title", FORMULA_LABELS.macro);
+    expect(refused?.querySelector(".katex-html")).toBeNull();
+    expect(fine?.querySelector(".katex-html")).not.toBeNull();
+    expect(fine).toHaveAttribute("data-latex", "x^2");
   });
 });
 

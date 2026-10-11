@@ -9,12 +9,14 @@
  * `@quiz/docrender/journalTree`, which the web app's journal mock builds its
  * navigation with. The web editor (M4-06) reads front matter through
  * `@quiz/docrender/frontMatter` (yaml, no marked) and asset URLs through
- * `@quiz/docrender/assets`: the web app never imports this root, which
+ * `@quiz/docrender/assets`, and KaTeX's bounds through
+ * `@quiz/docrender/katex`: the web app never imports this root, which
  * would pull the whole renderer into the bundle.
  */
 export * from "./assets.js";
 export * from "./frontMatter.js";
 export * from "./highlight.js";
 export * from "./journalTree.js";
+export * from "./katex.js";
 export * from "./render.js";
 export * from "./repoName.js";

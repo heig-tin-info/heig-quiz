@@ -6,6 +6,7 @@ import type { ClozeTextRenderer } from "@quiz/qt-cloze/client";
 
 import { useT } from "../i18n";
 import { HOLE_ATTR, renderMarkdown } from "./render";
+import { useFormulaLabels } from "./useFormulaLabels";
 
 /**
  * The text of a `cloze` question through the app's OWN markdown pipeline —
@@ -39,9 +40,10 @@ function ClozeMarkdown({
 }) {
   const t = useT();
   const codeLabel = t("markdown.codeBlock");
+  const formula = useFormulaLabels();
   const html = useMemo(
-    () => renderMarkdown(template, codeLabel, { holes: true }),
-    [template, codeLabel],
+    () => renderMarkdown(template, codeLabel, { holes: true, formula }),
+    [template, codeLabel, formula],
   );
   // A stable object, so React compares the string and never re-parses it.
   const inner = useMemo(() => ({ __html: html }), [html]);

@@ -1,5 +1,6 @@
 import { JournalWarning } from "@quiz/contracts";
-import { describe, expect, it } from "vitest";
+import katex from "katex";
+import { describe, expect, it, vi } from "vitest";
 
 import { splitFrontMatter } from "./frontMatter.js";
 import { renderPage, type RenderContext } from "./render.js";
@@ -177,6 +178,12 @@ describe("links", () => {
     expect(p.warnings).toEqual([]);
   });
 
+  it("drops a protocol-relative link: `//host` and `/\\host` lead off the platform (audit L16)", () => {
+    const p = renderPage("[a](//evil.example/x) [b](/\\evil.example/y)\n", ctx());
+    expect(p.html).not.toMatch(/<a\b/);
+    expect(p.html).not.toContain("evil.example");
+  });
+
   it("leaves a malformed escape as typed", () => {
     const p = renderPage("[bad](a%E0.pdf)\n", ctx());
     expect(p.warnings).toEqual([
@@ -222,6 +229,13 @@ describe("images", () => {
     expect(p.html).not.toContain("<img");
     expect(p.html).toContain("remote");
     expect(p.warnings).toEqual([{ code: "external_image", href: "https://example.org/p.png" }]);
+    expect(p.assets).toEqual([]);
+  });
+
+  it("never fetches a protocol-relative image either (audit L14)", () => {
+    const p = renderPage("![a](//evil.example/p.png) ![b](/\\evil.example/q.png)\n", ctx());
+    expect(p.html).not.toContain("<img");
+    expect(p.html).not.toContain("evil.example");
     expect(p.assets).toEqual([]);
   });
 
@@ -283,6 +297,79 @@ describe("math", () => {
   it("marks a broken display formula as a block", () => {
     const p = renderPage("$$\n\\frac{\n$$\n", ctx());
     expect(p.html).toContain('<code class="md-math-error md-math-block">');
+  });
+
+  /*
+   * Audit L15. What `KATEX_LIMITS` and the macro scan hold is tested in
+   * `katex.test.ts`; these check that the journal's renderer goes through them.
+   */
+  it("caps a formula's dimensions", () => {
+    const huge = renderPage("$\\rule{1000em}{1000em}$\n", ctx());
+    expect(huge.warnings).toEqual([]);
+    // The TeX source survives in the MathML annotation; what is DRAWN is capped.
+    expect(huge.html).toContain("border-top-width:10em");
+    expect(huge.html).not.toMatch(/(?:width|height)[:=]"?1000em/);
+  });
+
+  it("refuses a formula that defines a macro, as a math error", () => {
+    // 499 calls to a 1000-character macro: ~290 s of KaTeX if it got there.
+    const bomb = renderPage(`$\\def\\a{${"x".repeat(1000)}}${"\\a".repeat(499)}$\n`, ctx());
+    expect(codes(bomb.warnings)).toEqual(["math_error"]);
+    expect(bomb.html).toContain('<code class="md-math-error">');
+    expect(bomb.html).not.toContain("katex");
+    // `\verb` with `\` as its delimiter hands KaTeX the `\def` after `\\`.
+    for (const tex of ["\\verb\\!\\\\def\\a{x}\\a", "\\verb*\\q\\\\def\\a{x}\\a"]) {
+      expect(codes(renderPage(`$${tex}$\n`, ctx()).warnings)).toEqual(["math_error"]);
+    }
+    // `\tag{…}` defines `\df@tag`: calling it is an internal command, refused.
+    expect(codes(renderPage("$$\\tag{x}\\df@tag$$\n", ctx()).warnings)).toEqual(["math_error"]);
+  });
+
+  it("refuses a formula past FORMULA_SOURCE_MAX before KaTeX sees it", () => {
+    const spy = vi.spyOn(katex, "renderToString");
+    try {
+      const long = renderPage(`$${"x".repeat(5000)}$\n`, ctx());
+      expect(codes(long.warnings)).toEqual(["math_error"]);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("refuses a formula whose HTML is past FORMULA_HTML_MAX", () => {
+    // A 2 KB matrix row of 2000 cells: ~1.16 MB of KaTeX HTML, above 1 MB.
+    const big = renderPage(`$$\\begin{matrix}${"&".repeat(2000)}\\end{matrix}$$\n`, ctx());
+    expect(codes(big.warnings)).toEqual(["math_error"]);
+    expect(big.html).not.toContain("katex");
+  });
+
+  it("keeps a page's formulas until FORMULA_HTML_BUDGET, then refuses the rest", () => {
+    // Three 1 700-cell rows, ~965 KB each: two fit the page's 2 MB, the third does not.
+    const row = `$$\\begin{matrix}${"&".repeat(1700)}\\end{matrix}$$\n`;
+    const page = renderPage([row, row, row].join("\n"), ctx());
+    expect(page.html.match(/katex-display/g)).toHaveLength(2);
+    expect(codes(page.warnings)).toEqual(["math_error"]);
+    // The budget is the page's: the next page starts afresh.
+    expect(renderPage(row, ctx()).warnings).toEqual([]);
+  });
+
+  it("stops calling KaTeX once a page's budget is spent", () => {
+    // 4 KB rows of 4000 cells, ~2.3 MB each: the first spends the page.
+    const row = `$$\\begin{matrix}${"&".repeat(4000)}\\end{matrix}$$\n`;
+    const spy = vi.spyOn(katex, "renderToString");
+    try {
+      const page = renderPage(Array.from({ length: 6 }, () => row).join("\n"), ctx());
+      expect(codes(page.warnings)).toEqual(Array.from({ length: 6 }, () => "math_error"));
+      expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("reports a formula nested past the call stack, without failing the page", () => {
+    // 1000 nested superscripts: 4 KB, under FORMULA_SOURCE_MAX, past the stack.
+    const deep = renderPage(`$${"x^{".repeat(1000)}x${"}".repeat(1000)}$\n`, ctx());
+    expect(codes(deep.warnings)).toEqual(["math_error"]);
   });
 
   it("does not let a formula smuggle a link in", () => {
