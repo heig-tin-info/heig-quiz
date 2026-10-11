@@ -27,7 +27,7 @@ import { Suspense, type ComponentType, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import type { PlayerProps } from "@quiz/core/client";
-import type { RunOutcome } from "@quiz/core/server";
+import type { RunOutcome, SimulateOutcome } from "@quiz/core/server";
 import type { ClozeTextRenderer } from "@quiz/qt-cloze/client";
 
 import { useT } from "../i18n";
@@ -46,7 +46,7 @@ type PlayerHostProps = PlayerProps<unknown, unknown> & {
   onRun?: ((answer: unknown, options?: unknown) => Promise<RunOutcome>) | undefined;
   allowManualRun?: boolean | undefined;
   testsPrimary?: boolean | undefined;
-  onSimulate?: ((answer: unknown) => Promise<RunOutcome>) | undefined;
+  onSimulate?: ((answer: unknown) => Promise<SimulateOutcome>) | undefined;
 };
 
 /*
@@ -138,7 +138,7 @@ export function QuestionHost({
    * questions — a program's output against a case, a circuit's waveform
    * against a stimulus — and neither has a browser half to fall back on here.
    */
-  onSimulate?: ((answer: unknown) => Promise<RunOutcome>) | undefined;
+  onSimulate?: ((answer: unknown) => Promise<SimulateOutcome>) | undefined;
   /** Where something is saved as one types: see `PlayerProps.onUnsent`. */
   onUnsent?: (unsent: boolean) => void;
   /** The attempt's expand layer (`PlayerProps.Expand`); a player that needs no room ignores it. */

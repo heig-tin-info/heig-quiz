@@ -11,6 +11,7 @@ import {
   RunnerUnavailable,
   type AnyQuestionTypeServer,
   type FinalizeContext,
+  type InteractiveOutcome,
   type RunnerOutcome,
   type RunnerRequest,
   type RunnerService,
@@ -27,6 +28,7 @@ import { answerFromStudent, studentViewOf } from "./studentView.js";
 import {
   runButton,
   runnableView,
+  simulateResult,
   visibleRunRequest,
   visibleRunResult,
   type RunnableStudentView,
@@ -258,12 +260,13 @@ interface SimulateInput {
  * and never the reference's waveform. Nothing here inspects the request: the
  * live module does not know what a netlist is.
  *
- * The outcome comes back raw, in the response and nowhere else. A `code` run
- * needs an SSE frame because its result is a verdict the dashboard also
- * cares about; a simulation is a curve the student asked for, so the response
- * is the delivery.
+ * The outcome comes back in the response and nowhere else, reduced by the
+ * type (`simulateResult`, ADR-019 §6 amended 2026-10-11). A `code` run needs
+ * an SSE frame because its result is a verdict the dashboard also cares
+ * about; a simulation is a curve the student asked for, so the response is
+ * the delivery.
  */
-async function simulateAnswerNow(db: Db, input: SimulateInput): Promise<RunnerOutcome> {
+async function simulateAnswerNow(db: Db, input: SimulateInput): Promise<InteractiveOutcome> {
   const prepared = await attemptRunContext(db, {
     ...input,
     // A type with a button of its own; one judged case by case goes through
@@ -288,5 +291,5 @@ async function simulateAnswerNow(db: Db, input: SimulateInput): Promise<RunnerOu
     itemId: input.itemId,
     kind: "simulate",
   });
-  return outcome;
+  return simulateResult(prepared.type, prepared.config, outcome);
 }

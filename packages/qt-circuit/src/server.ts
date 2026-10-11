@@ -13,6 +13,7 @@ import { fromCanonical, toCanonical } from "./canonical.js";
 import {
   finalizeRunnerCircuit,
   gradeCircuit,
+  interactiveOutcome,
   interactiveRequest,
   studentDetails,
 } from "./grade.js";
@@ -128,6 +129,11 @@ export const circuitServer: QuestionTypeServer<
     return interactiveRequest(config, answer);
   },
 
+  /** The reference decks reduced to their curves, never their output (audit L11). */
+  interactiveOutcome(config: CircuitConfig, outcome: RunnerOutcome) {
+    return interactiveOutcome(config, outcome);
+  },
+
   grade(config: CircuitConfig, answer: CircuitAnswer | null, ctx: GradeContext) {
     return gradeCircuit(config, answer, ctx);
   },
@@ -152,7 +158,7 @@ export const circuitServer: QuestionTypeServer<
 
 /*
  * The pure parts a host reads beside `circuitServer`: `parseSimulation` reads
- * the outcome of the student's own Simulate button, and `extractNets` the
+ * the answer of the student's own Simulate button, and `extractNets` the
  * netlist the grade is computed from (ADR-019 §3, invariant 14) — a server
  * concern, so it leaves the package here and not through `./client`.
  */

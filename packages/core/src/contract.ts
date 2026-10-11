@@ -9,7 +9,7 @@
 import type { z } from "zod";
 import type { AnswerGenerator, AssistTextLabel } from "./generate.js";
 import type { LlmGradeRequest } from "./llm.js";
-import type { RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
+import type { InteractiveOutcome, RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
 
 /**
  * How many characters of `summarizeAnswer` a dashboard cell can hold.
@@ -568,16 +568,24 @@ export interface QuestionTypeServer<
    * there is nothing to run for this answer (an empty schematic).
    *
    * `POST /attempts/:id/simulate` runs it with `priority: "interactive"` and
-   * hands the `RunnerOutcome` back untouched; the client half of the type
-   * reads it. `POST /attempts/:id/run` takes its cases from it too, so which
-   * case is visible is the type's to say, never guessed from a case name.
-   * A type without this hook has no interactive run of its own.
+   * hands the outcome back through {@link interactiveOutcome}; the client
+   * half of the type reads it. `POST /attempts/:id/run` takes its cases from
+   * it too, so which case is visible is the type's to say, never guessed
+   * from a case name. A type without this hook has no interactive run of its
+   * own.
    */
   interactiveRequest?(
     config: TConfig,
     answer: TAnswer,
     ctx: FinalizeContext,
   ): RunnerRequest | null;
+
+  /**
+   * The outcome of {@link interactiveRequest} as the student may read it: own
+   * cases raw, the teacher's reduced in `reference` (ADR-019 §6, amended
+   * 2026-10-11). Omitted: the outcome goes back whole.
+   */
+  interactiveOutcome?(config: TConfig, outcome: RunnerOutcome): InteractiveOutcome;
 
   /** Second half of a `pending: runner` grading. Pure, so it is unit-testable without a runner. */
   finalizeRunner?(

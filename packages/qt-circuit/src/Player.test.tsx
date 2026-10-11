@@ -11,11 +11,11 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 
 import type { ExpandProps } from "@quiz/core/client";
-import type { RunOutcome } from "@quiz/core/server";
+import type { InteractiveOutcome } from "@quiz/core/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { CircuitPlayer } from "./Player.js";
-import type { CircuitAnswer, CircuitStudent, Schematic } from "./schema.js";
+import type { CircuitAnswer, CircuitStudent, Schematic, SeriesSet } from "./schema.js";
 
 vi.mock("./canvas/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./canvas/index.js")>();
@@ -24,7 +24,13 @@ vi.mock("./canvas/index.js", async (importOriginal) => {
     SchematicEditor: ({ "aria-label": label, height }: { "aria-label"?: string; height?: number | "fill" }) => (
       <div data-testid="schematic-editor" aria-label={label} data-height={height ?? "auto"} />
     ),
-    Plot: ({ title }: { title?: string }) => <div data-testid="plot">{title}</div>,
+    // The expected curve is what the reduced reference became: its samples
+    // are spelled out so a test can compare them with the server's reading.
+    Plot: ({ title, expected }: { title?: string; expected?: SeriesSet }) => (
+      <div data-testid="plot" data-expected={expected === undefined ? "" : JSON.stringify(expected)}>
+        {title}
+      </div>
+    ),
   };
 });
 
@@ -59,7 +65,16 @@ const runCase = (stdout: string) => ({
   truncated: false,
 });
 
-const outcome = (n: number): RunOutcome => ({
+/** A reduced reference curve, as the server sends it. */
+const SERIES: SeriesSet = {
+  kind: "tran",
+  t: [0, 1e-5, 2e-5],
+  vin: [0, 0.0627, 0.1253],
+  vout: [0, 0.0021, 0.0079],
+  iout: [0, 0, 0],
+};
+
+const outcome = (n: number): InteractiveOutcome => ({
   compile: { ok: true, stdout: "", stderr: "", ms: 0 },
   cases: Array.from({ length: n }, () => runCase(TABLE)),
 });
@@ -215,6 +230,28 @@ describe("CircuitPlayer", () => {
     const plots = await screen.findAllByTestId("plot");
     expect(plots).toHaveLength(2);
     expect(plots[0]).toHaveTextContent("Output — 1 kHz");
+  });
+
+  /**
+   * Audit L11: the reference decks reach the browser as the curves the server
+   * read out of them (`reference`), never as ngspice's output; the overlay is
+   * that curve, sample for sample.
+   */
+  it("overlays the reference curve the server reduced", async () => {
+    setup({
+      student: student({ showExpected: true }),
+      onSimulate: async () => ({ ...outcome(1), reference: [SERIES] }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Simulate" }));
+    const [plot] = await screen.findAllByTestId("plot");
+    expect(JSON.parse(plot!.getAttribute("data-expected") ?? "null")).toEqual(SERIES);
+  });
+
+  it("draws no overlay when the server sent no reference curve", async () => {
+    setup({ student: student({ showExpected: true }), onSimulate: async () => outcome(1) });
+    fireEvent.click(screen.getByRole("button", { name: "Simulate" }));
+    const [plot] = await screen.findAllByTestId("plot");
+    expect(plot).toHaveAttribute("data-expected", "");
   });
 
   it("sends the schematic and nothing about the simulation back as the answer", () => {

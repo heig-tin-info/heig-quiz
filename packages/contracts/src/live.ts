@@ -493,9 +493,9 @@ export type RunBody = z.infer<typeof RunBody>;
  * service). Invariant 7 is met by the two together — an envelope validated
  * here, a payload validated by the schema the type and the client share.
  *
- * The answer to `POST /app/api/attempts/:id/simulate` is the raw
- * `RunnerOutcome` of `@quiz/core`: the client half of the type reads it, and
- * no SSE frame repeats it — the response IS the delivery.
+ * The answer to `POST /app/api/attempts/:id/simulate` is the
+ * `InteractiveOutcome` of `@quiz/core`: the client half of the type reads it,
+ * and no SSE frame repeats it — the response IS the delivery.
  */
 export const SimulateBody = z.object({
   itemId: z.uuid(),

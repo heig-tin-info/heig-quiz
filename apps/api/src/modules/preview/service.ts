@@ -43,6 +43,7 @@ import {
   RunnerUnavailable,
   type FinalizeContext,
   type GradedResult,
+  type InteractiveOutcome,
   type RunnerOutcome,
   type RunnerService,
 } from "@quiz/core/server";
@@ -72,6 +73,7 @@ import * as live from "../live/service.js";
 import {
   runButton,
   runnableView,
+  simulateResult,
   visibleRunRequest,
   visibleRunResult,
 } from "../live/visibleRun.js";
@@ -324,7 +326,7 @@ export async function simulatePreview(
     answer: unknown;
     now: Date;
   },
-): Promise<RunnerOutcome> {
+): Promise<InteractiveOutcome> {
   const { evaluation, now } = input;
   const { joined, type, config, view, student } = await previewItem(db, evaluation, input.itemId, input.seed);
   // The second test is implied by the first; it is there for TypeScript's narrowing.
@@ -345,11 +347,14 @@ export async function simulatePreview(
   if (built === null) {
     throw new PreviewError("nothing_to_run", 422, { message: "this answer has nothing to run yet" });
   }
+  let outcome: RunnerOutcome;
   try {
-    return await input.runner.run({ ...built, priority: "interactive" });
+    outcome = await input.runner.run({ ...built, priority: "interactive" });
   } catch (error) {
     throw runnerDown(error) ?? error;
   }
+  // Reduced as the student's own route reduces it: the player reads one shape.
+  return simulateResult(type, config, outcome);
 }
 
 // --- Grading ------------------------------------------------------------------

@@ -2,7 +2,7 @@ import { memo, useCallback } from "react";
 import { Check, CheckCircle2, Lock, Minus } from "lucide-react";
 
 import type { CanvasShortcutsListener } from "@quiz/core/client";
-import type { RunOutcome } from "@quiz/core/server";
+import type { SimulateOutcome } from "@quiz/core/server";
 import type { AnswerMark } from "@quiz/domain";
 import type {
   CodeAnswer,
@@ -49,7 +49,7 @@ export const PlayerQuestion = memo(function PlayerQuestion({
   readOnly: boolean;
   setAnswer: (itemId: string, payload: unknown, answered?: boolean) => void;
   run: RunFn;
-  simulate: (itemId: string, answer: unknown) => Promise<RunOutcome>;
+  simulate: (itemId: string, answer: unknown) => Promise<SimulateOutcome>;
   /** The player holds an edit it does not send: the badge must not say "Saved". */
   onUnsent: (unsent: boolean) => void;
   /** Stable: a focused canvas's keys, for the side column (`PlayerProps.onCanvasShortcuts`). */

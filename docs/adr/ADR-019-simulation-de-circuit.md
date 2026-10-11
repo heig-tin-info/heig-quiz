@@ -7,6 +7,8 @@ Extended by [ADR-083 — Frequency-domain stimuli](ADR-083-stimulus-frequentiel-
 
 Amended 2026-10-09: §5 names the runner's shared image, and rejected alternative 3 records that the `llm` mode is refused at publication (ADR-063 §6).
 
+Amended 2026-10-11 (security audit L11), scope: §6 only — the Simulate route hands the outcome back raw for the student's own cases; reference cases are reduced by the type.
+
 ## Context
 
 `docs/spec/04-types-de-questions.md` §4.11 described `circuit` as a phase-3
@@ -89,6 +91,19 @@ reads a netlist on the command line and writes a table on stdout.
    against the question's `simulationsPerMinute` budget counted in the attempt
    log, and hands the `RunnerOutcome` back raw. The live module knows
    nothing of netlists; `code` keeps its older, case-filtering `/run`.
+
+   *Amended 2026-10-11 (audit L11): raw for the student's own cases;
+   reference cases reduced by the type.* With `showExpected` on, the request
+   also runs the reference decks, and a failed ngspice run's log quotes the
+   deck line it refused — the reference's components, values and topology.
+   `QuestionTypeServer.interactiveOutcome(config, outcome)` therefore runs on
+   the server before the response: the student's own cases stay in `cases`,
+   untouched, and each reference case leaves `cases` for `reference`, as its
+   decimated curve or `null` when it printed none — never its stdout or
+   stderr. The response is `InteractiveOutcome` (`@quiz/core`); the player
+   reads the curves instead of parsing the reference's output, and the route
+   still knows nothing of netlists. The preview's Simulate answers the same
+   shape.
 
 7. **A reference that does not simulate is the teacher's problem.** When the
    reference fails, or the runner is unreachable, the grading is stored

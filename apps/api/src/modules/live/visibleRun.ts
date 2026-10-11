@@ -7,7 +7,12 @@
  * Nothing here reads the database or calls the runner.
  */
 import type { RunnerResultEvent } from "@quiz/contracts";
-import type { AnyQuestionTypeServer, RunnerOutcome, RunnerRequest } from "@quiz/core/server";
+import type {
+  AnyQuestionTypeServer,
+  InteractiveOutcome,
+  RunnerOutcome,
+  RunnerRequest,
+} from "@quiz/core/server";
 import { caseVerdict } from "@quiz/qt-code/server";
 
 /** What `type.toStudent` exposes about running; read structurally, never cast. */
@@ -96,6 +101,15 @@ export function runButton(
   if (!type.interactiveRequest) return null;
   if (student.visibleCases === undefined) return "simulate";
   return type.finalizeRunner ? "run" : null;
+}
+
+/** What a Simulate button hands back, reduced by the type (ADR-019 §6, amended 2026-10-11). */
+export function simulateResult(
+  type: AnyQuestionTypeServer,
+  config: unknown,
+  outcome: RunnerOutcome,
+): InteractiveOutcome {
+  return type.interactiveOutcome?.(config, outcome) ?? outcome;
 }
 
 /** The only check a free stdin try can make: the program exits 0. */
