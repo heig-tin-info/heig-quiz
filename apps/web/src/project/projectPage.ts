@@ -7,6 +7,7 @@
  * page meets. `ProjectPage.tsx` and its sections draw them.
  */
 import {
+  MINUTES_PER_DAY,
   PROJECT_DEFAULTS,
   ProjectReleaseRefusal,
   ProjectUnassigned,
@@ -115,7 +116,7 @@ export function hasFellBack(p: ProjectDetail): boolean {
  */
 export function deadlineDesc(p: ProjectDetail, zone: string | null, t: TFunction): string | undefined {
   if (p.state === "draft" && p.durationMinutes !== null) {
-    return t("project.deadline.byDuration", { days: Math.round(p.durationMinutes / 1440) });
+    return t("project.deadline.byDuration", { days: Math.round(p.durationMinutes / MINUTES_PER_DAY) });
   }
   if (p.state === "locked") return t("project.deadline.reopenDesc");
   return zone ? t("project.zone", { zone }) : undefined;

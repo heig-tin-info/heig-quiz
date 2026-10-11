@@ -89,12 +89,17 @@ export const PROJECT_DEFAULTS = {
   deadlineStrategy: (typeof DEADLINE_STRATEGIES)[number];
   gradingMode: (typeof PROJECT_GRADING_MODES)[number];
   publishMode: (typeof PUBLISH_MODES)[number];
-  scaleKind: "linear" | "score_is_grade";
+  scaleKind: (typeof PROJECT_SCALE_KINDS)[number];
 };
 
-/** The bounds of a project's counts, defined ONCE: the schemas below and the forms' inputs read them. */
+/**
+ * The bounds of a project's counts, defined ONCE: the forms' inputs read the
+ * days (the schema's own minimum is 15 minutes) and the schemas below read the
+ * maximum of both.
+ */
 export const PROJECT_DURATION_DAYS = { min: 1, max: 400 } as const;
 export const PROJECT_GRACE_MAX_MINUTES = 1440;
+export const MINUTES_PER_DAY = 1440;
 
 /** A repository's provisioning (F-PROJ-05): `error` is retried by the student. */
 export const PROVISION_STATUSES = ["pending", "ok", "error"] as const;
@@ -141,7 +146,7 @@ export const ProjectGradingScale = z.object({
 export type ProjectGradingScale = z.infer<typeof ProjectGradingScale>;
 
 export const defaultProjectGradingScale = (): ProjectGradingScale =>
-  ProjectGradingScale.parse({ kind: "linear" });
+  ProjectGradingScale.parse({ kind: PROJECT_DEFAULTS.scaleKind });
 
 // ---------------------------------------------------------- activities
 
@@ -234,7 +239,7 @@ const ProjectName = z
   .refine((name) => slugify(name) !== "", "the name has no letter nor digit");
 
 /** Manual publication: the deadline is publication + 15 minutes … 400 days. */
-const DurationMinutes = z.number().int().min(15).max(PROJECT_DURATION_DAYS.max * 1440);
+const DurationMinutes = z.number().int().min(15).max(PROJECT_DURATION_DAYS.max * MINUTES_PER_DAY);
 /** Minutes after the deadline before the freeze is definitive (F-PROJ-11). */
 const GraceMinutes = z.number().int().min(0).max(PROJECT_GRACE_MAX_MINUTES);
 const Instant = z.iso.datetime({ offset: true });

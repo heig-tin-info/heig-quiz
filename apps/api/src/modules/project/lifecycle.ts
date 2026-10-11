@@ -97,15 +97,6 @@ async function readSource(
   return { source, branches };
 }
 
-/**
- * A scheduled start must lie ahead (`422 start_past`, F-PROJ-03): one in the
- * past would be published at the next tick, with the class notified. One rule
- * for the create and the patch.
- */
-function assertStartAhead(startAt: Date, now: Date): void {
-  if (startAt.getTime() <= now.getTime()) throw new ProjectError("start_past", "The start has passed");
-}
-
 /** The draft's dates: a manual publication starts at its publication, and counts its duration from there. */
 function draftDates(body: ProjectCreate, now: Date): { startAt: Date; deadlineAt: Date } {
   if (body.publishMode === "scheduled") return { startAt: new Date(body.startAt!), deadlineAt: new Date(body.deadlineAt!) };
@@ -203,7 +194,10 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
   const { body, now } = input;
   const dates = draftDates(body, now);
   if (dates.deadlineAt.getTime() <= now.getTime()) throw new ProjectError("deadline_past", "The deadline has passed");
-  if (body.publishMode === "scheduled") assertStartAhead(dates.startAt, now);
+  // A start in the past would be published at the next tick, with the class notified (a patch: `patchedDraftDates`).
+  if (body.publishMode === "scheduled" && dates.startAt.getTime() <= now.getTime()) {
+    throw new ProjectError("start_past", "The start has passed");
+  }
   const groupSetId = body.groupSetId ?? null;
   const { org, client } = await classroomClient(db, config, input.classroomId);
   const { source, branches } = await readSource(db, client, org, body.sourceRepo, body.branches, input.caller);

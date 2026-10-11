@@ -2,6 +2,7 @@ import type { ComponentProps, InputHTMLAttributes, ReactNode } from "react";
 
 import {
   PROJECT_DURATION_DAYS,
+  PROJECT_GRACE_MAX_MINUTES,
   type DeadlineStrategy,
   type ProjectGradingMode,
   type PublishMode,
@@ -144,36 +145,31 @@ export function ScaleRow({ value, disabled, onChange }: RowProps<ProjectScaleKin
 }
 
 /**
- * A setting that is a count: the row's title names the input, its unit
- * stands after it, a refusal under the row. The input's own props (value,
- * handlers, `disabled`) are the caller's.
+ * The grace, in minutes after the deadline: the row's title names the input,
+ * its unit stands after it, a refusal under the row. The input's own props
+ * (value, handlers, `disabled`) are the caller's.
  */
-export function NumberRow({
-  title,
-  desc,
-  unit,
+export function GraceMinutesRow({
   message,
-  id = FIELD_ID.grace,
   ...input
-}: Omit<InputHTMLAttributes<HTMLInputElement>, "title" | "size"> & {
-  title: string;
-  desc: string;
-  unit: string;
-  message: string | undefined;
-}) {
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & { message: string | undefined }) {
+  const t = useT();
+  const id = FIELD_ID.grace;
   return (
     <div>
-      <SettingRow title={title} desc={desc}>
+      <SettingRow title={t("project.grace")} desc={t("project.grace.desc")}>
         <TextInput
           id={id}
           type="number"
-          aria-label={title}
+          aria-label={t("project.grace")}
+          min={0}
+          max={PROJECT_GRACE_MAX_MINUTES}
           size="sm"
           className="w-20 text-right tabular-nums"
           {...input}
           {...fieldErrorProps(id, message)}
         />
-        <span className="text-[13px] text-fg-muted">{unit}</span>
+        <span className="text-[13px] text-fg-muted">{t("project.grace.unit")}</span>
       </SettingRow>
       {message ? (
         <div className="pb-3">

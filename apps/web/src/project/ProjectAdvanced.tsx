@@ -1,4 +1,4 @@
-import { PROJECT_GRACE_MAX_MINUTES, type ProjectSourceDetail } from "@quiz/contracts";
+import type { ProjectSourceDetail } from "@quiz/contracts";
 
 import { GroupSetPicker } from "../group/GroupSetPicker";
 import { useT } from "../i18n";
@@ -9,7 +9,7 @@ import {
   DeadlineKindRow,
   DeadlineStrategyRow,
   GradingModeRow,
-  NumberRow,
+  GraceMinutesRow,
   PublishModeRow,
   ScaleRow,
   SourceStrategyRow,
@@ -77,12 +77,7 @@ export function ProjectAdvanced({
 
       <DeadlineStrategyRow value={draft.deadlineStrategy} onChange={(deadlineStrategy) => update({ deadlineStrategy })} />
 
-      <NumberRow
-        title={t("project.grace")}
-        desc={t("project.grace.desc")}
-        unit={t("project.grace.unit")}
-        min={0}
-        max={PROJECT_GRACE_MAX_MINUTES}
+      <GraceMinutesRow
         value={draft.graceMinutes}
         message={message("grace")}
         onChange={(e) => update({ graceMinutes: e.target.value })}

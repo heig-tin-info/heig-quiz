@@ -77,6 +77,11 @@ export function ProjectDraftPublication({
 
   const change = (c: DraftChange) => {
     setSaid(null);
+    // Back to the mode the server stores: nothing to write, and what was typed meanwhile is dropped.
+    if (c.type === "mode" && c.mode === project.publishMode) {
+      setView(draftView(project));
+      return;
+    }
     const body = draftPatch(view, c);
     setView(applyChange(view, c));
     if (!body) return;

@@ -3,7 +3,6 @@ import { AlertTriangle, CalendarClock, FolderGit2, UsersRound } from "lucide-rea
 import { useState } from "react";
 
 import {
-  PROJECT_GRACE_MAX_MINUTES,
   ProjectPatch,
   type ProjectDetail,
   type ProjectSummary,
@@ -16,7 +15,7 @@ import { Facts } from "./ProjectOverview";
 import { ProjectDraftPublication, publicationKey } from "./ProjectDraftPublication";
 import { GroupSetBody } from "./ProjectGroupSet";
 import { ProjectRail } from "./ProjectRail";
-import { DeadlineStrategyRow, GradingModeRow, NumberRow, ScaleRow } from "./ProjectSettingRows";
+import { DeadlineStrategyRow, GraceMinutesRow, GradingModeRow, ScaleRow } from "./ProjectSettingRows";
 import { ProtectedFilesRow, useProtectedSuggestions } from "./ProjectSettings";
 import { WorkModeSetting, useWorkspace } from "./ProjectWorkspace";
 import { advancedCount, type WriteProject } from "./projectPage";
@@ -25,24 +24,13 @@ import { RepoLink } from "./parts";
 /** The grace, in minutes: written when the teacher leaves the field; 0 is a grace of none. */
 function GraceRow({ value, disabled, onWrite }: { value: number; disabled: boolean; onWrite: (minutes: number) => void }) {
   const t = useT();
-  const [invalid, setInvalid] = useState(false);
   const input = useNumberDraft(value, (n) => {
-    const parsed = ProjectPatch.shape.graceMinutes.safeParse(n);
-    setInvalid(!parsed.success);
-    if (parsed.success && n !== null) onWrite(n);
+    if (ProjectPatch.shape.graceMinutes.safeParse(n).success && n !== null) onWrite(n);
   });
-  return (
-    <NumberRow
-      title={t("project.grace")}
-      desc={t("project.grace.desc")}
-      unit={t("project.grace.unit")}
-      min={0}
-      max={PROJECT_GRACE_MAX_MINUTES}
-      disabled={disabled}
-      message={invalid ? t("project.missing.grace") : undefined}
-      {...input}
-    />
-  );
+  // Said while what is typed is not a grace, gone as soon as it is one (or empty).
+  const typed = input.value.trim();
+  const invalid = typed !== "" && !ProjectPatch.shape.graceMinutes.safeParse(Number(typed)).success;
+  return <GraceMinutesRow disabled={disabled} message={invalid ? t("project.missing.grace") : undefined} {...input} />;
 }
 
 /**

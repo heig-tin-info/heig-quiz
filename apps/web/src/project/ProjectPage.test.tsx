@@ -1436,6 +1436,15 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(screen.getByLabelText("Start")).toBeInTheDocument();
   });
 
+  it("writes nothing when the mode chosen is the stored one again, and shows the stored deadline", async () => {
+    const { calls } = routes(makeDraft({ durationMinutes: 7 * 1440 }), { [`PATCH ${BASE}`]: ok({}) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("radio", { name: "At the start" }));
+    await userEvent.click(screen.getByRole("radio", { name: "By hand" }));
+    expect(writes(calls)).toHaveLength(0);
+    expect(await screen.findByLabelText("Duration in days")).toHaveValue(7);
+  });
+
   it("holds the group switch, with a sentence, while the project works online", async () => {
     routes(makeDraft(), { [WORKSPACE]: workspace("online") });
     renderPage();

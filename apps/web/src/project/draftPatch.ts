@@ -7,7 +7,7 @@
  * days from the publication, and moving from one kind to the other writes
  * nothing until the new value is given. `ProjectDraftPublication.tsx` draws it.
  */
-import { ProjectPatch, type PublishMode, type ProjectDetail } from "@quiz/contracts";
+import { MINUTES_PER_DAY, ProjectPatch, type PublishMode, type ProjectDetail } from "@quiz/contracts";
 
 /** A manual publication's deadline: a date, or a number of days counted from the publication. */
 export type DeadlineKind = "date" | "duration";
@@ -29,8 +29,6 @@ export type DraftChange =
   | { type: "start"; at: string | null }
   | { type: "deadline"; at: string | null }
   | { type: "days"; days: number | null };
-
-const MINUTES_PER_DAY = 1440;
 
 /** The block as the stored draft has it. A manual draft's start and, by duration, its deadline are provisional: not shown. */
 export function draftView(
@@ -97,7 +95,8 @@ export function draftPatch(view: DraftView, change: DraftChange): ProjectPatch |
       ? { publishMode: "scheduled", startAt: next.startAt, deadlineAt: next.deadlineAt, durationMinutes: null }
       : null;
   }
-  if (change.type === "mode") return view.publishMode === "manual" ? null : { publishMode: "manual" };
+  // Back to manual: the caller has already settled that the stored mode is scheduled.
+  if (change.type === "mode") return { publishMode: "manual" };
   if (next.kind === "duration") return change.type === "days" && validDays(next.days) ? { durationMinutes: next.days * MINUTES_PER_DAY } : null;
   return change.type === "deadline" && next.deadlineAt ? { deadlineAt: next.deadlineAt, durationMinutes: null } : null;
 }

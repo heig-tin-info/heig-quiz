@@ -5,6 +5,7 @@
  * each refusal of the server is said. `NewProjectPage.tsx` draws them.
  */
 import {
+  MINUTES_PER_DAY,
   PROJECT_DEFAULTS,
   ProjectCreate,
   ProjectRefusal,
@@ -103,7 +104,7 @@ function rawBody(draft: ProjectDraft, detail: ProjectSourceDetail | undefined): 
     publishMode: draft.publishMode,
     ...(draft.publishMode === "scheduled" ? { startAt: fromLocalInput(draft.startLocal) ?? undefined } : {}),
     ...(byDuration(draft)
-      ? { durationMinutes: days === undefined ? Number.NaN : days * 1440 }
+      ? { durationMinutes: days === undefined ? Number.NaN : days * MINUTES_PER_DAY }
       : { deadlineAt: fromLocalInput(draft.deadlineLocal) ?? undefined }),
     graceMinutes: count(draft.graceMinutes) ?? Number.NaN,
     sourceStrategy: draft.sourceStrategy,
