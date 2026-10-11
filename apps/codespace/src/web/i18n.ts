@@ -61,6 +61,8 @@ const en = {
   sessionUnavailableTitle: "Session unavailable",
   sessionRestartFailed: "The container could not be restarted. Your volume is intact; try again.",
   sessionNoAddress: "The container has no address.",
+  portProxyTitle: "Port forwarding unavailable",
+  portProxyDetail: "The online workspace does not open a program's ports in the browser.",
 };
 
 export type MessageKey = keyof typeof en;
@@ -117,6 +119,8 @@ const fr: Record<MessageKey, string> = {
   sessionUnavailableTitle: "Session indisponible",
   sessionRestartFailed: "Le conteneur n'a pas pu être relancé. Votre volume est intact ; réessayez.",
   sessionNoAddress: "Le conteneur n'a pas d'adresse.",
+  portProxyTitle: "Redirection de port indisponible",
+  portProxyDetail: "L'espace de travail en ligne n'ouvre pas les ports d'un programme dans le navigateur.",
 };
 
 export const LANGS = ["fr", "en"] as const;

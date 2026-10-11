@@ -7,6 +7,9 @@
  * websocket established — is checked for real by an end-to-end run (heig-classroom's `scripts/e2e.ts`, not imported: M6-04), with a
  * container.
  */
+import { request as httpRequest } from "node:http";
+import type { AddressInfo } from "node:net";
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { loadConfig, type AppConfig } from "../auth/config.js";
@@ -16,7 +19,15 @@ import type { ContainerInfo, Engine } from "../engine/index.js";
 import { EXAM_COOKIE, issueExamCookie } from "../seb/index.js";
 import { buildPortal, type Portal } from "../server.js";
 
-import { SESSION_COOKIE, cookieValue, isEntryRequest, parseCookieValue } from "./index.js";
+import {
+  SESSION_COOKIE,
+  cookieValue,
+  isEntryRequest,
+  isPortProxyRequest,
+  isRemoteResourceRequest,
+  parseCookieValue,
+  upstreamHeaders,
+} from "./index.js";
 
 const EXAM_SECRET = "a-test-secret-long-enough-2";
 const TOKEN = "test-session-token";
@@ -143,6 +154,110 @@ describe("entry request", () => {
     expect(isEntryRequest("/s/s1", "s1")).toBe(true);
     expect(isEntryRequest("/s/s1/?folder=/work", "s1")).toBe(true);
     expect(isEntryRequest("/s/s1/static/out/vs/workbench.js", "s1")).toBe(false);
+  });
+});
+
+describe("one origin for every session (audit L24, invariant 14)", () => {
+  it.each(["/s/s1/proxy/8080/", "/s/s1/absproxy/5000/index.html?x=1", "/s/s1/PROXY/8080/", "/s/s1//proxy/8080/"])(
+    "%s is code-server's port proxy",
+    (url) => {
+      expect(isPortProxyRequest(url)).toBe(true);
+    },
+  );
+
+  it.each([
+    "/s/s1/",
+    "/s/s1/?folder=/work",
+    "/s/s1/static/out/proxy.js",
+    "/s/s1/stable-abc/vscode-remote-resource?path=/proxy/1/",
+    "/s/s1/proxyfoo/8080/",
+    "/s/s1/%5C%5B",
+  ])("%s is not", (url) => {
+    expect(isPortProxyRequest(url)).toBe(false);
+  });
+
+  it("recognizes the remote resource route, with or without the commit prefix", () => {
+    expect(isRemoteResourceRequest("/s/s1/vscode-remote-resource?path=/work/x.html")).toBe(true);
+    expect(isRemoteResourceRequest("/s/s1/stable-b11d/vscode-remote-resource?path=/x&tkn=")).toBe(true);
+    expect(isRemoteResourceRequest("/s/s1/stable-b11d/static/out/vs/workbench.js")).toBe(false);
+    expect(isRemoteResourceRequest("/s/s1/?path=/vscode-remote-resource")).toBe(false);
+  });
+
+  it("drops Set-Cookie and Service-Worker-Allowed from every answer", () => {
+    const out = upstreamHeaders(
+      {
+        "content-type": "text/javascript",
+        "set-cookie": ["vscode-tkn=x; SameSite=Lax", "a=b; Path=/"],
+        "service-worker-allowed": "/",
+        etag: '"1"',
+      },
+      "s1",
+      "/s/s1/_static/out/browser/serviceWorker.js",
+    );
+    expect(out).toEqual({ "content-type": "text/javascript", etag: '"1"' });
+  });
+
+  it("still rewrites an absolute Location into the session, and only that", () => {
+    expect(upstreamHeaders({ location: "/login" }, "s1", "/s/s1/x").location).toBe("/s/s1/login");
+    expect(upstreamHeaders({ location: "./?folder=/work" }, "s1", "/s/s1/").location).toBe("./?folder=/work");
+    expect(upstreamHeaders({ location: "//evil.example/" }, "s1", "/s/s1/").location).toBe("//evil.example/");
+  });
+
+  it("serves a remote resource sandboxed and unsniffed, whatever code-server sent", () => {
+    const out = upstreamHeaders(
+      { "content-type": "text/html", "content-security-policy": "default-src *" },
+      "s1",
+      "/s/s1/stable-b11d/vscode-remote-resource?path=/work/x.html",
+    );
+    expect(out).toEqual({
+      "content-type": "text/html",
+      "content-security-policy": "default-src 'none'; sandbox",
+      "x-content-type-options": "nosniff",
+    });
+    // Any other route keeps its own policy: the workbench page needs its scripts.
+    const page = upstreamHeaders({ "content-security-policy": "script-src 'self'" }, "s1", "/s/s1/?folder=/work");
+    expect(page["content-security-policy"]).toBe("script-src 'self'");
+  });
+
+  it("the portal refuses the port proxy with a 403 before any upstream", async () => {
+    const res = await portal.app.inject({
+      method: "GET",
+      url: "/s/s1/absproxy/8080/x",
+      cookies: { [SESSION_COOKIE]: cookieValue("s1", TOKEN) },
+      headers: { "accept-language": "en" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toContain("Port forwarding unavailable");
+  });
+
+  it("refuses a websocket upgrade to the port proxy: a 403, no 101", async () => {
+    await portal.app.listen({ host: "127.0.0.1", port: 0 });
+    const { port } = portal.app.server.address() as AddressInfo;
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest({
+        host: "127.0.0.1",
+        port,
+        path: "/s/s1/proxy/8080/",
+        headers: {
+          connection: "Upgrade",
+          upgrade: "websocket",
+          "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
+          "sec-websocket-version": "13",
+          cookie: `${SESSION_COOKIE}=${cookieValue("s1", TOKEN)}`,
+        },
+      });
+      req.on("upgrade", (res, socket) => {
+        socket.destroy();
+        resolve(res.statusCode ?? 101);
+      });
+      req.on("response", (res) => {
+        res.resume();
+        resolve(res.statusCode ?? 0);
+      });
+      req.on("error", reject);
+      req.end();
+    });
+    expect(status).toBe(403);
   });
 });
 

@@ -8,6 +8,8 @@ points are assumed defaults the owner may amend at review; points 7 and 8
 flag two weaker guarantees for the owner's attention. Nothing is
 implemented, and implementation waits for proof B (§9).
 Since 2026-10-11 its "GET start route" is `POST /app/api/projects/:id/workspace/start` (ADR-047, audit L7).
+Amended 2026-10-11 (audit L24): the "Same-site exposure" consequence points
+to [ADR-047's amendment](ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
 
 Scope: how a student works in the online workspace of an `online_seb`
 project from an attested kiosk station, across the two hosts of Quiz and
@@ -208,10 +210,11 @@ student's laptop cannot run SEB, the exam fallback is a kiosk station
 - The extension and its `externally_connectable` stay limited to Quiz's
   origins. The Admin console's URL allowlist gains the portal's origin;
   `docs/development/kiosk.md` changes when this ships, not before.
-- Same-site exposure: code-server's `/proxy/<port>` serves student content
-  on the portal's host, same-site with Quiz. This is already true on the
-  SEB path; Quiz's double-submit CSRF and the confinement of the session to
-  the project bound it, and the iframe's sandbox keeps that content from
+- Same-site exposure: the portal's host is same-site with Quiz; what a
+  session may serve there is [ADR-047's amendment of
+  2026-10-11](ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
+  Quiz's double-submit CSRF and the confinement of the session to the
+  project bound it, and the iframe's sandbox keeps that content from
   navigating the station.
 - `00` §0.6 ("fallback stations for an exam") becomes "for an exam or a
   supervised project" when this ADR is accepted; the spec edit lands with

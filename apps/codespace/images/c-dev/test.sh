@@ -397,6 +397,45 @@ case "$OUT" in
   *) fail "/healthz did not answer the expected JSON" "$OUT" ;;
 esac
 
+# The port proxy is off (--disable-proxy, audit L24): a program listening in
+# the container is never served on the portal's origin. A listener on the
+# probed port (code-server's bundled node; the image has no nc) makes the
+# answer the flag's, not a refused connection's (500).
+cexec "nohup /usr/lib/code-server/lib/node -e \"require('http').createServer((q, r) => r.end('L24')).listen(8099)\" >/dev/null 2>&1 &" >/dev/null 2>&1
+LISTENING=
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ "$(cexec 'curl -sS -m 1 http://localhost:8099/' 2>/dev/null)" = "L24" ] && { LISTENING=1; break; }
+  sleep 0.5
+done
+[ -n "$LISTENING" ] || fail "the probe listener on port 8099 did not start"
+for path in /proxy/8099/ /absproxy/8099/ /PROXY/8099/x; do
+  OUT=$(cexec "curl -sS -m 3 -o /dev/null -w '%{http_code}' http://localhost:8080${path}" 2>&1)
+  case "$OUT" in
+    403 | 404) : ;;
+    *) fail "code-server's port proxy answered ${path} with ${OUT} (403 or 404 expected)" ;;
+  esac
+done
+ok "port proxy disabled: /proxy/<port>/ and /absproxy/<port>/ refused"
+
+# The portal serves /vscode-remote-resource sandboxed (src/proxy/index.ts,
+# REMOTE_RESOURCE_HEADERS); code-server already does, which is what proves the
+# workbench works with that policy. A bump that drops it is noticed here.
+cexec 'printf "<script>1</script>" > /tmp/l24.html' >/dev/null 2>&1
+OUT=$(cexec "curl -sS -m 3 -D - -o /dev/null 'http://localhost:8080/vscode-remote-resource?path=/tmp/l24.html'" 2>&1 | tr -d '\r')
+case "$OUT" in
+  *"Content-Security-Policy: default-src 'none'; sandbox"*) ok "code-server serves a remote resource with CSP sandbox" ;;
+  *) fail "code-server no longer sends CSP sandbox on /vscode-remote-resource" "$OUT" ;;
+esac
+
+# No notebook support (Containerfile 2b): a notebook's HTML output would run
+# script in a webview on the portal's origin as soon as the .ipynb is opened.
+EXTS=/usr/lib/code-server/lib/vscode/extensions
+cexec "test ! -e $EXTS/ipynb && test ! -e $EXTS/notebook-renderers" >/dev/null 2>&1 \
+  || fail "a bundled notebook extension is still present (ipynb or notebook-renderers)"
+NB=$(cexec "grep -l '\"notebooks\"' $EXTS/*/package.json /opt/code-server/extensions/*/package.json 2>/dev/null")
+[ -z "$NB" ] || fail "an installed extension contributes a notebook type" "$NB"
+ok "no notebook support: ipynb and notebook-renderers absent, no extension contributes a notebook type"
+
 for f in /run/code-server/User/settings.json /run/code-server/Machine/settings.json; do
   cexec "test -f $f" >/dev/null 2>&1 || fail "machine settings not copied into $f"
   for k in '"files.autoSave": "afterDelay"' '"files.autoSaveDelay": 1000' \

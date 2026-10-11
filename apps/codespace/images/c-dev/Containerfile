@@ -75,6 +75,16 @@ RUN curl -fsSL -o /tmp/code-server.deb \
     rm -rf /var/lib/apt/lists/* && \
     code-server --version
 
+# 2b. No notebook support (audit L24): a notebook's HTML output runs script in
+#     a webview on the portal's origin, shared by every session, as soon as the
+#     .ipynb is opened. `ipynb` is the only bundled extension that contributes
+#     a notebook type; `notebook-renderers` renders its HTML outputs. Deleted
+#     here, at build time, so every rebuild drops them (README, § No notebook
+#     support).
+RUN rm -rf /usr/lib/code-server/lib/vscode/extensions/ipynb \
+           /usr/lib/code-server/lib/vscode/extensions/notebook-renderers && \
+    ! grep -l '"notebooks"' /usr/lib/code-server/lib/vscode/extensions/*/package.json
+
 # 3. student user, uid 1000. /work is the volume mount point.
 #    coder-logs is a link into the tmpfs: without it code-server throws at
 #    start-up trying to write its logs on the read-only root. The rest of

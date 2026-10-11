@@ -15,7 +15,12 @@
  * is synchronous, so the `preHandler` — which, for its part, may await the
  * database and Podman — deposits the address in a cache that `getUpstream`
  * reads back.
+ *
+ * Audit L24: what a session may serve on the origin every session shares is
+ * portal invariant 14 (CLAUDE.md) and ADR-047's amendment of 2026-10-11.
  */
+import type { IncomingHttpHeaders } from "node:http";
+
 import httpProxy from "@fastify/http-proxy";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
@@ -73,6 +78,49 @@ export function isEntryRequest(url: string, sessionId: string): boolean {
   return path === `/s/${sessionId}` || path === `/s/${sessionId}/`;
 }
 
+/**
+ * code-server's port proxy, `/proxy/<port>/…` and `/absproxy/<port>/…`.
+ * Express routes it on the raw path, case-insensitively, decoding nothing;
+ * @fastify/http-proxy refuses a `..` or `//` destination. Never throws.
+ */
+export function isPortProxyRequest(url: string): boolean {
+  return /^\/s\/[^/]+\/+(abs)?proxy(\/|$)/i.test(url.split("?", 1)[0] ?? "");
+}
+
+/**
+ * VS Code's remote resource route (`[/stable-<commit>]/vscode-remote-resource
+ * ?path=`), which serves any file of the container with its own media type.
+ * A miss only falls back to VS Code's own, identical, headers.
+ */
+export function isRemoteResourceRequest(url: string): boolean {
+  return (url.split("?", 1)[0] ?? "").split("/").pop() === "vscode-remote-resource";
+}
+
+/** Sandboxed and unsniffed: a document opened there runs no script. */
+const REMOTE_RESOURCE_HEADERS = {
+  "content-security-policy": "default-src 'none'; sandbox",
+  "x-content-type-options": "nosniff",
+} as const;
+
+/**
+ * code-server's answer headers as the browser gets them: no `Set-Cookie`, no
+ * `Service-Worker-Allowed` (code-server's only cookie, `vscode-tkn`, is never
+ * read without a connection token; its no-op PWA worker stops registering).
+ * An absolute `Location` is rewritten into the session (see `internalRewriteLocationHeader`).
+ */
+export function upstreamHeaders(
+  headers: IncomingHttpHeaders,
+  sessionId: string | undefined,
+  url: string,
+): IncomingHttpHeaders {
+  const { "set-cookie": _cookie, "service-worker-allowed": _worker, ...kept } = headers;
+  const location = kept.location;
+  if (typeof location === "string" && sessionId && location.startsWith("/") && !location.startsWith("//")) {
+    kept.location = `/s/${sessionId}${location}`;
+  }
+  return isRemoteResourceRequest(url) ? { ...kept, ...REMOTE_RESOURCE_HEADERS } : kept;
+}
+
 async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promise<void> {
   const { db, manager } = opts;
   /** sid → `http://<ip>:8080`. Filled by the `preHandler`, read by `getUpstream`. */
@@ -99,6 +147,12 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
         "sessionDeniedTitle",
         "sessionDeniedDetail",
       );
+    }
+
+    // Invariant 14: code-server runs with --disable-proxy; this holds if an image forgets it.
+    if (isPortProxyRequest(request.url)) {
+      request.log.warn({ sessionId, clientAddress: request.ip }, "proxy access refused: code-server port proxy");
+      return deny(reply, 403, "portProxyTitle", "portProxyDetail");
     }
 
     const assignment = findAssignment(db, session.assignmentId);
@@ -177,9 +231,9 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
     // empty string) by the *literal* prefix of the route, and
     // `"./?folder=/work".replace("", "/s/:sid")` produces
     // `"/s/:sid./?folder=/work"` — an unsubstituted `:sid`. We turn it off and
-    // rewrite it ourselves, touching only absolute paths: code-server serves
-    // everything relative (`serverBasePath: "."`), so the normal case does not
-    // even need to be rewritten.
+    // rewrite it ourselves in `upstreamHeaders`, touching only absolute paths:
+    // code-server serves everything relative (`serverBasePath: "."`), so the
+    // normal case does not even need to be rewritten.
     internalRewriteLocationHeader: false,
     replyOptions: {
       getUpstream(request) {
@@ -187,12 +241,8 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
         return upstreams.get(sessionId) ?? "http://127.0.0.1:1";
       },
       rewriteHeaders(headers, request) {
-        const location = headers["location"];
         const sessionId = (request?.params as { sid?: string } | undefined)?.sid;
-        if (typeof location === "string" && sessionId && location.startsWith("/") && !location.startsWith("//")) {
-          return { ...headers, location: `/s/${sessionId}${location}` };
-        }
-        return headers;
+        return upstreamHeaders(headers, sessionId, request?.url ?? "");
       },
     },
   });

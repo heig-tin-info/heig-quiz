@@ -40,8 +40,11 @@ case "${CODESPACE_RETURN_URL:-}" in
   http://* | https://*) set -- --link-protection-trusted-domains "${CODESPACE_RETURN_URL%/}" ;;
 esac
 
+# --disable-proxy: no port proxy on the origin every session shares (portal
+# invariant 14, audit L24); verified on 4.137.0 by test.sh § 7.
 exec code-server \
   --auth none \
+  --disable-proxy \
   --bind-addr 0.0.0.0:8080 \
   --disable-file-downloads \
   --disable-file-uploads \

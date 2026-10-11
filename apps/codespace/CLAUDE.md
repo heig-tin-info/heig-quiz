@@ -161,6 +161,13 @@ channel divergence for its containers.
     an existing `.git` of any kind, or a `work/` already the container's —
     is completed and configured inside the container (`completionScript`,
     `identityScript`, through `engine.exec`), as the student.
+14. **The port proxy is closed and code-server's answers are filtered** on
+    the origin every session shares (audit L24). code-server runs with
+    `--disable-proxy`; the proxy refuses `/proxy/<port>/` and
+    `/absproxy/<port>/` (403), drops `Set-Cookie` and
+    `Service-Worker-Allowed` from every upstream answer, and serves
+    `/vscode-remote-resource` with `CSP: default-src 'none'; sandbox` and
+    `nosniff`; the student image ships no notebook support. Gaps and the full fix: [ADR-047, amendment of 2026-10-11](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
 
 ## Commands
 

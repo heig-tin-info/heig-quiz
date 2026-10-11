@@ -16,6 +16,9 @@ session; no SEB project opens to students before proof B is recorded. See
 single use and bound to its request, and every token's lifetime is capped:
 [ADR-078's amendment of that date](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use).
 
+**Amended (2026-10-11, security audit L24):** what a session may serve on
+the portal's one origin ([amendment](#amendment-2026-10-11-one-origin-for-every-session-audit-l24)).
+
 **Amended (2026-10-11, security audit L7): the start route is a POST.**
 Scope: the start route of amendment "M6-06" (its path and method) and
 M6-07's launch from a `seb` session. A navigable GET that froze the work
@@ -281,3 +284,39 @@ classes.
    quota.
 5. **A single global quota** rather than one per teacher: a teacher starting an exam would
    consume everyone else's capacity without any screen showing it.
+
+## Amendment 2026-10-11: one origin for every session (audit L24)
+
+Scope: what the portal lets a session serve on its origin, shared by every
+session (`/s/<session>/`). Decided by the product owner on 2026-10-11 (the
+short fix):
+
+1. code-server runs with `--disable-proxy`, and the portal refuses
+   `/s/<session>/proxy/<port>/` and `…/absproxy/<port>/` itself (403).
+2. The portal drops `Set-Cookie` and `Service-Worker-Allowed` from every
+   answer of code-server.
+3. The portal serves `/vscode-remote-resource` with `Content-Security-Policy:
+   default-src 'none'; sandbox` and `X-Content-Type-Options: nosniff`.
+4. The student image ships no notebook support: code-server's bundled
+   `ipynb` and `notebook-renderers` extensions are deleted at build time
+   (the orchestrator's decision of the same day, on the owner's authority).
+
+Rationale: the port proxy put whatever a student's program serves on the
+shared origin, with its own headers, so it could set cookies on the whole
+origin or register a service worker over it; nothing in the product uses
+it. VS Code 1.137 already sends rule 3's headers, so the workbench is known
+to work with them (verified in Chromium through a real portal).
+
+VS Code's webviews are served from the same origin and run script there:
+a notebook's HTML output did so as soon as the `.ipynb` was opened, which
+rule 4 closes (an `.ipynb` no longer opens as a notebook, only as text;
+verified in Chromium).
+Known gaps, closed only by a subdomain per session (each session its own
+origin, a wildcard certificate): a markdown preview runs script once the
+student turns its security off, and a student's process can take port 8080
+for the moment between a `SIGUSR1` to code-server and the container's exit.
+Either can set a `path=/` cookie in that student's own browser; neither can
+widen a service worker's scope, and another browser never loads the page
+without the session's cookie. An image that must serve a web application
+waits for that fix.
+
