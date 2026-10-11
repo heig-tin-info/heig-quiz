@@ -16,7 +16,7 @@ import { drillRetrievability } from "@quiz/domain/drillSchedule";
 import { registerForTests } from "@quiz/registry/server";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
-import { classrooms, concepts, drillCards, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
+import { classrooms, conceptRelations, concepts, drillCards, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { kioskStation } from "../../test/kiosk.js";
@@ -369,6 +369,36 @@ describe("the student's concept mastery: the leak test (05 §5.7)", () => {
     for (const r of raw) expect(text).not.toContain(String(r).slice(0, 6));
     // (e) another student's evidence: Bob's identity.
     for (const needle of [bob.id, "Nom1", "Prenom1"]) expect(text).not.toContain(needle);
+  });
+
+  it("counts a card on a narrower, unlisted concept toward its listed broader one, never naming the narrower", async () => {
+    const db = server.app.db;
+    const at = new Date(NOW);
+    const narrow = randomUUID();
+    const label = "Narrower secret label";
+    await db.insert(concepts).values({
+      id: narrow,
+      status: "validated",
+      labelEn: label,
+      keyEn: label.toLowerCase(),
+      createdAt: at,
+      updatedAt: at,
+    });
+    // The sixth question (a foreign concept only so far) also carries it; it narrows `few`, which had four cards.
+    await db.insert(questionConcepts).values({ questionId: seed.questionIds[5]!, conceptId: narrow });
+    await db.insert(conceptRelations).values({ conceptId: narrow, targetId: ids.few, kind: "broader" });
+    try {
+      for (const headers of [alice.headers, await sessionOf(alice.id, { kind: "impersonation", actorUserId: admin.id })]) {
+        const { body, text } = await read(headers);
+        expect(levelOf(body, ids.few)).toMatchObject({ cards: 5, level: "solid" });
+        expect(body.concepts.map((c) => c.concept.id)).not.toContain(narrow);
+        expect(text).not.toContain(narrow);
+        expect(text).not.toContain(label);
+      }
+    } finally {
+      await db.delete(conceptRelations).where(eq(conceptRelations.conceptId, narrow));
+      await db.delete(questionConcepts).where(eq(questionConcepts.conceptId, narrow));
+    }
   });
 
   it("gives the teacher's seat the student shape for its own cards, not the class's", async () => {
