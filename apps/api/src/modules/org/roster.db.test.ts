@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../../db/client.js";
 import { classrooms, courses, enrollments, userEmails, users } from "../../db/schema.js";
 import { testDb } from "../../test/db.js";
-import { claimEnrollments, claimForExistingUsers } from "./roster.js";
+import { claimEnrollments } from "./roster.js";
 
 async function seedClassroom(db: Db) {
   const courseId = randomUUID();
@@ -133,30 +133,6 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
     const enrollmentId = await seedEntry(db, classroomId, shared, "Shared");
 
     expect(await claimEnrollments(db, { id: second })).toBe(0);
-    const row = await entry(db, enrollmentId);
-    expect(row.userId).toBeNull();
-    expect(row.conflictFlag).toBe(true);
-  });
-});
-
-describe("claimForExistingUsers (reverse claim)", () => {
-  it("attaches an existing account through its institutional address", async () => {
-    const classroomId = await seedClassroom(db);
-    const userId = await seedUser(db, "leoverdelaw@gmail.test", "leo.verdelaw@heig.test");
-    const enrollmentId = await seedEntry(db, classroomId, "leo.verdelaw@heig.test", "Verdelaw");
-
-    expect(await claimForExistingUsers(db, classroomId, randomUUID())).toBe(1);
-    expect((await entry(db, enrollmentId)).userId).toBe(userId);
-  });
-
-  it("flags rather than picking when two accounts hold the entry's address", async () => {
-    const classroomId = await seedClassroom(db);
-    const shared = "twins@heig.test";
-    await seedUser(db, "twin-a@gmail.test", shared);
-    await seedUser(db, "twin-b@gmail.test", shared);
-    const enrollmentId = await seedEntry(db, classroomId, shared, "Twin");
-
-    expect(await claimForExistingUsers(db, classroomId, randomUUID())).toBe(0);
     const row = await entry(db, enrollmentId);
     expect(row.userId).toBeNull();
     expect(row.conflictFlag).toBe(true);

@@ -134,7 +134,7 @@ ported independently, and its `grade.final` mail on the final review is dropped
 | `activity_available` | Winning move of an exercise to running; claimed student seats; in-class delivery restricted to App | On, take-home only |
 | `deadline_approaching` | Due non-poll evaluation/student pairs under the reminder rule below | On |
 | `results_updated` | Visible final grade changes after a grading write; folded per evaluation | Off |
-| `student_joined` | Student's own login claims a seat, not reverse claim during teacher import/e-mail edit; course staff, actor excluded; folded per classroom | Off |
+| `student_joined` | The student's own claim of a seat, at their sign-in or their next own request (ADR-053, addendum of 2026-10-11: no staff write claims); course staff, actor excluded; folded per classroom | Off |
 | `roster_conflict` | Roster conflict needing attention; course staff, actor excluded; folded per classroom | On |
 | `grading_ready` | Complete grading grid with proposals; course staff including the teacher who closed; not folded | On |
 | `pool_question_added` | Every publication, first or later version; pool owner and contributor/owner shares, not readers or author; folded per pool | Off |

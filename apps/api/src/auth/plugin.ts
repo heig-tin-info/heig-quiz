@@ -20,6 +20,7 @@ import {
 } from "@quiz/contracts";
 
 import { shownAvatar } from "../modules/avatar.js";
+import { claimEnrollments } from "../modules/org/service.js";
 import { invalid } from "../modules/http.js";
 import { devLoginRoutes } from "./dev.js";
 import { impersonationRoutes } from "./impersonation.js";
@@ -279,6 +280,19 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     req.auth = found.auth;
     req.caller = callerFor(found.user, found.auth, app.clock.now());
     req.sid = found.sidHash;
+    // The person's own request claims the roster lines that wait for them
+    // (F-ORG-05, ADR-053 addendum of 2026-10-11) — their own portal session
+    // only: never an impersonation (ADR-034), a confined session (ADR-027,
+    // ADR-051) or a bearer token. One indexed query when nothing waits;
+    // before the handler, so this very request sees the seat. Best-effort: a
+    // failed claim is retried by the next request, never fails this one.
+    if (found.auth.kind === "portal" && !delegated(found.auth)) {
+      try {
+        await claimEnrollments(app.db, found.user);
+      } catch (err) {
+        req.log.error({ err }, "claim on the person's own request failed");
+      }
+    }
     // Mirror the sliding renewal on the cookies, else the browser drops them
     // while the server-side session is still alive.
     if (found.renewedTo) {

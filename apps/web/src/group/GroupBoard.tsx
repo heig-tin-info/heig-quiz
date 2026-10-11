@@ -382,7 +382,7 @@ function Zone({
 
 /**
  * A student: the handle (drag, or select for click-then-click) and the
- * "Move to…" menu. One who has not signed in yet is placed like any other
+ * "Move to…" menu. One whose line is not yet attached is placed like any other
  * (ADR-070 §2) and marked with a dashed circle.
  */
 function StudentChip({

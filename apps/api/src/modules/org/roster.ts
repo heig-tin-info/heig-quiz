@@ -16,7 +16,7 @@ import {
   userEmails,
   users,
 } from "../../db/schema.js";
-import { emailIn, knownEmails, normalizeEmail, sharedWithOthers } from "../../identity.js";
+import { normalizeEmail, sharedWithOthers } from "../../identity.js";
 import { shownAvatar } from "../avatar.js";
 import { notifyMany } from "../notifications/service.js";
 import { rosterConflict, studentJoined } from "../realtime/bus.js";
@@ -71,6 +71,8 @@ export async function importRoster(
       else updated += 1;
     }
   });
+  // A line just added is claimed by its holder's next own request, not by
+  // this import (ADR-053, addendum of 2026-10-11).
   // Fine-grained insert/update counting will come with a real need; what
   // matters is atomicity and idempotent replay.
   return { parse, summary: { inserted, updated } };
@@ -95,8 +97,9 @@ interface RosterEvent {
  * and the classroom: no name, no address. Call it after the write has
  * committed.
  *
- * BEST-EFFORT: it runs inside a login (the claim at sign-in) and a roster
- * import, neither of which may fail because telling the staff did. A
+ * BEST-EFFORT: it runs inside a login and a person's own request (their
+ * claim), and inside the heig-classroom import, none of which may fail
+ * because telling the staff did. A
  * failure is logged and swallowed; the roster itself is already right.
  */
 async function tellStaff(db: Db, event: RosterEvent): Promise<void> {
@@ -141,8 +144,9 @@ export interface ClaimMatch {
 }
 
 /**
- * Settles one claim pass. The login claim and the reverse claim both end
- * here, so every conflict ends the same way (AU-21): an ambiguous match is
+ * Settles one claim pass. The person's own claim (`claimEnrollments`, at
+ * sign-in or at their next own request) and the heig-classroom import's
+ * both end here, so every conflict ends the same way (AU-21): an ambiguous match is
  * flagged; any other is attached, and flagged instead when the account
  * already holds a line of that classroom (UNIQUE(classroom_id, user_id)).
  *
@@ -225,9 +229,15 @@ export async function claimLines(db: Db, matches: ClaimMatch[], actorId: string)
 }
 
 /**
- * Automatic claim at login (AU-18, H3): every `pending` entry whose e-mail
- * is one of the account's known addresses (GH-11 — the login address, or an
- * institutional one asserted by edu-ID) is attached to the user.
+ * Automatic claim at login (AU-18, H3), and on every request of the
+ * account's own portal session (the auth hook, `plugin.ts`): every `pending`
+ * entry whose e-mail is one of the account's verified addresses (GH-11 —
+ * the login address, or an institutional one asserted by edu-ID) is
+ * attached to the user. Only the person's own action runs it, never a staff
+ * write (ADR-053, addendum of 2026-10-11): attaching on a teacher's import
+ * would show the staff the account of someone who never came, and let any
+ * address on a list link it. Its first step is one query on
+ * `enrollments_email_idx`, so the steady state of a request costs that.
  *
  * Nothing is attached on an ambiguous match. Three ways to be ambiguous:
  * the entry's address is also held by another account; several entries of
@@ -236,22 +246,22 @@ export async function claimLines(db: Db, matches: ClaimMatch[], actorId: string)
  * resolve (AU-21) — because guessing would put a grade on the wrong person.
  */
 export async function claimEnrollments(db: Db, user: { id: string }) {
-  const emails = await knownEmails(db, user.id);
-  if (emails.length === 0) return 0;
-
+  // A flagged line is not skipped: once its duplicate is gone, it is claimed.
   const pending = await db
     .select({
       entryId: enrollments.id,
       classroomId: enrollments.classroomId,
-      nom: enrollments.nom,
-      prenom: enrollments.prenom,
       email: enrollments.email,
       courseId: classrooms.courseId,
       classroomName: classrooms.name,
     })
-    .from(enrollments)
+    .from(userEmails)
+    .innerJoin(
+      enrollments,
+      and(sql`lower(${enrollments.email}) = ${userEmails.email}`, isNull(enrollments.userId)),
+    )
     .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
-    .where(and(isNull(enrollments.userId), emailIn(enrollments.email, emails)));
+    .where(and(eq(userEmails.userId, user.id), eq(userEmails.verified, true)));
   if (pending.length === 0) return 0;
 
   const shared = await sharedWithOthers(
@@ -280,54 +290,6 @@ export async function claimEnrollments(db: Db, user: { id: string }) {
     await tellStaff(db, { kind: "student_joined", ...room, actorId: user.id });
   }
   return claimed;
-}
-
-/**
- * Reverse claim (after an import or an e-mail edit, by `actorId`): attaches
- * a classroom's `pending` entries to existing accounts, on the same address
- * set and the same ambiguity rules as the login claim.
- */
-export async function claimForExistingUsers(db: Db, classroomId: string, actorId: string) {
-  const rows = await db
-    .select({
-      entryId: enrollments.id,
-      userId: userEmails.userId,
-      classroomId: enrollments.classroomId,
-      classroomName: classrooms.name,
-      courseId: classrooms.courseId,
-    })
-    .from(enrollments)
-    .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
-    .innerJoin(
-      userEmails,
-      and(
-        sql`lower(${enrollments.email}) = ${userEmails.email}`,
-        eq(userEmails.verified, true),
-      ),
-    )
-    .where(and(eq(enrollments.classroomId, classroomId), isNull(enrollments.userId)));
-
-  // One entry claimed by two accounts, or one account claiming two entries
-  // of this classroom: ambiguous either way.
-  const usersPerEntry = new Map<string, Set<string>>();
-  const entriesPerUser = new Map<string, Set<string>>();
-  const link = (map: Map<string, Set<string>>, key: string, value: string) => {
-    const set = map.get(key) ?? new Set<string>();
-    set.add(value);
-    map.set(key, set);
-  };
-  for (const m of rows) {
-    link(usersPerEntry, m.entryId, m.userId);
-    link(entriesPerUser, m.userId, m.entryId);
-  }
-
-  const matches = rows.map((m) => ({
-    ...m,
-    ambiguous: usersPerEntry.get(m.entryId)!.size > 1 || entriesPerUser.get(m.userId)!.size > 1,
-  }));
-  return settleClaims(db, matches, actorId, (m) =>
-    publish("roster", [`classroom:${classroomId}`, `user:${m.userId}`]),
-  );
 }
 
 /**

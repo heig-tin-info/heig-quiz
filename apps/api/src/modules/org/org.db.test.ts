@@ -3,10 +3,15 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { NotificationPayload } from "@quiz/contracts";
+import { CSRF_COOKIE, type NotificationPayload } from "@quiz/contracts";
+import { registerForTests } from "@quiz/registry/server";
 
+import { SESSION_COOKIE, createSession } from "../../auth/session.js";
+import { issueImpersonation, openImpersonation, openSebSession } from "../../auth/testing.js";
+import { createApiToken } from "../../auth/tokens.js";
 import {
   auditLog,
+  avatars,
   classrooms,
   courseStaff,
   courses,
@@ -16,8 +21,12 @@ import {
   githubOrganizations,
   notifications,
   userEmails,
+  users,
 } from "../../db/schema.js";
+import { fakeShort } from "../../test/fakeType.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
+import { kioskStation } from "../../test/kiosk.js";
+import { seedLive } from "../../test/live.js";
 import { studentJoined } from "../realtime/bus.js";
 import { claimEnrollments } from "./roster.js";
 
@@ -174,12 +183,13 @@ describe("the student_joined notification", () => {
     expect(before.some((n) => !n.read)).toBe(true);
     const unread = before.find((n) => !n.read);
     const email = `grace-${randomUUID().slice(0, 8)}@heig.test`;
-    await server.app.db
-      .insert(enrollments)
-      .values({ id: randomUUID(), classroomId, nom: "Hopper", prenom: "Grace", email });
     const watched = await watchers();
     const student = await signInStudent(email);
     const joiner = { id: student.id, stream: await openStream(student.headers) };
+    // The stream request claims, so the line is inserted after the stream opens.
+    await server.app.db
+      .insert(enrollments)
+      .values({ id: randomUUID(), classroomId, nom: "Hopper", prenom: "Grace", email });
     await settle();
 
     expect(await claimEnrollments(server.app.db, { id: student.id })).toBe(1);
@@ -310,14 +320,18 @@ describe("the roster_conflict notification", () => {
     );
   });
 
-  it("from an import: one entry with the count, to the staff but not the importer", async () => {
+  /** The account's own request, on its own portal session: where a claim pass runs (ADR-053, addendum of 2026-10-11). */
+  const ownRequest = async (who: { headers: Record<string, string> }) =>
+    expect((await server.app.inject({ method: "GET", url: "/app/api/me", headers: who.headers })).statusCode).toBe(200);
+
+  it("not from an import: the holders' own requests raise it, and every staff seat is told", async () => {
     const r = await room("CONF-C");
     const shared = `twin-${tag()}@heig.test`;
-    await account(`twin-a-${tag()}@gmail.test`, shared);
+    const twin = await account(`twin-a-${tag()}@gmail.test`, shared);
     await account(`twin-b-${tag()}@gmail.test`, shared);
     const priv = `tom-${tag()}@gmail.test`;
     const inst = `tom-${tag()}@heig.test`;
-    await account(priv, inst);
+    const tom = await account(priv, inst);
 
     const rows = [
       ["Nom", "Prénom", "E-mail"],
@@ -332,17 +346,29 @@ describe("the roster_conflict notification", () => {
       payload: { rows },
     });
     expect(imported.statusCode).toBe(200);
+    // The import ran no claim pass: nothing flagged, nobody told.
+    const flagged = await server.app.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.classroomId, r.id), eq(enrollments.conflictFlag, true)));
+    expect(flagged).toEqual([]);
+    expect(await told(colleague.id, r.id)).toEqual([]);
 
-    expect(await told(colleague.id, r.id)).toEqual([expected(r.id, "CONF-C", 3)]);
-    expect(await told(teacher.id, r.id)).toEqual([]);
+    await ownRequest(twin);
+    await ownRequest(tom);
+
+    // The pass is the student's: the importer is a staff seat like any other.
+    for (const staff of [teacher.id, colleague.id]) {
+      expect(await told(staff, r.id)).toEqual([expected(r.id, "CONF-C", 3)]);
+    }
     expect(await told(r.classmate.id, r.id)).toEqual([]);
     expect(JSON.stringify(await told(colleague.id, r.id))).not.toContain(shared);
   });
 
-  it("from an e-mail edit: one entry, to the staff but not the editor", async () => {
+  it("not from an e-mail edit: the holder's own request raises it", async () => {
     const r = await room("CONF-D");
     const shared = `pair-${tag()}@heig.test`;
-    await account(`pair-a-${tag()}@gmail.test`, shared);
+    const pair = await account(`pair-a-${tag()}@gmail.test`, shared);
     await account(`pair-b-${tag()}@gmail.test`, shared);
     const entry = await line(r.id, `typo-${tag()}@heig.test`);
 
@@ -353,33 +379,202 @@ describe("the roster_conflict notification", () => {
       payload: { email: shared },
     });
     expect(patched.statusCode).toBe(200);
+    expect(await told(colleague.id, r.id)).toEqual([]);
 
-    expect(await told(colleague.id, r.id)).toEqual([expected(r.id, "CONF-D", 1)]);
-    expect(await told(teacher.id, r.id)).toEqual([]);
+    await ownRequest(pair);
+    for (const staff of [teacher.id, colleague.id]) {
+      expect(await told(staff, r.id)).toEqual([expected(r.id, "CONF-D", 1)]);
+    }
   });
 
-  it("refreshes the staff's rosters, except the stream of whoever raised it", async () => {
+  it("refreshes the staff's rosters when a holder's request raises it", async () => {
     const r = await room("CONF-E");
     const shared = `hint-${tag()}@heig.test`;
-    await account(`hint-a-${tag()}@gmail.test`, shared);
+    const holder = await account(`hint-a-${tag()}@gmail.test`, shared);
     await account(`hint-b-${tag()}@gmail.test`, shared);
     const entry = await line(r.id, `typo-${tag()}@heig.test`);
-    const streams = {
-      teacher: await openStream(teacher.headers),
-      colleague: await openStream(colleague.headers),
-    };
-    await settle();
     await server.app.inject({
       method: "PATCH",
       url: `/app/api/classrooms/${r.id}/roster/${entry}`,
       headers: teacher.headers,
       payload: { email: shared },
     });
+    const streams = {
+      teacher: await openStream(teacher.headers),
+      colleague: await openStream(colleague.headers),
+    };
     await settle();
-    expect(streams.colleague.text).toContain('"kinds":["roster"]');
-    expect(streams.colleague.text).toContain('"kinds":["notifications"]');
-    expect(streams.colleague.text).not.toContain(shared);
+    await ownRequest(holder);
+    await settle();
+    for (const stream of Object.values(streams)) {
+      expect(stream.text).toContain('"kinds":["roster"]');
+      expect(stream.text).toContain('"kinds":["notifications"]');
+      expect(stream.text).not.toContain(shared);
+    }
     for (const s of Object.values(streams)) s.close();
+  });
+
+  /**
+   * Audit L4 (ADR-053, addendum of 2026-10-11): a line is attached only when
+   * the person acts — their sign-in or their own next request — never by a
+   * staff write, and until then the staff read nothing of the account.
+   */
+  describe("attached only when the person acts (audit L4)", () => {
+    let restore: () => void;
+    beforeAll(() => {
+      restore = registerForTests(fakeShort);
+    });
+    afterAll(() => restore());
+
+    const UNATTACHED = { status: "pending", conflictFlag: false, userId: null, lastLoginAt: null, githubLogin: null, avatarUrl: null };
+
+    async function connect(classroomId: string) {
+      const orgId = randomUUID();
+      await server.app.db.insert(githubOrganizations).values({ id: orgId, login: `org-${tag()}` });
+      await server.app.db.insert(githubClassroomLinks).values({ classroomId, orgId, linkedBy: teacher.id });
+    }
+
+    /** The whole teacher payload of a classroom, serialized, and its roster. */
+    async function staffView(classroomId: string) {
+      const res = await server.app.inject({ method: "GET", url: `/app/api/classrooms/${classroomId}`, headers: teacher.headers });
+      expect(res.statusCode).toBe(200);
+      return { body: res.body, roster: (res.json() as { roster: { email: string }[] }).roster };
+    }
+
+    const importRows = (classroomId: string, ...lines: [string, string, string][]) =>
+      server.app.inject({
+        method: "POST",
+        url: `/app/api/classrooms/${classroomId}/roster`,
+        headers: teacher.headers,
+        payload: { rows: [["Nom", "Prénom", "E-mail"], ...lines] },
+      });
+
+    /** The classrooms a student holds a seat in, as their home reads them. */
+    async function myClassrooms(headers: Record<string, string>) {
+      const res = await server.app.inject({ method: "GET", url: "/app/api/student/classrooms", headers });
+      expect(res.statusCode).toBe(200);
+      return (res.json() as { id: string }[]).map((c) => c.id);
+    }
+
+    const holder = async (entryId: string) =>
+      (await server.app.db.select({ userId: enrollments.userId }).from(enrollments).where(eq(enrollments.id, entryId)))[0]!.userId;
+
+    it("an import or an e-mail edit shows nothing of an existing account; the person's own request claims", async () => {
+      // Someone who used Quiz before: a sign-in, an uploaded avatar, a linked GitHub account.
+      const own = `ada-${tag()}@heig.test`;
+      const ada = await account(own);
+      const lastLogin = new Date("2026-09-01T08:00:00.000Z");
+      const githubLogin = `ada-gh-${tag()}`;
+      await server.app.db.update(users).set({ lastLoginAt: lastLogin }).where(eq(users.id, ada.id));
+      await server.app.db.insert(avatars).values({ userId: ada.id, data: Buffer.from("png"), contentType: "image/png" });
+      await server.app.db
+        .insert(githubAccounts)
+        .values({ userId: ada.id, githubUserId: 8_000_000 + Math.floor(Math.random() * 1e6), login: githubLogin });
+
+      const imported = await room("L4-import");
+      const edited = await room("L4-edit");
+      for (const r of [imported, edited]) await connect(r.id);
+      expect((await importRows(imported.id, ["Lovelace", "Ada", own])).statusCode).toBe(200);
+      const typo = await line(edited.id, `typo-${tag()}@heig.test`);
+      const patched = await server.app.inject({
+        method: "PATCH",
+        url: `/app/api/classrooms/${edited.id}/roster/${typo}`,
+        headers: teacher.headers,
+        payload: { email: own },
+      });
+      expect(patched.statusCode).toBe(200);
+
+      const traces = [ada.id, githubLogin, `/users/${ada.id}/avatar`, lastLogin.toISOString()];
+      for (const r of [imported, edited]) {
+        const view = await staffView(r.id);
+        expect(view.roster.find((e) => e.email === own)).toMatchObject(UNATTACHED);
+        for (const trace of traces) expect(view.body).not.toContain(trace);
+      }
+      const set = await server.app.inject({
+        method: "POST",
+        url: `/app/api/classrooms/${imported.id}/group-sets`,
+        headers: teacher.headers,
+        payload: {},
+      });
+      expect(set.statusCode).toBe(201);
+      for (const trace of traces) expect(set.body).not.toContain(trace);
+
+      // Ada's own request: her seats are hers, in this very response.
+      expect(await myClassrooms(ada.headers)).toEqual(expect.arrayContaining([imported.id, edited.id]));
+      for (const r of [imported, edited]) {
+        expect((await staffView(r.id)).roster.find((e) => e.email === own)).toMatchObject({ status: "claimed", userId: ada.id });
+        expect((await notificationsOf(teacher.id, "student_joined")).map((n) => n.payload)).toContainEqual(
+          expect.objectContaining({ classroomId: r.id, count: 1 }),
+        );
+      }
+      expect((await staffView(imported.id)).body).toContain(githubLogin);
+    });
+
+    it("never on an impersonation, a seb or kiosk session, nor a bearer token", async () => {
+      const admin = await server.signInWithSuperPowers();
+      const email = `grace-${tag()}@heig.test`;
+      const grace = await account(email);
+      const exam = async (settings: object) => {
+        const seed = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [grace.id], mode: "exam", settings });
+        const started = await server.app.inject({
+          method: "POST",
+          url: `/app/api/evaluations/${seed.evaluationId}/start`,
+          headers: teacher.headers,
+          payload: { confirm: true },
+        });
+        expect(started.statusCode, started.body).toBe(200);
+        return seed;
+      };
+      const sebExam = await exam({ safeExamBrowser: true });
+      const kioskExam = await exam({ kiosk: true });
+
+      const sitting = await openSebSession(server, sebExam.evaluationId, grace.headers);
+      const [seat] = await server.app.db
+        .select({ id: enrollments.id })
+        .from(enrollments)
+        .where(and(eq(enrollments.classroomId, sebExam.classroomId), eq(enrollments.userId, grace.id)));
+      const link = await issueImpersonation(server, admin.headers, sebExam.classroomId, seat!.id);
+      const impersonation = (await openImpersonation(server, link as string))!;
+      const station = await kioskStation(server.app);
+      const kiosk = await createSession(server.app.db, grace.id, 12, {
+        kind: "kiosk",
+        actorUserId: null,
+        evaluationId: kioskExam.evaluationId,
+        projectId: null,
+        deviceId: station.deviceId,
+      });
+      const { token } = await createApiToken(server.app.db, grace.id, { name: "cli", expiresInDays: 1 });
+
+      // A line that waits for her, written after all of them were opened.
+      const later = await room("L4-who");
+      const entry = await line(later.id, email);
+      const me = async (headers: Record<string, string>, kind: string) => {
+        const res = await server.app.inject({ method: "GET", url: "/app/api/me", headers });
+        expect(res.statusCode).toBe(200);
+        expect((res.json() as { session: { kind: string } }).session.kind).toBe(kind);
+      };
+      await me(impersonation, "impersonation");
+      await me(sitting("/app/api/me"), "seb");
+      await me({ cookie: `${SESSION_COOKIE}=${kiosk.token}; ${CSRF_COOKIE}=${kiosk.csrf}; ${station.cookie}` }, "kiosk");
+      await me({ authorization: `Bearer ${token}` }, "portal");
+      expect(await holder(entry)).toBeNull();
+
+      await me(grace.headers, "portal");
+      expect(await holder(entry)).toBe(grace.id);
+    });
+
+    it("exam day: a line added from the waiting room is the student's at their next request", async () => {
+      const email = `late-${tag()}@heig.test`;
+      const late = await account(email);
+      const lobby = await room("L4-lobby");
+      expect(await myClassrooms(late.headers)).not.toContain(lobby.id);
+
+      expect((await importRows(lobby.id, ["Late", "Student", email])).statusCode).toBe(200);
+      expect((await staffView(lobby.id)).roster.find((e) => e.email === email)).toMatchObject(UNATTACHED);
+
+      // The student refreshes: the same session, now in the classroom.
+      expect(await myClassrooms(late.headers)).toContain(lobby.id);
+    });
   });
 });
 

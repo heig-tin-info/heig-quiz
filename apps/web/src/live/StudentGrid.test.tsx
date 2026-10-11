@@ -225,7 +225,7 @@ describe("StudentGrid — the rows", () => {
     expect(within(rowOf("Nadia Roux 0")).queryByText("offline")).toBeNull();
   });
 
-  it("says a student on the roster has not signed in yet, rather than leaving them out", () => {
+  it("says a student on the roster has not opened Quiz yet, rather than leaving them out", () => {
     const view = viewIn("running", 2, 2);
     view.rows[1] = {
       ...view.rows[1]!,
@@ -236,7 +236,7 @@ describe("StudentGrid — the rows", () => {
     };
     setup(view);
     expect(
-      within(rowOf("Nadia Roux 1")).getByRole("img", { name: "has not signed in to Quiz yet" }),
+      within(rowOf("Nadia Roux 1")).getByRole("img", { name: "has not opened Quiz yet" }),
     ).toBeInTheDocument();
     expect(within(rowOf("Nadia Roux 1")).queryByRole("img", { name: "never connected" })).toBeNull();
   });

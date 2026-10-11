@@ -40,7 +40,7 @@ describe("LaunchStep checklist (#152)", () => {
     render(makeEvaluationDetail());
     expect(screen.getByRole("heading", { name: /^ready$/i })).toBeInTheDocument();
     expect(screen.getByText(/24 expected in the room/i)).toBeInTheDocument();
-    expect(screen.getByText(/2 have not signed in yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 are not yet attached/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeEnabled();
     expect(screen.getByRole("status")).toHaveTextContent(/start the evaluation from the dashboard/i);
   });

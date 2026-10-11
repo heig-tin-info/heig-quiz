@@ -34,7 +34,7 @@ Which claims edu-ID actually releases for HEIG-VD accounts, the picture included
 
 The teacher imports a spreadsheet with, for each student, last name, first name, e-mail address and, where it applies, an extra-time percentage (`packages/domain/src/roster.ts`). The teacher may add a free-form note about a student, which the student never sees (`apps/api/src/db/org.ts`).
 
-The class list is the only way into a classroom: the join code a student could type has been removed (ADR-053). A student's seat is attached to their account at sign-in, when one of the addresses edu-ID sends matches the address on the list (`apps/api/src/auth/claims.ts`).
+The class list is the only way into a classroom: the join code a student could type has been removed (ADR-053). A student's seat is attached to their account only when they open Quiz themselves — at sign-in, or at their next request when already signed in — when one of the addresses edu-ID sent matches the address on the list (`apps/api/src/auth/claims.ts`, `apps/api/src/modules/org/roster.ts`). Importing the list attaches no one: until the student comes, the teacher's roster shows nothing of their account.
 
 ### While the platform is used
 

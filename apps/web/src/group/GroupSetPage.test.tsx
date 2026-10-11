@@ -55,7 +55,7 @@ describe("the page's states", () => {
     expect(screen.getByText("2 groups · 2 placed · 3 not placed")).toBeInTheDocument();
     const none = screen.getByRole("region", { name: "No group" });
     expect(within(none).getByRole("button", { name: /^Martin Chloé/ })).toBeInTheDocument();
-    expect(within(none).getByRole("button", { name: /^Rochat David.*Has not signed in yet/ })).toBeInTheDocument();
+    expect(within(none).getByRole("button", { name: /^Rochat David.*Has not opened Quiz yet/ })).toBeInTheDocument();
     // The one primary while someone is in no group, and the secondary.
     expect(screen.getByRole("button", { name: "Form at random" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New group" })).toBeInTheDocument();

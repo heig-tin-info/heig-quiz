@@ -18,7 +18,7 @@ Teacher
 :   Creates courses, classrooms, pools and evaluations, and grades. You are a teacher when an administrator has granted your e-mail address, when a colleague has added you to the staff of a course, or when edu-ID reports you as staff. See [Administration](admin.md).
 
 Student
-:   Sees the classrooms whose roster carries their e-mail address, and the evaluations their teachers open there. A seat is claimed at the first sign-in with a matching address; there is no code to enter. See [For students](students.md).
+:   Sees the classrooms whose roster carries their e-mail address, and the evaluations their teachers open there. A seat is claimed when the student opens Quiz with a matching address; there is no code to enter. See [For students](students.md).
 
 Administrator
 :   One e-mail address named in the server configuration. The administrator grants and revokes the teacher role and reaches every course.
