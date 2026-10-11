@@ -1,7 +1,7 @@
 /** Portal API client: session cookies + double-submit CSRF header. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { CSRF_COOKIE, CSRF_HEADER, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
+import { CSRF_COOKIE, CSRF_HEADER, cookieName, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
 
 import { connection } from "./realtime/connection";
 
@@ -9,13 +9,22 @@ import type { Dict } from "./i18n/en";
 import { translateNow } from "./i18n/current";
 import { configKey, meKey } from "./queryKeys";
 
-function csrfToken(): string {
-  return (
-    document.cookie
+/**
+ * The CSRF cookie's value, for the header of a write: `__Host-quiz_csrf`
+ * where the API runs `Secure` (production, staging), `quiz_csrf` in
+ * development (`cookieName`, audit L8). The prefixed name wins: a bare
+ * cookie a sibling host planted never stands in for ours. The server only
+ * ever compares the header with its own cookie, so reading both names here
+ * widens nothing.
+ */
+export function csrfToken(cookies: string = document.cookie): string {
+  const jar = new Map(
+    cookies
       .split("; ")
-      .find((c) => c.startsWith(`${CSRF_COOKIE}=`))
-      ?.slice(CSRF_COOKIE.length + 1) ?? ""
+      .filter((pair) => pair.includes("="))
+      .map((pair) => [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)] as const),
   );
+  return jar.get(cookieName(CSRF_COOKIE, true)) ?? jar.get(cookieName(CSRF_COOKIE, false)) ?? "";
 }
 
 export class ApiError extends Error {

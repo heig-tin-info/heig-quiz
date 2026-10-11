@@ -20,10 +20,11 @@
  *       * the `quiz_guest` cookie is scoped to `/app/api/p`, is `HttpOnly`,
  *         carries no identity and is worth exactly one vote in one poll;
  *       * the ordinary double-submit CSRF check of `requireSession` does not
- *         apply (there is no session to protect), but when a `quiz_csrf`
- *         cookie IS present — a signed-in teacher or student trying the
- *         poll from their own browser — the header must match it, so a
- *         cross-site form cannot make THEM vote;
+ *         apply (there is no session to protect), but when the CSRF cookie
+ *         IS present — a signed-in teacher or student trying the poll from
+ *         their own browser — the header must match it, so a cross-site
+ *         form cannot make THEM vote; a session cookie without it is
+ *         refused (`csrfRefused`);
  *       * the read never carries the key before the teacher revealed it, and
  *         the question content goes through `studentView` like every other
  *         student payload (invariant 4).

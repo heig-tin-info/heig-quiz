@@ -52,8 +52,22 @@ export const SESSION_KINDS = ["portal", "impersonation", ...TRUSTED_CLIENTS] as 
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
 /**
+ * The name a first-party cookie of `base` takes (audit L8). With `secure`
+ * (production and staging, over https) it carries the `__Host-` prefix: a
+ * browser then keeps it only when it is `Secure`, on `Path=/` and without a
+ * `Domain`, so no sibling host under the same parent domain (the codespace
+ * portal, staging, a neighbour) can set, shadow or fixate it. Browsers refuse
+ * a `__Host-` cookie that is not `Secure`, so development over plain http
+ * keeps the bare name. The one rule for the API, the SPA and the scripts.
+ */
+export function cookieName(base: string, secure: boolean): string {
+  return secure ? `__Host-${base}` : base;
+}
+
+/**
  * The double-submit CSRF pair: the API sets the cookie at sign-in, the SPA
  * copies its value into the header of every write (`apps/web/src/api.ts`).
+ * The base name: the cookie itself is `cookieName(CSRF_COOKIE, secure)`.
  */
 export const CSRF_COOKIE = "quiz_csrf";
 export const CSRF_HEADER = "x-csrf-token";

@@ -9,7 +9,15 @@ import type { AppConfig } from "../config.js";
 import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { errorClass, tracked } from "../serviceHealth.js";
-import { CoachSeenPatch, MePatch, CSRF_COOKIE, CSRF_HEADER, type PublicConfig, type SessionKind } from "@quiz/contracts";
+import {
+  CoachSeenPatch,
+  MePatch,
+  CSRF_COOKIE,
+  CSRF_HEADER,
+  cookieName,
+  type PublicConfig,
+  type SessionKind,
+} from "@quiz/contracts";
 
 import { shownAvatar } from "../modules/avatar.js";
 import { invalid } from "../modules/http.js";
@@ -130,6 +138,16 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   const { config } = opts;
   const provider = new OidcProvider(config, app.log);
   const secure = config.NODE_ENV === "production";
+  /**
+   * The name of a first-party cookie on this instance: `__Host-` prefixed
+   * whenever it is `Secure` (audit L8, `cookieName`). Decorated as
+   * `app.cookieName`, what every other module reads a cookie by.
+   */
+  const named = (base: string) => cookieName(base, secure);
+  const sessionCookie = named(SESSION_COOKIE);
+  const csrfCookie = named(CSRF_COOKIE);
+  const loginStashCookie = named(LOGIN_STASH_COOKIE);
+  app.decorate("cookieName", named);
   // Development, and never production (invariant 3): the persona picker, and
   // an impersonation session that may write (ADR-034). One test, one place.
   const development = config.AUTH_DEV_LOGIN && config.NODE_ENV !== "production";
@@ -148,15 +166,29 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     pair: { token: string; csrf: string | undefined; expires: Date },
   ) => {
     const base = { path: "/", sameSite: confined(auth) ? "strict" : "lax", secure } as const;
-    reply.setCookie(SESSION_COOKIE, pair.token, { ...base, httpOnly: true, expires: pair.expires });
-    if (pair.csrf) reply.setCookie(CSRF_COOKIE, pair.csrf, { ...base, httpOnly: false, expires: pair.expires });
+    reply.setCookie(sessionCookie, pair.token, { ...base, httpOnly: true, expires: pair.expires });
+    if (pair.csrf) reply.setCookie(csrfCookie, pair.csrf, { ...base, httpOnly: false, expires: pair.expires });
   };
 
   /** The pair's end, at sign-out: both cookies cleared on the path they were set on. */
   const clearSessionCookies = (reply: FastifyReply) => {
-    reply.clearCookie(SESSION_COOKIE, { path: "/" });
-    reply.clearCookie(CSRF_COOKIE, { path: "/" });
+    reply.clearCookie(sessionCookie, { path: "/", secure });
+    reply.clearCookie(csrfCookie, { path: "/", secure });
   };
+
+  /**
+   * The bare names a browser may still hold from before the `__Host-`
+   * prefix (audit L8): never read, since a fallback would let a sibling
+   * host's cookie stand in for ours, and expired on the first request that
+   * shows one, so the browser stops sending it. Nothing to do where the
+   * names did not change (development).
+   */
+  const legacyCookies = secure ? [SESSION_COOKIE, CSRF_COOKIE] : [];
+  app.addHook("onRequest", async (req, reply) => {
+    for (const legacy of legacyCookies) {
+      if (req.cookies[legacy] !== undefined) reply.clearCookie(legacy, { path: "/", secure });
+    }
+  });
 
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
@@ -201,7 +233,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       req.caller = callerFor(found.user, null, app.clock.now());
       return;
     }
-    const token = req.cookies[SESSION_COOKIE];
+    const token = req.cookies[sessionCookie];
     if (!token) return;
     // A database failure here propagates on purpose: a lookup that cannot run
     // is an outage, not an anonymous visitor. Falling back to "anonymous"
@@ -247,7 +279,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // Mirror the sliding renewal on the cookies, else the browser drops them
     // while the server-side session is still alive.
     if (found.renewedTo) {
-      setSessionCookies(reply, found.auth, { token, csrf: req.cookies[CSRF_COOKIE], expires: found.renewedTo });
+      setSessionCookies(reply, found.auth, { token, csrf: req.cookies[csrfCookie], expires: found.renewedTo });
     }
   });
 
@@ -256,8 +288,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     if (!req.user) return reply.code(401).send({ error: "unauthenticated" });
     // Double-submit anti-CSRF on every mutation. A bearer token is exempt:
     // a browser never attaches one on its own, which is the whole attack.
+    // A session without its CSRF cookie is refused like a wrong header.
     if (req.authVia === "session" && !SAFE_METHODS.includes(req.method)) {
-      const cookie = req.cookies[CSRF_COOKIE];
+      const cookie = req.cookies[csrfCookie];
       const header = req.headers[CSRF_HEADER];
       if (!cookie || cookie !== header) {
         return reply.code(403).send({ error: "csrf" });
@@ -306,8 +339,10 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // validator, and the path travels in the SIGNED stash cookie beside the
     // PKCE verifier — never in the OIDC `state`, which the IdP echoes back.
     const returnTo = returnToOf(req.query);
-    reply.setCookie(LOGIN_STASH_COOKIE, JSON.stringify({ codeVerifier, state, nonce, returnTo }), {
-      path: "/app/auth",
+    // `Path=/`, which the `__Host-` prefix requires: a stash a sibling host
+    // planted could otherwise sign the browser in to the planter's account.
+    reply.setCookie(loginStashCookie, JSON.stringify({ codeVerifier, state, nonce, returnTo }), {
+      path: "/",
       httpOnly: true,
       sameSite: "lax",
       secure,
@@ -318,7 +353,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   });
 
   app.get("/app/auth/callback", async (req, reply) => {
-    const raw = req.cookies[LOGIN_STASH_COOKIE];
+    const raw = req.cookies[loginStashCookie];
     const unsigned = raw ? req.unsignCookie(raw) : { valid: false as const, value: null };
     if (!unsigned.valid || !unsigned.value) {
       return reply
@@ -331,7 +366,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       nonce: string;
       returnTo?: string;
     };
-    reply.clearCookie(LOGIN_STASH_COOKIE, { path: "/app/auth" });
+    reply.clearCookie(loginStashCookie, { path: "/", secure });
 
     const callbackUrl = new URL(req.raw.url ?? "", config.PUBLIC_URL);
     let claims: OidcClaims;
@@ -388,7 +423,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     LOGOUT_PATH,
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req, reply) => {
-      const token = req.cookies[SESSION_COOKIE];
+      const token = req.cookies[sessionCookie];
       // The audit entry is `deleteSession`'s: `auth.logout`, or the end of an impersonation.
       // And `superpowers.disabled` (`logout`) when they were still on (ADR-054).
       if (token) await deleteSession(app.db, token, app.clock.now());
@@ -511,6 +546,8 @@ declare module "fastify" {
     openSession: (reply: FastifyReply, user: SessionUser, auth?: NewSession) => Promise<void>;
     /** The value of {@link INTERNAL_CALL_HEADER} for this process. */
     internalCallSecret: string;
+    /** The name a first-party cookie of `base` takes on this instance (`cookieName` of `@quiz/contracts`, audit L8). */
+    cookieName: (base: string) => string;
   }
 }
 
