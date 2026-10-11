@@ -82,6 +82,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-081 — Concepts replace tags: one instance-wide, bilingual vocabulary, curated by the admin](ADR-081-vocabulaire-de-notions.md)
 - [ADR-083 — Frequency-domain stimuli for circuit](ADR-083-stimulus-frequentiel-de-circuit.md)
 - [ADR-099 — Regex matchers on RE2: linear matching, bounded programs, refused at publication only](ADR-099-moteur-re2-pour-les-expressions-regulieres.md)
+- [ADR-102 — Mathematical expression answers: a math field, numerical equivalence, no CAS](ADR-102-type-expression-mathematique.md)
 
 ### Evaluations, grading and practice
 

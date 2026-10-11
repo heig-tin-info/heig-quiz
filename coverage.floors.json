@@ -89,6 +89,11 @@
     "branches": 80,
     "functions": 70
   },
+  "packages/qt-math": {
+    "lines": 75,
+    "branches": 70,
+    "functions": 65
+  },
   "packages/registry": {
     "lines": 40,
     "branches": 0,

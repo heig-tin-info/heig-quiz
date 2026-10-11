@@ -15,6 +15,14 @@ import {
   shortReviewStrings,
 } from "@quiz/qt-short/client";
 import {
+  MATH_PROBLEM_KEYS,
+  mathEditorStrings,
+  mathGradingStrings,
+  mathPlayerStrings,
+  mathProblemStrings,
+  mathReviewStrings,
+} from "@quiz/qt-math/client";
+import {
   clozeEditorStrings,
   clozeGradingStrings,
   clozePlayerStrings,
@@ -134,6 +142,12 @@ const DICTIONARIES: [string, object][] = [
   ["qt.diagram.g", diagramGradingStrings],
   // The engine's canvas (`@quiz/diagram`): tools, inspector, text pane.
   ["qt.diagram.c", diagramStrings],
+  ["qt.math.e", mathEditorStrings],
+  ["qt.math.p", mathPlayerStrings],
+  ["qt.math.r", mathReviewStrings],
+  ["qt.math.g", mathGradingStrings],
+  // The problem sentences of the three `math` surfaces, worded once.
+  ["qt.math.problem", mathProblemStrings],
 ];
 
 /**
@@ -143,7 +157,12 @@ const DICTIONARIES: [string, object][] = [
  * `editorStrings.mcq` maps the editor's keys onto them. They are checked by
  * their own case below.
  */
-const MAPPED_ELSEWHERE: Record<string, readonly string[]> = { "qt.mcq.e": MCQ_HOST_MAPPED_KEYS };
+const MAPPED_ELSEWHERE: Record<string, readonly string[]> = {
+  "qt.mcq.e": MCQ_HOST_MAPPED_KEYS,
+  "qt.math.e": MATH_PROBLEM_KEYS,
+  "qt.math.p": MATH_PROBLEM_KEYS,
+  "qt.math.r": MATH_PROBLEM_KEYS,
+};
 
 describe("grading columns (ADR-044)", () => {
   // Every registered type gives the grading table its columns (there is no

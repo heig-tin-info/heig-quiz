@@ -80,6 +80,25 @@ const GUIDES: Record<string, TypeGuide> = {
       ],
     },
   },
+  math: {
+    summary: "Math expression: the student types a formula in a math field; any form equivalent to an accepted answer is right.",
+    rules: [
+      "`symbols` declares the variable names the answer may use (`x`, `R_1`, `omega`), each with the interval `[min, max]` the comparison points are drawn in; `e`, `i` and `pi` are constants, not names.",
+      "`answers` are LaTeX, in order, each with `points` (0..1): the first that matches at the sample points wins. Write the key once; equivalent forms are found by evaluation, never list them.",
+      "`tolerance` is relative (default 1e-6, exact formulas); 0.01 accepts a rounded constant. `samples` (default 10) is how many points are compared.",
+      "`forbidden` names functions the answer may not use, from: sin cos tan asin acos atan sinh cosh tanh sqrt exp ln log abs power; it is shown to the student while typing. Sums, derivatives, factorials and complex numbers have no value here.",
+      '`plot` is `"none"`, `"answer"` (the student\'s expression drawn as they type) or `"target"` (the first answer\'s curve drawn too, as the target to match); a plot needs exactly one symbol.',
+    ],
+    example: {
+      configVersion: 1,
+      prompt: "Donnez la résistance équivalente $R$ de $R_1$ et $R_2$ montées en parallèle.",
+      symbols: [
+        { name: "R_1", min: 1, max: 1000 },
+        { name: "R_2", min: 1, max: 1000 },
+      ],
+      answers: [{ value: "\\frac{R_1 R_2}{R_1+R_2}", points: 1 }],
+    },
+  },
   cloze: {
     summary: "Fill in the blanks: a Markdown text with blanks written inline between double braces.",
     rules: [

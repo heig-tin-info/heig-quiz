@@ -34,6 +34,7 @@ packages/
   qt-brainstorm/ question type: a brainstorm poll's ideas (ADR-071)
   diagram/    the diagram engine: scenes, kinds, router, editor (ADR-046)
   qt-diagram/ question type: a diagram, manual or LLM-proposed grading (ADR-046/063)
+  qt-math/    question type: a formula in a math field, graded by sampling (ADR-102)
 docs/
   guide/      the user guide
   spec/       the product specification
@@ -138,6 +139,7 @@ The application image does not contain it.
 | `@quiz/diagram` | `./server`, `./client` | the diagram engine: the scene and its schema, the catalogue of eight kinds, the router, the text serialisers (`./server`, no parser); `DiagramEditor` and `DiagramView` (`./client`) ([ADR-046](../adr/ADR-046-type-diagramme.md)) |
 | `@quiz/qt-diagram` | `./server`, `./client` | `diagram`, shown as "Diagram": a diagram of the notation the teacher chose, drawn on the engine's canvas and graded by hand beside a reference ([ADR-046](../adr/ADR-046-type-diagramme.md)) |
 | `@quiz/qt-circuit` | `./server`, `./client`, `./canvas` | `circuit`, a two-port schematic graded by simulating it with ngspice through the runner's `spice` language ([ADR-019](../adr/ADR-019-simulation-de-circuit.md)); `./canvas` is the schematic editor |
+| `@quiz/qt-math` | `./server`, `./client` | `math`, shown as "Math expression": a formula typed in MathLive's math field, stored as LaTeX, parsed on the server by Compute Engine and evaluated by a float interpreter of its own (`@quiz/domain/math`), compared to the accepted answers by their values at sample points drawn from the question, never a computer algebra system; an optional SVG graph (docs/spec/04 §4.16, [ADR-102](../adr/ADR-102-type-expression-mathematique.md)) |
 
 ### Server and client halves
 

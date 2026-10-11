@@ -21,6 +21,7 @@ import { brainstormServer } from "@quiz/qt-brainstorm/server";
 import { categorizeServer } from "@quiz/qt-categorize/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
 import { diagramServer } from "@quiz/qt-diagram/server";
+import { mathServer } from "@quiz/qt-math/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
 import { richServer } from "@quiz/qt-rich/server";
 import { shortServer } from "@quiz/qt-short/server";
@@ -37,12 +38,13 @@ export const serverRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeServe
     categorize: categorizeServer,
     diagram: diagramServer,
     brainstorm: brainstormServer,
+    math: mathServer,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */
 export const questionType = makeLookup<AnyQuestionTypeServer>(serverRegistry);
 
-/** The ids that are actually wired up right now (the four MVP types, `circuit`, `codeimage`, `rich`, `categorize`, `diagram` and `brainstorm`). */
+/** The ids that are actually wired up right now (the four MVP types, `circuit`, `codeimage`, `rich`, `categorize`, `diagram`, `brainstorm` and `math`). */
 export const registeredServerIds = (): string[] => registeredIds(serverRegistry);
 
 /**

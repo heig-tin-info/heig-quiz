@@ -31,7 +31,9 @@ export const ANSWER_SUMMARY_MAX = 24;
  * sorted into columns, §4.13 (`packages/qt-categorize`, ADR-036), and
  * `diagram` — a diagram of a chosen notation, graded by hand in v1, §4.14
  * (`packages/qt-diagram`, ADR-046), and `brainstorm` — short ideas a poll
- * gathers into a bubble cloud, with no key (`packages/qt-brainstorm`, ADR-071).
+ * gathers into a bubble cloud, with no key (`packages/qt-brainstorm`, ADR-071),
+ * and `math` — a mathematical expression, compared to the key by sampling,
+ * §4.16 (`packages/qt-math`, ADR-102).
  */
 export const QUESTION_TYPE_IDS = [
   "mcq",
@@ -44,6 +46,7 @@ export const QUESTION_TYPE_IDS = [
   "categorize",
   "diagram",
   "brainstorm",
+  "math",
 ] as const;
 export type QuestionTypeId = (typeof QUESTION_TYPE_IDS)[number];
 

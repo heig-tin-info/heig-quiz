@@ -293,6 +293,9 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
     // A poll's alone: no evaluation of the mock holds one.
     case "brainstorm":
       return "";
+    // `summarizeAnswer` of `@quiz/qt-math`: the LaTeX as typed.
+    case "math":
+      return (answer as { latex?: string }).latex ?? "";
   }
 }
 

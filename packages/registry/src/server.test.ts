@@ -6,6 +6,7 @@ import { circuitLeakFixture } from "@quiz/qt-circuit/testing";
 import { clozeLeakFixture } from "@quiz/qt-cloze/testing";
 import { codeimageLeakFixture, codeLeakFixture } from "@quiz/qt-code/testing";
 import { diagramLeakFixture } from "@quiz/qt-diagram/testing";
+import { mathLeakFixture } from "@quiz/qt-math/testing";
 import { mcqLeakFixture } from "@quiz/qt-mcq/testing";
 import { richLeakFixture } from "@quiz/qt-rich/testing";
 import { shortLeakFixture } from "@quiz/qt-short/testing";
@@ -15,9 +16,9 @@ import { QUESTION_TYPE_IDS, questionType, registeredServerIds, serverRegistry } 
 
 /**
  * The four MVP types, `circuit` (docs/spec/04 §4.11), `codeimage` (§4.9),
- * `rich` (§4.8), `categorize` (§4.13) and `diagram` (§4.14), brought forward.
+ * `rich` (§4.8), `categorize` (§4.13), `diagram` (§4.14) and `math` (§4.16), brought forward.
  */
-const REGISTERED = ["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize", "diagram", "brainstorm"] as const;
+const REGISTERED = ["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize", "diagram", "brainstorm", "math"] as const;
 type RegisteredId = (typeof REGISTERED)[number];
 
 /**
@@ -37,6 +38,7 @@ const CONFIG_VERSIONS: Record<RegisteredId, number> = {
   categorize: 1,
   diagram: 1,
   brainstorm: 1,
+  math: 1,
 };
 
 /**
@@ -58,6 +60,7 @@ const LEAK_FIXTURES: Record<RegisteredId, StudentLeakFixture> = {
   categorize: categorizeLeakFixture,
   diagram: diagramLeakFixture,
   brainstorm: brainstormLeakFixture,
+  math: mathLeakFixture,
 };
 
 /**
@@ -90,7 +93,7 @@ describe("the static registries", () => {
     expect(() => questionType("drawing")).toThrow(UnknownQuestionType);
   });
 
-  it("expose the nine ids", () => {
+  it("expose the eleven ids", () => {
     expect(QUESTION_TYPE_IDS).toEqual([...REGISTERED]);
     expect(Object.keys(serverRegistry)).toEqual([...REGISTERED]);
   });
