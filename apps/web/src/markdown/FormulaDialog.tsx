@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useT } from "../i18n";
 import { areaClass, Button, cx, Modal, Segmented, Spinner, TextInput } from "../ui";
 import { formulaHtml } from "./formula";
-import { useFormulaLabels } from "./MarkdownView";
+import { useFormulaLabels } from "./useFormulaLabels";
 import "./formula.css";
 
 /*

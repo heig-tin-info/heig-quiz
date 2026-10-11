@@ -5,8 +5,8 @@ import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 import type { ClozeTextRenderer } from "@quiz/qt-cloze/client";
 
 import { useT } from "../i18n";
-import { useFormulaLabels } from "./MarkdownView";
 import { HOLE_ATTR, renderMarkdown } from "./render";
+import { useFormulaLabels } from "./useFormulaLabels";
 
 /**
  * The text of a `cloze` question through the app's OWN markdown pipeline —

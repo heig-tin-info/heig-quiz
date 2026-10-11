@@ -6,7 +6,7 @@ import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 
 import { escapableStart, referenceAt } from "./delimiters";
-import { DEFAULT_FORMULA_LABELS, formulaHtml, type FormulaLabels } from "./formula";
+import { formulaHtml, type FormulaLabels } from "./formula";
 
 /*
  * Markdown -> sanitised HTML for content a student reads: question prompts,
@@ -479,8 +479,8 @@ export function renderMarkdown(
      */
     holes?: boolean;
     /** Why a formula was not drawn (`useFormulaLabels`). */
-    formula?: FormulaLabels;
-  } = {},
+    formula: FormulaLabels;
+  },
 ): string {
   if (!source.trim()) return "";
   const holes = options.holes === true ? encodeHoles(source) : null;
@@ -494,6 +494,6 @@ export function renderMarkdown(
     ALLOW_DATA_ATTR: false,
     RETURN_DOM: true,
   }) as unknown as HTMLElement;
-  postProcess(body, codeBlockLabel, holes, options.formula ?? DEFAULT_FORMULA_LABELS);
+  postProcess(body, codeBlockLabel, holes, options.formula);
   return body.innerHTML;
 }

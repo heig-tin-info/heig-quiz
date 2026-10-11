@@ -12,22 +12,13 @@ import { forbiddenMacroDefinition, KATEX_LIMITS } from "@quiz/docrender/katex";
  * (audit L15, `@quiz/docrender/katex`).
  */
 
-/** Why a formula was not drawn, in the reader's language (the caller's `t()`). */
+/** Why a formula was not drawn, in the reader's language (`useFormulaLabels`). */
 export interface FormulaLabels {
   /** It defines a macro (`\def`, `\newcommand`…). */
   macro: string;
   /** It nests deeper than the call stack goes. */
   tooDeep: string;
 }
-
-/**
- * What a caller without a locale gets (this module's tests). Every screen
- * passes its own, from `useFormulaLabels` (MarkdownView.tsx).
- */
-export const DEFAULT_FORMULA_LABELS: FormulaLabels = {
-  macro: "A formula cannot define macros (\\def, \\newcommand…)",
-  tooDeep: "This formula is nested too deeply to display",
-};
 
 /**
  * KaTeX's HTML for `tex`, or — for a formula KaTeX must not see or could not
@@ -45,11 +36,13 @@ export function formulaHtml(tex: string, display: boolean, labels: FormulaLabels
       output: "htmlAndMathml",
       ...KATEX_LIMITS,
     });
-  } catch {
-    return refused(tex, labels.tooDeep);
+  } catch (e) {
+    // Anything else KaTeX did not foresee: its source, no reason to give.
+    return refused(tex, e instanceof RangeError ? labels.tooDeep : null);
   }
 }
 
-function refused(tex: string, reason: string): string {
-  return `<span class="katex-error" title="${escapeHtml(reason)}" style="color:var(--danger)">${escapeHtml(tex)}</span>`;
+function refused(tex: string, reason: string | null): string {
+  const title = reason === null ? "" : ` title="${escapeHtml(reason)}"`;
+  return `<span class="katex-error"${title} style="color:var(--danger)">${escapeHtml(tex)}</span>`;
 }

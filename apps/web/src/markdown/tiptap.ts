@@ -43,7 +43,7 @@ import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table
 import { clozeHoleExtensions } from "./clozeHole";
 import { ParamExpr } from "./paramExpr";
 import { CodeHighlight } from "./codeHighlight";
-import { DEFAULT_FORMULA_LABELS, formulaHtml, type FormulaLabels } from "./formula";
+import { formulaHtml, type FormulaLabels } from "./formula";
 import { REFUSED, type ImageUrl } from "./imageUrl";
 import { assetUrl, assetWidth } from "./render";
 
@@ -123,19 +123,19 @@ const assetImage = (imageUrl?: ImageUrl) => Image.extend({
           element.getAttribute("data-asset") ?? element.getAttribute("src"),
         renderHTML: (attributes: Record<string, unknown>) => {
           const src = typeof attributes.src === "string" ? attributes.src : "";
-          const hosted = imageUrl?.(src) ?? null;
-          if (hosted !== null && hosted !== REFUSED) return { src: hosted, "data-asset": src };
-          const resolved = hosted === REFUSED ? null : assetUrl(src);
+          // The host's URL, else the asset's, else refused.
+          const shown = imageUrl?.(src) ?? assetUrl(src) ?? REFUSED;
           // Refused: no `src` at all, so nothing is fetched; the reference
           // travels in `data-asset`, which the parser reads back.
-          if (resolved === null) return { "data-asset": src, "data-refused": "" };
-          // The WIDTH lives in the reference too (`asset:<id>?w=50`), and it
-          // is rendered as the student's own class so a copy of the editor's
-          // HTML looks like the question. The editor itself draws through the
-          // node view below, which sizes the FRAME rather than the picture.
+          if (shown === REFUSED) return { "data-asset": src, "data-refused": "" };
+          // The WIDTH lives in an asset reference too (`asset:<id>?w=50`), and
+          // it is rendered as the student's own class so a copy of the
+          // editor's HTML looks like the question (100, no class, for any
+          // other src). The editor itself draws through the node view below,
+          // which sizes the FRAME rather than the picture.
           const width = assetWidth(src);
           return {
-            src: resolved,
+            src: shown,
             "data-asset": src,
             ...(width === 100 ? {} : { class: `md-img-${width}` }),
           };
@@ -553,7 +553,7 @@ export interface RichTextSchemaOptions {
   /** Resolves an image's `src` for display (the journal's relative paths). */
   imageUrl?: ImageUrl;
   /** Why a formula atom was not drawn, in the field's language (`useFormulaLabels`). */
-  formulaLabels?: FormulaLabels;
+  formulaLabels: FormulaLabels;
 }
 
 /**
@@ -570,8 +570,8 @@ export function richTextExtensions({
   inline = false,
   cloze = false,
   imageUrl,
-  formulaLabels = DEFAULT_FORMULA_LABELS,
-}: RichTextSchemaOptions = {}): AnyExtension[] {
+  formulaLabels,
+}: RichTextSchemaOptions): AnyExtension[] {
   const base = assetImage(imageUrl);
   const image = imageNodeView ? base.extend({ addNodeView: imageNodeView }) : base;
   const code = codeBlockNodeView

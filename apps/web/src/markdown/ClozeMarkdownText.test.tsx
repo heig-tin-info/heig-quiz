@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { clozeStudentTemplate, parseCloze } from "@quiz/domain/cloze";
 
 import { QuestionHost } from "../student/QuestionHost";
+import { FORMULA_LABELS } from "../test/formula";
 import { renderWithProviders } from "../test/render";
 import { renderMarkdown } from "./render";
 
@@ -84,23 +85,23 @@ describe("cloze text through the app's markdown pipeline", () => {
 
 describe("renderMarkdown — holes", () => {
   it("turns each sentinel into an empty hole element carrying its index", () => {
-    const html = renderMarkdown(studentOf("a {{x}} b {{y}}").template, "Code", { holes: true });
+    const html = renderMarkdown(studentOf("a {{x}} b {{y}}").template, "Code", { holes: true, formula: FORMULA_LABELS });
     expect(html).toContain('<span data-cloze-hole="0"></span>');
     expect(html).toContain('<span data-cloze-hole="1"></span>');
   });
 
   it("never lets the document write a hole of its own", () => {
-    const forged = renderMarkdown('<span data-cloze-hole="0">x</span>', "Code", { holes: true });
+    const forged = renderMarkdown('<span data-cloze-hole="0">x</span>', "Code", { holes: true, formula: FORMULA_LABELS });
     expect(forged).not.toContain("data-cloze-hole");
     // Private-use characters spelled as entities do not forge one either: a
     // run carries a per-render nonce, and only the parser's indices count.
     const template = studentOf("a {{x}} b").template;
-    const entities = renderMarkdown(`${template} &#xE000;&#xE010;&#xE001;`, "Code", { holes: true });
+    const entities = renderMarkdown(`${template} &#xE000;&#xE010;&#xE001;`, "Code", { holes: true, formula: FORMULA_LABELS });
     expect(entities.match(/data-cloze-hole/g)).toHaveLength(1);
     expect(entities).not.toMatch(/[\uE000-\uE1FF]/);
-    const alone = renderMarkdown("&#xE000;&#xE010;&#xE001; x", "Code", { holes: true });
+    const alone = renderMarkdown("&#xE000;&#xE010;&#xE001; x", "Code", { holes: true, formula: FORMULA_LABELS });
     expect(alone).not.toContain("data-cloze-hole");
     // Without `holes`, a sentinel is text like any other.
-    expect(renderMarkdown("a ⸢0⸣ b")).toContain("⸢0⸣");
+    expect(renderMarkdown("a ⸢0⸣ b", "Code", { formula: FORMULA_LABELS })).toContain("⸢0⸣");
   });
 });

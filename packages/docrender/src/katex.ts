@@ -16,7 +16,9 @@
  *   draws a 10 em square, not a black sheet over the grader's screen. It caps
  *   positive sizes only; what a NEGATIVE one (`\kern{-40em}`) pushes out of
  *   the block is clipped by the `contain: paint` of `.md-body`
- *   (`apps/web/src/style.css`).
+ *   (`apps/web/src/style.css`). Not in `.md-inline` (a prompt or a choice
+ *   flowing inside a label): an inline box cannot be contained, so a
+ *   negative size there still paints outside — teachers' content only.
  * - `maxExpand` caps macro expansions per formula (KaTeX's default is 1000).
  *   Built-ins count too: a six-line aligned logic proof (`\iff` = 8,
  *   `\implies` = 10, `\neq` = 4) needs about 70, so 500 leaves a long
@@ -37,30 +39,27 @@
  */
 export const KATEX_LIMITS = { maxSize: 10, maxExpand: 500 } as const;
 
-/** The commands that define or alias a macro (`\global` prefixes them). */
-const MACRO_DEFINITIONS = new Set([
-  "def", "gdef", "edef", "xdef", "let", "futurelet",
-  "newcommand", "renewcommand", "providecommand", "global",
-]);
-
 /**
- * A control sequence as KaTeX's lexer reads one: a control word (letters and
- * `@`) or a control symbol (`\\`, `\{`, …: one character). Reading `\\def`
- * as `\\` then `def` is what keeps a line break followed by `def` legal.
+ * A command that defines or aliases a macro (`\global` prefixes them), a
+ * backslash and the name with no letter after it, WHATEVER precedes the
+ * backslash. Reading the source as KaTeX's lexer does would let `\\def`
+ * through as a line break and letters — and `\verb\!\\def…` makes KaTeX
+ * take that very `\def` as a command again (`\verb` with `\` as its
+ * delimiter). So it refuses more than KaTeX would define: a line break
+ * followed by "def" must be written `\\ def`.
  */
-const CONTROL_SEQUENCE = /\\([A-Za-z@]+|[\s\S])/g;
+const MACRO_DEFINITION =
+  /\\(def|gdef|edef|xdef|let|futurelet|newcommand|renewcommand|providecommand|global)(?![A-Za-z@])/;
 
 /**
  * The first command of `tex` that defines a macro (`"\\def"`), or null.
  * Every renderer calls it before KaTeX and refuses the formula when it
  * answers: a definition is the one way a short formula expands into an
  * unbounded one, and no course formula needs one (nothing in the repository's
- * content, seeds or guides uses any). It over-refuses rather than under:
- * a `\def` inside a comment or `\verb` is refused too.
+ * content, seeds or guides uses any). It over-refuses rather than under: a
+ * `\def` inside a comment, a `\verb` or after `\\` is refused too.
  */
 export function forbiddenMacroDefinition(tex: string): string | null {
-  for (const match of tex.matchAll(CONTROL_SEQUENCE)) {
-    if (MACRO_DEFINITIONS.has(match[1]!)) return `\\${match[1]}`;
-  }
-  return null;
+  const match = MACRO_DEFINITION.exec(tex);
+  return match ? `\\${match[1]}` : null;
 }

@@ -541,19 +541,24 @@ html.dark {
    every one of them into an empty line — a bulleted list came out as items
    floating in blank space (issue #100). `pre` keeps its own `white-space`
    from the user agent. The editing surface wears `.md-body` too, and
-   ProseMirror needs its `pre-wrap`: it is left alone. */
-.md-body:not(.ProseMirror) { white-space: normal; }
-/* What the body draws stays inside the body (audit L15). KaTeX caps a
+   ProseMirror needs its `pre-wrap`: it is left alone.
+
+   What the body draws stays inside the body (audit L15). KaTeX caps a
    formula's positive sizes (`KATEX_LIMITS`), but not a negative one: a
-   `\kern{-40em}` in an essay would push what follows out of the answer and
-   over the grader's own screen, the list of answers beside it included.
-   Paint containment clips it to the block the content belongs to. `overflow-clip-margin` leaves the focus ring of a link or a
-   code block at the edge its 4 px (2 px outline, 2 px offset), where the
-   browser honours it. The editing surface is left out: a selected image or
-   formula draws its ring outside itself. */
+   `\kern{-40em}` in an essay would push what follows out of the answer
+   and over the grader's own screen, the list of answers beside it
+   included. Paint containment clips it to the block the content belongs
+   to. What is merely WIDE — a long inline formula, a matrix — used to
+   spill visibly past the column; clipped, it would be unreadable, so the
+   body scrolls sideways instead. Vertically it clips: KaTeX's struts
+   overhang by a pixel, and a scrollbar for that would be noise. The
+   editing surface is left out of both: a selected image or formula draws
+   its ring outside itself. */
 .md-body:not(.ProseMirror) {
+  white-space: normal;
   contain: paint;
-  overflow-clip-margin: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 /* The span form (`MarkdownView as="span"`, the reviews a grader reads)
    holds nothing but blocks — marked writes paragraphs — so it lays out as a
