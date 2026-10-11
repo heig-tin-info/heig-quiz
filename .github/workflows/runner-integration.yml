@@ -10,9 +10,9 @@ name: Runner integration
 # A PR that touches the runner (profile, engine, images) runs it, and so does
 # a weekly run, which catches Alpine's package updates (a new rustc, a new
 # ngspice). The images are built cold every time: no GitHub Actions cache,
-# which this repository shares with the deploy's buildx layers and which a
-# 1+ GB archive per PR would evict. A cache saved by the scheduled run only
-# can come back if the cold build proves slow on GitHub.
+# which this repository shares with the pnpm stores of every workflow and
+# which a 1+ GB archive per PR would evict. A cache saved by the scheduled
+# run only can come back if the cold build proves slow on GitHub.
 
 on:
   pull_request:
@@ -61,7 +61,7 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
       - uses: actions/setup-node@v7
         with:
           node-version: 24

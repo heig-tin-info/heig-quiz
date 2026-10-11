@@ -11,9 +11,18 @@ pd() { podman --remote --url "$ENGINE_PODMAN_URL" "$@"; }
 
 # pull_retag <repository> <sha> <local tag>: pulls the CI's image of the sha
 # and gives it the tag the quadlet runs (Pull=never: never the registry's
-# moving tag).
+# moving tag). With QUIZ_DEPLOY_DIGEST (set by deploy.sh from the CI's
+# request, audit M8) the pull is by that digest, the bytes the CI built, and
+# the image ID the pull prints is tagged with the sha locally; without it,
+# the pull is by the sha tag.
 pull_retag() {
-	pd pull "$1:$2"
+	local id
+	if [ -n "${QUIZ_DEPLOY_DIGEST:-}" ]; then
+		id=$(pd pull -q "$1@$QUIZ_DEPLOY_DIGEST")
+		pd tag "$id" "$1:$2"
+	else
+		pd pull "$1:$2"
+	fi
 	pd tag "$1:$2" "$1:$3"
 }
 

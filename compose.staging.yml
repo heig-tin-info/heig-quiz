@@ -21,8 +21,9 @@ name: quiz-staging
 
 services:
   app:
-    # The sha is written to .env.image by deploy.sh, so a manual `up -d`
-    # restarts the deployed image, not whatever :latest points to.
+    # The sha, and the digest the CI pushed (`<sha>@sha256:…`), are written
+    # to .env.image by deploy.sh, so a manual `up -d` restarts the deployed
+    # image, not whatever :latest or the sha tag points to.
     image: ghcr.io/heig-tin-info/quiz:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env.staging

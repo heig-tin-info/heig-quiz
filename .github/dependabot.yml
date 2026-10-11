@@ -45,11 +45,17 @@ updates:
       prefix-development: build(deps-dev)
 
   # GitHub Actions. Version updates ARE on here: these never touch the pnpm
-  # lockfile, so they merge without the repair above. There is drift to close —
-  # `actions/setup-node` is pinned at v5 in one workflow and v6 in another, and
-  # `pnpm/action-setup@v4` still targets the deprecated Node 20 runtime.
+  # lockfile, so they merge without the repair above. Every action outside
+  # GitHub's own `actions/*` is pinned by full commit sha with its version in
+  # a `# vX.Y.Z` comment (audit M8): a tag can be moved by whoever controls
+  # the action's repository, a commit cannot. Dependabot bumps the sha and
+  # the comment together. `/` covers .github/workflows/; the composite
+  # action that installs pnpm is listed on its own, or its pin would never
+  # move.
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/setup
     schedule:
       interval: weekly
       day: monday

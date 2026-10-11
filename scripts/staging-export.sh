@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Hand a copy of production's data to staging (ADR-028). Run on the
-# application VM, as `srv`, from the PRODUCTION checkout:
+# Hand a PSEUDONYMIZED copy of production's data to staging (ADR-028, update
+# 2026-10-11). Run on the application VM, as `srv`, from the PRODUCTION
+# checkout:
 #
-#   /srv/quiz/scripts/staging-export.sh
+#   /srv/quiz/scripts/staging-export.sh                      # keep list from .env.prod
+#   /srv/quiz/scripts/staging-export.sh --keep a@b,c@d       # this keep list instead
+#   /srv/quiz/scripts/staging-export.sh --keep-identities    # cutover rehearsal only (below)
 #
 # A copy of this script run from elsewhere (before production has been
 # promoted to the commit that adds it) names the checkout explicitly:
@@ -11,12 +14,32 @@
 #
 # Staging runs as its own account (`srvstg`), which cannot read /srv/quiz:
 # staging executes every commit of main before anyone approves it, so it must
-# never reach production's secrets, volumes or backups. The data therefore
-# travels one way, pushed by production into an inbox staging can only read
-# (`/srv/staging-inbox`, owner srv, group srvstg, mode 2750):
+# never reach production's secrets, volumes or backups, nor its people. The
+# data therefore travels one way, pushed by production into an inbox staging
+# can only read (`/srv/staging-inbox`, owner srv, group srvstg, mode 2750):
 #
-#   quiz.dump    a pg_dump -Fc taken now
+#   quiz.dump    a pg_dump -Fc of a pseudonymized copy, taken now
 #   assets.tar   the question images (content-addressed)
+#
+# The pseudonymization happens HERE, on production's side: the database is
+# copied into a scratch database of production's own PostgreSQL
+# (`staging_export`), scripts/staging-pseudonymize.sql rewrites the copy,
+# and only that copy is dumped, then dropped. A dump carries live rows only,
+# so no real identity reaches the inbox, staging's database or its WAL. The
+# accounts of the keep list are left as they are: STAGING_KEEP_EMAILS of
+# .env.prod (comma-separated addresses), or `--keep`. What is replaced and
+# what is kept: the header of staging-pseudonymize.sql.
+#
+# `--keep-identities` exports the real copy, for the heig-classroom cutover
+# rehearsal only, whose import matches people by their real addresses
+# (docs/merge/10-cutover-runbook.md §1.3); it is refused unless that
+# rehearsal's `hgc.dump` is already in the inbox, and its copies are deleted
+# the same day (that runbook, §5.1).
+#
+# It refuses (exit 3) while production has a live evaluation, with no way
+# to force it, and (exit 4) unless the free space under PostgreSQL's data
+# directory is at least 2.5 times the database (scratch copy, WAL, dump on
+# the same disk): the guards are below, before anything is created.
 #
 # Then, as `srvstg`: ~/quiz-staging/scripts/staging-refresh.sh
 set -euo pipefail
@@ -25,13 +48,74 @@ cd "${QUIZ_PROD_DIR:-$(dirname "$(readlink -f "$0")")/..}"
 INBOX="${QUIZ_STAGING_INBOX:-/srv/staging-inbox}"
 [ -d "$INBOX" ] && [ -w "$INBOX" ] || { echo "staging-export: $INBOX is not a writable directory" >&2; exit 1; }
 
+keep="$(sed -n 's/^STAGING_KEEP_EMAILS=//p' .env.prod 2>/dev/null | tail -n 1 | tr -d "\"'")"
+identities=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --keep) keep="${2:-}"; shift 2 ;;
+    --keep-identities) identities=1; shift ;;
+    *) echo "staging-export: unknown argument '$1' (--keep <addresses> | --keep-identities)" >&2; exit 2 ;;
+  esac
+done
+keep="$(printf '%s' "$keep" | tr -d ' \t\r' | tr '[:upper:]' '[:lower:]')"
+if [ -n "$identities" ] && [ ! -s "$INBOX/hgc.dump" ]; then
+  echo "staging-export: --keep-identities serves the cutover rehearsal only: put its hgc.dump in $INBOX first (cutover runbook §1.3)" >&2
+  exit 2
+fi
+
 if [ "$(id -u)" != 0 ] && [ -z "${DOCKER_HOST:-}" ]; then
   export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
 fi
 PROD=(docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image)
+psql_postgres=("${PROD[@]}" exec -T postgres psql -U quiz -d postgres -v ON_ERROR_STOP=1 -q)
+
+# Production comes first, on a 1-vCPU VM with a small disk. Refused, with
+# nothing created nor written:
+# - under a live evaluation (scripts/live-evaluations.sql, the deploy's
+#   guard): a full copy and dump would compete with the exam for the CPU
+#   and the disk. No `--force`: an export can always wait;
+# - with less free space under PostgreSQL's data directory than 2.5 times
+#   the database: the scratch copy, its WAL and the dump in the inbox (the
+#   same disk) must fit, or PostgreSQL runs out of space and production
+#   stops. A query that cannot run refuses like a failed check.
+live=$("${PROD[@]}" exec -T postgres psql -XAtq -v ON_ERROR_STOP=1 -F $'\t' -U quiz -d quiz < scripts/live-evaluations.sql) \
+  || live="(the live-evaluation query failed: see the error above)"
+if [ -n "$live" ]; then
+  {
+    echo "staging-export: production has a live evaluation (title | state | mode | opens | closes):"
+    printf '%s\n' "$live" | sed 's/\t/ | /g; s/^/  /'
+    echo "staging-export: REFUSED. Export once it has closed."
+  } >&2
+  exit 3
+fi
+db_bytes=$("${PROD[@]}" exec -T postgres psql -XAtq -v ON_ERROR_STOP=1 -U quiz -d quiz -c "SELECT pg_database_size('quiz')") \
+  || db_bytes=
+free_kb=$("${PROD[@]}" exec -T postgres df -Pk /var/lib/postgresql/data | awk 'NR == 2 { print $4 }') \
+  || free_kb=
+if ! [[ "$db_bytes" =~ ^[0-9]+$ && "$free_kb" =~ ^[0-9]+$ ]] || [ $((free_kb * 1024 * 2)) -lt $((db_bytes * 5)) ]; then
+  echo "staging-export: REFUSED: ${free_kb:-?} KiB free under PostgreSQL's data directory, the database is ${db_bytes:-?} bytes; 2.5 times that is needed (scratch copy, its WAL, the dump)." >&2
+  exit 4
+fi
+echo "staging-export: $((free_kb / 1024)) MiB free, database $((db_bytes / 1048576)) MiB"
 
 # Written under a temporary name and renamed: staging never reads half a dump.
-"${PROD[@]}" exec -T postgres pg_dump -Fc -U quiz quiz > "$INBOX/.quiz.dump.part"
+if [ -n "$identities" ]; then
+  echo "staging-export: WARNING: --keep-identities: the copy carries production's real identities (cutover rehearsal)" >&2
+  "${PROD[@]}" exec -T postgres pg_dump -Fc -U quiz quiz > "$INBOX/.quiz.dump.part"
+else
+  echo "staging-export: kept as they are: ${keep:-nobody}"
+  # The scratch copy is dropped however the export ends.
+  trap '"${psql_postgres[@]}" -c "DROP DATABASE IF EXISTS staging_export WITH (FORCE)" || true' EXIT
+  "${psql_postgres[@]}" -c 'DROP DATABASE IF EXISTS staging_export WITH (FORCE)' -c 'CREATE DATABASE staging_export OWNER quiz'
+  "${PROD[@]}" exec -T postgres bash -o pipefail -c \
+    'pg_dump -Fc -U quiz quiz | pg_restore -U quiz -d staging_export --no-owner --role=quiz --exit-on-error'
+  # The keep list as a setting psql quotes (`:'keep'`), never pasted into SQL.
+  {
+    echo "SELECT set_config('quiz.staging_keep_emails', :'keep', false);"
+    cat scripts/staging-pseudonymize.sql
+  } | "${PROD[@]}" exec -T postgres psql -U quiz -d staging_export -v ON_ERROR_STOP=1 -v keep="$keep" -q
+  "${PROD[@]}" exec -T postgres pg_dump -Fc -U quiz staging_export > "$INBOX/.quiz.dump.part"
+fi
 chmod 640 "$INBOX/.quiz.dump.part"
 mv "$INBOX/.quiz.dump.part" "$INBOX/quiz.dump"
 

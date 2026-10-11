@@ -14,18 +14,21 @@
 #
 # The CI's SSH command lands in $SSH_ORIGINAL_COMMAND, matched strictly and
 # never eval'd:
-#   [force] <component> <instance> <sha> <token>
+#   [force] <component> <instance> <sha> [<digest>] <token>
 #       runner prod, codespace prod     the production scope
 #       codespace staging                the staging scope
-#   <sha> <token>
+#   <sha> [<digest>] <token>
 #       the runner, the form the pre-M6-04 apps/runner/deploy/deploy.sh took
 #       and the one the CI still sends it.
 #       TODO(M6-04 follow-up): once root's authorized_keys names this script
 #       (RUNBOOK step 8), the CI sends `runner prod <sha> <token>`, and this
 #       branch and the forwarder apps/runner/deploy/deploy.sh go away.
-# "force" overrides the codespace prod live-session guard. The token is an
-# ephemeral GHCR token, piped to `podman login`; root's auth file is under
-# /run, so nothing survives a reboot.
+# "force" overrides the codespace prod live-session guard. The digest
+# (`sha256:<64 hex>`, what the CI's `image` job pushed for the component)
+# makes the pull `<image>@sha256:…` instead of the sha tag (audit M8,
+# lib.sh's pull_retag); without it the sha tag is pulled, as before. The
+# token is an ephemeral GHCR token, piped to `podman login`; root's auth
+# file is under /run, so nothing survives a reboot.
 #
 # The checkout moves to the deployed sha, detached, and the component's own
 # steps run from it (apps/runner/deploy/install.sh,
@@ -60,32 +63,37 @@ token=
 if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
   request="${SSH_ORIGINAL_COMMAND:-}"
   QUIZ_DEPLOY_FORCE=
+  QUIZ_DEPLOY_DIGEST=
   if [[ "$request" =~ ^force[[:space:]]+(.+)$ ]]; then
     QUIZ_DEPLOY_FORCE=1
     request="${BASH_REMATCH[1]}"
   fi
-  if [[ "$request" =~ ^(runner|codespace)[[:space:]]+([a-z]+)[[:space:]]+([0-9a-f]{40})[[:space:]]+([^[:space:]]+)$ ]]; then
+  digest='((sha256:[0-9a-f]{64})[[:space:]]+)?'
+  if [[ "$request" =~ ^(runner|codespace)[[:space:]]+([a-z]+)[[:space:]]+([0-9a-f]{40})[[:space:]]+$digest([^[:space:]]+)$ ]]; then
     QUIZ_DEPLOY_COMPONENT="${BASH_REMATCH[1]}"
     QUIZ_DEPLOY_INSTANCE="${BASH_REMATCH[2]}"
     QUIZ_DEPLOY_SHA="${BASH_REMATCH[3]}"
-    token="${BASH_REMATCH[4]}"
-  elif [[ "$request" =~ ^([0-9a-f]{40})[[:space:]]+([^[:space:]]+)$ ]]; then
+    QUIZ_DEPLOY_DIGEST="${BASH_REMATCH[5]}"
+    token="${BASH_REMATCH[6]}"
+  elif [[ "$request" =~ ^([0-9a-f]{40})[[:space:]]+$digest([^[:space:]]+)$ ]]; then
     QUIZ_DEPLOY_COMPONENT=runner
     QUIZ_DEPLOY_INSTANCE=prod
     QUIZ_DEPLOY_SHA="${BASH_REMATCH[1]}"
-    token="${BASH_REMATCH[2]}"
+    QUIZ_DEPLOY_DIGEST="${BASH_REMATCH[3]}"
+    token="${BASH_REMATCH[4]}"
   else
-    echo "deploy: malformed request (expected: [force] <component> <instance> <sha> <token>)" >&2
+    echo "deploy: malformed request (expected: [force] <component> <instance> <sha> [<digest>] <token>)" >&2
     exit 2
   fi
-  export QUIZ_DEPLOY_FORCE QUIZ_DEPLOY_COMPONENT QUIZ_DEPLOY_INSTANCE QUIZ_DEPLOY_SHA
+  export QUIZ_DEPLOY_FORCE QUIZ_DEPLOY_COMPONENT QUIZ_DEPLOY_INSTANCE QUIZ_DEPLOY_SHA QUIZ_DEPLOY_DIGEST
 else
   # A hand-over: from a previous copy of this script, which exported the
   # request, or from the pre-M6-04 runner script (through its forwarder),
   # which exports only the sha.
   QUIZ_DEPLOY_COMPONENT="${QUIZ_DEPLOY_COMPONENT:-runner}"
   QUIZ_DEPLOY_INSTANCE="${QUIZ_DEPLOY_INSTANCE:-prod}"
-  export QUIZ_DEPLOY_COMPONENT QUIZ_DEPLOY_INSTANCE
+  QUIZ_DEPLOY_DIGEST="${QUIZ_DEPLOY_DIGEST:-}"
+  export QUIZ_DEPLOY_COMPONENT QUIZ_DEPLOY_INSTANCE QUIZ_DEPLOY_DIGEST
 fi
 
 # What each key may deploy. Checked before the login, and again by the copy

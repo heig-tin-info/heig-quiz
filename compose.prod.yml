@@ -14,8 +14,8 @@
 # .env.prod (apps/runner/deploy/, docs/development/deployment.md §3).
 services:
   app:
-    # Image built in CI and pulled from GHCR -- never built on the VM.
-    # Rollback: IMAGE_TAG=<commit sha> docker compose ... up -d
+    # Built in CI, pulled from GHCR, never built here; deploy.sh writes IMAGE_TAG=<sha>@sha256:<digest> to .env.image.
+    # Rollback: IMAGE_TAG=<commit sha> docker compose ... up -d (the shell's value replaces the digest too)
     image: ghcr.io/heig-tin-info/quiz:${IMAGE_TAG:-latest}
     restart: always
     env_file: .env.prod

@@ -4,7 +4,10 @@
 
 Accepted (2026-09-26, asked for by the product owner after the move to
 Hetzner). Amended 2026-09-28: staging runs as its own account (see *Update
-2026-09-28*).
+2026-09-28*). Amended 2026-10-11 (security audit M8, M9, L17): the copy is
+pseudonymized before it leaves production, which replaces the "not
+anonymized" decision of §3; the deploys pull the image by digest (see
+*Update 2026-10-11*).
 
 Note (2026-10-06, M2-06, [ADR-035](ADR-035-fusion-de-classroom.md)): the
 refresh of §3 also forgets every GitHub installation, archives every
@@ -92,7 +95,8 @@ test of the production dump.
 The data is not anonymized, by the product owner's decision: staging is on
 the same VM, under the same account, as the data it copies, so a copy adds no
 exposure a compromise of the VM would not already give. (The account is no
-longer the same since 2026-09-28; the decision stands, see the update.) Staging is closed
+longer the same since 2026-09-28; the decision stood until 2026-10-11, when
+the copy became pseudonymized: see *Update 2026-10-11*.) Staging is closed
 instead: `LOGIN_ALLOWLIST` (addresses and `@domain` entries) is checked in
 the OIDC callback before any row is written; the super administrator is
 always admitted; empty, the default, admits everyone, as production does.
@@ -129,7 +133,8 @@ ADR-027 (a delegated session), not a development login turned back on.
 - **A staging database rebuilt on every deploy.** It would test every
   migration against fresh data, but erase every test set up by hand.
 - **Anonymizing the copy.** Rejected for now (§3); `staging-refresh.sh` is
-  the one place it would go.
+  the one place it would go. (Adopted as a pseudonymization on 2026-10-11,
+  at the export rather than the refresh.)
 - **Automatic promotion after the health check.** A green `/healthz` says the
   process boots, not that the change is right, and nothing should reach
   production during an exam without someone choosing it.
@@ -161,7 +166,34 @@ account of its own:
 - Staging and production no longer share a Docker daemon or an image store.
 
 The copy is still not anonymized (§3 stands, by the product owner's
-decision): staging stays closed by `LOGIN_ALLOWLIST`. Staging still uses
+decision; replaced on 2026-10-11, see below): staging stays closed by
+`LOGIN_ALLOWLIST`. Staging still uses
 production's edu-ID client and key, copied once by root; registering a
 separate client with its own key is the follow-up that leaves `srvstg`
 holding nothing of production's.
+
+## Update 2026-10-11
+
+§3's "not anonymized" decision is replaced (security audit M9): staging runs
+main's unapproved code, and since the account split of 2026-09-28 its
+premise (same account, no added exposure) no longer held. The copy is now
+**pseudonymized on production's side, before it reaches the inbox**:
+`staging-export.sh` copies production into a scratch database of
+production's PostgreSQL, rewrites who people are there
+(`scripts/staging-pseudonymize.sql`, whose header lists what is replaced
+and what is kept), dumps that copy alone and drops it. Pseudonymizing the
+restored copy on staging instead was rejected: the originals would survive
+in its dead tuples and WAL, readable by that unapproved code. Grades,
+answers and content stay real; the login allowlist stays. A keep list
+(`STAGING_KEEP_EMAILS` in `.env.prod`) leaves the testers' accounts as they
+are; anyone else who signs in on staging gets a new, empty account. The
+`audit_log` trigger (ADR-003 §5) is lifted for that rewrite, on the scratch
+copy only. One exception, `--keep-identities`, serves the heig-classroom
+cutover rehearsal, whose copies are deleted the same day. The scrub also
+empties the secrets kept in rows (audit L17). This concerns the staging copy
+only: pseudonymizing production's accounts is still not a requirement
+(ADR-003, #681).
+
+§2 now pins the bytes too (audit M8): the deploys pull
+`<image>:<sha>@sha256:<digest>`, the digest the CI's `image` job pushed
+([deployment.md §4](../development/deployment.md#4-continuous-deployment)).

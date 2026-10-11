@@ -10,10 +10,12 @@
 # from production into /srv/staging-inbox, never the other way.
 #
 # Never run by a deploy: a refresh wipes whatever a test had prepared.
-# The data is NOT anonymized (a decision of ADR-028): staging is closed by
-# LOGIN_ALLOWLIST instead. What IS removed is every credential production
-# issued -- sessions, launch tickets, API tokens, OAuth grants -- so that
-# nothing minted for production opens a door here; and every GitHub
+# The inbox's copy is already pseudonymized, by staging-export.sh on
+# production's side (ADR-028, update 2026-10-11); staging is closed by
+# LOGIN_ALLOWLIST as well. What this removes is every credential and secret
+# production issued -- sessions, launch tickets, API and OAuth tokens, kiosk
+# and Teams codes, the LLM key, kiosk credentials, poll guests' tokens -- so
+# that nothing minted for production opens a door here; and every GitHub
 # installation and live project, so that staging's own App never acts on a
 # production organization (N-SEC-18).
 #
@@ -40,9 +42,9 @@ echo "staging-refresh: restoring $dump"
   -c 'DROP DATABASE IF EXISTS quiz WITH (FORCE)' -c 'CREATE DATABASE quiz OWNER quiz'
 "${STAGING[@]}" exec -T postgres pg_restore -U quiz -d quiz --no-owner --role=quiz \
   --exit-on-error < "$dump"
-# Production's credentials emptied, its GitHub installations forgotten and
-# its projects archived (N-SEC-18): scripts/staging-scrub.sql, tested against
-# the real migrations by apps/api/src/stagingScrub.db.test.ts.
+# Production's credentials and secrets emptied, its GitHub installations
+# forgotten and its projects archived (N-SEC-18): scripts/staging-scrub.sql,
+# tested against the real migrations by apps/api/src/stagingScrub.db.test.ts.
 "${STAGING[@]}" exec -T postgres psql -U quiz -d quiz -v ON_ERROR_STOP=1 < scripts/staging-scrub.sql
 
 # The question images, content-addressed. The staging directory belongs to
