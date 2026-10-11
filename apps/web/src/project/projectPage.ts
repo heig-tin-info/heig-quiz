@@ -440,3 +440,173 @@ export const repoEntryOf = (p: Pick<ProjectDetail, "groupMode" | "rows">, repoId
  */
 export const offersResync = (p: Pick<ProjectDetail, "groupsDrifted" | "releasedAt" | "archivedAt">): boolean =>
   p.groupsDrifted && p.releasedAt === null && p.archivedAt === null;
+
+// ---------------------------------------------------------------- the dashboard (tiles, filter, rail)
+
+/** What a tile's sub-figure narrows the repositories' table to. `null` is "All". */
+export type RepoFilter = "pending" | "notAccepted" | "noCommit" | "ciFail" | "toVerify" | "alerts";
+
+/** The staff's test repository (ADR-077) is a row of the table and is counted nowhere. */
+const counted = (e: RepoEntry): boolean => !(e.kind === "student" && e.staff);
+/** A group project's student in none of the copy's groups: a row with no repository to wait for. */
+const noGroup = (e: RepoEntry, groupMode: boolean): boolean =>
+  groupMode && e.kind === "student" && e.student.enrollmentId !== null;
+/** A student whose seat left the roster: a repository kept, no roster line any more. */
+const leftRoster = (e: RepoEntry): boolean => e.kind === "student" && e.student.enrollmentId === null;
+/** A repository that exists on GitHub and is still the project's: provisioned, not deleted. */
+const liveRepo = (e: RepoEntry): ProjectRepoView | null =>
+  e.repo !== null && e.repo.provisionStatus === "ok" && !e.repo.flags.deleted ? e.repo : null;
+
+/** Whether `repo` is ready: provisioned, its invitation accepted or none (in group mode: provisioned). */
+const isReady = (repo: ProjectRepoView, groupMode: boolean): boolean =>
+  repo.provisionStatus === "ok" && (groupMode || repo.invitationStatus !== "pending");
+/** Whether `repo` still waits for something: its provisioning, or (individual project) its invitation. */
+const isPending = (repo: ProjectRepoView, groupMode: boolean): boolean =>
+  repo.provisionStatus === "pending" || (!groupMode && repo.provisionStatus === "ok" && repo.invitationStatus === "pending");
+
+/**
+ * One rule per filter, read by the tile's count AND by `filterEntries`, so a
+ * figure and the rows it opens never disagree. Always false for the staff's
+ * test repository.
+ */
+function matches(e: RepoEntry, filter: RepoFilter, groupMode: boolean): boolean {
+  if (!counted(e)) return false;
+  const { repo } = e;
+  switch (filter) {
+    case "pending":
+      return repo !== null && isPending(repo, groupMode);
+    case "notAccepted":
+      return repo === null && !noGroup(e, groupMode);
+    case "noCommit":
+      return liveRepo(e)?.commits === 0;
+    case "ciFail":
+      return liveRepo(e)?.ciStatus === "fail";
+    case "toVerify":
+      return repo !== null && repo.flags.toVerify;
+    case "alerts":
+      return repo !== null && (repo.flags.multiple || repo.flags.protectionSuspended);
+  }
+}
+
+/** The rows a filter keeps; `null` keeps all of them, the staff's test row included. */
+export function filterEntries(entries: RepoEntry[], filter: RepoFilter | null, groupMode: boolean): RepoEntry[] {
+  return filter === null ? entries : entries.filter((e) => matches(e, filter, groupMode));
+}
+
+/**
+ * Every figure of the four tiles, counted once over the page's rows (one per
+ * `repoEntries`, a group's in group mode; the staff's test repository
+ * excluded from all of them).
+ *
+ * `acceptance`: `ready` / `pending` / `none` are the ring's parts (a group
+ * project's `pending` is not drawn, an invitation being one member's);
+ * `provisionErrors`, `noGroup` and `leftRoster` are not parts, they are said
+ * in words. `progress`: `pushed` is the repositories with a commit; the
+ * others are `matches`'s counts. `freeze`: of the live repositories, how
+ * many are frozen. `own`: the repositories with a deadline of their own,
+ * how many are LATER than the project's, and the last of them.
+ */
+export interface ProjectTally {
+  total: number;
+  acceptance: {
+    ready: number;
+    pending: number;
+    none: number;
+    provisionErrors: number;
+    noGroup: number;
+    leftRoster: number;
+  };
+  progress: { pushed: number; noCommit: number; ciFail: number; toVerify: number; alerts: number };
+  freeze: { frozen: number; live: number };
+  own: { n: number; later: number; lastLater: string | null };
+}
+
+export function projectTally(p: Pick<ProjectDetail, "groupMode" | "rows" | "deadlineAt">): ProjectTally {
+  const entries = repoEntries(p).filter(counted);
+  const n = (filter: RepoFilter) => entries.filter((e) => matches(e, filter, p.groupMode)).length;
+  const repos = entries.flatMap((e) => (e.repo ? [e.repo] : []));
+  const live = entries.flatMap((e) => liveRepo(e) ?? []);
+  const own = repos.filter((r) => r.deadlineAt !== null);
+  const later = own.map((r) => r.deadlineAt!).filter((d) => d > p.deadlineAt).sort();
+  return {
+    total: entries.length,
+    acceptance: {
+      ready: entries.filter((e) => e.repo !== null && !leftRoster(e) && isReady(e.repo, p.groupMode)).length,
+      pending: p.groupMode ? 0 : n("pending"),
+      none: n("notAccepted"),
+      provisionErrors: repos.filter((r) => r.provisionStatus === "error").length,
+      noGroup: entries.filter((e) => noGroup(e, p.groupMode) && e.repo === null).length,
+      leftRoster: entries.filter(leftRoster).length,
+    },
+    progress: {
+      pushed: live.filter((r) => r.commits > 0).length,
+      noCommit: n("noCommit"),
+      ciFail: n("ciFail"),
+      toVerify: n("toVerify"),
+      alerts: n("alerts"),
+    },
+    freeze: { frozen: live.filter((r) => r.frozenAt !== null).length, live: live.length },
+    own: { n: own.length, later: later.length, lastLater: later.at(-1) ?? null },
+  };
+}
+
+/** The tone of a repository's commit count: nothing to say, to look at (amber), or past the freeze with nothing at all (red). */
+export type CommitTone = "plain" | "warning" | "danger";
+
+/**
+ * "0 commits" is amber while the work may still come, and red only once the
+ * repository's deadline was applied with no commit and no last commit
+ * received: after the freeze there is nothing left to wait for. A zero with
+ * a last commit (a push the count does not hold, e.g. the App's) stays
+ * amber, and its tooltip says why.
+ */
+export function commitTone(repo: Pick<ProjectRepoView, "commits" | "lastCommit" | "deadlineAppliedAt">): CommitTone {
+  if (repo.commits > 0) return "plain";
+  return repo.deadlineAppliedAt !== null && repo.lastCommit === null ? "danger" : "warning";
+}
+
+/**
+ * The lifecycle rail's steps, in time order: Published, the checkpoints
+ * still to fire or sent, the Deadline, the Freeze, then the checkpoints
+ * the deadline left void (never firing) and the Release. A project graded
+ * `none` has neither checkpoints nor a Release step; `checkpoints` is empty
+ * while the query has not answered.
+ */
+export type RailStep =
+  | { kind: "published"; at: string; done: boolean }
+  | { kind: "checkpoint"; checkpoint: ReviewCheckpoint; status: CheckpointStatus }
+  | { kind: "deadline"; at: string; done: boolean }
+  | {
+      kind: "freeze";
+      graceMinutes: number;
+      frozen: number;
+      live: number;
+      later: number;
+      lastLater: string | null;
+      done: boolean;
+    }
+  | { kind: "release"; at: string | null };
+
+export function railSteps(p: ProjectDetail, checkpoints: ReviewCheckpoint[]): RailStep[] {
+  const graded = p.gradingMode === "auto";
+  const tally = projectTally(p);
+  const byDue = (graded ? checkpoints : [])
+    .map((checkpoint) => ({ checkpoint, status: checkpointStatus(checkpoint, p.deadlineAt) }))
+    .sort((a, b) => a.checkpoint.dueAt.localeCompare(b.checkpoint.dueAt));
+  return [
+    { kind: "published", at: p.startAt, done: p.state !== "draft" },
+    ...byDue.filter((c) => c.status !== "void").map((c): RailStep => ({ kind: "checkpoint", ...c })),
+    { kind: "deadline", at: p.deadlineAt, done: p.deadlineAppliedAt !== null },
+    {
+      kind: "freeze",
+      graceMinutes: p.graceMinutes,
+      frozen: tally.freeze.frozen,
+      live: tally.freeze.live,
+      later: tally.own.later,
+      lastLater: tally.own.lastLater,
+      done: p.state === "locked" && tally.freeze.frozen >= tally.freeze.live,
+    },
+    ...byDue.filter((c) => c.status === "void").map((c): RailStep => ({ kind: "checkpoint", ...c })),
+    ...(graded ? [{ kind: "release", at: p.releasedAt } satisfies RailStep] : []),
+  ];
+}

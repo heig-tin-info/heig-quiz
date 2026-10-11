@@ -6,6 +6,10 @@ import { ApiError } from "../api";
 import { AHEAD, makeCheckpoint, makeGroup, makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
 import {
   checkpointStatus,
+  commitTone,
+  filterEntries,
+  projectTally,
+  railSteps,
   deadlineDesc,
   hasFellBack,
   isReopen,
@@ -450,5 +454,164 @@ describe("one row per group (ADR-070 §4, M3-16b)", () => {
     expect(offersResync(makeProject({ groupsDrifted: false }))).toBe(false);
     expect(offersResync(makeProject({ groupsDrifted: true, releasedAt: PAST }))).toBe(false);
     expect(offersResync(makeProject({ groupsDrifted: true, archivedAt: PAST }))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------- the dashboard
+
+const staffRow = (n: number, repo: ProjectRepoView | null) => ({ ...row(n, repo), staff: true });
+const flagsOf = (n: number, over: Partial<ProjectRepoView["flags"]>): Partial<ProjectRepoView> => ({
+  flags: { ...makeRepo(n).flags, ...over },
+});
+
+describe("the tiles' figures", () => {
+  const rows = [
+    row(1, makeRepo(1)),
+    row(2, makeRepo(2, { invitationStatus: "pending", commits: 0, lastCommit: null })),
+    row(3, makeRepo(3, { provisionStatus: "pending", commits: 0, lastCommit: null })),
+    row(4, makeRepo(4, { provisionStatus: "error", provisionError: "boom" })),
+    row(5, null),
+    row(6, makeRepo(6, { ciStatus: "fail", ...flagsOf(6, { toVerify: true }) })),
+    row(7, makeRepo(7, { ...flagsOf(7, { multiple: true }), frozenAt: PAST })),
+    row(8, makeRepo(8, { ...flagsOf(8, { protectionSuspended: true }), deadlineAt: AHEAD })),
+    { ...row(9, makeRepo(9)), student: { ...makeProject().rows[0]!.student, enrollmentId: null } },
+    staffRow(10, makeRepo(10, { commits: 0, ciStatus: "fail" })),
+  ];
+  const project = makeProject({ rows });
+
+  it("counts the acceptance in the ring's parts, and says the rest in words", () => {
+    const tally = projectTally(project);
+    // The staff's test repository is a row of the table and counted nowhere.
+    expect(tally.total).toBe(9);
+    expect(tally.acceptance).toEqual({
+      // 1, 6, 7, 8 are ready; 4 failed to provision and 9 left the roster are not parts.
+      ready: 4,
+      pending: 2,
+      none: 1,
+      provisionErrors: 1,
+      noGroup: 0,
+      leftRoster: 1,
+    });
+  });
+
+  it("counts the progress with the filters' own rules", () => {
+    const { progress } = projectTally(project);
+    // Pushed: the live repositories with a commit; the staff's and the unprovisioned ones are not.
+    expect(progress).toEqual({ pushed: 5, noCommit: 1, ciFail: 1, toVerify: 1, alerts: 2 });
+    const entries = repoEntries(project);
+    for (const [filter, n] of [
+      ["pending", 2],
+      ["notAccepted", 1],
+      ["noCommit", 1],
+      ["ciFail", 1],
+      ["toVerify", 1],
+      ["alerts", 2],
+    ] as const) {
+      expect(filterEntries(entries, filter, false)).toHaveLength(n);
+    }
+  });
+
+  it("keeps the staff's row under All only, and every row without a filter", () => {
+    const entries = repoEntries(project);
+    expect(filterEntries(entries, null, false)).toHaveLength(10);
+    for (const filter of ["pending", "notAccepted", "noCommit", "ciFail", "toVerify", "alerts"] as const) {
+      expect(filterEntries(entries, filter, false).some((e) => e.kind === "student" && e.staff)).toBe(false);
+    }
+  });
+
+  it("counts a group project per group, with a ring of two parts and an invitation that is nobody's", () => {
+    const g1 = makeGroup(1);
+    const g2 = makeGroup(2);
+    const grouped = makeProject({
+      groupMode: true,
+      rows: [
+        row(1, makeRepo(1, { invitationStatus: "pending" }), {}, g1),
+        row(2, makeRepo(1, { invitationStatus: "pending" }), {}, g1),
+        row(3, null, {}, g2),
+        row(4, null),
+      ],
+    });
+    const tally = projectTally(grouped);
+    expect(tally.total).toBe(3);
+    // One repository for the two members; the student in no group is said, not drawn.
+    expect(tally.acceptance).toMatchObject({ ready: 1, pending: 0, none: 1, noGroup: 1 });
+    expect(filterEntries(repoEntries(grouped), "notAccepted", true).map((e) => e.label)).toEqual(["Groupe 2"]);
+  });
+
+  it("counts the freeze, and the repositories with a later deadline of their own", () => {
+    const later = new Date(Date.parse(AHEAD) + 86_400_000).toISOString();
+    const earlier = new Date(Date.parse(AHEAD) - 86_400_000).toISOString();
+    const tally = projectTally(
+      makeProject({
+        rows: [
+          row(1, makeRepo(1, { frozenAt: PAST, deadlineAt: later })),
+          row(2, makeRepo(2, { deadlineAt: earlier })),
+          row(3, makeRepo(3)),
+        ],
+      }),
+    );
+    expect(tally.freeze).toEqual({ frozen: 1, live: 3 });
+    expect(tally.own).toEqual({ n: 2, later: 1, lastLater: later });
+  });
+});
+
+describe("the commit count's tone", () => {
+  const lastCommit = { sha: "abc", at: PAST };
+  it("is plain with commits, amber for none while the work may come, red once the deadline was applied and nothing was received", () => {
+    expect(commitTone({ commits: 3, lastCommit, deadlineAppliedAt: PAST })).toBe("plain");
+    expect(commitTone({ commits: 0, lastCommit: null, deadlineAppliedAt: null })).toBe("warning");
+    expect(commitTone({ commits: 0, lastCommit: null, deadlineAppliedAt: PAST })).toBe("danger");
+  });
+
+  it("stays amber for a zero with a last commit, even after the deadline", () => {
+    expect(commitTone({ commits: 0, lastCommit, deadlineAppliedAt: PAST })).toBe("warning");
+  });
+});
+
+describe("the lifecycle rail's steps", () => {
+  const kinds = (steps: ReturnType<typeof railSteps>) =>
+    steps.map((s) => (s.kind === "checkpoint" ? `${s.checkpoint.name}:${s.status}` : s.kind));
+  const soon = makeCheckpoint(1, { name: "soon" });
+  const sent = makeCheckpoint(2, { name: "sent", dispatchedAt: PAST, dueAt: PAST });
+  const late = makeCheckpoint(3, {
+    name: "late",
+    dueAt: new Date(Date.parse(AHEAD) + 86_400_000).toISOString(),
+    offsetDays: null,
+  });
+
+  it("runs Published, the checkpoints by date, Deadline, Freeze, the void ones, then Release", () => {
+    const steps = railSteps(makeProject(), [late, soon, sent]);
+    expect(kinds(steps)).toEqual(["published", "sent:dispatched", "soon:scheduled", "deadline", "freeze", "late:void", "release"]);
+    expect(steps.at(-1)).toEqual({ kind: "release", at: null });
+  });
+
+  it("has neither checkpoints nor a Release step for a project graded none", () => {
+    expect(kinds(railSteps(makeProject({ gradingMode: "none" }), [soon]))).toEqual(["published", "deadline", "freeze"]);
+  });
+
+  it("marks Release done with its date once released, and the freeze done once locked and every repository is frozen", () => {
+    const frozen = makeRepo(1, { frozenAt: PAST });
+    const released = makeProject({
+      state: "locked",
+      deadlineAppliedAt: PAST,
+      releasedAt: PAST,
+      rows: [row(1, frozen)],
+    });
+    const steps = railSteps(released, []);
+    expect(steps.at(-1)).toEqual({ kind: "release", at: PAST });
+    expect(steps.find((s) => s.kind === "freeze")).toMatchObject({ done: true, frozen: 1, live: 1 });
+    expect(steps.find((s) => s.kind === "deadline")).toMatchObject({ done: true });
+  });
+
+  it("goes back to an open freeze when the deadline is reopened, and says the later own deadlines", () => {
+    const later = new Date(Date.parse(AHEAD) + 86_400_000).toISOString();
+    const reopened = makeProject({
+      state: "published",
+      deadlineAppliedAt: null,
+      rows: [row(1, makeRepo(1, { deadlineAt: later })), row(2, makeRepo(2))],
+    });
+    const steps = railSteps(reopened, []);
+    expect(steps.find((s) => s.kind === "deadline")).toMatchObject({ done: false });
+    expect(steps.find((s) => s.kind === "freeze")).toMatchObject({ done: false, later: 1, lastLater: later });
   });
 });

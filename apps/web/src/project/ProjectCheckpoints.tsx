@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Flag, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type { ProjectDetail, ReviewCheckpoint, ReviewCheckpointCreate } from "@quiz/contracts";
@@ -9,26 +8,8 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { projectCheckpointsKey } from "../queryKeys";
-import {
-  fromLocalInput,
-  Actions,
-  Badge,
-  Button,
-  Card,
-  Field,
-  FormDialog,
-  FormError,
-  isoDateTime,
-  QueryError,
-  RelativeTime,
-  SectionHeading,
-  Segmented,
-  Skeleton,
-  type Tone,
-} from "../ui";
-import { checkpointStatus, refusalMessage, type CheckpointStatus } from "./projectPage";
-
-const STATUS_TONE: Record<CheckpointStatus, Tone> = { dispatched: "green", void: "zinc", scheduled: "amber" };
+import { fromLocalInput, Field, FormDialog, FormError, Segmented } from "../ui";
+import { refusalMessage } from "./projectPage";
 
 /** The body of a new checkpoint, or null while a field is missing (the name's pattern is the server's). */
 function checkpointBody(name: string, kind: "date" | "offset", local: string, days: string): ReviewCheckpointCreate | null {
@@ -114,17 +95,17 @@ function AddCheckpoint({
 }
 
 /**
- * The review checkpoints (F-PROJ-11, M3-05b): a name and a date, absolute
- * or J−n before the deadline, each dispatching a `grade-milestone` review to
- * every repository not yet at its deadline. Listed with their status — sent,
- * scheduled, or void when the deadline moved before it (it never fires, and
- * may be deleted) —, added through a dialog, deleted after a confirmation;
- * the server refuses the deletion once any dispatch of it was claimed
- * (`409 checkpoint_dispatched`), which is said as such.
+ * The review checkpoints of a project (F-PROJ-11, M3-05b): a name and a
+ * date, absolute or J−n before the deadline, each dispatching a
+ * `grade-milestone` review to every repository not yet at its deadline. The
+ * list, the creation and the deletion, for the lifecycle rail
+ * (`ProjectRail.tsx`) that draws them: the rail asks for the confirmation
+ * before a deletion, and the server refuses it once any dispatch of the
+ * checkpoint was claimed (`409 checkpoint_dispatched`), which is said as such.
  *
- * Drawn for a project graded `auto` only: no review is dispatched otherwise.
+ * Asked for a project graded `auto` only: no review is dispatched otherwise.
  */
-export function ProjectCheckpoints({ project }: { project: ProjectDetail }) {
+export function useCheckpoints(project: ProjectDetail) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
@@ -132,7 +113,11 @@ export function ProjectCheckpoints({ project }: { project: ProjectDetail }) {
   const [adding, setAdding] = useState(false);
   const base = `/app/api/projects/${project.id}/checkpoints`;
 
-  const list = useQuery<ReviewCheckpoint[]>({ queryKey: projectCheckpointsKey(project.id), queryFn: () => api(base) });
+  const list = useQuery<ReviewCheckpoint[]>({
+    queryKey: projectCheckpointsKey(project.id),
+    queryFn: () => api(base),
+    enabled: project.gradingMode === "auto",
+  });
   const refresh = () => qc.invalidateQueries({ queryKey: projectCheckpointsKey(project.id) });
   const create = useMutation({
     mutationFn: (body: ReviewCheckpointCreate) =>
@@ -164,81 +149,16 @@ export function ProjectCheckpoints({ project }: { project: ProjectDetail }) {
     }
   };
 
-  return (
-    <section aria-labelledby="project-checkpoints" className="space-y-3" data-coach="project.checkpoints">
-      <SectionHeading
-        icon={Flag}
-        title={<span id="project-checkpoints">{t("project.checkpoints")}</span>}
-        count={list.data?.length}
-        description={t("project.checkpoints.desc")}
-        actions={
-          <Button variant="secondary" size="sm" disabled={project.archivedAt !== null} onClick={() => setAdding(true)}>
-            <Plus /> {t("project.checkpoints.add")}
-          </Button>
-        }
-      />
-      {list.isLoading ? (
-        <Skeleton className="h-12" />
-      ) : list.isError ? (
-        <QueryError title={t("project.checkpoints.failed")} query={list} />
-      ) : list.data!.length === 0 ? (
-        <p className="text-sm text-fg-muted">{t("project.checkpoints.empty")}</p>
-      ) : (
-        <Card>
-          <ul className="divide-y divide-line">
-            {list.data!.map((c) => {
-              const status = checkpointStatus(c, project.deadlineAt);
-              return (
-                <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
-                  <span className="font-mono text-[13px] font-semibold">{c.name}</span>
-                  <span className="tabular-nums text-[13px] text-fg-muted">
-                    {isoDateTime(c.dueAt)}
-                    {c.offsetDays !== null ? ` · ${t("project.checkpoint.offsetLabel", { n: -c.offsetDays })}` : ""}
-                  </span>
-                  <Badge tone={STATUS_TONE[status]}>
-                    {t(`project.checkpoint.status.${status}`)}
-                    {status === "dispatched" ? (
-                      <>
-                        {" "}
-                        <RelativeTime iso={c.dispatchedAt!} />
-                      </>
-                    ) : null}
-                  </Badge>
-                  {status === "void" ? (
-                    <span className="text-xs text-fg-faint">{t("project.checkpoint.void.desc")}</span>
-                  ) : null}
-                  <span className="ml-auto">
-                    {status !== "dispatched" ? (
-                      <Actions
-                        size="sm"
-                        items={[
-                          {
-                            label: t("project.checkpoint.delete", { name: c.name }),
-                            icon: Trash2,
-                            danger: true,
-                            onSelect: () => void onDelete(c),
-                          },
-                        ]}
-                      />
-                    ) : null}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-      )}
-      {adding ? (
-        <AddCheckpoint
-          onSubmit={(body) => create.mutate(body)}
-          submitting={create.isPending}
-          error={create.error}
-          onClose={() => {
-            create.reset();
-            setAdding(false);
-          }}
-        />
-      ) : null}
-    </section>
-  );
+  const dialog = adding ? (
+    <AddCheckpoint
+      onSubmit={(body) => create.mutate(body)}
+      submitting={create.isPending}
+      error={create.error}
+      onClose={() => {
+        create.reset();
+        setAdding(false);
+      }}
+    />
+  ) : null;
+  return { list, onDelete, openAdd: () => setAdding(true), dialog };
 }

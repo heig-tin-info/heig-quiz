@@ -1,7 +1,7 @@
 import type { PollOutcome } from "@quiz/contracts";
 
 import { useT, type TFunction as T } from "../i18n";
-import { Tip } from "../ui";
+import { RingChart, Tip } from "../ui";
 
 /**
  * How a question fared over its last runs, beside its row in the launcher's
@@ -23,13 +23,6 @@ import { Tip } from "../ui";
  * every share out in words.
  */
 
-const SIZE = 36;
-const THICKNESS = 5;
-const RADIUS = (SIZE - THICKNESS) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-/** The surface gap between two segments, along the ring. */
-const GAP = 2;
-
 function runsLabel(t: T, runs: number): string {
   return runs === 1 ? t("poll.outcome.runsOne") : t("poll.outcome.runs", { n: runs });
 }
@@ -48,54 +41,12 @@ export function outcomeText(t: T, outcome: PollOutcome): string | null {
   return `${parts.join(" · ")} (${runsLabel(t, outcome.runs)})`;
 }
 
-/** The three segment classes, in the fixed clockwise order. */
-export const OUTCOME_STROKES = {
-  correct: "stroke-success",
-  incorrect: "stroke-warning",
-  abstention: "stroke-fg-faint/50",
-} as const;
-
 /** The swatch of the legend, the same token as the segment. */
 export const OUTCOME_FILLS = {
   correct: "bg-success",
   incorrect: "bg-warning",
   abstention: "bg-fg-faint/50",
 } as const;
-
-function Donut({ outcome }: { outcome: Extract<PollOutcome, { kind: "keyed" }> }) {
-  const segments = (
-    [
-      ["correct", outcome.correct.rate],
-      ["incorrect", outcome.incorrect.rate],
-      ["abstention", outcome.abstention?.rate ?? 0],
-    ] as const
-  ).filter(([, rate]) => rate > 0);
-  const gap = segments.length > 1 ? GAP : 0;
-  let start = 0;
-  return (
-    <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90" aria-hidden>
-      {segments.map(([part, rate]) => {
-        const length = rate * CIRCUMFERENCE;
-        const drawn = Math.max(length - gap, 0.75);
-        const offset = -start;
-        start += length;
-        return (
-          <circle
-            key={part}
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={RADIUS}
-            fill="none"
-            strokeWidth={THICKNESS}
-            strokeDasharray={`${drawn} ${CIRCUMFERENCE - drawn}`}
-            strokeDashoffset={offset}
-            className={OUTCOME_STROKES[part]}
-          />
-        );
-      })}
-    </svg>
-  );
-}
 
 export function OutcomeBadge({ outcome }: { outcome: PollOutcome }) {
   const t = useT();
@@ -121,21 +72,17 @@ export function OutcomeBadge({ outcome }: { outcome: PollOutcome }) {
       </Tip>
     );
   }
+  // The ring is the generic one (`ui/ring.tsx`): the parts keep this order, the correct share is the hole.
   return (
-    <Tip label={text}>
-      <span
-        role="img"
-        tabIndex={0}
-        aria-label={text}
-        className="relative grid shrink-0 place-items-center rounded-full"
-        style={{ width: SIZE, height: SIZE }}
-      >
-        <Donut outcome={outcome} />
-        <span className="absolute text-[10px] font-semibold tabular-nums text-fg" aria-hidden>
-          {outcome.correct.percent}
-        </span>
-      </span>
-    </Tip>
+    <RingChart
+      sentence={text}
+      hole={outcome.correct.percent}
+      parts={[
+        { value: outcome.correct.rate, tone: "success", label: "" },
+        { value: outcome.incorrect.rate, tone: "warning", label: "" },
+        { value: outcome.abstention?.rate ?? 0, tone: "faint", label: "" },
+      ]}
+    />
   );
 }
 

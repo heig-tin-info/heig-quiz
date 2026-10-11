@@ -10,7 +10,7 @@ import {
   Card,
   cx,
   EmptyState,
-  isoDateTime,
+  isoDateParts,
   pressable,
   RelativeTime,
   SectionHeading,
@@ -21,9 +21,19 @@ import {
   type Column,
 } from "../ui";
 import { CiBadge, MemberList, RepoLink, Score, StudentAccount, SyncBadge } from "./parts";
-import { repoEntries, repoFlags, reviewTag, shortSha, type RepoEntry } from "./projectPage";
+import {
+  commitTone,
+  filterEntries,
+  repoEntries,
+  repoFlags,
+  reviewTag,
+  shortSha,
+  type CommitTone,
+  type RepoEntry,
+  type RepoFilter,
+} from "./projectPage";
 
-type SortKey = "student" | "score" | "deadline";
+type SortKey = "student" | "score";
 
 /**
  * The identity cell of a row: a group's name over its members, each by name
@@ -96,8 +106,29 @@ function CommitCount({ repo }: { repo: ProjectRepoView }) {
   const tip = live ? t(live.stale ? "project.repo.commitsTipStale" : "project.repo.commitsTip", { n: live.commitCount }) : null;
   return (
     <Tip label={tip}>
-      <span className="text-xs text-fg-faint">{repo.commits === 1 ? t("sproj.commits.one") : t("sproj.commits", { n: repo.commits })}</span>
+      <span className={cx("text-xs", COMMIT_INK[commitTone(repo)])}>
+        {repo.commits === 1 ? t("sproj.commits.one") : t("sproj.commits", { n: repo.commits })}
+      </span>
     </Tip>
+  );
+}
+
+const COMMIT_INK: Record<CommitTone, string> = { plain: "text-fg-faint", warning: "text-warning", danger: "text-danger" };
+
+/**
+ * The last-commit cell: `sha · relative time · n commits` in one. "0 commits"
+ * is amber, and red only once the repository's deadline was applied with
+ * nothing received at all (`commitTone`); a repository that is not
+ * provisioned has no history to speak of.
+ */
+function CommitCell({ repo }: { repo: ProjectRepoView | null }) {
+  if (!repo || repo.provisionStatus !== "ok") return <>—</>;
+  return (
+    <span className="inline-flex flex-wrap items-baseline gap-x-2">
+      {repo.lastCommit ? <span className="font-mono text-xs text-fg-muted">{shortSha(repo.lastCommit.sha)}</span> : null}
+      {repo.lastCommit?.at ? <RelativeTime iso={repo.lastCommit.at} className="text-xs text-fg-muted" /> : null}
+      <CommitCount repo={repo} />
+    </span>
   );
 }
 
@@ -131,6 +162,9 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
         <Badge tone="zinc" icon={Snowflake}>
           {t("project.frozen.provisional")}
         </Badge>
+      ) : null}
+      {repo.deadlineAt !== null ? (
+        <Badge tone="amber">{t("project.repo.ownDeadline", { date: isoDateParts(repo.deadlineAt).date })}</Badge>
       ) : null}
       {review ? <Badge tone={review.tone}>{t(review.key)}</Badge> : null}
       <SyncBadge repo={repo} />
@@ -172,21 +206,23 @@ export function ProjectRepos({
   project,
   onOpen,
   navigate,
+  filter,
+  onFilter,
 }: {
   project: ProjectDetail;
   onOpen: (repoId: string) => void;
   navigate: Navigate;
+  /** The tile sub-figure in force, or `null` for all the rows. */
+  filter: RepoFilter | null;
+  onFilter: (filter: RepoFilter | null) => void;
 }) {
   const t = useT();
   const entries = repoEntries(project);
+  const shown = filterEntries(entries, filter, project.groupMode);
+  const graded = project.gradingMode === "auto";
   const { sorted, sort, toggle } = useSortableTable<RepoEntry, SortKey>(
-    entries,
-    (entry, key) =>
-      key === "student"
-        ? entry.label
-        : key === "score"
-          ? (entry.repo?.scores.final?.points ?? -1)
-          : (entry.repo?.effectiveDeadlineAt ?? ""),
+    shown,
+    (entry, key) => (key === "student" ? entry.label : (entry.repo?.scores.final?.points ?? -1)),
     null,
   );
 
@@ -234,8 +270,7 @@ export function ProjectRepos({
     { key: "repo", label: t("project.col.repo"), sortable: false, className: T.colMid },
     { key: "commit", label: t("project.col.commit"), sortable: false, className: T.colLow },
     { key: "ci", label: t("project.col.ci"), sortable: false, className: T.colMid },
-    { key: "score", label: t("project.col.score"), right: true },
-    { key: "deadline", label: t("project.deadline"), className: T.colHigh },
+    ...(graded ? [{ key: "score", label: t("project.col.score"), right: true } satisfies Column<SortKey>] : []),
     { key: "state", label: t("project.col.state"), sortable: false },
   ];
   const noneAccepted = project.state === "published" && entries.every((e) => e.repo === null);
@@ -246,6 +281,14 @@ export function ProjectRepos({
     <section aria-labelledby="project-repos" className="space-y-3" data-coach="project.repos">
       {heading}
       {noneAccepted ? <p className="text-sm text-fg-muted">{t("project.repos.none")}</p> : null}
+      {filter !== null ? (
+        <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-fg-muted" data-testid="project-filter">
+          {t("project.filter.showing", { filter: t(`project.filter.${filter}`) })} ·
+          <Button variant="ghost" size="sm" onClick={() => onFilter(null)}>
+            {t("project.filter.all")}
+          </Button>
+        </p>
+      ) : null}
       <Card className={`${T.container} overflow-x-auto`}>
         <table className={T.table}>
           <TableHead columns={columns} sort={sort} onToggle={toggle} />
@@ -253,7 +296,6 @@ export function ProjectRepos({
             {sorted.map((entry, index) => {
               const { repo } = entry;
               const opens = repo ? () => onOpen(repo.id) : undefined;
-              const own = repo !== null && repo.deadlineAt !== null;
               return (
                 <tr
                   key={entry.key}
@@ -272,32 +314,16 @@ export function ProjectRepos({
                     <RepoCell repo={repo} />
                   </td>
                   <td className={`${T.td} ${T.colLow} text-fg-muted`}>
-                    {repo?.lastCommit ? (
-                      <span className="inline-flex flex-wrap items-baseline gap-x-2">
-                        <span className="font-mono text-xs">{shortSha(repo.lastCommit.sha)}</span>
-                        {repo.lastCommit.at ? <RelativeTime iso={repo.lastCommit.at} className="text-xs" /> : null}
-                        <CommitCount repo={repo} />
-                      </span>
-                    ) : (
-                      "—"
-                    )}
+                    <CommitCell repo={repo} />
                   </td>
                   <td className={`${T.td} ${T.colMid}`}>
                     <CiBadge status={repo?.ciStatus ?? "none"} />
                   </td>
-                  <td className={`${T.td} text-right`}>
-                    <Score score={repo?.scores.final ?? null} />
-                  </td>
-                  <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>
-                    {repo ? (
-                      <span className="inline-flex flex-wrap items-center gap-2">
-                        {isoDateTime(repo.effectiveDeadlineAt)}
-                        {own ? <Badge tone="amber">{t("project.deadline.own")}</Badge> : null}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
+                  {graded ? (
+                    <td className={`${T.td} text-right`}>
+                      <Score score={repo?.scores.final ?? null} />
+                    </td>
+                  ) : null}
                   <td className={T.td}>{repo ? <StateCell repo={repo} /> : null}</td>
                 </tr>
               );
