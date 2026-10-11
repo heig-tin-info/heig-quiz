@@ -16,11 +16,11 @@ import { countsAsCompleted,
   pastTiming,
   parseCloze,
   poolRoleAllows,
-  programStats,
   round2,
   splitTemplate,
 } from "@quiz/domain";
-import type { BlocksAnswer } from "@quiz/qt-blocks/client";
+import type { BlocksAnswer, BlocksConfig } from "@quiz/qt-blocks/client";
+import { blocksServer } from "@quiz/qt-blocks/server";
 import type {
   EvaluationTiming,
   FeedbackWhen,
@@ -139,8 +139,9 @@ function itemSource(): MockQuestion[] {
   const codeimage = published.filter((q) => q.type === "codeimage");
   // The diagram comes eighth (docs/04 §4.14), after the picture.
   const diagram = published.filter((q) => q.type === "diagram");
-  // The blocks question comes ninth (docs/04 §4.17), after the diagram.
-  const blocks = published.filter((q) => q.type === "blocks");
+  // The blocks question (docs/04 §4.17) is no part of this list: the closed
+  // evaluation gets it last, after the parameterized one (`mock/grading.ts`),
+  // so no item and no draw of the others moves.
   const rest = primary.filter((q) => !["rich", "categorize", "codeimage", "diagram", "blocks"].includes(q.type));
   if (primary.length === 0) return published;
   return [
@@ -151,7 +152,6 @@ function itemSource(): MockQuestion[] {
     ...categorize,
     ...codeimage,
     ...diagram,
-    ...blocks,
     ...rest.slice(3),
   ];
 }
@@ -300,11 +300,9 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
       const { scene } = answer as { scene: { nodes: unknown[]; links: unknown[] } };
       return `${scene.nodes.length} · ${scene.links.length}`;
     }
-    // `summarizeAnswer` of `@quiz/qt-blocks`: the size of the program.
-    case "blocks": {
-      const nodes = programStats((answer as BlocksAnswer).program).nodes;
-      return nodes === 1 ? "1 block" : `${nodes} blocks`;
-    }
+    // The type's own `summarizeAnswer`: the number of blocks.
+    case "blocks":
+      return blocksServer.summarizeAnswer!(frozenConfig(q) as unknown as BlocksConfig, answer as BlocksAnswer);
     // A poll's alone: no evaluation of the mock holds one.
     case "brainstorm":
       return "";
@@ -677,9 +675,9 @@ export const EVAL_ROOM = "r1";
  * resolve to, which is what the screenshot script deep-links to.
  */
 evaluations.push(
-  // Ten items: the eighth is the diagram, the ninth the blocks, the tenth the
-  // cloze, so the correction draws all three.
-  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 10, {
+  // Nine items: the eighth is the diagram, the ninth the cloze, so the
+  // correction draws both.
+  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 9, {
     startedAt: iso(-20 * D),
     closedAt: iso(-20 * D + H),
   }),

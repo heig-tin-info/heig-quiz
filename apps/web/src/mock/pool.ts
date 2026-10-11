@@ -1798,6 +1798,12 @@ export const questionDetail = (q: MockQuestion) => ({
   review: reviewOfLatest(q),
 });
 
+/** The types whose own schema and publication gate the mock runs as they stand. */
+const SCHEMA_CHECKED: Partial<Record<MockQuestion["type"], AnyQuestionTypeServer>> = {
+  diagram: diagramServer,
+  blocks: blocksServer,
+};
+
 /**
  * A deliberately small stand-in for `configSchema.parse` (decision D16): it
  * catches the mistakes a teacher actually makes on these screens, so the
@@ -1852,19 +1858,15 @@ export function draftIssues(
       out.push({ path: ["columns"], code: "custom", message: "categorize.no_target" });
     }
   }
-  if (q.type === "diagram" || q.type === "blocks") {
-    const server = q.type === "diagram" ? diagramServer : blocksServer;
+  const server = SCHEMA_CHECKED[q.type];
+  if (server) {
+    // The type's own gate: its custom schema keys (a map, a battery), or,
+    // once the schema passes, what publication asks beyond it.
     const parsed = server.configSchema.safeParse(config);
-    if (parsed.success) {
-      for (const issue of server.publicationIssues?.(parsed.data as never) ?? []) {
-        out.push({ path: issue.path.map(String), code: "custom", message: issue.message });
-      }
-    } else if (q.type === "blocks") {
-      // The type's own keys (a map, a battery): the editor places each under its field.
-      for (const issue of parsed.error.issues) {
-        if (issue.code === "custom") out.push({ path: issue.path.map(String), code: "custom", message: issue.message });
-      }
-    }
+    const found = parsed.success
+      ? (server.publicationIssues?.(parsed.data) ?? [])
+      : parsed.error.issues.filter((issue) => issue.code === "custom");
+    for (const issue of found) out.push({ path: issue.path.map(String), code: "custom", message: issue.message });
   }
   if (q.type === "cloze") {
     const parse = parseCloze(String(config.text ?? ""));

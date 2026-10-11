@@ -170,6 +170,14 @@ const FALL: MockQuestion | undefined = questions.find((q) => q.id === "q-fall");
 
 const isFall = (q: { id: string }) => q.id === "q-fall";
 
+/*
+ * The blocks question (`q-blocks`, docs/04 §4.17), appended to the `closed`
+ * evaluation after the falling ball for the same reason: its answers come
+ * from each attempt's `ability`, never from `rand()`, so nothing else the
+ * mock draws moves, and no scene's question index either.
+ */
+const BLOCKS: MockQuestion | undefined = questions.find((q) => q.id === "q-blocks");
+
 interface FallValues {
   h: number;
   g: number;
@@ -276,9 +284,6 @@ function mockAnswer(q: MockQuestion, config: Record<string, unknown>, ability: n
   }
   if (q.type === "diagram") {
     return rand() < ability ? { scene: config.reference } : DIAGRAM_ANSWER;
-  }
-  if (q.type === "blocks") {
-    return rand() < ability ? BLOCKS_ANSWER : BLOCKS_STRAIGHT_ANSWER;
   }
   // Short programs and long ones, so the table's box shows its five-line
   // clamp on some rows and not on others.
@@ -420,7 +425,7 @@ function buildGradingWorld(
     items.forEach((item, itemIndex) => {
       const q = questions.find((x) => x.id === item.questionId)!;
       // Its own pass below: nothing of `rand()` is spent on it.
-      if (isFall(q)) return;
+      if (isFall(q) || q.id === BLOCKS?.id) return;
       const config = publishedConfig(q);
       const key = cellKey(attempt.id, item.id);
       // Two students in thirty left this question untouched.
@@ -581,6 +586,36 @@ function buildGradingWorld(
     }
   }
 
+  for (const item of items.filter((i) => i.questionId === BLOCKS?.id)) {
+    for (const [attemptIndex, attempt] of attempts.entries()) {
+      const key = cellKey(attempt.id, item.id);
+      // One student left it blank; the able half read the sensors, the rest counted cells.
+      const answer = attemptIndex === 3 ? null : attempt.ability >= 0.6 ? BLOCKS_ANSWER : BLOCKS_STRAIGHT_ANSWER;
+      if (answer) answers.set(key, answer);
+      const graded = tryAnswer(BLOCKS!, publishedConfig(BLOCKS!), answer) as { points: number; details: unknown };
+      gradings.set(key, [
+        {
+          id: `g${(gradingSeq += 1)}`,
+          answerId: answer ? `${key}-ans` : null,
+          attemptId: attempt.id,
+          itemId: item.id,
+          points: graded.points * item.points,
+          maxPoints: item.points,
+          // Validated at once: the run is the grade (ADR-103 §2).
+          source: "auto",
+          state: "validated",
+          details: graded.details,
+          confidence: null,
+          comment: null,
+          gradedBy: null,
+          gradedAt: iso(-2 * H + attemptIndex * 1000),
+          supersedesId: null,
+          regradeNote: null,
+        },
+      ]);
+    }
+  }
+
   return { evaluation, items, attempts, answers, gradings };
 }
 
@@ -606,6 +641,24 @@ const gradingWorlds: MockGradingWorld[] = [];
       questionVersionId: "vvvvvvvv-0000-4000-8000-00000000fa11",
       type: "short",
       internalName: FALL.internalName,
+      versionNumber: 1,
+      latestVersionNumber: 1,
+      deprecated: false,
+    });
+  }
+  // The blocks question, after it (see `BLOCKS` above).
+  if (closed && BLOCKS && closed.items.length > 0) {
+    closed.items.push({
+      ...closed.items.at(-1)!,
+      id: "iiiiiiii-0000-4000-8000-0000000b10c5",
+      position: closed.items.length,
+      points: 3,
+      milestone: false,
+      bonus: false,
+      questionId: BLOCKS.id,
+      questionVersionId: "vvvvvvvv-0000-4000-8000-0000000b10c5",
+      type: "blocks",
+      internalName: BLOCKS.internalName,
       versionNumber: 1,
       latestVersionNumber: 1,
       deprecated: false,

@@ -130,6 +130,20 @@ const studentEvaluationState = () =>
       : ("running" as const);
 
 /** One question of each MVP type, in French, as `toStudent` would publish it. */
+/** The type of the attempt's question n, at index n − 1. */
+const STUDENT_TYPES = [
+  "mcq",
+  "cloze",
+  "short",
+  "code",
+  "circuit",
+  "codeimage",
+  "rich",
+  "categorize",
+  "diagram",
+  "blocks",
+] as const;
+
 const studentPayloads: Record<number, unknown> = {
   // The mcq whose choices hold a FENCED BLOCK, which is what the rich editor
   // can now write into one (markdown/tiptap.ts): a lead line and a snippet,
@@ -460,32 +474,13 @@ export const studentAttemptView = (): AttemptView => ({
     pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
-  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((n) => {
+  items: (scene === "single" ? [1] : STUDENT_TYPES.map((_, i) => i + 1)).map((n) => {
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
       position: n - 1,
       points: n === 4 ? 5 : n === 5 || n === 7 ? 3 : n === 3 ? 1 : 2,
-      type:
-        n === 1
-          ? "mcq"
-          : n === 2
-            ? "cloze"
-            : n === 3
-              ? "short"
-              : n === 4
-                ? "code"
-                : n === 5
-                  ? "circuit"
-                  : n === 6
-                    ? "codeimage"
-                    : n === 7
-                      ? "rich"
-                      : n === 8
-                        ? "categorize"
-                        : n === 9
-                          ? "diagram"
-                          : "blocks",
+      type: STUDENT_TYPES[n - 1]!,
       milestone: n === 3,
       // The circuit, a bonus question (ADR-052): the player's label.
       bonus: n === 5,

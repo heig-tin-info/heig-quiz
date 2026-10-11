@@ -33,7 +33,7 @@ import type {
   StudentConceptMastery,
   EvaluationDrill,
 } from "@quiz/contracts";
-import { allowDrillWritable, drillLocalDate, drillWeekStarts } from "@quiz/domain";
+import { allowDrillWritable, DRILL_TYPES, drillLocalDate, drillWeekStarts } from "@quiz/domain";
 
 import { conceptRefs, seedConceptIds } from "./concept";
 import { evaluationOr404, evaluations, toEvaluation, type MockEvaluation } from "./evaluation";
@@ -62,8 +62,7 @@ interface MockCard {
   isNew: boolean;
 }
 
-/** The five types of v1 (ADR-041 §3, ADR-103 §10), a published version each, in an interleaved order. */
-const DRILL_TYPES = ["mcq", "short", "cloze", "categorize", "blocks"] as const;
+/** The drill's types (`DRILL_TYPES`, ADR-041 §3), a published version each, in an interleaved order. */
 const drillable = questions.filter(
   (q) => (DRILL_TYPES as readonly string[]).includes(q.type) && q.versions.length > 0 && q.deletedAt === null,
 );

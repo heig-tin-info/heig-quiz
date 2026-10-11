@@ -1376,7 +1376,8 @@ const scenes = [
   // evaluations the classroom list shows.
   // One scene per question type of the table (ADR-044): the closed
   // evaluation holds, in order, code, mcq, circuit, short, rich, categorize,
-  // codeimage, diagram and blocks (`itemSource` in src/mock/evaluation.ts).
+  // codeimage and diagram (`itemSource` in src/mock/evaluation.ts), then the
+  // parameterized question and the blocks one (`mock/grading.ts`).
   { name: "grading", role: "teacher", path: "/evaluations/closed/grading" },
   { name: "grading-code-expanded", role: "teacher", path: "/evaluations/closed/grading", act: async (p) => {
       await p.locator('[role="button"][aria-expanded="false"]').first().click();
@@ -1389,15 +1390,15 @@ const scenes = [
   { name: "grading-codeimage", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 6) },
   { name: "grading-diagram", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 7) },
   { name: "grading-diagram-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 7); await openRow(p, 1); } },
-  // The blocks question, ninth (docs/04 §4.17): the program column, then a row's review in the panel.
-  { name: "grading-blocks", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 8) },
-  { name: "grading-blocks-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 8); await openRow(p, 1); } },
-  // ADR-056 §9: the parameterized question, the closed evaluation's eleventh —
+  // The blocks question, appended last after the parameterized one (docs/04 §4.17): the program column, then a review in the panel.
+  { name: "grading-blocks", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 10) },
+  { name: "grading-blocks-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 10); await openRow(p, 1); } },
+  // ADR-056 §9: the parameterized question, the closed evaluation's tenth —
   // the question as written on the key's row, the rows by verdict, an
   // answer's own values and key, and the variables on the key's panel.
-  { name: "grading-param", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 10) },
-  { name: "grading-param-panel", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => { await nextQuestion(p, 10); await openRow(p, 1); } },
-  { name: "grading-param-expected", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => { await nextQuestion(p, 10); await openRow(p, 0); } },
+  { name: "grading-param", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 9) },
+  { name: "grading-param-panel", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => { await nextQuestion(p, 9); await openRow(p, 1); } },
+  { name: "grading-param-expected", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => { await nextQuestion(p, 9); await openRow(p, 0); } },
   // ADR-044: the table and its layers — the question menu, the answer
   // panel (an answer, the key, the adjustment), the filters, a sort, names.
   { name: "grading-menu", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
