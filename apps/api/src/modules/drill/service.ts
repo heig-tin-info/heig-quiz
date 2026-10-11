@@ -55,3 +55,4 @@ export {
   studentDrillClassrooms,
 } from "./review.js";
 export { classroomActivity, classroomConfidence, classroomMastery, classroomProgress } from "./teacher.js";
+export { studentConceptMastery } from "./studentMastery.js";

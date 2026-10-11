@@ -29,6 +29,8 @@ import type {
   DrillStudentActivity,
   DrillClassroomMastery,
   DrillWeek,
+  ConceptRef,
+  StudentConceptMastery,
   EvaluationDrill,
 } from "@quiz/contracts";
 import { allowDrillWritable, drillLocalDate, drillWeekStarts } from "@quiz/domain";
@@ -198,6 +200,33 @@ const CALIBRATION: DrillCalibrationLevel[] = [
 on("GET", "/app/api/drill/calibration", (): DrillCalibrationLevel[] =>
   flags.unstated ? CALIBRATION.map((l) => ({ ...l, answers: 0, right: 0 })) : CALIBRATION,
 );
+
+/**
+ * The student's own level on the course's concepts (ADR-098): a band each
+ * way, a concept with four cards ("No data yet") and one with none. Only the
+ * classrooms whose drill is on.
+ */
+on("GET", "/app/api/student/classrooms/:id/drill/mastery", (m): StudentConceptMastery => {
+  const id = m.groups!.id!;
+  if (!studentRoomIds().includes(id) || !roomOn(id)) return { declared: false, concepts: [] };
+  const [pointer, allocation, array, loop, types, recursion] = conceptRefs(MASTERY_IDS);
+  const row = (c: ConceptRef, level: StudentConceptMastery["concepts"][number]["level"], cards: number) => ({
+    concept: { id: c.id, label: c.label, qualifier: c.qualifier },
+    level,
+    cards,
+  });
+  return {
+    declared: true,
+    concepts: [
+      row(allocation!, "getting", 14),
+      row(array!, "solid", 22),
+      row(loop!, "solid", 9),
+      row(pointer!, "work", 11),
+      row(recursion!, null, 0),
+      row(types!, null, 4),
+    ],
+  };
+});
 
 // --- Teacher ---------------------------------------------------------------
 

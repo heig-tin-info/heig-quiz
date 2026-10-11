@@ -25,13 +25,14 @@ import {
   type DrillServed,
   type DrillSession,
   type DrillStudentActivity,
+  type StudentConceptMastery,
   type DrillClassroomMastery,
   type EvaluationDrill,
   ANSWER_COORDINATES,
 } from "@quiz/contracts";
 
 import { api } from "../api";
-import { classroomDrillKey, drillCalibrationKey, drillClassroomsKey, drillSessionKey } from "../queryKeys";
+import { classroomDrillKey, drillCalibrationKey, drillClassroomsKey, drillMasteryKey, drillSessionKey } from "../queryKeys";
 import { useCoarsePointer } from "../ui";
 
 /** A write's body, parsed by its contract before it leaves. */
@@ -112,6 +113,14 @@ export function useDrillCalibration(enabled = true) {
     queryKey: drillCalibrationKey,
     queryFn: () => api<DrillCalibrationLevel[]>("/app/api/drill/calibration"),
     enabled,
+  });
+}
+
+/** The student's own level on each concept their course declares (ADR-098): a band, never a number. */
+export function useStudentConceptMastery(classroomId: string) {
+  return useQuery({
+    queryKey: drillMasteryKey(classroomId),
+    queryFn: () => api<StudentConceptMastery>(`/app/api/student/classrooms/${classroomId}/drill/mastery`),
   });
 }
 

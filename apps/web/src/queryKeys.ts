@@ -349,6 +349,8 @@ export const drillClassroomsKey = [...drillRootKey, "classrooms"] as const;
 export const drillSessionKey = (device: string) => [...drillRootKey, "session", device] as const;
 /** The student's own calibration (ADR-085 §8): a finished session moves it. */
 export const drillCalibrationKey = [...drillRootKey, "calibration"] as const;
+/** The student's own concept mastery in one classroom (ADR-098): a finished session moves it. */
+export const drillMasteryKey = (classroomId: string) => [...drillRootKey, "mastery", classroomId] as const;
 /**
  * One card served (`POST /drill/cards/:id/serve`). Outside the `student`
  * root on purpose: a hint must not re-serve a card the student already

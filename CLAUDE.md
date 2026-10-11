@@ -77,6 +77,9 @@ Never work around these, not even "temporarily".
    full configuration passed through `toStudent`, by forbidden-key list AND
    by searching the serialized output for the answer-key values
    (`docs/spec/05-architecture.md`, 5.7).
+   **A student's concept mastery has one exit too**: the student view of the
+   `drill` module (ADR-098), which names only the concepts the course declares,
+   validated, and only from cards whose key the student may already see.
    **The journal's one exit is the student view of the `journal` module**
    (M4-01/M4-02):
    no draft page, no page whose `visible_from` has not passed (the
