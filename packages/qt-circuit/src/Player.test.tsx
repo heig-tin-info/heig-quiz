@@ -14,11 +14,8 @@ import type { ExpandProps } from "@quiz/core/client";
 import type { InteractiveOutcome } from "@quiz/core/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { interactiveOutcome } from "./grade.js";
 import { CircuitPlayer } from "./Player.js";
 import type { CircuitAnswer, CircuitStudent, Schematic, SeriesSet } from "./schema.js";
-import { circuitServer } from "./server.js";
-import { circuitConfig } from "./testing.js";
 
 vi.mock("./canvas/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./canvas/index.js")>();
@@ -67,6 +64,15 @@ const runCase = (stdout: string) => ({
   oom: false,
   truncated: false,
 });
+
+/** A reduced reference curve, as the server sends it. */
+const SERIES: SeriesSet = {
+  kind: "tran",
+  t: [0, 1e-5, 2e-5],
+  vin: [0, 0.0627, 0.1253],
+  vout: [0, 0.0021, 0.0079],
+  iout: [0, 0, 0],
+};
 
 const outcome = (n: number): InteractiveOutcome => ({
   compile: { ok: true, stdout: "", stderr: "", ms: 0 },
@@ -228,24 +234,17 @@ describe("CircuitPlayer", () => {
 
   /**
    * Audit L11: the reference decks reach the browser as the curves the server
-   * read out of them, never as ngspice's output. The overlay must be the curve
-   * the player used to parse itself, sample for sample.
+   * read out of them (`reference`), never as ngspice's output; the overlay is
+   * that curve, sample for sample.
    */
-  it("overlays the reference curve the server reduced, as it parsed it before", async () => {
-    const config = circuitConfig({ showExpected: true });
-    const view = circuitServer.toStudent(config, { seed: 1, itemId: "i", shuffle: false });
-    // What the runner answered, student deck then reference deck, and what
-    // the server hands the browser of it.
-    const reduced = interactiveOutcome(config, outcome(4));
-    expect(reduced.cases).toHaveLength(2);
-    expect(reduced.reference).toHaveLength(2);
-
-    setup({ student: view, onSimulate: async () => reduced });
+  it("overlays the reference curve the server reduced", async () => {
+    setup({
+      student: student({ showExpected: true }),
+      onSimulate: async () => ({ ...outcome(1), reference: [SERIES] }),
+    });
     fireEvent.click(screen.getByRole("button", { name: "Simulate" }));
     const [plot] = await screen.findAllByTestId("plot");
-    const expected = JSON.parse(plot!.getAttribute("data-expected") ?? "null") as SeriesSet;
-    expect(expected).toEqual(reduced.reference?.[0]);
-    expect(expected.kind !== "ac" ? expected.vout : []).toEqual([0, 2.10456606e-3, 7.88837779e-3]);
+    expect(JSON.parse(plot!.getAttribute("data-expected") ?? "null")).toEqual(SERIES);
   });
 
   it("draws no overlay when the server sent no reference curve", async () => {

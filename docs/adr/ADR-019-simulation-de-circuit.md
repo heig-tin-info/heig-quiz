@@ -100,7 +100,7 @@ reads a netlist on the command line and writes a table on stdout.
    the server before the response: the student's own cases stay in `cases`,
    untouched, and each reference case leaves `cases` for `reference`, as its
    decimated curve or `null` when it printed none — never its stdout or
-   stderr. The response is `SimulateResult` (`@quiz/contracts`); the player
+   stderr. The response is `InteractiveOutcome` (`@quiz/core`); the player
    reads the curves instead of parsing the reference's output, and the route
    still knows nothing of netlists. The preview's Simulate answers the same
    shape.

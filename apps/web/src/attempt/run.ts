@@ -8,8 +8,8 @@
  */
 import { useCallback } from "react";
 
-import type { RunAccepted, RunnerResultEvent, SimulateResult } from "@quiz/contracts";
-import type { RunOutcome, RunnerOutcome, SimulateOutcome } from "@quiz/core/server";
+import type { RunAccepted, RunnerResultEvent } from "@quiz/contracts";
+import type { InteractiveOutcome, RunOutcome, RunnerOutcome, SimulateOutcome } from "@quiz/core/server";
 
 import { ApiError, api } from "../api";
 
@@ -88,12 +88,11 @@ export const postRun = (url: string, body: unknown): Promise<RunOutcome> =>
  * `…/simulate`: the student's own button of a type that builds its own
  * request (ADR-019) — the `circuit` player's "Simulate", and the backend half
  * of a `codeimage` "Run" (ADR-021). Only the server may turn a schematic into
- * a SPICE netlist (invariant 14), so its answer is already the runner's: the
- * student's own cases raw, a circuit's reference decks as the curves the
- * server read out of them (audit L11).
+ * a SPICE netlist (invariant 14), so its answer is already the runner's,
+ * reduced by the type (ADR-019 §6).
  */
 export const postSimulate = (url: string, body: unknown): Promise<SimulateOutcome> =>
-  withRefusals(() => post<SimulateResult>(url, body));
+  withRefusals(() => post<InteractiveOutcome>(url, body));
 
 export function useAttemptRun(attemptId: string): RunFn {
   return useCallback<RunFn>(

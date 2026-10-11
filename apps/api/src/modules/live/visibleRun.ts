@@ -6,8 +6,13 @@
  * filtered and judged by one piece of code whoever pressed the button.
  * Nothing here reads the database or calls the runner.
  */
-import type { RunnerResultEvent, SimulateResult } from "@quiz/contracts";
-import type { AnyQuestionTypeServer, RunnerOutcome, RunnerRequest } from "@quiz/core/server";
+import type { RunnerResultEvent } from "@quiz/contracts";
+import type {
+  AnyQuestionTypeServer,
+  InteractiveOutcome,
+  RunnerOutcome,
+  RunnerRequest,
+} from "@quiz/core/server";
 import { caseVerdict } from "@quiz/qt-code/server";
 
 /** What `type.toStudent` exposes about running; read structurally, never cast. */
@@ -98,19 +103,12 @@ export function runButton(
   return type.finalizeRunner ? "run" : null;
 }
 
-/**
- * What a Simulate button hands back (audit L11, ADR-019 §6 as amended
- * 2026-10-11): the type reduces whatever ran of the teacher's work, under
- * the config its request was built from; the student's own cases stay raw.
- * A type with nothing of the teacher's in its request has no hook, and its
- * outcome goes back whole. Read nowhere here: the live module knows nothing
- * of what a case holds.
- */
+/** What a Simulate button hands back, reduced by the type (ADR-019 §6, amended 2026-10-11). */
 export function simulateResult(
   type: AnyQuestionTypeServer,
   config: unknown,
   outcome: RunnerOutcome,
-): SimulateResult {
+): InteractiveOutcome {
   return type.interactiveOutcome?.(config, outcome) ?? outcome;
 }
 

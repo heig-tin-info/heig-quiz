@@ -5,12 +5,13 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { RunnerResultEvent, SimulateResult } from "@quiz/contracts";
+import type { RunnerResultEvent } from "@quiz/contracts";
 import {
   RunnerBusy,
   RunnerUnavailable,
   type AnyQuestionTypeServer,
   type FinalizeContext,
+  type InteractiveOutcome,
   type RunnerOutcome,
   type RunnerRequest,
   type RunnerService,
@@ -259,14 +260,13 @@ interface SimulateInput {
  * and never the reference's waveform. Nothing here inspects the request: the
  * live module does not know what a netlist is.
  *
- * The outcome comes back in the response and nowhere else: raw for the
- * student's own cases, and whatever ran of the teacher's work reduced by the
- * type (`simulateResult`, audit L11). A `code` run needs an SSE frame
- * because its result is a verdict the dashboard also cares about; a
- * simulation is a curve the student asked for, so the response is the
- * delivery.
+ * The outcome comes back in the response and nowhere else, reduced by the
+ * type (`simulateResult`, ADR-019 §6 amended 2026-10-11). A `code` run needs
+ * an SSE frame because its result is a verdict the dashboard also cares
+ * about; a simulation is a curve the student asked for, so the response is
+ * the delivery.
  */
-async function simulateAnswerNow(db: Db, input: SimulateInput): Promise<SimulateResult> {
+async function simulateAnswerNow(db: Db, input: SimulateInput): Promise<InteractiveOutcome> {
   const prepared = await attemptRunContext(db, {
     ...input,
     // A type with a button of its own; one judged case by case goes through

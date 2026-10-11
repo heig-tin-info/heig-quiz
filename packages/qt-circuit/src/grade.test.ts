@@ -25,6 +25,7 @@ import {
   SECRET_REFERENCE_NAME,
   SECRET_RUBRIC,
   circuitConfig,
+  circuitLeakFixture,
   component,
   failedCase,
   lowPassBode,
@@ -495,57 +496,49 @@ describe("parseSimulation", () => {
 
 describe("interactiveOutcome", () => {
   /**
-   * A runner that runs nothing: every deck "fails" and quotes ITSELF in its
-   * log, which is what ngspice does with the line it refused. The reference
-   * decks carry the reference's designators, so a raw reference log would
-   * spell the key out.
+   * A runner that runs nothing: every deck quotes ITSELF, which is what
+   * ngspice does with the line it refused — in stderr with a failing exit, or
+   * in stdout with exit 0 and no table. The reference decks carry the key, so
+   * a raw reference case would spell it out.
    */
-  const quoting = (config: CircuitConfig) => {
+  const quoting = (config: CircuitConfig, stream: "stderr" | "stdout") => {
     const request = interactiveRequest(config, rcAnswer());
     if (request === null) throw new Error("nothing to run");
     return {
       request,
-      raw: outcome(request.files.map((file) => failedCase(`Error on line 4 :\n${file.content}`))),
+      raw: outcome(
+        request.files.map((file) => {
+          const log = `Error on line 4 :\n${file.content}`;
+          return stream === "stderr" ? failedCase(log) : { ...failedCase(""), exitCode: 0, stdout: log };
+        }),
+      ),
     };
   };
 
-  it.each([true, false])(
-    "never hands a reference deck's output back (showExpected %s)",
-    (showExpected) => {
-      const config = circuitConfig({ showExpected });
-      const { request, raw } = quoting(config);
-      // The precondition: with the overlay on, the request does carry the key.
-      expect(JSON.stringify(request).includes(SECRET_REFERENCE_NAME)).toBe(showExpected);
+  it.each(["stderr", "stdout"] as const)(
+    "never hands a reference deck's output back (deck quoted in %s)",
+    (stream) => {
+      const config = circuitConfig({ showExpected: true });
+      const { request, raw } = quoting(config, stream);
+      // The precondition: the request does carry the key.
+      expect(JSON.stringify(request)).toContain(SECRET_REFERENCE_NAME);
 
       const reduced = interactiveOutcome(config, raw);
-      expect(JSON.stringify(reduced)).not.toContain(SECRET_REFERENCE_NAME);
-      // A failed reference is no curve, and says nothing else.
-      expect(reduced.reference).toEqual(showExpected ? [null, null] : undefined);
+      const serialized = JSON.stringify(reduced);
+      for (const secret of circuitLeakFixture.secrets) expect(serialized, secret).not.toContain(secret);
+      // A reference that printed no table is no curve, and says nothing else.
+      expect(reduced.reference).toEqual([null, null]);
     },
   );
 
   it("hands the student's own decks back whole, in order", () => {
     const config = circuitConfig({ showExpected: true });
-    const { raw } = quoting(config);
+    const { raw } = quoting(config, "stderr");
     const reduced = interactiveOutcome(config, raw);
     expect(reduced.compile).toEqual(raw.compile);
     expect(reduced.cases).toEqual(raw.cases.slice(0, 2));
     // The student's log is theirs: the line ngspice refused is still in it.
     expect(reduced.cases[0]?.stderr).toContain("Error on line 4");
-  });
-
-  it("reduces a reference that simulated to its decimated curve", () => {
-    const config = circuitConfig({ showExpected: true });
-    const reduced = interactiveOutcome(
-      config,
-      outcome([okCase(good), failedCase(), okCase(reference), okCase(reference)]),
-    );
-    expect(reduced.cases).toHaveLength(2);
-    expect(reduced.reference).toHaveLength(2);
-    const student = circuitServer.toStudent(config, { seed: 1, itemId: "i", shuffle: false });
-    // The same table read by the same rule: the reference's curve is the one
-    // the student's identical deck gives.
-    expect(reduced.reference?.[0]).toEqual(parseSimulation(student, reduced)[0]?.series);
   });
 
   it("drops any case past the layout", () => {

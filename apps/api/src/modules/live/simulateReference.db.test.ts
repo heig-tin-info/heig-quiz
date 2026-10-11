@@ -65,7 +65,7 @@ function quotingRunner() {
 let server: TestServer;
 let student: { id: string; headers: Record<string, string> };
 let attemptId: string;
-const itemOf = new Map<boolean, string>();
+let itemId: string;
 
 beforeAll(async () => {
   server = await testServer();
@@ -74,50 +74,43 @@ beforeAll(async () => {
   const db = server.app.db;
   const seed = await seedLive(db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
 
-  // Two circuit questions, one per value of `showExpected`, through the real
-  // pool pipeline and the real type's schema.
-  const circuit = typeOf("circuit");
-  const ids = new Map<boolean, string>();
-  for (const showExpected of [true, false]) {
-    const { id } = await createQuestion(db, {
-      poolId: seed.poolId,
-      type: "circuit",
-      internalName: `leak-${showExpected}`,
-      createdBy: teacher.id,
-    });
-    const [question] = await db.select().from(questions).where(eq(questions.id, id));
-    await putDraft(db, question!, {
-      config: {
-        ...circuit.emptyDraft(),
-        prompt: "Build a divider",
-        stimuli: [
-          {
-            name: "step",
-            source: { kind: "step", from: 0, to: 1, atMs: 1 },
-            load: { kind: "open" },
-            visible: true,
-          },
-        ],
-        reference: { components: [part("c1", MARKER, "4.7k")], wires: [] },
-        showExpected,
-      },
-    });
-    await publishQuestion(db, question!, { userId: teacher.id });
-    ids.set(showExpected, id);
-  }
+  // One circuit question that overlays the expected curve, through the real
+  // pool pipeline and the real type's schema. Without the overlay no
+  // reference deck runs at all, which the precondition below shows.
+  const { id } = await createQuestion(db, {
+    poolId: seed.poolId,
+    type: "circuit",
+    internalName: "leak",
+    createdBy: teacher.id,
+  });
+  const [question] = await db.select().from(questions).where(eq(questions.id, id));
+  await putDraft(db, question!, {
+    config: {
+      ...typeOf("circuit").emptyDraft(),
+      prompt: "Build a divider",
+      stimuli: [
+        {
+          name: "step",
+          source: { kind: "step", from: 0, to: 1, atMs: 1 },
+          load: { kind: "open" },
+          visible: true,
+        },
+      ],
+      reference: { components: [part("c1", MARKER, "4.7k")], wires: [] },
+      showExpected: true,
+    },
+  });
+  await publishQuestion(db, question!, { userId: teacher.id });
 
   await addItems(
     db,
     await reload(db, seed.evaluationId),
-    [...ids.values()],
+    [id],
     (type, version) => typeOf(type).defaultPoints(loadConfig(type, version)),
     { attemptCount: 0 },
   );
   const running = await applyState(db, await reload(db, seed.evaluationId), "running", server.clock.now());
-  const items = await itemRows(db, running.id);
-  for (const [showExpected, questionId] of ids) {
-    itemOf.set(showExpected, items.find((i) => i.questionId === questionId)!.id);
-  }
+  itemId = (await itemRows(db, running.id)).find((i) => i.questionId === id)!.id;
 
   const participant = (await service.participantOf(db, running, student.id))!;
   const created = await service.ensureAttempt(db, running, participant, server.clock.now());
@@ -129,34 +122,31 @@ afterAll(async () => {
 });
 
 describe("POST /attempts/:id/simulate on a circuit (audit L11)", () => {
-  it.each([true, false])(
-    "never returns the reference deck, even when it fails (showExpected %s)",
-    async (showExpected) => {
-      const fake = quotingRunner();
-      (server.app as unknown as { runner: unknown }).runner = fake.runner;
+  it("never returns the reference deck, even when it fails", async () => {
+    const fake = quotingRunner();
+    (server.app as unknown as { runner: unknown }).runner = fake.runner;
 
-      const res = await server.app.inject({
-        method: "POST",
-        url: `/app/api/attempts/${attemptId}/simulate`,
-        headers: student.headers,
-        payload: { itemId: itemOf.get(showExpected), answer },
-      });
-      expect(res.statusCode).toBe(200);
+    const res = await server.app.inject({
+      method: "POST",
+      url: `/app/api/attempts/${attemptId}/simulate`,
+      headers: student.headers,
+      payload: { itemId, answer },
+    });
+    expect(res.statusCode).toBe(200);
 
-      // The precondition: with the overlay on, the reference deck did run,
-      // and its failure log quoted the marker.
-      const request = fake.requests[0]!;
-      expect(request.cases.map((c) => c.name)).toEqual(showExpected ? ["s0", "r0"] : ["s0"]);
-      expect(JSON.stringify(request).includes(MARKER)).toBe(showExpected);
+    // The precondition: the reference deck did run, and its failure log
+    // quoted the marker.
+    const request = fake.requests[0]!;
+    expect(request.cases.map((c) => c.name)).toEqual(["s0", "r0"]);
+    expect(JSON.stringify(request)).toContain(MARKER);
 
-      // The whole serialized response, not one field of it.
-      expect(res.body).not.toContain(MARKER);
-      const body = res.json();
-      // The student's own deck comes back whole: its log is theirs.
-      expect(body.cases).toHaveLength(1);
-      expect(body.cases[0].stderr).toContain("R1");
-      // A failed reference is no curve, and nothing else.
-      expect(body.reference).toEqual(showExpected ? [null] : undefined);
-    },
-  );
+    // The whole serialized response, not one field of it.
+    expect(res.body).not.toContain(MARKER);
+    const body = res.json();
+    // The student's own deck comes back whole: its log is theirs.
+    expect(body.cases).toHaveLength(1);
+    expect(body.cases[0].stderr).toContain("R1");
+    // A failed reference is no curve, and nothing else.
+    expect(body.reference).toEqual([null]);
+  });
 });

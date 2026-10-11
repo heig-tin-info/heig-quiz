@@ -11,7 +11,6 @@
  */
 import { z } from "zod";
 
-import { RunnerOutcome } from "@quiz/core/runner";
 import {
   announcedConditionsOn,
   ATTEMPT_CLOSERS,
@@ -494,32 +493,15 @@ export type RunBody = z.infer<typeof RunBody>;
  * service). Invariant 7 is met by the two together — an envelope validated
  * here, a payload validated by the schema the type and the client share.
  *
- * The answer to `POST /app/api/attempts/:id/simulate` is a
- * {@link SimulateResult}: the client half of the type reads it, and no SSE
- * frame repeats it — the response IS the delivery.
+ * The answer to `POST /app/api/attempts/:id/simulate` is the
+ * `InteractiveOutcome` of `@quiz/core`: the client half of the type reads it,
+ * and no SSE frame repeats it — the response IS the delivery.
  */
 export const SimulateBody = z.object({
   itemId: z.uuid(),
   answer: z.unknown(),
 });
 export type SimulateBody = z.infer<typeof SimulateBody>;
-
-/**
- * The answer to `POST /app/api/attempts/:id/simulate` and to the preview's
- * `…/preview/simulate`: the runner's outcome, RAW for the student's own cases
- * only (audit L11, ADR-019 §6 as amended 2026-10-11).
- *
- * `reference` is what the type made of the cases that ran the teacher's work
- * (`InteractiveOutcome` of `@quiz/core`, `QuestionTypeServer.interactiveOutcome`):
- * a `circuit` reference deck reduced to its parsed curve, never the engine's
- * output, which quotes the deck when it fails. Its shape is the type's, like
- * `SimulateBody.answer`'s, and the type's client half parses it with the
- * type's own schema. Absent: nothing of the teacher's ran.
- */
-export const SimulateResult = RunnerOutcome.extend({
-  reference: z.array(z.unknown()).optional(),
-});
-export type SimulateResult = z.infer<typeof SimulateResult>;
 
 // --- Student home ---------------------------------------------------------
 

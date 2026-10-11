@@ -1174,8 +1174,10 @@ on("POST", "/app/api/attempts/:id/events", () => undefined);
 /**
  * `POST /attempts/:id/simulate` (WP11): ngspice on the platform runner.
  *
- * It answers a RAW `RunnerOutcome` — one deck per VISIBLE stimulus, in order
- * — and the `circuit` player parses it itself (`parseSimulation`). The
+ * It answers an `InteractiveOutcome` — the student's deck per VISIBLE
+ * stimulus, raw and in order, and `reference` curves only when the question
+ * overlays them (none here) — and the `circuit` player parses it
+ * (`parseSimulation`). The
  * stdout below is a real transient, so the plot on the screen is a real RC
  * low-pass and not a drawing of one.
  *

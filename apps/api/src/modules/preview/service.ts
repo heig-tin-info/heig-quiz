@@ -37,13 +37,13 @@ import type {
   PreviewItemStatus,
   PreviewSolution,
   RunnerResultEvent,
-  SimulateResult,
 } from "@quiz/contracts";
 import {
   RunnerBusy,
   RunnerUnavailable,
   type FinalizeContext,
   type GradedResult,
+  type InteractiveOutcome,
   type RunnerOutcome,
   type RunnerService,
 } from "@quiz/core/server";
@@ -326,7 +326,7 @@ export async function simulatePreview(
     answer: unknown;
     now: Date;
   },
-): Promise<SimulateResult> {
+): Promise<InteractiveOutcome> {
   const { evaluation, now } = input;
   const { joined, type, config, view, student } = await previewItem(db, evaluation, input.itemId, input.seed);
   // The second test is implied by the first; it is there for TypeScript's narrowing.
@@ -353,8 +353,7 @@ export async function simulatePreview(
   } catch (error) {
     throw runnerDown(error) ?? error;
   }
-  // The student's answer, reduced exactly as the student's own route reduces
-  // it: the preview player reads the one shape (audit L11).
+  // Reduced as the student's own route reduces it: the player reads one shape.
   return simulateResult(type, config, outcome);
 }
 
