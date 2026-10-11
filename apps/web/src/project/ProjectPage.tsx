@@ -34,7 +34,7 @@ import {
   Skeleton,
   type MenuItem,
 } from "../ui";
-import { projectStateLabel, projectStateStyle } from "./common";
+import { projectPhaseLabel, projectPhaseStyle } from "./common";
 import { FIELD_ID } from "./newProject";
 import { ProjectGroupSet } from "./ProjectGroupSet";
 import { projectNotices, projectNoticeToast } from "./projectNotices";
@@ -294,7 +294,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
             ) : (
               project.name
             )}
-            <Badge {...projectStateStyle(project.state)}>{projectStateLabel(project.state, t)}</Badge>
+            {/* The same word as the list's badge: the server's phase (ADR-104). */}
+            <Badge {...projectPhaseStyle(project.phase)}>{projectPhaseLabel(project.phase, t)}</Badge>
             {archived ? <Badge tone="zinc">{t("classrooms.archived")}</Badge> : null}
           </span>
         }

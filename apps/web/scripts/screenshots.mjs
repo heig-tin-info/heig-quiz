@@ -130,7 +130,7 @@ const scenes = [
   { name: "activities-schedule", role: "teacher", path: "/activities", ls: { "quiz-activities-view": "schedule" } },
   { name: "activities-empty", role: "teacher", path: "/activities?empty=1" },
   { name: "activities-error", role: "teacher", path: "/activities?fail=1", settle: 2500 },
-  // M3-10: the projects among the activities (`?projects=1`: three on r1).
+  // M3-10: the projects among the activities (`?projects=1`: five on r1, a graded and a released one among them, ADR-104).
   { name: "activities-projects", role: "teacher", path: "/activities?projects=1" },
   { name: "activities-projects-schedule", role: "teacher", path: "/activities?projects=1", ls: { "quiz-activities-view": "schedule" } },
   // Teacher home (the courses)
@@ -340,6 +340,8 @@ const scenes = [
   // the rows' pull requests.
   { name: "project-sync-banner", role: "teacher", path: "/projects/pj-published?projects=1&ahead=1", settle: 2500 },
   { name: "project-locked", role: "teacher", path: "/projects/pj-locked?projects=1", settle: 2500 },
+  // Frozen, every score final, the release awaited: the `graded` badge and Release as the one action (ADR-104).
+  { name: "project-graded", role: "teacher", path: "/projects/pj-graded?projects=1", settle: 2500 },
   // ADR-047 (M6-06, `?codespace=1`): the workspace section — an online project
   // whose mode a launch froze, with its open workspaces; a draft whose mode the
   // owner with the grant may set; the same draft for an assistant (refused).

@@ -5338,9 +5338,12 @@ export const en = {
   "project.start": "Start",
   "project.deadline": "Deadline",
   "project.loadFailed": "Could not load the projects",
+  // The staff's badge reads the server's phase: the state, `locked` refined by the freeze and the release (ADR-104).
   "project.state.draft": "draft",
   "project.state.published": "published",
   "project.state.locked": "locked",
+  "project.state.graded": "graded",
+  "project.state.released": "released",
 
   // The new project (F-PROJ-01, M3-11, `project/NewProjectPage.tsx`).
   "project.new.desc": "Each student gets a private repository on GitHub, copied from a repository of the classroom's organization. The project is created as a draft: you publish it from its page.",

@@ -75,6 +75,14 @@ describe("the page's states", () => {
     expect((await screen.findAllByText("PRG1-2026"))[0]).toBeInTheDocument();
   });
 
+  it("wears the server's phase in its header badge, the same word as the list (ADR-104)", async () => {
+    routes(frozenProject({ phase: "released", releasedAt: PAST }));
+    renderPage();
+    const heading = within(await screen.findByRole("heading", { level: 1 }));
+    expect(heading.queryByText("locked")).toBeNull();
+    expect(heading.getByText("released").className).toContain("ring-current");
+  });
+
   it("says a 404 is a project that does not exist, or is not the caller's, as the classroom does", async () => {
     routes(fail(404, { message: "Not found" }));
     renderPage();
@@ -606,6 +614,7 @@ const frozenRepo = (n: number, over: Partial<ProjectRepoView> = {}) =>
 const frozenProject = (over: Partial<ProjectDetail> = {}) =>
   makeProject({
     state: "locked",
+    phase: "graded",
     deadlineAt: PAST,
     deadlineAppliedAt: PAST,
     rows: [row(1, frozenRepo(1)), row(2, null)],

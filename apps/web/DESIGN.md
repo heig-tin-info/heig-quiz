@@ -554,8 +554,11 @@ live in `ui/state.ts`, each written once.
   (ADR-104, one table per kind in `evaluation/common.ts` and
   `project/common.ts`): green = open to the students (`running`,
   `published`); amber = the staff's own correction or publication awaited
-  (`lobby`, `paused`, `grading`); zinc = at rest (`draft`, `scheduled`,
-  `closed`, `locked`); outline green = `released`. No solid fill: the soft
+  (`lobby`, `paused`, `grading`, a project `graded`); zinc = at rest
+  (`draft`, `scheduled`, `closed`, `locked`); outline green = `released`,
+  an evaluation's or a project's. A project's badge reads the server's
+  PHASE (`state`, with `locked` refined into `locked` / `graded` /
+  `released`), never the stored state alone. No solid fill: the soft
   green plus the `TimeLeft` timer (icon and "3 h", only in the two tables of
   a classroom's Activities tab) is what marks a live row, so the pill never
   competes with the row's one primary action. The student's activity cards

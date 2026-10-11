@@ -75,6 +75,7 @@ import {
   checkpointRefusal,
   editableProjectFields,
   projectListDates,
+  projectPhase,
   projectPrimaryAction,
   resolveFinalScore,
   reviewState,
@@ -180,12 +181,24 @@ const PJ_GROUP = "0190d3c4-0000-7000-8000-0000000000b4";
 const PJ_GROUP_LIVE = "0190d3c4-0000-7000-8000-0000000000b5";
 const PJ_GROUP_STOPPED = "0190d3c4-0000-7000-8000-0000000000b6";
 
-const SEEDS: { id: string; title: string; state: ProjectSummary["state"]; start: number; deadline: number; groupSet?: string; durationMinutes?: number }[] = [
+const SEEDS: {
+  id: string;
+  title: string;
+  state: ProjectSummary["state"];
+  start: number;
+  deadline: number;
+  groupSet?: string;
+  durationMinutes?: number;
+  /** A locked project whose release is still awaited: `graded` on the lists (ADR-104). */
+  unreleased?: true;
+}[] = [
   { id: "pj-draft", title: "Labo 3 — listes chaînées", state: "draft", start: 7 * D, deadline: 21 * D },
   // A draft published by hand, its deadline a duration: the list shows no date at all (M3-14a).
   { id: "pj-draft-manual", title: "Labo 5 — arbres", state: "draft", start: 0, deadline: 14 * D, durationMinutes: 14 * 24 * 60 },
   { id: "pj-published", title: "Labo 2 — pointeurs", state: "published", start: -7 * D, deadline: 7 * D },
   { id: "pj-locked", title: "Labo 1 — premiers pas en C", state: "locked", start: -35 * D, deadline: -7 * D },
+  // Frozen, every score final, the release awaited: the amber `graded` badge beside the released one.
+  { id: "pj-graded", title: "Labo 0 — prise en main", state: "locked", start: -21 * D, deadline: -2 * D, unreleased: true },
   // `?groups=1`: group projects following PRG1-2026's pairs — a draft, a published one, one stopped.
   ...(flags.groups
     ? [
@@ -461,8 +474,8 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
       // written with the review's maximum, the scored run the final score would otherwise come from.
       if (i === 4) base.teacher = { points: 72, max: 100, comment: "Excellent travail sur la gestion mémoire.", gradedAt: iso(-6 * D) };
       // Released five days ago at the final score of the day; on `i === 5` the review came in after it.
-      // `?unreleased=1`: not released yet — Release is the page's one action.
-      if (!flags.unreleased) {
+      // `?unreleased=1`, or a seed awaiting its release: not released yet — Release is the page's one action.
+      if (!flags.unreleased && !seed.unreleased) {
         const frozenRun = runs.find((r) => r.id === base.frozenRunId)!;
         const final = finalOf(base);
         base.released =
@@ -595,7 +608,7 @@ function seeded(): MockProject[] {
       summary,
       classroom: { id: room.id, name: room.name, courseCode: course?.code ?? "" },
       // The stopped group project waits for its release: the resync is still allowed (M3-16b).
-      releasedAt: seed.state === "locked" && !flags.unreleased && !seed.groupSet ? iso(-5 * D) : null,
+      releasedAt: seed.state === "locked" && !flags.unreleased && !seed.groupSet && !seed.unreleased ? iso(-5 * D) : null,
       repos: seed.groupSet
         ? seedGroupRepos(seed, summary, copy ?? following, classroomRoster(room.id))
         : seedRepos(seed, summary, classroomRoster(room.id)),
@@ -767,11 +780,29 @@ function resyncConsequences(p: MockProject): GroupConsequence[] {
   });
 }
 
+/**
+ * The release's readiness, as the API counts it over the live repositories
+ * (`releaseCounts` of `deadline.ts`, the `unverified` of `detail.ts`): what
+ * the primary action and the phase both read (ADR-104).
+ */
+function readinessOf(p: MockProject) {
+  const live = p.repos.filter((r) => isLive(p, r));
+  return {
+    state: p.summary.state,
+    gradingMode: p.summary.gradingMode,
+    live: live.length,
+    frozen: live.filter((r) => r.frozenAt !== null).length,
+    unverified: live.filter((r) => finalOf(r)?.toVerify === true).length,
+    released: p.releasedAt !== null,
+  };
+}
+
 const activityOf = (p: MockProject): ProjectActivitySummary => ({
   kind: "project",
   id: p.summary.id,
   title: p.summary.name,
   state: p.summary.state,
+  phase: projectPhase(readinessOf(p)),
   classroom: p.classroom,
   ...projectListDates(p.summary),
   source: p.summary.source,
@@ -950,29 +981,25 @@ function detailOf(p: MockProject): ProjectDetail {
   const drifted = p.copy !== null && p.summary.groupSetId !== null && copyKey(p.copy) !== copyKey(setGroupsOf(p.summary.groupSetId));
   const pending = p.resyncReads > 0;
   if (pending) p.resyncReads -= 1;
-  const live = p.repos.filter((r) => isLive(p, r));
+  const readiness = readinessOf(p);
   const views = rows.map((r) => r.repo).filter((r): r is ProjectRepoView => r !== null);
   const counts = {
     students: roster.length,
     accepted: p.repos.length,
     groups: copy.length,
-    live: live.length,
-    frozen: live.filter((r) => r.frozenAt !== null).length,
+    live: readiness.live,
+    frozen: readiness.frozen,
     toVerify: views.filter((r) => r.flags.toVerify).length,
     alerts: views.filter((r) => r.flags.multiple || r.flags.protectionSuspended).length,
   };
   const detail: ProjectDetail = {
     ...p.summary,
+    phase: projectPhase(readiness),
     releasedAt: p.releasedAt,
     primaryAction: projectPrimaryAction({
-      state: p.summary.state,
+      ...readiness,
       archived: p.summary.archivedAt !== null,
-      gradingMode: p.summary.gradingMode,
       sourceAhead: p.sync.aheadAt !== null,
-      live: counts.live,
-      frozen: counts.frozen,
-      unverified: live.filter((r) => finalOf(r)?.toVerify === true).length,
-      released: p.releasedAt !== null,
       changedAfterRelease: views.filter((r) => r.flags.changedAfterRelease).length,
     }),
     counts,
@@ -992,7 +1019,7 @@ function detailOf(p: MockProject): ProjectDetail {
           : null,
     },
     // Stale only when there was live state to read.
-    liveStale: !p.read && live.length > 0,
+    liveStale: !p.read && readiness.live > 0,
     // A stopped copy the set moved away from since (M3-16b); a confirmed resync owed for two reads (R2).
     groupsDrifted: drifted && p.summary.state !== "draft",
     groupSyncPending: pending,

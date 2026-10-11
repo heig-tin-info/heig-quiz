@@ -21,7 +21,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { GradeRunList, ProjectDetail, CSRF_COOKIE, type ProjectGradingScale } from "@quiz/contracts";
+import { GradeRunList, ProjectActivitySummary, ProjectDetail, CSRF_COOKIE, type ProjectGradingScale } from "@quiz/contracts";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
@@ -90,7 +90,34 @@ interface World {
  * A published project of a classroom of `students` claimed students and
  * an organization with Quiz's App; no repository yet.
  */
-async function world(opts: { students?: number; scale?: ProjectGradingScale; state?: "draft" | "published" | "locked" } = {}): Promise<World> {
+type ProjectState = "draft" | "published" | "locked";
+
+/** A project of `classroomId` on the organization `org`, in `state`, its repositories numbered from `n`. */
+async function insertProject(classroomId: string, orgId: string, org: string, state: ProjectState, scale?: ProjectGradingScale): Promise<string> {
+  const n = nextOrg++;
+  const id = randomUUID();
+  await server.app.db.insert(projects).values({
+    id,
+    classroomId,
+    orgId,
+    name: `Lab ${n}`,
+    slug: `lab-${n}`,
+    state,
+    startAt: at("2026-10-01T08:00:00Z"),
+    deadlineAt: at(DEADLINE),
+    sourceRepoId: n,
+    sourceFullName: `${org}/starter-${n}`,
+    distributionRepoId: n + 1,
+    distributionFullName: `${org}/lab-${n}-squashed`,
+    branches: ["main"],
+    protectedFiles: [],
+    gradingScale: scale ?? { kind: "linear", rounding: "nearest" },
+    createdBy: teacher.id,
+  });
+  return id;
+}
+
+async function world(opts: { students?: number; scale?: ProjectGradingScale; state?: ProjectState } = {}): Promise<World> {
   const db = server.app.db;
   const students = await Promise.all(Array.from({ length: opts.students ?? 2 }, () => server.signIn("student")));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
@@ -98,26 +125,14 @@ async function world(opts: { students?: number; scale?: ProjectGradingScale; sta
   const org = `vorg-${n}`;
   const orgId = randomUUID();
   await db.insert(githubOrganizations).values({ id: orgId, login: org, githubOrgId: n, installationId: n });
-  const projectId = randomUUID();
-  await db.insert(projects).values({
-    id: projectId,
-    classroomId: seeded.classroomId,
-    orgId,
-    name: "Lab",
-    slug: `lab-${n}`,
-    state: opts.state ?? "published",
-    startAt: at("2026-10-01T08:00:00Z"),
-    deadlineAt: at(DEADLINE),
-    sourceRepoId: n,
-    sourceFullName: `${org}/starter`,
-    distributionRepoId: n + 1,
-    distributionFullName: `${org}/lab-squashed`,
-    branches: ["main"],
-    protectedFiles: [],
-    gradingScale: opts.scale ?? { kind: "linear", rounding: "nearest" },
-    createdBy: teacher.id,
-  });
+  const projectId = await insertProject(seeded.classroomId, orgId, org, opts.state ?? "published", opts.scale);
   return { projectId, classroomId: seeded.classroomId, org, students };
+}
+
+/** Another project of `w`'s classroom and organization, in `state`: the list then holds one more. */
+async function sibling(w: World, state: ProjectState): Promise<string> {
+  const [own] = await server.app.db.select({ orgId: projects.orgId }).from(projects).where(eq(projects.id, w.projectId));
+  return insertProject(w.classroomId, own!.orgId, w.org, state);
 }
 
 type RepoPatch = Partial<typeof projectRepos.$inferInsert>;
@@ -400,6 +415,98 @@ describe("the project page (F-PROJ-13)", () => {
     expect(rowOf(changed, s1!.id).repo).toMatchObject({ released: { points: 8, max: 10 }, flags: { changedAfterRelease: true } });
     expect(rowOf(changed, s2!.id).repo!.flags.changedAfterRelease).toBe(false);
     expect(changed.primaryAction).toBe("release");
+  });
+
+  describe("the staff's phase of a project (ADR-104)", () => {
+    const frozenAt = at("2026-10-09T22:30:00Z");
+    const frozen = { deadlineAppliedAt: frozenAt, frozenAt };
+    /** The classroom's list, as `GET /classrooms/:id/projects` serves it to the staff. */
+    const list = async (classroomId: string) => {
+      const res = await call(`/app/api/classrooms/${classroomId}/projects`, teacher.headers);
+      expect(res.statusCode, res.body).toBe(200);
+      return ProjectActivitySummary.array().parse(res.json());
+    };
+    /** The list's phase of `w`'s project, the page's header agreeing with it. */
+    const phaseOf = async (w: World) => {
+      const row = (await list(w.classroomId)).find((r) => r.id === w.projectId)!;
+      expect((await detail(w.projectId)).phase).toBe(row.phase);
+      return row.phase;
+    };
+
+    it("is graded once every live repository is frozen with nothing to verify, released once released — a changed score notwithstanding", async () => {
+      const w = await world({ students: 3, state: "locked" });
+      const [s1, s2, s3] = w.students;
+      const r1 = await repoOf(w, s1!.id, frozen);
+      const r2 = await repoOf(w, s2!.id, { deadlineAppliedAt: frozenAt });
+      // Deleted on GitHub: not live, so it never holds the phase back.
+      await repoOf(w, s3!.id, { deletedAt: at(NOW) });
+      for (const repo of [r1, r2]) {
+        const scored = await run(repo, "2026-10-09T20:00:00Z");
+        await setRepo(repo, { currentGradeRunId: scored, frozenGradeRunId: scored });
+      }
+      expect(await phaseOf(w)).toBe("locked");
+      await setRepo(r2, frozen);
+      expect(await phaseOf(w)).toBe("graded");
+
+      await server.app.db.update(projects).set({ releasedAt: at(NOW), releasedBy: teacher.id }).where(eq(projects.id, w.projectId));
+      for (const repo of [r1, r2]) await setRepo(repo, { releasedPoints: 8, releasedMax: 10 });
+      expect(await phaseOf(w)).toBe("released");
+      // A score changed since: the page's primary action says a re-release waits, the badge stays released.
+      await setRepo(r1, { teacherPoints: 9 });
+      expect((await detail(w.projectId)).primaryAction).toBe("release");
+      expect(await phaseOf(w)).toBe("released");
+    });
+
+    it("stays locked for a project graded none, and while a final score rests on a run to verify until the teacher's score settles it", async () => {
+      const none = await world({ state: "locked" });
+      await server.app.db.update(projects).set({ gradingMode: "none" }).where(eq(projects.id, none.projectId));
+      await repoOf(none, none.students[0]!.id, frozen);
+      expect(await phaseOf(none)).toBe("locked");
+
+      // The list resolves the final score as the page does (`resolveFinalScore`, whose precedence its own tests own).
+      const w = await world({ students: 1, state: "locked" });
+      const r = await repoOf(w, w.students[0]!.id, frozen);
+      const suspect = await run(r, "2026-10-09T20:00:00Z", { toVerify: true });
+      await setRepo(r, { currentGradeRunId: suspect, frozenGradeRunId: suspect });
+      expect(await phaseOf(w)).toBe("locked");
+      await setRepo(r, { teacherPoints: 7, teacherMax: 10 });
+      expect(await phaseOf(w)).toBe("graded");
+    });
+
+    it("counts the student repositories only: a staff seat's unfrozen test repository holds nothing back (ADR-077)", async () => {
+      const w = await world({ students: 1, state: "locked" });
+      await repoOf(w, w.students[0]!.id, frozen);
+      await server.app.db.insert(enrollments).values({
+        id: randomUUID(),
+        classroomId: w.classroomId,
+        nom: "Staff",
+        prenom: "Seat",
+        email: `staff-${randomUUID()}@heig.test`,
+        userId: teacher.id,
+        staff: true,
+      });
+      await repoOf(w, teacher.id);
+      expect(await phaseOf(w)).toBe("graded");
+    });
+
+    it("gives each project of a list its own counts, in one pass and without GitHub", async () => {
+      const w = await world({ students: 2, state: "locked" });
+      const [s1, s2] = w.students;
+      await repoOf(w, s1!.id, frozen);
+      await repoOf(w, s2!.id, frozen);
+      const open = await sibling(w, "locked");
+      await repoOf({ ...w, projectId: open }, s1!.id, { deadlineAppliedAt: frozenAt });
+      const empty = await sibling(w, "locked");
+      const calls = gh.calls.length;
+      const rows = await list(w.classroomId);
+      const phase = (id: string) => rows.find((r) => r.id === id)!.phase;
+      expect(phase(w.projectId)).toBe("graded");
+      expect(phase(open)).toBe("locked");
+      // Locked with no live repository: nothing is final.
+      expect(phase(empty)).toBe("locked");
+      // A list never waits for GitHub (F-PROJ-13).
+      expect(gh.calls).toHaveLength(calls);
+    });
   });
 
   it("shows where each repository's final review stands (F-PROJ-11, M3-08b)", async () => {

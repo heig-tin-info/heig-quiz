@@ -46,6 +46,7 @@ describe("ActivitySummary (ADR-035 §2)", () => {
       id: ID,
       title: "Lab 2",
       state: "published",
+      phase: "published",
       classroom: { id: ID, name: "PRG1-2026", courseCode: "PRG1" },
       startAt: "2026-10-01T08:00:00.000Z",
       deadlineAt: "2026-10-15T22:00:00.000Z",
@@ -53,6 +54,10 @@ describe("ActivitySummary (ADR-035 §2)", () => {
       distribution: { fullName: "heig-tin-info/lab-2-prg1-2026" },
     } as const;
     expect(ActivitySummary.parse(project)).toEqual(project);
+    // The phase refines a locked state (ADR-104): the state stays, the badge's word is the phase.
+    for (const phase of ["locked", "graded", "released"] as const) {
+      expect(ActivitySummary.parse({ ...project, state: "locked", phase })).toMatchObject({ state: "locked", phase });
+    }
   });
 
   it("reads a manual draft's project row without provisional dates (M3-14a)", () => {
@@ -61,6 +66,7 @@ describe("ActivitySummary (ADR-035 §2)", () => {
       id: ID,
       title: "Lab 3",
       state: "draft",
+      phase: "draft",
       classroom: { id: ID, name: "PRG1-2026", courseCode: "PRG1" },
       startAt: null,
       deadlineAt: null,

@@ -3,15 +3,18 @@
  * project, and the rows of the Activities lists. Never a student's: the
  * student view of a project is M3-09's, its one exit (N-SEC-20).
  */
-import { and, desc, eq, isNotNull, isNull, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { ProjectActivitySummary, ProjectSummary } from "@quiz/contracts";
-import { editableProjectFields, projectListDates } from "@quiz/domain";
+import { editableProjectFields, projectListDates, projectPhase, resolveFinalScore } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, projectRepos, projects } from "../../db/schema.js";
+import { classrooms, courses, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
 import { staffAccess, type Caller } from "../guards.js";
+import { LIVE } from "./deadline.js";
+import { STUDENT_REPO } from "./repos.js";
 
 export type ProjectRow = typeof projects.$inferSelect;
 
@@ -51,6 +54,62 @@ export async function projectSummary(db: Db, row: ProjectRow, now: Date): Promis
   };
 }
 
+/** `releaseCounts` of `deadline.ts` and the `unverified` of `detail.ts`, over the live student repositories of one project. */
+interface PhaseCounts {
+  live: number;
+  frozen: number;
+  unverified: number;
+}
+
+const NO_REPOS: PhaseCounts = { live: 0, frozen: 0, unverified: 0 };
+
+/**
+ * The counts the phase of a locked project rests on (`projectPhase`,
+ * ADR-104), for every project of `projectIds` in ONE query — a list never
+ * loads a project's detail, nor asks GitHub (F-PROJ-13): one row per live
+ * (`LIVE`) student (`STUDENT_REPO`, the page's and the release's set)
+ * repository with its three slot runs, folded here through
+ * `resolveFinalScore` as the page does. A project with no such repository
+ * is absent: zero of each.
+ */
+async function phaseCounts(db: Db, projectIds: string[]): Promise<Map<string, PhaseCounts>> {
+  if (projectIds.length === 0) return new Map();
+  const review = alias(projectGradeRuns, "review_run");
+  const frozen = alias(projectGradeRuns, "frozen_run");
+  const current = alias(projectGradeRuns, "current_run");
+  const rows = await db
+    .select({
+      projectId: projectRepos.projectId,
+      frozenAt: projectRepos.frozenAt,
+      teacherPoints: projectRepos.teacherPoints,
+      // The slot runs as `resolveFinalScore` reads them; null for an empty slot (a missing left join).
+      review: { points: review.points, max: review.max, parseStatus: review.parseStatus, toVerify: review.toVerify },
+      frozen: { points: frozen.points, max: frozen.max, parseStatus: frozen.parseStatus, toVerify: frozen.toVerify },
+      current: { points: current.points, max: current.max, parseStatus: current.parseStatus, toVerify: current.toVerify },
+    })
+    .from(projectRepos)
+    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+    .leftJoin(review, eq(review.id, projectRepos.reviewGradeRunId))
+    .leftJoin(frozen, eq(frozen.id, projectRepos.frozenGradeRunId))
+    .leftJoin(current, eq(current.id, projectRepos.currentGradeRunId))
+    .where(and(inArray(projectRepos.projectId, projectIds), LIVE, STUDENT_REPO));
+  const counts = new Map<string, PhaseCounts>();
+  for (const r of rows) {
+    const c = counts.get(r.projectId) ?? { ...NO_REPOS };
+    c.live += 1;
+    if (r.frozenAt !== null) c.frozen += 1;
+    const final = resolveFinalScore({
+      teacherPoints: r.teacherPoints,
+      reviewScore: r.review,
+      frozenScore: r.frozen,
+      score: r.current,
+    });
+    if (final?.toVerify) c.unverified += 1;
+    counts.set(r.projectId, c);
+  }
+  return counts;
+}
+
 /** The Activities rows of the projects `where` selects, newest first. */
 async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActivitySummary[]> {
   const rows = await db
@@ -58,6 +117,8 @@ async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActi
       id: projects.id,
       title: projects.name,
       state: projects.state,
+      gradingMode: projects.gradingMode,
+      releasedAt: projects.releasedAt,
       startAt: projects.startAt,
       deadlineAt: projects.deadlineAt,
       publishMode: projects.publishMode,
@@ -73,6 +134,11 @@ async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActi
     .innerJoin(courses, eq(courses.id, classrooms.courseId))
     .where(where)
     .orderBy(desc(projects.createdAt));
+  // Only a locked project's phase reads its repositories (`projectPhase`): the counts of those alone.
+  const counts = await phaseCounts(
+    db,
+    rows.filter((r) => r.state === "locked").map((r) => r.id),
+  );
   return rows.map((r) => {
     const dates = projectListDates(r);
     return {
@@ -80,6 +146,7 @@ async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActi
       id: r.id,
       title: r.title,
       state: r.state,
+      phase: projectPhase({ state: r.state, gradingMode: r.gradingMode, released: r.releasedAt !== null, ...(counts.get(r.id) ?? NO_REPOS) }),
       classroom: { id: r.classroomId, name: r.classroomName, courseCode: r.courseCode },
       startAt: isoOrNull(dates.startAt),
       deadlineAt: isoOrNull(dates.deadlineAt),

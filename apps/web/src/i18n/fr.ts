@@ -5330,6 +5330,8 @@ export const fr: Record<keyof Dict, string> = {
   "project.state.draft": "brouillon",
   "project.state.published": "publié",
   "project.state.locked": "verrouillé",
+  "project.state.graded": "corrigé",
+  "project.state.released": "rendu",
 
   "project.new.desc": "Chaque étudiant reçoit un dépôt privé sur GitHub, copié d'un dépôt de l'organisation de la classe. Le projet est créé en brouillon : vous le publiez depuis sa page.",
   "project.name": "Nom",

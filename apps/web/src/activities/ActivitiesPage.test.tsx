@@ -67,13 +67,14 @@ const LAB: ProjectActivitySummary = {
   id: id("project", 1),
   title: "Labo 2 — pointeurs",
   state: "published",
+  phase: "published",
   classroom: ROOM,
   startAt: liveAt(-7 * 24 * 60 * MIN),
   deadlineAt: liveAt(7 * 24 * 60 * MIN),
   source: { fullName: "heig/lab-source" },
   distribution: { fullName: "heig/lab-squashed" },
 };
-const LAB3: ProjectActivitySummary = { ...LAB, id: id("project", 2), title: "Labo 3", state: "draft" };
+const LAB3: ProjectActivitySummary = { ...LAB, id: id("project", 2), title: "Labo 3", state: "draft", phase: "draft" };
 
 const render = (rows: ActivitySummary[] = ALL, navigate = vi.fn()) => {
   const stub = mockFetch({

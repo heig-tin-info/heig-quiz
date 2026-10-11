@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   changedAfterRelease,
   projectListDates,
+  projectPhase,
   projectPrimaryAction,
   reviewState,
   scoreGrade,
@@ -143,5 +144,37 @@ describe("projectListDates", () => {
     expect(projectListDates({ ...base, publishMode: "scheduled" })).toEqual(stored);
     expect(projectListDates({ ...base, state: "published", durationMinutes: 120 })).toEqual(stored);
     expect(projectListDates({ ...base, state: "locked" })).toEqual(stored);
+  });
+});
+
+describe("projectPhase (ADR-104)", () => {
+  const final = { gradingMode: "auto" as const, live: 3, frozen: 3, unverified: 0, released: false };
+
+  it("follows the state while it is not locked, a kept release notwithstanding (F-PROJ-09)", () => {
+    expect(projectPhase({ ...final, state: "draft" })).toBe("draft");
+    expect(projectPhase({ ...final, state: "published" })).toBe("published");
+    expect(projectPhase({ ...final, state: "published", released: true })).toBe("published");
+  });
+
+  it("is graded once every live repository is frozen with nothing left to verify", () => {
+    expect(projectPhase({ ...final, state: "locked" })).toBe("graded");
+  });
+
+  it("stays locked while a live repository is not frozen, or a final score is to verify", () => {
+    expect(projectPhase({ ...final, state: "locked", frozen: 2 })).toBe("locked");
+    expect(projectPhase({ ...final, state: "locked", unverified: 1 })).toBe("locked");
+  });
+
+  it("stays locked with no live repository at all", () => {
+    expect(projectPhase({ ...final, state: "locked", live: 0, frozen: 0 })).toBe("locked");
+  });
+
+  it("never grades a project graded none", () => {
+    expect(projectPhase({ ...final, state: "locked", gradingMode: "none" })).toBe("locked");
+  });
+
+  it("is released once released, even when a score changed since", () => {
+    expect(projectPhase({ ...final, state: "locked", released: true })).toBe("released");
+    expect(projectPhase({ ...final, state: "locked", released: true, unverified: 1 })).toBe("released");
   });
 });
