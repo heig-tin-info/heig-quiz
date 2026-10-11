@@ -35,6 +35,7 @@ packages/
   diagram/    the diagram engine: scenes, kinds, router, editor (ADR-046)
   qt-diagram/ question type: a diagram, manual or LLM-proposed grading (ADR-046/063)
   qt-math/    question type: a formula in a math field, graded by sampling (ADR-102)
+  qt-blocks/  question type: a program of blocks driving a warehouse robot (ADR-103)
 docs/
   guide/      the user guide
   spec/       the product specification
@@ -140,6 +141,7 @@ The application image does not contain it.
 | `@quiz/qt-diagram` | `./server`, `./client` | `diagram`, shown as "Diagram": a diagram of the notation the teacher chose, drawn on the engine's canvas and graded by hand beside a reference ([ADR-046](../adr/ADR-046-type-diagramme.md)) |
 | `@quiz/qt-circuit` | `./server`, `./client`, `./canvas` | `circuit`, a two-port schematic graded by simulating it with ngspice through the runner's `spice` language ([ADR-019](../adr/ADR-019-simulation-de-circuit.md)); `./canvas` is the schematic editor |
 | `@quiz/qt-math` | `./server`, `./client` | `math`, shown as "Math expression": a formula typed in MathLive's math field, stored as LaTeX, parsed on the server by Compute Engine and evaluated by a float interpreter of its own (`@quiz/domain/math`), compared to the accepted answers by their values at sample points drawn from the question, never a computer algebra system; an optional SVG graph (docs/spec/04 §4.16, [ADR-102](../adr/ADR-102-type-expression-mathematique.md)) |
+| `@quiz/qt-blocks` | `./server`, `./client` | `blocks`, shown as "Blocks": a program of blocks, assembled in Blockly, that drives a warehouse robot to its dock, run on visible and hidden warehouses by the pure interpreter of `@quiz/domain/blocks`, in the browser and on the server alike; the answer is the package's own syntax tree, never Blockly's, and Blockly (`src/blocklyBundle.ts`) is reached only by a dynamic import (docs/spec/04 §4.17, [ADR-103](../adr/ADR-103-type-blocs.md)) |
 
 ### Server and client halves
 
@@ -154,8 +156,8 @@ projection, `client.tsx` exports the lazy components.
 
 `packages/registry` is the one place the API and the web app learn which
 question types exist. `src/server.ts` maps `mcq`, `short`, `cloze`,
-`code`, `circuit`, `codeimage`, `rich`, `categorize`, `diagram` and
-`brainstorm` to their `*Server` objects; `src/client.ts` does the same for
+`code`, `circuit`, `codeimage`, `rich`, `categorize`, `diagram`,
+`brainstorm`, `math` and `blocks` to their `*Server` objects; `src/client.ts` does the same for
 the components. Registering a type is an import and an entry in each map. The
 registry depends on `core` and on the `qt-*` packages; nothing inside `core`
 may depend on the registry, or the package graph would cycle (decision D1

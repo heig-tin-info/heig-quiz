@@ -511,3 +511,71 @@ export function BrainstormType() {
     </Stage>
   );
 }
+
+// --- Blocks ---------------------------------------------------------------
+
+/** The warehouse "....D" / ".##.." / "^.#..": up the left aisle, then along the top. */
+const ROBOT_W = 5;
+const ROBOT_H = 3;
+const ROBOT_CELL = 30;
+const ROBOT_RACKS = [[1, 1], [2, 1], [2, 2]] as const;
+const ROBOT_DOCK = [4, 0] as const;
+/** The wall follower's run on it: x, y, heading in quarter turns, the block that just ran. */
+const ROBOT_RUN: readonly (readonly [number, number, number, "forward" | "turn" | null])[] = [
+  [0, 2, 0, null],
+  [0, 1, 0, "forward"],
+  [0, 0, 0, "forward"],
+  [0, 0, 1, "turn"],
+  [1, 0, 1, "forward"],
+  [2, 0, 1, "forward"],
+  [3, 0, 1, "forward"],
+  [4, 0, 1, "forward"],
+];
+
+export function BlocksType() {
+  const t = useT();
+  const [ref, step] = useLoop(600, ROBOT_RUN.length + 3);
+  const at = Math.min(step, ROBOT_RUN.length - 1);
+  const [x, y, heading, ran] = ROBOT_RUN[at]!;
+  const docked = at === ROBOT_RUN.length - 1;
+  const C = ROBOT_CELL;
+  // A block in the canvas's own words (`qt.blocks.c.*`); a C-shaped one wraps its body in a rail of its colour.
+  const block = (label: string, tone: string, lit: boolean, body?: ReactNode, rail?: string) => (
+    <div className="flex flex-col">
+      <span className={cx("w-fit rounded-[6px] px-2 py-1 text-[11px] font-semibold text-on-fill", tone, lit && "brightness-125")}>{label}</span>
+      {body ? <div className={cx("ml-2 flex flex-col gap-1 border-l-[6px] py-1 pl-1.5", rail)}>{body}</div> : null}
+    </div>
+  );
+  const moves = (
+    <>
+      {block(t("qt.blocks.c.forward"), "bg-fg-muted", !docked && ran === "forward")}
+      <span className="text-[10px] font-semibold text-fg-muted">{t("qt.blocks.c.else")}</span>
+      {block(t("qt.blocks.c.turn", { dir: t("qt.blocks.c.turnRight") }), "bg-fg-muted", !docked && ran === "turn")}
+    </>
+  );
+  const sensor = t("qt.blocks.c.ifSensor", { sensor: t("qt.blocks.c.sensorFree"), where: t("qt.blocks.c.whereFront") });
+  return (
+    <Stage stageRef={ref} className="flex items-center gap-4 p-3">
+      <div className="min-w-0 flex-1">
+        {block(t("qt.blocks.c.repeatUntilDock"), "bg-warning", false, block(sensor, "bg-info", false, moves, "border-info"), "border-warning")}
+      </div>
+      <svg viewBox={`0 0 ${ROBOT_W * C} ${ROBOT_H * C}`} className="w-[46%] shrink-0 rounded-field border border-line bg-surface">
+        {Array.from({ length: ROBOT_W * ROBOT_H }, (_, i) => (
+          <rect key={i} x={(i % ROBOT_W) * C} y={Math.floor(i / ROBOT_W) * C} width={C} height={C} fill="none" className="stroke-line" />
+        ))}
+        {ROBOT_RACKS.map(([rx, ry]) => (
+          <rect key={`${rx},${ry}`} x={rx * C + 4} y={ry * C + 4} width={C - 8} height={C - 8} rx={3} className="fill-fg-faint/60" />
+        ))}
+        <rect x={ROBOT_DOCK[0] * C + 3} y={ROBOT_DOCK[1] * C + 3} width={C - 6} height={C - 6} rx={4} strokeDasharray="3 2" className={docked ? "fill-success-soft stroke-success" : "fill-info-soft stroke-info"} />
+        {ROBOT_RUN.slice(0, at).map(([tx, ty], i) => (
+          <circle key={i} cx={tx * C + C / 2} cy={ty * C + C / 2} r={2.5} className="fill-fg-faint/45" />
+        ))}
+        <g className="transition-transform duration-300 ease-out motion-reduce:transition-none" style={{ transform: `translate(${x * C + C / 2}px, ${y * C + C / 2}px) rotate(${heading * 90}deg)` }}>
+          <rect x={-9} y={-9} width={18} height={18} rx={4} className="fill-fg" />
+          <path d="M -4 2.5 L 0 -4 L 4 2.5" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="stroke-surface" />
+        </g>
+      </svg>
+      {docked ? <Check className="pop-in absolute right-3 bottom-3 size-5 rounded-full bg-success p-0.5 text-on-fill" strokeWidth={3} /> : null}
+    </Stage>
+  );
+}

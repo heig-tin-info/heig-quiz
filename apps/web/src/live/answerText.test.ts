@@ -98,6 +98,26 @@ describe("answerText (#94)", () => {
     expect(answerText("categorize", student, { columns: [] })).toBeNull();
   });
 
+  it("keeps a program of blocks for the view to spell, never a verdict", () => {
+    const program = [
+      {
+        kind: "repeat_until_dock",
+        body: [{ kind: "if_sensor", sensor: "free", where: "front", then: [{ kind: "forward" }], else: [{ kind: "turn", dir: "right" }] }],
+      },
+    ];
+    // The visible warehouses travel in the student view; nothing of them is read.
+    const student = { visibleCases: [{ name: "A", map: [">.D", "...", "..."], battery: 5, points: 1 }] };
+    const text = answerText("blocks", student, { program });
+    expect(text).toEqual({ kind: "blocks", program });
+    expect(isEmptyAnswerText(text!)).toBe(false);
+    expect(isEmptyAnswerText(answerText("blocks", student, { program: [] })!)).toBe(true);
+    // A shape the type's schema refuses, a program too deep included, is not read.
+    expect(answerText("blocks", student, { program: [{ kind: "jump" }] })).toBeNull();
+    let deep: unknown[] = [{ kind: "forward" }];
+    for (let i = 0; i < 40; i++) deep = [{ kind: "repeat_until_dock", body: deep }];
+    expect(answerText("blocks", student, { program: deep })).toBeNull();
+  });
+
   it("gives null for no answer, an unknown type or a shape it does not read", () => {
     expect(answerText("short", {}, null)).toBeNull();
     expect(answerText("circuit", {}, { schematic: { components: [], wires: [] } })).toBeNull();

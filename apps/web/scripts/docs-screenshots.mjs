@@ -114,6 +114,7 @@ const QUESTIONS = {
   short: "prg1-mot-cle-constante",
   cloze: "prg1-boucle-for",
   code: "prg1-code-somme-tableau",
+  blocks: "prg1-robot-entrepot",
 };
 /** The reference solution of the seeded C exercise (the smoke test uses the same). */
 const SUM_SOLUTION = `
@@ -271,6 +272,15 @@ const scenes = [
     state: "As seeded: the published C exercise “prg1-code-somme-tableau”.",
   },
   {
+    name: "editor-blocks",
+    caption: "The editor of a blocks question: the toolbox, the starter and reference programs, the warehouses.",
+    persona: "teacher",
+    path: (w) => `/questions/${w.questions.blocks.id}`,
+    settle: 4000,
+    fullPage: true,
+    state: "As seeded: the published question “prg1-robot-entrepot”, three visible and two hidden warehouses.",
+  },
+  {
     name: "editor-preview",
     caption: "The student preview of a question, exactly what a student will see.",
     persona: "teacher",
@@ -329,6 +339,22 @@ const scenes = [
     },
     action: "Clicked “Run” on the visible cases, then “Grade my answer”, with the template as it is.",
     state: "As seeded; a real code runner compiled and ran the program.",
+  },
+  {
+    // The player of a blocks question needs no runner: the Try tab shows it
+    // as a student gets it, and the visible warehouses run in the browser.
+    name: "try-blocks",
+    caption: "A blocks question as the student gets it: the workspace with the starter, then the warehouses tested.",
+    persona: "teacher",
+    path: (w) => `/questions/${w.questions.blocks.id}?tab=try`,
+    settle: 4000,
+    fullPage: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^test on every warehouse$/i }).first().click();
+      await p.waitForTimeout(1500);
+    },
+    action: "Opened the Try tab and clicked “Test on every warehouse”, with the starter as it is.",
+    state: "As seeded: the published question “prg1-robot-entrepot”.",
   },
 
   // The evaluation configuration
