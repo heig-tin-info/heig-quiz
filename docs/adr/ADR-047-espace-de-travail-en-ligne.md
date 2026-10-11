@@ -16,6 +16,20 @@ session; no SEB project opens to students before proof B is recorded. See
 single use and bound to its request, and every token's lifetime is capped:
 [ADR-078's amendment of that date](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use).
 
+**Amended (2026-10-11, security audit L7): the start route is a POST.**
+Scope: the start route of amendment "M6-06" (its path and method) and
+M6-07's launch from a `seb` session. A navigable GET that froze the work
+mode and minted a launch token could be triggered by a cross-site link.
+The launch is now `POST /app/api/projects/:projectId/workspace/start`,
+under the double-submit CSRF check of every session write; same access
+rule (the caller's own portal session or the project's `seb` session, the
+student branch with a claimed seat, the 404 otherwise; an impersonation
+writes nothing, `403`), same refusals as `409 { error }` (the project page
+shows them as `?workspace=<code>`), and it answers `{ url }`, the portal's
+`/launch?token=…`, `Cache-Control: no-store`, which the page navigates to.
+The portal is unchanged: it never linked to the old path. ADR-089's
+station launch was already a POST.
+
 **Amended (2026-10-08, product owner): an administrator always holds the
 workspace grant.** Scope: amendment "M6-06" (B)'s last sentence, and (C)
 for an administrator. An account whose role is `admin` (`users.role`, the

@@ -260,7 +260,7 @@ Access and traceability:
 - direct access to the machine and the database is not traced by the platform;
 - the audit log is protected against change by a database trigger that refuses UPDATE and DELETE (migration `0096_audit_log_immutable`), but the application connects as the database's owner role, which could drop the trigger, and TRUNCATE is not covered; the application never does either, but the database does not forbid it;
 - the student is not notified when an administrator opens a view of their account; only the student help mentions the possibility;
-- a personal API token carries all its owner's rights and may never expire.
+- a personal API token carries all its owner's rights and may never expire (an administrator's always does, and the administration refuses one that does not).
 
 Informing the student:
 

@@ -25,6 +25,11 @@ evaluation, join the owner's acts. These are the first routes whose needed role
 depends on the state of the entity they load; the check stays in the loader,
 before the body. The gradebook's derived absence follows (ADR-074 §9).
 
+Amended 2026-10-11 (security audit L9, product owner's decision of 2026-10-10): §3
+only — reopening a finished attempt whose student the feedback policy has already shown
+the answer key (an exercise in `immediate` with `showKey`) joins the owner's acts, as an
+audited derogation; any other reopening stays every member's.
+
 Scope: what a member of a course's staff may do on the course, its classrooms and
 its evaluations; who reaches them is unchanged (`staffAccess`, invariant 6).
 
@@ -81,9 +86,10 @@ entity (404 when it fails, invariant 6), and a role that says what the caller ma
    | `POST /courses/:id/conditions`, `PATCH /courses/:id/conditions/:cid`, `PUT /courses/:id/conditions/order`, `POST /courses/:id/conditions/:cid/archive\|unarchive` (amended 2026-10-09) | the course's catalog of conditions, a course setting (F-ORG-16, ADR-079 §5); its list stays every member's |
    | `PUT /courses/:id/concepts` (amended 2026-10-10) | the concepts the course declares, a course setting (F-ORG-12, ADR-081 sixth addendum); reading it (in `GET /courses/:id`) stays every member's, and no student route returns it |
    | `DELETE /evaluations/:id` once the evaluation is released, its correction published, or one attempt of a student seat exists — a poll's attempts (votes) do not count, only its release (amended 2026-10-10; the poll exemption pending the product owner's confirmation) | the deletion cascades to attempts, answers, gradings, released grades, gradebook columns and marks, and drill cards: what students did, or were shown as final. A staff rehearsal (ADR-018) is not a student's attempt |
+   | `POST /evaluations/:id/attempts/:attemptId/reopen` once the policy has shown the student the answer key (`keyShownTo` of the `results` module: an exercise in `immediate` with `showKey`) (amended 2026-10-11, audit L9) | the student would rewrite their answers with the key in hand. The role depends on the attempt (`reopenRole`), decided in the loader like the two rows below: an assistant gets **`403 owner_required`**, and the live grid offers Reopen only to an owner (`reopenable`); the owner's reopening is audited `attempt.reopen` with `derogation: "key_shown"`. Retakes on and a published correction (ADR-050) stay refused to everybody |
    | Every grading write on a released evaluation: `POST /evaluations/:id/grading/run`, `/grading/validate-batch`, `/items/:itemId/regrade`; `POST /answers/:answerId/gradings`; `POST /gradings/:id/override`, `/validate` (amended 2026-10-10) | after the release a correction changes a published grade (F-GRADE-09, F-NOTIF-07), which is the owner's as the release is. A correction published while an exercise runs (ADR-050) is no release and triggers nothing: its answers are still graded by every member (pending the product owner's confirmation) |
 
-   The rule of the two state-dependent rows is pure, in `@quiz/domain`
+   The rule of the two state-dependent rows below is pure, in `@quiz/domain`
    (`evaluationDeletionRole`, `evaluationGradingRole`); the evaluation's payloads carry
    the deletion's (`deletionRole` of `EvaluationSummary` and `EvaluationDetail`), so the
    screens apply the server's rule. The delete decides it again inside its transaction,
@@ -100,8 +106,9 @@ entity (404 when it fails, invariant 6), and a role that says what the caller ma
    a classroom's settings (rename, archive, GitHub, journal, drill), the roster, the
    evaluations and their settings, deleting an evaluation no student took (and a poll
    not released), grading, validating and regrading until the release, reopening
-   (amended 2026-10-10: grading, validating and regrading were open whatever the
-   release; deletion was open whatever the evaluation held).
+   an attempt whose student has not been shown the key (amended 2026-10-10: grading,
+   validating and regrading were open whatever the release; deletion was open whatever
+   the evaluation held; amended 2026-10-11: reopening was open whatever the key).
 
 4. **The accepted loophole.** An assistant may set an evaluation's feedback policy to
    `immediate`, which shows students their results without a release. Closing it would

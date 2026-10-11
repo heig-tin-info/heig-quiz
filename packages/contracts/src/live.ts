@@ -722,10 +722,12 @@ export const DashboardView = z.object({
     closesAt: z.iso.datetime().nullable(),
     serverNow: z.iso.datetime(),
     /**
-     * Whether a finished attempt may be reopened (the server's
+     * Whether the caller may reopen a finished attempt (the server's
      * `reopenRefusal`): not on an exercise with several attempts, where the
      * student starts a new one instead (F-EVAL-15, ADR-025), nor on one whose
-     * correction is published (ADR-050). The grid offers Reopen only then.
+     * correction is published (ADR-050); on one that shows the answer key at
+     * the hand-in, for a course owner only (audit L9, ADR-068). The grid
+     * offers Reopen only then.
      */
     reopenable: z.boolean(),
     /**

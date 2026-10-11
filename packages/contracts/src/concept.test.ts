@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { ConceptPatch, ConceptResolveQuery } from "./concept.js";
+import { ConceptPatch, ConceptResolveQuery, SuggestConceptsRequest } from "./concept.js";
+import { GenerateRequest, LLM_CONFIG_MAX_CHARS } from "./llm.js";
 
 describe("ConceptPatch (ADR-081 addendum §5)", () => {
   it("takes either language, or both, and refuses an empty patch", () => {
@@ -16,5 +17,16 @@ describe("ConceptResolveQuery", () => {
     expect(ConceptResolveQuery.parse({ input: "pile, file" })).toEqual({ input: ["pile, file"] });
     expect(ConceptResolveQuery.parse({ input: ["pile", "file"] })).toEqual({ input: ["pile", "file"] });
     expect(ConceptResolveQuery.safeParse({ input: [] }).success).toBe(false);
+  });
+});
+
+describe("the question draft sent to a model (audit L2)", () => {
+  it("is bounded in size", () => {
+    const config = (chars: number) => ({ text: "x".repeat(chars) });
+    expect(SuggestConceptsRequest.safeParse({ config: config(1000) }).success).toBe(true);
+    expect(SuggestConceptsRequest.safeParse({ config: config(LLM_CONFIG_MAX_CHARS) }).success).toBe(false);
+    const big = GenerateRequest.safeParse({ config: config(LLM_CONFIG_MAX_CHARS), explanation: "" });
+    expect(big.success ? null : big.error.issues[0]!.message).toBe("config_too_large");
+    expect(GenerateRequest.safeParse({ config: undefined, explanation: "" }).success).toBe(true);
   });
 });

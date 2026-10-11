@@ -33,6 +33,15 @@ gains the `offsite` check, which §2's coarse `backup` word now covers (below).
 Extended by [ADR-058](ADR-058-passerelle-llm.md) §7: LLM health reads gateway state and the
 `llm.budget` check; it does not make a provider call.
 
+**Amended 2026-10-11 (security audit L21), scope: §2.** The public answer
+is `status` and `attention` alone (`HealthProbe`): the deploy gate reads the
+status code, the external probe its `"attention":false`. The coarse words
+(`checks`) and `uptimeSeconds` (`HealthResponse`) are served to the
+`METRICS_TOKEN` bearer (compared in constant time) and to an
+administrator's session. The probe's work runs at most once every
+`HEALTHZ_CACHE_MS` (5 s) of the server's clock, shared by every caller, so
+the public route is no lever on the database or the runner.
+
 ## Context
 
 The operator is one teacher. Before an exam, and when something feels

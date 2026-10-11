@@ -46,6 +46,7 @@ import { SITTING, confined, delegated } from "../../auth/session.js";
 import { iso } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import {
+  callerOf,
   loadEvaluation,
   loadEvaluationAttempt,
   ownAttempt,
@@ -53,6 +54,7 @@ import {
   sitRefusal,
   staffAttempt,
   teacherGuard,
+  withCourseRole,
 } from "../guards.js";
 import { notFound, rateLimited, studentRoute, teacherRoute } from "../http.js";
 import * as evaluationService from "../evaluation/service.js";
@@ -101,6 +103,9 @@ export async function livePlugin(
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     loadEvaluation(app, req, reply, p.id);
   const staffEvaluationAttempt = loadEvaluationAttempt(app);
+  const reopenableAttempt = withCourseRole(app, staffEvaluationAttempt, (s) => s.courseId, (s) =>
+    service.reopenRole(s.evaluation, s.attempt.state),
+  );
 
   // =========================================================================
   // Student side
@@ -468,11 +473,12 @@ export async function livePlugin(
   app.get(
     "/app/api/evaluations/:id/dashboard",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, query: DashboardQuery, load: staffEvaluation }, ({ now, query, scope }) =>
+    teacher({ params: IdParam, query: DashboardQuery, load: staffEvaluation }, async ({ req, now, query, scope }) =>
       service.dashboardView(app.db, scope.evaluation, {
         now,
         includeAnswers: query.includeAnswers,
         includeResults: query.results,
+        caller: callerOf(req),
       }),
     ),
   );
@@ -592,13 +598,22 @@ export async function livePlugin(
     }),
   );
 
-  /** …and giving it back, with the deadline recomputed from the original start. */
+  /**
+   * …and giving it back, with the deadline recomputed from the original
+   * start. Once the policy has shown the student the key, it is the course
+   * owner's (`reopenRole`, ADR-068 §3, audit L9): an assistant gets `403
+   * owner_required` from the loader, and the owner's reopening is audited
+   * with its derogation.
+   */
   app.post(
     "/app/api/evaluations/:id/attempts/:attemptId/reopen",
     { preHandler: requireTeacher },
-    teacher({ params: AttemptParam, load: staffEvaluationAttempt }, async ({ req, now, scope }) => {
-      const row = await service.reopenAttempt(app.db, scope.evaluation, scope.attempt, now);
-      await trace(req, "attempt.reopen", "attempt", row.id, { evaluationId: scope.evaluation.id });
+    teacher({ params: AttemptParam, load: reopenableAttempt }, async ({ req, now, scope }) => {
+      const { row, derogation } = await service.reopenAttempt(app.db, scope.evaluation, scope.attempt, now);
+      await trace(req, "attempt.reopen", "attempt", row.id, {
+        evaluationId: scope.evaluation.id,
+        ...(derogation ? { derogation } : {}),
+      });
       return {
         state: row.state,
         deadlineAt: row.deadlineAt === null ? null : iso(row.deadlineAt),

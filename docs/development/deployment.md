@@ -683,7 +683,7 @@ then the `production` environment waits for an approval before the two SSH
 calls. Then:
 
 ```bash
-curl -s https://quiz.chevallier.io/healthz | jq .              # database, jobs, runner: "up"
+curl -s -H "Authorization: Bearer $METRICS_TOKEN" https://quiz.chevallier.io/healthz | jq .   # database, jobs, runner: "up"
 ssh srv@portal.heig.chevallier.io 'cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image logs --tail 50 app'
 ssh root@code.chevallier.io 'journalctl -u quiz-runner -n 30'   # "podman engine ready", "quiz-runner started"
 ```
@@ -1031,12 +1031,16 @@ It cannot see the deletion of an archive whose day still has another one
 
 ### `/healthz`, the public probe
 
-`GET /healthz` answers `200 {"status":"ok"}` when the database answers
-`SELECT 1`, and `503 {"status":"degraded"}` otherwise. **Only the database
-decides the status code**: the container `HEALTHCHECK` and the deploy gate
-(`up -d --wait`, the CI's wait on staging, ADR-028) read it, and a restart
-or a refused deploy is the wrong answer to anything else. Its `checks`
-object reports, in coarse words only
+`GET /healthz` answers `200 {"status":"ok","attention":false}` when the
+database answers `SELECT 1`, and `503 {"status":"degraded",…}` otherwise.
+**Only the database decides the status code**: the container `HEALTHCHECK`
+and the deploy gate (`up -d --wait`, the CI's wait on staging, ADR-028) read
+it, and a restart or a refused deploy is the wrong answer to anything else.
+The answer is computed at most once every 5 s, whoever asks, so the public
+route is no lever on the database or the runner (audit L21). Anyone reads
+`status` and `attention`; the `checks` object and `uptimeSeconds` are for a
+request with `Authorization: Bearer $METRICS_TOKEN` or an administrator's
+session. They report, in coarse words only
 ([ADR-055](../adr/ADR-055-etat-du-systeme.md)):
 
 | Field | Values | Meaning |
@@ -1049,8 +1053,9 @@ object reports, in coarse words only
 | `backup` | `ok`, `stale`, `unknown` | the worse of the last dump's report and the off-site copy's (§6): `stale` when either is older than 26 h, failed or missing; `unknown` when not configured (staging, development) |
 
 and one aggregate, `"attention": true` when the ticker is `stale`, the disk
-`low`, the backup `stale` (the dump or its off-site copy) or the runner `down`. Nothing else: no path, no
-size, no name — the route is public. The details are on the admin page.
+`low`, the backup `stale` (the dump or its off-site copy) or the runner `down` — the one
+bit of them anyone reads. Nothing else: no path, no size, no name. The
+details are on the admin page.
 These checks run side by side within 1 s, well inside the healthcheck's
 5 s: a runner that does not answer in time reads as `down`.
 
@@ -1064,7 +1069,8 @@ keyword monitor**:
 - alert when the status code is not 200 (the database, the process, the VM,
   Caddy, DNS or the certificate);
 - **and** alert when the body does **not** contain the keyword
-  `"attention":false` (no space: the body is compact JSON). That covers a
+  `"attention":false` (no space: the body is compact JSON; the public
+  answer keeps it, so the monitor needs no token). That covers a
   stale ticker, a low disk, a stale or failed backup or off-site copy, and
   a runner down: a night without an off-site archive is noticed the next
   morning (past 26 h).
@@ -1331,7 +1337,7 @@ configuration.
 | --- | --- | --- |
 | `DATABASE_URL` | `postgres://quiz:<password>@postgres:5432/quiz`, set by compose | a `pglite://` URL is refused under `NODE_ENV=production` |
 | `POSTGRES_PASSWORD` | `openssl rand -base64 32` | used by the `postgres`, `backup` and `app` services |
-| `COOKIE_SECRET` | `openssl rand -base64 32` | signs the login state cookies; the `change-me` placeholder is refused |
+| `COOKIE_SECRET` | `openssl rand -base64 32` | signs the login state cookies; the `change-me` placeholder and a value under 32 characters are refused in production |
 | `AUTH_DEV_LOGIN` | unset | `1` is refused: the process does not start |
 | `PUBLIC_URL` | `https://quiz.chevallier.io`, set by compose | base of the OIDC redirect URI; `WEB_URL` is left empty because the monolith serves the SPA itself |
 | `OIDC_ISSUER`, `OIDC_CLIENT_ID` | `https://login.eduid.ch/` and the client id from the SWITCH Resource Registry | the dev defaults point at the local Keycloak |
@@ -1348,12 +1354,12 @@ configuration.
 | `SESSION_TTL_HOURS` | `12` | idle timeout with sliding expiry, at most 720 |
 | `TRUSTED_PROXIES` | default `loopback,172.16.0.0/12` | the addresses the API accepts `X-Forwarded-For` from: native Caddy on loopback and the Docker bridge; `req.ip` feeds the room restriction and the attempt journal, so never list a range a student machine can sit on |
 | `OAUTH_CIMD_HOSTS` | default `claude.ai,claude.com,chatgpt.com` | the only hosts whose OAuth Client ID Metadata Documents the server fetches ([ADR-023](../adr/ADR-023-serveur-oauth-pour-mcp.md)); `PUBLIC_URL` is the OAuth issuer, so it must be the exact public origin |
-| `METRICS_TOKEN` | a bearer token for Prometheus | empty leaves `/metrics` to an admin session; the endpoint is never public |
+| `METRICS_TOKEN` | `openssl rand -hex 32`, a bearer token for Prometheus | empty leaves `/metrics` and the coarse words of `/healthz` to an admin session; the metrics are never public; under 32 characters, production refuses to start |
 | `SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID` | the classroom's Scaleway project | empty: e-mails are logged, never sent |
 | `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_ALLOWED_TENANTS` | see [Microsoft Teams setup](teams.md) | empty: the Teams channel is off |
 | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH`, `GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` | the production App's | empty: the GitHub features are off; with an App id, the refusals of [Quiz's GitHub App](github-app.md#the-environments-variables) apply |
 | `RUNNER_MODE`, `RUNNER_URL` | `http`, `https://code.chevallier.io:8443` | `http` without a URL is refused; `stub` disables the runner, see below |
-| `RUNNER_TOKEN` | `openssl rand -hex 32`, the same value as `/etc/quiz-runner/env` on the runner VM | sent as `Authorization: Bearer` on every call; required when `RUNNER_MODE=http`, the process does not start without it |
+| `RUNNER_TOKEN` | `openssl rand -hex 32`, the same value as `/etc/quiz-runner/env` on the runner VM | sent as `Authorization: Bearer` on every call; required when `RUNNER_MODE=http`, the process does not start without it, nor, in production, with one under 32 characters |
 | `RUNNER_TIMEOUT_MS` | default `30000`, at least `26000` | the most an interactive run (a Run click, a teacher's Try or preview, the wand) may take once the runner starts it; the runner reports the cases past it as timed out, and the API waits that plus a queue allowance ([ADR-101](../adr/ADR-101-budget-du-runner.md)). Deploy the runner before the API: an older runner ignores the budget |
 | `RUNNER_RUNS_PER_EVALUATION` | default `4` | interactive runs of one evaluation in the runner at once (N-SEC-07, [ADR-101](../adr/ADR-101-budget-du-runner.md)); past it a Run answers "busy". The product owner sets it against the runner's `RUNNER_CONCURRENCY` |
 | `GRADING_RUNNER_CONCURRENCY` | default `1` | runner jobs of the background grading the API runs at once ([ADR-067](../adr/ADR-067-correction-a-la-remise-des-exercices.md)): exercises are graded at every hand-in, and the runner's queue (`RUNNER_CONCURRENCY`) also serves the students' Run clicks; raise it only with the runner's own concurrency |

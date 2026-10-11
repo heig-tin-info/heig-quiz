@@ -12,10 +12,11 @@ import fastifyStatic from "@fastify/static";
 import { sql } from "drizzle-orm";
 import { collectDefaultMetrics, Gauge, Registry } from "prom-client";
 
-import { AvatarMime, type HealthResponse } from "@quiz/contracts";
+import { AvatarMime, type HealthProbe } from "@quiz/contracts";
 import type { Clock } from "./clock.js";
 import { githubLinkPlugin } from "./auth/githubLink.js";
 import { authPlugin } from "./auth/plugin.js";
+import { sameSecret } from "./auth/session.js";
 import { requestLog } from "./redact.js";
 import { systemClock } from "./clock.js";
 import type { AppConfig } from "./config.js";
@@ -69,7 +70,7 @@ import { resultsPlugin } from "./modules/results/routes.js";
 import { createRunner } from "./modules/runner/index.js";
 import { statsPlugin } from "./modules/stats/routes.js";
 import { registerSystemJobs } from "./modules/system/jobs.js";
-import { coarseHealth, seedScheduledTasks } from "./modules/system/service.js";
+import { healthz, seedScheduledTasks } from "./modules/system/service.js";
 import { startJobs, type JobQueue } from "./jobs.js";
 import { startTicker } from "./ticker.js";
 
@@ -343,26 +344,21 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     }
   }
 
-  app.get("/healthz", async (_req, reply) => {
-    const databaseOk = await checkDatabase();
-    // The runner never decides the overall status: `stub` is the default
-    // configuration and an unreachable runner only degrades code grading to a
-    // manual one (decision D14). A container must not be restarted for that.
-    // Coarse words only, from the checks that touch no table (ADR-055): the
-    // route is public, and the details are the administrators' page. None
-    // of them changes the HTTP status, which the deploy gate reads.
-    const coarse = await coarseHealth(app, config);
-    const body: HealthResponse = {
-      status: databaseOk ? "ok" : "degraded",
-      attention: coarse.attention,
-      checks: {
-        database: databaseOk ? "up" : "down",
-        jobs: app.boss ? "up" : "down",
-        ...coarse.checks,
-      },
-      uptimeSeconds: Math.round(process.uptime()),
-    };
-    return reply.code(databaseOk ? 200 : 503).send(body);
+  /** The `METRICS_TOKEN` bearer, compared in constant time (audit L19). */
+  const scraper = (req: FastifyRequest) =>
+    config.METRICS_TOKEN !== "" && sameSecret(req.headers.authorization ?? "", `Bearer ${config.METRICS_TOKEN}`);
+
+  /**
+   * Public: the status and the probe's alarm (`HealthProbe`). The coarse
+   * words are the scraper's and an administrator's (`HealthResponse`;
+   * ADR-055 as amended for audit L21). The work behind it is `healthz`'s,
+   * memoised a few seconds.
+   */
+  app.get("/healthz", async (req, reply) => {
+    const body = await healthz(app, config, checkDatabase);
+    const detailed = scraper(req) || req.user?.role === "admin";
+    const probeOnly: HealthProbe = { status: body.status, attention: body.attention };
+    return reply.code(body.status === "ok" ? 200 : 503).send(detailed ? body : probeOnly);
   });
 
   /**
@@ -371,8 +367,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
    * `METRICS_TOKEN` bearer for Prometheus, an admin session otherwise.
    */
   const metricsGuard = async (req: FastifyRequest, reply: FastifyReply) => {
-    const token = config.METRICS_TOKEN;
-    if (token !== "" && req.headers.authorization === `Bearer ${token}`) return undefined;
+    if (scraper(req)) return undefined;
     return adminGuard(app)(req, reply);
   };
 

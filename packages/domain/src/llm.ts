@@ -89,6 +89,45 @@ export function isParis(answer: string): boolean {
 }
 
 /**
+ * The purposes a person's daily share leaves out (audit L2): a grading
+ * pass is billed to the evaluation's author, whoever pressed the button, and
+ * is bounded by the answers the students wrote — refusing it halfway would
+ * leave a class half graded. Its re-grades have their own budget
+ * ({@link LLM_REGRADES_PER_ITEM_PER_DAY}).
+ */
+export const USER_SHARE_EXEMPT: readonly LlmPurpose[] = ["grade"];
+
+/** The part of the day's cap one person may spend (audit L2), like the assistant's and the night's shares. */
+export const LLM_USER_DAY_SHARE = 0.2;
+
+/**
+ * Whether a call made for a person may be reserved (audit L2): a purpose
+ * the share leaves out always may; otherwise their own spend today, the
+ * exempt purposes aside, stays within {@link LLM_USER_DAY_SHARE} of the
+ * cap, so that no one teacher exhausts the institution's day. The cap's own
+ * check still runs after.
+ */
+export function userShareAllows(day: {
+  purpose: LlmPurpose;
+  spentUserUsd: number;
+  worstCaseUsd: number;
+  capUsd: number;
+}): boolean {
+  return (
+    USER_SHARE_EXEMPT.includes(day.purpose) ||
+    day.spentUserUsd + day.worstCaseUsd <= LLM_USER_DAY_SHARE * day.capUsd
+  );
+}
+
+/**
+ * How many times a day one evaluation item may be re-graded once the model
+ * grades it (audit L2): each re-grade sends every answer of the item to the
+ * model again. A re-grade of an item the model never graded costs nothing
+ * and is not counted.
+ */
+export const LLM_REGRADES_PER_ITEM_PER_DAY = 3;
+
+/**
  * Whether a teacher-assistant call may be reserved (ADR-080 §4): the chat's
  * own spend today stays within its `share` of the cap, and the day's total
  * leaves that same part of the cap to every other purpose, so the chat is

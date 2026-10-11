@@ -665,6 +665,8 @@ export function tracer(app: FastifyInstance): Trace {
       subjectType,
       subjectId,
       ...(recorded === undefined ? {} : { payload: recorded }),
+      // The server's clock (invariant 5): a rule may read the entry back by time.
+      at: app.clock.now(),
     });
   };
 }

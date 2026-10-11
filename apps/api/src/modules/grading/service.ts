@@ -18,6 +18,7 @@
 import { randomUUID } from "node:crypto";
 
 import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type {
   Grading,
@@ -37,6 +38,8 @@ import { reasonOf, RUNNER_WAITING_REASONS } from "@quiz/contracts";
 import {
   attemptTotal,
   isBatchable,
+  LLM_REGRADES_PER_ITEM_PER_DAY,
+  SCHOOL_TIME_ZONE,
   itemStanding,
   outcomeOf,
   overridePointsRange,
@@ -47,7 +50,7 @@ import {
 
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
-import { answers, attempts, gradings, questionVersions, users } from "../../db/schema.js";
+import { answers, attempts, auditLog, gradings, questionVersions, users } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 import {
   flagReleasedEvaluationsOf,
@@ -105,6 +108,9 @@ const REFUSALS = {
   // the values the students were served could not be read under it, so the
   // item keeps its version and nothing is regraded.
   variables_changed: [409, "the version declares other variables than the item's"],
+  // Audit L2: an item the model grades is re-graded at most
+  // `LLM_REGRADES_PER_ITEM_PER_DAY` times a day; the code is the gateway's.
+  llm_budget_exhausted: [429, "this item was re-graded by the model as often as a day allows: try again tomorrow"],
 } satisfies Record<string, Refusal>;
 
 export class GradingError extends refusalClass("GradingError", REFUSALS) {}
@@ -914,6 +920,54 @@ export async function regradeItem(
     await clearGradingReady(tx, item.evaluationId);
     return note;
   });
+}
+
+/**
+ * The payload of a `grading.regrade` audit entry: written by the regrade
+ * route, and read back by {@link checkLlmRegradeBudget} — one shape, so a
+ * renamed key cannot silently reset the budgets.
+ */
+export const RegradeAudit = z.object({
+  itemId: z.string(),
+  note: z.string(),
+  toVersionNumber: z.number().nullable(),
+  modifiedAfterRelease: z.boolean(),
+  /** The re-grade asked the model again: what the budget counts. */
+  llm: z.literal(true).optional(),
+});
+export type RegradeAudit = z.infer<typeof RegradeAudit>;
+const REGRADE_KEY = RegradeAudit.keyof().enum;
+
+/**
+ * Whether a re-grade of this item asks the model again — it did grade one of
+ * its answers — and, then, the item's daily budget (audit L2): past
+ * {@link LLM_REGRADES_PER_ITEM_PER_DAY} such re-grades today (Europe/Zurich,
+ * the server's clock), `429 llm_budget_exhausted`. The count is the audit
+ * log's: the regrade route records each one with `llm: true`. Two re-grades
+ * of one item pressed at the same instant may both pass the count; the
+ * budget bounds a day, not a race (ADR-058, amendment of 2026-10-11).
+ */
+export async function checkLlmRegradeBudget(db: Db, evaluationId: string, itemId: string, now: Date): Promise<boolean> {
+  const [graded] = await db
+    .select({ id: gradings.id })
+    .from(gradings)
+    .where(and(eq(gradings.itemId, itemId), eq(gradings.source, "llm")))
+    .limit(1);
+  if (!graded) return false;
+  const [today] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.action, "grading.regrade"),
+        eq(auditLog.subjectId, evaluationId),
+        sql`${auditLog.payload}->>${REGRADE_KEY.itemId} = ${itemId}`,
+        sql`${auditLog.payload}->>${REGRADE_KEY.llm} = 'true'`,
+        sql`${auditLog.createdAt} >= date_trunc('day', ${now.toISOString()}::timestamptz, ${SCHOOL_TIME_ZONE})`,
+      ),
+    );
+  if ((today?.n ?? 0) >= LLM_REGRADES_PER_ITEM_PER_DAY) throw new GradingError("llm_budget_exhausted");
+  return true;
 }
 
 /**

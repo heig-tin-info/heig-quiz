@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { ApiToken } from "@quiz/contracts";
 
 import { ApiTokensCard } from "./ApiTokensCard";
+import { makeMe } from "./test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "./test/render";
 
 const token = (over: Partial<ApiToken> = {}): ApiToken => ({
@@ -54,5 +55,22 @@ describe("ApiTokensCard", () => {
     expect(within(reveal).getByRole("textbox", { name: /mcp server address/i })).toHaveValue(
       `${window.location.origin}/app/api/mcp`,
     );
+  });
+
+  it("offers a teacher a token that never expires, never an administrator (audit L6)", async () => {
+    const user = userEvent.setup();
+    const lifetimes = async (role: "teacher" | "admin") => {
+      mockFetch({ "GET /app/api/me": ok(makeMe({ role })), "GET /app/api/me/tokens": ok([]) });
+      const view = renderWithProviders(<ApiTokensCard />);
+      await user.click(await screen.findByRole("button", { name: /new token/i }));
+      const dialog = await screen.findByRole("dialog");
+      const select = within(dialog).getByRole("combobox", { name: /expires/i });
+      await waitFor(() => expect(within(dialog).queryByText(/always expires/i) !== null).toBe(role === "admin"));
+      const options = within(select).getAllByRole("option").map((o) => o.textContent);
+      view.unmount();
+      return options;
+    };
+    expect(await lifetimes("teacher")).toContain("Never");
+    expect(await lifetimes("admin")).not.toContain("Never");
   });
 });

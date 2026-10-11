@@ -18,6 +18,8 @@ import {
   CONCEPT_QUALIFIER_MAX,
 } from "@quiz/domain";
 
+import { LlmDraftConfig } from "./llm.js";
+
 export const CONCEPT_LANGS = ["fr", "en"] as const;
 export const ConceptLang = z.enum(CONCEPT_LANGS);
 export type ConceptLang = z.infer<typeof ConceptLang>;
@@ -140,7 +142,7 @@ export const CONCEPT_SUGGEST_NEW_MAX = 2;
 /** A label to create, as the picker's form takes it: label and qualifier apart, each within its maximum. */
 export const NewConceptName = z.object({ label: z.string().min(1).max(CONCEPT_LABEL_MAX), qualifier: z.string().max(CONCEPT_QUALIFIER_MAX) });
 export type NewConceptName = z.infer<typeof NewConceptName>;
-export const SuggestConceptsRequest = z.object({ config: z.unknown() }).strict();
+export const SuggestConceptsRequest = z.object({ config: LlmDraftConfig }).strict();
 export type SuggestConceptsRequest = z.infer<typeof SuggestConceptsRequest>;
 export const ConceptSuggestions = z.object({
   existing: z

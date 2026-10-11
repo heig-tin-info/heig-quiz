@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
@@ -35,6 +35,7 @@ import {
   serves,
   deleteSession,
   findSessionUser,
+  sameSecret,
   type NewSession,
   type SessionAuth,
   type SessionState,
@@ -59,6 +60,12 @@ declare module "fastify" {
      * anonymous.
      */
     authVia: "session" | "token" | "assistant" | null;
+    /**
+     * The bearer token of this request never expires (a personal token made
+     * with no lifetime): what the administration routes refuse
+     * (`adminGuard`, audit L6). False for anything else.
+     */
+    endlessToken: boolean;
     /**
      * The assistant's tool a write of `authVia: "assistant"` runs
      * (`ASSIST_TOOL_HEADER`), for its audit entry; null otherwise.
@@ -161,6 +168,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
   app.decorateRequest("authVia", null);
+  app.decorateRequest("endlessToken", false);
   app.decorateRequest("assistTool", null);
   app.decorateRequest("auth", null);
   app.decorateRequest("caller", null);
@@ -169,8 +177,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   app.decorate("internalCallSecret", internalSecret);
   const isInternalCall = (req: FastifyRequest) => {
     const raw = req.headers[INTERNAL_CALL_HEADER];
-    if (typeof raw !== "string" || raw.length !== internalSecret.length) return false;
-    return timingSafeEqual(Buffer.from(raw), Buffer.from(internalSecret));
+    return typeof raw === "string" && sameSecret(raw, internalSecret);
   };
   app.addHook("preHandler", async (req, reply) => {
     // A bearer token is only ever read on the JSON API (ADR-022). When the
@@ -193,6 +200,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         if (path === MCP_PATH ? assistant : !isInternalCall(req)) return;
       }
       req.user = found.user;
+      req.endlessToken = found.expiresAt === null;
       if (found.audience === ASSIST_AUDIENCE) {
         req.authVia = "assistant";
         const tool = req.headers[ASSIST_TOOL_HEADER];

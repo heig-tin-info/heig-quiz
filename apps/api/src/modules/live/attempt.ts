@@ -18,6 +18,7 @@ import {
   type AttemptItem,
   type AttemptOrLobby,
   type AttemptView,
+  type CourseRole,
   type EvaluationCard,
   type EvaluationConditions,
   type EvaluationRules,
@@ -88,6 +89,7 @@ import {
   countedAttempt,
   countedAttemptId,
   gradeReadable,
+  keyShownTo,
   releasedGradesOf,
   resultsState,
   scoreVisible,
@@ -202,6 +204,17 @@ export function reopenRefusal(
   if (retakesEnabled(evaluation)) return "retakes_enabled";
   if (evaluation.correctionPublishedAt !== null) return "correction_published";
   return null;
+}
+
+/**
+ * The course role reopening an attempt in `attemptState` takes (ADR-068 §3,
+ * audit L9): an owner's once the policy has shown its student the answer
+ * key (`keyShownTo`, the rule of their feedback page: an exercise in
+ * `immediate` with `showKey`), any member's otherwise. The route's loader
+ * applies it; the owner's reopening is then a derogation, audited as such.
+ */
+export function reopenRole(evaluation: EvaluationRecord, attemptState: string): CourseRole {
+  return keyShownTo(evaluation, attemptState) ? "owner" : "assistant";
 }
 
 export class AnswerInvalid extends LiveError {
@@ -1404,14 +1417,16 @@ export async function reopenAttempt(
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
-): Promise<AttemptRecord> {
+): Promise<{ row: AttemptRecord; derogation: "key_shown" | null }> {
   if (evaluation.state !== "running" && evaluation.state !== "paused") {
     throw new LiveError("evaluation_not_live");
   }
-  if (attempt.state === "in_progress") return attempt;
+  if (attempt.state === "in_progress") return { row: attempt, derogation: null };
   const refused = reopenRefusal(evaluation);
-  if (refused === "retakes_enabled") throw new LiveError("retakes_enabled");
-  if (refused === "correction_published") throw new LiveError("correction_published");
+  if (refused !== null) throw new LiveError(refused);
+  // The caller's role was the loader's step (`reopenRole`): past it, a
+  // reopening the key was shown before is an owner's derogation (audit L9).
+  const derogation = reopenRole(evaluation, attempt.state) === "owner" ? "key_shown" : null;
   const participant = await participantOfAttempt(db, evaluation, attempt);
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {
     startedAt: attempt.startedAt ?? now,
@@ -1444,7 +1459,7 @@ export async function reopenAttempt(
   });
   const row = (await attemptById(db, attempt.id))!;
   events.deadlineChanged(evaluation, row, "reopen", now);
-  return row;
+  return { row, derogation };
 }
 
 // --- Student home (F-LIVE-01) --------------------------------------------

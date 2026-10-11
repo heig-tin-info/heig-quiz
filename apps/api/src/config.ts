@@ -17,6 +17,13 @@ export const RUNS_PER_EVALUATION = 4;
  * Configuration via environment variables, validated at startup (fail-fast).
  * Secrets only travel through the environment (ADR-010).
  */
+/**
+ * The shortest secret accepted, in characters: the LLM master key, the
+ * codespace launch secret (ADR-047 §5), and in production the webhook secret
+ * (N-SEC-16), the cookie key and the runner and metrics bearers (audit L19).
+ */
+export const SECRET_MIN = 32;
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   HOST: z.string().default("0.0.0.0"),
@@ -260,7 +267,7 @@ const EnvSchema = z.object({
   LLM_KEY_SECRET: z
     .string()
     .default("")
-    .refine((s) => s === "" || s.length >= 32, "must be at least 32 characters"),
+    .refine((s) => s === "" || s.length >= SECRET_MIN, `must be at least ${SECRET_MIN} characters`),
   /** The most the console may set as the daily spending cap, in USD (ADR-058 §5). */
   LLM_DAILY_CAP_MAX_USD: z.coerce.number().positive().default(100),
 
@@ -380,16 +387,24 @@ const EnvSchema = z.object({
   /**
    * HS256 key shared with the portal, for the launch and service tokens
    * (M6-01). Environment only (ADR-010): never in the database, a payload or
-   * a log. At least `CODESPACE_LAUNCH_SECRET_MIN` characters.
+   * a log. At least `SECRET_MIN` characters.
    */
   CODESPACE_LAUNCH_SECRET: z.string().trim().default(""),
 });
 
-/** The shortest launch secret accepted (ADR-047 section 5). */
-export const CODESPACE_LAUNCH_SECRET_MIN = 32;
-
-/** The shortest webhook secret production accepts (N-SEC-16). */
-export const GITHUB_WEBHOOK_SECRET_MIN = 32;
+/**
+ * Production refusals of the short secrets (audit L19): the cookie signing
+ * key, and the runner and metrics bearers when they are in use. Every one in
+ * one message, so an operator fixes the file once.
+ */
+function shortSecrets(env: AppConfig): string[] {
+  const inUse = [
+    ["COOKIE_SECRET", env.COOKIE_SECRET],
+    ...(env.RUNNER_MODE === "http" ? [["RUNNER_TOKEN", env.RUNNER_TOKEN.trim()] as const] : []),
+    ...(env.METRICS_TOKEN === "" ? [] : [["METRICS_TOKEN", env.METRICS_TOKEN] as const]),
+  ] as const;
+  return inUse.filter(([, value]) => value.length < SECRET_MIN).map(([key]) => key);
+}
 
 /**
  * Production refusals of the GitHub App (N-SEC-16). No App id: GitHub is
@@ -407,8 +422,8 @@ function githubRefusal(env: AppConfig): string | null {
   if (env.GITHUB_APP_CLIENT_ID === "" || env.GITHUB_APP_CLIENT_SECRET === "") {
     return "GITHUB_APP_CLIENT_ID and GITHUB_APP_CLIENT_SECRET are required";
   }
-  if (env.GITHUB_WEBHOOK_SECRET.length < GITHUB_WEBHOOK_SECRET_MIN) {
-    return `GITHUB_WEBHOOK_SECRET must be at least ${GITHUB_WEBHOOK_SECRET_MIN} characters`;
+  if (env.GITHUB_WEBHOOK_SECRET.length < SECRET_MIN) {
+    return `GITHUB_WEBHOOK_SECRET must be at least ${SECRET_MIN} characters`;
   }
   return null;
 }
@@ -500,13 +515,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // repository: refuse it at boot instead (N-SEC-16).
     const github = githubRefusal(parsed.data);
     if (github) throw new Error(`Invalid configuration: ${github}`);
+    const short = shortSecrets(parsed.data);
+    if (short.length > 0) {
+      throw new Error(`Invalid configuration: ${short.join(", ")} must be at least ${SECRET_MIN} characters in production`);
+    }
   }
   // A portal URL without a signing key would mint nothing the portal accepts
   // (or, worse, a guessable one): refused in development too. The answer
   // there is to leave both unset (the feature is off) or set a real secret.
-  if (parsed.data.CODESPACE_URL !== "" && parsed.data.CODESPACE_LAUNCH_SECRET.length < CODESPACE_LAUNCH_SECRET_MIN) {
+  if (parsed.data.CODESPACE_URL !== "" && parsed.data.CODESPACE_LAUNCH_SECRET.length < SECRET_MIN) {
     throw new Error(
-      `Invalid configuration: CODESPACE_URL requires CODESPACE_LAUNCH_SECRET of at least ${CODESPACE_LAUNCH_SECRET_MIN} characters`,
+      `Invalid configuration: CODESPACE_URL requires CODESPACE_LAUNCH_SECRET of at least ${SECRET_MIN} characters`,
     );
   }
   // `http` without an address is a runner that is silently never called: the

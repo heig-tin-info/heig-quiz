@@ -7,6 +7,7 @@ sequencing) are the product owner's decisions of 2026-10-09. The other
 points are assumed defaults the owner may amend at review; points 7 and 8
 flag two weaker guarantees for the owner's attention. Nothing is
 implemented, and implementation waits for proof B (§9).
+Since 2026-10-11 its "GET start route" is `POST /app/api/projects/:id/workspace/start` (ADR-047, audit L7).
 
 Scope: how a student works in the online workspace of an `online_seb`
 project from an attested kiosk station, across the two hosts of Quiz and

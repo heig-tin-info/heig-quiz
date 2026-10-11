@@ -63,6 +63,7 @@ export {
   submitAttempt,
   closeAttempt,
   reopenAttempt,
+  reopenRole,
   studentHome,
   drawSeed,
   orderItems,

@@ -10,7 +10,7 @@ import {
   type OAuthConnection,
 } from "@quiz/contracts";
 
-import { api } from "./api";
+import { api, useMe } from "./api";
 import { useConfirm } from "./confirm";
 import { useI18n } from "./i18n";
 import { apiTokensKey, connectionsKey } from "./queryKeys";
@@ -86,6 +86,8 @@ function NewTokenDialog({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [ttl, setTtl] = useState<string>("90");
+  // Audit L6: an administrator's token always expires.
+  const admin = useMe().data?.role === "admin";
   const create = useMutation({
     mutationFn: (body: ApiTokenCreate) =>
       api<ApiTokenCreated>("/app/api/me/tokens", { method: "POST", body: JSON.stringify(body) }),
@@ -146,8 +148,9 @@ function NewTokenDialog({ onClose }: { onClose: () => void }) {
             {t("tokens.days", { n: days })}
           </option>
         ))}
-        <option value="never">{t("tokens.never")}</option>
+        {admin ? null : <option value="never">{t("tokens.never")}</option>}
       </Select>
+      {admin ? <p className="text-sm text-fg-muted">{t("tokens.adminExpires")}</p> : null}
     </FormDialog>
   );
 }

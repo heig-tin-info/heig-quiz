@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { API_TOKEN_PREFIX, type ApiToken, type ApiTokenCreated } from "@quiz/contracts";
 
 import { apiTokens, auditLog } from "../db/schema.js";
+import { createApiToken } from "./tokens.js";
 import { type Payload, testServer, type TestServer } from "../test/http.js";
 
 let server: TestServer;
@@ -121,6 +122,34 @@ describe("using a token", () => {
     server.clock.advance(31 * 86_400_000);
     const res = await server.app.inject({ method: "GET", url: "/app/api/courses", headers: bearer(body.token) });
     expect(res.statusCode).toBe(401);
+  });
+
+  it("reaches the administration only if it expires (audit L6)", async () => {
+    const admin = await server.signIn("admin");
+    const usersOf = (token: string) =>
+      server.app.inject({ method: "GET", url: "/app/api/admin/users", headers: bearer(token) });
+
+    // An administrator mints none that never expires…
+    const endless = await mint(admin.headers, { name: "forever", expiresInDays: null });
+    expect(endless.status).toBe(422);
+    expect(endless.body).toMatchObject({ error: "token_expiry_required" });
+    // …and one made before the rule is refused there, while the rest of the API still takes it.
+    const old = await createApiToken(server.app.db, admin.id, { name: "old", expiresInDays: null }, server.clock.now());
+    const refused = await usersOf(old.token);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ error: "token_expiry_required" });
+    const courses = await server.app.inject({ method: "GET", url: "/app/api/courses", headers: bearer(old.token) });
+    expect(courses.statusCode).toBe(200);
+
+    // A token that expires reaches it.
+    const { status, body } = await mint(admin.headers, { name: "monthly", expiresInDays: 30 });
+    expect(status).toBe(201);
+    expect((await usersOf(body.token)).statusCode).toBe(200);
+
+    // A teacher's endless token is theirs to keep; the administration answers it the role's 403.
+    const own = await mint(teacher.headers, { name: "forever", expiresInDays: null });
+    expect(own.status).toBe(201);
+    expect((await usersOf(own.body.token)).json()).toEqual({ error: "forbidden" });
   });
 
   it("cannot be revoked by someone else: 404, like a token that never existed", async () => {

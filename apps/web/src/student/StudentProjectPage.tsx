@@ -38,11 +38,12 @@ import {
   workspaceStartPath,
   WorkspaceStartRefusal,
   type ProjectInvitationResent,
+  type WorkspaceStart,
   type StudentProject,
   type StudentProjectRepo,
 } from "@quiz/contracts";
 
-import { api, isNotFound, useMe } from "../api";
+import { api, apiErrorMessage, isNotFound, refusalCodeOf, useMe } from "../api";
 import { Grade } from "../Grade";
 import { useT } from "../i18n";
 import { useNoticeToasts } from "../notifications/notices";
@@ -55,7 +56,6 @@ import { CiBadge } from "../project/parts";
 import {
   Alert,
   Button,
-  buttonClass,
   Card,
   EmptyState,
   GithubIcon,
@@ -228,9 +228,9 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
 }
 
 /**
- * Why the workspace did not open (ADR-047, M6-06): the start route sends
- * the student back here with `?workspace=<code>` (`WorkspaceStartRefusal`);
- * any other value is ignored.
+ * Why the workspace did not open (ADR-047, M6-06): the start route's
+ * refusal, kept in the address as `?workspace=<code>` (`WorkspaceStartRefusal`)
+ * so that a reload still says it; any other value is ignored.
  */
 function WorkspaceRefusal() {
   const t = useT();
@@ -245,12 +245,11 @@ function WorkspaceRefusal() {
 }
 
 /**
- * The online workspace (ADR-047, M6-06): *Open workspace*, a plain link to
- * the start route — a navigation, never a fetch: the server answers with a
- * redirect to the portal —, once the student's repository exists; the
- * page's accent when the repository is ready and nothing else is asked of
- * the student. Under Safe Exam Browser (D21, M6-07), the link opens from
- * the project's own `seb` session only; from the portal, the action is the
+ * The online workspace (ADR-047, M6-06): *Open workspace* ({@link
+ * OpenWorkspaceButton}) once the student's repository exists; the page's
+ * accent when the repository is ready and nothing else is asked of the
+ * student. Under Safe Exam Browser (D21, M6-07), it opens from the
+ * project's own `seb` session only; from the portal, the action is the
  * project's `.seb`, through the steps of {@link SebLaunchModal}.
  */
 function WorkspaceSection({
@@ -271,9 +270,7 @@ function WorkspaceSection({
   const online = project.workspace?.mode === "online";
   const variant = primary ? "primary" : "secondary";
   const action = !live ? null : online || inSeb ? (
-    <a href={workspaceStartPath(project.id)} className={buttonClass(variant)}>
-      <Laptop /> {t("sproj.workspace.open")}
-    </a>
+    <OpenWorkspaceButton projectId={project.id} variant={variant} />
   ) : readOnly ? null : (
     <Button variant={variant} onClick={() => setLaunching(true)}>
       <Lock /> {t("sproj.workspace.openInSeb")}
@@ -292,6 +289,34 @@ function WorkspaceSection({
         <SebLaunchModal kind="workspace" href={projectSebPath(project.id)} title={project.title} onClose={() => setLaunching(false)} />
       ) : null}
     </section>
+  );
+}
+
+/**
+ * *Open workspace* (audit L7): a POST to the start route — a write under the
+ * CSRF check, never a link a cross-site page could make a browser follow —,
+ * then the page goes to the portal's launch address it answers. A refusal
+ * the student can read lands in the address (`?workspace=<code>`), where
+ * {@link WorkspaceRefusal} words it; anything else is a toast.
+ */
+function OpenWorkspaceButton({ projectId, variant }: { projectId: string; variant: "primary" | "secondary" }) {
+  const t = useT();
+  const toast = useToast();
+  const [, setRefusal] = useSearchParam("workspace", "");
+  const open = useMutation({
+    mutationFn: () => api<WorkspaceStart>(workspaceStartPath(projectId), { method: "POST" }),
+    onSuccess: ({ url }) => window.location.assign(url),
+    onError: (error) => {
+      const refusal = WorkspaceStartRefusal.safeParse(refusalCodeOf(error));
+      if (refusal.success) setRefusal(refusal.data);
+      else toast(apiErrorMessage(error, t("error.save")), "error");
+    },
+  });
+  // Still busy once answered: the page is leaving for the portal.
+  return (
+    <Button variant={variant} onClick={() => open.mutate()} loading={open.isPending || open.isSuccess}>
+      <Laptop /> {t("sproj.workspace.open")}
+    </Button>
   );
 }
 

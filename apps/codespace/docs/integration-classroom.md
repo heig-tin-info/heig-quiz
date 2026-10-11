@@ -150,6 +150,12 @@ distributed.
 
 ## 5. Exam mode: who authenticates, who verifies
 
+> **In Quiz.** The `.seb`'s `startURL` is the platform's one-time ticket
+> (M6-07), which lands on the project page; the launch is that page's
+> `POST /app/api/projects/<id>/workspace/start` (security audit L7, ADR-047),
+> which answers the portal's `/launch?token=…` for the page to open. No
+> navigable start route remains.
+
 The `startURL` written into the `.seb` file is **classroom's**:
 
 ```text

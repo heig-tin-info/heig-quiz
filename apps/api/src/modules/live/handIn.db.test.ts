@@ -263,7 +263,7 @@ describe("a reopen of an exercise attempt graded at hand-in", () => {
     app.clock.advance(1000);
     now = app.clock.now();
     const finished = (await live.attemptById(db, attempt.id))!;
-    const reopened = await live.reopenAttempt(db, evaluation, finished, now);
+    const { row: reopened } = await live.reopenAttempt(db, evaluation, finished, now);
     const afterReopen = await standing(attempt.id);
     expect(afterReopen.map((r) => r.id)).toEqual([override.id]);
     // Nothing deleted: the stood-down grading is still in the history.
@@ -298,7 +298,7 @@ describe("a reopen of an exercise attempt graded at hand-in", () => {
     // Reopened while its runner job waits: the job, run now, is stale.
     app.clock.advance(1000);
     now = app.clock.now();
-    const reopened = await live.reopenAttempt(db, evaluation, (await live.attemptById(db, attempt.id))!, now);
+    const { row: reopened } = await live.reopenAttempt(db, evaluation, (await live.attemptById(db, attempt.id))!, now);
     await drain(GRADING_RUNNER_QUEUE);
     expect(runner.calls).toBe(0);
     expect((await standing(attempt.id)).filter((r) => r.itemId === code.id)).toEqual([]);
@@ -337,7 +337,7 @@ describe("a reopen racing a grading write (ADR-067)", () => {
         grade: async (...args: Parameters<typeof mcqType.grade>) => {
           if (!reopened) {
             const finished = (await live.attemptById(db, attempt.id))!;
-            reopened = await live.reopenAttempt(db, evaluation, finished, app.clock.now());
+            ({ row: reopened } = await live.reopenAttempt(db, evaluation, finished, app.clock.now()));
           }
           return mcqType.grade(...args);
         },
@@ -378,7 +378,7 @@ describe("a reopen racing a grading write (ADR-067)", () => {
             raced = true;
             app.clock.advance(1000);
             const finished = (await live.attemptById(db, attempt.id))!;
-            const reopened = await live.reopenAttempt(db, evaluation, finished, app.clock.now());
+            const { row: reopened } = await live.reopenAttempt(db, evaluation, finished, app.clock.now());
             await answer(evaluation, reopened, mcq.id, { selected: [2] }, 2, app.clock.now());
             app.clock.advance(1000);
             await live.submitAttempt(db, evaluation, reopened, app.clock.now(), app);

@@ -40,6 +40,13 @@ export async function apiTokenRoutes(app: FastifyInstance) {
   app.post("/app/api/me/tokens", { preHandler: sessionOnly }, async (req, reply) => {
     const body = ApiTokenCreate.safeParse(req.body ?? {});
     if (!body.success) return invalid(reply, body.error);
+    // Audit L6: an administrator's token always expires.
+    if (body.data.expiresInDays === null && req.user!.role === "admin") {
+      return reply.code(422).send({
+        error: "token_expiry_required",
+        message: "An administrator's token must expire",
+      });
+    }
     const created = await createApiToken(app.db, req.user!.id, body.data, app.clock.now());
     await audit(app.db, {
       actorUserId: req.user!.id,

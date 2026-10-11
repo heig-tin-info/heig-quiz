@@ -6,10 +6,17 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, gte, isNull, sql, sum } from "drizzle-orm";
+import { and, eq, gte, isNull, notInArray, sql, sum } from "drizzle-orm";
 
 import type { LlmErrorCode, LlmUsage } from "@quiz/contracts";
-import { llmCostUsd, SCHOOL_TIME_ZONE, shareAllows, type LlmPurpose } from "@quiz/domain";
+import {
+  llmCostUsd,
+  SCHOOL_TIME_ZONE,
+  shareAllows,
+  USER_SHARE_EXEMPT,
+  userShareAllows,
+  type LlmPurpose,
+} from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
 import { llmCalls, llmSettings, users } from "../../db/schema.js";
@@ -35,12 +42,19 @@ export const startOfDay = (now: Date) => startOf("day", now);
  * Today's estimated spend, calls in flight included at their worst case.
  * `purpose` narrows it to one purpose, and `unattributed` to its calls made
  * by no person: the night's review counts its own share so (ADR-060 §5),
- * the assistant its own, every teacher's together (ADR-080 §4).
+ * the assistant its own, every teacher's together (ADR-080 §4). `userId`
+ * narrows it to one person's calls and `exceptPurposes` leaves purposes
+ * out: a person's share (audit L2).
  */
 export async function spentToday(
   db: Db | Tx,
   now: Date,
-  only?: { purpose: LlmPurpose; unattributed?: boolean },
+  only: {
+    purpose?: LlmPurpose;
+    unattributed?: boolean;
+    userId?: string;
+    exceptPurposes?: readonly LlmPurpose[];
+  } = {},
 ): Promise<number> {
   const [row] = await db
     .select({ total: sum(llmCalls.costUsd) })
@@ -48,8 +62,10 @@ export async function spentToday(
     .where(
       and(
         gte(llmCalls.createdAt, startOf("day", now)),
-        ...(only ? [eq(llmCalls.purpose, only.purpose)] : []),
-        ...(only?.unattributed ? [isNull(llmCalls.userId)] : []),
+        ...(only.purpose ? [eq(llmCalls.purpose, only.purpose)] : []),
+        ...(only.unattributed ? [isNull(llmCalls.userId)] : []),
+        ...(only.userId ? [eq(llmCalls.userId, only.userId)] : []),
+        ...(only.exceptPurposes?.length ? [notInArray(llmCalls.purpose, [...only.exceptPurposes])] : []),
       ),
     );
   return Number(row?.total ?? 0);
@@ -81,10 +97,11 @@ export async function todayBudget(db: Db, now: Date): Promise<{ spentUsd: number
  * therefore cannot both slip under the cap. Otherwise `budget_exhausted` is
  * thrown and nothing reaches the provider; the day's first refusal is logged.
  *
- * `share`, the chat's share of the cap (ADR-080 §4, `shareAllows`), is
- * checked first: its refusal is
- * the same `budget_exhausted` but writes nothing — the cap itself was not
- * reached, so the `llm.budget` check stays green.
+ * `share`, the chat's share of the cap (ADR-080 §4, `shareAllows`), and
+ * the person's share of a call made for a person (audit L2,
+ * `userShareAllows`), are checked first: their
+ * refusal is the same `budget_exhausted` but writes nothing — the cap itself
+ * was not reached, so the `llm.budget` check stays green.
  */
 export async function reserveCall(
   db: Db,
@@ -121,6 +138,17 @@ export async function reserveCall(
         },
         call.share,
       )
+    ) {
+      return false;
+    }
+    if (
+      call.userId !== null &&
+      !userShareAllows({
+        purpose: call.purpose,
+        spentUserUsd: await spentToday(tx, call.now, { userId: call.userId, exceptPurposes: USER_SHARE_EXEMPT }),
+        worstCaseUsd: call.worstCaseUsd,
+        capUsd: call.capUsd,
+      })
     ) {
       return false;
     }

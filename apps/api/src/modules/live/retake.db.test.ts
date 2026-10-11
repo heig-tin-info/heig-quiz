@@ -584,6 +584,7 @@ describe("the screens with several attempts", () => {
       now: app.clock.now(),
       includeAnswers: false,
       includeResults: false,
+      caller: { id: "00000000-0000-4000-8000-000000000000", reach: "all" },
     });
     expect(view.evaluation.reopenable).toBe(false);
     const row = view.rows.find((r) => r.userId === student)!;
@@ -614,6 +615,7 @@ describe("the screens with several attempts", () => {
       now: app.clock.now(),
       includeAnswers: false,
       includeResults: false,
+      caller: { id: "00000000-0000-4000-8000-000000000000", reach: "all" },
     });
     let row = view.rows.find((r) => r.userId === student)!;
     expect(row.attemptId).toBe(second.id);
@@ -628,6 +630,7 @@ describe("the screens with several attempts", () => {
       now: app.clock.now(),
       includeAnswers: false,
       includeResults: false,
+      caller: { id: "00000000-0000-4000-8000-000000000000", reach: "all" },
     });
     row = view.rows.find((r) => r.userId === student)!;
     expect(row.cells.map((c) => c.flagged)).toEqual([false, true]);

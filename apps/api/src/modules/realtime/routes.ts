@@ -33,6 +33,7 @@ import {
   accessWhere,
   callerOf,
   findReachableEvaluation,
+  type Caller,
   myPools,
   sitRefusal,
   staffAccess,
@@ -309,6 +310,7 @@ async function snapshotOf(
   stream: Stream,
   watch: Watch,
   now: Date,
+  caller: Caller,
 ): Promise<ServerEvent | null> {
   const seq = stream.stateSeq;
   const evaluation = await app.db
@@ -348,6 +350,7 @@ async function snapshotOf(
         now,
         includeAnswers: false,
         includeResults: false,
+        caller,
       }),
     };
   }
@@ -529,7 +532,7 @@ export async function realtimePlugin(app: FastifyInstance) {
       announceLobby(app, watch.evaluationId);
     }
     if (watch !== null) {
-      const snapshot = await snapshotOf(app, stream, watch, app.clock.now());
+      const snapshot = await snapshotOf(app, stream, watch, app.clock.now(), callerOf(req));
       if (snapshot) sendNamed(stream, snapshot, Date.now());
     }
     return reply;

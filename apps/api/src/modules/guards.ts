@@ -361,6 +361,11 @@ export function teacherGuard(app: FastifyInstance) {
  * `reach` (ADR-054). `hidden`: anyone else gets the 404 of a missing entity
  * rather than a 403, for a route on an entity a non-admin could reach
  * otherwise (invariant 6: the refusal says nothing about the entity).
+ *
+ * A personal token reaches these routes only if it expires (audit L6, the
+ * product owner's decision of 2026-10-10): an endless one gets `403
+ * token_expiry_required`, after the role, so it says nothing to a
+ * non-admin. The MCP tools keep working with tokens that do.
  */
 export function adminGuard(app: FastifyInstance, { hidden = false } = {}) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
@@ -368,6 +373,12 @@ export function adminGuard(app: FastifyInstance, { hidden = false } = {}) {
     if (denied) return denied;
     if (req.user!.role !== "admin") {
       return reply.code(hidden ? 404 : 403).send({ error: hidden ? "not_found" : "forbidden" });
+    }
+    if (req.endlessToken) {
+      return reply.code(403).send({
+        error: "token_expiry_required",
+        message: "An administration route takes a token that expires: create one with a lifetime",
+      });
     }
     return undefined;
   };
@@ -1272,11 +1283,16 @@ export const loadEvaluationAttempt =
     req: FastifyRequest,
     reply: FastifyReply,
     p: { id: string; attemptId: string },
-  ): Promise<{ evaluation: typeof evaluations.$inferSelect; attempt: typeof attempts.$inferSelect } | null> => {
+  ): Promise<{
+    evaluation: typeof evaluations.$inferSelect;
+    attempt: typeof attempts.$inferSelect;
+    /** The evaluation's course, for a role step (ADR-068). */
+    courseId: string;
+  } | null> => {
     const scope = await loadEvaluation(app, req, reply, p.id);
     if (!scope) return null;
     const attempt = await staffAttempt(app, req, reply, { evaluationId: p.id, attemptId: p.attemptId });
-    return attempt && { evaluation: scope.evaluation, attempt };
+    return attempt && { evaluation: scope.evaluation, attempt, courseId: scope.classroom.courseId };
   };
 
 // ---------------------------------------------------------------------------

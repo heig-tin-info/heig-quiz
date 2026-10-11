@@ -65,8 +65,8 @@ describe("the online workspace off (CODESPACE_URL empty)", () => {
 
     const inject = (method: "GET" | "PUT" | "POST" | "PATCH", url: string, headers: Record<string, string>, payload?: object) =>
       server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
-    expect((await inject("GET", `/app/codespace/start/${id}`, student.headers)).statusCode).toBe(404);
-    expect((await inject("GET", `/app/codespace/start/${id}`, {})).statusCode).toBe(404);
+    expect((await inject("POST", `/app/api/projects/${id}/workspace/start`, student.headers)).statusCode).toBe(404);
+    expect((await inject("POST", `/app/api/projects/${id}/workspace/start`, {})).statusCode).toBe(404);
     expect((await inject("GET", `/app/api/projects/${id}/workspace`, teacher.headers)).statusCode).toBe(404);
     expect((await inject("PUT", `/app/api/projects/${id}/workspace/mode`, teacher.headers, { mode: "free" })).statusCode).toBe(404);
     expect((await inject("POST", `/app/api/projects/${id}/workspace/sync`, teacher.headers)).statusCode).toBe(404);

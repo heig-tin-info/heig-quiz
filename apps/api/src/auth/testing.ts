@@ -116,7 +116,7 @@ export async function openSebSession(
 export const PROJECT_SEB_ROUTES = new Set([
   "GET /app/api/me",
   "GET /app/api/student/projects/:id",
-  "GET /app/codespace/start/:id",
+  "POST /app/api/projects/:id/workspace/start",
 ]);
 
 /**

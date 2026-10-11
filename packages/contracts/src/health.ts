@@ -9,19 +9,30 @@ const HealthStatus = z.enum(["ok", "degraded"]);
 /**
  * `GET /healthz`: PUBLIC, probed by the container healthcheck, the deploy
  * gate (ADR-028) and an external uptime service. It stays NARROW (ADR-055):
- * a 503 only when the database is down, and coarse words only — never a
- * path, a size, a name or a number beyond the uptime. The details are the
- * administrators' (`SystemStatus`).
+ * a 503 only when the database is down. Anyone reads this much (amended
+ * 2026-10-11, audit L21); the coarse words of {@link HealthResponse} are for
+ * the `METRICS_TOKEN` bearer and an administrator's session. The answer is
+ * computed at most once every few seconds, whoever asks.
  */
-export const HealthResponse = z.object({
+export const HealthProbe = z.object({
   status: HealthStatus,
   /**
-   * `true` when one of the coarse checks below needs the operator (a stale
+   * `true` when one of the coarse checks needs the operator (a stale
    * ticker, a low disk, a stale or failed backup, a configured runner that
    * does not answer). The external probe alerts on it (deployment.md §7);
    * it never changes the HTTP status.
    */
   attention: z.boolean(),
+});
+export type HealthProbe = z.infer<typeof HealthProbe>;
+
+/**
+ * `GET /healthz` with the `METRICS_TOKEN` bearer or an administrator's
+ * session: the probe and its coarse words — never a path, a size, a name or
+ * a number beyond the uptime. The details are the administrators'
+ * (`SystemStatus`).
+ */
+export const HealthResponse = HealthProbe.extend({
   checks: z.object({
     database: z.enum(["up", "down"]),
     jobs: z.enum(["up", "down"]),

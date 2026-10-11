@@ -85,6 +85,32 @@ describe("gitRunner", () => {
     );
   });
 
+  it("hands git nothing of the API's environment, nor any configuration but its own (audit L20)", async () => {
+    process.env.QUIZ_TEST_SECRET = "leak-me";
+    try {
+      const { git } = gitRunner({ token: TOKEN });
+      await git(dir, "ls-remote", `file://${remote}`);
+      const env = spawned.mock.calls[0]![2]!.env!;
+      expect(Object.keys(env).sort()).toEqual([
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_GLOBAL",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_NOSYSTEM",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "HOME",
+        "PATH",
+      ]);
+      expect(env).toMatchObject({ GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_TERMINAL_PROMPT: "0" });
+      expect(env.HOME).toBe("/nonexistent");
+      expect(JSON.stringify(env)).not.toContain("leak-me");
+      // Git reads no user configuration at all: not even an identity.
+      await expect(plain.git(dir, "config", "--global", "--get", "user.name")).rejects.toThrow();
+    } finally {
+      delete process.env.QUIZ_TEST_SECRET;
+    }
+  });
+
   it("sets no credential without a token", async () => {
     await plain.git(dir, "ls-remote", `file://${remote}`);
     expect(spawned.mock.calls[0]![2]?.env?.GIT_CONFIG_VALUE_0).toBeUndefined();

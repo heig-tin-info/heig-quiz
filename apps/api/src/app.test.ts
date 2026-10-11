@@ -52,8 +52,10 @@ describe("app (without a database)", () => {
     await app.close();
   });
 
+  const scraper = { authorization: "Bearer scrape-me" };
+
   it("healthz answers 503 degraded when the database is unreachable", async () => {
-    const res = await app.inject({ method: "GET", url: "/healthz" });
+    const res = await app.inject({ method: "GET", url: "/healthz", headers: scraper });
     expect(res.statusCode).toBe(503);
     expect(res.json()).toMatchObject({
       status: "degraded",
@@ -63,8 +65,16 @@ describe("app (without a database)", () => {
     });
   });
 
+  it("healthz answers the public its status and alarm alone (audit L21)", async () => {
+    for (const headers of [{}, { authorization: "Bearer scrape-me-not" }, { authorization: "scrape-me" }]) {
+      const res = await app.inject({ method: "GET", url: "/healthz", headers });
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toEqual({ status: "degraded", attention: false });
+    }
+  });
+
   it("healthz carries coarse words only, and only the database decides its status (ADR-055)", async () => {
-    const res = await app.inject({ method: "GET", url: "/healthz" });
+    const res = await app.inject({ method: "GET", url: "/healthz", headers: scraper });
     const body = HealthResponse.parse(res.json());
     // No ticker in `WORKER_MODE=web`, no backup report configured: neither
     // is a failure, and neither raises the external probe's alarm.

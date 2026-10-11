@@ -4,6 +4,8 @@
  * before the call, the call log without content, the connection test, the
  * usage, and the budget check of the system status.
  */
+import { randomUUID } from "node:crypto";
+
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -224,6 +226,43 @@ describe("the daily cap", () => {
     const budget = status.checks.find((c) => c.key === "llm.budget");
     expect(budget).toMatchObject({ status: "fail", cause: "llm.budget" });
     expect(JSON.stringify(budget)).not.toContain("boss@heig.test");
+  });
+});
+
+describe("a person's daily share (audit L2)", () => {
+  beforeAll(async () => {
+    await inject("PATCH", "/app/api/admin/llm", { apiKey: KEY, model: "claude-sonnet-5-5", dailyCapUsd: 10 });
+  });
+  afterAll(async () => {
+    await inject("PATCH", "/app/api/admin/llm", { dailyCapUsd: 20 });
+  });
+
+  // 40 000 output tokens at $10/M: a $0.40 worst case, settled at the fake's few tokens.
+  const call = (purpose: "generate" | "grade", userId: string | null) =>
+    server.app.llmGateway.complete({ purpose, userId, system: "s", prompt: "p", schema: {} as never, maxTokens: 40_000 });
+
+  it("refuses one teacher past their share of the cap, and nobody else", async () => {
+    const teacher = await server.signIn("teacher");
+    const colleague = await server.signIn("teacher");
+    // Today's spend of that teacher, at their share's edge ($2 of the $10 cap at 20 %).
+    await server.app.db.insert(llmCalls).values({
+      id: randomUUID(),
+      createdAt: server.clock.now(),
+      userId: teacher.id,
+      purpose: "generate",
+      provider: "anthropic",
+      model: "claude-sonnet-5-5",
+      status: "ok",
+      costUsd: 1.9,
+    });
+    await expect(call("generate", teacher.id)).rejects.toMatchObject({ code: "budget_exhausted" });
+    expect(seen).toHaveLength(0);
+    // The refusal is the share's, not the cap's: nothing written, the budget check stays green.
+    expect(await server.app.db.select().from(llmCalls).where(eq(llmCalls.error, "budget_exhausted"))).toEqual([]);
+    await expect(call("generate", colleague.id)).resolves.toMatchObject({ value: { answer: "Paris" } });
+    // A grading pass is the evaluation's, not the teacher's day: never counted against their share.
+    await expect(call("grade", teacher.id)).resolves.toMatchObject({ value: { answer: "Paris" } });
+    await expect(call("generate", null)).resolves.toMatchObject({ value: { answer: "Paris" } });
   });
 });
 
