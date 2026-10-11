@@ -1254,6 +1254,19 @@ signs in there gets a new, empty account. The export prints the list
 Before the first real refresh, run it with `--keep <your address>` and check
 those two lines.
 
+The export works inside production's PostgreSQL, on the 1-vCPU VM, so it
+guards production first and creates nothing when it refuses:
+
+- under a live evaluation (`scripts/live-evaluations.sql`, the deploy's
+  guard, §5) it refuses with exit 3 and the list, like a deploy; there is
+  no `--force`: export once the room is empty;
+- unless the free space under PostgreSQL's data directory (`df` inside the
+  `postgres` container) is at least 2.5 times `pg_database_size('quiz')`
+  (the scratch copy, its WAL and the dump in the inbox share the disk) it
+  refuses with exit 4 and both numbers. PostgreSQL out of space while
+  writing WAL stops production; free space first (§6's dumps, Docker's
+  images), never lower the factor.
+
 Never on deploy: a refresh wipes whatever a test had prepared. It restores
 the dump into a recreated database, empties every credential and secret
 production issued and forgets its GitHub installations and live projects

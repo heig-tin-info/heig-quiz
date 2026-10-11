@@ -36,6 +36,11 @@
 # rehearsal's `hgc.dump` is already in the inbox, and its copies are deleted
 # the same day (that runbook, §5.1).
 #
+# It refuses (exit 3) while production has a live evaluation, with no way
+# to force it, and (exit 4) unless the free space under PostgreSQL's data
+# directory is at least 2.5 times the database (scratch copy, WAL, dump on
+# the same disk): the guards are below, before anything is created.
+#
 # Then, as `srvstg`: ~/quiz-staging/scripts/staging-refresh.sh
 set -euo pipefail
 
@@ -63,6 +68,35 @@ if [ "$(id -u)" != 0 ] && [ -z "${DOCKER_HOST:-}" ]; then
 fi
 PROD=(docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image)
 psql_postgres=("${PROD[@]}" exec -T postgres psql -U quiz -d postgres -v ON_ERROR_STOP=1 -q)
+
+# Production comes first, on a 1-vCPU VM with a small disk. Refused, with
+# nothing created nor written:
+# - under a live evaluation (scripts/live-evaluations.sql, the deploy's
+#   guard): a full copy and dump would compete with the exam for the CPU
+#   and the disk. No `--force`: an export can always wait;
+# - with less free space under PostgreSQL's data directory than 2.5 times
+#   the database: the scratch copy, its WAL and the dump in the inbox (the
+#   same disk) must fit, or PostgreSQL runs out of space and production
+#   stops. A query that cannot run refuses like a failed check.
+live=$("${PROD[@]}" exec -T postgres psql -XAtq -v ON_ERROR_STOP=1 -F $'\t' -U quiz -d quiz < scripts/live-evaluations.sql) \
+  || live="(the live-evaluation query failed: see the error above)"
+if [ -n "$live" ]; then
+  {
+    echo "staging-export: production has a live evaluation (title | state | mode | opens | closes):"
+    printf '%s\n' "$live" | sed 's/\t/ | /g; s/^/  /'
+    echo "staging-export: REFUSED. Export once it has closed."
+  } >&2
+  exit 3
+fi
+db_bytes=$("${PROD[@]}" exec -T postgres psql -XAtq -v ON_ERROR_STOP=1 -U quiz -d quiz -c "SELECT pg_database_size('quiz')") \
+  || db_bytes=
+free_kb=$("${PROD[@]}" exec -T postgres df -Pk /var/lib/postgresql/data | awk 'NR == 2 { print $4 }') \
+  || free_kb=
+if ! [[ "$db_bytes" =~ ^[0-9]+$ && "$free_kb" =~ ^[0-9]+$ ]] || [ $((free_kb * 1024 * 2)) -lt $((db_bytes * 5)) ]; then
+  echo "staging-export: REFUSED: ${free_kb:-?} KiB free under PostgreSQL's data directory, the database is ${db_bytes:-?} bytes; 2.5 times that is needed (scratch copy, its WAL, the dump)." >&2
+  exit 4
+fi
+echo "staging-export: $((free_kb / 1024)) MiB free, database $((db_bytes / 1048576)) MiB"
 
 # Written under a temporary name and renamed: staging never reads half a dump.
 if [ -n "$identities" ]; then
