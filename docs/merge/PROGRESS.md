@@ -17,11 +17,15 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
   dropped. The breadcrumb app-wide is merged (#576). The import runs from
   the production image (#655, the runbook's O6). The projects and the
   import go live together (D26) at the cutover (D20).
-- **Next actions**: the cutover (M8-07, runbook §2), rehearsed on staging
-  on 2026-10-10 (M8-06, go: rehearsal log below) and dry-run in production
-  the same day; T0 is Sunday 2026-10-11 09:00 Europe/Zurich, with the
-  owner's decisions O3, O4, O5 (`W=12`) and O8 (roster options) as
-  suggested in the runbook unless they say otherwise. M6-07's code is merged; proof B is done for evaluations (2026-10-10, Config Key
+- **Next actions**: **the cutover is done** (M8-07, Sunday 2026-10-11
+  07:07–07:50 UTC, rehearsed on staging the day before: M8-06): classroom
+  redirects to Quiz, its data is imported, its App no longer acts. Now the
+  observation period D (runbook §4, one to two weeks): the first deadline
+  Quiz freezes on imported projects (Prog-A's Labo-02, 2026-10-11 23:59),
+  the late `mid-review` checkpoint of Labo-Intersection, the 19 MI-2026
+  roster lines in conflict, the daily `reconcile.repos`, the `hgc-protect`
+  rulesets (empty bypass list). Then E / M9-01 (point of no return,
+  decommission) from T0 + 7 days if D is clean. M6-07's code is merged; proof B is done for evaluations (2026-10-10, Config Key
   enforced in production) and waits for the project flow (a real SEB, the owner, on staging); M6-08 and M6-09 are to do. Quiz's production App
   exists (registered by hand); staging's, `heig-quiz-staging`, exists
   since 2026-10-06 (M2-06). Teachers create their Quiz classrooms; the
@@ -191,7 +195,7 @@ In the critical path only if D09 finds online assignments in production.
 | M8-04 | Codespace identity remap | dropped | M6 in scope | | | Product owner, 2026-10-09: classroom's portal never served a real class, and it has been stopped and disabled since M6-04 (SQLite and volumes archived in `/root/classroom-codespace` on the engine VM); Quiz's portal started empty. Nothing to remap; runbook step C4 |
 | M8-05 | Cutover runbook | done | M8-01…03 | `merge/M8-05-cutover-runbook` | #653 | [`10-cutover-runbook.md`](10-cutover-runbook.md) replaces 06 §6.5 B–E and §6.7, and its finding O6 (the production image could not run the import) was fixed by #655: card M8-05, "As delivered". |
 | M8-06 | Rehearsal on staging | done | M8-05, D22, #655 deployed | `merge/M8-06-rehearsal` | | Rehearsed 2026-10-10 by the product owner (srvstg) with the agent (srv): go. Findings folded into the runbook (§0 memory override and `ROSTER`, O8, §2 target times, §7 expectations): see the rehearsal log below |
-| M8-07 | Cutover | todo | M8-06 go, D20, runbook O1–O5, O8 | | | Runbook §2. T0 chosen: Sunday 2026-10-11 09:00 Europe/Zurich, short notice, `W=12` (Prog-A's Labo-02 is due that evening) |
+| M8-07 | Cutover | done | M8-06 go, D20, runbook O1–O5, O8 | `merge/M8-06-rehearsal` | | **Done 2026-10-11** (Sunday, short notice, `W=12`, O3 one import, O4 staff repositories imported, O8 explicit options). Times (UTC): §1.4 re-run 07:02 clean; C1 07:06 fragment, CI disabled, app stopped 07:07:48 (exit 137, no task left running); C2 07:08:09–07:08:16 (dumps 6.4 MB and 7.0 MB, scratch restored, runs 0); C3 07:18:01–07:18:19, exit 0, `applied`, pre-flight all ok, 0 red lines, 4 of 4 imported journals `ok`, runs 1; C5 07:19 health ok; C6 07:22:47 redirect fragment, 31 matrix rows ok, a real old link lands on Prog-A; C7 repos 07:25–07:28 (287 live repositories, 2 re-invited, 0 heads moved), grades 07:34–07:38 (0 runs to catch up), deliveries 07:39 (0 to replay); C8 07:50, all nine rows green (test push webhook processed in 1.5 s; `hgc-protect` has an empty bypass list on the imported repositories, classroom's App was not in it either, nothing to add). Freeze C1→C8 43 min. Known: 19 MI-2026 roster lines flagged for the teacher (O8); off-site backup `stale` (last 2026-10-09); classroom's postgres and backup containers stay up until E. Production deploys unfrozen 07:55 (image af62dde5, #751); "done" message sent by the owner. Next: D (runbook §4), then E / M9-01 from T0 + 7 days |
 
 ## M9 — Decommission
 
