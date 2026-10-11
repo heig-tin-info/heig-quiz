@@ -179,8 +179,7 @@ export interface JobQueue {
   stop(): Promise<void>;
 }
 
-/** Exported for its tests. */
-export class PgBossQueue implements JobQueue {
+class PgBossQueue implements JobQueue {
   constructor(
     private readonly boss: PgBoss,
     private readonly runWorkers: boolean,

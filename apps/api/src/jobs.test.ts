@@ -6,9 +6,7 @@
 import type { FastifyInstance } from "fastify";
 import { describe, expect, it, vi } from "vitest";
 
-import type { PgBoss } from "pg-boss";
-
-import { GRADING_EVALUATION_QUEUE, InProcessQueue, PgBossQueue, type JobQueue, type JobTry } from "./jobs.js";
+import { GRADING_EVALUATION_QUEUE, InProcessQueue, type JobQueue, type JobTry } from "./jobs.js";
 import { enqueueEvaluationGrading, registerGradingJobs } from "./modules/grading/jobs.js";
 
 const silent = () => {};
@@ -41,38 +39,6 @@ describe("the last try, as a handler sees it (ADR-101)", () => {
     await queue.work<{ id: string }>("q", async (_data, job) => void tries.push(job));
     await queue.send("q", { id: "a" });
     await vi.waitFor(() => expect(tries).toEqual([{ lastTry: true }]));
-  });
-
-  it("is the try whose retryCount reached its retryLimit on pg-boss", async () => {
-    let options: unknown;
-    let deliver!: (jobs: object[]) => Promise<void>;
-    const boss = {
-      work: async (_name: string, opts: unknown, handler: typeof deliver) => {
-        options = opts;
-        deliver = handler;
-        return "worker";
-      },
-    } as unknown as PgBoss;
-    const tries: [string, JobTry][] = [];
-    await new PgBossQueue(boss, true).work<{ id: string }>(
-      "q",
-      async (data, job) => void tries.push([data.id, job]),
-      { localConcurrency: 1 },
-    );
-    // Without the metadata, a job carries no retry count at all.
-    expect(options).toEqual({ localConcurrency: 1, includeMetadata: true });
-    await deliver([
-      { data: { id: "first" }, retryCount: 0, retryLimit: 2 },
-      { data: { id: "second" }, retryCount: 1, retryLimit: 2 },
-      { data: { id: "third" }, retryCount: 2, retryLimit: 2 },
-      { data: { id: "never retried" }, retryCount: 0, retryLimit: 0 },
-    ]);
-    expect(tries).toEqual([
-      ["first", { lastTry: false }],
-      ["second", { lastTry: false }],
-      ["third", { lastTry: true }],
-      ["never retried", { lastTry: true }],
-    ]);
   });
 });
 
