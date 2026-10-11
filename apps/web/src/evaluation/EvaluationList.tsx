@@ -27,11 +27,12 @@ import {
   T,
   TableBand,
   TableHead,
+  TimeLeft,
   usePersistentChoice,
   useSortableTable,
   type Column,
 } from "../ui";
-import { evaluationHome, evaluationLinkItems, evaluationStateLabel, stateTone } from "./common";
+import { evaluationHome, evaluationLinkItems, evaluationStateLabel, evaluationTimerAt, stateStyle } from "./common";
 import { evaluationsKey } from "../queryKeys";
 import { ModeChoice, type CreatedMode } from "./ModeChoice";
 import {
@@ -373,7 +374,11 @@ export function EvaluationList({
                       <td className={T.td}>
                         <span className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold">{row.title}</span>
-                          <Badge tone={stateTone(row.state)}>{evaluationStateLabel(row.state, t)}</Badge>
+                          {/* The time left rides in the badge (`evaluationTimerAt`, ADR-104). */}
+                          <Badge {...stateStyle(row.state)}>
+                            {evaluationStateLabel(row.state, t)}
+                            <TimeLeft iso={evaluationTimerAt(row)} />
+                          </Badge>
                           {/* Its template moved (F-EVAL-26): shown only where the
                               pull would be accepted, as the pull's own door. */}
                           {templatePullable(row) ? (

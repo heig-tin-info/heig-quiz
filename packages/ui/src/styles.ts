@@ -188,20 +188,36 @@ export function buttonClass(
   return cx(BUTTON_BASE, BUTTON_VARIANT[variant], BUTTON_SIZE[size], extra);
 }
 
+/** A badge's tone: its pale fill and its ink. */
 const BADGE_TONE = {
-  neutral: "bg-surface-3 text-fg-muted",
-  success: "bg-success-soft text-success",
-  warning: "bg-warning-soft text-warning",
-  danger: "bg-danger-soft text-danger",
-  accent: "bg-accent-soft text-accent",
+  neutral: { fill: "bg-surface-3", ink: "text-fg-muted" },
+  success: { fill: "bg-success-soft", ink: "text-success" },
+  warning: { fill: "bg-warning-soft", ink: "text-warning" },
+  danger: { fill: "bg-danger-soft", ink: "text-danger" },
+  accent: { fill: "bg-accent-soft", ink: "text-accent" },
 } as const;
 
 export type BadgeTone = keyof typeof BADGE_TONE;
 
-export function badge(tone: BadgeTone = "neutral", extra = ""): string {
+/**
+ * The two faces of a badge: `soft`, the fill under the ink, for a state that
+ * is live or awaited; `outline`, the ink alone with a 1 px inset ring in the
+ * same colour (`ring-current`), for a state that is finished and asks
+ * nothing (a released evaluation, ADR-104).
+ */
+export type BadgeVariant = "soft" | "outline";
+
+/**
+ * The class list of a status pill: 22 px, a tone and a face
+ * ({@link BadgeVariant}, `soft` by default). `apps/web`'s `Badge` is this
+ * list on a `<span>`; a question type writes it on its own.
+ */
+export function badge(tone: BadgeTone = "neutral", extra = "", variant: BadgeVariant = "soft"): string {
+  const { fill, ink } = BADGE_TONE[tone];
   return cx(
     "inline-flex h-5.5 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 text-xs font-medium",
-    BADGE_TONE[tone],
+    ink,
+    variant === "outline" ? "ring-1 ring-inset ring-current" : fill,
     extra,
   );
 }

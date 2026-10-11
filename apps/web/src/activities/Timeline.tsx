@@ -6,7 +6,7 @@ import type { ActivitySummary } from "@quiz/contracts";
 import { useI18n, useT } from "../i18n";
 import type { Route } from "../router";
 import { useShortcuts } from "../shortcuts";
-import { Card, cx, EmptyState, IconButton, isoDateTime, modKey } from "../ui";
+import { Card, cx, EmptyState, IconButton, isoDateTime, modKey, type Tone } from "../ui";
 import { bucketOf, kindOf, typeOf, type Span } from "./model";
 import { classroomLabel, openerOf, TYPE_ICON } from "./views";
 
@@ -124,18 +124,27 @@ function buildTicks(from: number, to: number, locale: string): Tick[] {
   return ticks;
 }
 
+const ENDED_BAR = "bg-surface-3 text-fg-muted";
+
+/** The full-strength fill of a bar, by the tone of its badge: only the two living tones have one. */
+const BAR_FILL = {
+  green: "bg-success text-on-fill",
+  amber: "bg-warning text-on-fill",
+} satisfies Partial<Record<Tone, string>>;
+
 /**
- * The fill of a bar, by its state's tone (evaluation/common.ts): green in
- * the room, amber waiting or paused, a calm blue for what is planned, a
- * dashed outline for a draft, the recessed surface for what is over. A
- * published project is open and nobody is in its room: amber, as its badge.
+ * The fill of a bar is its badge's tone (`KIND`'s `stateStyle`, ADR-104):
+ * green open to the students — a running evaluation, a published project —,
+ * amber awaiting the staff (the waiting room, a pause). Three exceptions a
+ * badge does not draw: a dashed outline for a draft, a calm blue ring for
+ * what is planned, the recessed surface for everything over — the badge's
+ * outline face (a released evaluation) never reaches the bar.
  */
 function barClass(a: ActivitySummary): string {
   if (a.state === "draft") return "border border-dashed border-fg-faint bg-surface text-fg-muted";
-  if (a.state === "running") return "bg-success text-on-fill";
-  if (bucketOf(a.state) === "open") return "bg-warning text-on-fill";
   if (a.state === "scheduled") return "bg-info-soft text-info ring-1 ring-inset ring-info";
-  return "bg-surface-3 text-fg-muted";
+  if (bucketOf(a.state) === "ended") return ENDED_BAR;
+  return BAR_FILL[kindOf(a).stateStyle(a).tone as keyof typeof BAR_FILL] ?? ENDED_BAR;
 }
 
 /** The dot beside a lane's name: the bar's colour, at full strength for the pale ones. */
@@ -463,8 +472,8 @@ export function ActivityTimeline({
       <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-fg-muted">
         {(
           [
-            ["bg-success", "activities.timeline.legend.live"],
-            ["bg-warning", "activities.timeline.legend.waiting"],
+            [BAR_FILL.green.split(" ")[0]!, "activities.timeline.legend.live"],
+            [BAR_FILL.amber.split(" ")[0]!, "activities.timeline.legend.waiting"],
             ["bg-info-soft ring-1 ring-inset ring-info", "activities.timeline.legend.scheduled"],
             ["border border-dashed border-fg-faint", "activities.timeline.legend.draft"],
             ["bg-surface-3", "activities.timeline.legend.ended"],

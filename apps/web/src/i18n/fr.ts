@@ -1253,6 +1253,11 @@ export const fr: Record<keyof Dict, string> = {
   "dur.hourMinSec": "{h} h {m} min {s} s",
   "dur.dayHour": "{d} j {h} h",
   "time.now": "à l'instant",
+  "time.left.days": "{n} j",
+  "time.left.hours": "{n} h",
+  "time.left.minutes": "{n} min",
+  "time.left.underMinute": "<1 min",
+  "time.closesIn": "ferme dans {time}",
 
   // --- Live primitives (ui/live.tsx) ---
   "countdown.remaining": "il reste {time}",
@@ -4992,8 +4997,8 @@ export const fr: Record<keyof Dict, string> = {
   "activities.timeline.focus": "Centrer sur ce qui est en cours",
   "activities.timeline.empty.title": "Rien de daté pour l'instant",
   "activities.timeline.empty.body": "Une activité apparaît sur la frise dès qu'elle a une date d'ouverture ou qu'elle a commencé.",
-  "activities.timeline.legend.live": "en salle",
-  "activities.timeline.legend.waiting": "salle d'attente, en pause, projet ouvert",
+  "activities.timeline.legend.live": "ouverte aux étudiants",
+  "activities.timeline.legend.waiting": "salle d'attente, en pause",
   "activities.timeline.legend.scheduled": "planifiée",
   "activities.timeline.legend.draft": "brouillon",
   "activities.timeline.legend.ended": "terminée",

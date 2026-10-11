@@ -30,8 +30,14 @@ describe("buttonClass", () => {
 
 describe("badge", () => {
   it("wears the tone's soft fill", () => {
-    expect(badge("success")).toContain("bg-success-soft text-success");
-    expect(badge()).toContain("bg-surface-3 text-fg-muted");
+    expect(badge("success")).toContain("text-success bg-success-soft");
+    expect(badge()).toContain("text-fg-muted bg-surface-3");
+  });
+
+  it("outlined, keeps the ink and rings it in the same colour, with no fill", () => {
+    expect(badge("success", "", "outline")).toContain("text-success ring-1 ring-inset ring-current");
+    expect(badge("success", "", "outline")).not.toMatch(/\bbg-/);
+    expect(badge("warning", "ml-1", "outline").endsWith(" ml-1")).toBe(true);
   });
 });
 

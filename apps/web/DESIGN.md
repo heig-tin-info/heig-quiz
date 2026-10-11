@@ -547,7 +547,20 @@ live in `ui/state.ts`, each written once.
   time left: minutes, then in the last five a bold countdown by the second
   behind a warning sign; the pill's ring and hairline follow the ink.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
-  accent. Status is a badge; a count is plain text. The accent tone is
+  accent, and an **outline** face (`variant="outline"`: no fill, the tone's
+  ink and a 1 px inset ring in the same colour) for a state that is finished
+  and asks nothing.
+  Status is a badge; a count is plain text. **The staff's state grammar**
+  (ADR-104, one table per kind in `evaluation/common.ts` and
+  `project/common.ts`): green = open to the students (`running`,
+  `published`); amber = the staff's own correction or publication awaited
+  (`lobby`, `paused`, `grading`); zinc = at rest (`draft`, `scheduled`,
+  `closed`, `locked`); outline green = `released`. No solid fill: the soft
+  green plus the `TimeLeft` timer (icon and "3 h", only in the two tables of
+  a classroom's Activities tab) is what marks a live row, so the pill never
+  competes with the row's one primary action. The student's activity cards
+  keep their own grammar (amber waits on the student, see "The student's
+  activity card"). The accent tone is
   rarely right: on the student's activity cards it is never used (the button
   alone carries it, see "The student's activity card"). A badge that is also the door to
   its own fix — "template rev. 1 → 3" on a classroom's evaluation row

@@ -13,7 +13,7 @@ import {
 import type { EvaluationState } from "@quiz/contracts";
 import { isEvaluationOver } from "@quiz/domain";
 
-import { evaluationStateLabel, stateTone } from "../evaluation/common";
+import { evaluationStateLabel, stateStyle } from "../evaluation/common";
 import { useT } from "../i18n";
 import { Actions, Badge, Button, ClockCountdown, IconButton, Menu, PageHeader } from "../ui";
 
@@ -135,7 +135,7 @@ export function LiveHeader({
       help="live"
       description={
         <span className="inline-flex flex-wrap items-center gap-1.5">
-          <Badge tone={stateTone(state)}>{evaluationStateLabel(state, t)}</Badge>
+          <Badge {...stateStyle(state)}>{evaluationStateLabel(state, t)}</Badge>
           {correction?.published ? (
             <Badge tone="zinc" icon={BookCheck}>
               {t("live.correction.published")}

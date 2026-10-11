@@ -21,7 +21,7 @@ describe("Verdict", () => {
     );
     const pill = screen.getByText("Missed");
     expect(pill.tagName).toBe("SPAN");
-    expect(pill.className).toContain("bg-warning-soft text-warning");
+    expect(pill.className).toContain("text-warning bg-warning-soft");
     expect(pill.className.endsWith(" ml-2")).toBe(true);
   });
 });

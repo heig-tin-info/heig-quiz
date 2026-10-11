@@ -34,7 +34,7 @@ import {
   Skeleton,
   type MenuItem,
 } from "../ui";
-import { projectStateLabel, projectStateTone } from "./common";
+import { projectStateLabel, projectStateStyle } from "./common";
 import { FIELD_ID } from "./newProject";
 import { ProjectGroupSet } from "./ProjectGroupSet";
 import { projectNotices, projectNoticeToast } from "./projectNotices";
@@ -294,7 +294,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
             ) : (
               project.name
             )}
-            <Badge tone={projectStateTone(project.state)}>{projectStateLabel(project.state, t)}</Badge>
+            <Badge {...projectStateStyle(project.state)}>{projectStateLabel(project.state, t)}</Badge>
             {archived ? <Badge tone="zinc">{t("classrooms.archived")}</Badge> : null}
           </span>
         }

@@ -2,7 +2,7 @@ import { renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { EvaluationActivitySummary } from "@quiz/contracts";
+import type { EvaluationActivitySummary, ProjectActivitySummary } from "@quiz/contracts";
 
 import { resetShortcuts, useActiveShortcuts } from "../shortcuts";
 import { id, liveAt } from "../test/live-fixtures";
@@ -52,6 +52,18 @@ const LOBBY = activity(2, { title: "Quiz 4 — chaînes", state: "lobby" });
 const POLL = activity(3, { title: "Which loop?", mode: "poll", state: "running", classroom: null, startedAt: liveAt(-4 * MIN) });
 const NEXT = activity(4, { title: "Série 6 — SPI", state: "scheduled", opensAt: liveAt(7 * DAYS), closesAt: liveAt(13 * DAYS) });
 const DRAFT = activity(5, { title: "Quiz 1 — undated" });
+const DONE = activity(6, { title: "Test 0", state: "released", startedAt: liveAt(-3 * DAYS), closedAt: liveAt(-2 * DAYS) });
+const LAB: ProjectActivitySummary = {
+  kind: "project",
+  id: id("project", 1),
+  title: "Labo 2 — pointeurs",
+  state: "published",
+  classroom: ROOM,
+  startAt: liveAt(-7 * DAYS),
+  deadlineAt: liveAt(7 * DAYS),
+  source: { fullName: "heig/lab-source" },
+  distribution: { fullName: "heig/lab-squashed" },
+};
 
 describe("spanOf", () => {
   const now = Date.now();
@@ -110,6 +122,26 @@ describe("the schedule view", () => {
     navigate.mockClear();
     await user.click(screen.getByRole("button", { name: "Série 6 — SPI" }));
     expect(navigate).toHaveBeenLastCalledWith({ view: "evaluation", id: NEXT.id });
+  });
+
+  it("fills a bar by its badge's tone: green open to students, amber awaiting the staff, recessed once over (ADR-104)", async () => {
+    wide(true);
+    const user = userEvent.setup();
+    mockFetch({ "GET /app/api/activities": ok([SERIES, LOBBY, LAB, DONE]) });
+    renderWithProviders(<ActivitiesPage navigate={vi.fn()} />);
+    const bar = async (name: RegExp) => (await screen.findByRole("button", { name })).className;
+    expect(await bar(/^Série 4 — deux semaines — running, /)).toContain("bg-success");
+    // A published project is open to the students: green, like a running
+    // evaluation, no longer the amber of M3-10.
+    expect(await bar(/^Labo 2 — pointeurs — published, /)).toContain("bg-success");
+    expect(await bar(/^Quiz 4 — chaînes — lobby, /)).toContain("bg-warning");
+    expect(screen.getByText("open to students")).toBeInTheDocument();
+    expect(screen.getByText("waiting room, paused")).toBeInTheDocument();
+    // The badge's outline (released) never reaches the bar: over is over.
+    await user.click(screen.getByRole("tab", { name: /Ended/ }));
+    const done = await bar(/^Test 0 — released, /);
+    expect(done).toContain("bg-surface-3");
+    expect(done).not.toContain("ring-");
   });
 
   it("lends its gestures to the sidebar's strip, not a sentence above the track", async () => {

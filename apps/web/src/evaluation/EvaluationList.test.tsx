@@ -42,16 +42,25 @@ const list = (rows: EvaluationSummary[]) => ({
 });
 
 describe("EvaluationList", () => {
-  it("shows one badge per state", async () => {
+  it("shows one badge per state: the time left inside a running one, an outline for a released one (ADR-104)", async () => {
     mockFetch(
       list([
         summary({ state: "draft" }),
-        summary({ id: id("evaluation", 2), state: "running", title: "Quiz 4" }),
+        summary({ id: id("evaluation", 2), state: "running", title: "Quiz 4", closesAt: liveAt(3 * 3600_000 + 30_000) }),
+        summary({ id: id("evaluation", 3), state: "lobby", title: "Quiz 5", closesAt: liveAt(3600_000) }),
+        summary({ id: id("evaluation", 4), state: "released", title: "Quiz 2" }),
       ]),
     );
     renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
     expect(await screen.findByText("draft")).toBeInTheDocument();
-    expect(screen.getByText("running")).toBeInTheDocument();
+    // The timer is in the pill, named for a screen reader; a lobby's clock
+    // has not started, so it gets none.
+    const running = screen.getByText("running").closest("span")!;
+    expect(within(running).getByText("3 h")).toBeInTheDocument();
+    expect(within(running).getByText("closes in 3 h")).toBeInTheDocument();
+    expect(within(screen.getByText("lobby").closest("span")!).queryByText(/closes in/)).toBeNull();
+    // Released: finished, nothing awaited — the outline face.
+    expect(screen.getByText("released").className).toContain("ring-current");
   });
 
   it("opens the dashboard for a live one and the configuration for a draft", async () => {
