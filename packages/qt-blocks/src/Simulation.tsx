@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { fmt, plural } from "@quiz/core/client";
 import type { NodePath, RunResult, Stmt } from "@quiz/domain/blocks";
-import { badge, Button, card, caption, cx, hint, prefersReducedMotion, sectionTitle } from "@quiz/ui";
+import { badge, Button, card, caption, countTone, cx, hint, prefersReducedMotion, sectionTitle, type AnswerTone, type BadgeTone } from "@quiz/ui";
 
 import { CaseTable, reasonWord, type CaseRow } from "./CaseTable.js";
 import { runCase } from "./grade.js";
@@ -20,6 +20,9 @@ import { mapOf, WarehouseMap, type Pose } from "./WarehouseMap.js";
 
 /** How long the robot takes for one move or one turn. */
 const TICK_MS = 180;
+
+/** The passed-count badge in the tone of the grading table's chips: all, some, none. */
+const BADGE_OF: Partial<Record<AnswerTone, BadgeTone>> = { good: "success", partial: "warning", bad: "danger" };
 
 /** A run being replayed: its trace, and how many events of it are shown. */
 interface Replay {
@@ -154,11 +157,11 @@ export function Simulation({
               {s.simulation}
             </h3>
             {results === null ? null : (
-              <span className={badge(passed === cases.length ? "success" : passed > 0 ? "warning" : "danger")}>
+              <span className={badge(BADGE_OF[countTone(passed, cases.length)] ?? "neutral")}>
                 {fmt(s.passed, { passed, total: cases.length })}
               </span>
             )}
-            {student.allOrNothing ? <span className={badge("warning")}>{s.allOrNothing}</span> : null}
+            {student.allOrNothing ? <span className={badge("warning")}>{c.allOrNothing}</span> : null}
           </div>
           <p className={hint}>{cases.length === 0 ? s.noVisible : s.simulationHint}</p>
         </div>
@@ -184,7 +187,7 @@ export function Simulation({
                 label={`${c.map} ${kase.name}`}
                 dockLabel={c.dock}
               />
-              <Battery label={s.battery} left={kase.battery - (state?.moves ?? 0)} total={kase.battery} />
+              <Battery label={c.battery} left={kase.battery - (state?.moves ?? 0)} total={kase.battery} />
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" onClick={runHere} disabled={playing}>
                   {s.runHere}
@@ -200,18 +203,11 @@ export function Simulation({
                 {finished === null ? "" : `${reasonWord(c, finished.reason)} · ${plural(c, "moves", finished.moves)}`}
               </p>
             </div>
-            <div className="flex flex-col gap-2">
-              <CaseTable rows={rows} c={c} selected={selected} onSelect={select} />
-              {student.hiddenCount > 0 ? (
-                <p className={cx(caption, "px-3")}>
-                  {plural(s, "hiddenFoot", student.hiddenCount, { count: student.hiddenCount, points: student.hiddenPoints })}
-                </p>
-              ) : null}
-            </div>
+            <CaseTable rows={rows} c={c} selected={selected} onSelect={select} />
           </div>
         </div>
       )}
-      {cases.length === 0 && student.hiddenCount > 0 ? (
+      {student.hiddenCount > 0 ? (
         <p className={caption}>
           {plural(s, "hiddenFoot", student.hiddenCount, { count: student.hiddenCount, points: student.hiddenPoints })}
         </p>

@@ -34,13 +34,15 @@ describe("BlocksPlayer", () => {
     expect(screen.getByText("Bring the robot to the dock without hitting a rack.")).toBeVisible();
     expect(screen.getByLabelText("Program")).toHaveTextContent("repeat 7 times");
     expect(screen.getByText(/The block editor did not load/)).toBeVisible();
-    expect(screen.getByText("2 blocks")).toBeVisible();
+    expect(screen.getByText("Unchanged starter: not an answer yet. · 2 blocks")).toBeVisible();
   });
 
   it("tests the visible warehouses only, in the browser, and fills the table", async () => {
     render(<BlocksPlayer student={student} answer={{ program: REFERENCE }} onChange={() => {}} readOnly={false} blockly={false} />);
     const table = screen.getByRole("table");
     expect(within(table).getAllByText("Not run")).toHaveLength(2);
+    // A program that is not the starter is an answer: no "unchanged" caption.
+    expect(screen.getByText("4 blocks")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Test on every warehouse" }));
     expect(within(table).getAllByText("Dock reached")).toHaveLength(2);
     expect(within(table).getByText("7 moves")).toBeVisible();
@@ -208,7 +210,7 @@ describe("the grading column", () => {
   });
 
   it("takes the host's words for the program too", () => {
-    const [french] = blocksGrading.columns(student, solution, { forward: "avancer", program: "Programme" });
+    const [french] = blocksGrading.columns(student, solution, { forward: "avancer", workspace: "Programme" });
     expect(french!.label).toBe("Programme");
     render(<div>{french!.cell({ answer: { program: [{ kind: "forward" }] }, details: null })}</div>);
     expect(screen.getByText("avancer")).toBeVisible();

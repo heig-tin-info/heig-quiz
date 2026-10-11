@@ -12,18 +12,18 @@
  * player's (`qt.blocks.p.*`), the review's (`qt.blocks.r.*`), the grading
  * table's (`qt.blocks.g.*`) and the CANVAS's (`qt.blocks.c.*`): the words of
  * the world itself — the block labels, the run's verdicts, the warehouse —
- * which the three surfaces all draw, Blockly's palette included.
+ * and every word more than one surface says, written once.
  */
 
 /**
- * The world's words. The block labels are interface strings (ADR-103 §9):
- * the bundle turns `{n}`, `{dir}`, `{sensor}` and `{where}` into Blockly's
- * fields, wherever the translation puts them. `blocklyLocale` names the
- * dictionary of Blockly's own interface (its context menu, its keyboard
- * announcements), which ships inside the package.
+ * The world's words, shared by every surface. The block labels are interface
+ * strings (ADR-103 §9): the bundle turns `{n}`, `{dir}`, `{sensor}` and
+ * `{where}` into Blockly's fields, wherever the translation puts them.
+ * Blockly's own interface (its context menu, its keyboard announcements)
+ * follows the page's language, `<html lang>`, from the message files the
+ * package ships.
  */
 export const blocksCanvasStrings = {
-  blocklyLocale: "en",
   start: "when the robot starts",
   forward: "move forward",
   turn: "turn {dir}",
@@ -47,6 +47,10 @@ export const blocksCanvasStrings = {
   kindRepeatUntilDock: "Repeat until the dock",
   kindIfSensor: "If a sensor reads",
   workspace: "Program",
+  reference: "Reference solution",
+  cases: "Warehouses",
+  battery: "Battery",
+  allOrNothing: "All or nothing",
   loading: "Loading the block editor…",
   unavailable: "The block editor did not load: the program is shown as text, read-only.",
   emptyProgram: "No block under “when the robot starts” yet.",
@@ -77,7 +81,6 @@ export const blocksEditorStrings = {
   toolboxHint: "The blocks the student's palette offers. The starter and the reference may only use these.",
   starter: "Starter program",
   starterHint: "Preloaded in the student's workspace. Leave it empty to start from nothing.",
-  reference: "Reference solution",
   referenceHint:
     "The key: it must reach the dock in every warehouse, hidden ones included, before the question can be published. It grades nothing.",
   checkReference: "Check the reference",
@@ -85,7 +88,6 @@ export const blocksEditorStrings = {
   referenceAllPass: "The reference reaches the dock in every warehouse.",
   referenceFails: "The reference misses {n} warehouses.",
   "referenceFails.one": "The reference misses 1 warehouse.",
-  cases: "Warehouses",
   casesHint:
     "Each warehouse is a test case: the program must bring the robot to the dock. A hidden warehouse is graded but never shown, exactly like a hidden test case.",
   case: "Warehouse {n}",
@@ -93,9 +95,7 @@ export const blocksEditorStrings = {
   caseNameAria: "Name {n}",
   points: "Points",
   pointsAria: "Points {n}",
-  battery: "Battery",
   batteryAria: "Battery {n}",
-  hidden: "Hidden",
   hiddenAria: "Hidden {n}",
   addCase: "Add a warehouse",
   removeCase: "Remove the warehouse {name}",
@@ -118,7 +118,6 @@ export const blocksEditorStrings = {
   headingSouth: "down",
   headingWest: "left",
   scoring: "Scoring",
-  allOrNothing: "All or nothing",
   allOrNothingHint: "The points only when the robot reaches the dock in every warehouse.",
 } as const;
 export type BlocksEditorStringKey = keyof typeof blocksEditorStrings;
@@ -126,6 +125,7 @@ export type BlocksEditorStrings = Readonly<Record<BlocksEditorStringKey, string>
 
 export const blocksPlayerStrings = {
   instruction: "Drag blocks from the palette under “when the robot starts”.",
+  unchangedStarter: "Unchanged starter: not an answer yet.",
   view: "View",
   viewBlocks: "Blocks",
   viewCode: "Code",
@@ -140,30 +140,24 @@ export const blocksPlayerStrings = {
   step: "Step",
   reset: "Reset",
   caseTitle: "Case {n} · {name}",
-  battery: "Battery",
   passed: "{passed} / {total} warehouses",
   hiddenFoot: "{count} hidden warehouses, worth {points} points in total, are tested at grading only.",
   "hiddenFoot.one": "1 hidden warehouse, worth {points} points, is tested at grading only.",
   noVisible: "Every warehouse is hidden: your program is tested at grading only.",
-  allOrNothing: "All or nothing",
 } as const;
 export type BlocksPlayerStringKey = keyof typeof blocksPlayerStrings;
 export type BlocksPlayerStrings = Readonly<Record<BlocksPlayerStringKey, string>>;
 
 export const blocksReviewStrings = {
   score: "{points} / {max} points",
-  program: "Program",
   noAnswer: "No answer",
-  reference: "Reference solution",
-  cases: "Warehouses",
   hiddenNote: "A hidden warehouse shows its verdict only.",
-  allOrNothing: "All or nothing",
 } as const;
 export type BlocksReviewStringKey = keyof typeof blocksReviewStrings;
 export type BlocksReviewStrings = Readonly<Record<BlocksReviewStringKey, string>>;
 
+/** The column's own words; it spells the program and names itself in the canvas's. */
 export const blocksGradingStrings = {
-  program: "Program",
   warehouses: "{passed}/{total} docks",
   "warehouses.one": "{passed}/1 dock",
   more: "{n} more lines",

@@ -93,20 +93,20 @@ export function BlocksReview({
       <ReviewPrompt prompt={student.prompt} sections={sections} renderMarkdown={renderMarkdown} />
       <div className="flex flex-wrap items-center gap-2">
         <h3 className={cx(sectionTitle, "tabular-nums")}>{fmt(s.score, { points: pointsOrDash(points), max: maxPoints })}</h3>
-        {student.allOrNothing ? <span className={badge("warning")}>{s.allOrNothing}</span> : null}
+        {student.allOrNothing ? <span className={badge("warning")}>{c.allOrNothing}</span> : null}
       </div>
 
       <section className="flex flex-col gap-2">
-        <h4 className={labelToken}>{s.program}</h4>
+        <h4 className={labelToken}>{c.workspace}</h4>
         {answer === null || answer.program.length === 0 ? (
           <p className={caption}>{s.noAnswer}</p>
         ) : (
-          <BlocklyHost program={answer.program} toolbox={student.toolbox} words={c} label={s.program} height={280} blockly={blockly} />
+          <BlocklyHost program={answer.program} toolbox={student.toolbox} words={c} label={c.workspace} height={280} blockly={blockly} />
         )}
       </section>
 
       <section className="flex flex-col gap-3">
-        <h4 className={labelToken}>{s.cases}</h4>
+        <h4 className={labelToken}>{c.cases}</h4>
         <div className="@container">
           <div
             className={cx(
@@ -137,8 +137,8 @@ export function BlocksReview({
 
       {reference === null ? null : (
         <section className="flex flex-col gap-2">
-          <h4 className={labelToken}>{s.reference}</h4>
-          <BlocklyHost program={reference} toolbox={student.toolbox} words={c} label={s.reference} height={280} blockly={blockly} />
+          <h4 className={labelToken}>{c.reference}</h4>
+          <BlocklyHost program={reference} toolbox={student.toolbox} words={c} label={c.reference} height={280} blockly={blockly} />
         </section>
       )}
     </div>

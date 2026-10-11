@@ -18,7 +18,7 @@ import { PROGRAM_LIMITS, programEquals, programStats, type NodePath, type Stmt }
 import { caption, hint, isLocked, markdown, Segmented } from "@quiz/ui";
 
 import { BlocklyHost } from "./BlocklyHost.js";
-import type { BlocksAnswer, BlocksStudent } from "./schema.js";
+import { programFits, shownProgram, storedProgram, type BlocksAnswer, type BlocksStudent } from "./schema.js";
 import { Simulation } from "./Simulation.js";
 import {
   blocksCanvasStrings,
@@ -36,15 +36,6 @@ export type BlocksPlayerProps = PlayerProps<BlocksStudent, BlocksAnswer> & {
   testsPrimary?: boolean | undefined;
   /** Forces the Blockly path on or off (the tests drive the text fallback). */
   blockly?: boolean | undefined;
-};
-
-/** What the workspace shows for a stored answer: the starter while nothing else was sent. */
-const shownProgram = (answer: BlocksAnswer | null, starter: Stmt[]): Stmt[] =>
-  answer !== null && answer.program.length > 0 ? answer.program : starter;
-
-const withinLimits = (program: Stmt[]) => {
-  const { nodes, depth } = programStats(program);
-  return nodes <= PROGRAM_LIMITS.nodes && depth <= PROGRAM_LIMITS.depth;
 };
 
 export function BlocksPlayer({
@@ -83,16 +74,19 @@ export function BlocksPlayer({
 
   const edit = (next: Stmt[]) => {
     setProgram(next);
-    const fits = withinLimits(next);
+    const fits = programFits(next);
     onUnsent?.(!fits);
     if (!fits) return;
-    const stored = programEquals(next, student.starter) ? [] : next;
+    const stored = storedProgram(next, student.starter);
     sent.current = stored;
     onChange({ program: stored });
   };
   const onHighlight = useCallback((path: NodePath | null) => setHighlight(path), []);
 
   const count = programStats(program).nodes;
+  const fits = programFits(program);
+  // The starter itself is no answer yet (ADR-103 §10): say so where the count is.
+  const unchanged = fits && student.starter.length > 0 && storedProgram(program, student.starter).length === 0;
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
@@ -113,7 +107,10 @@ export function BlocksPlayer({
               { value: "code", label: s.viewCode },
             ]}
           />
-          <span className={hint}>{plural(s, "blockCount", count)}</span>
+          <span className={hint}>
+            {!locked && unchanged ? `${s.unchangedStarter} · ` : ""}
+            {plural(s, "blockCount", count)}
+          </span>
         </div>
         <BlocklyHost
           program={program}
@@ -127,7 +124,7 @@ export function BlocksPlayer({
           blockly={blockly}
         />
         {view === "code" ? <p className={caption}>{s.codeHint}</p> : null}
-        {withinLimits(program) ? null : (
+        {fits ? null : (
           <p role="alert" className="rounded-field bg-danger-soft px-3 py-2 text-[13px] text-danger">
             {fmt(s.tooLarge, { nodes: PROGRAM_LIMITS.nodes, depth: PROGRAM_LIMITS.depth })}
           </p>

@@ -392,8 +392,17 @@ export const gradingStrings: Record<QuestionTypeId, (t: TFunction) => Record<str
   diagram: (t) => translated(t, diagramGradingStrings, "qt.diagram.g"),
   brainstorm: (t) => translated(t, brainstormGradingStrings, "qt.brainstorm.g"),
   math: (t) => translated(t, mathGradingStrings, "qt.math.g"),
-  // The column spells the program in the canvas's words.
-  blocks: (t) => ({ ...blocksCanvasStringsOf(t), ...translated(t, blocksGradingStrings, "qt.blocks.g") }),
+  /*
+   * The column spells the program and names itself in the canvas's words, so
+   * it takes the canvas dictionary the surfaces take (`CANVAS_STRINGS_OF`),
+   * translated once there, with its own few words on top. The package's
+   * `blocksGradingDictionary` is the same union of English defaults: this is
+   * its translation, not a second dictionary.
+   */
+  blocks: (t) => ({
+    ...(CANVAS_STRINGS_OF.blocks!(t) as Record<string, string>),
+    ...translated(t, blocksGradingStrings, "qt.blocks.g"),
+  }),
 };
 
 // --- Hosts -----------------------------------------------------------------

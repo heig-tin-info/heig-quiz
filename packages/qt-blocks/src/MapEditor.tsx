@@ -8,14 +8,14 @@
 import { useState, type ReactNode } from "react";
 
 import { fmt } from "@quiz/core/client";
-import { MAP_SIZE } from "@quiz/domain/blocks";
+import { HEADINGS, MAP_SIZE, type Heading } from "@quiz/domain/blocks";
 import { cx, NumberField, Segmented } from "@quiz/ui";
 
 import type { BlocksEditorStrings } from "./strings.js";
+import { Robot } from "./WarehouseMap.js";
 
 type Tool = "rack" | "start" | "dock";
 
-const HEADINGS = "^>v<";
 const HEADING_WORD = ["headingNorth", "headingEast", "headingSouth", "headingWest"] as const;
 
 /** The rows resized to `width` × `height`: new cells are floor, cut ones are gone. */
@@ -53,10 +53,10 @@ function CellGlyph({ char }: { char: string }) {
   if (char === "#") return <span className="block size-4.5 rounded-xs bg-fg-faint/60" />;
   if (char === "D") return <span className="block size-5 rounded-xs border border-dashed border-info bg-info-soft" />;
   if (heading === -1) return null;
+  // The map's own robot, in a cell of its own.
   return (
-    <svg viewBox="-10 -10 20 20" className="size-5" aria-hidden="true" style={{ transform: `rotate(${heading * 90}deg)` }}>
-      <rect x={-8} y={-8} width={16} height={16} rx={4} className="fill-fg" />
-      <path d="M -3.5 2 L 0 -3 L 3.5 2" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="stroke-surface" />
+    <svg viewBox="0 0 32 32" className="size-7" aria-hidden="true">
+      <Robot pose={{ x: 0, y: 0, heading: heading as Heading }} cell={32} />
     </svg>
   );
 }

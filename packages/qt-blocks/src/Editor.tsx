@@ -13,7 +13,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { ConfigIssue, EditorProps, StringOverrides } from "@quiz/core/client";
 import { fmt, issuesAt, plural, resolveStrings } from "@quiz/core/client";
-import { BLOCK_KINDS, type BlockKind, type RunReason, type Stmt } from "@quiz/domain/blocks";
+import { BLOCK_KINDS, type BlockKind, type Stmt } from "@quiz/domain/blocks";
 import {
   AsideSection,
   Button,
@@ -36,7 +36,7 @@ import {
 
 import { BlocklyHost } from "./BlocklyHost.js";
 import { reasonWord } from "./CaseTable.js";
-import { runCase } from "./grade.js";
+import { referenceRuns } from "./grade.js";
 import { MapEditor } from "./MapEditor.js";
 import { CASES_MAX, emptyCase, totalCasePoints, type BlocksConfig } from "./schema.js";
 import {
@@ -47,7 +47,6 @@ import {
   type BlocksEditorStringKey,
   type BlocksEditorStrings,
 } from "./strings.js";
-import { mapOf } from "./WarehouseMap.js";
 
 export type BlocksEditorProps = EditorProps<BlocksConfig> & {
   strings?: StringOverrides<BlocksEditorStringKey>;
@@ -67,9 +66,6 @@ const KIND_WORD = {
 const issuesHere = (issues: readonly ConfigIssue[], ...path: (string | number)[]) =>
   issuesAt(issues, ...path).filter((issue) => issue.path.length === path.length);
 
-/** One warehouse's verdict on the reference; `null` when its map does not read. */
-type Check = { name: string; reason: RunReason | null; ok: boolean };
-
 function ReferenceCheck({
   reference,
   cases,
@@ -81,19 +77,12 @@ function ReferenceCheck({
   s: BlocksEditorStrings;
   c: BlocksCanvasStrings;
 }): ReactNode {
-  const [checks, setChecks] = useState<Check[] | null>(null);
+  const [checks, setChecks] = useState<ReturnType<typeof referenceRuns> | null>(null);
   const key = JSON.stringify([reference, cases]);
   // A changed reference or warehouse is one nobody checked yet.
   useEffect(() => setChecks(null), [key]);
-  const run = () =>
-    setChecks(
-      cases.map((kase) => {
-        if (mapOf(kase.map) === null || !(kase.battery >= 1)) return { name: kase.name, reason: null, ok: false };
-        const result = runCase(reference, kase, { events: false });
-        return { name: kase.name, reason: result.reason, ok: result.ok };
-      }),
-    );
-  const missed = checks?.filter((check) => !check.ok).length ?? 0;
+  const run = () => setChecks(referenceRuns(reference, cases));
+  const missed = checks?.filter((check) => !check?.ok).length ?? 0;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-3">
@@ -111,10 +100,8 @@ function ReferenceCheck({
         <ul className="flex flex-col gap-1">
           {checks.map((check, i) => (
             <li key={i} className="flex items-center gap-2 text-[13px] text-fg">
-              <Verdict tone={verdictTone(check.reason === null ? null : check.ok)}>
-                {check.reason === null ? "—" : reasonWord(c, check.reason)}
-              </Verdict>
-              <span className="min-w-0 [overflow-wrap:anywhere]">{check.name || fmt(s.case, { n: i + 1 })}</span>
+              <Verdict tone={verdictTone(check?.ok)}>{check === null ? "—" : reasonWord(c, check.reason)}</Verdict>
+              <span className="min-w-0 break-words">{cases[i]?.name || fmt(s.case, { n: i + 1 })}</span>
             </li>
           ))}
         </ul>
@@ -187,13 +174,13 @@ export function BlocksEditor({
         <IssueList issues={issuesAt(issues, "starter")} />
       </EditorSection>
 
-      <EditorSection title={s.reference} hint={s.referenceHint}>
+      <EditorSection title={c.reference} hint={s.referenceHint}>
         <BlocklyHost
           program={config.referenceSolution ?? []}
           onChange={editable((reference) => patch({ referenceSolution: reference.length > 0 ? reference : null }))}
           toolbox={config.toolbox}
           words={c}
-          label={s.reference}
+          label={c.reference}
           height={320}
           blockly={blockly}
         />
@@ -203,7 +190,7 @@ export function BlocksEditor({
 
       <EditorSection>
         <RowListHeader
-          title={s.cases}
+          title={c.cases}
           count={plural(s, "totalPoints", total)}
           addLabel={s.addCase}
           addDisabled={disabled || config.cases.length >= CASES_MAX}
@@ -227,7 +214,7 @@ export function BlocksEditor({
                 pointsAriaLabel={fmt(s.pointsAria, { n: i + 1 })}
                 points={kase.points}
                 onPointsChange={(points) => patch({ cases: patchAt(config.cases, i, { points }) })}
-                hiddenLabel={s.hidden}
+                hiddenLabel={c.hidden}
                 hiddenAriaLabel={fmt(s.hiddenAria, { n: i + 1 })}
                 visible={kase.visible}
                 onVisibleChange={(visible) => patch({ cases: patchAt(config.cases, i, { visible }) })}
@@ -237,7 +224,7 @@ export function BlocksEditor({
               >
                 <NumberField
                   id={`blocks-case-${i}-battery`}
-                  label={s.battery}
+                  label={c.battery}
                   aria-label={fmt(s.batteryAria, { n: i + 1 })}
                   value={kase.battery}
                   min={1}
@@ -264,7 +251,7 @@ export function BlocksEditor({
         <h3 className={sectionTitle}>{s.scoring}</h3>
         <CheckboxField
           className={setting}
-          label={s.allOrNothing}
+          label={c.allOrNothing}
           checked={config.allOrNothing}
           disabled={disabled}
           onChange={(allOrNothing) => patch({ allOrNothing })}

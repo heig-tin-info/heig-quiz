@@ -1419,11 +1419,14 @@ through `pointsOrDash`: an answer nobody graded reads `—`, never `0`.
 
 The `blocks` question is the one surface drawn by a library we do not
 style with Tailwind: Blockly paints its blocks into SVG from a theme object
-and parses its colours itself, so they are VALUES in
-`packages/qt-blocks/src/blocklyBundle.ts` (`BLOCK_COLOURS`), one set per
-colour scheme, and the workspace is rebuilt when `html.dark` flips. What a
-theme cannot say (the flyout's group labels, its hairline) is CSS on the
-app's variables, registered by the same file.
+and parses its block colours itself, so the block hues and the hat's are
+VALUES in `packages/qt-blocks/src/blocklyBundle.ts` (`BLOCK_COLOURS`), one
+set per colour scheme. Everything else of its theme (workspace, flyout,
+grid, scrollbar, insertion marker) is read from the app's tokens on
+`<html>` when the workspace is built, and the workspace is rebuilt when
+`html.dark` (or `lang`) flips. What a theme cannot say (the flyout's group
+labels, its hairline) is CSS on the app's variables, registered by the same
+file.
 
 | Role | Light | Dark | Why |
 | --- | --- | --- | --- |

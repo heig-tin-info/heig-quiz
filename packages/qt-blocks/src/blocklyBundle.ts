@@ -40,35 +40,38 @@ export const MEDIA_PATH = "/blockly-media/";
 // Theme
 // ---------------------------------------------------------------------------
 
+/** The three groups of blocks: a colour each, a labelled group of the palette each. */
+type Group = "movement" | "control" | "sensors";
+
+/** Which group a kind belongs to: its block style and its place in the palette. */
+const GROUP_OF: Record<BlockKind, Group> = {
+  forward: "movement",
+  turn: "movement",
+  repeat: "control",
+  repeat_until_dock: "control",
+  if_sensor: "sensors",
+};
+
+/** The palette's groups, in order, with the canvas word that labels each. */
+const GROUPS: readonly [Group, "groupMovement" | "groupControl" | "groupSensors"][] = [
+  ["movement", "groupMovement"],
+  ["control", "groupControl"],
+  ["sensors", "groupSensors"],
+];
+
 /**
- * The colours, per scheme. Blockly parses its block colours itself, so they
- * are values here and not CSS variables; DESIGN.md lists them with their
- * reasons. The surfaces are the app's tokens, written out for the same reason.
+ * The block hues and the hat's, per scheme: Blockly parses a block colour
+ * itself, so these are values (DESIGN.md, "The blocks workspace", lists them
+ * with their reasons). Everything else of the theme is the app's own tokens,
+ * read from the page ({@link token}).
  */
-export const BLOCK_COLOURS = {
-  light: {
-    movement: "#55606f",
-    control: "#a35810",
-    sensors: "#1268a0",
-    start: "#726d64",
-    surface: "#ffffff",
-    surface2: "#f3f1ed",
-    line: "#e7e4de",
-    lineStrong: "#d3cfc7",
-    fg: "#1a1917",
-  },
-  dark: {
-    movement: "#7d8796",
-    control: "#c07a2a",
-    sensors: "#3f8ec4",
-    start: "#6b665e",
-    surface: "#1b1a18",
-    surface2: "#232220",
-    line: "#2a2825",
-    lineStrong: "#3a3733",
-    fg: "#ecebe7",
-  },
-} as const;
+export const BLOCK_COLOURS: Record<"light" | "dark", Record<Group | "start", string>> = {
+  light: { movement: "#55606f", control: "#a35810", sensors: "#1268a0", start: "#726d64" },
+  dark: { movement: "#7d8796", control: "#c07a2a", sensors: "#3f8ec4", start: "#6b665e" },
+};
+
+/** A colour token of the app (`--surface`), as the page resolves it now. */
+const token = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim();
 
 /** A hex colour scaled toward black (k < 1) or white (k > 1), for a block's shades. */
 function shade(hex: string, k: number): string {
@@ -89,21 +92,19 @@ function themeFor(dark: boolean): Blockly.Theme {
     name: dark ? "quiz-blocks-dark" : "quiz-blocks-light",
     base: Blockly.Themes.Classic,
     blockStyles: {
-      quiz_movement: style(c.movement),
-      quiz_control: style(c.control),
-      quiz_sensors: style(c.sensors),
+      ...Object.fromEntries(GROUPS.map(([group]) => [`quiz_${group}`, style(c[group])])),
       quiz_start: style(c.start, "cap"),
     },
     categoryStyles: {},
     componentStyles: {
-      workspaceBackgroundColour: c.surface,
-      toolboxBackgroundColour: c.surface2,
-      flyoutBackgroundColour: c.surface2,
-      flyoutForegroundColour: c.fg,
+      workspaceBackgroundColour: token("surface"),
+      toolboxBackgroundColour: token("surface-2"),
+      flyoutBackgroundColour: token("surface-2"),
+      flyoutForegroundColour: token("fg"),
       flyoutOpacity: 1,
-      scrollbarColour: c.lineStrong,
+      scrollbarColour: token("line-strong"),
       scrollbarOpacity: 1,
-      insertionMarkerColour: c.fg,
+      insertionMarkerColour: token("fg"),
       insertionMarkerOpacity: 0.3,
     },
     fontStyle: { family: '"Manrope Variable", Manrope, ui-sans-serif, sans-serif', weight: "600", size: 12 },
@@ -134,15 +135,21 @@ Blockly.Css.register(`
 const label = (text: string, fields: Record<string, number> = {}) =>
   fmt(text.replaceAll("%", "%%"), Object.fromEntries(Object.entries(fields).map(([k, n]) => [k, `%${n}`])));
 
-const STATEMENT = { previousStatement: null, nextStatement: null };
+/** A statement block of `kind`: chained above and below, in its group's style. */
+const statement = (kind: BlockKind) => ({
+  type: kind,
+  previousStatement: null,
+  nextStatement: null,
+  style: `quiz_${GROUP_OF[kind]}`,
+});
 
 /** The six block types, labelled in the reader's language; ids and field values stay English. */
 function defineBlocks(c: BlocksCanvasStrings): void {
   const definitions = [
     { type: "start", message0: label(c.start), nextStatement: null, style: "quiz_start" },
-    { type: "forward", message0: label(c.forward), ...STATEMENT, style: "quiz_movement" },
+    { ...statement("forward"), message0: label(c.forward) },
     {
-      type: "turn",
+      ...statement("turn"),
       message0: label(c.turn, { dir: 1 }),
       args0: [
         {
@@ -154,28 +161,22 @@ function defineBlocks(c: BlocksCanvasStrings): void {
           ],
         },
       ],
-      ...STATEMENT,
-      style: "quiz_movement",
     },
     {
-      type: "repeat",
+      ...statement("repeat"),
       message0: label(c.repeat, { n: 1 }),
       args0: [{ type: "field_number", name: "TIMES", value: 3, min: 1, max: PROGRAM_LIMITS.repeatMax, precision: 1 }],
       message1: "%1",
       args1: [{ type: "input_statement", name: "DO" }],
-      ...STATEMENT,
-      style: "quiz_control",
     },
     {
-      type: "repeat_until_dock",
+      ...statement("repeat_until_dock"),
       message0: label(c.repeatUntilDock),
       message1: "%1",
       args1: [{ type: "input_statement", name: "DO" }],
-      ...STATEMENT,
-      style: "quiz_control",
     },
     {
-      type: "if_sensor",
+      ...statement("if_sensor"),
       message0: label(c.ifSensor, { sensor: 1, where: 2 }),
       args0: [
         {
@@ -200,8 +201,6 @@ function defineBlocks(c: BlocksCanvasStrings): void {
       args1: [{ type: "input_statement", name: "THEN" }],
       message2: `${label(c.else)} %1`,
       args2: [{ type: "input_statement", name: "ELSE" }],
-      ...STATEMENT,
-      style: "quiz_sensors",
     },
   ];
   // Redefined at every mount, in the language of the page: a definition is a
@@ -212,18 +211,13 @@ function defineBlocks(c: BlocksCanvasStrings): void {
 
 /** The palette: three labelled groups, holding only what the toolbox offers. */
 function flyout(toolbox: readonly BlockKind[], c: BlocksCanvasStrings): Blockly.utils.toolbox.ToolboxDefinition {
-  const groups: [string, BlockKind[]][] = [
-    [c.groupMovement, ["forward", "turn"]],
-    [c.groupControl, ["repeat", "repeat_until_dock"]],
-    [c.groupSensors, ["if_sensor"]],
-  ];
   return {
     kind: "flyoutToolbox",
-    contents: groups.flatMap(([text, kinds]) => {
-      const offered = kinds.filter((kind) => toolbox.includes(kind));
+    contents: GROUPS.flatMap(([group, word]) => {
+      const offered = BLOCK_KINDS.filter((kind) => GROUP_OF[kind] === group && toolbox.includes(kind));
       return offered.length === 0
         ? []
-        : [{ kind: "label", text }, ...offered.map((type) => ({ kind: "block", type }))];
+        : [{ kind: "label", text: c[word] }, ...offered.map((type) => ({ kind: "block", type }))];
     }),
   };
 }
@@ -327,20 +321,21 @@ export function programOf(workspace: Blockly.Workspace): Stmt[] {
 }
 
 /**
- * The block a run event names. A path goes through a `repeat`'s body; the
- * path of an `if_sensor` does not say which branch it took, so the decision
- * itself is the block shown while the robot acts inside it.
+ * The block a run event names (`NodePath` of `@quiz/domain/blocks`): an index
+ * into a stack, then into the body of the block found there — after an
+ * `if_sensor`, the branch first (0 `THEN`, 1 `ELSE`), then the index in it.
+ * `null` for a path the workspace does not hold (it changed under the run).
  */
-function blockAt(workspace: Blockly.Workspace, path: NodePath): Blockly.Block | null {
+export function blockAt(workspace: Blockly.Workspace, path: NodePath): Blockly.Block | null {
   let stack = workspace.getBlocksByType("start", false)[0]?.getNextBlock() ?? null;
   let found: Blockly.Block | null = null;
-  for (const index of path) {
+  for (let at = 0; at < path.length; at++) {
     let block = stack;
-    for (let i = 0; i < index && block !== null; i++) block = block.getNextBlock();
-    if (block === null) return found;
+    for (let i = 0; i < path[at]! && block !== null; i++) block = block.getNextBlock();
+    if (block === null) return null;
     found = block;
-    if (block.type === "if_sensor") return found;
-    stack = block.getInputTargetBlock("DO");
+    if (block.type !== "if_sensor") stack = block.getInputTargetBlock("DO");
+    else if (at + 1 < path.length) stack = block.getInputTargetBlock(path[++at] === 0 ? "THEN" : "ELSE");
   }
   return found;
 }
@@ -370,11 +365,19 @@ generator.forBlock["if_sensor"] = (block, g) => {
  * (the package's tests run them under Node).
  */
 export function roundTrip(program: Stmt[], words: BlocksCanvasStrings): { program: Stmt[]; code: string } {
+  return headless(program, words, (workspace) => ({
+    program: programOf(workspace),
+    code: generator.workspaceToCode(workspace),
+  }));
+}
+
+/** `read` over a page-less workspace holding `program`, disposed after. */
+export function headless<T>(program: Stmt[], words: BlocksCanvasStrings, read: (workspace: Blockly.Workspace) => T): T {
   defineBlocks(words);
   const workspace = new Blockly.Workspace();
   try {
     Blockly.serialization.workspaces.load(workspaceState(program), workspace);
-    return { program: programOf(workspace), code: generator.workspaceToCode(workspace) };
+    return read(workspace);
   } finally {
     workspace.dispose();
   }
@@ -391,6 +394,8 @@ export interface WorkspaceOptions {
   toolbox: readonly BlockKind[];
   words: BlocksCanvasStrings;
   dark: boolean;
+  /** The page's language (`<html lang>`): Blockly's own interface follows it. */
+  lang: string;
   readOnly: boolean;
   /** Every change of the program; never called while a program is loaded. */
   onChange: (program: Stmt[]) => void;
@@ -410,10 +415,9 @@ export interface MountedWorkspace {
 /** Injects a workspace into `container`. Throws whatever Blockly throws; the host falls back. */
 export function mountWorkspace(options: WorkspaceOptions): MountedWorkspace {
   const { container, words, readOnly } = options;
-  Blockly.setLocale((words.blocklyLocale === "fr" ? Fr : En) as unknown as Record<string, string>);
+  Blockly.setLocale((options.lang.startsWith("fr") ? Fr : En) as unknown as Record<string, string>);
   defineBlocks(words);
   container.classList.add("quiz-blocks");
-  const colours = options.dark ? BLOCK_COLOURS.dark : BLOCK_COLOURS.light;
   const workspace = Blockly.inject(container, {
     renderer: "zelos",
     theme: themeFor(options.dark),
@@ -427,7 +431,7 @@ export function mountWorkspace(options: WorkspaceOptions): MountedWorkspace {
     disable: false,
     // The hat counts: the program's own cap is `PROGRAM_LIMITS.nodes`.
     maxBlocks: PROGRAM_LIMITS.nodes + 1,
-    grid: { spacing: 20, length: 2, colour: colours.line, snap: true },
+    grid: { spacing: 20, length: 2, colour: token("line"), snap: true },
     // The page scrolls under the wheel; the workspace by its scrollbars and a drag.
     move: { scrollbars: true, drag: true, wheel: false },
     zoom: { startScale: 0.72, controls: false, wheel: false, pinch: true },

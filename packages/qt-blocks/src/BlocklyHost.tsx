@@ -32,17 +32,27 @@ export function blocklyAvailable(): boolean {
   return !navigator.userAgent.includes("jsdom");
 }
 
-/** Whether the page is drawn dark (`html.dark`), followed as it changes. */
-function useDark(): boolean {
-  const read = () => typeof document !== "undefined" && document.documentElement.classList.contains("dark");
-  const [dark, setDark] = useState(read);
+/**
+ * What the page says of itself on `<html>`: whether it is drawn dark
+ * (`html.dark`) and its language (`lang`), followed as they change — the two
+ * things the host sets there and a workspace must be rebuilt for.
+ */
+function usePage(): { dark: boolean; lang: string } {
+  const read = () =>
+    typeof document === "undefined"
+      ? { dark: false, lang: "en" }
+      : { dark: document.documentElement.classList.contains("dark"), lang: document.documentElement.lang || "en" };
+  const [page, setPage] = useState(read);
   useEffect(() => {
     if (typeof MutationObserver === "undefined") return;
-    const observer = new MutationObserver(() => setDark(read()));
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    const observer = new MutationObserver(() => {
+      const next = read();
+      setPage((now) => (now.dark === next.dark && now.lang === next.lang ? now : next));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "lang"] });
     return () => observer.disconnect();
   }, []);
-  return dark;
+  return page;
 }
 
 export interface BlocklyHostProps {
@@ -110,7 +120,7 @@ const LazyCanvas = lazy(async () => {
     const holds = useRef<Stmt[]>(program);
     const change = useRef(onChange);
     change.current = onChange;
-    const dark = useDark();
+    const { dark, lang } = usePage();
     const [code, setCode] = useState("");
     const readOnly = onChange === undefined;
     // A surface builds its dictionaries at every render: the workspace
@@ -129,6 +139,7 @@ const LazyCanvas = lazy(async () => {
           program: holds.current,
           ...settings.current,
           dark,
+          lang,
           readOnly,
           onChange: (next) => {
             holds.current = next;
@@ -151,7 +162,7 @@ const LazyCanvas = lazy(async () => {
       };
       // A new theme, palette, language or mode is a new workspace; the
       // program travels through `holds`.
-    }, [dark, settingsKey, readOnly]);
+    }, [dark, lang, settingsKey, readOnly]);
 
     // A program from outside (a reset, another surface) replaces the blocks;
     // the echo of the workspace's own change does not.

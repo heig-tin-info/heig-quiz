@@ -53,7 +53,7 @@ export const blocksGrading: QuestionTypeGrading<BlocksStudent, BlocksAnswer, Blo
     return [
       {
         key: "program",
-        label: s.program,
+        label: s.workspace,
         cell: ({ answer, details }) => row(lead(details), box(answer?.program ?? [], "neutral")),
         expected: () =>
           row(null, solution?.referenceSolution ? box(solution.referenceSolution, "expected") : <Dash />),
