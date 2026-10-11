@@ -5,7 +5,7 @@
 //   pnpm --filter @quiz/web dev:mock          # in one terminal
 //   pnpm --filter @quiz/web screenshots       # in another
 //
-// Flags: --dark, --width=390|768|1440 (repeatable), --height=<px>, --only=<substring>,
+// Flags: --dark, --width=390|768|1440 (repeatable), --height=<px>, --only=<substring> (=name: that scene only),
 //        --fold (viewport only, instead of the full page), --touch (a touch
 //        screen: coarse pointer, no hover), --list.
 // Environment: BASE (default http://localhost:5173), OUT (default
@@ -342,6 +342,12 @@ const scenes = [
   { name: "project-locked", role: "teacher", path: "/projects/pj-locked?projects=1", settle: 2500 },
   // Frozen, every score final, the release awaited: the `graded` badge and Release as the one action (ADR-104).
   { name: "project-graded", role: "teacher", path: "/projects/pj-graded?projects=1", settle: 2500 },
+  // F-PROJ-13, the states nobody else can look at (`?pjstates=1`): archived (writes withheld), published and
+  // nobody accepted, graded `none` (no Score, no checkpoints, no Release), a draft with no distribution.
+  { name: "project-archived", role: "teacher", path: "/projects/pj-archived?projects=1&pjstates=1", settle: 2500 },
+  { name: "project-nobody", role: "teacher", path: "/projects/pj-nobody?projects=1&pjstates=1", settle: 2500 },
+  { name: "project-ungraded", role: "teacher", path: "/projects/pj-ungraded?projects=1&pjstates=1", settle: 2500 },
+  { name: "project-draft-nodist", role: "teacher", path: "/projects/pj-nodist?projects=1&pjstates=1" },
   // ADR-047 (M6-06, `?codespace=1`): the workspace section — an online project
   // whose mode a launch froze, with its open workspaces; a draft whose mode the
   // owner with the grant may set; the same draft for an assistant (refused).
@@ -2050,7 +2056,7 @@ if (flag("list")) {
 
 // --- Runner ------------------------------------------------------------
 
-const picked = scenes.filter((s) => only.length === 0 || only.some((f) => s.name.includes(f)));
+const picked = scenes.filter((s) => only.length === 0 || only.some((f) => (f.startsWith("=") ? s.name === f.slice(1) : s.name.includes(f))));
 if (picked.length === 0) {
   console.error(`No scene matches ${only.join(", ")}. Try --list.`);
   process.exit(1);

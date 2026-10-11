@@ -164,7 +164,15 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
         </Badge>
       ) : null}
       {repo.deadlineAt !== null ? (
-        <Badge tone="amber">{t("project.repo.ownDeadline", { date: isoDateParts(repo.deadlineAt).date })}</Badge>
+        <>
+          {/* A phone's State column is too narrow for the sentence: the date alone, the sentence in its title. */}
+          <span className="@2xl:hidden" title={t("project.repo.ownDeadline", { date: isoDateParts(repo.deadlineAt).date })}>
+            <Badge tone="amber">{isoDateParts(repo.deadlineAt).date}</Badge>
+          </span>
+          <span className="hidden @2xl:contents">
+            <Badge tone="amber">{t("project.repo.ownDeadline", { date: isoDateParts(repo.deadlineAt).date })}</Badge>
+          </span>
+        </>
       ) : null}
       {review ? <Badge tone={review.tone}>{t(review.key)}</Badge> : null}
       <SyncBadge repo={repo} />

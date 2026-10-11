@@ -1952,8 +1952,8 @@ deadline strategy, the grading mode and scale, the protected files and the
 work mode. The **lifecycle rail** stays under them while graded `auto`, so the
 checkpoints are set before Publish — and it shows no date the draft does not
 have: on a MANUAL draft Published says "at publication", and a deadline
-counted in days says "n days after publication" with a J−n checkpoint only its
-"D−n"; a deadline that is a date (manual or scheduled) is shown with its
+counted in days says "n days after publication", a checkpoint counted from it
+showing only its token (D−n in English, J−n in French); a deadline that is a date (manual or scheduled) is shown with its
 checkpoints' dates. No tiles,
 no table of repositories, no live workspace: nobody can accept a draft
 (ADR-077 §1). With no Source tile, **Sync** (the source is ahead) is a
@@ -1989,7 +1989,9 @@ the folded Settings.
   one red figure of the page.
 - **Lifecycle rail** (`ProjectRail`): Published → checkpoints → Deadline →
   Freeze (`+ grace`, later own deadlines) → Release, horizontal
-  from `md`, vertical on a phone. Done steps have a filled marker. A void
+  from `xl` (six columns of a date need the width), vertical below it. A date
+  never breaks or truncates, and a checkpoint's token (D−n, J−n) sits on the
+  line of its status badge, never cut from it. Done steps have a filled marker. A void
   checkpoint follows the Freeze, greyed, "never fires", still deletable. Graded
   `none`: no checkpoints and no Release. "Add a checkpoint" is offered until the project is locked (a draft takes
   them too, F-PROJ-01). Archived: that, a checkpoint's deletion and Sync are withheld.
@@ -1999,7 +2001,8 @@ the folded Settings.
   only once the repository's deadline was applied with no commit and no last
   commit received: before the freeze the work may still come, after it there
   is nothing left to wait for, and red is kept for what is certain. A zero with
-  a last commit stays amber. The score is bold points over the grade as text,
+  a last commit stays amber. On a phone the "own deadline" badge shows the date
+  alone (the sentence is its title): the State column has no room for more. The score is bold points over the grade as text,
   with the source (CI, review, teacher) as faint text under it.
 - **Settings** stay editable after publication but are demoted: a folded
   `Disclosure` at the bottom (strategy, protected files, work mode) with the
