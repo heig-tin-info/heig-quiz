@@ -2,6 +2,7 @@ import katex from "katex";
 import { describe, expect, it } from "vitest";
 
 import {
+  FORMULA_HTML_BUDGET,
   FORMULA_HTML_MAX,
   FORMULA_SOURCE_MAX,
   FormulaBudget,
@@ -42,10 +43,14 @@ describe("KATEX_LIMITS and FORMULA_HTML_MAX (audit L15)", () => {
 });
 
 describe("refusedBeforeKatex and FormulaBudget (audit L15)", () => {
-  it("refuses a forbidden command or a source past FORMULA_SOURCE_MAX, and nothing else", () => {
-    expect(refusedBeforeKatex("\\def\\a{x}")).toBe("command");
-    expect(refusedBeforeKatex("x".repeat(FORMULA_SOURCE_MAX + 1))).toBe("size");
-    expect(refusedBeforeKatex("x".repeat(FORMULA_SOURCE_MAX))).toBeNull();
+  it("refuses a forbidden command, a source past FORMULA_SOURCE_MAX or a spent budget, and nothing else", () => {
+    const budget = new FormulaBudget();
+    expect(refusedBeforeKatex("\\def\\a{x}", budget)).toBe("command");
+    expect(refusedBeforeKatex("x".repeat(FORMULA_SOURCE_MAX + 1), budget)).toBe("size");
+    expect(refusedBeforeKatex("x".repeat(FORMULA_SOURCE_MAX), budget)).toBeNull();
+    // A refused formula is charged what KaTeX built for it: 2.3 MB spends the body.
+    expect(budget.admit("x".repeat(FORMULA_HTML_BUDGET + 1))).toBe(false);
+    expect(refusedBeforeKatex("x", budget)).toBe("size");
   });
 
   it("refuses a matrix row whose HTML is past FORMULA_HTML_MAX", () => {

@@ -257,6 +257,21 @@ describe("MarkdownView — content", () => {
     expect(formulas[2]?.querySelector(".katex-error")).toHaveAttribute("title", FORMULA_LABELS.tooLarge);
   });
 
+  it("stops calling KaTeX once a body's budget is spent", () => {
+    // 4 KB rows of 4000 cells, ~2.3 MB each: the first spends the body.
+    const row = `$$\\begin{matrix}${"&".repeat(4000)}\\end{matrix}$$`;
+    const spy = vi.spyOn(katex, "renderToString");
+    try {
+      const host = document.createElement("div");
+      const source = Array.from({ length: 6 }, () => row).join("\n\n");
+      host.innerHTML = renderMarkdown(source, "Code", { formula: FORMULA_LABELS });
+      expect(host.querySelectorAll(".katex-error")).toHaveLength(6);
+      expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("shows a formula nested past the call stack as an error, not a crash", () => {
     // 1000 nested superscripts: 4 KB, under FORMULA_SOURCE_MAX, past the stack.
     const body = view(`$${"x^{".repeat(1000)}x${"}".repeat(1000)}$`);

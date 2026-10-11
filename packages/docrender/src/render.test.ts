@@ -353,6 +353,19 @@ describe("math", () => {
     expect(renderPage(row, ctx()).warnings).toEqual([]);
   });
 
+  it("stops calling KaTeX once a page's budget is spent", () => {
+    // 4 KB rows of 4000 cells, ~2.3 MB each: the first spends the page.
+    const row = `$$\\begin{matrix}${"&".repeat(4000)}\\end{matrix}$$\n`;
+    const spy = vi.spyOn(katex, "renderToString");
+    try {
+      const page = renderPage(Array.from({ length: 6 }, () => row).join("\n"), ctx());
+      expect(codes(page.warnings)).toEqual(Array.from({ length: 6 }, () => "math_error"));
+      expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("reports a formula nested past the call stack, without failing the page", () => {
     // 1000 nested superscripts: 4 KB, under FORMULA_SOURCE_MAX, past the stack.
     const deep = renderPage(`$${"x^{".repeat(1000)}x${"}".repeat(1000)}$\n`, ctx());

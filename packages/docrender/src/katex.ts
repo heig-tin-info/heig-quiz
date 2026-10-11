@@ -62,21 +62,27 @@ export const FORMULA_SOURCE_MAX = 4096;
 export const FORMULA_HTML_MAX = 1024 * 1024;
 
 /**
- * The most formula HTML one rendered body may hold: one `renderMarkdown`
- * call in the web app, one journal page. Past it, the next formulas of that
- * body are refused like a formula past {@link FORMULA_HTML_MAX}: 28 formulas
- * just under the cap in one 50 KB answer would otherwise put 27 MB in the
- * grader's page. Two of the largest legitimate formulas fit.
+ * The most formula HTML KaTeX may build for one rendered body: one
+ * `renderMarkdown` call in the web app, one journal page. Every formula is
+ * charged what KaTeX built for it, inserted or refused, and once the budget
+ * is spent the body's next formulas are refused BEFORE KaTeX is called. So
+ * KaTeX builds at most about 2 MB plus one formula (≤ 2.3 MB at
+ * {@link FORMULA_SOURCE_MAX}) per body, whatever its length — where 4 KB
+ * `array` formulas, 2.3 MB and ~56 ms each, would otherwise cost ~0.7 s per
+ * 50 KB answer and ~7 s per 500 KB journal page — and 28 formulas just
+ * under the cap cannot put 27 MB in the grader's page. Two of the largest
+ * legitimate formulas fit.
  */
 export const FORMULA_HTML_BUDGET = 2 * 1024 * 1024;
 
 /**
- * Why a formula must not reach KaTeX — a forbidden command, or a source past
- * {@link FORMULA_SOURCE_MAX} — or null. Every renderer asks before KaTeX.
+ * Why a formula must not reach KaTeX — a forbidden command, a source past
+ * {@link FORMULA_SOURCE_MAX}, or a body whose budget is spent — or null.
+ * Every renderer asks before KaTeX.
  */
-export function refusedBeforeKatex(tex: string): "command" | "size" | null {
+export function refusedBeforeKatex(tex: string, budget: FormulaBudget): "command" | "size" | null {
   if (forbiddenCommand(tex) !== null) return "command";
-  return tex.length > FORMULA_SOURCE_MAX ? "size" : null;
+  return tex.length > FORMULA_SOURCE_MAX || budget.spent ? "size" : null;
 }
 
 /**
@@ -87,14 +93,20 @@ export function refusedBeforeKatex(tex: string): "command" | "size" | null {
 export class FormulaBudget {
   private left = FORMULA_HTML_BUDGET;
 
+  /** Nothing left: the body's next formulas do not reach KaTeX. */
+  get spent(): boolean {
+    return this.left === 0;
+  }
+
   /**
    * Whether `html` may be inserted: under {@link FORMULA_HTML_MAX} and what
-   * the body has left. Spends it when it may.
+   * the body has left. Charged either way, up to what is left: what KaTeX
+   * built cost its time whether or not it is shown.
    */
   admit(html: string): boolean {
-    if (html.length > FORMULA_HTML_MAX || html.length > this.left) return false;
-    this.left -= html.length;
-    return true;
+    const fits = html.length <= FORMULA_HTML_MAX && html.length <= this.left;
+    this.left = Math.max(0, this.left - html.length);
+    return fits;
   }
 }
 

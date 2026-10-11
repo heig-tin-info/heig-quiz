@@ -363,7 +363,7 @@ function math(
   warnings: JournalWarning[],
   budget: FormulaBudget,
 ): string {
-  if (refusedBeforeKatex(source) === null) {
+  if (refusedBeforeKatex(source, budget) === null) {
     try {
       const html = katex.renderToString(source, {
         displayMode: display,

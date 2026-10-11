@@ -39,7 +39,7 @@ export function formulaHtml(
   labels: FormulaLabels,
   budget: FormulaBudget,
 ): string {
-  const before = refusedBeforeKatex(tex);
+  const before = refusedBeforeKatex(tex, budget);
   if (before !== null) return refused(tex, before === "command" ? labels.macro : labels.tooLarge);
   let html: string;
   try {
