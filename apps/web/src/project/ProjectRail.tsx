@@ -22,6 +22,9 @@ import { railSteps, type CheckpointStatus, type RailStep } from "./projectPage";
 
 const STATUS_TONE: Record<CheckpointStatus, Tone> = { dispatched: "green", void: "zinc", scheduled: "amber" };
 
+/** A date: never broken, never cut. */
+const When = ({ iso }: { iso: string }) => <span className="whitespace-nowrap tabular-nums">{isoDateTime(iso)}</span>;
+
 /** One step of the rail: a marker on the line, a title, its date and the lines that qualify it. */
 function Step({
   title,
@@ -37,16 +40,16 @@ function Step({
   action?: ReactNode;
 }) {
   return (
-    <li className={cx("group relative min-w-0 flex-1 pb-5 pl-7 last:pb-0 md:pb-0 md:pl-0 md:pr-4 md:pt-7", muted && "opacity-60")}>
+    <li className={cx("group relative min-w-0 flex-1 pb-5 pl-7 last:pb-0 xl:pb-0 xl:pl-0 xl:pr-4 xl:pt-7", muted && "opacity-60")}>
       {/* The line, vertical on a phone and horizontal beside the next step; the marker sits on it. */}
       <span
         aria-hidden
-        className="absolute bottom-0 left-[6px] top-3 w-px bg-line group-last:hidden md:bottom-auto md:left-0 md:right-0 md:top-[6px] md:h-px md:w-auto"
+        className="absolute bottom-0 left-[6px] top-3 w-px bg-line group-last:hidden xl:bottom-auto xl:left-0 xl:right-0 xl:top-[6px] xl:h-px xl:w-auto"
       />
       <span
         aria-hidden
         className={cx(
-          "absolute left-0 top-1 size-3.5 rounded-full border-2 md:top-0",
+          "absolute left-0 top-1 size-3.5 rounded-full border-2 xl:top-0",
           done ? "border-fg-muted bg-fg-muted" : "border-line-strong bg-surface",
         )}
       />
@@ -82,7 +85,7 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
       case "published":
         return (
           <Step key={key} title={t("project.rail.published")} done={step.done}>
-            <p className="tabular-nums">{step.at ? isoDateTime(step.at) : t("project.rail.atPublication")}</p>
+            <p>{step.at ? <When iso={step.at} /> : t("project.rail.atPublication")}</p>
           </Step>
         );
       case "checkpoint": {
@@ -110,12 +113,11 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
             }
           >
             {/* A checkpoint counted from a deadline not set yet has no date: only its D-n. */}
-            <p className="tabular-nums">
-              {dated ? isoDateTime(c.dueAt) : null}
-              {dated && c.offsetDays !== null ? " · " : null}
-              {c.offsetDays !== null ? t("project.checkpoint.offsetLabel", { n: -c.offsetDays }) : null}
-            </p>
-            <p>
+            {dated ? <p><When iso={c.dueAt} /></p> : null}
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              {c.offsetDays !== null ? (
+                <span className="whitespace-nowrap tabular-nums">{t("project.checkpoint.offsetLabel", { n: -c.offsetDays })}</span>
+              ) : null}
               <Badge tone={STATUS_TONE[status]}>
                 {t(`project.checkpoint.status.${status}`)}
                 {status === "dispatched" ? (
@@ -133,9 +135,9 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
       case "deadline":
         return (
           <Step key={key} title={t("project.deadline")} done={step.done}>
-            <p className="tabular-nums">
+            <p>
               {"at" in step
-                ? isoDateTime(step.at)
+                ? <When iso={step.at} />
                 : step.afterDays === 1
                   ? t("project.rail.afterPublication.one")
                   : t("project.rail.afterPublication", { n: step.afterDays })}
@@ -154,7 +156,7 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
       case "release":
         return (
           <Step key={key} title={t("project.rail.release")} done={step.at !== null}>
-            <p className="tabular-nums">{step.at ? isoDateTime(step.at) : t("project.rail.toCome")}</p>
+            <p>{step.at ? <When iso={step.at} /> : t("project.rail.toCome")}</p>
           </Step>
         );
     }
@@ -181,7 +183,7 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
         <QueryError title={t("project.checkpoints.failed")} query={list} />
       ) : (
         <Card className="px-4 py-4">
-          <ol className="flex flex-col md:flex-row">
+          <ol className="flex flex-col xl:flex-row">
             {railSteps(project, checkpoints).map((step, i) => stepOf(step, `${step.kind}-${i}`))}
           </ol>
           {auto && checkpoints.length === 0 ? (

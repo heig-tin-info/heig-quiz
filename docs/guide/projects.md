@@ -39,6 +39,12 @@ When a push by anyone but Quiz (a student, or a workflow's own commit) touches a
 
 A draft's page is a form, written as you go: there is no Save. **Work handed out** recalls the source, the branches and the history, which are fixed. **Publication and deadline** holds the three things most projects need: publish by hand or at a start, and the deadline, either a date or a number of days counted from the publication. A scheduled start must lie ahead; the start and the deadline are saved together once both are filled, and a refusal is said under the field it concerns. **Groups** turns on group work and chooses the group set. Everything else (grace, what happens at the deadline, grading, protected files, where students work) is folded under **Advanced options**, and the lifecycle rail below lets you set the review checkpoints before publishing; before a manual publication it shows no date, since none is set yet. Once published, the page becomes the dashboard described below.
 
+<figure markdown="span">
+  ![A draft's page: work handed out, publication and deadline, groups, advanced options and the lifecycle rail](../assets/screenshots/mock-project-draft-light.png#only-light)
+  ![A draft's page: work handed out, publication and deadline, groups, advanced options and the lifecycle rail](../assets/screenshots/mock-project-draft-dark.png#only-dark)
+  <figcaption>A draft: a form, written as you go. (Mock data.)</figcaption>
+</figure>
+
 ## Publish
 
 On the project page, **Publish** is the primary action of a draft. It starts the project now, or leaves the schedule to do it. A group project cannot be published while a claimed student is in no group.

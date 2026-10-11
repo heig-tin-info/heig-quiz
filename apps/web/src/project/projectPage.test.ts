@@ -521,9 +521,10 @@ describe("the tiles' figures", () => {
     }
   });
 
-  it("counts no commit nor CI failure on an archived project: no repository is live", () => {
+  it("counts an archived project's repositories like any other: the figures describe them, not what can be acted on", () => {
     const archived = makeProject({ rows, archivedAt: PAST });
-    expect(projectTally(archived).progress).toMatchObject({ pushed: 0, noCommit: 0, ciFail: 0 });
+    expect(projectTally(archived).progress).toEqual(projectTally(makeProject({ rows })).progress);
+    expect(projectTally(archived).progress.pushed).toBeGreaterThan(0);
   });
 
   it("counts a group project per group, with a ring of two parts and an invitation that is nobody's", () => {

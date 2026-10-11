@@ -96,6 +96,7 @@ export const FLAG_NAMES = [
   "journalerror",
   "journalconflict",
   "projects",
+  "pjstates",
   "srcmissing",
   "distfail",
   "unassigned",

@@ -133,6 +133,21 @@ function CommitCell({ repo }: { repo: ProjectRepoView | null }) {
 }
 
 /**
+ * The repository's own deadline: the sentence from `@2xl`, the date alone
+ * where the column is narrow, the sentence then read by a screen reader only.
+ */
+function OwnDeadlineBadge({ at }: { at: string }) {
+  const t = useT();
+  const { date } = isoDateParts(at);
+  return (
+    <Badge tone="amber">
+      <span aria-hidden className="@2xl:hidden">{date}</span>
+      <span className="sr-only @2xl:not-sr-only">{t("project.repo.ownDeadline", { date })}</span>
+    </Badge>
+  );
+}
+
+/**
  * The lock, the freeze, the final review's state, the sync's pull request
  * (M3-07) and the flags of a repository, as tags; on a narrow table the
  * flags fold into one count. The review tag (M3-12b) says nothing while it
@@ -163,9 +178,7 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
           {t("project.frozen.provisional")}
         </Badge>
       ) : null}
-      {repo.deadlineAt !== null ? (
-        <Badge tone="amber">{t("project.repo.ownDeadline", { date: isoDateParts(repo.deadlineAt).date })}</Badge>
-      ) : null}
+      {repo.deadlineAt !== null ? <OwnDeadlineBadge at={repo.deadlineAt} /> : null}
       {review ? <Badge tone={review.tone}>{t(review.key)}</Badge> : null}
       <SyncBadge repo={repo} />
       {/* Wrappers, not classes on the badges: a badge's own `inline-flex` would win over `hidden`. */}
