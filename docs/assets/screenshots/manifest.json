@@ -345,6 +345,29 @@
       "base": "http://localhost:3100"
     },
     {
+      "name": "editor-blocks",
+      "caption": "The editor of a blocks question: the toolbox, the starter and reference programs, the warehouses.",
+      "persona": "teacher",
+      "path": "/questions/e6367378-1311-42db-8596-9eaf47d2ce2d",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: the published question “prg1-robot-entrepot”, three visible and two hidden warehouses.",
+      "phase": "seeded",
+      "files": {
+        "light": "editor-blocks-light.png",
+        "dark": "editor-blocks-dark.png"
+      },
+      "takenAt": "2026-10-11T15:28:52.547Z",
+      "commit": "6106b630",
+      "base": "http://localhost:3100"
+    },
+    {
       "name": "editor-preview",
       "caption": "The student preview of a question, exactly what a student will see.",
       "persona": "teacher",
@@ -457,6 +480,29 @@
       },
       "takenAt": "2026-09-21T20:58:21.264Z",
       "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "player-blocks",
+      "caption": "A blocks question as the student gets it: the workspace with the starter, then the warehouses tested.",
+      "persona": "teacher",
+      "path": "/questions/e6367378-1311-42db-8596-9eaf47d2ce2d?tab=try",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Opened the Try tab and clicked “Test on every warehouse”, with the starter as it is.",
+      "state": "As seeded: the published question “prg1-robot-entrepot”.",
+      "phase": "seeded",
+      "files": {
+        "light": "player-blocks-light.png",
+        "dark": "player-blocks-dark.png"
+      },
+      "takenAt": "2026-10-11T15:28:52.547Z",
+      "commit": "6106b630",
       "base": "http://localhost:3100"
     },
     {

@@ -133,7 +133,9 @@ fresh seed with no runner, for Coming up grouped by day. The
 AI's wand, criteria and model (ADR-063). The `player-*` scenes but
 `player-run` were retaken on 2026-10-02, on a fresh seed with no runner,
 for the pinned rail and the wide code question (ADR-066); `player-run` and
-`try-code` need a code runner and were not.
+`try-code` need a code runner and were not. The `editor-blocks` and
+`player-blocks` scenes were added on 2026-10-11, on a fresh seed with no
+runner (a blocks question needs none).
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -151,11 +153,13 @@ for the pinned rail and the wide code question (ADR-066); `player-run` and
 | `editor-short` | teacher | `/questions/dcaaf3e6-7023-4f27-9dac-38d8212b4177` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `editor-cloze` | teacher | `/questions/557c0ffa-9fc0-46aa-b524-dc89ae4af138` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `editor-code` | teacher | `/questions/637aca79-7782-4acc-ab32-907876fedddb` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `editor-blocks` | teacher | `/questions/e6367378-1311-42db-8596-9eaf47d2ce2d` | seeded | Nothing: the page as it loads. | 1440×900, full page |
 | `editor-preview` | teacher | `/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c` | seeded | Pressed Ctrl+Shift+M in the editor. | 1440×900, full page |
 | `editor-versions` | teacher | `/questions/637aca79-7782-4acc-ab32-907876fedddb?tab=versions` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `editor-publish` | teacher | `/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c` | seeded | Pressed Ctrl+Shift+P in the editor. | 1440×900 |
 | `try-mcq-graded` | teacher | `/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c?tab=try` | seeded | Chose the first answer, clicked “Grade my answer”. | 1440×900 |
 | `try-code` | teacher | `/questions/637aca79-7782-4acc-ab32-907876fedddb?tab=try` | seeded | Clicked “Run” on the visible cases, then “Grade my answer”, with the template as it is. | 1440×900, full page |
+| `player-blocks` | teacher | `/questions/e6367378-1311-42db-8596-9eaf47d2ce2d?tab=try` | seeded | Opened the Try tab and clicked “Test on every warehouse”, with the starter as it is. | 1440×900, full page |
 | `eval-questions` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=questions` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `eval-timing` | teacher | `/evaluations/18756045-182f-4e4a-9541-a45243d41f15?step=timing` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `eval-launch` | teacher | `/evaluations/18756045-182f-4e4a-9541-a45243d41f15?step=launch` | seeded | Nothing: the page as it loads. | 1440×900 |
