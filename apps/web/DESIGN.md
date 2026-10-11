@@ -988,6 +988,8 @@ live in `ui/state.ts`, each written once.
   never a refusal. A student who has not signed in carries a faint
   `CircleDashed`. Read-only (an archived classroom): plain chips, no menu.
 - Empty state: icon in a `surface-2` circle, title, one line, one action.
+  One exception, the Courses home: a text line under the one action — muted
+  `text-sm`, a `textLink`, never a button (when: ADR-105 §5).
 - PageSkeleton: the loading state of a whole page, in ONE shape — a 32 px
   title bar, optionally the 36 px tabs/toolbar row under it, then a 256 px
   block, optionally under a 96 px summary strip for a page that opens on

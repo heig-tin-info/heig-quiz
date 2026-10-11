@@ -82,6 +82,12 @@ export const teamsTabKey = ["teams-tab"] as const;
 // --- Courses and classrooms --------------------------------------------------
 
 export const coursesKey = ["courses"] as const;
+/**
+ * The caller's training course and the state of its missions (ADR-105):
+ * under the courses, so every course mutation — the training course's
+ * deletion included — refreshes it with the list.
+ */
+export const trainingKey = [...coursesKey, "training"] as const;
 export const courseKey = (id: string) => ["course", id] as const;
 /**
  * `GET /courses/:id/templates` (ADR-031): under the course, so a course

@@ -5,6 +5,7 @@ import {
   CircleHelp,
   ClipboardCheck,
   Code2,
+  Compass,
   FolderTree,
   GitBranch,
   GraduationCap,
@@ -92,6 +93,8 @@ export interface CommandContext {
    * the Shell owns — the palette has no sheet of its own to open.
    */
   onStartPoll?: () => void;
+  /** The training course (ADR-105 §5): `UserMenu`'s `onTraining`, the same door. */
+  onTraining?: () => void;
 }
 
 /** Id prefix of the per-classroom commands; the cap below recognizes them by it. */
@@ -383,6 +386,20 @@ export function buildCommands(ctx: CommandContext): Command[] {
       run: () => openExternal(SOURCES_URL),
     },
   );
+
+  if (ctx.onTraining) {
+    // It creates a course on first use. A global command never reaches the
+    // assistant, which reads the mounted screen's commands only (ADR-080 §10).
+    commands.push({
+      id: "help:training-course",
+      label: t("menu.training"),
+      hint: t("training.paletteHint"),
+      icon: Compass,
+      group: "help",
+      keywords: "training initiation onboarding tutorial formation missions",
+      run: ctx.onTraining,
+    });
+  }
 
   for (const { topic, title } of ctx.helpTopics) {
     commands.push({

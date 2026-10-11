@@ -31,6 +31,7 @@ import { HelpIcon, type IconType } from "./layers";
  * <LinkButton> and the raw anchors of the app wear the same list.
  */
 export { buttonClass };
+export type { ButtonVariant };
 
 /** A link in running text: the parent's ink until hovered, then `fg` and an underline. */
 export const textLink = "underline-offset-2 transition-colors hover:text-fg hover:underline";
@@ -42,7 +43,7 @@ export function Button({
   loading,
   className = "",
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+}: React.ComponentPropsWithRef<"button"> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
   /** Shows a spinner in place of the leading icon and disables the button. */

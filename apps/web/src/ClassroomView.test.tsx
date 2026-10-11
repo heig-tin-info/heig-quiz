@@ -27,6 +27,33 @@ const EVALUATIONS = `${ROOM}/evaluations`;
 const ME = "/app/api/me";
 /** The roster tab, whatever the roster holds. */
 const ROSTER_TAB = "/classrooms/r1?tab=roster";
+const TRAINING = "/app/api/training";
+const LIVE_QUIZ_ID = "11111111-1111-4111-8111-111111111105";
+
+/** The training status (ADR-105) naming `r1` as the training classroom and its live quiz, missions as given. */
+const trainingStatus = (
+  states: Partial<Record<"student" | "run" | "own" | "tools", "todo" | "done" | "unavailable">> = {},
+  liveEvaluationId: string | null = LIVE_QUIZ_ID,
+) => ({
+  installed: true,
+  course: { id: "c1", classroomId: "r1", liveEvaluationId },
+  missions: (["student", "run", "own", "tools"] as const).map((key) => ({ key, state: states[key] ?? "todo" })),
+});
+/** The staff seat of the test's teacher (`makeMe().id`). */
+const MY_SEAT = makeClassroomDetail({ roster: [makeRosterEntry({ id: "e-me", userId: "u-1", staff: true })] });
+/** The classes of a button, for the one accent of a screen. */
+const classesOf = (button: HTMLElement) => button.className.split(" ");
+
+/** The Activities tab of `r1` with the training's two quizzes among its evaluations. */
+const trainingRoutes = (status: ReturnType<typeof trainingStatus>, detail = makeClassroomDetail()) => ({
+  [`GET ${ROOM}`]: ok(detail),
+  [`GET ${ME}`]: ok(makeMe()),
+  [`GET ${TRAINING}`]: ok(status),
+  [`GET ${EVALUATIONS}`]: ok([
+    summary({ title: "Le quiz d'accueil", mode: "exercise", state: "scheduled" }),
+    summary({ id: LIVE_QUIZ_ID, title: "Le quiz en direct" }),
+  ]),
+});
 
 /** Only the number of these matters here; the list has its own tests. */
 const summary = (over: Partial<EvaluationSummary>): EvaluationSummary => ({
@@ -484,5 +511,93 @@ describe("the Grades tab (F-GBOOK-01, F-GBOOK-04, M5-04)", () => {
     renderWithProviders(<ClassroomView id="r1" navigate={navigate} />);
     await userEvent.click(await screen.findByRole("tab", { name: /Grades/ }));
     expect(navigate).toHaveBeenCalledWith({ view: "classroomGrades", id: "r1" });
+  });
+});
+
+describe("ClassroomView: the training classroom's card (ADR-105 §4)", () => {
+  it("accents the next required mission on the training classroom, and steps New down", async () => {
+    mockFetch(trainingRoutes(trainingStatus({ tools: "unavailable" })));
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    expect(await screen.findByRole("heading", { name: "Your four missions" })).toBeVisible();
+    // One button on the card, the next mission's; the three others carry none.
+    expect(classesOf(screen.getByRole("button", { name: "Show me the button" }))).toContain("bg-accent");
+    expect(screen.queryByRole("button", { name: "Open the live quiz" })).toBeNull();
+    await waitFor(() =>
+      expect(classesOf(screen.getByRole("button", { name: /New evaluation/ }))).not.toContain("bg-accent"),
+    );
+    // The fourth mission reads as unavailable, in words.
+    expect(screen.getByText("Not available on this server")).toBeVisible();
+  });
+
+  it("leads mission 1 to the page's own Join as student, under focus, and never clicks it", async () => {
+    const { calls } = mockFetch(trainingRoutes(trainingStatus()));
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Show me the button" }));
+    expect(screen.getByRole("button", { name: /Join as student/ })).toHaveFocus();
+    expect(calls.some((c) => c.url.endsWith("/self-enroll"))).toBe(false);
+  });
+
+  it("steps the empty list's New evaluation down too, so the tab has exactly one accent (invariant 2)", async () => {
+    mockFetch({ ...trainingRoutes(trainingStatus()), [`GET ${EVALUATIONS}`]: ok([]) });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    expect(await screen.findByRole("button", { name: "Show me the button" })).toBeVisible();
+    await screen.findByText("No evaluation yet");
+    await waitFor(() => {
+      const accented = screen.getAllByRole("button").filter((b) => classesOf(b).includes("bg-accent"));
+      expect(accented.map((b) => b.textContent)).toEqual(["Show me the button"]);
+    });
+  });
+
+  it("shows no card on another classroom", async () => {
+    mockFetch({
+      [`GET ${ROOM}`]: ok(makeClassroomDetail()),
+      [`GET ${ME}`]: ok(makeMe()),
+      [`GET ${EVALUATIONS}`]: ok([]),
+      [`GET ${TRAINING}`]: ok({ ...trainingStatus(), course: { id: "c9", classroomId: "r9", liveEvaluationId: null } }),
+    });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    await screen.findByRole("tab", { name: /Activities/ });
+    await waitFor(() => expect(classesOf(screen.getByRole("button", { name: /New evaluation/ }))).toContain("bg-accent"));
+    expect(screen.queryByRole("heading", { name: "Your four missions" })).toBeNull();
+  });
+
+  it("leads mission 2 to the live quiz the status names, and offers no door once it is deleted", async () => {
+    const navigate = vi.fn();
+    mockFetch(trainingRoutes(trainingStatus({ student: "done" }), MY_SEAT));
+    const first = renderWithProviders(<ClassroomView id="r1" navigate={navigate} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Open the live quiz" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "evaluation", id: LIVE_QUIZ_ID });
+    first.unmount();
+
+    mockFetch(trainingRoutes(trainingStatus({ student: "done" }, null), MY_SEAT));
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    expect(await screen.findByText("Run a class")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Open the live quiz" })).toBeNull();
+    // The row keeps its text; the page keeps its accent, since no button carries it.
+    expect(screen.getByText(/Open the live quiz's waiting room/)).toBeVisible();
+    await waitFor(() => expect(classesOf(screen.getByRole("button", { name: /New evaluation/ }))).toContain("bg-accent"));
+  });
+
+  it("names the account menu's switch once the seat exists, and leaves New its accent", async () => {
+    mockFetch(trainingRoutes(trainingStatus(), MY_SEAT));
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    expect(await screen.findByText(/switch to the student view from your account menu/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Show me the button" })).toBeNull();
+    // A hint in words is no accent: the screen never has zero.
+    await waitFor(() => expect(classesOf(screen.getByRole("button", { name: /New evaluation/ }))).toContain("bg-accent"));
+  });
+
+  it("says the training is complete once the required missions are done, links the guide, and gives New its accent back", async () => {
+    mockFetch(trainingRoutes(trainingStatus({ student: "done", run: "done", own: "done" })));
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    expect(await screen.findByText(/Training complete/)).toBeVisible();
+    expect(screen.getByRole("link", { name: /Read the guide chapter/ })).toHaveAttribute(
+      "href",
+      "https://heig-tin-info.github.io/heig-quiz/guide/training/",
+    );
+    // The optional fourth mission keeps its door, secondary: the page's
+    // primary is back, and the screen has one accent.
+    expect(classesOf(screen.getByRole("button", { name: "Open Settings" }))).not.toContain("bg-accent");
+    await waitFor(() => expect(classesOf(screen.getByRole("button", { name: /New evaluation/ }))).toContain("bg-accent"));
   });
 });

@@ -136,6 +136,12 @@ const scenes = [
   // Teacher home (the courses)
   { name: "teacher-home", role: "teacher", path: "/" },
   { name: "teacher-home-empty", role: "teacher", path: "/?empty=1" },
+  // ADR-105: the training course — the empty home's line (above), the
+  // account menu's entry, the classroom's card with its missions to do and
+  // once the three required ones are done.
+  { name: "training-menu", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /^user menu/i }).first().click() },
+  { name: "training-classroom", role: "teacher", path: "/classrooms/r1?training=1" },
+  { name: "training-classroom-done", role: "teacher", path: "/classrooms/r1?trainingdone=1" },
   { name: "teacher-home-error", role: "teacher", path: "/?fail=1", settle: 2500 },
   { name: "teacher-home-loading", role: "teacher", path: "/?slow=1", settle: 300 },
   { name: "teacher-home-many", role: "teacher", path: "/?many=1" },

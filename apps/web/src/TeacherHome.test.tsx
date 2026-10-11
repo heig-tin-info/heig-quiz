@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -6,6 +6,7 @@ import { applyTheme, getThemeChoice } from "./theme";
 import { TeacherHome } from "./TeacherHome";
 import { makeClassroomSummary, makeCourseSummary } from "./test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "./test/render";
+import { coursesKey } from "./queryKeys";
 
 /*
  * Teacher home: the courses, each with its classrooms. The page has ONE
@@ -14,6 +15,17 @@ import { mockFetch, ok, renderWithProviders } from "./test/render";
  */
 
 const COURSES = "/app/api/courses";
+const TRAINING = "/app/api/training";
+
+/** The training status (ADR-105): installed, no course yet, every mission to do. */
+const trainingStatus = (
+  over: { installed?: boolean; course?: { id: string; classroomId: string; liveEvaluationId: string | null } | null } = {},
+) => ({
+  installed: true,
+  course: null,
+  missions: ["student", "run", "own", "tools"].map((key) => ({ key, state: "todo" })),
+  ...over,
+});
 
 describe("TeacherHome", () => {
   it("lists each course with its classrooms and headcount", async () => {
@@ -344,5 +356,67 @@ describe("TeacherHome in a private window", () => {
     // The remembered view falls back to cards, and picking one still works.
     await userEvent.click(screen.getByRole("radio", { name: "List" }));
     expect(screen.getByRole("radio", { name: "List" })).toBeChecked();
+  });
+
+  it("offers the training course under the one action of the empty home, and opens it once provisioned (ADR-105 §5)", async () => {
+    const navigate = vi.fn();
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([]),
+      [`GET ${TRAINING}`]: ok(trainingStatus()),
+      [`POST ${TRAINING}`]: ok({ courseId: "c-init", classroomId: "r-init", created: true }),
+    });
+    renderWithProviders(<TeacherHome navigate={navigate} />);
+
+    expect(await screen.findByText("First time here?")).toBeVisible();
+    // A text link, not a second button: the one accent stays on New course.
+    const link = screen.getByRole("button", { name: "Start with the training course" });
+    expect(link.className.split(" ")).not.toContain("bg-accent");
+    expect(screen.getAllByRole("button", { name: /New course/ })).toHaveLength(1);
+    await userEvent.click(link);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r-init" }));
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual([TRAINING]);
+  });
+
+  it("offers no training line while the content is not installed, nor once the course exists", async () => {
+    mockFetch({
+      [`GET ${COURSES}`]: ok([]),
+      [`GET ${TRAINING}`]: ok(trainingStatus({ installed: false })),
+    });
+    const first = renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+    expect(await screen.findByText("No courses yet")).toBeVisible();
+    expect(screen.queryByText("First time here?")).toBeNull();
+    first.unmount();
+
+    mockFetch({
+      [`GET ${COURSES}`]: ok([]),
+      [`GET ${TRAINING}`]: ok(trainingStatus({ course: { id: "c-init", classroomId: "r-init", liveEvaluationId: null } })),
+    });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+    expect(await screen.findByText("No courses yet")).toBeVisible();
+    expect(screen.queryByText("First time here?")).toBeNull();
+  });
+
+  it("reads the status again after a course mutation, so a deleted training course is provisioned anew", async () => {
+    const navigate = vi.fn();
+    let course: { id: string; classroomId: string; liveEvaluationId: string | null } | null = {
+      id: "c-init",
+      classroomId: "r-init",
+      liveEvaluationId: null,
+    };
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([]),
+      [`GET ${TRAINING}`]: () => ok(trainingStatus({ course })),
+      [`POST ${TRAINING}`]: ok({ courseId: "c-new", classroomId: "r-new", created: true }),
+    });
+    const { queryClient } = renderWithProviders(<TeacherHome navigate={navigate} />);
+    expect(await screen.findByText("No courses yet")).toBeVisible();
+    expect(screen.queryByText("First time here?")).toBeNull();
+    // The course is deleted elsewhere: every course mutation refreshes the
+    // courses' key, which the status lives under (`trainingKey`).
+    course = null;
+    await queryClient.invalidateQueries({ queryKey: coursesKey });
+    await userEvent.click(await screen.findByRole("button", { name: "Start with the training course" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r-new" }));
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual([TRAINING]);
   });
 });

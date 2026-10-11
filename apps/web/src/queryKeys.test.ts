@@ -43,6 +43,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["teamsHostKey", keys.teamsHostKey, ["teams-host"]],
     ["teamsTabKey", keys.teamsTabKey, ["teams-tab"]],
     ["coursesKey", keys.coursesKey, ["courses"]],
+    ["trainingKey", keys.trainingKey, ["courses", "training"]],
     ["courseKey", keys.courseKey("c1"), ["course", "c1"]],
     ["courseTemplatesKey", keys.courseTemplatesKey("c1"), ["course", "c1", "templates"]],
     ["courseConditionsKey", keys.courseConditionsKey("c1"), ["course", "c1", "conditions"]],

@@ -78,6 +78,9 @@
  *                      answer, one stored conversation and the history (ADR-080).
  *   concept.ts     12. the vocabulary of concepts and the stop list of the
  *                      dropped tags (ADR-081, second addendum).
+ *   training.ts    13. the training course (ADR-105): the status the card
+ *                      reads and the provisioning (`?training=1`,
+ *                      `?trainingdone=1`).
  *
  * That list is also the dependency order, and the graph is acyclic: a file
  * reads the ones above it and never the ones below. Two handlers are
@@ -152,6 +155,7 @@ import "./journal";
 import "./kiosk";
 import "./assist";
 import "./concept";
+import "./training";
 import {
   polls,
   findTeacherPoll,

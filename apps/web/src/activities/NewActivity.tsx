@@ -4,7 +4,7 @@ import type { GithubClassroom } from "@quiz/contracts";
 
 import { useT, type TFunction } from "../i18n";
 import type { Navigate } from "../router";
-import { Button, Menu, type MenuItem } from "../ui";
+import { Button, type ButtonVariant, Menu, type MenuItem } from "../ui";
 
 /**
  * The classroom's one primary on its activities tab (M3-10, `docs/merge/
@@ -29,6 +29,7 @@ export function NewActivity({
   navigate,
   onEvaluation,
   onConnect,
+  variant = "primary",
 }: {
   classroomId: string;
   /** The classroom's GitHub read, once it succeeded. */
@@ -38,12 +39,17 @@ export function NewActivity({
   onEvaluation: () => void;
   /** Opens the Settings' connect sheet (`ClassroomView`'s `openConnect`). */
   onConnect: () => void;
+  /**
+   * `secondary` on the training classroom while the progress card's button
+   * is the screen's one accent (ADR-105 §4, `trainingAccent`).
+   */
+  variant?: ButtonVariant;
 }) {
   const t = useT();
   const project = newProjectAction(classroomId, github, navigate, onConnect, t);
   if (!project) {
     return (
-      <Button onClick={onEvaluation}>
+      <Button variant={variant} onClick={onEvaluation}>
         <Plus /> {t("eval.new")}
       </Button>
     );
@@ -57,7 +63,7 @@ export function NewActivity({
       label={t("activity.new")}
       items={items}
       trigger={
-        <Button>
+        <Button variant={variant}>
           <Plus /> {t("activity.new")} <ChevronDown />
         </Button>
       }

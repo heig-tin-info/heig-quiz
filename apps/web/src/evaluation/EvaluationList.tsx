@@ -31,6 +31,7 @@ import {
   usePersistentChoice,
   useSortableTable,
   type Column,
+  type ButtonVariant,
 } from "../ui";
 import { evaluationHome, evaluationLinkItems, evaluationStateLabel, evaluationTimerAt, stateStyle } from "./common";
 import { evaluationsKey } from "../queryKeys";
@@ -236,6 +237,7 @@ export function EvaluationList({
   navigate,
   onNew,
   newProject,
+  newVariant = "primary",
 }: {
   classroomId: string;
   navigate: (r: Route) => void;
@@ -246,6 +248,12 @@ export function EvaluationList({
    * evaluation" in the empty state; absent where a project has no door.
    */
   newProject?: { description?: string; onSelect: () => void } | null;
+  /**
+   * The empty state's "New evaluation": `secondary` on the training
+   * classroom while the progress card's button is the screen's one accent
+   * (ADR-105 §4, the same demotion as the header's "New ▾").
+   */
+  newVariant?: ButtonVariant;
 }) {
   const t = useT();
   const qc = useQueryClient();
@@ -327,7 +335,7 @@ export function EvaluationList({
               /* The header's "New ▾" folded open: an empty tab has room to
                  show both doors, the evaluation still the primary. */
               <div className="flex flex-wrap justify-center gap-2">
-                <Button onClick={onNew}>
+                <Button variant={newVariant} onClick={onNew}>
                   <Plus /> {t("eval.new")}
                 </Button>
                 {newProject ? (

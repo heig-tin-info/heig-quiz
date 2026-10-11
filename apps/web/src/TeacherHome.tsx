@@ -9,6 +9,7 @@ import { useCourses } from "./course/parts";
 import { inNavigation } from "./CourseNav";
 import { useT } from "./i18n";
 import type { Route } from "./router";
+import { useOpenTraining, useTrainingStatus } from "./training/api";
 import {
   Button,
   Card,
@@ -20,6 +21,7 @@ import {
   Spinner,
   T,
   TableHead,
+  textLink,
   ToggleChip,
   type Column,
   usePersistentChoice,
@@ -56,6 +58,13 @@ import {
  * brings those courses back here, each one badged and with "Show again" in
  * its menu. The toggle is not remembered — hidden is meant to stay out of
  * sight — and it only exists while something is hidden.
+ *
+ * The empty state keeps its one action and, under it, a text line offers
+ * the training course (ADR-105 §5; `DESIGN.md`, "Empty state") — a line and
+ * not a second button, shown only while the content is installed and the
+ * teacher has no training course yet. The line provisions the course and
+ * opens its classroom; the account menu and the palette carry the same
+ * door for a teacher whose home is not empty.
  */
 
 const VIEW_KEY = "quiz-courses-view";
@@ -70,6 +79,9 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
   const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "cards");
   const [showHidden, setShowHidden] = useState(false);
   const courses = useCourses();
+  const training = useTrainingStatus();
+  const openTraining = useOpenTraining(navigate, training.data?.course);
+  const offerTraining = training.data?.installed === true && training.data.course === null;
   const all = courses.data ?? [];
   const hiddenCount = all.filter((c) => c.hidden).length;
   const rows = showHidden ? all : all.filter((c) => inNavigation(c));
@@ -156,9 +168,24 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
           icon={Library}
           title={t("courses.empty.title")}
           action={
-            <Button data-coach="home.new-course" onClick={() => setCreating(true)}>
-              <Plus /> {t("courses.new")}
-            </Button>
+            <div className="flex flex-col items-center gap-3">
+              <Button data-coach="home.new-course" onClick={() => setCreating(true)}>
+                <Plus /> {t("courses.new")}
+              </Button>
+              {offerTraining ? (
+                <p className="text-sm text-fg-muted">
+                  {t("training.offer.lead")}{" "}
+                  <button
+                    type="button"
+                    disabled={openTraining.pending}
+                    onClick={openTraining.open}
+                    className={cx(textLink, "font-medium text-fg disabled:opacity-60")}
+                  >
+                    {t("training.offer.link")}
+                  </button>
+                </p>
+              ) : null}
+            </div>
           }
         >
           {t("courses.empty.body")}
