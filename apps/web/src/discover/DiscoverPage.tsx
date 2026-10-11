@@ -38,6 +38,7 @@ import {
   TestsCard,
 } from "./scenes";
 import {
+  BlocksType,
   BrainstormType,
   CategorizeType,
   CircuitType,
@@ -250,6 +251,7 @@ const TYPES: readonly [Key, string][] = [
   ["discover.qt.rich.name", "var(--q-blue)"],
   ["discover.qt.categorize.name", "var(--q-green)"],
   ["discover.qt.diagram.name", "var(--q-red)"],
+  ["discover.qt.blocks.name", "var(--q-blue)"],
   ["discover.qt.brainstorm.name", "var(--q-yellow)"],
   ["discover.type.parameterized", "var(--q-blue)"],
   ["discover.type.poll", "var(--q-green)"],
@@ -293,6 +295,7 @@ const QTYPES: readonly { id: string; tone: string; scene: () => ReactNode; chips
   { id: "rich", tone: "var(--q-blue)", scene: () => <RichType />, chips: 3 },
   { id: "categorize", tone: "var(--q-green)", scene: () => <CategorizeType />, chips: 2 },
   { id: "diagram", tone: "var(--q-red)", scene: () => <DiagramType />, chips: 3 },
+  { id: "blocks", tone: "var(--q-blue)", scene: () => <BlocksType />, chips: 3 },
   { id: "brainstorm", tone: "var(--q-yellow)", scene: () => <BrainstormType />, chips: 2 },
 ];
 
