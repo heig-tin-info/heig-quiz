@@ -36,153 +36,118 @@ program of nested empty `repeat` blocks ran 40^d iterations for free.
 
 ## Decision
 
+The type's rules are in [docs/spec/04 §4.17](../spec/04-types-de-questions.md#417-blocks-blocks);
+what a program means is the header of `packages/domain/src/blocks.ts`. This
+record keeps the decisions and their reasons.
+
 ### 1. A new type, `blocks`, in its own package
 
-`packages/qt-blocks` (`./server`, `./client`), registered in both registries,
-shown as "Blocks" / « Blocs ». It is not a variant of `code`: ADR-021 made
-`codeimage` a variant because it shares everything about the program
-(language, template, runner, Monaco); `blocks` shares none of it. Its model
-is `circuit`: a simulation, graded server-side, whose stimuli play the role of
-cases. The config carries `world: { kind: "warehouse" }`, a discriminated
-union with one member in v1, so a second world (a turtle, a sorting line)
-later needs no new type id. The world fixes the block set.
+`packages/qt-blocks`, registered in both registries. It is not a variant of
+`code`: ADR-021 made `codeimage` a variant because it shares everything about
+the program (language, template, runner, Monaco); `blocks` shares none of it.
+Its model is `circuit`: a simulation graded server-side, whose stimuli play
+the role of cases. The config carries `world: { kind: "warehouse" }`, a
+discriminated union with one member, so a second world (a turtle, a sorting
+line) later needs no new type id; the world fixes the block set.
 
 ### 2. Grading as `code` (product owner)
 
-Each case has its points; the grade is the sum of the cases whose run reaches
-the dock, or all or nothing with `allOrNothing` (config, default `false`).
-The battery is PER CASE, since maps differ in size. A turn costs no battery,
-a forward move costs one, a collision stops the run. Path length is never
-rewarded: a correct program is not penalised for a longer route.
+Points per case, summed over the cases whose run reaches the dock, or all or
+nothing under `allOrNothing`. The battery is per case because maps differ in
+size; a turn is free, a forward move costs one, a collision stops the run.
+Path length is never rewarded: a correct program is not penalised for a
+longer route.
 
 ### 3. A reference solution is mandatory at publication (product owner)
 
-A draft saves without it. Publication runs the reference on every case,
-visible and hidden, and is refused when it is missing
-(`blocks.reference_missing`) or fails a case (`blocks.reference_fails_case`,
-naming the case). This catches an unsolvable map (a dock walled in, a
-battery too small) before a student meets it. The reference grades nothing;
-only the verdict "dock reached" counts.
+A draft saves without it; publication runs it on every case, visible and
+hidden, and refuses a missing or failing reference. This catches an
+unsolvable map (a dock walled in, a battery too small) before a student
+meets it. The reference grades nothing.
 
 ### 4. One pure interpreter, with a hard budget
 
-The interpreter lives in `packages/domain/src/blocks.ts`
-(`@quiz/domain/blocks`): no `eval`, no `new Function`, no Blockly import. The
-CSP has no `unsafe-eval`, and the server grades with the SAME function the
-browser animates with, so what the student sees is what is graded.
+The interpreter lives in `@quiz/domain/blocks`, with no `eval`, no
+`new Function` and no Blockly import: the CSP has no `unsafe-eval`, and the
+server grades with the SAME function the browser animates with, so what the
+student sees is what is graded.
 
 EVERY node visit and EVERY loop iteration costs one step of a budget, not
-only the emitted moves. The budget is a server constant derived from the
-battery, never a teacher setting: `stepBudget(battery) = 50 × battery + 100`.
-Exhausting it ends the run with `loop`. The answer schema caps the program:
-at most 200 nodes, nesting depth at most 16, `repeat.times` in 1..40
-(`PROGRAM_LIMITS`). The config schema caps `battery` at 200 (a 12 × 12 map
-has 144 cells), so a run never takes more than 10 100 steps, whatever the
-program, on the request path or in the grading worker.
-
-The semantics, for one map and one battery: `forward` into a rack or off the
-map ends with `collision` (the move is not counted; a collision is checked
-before the battery); `forward` with no battery left ends with `battery`;
-reaching the dock ends the run at once with `dock`; a program that ends
-elsewhere ends with `short`. `if_sensor` tests the cell in front, to the
-left or to the right of the robot: `free` is inside the map and not a rack,
-`blocked` its negation. `repeat_until_dock` re-tests before each iteration.
+only the emitted moves; the run ends with `loop` beyond `stepBudget`. The
+budget derives from the battery and is never a teacher setting. The bound
+lives in the domain itself: `stepBudget` and `simulate` clamp the battery to
+0..`BATTERY_MAX` whatever the caller passes, so no config, however it got
+stored, makes a run unbounded. The config schema refuses a battery above
+`BATTERY_MAX` too, and every schema that accepts a program — the answer, the
+starter, the reference — holds it to `PROGRAM_LIMITS`, measured first by the
+iterative `programStats`: the rest of the interpreter recurses, and the
+server runs the reference at publication.
 
 ### 5. The stored answer is our syntax tree, not Blockly's JSON
 
-`{ program: Stmt[] }`, with English node kinds and no positions:
-
-```ts
-type Stmt =
-  | { kind: "forward" }
-  | { kind: "turn"; dir: "left" | "right" }
-  | { kind: "repeat"; times: number; body: Stmt[] }
-  | { kind: "repeat_until_dock"; body: Stmt[] }
-  | { kind: "if_sensor"; sensor: "free" | "blocked"; where: "front" | "left" | "right"; then: Stmt[]; else: Stmt[] };
-```
-
-The client converts Blockly to and from it. The workspace holds ONE
-undeletable, unmovable hat block, "when the robot starts"; only the stack
-under it is the program. Detached stacks are disabled visually
-(`Blockly.Events.disableOrphans`) and discarded on save; on reload the client
-lays the stack out canonically under the hat. Reasons: F-GRADE-06 re-grades
-old answers, a Blockly major may change its serialization, and the server
-must not depend on where a student dropped a block.
+`{ program: Stmt[] }` with English node kinds and no positions; the client
+converts Blockly to and from it. The workspace holds one undeletable hat
+block, "when the robot starts"; only the stack under it is the program, and
+detached stacks are discarded on save. Reasons: F-GRADE-06 re-grades old
+answers, a Blockly major may change its serialization, and the server must
+not depend on where a student dropped a block.
 
 ### 6. Maps are ASCII rows
 
-`.` floor, `#` rack, one of `^ > v <` the start cell and its heading, `D` the
-dock. Width and height 3..12, rectangular, exactly one start and one dock;
-`parseMap` refuses anything else with a message key (`blocks.map_*`).
-Compact, diffable, writable through MCP. The teacher's editor shows a
-clickable grid over the rows.
+`.` floor, `#` rack, `^ > v <` the start and its heading, `D` the dock,
+bounded by `MAP_SIZE`. Compact, diffable, writable through MCP; the teacher's
+editor shows a clickable grid over the rows.
 
 ### 7. What the student gets (invariant 4)
 
-`toStudent` publishes the prompt, the toolbox, the starter program, the
-VISIBLE cases whole (name, map, battery, points) and, of the hidden cases,
-only their count and total points. Never a hidden map, never the reference
-(`referenceSolution`, a key of the common forbidden floor). `studentDetails`
-gives a visible case its full result (verdict, reason, moves, trail); a
-hidden case its verdict and a coarse reason (`collision`, `battery`, `loop`,
-`short`) only — never the trace, the move count or the step index — its name
-under `showHiddenCaseNames`, its map only under `showKey`, as ADR-096 §5 does
-for `code`. The leak test searches the serialized student view for the rack
-and dock coordinates of the hidden maps and for fragments of the reference.
+Visible cases whole, hidden cases as a count and a total of points; a hidden
+case's result as its verdict and a coarse reason, never its trace — the
+redaction ADR-096 §5 gives `code`, for the same reason: a trace on a hidden
+map draws the map. The exact payloads and their leak tests are in the spec.
 
 ### 8. The player runs everything in the browser, with no route
 
 "Test on every warehouse" runs the visible cases in the browser through the
-domain interpreter and fills the case table; the selected case is animated
-from the interpreter's trace. No `interactiveRequest`, no `/run`, no
-`onRun`: there is nothing secret to run and nothing to protect with a
+domain interpreter and animates its trace. No `interactiveRequest`, no
+`/run`: there is nothing secret to run and nothing to protect with a
 cooldown. The grade is the server's (ADR-015 §2).
 
 ### 9. Keyboard and devices (product owner)
 
-Keyboard navigation of the workspace is mandatory in v1. Blockly 13 ships it
-in core (below), so no plugin is needed. `blocks` joins `code` and `diagram`
-in the "optimised for desktop" exception of docs/spec/00 §0.4: it stays
-usable on a tablet, but dragging blocks on a phone is not a target. Block
-labels are UI strings and go through the canvas dictionary (`qt.blocks.c.*`,
-`en` and `fr`, invariant 1); block kinds and ids are English.
+Keyboard navigation of the workspace is mandatory in v1; Blockly 13 has it in
+core (below). `blocks` joins `code` and `diagram` in the "optimised for
+desktop" exception of docs/spec/00 §0.4: dragging blocks on a phone is not a
+target. Block labels are UI strings (invariant 1); block kinds are English.
 
 ### 10. The v1 scope (product owner)
 
-All four options are in: (a) a "Code" tab showing the JavaScript Blockly
-generates, for display only, never executed; (b) the teacher picks the
-toolbox, `toolbox: BlockKind[]`, a non-empty subset of the five kinds,
-default all; (c) a starter program, `starter: Stmt[]`, default empty,
-preloaded in the student's workspace — `isAnswered` is true only when the
-program is non-empty AND differs from the starter (`programEquals`); (d)
-`blocks` enters the drill's `DRILL_TYPES` (ADR-041 §3): its grading is
+All four options are in: a read-only "Code" tab showing the JavaScript
+Blockly generates (never executed); a teacher-chosen toolbox; a starter
+program, with `isAnswered` false while the program is still the starter; and
+`blocks` in the drill's `DRILL_TYPES` (ADR-041 §3), since its grading is
 synchronous, automatic and final.
 
 ### 11. Blockly is loaded lazily, and self-hosted
 
-Blockly and its JavaScript generator live in ONE module,
-`packages/qt-blocks/src/blocklyBundle.ts`, reached only by a dynamic
-`import()` from the workspace host. The client entry point exports lazy
-surfaces and nothing that transitively imports Blockly; `server.ts` never
-imports it. Blockly's media (SVG, sounds) are copied from
-`node_modules/blockly/media` into the web app's public directory at build
-time, the `media` option points there, and sounds are off: nothing is fetched
+Blockly and its generator live in one module, `blocklyBundle.ts`, reached
+only by a dynamic `import()`; nothing on the client entry point or the
+server imports it. Its media are copied from `node_modules/blockly/media`
+into the web app's public directory and sounds are off: nothing is fetched
 from a third-party host (ADR-015 §4).
 
 ### 12. A fallback surface without Blockly
 
-When Blockly is unavailable (jsdom, a chunk that failed to load) the surfaces
-render a read-only pseudo-code view of the program with a message. Component
-tests drive it (`blockly?: boolean`, like `monaco?: boolean` in `qt-code`).
-It is not a student editing path.
+Without Blockly (jsdom, a chunk that failed to load) the surfaces show the
+program as read-only pseudo-code. Component tests drive it, as `monaco?:
+boolean` does in `qt-code`; it is not a student editing path.
 
 ### 13. The contract hooks
 
-`shuffleable` is false; `summarizeAnswer` is "N blocks" (never a verdict);
-`aggregate` is the pass rate of the visible cases, as `code`; `answerMisfit`
-refuses a program that uses a kind the toolbox does not offer (`usedKinds`);
-`searchText` and `assistText` read the prompt and the case names. No
-generator (wand) in v1, and the type is not usable in a poll.
+The hooks follow `code` where a hook exists for cases (`aggregate` on the
+visible cases) and stay off otherwise: not shuffleable, not pollable, no
+generator (wand) in v1. `answerMisfit` refuses a program that uses a kind the
+toolbox does not offer, so the toolbox is a rule and not only a palette. The
+spec's Answer and Dashboard paragraphs list them.
 
 ### The Blockly dependency
 
@@ -191,34 +156,30 @@ generator (wand) in v1, and the type is not usable in a poll.
 package: `KeyboardNavigationController`, the keyboard mover, the shortcuts
 that focus and navigate the workspace and the flyout), so no plugin is
 needed; `@blockly/keyboard-navigation`, last released as 3.0.5, declares a
-peer of `blockly@^12.3.0` only. Its media (`node_modules/blockly/media`) are
-in the package, which §11 needs. The bundle is about 1 MB, which is why §11
-keeps it in its own chunk.
+peer of `blockly@^12.3.0` only. Its media are in the package, which §11
+needs. The bundle is about 1 MB, which is why §11 keeps it in its own chunk.
 
 ## Consequences
 
 - Teachers get a first-weeks programming question that needs neither a
   runner nor a compiler, graded at once, usable in the drill.
-- One interpreter decides both the animation and the grade; its budget makes
-  every run bounded whatever the program, so grading needs no worker and no
+- One interpreter decides both the animation and the grade; its budget,
+  enforced by the domain, bounds every run, so grading needs no worker and no
   runner capacity (ADR-101 does not apply).
 - The stored answer survives a Blockly upgrade; the conversion to and from
   Blockly is client code the type owns and tests.
-- A second world is a new member of `world`, its block set and its
-  interpreter rules; it needs no new type id and no migration of existing
-  configs.
+- A second world is a new member of `world`, its block set and its rules; no
+  new type id, no migration.
 - Cost: a ≈1 MB dependency, lazily loaded; a canvas dictionary for block
   labels; a media copy step in the web build.
 
 ## Alternatives considered
 
 - **A `language: "blocks"` variant of `code`.** Rejected: it would share no
-  template, no runner, no editor and no grading path with `code`, only the
-  word "program".
+  template, no runner, no editor and no grading path with `code`.
 - **Generate JavaScript from the blocks and run it.** Rejected: the CSP has no
   `unsafe-eval`, the server would need a JavaScript sandbox, and the budget
-  could not count loop iterations of generated code. The "Code" tab shows the
-  generated JavaScript for reading only.
+  could not count loop iterations of generated code.
 - **Store Blockly's serialization.** Rejected: positions and block ids are
   noise for grading, and a Blockly major may change the format under answers
   that must be re-gradable.

@@ -1,9 +1,10 @@
 /**
  * The rules of the `blocks` question type (docs/04 §4.17, ADR-103): a
  * program of blocks drives a warehouse robot from its start cell to the dock.
- * This module is the ONE interpreter: the browser animates its trace, the
+ * This module is the REFERENCE for what a program means; the spec and the ADR
+ * point here. It is the ONE interpreter: the browser animates its trace, the
  * server grades with its verdict. It never evaluates code: no `eval`, no
- * `new Function`, no Blockly — the program is our own syntax tree.
+ * `new Function`, no Blockly — the program is our own syntax tree (`Stmt`).
  *
  * THE WORLD. A map is a grid of ASCII rows (`parseMap`): `.` floor, `#` rack,
  * one of `^ > v <` the start cell and the robot's heading (north, east, south,
@@ -28,21 +29,26 @@
  *
  * A program that ends anywhere but the dock ends with `short`.
  *
- * THE BUDGET (ADR-103, D4). Every node visit and every loop iteration costs
+ * THE BUDGET (ADR-103 §4). Every node visit and every loop iteration costs
  * one step, so nested empty loops are as bounded as anything else. Beyond
- * `stepBudget(battery)` steps the run stops with `loop`. The budget derives
- * from the battery, never from a teacher's setting. Each event is emitted by
- * a step, so a trace never holds more events than the budget.
+ * `stepBudget(battery)` steps the run stops with `loop`. The battery is
+ * clamped here to 0..`BATTERY_MAX` whatever the caller passes (NaN and the
+ * infinities count as 0), so this module alone bounds a run. Each event is
+ * emitted by a step, so a trace never holds more events than the budget.
+ *
+ * THE LIMITS. `simulate`, `runProgram`, `usedKinds` and `programEquals`
+ * recurse and assume a program within `PROGRAM_LIMITS`; `programStats` is the
+ * guard every schema runs first, on raw input, before any recursive parse.
  */
 
-export type Dir = "left" | "right";
+export type TurnDir = "left" | "right";
 /** North, east, south, west. */
 export type Heading = 0 | 1 | 2 | 3;
 
 /** One statement of a program: the stored answer, English kinds, no positions. */
 export type Stmt =
   | { kind: "forward" }
-  | { kind: "turn"; dir: Dir }
+  | { kind: "turn"; dir: TurnDir }
   | { kind: "repeat"; times: number; body: Stmt[] }
   | { kind: "repeat_until_dock"; body: Stmt[] }
   | {
@@ -58,14 +64,20 @@ export type BlockKind = Stmt["kind"];
 /** Every kind, in the toolbox's order: the default toolbox. */
 export const BLOCK_KINDS: readonly BlockKind[] = ["forward", "turn", "repeat", "repeat_until_dock", "if_sensor"];
 
-/** The caps of the answer schema: statements, nesting levels, iterations of a `repeat`. */
+/**
+ * The caps of every program a schema accepts — an answer, a starter, a
+ * reference: statements, nesting levels, iterations of a `repeat`.
+ */
 export const PROGRAM_LIMITS = { nodes: 200, depth: 16, repeatMax: 40 } as const;
+
+/** The largest battery of a case: a 12 × 12 map has 144 cells. It bounds every run (`stepBudget`). */
+export const BATTERY_MAX = 200;
 
 /** Every statement of a program with its level (top level 1), depth first, in order. */
 function* walk(program: Stmt[]): Generator<{ stmt: Stmt; level: number }> {
-  // An explicit stack: the walk stays safe on a program deeper than the limits,
-  // which is what the schema refinement calls it to find out.
-  const stack = program.map((stmt) => ({ stmt, level: 1 })).reverse();
+  // An explicit stack, so that `programStats` measures a program of any depth
+  // and a schema can refuse one too deep BEFORE any recursive parse.
+  const stack = (Array.isArray(program) ? program : []).map((stmt) => ({ stmt, level: 1 })).reverse();
   for (let top = stack.pop(); top; top = stack.pop()) {
     yield top;
     const children = bodies(top.stmt).flat();
@@ -73,19 +85,24 @@ function* walk(program: Stmt[]): Generator<{ stmt: Stmt; level: number }> {
   }
 }
 
+/** Where each kind keeps its bodies. */
+const BODIES = new Map<unknown, readonly string[]>([
+  ["repeat", ["body"]],
+  ["repeat_until_dock", ["body"]],
+  ["if_sensor", ["then", "else"]],
+]);
+
+/** The bodies of a statement; on raw input a missing or malformed body counts as empty. */
 function bodies(stmt: Stmt): Stmt[][] {
-  switch (stmt.kind) {
-    case "repeat":
-    case "repeat_until_dock":
-      return [stmt.body];
-    case "if_sensor":
-      return [stmt.then, stmt.else];
-    default:
-      return [];
-  }
+  const node = (stmt ?? {}) as unknown as Record<string, unknown>;
+  return (BODIES.get(node.kind) ?? []).map((key) => node[key]).filter((body): body is Stmt[] => Array.isArray(body));
 }
 
-/** How many statements a program holds and how deeply it nests (an empty program: 0 and 0). */
+/**
+ * How many statements a program holds and how deeply it nests (an empty
+ * program: 0 and 0). Iterative and tolerant of malformed nodes: the guard a
+ * schema runs on raw input against `PROGRAM_LIMITS`.
+ */
 export function programStats(program: Stmt[]): { nodes: number; depth: number } {
   let nodes = 0;
   let depth = 0;
@@ -155,7 +172,7 @@ export class MapError extends Error {
 }
 
 /** Sides of a map, in cells. */
-const MAP_SIZE = { min: 3, max: 12 } as const;
+export const MAP_SIZE = { min: 3, max: 12 } as const;
 const HEADINGS = "^>v<";
 const CELL = /^[.#^>v<D]*$/;
 
@@ -212,27 +229,37 @@ export type NodePath = readonly number[];
  * `battery` the last event is the `forward` that failed, its pose unchanged:
  * the block to highlight. A `test` is a sensor read or a loop's re-test.
  */
-export type Event = {
+export type RunEvent = {
   op: "forward" | "turn" | "test";
   path: NodePath;
   pose: { x: number; y: number; heading: Heading };
 };
 
-export type Reason = "dock" | "collision" | "battery" | "loop" | "short";
+export type RunReason = "dock" | "collision" | "battery" | "loop" | "short";
 
-export interface RunResult {
+/** How a run ended. */
+export interface RunVerdict {
   ok: boolean;
-  reason: Reason;
+  reason: RunReason;
   /** Forward moves made, which is the battery spent. */
   moves: number;
-  /** The cells the robot stood on, start first. */
-  trail: { x: number; y: number }[];
-  events: Event[];
 }
 
-/** The steps a run may take on a map whose battery is `battery`. */
+export interface RunResult extends RunVerdict {
+  /** The cells the robot stood on, start first. */
+  trail: { x: number; y: number }[];
+  /** Every event, unless the caller asked for none (`events: false`). */
+  events: RunEvent[];
+}
+
+/** A battery as the run uses it: a whole number in 0..`BATTERY_MAX`, 0 when not finite. */
+function clampBattery(battery: number): number {
+  return Number.isFinite(battery) ? Math.min(Math.max(Math.floor(battery), 0), BATTERY_MAX) : 0;
+}
+
+/** The steps a run may take on a map whose battery is `battery` (clamped, see the header). */
 export function stepBudget(battery: number): number {
-  return 50 * battery + 100;
+  return 50 * clampBattery(battery) + 100;
 }
 
 /** Cell offsets of the four headings: north, east, south, west. */
@@ -250,8 +277,9 @@ export function* simulate(
   program: Stmt[],
   map: GridMap,
   battery: number,
-): Generator<Event, { ok: boolean; reason: Reason }> {
-  const budget = stepBudget(battery);
+): Generator<RunEvent, RunVerdict> {
+  const charge = clampBattery(battery);
+  const budget = stepBudget(charge);
   let steps = 0;
   let moves = 0;
   let { x, y, heading } = map.start;
@@ -262,12 +290,12 @@ export function* simulate(
     const [dx, dy] = AHEAD[((heading + turns) % 4) as Heading];
     return { x: x + dx, y: y + dy };
   };
-  const event = (op: Event["op"], path: NodePath): Event => ({ op, path, pose: { x, y, heading } });
+  const event = (op: RunEvent["op"], path: NodePath): RunEvent => ({ op, path, pose: { x, y, heading } });
   /** Spends one step; true once the budget is gone. */
   const exhausted = () => ++steps > budget;
 
   /** Runs a body; returns the reason the run ended, or null to carry on. */
-  function* block(body: Stmt[], at: NodePath): Generator<Event, Reason | null> {
+  function* block(body: Stmt[], at: NodePath): Generator<RunEvent, RunReason | null> {
     for (const [i, stmt] of body.entries()) {
       if (exhausted()) return "loop";
       const ended = yield* visit(stmt, [...at, i]);
@@ -276,11 +304,11 @@ export function* simulate(
     return null;
   }
 
-  function* visit(stmt: Stmt, path: NodePath): Generator<Event, Reason | null> {
+  function* visit(stmt: Stmt, path: NodePath): Generator<RunEvent, RunReason | null> {
     switch (stmt.kind) {
       case "forward": {
         const next = ahead(0);
-        const refused: Reason | null = !free(next.x, next.y) ? "collision" : moves >= battery ? "battery" : null;
+        const refused: RunReason | null = !free(next.x, next.y) ? "collision" : moves >= charge ? "battery" : null;
         if (refused === null) {
           ({ x, y } = next);
           moves++;
@@ -317,19 +345,29 @@ export function* simulate(
   }
 
   const reason = (yield* block(program, [])) ?? "short";
-  return { ok: reason === "dock", reason };
+  return { ok: reason === "dock", reason, moves };
 }
 
-/** Runs a program to its end: the grading verdict and the whole trace. */
-export function runProgram(program: Stmt[], map: GridMap, battery: number): RunResult {
+/**
+ * Runs a program to its end: the verdict, the trail and the trace. The server
+ * grades with `events: false`: the trace is for the browser's animation.
+ */
+export function runProgram(
+  program: Stmt[],
+  map: GridMap,
+  battery: number,
+  options: { events?: boolean } = {},
+): RunResult {
+  const keep = options.events ?? true;
   const run = simulate(program, map, battery);
-  const events: Event[] = [];
+  const events: RunEvent[] = [];
   const trail = [{ x: map.start.x, y: map.start.y }];
   for (let next = run.next(); ; next = run.next()) {
-    if (next.done) return { ...next.value, moves: trail.length - 1, trail, events };
+    if (next.done) return { ...next.value, trail, events };
     const { op, pose } = next.value;
     const last = trail[trail.length - 1]!;
+    // A failed forward is an event whose pose did not change: no new cell.
     if (op === "forward" && (pose.x !== last.x || pose.y !== last.y)) trail.push({ x: pose.x, y: pose.y });
-    events.push(next.value);
+    if (keep) events.push(next.value);
   }
 }

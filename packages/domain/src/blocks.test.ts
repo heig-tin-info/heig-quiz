@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BLOCK_KINDS,
+  BATTERY_MAX,
   formatMap,
   MapError,
+  MAP_SIZE,
   parseMap,
-  PROGRAM_LIMITS,
   programEquals,
   programStats,
   runProgram,
@@ -30,15 +30,19 @@ const ifs = (
 /** Three cells east of the start, the dock. */
 const corridor = parseMap(["....", ">..D", "...."]);
 
-describe("stepBudget and the limits", () => {
+describe("stepBudget", () => {
   it("derives the budget from the battery: 50 steps a move, 100 to spare", () => {
     expect(stepBudget(0)).toBe(100);
     expect(stepBudget(40)).toBe(2100);
+    expect(stepBudget(BATTERY_MAX)).toBe(10_100);
   });
 
-  it("names the five kinds and the caps of the answer schema", () => {
-    expect(BLOCK_KINDS).toEqual(["forward", "turn", "repeat", "repeat_until_dock", "if_sensor"]);
-    expect(PROGRAM_LIMITS).toEqual({ nodes: 200, depth: 16, repeatMax: 40 });
+  it("clamps whatever battery it is given to a whole number in 0..BATTERY_MAX", () => {
+    expect(stepBudget(1e9)).toBe(10_100);
+    expect(stepBudget(2.7)).toBe(200);
+    for (const battery of [-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(stepBudget(battery)).toBe(100);
+    }
   });
 });
 
@@ -201,6 +205,38 @@ describe("runProgram: the step budget (ADR-103, D4)", () => {
   it("ends an empty repeat_until_dock", () => {
     expect(runProgram([until()], corridor, 5)).toMatchObject({ ok: false, reason: "loop", moves: 0 });
   });
+
+  it("ends whatever battery the caller passes, a hostile one included", () => {
+    for (const battery of [Number.NaN, Number.POSITIVE_INFINITY, 1e9, -1]) {
+      const run = runProgram([until(L)], corridor, battery);
+      expect(run.reason).toBe("loop");
+      expect(run.events.length).toBeLessThanOrEqual(stepBudget(BATTERY_MAX));
+    }
+  });
+
+  it("spends the battery as clamped: a huge one is BATTERY_MAX, a non-finite one is empty", () => {
+    expect(runProgram([F, F, F], corridor, 1e9).reason).toBe("dock");
+    expect(runProgram([F], corridor, Number.POSITIVE_INFINITY).reason).toBe("battery");
+    expect(runProgram([F, F], corridor, 1.9)).toMatchObject({ reason: "battery", moves: 1 });
+  });
+});
+
+describe("runProgram without events", () => {
+  it("keeps the verdict and the trail, drops the trace", () => {
+    const run = runProgram([until(F)], corridor, 10, { events: false });
+    expect(run).toEqual({
+      ok: true,
+      reason: "dock",
+      moves: 3,
+      trail: [
+        { x: 0, y: 1 },
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+        { x: 3, y: 1 },
+      ],
+      events: [],
+    });
+  });
 });
 
 describe("simulate", () => {
@@ -208,7 +244,7 @@ describe("simulate", () => {
     const run = simulate([F, L], corridor, 10);
     expect(run.next()).toEqual({ done: false, value: { op: "forward", path: [0], pose: { x: 1, y: 1, heading: 1 } } });
     expect(run.next()).toEqual({ done: false, value: { op: "turn", path: [1], pose: { x: 1, y: 1, heading: 0 } } });
-    expect(run.next()).toEqual({ done: true, value: { ok: false, reason: "short" } });
+    expect(run.next()).toEqual({ done: true, value: { ok: false, reason: "short", moves: 1 } });
   });
 });
 
@@ -220,10 +256,10 @@ describe("parseMap and formatMap", () => {
     expect(["^", ">", "v", "<"].map((h) => parseMap([`${h}.D`, "...", "..."]).start.heading)).toEqual([0, 1, 2, 3]);
   });
 
-  it("accepts 3 to 12 cells a side", () => {
-    expect(parseMap([">.D", "...", "..."]).width).toBe(3);
+  it("accepts MAP_SIZE.min to MAP_SIZE.max cells a side", () => {
+    expect(parseMap([">.D", "...", "..."]).width).toBe(MAP_SIZE.min);
     const big = parseMap([`>${".".repeat(10)}D`, ...Array<string>(11).fill(".".repeat(12))]);
-    expect([big.width, big.height]).toEqual([12, 12]);
+    expect([big.width, big.height]).toEqual([MAP_SIZE.max, MAP_SIZE.max]);
   });
 
   it.each([
@@ -271,6 +307,17 @@ describe("program analysis", () => {
     let deep: Stmt = F;
     for (let i = 0; i < 20_000; i++) deep = rep(2, deep);
     expect(programStats([deep])).toEqual({ nodes: 20_001, depth: 20_001 });
+  });
+
+  it("measures raw input: a malformed node or body counts as a statement without a body", () => {
+    const raw = [
+      { kind: "repeat" },
+      { kind: "if_sensor", then: "not a list", else: [{ kind: "forward" }] },
+      { kind: "toString", body: [{ kind: "forward" }] },
+      null,
+    ] as unknown as Stmt[];
+    expect(programStats(raw)).toEqual({ nodes: 5, depth: 2 });
+    expect(programStats({ kind: "forward" } as unknown as Stmt[])).toEqual({ nodes: 0, depth: 0 });
   });
 
   it("lists the kinds a program uses", () => {
