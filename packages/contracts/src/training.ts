@@ -9,6 +9,9 @@ import { z } from "zod";
 export const TRAINING_MISSIONS = ["student", "run", "own", "tools"] as const;
 export type TrainingMission = (typeof TRAINING_MISSIONS)[number];
 
+/** The one optional mission: "all done" is every other one `done` (ADR-105 §4). */
+export const TRAINING_OPTIONAL: TrainingMission = "tools";
+
 export const TrainingMissionState = z.enum(["todo", "done", "unavailable"]);
 export type TrainingMissionState = z.infer<typeof TrainingMissionState>;
 
@@ -21,6 +24,12 @@ export const TrainingStatus = z.object({
     .object({
       id: z.string().uuid(),
       classroomId: z.string().uuid(),
+      /**
+       * The live quiz of mission 2: the classroom's oldest evaluation in Live
+       * mode, resolved by the server so the card never matches a title the
+       * teacher may rename; null once it is deleted.
+       */
+      liveEvaluationId: z.string().uuid().nullable(),
     })
     .nullable(),
   /** One entry per mission of `TRAINING_MISSIONS`, in that order. */

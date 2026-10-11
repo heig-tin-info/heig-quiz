@@ -155,7 +155,10 @@ until that type merges (a content update then adds it).
 ### 4. A progress card derived from the data, never stored
 
 `GET /app/api/training` returns whether the content is installed, the caller's
-training course (id, classroom id) or null, and the state of each mission —
+training course (id, classroom id, and the id of the live quiz of mission 2 — the
+classroom's oldest evaluation in Live mode, resolved by the server so the card never
+matches a title the teacher may rename, null once deleted) or null, and the state
+of each mission —
 `todo`, `done` or `unavailable` — computed from existing tables and never stored:
 
 | Mission | `done` when | `unavailable` when |
@@ -182,9 +185,13 @@ The empty state of the Courses home keeps its one action, **New course**, and ga
 a text line under it: "First time here? Start with the training course"
 (Assumption 2; `DESIGN.md` amended for this screen). A teacher whose home is not
 empty (invited on a colleague's course) finds **Training course** in the account
-menu and in the palette's Help group; the palette command is declared with an effect,
-so the assistant never runs it (ADR-080 §10). Each provisions or opens the same
-course. Neither is shown while the content is not installed.
+menu and in the palette's Help group; it is a global palette command, which the
+assistant is never offered (it reads the mounted screen's commands only, ADR-080
+§10). Each provisions or opens the same course. Neither is shown while the content is
+not installed. "All done" and the demotion of `New ▾` follow one pure rule shared by
+the card and the page, so the two can never disagree; when mission 1 is next and the
+teacher already holds a seat, the card shows a hint in words and `New ▾` keeps its
+accent.
 
 ## Assumptions (the product owner's open points, values taken on 2026-10-11)
 
