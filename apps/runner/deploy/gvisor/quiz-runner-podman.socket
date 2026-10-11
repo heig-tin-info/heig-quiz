@@ -1,0 +1,12 @@
+# The runner's own Podman socket, gVisor by default. Installed by
+# apps/runner/deploy/install-gvisor.sh; why and how: apps/runner/README.md, gVisor.
+[Unit]
+Description=Podman API socket of the quiz runner (gVisor)
+Documentation=https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md
+
+[Socket]
+ListenStream=/run/quiz-runner-podman/podman.sock
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

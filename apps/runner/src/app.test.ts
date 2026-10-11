@@ -48,3 +48,12 @@ describe("buildApp", () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+describe("buildApp under RUNNER_RUNTIME=runsc", () => {
+  it("refuses to start when proveRuntime fails (its cases: probe.test.ts)", async () => {
+    const engine = createFakeEngine();
+    const runsc = testConfig({ LOG_LEVEL: "fatal", RUNNER_RUNTIME: "runsc" });
+    await expect(buildApp({ config: runsc, engine })).rejects.toThrow(/runs crun, not runsc/);
+    expect(engine.created).toEqual([]);
+  });
+});

@@ -56,7 +56,6 @@ function engine(overrides: Partial<Parameters<typeof createEngine>[0]> = {}) {
     socket: "/run/podman/podman.sock",
     seccompProfile: "/etc/quiz/seccomp.json",
     usernsAuto: true,
-    runtime: null,
     cgroupParent: null,
     capabilities: FAKE_CAPABILITIES,
     instanceId: INSTANCE,
@@ -110,10 +109,6 @@ describe("containerArgs", () => {
       ...plain.slice(at),
     ]);
     expect(plain.some((arg) => arg.startsWith("--cgroup-parent"))).toBe(false);
-  });
-
-  it("adds gVisor when the host has it", () => {
-    expect(engine({ runtime: "runsc" }).containerArgs(CREATE)).toContain("runsc");
   });
 
   it("never mounts anything from the host", () => {
@@ -320,18 +315,6 @@ describe("exec, against a fake podman", () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it("recognises a container that is not there any more", async () => {
-    const result = await local().exec("c", {
-      argv: ["sh", "-c", "echo 'Error: no such container' >&2; exit 125"],
-      stdin: "",
-      timeoutMs: 5000,
-      maxBytes: 1024,
-    });
-    expect(result.containerGone).toBe(true);
-    // Podman's complaint is not the program's output.
-    expect(result.stderr).toBe("");
-  });
-
   it("reports a missing binary instead of throwing", async () => {
     const result = await engine({ podmanBin: "/nonexistent/podman", socket: null }).exec("c", {
       argv: ["true"],
@@ -340,5 +323,106 @@ describe("exec, against a fake podman", () => {
       maxBytes: 1024,
     });
     expect(result.exitCode).toBeNull();
+  });
+});
+
+/**
+ * Whether the container is gone is Podman's answer, never the program's
+ * (audit L12, README). The fake `podman` runs the "program" of an `exec`,
+ * answers `container inspect` from a state file, and records every argv.
+ */
+describe("a container that is gone, as Podman says it", () => {
+  function fakePodman(): {
+    bin: string;
+    state: (value: "running" | "stopped" | "missing") => void;
+    calls: () => string[][];
+  } {
+    const dir = mkdtempSync(join(tmpdir(), "quiz-runner-gone-"));
+    const log = join(dir, "argv.log");
+    const stateFile = join(dir, "state");
+    const bin = join(dir, "podman");
+    writeFileSync(log, "");
+    writeFileSync(
+      bin,
+      "#!/bin/sh\n" +
+        `for arg in "$@"; do printf '%s\\n' "$arg" >> ${log}; done\n` +
+        `printf '%s\\n' '@@END@@' >> ${log}\n` +
+        '[ "$1" = --remote ] && shift 3\n' +
+        'if [ "$1" = exec ]; then shift 5; exec "$@"; fi\n' +
+        `case "$(cat ${stateFile})" in\n` +
+        "  running) echo true ;;\n" +
+        "  stopped) echo false ;;\n" +
+        "  *) echo 'Error: no such container c' >&2; exit 125 ;;\n" +
+        "esac\n",
+    );
+    chmodSync(bin, 0o755);
+    return {
+      bin,
+      state: (value) => writeFileSync(stateFile, value),
+      calls: () =>
+        readFileSync(log, "utf8")
+          .split("@@END@@\n")
+          .filter((block) => block !== "")
+          .map((block) => block.split("\n").filter((line) => line !== "")),
+    };
+  }
+
+  const SOCKET = ["--remote", "--url", "unix:///run/podman/podman.sock"];
+  const INSPECT = [...SOCKET, "container", "inspect", "--format", "{{.State.Running}}", "c"];
+
+  async function program(podman: ReturnType<typeof fakePodman>, script: string) {
+    return engine({ podmanBin: podman.bin }).exec("c", {
+      argv: ["sh", "-c", script],
+      stdin: "",
+      timeoutMs: 5000,
+      maxBytes: 1024,
+    });
+  }
+
+  it("keeps a program's stderr, and its container, when it only SAYS the container is gone", async () => {
+    const podman = fakePodman();
+    podman.state("running");
+    const result = await program(podman, "echo 'Error: no such container' >&2; exit 125");
+
+    expect(result).toMatchObject({
+      exitCode: 125,
+      containerGone: false,
+      stderr: "Error: no such container\n",
+    });
+    // The words raised the question; Podman, over the same socket, answered it.
+    expect(podman.calls().slice(1)).toEqual([INSPECT]);
+
+    // The same with exit 1: the words alone raise it too.
+    const one = await program(podman, "echo 'can only create exec sessions on running containers' >&2; exit 1");
+    expect(one).toMatchObject({ exitCode: 1, containerGone: false });
+    expect(one.stderr).toContain("can only create exec sessions");
+  });
+
+  it("asks about a SIGKILL, and believes the answer either way", async () => {
+    const podman = fakePodman();
+    podman.state("running");
+    const alive = await program(podman, "echo partial >&2; exit 137");
+    expect(alive).toMatchObject({ exitCode: 137, containerGone: false, stderr: "partial\n" });
+
+    podman.state("stopped");
+    const dead = await program(podman, "exit 137");
+    expect(dead).toMatchObject({ exitCode: 137, containerGone: true });
+    expect(podman.calls().filter((argv) => argv.includes("inspect"))).toEqual([INSPECT, INSPECT]);
+  });
+
+  it("calls a container gone when Podman no longer knows it, and drops Podman's complaint", async () => {
+    const podman = fakePodman();
+    podman.state("missing");
+    const result = await program(podman, "echo 'Error: no such container c' >&2; exit 125");
+    expect(result).toMatchObject({ exitCode: 125, containerGone: true, stderr: "" });
+  });
+
+  it("asks nothing about a program that succeeds, or fails in its own words", async () => {
+    const podman = fakePodman();
+    podman.state("missing");
+    expect(await program(podman, "exit 0")).toMatchObject({ containerGone: false });
+    const failed = await program(podman, "echo 'segfault' >&2; exit 139");
+    expect(failed).toMatchObject({ exitCode: 139, containerGone: false, stderr: "segfault\n" });
+    expect(podman.calls().filter((argv) => argv.includes("inspect"))).toEqual([]);
   });
 });

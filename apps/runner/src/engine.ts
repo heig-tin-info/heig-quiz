@@ -51,7 +51,10 @@ export interface EngineCapabilities {
   remote: boolean;
   /** `--userns=auto` accepted by this engine (always true rootful). */
   usernsAuto: boolean;
-  /** An alternative OCI runtime, `runsc` (gVisor) when the host has it. */
+  /**
+   * The engine's default OCI runtime (`podman info`), `runsc` being gVisor;
+   * the service's choice, never this client's (README, gVisor).
+   */
   runtime: string | null;
   cgroupVersion: string;
 }
@@ -83,7 +86,10 @@ export interface ExecResult {
   ms: number;
   timedOut: boolean;
   truncated: boolean;
-  /** The container was gone: killed by the OOM reaper, or never started. */
+  /**
+   * The container was gone — killed by the OOM reaper, or never started — as
+   * `podman container inspect` says, never as the program's stderr says.
+   */
   containerGone: boolean;
 }
 
@@ -133,7 +139,6 @@ export interface EngineOptions {
   socket: string | null;
   seccompProfile: string;
   usernsAuto: boolean;
-  runtime: string | null;
   /**
    * `--cgroup-parent=<slice>` (`RUNNER_CGROUP_PARENT`), validated as a slice
    * unit name by `loadConfig`; `null` = no flag. An addition to the
@@ -150,13 +155,18 @@ export interface EngineOptions {
   instanceId?: string;
 }
 
-/** Message fragments Podman uses when the container is not there any more. */
+/**
+ * Podman's words for a container that is gone, and its exit codes (125: its
+ * own failure, 137: SIGKILL). Hints only: the program can print or exit with
+ * any of them, so they trigger an inspect that alone decides (README, L12).
+ */
 const GONE = [
   "no such container",
   "is not running",
   "container state improper",
   "can only create exec sessions on running containers",
 ];
+const SUSPECT_EXIT = new Set([125, 137]);
 
 interface SpawnResult {
   code: number | null;
@@ -263,6 +273,16 @@ export function createEngine(options: EngineOptions): Engine {
     });
   }
 
+  /** Podman's answer; an inspect that could not run at all proves nothing (running). */
+  async function isRunning(name: string): Promise<boolean> {
+    const result = await podman(
+      ["container", "inspect", "--format", "{{.State.Running}}", name],
+      { timeoutMs: 30_000, maxBytes: 16 * 1024 },
+    );
+    if (result.code === null) return true;
+    return result.code === 0 && result.stdout.toString("utf8").trim() === "true";
+  }
+
   function containerArgs(create: CreateOptions): string[] {
     return [
       "run",
@@ -319,7 +339,7 @@ export function createEngine(options: EngineOptions): Engine {
       // Podman refuses it together with `--network none`.
       "--network",
       "none",
-      ...(options.runtime === null ? [] : ["--runtime", options.runtime]),
+      // No `--runtime`: a `--remote` client rejects it (README, gVisor).
       // Invariant 10: a CLOSED list, and no secret in it.
       ...Object.entries(CONTAINER_ENV).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
       create.image,
@@ -353,8 +373,14 @@ export function createEngine(options: EngineOptions): Engine {
         { stdin: exec.stdin, timeoutMs: exec.timeoutMs, maxBytes: exec.maxBytes },
       );
       const stderr = result.stderr.toString("utf8");
-      const gone =
-        result.code !== 0 && GONE.some((needle) => stderr.toLowerCase().includes(needle));
+      // A case the service's clock ended is destroyed by its caller anyway.
+      const suspect =
+        result.code !== null &&
+        result.code !== 0 &&
+        !result.timedOut &&
+        (SUSPECT_EXIT.has(result.code) ||
+          GONE.some((needle) => stderr.toLowerCase().includes(needle)));
+      const gone = suspect && !(await isRunning(name));
       return {
         exitCode: result.code,
         stdout: result.stdout.toString("utf8"),

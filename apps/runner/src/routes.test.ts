@@ -90,6 +90,18 @@ describe("GET /health", () => {
     expect(body).toMatchObject({ concurrency: 4, queueMax: 32, running: 0 });
     expect(body.engine).toMatchObject({ usernsAuto: true, remote: true });
   });
+
+  it("names the OCI runtime in the contract, and leaves it out when the engine did not say", async () => {
+    const health = RunnerHealth.parse((await (await start(createFakeEngine())).inject({ url: "/health" })).json());
+    expect(health.runtime).toBe("crun");
+    await app?.close();
+
+    const silent = createFakeEngine();
+    const unnamed = { ...silent, capabilities: { ...silent.capabilities, runtime: null } };
+    const body = (await (await start(unnamed)).inject({ url: "/health" })).json() as Record<string, unknown>;
+    expect(body).not.toHaveProperty("runtime");
+    expect(RunnerHealth.safeParse(body).success).toBe(true);
+  });
 });
 
 describe("POST /run", () => {

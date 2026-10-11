@@ -82,6 +82,13 @@ export const RunnerHealth = z.object({
   queued: z.number().int(),
   avgMs: z.number().nullable(),
   reason: z.string().optional(),
+  /**
+   * The OCI runtime the sandbox containers run under — `runsc` is gVisor
+   * (N-SEC-06, ADR-016) — for the system status. Optional on both sides: the
+   * API and the runner deploy separately, and a runner older than the field,
+   * or whose engine did not name its runtime, simply leaves it out.
+   */
+  runtime: z.string().optional(),
 });
 export type RunnerHealth = z.infer<typeof RunnerHealth>;
 

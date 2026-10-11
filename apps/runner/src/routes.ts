@@ -78,12 +78,16 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     const stats = queue.stats();
     const reason =
       found.error ?? (found.languages.length === 0 ? "no_language_image" : undefined);
+    const runtime = engine.capabilities.runtime;
     return {
       ok: reason === undefined,
       languages: found.languages,
       queued: stats.queued,
       avgMs: stats.avgMs,
       ...(reason === undefined ? {} : { reason }),
+      // In the contract, optional: an API older than this field drops it, and
+      // this runner omits it when the engine did not name its runtime.
+      ...(runtime === null ? {} : { runtime }),
       // Beyond the contract, for the admin health panel and for a human
       // curling the service. `RunnerHealth.safeParse` drops them silently.
       running: stats.running,

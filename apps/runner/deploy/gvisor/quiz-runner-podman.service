@@ -1,0 +1,19 @@
+# The system's podman.service, with runsc as its default runtime
+# (containers.conf beside this file). Installed by
+# apps/runner/deploy/install-gvisor.sh; why and how: apps/runner/README.md, gVisor.
+[Unit]
+Description=Podman API service of the quiz runner (gVisor)
+Documentation=https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md
+Requires=quiz-runner-podman.socket
+After=quiz-runner-podman.socket
+StartLimitIntervalSec=0
+
+[Service]
+Delegate=true
+Type=exec
+KillMode=process
+Environment=CONTAINERS_CONF_OVERRIDE=/etc/quiz-runner/containers.conf
+ExecStart=/usr/bin/podman --log-level=info system service
+
+[Install]
+WantedBy=default.target

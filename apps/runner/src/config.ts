@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { BlockList, isIP } from "node:net";
 import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
@@ -38,12 +39,13 @@ export const SLICE_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,200}\.slice$/;
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   /**
-   * The runner is an INTERNAL service: `compose.prod.yml` never publishes its
-   * port and Caddy never routes to it. It binds every interface of its own
-   * network namespace because that is what a container needs to be reachable
-   * from the API container, and nothing else.
+   * Loopback by default. Production binds 127.0.0.1 on the code VM's host
+   * network, and Caddy is the only way in (`deploy/quiz-runner.container`,
+   * ADR-016); a workstation's API reaches it on localhost. Any other address
+   * is a PUBLIC bind, which `loadConfig` refuses without a `RUNNER_TOKEN`:
+   * an open runner is a free compute service for whoever finds it.
    */
-  HOST: z.string().default("0.0.0.0"),
+  HOST: z.string().trim().default("127.0.0.1"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3200),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 
@@ -89,7 +91,12 @@ const EnvSchema = z.object({
    * enough `/etc/subuid` allocation.
    */
   RUNNER_USERNS_AUTO: z.enum(["auto", "true", "false"]).default("auto"),
-  /** An alternative OCI runtime, e.g. `runsc` (gVisor). Empty = the host default, probed at startup. */
+  /**
+   * gVisor (N-SEC-06; ADR-016, 2026-10-11). `runsc`: fail-closed through
+   * `proveRuntime`. `auto`: record the engine's runtime, warn at startup in
+   * production without gVisor. `none`: the explicit derogation, `auto`
+   * without that warning.
+   */
   RUNNER_RUNTIME: z.enum(["auto", "none", "runsc"]).default("auto"),
   /**
    * The systemd slice the sandbox containers are created in, passed as
@@ -143,6 +150,23 @@ export type RunnerConfig = Omit<z.infer<typeof EnvSchema>, "PODMAN_SOCKET" | "RU
   RUNNER_SECCOMP: string;
 };
 
+const LOOPBACK = new BlockList();
+LOOPBACK.addSubnet("127.0.0.0", 8, "ipv4");
+LOOPBACK.addAddress("::1", "ipv6");
+
+/**
+ * Whether `HOST` binds the loopback only: `127.0.0.0/8`, `::1` or
+ * `localhost`. Everything else — `0.0.0.0`, `::`, an interface's address, a
+ * host name — is public.
+ */
+export function isLoopback(host: string): boolean {
+  if (host.toLowerCase() === "localhost") return true;
+  const family = isIP(host);
+  if (family === 4) return LOOPBACK.check(host, "ipv4");
+  if (family === 6) return LOOPBACK.check(host, "ipv6");
+  return false;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
   const parsed = EnvSchema.safeParse(env);
   if (!parsed.success) {
@@ -165,6 +189,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
   const token = data.RUNNER_TOKEN.trim();
   if (data.NODE_ENV === "production" && token === "") {
     throw new Error("Invalid configuration: RUNNER_TOKEN is required in production");
+  }
+  if (!isLoopback(data.HOST) && token === "") {
+    throw new Error(
+      `Invalid configuration: RUNNER_TOKEN is required to listen on ${data.HOST}, outside the loopback`,
+    );
   }
 
   return {

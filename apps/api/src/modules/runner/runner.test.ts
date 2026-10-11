@@ -142,6 +142,9 @@ describe("HttpRunner", () => {
     server.get("/health", async (_req, reply) =>
       reply.send({ ok: true, languages: ["c", "python"], queued: 2, avgMs: 412 }),
     );
+    server.get("/gvisor/health", async (_req, reply) =>
+      reply.send({ ok: true, languages: ["c"], queued: 0, avgMs: null, runtime: "runsc", warning: "x" }),
+    );
     server.get("/sick/health", async (_req, reply) => reply.code(500).send({ error: "nope" }));
     server.get("/garbage/health", async (_req, reply) => reply.send({ almost: true }));
     await server.listen({ host: "127.0.0.1", port: 0 });
@@ -260,6 +263,16 @@ describe("HttpRunner", () => {
       languages: ["c", "python"],
       queued: 2,
       avgMs: 412,
+    });
+    // `runtime` is optional on both sides (ADR-016, 2026-10-11): an older
+    // runner leaves it out (above), a newer one names it; what is beyond the
+    // contract is dropped.
+    expect(await runnerAt("/gvisor").health()).toEqual({
+      ok: true,
+      languages: ["c"],
+      queued: 0,
+      avgMs: null,
+      runtime: "runsc",
     });
     expect(await runnerAt("/sick").health()).toMatchObject({ ok: false, reason: "http_500" });
     expect(await runnerAt("/garbage").health()).toMatchObject({

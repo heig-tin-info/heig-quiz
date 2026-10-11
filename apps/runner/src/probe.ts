@@ -1,7 +1,9 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { release as osRelease } from "node:os";
 import { promisify } from "node:util";
 
-import { remoteArgs, type EngineCapabilities } from "./engine.js";
+import { EngineError, remoteArgs, type Engine, type EngineCapabilities } from "./engine.js";
 import { availableLanguages, imageRef } from "./images.js";
 import type { RunnerConfig } from "./config.js";
 
@@ -85,18 +87,10 @@ export async function probeEngine(
     notes.push("podman info could not be parsed; assuming defaults");
   }
 
-  // gVisor: used when the host has it and the configuration did not forbid it.
-  // This machine has none; the production VM may grow one without a code
-  // change. The runtime comes out of the `info` above — asking a second time,
-  // with another format string, was two round trips for one answer.
-  let runtime: string | null = null;
-  if (config.RUNNER_RUNTIME === "runsc") {
-    runtime = "runsc";
-  } else if (config.RUNNER_RUNTIME === "auto") {
-    runtime = hostRuntime === "runsc" ? "runsc" : null;
-    if (runtime === null && hostRuntime !== null) {
-      notes.push(`oci runtime ${hostRuntime}, no gVisor`);
-    }
+  // The runtime is recorded, never chosen (README, gVisor); it comes out of
+  // the `info` above rather than a second round trip.
+  if (hostRuntime !== null && hostRuntime !== "runsc") {
+    notes.push(`oci runtime ${hostRuntime}, no gVisor`);
   }
 
   let usernsAuto = config.RUNNER_USERNS_AUTO === "true";
@@ -136,9 +130,91 @@ export async function probeEngine(
       rootless,
       remote: config.PODMAN_SOCKET !== null,
       usernsAuto,
-      runtime,
+      runtime: hostRuntime,
       cgroupVersion,
     },
     notes,
   };
+}
+
+/**
+ * The startup warning of a production runner without gVisor under `auto`, or
+ * `null`; `none` is the explicit derogation and stays silent (README, gVisor).
+ */
+export function gvisorWarning(
+  config: RunnerConfig,
+  capabilities: EngineCapabilities,
+): string | null {
+  if (config.NODE_ENV !== "production" || config.RUNNER_RUNTIME !== "auto") return null;
+  if (capabilities.runtime === "runsc") return null;
+  return (
+    `gVisor is NOT in use: student code runs under ${capabilities.runtime ?? "an unnamed runtime"}. ` +
+    "N-SEC-06 requires it (apps/runner/README.md, Switching production to gVisor)."
+  );
+}
+
+/** The container `proveRuntime` starts: small, short-lived, hardened like any other. */
+const PROOF_TTL_SECONDS = 60;
+
+/**
+ * `RUNNER_RUNTIME=runsc`, fail-closed (README, gVisor): throws unless the
+ * engine names runsc, a container built from `containerArgs` runs `uname -r`
+ * through `podman exec`, and that release is not the host's (crun and runc
+ * share the host kernel; gVisor answers its own). Any other value: no-op.
+ */
+export async function proveRuntime(
+  engine: Engine,
+  config: RunnerConfig,
+  hostRelease: string = osRelease(),
+): Promise<void> {
+  if (config.RUNNER_RUNTIME !== "runsc") return;
+  const refuse = (why: string, cause?: unknown): Error =>
+    new Error(`RUNNER_RUNTIME=runsc: ${why}`, cause === undefined ? undefined : { cause });
+
+  if (engine.capabilities.runtime !== "runsc") {
+    throw refuse(
+      `the Podman service at ${config.PODMAN_SOCKET ?? "the local CLI"} runs ` +
+        `${engine.capabilities.runtime ?? "an unnamed runtime"}, not runsc; a --remote client ` +
+        "rejects --runtime, so PODMAN_SOCKET must reach a service whose default is runsc " +
+        "(deploy/install-gvisor.sh)",
+    );
+  }
+  const language = availableLanguages(await engine.listImages(), config)[0];
+  if (language === undefined) {
+    throw refuse("no runner image to prove gVisor with (images/build.sh)");
+  }
+  const name = `quiz-runtime-proof-${randomUUID()}`;
+  let kernel: string;
+  try {
+    await engine.create({
+      name,
+      image: imageRef(config, language),
+      memoryMb: Math.min(128, config.RUNNER_MAX_MEMORY_MB),
+      pidsLimit: 64,
+      cpus: 1,
+      workdirMb: config.RUNNER_WORKDIR_MB,
+      ttlSeconds: PROOF_TTL_SECONDS,
+    });
+    const ran = await engine.exec(name, {
+      argv: ["uname", "-r"],
+      stdin: "",
+      timeoutMs: 30_000,
+      maxBytes: 16 * 1024,
+    });
+    if (ran.exitCode !== 0) {
+      throw new EngineError(`podman exec failed (${ran.exitCode ?? "killed"})`, ran.stderr);
+    }
+    kernel = ran.stdout.trim();
+  } catch (error) {
+    const detail =
+      error instanceof EngineError ? `${error.message}: ${error.stderr.trim()}` : String(error);
+    throw refuse(`no hardened container could run under gVisor (${detail})`, error);
+  } finally {
+    await engine.remove(name).catch(() => undefined);
+  }
+  if (kernel === "" || kernel === hostRelease) {
+    throw refuse(
+      `the container saw kernel ${kernel || "(nothing)"}, the host's own: it did not run under gVisor`,
+    );
+  }
 }

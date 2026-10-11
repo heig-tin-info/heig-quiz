@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { probeEngine, type PodmanRun } from "./probe.js";
+import { EngineError } from "./engine.js";
+import { gvisorWarning, probeEngine, proveRuntime, type PodmanRun } from "./probe.js";
 import { testConfig } from "./test/config.js";
+import { createFakeEngine, FAKE_CAPABILITIES, type FakeEngine } from "./test/fakeEngine.js";
 
 /**
  * The startup probe, against an injected spawner.
@@ -58,7 +60,7 @@ describe("probeEngine", () => {
       rootless: false,
       remote: true,
       cgroupVersion: "v2",
-      runtime: null,
+      runtime: "crun",
     });
     // Two round trips for one answer is what a second `info --format
     // {{.Host.OCIRuntime.Name}}` was: the JSON already carries it.
@@ -122,26 +124,135 @@ describe("probeEngine", () => {
   });
 
   it("obeys the configuration when it is not `auto`", async () => {
-    const forced = await probeEngine(
-      testConfig({ RUNNER_USERNS_AUTO: "true", RUNNER_RUNTIME: "runsc" }),
-      spawner({}).run,
-    );
-    expect(forced.capabilities).toMatchObject({ usernsAuto: true, runtime: "runsc" });
+    const forced = await probeEngine(testConfig({ RUNNER_USERNS_AUTO: "true" }), spawner({}).run);
+    expect(forced.capabilities).toMatchObject({ usernsAuto: true });
 
     const off = spawner({ images: "localhost/quiz-runner-c:latest\n" });
-    const refused = await probeEngine(
-      testConfig({ RUNNER_USERNS_AUTO: "false", RUNNER_RUNTIME: "none" }),
-      off.run,
-    );
-    expect(refused.capabilities).toMatchObject({ usernsAuto: false, runtime: null });
+    const refused = await probeEngine(testConfig({ RUNNER_USERNS_AUTO: "false" }), off.run);
+    expect(refused.capabilities).toMatchObject({ usernsAuto: false });
     expect(off.calls.map((args) => args[0])).not.toContain("run");
+  });
+
+  it("records the engine's runtime, whatever RUNNER_RUNTIME demands", async () => {
+    // A `--remote` client cannot choose the runtime: what the service runs is
+    // what the containers get, and `RUNNER_RUNTIME=runsc` is checked against
+    // it by `proveRuntime`, not imposed by a flag.
+    const demanded = await probeEngine(testConfig({ RUNNER_RUNTIME: "runsc" }), spawner({}).run);
+    expect(demanded.capabilities.runtime).toBe("crun");
+    expect(demanded.notes).toContain("oci runtime crun, no gVisor");
+
+    const gvisor = await probeEngine(
+      testConfig(),
+      spawner({ info: INFO({ ociRuntime: { name: "runsc" } }) }).run,
+    );
+    expect(gvisor.capabilities.runtime).toBe("runsc");
+    expect(gvisor.notes.filter((note) => note.includes("gVisor"))).toEqual([]);
   });
 
   it("carries on with the defaults when `podman info` cannot be read", async () => {
     const podman = spawner({ info: new Error("cannot connect to podman") });
     const probed = await probeEngine(testConfig({ PODMAN_SOCKET: null }), podman.run);
 
-    expect(probed.capabilities).toMatchObject({ cgroupVersion: "unknown", runtime: null });
+    expect(probed.capabilities).toMatchObject({
+      cgroupVersion: "unknown",
+      runtime: null,
+    });
     expect(probed.notes).toContain("podman info could not be parsed; assuming defaults");
+  });
+});
+
+describe("gvisorWarning", () => {
+  const caps = (runtime: string | null) => ({ ...FAKE_CAPABILITIES, runtime });
+
+  it("speaks up under `auto` in production without gVisor, naming the runtime in use", () => {
+    const prod = testConfig({ NODE_ENV: "production" });
+    expect(gvisorWarning(prod, caps("crun"))).toMatch(
+      /gVisor is NOT in use: student code runs under crun\./,
+    );
+    expect(gvisorWarning(prod, caps(null))).toMatch(/an unnamed runtime/);
+  });
+
+  it("is silent under gVisor, outside production, and under the explicit derogation `none`", () => {
+    const prod = testConfig({ NODE_ENV: "production" });
+    expect(gvisorWarning(prod, caps("runsc"))).toBeNull();
+    expect(gvisorWarning(testConfig(), caps("crun"))).toBeNull();
+    expect(gvisorWarning({ ...prod, RUNNER_RUNTIME: "none" }, caps("crun"))).toBeNull();
+  });
+});
+
+/**
+ * The fail-closed gate, against a fake engine. Against a real one it runs at
+ * the start of every integration suite of the CI's runsc leg
+ * (`test/integration.ts`).
+ */
+describe("proveRuntime", () => {
+  const RUNSC = testConfig({ RUNNER_RUNTIME: "runsc" });
+  const HOST = "6.8.0-1017-azure";
+
+  function gvisorEngine(handler: Parameters<typeof createFakeEngine>[0] = () => ({ stdout: "4.4.0\n" })): FakeEngine {
+    const engine = createFakeEngine(handler);
+    return { ...engine, capabilities: { ...engine.capabilities, runtime: "runsc" } };
+  }
+
+  it("passes once a hardened container saw another kernel than the host's, and removes it", async () => {
+    const engine = gvisorEngine();
+    await proveRuntime(engine, RUNSC, HOST);
+
+    expect(engine.created).toHaveLength(1);
+    const proof = engine.created[0]!;
+    expect(proof.image).toBe("quiz-runner-c:latest");
+    expect(engine.calls.map((call) => [call.container, call.argv])).toEqual([
+      [proof.name, ["uname", "-r"]],
+    ]);
+    expect(engine.removed).toEqual([proof.name]);
+  });
+
+  it("refuses an engine whose runtime is not runsc, before starting anything", async () => {
+    const engine = createFakeEngine();
+    await expect(proveRuntime(engine, RUNSC, HOST)).rejects.toThrow(
+      /runs crun, not runsc; a --remote client rejects --runtime/,
+    );
+    expect(engine.created).toEqual([]);
+  });
+
+  it("refuses a container that shares the host's kernel", async () => {
+    const engine = gvisorEngine(() => ({ stdout: `${HOST}\n` }));
+    await expect(proveRuntime(engine, RUNSC, HOST)).rejects.toThrow(/the host's own/);
+    expect(engine.removed).toHaveLength(1);
+  });
+
+  it("refuses when the container does not run, and still removes it", async () => {
+    const engine = gvisorEngine(() => ({ exitCode: 125, stderr: "OCI runtime error: runsc" }));
+    await expect(proveRuntime(engine, RUNSC, HOST)).rejects.toThrow(
+      /no hardened container could run under gVisor \(podman exec failed \(125\): OCI runtime error/,
+    );
+    expect(engine.removed).toHaveLength(1);
+  });
+
+  it("refuses when the engine will not create it", async () => {
+    const engine = gvisorEngine();
+    const refusing: FakeEngine = {
+      ...engine,
+      create: () =>
+        Promise.reject(new EngineError("podman run failed (126)", "runsc: unsupported flag")),
+    };
+    await expect(proveRuntime(refusing, RUNSC, HOST)).rejects.toThrow(/unsupported flag/);
+  });
+
+  it("refuses with no runner image to prove it on", async () => {
+    const base = createFakeEngine();
+    // `listImages` reads the images of the object it was made with.
+    base.images = [];
+    const engine: FakeEngine = { ...base, capabilities: { ...base.capabilities, runtime: "runsc" } };
+    await expect(proveRuntime(engine, RUNSC, HOST)).rejects.toThrow(/no runner image/);
+    expect(engine.created).toEqual([]);
+  });
+
+  it("proves nothing, and starts nothing, unless runsc is demanded", async () => {
+    for (const RUNNER_RUNTIME of ["auto", "none"] as const) {
+      const engine = createFakeEngine();
+      await proveRuntime(engine, testConfig({ RUNNER_RUNTIME }), HOST);
+      expect(engine.created).toEqual([]);
+    }
   });
 });

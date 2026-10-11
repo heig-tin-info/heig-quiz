@@ -39,7 +39,7 @@ export const FAKE_CAPABILITIES: EngineCapabilities = {
   rootless: true,
   remote: true,
   usernsAuto: true,
-  runtime: null,
+  runtime: "crun",
   cgroupVersion: "v2",
 };
 

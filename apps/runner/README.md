@@ -103,10 +103,14 @@ podman --remote --url unix://<socket> run -d
   --ulimit core=0:0                   # no core dump
   --pull=never                        # images are built on the host, never fetched
   --network none
-  [--runtime runsc]                   # when the host has gVisor
   -e HOME=/work -e LANG=C.UTF-8       # the CLOSED list, asserted by a test
   quiz-runner-<lang>:latest sleep <ttl>
 ```
+
+There is no `--runtime` in that list: a `--remote` client rejects it
+(`unknown flag: --runtime`; remotely only `--url`, `--identity`,
+`--log-level` and `--connection` are honoured). gVisor is the runtime of the
+Podman service the runner talks to — see [gVisor](#gvisor).
 
 `--cgroup-parent` is an addition, never a relaxation: it places the
 container in a systemd slice (its CPU and IO weight, its protected memory)
@@ -143,6 +147,36 @@ it, which is the assertion in `src/podman.int.test.ts`.
 `PODMAN_SOCKET` is auto-detected (user socket, then rootful) and
 `PODMAN_REMOTE=false` drives the local CLI instead — the escape hatch for a
 host whose Podman service is not running, not the normal path.
+
+### gVisor
+
+N-SEC-06 requires gVisor (`runsc`); why it is a Podman service and not a
+flag is ADR-016 (amendment of 2026-10-11). `deploy/install-gvisor.sh`
+(gVisor release **20261005**, `runsc=20261005.0`, signing key checked by
+fingerprint) installs:
+
+- the `runsc` package, from gVisor's dated apt channel;
+- `/usr/local/libexec/quiz-runner/runsc`, which runs runsc with
+  **`--oci-seccomp`** — without it runsc ignores the OCI seccomp profile;
+- `quiz-runner-podman.socket` (`/run/quiz-runner-podman/podman.sock`) and its
+  service: the system's `podman system service` with
+  `CONTAINERS_CONF_OVERRIDE=/etc/quiz-runner/containers.conf`, whose default
+  runtime is that wrapper (`deploy/gvisor/`). Same storage, images and
+  `/etc/subuid` as the system service, which keeps crun for the workspace
+  portal.
+
+`RUNNER_RUNTIME` (`src/probe.ts`) decides what the runner makes of it; every
+value reports the engine's runtime as `runtime` in `GET /health`, an optional
+field of `RunnerHealth` that both sides tolerate absent:
+
+| `RUNNER_RUNTIME` | At startup |
+| --- | --- |
+| `runsc` | **fail-closed** (`proveRuntime`): refuses to start unless the engine names runsc, a container built from `containerArgs` runs `uname -r` through `podman exec`, and that release is not the host's. One `fatal` line; the quadlet restarts it, `/healthz` reports it down, the ADR-055 alert fires |
+| `auto` (default) | records the engine's runtime; in production without gVisor, one warning |
+| `none` | the explicit derogation: as `auto`, without the warning |
+
+The `runsc` leg of `.github/workflows/runner-integration.yml` proves it on
+CI before production is switched (below).
 
 ## How a request is served
 
@@ -201,6 +235,14 @@ tells them apart: at the deadline it is `timedOut`, well before it is `oom`.
 When the service's own clock has to fire, or when the OOM killer took the
 container down with it, the container is rebuilt and the remaining cases still
 run.
+
+**Whether the container is gone is Podman's answer, never the program's**
+(audit L12). The program shares its stderr with `podman exec` and picks its
+own exit code, so Podman's messages, exit 125 and exit 137 only make the
+engine ask `podman container inspect --format {{.State.Running}}`; that
+answer alone blanks the stderr, flags the case `oom` and rebuilds the
+container. A program that exits 137 before its deadline is still reported
+`oom`, on its own case only.
 
 **`cases[].timeMs` on the wire.** `RunnerRequest` carries one budget for the
 whole request (`limits.timeMs`) and no per-case one: `buildRunnerRequest` in
@@ -331,6 +373,14 @@ What the job relaxes is the HOST, never the sandbox: it adds the
 hands the rootful socket to the job's user. The containers get the flags of
 `containerArgs()`, unchanged.
 
+The job has two legs. `default` drives the system socket (crun), as
+production does today. `runsc` runs `deploy/install-gvisor.sh` and the suite
+through the gVisor socket with `RUNNER_RUNTIME=runsc`: `proveRuntime` gates
+it, the seccomp probe must see the profile's own `EPERM`, and every other
+case runs under gVisor (systrap platform, no KVM needed). It is
+`continue-on-error` until it has been green once (tracking issue linked in
+the workflow).
+
 ### The smoke test, against a live runner
 
 ```bash
@@ -371,7 +421,8 @@ Everything is in `src/config.ts`, validated at startup.
 
 | Variable | Default | What it settles |
 | --- | --- | --- |
-| `PORT` | 3200 | The port; `HOST` is `0.0.0.0` of its own namespace. |
+| `HOST` | `127.0.0.1` | The bind address. Anything outside `127.0.0.0/8`, `::1` and `localhost` is public, and refused without `RUNNER_TOKEN`. |
+| `PORT` | 3200 | The port. |
 | `PODMAN_BIN` | `podman` | The binary. `podman-remote` works; `docker` does not. |
 | `PODMAN_SOCKET` | auto | User socket, then the rootful one. |
 | `PODMAN_REMOTE` | auto | `false` drives the local CLI: the escape hatch. |
@@ -380,7 +431,7 @@ Everything is in `src/config.ts`, validated at startup.
 | `RUNNER_IMAGE_PREFIX` / `_TAG` | `quiz-runner` / `latest` | `quiz-runner-c:latest`. |
 | `RUNNER_SECCOMP` | the profile shipped here | Resolved by the Podman server (above). |
 | `RUNNER_USERNS_AUTO` | auto | Probed once at startup. |
-| `RUNNER_RUNTIME` | auto | `runsc` when the host has gVisor. |
+| `RUNNER_RUNTIME` | auto | `runsc` fail-closed, `auto` warns in production without gVisor, `none` derogates ([gVisor](#gvisor)). |
 | `RUNNER_CGROUP_PARENT` | empty | A slice unit name (`quiz-runner.slice`, set by the quadlet): `--cgroup-parent=<slice>`; empty, no flag. |
 | `RUNNER_MAX_OUTPUT_KB` | 256 | Ceiling on `limits.outputKb`, per stream and per case. |
 | `RUNNER_MAX_MEMORY_MB` | 512 | Ceiling on `limits.memoryMb`, per container. |
@@ -400,9 +451,12 @@ afford: a VM with 4 GB for four concurrent containers lowers
 
 `RUNNER_TOKEN` is the one exception to "no secret": the shared bearer the API
 presents on every call, checked on both routes in constant time, required in
-production (`loadConfig` refuses to start without it there) and never passed
-into a container. It exists because the service runs on a VM of its own,
-behind TLS, and would otherwise answer anyone (ADR-016).
+production and on any public bind (`loadConfig` refuses to start without it
+there, audit L13) and never passed into a container. It exists because the
+service runs on a VM of its own, behind TLS, and would otherwise answer anyone
+(ADR-016). On a workstation the runner listens on `127.0.0.1` without one: the
+dev launcher pins `HOST` to it (`RUNNER_HOST` moves it), since the root
+`.env` it reads sets the API's `HOST=0.0.0.0`.
 
 **No other secret belongs here.** The runner holds no credential, reaches no
 database and passes nothing of its own environment into a container.
@@ -417,3 +471,25 @@ path and the server is what opens it — a Caddy fragment that exposes it as
 `https://code.chevallier.io:8443` to the quiz VM's address only, an
 `env.example` for `/etc/quiz-runner/env`, and the `deploy.sh` the CI's
 forced-command key is pinned to.
+
+### Switching production to gVisor
+
+A deploy never does it; the operator does, once the CI's `runsc` leg is green
+(ADR-016, amendment of 2026-10-11). On the engine VM, as root, from the
+runner's checkout (`/opt/quiz-runner`):
+
+```bash
+apps/runner/deploy/install-gvisor.sh        # runsc, the wrapper, the gVisor socket
+install -D -m 0644 apps/runner/deploy/gvisor/quiz-runner.container.d-gvisor.conf \
+  /etc/containers/systemd/quiz-runner.container.d/gvisor.conf
+# in /etc/quiz-runner/env:
+#   PODMAN_SOCKET=/run/quiz-runner-podman/podman.sock
+#   RUNNER_RUNTIME=runsc
+systemctl daemon-reload && systemctl restart quiz-runner
+journalctl -u quiz-runner -n 20             # "podman engine ready" with runtime runsc, or the fatal line
+```
+
+The drop-in mounts the gVisor socket and orders the runner after it; the
+system socket and the workspace portal are untouched. To re-run the script
+after the switch, stop `quiz-runner` first. The way back is to remove the
+drop-in and the two lines, then reload and restart.

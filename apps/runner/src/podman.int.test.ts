@@ -26,6 +26,8 @@ const has = (language: RunnerLanguage): boolean => host.has(language);
 announce(host, "the integration suite");
 
 const config = host.config;
+/** The CI's gVisor leg: every container of this file runs under runsc. */
+const GVISOR = config.RUNNER_RUNTIME === "runsc";
 let engine: Engine;
 
 beforeAll(async () => {
@@ -524,6 +526,8 @@ describe.skipIf(!has("c"))("the container itself", () => {
     // removes the syscall outright answers. Anything else — EFAULT above all
     // — means the call reached the kernel and no profile was in the way.
     expect([1, 38]).toContain(errno);
+    // Under gVisor only the profile's own EPERM proves `--oci-seccomp` (README, gVisor).
+    if (GVISOR) expect(errno).toBe(1);
   });
 
   it("carries the closed list of environment variables and nothing else", async () => {
@@ -566,3 +570,41 @@ describe.skipIf(!has("c"))("the container itself", () => {
     );
   });
 });
+
+/**
+ * The container's state is Podman's to say, never the program's (audit L12,
+ * README): a program that prints Podman's words and exits 1 or 125 keeps its
+ * stderr, is not out of memory, and keeps its container — the next case still
+ * sees the file it wrote in /work.
+ */
+const IMPERSONATOR =
+  "import os, sys\n" +
+  "if sys.argv[1] == 'read':\n" +
+  "    print('same' if os.path.exists('/work/marker') else 'rebuilt')\n" +
+  "    sys.exit(0)\n" +
+  "open('/work/marker', 'w').write('x')\n" +
+  "print('Error: no such container: quiz-run-x', file=sys.stderr)\n" +
+  "print('Error: can only create exec sessions on running containers', file=sys.stderr)\n" +
+  "sys.exit(int(sys.argv[1]))\n";
+
+describe.skipIf(!has("python"))("a program that impersonates Podman", () => {
+  it("keeps its stderr and its container, and is not out of memory", async () => {
+    const outcome = await run(
+      request("python", IMPERSONATOR, {
+        cases: [
+          { name: "one", args: ["1"], stdin: "" },
+          { name: "podman", args: ["125"], stdin: "" },
+          { name: "look", args: ["read"], stdin: "" },
+        ],
+      }),
+    );
+    expect(outcome.compile.ok, outcome.compile.stderr).toBe(true);
+    for (const [index, exitCode] of [1, 125].entries()) {
+      expect(outcome.cases[index]).toMatchObject({ exitCode, oom: false, timedOut: false });
+      expect(outcome.cases[index]!.stderr).toContain("no such container");
+    }
+    // A rebuilt container would have lost /work/marker with its tmpfs.
+    expect(outcome.cases[2]!.stdout).toBe("same\n");
+  });
+});
+
