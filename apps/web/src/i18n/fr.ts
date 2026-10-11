@@ -1422,7 +1422,7 @@ export const fr: Record<keyof Dict, string> = {
   "pool.filter.noConcept": "Aucune notion ne correspond.",
   "pool.filter.noConceptMatch": "aucune notion ne correspond",
   "pool.filter.course": "Cours",
-  "pool.filter.courseHint": "Les questions qui travaillent une notion que le cours liste. Dans la recherche : course:{code}.",
+  "pool.filter.courseHint": "Les questions qui travaillent une notion que le cours liste ou une notion plus étroite. Dans la recherche : course:{code}.",
   "pool.filter.courseChip": "Cours {code}",
   "pool.filter.noCourseMatch": "aucun cours ne correspond",
   "pool.filter.difficulty": "Difficulté",

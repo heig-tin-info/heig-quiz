@@ -56,23 +56,23 @@ The search field matches the internal name and the statement. **Filters** opens 
   <figcaption>The filters: type, difficulty, concepts, and the switch that shows deleted questions.</figcaption>
 </figure>
 
-When the pool is linked to one of your courses, **Filters** also offers a **Course** block (*Cours*): pick one to keep the questions that exercise a concept the course lists in its Settings. Only your own courses linked to the pool are offered, and a course that lists no concept matches nothing. `course:` in the search field does the same, by the course's code or name.
+When the pool is linked to one of your courses, **Filters** also offers a **Course** block (*Cours*): pick one to keep the questions that exercise a concept the course lists in its Settings, or one narrower than it. Only your own courses linked to the pool are offered, and a course that lists no concept matches nothing. `course:` in the search field does the same, by the course's code or name.
 
 Everything you tick comes back as removable chips under the search bar, with the number of questions left. The search field accepts the same filters as words, which is faster once you know the vocabulary:
 
 | Typed | Meaning |
 | --- | --- |
-| `#pointers` (also `tag:pointers`) | the questions classified under a concept that word names |
+| `#pointers` (also `tag:pointers`) | the questions classified under a concept that word names, or under a concept narrower than it |
 | `type:mcq`, `type:short`, `type:cloze`, `type:code` | that question type |
 | `difficulty:3` | exactly 3 |
 | `difficulty:>3`, `difficulty:>=2`, `difficulty:<3`, `difficulty:<=4` | a bound |
 | `difficulty:2-4` | a range |
 | `version:v2` or `version:2` | published version 2 |
 | `version:>1`, `version:>=2`, `version:<3`, `version:1-3` | a bound, a range |
-| `course:PRG1` (a course's code or name) | the questions on the concepts that course lists |
+| `course:PRG1` (a course's code or name) | the questions on the concepts that course lists, and their narrower ones |
 | `"a whole phrase"` | those words together |
 
-A concept word matches every concept it may name: its label in French or in English, or the label with its qualifier (`#"address (memory)"`), so `#pointeur` and `#pointers` find the same questions; a word that names no concept is shown with a dashed chip and filters nothing. Anything else is free text. Several concept words add up (a question matching any of them is listed), and two `version:` bounds narrow each other. Words and ticks are the same filter: both appear as chips, and removing a chip removes the word from the field. Right after `#`, `tag:` or `type:`, a short list opens under the field; arrows move through it, Enter inserts, Escape closes.
+A concept word matches every concept it may name: its label in French or in English, or the label with its qualifier (`#"address (memory)"`), so `#pointeur` and `#pointers` find the same questions; a word that names no concept is shown with a dashed chip and filters nothing. Anything else is free text. A concept covers its narrower concepts: filtering on *Memory* also lists the questions classified under *Pointer* when an administrator made *Pointer* narrower than *Memory*. Several concept words add up (a question matching any of them is listed), and two `version:` bounds narrow each other. Words and ticks are the same filter: both appear as chips, and removing a chip removes the word from the field. Right after `#`, `tag:` or `type:`, a short list opens under the field; arrows move through it, Enter inserts, Escape closes.
 
 ### Cards, table, grouping and sort
 

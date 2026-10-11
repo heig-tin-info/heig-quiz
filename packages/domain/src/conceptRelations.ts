@@ -96,7 +96,13 @@ function reach(next: ReadonlyMap<string, readonly string[]>, start: string): Map
 
 /** Every narrower concept of `id`, near or far, sorted: what a selected concept covers (§4). */
 export function narrowerDescendants(broader: readonly RelationEdge[], id: string): string[] {
-  return [...reach(adjacency(broader, false), id).keys()].filter((c) => c !== id).sort();
+  return narrowerDescendantsOf(broader, [id]).get(id)!;
+}
+
+/** {@link narrowerDescendants} of several concepts, the downward adjacency built once. */
+export function narrowerDescendantsOf(broader: readonly RelationEdge[], ids: readonly string[]): Map<string, string[]> {
+  const down = adjacency(broader, false);
+  return new Map(ids.map((id) => [id, [...reach(down, id).keys()].filter((c) => c !== id).sort()]));
 }
 
 /**

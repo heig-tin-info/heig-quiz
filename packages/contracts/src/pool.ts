@@ -401,7 +401,8 @@ export const QuestionSearch = z.object({
   /**
    * Concept ids, any of them (ADR-081 third addendum §7): the web app
    * resolves a typed `#word` to every concept it may designate and sends
-   * their ids. A concept matches its own questions only (no narrower ones yet).
+   * their ids. A concept matches its own questions and those of every narrower
+   * concept (ADR-081 §4, step 7d; the server widens it).
    */
   concept: StringList.pipe(z.array(z.uuid())).optional(),
   difficulty: IntList.optional(),
@@ -410,7 +411,7 @@ export const QuestionSearch = z.object({
    * A course id (#599 step 7b): only the questions that exercise a concept
    * the course lists (expanded server-side). It must be a course the caller
    * staffs AND that the pool is linked to, else the answer is the 404 of a
-   * missing course. Narrower concepts are not covered yet (7d).
+   * missing course. The concepts the course lists cover their narrower ones (7d).
    */
   course: z.uuid().optional(),
   /** Soft-deleted questions are hidden unless this is set (F-QST-11). */

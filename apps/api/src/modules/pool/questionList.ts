@@ -23,7 +23,7 @@ import {
   questionVersions,
   questions,
 } from "../../db/schema.js";
-import { byLabel, conceptsOf, toConceptRef } from "../concept/service.js";
+import { byLabel, conceptsOf, coveredConcepts, toConceptRef } from "../concept/service.js";
 import { hasKey, isParameterized, loadConfig, publicationIssuesOf, tryLoadConfig } from "./config.js";
 import { exampleConfig, parameterIssues, type VersionContent } from "./instance.js";
 import { openReportCounts, type ReportViewer } from "./reports.js";
@@ -134,6 +134,16 @@ function searchWhere(
   // computes the row's `starred` flag.
   if (search.starred) clauses.push(starredBy(userId));
   return clauses;
+}
+
+/**
+ * The search with its `concept` filter widened to what the selected concepts
+ * cover (ADR-081 §4, step 7d): a concept matches its own questions and those
+ * of every narrower concept. The one place the filter is widened, shared by a
+ * pool's list and the poll launcher's search.
+ */
+async function withCoveredConcepts(db: Db, search: QuestionSearch): Promise<QuestionSearch> {
+  return search.concept?.length ? { ...search, concept: await coveredConcepts(db, search.concept) } : search;
 }
 
 /** The question exercises at least one of `conceptIds`. */
@@ -306,7 +316,7 @@ export async function listQuestions(
 ) {
   const { page, facts, nextCursor, total } = await pageWhere(
     db,
-    searchWhere(poolId, viewer.id, search, courseConcepts),
+    searchWhere(poolId, viewer.id, await withCoveredConcepts(db, search), courseConcepts),
     search,
     starredBy(viewer.id),
   );
@@ -473,7 +483,7 @@ export async function searchReachableQuestions(
   total: number;
   concepts: ConceptRef[];
 }> {
-  const { search } = input;
+  const search = await withCoveredConcepts(db, input.search);
   const types = search.type?.length
     ? input.types.filter((t) => search.type!.includes(t))
     : [...input.types];

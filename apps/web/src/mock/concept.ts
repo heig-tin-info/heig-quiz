@@ -24,6 +24,7 @@ import {
 } from "@quiz/contracts";
 import {
   canonicalRelated,
+  narrowerDescendants,
   checkAlias,
   checkBroaderEdge,
   checkRelatedEdge,
@@ -432,8 +433,14 @@ const listedByACourse = (id: string) => [...courseConcepts.values()].some((ids) 
 export const courseConceptRefs = (courseId: string): ConceptRef[] =>
   conceptRefs(courseConcepts.get(courseId) ?? []).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
 
-/** The concept ids a course covers (the server's `conceptsCoveredByCourse`): today the ones it lists. */
-export const coveredByCourse = (courseId: string): string[] => courseConceptRefs(courseId).map((c) => c.id);
+/** The concepts the given ones cover together, themselves and every narrower one (the server's `coveredConcepts`, ADR-081 §4). */
+export function coveredConceptIds(ids: readonly string[]): string[] {
+  const { broader } = edgesOf(concepts);
+  return [...new Set(ids.flatMap((id) => [id, ...narrowerDescendants(broader, id)]))];
+}
+
+/** The concept ids a course covers (the server's `conceptsCoveredByCourse`): the ones it lists and their narrower ones. */
+export const coveredByCourse = (courseId: string): string[] => coveredConceptIds(courseConceptRefs(courseId).map((c) => c.id));
 
 /** `PUT /courses/:id/concepts`: the whole set; a merged or unknown id is `422 concept_not_found`. */
 export function setCourseConceptIds(courseId: string, ids: readonly string[]): void {
