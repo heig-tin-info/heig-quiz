@@ -10,7 +10,7 @@
  * never went online has none. Deleted with its project. Nothing here is a
  * secret: the launch token is never stored (its `jti` is in the audit log).
  */
-import { bigint, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 import { users } from "./auth.js";
 import { projects } from "./project.js";
@@ -74,4 +74,24 @@ export const codespaceRelays = pgTable(
     declaredAt: timestamp("declared_at", { withTimezone: true }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.githubRepoId, t.sha] })],
+);
+
+/**
+ * The relay's requests already served (ADR-078 §2, amendment of 2026-10-11,
+ * #743): one row per consumed `jti` of `POST /app/codespace/git-token` and
+ * `POST /app/codespace/relay-heads`. The primary key IS the single use — a
+ * second `INSERT` of the same `jti` conflicts and the route answers `401` —
+ * not a read followed by a write. `exp` (the request's) is kept for the
+ * purge alone, which waits until `verifyHs256` would refuse the request
+ * anyway (`exp` plus the skew plus a minute). Never a credential.
+ */
+export const codespaceRelayJtis = pgTable(
+  "codespace_relay_jtis",
+  {
+    jti: text("jti").primaryKey(),
+    exp: timestamp("exp", { withTimezone: true }).notNull(),
+    /** The receipt, by the server's clock. */
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("codespace_relay_jtis_exp_idx").on(t.exp)],
 );

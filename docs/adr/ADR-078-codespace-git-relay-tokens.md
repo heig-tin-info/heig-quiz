@@ -9,7 +9,9 @@ that last point (§7) confirmed by the product owner on 2026-10-07. Delivered by
 [progress](../merge/PROGRESS.md)). Amended 2026-10-09: deployment state left to PROGRESS.md (M6-10 done,
 staging checks pending). Amended 2026-10-11 (security audit M11 and L25): the portal's service
 tokens are single use and bound to their request, and every token's lifetime is capped
-([amendment](#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use)).
+([amendment](#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use)). Amended
+2026-10-11 again (#743): the portal's requests to Quiz (§2) are single use on Quiz's side
+([amendment](#amendment-2026-10-11-743-the-relays-requests-are-single-use)).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -112,7 +114,7 @@ invariant 7):
 | `iss` | `heig-codespace` (the portal) |
 | `aud` | `heig-quiz-git-token` — a distinct audience: a launch token (`heig-codespace`), a sync token (`heig-codespace-api`) or any other service token is refused here, and this one is refused everywhere else |
 | `iat`, `exp` | `exp - iat` ≤ 60 s; the 30 s leeway of `verifyHs256` |
-| `jti` | random, required (`requireJti`); logged by Quiz, not consumed |
+| `jti` | random, required (`requireJti`); logged by Quiz, and consumed since the [amendment of 2026-10-11 (#743)](#amendment-2026-10-11-743-the-relays-requests-are-single-use) |
 | `projectId` | the project (the portal's `assignmentId`) |
 | `userId` | the Quiz user the workspace belongs to (the launch token's `sub`) |
 | `repository` | `owner/name`, as the portal knows it (the launch token's `repo.fullName`, or the sync's `sourceRepo.fullName`) |
@@ -487,13 +489,10 @@ Quiz, whose rules stand (below).
   new Quiz. Rolling the application back alone leaves the sync and the
   staff's workspace list refused (401) until the portal is rolled back too;
   launches are unaffected. `deploy/smoke.mjs` signs bound tokens.
-- **§2's route is unchanged.** The portal's requests to Quiz were bound from
-  the start (the request is the token, a distinct audience per route, an
-  empty body); their `jti` stays logged, not consumed. Consuming it needs a
-  table and a migration on Quiz's side: until then a request captured in
-  transit (TLS broken, a leaked log) replays for about 90 s and mints the
-  `contents: write` installation token §2 grants for that repository.
-  Open: [#743](https://github.com/heig-tin-info/heig-quiz/issues/743).
+- **§2's route.** The portal's requests to Quiz were bound from the start
+  (the request is the token, a distinct audience per route, an empty body).
+  Their `jti`, left logged but not consumed by this amendment, is consumed
+  since the [next one](#amendment-2026-10-11-743-the-relays-requests-are-single-use).
 - **The disk (audit M11).** In code, one push into a staging repository is
   capped by `receive.maxInputSize` (100 MiB, `RECEIVE_MAX_INPUT_BYTES`). The
   rest is the owner's checklist (`apps/codespace/deploy/RUNBOOK.md`, Disk):
@@ -502,6 +501,33 @@ Quiz, whose rules stand (below).
 - **The door (audit L25).** Only the application VM calls the service
   routes; a Caddy allow-list on `/api/*` waits for the owner to confirm the
   addresses: [#744](https://github.com/heig-tin-info/heig-quiz/issues/744).
+
+## Amendment 2026-10-11 (#743): the relay's requests are single use
+
+Scope: §2's two routes on Quiz, `POST /app/codespace/git-token` and
+`POST /app/codespace/relay-heads`. Their claims, checks 2 to 6 and the
+portal's side are unchanged.
+
+- **Consumed on Quiz.** Once a request verifies (check 1: signature,
+  audience, issuer, lifetime, claims), its `jti` is inserted into
+  `codespace_relay_jtis` (the `codespace` module's table: `jti` primary key,
+  the request's `exp`, `created_at`; migration `0107`), first thing in the
+  transaction that reads checks 2 to 5, before any token is minted or head
+  recorded. The primary key is the guarantee, concurrent presentations
+  included: a second presentation of the same request is a `401
+  unauthorized`, like any other refusal of the token, logged at `info` with
+  its `jti`, not audited. A request captured in transit therefore mints
+  nothing more than the one call it was signed for.
+- **Spent even when refused further on.** A request that verifies and is
+  then refused (`404`, `409`, `503`) stays consumed: the portal signs a
+  fresh one for every call, retries included (`quizForge.ts`), so nothing
+  changes on its side.
+- **Retention.** A row is kept until `exp + HS256_SKEW_SECONDS + 60 s`, the
+  bound of the portal's `launch_tokens_used` (the previous amendment, audit
+  M11), past which `verifyHs256` refuses the request anyway. Each call
+  purges the expired rows before it consumes its own, as the portal does:
+  the table holds a few minutes of requests, and no scheduled task is
+  needed.
 
 ## Alternatives considered
 

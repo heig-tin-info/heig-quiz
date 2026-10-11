@@ -15,14 +15,14 @@
  *     whose head is declared there is the student's (`pushAuthor`,
  *     `modules/github/deliveries.ts`).
  *
- * Both share one prologue ({@link authorizeCall}): the signed request, then
- * ONE pure rule, `gitTokenRefusal` of `@quiz/domain`, over facts read in one
+ * Both share one prologue ({@link authorizeCall}): the signed request, served
+ * once (its `jti` consumed, `codespace_relay_jtis`), then ONE pure rule, `gitTokenRefusal` of `@quiz/domain`, over facts read in one
  * transaction. The token exists here only between GitHub's answer and the
  * reply: never stored, cached, logged nor audited (§4); a GitHub failure is
  * reported by its status alone.
  */
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, lt } from "drizzle-orm";
 import type { z } from "zod";
 
 import {
@@ -34,12 +34,13 @@ import {
   RelayHeadsClaims,
   type GitTokenError,
 } from "@quiz/contracts";
-import { gitTokenRefusal, verifyHs256, type GitTokenGrantDecision, type GitTokenRefusalCode } from "@quiz/domain";
+import { HS256_SKEW_SECONDS, gitTokenRefusal, verifyHs256, type GitTokenGrantDecision, type GitTokenRefusalCode } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import { bearerOf } from "../../auth/plugin.js";
 import type { AppConfig } from "../../config.js";
-import { classrooms, codespaceLaunches, codespaceRelays, projectRepos, projects } from "../../db/schema.js";
+import type { Db } from "../../db/client.js";
+import { classrooms, codespaceLaunches, codespaceRelayJtis, codespaceRelays, projectRepos, projects } from "../../db/schema.js";
 import { githubStatus, mintRepositoryToken } from "../../github/app.js";
 import { projectInstallation } from "../github/service.js";
 
@@ -52,6 +53,27 @@ export interface GitRelayRefusal {
 const STATUS: Record<GitTokenRefusalCode, 404 | 409> = { not_found: 404, not_online: 409, closed: 409 };
 
 type RelayApp = Pick<FastifyInstance, "db" | "clock">;
+
+/**
+ * How long a consumed `jti` outlives its request's `exp`: `verifyHs256`
+ * accepts a request until `exp + HS256_SKEW_SECONDS`, and a minute more
+ * covers a clock step between the check and the purge — the portal's
+ * `JTI_RETENTION_AFTER_EXP_MS` (ADR-078, amendment of 2026-10-11).
+ */
+export const RELAY_JTI_RETENTION_AFTER_EXP_MS = (HS256_SKEW_SECONDS + 60) * 1000;
+
+/**
+ * Deletes the consumed `jti`s of requests `verifyHs256` refuses anyway.
+ * Every call runs it before consuming its own, as the portal does: the
+ * table holds a few minutes of requests, and no scheduled task is needed.
+ */
+export async function purgeRelayJtis(db: Db, now: Date): Promise<number> {
+  const purged = await db
+    .delete(codespaceRelayJtis)
+    .where(lt(codespaceRelayJtis.exp, new Date(now.getTime() - RELAY_JTI_RETENTION_AFTER_EXP_MS)))
+    .returning({ jti: codespaceRelayJtis.jti });
+  return purged.length;
+}
 
 /** What a call that passed checks 1 to 5 carries on. */
 interface AuthorizedCall<C> {
@@ -70,7 +92,13 @@ interface AuthorizedCall<C> {
  *      route's OWN audience (a launch, a sync or the other route's token is
  *      refused), the portal's issuer, a minute at most on the server's
  *      clock, a `jti`, claims of the contract (uuid ids); otherwise `401`;
- *   2–5. in one read transaction, the project, the user's launch
+ *      the `jti` is then consumed, first thing in the transaction below:
+ *      an `INSERT` whose primary key refuses a second presentation of the
+ *      same request, concurrent ones included (`401`, like any other
+ *      refusal of the token). Consumed before any work, a request refused
+ *      further on stays spent: the portal signs a fresh one for every
+ *      call, retries included;
+ *   2–5. in the same transaction, the project, the user's launch
  *      (`codespace_launches`), the user's own repository and the classroom,
  *      judged by `gitTokenRefusal`.
  *
@@ -101,7 +129,14 @@ async function authorizeCall<S extends typeof GitTokenRequestClaims | typeof Rel
     return { status: 401, error: "unauthorized" };
   }
   const claims = parsed.data as z.infer<S>;
+  await purgeRelayJtis(app.db, now);
   const decided = await app.db.transaction(async (tx) => {
+    const [fresh] = await tx
+      .insert(codespaceRelayJtis)
+      .values({ jti: claims.jti, exp: new Date(claims.exp * 1000), createdAt: now })
+      .onConflictDoNothing()
+      .returning({ jti: codespaceRelayJtis.jti });
+    if (!fresh) return "replayed" as const;
     const [row] = await tx
       .select({ project: projects, archivedAt: classrooms.archivedAt })
       .from(projects)
@@ -127,6 +162,10 @@ async function authorizeCall<S extends typeof GitTokenRequestClaims | typeof Rel
     const fullName = decision.permission === "write" ? repo!.fullName! : row.project.distributionFullName!;
     return { grant: decision, fullName, orgId: row.project.orgId };
   });
+  if (decided === "replayed") {
+    log.info({ code: "unauthorized", replayed: true, jti: claims.jti, projectId: claims.projectId }, `${route.name} refused`);
+    return { status: 401, error: "unauthorized" };
+  }
   if (decided === null || typeof decided === "string") {
     const refused = decided ?? "not_found";
     log.info({ code: refused, jti: claims.jti, projectId: claims.projectId }, `${route.name} refused`);
