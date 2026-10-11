@@ -1,10 +1,13 @@
 /**
  * What a staging refresh does to production's data once restored
- * (ADR-028, N-SEC-18, M2-06): `scripts/staging-scrub.sql`, the very file
- * `staging-refresh.sh` pipes into psql, run here against the real
- * migrations. A refresh from a dump holding installations leaves no
- * production installation reachable, no project nor group move the ticker
- * would drive, no delivery to replay and no queued job.
+ * (ADR-028, N-SEC-18, M2-06; audit M9, L17): `scripts/staging-pseudonymize.sql`
+ * then `scripts/staging-scrub.sql`, the very files `staging-refresh.sh`
+ * pipes into psql, run here against the real migrations. A refresh from a
+ * dump holding installations leaves no production installation reachable,
+ * no project nor group move the ticker would drive, no delivery to replay
+ * and no queued job; a refresh from a dump holding people and secrets
+ * leaves none of their names, addresses, external ids or secrets anywhere
+ * in the database, except the accounts of the keep list, untouched.
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -20,6 +23,7 @@ import { classrooms, courses, githubOrganizations, projects, sessions, users, we
 import { testDatabase } from "./test/db.js";
 
 const SCRUB = readFileSync(new URL("../../../scripts/staging-scrub.sql", import.meta.url), "utf8");
+const PSEUDONYMIZE = readFileSync(new URL("../../../scripts/staging-pseudonymize.sql", import.meta.url), "utf8");
 const ARCHIVED = new Date("2026-09-01T08:00:00Z");
 
 let db: Db;
@@ -88,6 +92,244 @@ describe("staging-scrub.sql", () => {
       expect(delivery!.processedAt).not.toBeNull();
       const boss = await client.query("SELECT 1 FROM pg_namespace WHERE nspname = 'pgboss'");
       expect(boss.rows).toEqual([]);
+    }
+  });
+});
+
+/**
+ * Every row of every table of the public schema, as one text: what a
+ * person who can read the staging database could read. A bytea shows as
+ * its hex, so a marker is looked for in both forms.
+ */
+async function everything(pg: PGlite): Promise<string> {
+  const tables = await pg.query<{ name: string }>(
+    "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY 1",
+  );
+  const parts: string[] = [];
+  for (const { name } of tables.rows) {
+    const rows = await pg.query<{ dump: string | null }>(`SELECT json_agg(t ORDER BY t::text)::text AS dump FROM "${name}" t`);
+    parts.push(`${name}: ${rows.rows[0]?.dump ?? ""}`);
+  }
+  return parts.join("\n");
+}
+
+const hex = (text: string) => Buffer.from(text, "utf8").toString("hex");
+
+/** What a production dump may hold of people and secrets, as markers searched for afterwards. */
+const MARKERS = [
+  "alice.martin@heig-vd.ch",
+  "a.martinez@hes-so.ch",
+  "bob.durand@heig-vd.ch",
+  "dora.grant@heig-vd.ch",
+  "chloe.dubois@heig-vd.ch",
+  "Martinez",
+  "Durandal",
+  "Duboisier",
+  "Chloé",
+  "sub-alice-REAL",
+  "sub-bob-REAL",
+  "761234567890@eduid.ch",
+  "pictures.example",
+  "AVATAR-PHOTO-MARKER",
+  "aad-alice-REAL",
+  "Alice Teamsname",
+  "alice.teams@heig-vd.ch",
+  "alicemartin-gh",
+  "4242424242",
+  "NOTE-MARKER",
+  "Gaston Lagaffe",
+  "203.0.113.77",
+  "LLM-KEY-SECRET-MARKER",
+  "MRK4",
+  "c".repeat(64),
+  "d".repeat(64),
+  "GUEST-TOKEN-MARKER",
+  "TEAMS-TOKEN-MARKER",
+  "aad-bob-REAL",
+];
+
+describe("staging-pseudonymize.sql, then staging-scrub.sql", () => {
+  it("leaves no name, address, external id nor secret of production, keeps the keep list's accounts, and is idempotent", async () => {
+    const { client: pg } = await testDatabase();
+    const [alice, bob, po] = [randomUUID(), randomUUID(), randomUUID()];
+    const [course, classroom, evaluation, org, project, repo] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    const [aliceRow, chloeRow, poRow, device] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    const exec = (sql: string, params: unknown[] = []) => pg.query(sql, params);
+
+    // People. Alice is a student with a second address, an avatar, IdP
+    // claims, a Teams link and a GitHub account; Bob a teacher by grant;
+    // Chloé an unclaimed roster row; Paula, the product owner, is kept.
+    await exec(
+      `INSERT INTO users (id, oidc_sub, email, email_verified, given_name, family_name, swiss_edu_id, picture_url, role, created_at) VALUES
+       ($1, 'sub-alice-REAL', 'alice.martin@heig-vd.ch', true, 'Alice', 'Martinez', '761234567890@eduid.ch', 'https://pictures.example/alice.jpg', 'student', now() - interval '3 days'),
+       ($2, 'sub-bob-REAL', 'bob.durand@heig-vd.ch', true, 'Bob', 'Durandal', NULL, NULL, 'teacher', now() - interval '2 days'),
+       ($3, 'sub-po-REAL', 'Paula.Owner@heig-vd.ch', true, 'Paula', 'Proprietaria', '769999999999@eduid.ch', NULL, 'admin', now() - interval '1 day')`,
+      [alice, bob, po],
+    );
+    await exec(
+      `INSERT INTO user_emails (user_id, email, source, verified) VALUES
+       ($1, 'alice.martin@heig-vd.ch', 'login', true), ($1, 'a.martinez@hes-so.ch', 'mail', true),
+       ($2, 'bob.durand@heig-vd.ch', 'login', true), ($3, 'paula.owner@heig-vd.ch', 'login', true)`,
+      [alice, bob, po],
+    );
+    await exec(
+      `INSERT INTO teacher_grants (id, email, created_by, created_at) VALUES
+       ($1, 'bob.durand@heig-vd.ch', $3, now() - interval '1 hour'), ($2, 'dora.grant@heig-vd.ch', $3, now())`,
+      [randomUUID(), randomUUID(), po],
+    );
+    await exec(`INSERT INTO avatars (user_id, data, content_type) VALUES ($1, convert_to('AVATAR-PHOTO-MARKER', 'UTF8'), 'image/png')`, [alice]);
+    await exec(
+      `INSERT INTO user_idp_claims (user_id, claims, affiliations) VALUES
+       ($1, '{"given_name":"Alice","email":"alice.martin@heig-vd.ch","swissEduPersonUniqueID":"761234567890@eduid.ch"}', ARRAY['student@heig-vd.ch'])`,
+      [alice],
+    );
+    await exec(
+      `INSERT INTO teams_links (user_id, tenant_id, aad_object_id, teams_name, teams_username) VALUES
+       ($1, 'tenant-REAL', 'aad-alice-REAL', 'Alice Teamsname', 'alice.teams@heig-vd.ch')`,
+      [alice],
+    );
+    await exec(`INSERT INTO github_accounts (user_id, github_user_id, login) VALUES ($1, 4242424242, 'alicemartin-gh'), ($2, 5151515151, 'paula-gh')`, [
+      alice,
+      po,
+    ]);
+
+    // A class, its roster, a project repository named after its student,
+    // a poll with a guest.
+    await exec(`INSERT INTO courses (id, name, code) VALUES ($1, 'Programmation C', 'PRG1')`, [course]);
+    await exec(`INSERT INTO classrooms (id, course_id, name, period) VALUES ($1, $2, 'A', '2026-A')`, [classroom, course]);
+    await exec(
+      `INSERT INTO enrollments (id, classroom_id, nom, prenom, email, user_id, note) VALUES
+       ($1, $4, 'Martinez', 'Alice', 'alice.martin@heig-vd.ch', $5, 'NOTE-MARKER dyslexia'),
+       ($2, $4, 'Duboisier', 'Chloé', 'chloe.dubois@heig-vd.ch', NULL, NULL),
+       ($3, $4, 'Proprietaria', 'Paula', 'paula.owner@heig-vd.ch', $6, 'kept note')`,
+      [aliceRow, chloeRow, poRow, classroom, alice, po],
+    );
+    await exec(`INSERT INTO github_organizations (id, login, github_org_id, installation_id) VALUES ($1, 'heig-prod', 1, 11)`, [org]);
+    await exec(
+      `INSERT INTO projects (id, classroom_id, org_id, name, slug, state, start_at, deadline_at, source_repo_id, source_full_name, branches, protected_files, grading_scale, created_by)
+       VALUES ($1, $2, $5, 'lab1', 'lab1', 'published', now(), now(), 1, 'heig-prod/lab1', ARRAY['main'], ARRAY[]::text[], $3, $4)`,
+      [project, classroom, JSON.stringify(defaultProjectGradingScale()), bob, org],
+    );
+    await exec(
+      `INSERT INTO project_repos (id, project_id, user_id, github_repo_id, full_name, accepted_at) VALUES ($1, $2, $3, 77, 'heig-prod/lab1-alicemartin-gh', now())`,
+      [repo, project, alice],
+    );
+    await exec(
+      `INSERT INTO project_repo_access (id, repo_id, enrollment_id, github_user_id, github_login, invited_at) VALUES ($1, $2, $3, 4242424242, 'alicemartin-gh', now())`,
+      [randomUUID(), repo, aliceRow],
+    );
+    await exec(
+      `INSERT INTO evaluations (id, classroom_id, title, mode, settings, grading_scale, feedback_policy, created_by) VALUES ($1, $2, 'Sondage', 'poll', '{}', '{}', '{}', $3)`,
+      [evaluation, classroom, bob],
+    );
+    await exec(`INSERT INTO guest_participants (id, evaluation_id, pseudonym, token_hash) VALUES ($1, $2, 'Gaston Lagaffe', 'GUEST-TOKEN-MARKER')`, [
+      randomUUID(),
+      evaluation,
+    ]);
+
+    // Free text beside the content.
+    await exec(
+      `INSERT INTO audit_log (actor_user_id, actor_type, action, subject_type, subject_id, payload) VALUES
+       ($1, 'user', 'admin.teacher_granted', 'teacher_grant', 'dora.grant@heig-vd.ch', '{"email":"dora.grant@heig-vd.ch","ip":"203.0.113.77"}')`,
+      [po],
+    );
+    await exec(
+      `INSERT INTO legacy_classroom_audit_log (source_id, actor_type, action, subject_type, subject_id, payload, created_at) VALUES
+       (1, 'user', 'roster.imported', 'classroom', 'x', '{"nom":"Duboisier","email":"chloe.dubois@heig-vd.ch"}', now())`,
+    );
+    await exec(`INSERT INTO notifications (id, user_id, payload) VALUES ($1, $2, '{"kind":"pool_shared","poolName":"P","byName":"Bob Durandal"}')`, [
+      randomUUID(),
+      alice,
+    ]);
+    await exec(
+      `INSERT INTO webhook_deliveries (delivery_id, event, payload, received_at) VALUES
+       ($1, 'push', '{"sender":{"login":"alicemartin-gh","email":"alice.martin@heig-vd.ch"}}', now())`,
+      [randomUUID()],
+    );
+
+    // Secrets kept in rows (audit L17).
+    // The migrations seed the one settings row.
+    await exec(`UPDATE llm_settings SET key_ciphertext = convert_to('LLM-KEY-SECRET-MARKER', 'UTF8'), key_last4 = 'MRK4', daily_cap_usd = 5`);
+    await exec(`INSERT INTO kiosk_devices (id, google_device_id, label, status, credential_hash) VALUES ($1, 'dev-1', 'Poste 1', 'active', $2)`, [
+      device,
+      "c".repeat(64),
+    ]);
+    await exec(
+      `INSERT INTO kiosk_pairings (id, device_id, device_code_hash, user_code_hash, state, expires_at) VALUES ($1, $2, $3, $4, 'pending', now() + interval '5 minutes')`,
+      [randomUUID(), device, "d".repeat(64), "e".repeat(64)],
+    );
+    await exec(
+      `INSERT INTO teams_link_tokens (token_hash, tenant_id, aad_object_id, teams_name, teams_username, created_at, expires_at) VALUES
+       ('TEAMS-TOKEN-MARKER', 'tenant-REAL', 'aad-bob-REAL', 'Bob Teamsname', 'bob.teams@heig-vd.ch', now(), now() + interval '1 hour')`,
+    );
+
+    const before = await everything(pg);
+    for (const marker of MARKERS) expect(before.includes(marker) || before.includes(hex(marker)), marker).toBe(true);
+
+    let first: string | undefined;
+    for (let run = 0; run < 2; run += 1) {
+      // As staging-refresh.sh sets it; case and spaces do not matter.
+      await pg.query("SELECT set_config('quiz.staging_keep_emails', ' PAULA.owner@heig-vd.ch ,', false)");
+      await pg.exec(PSEUDONYMIZE);
+      await pg.exec(SCRUB);
+      const after = await everything(pg);
+      for (const marker of MARKERS) {
+        expect(after.includes(marker), marker).toBe(false);
+        expect(after.includes(hex(marker)), `${marker} (bytea)`).toBe(false);
+      }
+
+      // The kept account, its address, its GitHub account and its roster row, as they were.
+      expect((await exec("SELECT oidc_sub, email, given_name, family_name, swiss_edu_id FROM users WHERE id = $1", [po])).rows).toEqual([
+        { oidc_sub: "sub-po-REAL", email: "Paula.Owner@heig-vd.ch", given_name: "Paula", family_name: "Proprietaria", swiss_edu_id: "769999999999@eduid.ch" },
+      ]);
+      expect((await exec("SELECT login FROM github_accounts WHERE user_id = $1", [po])).rows).toEqual([{ login: "paula-gh" }]);
+      expect((await exec("SELECT email, note FROM enrollments WHERE id = $1", [poRow])).rows).toEqual([
+        { email: "paula.owner@heig-vd.ch", note: "kept note" },
+      ]);
+
+      // The others: deterministic fakes, consistent across tables. The
+      // teacher's grant names the teacher's only address, the student's
+      // roster row the student's.
+      expect((await exec("SELECT id, oidc_sub, email, given_name, family_name FROM users WHERE id = ANY($1) ORDER BY role", [[alice, bob]])).rows).toEqual([
+        { id: alice, oidc_sub: `staging:${alice}`, email: "student-1@example.invalid", given_name: "Student", family_name: "1" },
+        { id: bob, oidc_sub: `staging:${bob}`, email: "teacher-1@example.invalid", given_name: "Teacher", family_name: "1" },
+      ]);
+      expect((await exec("SELECT email FROM user_emails WHERE user_id = $1", [bob])).rows).toEqual([{ email: "teacher-1@example.invalid" }]);
+      expect((await exec("SELECT email FROM teacher_grants ORDER BY email")).rows).toEqual([
+        { email: "grant-2@example.invalid" },
+        { email: "teacher-1@example.invalid" },
+      ]);
+      expect((await exec("SELECT email, nom, prenom, note FROM enrollments WHERE id = ANY($1) ORDER BY email", [[aliceRow, chloeRow]])).rows).toEqual([
+        { email: "enrollment-1@example.invalid", nom: "1", prenom: "Enrollment", note: null },
+        { email: "student-1@example.invalid", nom: "1", prenom: "Student", note: null },
+      ]);
+      expect((await exec("SELECT github_user_id::text AS id, login FROM github_accounts WHERE user_id = $1", [alice])).rows).toEqual([
+        { id: "-1", login: "github-user-1" },
+      ]);
+      expect((await exec("SELECT github_user_id::text AS id, github_login FROM project_repo_access")).rows).toEqual([
+        { id: "-1", github_login: "github-user-1" },
+      ]);
+      expect((await exec("SELECT full_name FROM project_repos")).rows).toEqual([{ full_name: `heig-prod/repo-${repo.slice(0, 8)}` }]);
+      // The affiliations stay: the role rule reads them.
+      expect((await exec("SELECT claims, affiliations FROM user_idp_claims")).rows).toEqual([{ claims: {}, affiliations: ["student@heig-vd.ch"] }]);
+      // The station stays, without its credential; the guest stays, with a
+      // hash nobody holds; the LLM settings stay, without their key.
+      expect((await exec("SELECT label, credential_hash FROM kiosk_devices")).rows).toEqual([{ label: "Poste 1", credential_hash: null }]);
+      expect((await exec("SELECT pseudonym, token_hash FROM guest_participants")).rows).toEqual([
+        { pseudonym: "Guest 1", token_hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
+      ]);
+      expect((await exec("SELECT key_ciphertext, key_last4, daily_cap_usd::text AS cap FROM llm_settings")).rows).toEqual([
+        { key_ciphertext: null, key_last4: null, cap: "5.00" },
+      ]);
+      expect((await exec("SELECT count(*)::int AS n FROM kiosk_pairings")).rows).toEqual([{ n: 0 }]);
+      // The audit log's trigger, lifted for the copy's rewrite, is back on.
+      await expect(exec("UPDATE audit_log SET action = action")).rejects.toThrow(/append-only/);
+      expect((await exec("SELECT count(*)::int AS n FROM teams_link_tokens")).rows).toEqual([{ n: 0 }]);
+
+      // A second run changes nothing but the guest's unmatchable hash.
+      const stable = after.replace(/"token_hash":"[0-9a-f]{64}"/g, "");
+      if (first !== undefined) expect(stable).toBe(first);
+      first = stable;
     }
   });
 });

@@ -183,7 +183,9 @@ install -m 640 -g srvstg /srv/quiz/merge/mapping.json /srv/staging-inbox/mapping
 Then as srvstg (owner):
 
 ```bash
-~/quiz-staging/scripts/staging-refresh.sh
+# --keep-identities: the import matches people by address and edu-ID
+# identifier, which a normal refresh pseudonymizes (ADR-028, 2026-10-11).
+~/quiz-staging/scripts/staging-refresh.sh --keep-identities
 s exec -T postgres psql -U quiz -d postgres -v ON_ERROR_STOP=1 \
   -c 'DROP DATABASE IF EXISTS hgc_cutover WITH (FORCE)' -c 'CREATE DATABASE hgc_cutover OWNER quiz'
 s exec -T postgres pg_restore -U quiz -d hgc_cutover --no-owner --role=quiz --exit-on-error < /srv/staging-inbox/hgc.dump
@@ -742,7 +744,7 @@ the day before T0. The owner works as `srvstg` unless a step says otherwise.
 
 1. Agent (srv): the dumps and the mapping into the inbox (§1.3, *Staging
    dry run*, first block). Note the time: it stands for C1.
-2. `staging-refresh.sh`, then `hgc_cutover` restored (§1.3, second block,
+2. `staging-refresh.sh --keep-identities`, then `hgc_cutover` restored (§1.3, second block,
    up to `pg_restore`). Time it as C2.
 3. `imp s ~/merge --dry-run`, then `imp s ~/merge --apply --final --window-hours "$W"` (O5). Time
    both. The dump comes from a running classroom, so the STATE checks see

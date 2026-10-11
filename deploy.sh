@@ -8,13 +8,17 @@
 # the commit it runs has not been approved yet, and that account can read
 # nothing of production's.
 #
-# The CI passes "<commit sha> <ephemeral GHCR token>" as the SSH "command";
-# it lands in $SSH_ORIGINAL_COMMAND. The sha is the commit to deploy: the
-# checkout moves to it and the image tagged with it is started, so
-# production runs exactly the image staging ran. The token is used only to
-# log in for the private-image pull, then expires with the job — no registry
-# credential is ever stored on the VM. A token alone (a manual deploy)
-# deploys the head of origin/main, still by its sha.
+# The CI passes "<commit sha> [<image digest>] <ephemeral GHCR token>" as
+# the SSH "command"; it lands in $SSH_ORIGINAL_COMMAND. The sha is the commit
+# to deploy: the checkout moves to it and the image built from it is
+# started, so production runs exactly the image staging ran. The digest
+# (`sha256:<64 hex>`, the one the CI's `image` job pushed) pins that image
+# by content: the pull is `quiz:<sha>@sha256:…`, which a tag moved since the
+# build cannot redirect (audit M8). Without it the image is pulled by its
+# sha tag, as before. The token is used only to log in for the private-image
+# pull, then expires with the job — no registry credential is ever stored on
+# the VM. A token alone (a manual deploy) deploys the head of origin/main,
+# still by its sha.
 #
 # Production refuses to restart under a live evaluation (exit 3, nothing
 # pulled, nothing restarted; scripts/live-evaluations.sql says what "live"
@@ -68,12 +72,14 @@ if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
 fi
 trap '[ -z "${DOCKER_CONFIG:-}" ] || rm -rf "$DOCKER_CONFIG"' EXIT
 
-# "[force] <sha> <token>" or "[force] <token>": matched strictly, never
-# eval'd. The sha and the force travel to the re-exec through the
-# environment; a first run takes the force from the request and nowhere else.
+# "[force] <sha> [<digest>] <token>" or "[force] <token>": matched
+# strictly, never eval'd. The sha, the digest and the force travel to the
+# re-exec through the environment; a first run takes them from the request
+# and nowhere else.
 request="${SSH_ORIGINAL_COMMAND:-}"
 if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
   QUIZ_DEPLOY_FORCE=
+  QUIZ_DEPLOY_DIGEST=
 fi
 if [[ "$request" =~ ^force[[:space:]]+(.+)$ ]]; then
   QUIZ_DEPLOY_FORCE=1
@@ -81,9 +87,18 @@ if [[ "$request" =~ ^force[[:space:]]+(.+)$ ]]; then
 fi
 export QUIZ_DEPLOY_FORCE
 token="$request"
-if [[ "$request" =~ ^([0-9a-f]{40})[[:space:]]+(.+)$ ]]; then
+if [[ "$request" =~ ^([0-9a-f]{40})[[:space:]]+(sha256:[0-9a-f]{64})[[:space:]]+(.+)$ ]]; then
+  export QUIZ_DEPLOY_SHA="${BASH_REMATCH[1]}"
+  QUIZ_DEPLOY_DIGEST="${BASH_REMATCH[2]}"
+  token="${BASH_REMATCH[3]}"
+elif [[ "$request" =~ ^([0-9a-f]{40})[[:space:]]+(.+)$ ]]; then
   export QUIZ_DEPLOY_SHA="${BASH_REMATCH[1]}"
   token="${BASH_REMATCH[2]}"
+fi
+export QUIZ_DEPLOY_DIGEST="${QUIZ_DEPLOY_DIGEST:-}"
+if [ -n "$QUIZ_DEPLOY_DIGEST" ] && ! [[ "$QUIZ_DEPLOY_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "deploy: malformed image digest" >&2
+  exit 2
 fi
 
 # Optional GHCR login (private package): the token is piped straight to
@@ -133,10 +148,11 @@ if [ "$environment" = production ] && [ -f .env.image ]; then
     } >&2
     if [ -z "${QUIZ_DEPLOY_FORCE:-}" ]; then
       echo "deploy: REFUSED. Re-run the deploy job once it has closed, or force it (docs/development/deployment.md §5)." >&2
-      # Back to the commit actually running: .env.image names it, whichever
-      # copy of this script (old or new) did the checkout.
-      # Only a full sha reaches git: never an option-like value.
+      # Back to the commit actually running: .env.image names it (`<sha>`
+      # or `<sha>@sha256:…`), whichever copy of this script (old or new) did
+      # the checkout. Only a full sha reaches git: never an option-like value.
       running=$(sed -n 's/^IMAGE_TAG=//p' .env.image)
+      running="${running%%@*}"
       if [[ "$running" =~ ^[0-9a-f]{40}$ ]]; then
         git checkout --quiet --detach "$running"
       else
@@ -148,16 +164,24 @@ if [ "$environment" = production ] && [ -f .env.image ]; then
   fi
 fi
 
-# The image tag is the sha, kept in .env.image so that a later manual
-# `up -d` restarts THIS image, not whatever :latest has become since.
+# The image tag is the sha, with the digest when the CI sent one
+# (`<sha>@sha256:…`: the digest decides, the tag is for people), kept in
+# .env.image so that a later manual `up -d` restarts THIS image, not
+# whatever :latest or the sha tag has become since. A manual rollback that
+# sets IMAGE_TAG=<sha> in the shell replaces both.
 tag="$(git rev-parse HEAD)"
-printf 'IMAGE_TAG=%s\n' "$tag" > .env.image
+printf 'IMAGE_TAG=%s\n' "$tag${QUIZ_DEPLOY_DIGEST:+@$QUIZ_DEPLOY_DIGEST}" > .env.image
 
 # `pull app`, not `pull`: postgres and backup are public images that compose
 # already has, and naming ours keeps the login scoped to what the token was
 # issued for. `--ignore-pull-failures` is deliberately NOT used: a missing
 # image must stop the deploy, not half-restart the stack.
 "${COMPOSE[@]}" pull app
+# A pull by digest may leave the image without its sha tag: the tag names
+# it for people and for the clean-up below.
+if [ -n "$QUIZ_DEPLOY_DIGEST" ]; then
+  docker tag "ghcr.io/heig-tin-info/quiz@$QUIZ_DEPLOY_DIGEST" "ghcr.io/heig-tin-info/quiz:$tag"
+fi
 # `--wait`: return only once every container is running and the app's
 # HEALTHCHECK (/healthz) says healthy, and fail otherwise -- so the exit code
 # the CI receives over SSH is the health of the deploy, production included.
@@ -170,4 +194,4 @@ docker images -q --filter "reference=ghcr.io/heig-tin-info/quiz" \
   --filter "before=ghcr.io/heig-tin-info/quiz:$tag" \
   | sort -u | xargs -r docker rmi >/dev/null 2>&1 || true
 docker image prune -f >/dev/null
-echo "deploy: $environment at ${tag:0:7}"
+echo "deploy: $environment at ${tag:0:7}${QUIZ_DEPLOY_DIGEST:+ (${QUIZ_DEPLOY_DIGEST:0:19}…)}"

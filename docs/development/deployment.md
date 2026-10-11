@@ -475,10 +475,13 @@ workspace serves a real class.
    request that changes only prose (`docs/`, `mockups/`, Markdown outside a
    `src/`) skips the jobs and passes `checks`; a push to `main` always runs
    them all.
-2. **image**, on a push to `main` only: both images are built side by side
-   with `docker/build-push-action`, each with a buildx layer cache of its own
-   (`type=gha`, one `scope` per image), and pushed to GHCR twice each, as
-   `:latest` and as `:<commit sha>`.
+2. **image**, on a push to `main` only: the three images (the application,
+   the runner, the codespace portal) are built side by side with
+   `docker/build-push-action`, cold, with no layer cache (the Actions cache
+   of `main` is writable by every job that runs there, so it is not a
+   trusted input for production, audit M8), and pushed to GHCR twice each,
+   as `:latest` and as `:<commit sha>`. Each leg publishes the digest it
+   pushed (`sha256:…`, in the run's summary too) for the deploys.
 3. **deploy-staging**: one SSH call to the application VM with the
    `STAGING_DEPLOY_SSH_KEY` key (a secret of the `staging` environment), as
    `vars.STAGING_DEPLOY_USER` (`srvstg`), then a wait of up to 150 s for
@@ -499,6 +502,75 @@ its own environment. The workflow's default token is read-only, and `main`
 is protected by a ruleset (a pull request and the `checks` job required). Without its key a job prints
 a notice and does nothing, so the pipeline stays green until the keys are
 provisioned; without `DEPLOY_RUNNER_HOST` only the application is deployed.
+
+### The supply chain
+
+Every action outside GitHub's own `actions/*` is pinned by full commit sha,
+with its version in a comment (`uses: docker/login-action@<sha> # v4.6.0`):
+a tag can be moved by whoever controls the action's repository, a commit
+cannot. GitHub's `actions/*` keep their major tag, published by GitHub
+itself. Dependabot (`.github/dependabot.yml`, `github-actions`, weekly,
+grouped) bumps a pin and its comment together, for the workflows and the
+composite action `.github/actions/setup` alike; review its pull request like
+code. A new third-party action is added pinned the same way: resolve the
+release tag to its commit (`gh api repos/<owner>/<repo>/git/ref/tags/<tag>`,
+then `.../git/tags/<sha>` when the tag is annotated). The images are not
+signed (cosign): the digest the deploy pulls comes from the build job of
+the same run, over the CI's own channel, which a signature would not
+strengthen while the registry and the CI share one GitHub organization.
+
+### Deploying by digest
+
+The `image` job's outputs are the three digests; each deploy step sends the
+one of its component in the SSH command, between the sha and the token
+(`<sha> sha256:<64 hex> <token>`, and `codespace <instance> <sha>
+sha256:… <token>` on the runner VM). The scripts pull
+`<image>:<sha>@sha256:…` — the digest decides, the tag names it for people —
+and tag it `:<sha>` locally; `.env.image` then holds
+`IMAGE_TAG=<sha>@sha256:…`. A request without a digest still deploys by the
+sha tag, so a rollback to a run from before this change works as it did.
+
+The digest is sent only while the REPOSITORY variable `DEPLOY_BY_DIGEST`
+is `1`. A checkout whose deploy script predates it would read the digest as
+part of the token and fail its registry login, so set the variable only
+once every checkout the CI deploys to runs a commit that has it (the
+digest-aware scripts parse `[<digest>]`): the staging and production
+checkouts on the application VM (`grep -c QUIZ_DEPLOY_DIGEST deploy.sh` in
+`/home/srvstg/quiz-staging` and `/srv/quiz`) and the runner VM's
+(`/opt/quiz-runner`, and `/opt/quiz-engine-staging` when
+`CODESPACE_DEPLOY=1`; `grep -c QUIZ_DEPLOY_DIGEST infra/engine/deploy.sh`).
+Then `gh variable set DEPLOY_BY_DIGEST --repo heig-tin-info/heig-quiz --body 1`;
+the gate leaves `ci.yml` once it is set for good. A checkout left behind
+(the staging engine while the portal deploy is off) must be brought forward
+by one deploy without the variable before it is switched on again.
+
+### The environments
+
+The deploy jobs name their environment (`staging`, `production`) and run on
+a push to `main` only, whatever their `needs`; what keeps them there is in
+the repository settings, which no file can set. As of 2026-10-11 they hold
+the following; check them after any change of administrators
+(*Settings → Environments*):
+
+- `staging`: *Deployment branches and tags* → *Selected branches and tags*,
+  one rule, the branch `main` (no tag). Its one secret,
+  `STAGING_DEPLOY_SSH_KEY`.
+- `production`: the same single `main` branch rule; *Required reviewers*,
+  the people who approve a promotion; its one secret, `DEPLOY_SSH_KEY`.
+  Recommended, not yet set: untick *Allow administrators to bypass
+  configured protection rules*, so that an administrator's click cannot skip
+  the approval; *Prevent self-review* only when two reviewers are
+  available, or no promotion of one's own merge could be approved.
+- No repository-level secret: a key at the repository level reaches every
+  job of every workflow, pull requests' included. The deploy hosts, users
+  and host keys are repository VARIABLES (not secret), and so are
+  `CODESPACE_DEPLOY`, `DEPLOY_BY_DIGEST`, `DEPLOY_FORCE_SHA` and
+  `CODESPACE_FORCE_SHA`.
+
+A job inherits the workflow's read-only token and adds only what it needs:
+`packages: write` for `image`, `packages: read` for the deploys (their
+token is the VM's one-time pull credential), `pull-requests: read` for the
+path filter. `image-artifact.yml` reads the repository and nothing else.
 
 ### Forced commands
 
@@ -532,8 +604,9 @@ production. The workflow connects to the application VM as
 (`srv`) for production, with no fallback (an unset variable fails the job
 rather than pick an account), and as `root` to the runner VM.
 
-The CI sends `<commit sha> <ephemeral GHCR token>` as the SSH command; it
-arrives in `$SSH_ORIGINAL_COMMAND`, is matched strictly and never evaluated.
+The CI sends `<commit sha> [<image digest>] <ephemeral GHCR token>` as the
+SSH command (the digest: *Deploying by digest* above); it arrives in
+`$SSH_ORIGINAL_COMMAND`, is matched strictly and never evaluated.
 The token is piped straight to `docker login` or `podman login` with
 `--password-stdin` and expires with the workflow run; no registry credential
 is stored on either VM. On the application VM the login goes to a throwaway
@@ -557,7 +630,8 @@ done). Then they diverge:
 - **application VM** (`deploy.sh`): serialise with any other deploy of the
   same account through a `flock` (per account since staging moved to
   `srvstg`: staging and production no longer share a daemon), write
-  the sha to `.env.image` as `IMAGE_TAG`, `docker compose pull app` (only our
+  the sha (`<sha>@sha256:…` with a digest) to `.env.image` as `IMAGE_TAG`,
+  `docker compose pull app` (only our
   image; `--ignore-pull-failures` is deliberately not used, a missing image
   must stop the deploy rather than half-restart the stack), `up -d`, remove
   the older sha-tagged images, print the deployed commit. When not root it
@@ -567,7 +641,8 @@ done). Then they diverge:
 - **runner VM** (`infra/engine/deploy.sh`, which serialises the VM's deploys
   through a `flock`, checks the key's scope, then runs the component's
   steps; the runner's are `apps/runner/deploy/install.sh`): `podman pull` of
-  the sha-tagged runner image and retag it `:latest` (the tag the quadlet
+  the runner image by its digest (by its sha tag without one), tag it
+  `:<sha>` and `:latest` (the tag the quadlet
   runs), install the seccomp profile, the quadlet and the Caddy fragment
   from the checkout, `caddy validate`, `systemctl daemon-reload`, restart
   `quiz-runner.service`, reload Caddy, untag the older sha-tagged runner
@@ -1083,8 +1158,9 @@ installed by `srv` (or an administrator), never by staging.
 
 It is production configured: `NODE_ENV=production`, the edu-ID login, no
 development login. Only the addresses in `LOGIN_ALLOWLIST` (and the super
-administrator) may sign in, because its data is a copy of production's, not
-anonymized (ADR-028, §3).
+administrator) may sign in, because its data is a copy of production's:
+pseudonymized since 2026-10-11, but grades, answers and content are real
+(ADR-028, §3 and *Update 2026-10-11*).
 
 Until 2026-09-28 staging ran as `srv` in `/srv/quiz-staging`, on production's
 Docker daemon.
@@ -1117,7 +1193,7 @@ cat /sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/cgroup.c
 cd ~ && git clone https://github.com/heig-tin-info/heig-quiz.git quiz-staging && cd quiz-staging
 mkdir -p secrets assets
 cp .env.staging.example .env.staging && chmod 600 .env.staging
-nano .env.staging   # POSTGRES_PASSWORD, COOKIE_SECRET (new values), OIDC_CLIENT_ID, LOGIN_ALLOWLIST
+nano .env.staging   # POSTGRES_PASSWORD, COOKIE_SECRET (new values), OIDC_CLIENT_ID, LOGIN_ALLOWLIST, STAGING_KEEP_EMAILS
 
 # As root: the edu-ID key, copied once (srvstg cannot read production's copy).
 sudo install -o srvstg -g srvstg -m 600 /srv/quiz/secrets/eduid-private-key.pem /home/srvstg/quiz-staging/secrets/
@@ -1151,28 +1227,68 @@ production's.
 
 ### Refreshing the data
 
-The copy travels one way, from production into `/srv/staging-inbox`, which
-`srvstg` can read and not write:
+The copy travels one way, from production into `/srv/staging-inbox`, a
+directory `srvstg` can read and not write. The two files in it are
+group-writable (`660`), so that the refresh can EMPTY them once it is done;
+`srvstg` still cannot create, rename or remove a file there:
 
 ```bash
 # 1. As srv: a dump taken now and the question images, into the inbox.
 /srv/quiz/scripts/staging-export.sh
-# 2. As srvstg: restore them.
+# 2. As srvstg: restore them; the inbox is emptied when this succeeds.
+~/quiz-staging/scripts/staging-refresh.sh --keep-list  # who will keep their account (changes nothing)
 ~/quiz-staging/scripts/staging-refresh.sh              # the inbox's copy
-~/quiz-staging/scripts/staging-refresh.sh <file>       # that dump, images unchanged
+~/quiz-staging/scripts/staging-refresh.sh <file>       # that dump, images unchanged, file left alone
 ```
 
 Never on deploy: a refresh wipes whatever a test had prepared. It restores
-the dump into a recreated database, empties sessions, launch tickets, API
-tokens and OAuth grants (nothing production issued works here), forgets
-every GitHub installation, archives every project and stops its group
-moves, closes the copied webhook deliveries and drops production's queued
-jobs (`scripts/staging-scrub.sql`: staging's own App never acts on a
-production organization, N-SEC-18; a tester unarchives the project under
-test), unpacks the
-question images, and starts the app, which migrates the copy forward: the
-very migration production will run next. It doubles as the restore test of
-§6. The inbox keeps only the latest copy; each export overwrites it.
+the dump into a recreated database, then:
+
+1. **pseudonymizes it** (`scripts/staging-pseudonymize.sql`): every account
+   becomes `student-<n>@example.invalid` / "Student" "<n>" (by role), with an
+   OIDC subject no identity provider issues (`staging:<id>`), no edu-ID
+   identifier and no picture; an unclaimed roster row becomes
+   `enrollment-<n>@example.invalid`, a teacher grant follows its teacher (or
+   becomes `grant-<n>@…`), a GitHub identity becomes `github-user-<n>` with a
+   negative id, a student repository `<org>/repo-<id>`, a poll guest
+   "Guest <n>"; IdP claims (the affiliations stay), avatars, Teams links,
+   roster notes, audit and webhook payloads and notifications are emptied
+   (the audit trigger is lifted for that, on the copy only). Grades,
+   answers, questions, journals and projects stay;
+2. **leaves the keep list as it is**: the accounts of `STAGING_KEEP_EMAILS`
+   (in `.env.staging`, or the environment for one run), of
+   `SUPER_ADMIN_EMAIL` and of the full addresses of `LOGIN_ALLOWLIST` (not
+   its `@domain` entries), with their roster rows, GitHub account and
+   history. Put there whoever tests on staging: anyone else who signs in
+   gets a NEW, empty account (a login finds its account by its OIDC
+   subject, which the pseudonymization replaced) — a student account to
+   walk a flow is made by enrolling it, as in production;
+3. **scrubs it** (`scripts/staging-scrub.sql`): empties sessions, launch
+   tickets, API tokens, OAuth requests and grants, kiosk pairings and Teams
+   link tokens (nothing production issued works here), the encrypted LLM
+   key (enter staging's own in the admin screen), kiosk station credentials
+   (a station attests again) and poll guests' tokens; forgets every GitHub
+   installation, archives every project and stops its group moves, closes
+   the copied webhook deliveries and drops production's queued jobs
+   (staging's own App never acts on a production organization, N-SEC-18; a
+   tester unarchives the project under test);
+
+then unpacks the question images, starts the app, which migrates the copy
+forward (the very migration production will run next), and empties the
+inbox's two files. It doubles as the restore test of §6. A refresh that
+fails says so and leaves the inbox as it was, for a retry; empty it by hand
+(as `srv`, `rm -f /srv/staging-inbox/*`) if the copy is abandoned. Both SQL
+files are tested against the real migrations by
+`apps/api/src/stagingScrub.db.test.ts`.
+
+`--keep-identities` skips step 1 (and so step 2), loudly: it exists for the
+heig-classroom cutover rehearsal, whose import matches people by their real
+addresses (docs/merge/10-cutover-runbook.md §1.3), and its copy is deleted
+the same day. Nothing else uses it.
+
+Once, after 2026-10-11 (the export made before then is mode `640`, which
+`srvstg` cannot empty; the refresh warns about it): as `srv`,
+`rm -f /srv/staging-inbox/quiz.dump /srv/staging-inbox/assets.tar`.
 
 ### Exam days
 

@@ -34,7 +34,7 @@ jobs:
     steps:
       - id: filter
         if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           # A file counts for `code` when it matches EVERY pattern below.
           predicate-quantifier: every
@@ -158,9 +158,16 @@ jobs:
           done
 
   # Production images, built HERE and pushed to GHCR: the VM must never build.
-  # The two images are independent, so they build side by side, each with a
-  # buildx layer cache of its own (`scope`): sharing one scope, each export
-  # replaced the other's and the next build of either started cold.
+  # The images are independent, so they build side by side. Each is built
+  # COLD, with no buildx layer cache: the GitHub Actions cache of `main` is
+  # writable by every job that runs on `main` (the test jobs run pnpm install
+  # scripts and the whole suite), so a cache entry is not a trusted input
+  # for an image that reaches production (audit M8). A cold build costs a
+  # few minutes per push to main, never a PR.
+  #
+  # Each leg publishes the digest it pushed as a job output named after its
+  # image (with `_` for `-`): the deploys pull `<tag>@sha256:…`, the bytes
+  # this job built, not whatever the tag names by then (deployment.md §4).
   image:
     needs: checks
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -168,6 +175,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      quiz: ${{ steps.digest.outputs.quiz }}
+      quiz_runner: ${{ steps.digest.outputs.quiz_runner }}
+      quiz_codespace: ${{ steps.digest.outputs.quiz_codespace }}
     strategy:
       matrix:
         include:
@@ -196,29 +207,41 @@ jobs:
             echo "COMMIT_DATE=$(git log -1 --format=%cI)"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v7
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ${{ matrix.file }}
           push: true
           build-args: ${{ steps.commit.outputs.args }}
-          # :latest for the regular deploy, :<sha> kept for rollbacks.
+          # :<sha> names the image for people and rollbacks; :latest is a
+          # convenience. The deploys pull by digest (the `digest` step).
           tags: |
             ghcr.io/heig-tin-info/${{ matrix.image }}:latest
             ghcr.io/heig-tin-info/${{ matrix.image }}:${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+      # This leg's digest, under its image's name: a matrix job's outputs are
+      # the union of what its legs set, each leg setting only its own.
+      - id: digest
+        env:
+          IMAGE: ${{ matrix.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no image digest for $IMAGE ('$DIGEST')"; exit 1; }
+          echo "${IMAGE//-/_}=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "$IMAGE: ghcr.io/heig-tin-info/$IMAGE:$GITHUB_SHA@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
       # The image carries the heig-classroom import, runnable with plain Node
       # and no fetch (the cutover runs it in a one-off `app` container). A
-      # failure here stops the deploys, which pull this sha's tag.
+      # failure here stops the deploys, which pull this digest.
       - if: matrix.image == 'quiz'
-        run: docker run --rm --network none ghcr.io/heig-tin-info/quiz:${{ github.sha }} node dist/import-classroom.js --help
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: docker run --rm --network none "ghcr.io/heig-tin-info/quiz@$DIGEST" node dist/import-classroom.js --help
 
   # Deploy, in two steps (ADR-028): every push to main goes to STAGING
   # (quiz.dev.chevallier.io) automatically; the SAME sha goes to PRODUCTION
@@ -237,14 +260,24 @@ jobs:
   # that owns production's secrets, volumes and backups. On the code VM the
   # staging key has its own checkout and scope, but is root there (risk
   # accepted by the owner, ADR-016's M6-04 amendment).
-  # The SSH command carries the commit and a pull credential stored nowhere
-  # (→ $SSH_ORIGINAL_COMMAND; the code VM's forms: infra/engine/deploy.sh).
+  # The SSH command carries the commit, the digest the `image` job pushed
+  # and a pull credential stored nowhere (→ $SSH_ORIGINAL_COMMAND; the code
+  # VM's forms: infra/engine/deploy.sh). The digest is sent only while the
+  # REPOSITORY variable DEPLOY_BY_DIGEST is 1: a VM still at a commit whose
+  # deploy script predates the digest would read it as part of the token
+  # and fail its login, so the PO sets it once every checkout the CI
+  # deploys to runs this version (deployment.md §4, *Deploying by digest*),
+  # a gate to drop from this file then.
+  # Every deploy job runs on a push to main only, whatever its `needs`, and
+  # its environment (staging, production) is restricted to `main` in the
+  # repository settings as well (deployment.md §4, *The environments*).
   # Without its key a job no-ops, so the pipeline stays green until keys are
   # provisioned; the codespace steps also wait for the REPOSITORY variable
   # CODESPACE_DEPLOY=1, set at the switch (apps/codespace/deploy/RUNBOOK.md),
   # a gate to drop from this file once the switch has run.
   deploy-staging:
     needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: staging
@@ -263,6 +296,8 @@ jobs:
       DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
       CODESPACE_DEPLOY: ${{ vars.CODESPACE_DEPLOY }}
       STAGING_URL: ${{ vars.STAGING_URL || 'https://quiz.dev.chevallier.io' }}
+      IMAGE_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz || '' }}
+      CODESPACE_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz_codespace || '' }}
     steps:
       - name: Skip when the staging key is not configured
         if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_HOST == ''
@@ -284,7 +319,7 @@ jobs:
           # No fallback account: an unset variable fails the deploy loudly,
           # and never falls back to production's account.
           DEPLOY_USER: ${{ vars.STAGING_DEPLOY_USER }}
-        run: ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.STAGING_DEPLOY_USER is not set}"@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
+        run: ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.STAGING_DEPLOY_USER is not set}"@"$DEPLOY_HOST" "$GITHUB_SHA${IMAGE_DIGEST:+ $IMAGE_DIGEST} $GHCR_TOKEN"
       # The gate: a staging that does not come up healthy (a migration that
       # fails on production-shaped data, a crash at boot) stops the promotion.
       - name: Staging answers healthy
@@ -304,10 +339,12 @@ jobs:
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != '' && env.CODESPACE_DEPLOY == '1'
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "codespace staging $GITHUB_SHA $GHCR_TOKEN"
+        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "codespace staging $GITHUB_SHA${CODESPACE_DIGEST:+ $CODESPACE_DIGEST} $GHCR_TOKEN"
 
   deploy-production:
-    needs: deploy-staging
+    # `image` for its digests: a job reads the outputs of its direct needs only.
+    needs: [image, deploy-staging]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # The approval gate: the job waits here until a required reviewer of the
     # `production` environment approves it (repository settings).
@@ -331,6 +368,8 @@ jobs:
       DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
       DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
       DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
+      IMAGE_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz || '' }}
+      RUNNER_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz_runner || '' }}
     steps:
       - name: Skip when the deploy key is not configured
         if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_HOST == ''
@@ -362,13 +401,13 @@ jobs:
             force="force "
             echo "::warning::DEPLOY_FORCE_SHA names this sha: the live-evaluation guard is overridden."
           fi
-          ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.DEPLOY_USER is not set}"@"$DEPLOY_HOST" "${force}$GITHUB_SHA $GHCR_TOKEN"
+          ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.DEPLOY_USER is not set}"@"$DEPLOY_HOST" "${force}$GITHUB_SHA${IMAGE_DIGEST:+ $IMAGE_DIGEST} $GHCR_TOKEN"
       # The request form: infra/engine/deploy.sh (its TODO names the follow-up).
       - name: Deploy the runner (forced command runs infra/engine/deploy.sh production on the code VM)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "$GITHUB_SHA $GHCR_TOKEN"
+        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "$GITHUB_SHA${RUNNER_DIGEST:+ $RUNNER_DIGEST} $GHCR_TOKEN"
 
   # The production portal (code.chevallier.io), a job of its own after the
   # application and the runner, so that a refusal of its live-session guard
@@ -380,8 +419,8 @@ jobs:
   # enters it) skips it outright, with no approval asked, while the portal
   # deploy is off.
   deploy-codespace-prod:
-    needs: deploy-production
-    if: vars.CODESPACE_DEPLOY == '1'
+    needs: [image, deploy-production]
+    if: vars.CODESPACE_DEPLOY == '1' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -396,6 +435,7 @@ jobs:
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
       DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
+      CODESPACE_DIGEST: ${{ vars.DEPLOY_BY_DIGEST == '1' && needs.image.outputs.quiz_codespace || '' }}
     steps:
       - name: Skip when the deploy key is not configured
         if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_RUNNER_HOST == ''
@@ -415,4 +455,4 @@ jobs:
             force="force "
             echo "::warning::CODESPACE_FORCE_SHA names this sha: the live-session guard is overridden."
           fi
-          ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "${force}codespace prod $GITHUB_SHA $GHCR_TOKEN"
+          ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "${force}codespace prod $GITHUB_SHA${CODESPACE_DIGEST:+ $CODESPACE_DIGEST} $GHCR_TOKEN"

@@ -375,9 +375,9 @@ on `ubuntu-latest` against the ROOTFUL socket (`/run/podman/podman.sock`), so
 `apps/runner/**`, every Monday, and on demand (*Actions → Runner integration →
 Run workflow*); it is a workflow of its own, so it never holds up `checks` nor
 the deploy chain. It builds all six images cold with `images/build.sh`, every
-time: no GitHub Actions cache, which the repository shares with the deploy's
-buildx layers. A cache saved by the weekly run only can come back if the cold
-build proves slow.
+time: no GitHub Actions cache, which the repository shares with the pnpm
+stores of every workflow. A cache saved by the weekly run only can come back
+if the cold build proves slow.
 
 What the job relaxes is the HOST, never the sandbox: it adds the
 `containers` range to `/etc/subuid` and `/etc/subgid` (which rootful

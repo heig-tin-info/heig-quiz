@@ -18,7 +18,13 @@
 #   quiz.dump    a pg_dump -Fc taken now
 #   assets.tar   the question images (content-addressed)
 #
-# Then, as `srvstg`: ~/quiz-staging/scripts/staging-refresh.sh
+# Then, as `srvstg`: ~/quiz-staging/scripts/staging-refresh.sh, which
+# pseudonymizes the copy once restored and empties both files when it
+# succeeds (ADR-028, amendment 2026-10-11): a full copy of production waits
+# in the inbox only between this export and that refresh. Both files are
+# therefore group-writable (srvstg may empty them, never create nor remove
+# one: the directory stays read-only to it); srv never reads them back, and
+# each export replaces them by a rename, never writes through them.
 set -euo pipefail
 
 cd "${QUIZ_PROD_DIR:-$(dirname "$(readlink -f "$0")")/..}"
@@ -32,13 +38,13 @@ PROD=(docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.im
 
 # Written under a temporary name and renamed: staging never reads half a dump.
 "${PROD[@]}" exec -T postgres pg_dump -Fc -U quiz quiz > "$INBOX/.quiz.dump.part"
-chmod 640 "$INBOX/.quiz.dump.part"
+chmod 660 "$INBOX/.quiz.dump.part"
 mv "$INBOX/.quiz.dump.part" "$INBOX/quiz.dump"
 
 # The images belong to the containers' `node` (a sub-uid on the host): read
 # through a container, streamed out as the calling user.
 docker run --rm -v "$PWD/assets:/from:ro" alpine tar -C /from -cf - . > "$INBOX/.assets.tar.part"
-chmod 640 "$INBOX/.assets.tar.part"
+chmod 660 "$INBOX/.assets.tar.part"
 mv "$INBOX/.assets.tar.part" "$INBOX/assets.tar"
 
 echo "staging-export: $(du -h "$INBOX/quiz.dump" | cut -f1) dump and $(du -h "$INBOX/assets.tar" | cut -f1) of images in $INBOX"
