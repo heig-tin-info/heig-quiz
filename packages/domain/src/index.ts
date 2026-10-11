@@ -9,6 +9,7 @@
  */
 export * from "./activity.js";
 export * from "./batchable.js";
+export * from "./blocks.js";
 export * from "./brainstorm.js";
 // The calculator engines' own helpers (`binary`, `settle`, `CONSTANTS`…) stay
 // inside the package: the barrel publishes the keypad's API only.

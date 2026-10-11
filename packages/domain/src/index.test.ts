@@ -76,6 +76,10 @@ describe("@quiz/domain public surface", () => {
       "reopens",
       "slugify",
       "zonedIso",
+      // The interpreter of the `blocks` type (ADR-103).
+      "parseMap",
+      "runProgram",
+      "programStats",
     ];
     for (const name of expected) expect(domain).toHaveProperty(name);
   });
