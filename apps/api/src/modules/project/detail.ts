@@ -467,14 +467,7 @@ export async function projectDetail(
       changedAfterRelease: accepted.filter((v) => v.flags.changedAfterRelease).length,
     }),
     sync,
-    counts: {
-      students: roster.filter((s) => !s.staff).length,
-      accepted: accepted.length,
-      groups: copy.size,
-      ...counts,
-      toVerify: accepted.filter((v) => v.flags.toVerify).length,
-      alerts: accepted.filter((v) => v.flags.multiple || v.flags.protectionSuspended).length,
-    },
+    counts,
     liveStale: !complete || [...live.values()].some((read) => read.stale),
     rows,
   };

@@ -137,7 +137,7 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
     groupSyncPending: false,
     primaryAction: "none",
     sync: { ahead: null, inProgress: false, syncedAt: null, last: null },
-    counts: { students: rows.length, accepted, groups: 0, live: accepted, frozen: 0, toVerify: 0, alerts: 0 },
+    counts: { live: accepted, frozen: 0 },
     liveStale: false,
     rows,
     ...over,

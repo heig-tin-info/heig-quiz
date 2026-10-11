@@ -964,10 +964,11 @@ export type ProjectSyncAccepted = z.infer<typeof ProjectSyncAccepted>;
  * `GET /app/api/projects/:id` (F-PROJ-13): the project for its staff
  * ({@link ProjectSummary}) and its page — STAFF ONLY, never reused nor
  * filtered for a student (N-SEC-20: the student's projection is M3-09's).
- * `counts`: the roster's students (staff seats excepted), the repositories
- * accepted, the live ones (provisioned, not deleted, the project not
- * archived) and how many of them are definitively frozen, the rows to
- * verify, the rows with an alert (`multiple`, or protection suspended).
+ * `counts`: the live repositories (provisioned, not deleted, the project not
+ * archived) and how many of them are definitively frozen — the two figures
+ * the release reads. The page's other figures (students, accepted, groups,
+ * rows to verify, alerts) are counted by the browser from `rows`
+ * (`projectTally`, `apps/web`).
  * `primaryAction` is the server's (`projectPrimaryAction`, `@quiz/domain`).
  * `phase` is the header badge's word, the same as the list's
  * ({@link ProjectPhase}, from the same counts as `primaryAction`).
@@ -980,7 +981,6 @@ export type ProjectSyncAccepted = z.infer<typeof ProjectSyncAccepted>;
  * it or not (released, archived). `groupSyncPending` (product owner R2;
  * M3-16b): a confirmed resync is not fully applied by the `group.sync` job
  * yet — the release answers `409 group_sync_pending` meanwhile.
- * `counts.groups`: the groups of a group project's copy (0 otherwise).
  */
 export const ProjectDetail = ProjectSummary.extend({
   phase: ProjectPhase,
@@ -990,13 +990,8 @@ export const ProjectDetail = ProjectSummary.extend({
   primaryAction: ProjectPrimaryAction,
   sync: ProjectSyncState,
   counts: z.object({
-    students: z.number().int(),
-    accepted: z.number().int(),
-    groups: z.number().int(),
     live: z.number().int(),
     frozen: z.number().int(),
-    toVerify: z.number().int(),
-    alerts: z.number().int(),
   }),
   liveStale: z.boolean(),
   rows: z.array(ProjectDetailRow),

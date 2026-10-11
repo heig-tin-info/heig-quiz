@@ -899,7 +899,6 @@ describe("the mock's group sets (M3-16a, ?groups=1)", () => {
   it("drifts a stopped group project: its resync names the frozen repositories and an arrival without one, then is owed (M3-16b)", async () => {
     const before = (await get(STOPPED)) as ProjectDetail;
     expect([before.groupsDrifted, before.groupSyncPending, before.primaryAction]).toEqual([true, false, "release"]);
-    expect(before.counts.groups).toBeGreaterThan(0);
     expect(before.rows.every((r) => r.group !== null && r.group.stopped)).toBe(true);
     const asked = await send(`${STOPPED}/groups/resync`, "POST", {});
     expect([asked.status, refusal(asked.body)]).toEqual([409, "needs_confirmation"]);
