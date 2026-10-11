@@ -527,6 +527,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       throw new Error(`Invalid configuration: ${short.join(", ")} must be at least ${SECRET_MIN} characters in production`);
     }
   }
+  // An idle timeout longer than the absolute bound would never be reached:
+  // a configuration that says two contradictory things is refused.
+  if (parsed.data.SESSION_TTL_HOURS > parsed.data.SESSION_MAX_AGE_HOURS) {
+    throw new Error("Invalid configuration: SESSION_TTL_HOURS must not exceed SESSION_MAX_AGE_HOURS");
+  }
   // A portal URL without a signing key would mint nothing the portal accepts
   // (or, worse, a guessable one): refused in development too. The answer
   // there is to leave both unset (the feature is off) or set a real secret.

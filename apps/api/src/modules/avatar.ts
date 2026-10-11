@@ -1,22 +1,25 @@
 import { createHash } from "node:crypto";
 
-import type { FastifyBaseLogger, FastifyInstance } from "fastify";
-import { and, eq, isNotNull } from "drizzle-orm";
+import type { FastifyInstance } from "fastify";
+import { and, eq, isNotNull, like, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { AvatarMime } from "@quiz/contracts";
 
 import { audit } from "../audit.js";
-import { readCapped } from "../cappedBody.js";
 import type { Db } from "../db/client.js";
 import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
+import { remoteImageCache, type RemoteImage } from "../remoteImage.js";
 import { callerOf, seesUser, type Caller } from "./guards.js";
 import { INERT_IMAGE_HEADERS, sniffImage } from "./pool/assets.js";
 
 /** `AvatarMime` is the one list (B-19); `app.ts` parses the same set. */
 const ACCEPTED: ReadonlySet<string> = new Set<string>(AvatarMime.options);
 const MAX_BYTES = 1_000_000; // cropped to 256x256 client-side: ~30-80 KB in practice
+
+/** The IdP's picture is served only from an https address (`remoteImage.ts` refuses any other). */
+const IDP_PICTURE_SCHEME = "https://";
 
 /**
  * The URL of a user's uploaded picture, `?v=` busting the cache on change.
@@ -29,11 +32,11 @@ export function avatarUrl(userId: string, updatedAt: Date): string {
 
 /**
  * The picture a user is shown with: their upload, else the IdP's `picture`
- * claim, else null (the client draws initials). `userId` is null for an
- * unclaimed roster seat, which has neither. Both are served from the same
- * route, so a browser never loads an image from the IdP's host and the CSP
- * admits no `https:` image (audit 2026-10-10, §6); `?v=` of the IdP's is a
- * digest of its address, so a new claim busts the cache.
+ * claim (an https one), else null (the client draws initials). `userId` is
+ * null for an unclaimed roster seat, which has neither. Both are served from
+ * the same route, so a browser never loads an image from the IdP's host and
+ * the CSP admits no `https:` image (audit 2026-10-10, §6); `?v=` of the
+ * IdP's is a digest of its address, so a new claim busts the cache.
  */
 export function shownAvatar(
   userId: string | null,
@@ -42,90 +45,51 @@ export function shownAvatar(
 ): string | null {
   if (!userId) return null;
   if (uploadedAt) return avatarUrl(userId, uploadedAt);
-  if (!pictureUrl) return null;
+  if (!pictureUrl?.startsWith(IDP_PICTURE_SCHEME)) return null;
   const version = createHash("sha256").update(pictureUrl).digest("hex").slice(0, 12);
   return `/app/api/users/${userId}/avatar?v=${version}`;
 }
 
-/** The user's uploaded picture, if the caller may see that user; null alike for no picture and no right (#318). */
+/**
+ * THE visibility of a user's picture (#318): the user, when the caller may
+ * see them, and they have one to show — an upload, or an https IdP claim
+ * (as {@link shownAvatar} says). One predicate for the route and for
+ * {@link seesAvatar}, over `users LEFT JOIN avatars`.
+ */
+const visiblePicture = (caller: Caller, userId: string) =>
+  and(
+    eq(users.id, userId),
+    or(isNotNull(avatars.userId), like(users.pictureUrl, `${IDP_PICTURE_SCHEME}%`)),
+    seesUser(caller, userId),
+  );
+
+/**
+ * The user's picture if the caller may see that user: the upload's bytes,
+ * else the IdP's address; null alike for no picture and no right (#318).
+ */
 export async function findVisibleAvatar(db: Db, caller: Caller, userId: string) {
   const [row] = await db
-    .select()
-    .from(avatars)
-    .where(and(eq(avatars.userId, userId), seesUser(caller, userId)))
+    .select({ data: avatars.data, contentType: avatars.contentType, pictureUrl: users.pictureUrl })
+    .from(users)
+    .leftJoin(avatars, eq(avatars.userId, users.id))
+    .where(visiblePicture(caller, userId))
     .limit(1);
   return row ?? null;
-}
-
-/** The IdP's `picture` address of a user the caller may see (#318), or null. */
-async function findVisiblePicture(db: Db, caller: Caller, userId: string): Promise<string | null> {
-  const [row] = await db
-    .select({ pictureUrl: users.pictureUrl })
-    .from(users)
-    .where(and(eq(users.id, userId), isNotNull(users.pictureUrl), seesUser(caller, userId)))
-    .limit(1);
-  return row?.pictureUrl ?? null;
-}
-
-interface Picture {
-  bytes: Buffer;
-  mime: string;
-}
-
-/**
- * The IdP's pictures, fetched by the server and kept in memory by their
- * address (as the GitHub organizations' avatars, `github/service.ts`): no
- * column and no migration; a restart only refetches. A picture is kept a
- * day, a failure ten minutes, so a broken address is not fetched again for
- * every row of a roster; the oldest entry goes past {@link PICTURES_MAX}.
- */
-const pictures = new Map<string, { at: number; ttl: number; image: Promise<Picture | null> }>();
-const PICTURE_TTL_MS = 24 * 3_600_000;
-const PICTURE_FAILED_TTL_MS = 10 * 60_000;
-const PICTURES_MAX = 1_000;
-
-async function idpPicture(url: string, now: number, log: FastifyBaseLogger): Promise<Picture | null> {
-  const hit = pictures.get(url);
-  if (hit && now - hit.at < hit.ttl) return hit.image;
-  pictures.delete(url);
-  if (pictures.size >= PICTURES_MAX) pictures.delete(pictures.keys().next().value!);
-  const entry = {
-    at: now,
-    ttl: PICTURE_TTL_MS,
-    image: downloadPicture(url).catch((err: unknown) => {
-      log.warn({ err }, "fetching an IdP picture failed");
-      return null;
-    }),
-  };
-  pictures.set(url, entry);
-  const image = await entry.image;
-  if (!image) entry.ttl = PICTURE_FAILED_TTL_MS;
-  return image;
-}
-
-/**
- * The validation of an upload, applied to what the IdP's address answers:
- * https only, no redirect followed, at most {@link MAX_BYTES}, and the bytes
- * decide the type — JPEG, PNG or WebP, never SVG nor anything else.
- */
-async function downloadPicture(url: string): Promise<Picture | null> {
-  if (!URL.canParse(url) || new URL(url).protocol !== "https:") return null;
-  const res = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5_000) });
-  if (!res.ok) return null;
-  const bytes = await readCapped(res, MAX_BYTES);
-  const mime = bytes === null ? undefined : sniffImage(bytes)?.mime;
-  return bytes !== null && mime !== undefined && ACCEPTED.has(mime) ? { bytes, mime } : null;
 }
 
 /** {@link findVisibleAvatar} without the image: whether the caller sees a picture of that user. */
 export async function seesAvatar(db: Db, caller: Caller, userId: string): Promise<boolean> {
   const [row] = await db
-    .select({ userId: avatars.userId })
-    .from(avatars)
-    .where(and(eq(avatars.userId, userId), seesUser(caller, userId)))
+    .select({ id: users.id })
+    .from(users)
+    .leftJoin(avatars, eq(avatars.userId, users.id))
+    .where(visiblePicture(caller, userId))
     .limit(1);
   return row !== undefined;
 }
+
+/** The IdP's pictures, by address, fetched and kept under the one policy of `remoteImage.ts`. */
+const idpPictures = remoteImageCache<string>();
 
 /**
  * Uploaded avatar (cropped client-side, circular preview). Takes precedence
@@ -207,14 +171,13 @@ export async function avatarPlugin(app: FastifyInstance) {
     async (req, reply) => {
       const params = UserParam.safeParse(req.params);
       if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const caller = callerOf(req);
-      const row = await findVisibleAvatar(app.db, caller, params.data.uid);
-      // Else the IdP's picture, through here (audit 2026-10-10, §6).
-      const picture = row
-        ? { bytes: row.data, mime: row.contentType }
-        : await findVisiblePicture(app.db, caller, params.data.uid).then((url) =>
-            url === null ? null : idpPicture(url, app.clock.now().getTime(), req.log),
-          );
+      const row = await findVisibleAvatar(app.db, callerOf(req), params.data.uid);
+      // The upload, else the IdP's picture, through here (audit 2026-10-10, §6).
+      const picture: RemoteImage | null = !row
+        ? null
+        : row.data !== null && row.contentType !== null
+          ? { bytes: row.data, mime: row.contentType }
+          : await idpPictures.get(row.pictureUrl!, row.pictureUrl!, app.clock.now().getTime(), req.log);
       // No picture and a picture the caller may not see answer alike (#318).
       if (!picture) return reply.code(404).send({ error: "not_found" });
       return reply

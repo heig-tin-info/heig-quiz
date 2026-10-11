@@ -409,8 +409,8 @@ export async function realtimePlugin(app: FastifyInstance) {
     let watch: Watch | null = null;
     let staff = me.role === "teacher" || me.role === "admin";
     let participant = false;
-    // A `seb` session streams its evaluation and nothing else (ADR-027).
-    if (raw === null && req.auth?.evaluationId) return reply.code(404).send({ error: "not_found" });
+    // A confined session streams its evaluation and nothing else (ADR-027, ADR-051).
+    if (raw === null && confined(req.auth)) return reply.code(404).send({ error: "not_found" });
     if (raw !== null) {
       // The grammar is a contract (`WatchSubject`), not a `split(":")`:
       // `attempt:not-a-uuid` used to reach the database and answer a 500.

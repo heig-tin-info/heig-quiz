@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { enrollments, users } from "../db/schema.js";
+import { REMOTE_IMAGE_MAX_BYTES } from "../remoteImage.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { addStaff, createClassroom, createCourse } from "./org/service.js";
 import { createPool } from "./pool/service.js";
@@ -171,42 +172,63 @@ describe("avatar", () => {
       vi.restoreAllMocks();
     });
 
-    /** A user whose IdP claim is `url`, with no upload; their own avatar route, fetched by themself. */
+    /** A user whose IdP claim is `url`, with no upload. */
     async function withPicture(url: string, answer: () => Response) {
-      const who = await server.signIn("teacher");
-      await server.app.db.update(users).set({ pictureUrl: url }).where(eq(users.id, who.id));
+      const owner = await server.signIn("teacher");
+      await server.app.db.update(users).set({ pictureUrl: url }).where(eq(users.id, owner.id));
       const fetched = vi.spyOn(globalThis, "fetch").mockImplementation(async () => answer());
-      const me = (await server.app.inject({ method: "GET", url: "/app/api/me", headers: who.headers })).json();
-      const res = await server.app.inject({ method: "GET", url: me.avatarUrl, headers: who.headers });
-      return { me, res, fetched };
+      const me = (await server.app.inject({ method: "GET", url: "/app/api/me", headers: owner.headers })).json();
+      /** The owner's picture as `who` reads it. */
+      const read = (who: Caller = owner) =>
+        server.app.inject({ method: "GET", url: `/app/api/users/${owner.id}/avatar`, headers: who.headers });
+      return { me, read, fetched };
     }
 
-    it("is a same-origin address, and serves the bytes inert", async () => {
-      const { me, res, fetched } = await withPicture("https://idp.example/p/1.png", () => new Response(PNG));
+    it("is a same-origin address, serves the bytes inert, and is fetched once", async () => {
+      const { me, read, fetched } = await withPicture("https://idp.example/p/1.png", () => new Response(PNG));
       expect(me.avatarUrl).toMatch(new RegExp(`^/app/api/users/${me.id}/avatar\\?v=[0-9a-f]{12}$`));
-      expect(fetched).toHaveBeenCalledOnce();
+      const res = await read();
       expect(res.statusCode).toBe(200);
       expect(res.headers["content-type"]).toBe("image/png");
       expect(res.headers["x-content-type-options"]).toBe("nosniff");
       expect(res.headers["content-security-policy"]).toBe("default-src 'none'; sandbox");
+      expect((await read()).statusCode).toBe(200);
+      expect(fetched).toHaveBeenCalledOnce();
     });
 
-    it("refuses what is not a JPEG, PNG or WebP by its bytes, whatever its declared type", async () => {
-      const html = () => new Response("<html><script>alert(1)</script></html>", { headers: { "content-type": "image/png" } });
-      expect((await withPicture("https://idp.example/p/2.png", html)).res.statusCode).toBe(404);
-      const svg = () => new Response('<svg xmlns="http://www.w3.org/2000/svg"/>', { headers: { "content-type": "image/svg+xml" } });
-      expect((await withPicture("https://idp.example/p/3.svg", svg)).res.statusCode).toBe(404);
-    });
-
-    it("refuses a body over the upload's cap", async () => {
-      const big = () => new Response(Buffer.concat([PNG, Buffer.alloc(1_000_001)]));
-      expect((await withPicture("https://idp.example/p/4.png", big)).res.statusCode).toBe(404);
-    });
-
-    it("never fetches an address that is not https", async () => {
-      const { res, fetched } = await withPicture("http://idp.example/p/5.png", () => new Response(PNG));
-      expect(res.statusCode).toBe(404);
+    it("answers someone who does not see its owner the 404 of no picture, and fetches nothing (#318)", async () => {
+      const { read, fetched } = await withPicture("https://idp.example/p/2.png", () => new Response(PNG));
+      const stranger = await server.signIn("student");
+      expect((await read(stranger)).statusCode).toBe(404);
       expect(fetched).not.toHaveBeenCalled();
+    });
+
+    it("refuses what is not an image by its bytes, whatever its declared type", async () => {
+      const html = () => new Response("<html><script>alert(1)</script></html>", { headers: { "content-type": "image/png" } });
+      expect((await (await withPicture("https://idp.example/p/3.png", html)).read()).statusCode).toBe(404);
+    });
+
+    it("refuses a body over the cap", async () => {
+      const big = () => new Response(Buffer.concat([PNG, Buffer.alloc(REMOTE_IMAGE_MAX_BYTES)]));
+      expect((await (await withPicture("https://idp.example/p/4.png", big)).read()).statusCode).toBe(404);
+    });
+
+    it("never fetches an address that is not https to a public name", async () => {
+      for (const url of [
+        "http://idp.example/p/5.png",
+        "https://127.0.0.1/p.png",
+        "https://[::1]/p.png",
+        "https://10.0.0.7/p.png",
+        "https://localhost/p.png",
+        "https://intranet/p.png",
+        "https://db.internal/p.png",
+      ]) {
+        const { me, read, fetched } = await withPicture(url, () => new Response(PNG));
+        expect((await read()).statusCode, url).toBe(404);
+        expect(fetched, url).not.toHaveBeenCalled();
+        vi.restoreAllMocks();
+        if (url.startsWith("http:")) expect(me.avatarUrl).toBeNull();
+      }
     });
   });
 });

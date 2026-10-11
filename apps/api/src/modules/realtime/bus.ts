@@ -30,6 +30,8 @@ import type {
   Verdict,
 } from "@quiz/contracts";
 
+import type { RouteOptions } from "fastify";
+
 import { iso, isoOrNull } from "../../clock.js";
 import { isOwnedPoll } from "../../db/evaluation.js";
 import {
@@ -109,6 +111,17 @@ export function hint(type: EventType, topics: Topic[], except?: string): void {
  */
 export function staffAndStudentsHint(type: EventType, courseId: string, userIds: readonly string[]): void {
   hint(type, [`course:${courseId}`, ...new Set(userIds.map(userTopic))]);
+}
+
+/**
+ * An `onRoute` hook for a plugin whose writes publish their own hints
+ * ({@link staffAndStudentsHint} and its kin): each of its routes is marked
+ * `ownHints`, and the generic hint of `app.ts` — which would tell
+ * `classroom:<id>` — stays silent for it (N-SEC-20). Encapsulated: it marks
+ * the routes of the plugin that adds it, nobody else's.
+ */
+export function ownHints(route: RouteOptions): void {
+  route.config = { ...route.config, ownHints: true };
 }
 
 /**

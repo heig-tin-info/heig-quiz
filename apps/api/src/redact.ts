@@ -83,21 +83,13 @@ function redactSecretPages(url: string): string {
   const q = url.indexOf("?");
   if (q < 0) return url;
   const params = new URLSearchParams(url.slice(q + 1));
-  let masked = false;
-  for (const name of RETURN_PARAMS) {
-    const value = params.get(name);
-    if (value !== null && secret(value)) {
-      params.set(name, "…");
-      masked = true;
-    }
-  }
-  for (const name of TOKEN_PARAMS) {
-    if (params.has(name)) {
-      params.set(name, "…");
-      masked = true;
-    }
-  }
-  return masked ? `${url.slice(0, q)}?${params.toString()}` : url;
+  // A parameter is masked when it IS a secret, or holds a URL that carries one.
+  const masked = [...params.keys()].filter((name) => {
+    const value = params.get(name)!;
+    return TOKEN_PARAMS.includes(name) || (RETURN_PARAMS.includes(name) && secret(value) !== undefined);
+  });
+  for (const name of masked) params.set(name, "…");
+  return masked.length > 0 ? `${url.slice(0, q)}?${params.toString()}` : url;
 }
 
 /** The `req` serializer of the request log: what a line says of a request. */

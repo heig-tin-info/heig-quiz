@@ -60,6 +60,7 @@ import {
 } from "../guards.js";
 import { codespaceOn, requestCodespaceSync } from "../codespace/service.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
+import { ownHints } from "../realtime/bus.js";
 import * as service from "./service.js";
 import { registerProjectHandlers } from "./webhooks.js";
 
@@ -68,6 +69,8 @@ const PORTAL_FIELDS = ["name", "publishMode", "startAt", "deadlineAt", "duration
 
 export async function projectPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
+  // Its hints are its own, never `classroom:` (N-SEC-20, `project/events.ts`).
+  app.addHook("onRoute", ownHints);
   // GitHub's events on projects (M3-04), on the `github` module's registry.
   registerProjectHandlers();
   const teacher = teacherRoute(app);
@@ -104,6 +107,8 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
         now,
         log: req.log,
       });
+      // The other staff's lists re-read; the students hear of it only when it is published.
+      service.projectsChanged([scope.course.id]);
       return reply.code(201).send(await service.projectSummary(app.db, row, now));
     }),
   );

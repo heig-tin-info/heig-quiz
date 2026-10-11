@@ -193,19 +193,17 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // which reaches every administrator and not just the actor), and
   // `POST /pools`, whose brand-new pool has no `pool:<id>` subscriber yet.
   //
-  // A classroom's projects, group sets and gradebook address their own hints
-  // to the course's staff and to the `user:` topic of the students concerned
-  // (`project/events.ts`, `group/events.ts`, `gradebook/events.ts`), NEVER
-  // to `classroom:<id>`, which every student of the classroom hears
-  // (N-SEC-20; audit 2026-10-10, §6): the generic hint skips them.
+  // A route that publishes its own, better-addressed hints says so
+  // (`config.ownHints`, `realtime/bus.ts#ownHints`) and is skipped: a
+  // classroom's projects, group sets and gradebook hint the course's staff
+  // and the students concerned, NEVER `classroom:<id>`, which every student
+  // of the classroom hears (N-SEC-20; audit 2026-10-10, §6).
   app.addHook("onResponse", async (req, reply) => {
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
     if (reply.statusCode >= 400 || !req.user) return;
-    if (req.routeOptions.config.readOnly) return;
+    if (req.routeOptions.config.readOnly || req.routeOptions.config.ownHints) return;
     const pool = /^\/app\/api\/pools\/([0-9a-f-]{36})/.exec(req.url);
-    const classroom = /^\/app\/api\/classrooms\/([0-9a-f-]{36})(?!\/(?:projects|group-sets|gradebook)(?:[/?]|$))/.exec(
-      req.url,
-    );
+    const classroom = /^\/app\/api\/classrooms\/([0-9a-f-]{36})/.exec(req.url);
     const course = /^\/app\/api\/courses\/([0-9a-f-]{36})/.exec(req.url);
     if (pool) publish("mutation", [`pool:${pool[1]}`]);
     else if (classroom) publish("mutation", [`classroom:${classroom[1]}`]);
@@ -398,5 +396,7 @@ declare module "fastify" {
   interface FastifyContextConfig {
     /** A read served by a non-GET verb: no refresh hint on its response. */
     readOnly?: boolean;
+    /** The route publishes its own refresh hints: the generic one stays silent (`realtime/bus.ts#ownHints`). */
+    ownHints?: boolean;
   }
 }

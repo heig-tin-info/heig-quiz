@@ -47,9 +47,12 @@ import type { AppConfig } from "../../config.js";
 import { accessibleGroupSet, projectsClassroom, readableClassroom, selfFormingSeat, studentGroupSet } from "../guards.js";
 import { studentRoute, teacherRoute } from "../http.js";
 import { requestGroupSync } from "../project/service.js";
+import { ownHints } from "../realtime/bus.js";
 import * as service from "./service.js";
 
 export async function groupPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
+  // Its hints are its own, never `classroom:` (N-SEC-20, `group/events.ts`).
+  app.addHook("onRoute", ownHints);
   const teacher = teacherRoute(app);
   const student = studentRoute(app);
   const session = { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) };

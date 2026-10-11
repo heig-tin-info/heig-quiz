@@ -778,3 +778,22 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
     }
   });
 });
+
+describe("the hints of a project's creation (N-SEC-20, audit 2026-10-10 §6)", () => {
+  it("reach the course's staff, never the classroom's topic", async () => {
+    const room = await connectedClassroom([await newStudent()]);
+    const topics: string[] = [];
+    const unsubscribe = subscribe((m) => {
+      if (m.kind === "hint") topics.push(...m.topics);
+    });
+    try {
+      await project(room, "Lab hint", { publish: false });
+      // The generic hint would be the `onResponse` hook's, after the answer is out.
+      for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      unsubscribe();
+    }
+    expect(topics).toContain(`course:${room.courseId}`);
+    expect(topics.filter((t) => t.startsWith("classroom:"))).toEqual([]);
+  });
+});

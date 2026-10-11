@@ -315,7 +315,7 @@ async function supersede(tx: Tx, userId: string, auth: NewSession & { kind: Trus
 export async function findSessionUser(
   db: Db,
   token: string,
-  opts?: { renewTtlHours?: number; maxAgeHours?: number; now?: Date },
+  opts: { renewTtlHours?: number; maxAgeHours: number; now?: Date },
 ) {
   const rows = await db
     .select({
@@ -339,8 +339,8 @@ export async function findSessionUser(
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  // The end no renewal passes: creation plus the bound (none when not given).
-  const bound = opts?.maxAgeHours ? row.createdAt.getTime() + opts.maxAgeHours * 3_600_000 : Infinity;
+  // The end no renewal passes: creation plus the bound.
+  const bound = row.createdAt.getTime() + opts.maxAgeHours * 3_600_000;
   if (Math.min(row.expiresAt.getTime(), bound) <= Date.now()) {
     await endSessions(db, eq(sessions.sidHash, row.sidHash), "expired");
     return null;
