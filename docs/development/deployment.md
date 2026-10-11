@@ -31,7 +31,7 @@ environment's GitHub App is [Quiz's GitHub App](github-app.md).
 | Gets | `/srv/quiz`: the compose stack `app`, `postgres`, `backup`, on the `srv` account's rootless Docker; and staging, `/home/srvstg/quiz-staging` on the `srvstg` account's own rootless Docker (§8) | `/opt/quiz-runner`: the runner as a Podman quadlet |
 | Listens on | `app` on `127.0.0.1:3002` (staging `127.0.0.1:3003`) | the runner on `127.0.0.1:3200` |
 | Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `code.chevallier.io:8443` |
-| Deploys through | `/srv/quiz/deploy.sh production` (user `srv`) and `/home/srvstg/quiz-staging/deploy.sh staging` (user `srvstg`), forced commands | `/opt/quiz-runner/infra/engine/deploy.sh production` and `… staging` (root), forced commands of the dispatcher shared by the runner and the codespace portal (M6-04) |
+| Deploys through | `/srv/quiz/deploy.sh production` (user `srv`) and `/home/srvstg/quiz-staging/deploy.sh staging` (user `srvstg`), forced commands | `/opt/quiz-runner/infra/engine/deploy.sh production` (root), the forced command of the dispatcher shared by the runner and the codespace portal's `prod` (M6-04); `/usr/local/libexec/quiz-engine/staging-dispatch.sh` (root), the frozen staging dispatcher (§4, audit H4) |
 
 Until 2026-09-25 the application VM was a DigitalOcean droplet
 (`165.245.246.213`, root, rootful Docker, everything under `/opt`); the three
@@ -169,6 +169,7 @@ precondition of the 4 h RTO ([ADR-010](../adr/ADR-010-stockage-secrets.md)).
 | the slices | `quiz-runner.slice`, `codespace.slice` in `/etc/systemd/system/` | `infra/engine/*.slice`, installed by the deploys (below) |
 | the host input policy | `table inet host`, `/etc/quiz-engine/host.nft` included by `/etc/nftables.conf` | `infra/engine/host.nft`, applied by hand with `infra/engine/nft-apply.sh` (below) |
 | the codespace backup export | `/usr/local/lib/quiz-codespace/backup-export.sh`, root's forced command for the backup key | `apps/codespace/deploy/backup-export.sh` (below) |
+| the frozen staging dispatcher | `/usr/local/libexec/quiz-engine/staging-dispatch.sh`, root's forced command for the staging key | `infra/engine/staging-dispatch.sh`, installed by hand (§4, *The frozen staging dispatcher*) |
 
 `quiz-runner.container` is a Podman quadlet: `systemd` generates
 `quiz-runner.service` from it at `daemon-reload`, and `deploy.sh` installs it
@@ -534,6 +535,9 @@ sha256:… <token>` on the runner VM). The scripts pull
 and tag it `:<sha>` locally; `.env.image` then holds
 `IMAGE_TAG=<sha>@sha256:…`. A request without a digest still deploys by the
 sha tag, so a rollback to a run from before this change works as it did.
+The one exception is the frozen staging dispatcher of the runner VM (below):
+it has no checkout to lag behind and refuses a request without a digest, so
+the CI always sends the portal's staging digest, whatever the variable.
 
 The digest is sent only while the REPOSITORY variable `DEPLOY_BY_DIGEST`
 is `1`. A checkout whose deploy script predates it would read the digest as
@@ -542,14 +546,13 @@ once every checkout the CI deploys to runs a commit that has it (the
 digest-aware scripts parse `[<digest>]`): the staging and production
 checkouts on the application VM (`grep -c QUIZ_DEPLOY_DIGEST deploy.sh` in
 `/home/srvstg/quiz-staging` and `/srv/quiz`) and the runner VM's
-(`/opt/quiz-runner`, and `/opt/quiz-engine-staging` when
-`CODESPACE_DEPLOY=1`; `grep -c QUIZ_DEPLOY_DIGEST infra/engine/deploy.sh`).
+production checkout (`/opt/quiz-runner`;
+`grep -c QUIZ_DEPLOY_DIGEST infra/engine/deploy.sh`).
 Then `gh variable set DEPLOY_BY_DIGEST --repo heig-tin-info/heig-quiz --body 1`.
 While it is set, a deploy step whose digest is missing fails instead of
 falling back to the tag. The gate leaves `ci.yml` once it is set for good
-(#747). A checkout left behind (the staging engine while the portal deploy
-is off) must be brought forward by one deploy without the variable before
-it is switched on again.
+(#747). A checkout left behind must be brought forward by one deploy
+without the variable before it is switched on again.
 
 ### The environments
 
@@ -591,16 +594,17 @@ command="/srv/quiz/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@
 command="/home/srvstg/quiz-staging/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
 # /root/.ssh/authorized_keys on the runner VM
 command="/opt/quiz-runner/infra/engine/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@quiz
-command="/opt/quiz-engine-staging/infra/engine/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
+command="/usr/local/libexec/quiz-engine/staging-dispatch.sh",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
 ```
 
-On the runner VM one dispatcher, `infra/engine/deploy.sh`, deploys both of
-its components since M6-04, each key from its own checkout, and the scope of
-the line bounds what a key may deploy: the production key the runner and the
-codespace portal's `prod` instance, the staging key the portal's `staging`
-instance only. The staging key is still root on that VM (ADR-016, M6-04
-amendment). The request forms are in the dispatcher's header; the switch
-and the portal's operations are
+On the runner VM the production key reaches `infra/engine/deploy.sh` in
+production's checkout, which deploys the runner and the codespace portal's
+`prod` instance from an approved commit (M6-04). The staging key reaches
+only the frozen staging dispatcher, a script the operator installed outside
+any checkout, which deploys the portal's `staging` instance without running
+anything of the commit (below; ADR-016, amendment of 2026-10-11). The
+request forms are in each script's header; the switch and the portal's
+operations are
 [`apps/codespace/deploy/RUNBOOK.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md).
 
 Whatever command the client asks for, the server runs the pinned script
@@ -645,8 +649,8 @@ done). Then they diverge:
   defaults `DOCKER_HOST` to the rootless socket. In production, before the
   pull, it refuses to restart under a live evaluation (§5, *The
   live-evaluation guard*).
-- **runner VM** (`infra/engine/deploy.sh`, which serialises the VM's deploys
-  through a `flock`, checks the key's scope, then runs the component's
+- **runner VM** (`infra/engine/deploy.sh`, production only, which serialises
+  the VM's deploys through a `flock`, checks the key's scope, then runs the component's
   steps; the runner's are `apps/runner/deploy/install.sh`): `podman pull` of
   the runner image by its digest (by its sha tag without one), tag it
   `:<sha>` and `:latest` (the tag the quadlet
@@ -659,6 +663,80 @@ done). Then they diverge:
 `.github/workflows/image-artifact.yml` is a keyless fallback for the
 application image only: run by hand, it builds the image and publishes it as
 a workflow artifact to `gh run download` and `docker load` on the VM.
+
+### The frozen staging dispatcher
+
+Every commit of `main` reaches the staging key before anyone approves it,
+and the runner VM hosts the production runner and portal, their secrets
+(`RUNNER_TOKEN`, `CODESPACE_LAUNCH_SECRET`) and the rootful Podman socket.
+So the staging key's forced command is not a file of a checkout: it is
+`/usr/local/libexec/quiz-engine/staging-dispatch.sh`, a copy of
+`infra/engine/staging-dispatch.sh` the operator installs by hand, owned by
+root, mode `0755`, in a directory only root may write, and that no deploy
+rewrites (audit H4, ADR-016's amendment of 2026-10-11). For
+`codespace staging <sha> sha256:<digest> <token>` (the digest mandatory, no
+`force`) it logs in to GHCR, pulls `quiz-codespace@<digest>`, tags it
+`:<sha>` and `:staging`, restarts `quiz-codespace-net@staging` and
+`quiz-codespace-staging`, waits for `127.0.0.1:3120/healthz` (the CI's exit
+code) and untags the older sha tags, under the VM's deploy lock. It runs no
+`git`, no `install.sh`, sources nothing and writes no unit: the staging
+quadlet, Caddy site and seccomp profile are those `bootstrap.sh staging`
+installed from production's checkout, an approved commit.
+`infra/engine/staging-dispatch.test.sh` (run by the `checks` job) tests its
+grammar and that it reaches no checkout. The former staging checkout,
+`/opt/quiz-engine-staging`, is no longer read by anything; remove it at
+leisure. A production deploy warns when the checkout's copy of the script
+differs from the installed one (`warn_manual_drift`).
+
+What it does not close: the staging portal's image is still built from
+every commit of `main` and still mounts the rootful socket (the fixed
+quadlet), so unapproved code keeps a root-equivalent handle on this VM
+through the running portal (ADR-016's amendment says what would close it).
+
+**Installing it, once**, as root on the runner VM. Before the merge of the
+change that refuses the staging scope in `deploy.sh` (audit H4), take the file
+from the pull request's head (`git fetch origin pull/<n>/head`, then
+`FETCH_HEAD` for `origin/main` below); after it, from `origin/main`, then
+re-run the failed `deploy-staging` job. Either way, read the file before
+installing it: it is what the staging key runs as root.
+
+```bash
+cd /opt/quiz-runner && git fetch --quiet origin main
+git show origin/main:infra/engine/staging-dispatch.sh > /root/staging-dispatch.sh
+less /root/staging-dispatch.sh
+install -d -o root -g root -m 0755 /usr/local/libexec/quiz-engine
+install -o root -g root -m 0755 /root/staging-dispatch.sh /usr/local/libexec/quiz-engine/staging-dispatch.sh
+rm /root/staging-dispatch.sh
+stat -c '%U:%G %a %n' /usr/local/libexec /usr/local/libexec/quiz-engine /usr/local/libexec/quiz-engine/staging-dispatch.sh   # root:root, 755 each
+# The staging instance's fixed files, from production's (approved) checkout; idempotent,
+# the env file is kept.
+/opt/quiz-runner/apps/codespace/deploy/bootstrap.sh staging
+grep '^Image=' /etc/containers/systemd/quiz-codespace-staging.container   # …/quiz-codespace:staging
+# Re-point the staging key.
+cp -a /root/.ssh/authorized_keys /root/.ssh/authorized_keys.before-h4
+sed -i 's|command="/opt/quiz-engine-staging/infra/engine/deploy.sh staging"|command="/usr/local/libexec/quiz-engine/staging-dispatch.sh"|' /root/.ssh/authorized_keys
+grep -c 'quiz-engine-staging' /root/.ssh/authorized_keys                                   # 0
+grep -c 'command="/usr/local/libexec/quiz-engine/staging-dispatch.sh",restrict' /root/.ssh/authorized_keys   # 1
+# A first deploy by hand, or re-run the last deploy-staging job. The sha and the
+# quiz-codespace digest: that run's summary (the image job).
+SSH_ORIGINAL_COMMAND="codespace staging <sha> sha256:<digest> <PAT read:packages>" /usr/local/libexec/quiz-engine/staging-dispatch.sh
+```
+
+**When the dispatcher changes** (a production deploy warns): read
+`diff /usr/local/libexec/quiz-engine/staging-dispatch.sh <(git -C /opt/quiz-runner show HEAD:infra/engine/staging-dispatch.sh)`,
+then install it from production's checkout as above
+(`git show HEAD:…` in `/opt/quiz-runner`, an approved commit).
+
+**When the staging quadlet, Caddy site or seccomp profile must change**
+(`apps/codespace/deploy/quiz-codespace.container`, `Caddyfile`,
+`infra/seccomp/codespace.json`, the instance values of `lib.sh`): no
+staging deploy installs them. Once production's checkout carries the
+change (an approved `deploy-production`), the operator runs
+`/opt/quiz-runner/apps/codespace/deploy/bootstrap.sh staging`, then
+`systemctl restart quiz-codespace-staging.service`. A portal change that
+needs the new quadlet cannot be tried on staging before that; installing
+from an unapproved commit instead is the operator's decision, after
+reading its diff.
 
 ### Setting up the CI keys
 
@@ -772,7 +850,7 @@ cd /srv/quiz && SSH_ORIGINAL_COMMAND="<sha> <PAT read:packages>" ./deploy.sh pro
 # runner VM, as root: the runner, then the codespace portal's instances
 SSH_ORIGINAL_COMMAND="runner prod <sha> <PAT read:packages>" /opt/quiz-runner/infra/engine/deploy.sh production
 SSH_ORIGINAL_COMMAND="codespace prod <sha> <PAT read:packages>" /opt/quiz-runner/infra/engine/deploy.sh production
-SSH_ORIGINAL_COMMAND="codespace staging <sha> <PAT read:packages>" /opt/quiz-engine-staging/infra/engine/deploy.sh staging
+SSH_ORIGINAL_COMMAND="codespace staging <sha> sha256:<digest> <PAT read:packages>" /usr/local/libexec/quiz-engine/staging-dispatch.sh
 ```
 
 The checkouts are DETACHED at the deployed commit, and `.env.image` holds its

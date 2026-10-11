@@ -5,10 +5,13 @@
 # instances, IDEMPOTENT:
 #   apps/codespace/deploy/bootstrap.sh <prod | staging>
 #
-# Once per instance, before its first deploy (RUNBOOK.md says when). It never
-# overwrites what holds a secret: the instance's env file is written only
-# when absent. It does NOT deploy the portal (the CI does, through
-# infra/engine/deploy.sh) and builds no image.
+# Once per instance, before its first deploy (RUNBOOK.md says when), and
+# again for staging whenever its quadlet, Caddy site or seccomp profile
+# changes: no staging deploy rewrites them (deployment.md §4, The frozen
+# staging dispatcher). It never overwrites what holds a secret: the
+# instance's env file is written only when absent. It does NOT deploy the
+# portal (the CI does: prod through infra/engine/deploy.sh, staging through
+# the frozen infra/engine/staging-dispatch.sh) and builds no image.
 #
 #   1. checks: root, the rootful socket, the `containers` subordinate range
 #   2. persistent br_netfilter (without it the ICC rule is inoperative)

@@ -35,12 +35,16 @@ install_slices() {
 	install -m 0644 "$ENGINE_DIR/quiz-runner.slice" "$ENGINE_DIR/codespace.slice" /etc/systemd/system/
 }
 
-# warn_host_nft: a deploy never touches the host firewall; it only says when
-# the checkout's host.nft differs from the applied copy (or none is applied
-# yet). Applying stays manual (nft-apply.sh, deployment.md §3).
-warn_host_nft() {
+# warn_manual_drift: a deploy never touches the host firewall, nor the frozen
+# staging dispatcher; it only says when the checkout's host.nft or
+# staging-dispatch.sh differs from the installed copy (or none is installed
+# yet). Installing stays manual (nft-apply.sh, deployment.md §3; the
+# dispatcher, deployment.md §4).
+warn_manual_drift() {
 	cmp -s "$ENGINE_DIR/host.nft" /etc/quiz-engine/host.nft \
 		|| echo "deploy: warning: infra/engine/host.nft differs from the applied copy: run nft-apply.sh (deployment.md §3)" >&2
+	cmp -s "$ENGINE_DIR/staging-dispatch.sh" /usr/local/libexec/quiz-engine/staging-dispatch.sh \
+		|| echo "deploy: warning: infra/engine/staging-dispatch.sh differs from the installed copy: read the difference, then install it by hand (deployment.md §4, The frozen staging dispatcher)" >&2
 }
 
 # drop_old_sha_tags <repository> <sha to keep>: untags every other 40-hex

@@ -21,7 +21,9 @@ after the cutover (D09, settled 2026-10-01).
 **Amended (2026-10-07, M6-04): how the portal is deployed beside the
 runner.** Scope: point 4 below and the addendum above; the runner's own
 deploy steps are unchanged.
-(a) *One dispatcher, two checkouts.* `infra/engine/deploy.sh` is the
+(a) *One dispatcher, two checkouts* (the staging half replaced on
+2026-10-11, audit H4, below: the staging key reaches a frozen dispatcher,
+not a checkout). `infra/engine/deploy.sh` is the
 engine VM's forced command for both components, with a scope fixed by the
 `authorized_keys` line: the production key runs the dispatcher of
 `/opt/quiz-runner` (the runner and the portal's `prod`), the staging key
@@ -74,7 +76,8 @@ commit changing what production runs under), not attacks. The switch from
 heig-classroom's portal and the operations are
 `apps/codespace/deploy/RUNBOOK.md`. The portal holds no GitHub App key
 (`FORGE_KIND=none`, root invariant 15).
-(f) *Risk accepted by the owner (2026-10-07):* the staging key deploys
+(f) *Risk accepted by the owner (2026-10-07; its first half closed on
+2026-10-11, audit H4, below, the second still open):* the staging key deploys
 every commit of `main` before approval and runs that commit's scripts as
 root on the VM that hosts the production runner and portal, and the
 staging portal mounts the rootful Podman socket, which is root-equivalent.
@@ -134,6 +137,39 @@ absent on both sides. (e) A program's stderr or exit code only triggers a
 `podman container inspect`, whose answer alone says the container is gone.
 (f) The runner binds `127.0.0.1` by default and refuses a bind outside the
 loopback without `RUNNER_TOKEN`.
+
+**Amended (2026-10-11, security audit H4): the staging key reaches a frozen
+dispatcher.** Scope: the staging half of the M6-04 amendment's (a), and its
+(f); production's path is unchanged. The owner chose this over a separate
+staging VM.
+(a) *Nothing of a commit runs at a staging deploy.* The staging key's forced
+command is `/usr/local/libexec/quiz-engine/staging-dispatch.sh`, a copy of
+`infra/engine/staging-dispatch.sh` the operator installs by hand, root's,
+in a directory only root may write, and that no deploy rewrites. It accepts
+`codespace staging <sha> <digest> <token>` alone, the digest mandatory,
+pulls the portal image by that digest, tags it, restarts the staging
+quadlet and waits for its health, under the VM's deploy lock. It runs no
+`git`, no `install.sh`, sources nothing and writes no unit; a shell test in
+`checks` holds it to its grammar and to that. `infra/engine/deploy.sh`
+refuses the staging scope; the staging checkout is retired.
+(b) *What a staging deploy no longer installs*: the staging quadlet, Caddy
+site and seccomp profile are those `bootstrap.sh staging` wrote from
+production's checkout, an approved commit; a change to them, or to the
+dispatcher, is an operator's step (`deployment.md` §4), like the host
+firewall, and a production deploy warns when the checkout's dispatcher
+differs from the installed one.
+(c) *Production keeps running its commit's scripts as root*: the approval of
+the `production` environment is what makes that commit trusted on this VM.
+(d) *Rejected*: `deploy.sh` delegating its staging scope to the frozen
+script, since the staging key would still start a file of the tree; a
+separate staging VM (the owner's choice, for now).
+(e) *Still open*: the staging portal's image is built from every commit of
+`main` and the fixed quadlet mounts the rootful Podman socket into it, so
+an unapproved commit's portal can still start a container with the host's
+privileges. This amendment removes the deploy-time path (a repository script
+run as root before approval), not that one. Closing it means a staging
+portal without the rootful socket (an engine of its own, rootless, under a
+dedicated account) or on another host.
 
 ## Context
 

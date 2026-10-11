@@ -1,26 +1,29 @@
 #!/usr/bin/env bash
 #
-# Deploys one instance of the portal on the engine VM, at the checkout's
-# commit. Run by the dispatcher infra/engine/deploy.sh (as root, after the
-# registry login and the checkout of the deployed sha):
-#   apps/codespace/deploy/install.sh <prod | staging>
+# Deploys the portal's PROD instance on the engine VM, at the checkout's
+# commit. Run by the production dispatcher infra/engine/deploy.sh (as root,
+# after the registry login and the checkout of an approved sha):
+#   apps/codespace/deploy/install.sh prod
+# The staging instance is never deployed from a checkout: its deploy is the
+# frozen dispatcher's (infra/engine/staging-dispatch.sh, ADR-016's amendment
+# of 2026-10-11), and its files are installed by bootstrap.sh.
 #
-# 1. the live-session guard (prod only), 2. pull the CI's image of this sha
-# and tag it :<instance>, the tag the quadlet runs, 3. install the host-level
-# files (prod only) and the instance's files, 4. replay the instance's
-# network setup, restart the portal and wait for its /healthz, 5. untag
-# older sha tags. The student image is NOT touched: it is built on the VM on
-# purpose (images/build.sh).
+# 1. the live-session guard, 2. pull the CI's image of this sha and tag it
+# :prod, the tag the quadlet runs, 3. install the host-level files and the
+# instance's files, 4. replay the instance's network setup, restart the
+# portal and wait for its /healthz, 5. untag older sha tags. The student
+# image is NOT touched: it is built on the VM on purpose (images/build.sh).
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/../../.."
 # shellcheck source=lib.sh
 . apps/codespace/deploy/lib.sh
 
-if ! cs_instance "${1:-}"; then
-	echo "deploy: unknown codespace instance '${1:-}' (prod | staging)" >&2
+if [ "${1:-}" != prod ]; then
+	echo "deploy: install.sh deploys the prod instance only, not '${1:-}' (staging: the frozen dispatcher, deployment.md §4)" >&2
 	exit 2
 fi
+cs_instance prod
 if [ ! -f "$CS_ETC/env" ]; then
 	echo "deploy: $CS_ETC/env is missing: bootstrap the instance first (apps/codespace/deploy/RUNBOOK.md)" >&2
 	exit 2
@@ -31,32 +34,27 @@ tag="$(git rev-parse HEAD)"
 # restart keeps the student containers, but every open editor loses its
 # connection for a few seconds, and an exam must not. Podman is asked, not
 # the portal, so a portal that is down does not block its own repair; a
-# `ps` that fails refuses like a live session. Staging is not guarded.
-if [ "$CS_INSTANCE" = prod ]; then
-	live=$(pd ps --filter label=heig-codespace.session \
-		--filter "label=heig-codespace.instance=$CS_INSTANCE" \
-		--filter status=running --format '{{.Names}}') \
-		|| live="(podman ps failed: see the error above)"
-	if [ -n "$live" ]; then
-		{
-			echo "deploy: codespace $CS_INSTANCE has running sessions:"
-			printf '%s\n' "$live" | sed 's/^/  /'
-		} >&2
-		if [ -z "${QUIZ_DEPLOY_FORCE:-}" ]; then
-			echo "deploy: REFUSED. Re-run the deploy job once they have closed, or force it (RUNBOOK.md, The live-session guard)." >&2
-			exit 3
-		fi
-		echo "deploy: FORCED, restarting anyway." >&2
+# `ps` that fails refuses like a live session.
+live=$(pd ps --filter label=heig-codespace.session \
+	--filter "label=heig-codespace.instance=$CS_INSTANCE" \
+	--filter status=running --format '{{.Names}}') \
+	|| live="(podman ps failed: see the error above)"
+if [ -n "$live" ]; then
+	{
+		echo "deploy: codespace $CS_INSTANCE has running sessions:"
+		printf '%s\n' "$live" | sed 's/^/  /'
+	} >&2
+	if [ -z "${QUIZ_DEPLOY_FORCE:-}" ]; then
+		echo "deploy: REFUSED. Re-run the deploy job once they have closed, or force it (RUNBOOK.md, The live-session guard)." >&2
+		exit 3
 	fi
+	echo "deploy: FORCED, restarting anyway." >&2
 fi
 
 pull_retag "$CS_IMAGE_REPO" "$tag" "$CS_INSTANCE"
 
-# Host-level pieces from production's commits only (lib.sh says why, and
-# what this does not protect against).
-if [ "$CS_INSTANCE" = prod ]; then
-	cs_install_host
-fi
+# Host-level pieces, then the instance's (lib.sh).
+cs_install_host
 cs_install_instance
 systemctl daemon-reload
 # The git channel binds the bridge gateway and refuses to start without it
