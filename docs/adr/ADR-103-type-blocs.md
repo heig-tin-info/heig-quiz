@@ -127,6 +127,15 @@ program, with `isAnswered` false while the program is still the starter; and
 `blocks` in the drill's `DRILL_TYPES` (ADR-041 §3), since its grading is
 synchronous, automatic and final.
 
+*Note (PR 2, 2026-10-11).* `isAnswered` sees the answer and not the config,
+so the stored answer carries the rule: the empty program `[]` means "the
+starter as shown". The player stores a program equal to the starter as `[]`
+and shows the starter for `[]` (`storedProgram` / `shownProgram`,
+`packages/qt-blocks/src/schema.ts`). A client that sends the starter itself
+is counted as answered and graded on it; we accept that, since only a
+client that bypasses the player can do it and it gains nothing a student
+could not get by editing one block.
+
 ### 11. Blockly is loaded lazily, and self-hosted
 
 Blockly and its generator live in one module, `blocklyBundle.ts`, reached

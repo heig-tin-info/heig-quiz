@@ -9,7 +9,7 @@
 import { reparseMigrate, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
 import { programStats } from "@quiz/domain/blocks";
 
-import { answerMisfit, gradeBlocks, runCase, studentDetails } from "./grade.js";
+import { answerMisfit, gradeBlocks, referenceRuns, studentDetails } from "./grade.js";
 import {
   BLOCKS_CONFIG_VERSION,
   BlocksAnswer,
@@ -64,10 +64,8 @@ export const blocksServer: QuestionTypeServer<
     if (reference === null || reference.length === 0) {
       return [{ path: ["referenceSolution"], message: "blocks.reference_missing" }];
     }
-    return config.cases.flatMap((kase, i) =>
-      runCase(reference, kase, { events: false }).ok
-        ? []
-        : [{ path: ["cases", i], message: "blocks.reference_fails_case" }],
+    return referenceRuns(reference, config.cases).flatMap((run, i) =>
+      run?.ok ? [] : [{ path: ["cases", i], message: "blocks.reference_fails_case" }],
     );
   },
 
@@ -119,11 +117,11 @@ export const blocksServer: QuestionTypeServer<
 
   grade: (config, answer, ctx) => gradeBlocks(config, answer, ctx.itemPoints),
 
-  /** The live grid: the size of the program, never its worth (≤ 24 characters). */
-  summarizeAnswer(_config, answer) {
-    const { nodes } = programStats(answer.program);
-    return nodes === 1 ? "1 block" : `${nodes} blocks`;
-  },
+  /**
+   * The live grid: the number of blocks, never their worth. A bare figure,
+   * as `diagram` and `categorize` write theirs: the cell is not translated.
+   */
+  summarizeAnswer: (_config, answer) => String(programStats(answer.program).nodes),
 
   /**
    * How many graded attempts reached the dock in each VISIBLE warehouse

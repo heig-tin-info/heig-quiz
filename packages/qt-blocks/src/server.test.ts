@@ -54,12 +54,14 @@ describe("grade", () => {
     expect(details.cases.every((c) => c.reason === "short" && c.moves === 0)).toBe(true);
   });
 
-  it("defends itself against a block the toolbox does not offer", () => {
+  it("grades an answer with a block the toolbox no longer offers as the empty program, without a comment", () => {
+    // F-GRADE-06: a re-grade against a narrower toolbox. A comment would reach the student verbatim.
     const narrow = { ...SECRET_CONFIG, toolbox: ["forward", "repeat"] as BlocksConfig["toolbox"], referenceSolution: null };
     const result = grade(narrow, { program: [{ kind: "turn", dir: "left" }, ...SEVEN] });
-    expect(result.points).toBe(0);
-    expect(result.comment).toBe("blocks.answer_misfit");
-    expect(grade(narrow, { program: SEVEN }).comment).toBeUndefined();
+    expect(result).toMatchObject({ points: 0, state: "validated" });
+    expect(result.comment).toBeUndefined();
+    expect(result.details.cases.every((c) => c.reason === "short" && c.moves === 0)).toBe(true);
+    expect(grade(narrow, { program: SEVEN }).points).toBeGreaterThan(0);
   });
 
   it("is worth nothing when every warehouse is worth nothing", () => {
@@ -103,9 +105,9 @@ describe("the other hooks", () => {
     expect(blocksServer.answerMisfit!(narrow, { program: REFERENCE })).toBe("blocks.answer_misfit");
   });
 
-  it("summarises an answer by its size, never its worth", () => {
-    expect(blocksServer.summarizeAnswer!(SECRET_CONFIG, { program: REFERENCE })).toBe("4 blocks");
-    expect(blocksServer.summarizeAnswer!(SECRET_CONFIG, { program: [{ kind: "forward" }] })).toBe("1 block");
+  it("summarises an answer by its number of blocks, a bare figure", () => {
+    expect(blocksServer.summarizeAnswer!(SECRET_CONFIG, { program: REFERENCE })).toBe("4");
+    expect(blocksServer.summarizeAnswer!(SECRET_CONFIG, { program: [] })).toBe("0");
   });
 
   it("counts the pass rate of the visible warehouses, skipping what it cannot read", () => {

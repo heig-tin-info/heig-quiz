@@ -2,7 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import { BATTERY_MAX, PROGRAM_LIMITS, type Stmt } from "@quiz/domain/blocks";
 
-import { BlocksAnswer, BlocksConfig, emptyBlocksDraft, isBlocksAnswered, kindsOutside } from "./schema.js";
+import {
+  BlocksAnswer,
+  BlocksConfig,
+  emptyBlocksDraft,
+  isBlocksAnswered,
+  kindsOutside,
+  programFits,
+  shownProgram,
+  storedProgram,
+} from "./schema.js";
 import { SECRET_CONFIG } from "./testing.js";
 
 const messages = (result: { success: boolean; error?: { issues: { message: string; path: PropertyKey[] }[] } }) =>
@@ -113,6 +122,44 @@ describe("the config schema", () => {
       referenceSolution: null,
       allOrNothing: false,
     });
+  });
+});
+
+describe("programFits, the player's check before it sends", () => {
+  it("says what the schema says", () => {
+    expect(programFits(nested(PROGRAM_LIMITS.depth - 1))).toBe(true);
+    expect(programFits(nested(PROGRAM_LIMITS.depth))).toBe(false);
+    expect(programFits(Array.from({ length: PROGRAM_LIMITS.nodes + 1 }, (): Stmt => ({ kind: "forward" })))).toBe(false);
+  });
+});
+
+describe("the starter is no answer (ADR-103 §10, spec 4.17)", () => {
+  const starter = SECRET_CONFIG.starter;
+  const other: Stmt[] = [{ kind: "forward" }];
+
+  it("stores the starter as the empty program, anything else as it is", () => {
+    expect(storedProgram(starter, starter)).toEqual([]);
+    expect(storedProgram(structuredClone(starter), starter)).toEqual([]);
+    expect(storedProgram(other, starter)).toBe(other);
+    expect(storedProgram([], [])).toEqual([]);
+  });
+
+  it("shows the starter for no answer and for the empty program, the program otherwise", () => {
+    expect(shownProgram(null, starter)).toBe(starter);
+    expect(shownProgram({ program: [] }, starter)).toBe(starter);
+    expect(shownProgram({ program: other }, starter)).toBe(other);
+  });
+
+  it("round-trips: what is shown is stored back unchanged, and an untouched question is unanswered", () => {
+    for (const answer of [null, { program: [] }, { program: other }]) {
+      const stored = { program: storedProgram(shownProgram(answer, starter), starter) };
+      expect(shownProgram(stored, starter)).toEqual(shownProgram(answer, starter));
+    }
+    expect(isBlocksAnswered({ program: storedProgram(shownProgram(null, starter), starter) })).toBe(false);
+  });
+
+  it("counts a starter sent as such: a client that bypasses the player is answered", () => {
+    expect(isBlocksAnswered({ program: starter })).toBe(true);
   });
 });
 

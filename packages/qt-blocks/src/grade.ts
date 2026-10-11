@@ -8,10 +8,11 @@
  * Pure: no React, no Blockly.
  */
 import type { GradedResult } from "@quiz/core/server";
-import { parseMap, runProgram, type RunResult, type Stmt } from "@quiz/domain/blocks";
+import { parseMap, runProgram, type RunResult, type RunVerdict, type Stmt } from "@quiz/domain/blocks";
 import { round2 } from "@quiz/domain/round";
 
 import {
+  CaseSchema,
   kindsOutside,
   totalCasePoints,
   type BlocksAnswer,
@@ -45,9 +46,11 @@ export function gradeBlocks(
   itemPoints: number,
 ): GradedResult<BlocksDetails> {
   // The write refuses a misfit; the grader still defends itself (an answer
-  // stored before the toolbox changed) by running nothing at all.
-  const misfit = answer === null ? null : answerMisfit(config, answer);
-  const program = answer === null || misfit !== null ? [] : answer.program;
+  // re-graded against a narrower toolbox, F-GRADE-06) by running nothing at
+  // all. No comment says so: a comment reaches the student verbatim, and the
+  // breakdown already shows every warehouse stopped short.
+  const fits = answer !== null && answerMisfit(config, answer) === null;
+  const program = fits ? answer.program : [];
   const cases = config.cases.map((kase): CaseResult => {
     const run = runCase(program, kase, { events: false });
     return {
@@ -69,8 +72,26 @@ export function gradeBlocks(
     maxPoints: itemPoints,
     details: { cases, earned, total },
     state: "validated",
-    ...(misfit === null ? {} : { comment: misfit }),
   };
+}
+
+/**
+ * The reference on every warehouse: its verdict, or `null` for a warehouse
+ * that cannot be run (a draft's map the domain refuses, a battery out of
+ * range). What publication checks (`publicationIssues`) and what the
+ * editor's "Check the reference" lists — one function, so the two agree.
+ */
+export function referenceRuns(
+  reference: Stmt[],
+  cases: readonly Pick<BlocksCase, "map" | "battery">[],
+): (RunVerdict | null)[] {
+  return cases.map((kase) => {
+    if (!CaseSchema.shape.map.safeParse(kase.map).success || !CaseSchema.shape.battery.safeParse(kase.battery).success) {
+      return null;
+    }
+    const { ok, reason, moves } = runCase(reference, kase, { events: false });
+    return { ok, reason, moves };
+  });
 }
 
 /**

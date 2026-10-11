@@ -27,7 +27,9 @@ import {
   MapError,
   PROGRAM_LIMITS,
   parseMap,
+  programEquals,
   programStats,
+  RUN_REASONS,
   usedKinds,
   type BlockKind,
   type RunReason,
@@ -67,16 +69,28 @@ const StmtSchema: z.ZodType<Stmt> = z.lazy(() =>
 );
 
 /**
+ * The limit a program breaks, depth first, or `null` when it fits
+ * `PROGRAM_LIMITS`. Iterative (`programStats`), so it measures raw input of
+ * any depth: the guard of every schema below, and the player's own check
+ * before it sends anything.
+ */
+export function programLimitIssue(program: Stmt[]): "blocks.program_too_deep" | "blocks.program_too_long" | null {
+  const { nodes, depth } = programStats(program);
+  if (depth > PROGRAM_LIMITS.depth) return "blocks.program_too_deep";
+  return nodes > PROGRAM_LIMITS.nodes ? "blocks.program_too_long" : null;
+}
+
+/** Whether a program is within `PROGRAM_LIMITS`. */
+export const programFits = (program: Stmt[]): boolean => programLimitIssue(program) === null;
+
+/**
  * A program: measured on the RAW input before anything recurses. A refusal
  * here aborts the parse (a preprocess that adds an issue stops the pipe), so
  * the recursive schema never sees a program beyond `PROGRAM_LIMITS`.
  */
 export const ProgramSchema = z.preprocess((raw, ctx) => {
-  if (Array.isArray(raw)) {
-    const { nodes, depth } = programStats(raw as Stmt[]);
-    if (depth > PROGRAM_LIMITS.depth) ctx.addIssue({ code: "custom", message: "blocks.program_too_deep" });
-    else if (nodes > PROGRAM_LIMITS.nodes) ctx.addIssue({ code: "custom", message: "blocks.program_too_long" });
-  }
+  const issue = Array.isArray(raw) ? programLimitIssue(raw as Stmt[]) : null;
+  if (issue !== null) ctx.addIssue({ code: "custom", message: issue });
   return raw;
 }, z.array(StmtSchema));
 
@@ -184,14 +198,23 @@ export type BlocksAnswer = z.infer<typeof BlocksAnswer>;
 /**
  * Whether the answer holds something (issue #89): the ONE predicate behind
  * both `isAnswered` hooks. The hook sees no config, so "differs from the
- * starter" (ADR-103 §10) is the player's to write: a program equal to the
- * starter goes back as the EMPTY program, which the player shows as the
- * starter again. An untouched question therefore stays unanswered, and is
- * graded as one.
+ * starter" (ADR-103 §10) is carried by the stored answer itself: a program
+ * equal to the starter is stored as the EMPTY program ({@link storedProgram})
+ * and an empty one is shown as the starter ({@link shownProgram}). An
+ * untouched question stays unanswered and is graded as one. A client that
+ * sends the starter itself is counted as answered and graded on it (spec 4.17).
  */
 export function isBlocksAnswered(answer: BlocksAnswer): boolean {
   return answer.program.length > 0;
 }
+
+/** What the workspace shows for a stored answer: the starter while the stored program is empty. */
+export const shownProgram = (answer: BlocksAnswer | null, starter: Stmt[]): Stmt[] =>
+  answer !== null && answer.program.length > 0 ? answer.program : starter;
+
+/** What is stored for the program on screen: nothing while it is still the starter. */
+export const storedProgram = (program: Stmt[], starter: Stmt[]): Stmt[] =>
+  programEquals(program, starter) ? [] : program;
 
 // ---------------------------------------------------------------------------
 // Student view
@@ -238,7 +261,7 @@ export type BlocksSolution = z.infer<typeof BlocksSolution>;
 // Grading details
 // ---------------------------------------------------------------------------
 
-export const RunReasonSchema = z.enum(["dock", "collision", "battery", "loop", "short"]);
+export const RunReasonSchema = z.enum(RUN_REASONS);
 
 /** One warehouse's run, as graded: never its map (spec 4.17). */
 export const CaseResult = z.object({
