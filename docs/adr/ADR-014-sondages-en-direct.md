@@ -40,7 +40,7 @@ Generic classroom evaluation routes cannot reach a classroom-less poll.
 A classroom poll admits signed-in claimed roster seats, staff and authorized admins.
 A signed-in outsider receives `403 not_on_roster` without content: the public code
 already reveals the poll's existence. A browser without a session must sign in
-(`401 login_required`).
+(`401 login_required`), and receives nothing of the poll.
 An anonymous poll admits anyone with its code: a signed-in browser votes as its
 account, otherwise as a guest. There is no second identity for the same browser.
 The database requires exactly one of `attempts.user_id` and `guest_id`, and a

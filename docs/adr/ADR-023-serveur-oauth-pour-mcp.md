@@ -15,7 +15,13 @@ look-alike). An authorization error now goes back to the client only when it
 is a CIMD client whose document host is still in `OAUTH_CIMD_HOSTS`
 (`redirectsErrors`, `auth/oauth/clients.ts`), or after the consent screen
 (the teacher's denial, `decide`); every other error is said on
-`/oauth/authorize/invalid?reason=`.
+`/oauth/authorize/invalid?reason=`. The same audit (L5) meters the endpoint,
+which stores an `oauth_requests` row and may fetch a CIMD document before
+anybody signs in: `AUTHORIZATIONS_PER_HOUR` per address
+(`auth/oauth/routes.ts`), past which the invalid page says
+`temporarily_unavailable`. Like the registration limit, it is in memory and
+per address, so a campus behind one NAT address shares it: a matter of
+availability only.
 
 ## Context
 

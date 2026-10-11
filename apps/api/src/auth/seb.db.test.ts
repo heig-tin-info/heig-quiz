@@ -21,7 +21,7 @@ import { routesOf, testServer, type Method, type TestServer } from "../test/http
 import { seedLive } from "../test/live.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
 import { LAUNCH_PATH } from "./paths.js";
-import { AUDITED_SEB_REFUSALS_PER_HOUR, configKeyHeaderFor } from "./seb.js";
+import { AUDITED_SEB_REFUSALS_PER_TICKET, configKeyHeaderFor } from "./seb.js";
 import {
   launchSeb,
   openProjectSebSession,
@@ -138,7 +138,7 @@ describe("the launch ticket", () => {
     expect((await launch(url)).headers.location).toBe("/?seb=invalid");
   });
 
-  it("is audited when refused only if it is pending, and so many times per address and hour (audit L5)", async () => {
+  it("is audited when refused only if it is pending, and so many times per ticket (audit L5)", async () => {
     const refusals = async () =>
       (await server.app.db.select().from(auditLog).where(eq(auditLog.action, "auth.seb_refused"))).length;
     const from = (url: string, remoteAddress: string) =>
@@ -152,17 +152,18 @@ describe("the launch ticket", () => {
     }
     expect(await refusals()).toBe(before);
 
-    // A pending ticket replayed outside SEB: audited up to the limit, then only refused.
+    // A pending ticket replayed outside SEB, from addresses it rotates:
+    // audited up to the ticket's limit, then only refused.
     const startUrl = await download(exam.evaluationId);
     const path = new URL(startUrl).pathname;
-    for (let i = 0; i < AUDITED_SEB_REFUSALS_PER_HOUR + 3; i += 1) {
-      expect((await from(path, "203.0.113.11")).headers.location).toBe("/?seb=invalid");
+    for (let i = 0; i < AUDITED_SEB_REFUSALS_PER_TICKET + 3; i += 1) {
+      expect((await from(path, `203.0.113.${20 + i}`)).headers.location).toBe("/?seb=invalid");
     }
-    expect(await refusals()).toBe(before + AUDITED_SEB_REFUSALS_PER_HOUR);
-    // Another address counts apart, and the ticket still opens in SEB.
-    await from(path, "203.0.113.12");
-    expect(await refusals()).toBe(before + AUDITED_SEB_REFUSALS_PER_HOUR + 1);
+    expect(await refusals()).toBe(before + AUDITED_SEB_REFUSALS_PER_TICKET);
+    // The ticket still opens in SEB; another ticket, from the same address, has its own count.
     expect((await launch(startUrl)).headers.location).toBe(`/take/${exam.evaluationId}`);
+    await from(new URL(await download(exam.evaluationId)).pathname, "203.0.113.20");
+    expect(await refusals()).toBe(before + AUDITED_SEB_REFUSALS_PER_TICKET + 1);
   });
 
   it("is only issued to a seated student, on an exam that requires SEB", async () => {

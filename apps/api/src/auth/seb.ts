@@ -145,11 +145,12 @@ export async function sendLaunchFile(
 // --- The routes ----------------------------------------------------------------
 
 /**
- * Audited launch refusals per address and hour. The start route takes no
- * session, so whoever holds a pending ticket could otherwise replay it with a
- * wrong header and write to the audit log for ever (audit L5).
+ * Audited launch refusals per pending ticket. The start route takes no
+ * session, so whoever holds a ticket could otherwise replay it with a wrong
+ * header and write to the audit log for ever (audit L5). Per ticket, not per
+ * address: an exam room shares one address, and one holder may rotate them.
  */
-export const AUDITED_SEB_REFUSALS_PER_HOUR = 60;
+export const AUDITED_SEB_REFUSALS_PER_TICKET = 10;
 
 export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
   /**
@@ -182,15 +183,16 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
    * file opened in an ordinary browser is refused and leaves the ticket for
    * SEB. Every refusal looks the same to the client; the audit log keeps the
    * reason — of a refusal that names a pending ticket only, and at most
-   * {@link AUDITED_SEB_REFUSALS_PER_HOUR} per address and hour: a secret that
+   * {@link AUDITED_SEB_REFUSALS_PER_TICKET} times per ticket: a secret that
    * names none is noise anyone can make, and the route has no session to
-   * meter by (audit L5). What goes unaudited is still logged.
+   * meter by (audit L5). What goes unaudited is still logged. A ticket lives
+   * minutes, so an hour's window outlives it.
    */
-  const auditedRefusals = new FixedWindowLimiter(AUDITED_SEB_REFUSALS_PER_HOUR, 3_600_000);
+  const auditedRefusals = new FixedWindowLimiter(AUDITED_SEB_REFUSALS_PER_TICKET, 3_600_000);
   app.get<{ Params: { secret: string } }>(`${LAUNCH_PATH}:secret`, async (req, reply) => {
     const now = app.clock.now();
     const refuse = async (reason: string, ticketId: string | null) => {
-      if (ticketId !== null && auditedRefusals.hit(req.ip, now.getTime()) === null) {
+      if (ticketId !== null && auditedRefusals.hit(ticketId, now.getTime()) === null) {
         await audit(app.db, {
           actorType: "system",
           action: "auth.seb_refused",

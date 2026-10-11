@@ -293,38 +293,26 @@ describe("refusals", () => {
     expect(res.headers.location).toBe("/oauth/authorize/invalid?reason=invalid_redirect_uri");
   });
 
-  it("says a self-registered client's error on its own page, never at the client's address (RFC 9700 §4.11.2)", async () => {
-    const { body: client } = await register();
-    const res = await inject({
-      method: "GET",
-      url: authorizeUrl({ response_type: "code", client_id: client.client_id, redirect_uri: REDIRECT, state: "s" }),
-    });
-    expect(res.statusCode).toBe(303);
-    expect(res.headers.location).toBe("/oauth/authorize/invalid?reason=invalid_request");
-  });
-
   // Audit M4's repro: anyone registers a client whose redirect URI is any
-  // https address, then links to an authorization request it makes fail.
+  // https address, then links to an authorization request it makes fail. A
+  // self-registered client's error is said on the portal's own page, never at
+  // the client's address (RFC 9700 §4.11.2).
   it("never bounces a visitor with no session to a self-registered address", async () => {
     const LURE = "https://edu-id.phishing.example/login";
     const { body: client } = await register([LURE]);
-    const failing = [
-      { response_type: "token", client_id: client.client_id, redirect_uri: LURE },
-      { response_type: "code", client_id: client.client_id, redirect_uri: LURE },
-      {
-        response_type: "code",
-        client_id: client.client_id,
-        redirect_uri: LURE,
-        code_challenge: pkce().challenge,
-        code_challenge_method: "S256",
-        resource: "https://elsewhere.example/mcp",
-      },
+    const base = { response_type: "code", client_id: client.client_id, redirect_uri: LURE, state: "s" };
+    const failing: [Record<string, string>, string][] = [
+      [{ ...base, response_type: "token" }, "unsupported_response_type"],
+      [base, "invalid_request"],
+      [
+        { ...base, code_challenge: pkce().challenge, code_challenge_method: "S256", resource: "https://elsewhere.example/mcp" },
+        "invalid_target",
+      ],
     ];
-    for (const params of failing) {
+    for (const [params, reason] of failing) {
       const res = await inject({ method: "GET", url: authorizeUrl(params) });
-      const location = String(res.headers.location ?? "");
-      expect(location.startsWith("/oauth/authorize/invalid?reason="), location).toBe(true);
-      expect(location).not.toContain("phishing");
+      expect(res.statusCode).toBe(303);
+      expect(res.headers.location).toBe(`/oauth/authorize/invalid?reason=${reason}`);
     }
   });
 

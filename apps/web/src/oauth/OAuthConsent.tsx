@@ -4,7 +4,7 @@ import { Bot, Check, KeyRound, TriangleAlert, X } from "lucide-react";
 import type { Me, OAuthDecisionResult, OAuthRequestView } from "@quiz/contracts";
 
 import { api, isNotFound } from "../api";
-import { useT } from "../i18n";
+import { DICTS, useT, type Dict } from "../i18n";
 import { oauthRequestKey } from "../queryKeys";
 import { SignInGate } from "../SignInGate";
 import { Alert, Button, Card, FormError, GateCard, GateFrame, GateIcon, GateSkeleton } from "../ui";
@@ -21,20 +21,14 @@ import { Alert, Button, Card, FormError, GateCard, GateFrame, GateIcon, GateSkel
 export function OAuthConsent({ id, me }: { id: string; me: Me | null }) {
   const t = useT();
   if (id === "invalid") {
+    // The reason is the server's error code: the dictionary says which ones have words.
     const reason = new URLSearchParams(window.location.search).get("reason") ?? "invalid_request";
-    const known = [
-      "invalid_client",
-      "invalid_redirect_uri",
-      "invalid_client_metadata",
-      "temporarily_unavailable",
-      "unsupported_response_type",
-      "invalid_target",
-    ].includes(reason);
+    const key = `oauth.invalid.${reason}`;
     return (
       <GateCard
         icon={<TriangleAlert className="mx-auto size-8 text-warning" />}
         title={t("oauth.invalid.title")}
-        body={known ? t(`oauth.invalid.${reason}` as Parameters<typeof t>[0]) : t("oauth.invalid.invalid_request")}
+        body={t(Object.hasOwn(DICTS.en, key) ? (key as keyof Dict) : "oauth.invalid.invalid_request")}
       />
     );
   }

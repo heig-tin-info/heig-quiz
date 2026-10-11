@@ -595,18 +595,6 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
     namedId = created.json().evaluation.id;
   });
 
-  it("sends a browser with no session to the login, on every public route", async () => {
-    const refused = await post(`/app/api/p/${named}/join`);
-    expect(refused.statusCode).toBe(401);
-    expect(refused.json()).toMatchObject({ error: "login_required", next: `/p/${named}` });
-    expect(guestCookieOf(refused)).toBeNull();
-    const read = await get(`/app/api/p/${named}`);
-    expect(read.statusCode).toBe(401);
-    expect(read.json()).toMatchObject({ error: "login_required", next: `/p/${named}` });
-    const answered = await post(`/app/api/p/${named}/answer`, {}, { payload: { selected: [0] } });
-    expect(answered.statusCode).toBe(401);
-  });
-
   it("refuses a signed-in account that holds no seat on the roster, and writes nothing", async () => {
     const read = await get(`/app/api/p/${named}`, outsider.headers);
     expect(read.statusCode).toBe(403);
@@ -656,10 +644,14 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
     expect(view.json().tally).toMatchObject({ joined: 2, answered: 1 });
   });
 
-  // Audit L3: with the key revealed and the votes shown, a browser with no
-  // session — a guest cookie of another poll changes nothing — reads nothing
-  // of the poll on any public route: no statement, no choice, no vote, no key.
-  it("leaks nothing of a revealed classroom poll to a browser with no session", async () => {
+  // Audit L3 (05 §5.7): with the key revealed and the votes shown, a browser
+  // with no session — a guest of an anonymous poll included — is sent to the
+  // login on every public route, and reads nothing of the poll: no statement,
+  // no choice, no vote, no key.
+  it("sends a browser with no session to the login, and leaks nothing of a revealed poll", async () => {
+    const anonymous = await post("/app/api/polls", teacher.headers, { audience: ANYONE, questionId });
+    const guest = guestCookieOf(await post(`/app/api/p/${anonymous.json().evaluation.code}/join`));
+    expect(guest).toBeTruthy();
     const shown = await post(`/app/api/evaluations/${namedId}/poll/reveal`, teacher.headers, {
       revealed: true,
       votes: true,
@@ -670,8 +662,7 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
     expect(own.json().solution).toEqual({ correct: [0] });
     expect(own.json().tally).toMatchObject({ answered: 1 });
 
-    const strangers = [{}, { cookie: `${GUEST_COOKIE}=some-guest-of-another-poll` }];
-    for (const headers of strangers) {
+    for (const headers of [{}, { cookie: `${GUEST_COOKIE}=${guest}` }]) {
       const responses = [
         await get(`/app/api/p/${named}`, headers),
         await post(`/app/api/p/${named}/join`, headers),
@@ -679,10 +670,9 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
       ];
       for (const res of responses) {
         expect(res.statusCode).toBe(401);
-        expect(Object.keys(res.json()).sort()).toEqual(["error", "message", "next"]);
-        for (const secret of ["capitale", "Lausanne", "Yverdon", "Nyon", "Capitale VD", "correct", "tally", "solution"]) {
-          expect(res.body, `a 401 carried "${secret}"`).not.toContain(secret);
-        }
+        expect(Object.keys(res.json()).sort()).toEqual(["error", "message"]);
+        expect(res.json().error).toBe("login_required");
+        expect(guestCookieOf(res)).toBeNull();
       }
     }
     await post(`/app/api/evaluations/${namedId}/poll/reveal`, teacher.headers, { revealed: false, votes: false });

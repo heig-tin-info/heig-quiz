@@ -318,7 +318,6 @@ function refuseOutsider(poll: MockPoll): void {
     throw new MockPayload(401, {
       error: "login_required",
       message: "This poll is for the students of its classroom",
-      next: `/p/${poll.code}`,
     });
   }
   if (!poll.anonymous && poll.offRoster === true) {

@@ -6,13 +6,6 @@ Accepted (2026-09-26, issue #139, with `apps/api/src/auth/launch.ts`,
 `auth/seb.ts`, `sessions.kind` and the `sitRefusal` rule of `modules/guards.ts`).
 Brings Safe Exam Browser back into scope (00 §0.6).
 
-**Amended 2026-10-11 (security audit L5, N-SEC-09), scope: §2, which launch
-refusals are audited.** The start route takes no session, so any visitor could
-write `auth.seb_refused` rows at will: a secret that names no pending ticket is
-now refused without an audit row, and the audited refusals are capped at 60
-per address and hour (`AUDITED_SEB_REFUSALS_PER_HOUR`, `auth/seb.ts`); the
-others are logged only.
-
 **Addendum (2026-09-30, ADR-035, the classroom merge):** what is settled,
 and what waits for D21 (unified SEB design, settled 2026-10-01 for M6).
 
@@ -91,6 +84,14 @@ the student downloads it again.
 
 Amended 2026-10-09: the rule is named `sitRefusal` (`modules/guards.ts`), formerly `sits`; §4 keeps its old anchor.
 
+**Amended 2026-10-11 (security audit L5, N-SEC-09), scope: §2, which launch
+refusals are audited.** The start route takes no session, so any visitor could
+write `auth.seb_refused` rows at will: a secret that names no pending ticket is
+now refused without an audit row, and each pending ticket's audited refusals
+are capped at `AUDITED_SEB_REFUSALS_PER_TICKET` (`auth/seb.ts`) — per ticket,
+not per address, since an exam room shares one address; the others are
+logged only.
+
 ## Context
 
 An exam sat in Safe Exam Browser (SEB) is a separate browser: the portal's
@@ -135,8 +136,8 @@ session through `openSession` — still the one place session cookies are
 minted — and lands on `/take/<evaluation>`. Every refusal looks the same to
 the client (`/?seb=invalid`); the audit log keeps the reason
 (`auth.seb_refused`: `config_key`, `ticket`, `seat`). *Amended 2026-10-11
-(see Status): only for a secret that names a pending ticket, at most 60 times
-per address and hour.*
+(see Status): only for a secret that names a pending ticket, at most
+`AUDITED_SEB_REFUSALS_PER_TICKET` times per ticket.*
 
 The Config Key is computed, not stored: the file is a function of its start
 URL, so the start route rebuilds it from the URL it was reached on. The port

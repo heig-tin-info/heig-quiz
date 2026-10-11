@@ -80,7 +80,6 @@ describe("the poll participant page", () => {
       [`GET ${URL}`]: fail(401, {
         error: "login_required",
         message: "This poll is for the students of its classroom",
-        next: `/p/${CODE}`,
       }),
       "GET /app/api/config": ok({ devLogin: false }),
     });

@@ -352,7 +352,7 @@ The audit union gains:
 
 | Action | When |
 |---|---|
-| `kiosk.attested`, `kiosk.attest_failed` | an attestation succeeded or failed (reason `refused` or `unavailable`; the device id, never the challenge or the response) |
+| `kiosk.attested`, `kiosk.attest_failed` | an attestation succeeded or failed (reason `refused` or `unavailable`; the device id, never the challenge or the response). *Amended 2026-10-11 (security audit L5, N-SEC-09): a failure is audited for a known station only; an unknown caller's is logged.* |
 | `kiosk.device_registered`, `kiosk.device_labeled`, `kiosk.device_retired`, `kiosk.device_reactivated` | the registry changed (a retired station put back in service is its own entry) |
 | `kiosk.paired`, `kiosk.pair_refused`, `kiosk.assigned` | a pairing was approved, refused, or approved by the supervisor |
 | `kiosk.suspended`, `kiosk.resumed` | a kiosk session was suspended or resumed |

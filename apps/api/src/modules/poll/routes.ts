@@ -450,9 +450,9 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
    * addendum 2026-09-27), not a 404: the code is on the wall of the room, so
    * the poll's existence is no secret — what is withheld is its content, and
    * the reason is the one thing the reader can act on (sign in with another
-   * account). A browser with no session is `401 login_required` with the
-   * page to come back to, and reads nothing of the poll either: neither its
-   * statement, nor its votes, nor its revealed key (audit L3).
+   * account). A browser with no session is `401 login_required`, and reads
+   * nothing of the poll either: neither its statement, nor its votes, nor its
+   * revealed key (ADR-014, audit L3).
    */
   async function publicRequest<B extends z.ZodType | undefined = undefined>(
     req: FastifyRequest,
@@ -474,11 +474,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     const found = await service.byCode(app.db, params.data.code, now);
     if (found && !isOwnedPoll(found.evaluation)) {
       if (!req.user) {
-        reply.code(401).send({
-          error: "login_required",
-          message: "This poll is for the students of its classroom",
-          next: `/p/${found.evaluation.accessCode ?? params.data.code}`,
-        });
+        reply.code(401).send({ error: "login_required", message: "This poll is for the students of its classroom" });
         return null;
       }
       if (!(await findReachableEvaluation(app.db, callerOf(req), found.evaluation.id))) {

@@ -1,9 +1,7 @@
 /**
- * A fixed-window counter per key, in the process's memory: the public
- * routes that must not be a free resource — the OAuth client registration
- * (RFC 7591), a kiosk station's attestation, each call of which reaches
- * Google. Best effort: a restart forgets it, and a second process would
- * count apart.
+ * A fixed-window counter per key, in the process's memory, for what a caller
+ * without a session must not get for free. Best effort: a restart forgets it,
+ * and a second process would count apart.
  */
 export class FixedWindowLimiter {
   private readonly windows = new Map<string, { start: number; count: number }>();
