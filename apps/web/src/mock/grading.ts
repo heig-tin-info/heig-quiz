@@ -178,6 +178,52 @@ const isFall = (q: { id: string }) => q.id === "q-fall";
  */
 const BLOCKS: MockQuestion | undefined = questions.find((q) => q.id === "q-blocks");
 
+/**
+ * A question appended to the `closed` evaluation, graded in a pass of its own
+ * that draws nothing from `rand()`: what differs is its item id's suffix, its
+ * points, each attempt's answer (`null`: blank) and whether a grading is left
+ * to validate.
+ */
+interface Appended {
+  question: MockQuestion;
+  suffix: string;
+  points: number;
+  answer: (attempt: MockAttempt, attemptIndex: number, key: string) => unknown;
+  proposed: (key: string) => boolean;
+}
+
+const APPENDED: Appended[] = [
+  ...(FALL
+    ? [
+        {
+          question: FALL,
+          suffix: "00000000fa11",
+          points: 2,
+          // One student left it blank; the others answered from their own values.
+          answer: (attempt: MockAttempt, attemptIndex: number, key: string) =>
+            attemptIndex === 2 ? null : { text: fallAnswer(fallValues(attempt.id), attempt.ability, fallHash(key)) },
+          // A few left to validate while the evaluation is being graded.
+          proposed: (key: string) => fallHash(key) % 5 === 0,
+        },
+      ]
+    : []),
+  ...(BLOCKS
+    ? [
+        {
+          question: BLOCKS,
+          suffix: "0000000b10c5",
+          points: 3,
+          // One student left it blank; the able half read the sensors, the rest counted cells.
+          answer: (attempt: MockAttempt, attemptIndex: number) =>
+            attemptIndex === 3 ? null : attempt.ability >= 0.6 ? BLOCKS_ANSWER : BLOCKS_STRAIGHT_ANSWER,
+          // Validated at once: the run is the grade (ADR-103 §2).
+          proposed: () => false,
+        },
+      ]
+    : []),
+];
+const isAppended = (q: { id: string }) => APPENDED.some((a) => a.question.id === q.id);
+
 interface FallValues {
   h: number;
   g: number;
@@ -425,7 +471,7 @@ function buildGradingWorld(
     items.forEach((item, itemIndex) => {
       const q = questions.find((x) => x.id === item.questionId)!;
       // Its own pass below: nothing of `rand()` is spent on it.
-      if (isFall(q) || q.id === BLOCKS?.id) return;
+      if (isAppended(q)) return;
       const config = publishedConfig(q);
       const key = cellKey(attempt.id, item.id);
       // Two students in thirty left this question untouched.
@@ -553,66 +599,38 @@ function buildGradingWorld(
     });
   });
 
-  for (const item of items.filter((i) => i.questionId === FALL?.id)) {
-    for (const [attemptIndex, attempt] of attempts.entries()) {
-      const key = cellKey(attempt.id, item.id);
-      const n = fallHash(key);
-      // One student left it blank; the others answered from their own values.
-      const answer = attemptIndex === 2 ? null : { text: fallAnswer(fallValues(attempt.id), attempt.ability, n) };
-      if (answer) answers.set(key, answer);
-      const graded = answer
-        ? (tryAnswer(FALL!, attemptConfig(FALL!, attempt.id), answer) as { points: number; details: unknown })
-        : { points: 0, details: null };
-      gradings.set(key, [
-        {
-          id: `g${(gradingSeq += 1)}`,
-          answerId: answer ? `${key}-ans` : null,
-          attemptId: attempt.id,
-          itemId: item.id,
-          points: graded.points * item.points,
-          maxPoints: item.points,
-          source: "auto",
-          // A few left to validate while the evaluation is being graded.
-          state: !options.allValidated && n % 5 === 0 && graded.points > 0 ? "proposed" : "validated",
-          details: graded.details,
-          confidence: !options.allValidated && n % 5 === 0 && graded.points > 0 ? "high" : null,
-          comment: null,
-          gradedBy: null,
-          gradedAt: iso(-2 * H + attemptIndex * 1000),
-          supersedesId: null,
-          regradeNote: null,
-        },
-      ]);
-    }
-  }
-
-  for (const item of items.filter((i) => i.questionId === BLOCKS?.id)) {
-    for (const [attemptIndex, attempt] of attempts.entries()) {
-      const key = cellKey(attempt.id, item.id);
-      // One student left it blank; the able half read the sensors, the rest counted cells.
-      const answer = attemptIndex === 3 ? null : attempt.ability >= 0.6 ? BLOCKS_ANSWER : BLOCKS_STRAIGHT_ANSWER;
-      if (answer) answers.set(key, answer);
-      const graded = tryAnswer(BLOCKS!, publishedConfig(BLOCKS!), answer) as { points: number; details: unknown };
-      gradings.set(key, [
-        {
-          id: `g${(gradingSeq += 1)}`,
-          answerId: answer ? `${key}-ans` : null,
-          attemptId: attempt.id,
-          itemId: item.id,
-          points: graded.points * item.points,
-          maxPoints: item.points,
-          // Validated at once: the run is the grade (ADR-103 §2).
-          source: "auto",
-          state: "validated",
-          details: graded.details,
-          confidence: null,
-          comment: null,
-          gradedBy: null,
-          gradedAt: iso(-2 * H + attemptIndex * 1000),
-          supersedesId: null,
-          regradeNote: null,
-        },
-      ]);
+  for (const appended of APPENDED) {
+    const q = appended.question;
+    for (const item of items.filter((i) => i.questionId === q.id)) {
+      for (const [attemptIndex, attempt] of attempts.entries()) {
+        const key = cellKey(attempt.id, item.id);
+        const answer = appended.answer(attempt, attemptIndex, key);
+        if (answer !== null) answers.set(key, answer);
+        const graded =
+          answer === null
+            ? { points: 0, details: null }
+            : (tryAnswer(q, attemptConfig(q, attempt.id), answer) as { points: number; details: unknown });
+        const proposed = !options.allValidated && graded.points > 0 && appended.proposed(key);
+        gradings.set(key, [
+          {
+            id: `g${(gradingSeq += 1)}`,
+            answerId: answer === null ? null : `${key}-ans`,
+            attemptId: attempt.id,
+            itemId: item.id,
+            points: graded.points * item.points,
+            maxPoints: item.points,
+            source: "auto",
+            state: proposed ? "proposed" : "validated",
+            details: graded.details,
+            confidence: proposed ? "high" : null,
+            comment: null,
+            gradedBy: null,
+            gradedAt: iso(-2 * H + attemptIndex * 1000),
+            supersedesId: null,
+            regradeNote: null,
+          },
+        ]);
+      }
     }
   }
 
@@ -628,37 +646,20 @@ const gradingWorlds: MockGradingWorld[] = [];
 {
   const closed = evaluations.find((e) => e.state === "closed");
   const released = evaluations.find((e) => e.state === "released");
-  // The parameterized question, the closed evaluation's last item (ADR-056 §9).
-  if (closed && FALL && closed.items.length > 0) {
+  // The appended questions, the closed evaluation's last items, in order (`APPENDED`).
+  for (const { question, suffix, points } of APPENDED) {
+    if (!closed || closed.items.length === 0) break;
     closed.items.push({
       ...closed.items.at(-1)!,
-      id: "iiiiiiii-0000-4000-8000-00000000fa11",
+      id: `iiiiiiii-0000-4000-8000-${suffix}`,
       position: closed.items.length,
-      points: 2,
+      points,
       milestone: false,
       bonus: false,
-      questionId: FALL.id,
-      questionVersionId: "vvvvvvvv-0000-4000-8000-00000000fa11",
-      type: "short",
-      internalName: FALL.internalName,
-      versionNumber: 1,
-      latestVersionNumber: 1,
-      deprecated: false,
-    });
-  }
-  // The blocks question, after it (see `BLOCKS` above).
-  if (closed && BLOCKS && closed.items.length > 0) {
-    closed.items.push({
-      ...closed.items.at(-1)!,
-      id: "iiiiiiii-0000-4000-8000-0000000b10c5",
-      position: closed.items.length,
-      points: 3,
-      milestone: false,
-      bonus: false,
-      questionId: BLOCKS.id,
-      questionVersionId: "vvvvvvvv-0000-4000-8000-0000000b10c5",
-      type: "blocks",
-      internalName: BLOCKS.internalName,
+      questionId: question.id,
+      questionVersionId: `vvvvvvvv-0000-4000-8000-${suffix}`,
+      type: question.type,
+      internalName: question.internalName,
       versionNumber: 1,
       latestVersionNumber: 1,
       deprecated: false,

@@ -45,8 +45,8 @@
     "functions": 100
   },
   "packages/qt-blocks": {
-    "lines": 75,
-    "branches": 75,
+    "lines": 77,
+    "branches": 76,
     "functions": 75
   },
   "packages/qt-brainstorm": {

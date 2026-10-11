@@ -119,7 +119,7 @@ const STUDENT_HANDED_IN_ATTEMPT = "22222222-2222-4222-8222-222222222225";
  * questions still waiting for a grading: points only, no grade (F-RES-04).
  */
 export const STUDENT_EARLY_ATTEMPT = "22222222-2222-4222-8222-222222222226";
-const studentItem = (n: number) => `aaaaaaaa-0000-4000-8000-00000000000${n}`;
+const studentItem = (n: number) => `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 /** The evaluation's state follows the scene; everything else is fixed. */
 const studentEvaluationState = () =>
@@ -129,7 +129,6 @@ const studentEvaluationState = () =>
       ? ("paused" as const)
       : ("running" as const);
 
-/** One question of each MVP type, in French, as `toStudent` would publish it. */
 /** The type of the attempt's question n, at index n − 1. */
 const STUDENT_TYPES = [
   "mcq",
@@ -144,6 +143,7 @@ const STUDENT_TYPES = [
   "blocks",
 ] as const;
 
+/** One question of each MVP type, in French, as `toStudent` would publish it. */
 const studentPayloads: Record<number, unknown> = {
   // The mcq whose choices hold a FENCED BLOCK, which is what the rich editor
   // can now write into one (markdown/tiptap.ts): a lead line and a snippet,
