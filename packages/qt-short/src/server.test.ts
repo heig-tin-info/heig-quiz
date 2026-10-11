@@ -1,11 +1,27 @@
 /** The contract surface of `shortServer`. */
 import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
-import { describe, expect, it } from "vitest";
+import { buildClock } from "@quiz/domain/regex";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { toCanonical } from "./canonical.js";
 import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { emptyShortDraft, ShortConfigSchema } from "./schema.js";
 import { expectedAnswers, migrateShortV1, shortServer } from "./server.js";
+
+/*
+ * Coverage (CI's Coverage job) slows a build some twentyfold, and a cold first
+ * build then passes the measured guard of `@quiz/domain/regex`, which adds
+ * `regex.too_complex` to a pattern accepted, or refused, on its text. Its
+ * clock is stopped for this file, as in `regex.test.ts`: the refusals
+ * asserted here are read on the text, and the guard is tested there.
+ */
+const realNow = buildClock.now;
+beforeAll(() => {
+  buildClock.now = () => 0;
+});
+afterAll(() => {
+  buildClock.now = realNow;
+});
 
 describe("the contract", () => {
   it("refuses a version it never emitted", () => {

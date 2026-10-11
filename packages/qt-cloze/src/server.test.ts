@@ -2,11 +2,26 @@
 import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
 import { buildClock } from "@quiz/domain/regex";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { toCanonical } from "./canonical.js";
 import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { CLOZE_CONFIG_VERSION, ClozeConfigSchema, emptyClozeDraft } from "./schema.js";
 import { clozeServer, hasSelectBlank } from "./server.js";
+
+/*
+ * Coverage (CI's Coverage job) slows a build some twentyfold, and a cold first
+ * build then passes the measured guard of `@quiz/domain/regex`, which adds
+ * `regex.too_complex` to a pattern accepted, or refused, on its text. Its
+ * clock is stopped for this file, as in `regex.test.ts`: the refusals
+ * asserted here are read on the text, and the guard is tested there.
+ */
+const realNow = buildClock.now;
+beforeAll(() => {
+  buildClock.now = () => 0;
+});
+afterAll(() => {
+  buildClock.now = realNow;
+});
 
 describe("the contract", () => {
   /*
@@ -104,21 +119,14 @@ describe("regex blanks RE2 refuses (ADR-099)", () => {
   });
 
   it("publish a question under the budget", () => {
-    // About 25 ms to build. The measured guard of `@quiz/domain/regex` would
-    // refuse it under coverage, twenty times slower: its clock is stopped here,
-    // the estimate alone decides, and the bound is loose.
-    const realNow = buildClock.now;
-    buildClock.now = () => 0;
-    try {
-      expect(
-        elapsed(() => {
-          const under = config(`${blanks(5, "\\p{Ll}".repeat(10))} ${blanks(45, "(the )?[a-zà-ÿ]{2,30}")}`);
-          expect(clozeServer.publicationIssues!(under)).toEqual([]);
-        }),
-      ).toBeLessThan(1000);
-    } finally {
-      buildClock.now = realNow;
-    }
+    // About 25 ms to build, twenty times more under coverage: with the clock
+    // stopped (top of the file), the estimate alone decides, and the bound is loose.
+    expect(
+      elapsed(() => {
+        const under = config(`${blanks(5, "\\p{Ll}".repeat(10))} ${blanks(45, "(the )?[a-zà-ÿ]{2,30}")}`);
+        expect(clozeServer.publicationIssues!(under)).toEqual([]);
+      }),
+    ).toBeLessThan(1000);
   });
 
   it("hold no [[…]] reference in a parameterized question (ADR-056 §10)", () => {
