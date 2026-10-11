@@ -44,6 +44,7 @@ import type { InteractiveOutcome } from "@quiz/core/server";
 import { tracer, type AuditAction } from "../../audit.js";
 import { SITTING, confined, delegated } from "../../auth/session.js";
 import { iso } from "../../clock.js";
+import type { AppConfig } from "../../config.js";
 import {
   loadEvaluation,
   loadEvaluationAttempt,
@@ -62,7 +63,10 @@ import * as service from "./service.js";
 /** Rate limit of the journal route (F-EVAL-13): 60 entries a minute. */
 const EVENTS_PER_MINUTE = 60;
 
-export async function livePlugin(app: FastifyInstance) {
+export async function livePlugin(
+  app: FastifyInstance,
+  opts: { config: Pick<AppConfig, "RUNNER_RUNS_PER_EVALUATION"> },
+) {
   const requireSession = (req: FastifyRequest, reply: FastifyReply) =>
     app.requireSession(req, reply);
   const requireTeacher = teacherGuard(app);
@@ -408,6 +412,7 @@ export async function livePlugin(app: FastifyInstance) {
     student({ params: IdParam, body: RunBody, load: own }, async ({ reply, now, body, scope }) => {
       const outcome = await service.runVisibleCases(app.db, {
         runner: app.runner,
+        runsPerEvaluation: opts.config.RUNNER_RUNS_PER_EVALUATION,
         evaluation: scope.evaluation,
         attempt: scope.attempt,
         itemId: body.itemId,
@@ -445,6 +450,7 @@ export async function livePlugin(app: FastifyInstance) {
     student({ params: IdParam, body: SimulateBody, load: own }, async ({ reply, now, body, scope }) => {
       const outcome = await service.simulateAnswer(app.db, {
         runner: app.runner,
+        runsPerEvaluation: opts.config.RUNNER_RUNS_PER_EVALUATION,
         evaluation: scope.evaluation,
         attempt: scope.attempt,
         itemId: body.itemId,

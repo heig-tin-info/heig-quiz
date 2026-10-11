@@ -41,6 +41,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-010 — Secrets outside the repository and outside the database, in an encrypted institutional vault](ADR-010-stockage-secrets.md)
 - [ADR-011 — Reconciliation reuses the idempotent webhook handlers](ADR-011-reconciliation-par-les-handlers.md)
 - [ADR-016 — The code runner on the codespace VM, behind Caddy, with a shared token](ADR-016-runner-sur-vm-separee.md)
+- [ADR-101 — The runner's capacity is budgeted: a budget per request, aged grading, a cap per evaluation](ADR-101-budget-du-runner.md)
 - [ADR-028 — A staging environment on the production VM, and promotion by sha](ADR-028-recette-sur-la-meme-vm.md)
 - [ADR-030 — Notification channels and delivery rules](ADR-030-canaux-de-notification.md)
 - [ADR-087 — What's new: one entry file per pull request, shown once after an update](ADR-087-nouveautes-de-la-plateforme.md)

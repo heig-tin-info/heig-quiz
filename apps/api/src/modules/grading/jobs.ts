@@ -25,8 +25,11 @@
  *    attempt reopened, or answer rewritten, since → nothing: a later pass sends its own
  *    runner.run() → type.finalizeRunner()         → validated
  *    RunnerUnavailable (the stub, decision D14)   → proposed, reason 'runner_unavailable'
- *    RunnerBusy                                   → rethrown, pg-boss retries
+ *    RunnerBusy (queue full, or waited too long)  → rethrown, pg-boss retries (ADR-101)
+ *      … on the last try                          → proposed, reason 'runner_busy'
  *    anything else                                → proposed, reason 'runner_error'
+ *    (a program that overruns is a result: the runner reports its cases
+ *     timed out within the request's budget, never a retry)
  *    then, the grid complete                      → grading_ready, once (`ready.ts`)
  *
  * grading.llm, for one answer (ADR-063):
@@ -73,6 +76,7 @@ import {
   GRADING_LLM_QUEUE,
   GRADING_RUNNER_QUEUE,
   type JobQueue,
+  type JobTry,
 } from "../../jobs.js";
 import { LlmError } from "../llm/service.js";
 import {
@@ -244,7 +248,7 @@ export async function registerGradingJobs(
   await queue.work<EvaluationGradingJob>(GRADING_EVALUATION_QUEUE, (data) =>
     runEvaluationGrading(app, data),
   );
-  await queue.work<RunnerGradingJob>(GRADING_RUNNER_QUEUE, (data) => runRunnerGrading(app, data), {
+  await queue.work<RunnerGradingJob>(GRADING_RUNNER_QUEUE, (data, job) => runRunnerGrading(app, data, job), {
     localConcurrency: config.GRADING_RUNNER_CONCURRENCY,
   });
   // No retry: the provider's SDK already retries a rate limit, and a cap
@@ -643,17 +647,19 @@ async function enqueueOrRun<T extends object>(
  * The second half of a `pending: runner` grading (decision D2). The runner is
  * `app.runner`, chosen once at boot by `RUNNER_MODE`; under the default stub
  * it throws `RunnerUnavailable` and this ends as a proposal (decision D14).
+ * Run inline (no queue), every call is the last try. Exported for its tests.
  */
-async function runRunnerGrading(
+export async function runRunnerGrading(
   app: FastifyInstance,
   job: RunnerGradingJob,
+  tried: JobTry = { lastTry: true },
 ): Promise<void> {
   const db = app.db;
   const evaluation = await byId(db, job.evaluationId);
   if (!evaluation) return;
   // A cell a teacher (or a job before this one) validated is never touched.
   if (!(await isValidated(db, job.attemptId, job.itemId))) {
-    await gradeWithRunner(app, evaluation, job);
+    await gradeWithRunner(app, evaluation, job, tried);
   }
   // Whichever way it went, this job may be the last writer on the grid: the
   // pass that sent it may have committed its batch only after another job
@@ -669,6 +675,7 @@ async function gradeWithRunner(
   app: FastifyInstance,
   evaluation: EvaluationRecord,
   job: RunnerGradingJob,
+  tried: JobTry,
 ): Promise<void> {
   const db = app.db;
 
@@ -706,7 +713,15 @@ async function gradeWithRunner(
     (err: unknown) => ({ err }),
   );
   if ("err" in run) {
-    if (run.err instanceof RunnerBusy) throw run.err; // the queue retries with backoff
+    // Saturation is worth a retry, with the same job (its `finalizeState`
+    // included): pg-boss retries with backoff. The last try settles the cell
+    // as a proposal, so the grid completes and `grading_ready` goes out
+    // (ADR-101); the teacher's "Run grading again" clears it.
+    if (run.err instanceof RunnerBusy) {
+      if (!tried.lastTry) throw run.err;
+      await write(failedProposal("runner_busy"));
+      return;
+    }
     const reason = run.err instanceof RunnerUnavailable ? "runner_unavailable" : "runner_error";
     if (reason === "runner_error") {
       app.log.error({ err: run.err, itemId: job.itemId }, "grading: runner failed");

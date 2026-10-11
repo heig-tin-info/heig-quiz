@@ -1,7 +1,7 @@
 import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { QueueFull, RunQueue } from "./queue.js";
+import { GRADING_AGING_MS, QueueFull, RunQueue } from "./queue.js";
 
 function request(priority: RunnerRequest["priority"], name: string): RunnerRequest {
   return {
@@ -57,6 +57,41 @@ describe("RunQueue", () => {
     gates[2]!.open();
     await Promise.all(all);
     expect(queue.stats()).toMatchObject({ running: 0, queued: 0 });
+  });
+
+  describe("the aging of a grading request (ADR-101)", () => {
+    afterEach(() => vi.useRealTimers());
+
+    /** One slot held by `first`; a grading request waits `waitedMs`, then an interactive one arrives. */
+    async function orderAfter(waitedMs: number): Promise<string[]> {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const order: string[] = [];
+      const first = gate();
+      const queue = new RunQueue({
+        concurrency: 1,
+        queueMax: 10,
+        run: (req) => {
+          order.push(req.files[0]!.content);
+          return order.length === 1 ? first.promise : Promise.resolve(EMPTY);
+        },
+      });
+      const all = [queue.submit(request("interactive", "first"))];
+      await Promise.resolve();
+      all.push(queue.submit(request("grading", "grading")));
+      vi.setSystemTime(Date.now() + waitedMs);
+      all.push(queue.submit(request("interactive", "interactive")));
+      first.open();
+      await Promise.all(all);
+      return order;
+    }
+
+    it("puts a grading request that waited past the threshold before the interactive ones", async () => {
+      expect(await orderAfter(GRADING_AGING_MS + 1000)).toEqual(["first", "grading", "interactive"]);
+    });
+
+    it("leaves a grading request under the threshold behind them", async () => {
+      expect(await orderAfter(GRADING_AGING_MS - 1000)).toEqual(["first", "interactive", "grading"]);
+    });
   });
 
   it("serves an interactive request before a grading one, whatever the order", async () => {

@@ -5,8 +5,14 @@ import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
  *
  * `interactive` is a student waiting in front of their screen for the Run
  * button to answer; `grading` is a background pass that pg-boss will happily
- * retry in thirty seconds. So interactive always goes first, and a grading
- * pass can never starve a classroom: the ordering is absolute, not weighted.
+ * retry in a few seconds. So interactive goes first, and a grading pass can
+ * never starve a classroom — but a class running code must not starve the
+ * grading either, or every hand-in's run waits out the API's patience
+ * (audit M5). Hence the aging: a grading request that has waited
+ * `agingMs` (10 s, well under the API's queue allowance) goes before the
+ * interactive ones. The API sends one grading run at a time
+ * (`GRADING_RUNNER_CONCURRENCY`), so an aged request costs the class one
+ * slot for one run, never the pool (ADR-101, amending ADR-067 §5).
  *
  * Beyond `queueMax` waiting requests the answer is `429` with a `Retry-After`
  * (queue.ts never blocks a caller it cannot serve). The HTTP client of the API
@@ -17,7 +23,7 @@ import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
  * A caller that goes away takes its request with it: the `signal` of
  * `submit` removes a waiting request from its queue, and is handed to `run`
  * for a running one, which destroys its container. Otherwise a client that
- * gave up (the API stops waiting after `RUNNER_TIMEOUT_MS`) would still hold
+ * gave up (the API stops waiting past its queue allowance) would still hold
  * one of the few slots for a run nobody reads.
  */
 
@@ -30,10 +36,15 @@ export class QueueFull extends Error {
 
 export type Priority = RunnerRequest["priority"];
 
+/** How long a grading request waits before it goes ahead of the interactive ones. */
+export const GRADING_AGING_MS = 10_000;
+
 export interface QueueOptions {
   concurrency: number;
   queueMax: number;
   run: (request: RunnerRequest, signal?: AbortSignal) => Promise<RunnerOutcome>;
+  /** {@link GRADING_AGING_MS} by default. */
+  agingMs?: number;
 }
 
 export interface QueueStats {
@@ -48,6 +59,8 @@ export interface QueueStats {
 interface Waiter {
   request: RunnerRequest;
   signal: AbortSignal | undefined;
+  /** When it joined its queue, for the aging of a grading request. */
+  queuedAt: number;
   /** Stops listening to `signal` once the request leaves the queue. */
   detach: () => void;
   resolve: (outcome: RunnerOutcome) => void;
@@ -99,6 +112,7 @@ export class RunQueue {
       const waiter: Waiter = {
         request,
         signal,
+        queuedAt: Date.now(),
         resolve,
         reject,
         // Once running, the request is `run`'s to stop: it has the signal.
@@ -122,7 +136,16 @@ export class RunQueue {
     return Math.min(30, Math.max(1, Math.ceil((ahead * average) / 1000)));
   }
 
+  /**
+   * The oldest grading request once it has aged, then interactive, then
+   * grading. Read only when a slot frees up (or a request arrives), which is
+   * the only moment the order matters: no timer.
+   */
   private next(): Waiter | undefined {
+    const oldest = this.waiting.grading[0];
+    const aged =
+      oldest !== undefined && Date.now() - oldest.queuedAt >= (this.options.agingMs ?? GRADING_AGING_MS);
+    if (aged) return this.waiting.grading.shift();
     return this.waiting.interactive.shift() ?? this.waiting.grading.shift();
   }
 

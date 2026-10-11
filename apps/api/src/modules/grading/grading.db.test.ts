@@ -27,7 +27,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { reasonOf, type McqPolicy } from "@quiz/contracts";
-import type { PendingRunnerResult, RunnerOutcome, RunnerService } from "@quiz/core/server";
+import { RunnerBusy, type PendingRunnerResult, type RunnerOutcome, type RunnerService } from "@quiz/core/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -42,7 +42,8 @@ import { applyState, byId, createEvaluation, joinedItems } from "../evaluation/s
 import * as live from "../live/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
-import { runEvaluationGrading } from "./jobs.js";
+import { GRADING_RUNNER_QUEUE, type JobQueue } from "../../jobs.js";
+import { runEvaluationGrading, runRunnerGrading } from "./jobs.js";
 import * as service from "./service.js";
 import { writeGradings } from "./service.js";
 
@@ -637,6 +638,86 @@ describe("runner-backed grading (decision D14)", () => {
       const fixture = await seedCodeEvaluation(db, app.clock.now());
       await runEvaluationGrading(app, { evaluationId: fixture.evaluationId });
       expect(seen).toEqual([[2, 0, 1]]);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("a saturated runner (ADR-101)", () => {
+  const busy: RunnerService = {
+    run: async () => {
+      throw new RunnerBusy(null);
+    },
+    health: async () => ({ ok: true, languages: ["c"], queued: 32, avgMs: 1 }),
+  };
+
+  /** A code evaluation whose pass sent its runner job to a queue; the job, as pg-boss would hand it over. */
+  async function runnerJob(runner: RunnerService) {
+    const app = await appFor();
+    (app as unknown as { runner: RunnerService }).runner = runner;
+    const sent: { name: string; data: object }[] = [];
+    const queue: JobQueue = {
+      createQueue: async () => {},
+      send: async (name, data) => void sent.push({ name, data }),
+      work: async () => {},
+      stop: async () => {},
+    };
+    (app as unknown as { boss: JobQueue }).boss = queue;
+    const fixture = await seedCodeEvaluation(db, app.clock.now());
+    await runEvaluationGrading(app, { evaluationId: fixture.evaluationId });
+    const job = sent.find((s) => s.name === GRADING_RUNNER_QUEUE)!.data;
+    return { app, fixture, job: job as Parameters<typeof runRunnerGrading>[1] };
+  }
+
+  it("rethrows before the last try, so pg-boss retries the same job, and writes nothing", async () => {
+    const restore = registerForTests(fakeRunnableCode);
+    try {
+      const { app, fixture, job } = await runnerJob(busy);
+      await expect(runRunnerGrading(app, job, { lastTry: false })).rejects.toBeInstanceOf(RunnerBusy);
+      expect(await gradingsOf(fixture.evaluationId)).toHaveLength(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it("settles the cell as a runner_busy proposal on the last try: the grid completes", async () => {
+    const restore = registerForTests(fakeRunnableCode);
+    try {
+      const { app, fixture, job } = await runnerJob(busy);
+      await runRunnerGrading(app, job, { lastTry: true });
+      const rows = await gradingsOf(fixture.evaluationId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.grading).toMatchObject({ state: "proposed", points: 0, comment: "runner_busy" });
+      expect(reasonOf(rows[0]!.grading.details)).toBe("runner_busy");
+      // Waiting for the runner, like an absent one: a new pass may clear it.
+      expect(await service.progressOf(db, fixture.evaluationId)).toMatchObject({
+        done: 0,
+        pending: { runner: 1, llm: 0 },
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("grades a program that overran its budget from its timed-out cases, never as runner_unavailable", async () => {
+    const restore = registerForTests(fakeRunnableCode);
+    try {
+      const timedOut: RunnerService = {
+        run: async (req) => ({
+          compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+          cases: req.cases.map(() => ({
+            exitCode: null, stdout: "", stderr: "", ms: 1000, timedOut: true, oom: false, truncated: false,
+          })),
+        }),
+        health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
+      };
+      const { app, fixture, job } = await runnerJob(timedOut);
+      // Not the last try: a deterministic overrun is a result, never retried.
+      await runRunnerGrading(app, job, { lastTry: false });
+      const rows = await gradingsOf(fixture.evaluationId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.grading).toMatchObject({ state: "validated", points: 0, details: { passed: 0 } });
     } finally {
       restore();
     }

@@ -1263,8 +1263,9 @@ describe("running code (POST /attempts/:id/run)", () => {
       { name: "hidden-1", expected: "secret-expected", visible: false },
     ],
     compare?: { ignoreCase: boolean },
+    students = 2,
   ) {
-    const seed = await seedLive(db, { questions: 0 });
+    const seed = await seedLive(db, { questions: 0, students });
     const draft = await reload(db, seed.evaluationId);
     const { createQuestion, putDraft, publishQuestion } = await import("../pool/service.js");
     const { id: questionId } = await createQuestion(db, {
@@ -1301,11 +1302,16 @@ describe("running code (POST /attempts/:id/run)", () => {
       { attemptCount: 0 },
     );
     const row = await applyState(db, draft, "running", clock.now());
-    const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
-    const created = await service.ensureAttempt(db, row, participant, clock.now());
-    const attempt = await service.beginAttempt(db, row, created, participant, clock.now());
+    const begin = async (studentId: string) => {
+      const participant = (await service.participantOf(db, row, studentId))!;
+      const created = await service.ensureAttempt(db, row, participant, clock.now());
+      return service.beginAttempt(db, row, created, participant, clock.now());
+    };
+    const attempt = await begin(seed.studentIds[0]!);
     const items = await itemRows(db, row.id);
-    return { evaluation: row, attempt, itemId: items[0]!.id };
+    /** The attempts of the other students, for the per-evaluation cap. */
+    const others = () => Promise.all(seed.studentIds.slice(1).map(begin));
+    return { evaluation: row, attempt, itemId: items[0]!.id, others };
   }
 
   /** A runner that answers "ok" to every case it is sent, once `hold` settles. */
@@ -1391,6 +1397,47 @@ describe("running code (POST /attempts/:id/run)", () => {
     for (const r of results.filter((r) => r.status === "rejected")) {
       expect((r as PromiseRejectedResult).reason).toMatchObject({ code: "rate_limited" });
     }
+  });
+
+  it("runs at most RUNNER_RUNS_PER_EVALUATION of one evaluation at once, and spends no budget on a refusal (ADR-101)", async () => {
+    const crowded = await codeAttempt(undefined, undefined, 5);
+    const elsewhere = await codeAttempt();
+    const attempts = [crowded.attempt, ...(await crowded.others())];
+    let release = (): void => undefined;
+    const runner = echoRunner(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const run = (target: { evaluation: typeof crowded.evaluation; itemId: string }, attempt: typeof crowded.attempt) =>
+      service.runVisibleCases(db, {
+        runner: runner as never,
+        runsPerEvaluation: 4,
+        evaluation: target.evaluation,
+        attempt,
+        itemId: target.itemId,
+        regions: ["return 0;"],
+        now: clock.now(),
+      });
+
+    const four = attempts.slice(0, 4).map((attempt) => run(crowded, attempt));
+    await vi.waitFor(() => expect(runner.sent).toHaveLength(4));
+    // The fifth of the same evaluation is told the runner is busy...
+    await expect(run(crowded, attempts[4]!)).rejects.toMatchObject({
+      code: "runner_unavailable",
+      status: 503,
+      reason: "busy",
+    });
+    // ... while another evaluation still runs.
+    const other = run(elsewhere, elsewhere.attempt);
+    await vi.waitFor(() => expect(runner.sent).toHaveLength(5));
+    release();
+    await Promise.all([...four, other]);
+
+    // The refusal journaled nothing: the fifth student's budget is whole,
+    // and once a slot is free their run goes through.
+    expect(await service.countRecentEvents(db, attempts[4]!.id, "run", new Date(0))).toBe(0);
+    await expect(run(crowded, attempts[4]!)).resolves.toMatchObject({ result: { status: "ok" } });
   });
 
   it("answers 503 runner_unavailable with the stub runner (decision D14)", async () => {

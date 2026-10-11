@@ -28,3 +28,26 @@ export class Budget {
 
 /** A refused spend waits at most this long: the window's width. */
 export const BUDGET_RETRY_AFTER_S = 60;
+
+/**
+ * Concurrent holders by key, in memory: at most `limit` of `key` at once.
+ * The same weight as {@link Budget} — per process, lost on restart — for the
+ * runs in flight of one attempt and of one evaluation (`live/runs.ts`,
+ * ADR-101).
+ */
+export class Slots {
+  private readonly held = new Map<string, number>();
+
+  /** Takes one of the `limit` slots of `key`: the function that gives it back, or null when all are held. */
+  take(key: string, limit: number): (() => void) | null {
+    const count = this.held.get(key) ?? 0;
+    if (count >= limit) return null;
+    this.held.set(key, count + 1);
+    // Called once, in a `finally`.
+    return () => {
+      const left = (this.held.get(key) ?? 1) - 1;
+      if (left === 0) this.held.delete(key);
+      else this.held.set(key, left);
+    };
+  }
+}

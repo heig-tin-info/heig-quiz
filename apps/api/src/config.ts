@@ -10,6 +10,9 @@ const flag = (fallback: "" | "1" = "") =>
     .default(fallback)
     .transform((v) => v === "1" || v === "true");
 
+/** `RUNNER_RUNS_PER_EVALUATION` by default, and what a caller naming no cap gets (`live/runs.ts`). */
+export const RUNS_PER_EVALUATION = 4;
+
 /**
  * Configuration via environment variables, validated at startup (fail-fast).
  * Secrets only travel through the environment (ADR-010).
@@ -207,8 +210,23 @@ const EnvSchema = z.object({
    * finds the address. Required in production when `RUNNER_MODE=http`.
    */
   RUNNER_TOKEN: z.string().default(""),
-  /** Wall-clock budget of one runner call, compilation and every case included. */
+  /**
+   * The most an INTERACTIVE run may take once the runner starts it (a Run
+   * click, a teacher's preview run, the wand's settle), compilation and every
+   * case included: sent as the request's `budgetMs`, which the runner
+   * enforces by reporting the cases past it as timed out. A grading run gets
+   * its full budget. The API waits that budget plus a queue allowance
+   * (`modules/runner/http.ts`, ADR-101).
+   */
   RUNNER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
+  /**
+   * Interactive runs of ONE evaluation in the runner at once (N-SEC-07's
+   * per-evaluation limit, ADR-101): past it a student's Run answers "busy,
+   * try again in a moment" and spends nothing of their budget. In memory,
+   * like `inFlight` (ADR-001: one process). The product owner sets the
+   * value against the runner's `RUNNER_CONCURRENCY`.
+   */
+  RUNNER_RUNS_PER_EVALUATION: z.coerce.number().int().min(1).max(64).default(RUNS_PER_EVALUATION),
   /**
    * Runner jobs of the background grading (`grading.runner`) this process
    * runs at once (ADR-067). An exercise grades every hand-in while it runs,

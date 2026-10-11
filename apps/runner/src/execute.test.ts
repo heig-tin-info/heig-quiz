@@ -1,5 +1,5 @@
 import type { RunnerRequest } from "@quiz/core/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { caseArgv, classify, containerTtlSeconds, executeRequest, prepareFiles } from "./execute.js";
 import { createFakeEngine } from "./test/fakeEngine.js";
@@ -57,6 +57,10 @@ describe("containerTtlSeconds", () => {
     expect(containerTtlSeconds(many, config)).toBe(
       config.RUNNER_REQUEST_TIMEOUT_MS / 1000 + 5,
     );
+  });
+
+  it("follows the budget the API sent (ADR-101)", () => {
+    expect(containerTtlSeconds(request({ budgetMs: 10_000 }), config)).toBe(10 + 5);
   });
 
   it("ignores the cases of a `check`", () => {
@@ -191,6 +195,29 @@ describe("executeRequest", () => {
     expect(runs[1]!.argv).toEqual([
       "timeout", "-s", "KILL", "2", "./program", "3", "a b", 'q"x', "semi;colon",
     ]);
+  });
+
+  describe("the request's budget (ADR-101)", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("starts no case that could end past it, and reports the rest as timed out", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      // Every case is an infinite loop the in-container reaper kills at 2 s.
+      const engine = createFakeEngine((call) => {
+        if (call.argv[0] !== "timeout") return {};
+        vi.setSystemTime(Date.now() + 2000);
+        return { exitCode: 137, ms: 2000 };
+      });
+      const fifteen = Array.from({ length: 15 }, (_, i) => ({ name: `c${i}`, args: [], stdin: "" }));
+      const outcome = await executeRequest(request({ cases: fifteen, budgetMs: 10_000 }), deps(engine));
+
+      // A case costs 2 s plus the 2 s grace: those starting at 0, 2, 4 and
+      // 6 s can end by 10 s; the fifth, at 8 s, could not.
+      expect(engine.calls.filter((call) => call.argv[0] === "timeout")).toHaveLength(4);
+      expect(outcome.cases).toHaveLength(15);
+      expect(outcome.cases.every((c) => c.timedOut)).toBe(true);
+      expect(engine.created[0]!.ttlSeconds).toBe(15);
+    });
   });
 
   it("stops at a build failure and runs no case", async () => {

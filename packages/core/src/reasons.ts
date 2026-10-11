@@ -11,9 +11,10 @@ import type { LlmCriterion } from "./llm.js";
 /**
  * Why a machine PROPOSED instead of grading: the `details.reason` (and the
  * `comment`) of a grading no grader could settle. Wire values, closed here
- * once: the grading pass writes the first nine (`jobs.ts`), question types
- * the next four (a circuit's or a program's own fault, issue #267), and the
- * runner's saturation the last. The web translates every one of them.
+ * once: the grading pass writes the first ten (`jobs.ts`; `runner_busy` on
+ * the last try of a saturated runner, ADR-101), question types the next
+ * four (a circuit's or a program's own fault, issue #267). The web
+ * translates every one of them.
  */
 export const PASS_REASONS = [
   "config_unreadable",
@@ -25,6 +26,7 @@ export const PASS_REASONS = [
   "runner_unavailable",
   "runner_error",
   "finalize_error",
+  "runner_busy",
 ] as const;
 export type PassReason = (typeof PASS_REASONS)[number];
 
@@ -34,7 +36,6 @@ export const MACHINE_REASONS = [
   "palette_violation",
   "runner_request_invalid",
   "template_region_mismatch",
-  "runner_busy",
 ] as const;
 export type MachineReason = (typeof MACHINE_REASONS)[number];
 

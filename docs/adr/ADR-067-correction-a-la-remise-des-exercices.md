@@ -16,6 +16,10 @@ Settles open question 50 of `docs/spec/06-questions-ouvertes.md`.
 
 Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
 
+Amended 2026-10-11 by [ADR-101](ADR-101-budget-du-runner.md) §4, scope §5:
+the runner's interactive-first order is no longer absolute; a grading
+request that has waited 10 s goes first.
+
 ## Context
 
 The exercise "Premiers pas en C" — mode `exercise`, feedback `immediate`,
@@ -114,7 +118,8 @@ part of an attempt the student has not handed in.
    at every hand-in sends grading runs while the class is still running
    code, so the API takes `grading.runner` jobs `GRADING_RUNNER_CONCURRENCY`
    at a time, one by default: a background grading holds at most one slot,
-   and the rest stays the students'.
+   and the rest stays the students'. *(Amended by ADR-101 §4: a grading
+   request waiting 10 s goes before the interactive ones.)*
 
 6. **What the student reads** (landing with the sibling pull request
    `feedback-pending`, merged right after this one; recorded here because it
