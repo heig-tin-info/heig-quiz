@@ -33,7 +33,7 @@ records the initial rationale; it is not a current product comparison.
 - Auth: edu-ID only for named accounts. A session code allows anonymous participation in polls. Linking a GitHub account (F-GH-05) is never a way to sign in: it attaches a GitHub identity to an edu-ID account.
 - GitHub: the platform acts on GitHub through its own GitHub App (D23 of `docs/merge/08-decisions.md`), installed by a teacher on an organization; production and staging have separate Apps, and staging never holds the production one (N-SEC-18).
 - Data: answers and grades are personal data. See [03-exigences-non-fonctionnelles.md](03-exigences-non-fonctionnelles.md), data section.
-- Browsers: current versions of Chrome, Firefox, Safari, Edge. Mobile and tablet for every type except code and diagram, which remain usable but are optimised for desktop.
+- Browsers: current versions of Chrome, Firefox, Safari, Edge. Mobile and tablet for every type except code, diagram and blocks (ADR-103), which remain usable but are optimised for desktop.
 
 ## 0.5 Phases
 

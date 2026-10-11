@@ -29,7 +29,7 @@ Rules:
 
 - A type has no tables. Its configuration and its answers live in JSONB in the core tables.
 - A type makes no direct network call. Runner execution uses `ctx.runner`; an LLM request is returned as a pending result for the API to execute. `ctx.llm` is an availability flag, not a service.
-- A type has no drill hook (ADR-041 §4). A question is drillable when its type is in the drill's scope — `mcq`, `short`, `cloze` and `categorize` in v1, `DRILL_TYPES` in `@quiz/domain` — and `grade` settles its answer automatically and finally: graded at once, not pending a runner or an LLM, not a proposal for the teacher. The drill takes its correctness from `grade`'s points and its time from the review.
+- A type has no drill hook (ADR-041 §4). A question is drillable when its type is in the drill's scope — `mcq`, `short`, `cloze`, `categorize` and `blocks` (ADR-103) in v1, `DRILL_TYPES` in `@quiz/domain` — and `grade` settles its answer automatically and finally: graded at once, not pending a runner or an LLM, not a proposal for the teacher. The drill takes its correctness from `grade`'s points and its time from the review.
 - The phase 1 types live in the monorepo under `packages/qt-*`, with two entry points `server` and `client`, see 5.2. Loading is static, through two registries.
 
 ## 4.2 Canonical format
@@ -561,3 +561,65 @@ Shown as **Math expression** / « Expression mathématique » in the interface. 
 **Dashboard and more**: the live cell shows the LaTeX on one line; the class debrief groups the answers by the text typed, as `short` (ADR-033) — never by equivalence. Not pollable, no drill (`POLL_TYPES` and `DRILL_TYPES` unchanged), no parameters (ADR-056 §10 keeps `mcq`, `short` and `cloze`).
 
 **Out of v1**, each settled later without a migration ([ADR-102](../adr/ADR-102-type-expression-mathematique.md) decision 11): parameterized keys, equations, inequalities, intervals, sets and vectors, form checks (simplified, factored, a required function), a maximum degree, drill and polls, a formula blank in `cloze`, negative marking, anticipated mistakes with a feedback.
+
+## 4.17 Blocks `blocks`
+
+Shown as **Blocks** / « Blocs » in the interface. The student assembles a program of blocks that drives a warehouse robot from its start cell to the loading dock without hitting a rack; the program runs on several warehouses, some hidden, so it must read its sensors rather than count cells. Decided by the product owner on 2026-10-11, [ADR-103](../adr/ADR-103-type-blocs.md); package `packages/qt-blocks`, interpreter `@quiz/domain/blocks`. The origin of the player is the prototype the ADR names.
+
+**Configuration** (`configVersion: 1`):
+
+```yaml
+config:
+  prompt: markdown
+  world: { kind: warehouse }   # a discriminated union, one member in v1; the world fixes the block set
+  toolbox: [forward, turn, repeat, repeat_until_dock, if_sensor]   # a non-empty subset, default all
+  starter: []                  # a program preloaded in the student's workspace, default empty
+  cases:                       # at least one
+    - name: "Allée dégagée"
+      map:                     # ASCII rows: . floor, # rack, ^ > v < start and heading, D dock
+        - "..#..#.."
+        - "........"
+        - ">......D"
+        - "...#..#."
+      battery: 40              # forward moves allowed on this map
+      visible: true
+      points: 1
+    - name: "caché A"
+      map: ["^...D", ".#.#.", "....."]
+      battery: 20
+      visible: false
+      points: 1
+  referenceSolution:           # a program: the key; mandatory at publication
+    - kind: repeat_until_dock
+      body:
+        - kind: if_sensor
+          sensor: free
+          where: front
+          then: [{ kind: forward }]
+          else: [{ kind: turn, dir: right }]
+  allOrNothing: false
+```
+
+- **A program** is a list of statements: `forward`; `turn` with `dir` `left` or `right`; `repeat` with `times` and a `body`; `repeat_until_dock` with a `body`; `if_sensor` with `sensor` (`free` or `blocked`), `where` (`front`, `left` or `right`), `then` and `else` (`Stmt` in `@quiz/domain/blocks`). Kinds are English and carry no position: Blockly's own serialization is never stored (ADR-103 §5). **Every program a schema accepts is held to `PROGRAM_LIMITS`** (statements, nesting depth, `repeat.times`): the answer, and in the config the `starter` and the `referenceSolution` alike, since the server runs the reference at publication. Each schema measures the raw input with `programStats` before parsing it recursively.
+- **A map** is `MAP_SIZE.min` to `MAP_SIZE.max` rows of `MAP_SIZE.min` to `MAP_SIZE.max` cells each, all of the same length, with exactly one start and one dock. `x` counts columns from the left, `y` rows from the top; `^` faces north (towards row 0). The schema refuses anything else with the key of `parseMap`: `blocks.map_too_small`, `blocks.map_too_large`, `blocks.map_bad_char`, `blocks.map_not_rectangular`, `blocks.map_no_start`, `blocks.map_two_starts`, `blocks.map_no_dock`, `blocks.map_two_docks`.
+- **The battery is per case**: maps differ in size. A turn costs nothing, a forward move costs one. `battery` is an integer from 1 to `BATTERY_MAX`; the schema refuses more, and the interpreter clamps whatever it is given to that range, so a run stays bounded whatever the caller passes.
+- **The reference solution is mandatory at publication**, not for a draft. Publication runs it on every case, visible and hidden, and refuses a question whose reference is missing (`blocks.reference_missing`) or does not reach the dock on a case (`blocks.reference_fails_case`, naming the case). The reference grades nothing.
+
+**The run**: `runProgram` of `@quiz/domain/blocks`, the same function in the browser and on the server, whose header is the reference for what each statement does and how a run ends (`dock`, `collision`, `battery`, `loop`, `short`). **Every statement visited and every loop iteration costs one step** of `stepBudget(battery)`, a budget derived from the battery, never from a setting, which holds for nested empty loops (ADR-103 §4).
+
+**Answer**: `{ program: [statements] }`, the stack under the workspace's single "when the robot starts" block; detached blocks are discarded on save. The answer schema enforces the program limits; `answerMisfit` refuses a program that uses a kind the toolbox does not offer (`422 answer_invalid`, key `blocks.answer_misfit`). `isAnswered`: the program is non-empty AND differs from the starter.
+
+**Scoring**: as `code` (§4.7). A case passes when its run ends with `dock`; the grade is the sum of the points of the cases that passed, or all or nothing under `allOrNothing`. The path length is never rewarded. Grading is synchronous and final (`state: validated`): no runner, no proposal. `gradings.details` records, per case, the verdict, the reason, the moves and the trail.
+
+**Student** (`toStudent`, invariant 4): the prompt, the world, the toolbox, the starter, the VISIBLE cases whole (name, map, battery, points) and, of the hidden cases, only their count and total points. `toStudent` never includes the `referenceSolution` key nor any container of hidden cases, which the test asserts by forbidden key; it also searches the serialized view for the VALUES of the key (05 §5.7): each hidden map's distinctive rows (maps travel as ASCII rows, never as coordinates), the hidden case names, the hidden batteries and a serialized fragment of the reference.
+
+- **`studentDetails` runs only when the key is not shown**: under `showKey`, `filterDetails` hands the details over whole. It keeps a visible case's full result (verdict, reason, moves, trail) and replaces a hidden case with `{ name, visible: false, points, ok, reason }`, where `name` is `#n` unless `showHiddenCaseNames` is on and `reason` is the coarse one (`collision`, `battery`, `loop`, `short`): never the trail, the move count or a step index. Its test searches its output for the hidden trails' cells and the move counts.
+- **`gradings.details` never stores a map**. The key (`toSolution`) is the reference program and the hidden cases; under `showKey` the hidden maps and the reference reach the review from `toSolution` only.
+
+**Editor**: the prompt; the toolbox as checkboxes; the starter program and the reference solution, each in a block workspace; a secondary "Check the reference" button that runs the reference on every case in the browser and lists the verdicts; the case list, each case with its name, a clickable grid over its map (a click cycles floor and rack, a tool places the start with its heading or the dock), its battery, its visibility and its points; the "all or nothing" switch. Long sections are cards, as in the code editor.
+
+**Player**: the prompt, then the block workspace full width — a permanent palette in three labelled groups (Movement, Control, Sensors) holding the toolbox's blocks, a `Blocks | Code` switch above it (the Code tab shows the JavaScript Blockly generates, read-only, never executed), the block count — then a **Simulation** card whose one primary action is "Test on every warehouse": it runs the VISIBLE cases in the browser through the interpreter and fills the case table (case, warehouse thumbnail, result, verdict), with a foot line on the hidden cases' count and points. The selected case is animated from the interpreter's trace, with a battery meter and the secondary buttons "Run here", "Step" and "Reset". No API route is involved; the grade is the server's. The workspace is navigable from the keyboard (Blockly's core keyboard navigation). Block labels are interface strings (`qt.blocks.c.*`, `en` and `fr`). Blockly is loaded lazily and self-hosted; without it (a chunk that failed to load) the surfaces show the program as read-only pseudo-code with a message.
+
+**Review**: the student's program, read-only, and the case table with each case's verdict and reason; the teacher, and a student under `showKey`, also see the trails, the hidden maps and the reference.
+
+**Dashboard and more**: the live cell shows "N blocks", never a verdict. `aggregate` is the pass rate of the visible cases, as `code`. Not shuffleable, not pollable, no generator (wand) in v1. Drillable (§4.1): its grading is automatic and final. Optimised for desktop (docs/00 §0.4).

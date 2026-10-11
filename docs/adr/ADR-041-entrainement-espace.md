@@ -24,6 +24,9 @@ confidence the student stated, which §4 and §5 never read; since ADR-085 §4's
 amendment of 2026-10-08, the due date §5 computes is capped to the next day for a
 confident error, FSRS's state untouched (§11).
 
+Extended by [ADR-103](ADR-103-type-blocs.md) §10 (2026-10-11): `blocks` joins
+the types of §3.
+
 Student mastery per concept (F-DRILL-05) is decided in
 [ADR-098](ADR-098-maitrise-des-notions-par-l-etudiant.md), which keeps §6, §11 and §15.
 
