@@ -1,6 +1,6 @@
 # Question types
 
-Ten types are available today: multiple choice, short answer, fill in the blanks, code, categorize, code with image, circuit, essay, diagram and math expression. This chapter walks through the first five; the last five are summed up under [More types](#more-types). All but the essay and the diagram are graded automatically, and all are written in the editor described in [Question pools](pools.md). This chapter covers what each form asks for, how the answer is scored and what the student gets.
+Eleven types are available today: multiple choice, short answer, fill in the blanks, code, categorize, blocks, code with image, circuit, essay, diagram and math expression. This chapter walks through the first six; the last five are summed up under [More types](#more-types). All but the essay and the diagram are graded automatically, and all are written in the editor described in [Question pools](pools.md). This chapter covers what each form asks for, how the answer is scored and what the student gets.
 
 ## Multiple choice
 
@@ -298,6 +298,62 @@ The statement, a line saying whether the order matters, the tray of cards to sor
 !!! tip
     One distractor or two that a student with a precise misconception would place are worth more than many obvious ones: a distractor everybody leaves out only lowers the weight of the other cards under **Per card**.
 
+## Blocks
+
+For a first program without any syntax: the student snaps blocks together to drive a warehouse robot from its start to the loading dock without hitting a rack. The program runs in several warehouses, some of them hidden, so a program that counts cells fails where one that reads the robot's sensors succeeds. It is graded like a code question, warehouse by warehouse, and needs no code runner.
+
+### The editor
+
+<figure markdown="span">
+  ![The editor of a blocks question](../assets/screenshots/editor-blocks-light.png#only-light)
+  ![The editor of a blocks question](../assets/screenshots/editor-blocks-dark.png#only-dark)
+  <figcaption>A blocks question: the statement, the blocks offered, the starter and the reference programs, then the warehouses, two of them hidden.</figcaption>
+</figure>
+
+**Blocks** lists the five blocks the student's palette may offer: **Move forward**, **Turn** (left or right), **Repeat n times**, **Repeat until the dock** and **If a sensor reads** (the cell ahead, on the left or on the right is free or blocked, with an *else* branch). Untick the ones the exercise should do without: a first exercise without the sensor, say.
+
+The **Starter program** is preloaded in the student's workspace; leave it empty to start from nothing. A student who hands it back untouched has not answered: the player says **Unchanged starter: not an answer yet**, and the question is graded as unanswered.
+
+The **Reference solution** is your own program, assembled on the same workspace. It is required to publish, not to save a draft, and it must reach the dock in every warehouse, hidden ones included: publishing refuses a question whose reference misses one and names it. **Check the reference** runs it on every warehouse in your browser and says which ones it misses. The reference grades nothing; it is the key the student sees only if the evaluation shows the expected answer. The starter and the reference may only use the blocks you ticked.
+
+**Warehouses** are the test cases, one to eight. Each has a **Name**, its **Points**, its **Battery** (the forward moves allowed, from 1 to 200; a turn is free) and **Hidden**. **Width** and **Height** go from 3 to 12 cells, and the grid under them is the map: with the **Racks** tool a click adds or removes a rack, with **Start** a click places the robot and a click on it turns it, with **Dock** a click moves the dock. **Add a warehouse** starts from a small corridor. **All or nothing**, under **Scoring**, gives the points only when the robot reaches the dock in every warehouse.
+
+Behind the grid, a map is a list of rows of equal length, which is how it is written through the API or by an assistant over MCP: `.` is floor, `#` a rack, one of `^`, `>`, `v`, `<` the robot's start and the way it faces (`^` towards the first row), and `D` the dock, exactly one start and one dock:
+
+```text
+..#..#..
+........
+>......D
+...#..#.
+```
+
+### How it is graded
+
+Each warehouse runs the program from the robot's start. A forward move costs one unit of battery, a turn nothing. A run ends in one of five ways: **Dock reached**, the only one that passes; **Collision**, the robot moved into a rack or out of the warehouse; **Battery empty**; **Endless loop**, the program kept running, turning or testing, far longer than its battery allows; **Stopped short**, the program ended elsewhere. The points of the question are the sum of the points of the warehouses whose run reached the dock, or all of them or nothing under **All or nothing**. The length of the path is never rewarded: a robot that wanders and arrives scores like one that goes straight.
+
+The grade is computed the moment the evaluation closes and arrives validated: the server runs the same interpreter the player animates, so a warehouse passed in the browser is passed at grading. A program using a block you have since unticked is graded as an empty program.
+
+### What the student sees
+
+<figure markdown="span">
+  ![The player of a blocks question after testing](../assets/screenshots/player-blocks-light.png#only-light)
+  ![The player of a blocks question after testing](../assets/screenshots/player-blocks-dark.png#only-dark)
+  <figcaption>The player with the starter as it is, after Test on every warehouse: the first warehouse reached, a collision in the two others, and the two hidden warehouses announced with their points.</figcaption>
+</figure>
+
+The statement, then the workspace: the palette on the left in three groups, **Movement**, **Control** and **Sensors**, holding the blocks you ticked, and the program assembled under the block **when the robot starts**. A block left apart from that stack is greyed out and not part of the answer. **Blocks | Code** above it switches to the JavaScript the blocks stand for, shown and never run; the block count sits at the right.
+
+Under it, the **Simulation** card. **Test on every warehouse** runs the program on the visible warehouses in the browser and fills the table: **Case**, **Warehouse** with a thumbnail, **Result** in moves and **Verdict**. The map shows the selected warehouse with its battery: **Run here** animates the robot on it, **Step** advances it one move or turn at a time and **Reset** puts it back. The foot of the card says how many hidden warehouses there are and what they are worth; they run only at grading.
+
+In the feedback, a visible warehouse shows its verdict, its moves and the path the robot took. A hidden one shows only whether it passed and, if not, why in a word (**Collision**, **Battery empty**, **Endless loop**, **Stopped short**), never its map nor the path, unless the evaluation shows the expected answer: then the hidden maps and the reference appear too. The live dashboard shows how many blocks each student has assembled, never a verdict, and its tooltip spells the program.
+
+The workspace can be driven from the keyboard, with Blockly's own keyboard navigation. Like a code question, the type is made for a computer: on a phone it works, but not comfortably. A blocks question can be used in drill, not in a poll.
+
+!!! tip
+    Make at least one hidden warehouse that a program counting cells fails, such as a rack on the straight line: that is what makes the student use **Repeat until the dock** and the sensor. Run **Check the reference** after every change to a map.
+
+Its full rules are in the specification, [4.17 Blocks](../spec/04-types-de-questions.md#417-blocks-blocks).
+
 ## Comparison
 
 | Type | Auto-graded | Partial credit | On a phone | Typical use |
@@ -307,6 +363,7 @@ The statement, a line saying whether the order matters, the tray of cards to sor
 | Fill in the blanks | yes | yes, per blank | yes, with short blanks | complete a sentence, a formula or a line of code |
 | Code | yes, on the server | yes, per case | not comfortably | write or complete a function against test cases |
 | Categorize | yes | yes, per card | yes, by clicking | sort terms into groups, put steps in order |
+| Blocks | yes | yes, per warehouse | not comfortably | a first algorithm: loops, conditions, sensors |
 | Essay | no: you validate, from an AI proposal when a model is configured | yes, your points | yes, for a short text | explain, argue, describe in a few paragraphs |
 | Math expression | yes | yes, per accepted answer | yes, with the on-screen keyboard | a formula: an equivalent resistance, a derivative, a transfer function |
 
