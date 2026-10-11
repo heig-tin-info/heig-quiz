@@ -37,6 +37,7 @@ import {
   scene,
 } from "./runtime";
 import {
+  BLOCKS_CONFIG,
   CATEGORIZE_CONFIG,
   DIAGRAM_CONFIG,
   RC_STUDENT,
@@ -50,6 +51,8 @@ import { categorizeServer } from "@quiz/qt-categorize/server";
 import type { CategorizeConfig } from "@quiz/qt-categorize/client";
 import { diagramServer } from "@quiz/qt-diagram/server";
 import type { DiagramConfig } from "@quiz/qt-diagram/client";
+import { blocksServer } from "@quiz/qt-blocks/server";
+import type { BlocksConfig } from "@quiz/qt-blocks/client";
 import { pollOfTeacher, teacherPolls } from "./poll";
 import { hasMockJournal } from "./journal";
 import { hasStudentGroups, studentGroupSetCards } from "./groups";
@@ -298,6 +301,12 @@ const studentPayloads: Record<number, unknown> = {
    * reference — the type's own `toStudent`.
    */
   9: diagramServer.toStudent(DIAGRAM_CONFIG as DiagramConfig, { seed: 0, itemId: "9", shuffle: false }),
+  /*
+   * The `blocks` item (docs/04 §4.17): the visible warehouses and the
+   * starter; the hidden warehouses as a count, never their maps — the type's
+   * own `toStudent`.
+   */
+  10: blocksServer.toStudent(BLOCKS_CONFIG as BlocksConfig, { seed: 0, itemId: "10", shuffle: false }),
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
@@ -451,7 +460,7 @@ export const studentAttemptView = (): AttemptView => ({
     pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
-  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5, 6, 7, 8, 9]).map((n) => {
+  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((n) => {
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
@@ -474,7 +483,9 @@ export const studentAttemptView = (): AttemptView => ({
                       ? "rich"
                       : n === 8
                         ? "categorize"
-                        : "diagram",
+                        : n === 9
+                          ? "diagram"
+                          : "blocks",
       milestone: n === 3,
       // The circuit, a bonus question (ADR-052): the player's label.
       bonus: n === 5,

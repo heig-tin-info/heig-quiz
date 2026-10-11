@@ -18,6 +18,7 @@ import {
 } from "@quiz/domain";
 import type { GradingConfidence, GradingSource, GradingState } from "@quiz/contracts";
 import type { AnyQuestionTypeServer, ItemAggregate } from "@quiz/core/server";
+import { blocksServer } from "@quiz/qt-blocks/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
 import { shortServer } from "@quiz/qt-short/server";
@@ -50,6 +51,8 @@ import {
   studentAttemptPixels,
 } from "./codeimage";
 import {
+  BLOCKS_ANSWER,
+  BLOCKS_STRAIGHT_ANSWER,
   CATEGORIZE_ANSWER,
   CircuitStimulusLike,
   DIAGRAM_ANSWER,
@@ -273,6 +276,9 @@ function mockAnswer(q: MockQuestion, config: Record<string, unknown>, ability: n
   }
   if (q.type === "diagram") {
     return rand() < ability ? { scene: config.reference } : DIAGRAM_ANSWER;
+  }
+  if (q.type === "blocks") {
+    return rand() < ability ? BLOCKS_ANSWER : BLOCKS_STRAIGHT_ANSWER;
   }
   // Short programs and long ones, so the table's box shows its five-line
   // clamp on some rows and not on others.
@@ -999,6 +1005,7 @@ const DEBRIEF_TYPES: Record<string, AnyQuestionTypeServer | undefined> = {
   mcq: mcqServer,
   short: shortServer,
   cloze: clozeServer,
+  blocks: blocksServer,
 };
 
 function attemptAggregate(type: string, answer: unknown, details: unknown): ItemAggregate {

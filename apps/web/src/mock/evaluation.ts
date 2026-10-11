@@ -16,9 +16,11 @@ import { countsAsCompleted,
   pastTiming,
   parseCloze,
   poolRoleAllows,
+  programStats,
   round2,
   splitTemplate,
 } from "@quiz/domain";
+import type { BlocksAnswer } from "@quiz/qt-blocks/client";
 import type {
   EvaluationTiming,
   FeedbackWhen,
@@ -41,6 +43,8 @@ import {
   rand,
 } from "./runtime";
 import {
+  BLOCKS_ANSWER,
+  BLOCKS_STRAIGHT_ANSWER,
   CATEGORIZE_ANSWER,
   DIAGRAM_ANSWER,
   MockQuestion,
@@ -135,7 +139,9 @@ function itemSource(): MockQuestion[] {
   const codeimage = published.filter((q) => q.type === "codeimage");
   // The diagram comes eighth (docs/04 §4.14), after the picture.
   const diagram = published.filter((q) => q.type === "diagram");
-  const rest = primary.filter((q) => !["rich", "categorize", "codeimage", "diagram"].includes(q.type));
+  // The blocks question comes ninth (docs/04 §4.17), after the diagram.
+  const blocks = published.filter((q) => q.type === "blocks");
+  const rest = primary.filter((q) => !["rich", "categorize", "codeimage", "diagram", "blocks"].includes(q.type));
   if (primary.length === 0) return published;
   return [
     ...rest.slice(0, 2),
@@ -145,6 +151,7 @@ function itemSource(): MockQuestion[] {
     ...categorize,
     ...codeimage,
     ...diagram,
+    ...blocks,
     ...rest.slice(3),
   ];
 }
@@ -232,6 +239,9 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
     // Half drawn from the starter, or the reference itself.
     case "diagram":
       return wrong ? DIAGRAM_ANSWER : { scene: config.reference };
+    // Counting cells, or reading the sensors.
+    case "blocks":
+      return wrong ? BLOCKS_STRAIGHT_ANSWER : BLOCKS_ANSWER;
   }
 }
 
@@ -289,6 +299,11 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
     case "diagram": {
       const { scene } = answer as { scene: { nodes: unknown[]; links: unknown[] } };
       return `${scene.nodes.length} · ${scene.links.length}`;
+    }
+    // `summarizeAnswer` of `@quiz/qt-blocks`: the size of the program.
+    case "blocks": {
+      const nodes = programStats((answer as BlocksAnswer).program).nodes;
+      return nodes === 1 ? "1 block" : `${nodes} blocks`;
     }
     // A poll's alone: no evaluation of the mock holds one.
     case "brainstorm":
@@ -662,9 +677,9 @@ export const EVAL_ROOM = "r1";
  * resolve to, which is what the screenshot script deep-links to.
  */
 evaluations.push(
-  // Nine items: the eighth is the diagram, the ninth the cloze, so the
-  // correction draws both.
-  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 9, {
+  // Ten items: the eighth is the diagram, the ninth the blocks, the tenth the
+  // cloze, so the correction draws all three.
+  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 10, {
     startedAt: iso(-20 * D),
     closedAt: iso(-20 * D + H),
   }),

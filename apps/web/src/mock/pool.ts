@@ -101,6 +101,9 @@ import type { CategorizeAnswer, CategorizeConfig } from "@quiz/qt-categorize/cli
 import { diagramServer } from "@quiz/qt-diagram/server";
 import type { DiagramAnswer, DiagramConfig } from "@quiz/qt-diagram/client";
 import { EXAMPLES, type Scene } from "@quiz/diagram/server";
+/* `blocks` likewise: its `toStudent` keeps the hidden warehouses home, its grade is the domain's run. */
+import { blocksServer } from "@quiz/qt-blocks/server";
+import type { BlocksAnswer, BlocksConfig } from "@quiz/qt-blocks/client";
 import type { AnyQuestionTypeServer, RunnerService } from "@quiz/core/server";
 import { shortServer } from "@quiz/qt-short/server";
 
@@ -135,7 +138,7 @@ interface MockVersion {
 export interface MockQuestion {
   id: string;
   poolId: string;
-  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize" | "diagram" | "brainstorm" | "math";
+  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize" | "diagram" | "brainstorm" | "math" | "blocks";
   internalName: string;
   categoryId: string | null;
   difficulty: number;
@@ -866,6 +869,53 @@ export const DIAGRAM_ANSWER: DiagramAnswer = {
   },
 };
 
+/**
+ * The blocks question of the mock (docs/04 §4.17): the warehouses of the
+ * prototype, three visible and two hidden, and the wall follower as the
+ * reference, which reaches every dock. The starter only works on the first
+ * warehouse, which is the point: the student must read the sensors.
+ */
+const WALL_FOLLOWER = [
+  {
+    kind: "repeat_until_dock",
+    body: [
+      {
+        kind: "if_sensor",
+        sensor: "free",
+        where: "front",
+        then: [{ kind: "forward" }],
+        else: [{ kind: "turn", dir: "right" }],
+      },
+    ],
+  },
+];
+export const BLOCKS_CONFIG: Record<string, unknown> = {
+  configVersion: 1,
+  prompt:
+    "Le robot de l'entrepôt doit rejoindre le **quai de chargement** sans heurter un rayonnage. " +
+    "Votre programme sera exécuté dans **plusieurs entrepôts** dont il ne connaît pas le plan : " +
+    "il doit se servir de ses capteurs plutôt que compter les cases. Chaque déplacement consomme une unité de batterie.",
+  world: { kind: "warehouse" },
+  toolbox: ["forward", "turn", "repeat", "repeat_until_dock", "if_sensor"],
+  starter: [{ kind: "repeat", times: 7, body: [{ kind: "forward" }] }],
+  referenceSolution: WALL_FOLLOWER,
+  cases: [
+    { name: "Allée dégagée", map: ["..#..#..", "........", ">......D", "...#..#.", "........", "........"], battery: 40, visible: true, points: 1 },
+    { name: "Rayonnage sur l'allée", map: ["......D.", ">..#....", "........", "........"], battery: 40, visible: true, points: 1 },
+    { name: "Quai au nord", map: ["^...D", ".#.#.", "....."], battery: 20, visible: true, points: 1 },
+    { name: "caché A", map: ["........", "..#..#..", "...#.#..", ">.##...D", "........"], battery: 60, visible: false, points: 1 },
+    { name: "caché B", map: ["......", ".#..#.", ".....v", "...#..", "D....."], battery: 30, visible: false, points: 1 },
+  ],
+  allOrNothing: false,
+};
+
+/** A student's answer: the wall follower, the program that reaches every dock. */
+export const BLOCKS_ANSWER: BlocksAnswer = { program: WALL_FOLLOWER as BlocksAnswer["program"] };
+/** Straight ahead, eight cells: what counting cells gives — the first warehouse only. */
+export const BLOCKS_STRAIGHT_ANSWER: BlocksAnswer = {
+  program: [{ kind: "repeat", times: 8, body: [{ kind: "forward" }] }],
+};
+
 export const questions: MockQuestion[] = [
   makeQuestion({
     poolId: "p1",
@@ -1280,6 +1330,24 @@ export const questions: MockQuestion[] = [
     config: DIAGRAM_CONFIG,
     explanation: "`Figure` réalise `Forme` ; `Cercle` et `Rectangle` en héritent.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 3 }],
+  }),
+  /*
+   * The `blocks` question (docs/04 §4.17), under an id of its own so the
+   * numbered ones after it keep theirs; `itemSource` in `evaluation.ts`
+   * splices it into the evaluations after the diagram.
+   */
+  makeQuestion({
+    id: "q-blocks",
+    poolId: "p1",
+    type: "blocks",
+    internalName: "robot-entrepot-capteurs",
+    categoryId: "k1",
+    difficulty: 2,
+    randomizable: false,
+    concepts: seedConceptIds(["Boucle"]),
+    config: BLOCKS_CONFIG,
+    explanation: "Longer le mur à droite mène au quai quelle que soit la disposition des rayonnages.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 2 }],
   }),
 ];
 
@@ -1784,11 +1852,17 @@ export function draftIssues(
       out.push({ path: ["columns"], code: "custom", message: "categorize.no_target" });
     }
   }
-  if (q.type === "diagram") {
-    const parsed = diagramServer.configSchema.safeParse(config);
+  if (q.type === "diagram" || q.type === "blocks") {
+    const server = q.type === "diagram" ? diagramServer : blocksServer;
+    const parsed = server.configSchema.safeParse(config);
     if (parsed.success) {
-      for (const issue of diagramServer.publicationIssues?.(parsed.data) ?? []) {
+      for (const issue of server.publicationIssues?.(parsed.data as never) ?? []) {
         out.push({ path: issue.path.map(String), code: "custom", message: issue.message });
+      }
+    } else if (q.type === "blocks") {
+      // The type's own keys (a map, a battery): the editor places each under its field.
+      for (const issue of parsed.error.issues) {
+        if (issue.code === "custom") out.push({ path: issue.path.map(String), code: "custom", message: issue.message });
       }
     }
   }
@@ -1926,6 +2000,8 @@ export function studentView(q: MockQuestion, config: Record<string, unknown>): u
       return categorizeServer.toStudent(config as CategorizeConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "diagram":
       return diagramServer.toStudent(config as DiagramConfig, { seed: 0, itemId: q.id, shuffle: false });
+    case "blocks":
+      return blocksServer.toStudent(config as BlocksConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "code": {
       const cases = ((config.tests as { cases?: CodeCaseLike[] })?.cases ?? []) as CodeCaseLike[];
       const visible = cases.filter((c) => c.visible);
@@ -2061,6 +2137,8 @@ export function solutionOf(q: MockQuestion): unknown {
       return categorizeServer.toSolution(config as CategorizeConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "diagram":
       return diagramServer.toSolution(config as DiagramConfig, { seed: 0, itemId: q.id, shuffle: false });
+    case "blocks":
+      return blocksServer.toSolution(config as BlocksConfig, { seed: 0, itemId: q.id, shuffle: false });
   }
 }
 
@@ -2105,6 +2183,18 @@ export function tryAnswer(
       solution: solutionOf(q),
       ...(graded.state === "proposed" ? { manual: true } : {}),
     };
+  }
+  // `blocks` is graded by its own server half: the domain's run on every warehouse.
+  if (q.type === "blocks") {
+    const graded = blocksServer.grade(config as BlocksConfig, (answer as BlocksAnswer | null) ?? null, {
+      seed: 0,
+      itemId: q.id,
+      attemptId: "",
+      itemPoints: 1,
+      now: new Date(),
+      runner: NO_RUNNER,
+    }) as { points: number; maxPoints: number; details: unknown };
+    return { status: "graded", points: graded.points, maxPoints: graded.maxPoints, details: graded.details, solution: solutionOf(q) };
   }
   // `categorize` is graded by its own server half, the evaluation's negative marking included.
   if (q.type === "categorize") {
@@ -2766,6 +2856,8 @@ export function emptyConfig(type: MockQuestion["type"]): Record<string, unknown>
       return { ...categorizeServer.emptyDraft() };
     case "diagram":
       return { ...diagramServer.emptyDraft() };
+    case "blocks":
+      return { ...blocksServer.emptyDraft() };
     case "brainstorm":
       return { ...brainstormServer.emptyDraft() };
     case "math":

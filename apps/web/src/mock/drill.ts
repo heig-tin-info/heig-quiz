@@ -62,13 +62,13 @@ interface MockCard {
   isNew: boolean;
 }
 
-/** The four types of v1 (ADR-041 §3), a published version each, in an interleaved order. */
-const DRILL_TYPES = ["mcq", "short", "cloze", "categorize"] as const;
+/** The five types of v1 (ADR-041 §3, ADR-103 §10), a published version each, in an interleaved order. */
+const DRILL_TYPES = ["mcq", "short", "cloze", "categorize", "blocks"] as const;
 const drillable = questions.filter(
   (q) => (DRILL_TYPES as readonly string[]).includes(q.type) && q.versions.length > 0 && q.deletedAt === null,
 );
 const pickOf = (type: string, n: number) => drillable.filter((q) => q.type === type).slice(0, n);
-const picked = [...pickOf("mcq", 2), ...pickOf("short", 1), ...pickOf("cloze", 1), ...pickOf("categorize", 1)];
+const picked = [...pickOf("mcq", 2), ...pickOf("short", 1), ...pickOf("cloze", 1), ...pickOf("blocks", 1), ...pickOf("categorize", 1)];
 
 const cards: MockCard[] = picked.map((question, i) => ({
   id: `dddddddd-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
