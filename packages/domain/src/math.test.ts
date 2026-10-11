@@ -84,6 +84,15 @@ describe("readMath", () => {
     expect(problem("\\sqrt{x}", { symbols: ["x"], forbidden: ["sin"] })).toBeNull();
   });
 
+  it("moves an operator left inside a script by the math field out of it", () => {
+    const r = read("\\frac{R_1R_2}{R_{1+}R_2}", ["R_1", "R_2"]);
+    expect(r.evaluate({ R_1: 2, R_2: 2 })).toBe(1);
+    expect(read("x^{2+}1").evaluate({ x: 3 })).toBe(10);
+    expect(read("x_{a-}1", ["x_a"]).evaluate({ x_a: 3 })).toBe(2);
+    // A script that is a name stays whole.
+    expect(problem("R_{12}+1", { symbols: ["R_12"] })).toBeNull();
+  });
+
   it("echoes e, not the engine's macro, and the reading of an ambiguous slash", () => {
     expect(read("\\exp(x)").latex).toBe("e^{x}");
     expect(read("2/3x").latex).toBe("\\frac{2}{3x}");

@@ -6,7 +6,7 @@
  */
 import type { MarkdownRenderer } from "@quiz/core/client";
 import type { MathProblem } from "@quiz/domain/math";
-import { caption, cx, ErrorText, markdown } from "@quiz/ui";
+import { caption, ErrorText, markdown } from "@quiz/ui";
 
 import { problemText, type ProblemStrings } from "./problems.js";
 
@@ -25,9 +25,9 @@ export function MathEcho({
   if (reading === null) return null;
   if ("problem" in reading) return <ErrorText>{problemText(s, reading.problem, symbols)}</ErrorText>;
   return (
-    <div className={cx(caption, "flex flex-wrap items-center gap-2")} data-testid="math-echo">
-      <span>{s.interpreted}</span>
-      <span className="text-fg">{markdown(renderMarkdown, `$${reading.latex}$`)}</span>
+    <div className="flex flex-wrap items-center gap-2" data-testid="math-echo">
+      <span className={caption}>{s.interpreted}</span>
+      <span className="text-base text-fg">{markdown(renderMarkdown, `$${reading.latex}$`)}</span>
     </div>
   );
 }

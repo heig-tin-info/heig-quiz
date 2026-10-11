@@ -65,7 +65,7 @@ export function MathReview({ student, answer, solution, details, points, maxPoin
           <span className="text-[13px] font-medium text-fg">{s.expected}</span>
           <ul className="flex flex-wrap gap-1.5">
             {solution.answers.map((expected, i) => (
-              <li key={`${expected.value}-${i}`} className="rounded-full border border-line bg-surface px-2 py-0.5 text-xs text-fg-muted">
+              <li key={`${expected.value}-${i}`} className="rounded-full border border-line bg-surface px-2.5 py-1 text-sm text-fg">
                 {markdown(renderMarkdown, `$${expected.value}$`)}
                 {expected.points < 1 ? <span className="ml-1 tabular-nums">({expected.points})</span> : null}
               </li>

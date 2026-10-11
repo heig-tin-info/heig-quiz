@@ -189,6 +189,18 @@ function parsesInBoundedTime(source: string): boolean {
   return (source.match(BAR) ?? []).length <= MAX_BARS;
 }
 
+/**
+ * A math field keeps the caret inside a subscript once `_` is typed, so a
+ * student who types `R_1+R_2` without leaving the subscript sends
+ * `R_{1+}R_2`: an operator closing a script is what they meant to write
+ * after it, never a part of the name.
+ */
+const SCRIPT_TRAILING_OPERATOR = /([_^])\{([A-Za-z0-9]+)([+\-*/])\}/g;
+
+function tidyScripts(latex: string): string {
+  return latex.replace(SCRIPT_TRAILING_OPERATOR, "$1{$2}$3");
+}
+
 /** The parsed expression, or `null` when the engine refuses the text outright (a numeral too long to hold). */
 function parse(source: string): Expression | null {
   try {
@@ -258,7 +270,7 @@ export function readMath(latex: string, options: ReadOptions): { ok: true; readi
   const source = latex.trim();
   if (source === "") return { ok: false, problem: { code: "empty" } };
   if (source.length > max) return { ok: false, problem: { code: "too_long", max } };
-  const expr = parsesInBoundedTime(source) ? parse(source) : null;
+  const expr = parsesInBoundedTime(source) ? parse(tidyScripts(source)) : null;
   if (expr === null || !expr.isValid) return { ok: false, problem: { code: "syntax" } };
   const declared = new Set(options.symbols);
   const unknown = expr.unknowns.filter((name) => !declared.has(name));
