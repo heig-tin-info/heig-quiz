@@ -1053,7 +1053,10 @@ The answer is computed at most once every 5 s, whoever asks, so the public
 route is no lever on the database or the runner (audit L21). Anyone reads
 `status` and `attention`; the `checks` object and `uptimeSeconds` are for a
 request with `Authorization: Bearer $METRICS_TOKEN` or an administrator's
-session. They report, in coarse words only
+session (`Cache-Control: no-store`: the answer depends on the caller). A
+browser whose session a deploy ended (*A deploy that signs everyone out*)
+reads the public answer until it signs in again, even though a tab opened
+before the deploy still looks signed in. The checks report, in coarse words only
 ([ADR-055](../adr/ADR-055-etat-du-systeme.md)):
 
 | Field | Values | Meaning |
