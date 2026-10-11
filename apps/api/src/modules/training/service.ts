@@ -19,7 +19,7 @@ import { isDeepStrictEqual } from "node:util";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { Locale } from "@quiz/domain";
-import { currentOrNextSemester, semesterMonths } from "@quiz/domain";
+import { clockChoiceOf, currentOrNextSemester, semesterMonths } from "@quiz/domain";
 import type { TrainingInstallResult, TrainingProvisionResponse, TrainingStatus } from "@quiz/contracts";
 import { TRAINING_MISSIONS, type TrainingMissionState } from "@quiz/contracts";
 
@@ -521,17 +521,27 @@ async function missionsOf(
   };
 }
 
+/**
+ * The live quiz of mission 2 (§4): the classroom's oldest evaluation in Live
+ * mode — the clock rule of ADR-086 (`clockChoiceOf`), read from each row's
+ * settings, never a title the teacher may rename. Null once it is deleted.
+ */
+async function liveEvaluationIdOf(db: Db, classroomId: string): Promise<string | null> {
+  const rows = await db.select().from(evaluations).where(eq(evaluations.classroomId, classroomId)).orderBy(asc(evaluations.createdAt));
+  return rows.find((row) => clockChoiceOf(evaluationService.settingsOf(row)).mode === "live")?.id ?? null;
+}
+
 /** `GET /app/api/training`: installed, the caller's course, the missions — `todo` everywhere without a course. */
 export async function status(db: Db, input: { userId: string; llmEnabled: boolean }): Promise<TrainingStatus> {
   const [pool, course] = await Promise.all([trainingPool(db), courseOf(db, input.userId)]);
   const classroomId = course ? await classroomIdOf(db, course.id) : null;
-  const missions =
+  const [missions, liveEvaluationId] =
     course && classroomId
-      ? await missionsOf(db, course.id, input.userId, input.llmEnabled)
-      : { student: "todo" as const, run: "todo" as const, own: "todo" as const, tools: "todo" as const };
+      ? await Promise.all([missionsOf(db, course.id, input.userId, input.llmEnabled), liveEvaluationIdOf(db, classroomId)])
+      : [{ student: "todo" as const, run: "todo" as const, own: "todo" as const, tools: "todo" as const }, null];
   return {
     installed: pool !== null,
-    course: course && classroomId ? { id: course.id, classroomId } : null,
+    course: course && classroomId ? { id: course.id, classroomId, liveEvaluationId } : null,
     missions: TRAINING_MISSIONS.map((key) => ({ key, state: missions[key] })),
   };
 }

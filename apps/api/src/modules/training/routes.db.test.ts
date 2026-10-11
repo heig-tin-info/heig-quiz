@@ -129,7 +129,8 @@ describe("provisioning over HTTP and the four missions (§1, §4)", () => {
     expect(second.statusCode).toBe(200);
     expect(second.json()).toEqual({ courseId, classroomId, created: false });
     const s = await statusOf();
-    expect(s.course).toEqual({ id: courseId, classroomId });
+    const liveQuiz = (await server.app.db.select().from(evaluations).where(and(eq(evaluations.classroomId, classroomId), eq(evaluations.mode, "exam"))))[0]!;
+    expect(s.course).toEqual({ id: courseId, classroomId, liveEvaluationId: liveQuiz.id });
     // No LLM gateway and no OAuth client in this server: the fourth mission cannot be done.
     expect(missions(s)).toEqual({ student: "todo", run: "todo", own: "todo", tools: "unavailable" });
   });

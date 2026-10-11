@@ -25,7 +25,7 @@ import {
 } from "../../db/schema.js";
 import { TRAINING_MCQ, TRAINING_SHORT, trainingFixture } from "../../test/training.js";
 import { testApp } from "../../test/db.js";
-import { settingsOf, feedbackOf } from "../evaluation/service.js";
+import { deleteEvaluation, feedbackOf, patchEvaluation, settingsOf } from "../evaluation/service.js";
 import { install, provision, status, TrainingNotInstalled } from "./service.js";
 
 const ADMIN_EMAIL = "admin@heig.test";
@@ -177,9 +177,24 @@ describe("provision (§1)", () => {
     expect(await db.select().from(evaluationItems).where(eq(evaluationItems.evaluationId, liveQuiz.id))).toHaveLength(2);
 
     expect(await auditRows("training.provision")).toMatchObject([{ actorUserId: teacherId, subjectId: course!.id }]);
+    // The status names the live quiz by its clock mode (ADR-086), never by its title.
     expect(await status(db, { userId: teacherId, llmEnabled: false })).toMatchObject({
       installed: true,
-      course: { id: course!.id, classroomId: room!.id },
+      course: { id: course!.id, classroomId: room!.id, liveEvaluationId: liveQuiz.id },
+    });
+  });
+
+  it("names no live quiz once the teacher deleted it, and names it whatever its title", async () => {
+    const [course] = await db.select().from(courses).where(eq(courses.trainingFor, teacherId));
+    const [room] = await db.select().from(classrooms).where(eq(classrooms.courseId, course!.id));
+    const liveQuiz = (await db.select().from(evaluations).where(and(eq(evaluations.classroomId, room!.id), eq(evaluations.mode, "exam"))))[0]!;
+    await patchEvaluation(db, liveQuiz, { title: "Mon examen" }, { attemptCount: 0, now: NOW });
+    expect((await status(db, { userId: teacherId, llmEnabled: false })).course?.liveEvaluationId).toBe(liveQuiz.id);
+    await deleteEvaluation(db, liveQuiz, "owner");
+    expect((await status(db, { userId: teacherId, llmEnabled: false })).course).toEqual({
+      id: course!.id,
+      classroomId: room!.id,
+      liveEvaluationId: null,
     });
   });
 
