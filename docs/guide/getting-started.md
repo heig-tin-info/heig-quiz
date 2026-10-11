@@ -18,7 +18,7 @@ The session lasts thirty days. **Sign out**, in the account menu described below
 
 ## The home page and the sidebar
 
-A teacher lands on **Courses**: one card per course, with its classrooms, its staff and the pools linked to it. The sidebar on the left is the same on every page:
+A teacher lands on **Courses**: one card per course, with its classrooms, its staff and the pools linked to it. An empty home also offers the training course, a course of your own with two quizzes in it, to learn the platform by doing: see [The training course](training.md). The sidebar on the left is the same on every page:
 
 - **Activities**: every exam, exercise and poll of your classrooms, in one place.
 - **Courses**: the home page.
