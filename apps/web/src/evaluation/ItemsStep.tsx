@@ -56,7 +56,7 @@ import {
   Tip,
   TextInput,
 } from "../ui";
-import { BonusLabel } from "../BonusLabel";
+import { BonusLabel } from "../CountingLabel";
 import { ConceptNames } from "../concepts/refs";
 import { DifficultyDots } from "../pool/QuestionTable";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
@@ -417,7 +417,7 @@ function ItemCard({
         <span className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2">
             <span className="truncate font-semibold">{item.internalName}</span>
-            {item.bonus ? (
+            {item.counting === "bonus" ? (
               <BonusLabel label="eval.questions.bonus.badge" hint="eval.questions.bonus.hint" />
             ) : null}
             {item.deprecated ? <Badge tone="red">{t("eval.questions.deprecated")}</Badge> : null}
@@ -449,10 +449,10 @@ function ItemCard({
           <IconButton
             size="sm"
             label={t("eval.questions.bonus")}
-            active={item.bonus}
-            aria-pressed={item.bonus}
+            active={item.counting === "bonus"}
+            aria-pressed={item.counting === "bonus"}
             disabled={locked}
-            onClick={() => onBonus(!item.bonus)}
+            onClick={() => onBonus(item.counting !== "bonus")}
           >
             <Candy />
           </IconButton>
@@ -786,7 +786,7 @@ export function ItemsStep({
                         last={index === items.length - 1}
                         t={t}
                         onPoints={(points) => patch.mutate({ itemId: item.id, body: { points } })}
-                        onBonus={(bonus) => patch.mutate({ itemId: item.id, body: { bonus } })}
+                        onBonus={(bonus) => patch.mutate({ itemId: item.id, body: { counting: bonus ? "bonus" : "normal" } })}
                         onMilestone={(milestone) =>
                           patch.mutate({ itemId: item.id, body: { milestone } })
                         }

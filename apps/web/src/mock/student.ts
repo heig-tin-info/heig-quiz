@@ -483,7 +483,7 @@ export const studentAttemptView = (): AttemptView => ({
       type: STUDENT_TYPES[n - 1]!,
       milestone: n === 3,
       // The circuit, a bonus question (ADR-052): the player's label.
-      bonus: n === 5,
+      counting: n === 5 ? ("bonus" as const) : ("normal" as const),
       intro: scene === "intro" ? (STUDENT_INTROS[n] ?? null) : null,
       // ADR-026: what `toStudent` adds to a choice question under negative marking.
       student:

@@ -393,7 +393,8 @@ export const TOOLS: Tool[] = [
     name: "get_evaluation",
     title: "Get an evaluation",
     description: "One evaluation: settings, schedule and its items (the questions it plays, with their points). " +
-      "A `bonus` item's points are left out of the total: they can only lift a student (ADR-052).",
+      "An item's `counting`: `normal`; `bonus`, left out of the total, its points can only lift a student (ADR-052); " +
+      "`neutralized`, left out of the total and of every student's points (ADR-108).",
     input: z.object({ evaluationId: Id }),
     annotations: READ,
     run: (api, a) => api.get(`/evaluations/${a.evaluationId}`),

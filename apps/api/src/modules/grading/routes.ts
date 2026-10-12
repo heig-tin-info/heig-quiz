@@ -16,6 +16,8 @@ import {
   GradingQuery,
   GradingRunBody,
   IdParam,
+  ItemCountingBody,
+  type ItemCountingResult,
   ItemParam,
   type ItemVersions,
   type GradingRunAccepted,
@@ -322,6 +324,36 @@ export async function gradingPlugin(app: FastifyInstance) {
         return reply
           .code(202)
           .send({ evaluationId: scope.evaluation.id, itemIds: [item.item.id], queued });
+      },
+    ),
+  );
+
+  /**
+   * ADR-108: how an item counts — normal, bonus or neutralized — changed
+   * after the evaluation ran, when a question proves incoherent. Only once
+   * the item list is frozen (the builder's toggle owns it before), never on
+   * a poll, never down to a total of 0; after the release, the owner's
+   * (`gradedEvaluation`, ADR-068 §3), and the students whose shown grade
+   * moved are told (`changeItemCounting`). Reversible any number of times.
+   */
+  app.put(
+    "/app/api/evaluations/:id/items/:itemId/counting",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: ItemParam, body: ItemCountingBody, load: gradedEvaluation },
+      async ({ req, reply, now, params, body, scope }): Promise<ItemCountingResult | FastifyReply> => {
+        const outcome = await service.changeItemCounting(app.db, scope.evaluation, params.itemId, body.counting, now);
+        if (outcome === null) return notFound(reply);
+        if (outcome.changed) {
+          await trace(req, "evaluation.item_counting", "evaluation", scope.evaluation.id, {
+            itemId: params.itemId,
+            before: outcome.before,
+            after: body.counting,
+            modifiedAfterRelease: outcome.modifiedAfterRelease,
+          });
+          events.gradingChanged(scope.evaluation);
+        }
+        return { counting: body.counting, modifiedAfterRelease: outcome.modifiedAfterRelease };
       },
     ),
   );

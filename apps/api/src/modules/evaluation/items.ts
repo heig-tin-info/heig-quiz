@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { ItemPatch, ItemRow, PoolSummary, TemplateItemRef } from "@quiz/contracts";
+import { copiedCounting, evaluationTotal, itemListLock, lacksGradedPoints, type ItemCounting } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -23,7 +24,7 @@ import {
   EvaluationError,
   questionRefused,
 } from "./shared.js";
-import { byId, classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
+import { attemptCount, byId, classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
 import type { ItemRecord } from "./shared.js";
 import { countingCoursePool, type Caller } from "../guards.js";
 
@@ -164,13 +165,56 @@ export async function patchItem(
   const next: Partial<typeof evaluationItems.$inferInsert> = {};
   if (patch.points !== undefined) next.points = patch.points;
   if (patch.milestone !== undefined) next.milestone = patch.milestone;
-  if (patch.bonus !== undefined) next.bonus = patch.bonus;
+  if (patch.counting !== undefined) next.counting = patch.counting;
   if (patch.intro !== undefined) next.intro = patch.intro;
   await db
     .update(evaluationItems)
     .set(next)
     .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, row.id)));
   return itemRows(db, row.id);
+}
+
+/**
+ * The grading-time counting act (ADR-108): an item becomes `normal`, `bonus`
+ * or `neutralized` AFTER the item list froze — the opposite gate of
+ * {@link patchItem}'s. Never on a poll, never down to a total of 0
+ * (`no_graded_points`, as the readiness check says it). Only the item's
+ * `counting` is written; the stored gradings are never touched, the sums
+ * apply it (`countedPoints`), so it is reversible any number of times. Under
+ * the evaluation's row lock, so two concurrent changes cannot both pass the
+ * total check. Returns the counting it replaced, or null for an item the
+ * evaluation does not hold.
+ */
+export async function setItemCounting(
+  tx: DbOrTx,
+  row: EvaluationRecord,
+  itemId: string,
+  counting: ItemCounting,
+): Promise<ItemCounting | null> {
+  if (row.mode === "poll") throw new EvaluationError("counting_poll");
+  const [locked] = await tx.select().from(evaluations).where(eq(evaluations.id, row.id)).for("update");
+  if (!locked) return null;
+  const items = await tx
+    .select({ id: evaluationItems.id, points: evaluationItems.points, counting: evaluationItems.counting })
+    .from(evaluationItems)
+    .where(eq(evaluationItems.evaluationId, row.id));
+  const item = items.find((i) => i.id === itemId);
+  if (!item) return null;
+  if (itemListLock(locked.state, await attemptCount(tx, row.id)) === null) {
+    throw new EvaluationError("counting_not_frozen");
+  }
+  const next = items.map((i) => (i.id === itemId ? { ...i, counting } : i));
+  if (lacksGradedPoints(locked.mode, evaluationTotal(next))) {
+    throw new EvaluationError(
+      "illegal_transition",
+      "no question would count towards the total (ADR-052, ADR-108)",
+      { reason: "no_graded_points" },
+    );
+  }
+  if (item.counting !== counting) {
+    await tx.update(evaluationItems).set({ counting }).where(eq(evaluationItems.id, itemId));
+  }
+  return item.counting;
 }
 
 export async function deleteItem(
@@ -310,7 +354,8 @@ export async function replaceItems(
 
 /**
  * THE copy of an item list into `evaluationId`: the SAME frozen versions,
- * points, order, milestones, bonus flags and intros (ADR-084), under new ids — copying must never silently
+ * points, order, milestones, countings (a neutralized item comes back normal,
+ * `copiedCounting`, ADR-108) and intros (ADR-084), under new ids — copying must never silently
  * upgrade a question. Written by `copyEvaluation` and by a template pull
  * (F-EVAL-26), inside the caller's transaction.
  */
@@ -328,7 +373,7 @@ export async function copyItems(
       questionVersionId: item.questionVersionId,
       points: item.points,
       milestone: item.milestone,
-      bonus: item.bonus,
+      counting: copiedCounting(item.counting),
       intro: item.intro,
     })),
   );
@@ -343,7 +388,8 @@ export type CopyHome = { classroomId: string } | { courseId: string };
 /**
  * THE copy of an evaluation into a new draft: its settings, grade scale,
  * feedback and MCQ policies, duration, and its items — the SAME frozen
- * versions, points, order, milestones and bonus flags. Duplicate, "Save as template" and
+ * versions, points, order, milestones and bonus items (never a neutralization,
+ * ADR-108). Duplicate, "Save as template" and
  * "Instantiate" differ only in the home and the origin. A copy into a
  * course is a template, at revision 1, and carries nothing of a run (dates,
  * IP list); a copy into a classroom keeps them — a template has none to

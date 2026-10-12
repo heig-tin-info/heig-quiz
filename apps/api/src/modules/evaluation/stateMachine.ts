@@ -11,6 +11,7 @@ import {
   missingTimingFields,
   pastTiming,
   pausableMode,
+  type ItemCounting,
   type PastTiming,
 } from "@quiz/domain";
 
@@ -48,7 +49,7 @@ export function isLegalTransition(from: EvaluationState, to: EvaluationState): b
 }
 
 /** What readiness reads of the item list: how many, and what counts (ADR-052). */
-export type ReadyItems = readonly { points: number; bonus: boolean }[];
+export type ReadyItems = readonly { points: number; counting: ItemCounting }[];
 
 interface TransitionContext {
   items: ReadyItems;
@@ -238,7 +239,7 @@ export async function transition(
 ): Promise<EvaluationRecord> {
   if (row.mode === "poll") throw new EvaluationError("not_implemented");
   const items = await db
-    .select({ points: evaluationItems.points, bonus: evaluationItems.bonus })
+    .select({ points: evaluationItems.points, counting: evaluationItems.counting })
     .from(evaluationItems)
     .where(eq(evaluationItems.evaluationId, row.id));
   guardTransition(row, to, {

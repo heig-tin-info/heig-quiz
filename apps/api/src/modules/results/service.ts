@@ -41,6 +41,8 @@ import { AI_KEY, INSTANCE_WARNING_KEY, JUSTIFICATION_KEY } from "@quiz/contracts
 import {
   evaluationTotal,
   attemptTotal,
+  countsForStudent,
+  shownPoints,
   correctionPublishRefusal,
   debrief,
   describe,
@@ -219,12 +221,18 @@ async function computeResults(
       for (const item of items) {
         const grading = validated.get(pairKey(attempt.id, item.item.id));
         if (!grading) continue;
-        perItem[item.item.id] = grading.points;
+        // As the student's copy shows it: a bonus floored (ADR-108).
+        perItem[item.item.id] = shownPoints(grading.points, item.item.counting);
       }
     }
     // Per item, the points as graded — negative ones included (ADR-026);
     // the total is `attemptTotal`'s, floored at 0, and the grade comes from it.
-    const points = attemptTotal(Object.values(perItem));
+    const points = attemptTotal(
+      items.flatMap((i) => {
+        const p = perItem[i.item.id];
+        return p === undefined ? [] : [{ points: p, counting: i.item.counting }];
+      }),
+    );
     rows.push({
       userId: entry.userId,
       displayName: `${entry.prenom} ${entry.nom}`.trim() || entry.email,
@@ -299,7 +307,7 @@ function itemViews(
       internalName: i.question.internalName,
       type: i.question.type,
       points: i.item.points,
-      bonus: i.item.bonus,
+      counting: i.item.counting,
       successRate: acc && acc.n > 0 ? round2(acc.sum / acc.n) : null,
     };
   });
@@ -812,9 +820,10 @@ async function reviewedItems(
       itemId: item.item.id,
       position: item.item.position,
       type: item.question.type,
-      points: grading ? grading.points : null,
+      // A bonus never reads "−4 / 2"; a neutralized cell keeps its points, struck through (ADR-108).
+      points: grading ? shownPoints(grading.points, item.item.counting) : null,
       maxPoints: item.item.points,
-      bonus: item.item.bonus,
+      counting: item.item.counting,
       verdict: grading ? verdictOf(grading) : null,
       student: studentViewOf(type, config, view),
       answer: policy.showAnswer ? answerToStudent(type, config, view, answer?.payload) : null,
@@ -832,9 +841,12 @@ async function reviewedItems(
   // The same total as the grade table (`attemptTotal`, floored at 0 under
   // negative marking, ADR-026), over the same validated gradings. A cell
   // still pending counts nowhere — never as a 0.
-  const points = attemptTotal(result.flatMap((r) => (r.points === null ? [] : [r.points])));
+  const points = attemptTotal(
+    result.flatMap((r) => (r.points === null ? [] : [{ points: r.points, counting: r.counting }])),
+  );
   // Must equal `pendingCells` (grading/kept.ts), the count of the Grades page and the card.
-  const pendingCount = result.filter((r) => r.points === null).length;
+  // A neutralized item (ADR-108) counts nowhere: its ungraded answers hold nothing back.
+  const pendingCount = result.filter((r) => r.points === null && countsForStudent(r.counting)).length;
   // The total is the frozen one while it still holds (D-06); the per-item
   // points above always come from the gradings, which the snapshot mirrors.
   const hit =
@@ -885,7 +897,11 @@ export async function studentFeedback(
     const tally = (await tallyByAttempt(db, [attempt.id])).get(attempt.id);
     return {
       ...pending(gate.reason),
-      score: scoreOf(tally, items.length, evaluationTotal(items.map((i) => i.item))),
+      score: scoreOf(
+        tally,
+        items.filter((i) => countsForStudent(i.item.counting)).length,
+        evaluationTotal(items.map((i) => i.item)),
+      ),
       ...retake,
     };
   }

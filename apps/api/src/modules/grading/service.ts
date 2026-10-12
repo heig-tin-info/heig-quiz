@@ -37,6 +37,7 @@ import type {
 import { reasonOf, RUNNER_WAITING_REASONS } from "@quiz/contracts";
 import {
   attemptTotal,
+  countsForStudent,
   isBatchable,
   LLM_REGRADES_PER_ITEM_PER_DAY,
   SCHOOL_TIME_ZONE,
@@ -45,15 +46,18 @@ import {
   overridePointsRange,
   round2,
   scoresNegatively,
+  type ItemCounting,
   type StoodItem,
 } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
-import { answers, attempts, auditLog, gradings, questionVersions, users } from "../../db/schema.js";
+import { answers, attempts, auditLog, evaluationItems, gradings, questionVersions, users } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 import {
   flagReleasedEvaluationsOf,
+  setItemCounting,
+  setModifiedAfterRelease,
   joinedItem,
   joinedItems,
   negativeMarkingEnabled,
@@ -376,7 +380,9 @@ export async function progressOf(db: Db, evaluationId: string): Promise<GradingP
     .select({ id: attempts.id })
     .from(attempts)
     .where(eq(attempts.evaluationId, evaluationId));
-  const total = items.length * attemptRows.length;
+  // A neutralized item (ADR-108) awaits no grade: neither in the total nor done.
+  const counted = new Set(items.filter((i) => countsForStudent(i.item.counting)).map((i) => i.item.id));
+  const total = counted.size * attemptRows.length;
   const standing = await standingGradings(db, evaluationId);
 
   let done = 0;
@@ -384,6 +390,7 @@ export async function progressOf(db: Db, evaluationId: string): Promise<GradingP
   let llm = 0;
   let failed = 0;
   for (const row of standing.values()) {
+    if (!counted.has(row.itemId)) continue;
     if (row.state === "validated") {
       done += 1;
       continue;
@@ -649,15 +656,17 @@ export async function gradingQueue(
   let validated = 0;
   let proposed = 0;
   for (const item of items) {
+    // A neutralized item's answers stay on the panel, out of the counts (ADR-108).
+    const counts = countsForStudent(item.item.counting);
     for (const attempt of attemptRows) {
       const grading = context.standing.get(pairKey(attempt.id, item.item.id)) ?? null;
-      if (grading?.state === "validated") validated += 1;
-      else if (grading?.state === "proposed") proposed += 1;
+      if (counts && grading?.state === "validated") validated += 1;
+      else if (counts && grading?.state === "proposed") proposed += 1;
       entries.push(entryOf({ attempt, item }, grading, context, query.anonymous));
     }
   }
 
-  const total = items.length * attemptRows.length;
+  const total = items.filter((i) => countsForStudent(i.item.counting)).length * attemptRows.length;
   return {
     items: items.map((i) => ({
       id: i.item.id,
@@ -742,7 +751,7 @@ function pointsRangeOf(
   const negative = scoresNegatively(
     item?.question.type ?? "",
     negativeMarkingEnabled(evaluation),
-    item?.item.bonus ?? false,
+    item?.item.counting ?? "normal",
   );
   return overridePointsRange(maxPoints, negative);
 }
@@ -1064,6 +1073,57 @@ export async function pointsByAttempt(
 }
 
 /**
+ * The grading-time counting act (ADR-108): `itemId` of `evaluation` becomes
+ * `normal`, `bonus` or `neutralized`. The write is the evaluation module's
+ * (`setItemCounting`: the frozen-list gate, the total that must stay above
+ * 0); this orchestrates around it what a grading write does after the
+ * release (ADR-030 §h): the grades the students are shown are read before,
+ * the evaluation is marked modified after publication in the same
+ * transaction as the change (so the frozen snapshot stops being served), and
+ * the students whose shown grade moved are told after the commit. Stored
+ * gradings are never touched. Null for an item the evaluation does not hold.
+ */
+export async function changeItemCounting(
+  db: Db,
+  evaluation: EvaluationRecord,
+  itemId: string,
+  counting: ItemCounting,
+  now: Date,
+): Promise<CountingChange | null> {
+  const watch = await watchCounting(db, evaluation, itemId);
+  const outcome = await db.transaction(async (tx): Promise<CountingChange | null> => {
+    const before = await setItemCounting(tx, evaluation, itemId, counting);
+    if (before === null) return null;
+    // Choosing the counting it already has changes nothing, and flags nothing.
+    if (before === counting) return { changed: false, before, modifiedAfterRelease: false };
+    return { changed: true, before, modifiedAfterRelease: await setModifiedAfterRelease(tx, evaluation.id, now) };
+  });
+  if (outcome?.changed) await watch.announce();
+  return outcome;
+}
+
+/** What {@link changeItemCounting} did: whether anything moved, from what, and the release flag. */
+export interface CountingChange {
+  changed: boolean;
+  before: ItemCounting;
+  modifiedAfterRelease: boolean;
+}
+
+/** The grades shown before a counting change; nothing to read on an evaluation not released. */
+async function watchCounting(db: Db, evaluation: EvaluationRecord, itemId: string) {
+  if (evaluation.releasedAt === null) return { announce: async () => {} };
+  const owners = await db
+    .select({ attemptId: attempts.id })
+    .from(attempts)
+    .where(eq(attempts.evaluationId, evaluation.id));
+  return watchReleasedGrades(
+    db,
+    owners.map((o) => ({ attemptId: o.attemptId, itemId })),
+    pointsByAttempt,
+  );
+}
+
+/**
  * {@link pointsByAttempt} as the student saw it BEFORE a regrade touched
  * `cells`: on each of those cells that holds no validated grading, the
  * grading a regrade stood down counts instead — the newest `superseded` row
@@ -1089,8 +1149,10 @@ export function pointsAcrossRegrade(
         itemId: gradings.itemId,
         points: gradings.points,
         state: gradings.state,
+        counting: evaluationItems.counting,
       })
       .from(gradings)
+      .innerJoin(evaluationItems, eq(evaluationItems.id, gradings.itemId))
       .where(
         and(
           inArray(gradings.attemptId, [...attemptIds]),
@@ -1106,17 +1168,19 @@ export function pointsAcrossRegrade(
       .orderBy(asc(gradings.gradedAt));
     // Per cell: a validated grading wins; otherwise, on a touched cell, the
     // newest stood-down one (ascending order: the last one read).
-    const byCell = new Map<PairKey, { attemptId: string; points: number; validated: boolean }>();
+    const byCell = new Map<PairKey, { attemptId: string; points: number; counting: ItemCounting; validated: boolean }>();
     for (const row of rows) {
       const key = pairKey(row.attemptId, row.itemId);
       const validated = row.state === "validated";
       if (!validated && !touched.has(key)) continue;
       if (byCell.get(key)?.validated) continue;
-      byCell.set(key, { attemptId: row.attemptId, points: row.points, validated });
+      byCell.set(key, { attemptId: row.attemptId, points: row.points, counting: row.counting, validated });
     }
-    const perAttempt = new Map<string, number[]>();
+    const perAttempt = new Map<string, { points: number; counting: ItemCounting }[]>();
     for (const cell of byCell.values()) {
-      perAttempt.set(cell.attemptId, [...(perAttempt.get(cell.attemptId) ?? []), cell.points]);
+      const list = perAttempt.get(cell.attemptId);
+      if (list) list.push(cell);
+      else perAttempt.set(cell.attemptId, [cell]);
     }
     return new Map([...perAttempt].map(([id, points]) => [id, attemptTotal(points)]));
   };

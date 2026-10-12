@@ -103,7 +103,7 @@ function view(
         points: 1,
         type: "mcq",
         milestone: false,
-        bonus: false,
+        counting: "normal",
         intro: null,
         student: {
           prompt: "Quelle expression donne l'adresse de `x` ?",

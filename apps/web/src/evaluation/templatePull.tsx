@@ -75,8 +75,8 @@ function changeOf(from: TemplatePullItem, to: TemplatePullItem, t: TFunction): s
     ...(from.milestone !== to.milestone
       ? [t(to.milestone ? "templatePull.change.milestoneOn" : "templatePull.change.milestoneOff")]
       : []),
-    ...(from.bonus !== to.bonus
-      ? [t(to.bonus ? "templatePull.change.bonusOn" : "templatePull.change.bonusOff")]
+    ...((from.counting === "bonus") !== (to.counting === "bonus")
+      ? [t(to.counting === "bonus" ? "templatePull.change.bonusOn" : "templatePull.change.bonusOff")]
       : []),
     ...(from.intro !== to.intro ? [t("templatePull.change.intro")] : []),
   ];

@@ -10,15 +10,16 @@
  * no points at all.
  *
  * Imported through `./service.ts`. It reads `attempts` (the `live` module's)
- * by select and `gradings` (this module's), and writes nothing.
+ * and `evaluation_items` (the `evaluation` module's, for their counting) by
+ * select and `gradings` (this module's), and writes nothing.
  */
-import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { AttemptScore } from "@quiz/contracts";
-import { attemptTotal, keptAttempt } from "@quiz/domain";
+import { attemptTotal, countsForStudent, keptAttempt, type ItemCounting } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { attempts, gradings } from "../../db/schema.js";
+import { attempts, evaluationItems, gradings } from "../../db/schema.js";
 import { retakePolicyOf, type EvaluationRecord } from "../evaluation/service.js";
 
 type AttemptRecord = typeof attempts.$inferSelect;
@@ -27,14 +28,20 @@ type AttemptRecord = typeof attempts.$inferSelect;
  * The validated points of an attempt and how many of its cells they cover.
  * `points` is the attempt's TOTAL (`attemptTotal`): floored at 0, so a
  * negative sum under negative marking (ADR-026) is 0 here, in the kept rule
- * and on every screen that reads it.
+ * and on every screen that reads it. `graded` counts the cells of the items
+ * that count: a neutralized item (ADR-108) is never waited for.
  */
 export interface AttemptTally {
   points: number;
   graded: number;
 }
 
-/** {@link AttemptTally} per attempt, in one grouped query. Absent = nothing validated. */
+/**
+ * {@link AttemptTally} per attempt, in one query. Absent = nothing validated.
+ * The cells are read one by one with their item's counting, so the sum goes
+ * through `attemptTotal` and its `countedPoints` (ADR-108): a neutralized
+ * item adds nothing, a bonus item never takes points away.
+ */
 export async function tallyByAttempt(
   db: Db,
   attemptIds: readonly string[],
@@ -43,20 +50,30 @@ export async function tallyByAttempt(
   const rows = await db
     .select({
       attemptId: gradings.attemptId,
-      points: sql<string>`sum(${gradings.points})`,
-      graded: count(),
+      points: gradings.points,
+      counting: evaluationItems.counting,
     })
     .from(gradings)
-    .where(and(inArray(gradings.attemptId, [...attemptIds]), eq(gradings.state, "validated")))
-    .groupBy(gradings.attemptId);
+    .innerJoin(evaluationItems, eq(evaluationItems.id, gradings.itemId))
+    .where(and(inArray(gradings.attemptId, [...attemptIds]), eq(gradings.state, "validated")));
+  const cells = new Map<string, { points: number; counting: ItemCounting }[]>();
+  for (const row of rows) {
+    const list = cells.get(row.attemptId);
+    if (list) list.push(row);
+    else cells.set(row.attemptId, [row]);
+  }
   return new Map(
-    rows.map((r) => [r.attemptId, { points: attemptTotal([Number(r.points)]), graded: r.graded }]),
+    [...cells].map(([id, list]) => [
+      id,
+      { points: attemptTotal(list), graded: list.filter((c) => countsForStudent(c.counting)).length },
+    ]),
   );
 }
 
 /**
  * The score a student reads between two attempts (ADR-025): the validated
- * points, and how many items have none yet.
+ * points, and how many items have none yet. `itemCount` is the number of
+ * items that are not neutralized (ADR-108), as `tally.graded` counts them.
  */
 export function scoreOf(
   tally: AttemptTally | undefined,

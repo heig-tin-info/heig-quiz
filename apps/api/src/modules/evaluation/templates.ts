@@ -286,7 +286,7 @@ async function contentOf(db: DbOrTx, row: EvaluationRecord) {
         questionVersionId: evaluationItems.questionVersionId,
         points: evaluationItems.points,
         milestone: evaluationItems.milestone,
-        bonus: evaluationItems.bonus,
+        counting: evaluationItems.counting,
         intro: evaluationItems.intro,
       })
       .from(evaluationItems)
@@ -413,7 +413,7 @@ const pullItem = (j: JoinedItem): TemplatePullItem => ({
   versionNumber: j.version.number ?? 0,
   points: j.item.points,
   milestone: j.item.milestone,
-  bonus: j.item.bonus,
+  counting: j.item.counting,
   intro: j.item.intro,
 });
 

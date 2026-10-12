@@ -30,6 +30,7 @@ import {
   EvaluationSettings,
   EvaluationState,
   FeedbackPolicy,
+  ItemCounting,
   Navigation,
   RetakeKeep,
   RetakeScope,
@@ -106,8 +107,8 @@ export const AttemptItem = z.object({
   points: z.number(),
   type: z.string(),
   milestone: z.boolean(),
-  /** ADR-052: shown as "Bonus question"; an item's property, not question content. */
-  bonus: z.boolean(),
+  /** ADR-052, ADR-108: a bonus is shown as "Bonus question"; an item's property, not question content. */
+  counting: ItemCounting,
   /**
    * ADR-084: the teacher's markdown shown as a passage screen before the
    * item; null for none. An item's property, not question content.

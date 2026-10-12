@@ -7,7 +7,9 @@
  * grade tell nobody, and nothing is stored: the "before" lives in memory for
  * the length of one write.
  *
- * The hook is the single grading writer (`grading.writeGradings`), so every
+ * The hook is the single grading writer (`grading.writeGradings`) — and the
+ * one other write that moves a grade, an item's counting (ADR-108,
+ * `grading.changeItemCounting`) — so every
  * path that validates a grading — a click, an override, a batch, the
  * automatic pass, a runner job, the pass of a regrade — goes through it, once
  * per WRITE and never once per cell: a batch of twenty cells across five
@@ -24,7 +26,7 @@ import { attempts, evaluations } from "../../db/schema.js";
 import { byId, staffAttemptIds, type EvaluationRecord } from "../evaluation/service.js";
 import { pointsAcrossRegrade } from "../grading/service.js";
 import { notifyMany, type Delivery } from "../notifications/service.js";
-import { shownGrades, type ShownGrade } from "./service.js";
+import { shownGrades, type PointsReader, type ShownGrade } from "./service.js";
 
 /** What a grading write holds between its "before" and its commit. */
 export interface GradeWatch {
@@ -48,11 +50,13 @@ interface Watched {
  * On a written cell that a regrade stood down, the "before" is the grading
  * the regrade replaced (`pointsAcrossRegrade`): the grade the student was
  * shown before the regrade, not the one without the item the page showed
- * while the pass ran.
+ * while the pass ran. A write that touches no grading — an item's counting
+ * changed (ADR-108) — passes `pointsByAttempt`, the points as they stand.
  */
 export async function watchReleasedGrades(
   db: Db,
   cells: readonly { attemptId: string; itemId: string }[],
+  readBefore: PointsReader = pointsAcrossRegrade(cells),
 ): Promise<GradeWatch> {
   if (cells.length === 0) return NOTHING;
   try {
@@ -72,12 +76,11 @@ export async function watchReleasedGrades(
     for (const { evaluationId, userId } of pairs) {
       owners.set(evaluationId, [...(owners.get(evaluationId) ?? []), userId!]);
     }
-    const before = pointsAcrossRegrade(cells);
     const watched: Watched[] = [];
     for (const [evaluationId, userIds] of owners) {
       const evaluation = await byId(db, evaluationId);
       if (!evaluation) continue;
-      watched.push({ evaluation, before: await shownGrades(db, evaluation, userIds, before) });
+      watched.push({ evaluation, before: await shownGrades(db, evaluation, userIds, readBefore) });
     }
     return { announce: () => announceChanges(db, watched) };
   } catch (err) {

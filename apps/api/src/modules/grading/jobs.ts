@@ -173,8 +173,6 @@ interface LlmGradingJob {
   request: LlmGradeRequest;
   /** The type's own details, kept beside the model's reply. */
   details?: unknown;
-  /** A bonus item never takes points away (ADR-052). */
-  bonus: boolean;
   regradeNote?: string;
 }
 
@@ -448,9 +446,9 @@ async function gradeCell(
     },
   });
   if (outcome.kind === "written") {
-    // A bonus item never takes points away (ADR-052): floored at 0 here, the
-    // one place an automatic grade becomes an item's points.
-    const points = itemPoints(outcome.grading.points, item.item.bonus);
+    // The one place an automatic grade becomes an item's points: stored raw,
+    // a bonus floored where the sums read it (ADR-108).
+    const points = itemPoints(outcome.grading.points);
     return { write: { ...base, ...outcome.grading, details: withWarning(outcome.grading.details, warning), points } };
   }
   const cellOf = {
@@ -462,7 +460,7 @@ async function gradeCell(
   };
   if (outcome.kind === "llm") {
     const details = withWarning(outcome.details, warning);
-    return { llm: { ...cellOf, request: outcome.request, details, bonus: item.item.bonus } };
+    return { llm: { ...cellOf, request: outcome.request, details } };
   }
   return {
     runner: {
@@ -758,7 +756,7 @@ async function gradeWithRunner(
     return;
   }
   await write({
-    points: itemPoints(graded.points, item.item.bonus),
+    points: itemPoints(graded.points),
     source: "auto",
     state: graded.state ?? "validated",
     details: graded.details,
@@ -933,7 +931,7 @@ async function askModel(app: FastifyInstance, evaluation: EvaluationRecord, job:
     const own = job.details && typeof job.details === "object" ? job.details : {};
     const points = round2(Math.min(request.maxPoints, Math.max(0, outcome.points)));
     return {
-      points: itemPoints(points, job.bonus),
+      points: itemPoints(points),
       source: "llm" as const,
       state: "proposed" as const,
       details: {

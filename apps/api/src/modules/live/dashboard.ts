@@ -22,6 +22,7 @@ import {
   kioskWatchOf,
   round2,
   uniquePseudonyms,
+  type ItemCounting,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -334,10 +335,10 @@ function pointsOf(
   attemptId: string,
   items: readonly JoinedItem[],
 ): number | null {
-  const points: number[] = [];
+  const points: { points: number; counting: ItemCounting }[] = [];
   for (const item of items) {
     const grading = standing.get(pairKey(attemptId, item.item.id));
-    if (grading?.state === "validated") points.push(grading.points);
+    if (grading?.state === "validated") points.push({ points: grading.points, counting: item.item.counting });
   }
   return points.length === 0 ? null : attemptTotal(points);
 }

@@ -9,6 +9,7 @@
  */
 import type { EvaluationTiming } from "./deadline.js";
 import type { EvaluationStateName } from "./itemList.js";
+import type { ItemCounting } from "./grade.js";
 
 /** The evaluation modes of F-EVAL-01. `poll` is stored and refused by every evaluation route (decision D7). */
 export const EVALUATION_MODES = ["exam", "exercise", "poll"] as const;
@@ -367,6 +368,6 @@ export const NEGATIVE_MARKING_TYPES: readonly string[] = ["mcq", "categorize"];
  * Whether an item of `type` may score below 0 in an evaluation where it is
  * `on`. Never a bonus item: its score is floored at 0 (`itemPoints`, ADR-052).
  */
-export function scoresNegatively(type: string, on: boolean, bonus: boolean): boolean {
-  return on && !bonus && NEGATIVE_MARKING_TYPES.includes(type);
+export function scoresNegatively(type: string, on: boolean, counting: ItemCounting): boolean {
+  return on && counting !== "bonus" && NEGATIVE_MARKING_TYPES.includes(type);
 }

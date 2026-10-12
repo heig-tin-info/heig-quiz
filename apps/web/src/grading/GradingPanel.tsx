@@ -48,6 +48,7 @@ import {
 } from "./rows";
 import { useGradingActions, type BatchScope } from "./useGradingActions";
 import { useGradingData } from "./useGradingData";
+import { useItemCounting } from "./useItemCounting";
 import { useGradingKeys } from "./useGradingKeys";
 import { useGradingView } from "./view";
 
@@ -115,6 +116,7 @@ export function GradingPanel({
   const myRole = useCourseRole(data.evaluation.data?.courseId);
   const readOnly = needed === "owner" && !courseRoleAllows(myRole, needed);
   const regrade = readOnly ? undefined : () => setRegrading(true);
+  const countingAct = useItemCounting(evaluationId, data.evaluation.data);
   const actions = useGradingActions({
     evaluationId,
     navigate,
@@ -314,7 +316,20 @@ export function GradingPanel({
     <Page pane={answer ? pane : null}>
       {header}
       {readOnly ? <Alert icon={Lock} title={t("grading.ownerOnly")} /> : null}
-      <QuestionBar items={items} index={index} states={data.states} onJump={goTo} />
+      <QuestionBar
+        items={items}
+        index={index}
+        states={data.states}
+        onJump={goTo}
+        counting={
+          item && countingAct.offered && !readOnly
+            ? {
+                refused: (option) => countingAct.refused(item.id, option),
+                onChange: (option) => void countingAct.change(item, option),
+              }
+            : undefined
+        }
+      />
       <GradingToolbar
         view={view}
         onView={setView}

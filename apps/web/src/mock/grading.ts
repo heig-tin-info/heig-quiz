@@ -16,7 +16,7 @@ import {
   scoresNegatively,
   type AttemptTally,
 } from "@quiz/domain";
-import type { GradingConfidence, GradingSource, GradingState } from "@quiz/contracts";
+import type { GradingConfidence, GradingSource, GradingState, ItemCounting } from "@quiz/contracts";
 import type { AnyQuestionTypeServer, ItemAggregate } from "@quiz/core/server";
 import { blocksServer } from "@quiz/qt-blocks/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
@@ -33,6 +33,7 @@ import {
   on,
   pick,
   rand,
+  refuse,
 } from "./runtime";
 import {
   MockEvaluation,
@@ -107,8 +108,8 @@ interface MockEvalItem {
   internalName: string;
   type: string;
   points: number;
-  /** ADR-052. */
-  bonus: boolean;
+  /** ADR-052, ADR-108. */
+  counting: ItemCounting;
 }
 
 interface MockAttempt {
@@ -434,7 +435,7 @@ function buildGradingWorld(
       internalName: i.internalName,
       type: i.type,
       points: i.points,
-      bonus: i.bonus,
+      counting: i.counting,
     }));
 
   // One attempt per dashboard row that has one. A row without an attempt is a
@@ -518,8 +519,8 @@ function buildGradingWorld(
           points: number;
           details: unknown;
         };
-        // A bonus item is floored at 0, as the server writes it (ADR-052).
-        points = itemPoints(halfPoints(graded.points * item.points), item.bonus);
+        // Stored raw, as the server writes it (ADR-108).
+        points = itemPoints(halfPoints(graded.points * item.points));
         details = graded.details;
       }
 
@@ -655,7 +656,7 @@ const gradingWorlds: MockGradingWorld[] = [];
       position: closed.items.length,
       points,
       milestone: false,
-      bonus: false,
+      counting: "normal",
       questionId: question.id,
       questionVersionId: `vvvvvvvv-0000-4000-8000-${suffix}`,
       type: question.type,
@@ -689,7 +690,7 @@ function standingGrading(e: MockGradingWorld, attemptId: string, itemId: string)
   return chain.find((g) => g.state !== "superseded") ?? null;
 }
 
-/** The server's total: bonus items left out (ADR-052). */
+/** The server's total: bonus and neutralized items left out (ADR-052, ADR-108). */
 const gradedTotalPointsOf = (e: MockGradingWorld) => evaluationTotal(e.items);
 
 function gradeOf(points: number, total: number): number {
@@ -702,8 +703,10 @@ function attemptPoints(e: MockGradingWorld, attemptId: string): { points: number
     const g = standingGrading(e, attemptId, item.id);
     if (g && g.state === "validated") perItem[item.id] = g.points;
   }
-  // The server's one total: floored at 0 under negative marking (ADR-026).
-  return { points: attemptTotal(Object.values(perItem)), perItem };
+  // The server's one total: each cell as it counts (ADR-108), floored at 0
+  // under negative marking (ADR-026).
+  const cells = e.items.flatMap((i) => (i.id in perItem ? [{ points: perItem[i.id]!, counting: i.counting }] : []));
+  return { points: attemptTotal(cells), perItem };
 }
 
 /** ADR-026: the evaluation scores its choice questions negatively (never a poll). */
@@ -782,7 +785,7 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       internalName: i.internalName,
       type: i.type,
       points: i.points,
-      minPoints: scoresNegatively(i.type, negativeOf(e.evaluation), i.bonus) ? -i.points : 0,
+      minPoints: scoresNegatively(i.type, negativeOf(e.evaluation), i.counting) ? -i.points : 0,
       explanation: questions.find((q) => q.id === i.questionId)?.versions.at(-1)?.explanation || null,
       ...(FALL && i.questionId === FALL.id
         ? {
@@ -973,6 +976,29 @@ on("POST", "/app/api/evaluations/:id/items/:itemId/regrade", (m, body) => {
   return { evaluationId: e.evaluation.id, itemIds: [itemId], queued: false };
 });
 
+/**
+ * ADR-108: how an item counts, changed at grading time — the server's gates
+ * (a frozen list, a total that stays above 0), its "modified after
+ * publication" once released.
+ */
+on("PUT", "/app/api/evaluations/:id/items/:itemId/counting", (m, body) => {
+  const e = gradingWorldOr404(m.groups!.id!);
+  const itemId = String(m.groups!.itemId);
+  const counting = body.counting as ItemCounting;
+  const frozen = e.evaluation.items.find((i) => i.id === itemId);
+  const graded = e.items.find((i) => i.id === itemId);
+  if (!frozen || !graded) throw new MockError(404, "Item not found");
+  const next = e.items.map((i) => (i.id === itemId ? { ...i, counting } : i));
+  if (evaluationTotal(next) <= 0) {
+    throw refuse(409, "illegal_transition", "no question would count", { reason: "no_graded_points" });
+  }
+  const changed = graded.counting !== counting;
+  frozen.counting = counting;
+  graded.counting = counting;
+  if (changed && e.evaluation.releasedAt !== null) e.evaluation.modifiedAfterRelease = true;
+  return { counting, modifiedAfterRelease: changed && e.evaluation.releasedAt !== null };
+});
+
 function resultsView(e: MockGradingWorld) {
   const total = gradedTotalPointsOf(e);
   const rows = e.attempts.map((a) => {
@@ -1035,7 +1061,7 @@ function resultsView(e: MockGradingWorld) {
         internalName: i.internalName,
         type: i.type,
         points: i.points,
-        bonus: i.bonus,
+        counting: i.counting,
         successRate:
           scores.length === 0
             ? null
@@ -1255,7 +1281,7 @@ function copyOf(e: MockGradingWorld, attempt: MockAttempt) {
         type: item.type,
         points: grading ? grading.points : null,
         maxPoints: item.points,
-        bonus: item.bonus,
+        counting: item.counting,
         verdict: grading
           ? grading.points >= item.points
             ? "correct"

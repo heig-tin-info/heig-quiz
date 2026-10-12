@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   attemptTotal,
   bonusTotal,
+  copiedCounting,
+  countedPoints,
+  countsForStudent,
   gradeBand,
   gradeFromPoints,
   gradeLetter,
@@ -13,6 +16,7 @@ import {
   MIN_GRADE,
   overridePointsRange,
   type Scale,
+  shownPoints,
 } from "./grade.js";
 
 const linear: Scale = {};
@@ -103,50 +107,108 @@ describe("gradeLetter", () => {
   });
 });
 
+const n = (...points: number[]) => points.map((p) => ({ points: p, counting: "normal" as const }));
+
 describe("attemptTotal (ADR-026)", () => {
   it("sums the points of the items, rounded to the hundredth", () => {
-    expect(attemptTotal([1, 0.5, 0.25])).toBe(1.75);
-    expect(attemptTotal([0.1, 0.2])).toBe(0.3);
+    expect(attemptTotal(n(1, 0.5, 0.25))).toBe(1.75);
+    expect(attemptTotal(n(0.1, 0.2))).toBe(0.3);
     expect(attemptTotal([])).toBe(0);
   });
 
   it("carries negative items into the sum", () => {
-    expect(attemptTotal([2, -0.5, -0.33])).toBe(1.17);
+    expect(attemptTotal(n(2, -0.5, -0.33))).toBe(1.17);
   });
 
   it("floors a negative total at 0, never -0", () => {
-    expect(attemptTotal([-1, -0.33, 0.5])).toBe(0);
-    expect(Object.is(attemptTotal([-0.001]), 0)).toBe(true);
-    expect(Object.is(attemptTotal([-1, 1]), 0)).toBe(true);
+    expect(attemptTotal(n(-1, -0.33, 0.5))).toBe(0);
+    expect(Object.is(attemptTotal(n(-0.001)), 0)).toBe(true);
+    expect(Object.is(attemptTotal(n(-1, 1)), 0)).toBe(true);
   });
 
   it("gives the grade of a floored total", () => {
-    expect(gradeFromPoints(attemptTotal([-3, 1]), 10, linear)).toBe(1);
+    expect(gradeFromPoints(attemptTotal(n(-3, 1)), 10, linear)).toBe(1);
+  });
+
+  it("sums each cell through countedPoints (ADR-108)", () => {
+    expect(
+      attemptTotal([
+        { points: 3, counting: "normal" },
+        { points: -1, counting: "bonus" },
+        { points: 2, counting: "bonus" },
+        { points: 5, counting: "neutralized" },
+        { points: -2, counting: "neutralized" },
+      ]),
+    ).toBe(5);
+  });
+});
+
+describe("countedPoints (ADR-108)", () => {
+  it("keeps a normal cell as stored, negative included", () => {
+    expect(countedPoints(-0.5, "normal")).toBe(-0.5);
+    expect(countedPoints(2, "normal")).toBe(2);
+  });
+
+  it("floors a bonus cell at 0, never -0", () => {
+    expect(countedPoints(1.5, "bonus")).toBe(1.5);
+    expect(Object.is(countedPoints(-0.5, "bonus"), 0)).toBe(true);
+  });
+
+  it("gives 0 for a neutralized cell, whatever its points", () => {
+    expect(countedPoints(4, "neutralized")).toBe(0);
+    expect(countedPoints(-4, "neutralized")).toBe(0);
+  });
+});
+
+describe("shownPoints (ADR-108)", () => {
+  it("shows a bonus cell floored, a normal or neutralized cell as stored", () => {
+    expect(Object.is(shownPoints(-4, "bonus"), 0)).toBe(true);
+    expect(shownPoints(1.5, "bonus")).toBe(1.5);
+    expect(shownPoints(-4, "normal")).toBe(-4);
+    expect(shownPoints(3, "neutralized")).toBe(3);
+  });
+});
+
+describe("countsForStudent (ADR-108)", () => {
+  it("is false for a neutralized item only", () => {
+    expect(countsForStudent("normal")).toBe(true);
+    expect(countsForStudent("bonus")).toBe(true);
+    expect(countsForStudent("neutralized")).toBe(false);
+  });
+});
+
+describe("copiedCounting (ADR-108)", () => {
+  it("copies a neutralized item as normal, a bonus or normal one as it is", () => {
+    expect(copiedCounting("neutralized")).toBe("normal");
+    expect(copiedCounting("bonus")).toBe("bonus");
+    expect(copiedCounting("normal")).toBe("normal");
   });
 });
 
 describe("evaluationTotal (ADR-052)", () => {
-  it("sums the items, bonus items left out, rounded to the hundredth", () => {
+  it("sums the items, bonus and neutralized items left out, rounded to the hundredth", () => {
     expect(evaluationTotal([])).toBe(0);
     expect(
       evaluationTotal([
-        { points: 0.1, bonus: false },
-        { points: 0.2, bonus: false },
-        { points: 3, bonus: true },
+        { points: 0.1, counting: "normal" },
+        { points: 0.2, counting: "normal" },
+        { points: 3, counting: "bonus" },
+        { points: 4, counting: "neutralized" },
       ]),
     ).toBe(0.3);
   });
 
   it("rounds half away from zero, where Math.round went up (audit B-08)", () => {
-    expect(evaluationTotal([{ points: 1.25, bonus: false }, { points: 2.5, bonus: false }, { points: 0.75, bonus: false }])).toBe(4.5);
-    expect(evaluationTotal([{ points: -0.125, bonus: false }])).toBe(-0.13);
+    expect(evaluationTotal(n(1.25, 2.5, 0.75))).toBe(4.5);
+    expect(evaluationTotal(n(-0.125))).toBe(-0.13);
   });
 
-  it("has its complement in bonusTotal", () => {
+  it("has its bonus complement in bonusTotal, the neutralized items in neither", () => {
     const items = [
-      { points: 2, bonus: false },
-      { points: 0.1, bonus: true },
-      { points: 0.2, bonus: true },
+      { points: 2, counting: "normal" as const },
+      { points: 0.1, counting: "bonus" as const },
+      { points: 0.2, counting: "bonus" as const },
+      { points: 7, counting: "neutralized" as const },
     ];
     expect([evaluationTotal(items), bonusTotal(items)]).toEqual([2, 0.3]);
   });
@@ -164,16 +226,22 @@ describe("lacksGradedPoints (ADR-052)", () => {
   });
 });
 
-describe("itemPoints (ADR-052)", () => {
-  it("rounds, and floors a bonus item at 0, never -0", () => {
-    expect(itemPoints(-0.5, true)).toBe(0);
-    expect(Object.is(itemPoints(-0.001, true), 0)).toBe(true);
-    expect(itemPoints(1.005, true)).toBe(1.01);
+describe("itemPoints (ADR-108)", () => {
+  it("rounds, never -0, and floors nothing: the floor of a bonus is the sum's", () => {
+    expect(itemPoints(-0.5)).toBe(-0.5);
+    expect(itemPoints(2 / 3)).toBe(0.67);
+    expect(itemPoints(1.005)).toBe(1.01);
+    expect(Object.is(itemPoints(-0.001), 0)).toBe(true);
   });
+});
 
-  it("leaves an ordinary item as the type scored it, rounded", () => {
-    expect(itemPoints(-0.5, false)).toBe(-0.5);
-    expect(itemPoints(2 / 3, false)).toBe(0.67);
+describe("countsForStudent (ADR-108)", () => {
+  it("is false for a neutralized item only", () => {
+    expect([countsForStudent("normal"), countsForStudent("bonus"), countsForStudent("neutralized")]).toEqual([
+      true,
+      true,
+      false,
+    ]);
   });
 });
 

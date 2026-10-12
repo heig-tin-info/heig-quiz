@@ -41,7 +41,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { EVALUATION_CLOSERS, EVALUATION_MODES, EVALUATION_STATES, MCQ_SCORE_POLICIES } from "@quiz/domain";
+import { EVALUATION_CLOSERS, EVALUATION_MODES, EVALUATION_STATES, ITEM_COUNTINGS, MCQ_SCORE_POLICIES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { classrooms, courses } from "./org.js";
@@ -240,10 +240,12 @@ export const evaluationItems = pgTable(
     /** F-EVAL-07: navigation cannot go back past a milestone item. */
     milestone: boolean("milestone").notNull().default(false),
     /**
-     * ADR-052: a bonus item's points are left out of the evaluation's total
-     * (`evaluationTotal`), and its score is floored at 0 (`itemPoints`).
+     * ADR-052, ADR-108: how the item counts. A bonus item's points are left
+     * out of the evaluation's total (`evaluationTotal`) and floored at 0; a
+     * neutralized item is out of the total and out of every student's sum
+     * (`countedPoints`). The one stored source of truth.
      */
-    bonus: boolean("bonus").notNull().default(false),
+    counting: text("counting", { enum: ITEM_COUNTINGS }).notNull().default("normal"),
     /**
      * ADR-084: the teacher's markdown shown as a passage screen before this
      * item; null for none. Item content, like `milestone`.

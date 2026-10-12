@@ -740,3 +740,90 @@ describe("GradingPanel — adjusting an answer (F-GRADE-05)", () => {
     );
   });
 });
+
+describe("GradingPanel — how a question counts (ADR-108)", () => {
+  const COUNTING = `PUT ${EVAL}/items/i1/counting`;
+  const base = makeEvaluationDetail();
+
+  it("asks with the new total, then writes the choice", async () => {
+    const { calls } = mockFetch(
+      routes([validated("a1", 2)], {
+        [COUNTING]: ok({ counting: "bonus", modifiedAfterRelease: false }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+
+    await userEvent.click(screen.getByRole("button", { name: "How this question counts" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Count as bonus" }));
+    const dialog = await screen.findByRole("dialog", { name: "Change how question 1 counts?" });
+    expect(within(dialog).getByText("Total: 5 → 3 pts")).toBeInTheDocument();
+    // Not released: nobody to tell.
+    expect(within(dialog).queryByText(/will be notified/)).toBeNull();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Change" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ counting: "bonus" }));
+  });
+
+  it("says the students are told once released", async () => {
+    mockFetch(
+      routes([validated("a1", 2)], {
+        [`GET ${EVAL}`]: ok({
+          ...base,
+          evaluation: { ...base.evaluation, state: "released", releasedAt: "2026-09-02T09:00:00.000Z" },
+        }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+
+    await userEvent.click(screen.getByRole("button", { name: "How this question counts" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Do not count" }));
+    const dialog = await screen.findByRole("dialog", { name: "Change how question 1 counts?" });
+    expect(within(dialog).getByText("Total: 5 → 3 pts")).toBeInTheDocument();
+    expect(within(dialog).getByText(/will be notified/)).toBeInTheDocument();
+  });
+
+  it("greys out a choice that would leave nothing in the total", async () => {
+    mockFetch(
+      routes([validated("a1", 2)], {
+        [`GET ${EVAL}`]: ok({
+          ...base,
+          items: base.items.map((i) => (i.id === "i2" ? { ...i, counting: "neutralized" as const } : i)),
+          totalPoints: 2,
+        }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+
+    await userEvent.click(screen.getByRole("button", { name: "How this question counts" }));
+    expect(await screen.findByRole("menuitem", { name: /Do not count/ })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("menuitem", { name: /Count as bonus/ })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("menuitem", { name: /Count normally/ })).not.toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("names a neutralized question beside its points", async () => {
+    mockFetch(
+      routes([validated("a1", 2)], {
+        [`GET ${EVAL}`]: ok({
+          ...base,
+          items: base.items.map((i) => (i.id === "i1" ? { ...i, counting: "neutralized" as const } : i)),
+        }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    expect(screen.getByText("Not counted")).toBeInTheDocument();
+  });
+
+  it("offers nothing while the item list is still editable", async () => {
+    mockFetch(
+      routes([validated("a1", 2)], {
+        [`GET ${EVAL}`]: ok({ ...base, evaluation: { ...base.evaluation, state: "draft" }, attemptCount: 0 }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    expect(await screen.findByText(/Nobody has taken this evaluation yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "How this question counts" })).toBeNull();
+  });
+});

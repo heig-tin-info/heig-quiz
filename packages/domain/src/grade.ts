@@ -73,8 +73,63 @@ export function gradeLetter(grade: number): GradeLetter {
 }
 
 /**
- * THE total of an attempt: the sum of its per-question points, rounded to the
- * granularity of `gradings.points`, and FLOORED AT 0 (ADR-026, #130).
+ * How an item counts (ADR-052, ADR-108): `normal`, in the total and in the
+ * student's points; `bonus`, out of the total, its points floored at 0 and
+ * still lifting the student; `neutralized`, out of the total AND out of every
+ * student's points. ONE stored state per item (`evaluation_items.counting`).
+ * The builder offers `normal` and `bonus`; `neutralized` is a grading-time
+ * act once the item list is frozen (ADR-108).
+ */
+export const ITEM_COUNTINGS = ["normal", "bonus", "neutralized"] as const;
+export type ItemCounting = (typeof ITEM_COUNTINGS)[number];
+
+/**
+ * THE points one cell adds to a student's sum (ADR-108): 0 on a neutralized
+ * item, floored at 0 on a bonus item, as stored on a normal one. Stored
+ * gradings are never rewritten when an item's counting changes: the floor
+ * and the neutralization are applied here, at sum time, so the change is
+ * reversible any number of times.
+ */
+export function countedPoints(points: number, counting: ItemCounting): number {
+  if (!countsForStudent(counting)) return 0;
+  // `+ 0` turns a `-0` into a `0`.
+  return counting === "bonus" ? Math.max(0, points) + 0 : points;
+}
+
+/**
+ * The points a student's copy and the results grid SHOW for one cell
+ * (ADR-108): a bonus cell as it counts, floored at 0 — a bonus never reads
+ * "−4 / 2" —, a neutralized or normal cell as stored (a neutralized one is
+ * drawn struck through). The grading panel shows the stored points, which
+ * the teacher edits.
+ */
+export function shownPoints(points: number, counting: ItemCounting): number {
+  return counting === "bonus" ? countedPoints(points, counting) : points;
+}
+
+/**
+ * Whether an item counts for the student (ADR-108): a neutralized item does
+ * not — its cells add nothing, and an ungraded answer of it is not awaited
+ * (it is never "pending", for the student nor on the teacher's progress).
+ */
+export function countsForStudent(counting: ItemCounting): boolean {
+  return counting !== "neutralized";
+}
+
+/**
+ * The counting an item takes into a copy (ADR-108): a duplicate, a template
+ * saved from an evaluation, an instance, a template pull. A neutralization
+ * judged one run's question, not the question: the copy counts it normally.
+ * A bonus is the teacher's design and is kept.
+ */
+export function copiedCounting(counting: ItemCounting): ItemCounting {
+  return counting === "neutralized" ? "normal" : counting;
+}
+
+/**
+ * THE total of an attempt: the sum of its per-question points, each through
+ * {@link countedPoints}, rounded to the granularity of `gradings.points`,
+ * and FLOORED AT 0 (ADR-026, #130).
  *
  * Under negative marking a question may be worth less than nothing, and those
  * negative points are stored and shown as such, question by question. The
@@ -88,39 +143,40 @@ export function gradeLetter(grade: number): GradeLetter {
  * Outside negative marking every item scores in [0, max], and the floor
  * changes nothing.
  */
-export function attemptTotal(points: Iterable<number>): number {
+export function attemptTotal(cells: Iterable<{ points: number; counting: ItemCounting }>): number {
   let sum = 0;
-  for (const p of points) sum += p;
+  for (const cell of cells) sum += countedPoints(cell.points, cell.counting);
   // `+ 0` turns a `-0` into a `0`: a total prints as "0", never "-0".
   return Math.max(0, round2(sum)) + 0;
 }
 
 /**
- * THE total of an evaluation (ADR-052): the points of its items, BONUS ITEMS
- * LEFT OUT, rounded by {@link round2} (decision D13). The one definition
- * behind the builder, the attempt view, the live dashboard, the results, the
- * feedback page, the templates and the release snapshot. A student's points
- * include the bonus items, so they may exceed it ("21 / 18 pts").
+ * THE total of an evaluation (ADR-052, ADR-108): the points of its items,
+ * BONUS AND NEUTRALIZED ITEMS LEFT OUT, rounded by {@link round2} (decision
+ * D13). The one definition behind the builder, the attempt view, the live
+ * dashboard, the results, the feedback page, the templates and the release
+ * snapshot. A student's points include the bonus items, so they may exceed
+ * it ("21 / 18 pts").
  */
-export function evaluationTotal(items: Iterable<{ points: number; bonus: boolean }>): number {
-  return pointsWhere(items, false);
+export function evaluationTotal(items: Iterable<{ points: number; counting: ItemCounting }>): number {
+  return pointsWhere(items, "normal");
 }
 
 /** What the bonus items may add on top of {@link evaluationTotal}, rounded the same way. */
-export function bonusTotal(items: Iterable<{ points: number; bonus: boolean }>): number {
-  return pointsWhere(items, true);
+export function bonusTotal(items: Iterable<{ points: number; counting: ItemCounting }>): number {
+  return pointsWhere(items, "bonus");
 }
 
-function pointsWhere(items: Iterable<{ points: number; bonus: boolean }>, bonus: boolean): number {
+function pointsWhere(items: Iterable<{ points: number; counting: ItemCounting }>, counting: ItemCounting): number {
   let sum = 0;
-  for (const item of items) if (item.bonus === bonus) sum += item.points;
+  for (const item of items) if (item.counting === counting) sum += item.points;
   return round2(sum);
 }
 
 /**
  * Readiness `no_graded_points` (ADR-052): an exam or an exercise whose
- * {@link evaluationTotal} is 0 — every question a bonus, or none worth a
- * point — has nothing to grade against, and is not opened. A poll is never
+ * {@link evaluationTotal} is 0 — every question a bonus or neutralized, or
+ * none worth a point — has nothing to grade against, and is not opened. A poll is never
  * graded, so it is never refused for it.
  */
 export function lacksGradedPoints(mode: EvaluationModeName, total: number): boolean {
@@ -129,16 +185,17 @@ export function lacksGradedPoints(mode: EvaluationModeName, total: number): bool
 
 /**
  * THE points of one automatically graded item: what its question type gave,
- * rounded by {@link round2} to the granularity of `gradings.points`, and
- * floored at 0 on a BONUS item (ADR-052). A bonus item is graded like any
- * other — under negative marking (ADR-026) with the negative rule, so a wrong
- * choice still lowers a partial score — but it can only add to the total,
- * never take from it. Every automatic grade goes through this one function.
+ * rounded by {@link round2} to the granularity of `gradings.points`. Stored
+ * RAW whatever the item's counting (ADR-108): a bonus item is graded like
+ * any other — under negative marking (ADR-026) with the negative rule — and
+ * its floor at 0 is applied where the student's points are read
+ * ({@link countedPoints}), never written, so a change of counting is
+ * reversible. (Bonus gradings written before ADR-108 were floored at write
+ * time and stay so.) Every automatic grade goes through this one function.
  */
-export function itemPoints(raw: number, bonus: boolean): number {
-  const points = round2(raw);
+export function itemPoints(raw: number): number {
   // `+ 0` turns a `-0` into a `0`, as in {@link attemptTotal}.
-  return bonus ? Math.max(0, points) + 0 : points;
+  return round2(raw) + 0;
 }
 
 /**

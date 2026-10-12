@@ -148,6 +148,18 @@ describe("the life of a card (ADR-041 §1–3)", () => {
     expect(await cardsOf({ evaluationId: seed.evaluationId })).toHaveLength(4);
   });
 
+  it("creates no card for an item neutralized before the release (ADR-108)", async () => {
+    const app = await appAt();
+    const seed = await world(app, { allowDrill: true });
+    await sit(app, seed);
+    await evaluationService.setItemCounting(db, await reload(db, seed.evaluationId), seed.itemIds[1]!, "neutralized");
+    await releaseResults(db, await reload(db, seed.evaluationId), app.clock.now());
+    const cards = await cardsOf({ evaluationId: seed.evaluationId });
+    // Two students, one question left.
+    expect(cards).toHaveLength(2);
+    expect(new Set(cards.map((c) => c.questionId))).toEqual(new Set([seed.questionIds[0]]));
+  });
+
   it("creates nothing for an exam left at its default, nor with the classroom's drill off", async () => {
     const app = await appAt();
     const byDefault = await world(app);

@@ -3,7 +3,7 @@ import { Check, CheckCircle2, Lock, Minus } from "lucide-react";
 
 import type { CanvasShortcutsListener } from "@quiz/core/client";
 import type { SimulateOutcome } from "@quiz/core/server";
-import type { AnswerMark } from "@quiz/domain";
+import type { AnswerMark, ItemCounting } from "@quiz/domain";
 import type {
   CodeAnswer,
   CodeImageAnswer,
@@ -17,7 +17,7 @@ import type { RunFn } from "../attempt/run";
 import { useT, type TFunction } from "../i18n";
 import { runCode, runCodeImage } from "../runner/codeRun";
 import { Badge } from "../ui";
-import { BonusLabel } from "../BonusLabel";
+import { CountingLabel } from "../CountingLabel";
 import { ExpandLayer } from "./ExpandLayer";
 import { isAnswered, QuestionHost } from "./QuestionHost";
 
@@ -113,12 +113,12 @@ export const PlayerQuestion = memo(function PlayerQuestion({
 
 /**
  * "Question 2", its state in a word AND a symbol — the same symbols as the
- * list above — whether it is a bonus (ADR-052), and what it is worth.
+ * list above — how it counts (ADR-052, ADR-108), and what it is worth.
  */
 export function QuestionHeading({
   index,
   points,
-  bonus = false,
+  counting = "normal",
   validated,
   acquired = false,
   mark,
@@ -127,8 +127,8 @@ export function QuestionHeading({
   index: number;
   /** Absent on a wide screen: the side column says it, beside the list. */
   points?: number;
-  /** A bonus question: its points are not in the total. */
-  bonus?: boolean;
+  /** How the question counts: a bonus one's points are not in the total (ADR-052, ADR-108). */
+  counting?: ItemCounting;
   validated: boolean;
   /** ADR-091: carried over by a partial retake, kept as it was. */
   acquired?: boolean;
@@ -149,7 +149,7 @@ export function QuestionHeading({
             one question per page needs no second counter. */}
         {t("player.question", { n: index + 1 })}
       </p>
-      {bonus ? <BonusLabel /> : null}
+      <CountingLabel counting={counting} />
       {/* Nothing for "not answered yet": that is what a question is until
           it is not. */}
       {acquired ? (

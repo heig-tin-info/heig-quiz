@@ -144,6 +144,12 @@ export type AuditAction =
   | "evaluation.duplicate"
   | "evaluation.extend"
   | "evaluation.items_update"
+  /**
+   * ADR-108: an item's counting changed at grading time (normal, bonus,
+   * neutralized); subject the evaluation, `payload.itemId`, `payload.before`,
+   * `payload.after` and `payload.modifiedAfterRelease`.
+   */
+  | "evaluation.item_counting"
   | "evaluation.items_versions"
   | "evaluation.pause"
   | "evaluation.resume"

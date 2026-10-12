@@ -340,7 +340,7 @@ async function ensureEvaluation(
   });
   const bonusIds = new Set((spec.bonus ?? []).map((name) => ctx.questionIds.get(name)));
   for (const item of items.filter((i) => bonusIds.has(i.questionId))) {
-    await evaluationService.patchItem(db, row, item.id, { bonus: true }, { attemptCount: 0 });
+    await evaluationService.patchItem(db, row, item.id, { counting: "bonus" }, { attemptCount: 0 });
   }
   row = (await evaluationService.byId(db, row.id))!;
 

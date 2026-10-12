@@ -1,9 +1,31 @@
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
+import type { ItemCounting } from "@quiz/contracts";
+import { ITEM_COUNTINGS } from "@quiz/domain";
+
+import { CountingLabel } from "../CountingLabel";
+import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { typeLabel } from "../questionTypes";
 import { Badge, IconButton, Menu, ProgressSegments } from "../ui";
 import type { GradingItem, StepState } from "./useGradingData";
+
+/** The menu's words for each counting (ADR-108). */
+const COUNTING_LABEL: Record<ItemCounting, keyof Dict> = {
+  normal: "grading.counting.normal",
+  bonus: "grading.counting.bonus",
+  neutralized: "grading.counting.neutralized",
+};
+
+/**
+ * The question bar's part of the counting act (ADR-108): the menu's
+ * states, the current one ticked, a choice that would leave nothing in the
+ * total greyed out; `onChange` asks and writes (`useItemCounting`).
+ */
+export interface CountingMenu {
+  refused: (counting: ItemCounting) => boolean;
+  onChange: (counting: ItemCounting) => void;
+}
 
 /** What a question still asks for: the answers not validated yet. */
 const leftOf = (state: StepState | undefined) =>
@@ -19,17 +41,25 @@ const leftOf = (state: StepState | undefined) =>
  *
  * Never red: red on this screen is the thing to press, and a place in a
  * path is not an action (DESIGN.md › Color).
+ *
+ * Once the evaluation has run, the ⋯ menu changes how the question counts
+ * — normally, as a bonus, or not at all (ADR-108): a secondary act, so a
+ * menu at the end of the bar and never a button beside the primary one.
+ * An item that does not count normally says so beside its points.
  */
 export function QuestionBar({
   items,
   index,
   states,
   onJump,
+  counting,
 }: {
   items: GradingItem[];
   index: number;
   states: ReadonlyMap<string, StepState>;
   onJump: (index: number) => void;
+  /** Absent before the list is frozen, and for a reader who may not grade. */
+  counting?: CountingMenu | undefined;
 }) {
   const t = useT();
   const item = items[index];
@@ -73,6 +103,7 @@ export function QuestionBar({
         <span className="flex flex-wrap items-center gap-1.5">
           <Badge tone="zinc">{typeLabel(t, item.type)}</Badge>
           <Badge tone="zinc">{t("grading.points", { n: item.points })}</Badge>
+          <CountingLabel counting={item.counting} />
         </span>
         <span className="min-w-0 truncate text-[13px] text-fg-muted">
           {item.internalName}
@@ -90,6 +121,21 @@ export function QuestionBar({
         >
           <ChevronRight />
         </IconButton>
+        {counting ? (
+          <Menu
+            label={t("grading.counting.menu")}
+            items={ITEM_COUNTINGS.map((option) => {
+              const current = option === item.counting;
+              const refused = !current && counting.refused(option);
+              return {
+                label: t(COUNTING_LABEL[option]),
+                ...(current ? { icon: Check } : {}),
+                ...(refused ? { disabled: true, description: t("grading.counting.noGradedPoints") } : {}),
+                onSelect: () => counting.onChange(option),
+              };
+            })}
+          />
+        ) : null}
       </div>
       {items.length > 1 ? (
         <ProgressSegments
