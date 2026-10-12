@@ -24,12 +24,16 @@
  * retried: retrying a full queue is how a full queue stays full.
  */
 import {
+  ProjectRunRefusal,
+  ProjectRunRequest,
+  ProjectRunResult,
   RunnerBusy,
   RunnerHealth,
   RunnerOutcome,
   RunnerUnavailable,
   RUNNER_TTL_SLACK_MS,
   requestBudgetMs,
+  type ProjectRunnerService,
   type RunnerRequest,
   type RunnerService,
 } from "@quiz/core/server";
@@ -126,7 +130,17 @@ function retryAfterMs(res: Response): number | null {
   return Number.isFinite(seconds) ? Math.max(0, Math.round(seconds * 1000)) : null;
 }
 
-export class HttpRunner implements RunnerService {
+/**
+ * How long a project run may wait in the runner's queue: as a grading run.
+ * The project job is paced on this side, so the wait is the code questions'
+ * runs ahead of it.
+ */
+const PROJECT_QUEUE_ALLOWANCE_MS = QUEUE_ALLOWANCE_MS.grading;
+
+/** The runner's refusals of a project run, by its `error`: an answer, never retried. */
+const PROJECT_REFUSALS = new Set<string>(ProjectRunRefusal.shape.refused.options);
+
+export class HttpRunner implements RunnerService, ProjectRunnerService {
   private readonly base: string;
   private readonly interactiveCeilingMs: number;
   private readonly waitMs: (req: RunnerRequest & { budgetMs: number }) => number;
@@ -154,6 +168,42 @@ export class HttpRunner implements RunnerService {
       await res.text().catch(() => "");
 
       if (res.status === 429) throw new RunnerBusy(retryAfterMs(res));
+      if (RETRYABLE.has(res.status)) {
+        if (attempt < this.retries) continue;
+        throw new RunnerUnavailable(`upstream_${res.status}`);
+      }
+      throw new RunnerUnavailable(`http_${res.status}`);
+    }
+  }
+
+  /**
+   * `POST /project` (ADR-106 §3). A refusal the runner states — no image
+   * for it, an archive over the cap or not a tar, a request it would not
+   * parse — is an ANSWER and is never retried, even when it comes as a 503
+   * (`image_unavailable`); any other 502/503/504 is retried once, like `run`.
+   */
+  async project(req: ProjectRunRequest): Promise<ProjectRunResult | ProjectRunRefusal> {
+    const sent = ProjectRunRequest.parse(req);
+    const waitMs = PROJECT_QUEUE_ALLOWANCE_MS + sent.budgetMs + RUNNER_TTL_SLACK_MS;
+    for (let attempt = 0; ; attempt++) {
+      const res = await this.post(`${this.base}/project`, sent, waitMs);
+      if (res.ok) {
+        const parsed = ProjectRunResult.safeParse(await this.json(res));
+        if (!parsed.success) throw new RunnerUnavailable("bad_response");
+        return parsed.data;
+      }
+      const body = (await res.json().catch(() => null)) as { error?: unknown; entries?: unknown } | null;
+      const error = body?.error;
+
+      if (res.status === 429) throw new RunnerBusy(retryAfterMs(res));
+      if (res.status === 413) return { refused: "archive_too_large" };
+      if (typeof error === "string" && PROJECT_REFUSALS.has(error) && res.status !== 502) {
+        const entries = Array.isArray(body?.entries)
+          ? body.entries.filter((entry): entry is string => typeof entry === "string")
+          : undefined;
+        return { refused: error as ProjectRunRefusal["refused"], ...(entries ? { entries } : {}) };
+      }
+      if (res.status === 400) return { refused: "invalid_request" };
       if (RETRYABLE.has(res.status)) {
         if (attempt < this.retries) continue;
         throw new RunnerUnavailable(`upstream_${res.status}`);
@@ -197,13 +247,17 @@ export class HttpRunner implements RunnerService {
     }
   }
 
-  private async outcome(res: Response): Promise<RunnerOutcome> {
-    let body: unknown;
+  /** A 200's body, capped; any failure is `RunnerUnavailable`. */
+  private async json(res: Response): Promise<unknown> {
     try {
-      body = await cappedJson(res, MAX_OUTCOME_BYTES);
+      return await cappedJson(res, MAX_OUTCOME_BYTES);
     } catch (err) {
       throw err instanceof RunnerUnavailable ? err : new RunnerUnavailable("bad_response");
     }
+  }
+
+  private async outcome(res: Response): Promise<RunnerOutcome> {
+    const body = await this.json(res);
     const parsed = RunnerOutcome.safeParse(body);
     // A runner answering 200 with something else is as useless as a dead one,
     // and far more confusing downstream: same error, explicit reason.

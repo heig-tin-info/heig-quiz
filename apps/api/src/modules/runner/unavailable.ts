@@ -7,12 +7,22 @@
  * `RunnerUnavailable`, the grading job turns that into a `proposed` grading
  * with `comment: "runner_unavailable"`, and nothing blocks.
  */
-import { RunnerUnavailable, type RunnerHealth, type RunnerService } from "@quiz/core/server";
+import {
+  RunnerUnavailable,
+  type ProjectRunnerService,
+  type RunnerHealth,
+  type RunnerService,
+} from "@quiz/core/server";
 
-export class UnavailableRunner implements RunnerService {
+export class UnavailableRunner implements RunnerService, ProjectRunnerService {
   constructor(private readonly reason: string = "not_configured") {}
 
   run(): Promise<never> {
+    return Promise.reject(new RunnerUnavailable(this.reason));
+  }
+
+  /** A project run has nowhere to go either (ADR-106 §3). */
+  project(): Promise<never> {
     return Promise.reject(new RunnerUnavailable(this.reason));
   }
 

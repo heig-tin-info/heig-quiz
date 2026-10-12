@@ -6,12 +6,14 @@
  * codes, `Retry-After`, a body that arrives late, a socket that is not there),
  * and a mock would be a restatement of the code it checks.
  */
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   RunnerBusy,
   RunnerUnavailable,
+  type ProjectRunRequest,
+  type ProjectRunResult,
   type RunnerOutcome,
   type RunnerRequest,
 } from "@quiz/core/server";
@@ -326,5 +328,99 @@ describe("HttpRunner", () => {
     const config = loadConfig({ RUNNER_MODE: "http", RUNNER_URL: url });
     expect(await runnerCheck(config, runnerAt())).toBe("up");
     expect(await runnerCheck(config, runnerAt("/sick"))).toBe("down");
+  });
+});
+
+describe("HttpRunner.project (ADR-106 §3)", () => {
+  const PROJECT: ProjectRunRequest = {
+    archive: Buffer.from("tar").toString("base64"),
+    image: "lab-c",
+    commands: { build: ["make", "prepare"], test: ["pytest", "-q"] },
+    outputs: ["report.xml"],
+    limits: { timeMs: 60_000, memoryMb: 512, cpus: 1 },
+    budgetMs: 120_000,
+  };
+  const RESULT: ProjectRunResult = {
+    build: { exitCode: 0, stdout: "", stderr: "", ms: 10, timedOut: false, truncated: false },
+    test: { exitCode: 1, stdout: "1 failed", stderr: "", ms: 20, timedOut: false, truncated: false },
+    files: [
+      { path: "report.xml", content: "<testsuite/>", truncated: false },
+      { path: "build/prog", binary: true, size: 4096 },
+    ],
+  };
+
+  let server: FastifyInstance;
+  let url: string;
+  const hits = new Map<string, number>();
+  const answer = (status: number, body: unknown) => async (_req: FastifyRequest, reply: FastifyReply) =>
+    reply.code(status).send(body);
+
+  beforeAll(async () => {
+    server = Fastify({ bodyLimit: 64 << 20 });
+    server.addHook("onRequest", async (req) => {
+      hits.set(req.url, (hits.get(req.url) ?? 0) + 1);
+    });
+    server.post("/project", answer(200, RESULT));
+    server.post("/noimage/project", answer(503, { error: "image_unavailable", image: "lab-c" }));
+    server.post("/engine/project", answer(503, { error: "engine_error" }));
+    server.post("/big/project", answer(413, { error: "archive_too_large" }));
+    server.post("/nottar/project", answer(400, { error: "archive_invalid" }));
+    server.post("/link/project", answer(400, { error: "archive_refused", entries: ["l: symbolic_link"] }));
+    server.post("/schema/project", answer(400, { error: "invalid_request", issues: [] }));
+    server.post("/busy/project", async (_req, reply) =>
+      reply.code(429).header("retry-after", "30").send({ error: "queue_full" }),
+    );
+    server.post("/garbage/project", answer(200, { build: "?" }));
+    await server.listen({ host: "127.0.0.1", port: 0 });
+    const address = server.server.address();
+    if (address === null || typeof address === "string") throw new Error("no address");
+    url = `http://127.0.0.1:${address.port}`;
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  const at = (path = "") => new HttpRunner({ url: `${url}${path}`, interactiveCeilingMs: 30_000 });
+
+  it("returns the parsed result on 200", async () => {
+    expect(await at().project(PROJECT)).toEqual(RESULT);
+  });
+
+  it("answers image_unavailable as a refusal, never retried", async () => {
+    expect(await at("/noimage").project(PROJECT)).toEqual({ refused: "image_unavailable" });
+    expect(hits.get("/noimage/project")).toBe(1);
+  });
+
+  it("retries another 503 once, then throws RunnerUnavailable", async () => {
+    await expect(at("/engine").project(PROJECT)).rejects.toBeInstanceOf(RunnerUnavailable);
+    expect(hits.get("/engine/project")).toBe(2);
+  });
+
+  it("maps the archive's refusals and a schema refusal", async () => {
+    expect(await at("/big").project(PROJECT)).toEqual({ refused: "archive_too_large" });
+    expect(await at("/nottar").project(PROJECT)).toEqual({ refused: "archive_invalid" });
+    expect(await at("/link").project(PROJECT)).toEqual({
+      refused: "archive_refused",
+      entries: ["l: symbolic_link"],
+    });
+    expect(await at("/schema").project(PROJECT)).toEqual({ refused: "invalid_request" });
+  });
+
+  it("throws RunnerBusy on 429, and RunnerUnavailable on a body that is not a result", async () => {
+    await expect(at("/busy").project(PROJECT)).rejects.toMatchObject({ retryAfterMs: 30_000 });
+    await expect(at("/busy").project(PROJECT)).rejects.toBeInstanceOf(RunnerBusy);
+    await expect(at("/garbage").project(PROJECT)).rejects.toMatchObject({ reason: "bad_response" });
+  });
+
+  it("validates the request with the contract's schema before sending it", async () => {
+    await expect(
+      at().project({ ...PROJECT, commands: { test: ["make && pytest", ""] } }),
+    ).rejects.toThrow();
+    expect(hits.get("/project")).toBe(1);
+  });
+
+  it("is refused by the stub like a run", async () => {
+    await expect(new UnavailableRunner().project()).rejects.toBeInstanceOf(RunnerUnavailable);
   });
 });

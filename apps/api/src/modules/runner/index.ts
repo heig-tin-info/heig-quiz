@@ -10,7 +10,7 @@
  * service.
  */
 import type { HealthResponse } from "@quiz/contracts";
-import type { RunnerService } from "@quiz/core/server";
+import type { ProjectRunnerService, RunnerService } from "@quiz/core/server";
 
 import type { AppConfig } from "../../config.js";
 import { HttpRunner, type FetchLike } from "./http.js";
@@ -22,7 +22,10 @@ export { UnavailableRunner } from "./unavailable.js";
 /** What `/healthz` says about the runner. `stub` is a choice, not a failure. */
 type RunnerCheck = HealthResponse["checks"]["runner"];
 
-export function createRunner(config: AppConfig, fetchImpl?: FetchLike): RunnerService {
+export function createRunner(
+  config: AppConfig,
+  fetchImpl?: FetchLike,
+): RunnerService & ProjectRunnerService {
   if (config.RUNNER_MODE === "http") {
     return new HttpRunner({
       url: config.RUNNER_URL,
@@ -50,7 +53,7 @@ export async function runnerCheck(
 
 declare module "fastify" {
   interface FastifyInstance {
-    /** Always present; may be the stub that throws `RunnerUnavailable`. */
-    runner: RunnerService;
+    /** Always present; may be the stub that throws `RunnerUnavailable`. Runs projects too (ADR-106 §3). */
+    runner: RunnerService & ProjectRunnerService;
   }
 }
