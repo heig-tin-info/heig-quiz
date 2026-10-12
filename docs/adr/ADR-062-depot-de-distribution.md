@@ -11,6 +11,12 @@ git runner (`apps/api/src/github/git.ts`). Tested by
 Completes ADR-035 (the merge), D19 (`docs/merge/08-decisions.md`) and
 F-PROJ-02, F-PROJ-16.
 
+**Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md)
+§3** (scope: a second use of addendum 1's reference; nothing here changes):
+the evidence run of a project graded by criteria overlays the
+distribution's current protected files on the student's tree, exactly as a
+restore takes them, and records the distribution sha it used.
+
 **Addendum (2026-10-02, product owner; merge task M3-04): the distribution
 repository is also the reference of the protected files.** F-PROJ-08 is
 amended to match:

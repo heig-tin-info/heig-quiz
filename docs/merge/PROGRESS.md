@@ -212,6 +212,20 @@ In the critical path only if D09 finds online assignments in production.
 | --- | --- | --- | --- | --- | --- | --- |
 | M9-01 | Point of no return, decommission, close #143 | todo | M8-07 + observation | | | |
 
+## L — After the merge
+
+Project grading by criteria on the platform ([ADR-106](../adr/ADR-106-notation-des-projets-par-criteres.md)); the pilot (L-02g) comes before the student table (L-02f).
+
+| ID | Task | Status | Depends | Branch | PR | Handoff |
+| --- | --- | --- | --- | --- | --- | --- |
+| L-02a | Criteria snapshot: parser, totals, `project_criteria`, opt-in `criteria` mode | todo | ADR-106 | | | |
+| L-02b | Runner `project` action, `lab-c` image, `project.evidence` | todo | L-02a | | | |
+| L-02c | Final pass, proposals, regrade | todo | L-02a, L-02b | | | |
+| L-02d | Milestone locks | todo | L-02c, L-02e | | | |
+| L-02e | Teacher grading screen, release gate | todo | L-02c | | | |
+| L-02f | Student criteria table | todo | L-02c, L-02g | | | |
+| L-02g | Labo 00 pilot | todo | L-02c, L-02e | | | |
+
 ## Rehearsal log
 
 | Date | Dump date | Duration | Parity report | Go / no-go | Notes |

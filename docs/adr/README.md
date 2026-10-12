@@ -152,6 +152,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-073 — Syncing a project's source: a lease, one pull request per branch, the handed-out sha](ADR-073-synchronisation-de-la-source.md)
 - [ADR-074 — Gradebook: stored marks beside derived absence](ADR-074-carnet-de-notes-marques-stockees.md)
 - [ADR-100 — GitHub organizations are granted to courses: who may connect, what the staff may read](ADR-100-organisations-github-accordees-aux-cours.md)
+- [ADR-106 — Grading a project by criteria on the platform: the criteria as data, the evidence run in `apps/runner`, an LLM pass, a validated report](ADR-106-notation-des-projets-par-criteres.md)
 
 ## Maintaining a record
 

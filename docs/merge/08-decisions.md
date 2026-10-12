@@ -146,6 +146,15 @@ Status values: `open`, `settled`, `superseded`.
   from heig-classroom get `score_is_grade` (product owner, 2026-10-02), its
   own reading of a score out of 6, so that no released grade moves at the
   import (M8-01).
+  Amended 2026-10-12 (product owner, decision 2 of
+  [ADR-106](../adr/ADR-106-notation-des-projets-par-criteres.md) §9; amended
+  together with N-SEC-20 and ADR-063 §4): for a project in the `criteria`
+  grading mode, the student's **project page** (not the Grades page, which
+  is unchanged) shows the criteria table; its rationale column appears
+  after the repository's definitive freeze, marked provisional, and is
+  final after the release. A fourth final-score
+  source, `criteria`, ranks between the teacher's and the review's
+  (ADR-106 §7).
 
 ### D06 — Gradebook rules
 - **Suggested**: exams and projects count by default, exercises opt-in,
@@ -274,6 +283,7 @@ Status values: `open`, `settled`, `superseded`.
   is; a platform `llm` module is phase L.
 - Blocks: nothing on the critical path.
 - **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion, for now: classroom's CI-dispatched review is ported as is. Later, once the platform `llm` module is really in place (phase L), Quiz may run the review of a project itself instead of the student repository's CI.
+- **Amended 2026-10-12 (product owner, [ADR-106](../adr/ADR-106-notation-des-projets-par-criteres.md))**: the later step is taken, opt-in per project. A project whose staff chose the `criteria` grading mode is graded by the platform: its tests run in `apps/runner` (the `project` action), its criteria proposed by one LLM call per repository through the gateway (purpose `project`, institutional key), validated by the teacher. A project in `auto` mode keeps the CI's dispatched review; the CI's `llm-review` tier and the organization secret's check go progressively (M3-14f).
 
 ### D18 — Notification kinds for projects
 - **Suggested**: student `project_published`, `project_deadline_reminder`,

@@ -18,6 +18,14 @@ amendment (a) of [ADR-016](ADR-016-runner-sur-vm-separee.md) (the engine VM's
 size) and on [ADR-096](ADR-096-fichiers-annexes-publics.md) (`finalizeState`
 travels in the job).
 
+**Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md)
+§3** (scope: the request ceilings, for the new `project` action only). The
+`project` action has its own request ceiling, `RUNNER_PROJECT_TIMEOUT_MS`
+(up to 600 s), and its own separate bounded tmpfs, `RUNNER_PROJECT_WORKDIR_MB`,
+both runner configuration, never a per-request override; the API's wait
+budget for it is that ceiling plus 60 s. Its jobs run on the grading
+priority, paced so that a pass never fills the runner's queue.
+
 ## Context
 
 Production runs the runner with two slots (`RUNNER_CONCURRENCY=2`). The API

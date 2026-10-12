@@ -67,6 +67,11 @@ concept suggestion, the assistant's editor draft) is at most
 
 Amended 2026-10-09: §2 says what the screen writes (`models.default` only) and how a call resolves its model (the purpose's own, the purpose's fixed model, the default, the platform's), as `modelFor` does.
 
+Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md)
+§4 (scope: §1's purposes and the L2 amendment above): a purpose `project`,
+exempt from the user share, with a regrade cap of its own; the rules are
+ADR-106 §4's.
+
 ## Context
 
 ADR-045 gave the grading pass a call path and a deterministic stub, and

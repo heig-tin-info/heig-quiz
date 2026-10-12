@@ -21,6 +21,15 @@ Amended 2026-10-09: [ADR-045](ADR-045-service-llm-de-correction.md) is
 folded into this record (§9, and the
 [correspondence table](#correspondence-with-adr-045) at the end).
 
+Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md)
+(product owner, decision 2; scope: project criteria only). §2's failure
+reasons and §4's masking are reused by the LLM pass of a project graded by
+criteria; unlike §4's justification, that pass's rationales reach the
+student, as plain text through the project's student view only —
+provisional after the repository's definitive freeze, final (validated)
+after the release. An essay's or a diagram's justification and `details.ai`
+stay the teacher's.
+
 ## Context
 
 ADR-045 built the call path: an essay with a rubric or a model answer

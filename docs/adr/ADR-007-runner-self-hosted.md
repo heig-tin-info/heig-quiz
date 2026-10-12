@@ -12,6 +12,14 @@ still executed by Quiz's own runner service (`apps/runner`, ADR-016): the
 two never meet, and "runner" alone means `apps/runner`; these are "CI
 runners".
 
+**Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md)**
+(scope: what these runners grade). A project in the `criteria` grading mode
+is graded by the platform: its tests run in `apps/runner`'s `project`
+action and its review is a platform LLM pass. On its repositories the CI's
+objective tier keeps running on these runners, as the student's indicative
+feedback; the `llm-review` tier is decommissioned progressively (M3-14f).
+A project in `auto` mode is unchanged.
+
 Until 2026-09-30 this record read: *Not applicable to quiz — see ADR-016
 and `apps/runner`. This record is inherited from heig-classroom, where
 grading runs on GitHub Actions. Quiz has no GitHub Actions grading: code is
