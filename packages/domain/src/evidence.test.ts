@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { automaticPoints, coversCase, parseJunit, proratedByTests, stripTarballRoot } from "./evidence.js";
+import { automaticPoints, coversCase, parseJunit, plainSources, proratedByTests, sourcePaths, stripTarballRoot } from "./evidence.js";
 
 const REPORT = `<?xml version="1.0" encoding="utf-8"?>
 <testsuites><testsuite name="pytest" errors="1" failures="1" skipped="1" tests="5">
@@ -74,5 +74,20 @@ describe("stripTarballRoot", () => {
     ];
     expect(stripTarballRoot(entries).map((e) => e.path)).toEqual(["Makefile", "src/main.c"]);
     expect(stripTarballRoot([])).toEqual([]);
+  });
+});
+
+describe("sourcePaths", () => {
+  const paths = ["report.xml", "build/rapport.md", "build/deep/x.c", "src/main.c", "src/a/b.c", "README.md"];
+
+  it("keeps the paths a source names or holds, in their order; a wildcard names nothing", () => {
+    expect(sourcePaths(["build/", "./README.md"], paths)).toEqual(["build/rapport.md", "build/deep/x.c", "README.md"]);
+    expect(sourcePaths(["src/main.c", "src/a"], paths)).toEqual(["src/main.c"]);
+    expect(sourcePaths(["src/*.c"], paths)).toEqual([]);
+    expect(plainSources(["src/", "*.md", "a/b?.c", "./x"])).toEqual({ plain: ["src/", "x"], wildcards: ["*.md", "a/b?.c"] });
+  });
+
+  it("keeps every path when no glob is given", () => {
+    expect(sourcePaths([], paths)).toEqual(paths);
   });
 });

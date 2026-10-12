@@ -2040,32 +2040,6 @@ draw them 2 px where two cells meet.
   in the heat; the caption under the box says the area is proportional to the
   number of questions.
 
-## The activity heatmap (Administration, Activity tab)
-
-`AdminActivity.tsx` (F-ADMIN-09, ADR-107): an observation screen, no action;
-its one control is a `Segmented` (Everyone / Students / Staff) on the grid's
-card. A row of four `Stat` tiles above it (active now, last 24 hours, last 7
-days, each "n students · n staff"; the students' off-hours share, its window
-written in its hint).
-
-- **The grid is a real table**: seven dated rows (today last, in `fg` and
-  600), 24 hour columns, `table-fixed`, 2 px `border-spacing` as the gap
-  between cells, 28 px rows, 3 px radius. A screen reader reads each figure
-  under its day and hour; the `title` of a cell says it in a sentence.
-- **One sequential hue**: `--heat-1..5`, `info` mixed into `surface` in five
-  steps, re-cut for the dark theme. The step is the cell's share of the
-  grid's largest cell, rounded up; an empty hour is `surface-2`. Ink held to
-  4.5:1 on every step: `fg` on steps 1–3, `--heat-ink-4` on step 4 (`fg` in
-  light, `on-fill` in dark), `on-fill` on step 5. Every non-empty cell
-  prints its count (11 px, tabular).
-- **Off-hours are a texture, not a colour**: a 135° hatch of `fg` at 11 %
-  over whatever the cell holds, so a busy evening keeps its blue and its
-  figure; the legend names the window and the time zone.
-- **The week per hour** closes the table as a `tfoot` row of bars on the
-  same columns (`heat-4`, 40 px), so it aligns by construction.
-- **Narrow screens**: the table keeps a 46 rem minimum and scrolls inside
-  its card; the page never scrolls sideways.
-
 ## Correction projection (the graded evaluation on a beamer)
 
 `/evaluations/:id/correction` (`results/CorrectionProjection.tsx`, ADR-033):

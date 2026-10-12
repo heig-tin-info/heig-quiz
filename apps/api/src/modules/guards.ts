@@ -614,7 +614,7 @@ export const accessibleProject = routeLoader(
  */
 export async function findAccessibleProjectRepo(db: Db, user: Caller, projectId: string, repoId: string) {
   const [row] = await db
-    .select({ project: projects, repo: projectRepos })
+    .select({ project: projects, repo: projectRepos, courseId: courses.id })
     .from(projectRepos)
     .innerJoin(projects, eq(projectRepos.projectId, projects.id))
     .innerJoin(classrooms, eq(projects.classroomId, classrooms.id))

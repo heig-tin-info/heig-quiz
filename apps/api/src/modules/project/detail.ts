@@ -372,7 +372,8 @@ export async function projectDetail(
   const [runs, facts, dispatches, syncs, receipts] = await Promise.all([
     slotRuns(db, shownRepos),
     runFacts(db, repoIds),
-    finalDispatches(db, repoIds),
+    // The CI final review's ledger only: a `criteria` project's `deadline` rows are its platform pass (ADR-106 §6).
+    project.gradingMode === "auto" ? finalDispatches(db, repoIds) : new Map<string, DispatchRow>(),
     repoSyncViews(db, project, shownRepos),
     // The student's own count (M3-14m): the same receipts and rule as their card.
     countedReceipts(db, shownRepos.flatMap((repo) => (repo.githubRepoId === null ? [] : [repo.githubRepoId]))),

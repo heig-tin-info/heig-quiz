@@ -12,7 +12,7 @@
  * vocabulary, ADR-081 fifth addendum §4; `suggest`, the concepts proposed for a
  * question being edited, ADR-081 sixth addendum §6).
  */
-export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll", "assist", "describe", "domain", "concepts", "suggest"] as const;
+export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll", "assist", "describe", "domain", "concepts", "suggest", "project"] as const;
 export type LlmPurpose = (typeof LLM_PURPOSES)[number];
 
 export interface LlmModel {
@@ -93,9 +93,12 @@ export function isParis(answer: string): boolean {
  * pass is billed to the evaluation's author, whoever pressed the button, and
  * is bounded by the answers the students wrote — refusing it halfway would
  * leave a class half graded. Its re-grades have their own budget
- * ({@link LLM_REGRADES_PER_ITEM_PER_DAY}).
+ * ({@link LLM_REGRADES_PER_ITEM_PER_DAY}). A project's pass (`project`,
+ * ADR-106 §4) likewise: billed to the project's creator, one call per
+ * repository, its regrades capped per project
+ * ({@link PROJECT_REGRADES_PER_DAY}).
  */
-export const USER_SHARE_EXEMPT: readonly LlmPurpose[] = ["grade"];
+export const USER_SHARE_EXEMPT: readonly LlmPurpose[] = ["grade", "project"];
 
 /** The part of the day's cap one person may spend (audit L2), like the assistant's and the night's shares. */
 export const LLM_USER_DAY_SHARE = 0.2;
@@ -126,6 +129,13 @@ export function userShareAllows(day: {
  * and is not counted.
  */
 export const LLM_REGRADES_PER_ITEM_PER_DAY = 3;
+
+/**
+ * How many regrades a project graded by criteria takes a day (ADR-106 §4,
+ * ADR-058 L2 (b)): the project's and a repository's count one each, every
+ * one of them sending its repositories back to the model.
+ */
+export const PROJECT_REGRADES_PER_DAY = 3;
 
 /**
  * Whether a teacher-assistant call may be reserved (ADR-080 §4): the chat's

@@ -29,19 +29,35 @@ import { decryptKey, encryptKey } from "./crypto.js";
 import type { LlmGateway } from "./gateway.js";
 import { gatewayGrader } from "./grader.js";
 import { settingsRow, todayBudget, type SettingsRow } from "./ledger.js";
+import { stubProjectReview, type ProjectReviewOutcome, type ProjectReviewRequest } from "./projectReviewer.js";
 import { LlmError } from "./provider.js";
-import { StubLlm } from "./stub.js";
+import { STUB_MODEL, StubLlm } from "./stub.js";
 
 export { LlmError, type ConverseTurn, type ReadOnlyTool } from "./provider.js";
+export { type ProjectReviewCriterion, type ProjectReviewOutcome, type ProjectReviewRequest } from "./projectReviewer.js";
 export { LlmGateway, type CompleteRequest, type Completion } from "./gateway.js";
 export { STUB_MODEL } from "./stub.js";
 export { monthUsage, settingsRow, spentToday, startOfDay, todayBudget } from "./ledger.js";
+
+/**
+ * The reason a failed model call leaves on what it was to grade (ADR-063
+ * §2): the day's budget, no usable key, anything else. One rule for the
+ * grading pass and a project's (ADR-106 §4).
+ */
+export function llmFailure(err: unknown): "llm_budget" | "llm_not_configured" | "grader_error" {
+  if (!(err instanceof LlmError)) return "grader_error";
+  if (err.code === "budget_exhausted") return "llm_budget";
+  if (err.code === "not_configured" || err.code === "key_unreadable") return "llm_not_configured";
+  return "grader_error";
+}
 
 export interface GradingLlm {
   /** Whether a call can be made now; the grading pass offers the service only then. */
   ready(): Promise<boolean>;
   /** `billedTo` is the person the call is logged against (`llm_calls`, F-LLM-04), never sent to the model. */
   grade(req: LlmGradeRequest, billedTo: string | null): Promise<LlmGradeOutcome>;
+  /** A project's pass for one repository (ADR-106 §4): `req` masked by the caller, `billedTo` the project's creator. */
+  reviewProject(req: ProjectReviewRequest, billedTo: string | null): Promise<ProjectReviewOutcome>;
 }
 
 /**
@@ -52,7 +68,11 @@ export function createLlm(config: Pick<AppConfig, "LLM_PROVIDER">, gateway: LlmG
   if (config.LLM_PROVIDER === "stub") {
     const stub = new StubLlm();
     // Every call recorded for the services' status (ADR-055 §6); the gateway records its own.
-    return { ready: () => Promise.resolve(true), grade: (req) => tracked("llm", () => stub.grade(req)) };
+    return {
+      ready: () => Promise.resolve(true),
+      grade: (req) => tracked("llm", () => stub.grade(req)),
+      reviewProject: (req) => tracked("llm", () => Promise.resolve(stubProjectReview(req, STUB_MODEL))),
+    };
   }
   return gateway?.enabled ? gatewayGrader(gateway) : null;
 }

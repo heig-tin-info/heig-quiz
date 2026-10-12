@@ -78,7 +78,7 @@ import {
   type JobQueue,
   type JobTry,
 } from "../../jobs.js";
-import { LlmError } from "../llm/service.js";
+import { llmFailure } from "../llm/service.js";
 import {
   byId,
   gradeDefaults,
@@ -892,14 +892,6 @@ function keepsLlmProposal(
     standing.answerId === answer?.id &&
     justificationOf(standing.details) !== null
   );
-}
-
-/** The reason a failed call leaves on its cell (ADR-063 §2). */
-function llmFailure(err: unknown): PassReason {
-  if (!(err instanceof LlmError)) return "grader_error";
-  if (err.code === "budget_exhausted") return "llm_budget";
-  if (err.code === "not_configured" || err.code === "key_unreadable") return "llm_not_configured";
-  return "grader_error";
 }
 
 /**

@@ -122,6 +122,7 @@ function recordingStub(
       billed.push(billedTo);
       return options.fail ? Promise.reject(options.fail) : stub.grade(req);
     },
+    reviewProject: () => Promise.reject(new Error("no project here")),
   };
 }
 

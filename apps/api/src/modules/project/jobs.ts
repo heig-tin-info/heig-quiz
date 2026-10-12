@@ -23,7 +23,9 @@
  * 4. a repository past its effective deadline + the grace is frozen for
  *    good (`frozen_at`, audited `project_repo.frozen`; one archived as its
  *    lock or with its protection suspended is audited
- *    `project_repo.review_skipped`, M3-05b);
+ *    `project_repo.review_skipped`, M3-05b); a repository of a project
+ *    graded by criteria gets its final pass claimed in `grade_dispatches`
+ *    (ADR-106 §6), its `project.evidence` job sent with a queue only;
  * 4b. the day-before reminders due are claimed and sent (`remindDeadlines`,
  *    `notify.ts`, M3-09b): no HTTP, the notifications' own jobs carry the
  *    e-mails;
@@ -55,6 +57,8 @@
  * `bot_commits(deadline)` BEFORE its ref moves; the score never depends on
  * it — the receipt time does (ADR-012).
  */
+import { randomUUID } from "node:crypto";
+
 import type { FastifyInstance } from "fastify";
 import { and, asc, eq, exists, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
@@ -64,7 +68,7 @@ import { deadlineWantsLock, effectiveDeadline, zonedIso } from "@quiz/domain";
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { botCommits, classrooms, projectRepos, projects } from "../../db/schema.js";
+import { botCommits, classrooms, gradeDispatches, projectRepos, projects } from "../../db/schema.js";
 import { githubApp, githubStatus, ownerRepo } from "../../github/app.js";
 import { pushEmptyCommit } from "../../github/commit.js";
 import { lockStudentRepo, setRepoArchived, unlockStudentRepo } from "../../github/lock.js";
@@ -74,6 +78,7 @@ import {
   PROJECT_DISPATCH_QUEUE,
   PROJECT_EVIDENCE_QUEUE,
   PROJECT_GROUP_SYNC_QUEUE,
+  PROJECT_REVIEW_QUEUE,
   PROJECT_SYNC_QUEUE,
   type JobQueue,
 } from "../../jobs.js";
@@ -81,7 +86,7 @@ import type { TickTask } from "../../ticker.js";
 import { requestCodespaceSync } from "../codespace/service.js";
 import { DomainError } from "../http.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
-import { EVIDENCE_CONCURRENCY, runEvidence, type EvidenceJob } from "./evidence.js";
+import { EVIDENCE_CONCURRENCY, type EvidenceJob } from "./evidence.js";
 import { stopGroups, stopProjects } from "./groupCopy.js";
 import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
 import { claimLeases, runLeased, type ProjectJob } from "./lease.js";
@@ -89,6 +94,7 @@ import { publishProject } from "./lifecycle.js";
 import { remindDeadlines, tellProjectStaff } from "./notify.js";
 import { hintProjectStaff, hintRepo, markRepoDeleted, type RepoRow } from "./repos.js";
 import { claimReviewWork, runReviewJob } from "./review.js";
+import { REVIEW_CONCURRENCY, runEvidencePass, runReview, type ReviewJob } from "./reviewPass.js";
 import { runSyncJob } from "./sync.js";
 import type { ProjectRow } from "./views.js";
 
@@ -212,8 +218,21 @@ async function auditRepos(
   }
 }
 
-/** Step 4: the definitive freeze of each repository, at its effective deadline + the grace. */
-async function freezeDue(db: Db, now: Date): Promise<string[]> {
+/** A final pass claimed at a freeze (ADR-106 §6): the repository, and its `deadline` ledger row, the pass's id. */
+interface FinalPass {
+  repoId: string;
+  passId: string;
+}
+
+/**
+ * Step 4: the definitive freeze of each repository, at its effective
+ * deadline + the grace. A repository of a project graded by criteria gets
+ * its final pass claimed in the `grade_dispatches` ledger in the same
+ * transaction (ADR-106 §6; `trigger = 'deadline'`, an empty sha: the evidence job
+ * chooses the target commit): at most once, a reopen
+ * forgetting it (`deadline.ts`). The caller enqueues its evidence.
+ */
+async function freezeDue(db: Db, now: Date): Promise<{ projectIds: string[]; passes: FinalPass[] }> {
   return db.transaction(async (tx) => {
     const frozen = await tx
       .update(projectRepos)
@@ -237,13 +256,37 @@ async function freezeDue(db: Db, now: Date): Promise<string[]> {
         gradingMode: projects.gradingMode,
       });
     await auditRepos(tx, "project_repo.frozen", frozen);
+    const passes: FinalPass[] = [];
     for (const repo of frozen) {
+      if (repo.gradingMode === "criteria") {
+        const [claim] = await tx
+          .insert(gradeDispatches)
+          .values({ id: randomUUID(), repoId: repo.id, trigger: "deadline", sha: "", createdAt: now })
+          .onConflictDoNothing()
+          .returning({ id: gradeDispatches.id });
+        if (claim) passes.push({ repoId: repo.id, passId: claim.id });
+      }
       if (repo.gradingMode !== "auto") continue;
       if (repo.archivedAt !== null) await auditReviewSkipped(tx, repo, "archived");
       else if (repo.protectionSuspendedAt !== null) await auditReviewSkipped(tx, repo, "protection_suspended");
     }
-    return frozen.map((r) => r.projectId);
+    return { projectIds: frozen.map((r) => r.projectId), passes };
   });
+}
+
+/**
+ * The final passes claimed at a freeze sent to `project.evidence` — its
+ * review follows (`runEvidencePass`) — each ledger row marked
+ * `dispatched_at` once sent. Without a queue the claim stays unconfirmed
+ * (the staff see it, and a Regrade runs the pass).
+ */
+async function sendFinalPasses(app: FastifyInstance, passes: readonly FinalPass[]): Promise<void> {
+  if (!app.boss) return;
+  for (const pass of passes) {
+    const job: EvidenceJob = { repoId: pass.repoId, passId: pass.passId };
+    await app.boss.send(PROJECT_EVIDENCE_QUEUE, job);
+    await app.db.update(gradeDispatches).set({ dispatchedAt: app.clock.now() }).where(eq(gradeDispatches.id, pass.passId));
+  }
 }
 
 /**
@@ -306,13 +349,11 @@ export async function projectTick(app: FastifyInstance, config: AppConfig): Prom
   if (!githubApp(config)) return;
   const now = app.clock.now();
   const published = await publishScheduled(app.db, now);
-  const changed = [
-    ...published,
-    ...(await applyDeadlines(app.db, now)),
-    ...(await freezeDue(app.db, now)),
-  ];
-  await hintProjectStaff(app.db, changed);
+  const applied = await applyDeadlines(app.db, now);
+  const frozen = await freezeDue(app.db, now);
+  await hintProjectStaff(app.db, [...published, ...applied, ...frozen.projectIds]);
   await remindDeadlines(app.db, now, app.log);
+  await sendFinalPasses(app, frozen.passes);
   if (!app.boss) return;
   // An online project published by the schedule goes to the portal (ADR-047 §6, M6-06): a job, never a call here.
   for (const id of published) await requestCodespaceSync(app, config, id);
@@ -342,14 +383,19 @@ export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue,
   // The source's sync (M3-07): sent by the staff's request, never by the ticker.
   await queue.createQueue(PROJECT_SYNC_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_SYNC_QUEUE, (job) => runSyncJob(app, config, job));
-  // The evidence of a project graded by criteria (ADR-106 §3): nothing sends it before L-02c.
+  // The evidence of a project graded by criteria (ADR-106 §3), sent by the final pass and a Regrade; its review follows (§4).
   await queue.createQueue(PROJECT_EVIDENCE_QUEUE, { retryLimit: 0 });
-  await queue.work<EvidenceJob>(
-    PROJECT_EVIDENCE_QUEUE,
+  await queue.work<EvidenceJob>(PROJECT_EVIDENCE_QUEUE, (job) => runEvidencePass(app, config, job), {
+    localConcurrency: EVIDENCE_CONCURRENCY,
+  });
+  // The LLM pass of one repository (ADR-106 §4): no retry, a failure is a proposal with its reason.
+  await queue.createQueue(PROJECT_REVIEW_QUEUE, { retryLimit: 0 });
+  await queue.work<ReviewJob>(
+    PROJECT_REVIEW_QUEUE,
     async (job) => {
-      await runEvidence(app, config, job.repoId);
+      await runReview(app, job);
     },
-    { localConcurrency: EVIDENCE_CONCURRENCY },
+    { localConcurrency: REVIEW_CONCURRENCY },
   );
 }
 

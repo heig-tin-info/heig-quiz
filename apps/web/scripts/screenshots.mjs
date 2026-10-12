@@ -1587,11 +1587,6 @@ const scenes = [
   { name: "admin-empty", role: "admin", path: "/admin?empty=1" },
   { name: "admin-error", role: "admin", path: "/admin?fail=1", settle: 2500 },
   { name: "admin-loading", role: "admin", path: "/admin?slow=1", settle: 300 },
-  // F-ADMIN-09 (ADR-107): the platform's activity, and its states.
-  { name: "admin-activity", role: "admin", path: "/admin?tab=activity" },
-  { name: "admin-activity-empty", role: "admin", path: "/admin?tab=activity&empty=1" },
-  { name: "admin-activity-error", role: "admin", path: "/admin?tab=activity&fail=1", settle: 2500 },
-  { name: "admin-activity-loading", role: "admin", path: "/admin?tab=activity&slow=1", settle: 300 },
   // F-ADMIN-06: the scheduled tasks, one of each state.
   { name: "admin-tasks", role: "admin", path: "/admin?tab=tasks" },
   { name: "admin-tasks-error", role: "admin", path: "/admin?tab=tasks&fail=1", settle: 2500 },

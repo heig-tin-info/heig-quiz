@@ -66,7 +66,12 @@ import { hintProjectStaff, markRepoDeleted } from "./repos.js";
 
 // ---------------------------------------------------------------- what is due, in SQL
 
-/** A project that reviews: graded `auto`, not archived. Over `projects`. */
+/**
+ * A project that reviews through its CI: graded `auto`, not archived. Over
+ * `projects`. A project graded `none` or `criteria` is never dispatched —
+ * neither its final review nor a checkpoint: a `criteria` project's final
+ * pass is the platform's (`jobs.ts`, ADR-106 §6, §10).
+ */
 const REVIEWS = sql`(${projects.gradingMode} = 'auto' AND ${projects.archivedAt} IS NULL)`;
 
 /**

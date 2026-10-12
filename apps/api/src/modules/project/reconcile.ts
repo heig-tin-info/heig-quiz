@@ -112,8 +112,11 @@ const rateLimited = (err: unknown): boolean => rateLimitReset(err, Date.now()) !
 
 /** The live repositories in scope (`reconciles`), with their project and course; one read. */
 async function candidates(db: Db, now: Date): Promise<Candidate[]> {
+  // A CI final review asked: an `auto` project's only — a `criteria` project's `deadline` row is
+  // its platform pass (ADR-106 §6), whose review slot never fills.
   const reviewAsked = sql<boolean>`EXISTS (SELECT 1 FROM ${gradeDispatches}
-    WHERE ${gradeDispatches.repoId} = ${projectRepos.id} AND ${gradeDispatches.trigger} = 'deadline')`.mapWith(Boolean);
+    WHERE ${gradeDispatches.repoId} = ${projectRepos.id} AND ${gradeDispatches.trigger} = 'deadline'
+    AND ${projects.gradingMode} = 'auto')`.mapWith(Boolean);
   const rows = await db
     .select({ repo: projectRepos, project: projects, courseId: classrooms.courseId, reviewAsked })
     .from(projectRepos)

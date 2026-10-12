@@ -412,6 +412,17 @@ describe("reconcile.grades", () => {
     expect(await runsOf(pending!)).toHaveLength(1);
   });
 
+  it("drops a criteria project's repository a day after its freeze, its platform pass being no CI review (ADR-106 §6)", async () => {
+    const { id, repos } = await project({ students: 1 });
+    const [repo] = repos;
+    await server.app.db.update(projects).set({ gradingMode: "criteria" }).where(eq(projects.id, id));
+    list(repo!, head(repo!));
+    await freeze(repo!, at(NOW, -25 * HOUR));
+    await server.app.db.insert(gradeDispatches).values({ id: randomUUID(), repoId: repo!.id, trigger: "deadline", sha: head(repo!) });
+    expect(await reconcileGrades(server.app, config)).toBe("0 quiet repositories checked, 0 runs ingested");
+    expect(await runsOf(repo!)).toHaveLength(0);
+  });
+
   it("skips an archived project's repositories and a deleted one; a 404 from the run listing deletes nothing", async () => {
     const { id, repos } = await project({ students: 2 });
     const [gone, kept] = repos;

@@ -78,6 +78,7 @@ import {
 } from "@quiz/domain";
 import type { ParsedCriteria } from "@quiz/domain/criteria";
 import type { JunitCase } from "@quiz/domain/evidence";
+import type { CriterionReason } from "@quiz/domain/criteriaTable";
 
 import { users } from "./auth.js";
 import { githubOrganizations } from "./github.js";
@@ -887,7 +888,7 @@ export const projectCriterionGrades = pgTable(
     /** Plain text, never rendered as markup (§6). */
     rationale: text("rationale"),
     /** Why a 0-point row has no evidence: an evidence status, or an LLM failure (L-02c). */
-    reason: text("reason"),
+    reason: text("reason").$type<CriterionReason>(),
     passId: uuid("pass_id"),
     supersedesId: uuid("supersedes_id").references((): AnyPgColumn => projectCriterionGrades.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),

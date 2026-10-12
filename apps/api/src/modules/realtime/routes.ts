@@ -545,8 +545,7 @@ export async function realtimePlugin(app: FastifyInstance) {
 
   const guarded = {
     preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply),
-    // Background traffic: a stream stays open whether anybody looks (ADR-107).
-    config: { ...SITTING, background: true },
+    config: SITTING,
   };
   app.get("/app/api/events", guarded, handler);
 }

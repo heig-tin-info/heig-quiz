@@ -13,19 +13,24 @@ import type { CriteriaLeaf } from "./criteria.js";
  * with its steps; otherwise why there is no evidence, which is also the
  * reason of the 0-point rows of the automatic criteria: no student commit
  * by the deadline, a tarball over the cap, a repository gone from GitHub,
- * the runner unreachable, refusing the archive, or busy past the API's
- * wait.
+ * GitHub failing otherwise (the App, the distribution's head, the tarball's
+ * download: try again by a Regrade), the runner unreachable, refusing the
+ * archive, or busy past the API's wait.
  */
 export const EVIDENCE_STATUSES = [
   "ok",
   "no_commit",
   "archive_too_large",
   "repo_missing",
+  "github_unavailable",
   "runner_unavailable",
   "refused",
   "timed_out",
 ] as const;
 export type EvidenceStatus = (typeof EVIDENCE_STATUSES)[number];
+
+/** The JUnit report the default test command writes: its cases are the evidence's summary, never a source. */
+export const REPORT_FILE = "report.xml";
 
 /** One test case of a JUnit report. */
 export interface JunitCase {
@@ -148,4 +153,26 @@ export function stripTarballRoot<T extends { path: string }>(entries: readonly T
     const path = entry.path.slice(root.length);
     return path === "" ? [] : [{ ...entry, path }];
   });
+}
+
+/**
+ * `grading.sources` as the evidence run takes them (ADR-106 §4): plain
+ * paths, a directory with its trailing `/`; a wildcard pattern is not one
+ * (the runner brings back named paths only) — `wildcards` lists them.
+ */
+export function plainSources(sources: readonly string[]): { plain: string[]; wildcards: string[] } {
+  const plain: string[] = [];
+  const wildcards: string[] = [];
+  for (const source of sources) (/[*?[]/.test(source) ? wildcards : plain).push(source.replace(/^\.\//, ""));
+  return { plain, wildcards };
+}
+
+/**
+ * The paths of `paths` the sources name — equal to a plain source, or under
+ * a source directory — in their order; every path when there is no source.
+ */
+export function sourcePaths(sources: readonly string[], paths: readonly string[]): string[] {
+  const { plain } = plainSources(sources);
+  if (sources.length === 0) return [...paths];
+  return paths.filter((path) => plain.some((source) => (source.endsWith("/") ? path.startsWith(source) : path === source)));
 }

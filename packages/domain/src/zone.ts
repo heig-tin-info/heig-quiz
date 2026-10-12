@@ -28,11 +28,6 @@ export function zoneOffset(at: Date, timeZone: string): number {
 
 const DAY_MS = 86_400_000;
 
-/** The calendar date (`YYYY-MM-DD`) of the instant `at` on `timeZone`'s wall clock: the school's days. */
-export function localDate(at: Date, timeZone: string = SCHOOL_TIME_ZONE): string {
-  return new Date(at.getTime() + zoneOffset(at, timeZone)).toISOString().slice(0, 10);
-}
-
 /**
  * `days` calendar days from `at` on `timeZone`'s wall clock (negative:
  * before), at the same local time: J−3 of a deadline at 23:59 is 23:59

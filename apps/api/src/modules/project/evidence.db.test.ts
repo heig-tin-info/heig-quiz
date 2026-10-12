@@ -320,13 +320,18 @@ describe("the evidence of a repository", () => {
       ...routes,
     ];
     try {
-      const err = await runEvidence(server.app, config, repo.id).catch((e: unknown) => e as Error);
-      expect(err).toBeInstanceOf(TarballUnavailable);
-      expect((err as Error).message).toContain("token=***");
-      expect(`${(err as Error).message} ${(err as Error).stack}`).not.toContain(CODELOAD_TOKEN);
+      // GitHub's failure is stored, not thrown: the pass's review still follows (ADR-106 §4).
+      expect(await runEvidence(server.app, config, repo.id)).toMatchObject({ status: "github_unavailable", rows: 3 });
     } finally {
       gh.routes = routes;
     }
+    const [stored] = await evidenceOf(repo.id);
+    expect(stored).toMatchObject({ status: "github_unavailable", reason: expect.stringContaining("socket hang up on <url>") });
+    expect((await pointsOf(repo.id))["rendu.all-tests-passed"]).toEqual([0, 10, "github_unavailable"]);
+    // The error itself, where one is still thrown, never carries the token either.
+    const err = new TarballUnavailable(`socket hang up on https://${CODELOAD_HOST}/x?token=${CODELOAD_TOKEN}`);
+    expect(err.message).toContain("token=***");
+    expect(`${err.message} ${err.stack}`).not.toContain(CODELOAD_TOKEN);
     const everything = JSON.stringify([await server.app.db.select().from(projectEvidence), await server.app.db.select().from(projectCriterionGrades), sent]);
     expect(everything).not.toContain(CODELOAD_TOKEN);
     expect(everything).not.toContain(CODELOAD_HOST);
@@ -344,12 +349,12 @@ describe("the evidence of a repository", () => {
       ...routes,
     ];
     try {
-      await expect(runEvidence(server.app, config, repo.id)).rejects.toBeInstanceOf(TarballUnavailable);
+      expect(await runEvidence(server.app, config, repo.id)).toMatchObject({ status: "github_unavailable" });
     } finally {
       gh.routes = routes;
     }
     expect(gh.calls.some((c) => c.includes("evil.example"))).toBe(false);
-    expect(await evidenceOf(repo.id)).toEqual([]);
+    expect(await evidenceOf(repo.id)).toEqual([expect.objectContaining({ status: "github_unavailable", reason: expect.stringContaining("evil.example") })]);
   });
 
   it("deletes the evidence and the rows with the project", async () => {

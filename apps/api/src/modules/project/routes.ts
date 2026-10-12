@@ -39,6 +39,8 @@ import {
   ProjectGroupResync,
   ProjectListQuery,
   ProjectPatch,
+  ProjectRegradeAccepted,
+  ProjectRepoCriteria,
   ProjectRepoDeadline,
   ProjectRepoParams,
   ProjectSourceParams,
@@ -83,6 +85,11 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   const onOwnedProject = {
     params: IdParam,
     load: withCourseRole(app, accessibleProject.bind(null, app), (scope) => scope.course.id, "owner"),
+  };
+  // A grading write by criteria (ADR-106 §8, 05 §5.11): an owner or an assistant of the course.
+  const onStaffedProject = {
+    params: IdParam,
+    load: withCourseRole(app, accessibleProject.bind(null, app), (scope) => scope.course.id, "assistant"),
   };
 
   // ------------------------------------------------------------ a classroom's projects
@@ -177,6 +184,20 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     teacher(onProject, async ({ req, now, scope }) => service.reloadCriteria(app.db, config, scope.project, actorOf(req), now)),
   );
 
+  /**
+   * ADR-106 §4: a Regrade of every repository frozen for good — 202 with
+   * the counts the confirmation priced; `409 not_criteria`, `409
+   * not_frozen`, `429 regrade_limit`. A write: the course role
+   * (`requireCourseRole`, owner or assistant).
+   */
+  app.post(
+    "/app/api/projects/:id/regrade",
+    session,
+    teacher(onStaffedProject, async ({ req, reply, now, scope }) =>
+      reply.code(202).send(ProjectRegradeAccepted.parse(await service.regrade(app, config, scope.project, null, actorOf(req), now))),
+    ),
+  );
+
   /** D19, F-PROJ-16: the rows only, in any state; nothing is deleted on GitHub. */
   app.delete(
     "/app/api/projects/:id",
@@ -266,6 +287,30 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   // ------------------------------------------------------------ one repository (M3-05a)
 
   const onRepo = { params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) };
+  const onStaffedRepo = {
+    params: ProjectRepoParams,
+    load: withCourseRole(app, accessibleProjectRepo.bind(null, app), (scope) => scope.courseId, "assistant"),
+  };
+
+  /**
+   * ADR-106 §6: the repository's criteria table for its staff — each
+   * criterion's current row, source, rationale (plain text) and reason —
+   * and its last evidence's summary, never its files.
+   */
+  app.get(
+    "/app/api/projects/:id/repos/:rid/criteria",
+    session,
+    teacher(onRepo, async ({ scope }) => ProjectRepoCriteria.parse(await service.repoCriteria(app.db, scope.project, scope.repo))),
+  );
+
+  /** ADR-106 §4: a Regrade of one repository frozen for good; as the project's, it counts toward the day's three. */
+  app.post(
+    "/app/api/projects/:id/repos/:rid/regrade",
+    session,
+    teacher(onStaffedRepo, async ({ req, reply, now, scope }) =>
+      reply.code(202).send(ProjectRegradeAccepted.parse(await service.regrade(app, config, scope.project, scope.repo, actorOf(req), now))),
+    ),
+  );
 
   /** F-PROJ-13: a repository's runs, the newest first, and its three slots. Database only. */
   app.get(
