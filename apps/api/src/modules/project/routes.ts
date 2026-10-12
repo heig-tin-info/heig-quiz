@@ -35,12 +35,16 @@ import {
   IdParam,
   ProjectAcceptance,
   ProjectCheckpointParams,
+  CriterionGradeWrite,
   ProjectCreate,
+  ProjectCriterionParams,
+  ProjectGradingRepo,
+  ProjectGradingView,
   ProjectGroupResync,
+  ProjectValidated,
   ProjectListQuery,
   ProjectPatch,
   ProjectRegradeAccepted,
-  ProjectRepoCriteria,
   ProjectRepoDeadline,
   ProjectRepoParams,
   ProjectSourceParams,
@@ -198,6 +202,27 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     ),
   );
 
+  /**
+   * ADR-106 §8: the grading screen's payload (staff, `409 not_criteria`
+   * off the mode), and *Validate the rest as proposed* — 202 with the
+   * repositories validated, `409 criteria_incomplete` naming each
+   * repository and criterion without a row, `409 not_frozen`. The write:
+   * the course role.
+   */
+  app.get(
+    "/app/api/projects/:id/grading",
+    session,
+    teacher(onProject, async ({ scope }) => ProjectGradingView.parse(await service.gradingView(app.db, scope.project))),
+  );
+
+  app.post(
+    "/app/api/projects/:id/validate",
+    session,
+    teacher(onStaffedProject, async ({ req, reply, now, scope }) =>
+      reply.code(202).send(ProjectValidated.parse(await service.validateProject(app.db, scope.project, actorOf(req), now))),
+    ),
+  );
+
   /** D19, F-PROJ-16: the rows only, in any state; nothing is deleted on GitHub. */
   app.delete(
     "/app/api/projects/:id",
@@ -300,7 +325,35 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.get(
     "/app/api/projects/:id/repos/:rid/criteria",
     session,
-    teacher(onRepo, async ({ scope }) => ProjectRepoCriteria.parse(await service.repoCriteria(app.db, scope.project, scope.repo))),
+    teacher(onRepo, async ({ scope }) => ProjectGradingRepo.parse(await service.gradingRepo(app.db, scope.project, scope.repo))),
+  );
+
+  /**
+   * ADR-106 §8: a teacher's points for one criterion — a `manual` row,
+   * still proposed (`422 points_out_of_range`, a 404 for an unknown
+   * criterion, `409 not_criteria`, `409 not_frozen`); and the validation of
+   * the repository's proposals (`409 criteria_incomplete` while a criterion
+   * has no row). Writes: the course role. Both answer the repository's
+   * entry of the grading screen.
+   */
+  app.put(
+    "/app/api/projects/:id/repos/:rid/criteria/:criterionId",
+    session,
+    teacher(
+      { params: ProjectCriterionParams, body: CriterionGradeWrite, load: onStaffedRepo.load },
+      async ({ req, now, params, body, scope }) =>
+        ProjectGradingRepo.parse(
+          await service.gradeCriterion(app.db, scope.project, scope.repo, params.criterionId, body, actorOf(req), req.user!.id, now),
+        ),
+    ),
+  );
+
+  app.post(
+    "/app/api/projects/:id/repos/:rid/validate",
+    session,
+    teacher(onStaffedRepo, async ({ req, now, scope }) =>
+      ProjectGradingRepo.parse(await service.validateRepo(app.db, scope.project, scope.repo, actorOf(req), now)),
+    ),
   );
 
   /** ADR-106 §4: a Regrade of one repository frozen for good; as the project's, it counts toward the day's three. */

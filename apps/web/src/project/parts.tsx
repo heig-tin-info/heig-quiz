@@ -59,6 +59,7 @@ export function Points({ points, max }: { points: number | null; max: number | n
 /** The words of a final score's source (I42). */
 export const SCORE_SOURCE_KEY: Record<NonNullable<ProjectRepoView["scores"]["final"]>["source"], keyof Dict> = {
   teacher: "project.score.source.teacher",
+  criteria: "project.score.source.criteria",
   review: "project.review",
   ci: "project.col.ci",
 };

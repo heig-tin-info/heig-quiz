@@ -48,7 +48,7 @@ export function changedAfterRelease(
 }
 
 /** The one primary action of the staff's project page (F-PROJ-13). */
-export const PROJECT_PRIMARY_ACTIONS = ["publish", "sync", "release", "none"] as const;
+export const PROJECT_PRIMARY_ACTIONS = ["publish", "sync", "grade", "release", "none"] as const;
 export type ProjectPrimaryAction = (typeof PROJECT_PRIMARY_ACTIONS)[number];
 
 export interface PrimaryActionInput {
@@ -66,6 +66,12 @@ export interface PrimaryActionInput {
   released: boolean;
   /** Repositories whose final score moved since the release. */
   changedAfterRelease: number;
+  /**
+   * A project graded by criteria: its live repositories not validated yet
+   * (ADR-106 §8, `repoValidation`) — the release waits for them. Absent
+   * (0) for any other mode.
+   */
+  unvalidated?: number;
 }
 
 /**
@@ -77,8 +83,13 @@ export interface PrimaryActionInput {
  * repository, one never provisioned, or any repository of an archived
  * project does not hold it back.
  */
-export function scoresFinal(p: Pick<PrimaryActionInput, "gradingMode" | "live" | "frozen" | "unverified">): boolean {
-  return projectGraded(p.gradingMode) && p.live > 0 && p.frozen === p.live && p.unverified === 0;
+export function scoresFinal(p: Pick<PrimaryActionInput, "gradingMode" | "live" | "frozen" | "unverified" | "unvalidated">): boolean {
+  return allFrozen(p) && p.unverified === 0 && (p.unvalidated ?? 0) === 0;
+}
+
+/** A graded project whose every live repository is frozen for good, and at least one. */
+function allFrozen(p: Pick<PrimaryActionInput, "gradingMode" | "live" | "frozen">): boolean {
+  return projectGraded(p.gradingMode) && p.live > 0 && p.frozen === p.live;
 }
 
 // ---------------------------------------------------------------- the staff's phase (ADR-104)
@@ -93,7 +104,7 @@ export function scoresFinal(p: Pick<PrimaryActionInput, "gradingMode" | "live" |
 export const PROJECT_PHASES = ["draft", "published", "locked", "graded", "released"] as const;
 export type ProjectPhase = (typeof PROJECT_PHASES)[number];
 
-export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode" | "live" | "frozen" | "unverified" | "released">;
+export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode" | "live" | "frozen" | "unverified" | "unvalidated" | "released">;
 
 /**
  * The state first: a project moved back to `published` by a later deadline
@@ -110,14 +121,17 @@ export function projectPhase(p: ProjectPhaseInput): ProjectPhase {
 }
 
 /**
- * Publish for a draft; Release once the scores are final and not yet
- * released, or changed since; Sync when the source is ahead; nothing for an
- * archived project. The release comes before the sync: once every
- * repository is frozen, a sync reaches nobody's score.
+ * Publish for a draft; Grade for a project graded by criteria, every
+ * repository frozen, while one is still to validate (ADR-106 §8); Release
+ * once the scores are final and not yet released, or changed since; Sync
+ * when the source is ahead; nothing for an archived project. The release
+ * comes before the sync: once every repository is frozen, a sync reaches
+ * nobody's score.
  */
 export function projectPrimaryAction(p: PrimaryActionInput): ProjectPrimaryAction {
   if (p.archived) return "none";
   if (p.state === "draft") return "publish";
+  if (allFrozen(p) && (p.unvalidated ?? 0) > 0) return "grade";
   if (scoresFinal(p) && (!p.released || p.changedAfterRelease > 0)) return "release";
   if (p.sourceAhead) return "sync";
   return "none";

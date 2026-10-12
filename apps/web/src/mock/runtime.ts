@@ -102,6 +102,7 @@ export const FLAG_NAMES = [
   "unassigned",
   "unreleased",
   "criteriafail",
+  "pjcriteria",
   "ahead",
   "groups",
   "superpowers",

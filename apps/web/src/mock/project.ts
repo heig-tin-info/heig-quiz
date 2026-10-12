@@ -43,6 +43,8 @@
  * can be seen (`arriveProjectActivity`).
  */
 import {
+  CriteriaIncomplete,
+  CriterionGradeWrite,
   effectiveTestsCriterion,
   PROJECT_DEFAULTS,
   ProjectGroupResync,
@@ -59,6 +61,10 @@ import {
   type ProjectDetail,
   type ProjectDetailGroup,
   type ProjectDetailRow,
+  type ProjectGradingRepo,
+  type ProjectGradingView,
+  type ProjectRegradeAccepted,
+  type ProjectValidated,
   type ProjectInvitationResent,
   type ProjectReleaseResult,
   type ProjectRepoDeadlineState,
@@ -73,11 +79,15 @@ import {
   type RosterEntry,
 } from "@quiz/contracts";
 import {
+  awardedRange,
   changedAfterRelease,
   checkpointDueAt,
   checkpointRefusal,
   classifyCriterion,
+  criteriaScore,
+  criteriaTable,
   criteriaTotals,
+  currentCriterionRows,
   editableProjectFields,
   patchedDraftDates,
   projectFieldRefusal,
@@ -85,9 +95,11 @@ import {
   projectPhase,
   projectPrimaryAction,
   resolveFinalScore,
+  repoValidation,
   reviewState,
   scoreGrade,
   teacherScoreMax,
+  type CriterionGradeLike,
   type ProjectDatesChange,
   type ProjectLifeLike,
 } from "@quiz/domain";
@@ -189,6 +201,9 @@ const PJ_GROUP = "0190d3c4-0000-7000-8000-0000000000b4";
 /** The published group projects on the pairs (M3-16b): one following them, one stopped at its deadline. */
 const PJ_GROUP_LIVE = "0190d3c4-0000-7000-8000-0000000000b5";
 const PJ_GROUP_STOPPED = "0190d3c4-0000-7000-8000-0000000000b6";
+/** `?pjcriteria=1`: the projects graded by criteria (ADR-106), frozen and open. */
+const PJ_CRITERIA = "0190d3c4-0000-7000-8000-0000000000c1";
+const PJ_CRITERIA_OPEN = "0190d3c4-0000-7000-8000-0000000000c2";
 
 const SEEDS: {
   id: string;
@@ -231,6 +246,18 @@ const SEEDS: {
     : []),
 ];
 
+/**
+ * `?pjcriteria=1` (ADR-106 §8): graded by criteria — one frozen and awaiting
+ * its validation, one still open. Read at each seeding, not at import, so a
+ * test may turn the flag on for its own scenes only.
+ */
+const CRITERIA_SEEDS: (typeof SEEDS)[number][] = [
+  { id: PJ_CRITERIA, title: "Labo 00 — par critères", state: "locked", start: -21 * D, deadline: -3 * D, unreleased: true, summary: { gradingMode: "criteria", gradingScale: { kind: "linear", rounding: "nearest" } } },
+  { id: PJ_CRITERIA_OPEN, title: "Labo 01 — par critères", state: "published", start: -3 * D, deadline: 9 * D, summary: { gradingMode: "criteria" } },
+];
+/** The seeds in force: the criteria ones with their flag. */
+const seedsNow = () => [...SEEDS, ...(flags.pjcriteria ? CRITERIA_SEEDS : [])];
+
 const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 /**
  * A repository's id, a uuid: the contracts name repositories that way
@@ -239,7 +266,7 @@ const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").
  * left the roster).
  */
 const repoId = (seed: (typeof SEEDS)[number], n: number) =>
-  `0190d3c4-0000-7000-8000-${String(SEEDS.indexOf(seed) + 1).padStart(4, "0")}${String(n).padStart(8, "0")}`;
+  `0190d3c4-0000-7000-8000-${String([...SEEDS, ...CRITERIA_SEEDS].indexOf(seed) + 1).padStart(4, "0")}${String(n).padStart(8, "0")}`;
 const sha = (n: number) => (0x9a3f1c00 + n * 0x1f3d7).toString(16).padStart(8, "0").repeat(5).slice(0, 40);
 
 /** One run of `grading.yml`, as the ingestion stored it. */
@@ -483,7 +510,8 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
       // On `i === 4` (variant 4: a restored head, the frozen run to verify) the review was asked
       // but its run is to verify too and never fills the slot (F-PROJ-11 as amended): the final
       // score rests on the frozen run, and only the teacher's score settles it.
-      if (!base.archived && base.currentRunId) {
+      // Graded by criteria (ADR-106 §10): nothing is dispatched to the repository.
+      if (!base.archived && base.currentRunId && project.gradingMode === "auto") {
         base.dispatch = { sha: latest.headSha, dispatchedAt: i === 2 ? null : iso(seed.deadline + 31 * 60_000) };
         if (i !== 2 && i !== 4) {
           const review = scored(9, seed.deadline + 40 * 60_000, { kind: "review", points: 60 + (i % 7) * 5, max: 100, testsPassed: null, testsTotal: null, headSha: latest.headSha });
@@ -505,7 +533,7 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
       }
     }
     // Graded `none`: no run is scored (F-PROJ-09).
-    if (project.gradingMode !== "auto") {
+    if (project.gradingMode === "none") {
       runs.length = 0;
       Object.assign(base, { currentRunId: null, ciStatus: "none" });
     }
@@ -562,13 +590,14 @@ function finalOf(repo: MockRepo) {
   return resolveFinalScore({
     teacherPoints: repo.teacher?.points ?? null,
     teacherMax: repo.teacher?.max ?? null,
+    criteriaScore: criteriaScoreOf(repo),
     ...slotRuns(repo),
   });
 }
 
 /** The maximum a teacher's score is held to (`teacherRunMax` of the API): the scored run's, none when it is to verify. */
 function runMaxOf(repo: MockRepo): number | null {
-  const scored = resolveFinalScore(slotRuns(repo));
+  const scored = resolveFinalScore({ criteriaScore: criteriaScoreOf(repo), ...slotRuns(repo) });
   return scored && !scored.toVerify ? scored.max : null;
 }
 
@@ -595,7 +624,7 @@ function seeded(): MockProject[] {
   const room = rooms.find((r) => r.id === "r1");
   if (!flags.projects || !room || room.archivedAt !== null) return [];
   const course = courses.find((c) => c.id === room.courseId);
-  for (const seed of SEEDS) {
+  for (const seed of seedsNow()) {
     if (PROJECTS.has(seed.id)) continue;
     const name = slug(seed.title);
     const summary: ProjectSummary = {
@@ -675,8 +704,10 @@ function seeded(): MockProject[] {
             ]
           : [];
     PROJECTS.set(seed.id, project);
+    // Graded by criteria (ADR-106): the snapshot, and the passes' rows of every frozen repository.
+    if (summary.gradingMode === "criteria") seedCriteria(project);
   }
-  return SEEDS.map((s) => PROJECTS.get(s.id)!);
+  return seedsNow().map((s) => PROJECTS.get(s.id)!);
 }
 
 /** The projects created in this page's life (M3-11's form, `projectNew.ts`), any classroom. */
@@ -831,6 +862,7 @@ function readinessOf(p: MockProject) {
     live: live.length,
     frozen: live.filter((r) => r.frozenAt !== null).length,
     unverified: live.filter((r) => finalOf(r)?.toVerify === true).length,
+    unvalidated: unvalidatedOf(p).length,
     released: p.releasedAt !== null,
   };
 }
@@ -1238,6 +1270,200 @@ on("POST", "/app/api/projects/:id/criteria/reload", (m) => {
   return criteriaViewOf(p);
 });
 
+// ---------------------------------------------------------------- the grading screen (ADR-106 §7, §8)
+
+/** A row of `project_criterion_grades`, as the mock keeps it. */
+type MockCriterionRow = CriterionGradeLike & { max: number };
+
+/** The rows of each repository graded by criteria, superseded ones included; absent for any other repository. */
+const CRITERION_ROWS = new Map<string, MockCriterionRow[]>();
+/** The last evidence of each repository graded by criteria. */
+const EVIDENCE = new Map<string, NonNullable<ProjectGradingRepo["evidence"]>>();
+const SNAPSHOT = { leaves: SAMPLE_LEAVES };
+
+const RATIONALES: Record<string, string[]> = {
+  "rapport.reponses": [
+    "Les neuf points sont traités ; la réponse au point 6 reste vague sur la portée des variables.",
+    "Les réponses 3 et 7 manquent. Le rapport cite <script>alert(1)</script> tel quel.",
+    "Sept points sur neuf : la compilation séparée et le rôle du Makefile ne sont pas expliqués.",
+  ],
+  "rapport.presentation": ["Titres, listes et code mis en forme proprement.", "Pas de titre, le code n'est pas en bloc."],
+  "rapport.redaction": ["Rédaction claire, sans faute notable.", "Plusieurs phrases inachevées."],
+  "rapport.cle-privee": ["Aucune clé privée trouvée dans le dépôt.", "Une clé id_ed25519 est présente à la racine du dépôt."],
+  "bonus.proactivite": ["Rien au-delà de l'énoncé.", "Des tests supplémentaires dans tests/extra."],
+};
+
+/**
+ * `?pjcriteria=1`: what the passes left on every frozen repository of a
+ * project graded by criteria — the tests' row, the model's proposals with
+ * their rationale (one quoting a script, shown as text), a failed pass
+ * (`llm_budget`) on one; every third repository already validated, the
+ * teacher-only `git.commits` written by the teacher there and nowhere else.
+ */
+function seedCriteria(p: MockProject): void {
+  CRITERIA.set(p.summary.id, sampleSnapshot(p.summary.deadlineAt));
+  p.repos.forEach((r, i) => {
+    if (r.frozenAt === null || !isLive(p, r)) return;
+    const at = new Date(Date.parse(r.frozenAt) + 20 * 60_000);
+    const validated = i % 3 === 0;
+    const failed = i === 4;
+    const rows: MockCriterionRow[] = [];
+    const add = (criterionId: string, points: number, source: MockCriterionRow["source"], rationale: string | null = null) => {
+      const leaf = SAMPLE_LEAVES.find((l) => l.id === criterionId)!;
+      rows.push({ criterionId, points, max: leaf.maxPoints, source, state: validated ? "validated" : "proposed", rationale, reason: null, createdAt: at });
+    };
+    const tests = [12, 9, 6, 10.5, 12, 7.5][i % 6]!;
+    add("rendu.all-tests-passed", tests, "auto");
+    const pick = (id: string, k: number) => RATIONALES[id]![k % RATIONALES[id]!.length]!;
+    if (failed) {
+      for (const id of ["rapport.reponses", "rapport.presentation", "rapport.redaction", "rapport.cle-privee", "bonus.proactivite"]) {
+        rows.push({ criterionId: id, points: 0, max: SAMPLE_LEAVES.find((l) => l.id === id)!.maxPoints, source: "llm", state: "proposed", rationale: null, reason: "llm_budget", createdAt: at });
+      }
+    } else {
+      add("rapport.reponses", [4, 2.5, 3][i % 3]!, "llm", pick("rapport.reponses", i));
+      add("rapport.presentation", i % 2 === 0 ? 2 : 1, "llm", pick("rapport.presentation", i));
+      add("rapport.redaction", i % 2 === 0 ? 1 : 0.5, "llm", pick("rapport.redaction", i));
+      add("rapport.cle-privee", i % 7 === 5 ? -3 : 0, "llm", pick("rapport.cle-privee", i % 7 === 5 ? 1 : 0));
+      add("bonus.proactivite", i % 4 === 1 ? 1 : 0, "llm", pick("bonus.proactivite", i % 4 === 1 ? 1 : 0));
+    }
+    if (validated) add("git.commits", 1, "manual", "Identité configurée, messages clairs.");
+    CRITERION_ROWS.set(r.id, rows);
+    EVIDENCE.set(r.id, {
+      status: "ok",
+      reason: null,
+      targetSha: r.lastCommit?.sha ?? sha(i),
+      distributionSha: sha(500),
+      casesPassed: Math.round(tests),
+      casesTotal: 12,
+      build: { exitCode: 0, timedOut: false },
+      test: { exitCode: tests === 12 ? 0 : 1, timedOut: false },
+      createdAt: at.toISOString(),
+    });
+  });
+}
+
+/** The `criteria` source of a repository (`criteriaScore`): null until it is validated, and off the mode. */
+function criteriaScoreOf(r: MockRepo): { points: number; max: number } | null {
+  const rows = CRITERION_ROWS.get(r.id);
+  return rows ? criteriaScore(SNAPSHOT, rows) : null;
+}
+
+/** The live repositories of a project graded by criteria that are not validated: what the release waits for. */
+function unvalidatedOf(p: MockProject): string[] {
+  if (p.summary.gradingMode !== "criteria") return [];
+  return p.repos.filter((r) => isLive(p, r) && !repoValidation(SNAPSHOT, CRITERION_ROWS.get(r.id) ?? []).validated).map((r) => r.id);
+}
+
+function gradingRepoOf(p: MockProject, r: MockRepo): ProjectGradingRepo {
+  const rows = CRITERION_ROWS.get(r.id) ?? [];
+  return {
+    id: r.id,
+    label: `${r.student.nom} ${r.student.prenom}`,
+    group: false,
+    frozen: r.frozenAt !== null,
+    validation: repoValidation(SNAPSHOT, rows),
+    table: criteriaTable(SNAPSHOT, rows, { audience: "staff", frozen: r.frozenAt !== null, released: p.releasedAt !== null }),
+    evidence: EVIDENCE.get(r.id) ?? null,
+    total: criteriaScore(SNAPSHOT, rows),
+  };
+}
+
+/** A project graded by criteria, or `409 not_criteria`. */
+function criteriaProjectOr409(id: string): MockProject {
+  const p = projectOr404(id);
+  if (p.summary.gradingMode !== "criteria" || !CRITERIA.has(p.summary.id)) throw refuse(409, "not_criteria", "The project is not graded by criteria");
+  return p;
+}
+
+/** A repository of `p` frozen for good, or the refusal the server answers. */
+function frozenRepoOr409(p: MockProject, rid: string): MockRepo {
+  const r = p.repos.find((x) => x.id === rid);
+  if (!r) throw new MockError(404, "Not found");
+  if (r.frozenAt === null) throw refuse(409, "not_frozen", "The repository is not frozen for good");
+  return r;
+}
+
+/** The writer's rule (`writeCriterionGrades`): a teacher's or a validated row supersedes whatever stands on its criterion. */
+function writeRow(r: MockRepo, row: MockCriterionRow): void {
+  const rows = CRITERION_ROWS.get(r.id) ?? [];
+  for (const old of rows) if (old.criterionId === row.criterionId && old.state !== "superseded") old.state = "superseded";
+  rows.push(row);
+  CRITERION_ROWS.set(r.id, rows);
+}
+
+/** `409 criteria_incomplete` naming each repository and its criteria without a row; nothing is validated. */
+function refuseIncomplete(p: MockProject, repos: MockRepo[]): void {
+  const incomplete = repos
+    .map((r) => ({ repoId: r.id, missing: gradingRepoOf(p, r).validation.missing }))
+    .filter((x) => x.missing.length > 0);
+  if (incomplete.length > 0) {
+    throw new MockPayload(409, CriteriaIncomplete.parse({ error: "criteria_incomplete", message: "A criterion has no row", repos: incomplete }));
+  }
+}
+
+/** Every current proposal of `r` as a validated row. */
+function validateRepo(r: MockRepo): boolean {
+  const current = currentCriterionRows(CRITERION_ROWS.get(r.id) ?? []);
+  const proposed = [...current.values()].filter((row) => row.state === "proposed");
+  for (const row of proposed) writeRow(r, { ...row, state: "validated", createdAt: new Date() });
+  return proposed.length > 0;
+}
+
+on("GET", "/app/api/projects/:id/grading", (m): ProjectGradingView => {
+  const p = criteriaProjectOr409(m.groups!.id!);
+  return {
+    project: { id: p.summary.id, classroomId: p.summary.classroomId, name: p.summary.name, deadlineAt: p.summary.deadlineAt },
+    repos: p.repos
+      .filter((r) => isLive(p, r))
+      .map((r) => gradingRepoOf(p, r))
+      .sort((a, b) => a.label.localeCompare(b.label, "fr")),
+  };
+});
+
+on("PUT", "/app/api/projects/:id/repos/:rid/criteria/:criterionId", (m, raw): ProjectGradingRepo => {
+  const p = criteriaProjectOr409(m.groups!.id!);
+  const leaf = SAMPLE_LEAVES.find((l) => l.id === decodeURIComponent(m.groups!.criterionId!));
+  if (!leaf) throw new MockError(404, "Not found");
+  const r = frozenRepoOr409(p, m.groups!.rid!);
+  const body = CriterionGradeWrite.parse(raw);
+  const [min, max] = awardedRange(leaf);
+  if (body.points < min || body.points > max) throw refuse(422, "points_out_of_range", "The points lie outside the criterion's range", { min, max });
+  const before = currentCriterionRows(CRITERION_ROWS.get(r.id) ?? []).get(leaf.id);
+  writeRow(r, {
+    criterionId: leaf.id,
+    points: body.points,
+    max: leaf.maxPoints,
+    source: "manual",
+    state: "proposed",
+    rationale: body.rationale ?? before?.rationale ?? null,
+    reason: null,
+    createdAt: new Date(),
+  });
+  return gradingRepoOf(p, r);
+});
+
+on("POST", "/app/api/projects/:id/repos/:rid/validate", (m): ProjectGradingRepo => {
+  const p = criteriaProjectOr409(m.groups!.id!);
+  const r = frozenRepoOr409(p, m.groups!.rid!);
+  refuseIncomplete(p, [r]);
+  validateRepo(r);
+  return gradingRepoOf(p, r);
+});
+
+on("POST", "/app/api/projects/:id/validate", (m): ProjectValidated => {
+  const p = criteriaProjectOr409(m.groups!.id!);
+  const repos = p.repos.filter((r) => isLive(p, r) && r.frozenAt !== null);
+  if (repos.length === 0) throw refuse(409, "not_frozen", "No repository is frozen for good");
+  refuseIncomplete(p, repos);
+  return { validated: repos.filter(validateRepo).length };
+});
+
+on("POST", "/app/api/projects/:id/repos/:rid/regrade", (m): ProjectRegradeAccepted => {
+  const p = criteriaProjectOr409(m.groups!.id!);
+  frozenRepoOr409(p, m.groups!.rid!);
+  return { repos: 1 };
+});
+
 on("POST", "/app/api/projects/:id/publish", (m) => {
   const p = projectOr404(m.groups!.id!);
   const s = p.summary;
@@ -1273,6 +1499,8 @@ on("DELETE", "/app/api/projects/:id", (m) => {
   const seed = SEEDS.findIndex((s) => s.id === p.summary.id);
   if (created >= 0) CREATED.splice(created, 1);
   if (seed >= 0) SEEDS.splice(seed, 1);
+  const criteriaSeed = CRITERIA_SEEDS.findIndex((s) => s.id === p.summary.id);
+  if (criteriaSeed >= 0) CRITERIA_SEEDS.splice(criteriaSeed, 1);
   return undefined;
 });
 
@@ -1323,7 +1551,7 @@ on("PATCH", "/app/api/projects/:id/repos/:rid/score", (m, raw) => {
   if (!r) throw new MockError(404, "Not found");
   const parsed = ScoreOverride.safeParse(raw);
   if (!parsed.success) throw new MockPayload(400, { error: "validation", message: parsed.error.message });
-  if (p.summary.gradingMode !== "auto") throw refuse(409, "grading_none", "The project is not graded");
+  if (p.summary.gradingMode === "none") throw refuse(409, "grading_none", "The project is not graded");
   if (r.frozenAt === null) throw refuse(409, "not_frozen", "The repository is not frozen yet");
   const body = parsed.data;
   if (body.points === null) {
@@ -1345,7 +1573,7 @@ on("PATCH", "/app/api/projects/:id/repos/:rid/score", (m, raw) => {
  */
 on("POST", "/app/api/projects/:id/release", (m) => {
   const p = projectOr404(m.groups!.id!);
-  if (p.summary.gradingMode !== "auto") throw refuse(409, "grading_none", "The project is not graded");
+  if (p.summary.gradingMode === "none") throw refuse(409, "grading_none", "The project is not graded");
   if (p.resyncReads > 0) throw refuse(409, "group_sync_pending", "A confirmed resync of the groups is still applied");
   const live = p.repos.filter((r) => isLive(p, r));
   const frozen = live.filter((r) => r.frozenAt !== null);
@@ -1353,6 +1581,11 @@ on("POST", "/app/api/projects/:id/release", (m) => {
   if (live.length === 0 || frozen.length < live.length) {
     const body = ProjectReleaseRefusal.parse({ error: "not_frozen", message: "Some live repositories are not frozen", live: live.length, frozen: frozen.length });
     throw new MockPayload(409, body);
+  }
+  // ADR-106 §8: graded by criteria, every live repository validated first.
+  const unvalidated = unvalidatedOf(p);
+  if (unvalidated.length > 0) {
+    throw new MockPayload(409, ProjectReleaseRefusal.parse({ error: "not_validated", message: "Some repositories are not validated", repos: unvalidated }));
   }
   const toVerify = live.filter((r) => finalOf(r)?.toVerify).map((r) => r.id);
   if (toVerify.length > 0) {

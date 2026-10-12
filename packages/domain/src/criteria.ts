@@ -196,7 +196,7 @@ export interface CriteriaTotals {
  * added on top, the total clamped to `[0, max + bonusMax]`.
  */
 export function criteriaTotals(
-  leaves: Pick<CriteriaLeaf, "id" | "maxPoints" | "bonusPoints">[],
+  leaves: readonly Pick<CriteriaLeaf, "id" | "maxPoints" | "bonusPoints">[],
   awarded: Record<string, number | null | undefined>,
 ): CriteriaTotals {
   let points = 0;

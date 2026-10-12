@@ -76,6 +76,7 @@ export * from "./selection";
 export * from "./state";
 export * from "./expand";
 export * from "./disclosure";
+export * from "./heldButton";
 export * from "./groupBy";
 export * from "./toolDock";
 export { FormError, PageError, QueryError } from "../queryError";

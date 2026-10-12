@@ -4,7 +4,7 @@ import { useId, type ReactNode } from "react";
 import type { GradingConfidence, GradingSource } from "@quiz/contracts";
 
 import { useT, type Dict } from "../i18n";
-import { Button, Segmented, Switch, Tip } from "../ui";
+import { Button, HeldButton, Segmented, Switch } from "../ui";
 import { ANY, type Any, type PrimaryAction, type StateFilter } from "./rows";
 import type { GradingView } from "./view";
 
@@ -151,17 +151,9 @@ export function PrimaryButton({
       );
     case "blocked":
       return (
-        <Tip
-          label={t(
-            action.reason === "hidden" ? "grading.blocked.hidden" : "grading.blocked.byHand",
-          )}
-        >
-          <span tabIndex={0} className="rounded-full">
-            <Button disabled>
-              <CheckCheck /> {t("grading.validate")}
-            </Button>
-          </span>
-        </Tip>
+        <HeldButton disabledReason={t(action.reason === "hidden" ? "grading.blocked.hidden" : "grading.blocked.byHand")}>
+          <CheckCheck /> {t("grading.validate")}
+        </HeldButton>
       );
     case "next":
       return (

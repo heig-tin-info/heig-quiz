@@ -87,6 +87,8 @@ export type Route =
   | { view: "groupSet"; classroomId: string; id: string; fromProject?: string }
   /** One project, the staff's page (F-PROJ-13, M3-12; `project/ProjectPage`). */
   | { view: "project"; id: string }
+  /** The grading screen of a project graded by criteria (ADR-106 §8; `project/grading/ProjectGradingPage`); `?repo=` the repository on screen. */
+  | { view: "projectGrading"; id: string }
   /**
    * A new project in one classroom (F-PROJ-01): where "New ▾ › Project" leads
    * on a connected classroom (M3-10), M3-11's form (`project/NewProjectPage`).
@@ -465,6 +467,15 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: true,
     section: "activities",
     bottomSlot: { student: "courses", teacher: "activities" },
+  },
+  // ADR-106 §8: the staff's grading screen of a project graded by criteria, a tail of the project.
+  projectGrading: {
+    path: (r) => `/projects/${r.id}/grading`,
+    match: ([head, id, tail, leaf]) =>
+      head === "projects" && id && tail === "grading" && leaf === undefined ? { view: "projectGrading", id } : null,
+    studentSafe: false,
+    section: "activities",
+    bottomSlot: { teacher: "activities" },
   },
   activities: {
     ...fixed("activities", { view: "activities" }),

@@ -77,6 +77,18 @@ describe("projectPrimaryAction (F-PROJ-13)", () => {
     expect(projectPrimaryAction({ ...base, state: "locked", frozen: 3, unverified: 1 })).toBe("none");
   });
 
+  it("grades a frozen project by criteria while a repository is to validate, then releases (ADR-106 §8)", () => {
+    const criteria = { ...base, gradingMode: "criteria" as const, state: "locked" as const };
+    expect(projectPrimaryAction({ ...criteria, frozen: 2, unvalidated: 3 })).toBe("none");
+    expect(projectPrimaryAction({ ...criteria, frozen: 3, unvalidated: 1 })).toBe("grade");
+    // A score to verify beneath an unvalidated repository: the validation settles it first.
+    expect(projectPrimaryAction({ ...criteria, frozen: 3, unvalidated: 1, unverified: 1 })).toBe("grade");
+    expect(projectPrimaryAction({ ...criteria, frozen: 3, unvalidated: 0 })).toBe("release");
+    expect(scoresFinal({ gradingMode: "criteria", live: 3, frozen: 3, unverified: 0, unvalidated: 1 })).toBe(false);
+    expect(projectPhase({ ...criteria, frozen: 3, unvalidated: 1 })).toBe("locked");
+    expect(projectPhase({ ...criteria, frozen: 3, unvalidated: 0 })).toBe("graded");
+  });
+
   it("syncs when the source is ahead and the scores are not final", () => {
     expect(projectPrimaryAction({ ...base, sourceAhead: true })).toBe("sync");
     expect(projectPrimaryAction({ ...base, sourceAhead: true, state: "locked", frozen: 3 })).toBe("release");

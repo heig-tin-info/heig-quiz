@@ -7,7 +7,7 @@
  * markup here or anywhere (N-SEC-14's rule); the screens escape it.
  */
 import { GRADING_SOURCES, GRADING_STATES } from "./batchable.js";
-import type { CriteriaLeaf } from "./criteria.js";
+import { criteriaTotals, type CriteriaLeaf } from "./criteria.js";
 import { EVIDENCE_STATUSES } from "./evidence.js";
 
 /**
@@ -65,7 +65,7 @@ export interface CriteriaTableOptions {
 }
 
 /** The row a criterion stands on: its validated row, else its newest proposal; a superseded row never. */
-function currentRows<R extends CriterionGradeLike>(rows: readonly R[]): Map<string, R> {
+export function currentCriterionRows<R extends CriterionGradeLike>(rows: readonly R[]): Map<string, R> {
   const current = new Map<string, R>();
   for (const row of rows) {
     if (row.state === "superseded") continue;
@@ -93,7 +93,7 @@ export function criteriaTable(
   rows: readonly CriterionGradeLike[],
   options: CriteriaTableOptions,
 ): CriteriaTableRow[] {
-  const current = currentRows(rows);
+  const current = currentCriterionRows(rows);
   const staff = options.audience === "staff";
   return snapshot.leaves.map((leaf) => {
     const line: CriteriaTableRow = {
@@ -126,4 +126,50 @@ export function criteriaTable(
     if (rationaleShown && row.rationale !== null) line.rationale = row.rationale;
     return line;
   });
+}
+
+/** Where a repository's validation stands (ADR-106 §8). */
+export interface RepoValidation {
+  /** Every criterion of the snapshot has a current `validated` row. */
+  validated: boolean;
+  /** The criteria with no row at all: a teacher-only one waits for a teacher, never defaulted to 0. */
+  missing: string[];
+  /** The criteria whose current row is a proposal: Validate marks them validated. */
+  proposed: string[];
+}
+
+/**
+ * A repository is **validated** when every criterion of the snapshot has a
+ * current `validated` row (ADR-106 §8): no repository state of its own. A
+ * row of a criterion the snapshot no longer holds is not counted.
+ */
+export function repoValidation(snapshot: { leaves: readonly Pick<CriteriaLeaf, "id">[] }, rows: readonly CriterionGradeLike[]): RepoValidation {
+  const current = currentCriterionRows(rows);
+  const missing: string[] = [];
+  const proposed: string[] = [];
+  for (const { id } of snapshot.leaves) {
+    const row = current.get(id);
+    if (!row) missing.push(id);
+    else if (row.state !== "validated") proposed.push(id);
+  }
+  return { validated: missing.length === 0 && proposed.length === 0, missing, proposed };
+}
+
+/**
+ * The `criteria` final-score source of a repository (ADR-106 §7): the
+ * total of its validated rows (`criteriaTotals`: the maximum is the sum of
+ * the positive maxima, a penalty subtracted, a bonus on top, clamped) —
+ * ONLY for a validated repository; null otherwise, never 0, so the final
+ * score falls through to the review, frozen or current score. Null too for
+ * a snapshot with no positive maximum: a score needs one.
+ */
+export function criteriaScore(
+  snapshot: { leaves: readonly Pick<CriteriaLeaf, "id" | "maxPoints" | "bonusPoints">[] },
+  rows: readonly CriterionGradeLike[],
+): { points: number; max: number } | null {
+  if (!repoValidation(snapshot, rows).validated) return null;
+  const awarded: Record<string, number> = {};
+  for (const [id, row] of currentCriterionRows(rows)) awarded[id] = row.points;
+  const totals = criteriaTotals(snapshot.leaves, awarded);
+  return totals.max > 0 ? { points: totals.points, max: totals.max } : null;
 }

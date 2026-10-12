@@ -1,6 +1,6 @@
 /**
- * A Regrade by the staff (ADR-106 §4), and the staff's criteria table of
- * one repository (§6).
+ * A Regrade by the staff (ADR-106 §4). The staff's criteria table of one
+ * repository is `criteriaGrading.ts`'s.
  *
  * **Regrade**, of the project or of one repository: a new pass over the
  * repositories frozen for good — each one's evidence (an `ok` evidence of
@@ -17,15 +17,15 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
-import type { CriteriaTableRow as TableRowContract, ProjectRegradeAccepted, ProjectRepoCriteria } from "@quiz/contracts";
-import { criteriaTable, PROJECT_REGRADES_PER_DAY, SCHOOL_TIME_ZONE, type CriteriaTableRow } from "@quiz/domain";
+import type { ProjectRegradeAccepted } from "@quiz/contracts";
+import { PROJECT_REGRADES_PER_DAY, SCHOOL_TIME_ZONE } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { auditLog, projectCriteria, projectCriterionGrades, projectEvidence, projectRepos, projects } from "../../db/schema.js";
+import { auditLog, projectCriteria, projectRepos, projects } from "../../db/schema.js";
 import { PROJECT_EVIDENCE_QUEUE } from "../../jobs.js";
 import { isLive, LIVE } from "./deadline.js";
 import { ProjectError } from "./errors.js";
@@ -100,46 +100,3 @@ export async function regrade(
   }
   return { repos: repos.length };
 }
-
-/**
- * `GET …/repos/:rid/criteria` (§6): the staff's table of the repository —
- * every criterion of the snapshot with its current row, source, rationale
- * and reason — and its last evidence's summary, never its files.
- */
-export async function repoCriteria(db: Db, project: ProjectRow, repo: RepoRow): Promise<ProjectRepoCriteria> {
-  const [snapshot] = await db.select().from(projectCriteria).where(eq(projectCriteria.projectId, project.id));
-  const rows = await db.select().from(projectCriterionGrades).where(eq(projectCriterionGrades.repoId, repo.id));
-  const table = snapshot
-    ? criteriaTable(snapshot.criteria, rows, { audience: "staff", frozen: repo.frozenAt !== null, released: project.releasedAt !== null })
-    : [];
-  const [last] = await db
-    .select()
-    .from(projectEvidence)
-    .where(eq(projectEvidence.repoId, repo.id))
-    .orderBy(desc(projectEvidence.createdAt))
-    .limit(1);
-  const step = (s: EvidenceStep) => (s ? { exitCode: s.exitCode, timedOut: s.timedOut } : null);
-  return {
-    table,
-    evidence: last
-      ? {
-          status: last.status,
-          reason: last.reason,
-          targetSha: last.targetSha,
-          distributionSha: last.distributionSha,
-          casesPassed: (last.cases ?? []).filter((c) => c.passed).length,
-          casesTotal: (last.cases ?? []).length,
-          build: step(last.build),
-          test: step(last.test),
-          createdAt: last.createdAt.toISOString(),
-        }
-      : null,
-  };
-}
-
-type EvidenceStep = (typeof projectEvidence.$inferSelect)["build"];
-
-/** The domain's table line and the contract's are one shape: either drifting breaks the build. */
-type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-const sameTableRow: Same<CriteriaTableRow, TableRowContract> = true;
-void sameTableRow;

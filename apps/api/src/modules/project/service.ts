@@ -53,12 +53,14 @@
  * (`evidence.ts`, the `project.evidence` job) and the automatic criteria's rows;
  * §4, §6: the LLM pass (`reviewPass.ts`, the `project.review` job), the final
  * pass at the freeze (`jobs.ts`), a Regrade and the staff's criteria table
- * (`regrade.ts`).
+ * (`regrade.ts`); §8, the teacher's grading screen and the validation
+ * (`criteriaGrading.ts`), the release waiting for it (`grades.ts`).
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
 export { criteriaForSwitch, criteriaView, refreshCriteria, reloadCriteria } from "./criteria.js";
-export { regrade, repoCriteria } from "./regrade.js";
+export { gradeCriterion, gradingRepo, gradingView, validateProject, validateRepo } from "./criteriaGrading.js";
+export { regrade } from "./regrade.js";
 export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";

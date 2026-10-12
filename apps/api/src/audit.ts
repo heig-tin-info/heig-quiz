@@ -464,6 +464,15 @@ export type AuditAction =
   | "project.regrade"
   | "project_repo.regrade"
   /**
+   * The grading screen (ADR-106 §8), subject the repository:
+   * `criterion_graded` — a teacher's points for one criterion,
+   * `payload.criterionId`, `points` (`before`: the points it replaced, or
+   * null); `validated` — its proposed rows marked validated,
+   * `payload.criteria` (their count), `bulk` (by *Validate the rest*).
+   */
+  | "project_repo.criterion_graded"
+  | "project_repo.validated"
+  /**
    * A review checkpoint authored or removed by the staff (F-PROJ-11; merge
    * task M3-05b), subject the checkpoint: `payload.projectId`, `name`,
    * `dueAt`, `offsetDays` (null: an absolute date).

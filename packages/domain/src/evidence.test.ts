@@ -25,6 +25,15 @@ describe("parseJunit", () => {
     ]);
   });
 
+  it("decodes numeric entities and single quotes, keeps an unknown entity, and reads a case with no attributes", () => {
+    const xml = `<testcase classname='t.x' name="&#x41;&#66;&nope;" /><testcase /><testcase name="n"><failure>no message</failure></testcase>`;
+    expect(parseJunit(xml).cases).toEqual([
+      { name: "AB&nope;", classname: "t.x", passed: true },
+      { name: "", classname: "", passed: true },
+      { name: "n", classname: "", passed: false },
+    ]);
+  });
+
   it("yields no case from text that is not a report", () => {
     expect(parseJunit("not xml at all")).toEqual({ cases: [], passed: 0, total: 0 });
     expect(parseJunit("")).toEqual({ cases: [], passed: 0, total: 0 });
@@ -61,6 +70,8 @@ describe("automaticPoints", () => {
   it("matches a node id against the dotted classname", () => {
     expect(coversCase("tests/test_parse.py::test_empty", { name: "test_empty", classname: "tests.test_parse" })).toBe(true);
     expect(coversCase("tests/test_run.py", { name: "test_empty", classname: "tests.test_parse" })).toBe(false);
+    // A case with no classname: its name is its id.
+    expect(coversCase("tests.py::test_x", { name: "tests.test_x", classname: "" })).toBe(true);
   });
 });
 

@@ -69,7 +69,15 @@ The table has one row per student (or group): the repository, the last commit wi
   <figcaption>The sheet of a repository: scores, own deadline, lock, runs. (Mock data.)</figcaption>
 </figure>
 
-The single primary action follows the state: **Publish** for a draft, **Sync** when the source is ahead, **Release scores** once everything is final.
+The single primary action follows the state: **Publish** for a draft, **Sync** when the source is ahead, **Grade** for a project graded by criteria while a repository is still to validate, **Release scores** once everything is final.
+
+A project graded by criteria has a **grading screen** (**Grade**, or **Grading screen** above the repositories): one repository at a time, each criterion with its proposed points, their source (CI, AI, teacher) and the rationale. Correct the points in place, give the teacher-only criteria theirs (0 included), then **Validate** and go on to the next; *Validate the rest as proposed* is in the menu. The release waits until every repository is validated.
+
+<figure markdown="span">
+  ![The grading screen: one repository, its criteria, their points, sources and states](../assets/screenshots/mock-project-grading-light.png#only-light)
+  ![The grading screen: one repository, its criteria, their points, sources and states](../assets/screenshots/mock-project-grading-dark.png#only-dark)
+  <figcaption>Grading a project by criteria. (Mock data.)</figcaption>
+</figure>
 
 ## Test a project as a student
 
