@@ -5,7 +5,6 @@ import {
   FolderTree,
   Library,
   Menu as MenuIcon,
-  School,
   Search,
   ShieldCheck,
   VenetianMask,
@@ -32,6 +31,7 @@ import { SECTION_ROOTS } from "./Trail";
 import { useOpenTraining, useTrainingStatus } from "./training/api";
 import {
   Button,
+  ClassroomIcon,
   cx,
   IconButton,
   LG_PX,
@@ -153,7 +153,7 @@ function ClassroomNavItem({
   return (
     <Tip label={truncated ? t("nav.classroomTip", { name, course }) : course} className="block">
       <NavItem
-        icon={School}
+        icon={ClassroomIcon}
         label={
           <span ref={nameRef} className="block truncate">
             {name}

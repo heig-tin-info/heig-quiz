@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Archive, BookOpen, CalendarClock, EyeOff, School, Users } from "lucide-react";
+import { Archive, BookOpen, CalendarClock, EyeOff, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import type {
@@ -17,7 +17,7 @@ import { nextEventWhen } from "../activities/Summary";
 import { api, type ReadOptions } from "../api";
 import { useI18n, useT, type TFunction } from "../i18n";
 import type { Route } from "../router";
-import { Badge, cx, relativeTime, ToggleChip, useNow } from "../ui";
+import { Badge, ClassroomIcon, cx, relativeTime, ToggleChip, useNow } from "../ui";
 import { activitiesKey, classroomKey, courseConditionsKey, courseKey, coursesKey } from "../queryKeys";
 import { classroomSignals, type ClassroomSignals } from "./classroomSignals";
 
@@ -150,7 +150,7 @@ export function ClassroomRow({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const Icon = archived ? Archive : School;
+  const Icon = archived ? Archive : ClassroomIcon;
   return (
     <button
       type="button"

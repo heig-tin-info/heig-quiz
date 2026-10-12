@@ -35,7 +35,7 @@ import { evaluationInView, type Route } from "./router";
 import { screenCommands } from "./screenCommands";
 import { homeLook } from "./bottomNavSlots";
 import type { Theme, ThemeChoice } from "./theme";
-import type { IconType } from "./ui";
+import { ClassroomIcon, type IconType } from "./ui";
 
 /*
  * What the command palette can do, as data. No JSX and no hook here on
@@ -238,7 +238,7 @@ export function buildCommands(ctx: CommandContext): Command[] {
           // The course code is how a teacher names a classroom out loud, and
           // it is shorter to type than the display name.
           keywords: `${course.code} ${course.name} ${room.period}`,
-          icon: School,
+          icon: ClassroomIcon,
           group: "navigate",
           run: () => navigate({ view: "classroom", id: room.id }),
         });

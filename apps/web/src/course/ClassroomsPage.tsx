@@ -1,11 +1,11 @@
-import { Library, School } from "lucide-react";
+import { Library } from "lucide-react";
 
 import type { ClassroomSummary } from "@quiz/contracts";
 
 import { rightNowClassrooms } from "../CourseNav";
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import { Button, Card, EmptyState, PageHeader, QueryError, Skeleton } from "../ui";
+import { Button, Card, ClassroomIcon, EmptyState, PageHeader, QueryError, Skeleton } from "../ui";
 import { ClassroomRow, useClassroomSignals, useCourses } from "./parts";
 
 const ROUTE: Route = { view: "classrooms" };
@@ -37,7 +37,7 @@ export function ClassroomsPage({ navigate }: { navigate: (r: Route) => void }) {
         <QueryError title={t("classrooms.title")} query={courses} />
       ) : rooms.length === 0 ? (
         <EmptyState
-          icon={School}
+          icon={ClassroomIcon}
           title={t("classrooms.rightNowEmpty")}
           action={
             <Button variant="secondary" onClick={() => navigate({ view: "home" })}>
