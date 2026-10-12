@@ -14,7 +14,12 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { GradeContext } from "@quiz/core/server";
-import { DRILL_TYPES, FINISHED_ATTEMPT_STATES, isDrillEligible } from "@quiz/domain";
+import {
+  countsForStudent,
+  DRILL_TYPES,
+  FINISHED_ATTEMPT_STATES,
+  isDrillEligible,
+} from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -193,7 +198,7 @@ async function createCards(
   for (const j of items) {
     // A neutralized item was judged incoherent at grading time (ADR-108):
     // it is not a question worth reviewing.
-    if (j.item.counting === "neutralized") continue;
+    if (!countsForStudent(j.item.counting)) continue;
     // The card serves the question as it stands now (ADR-041 §7).
     const version = current.get(j.question.id) ?? j.version;
     // Whether it can be drilled is a matter of structure: a parameterized
