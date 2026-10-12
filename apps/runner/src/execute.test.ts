@@ -95,6 +95,7 @@ describe("classify", () => {
   const result = {
     exitCode: 0,
     stdout: "",
+    stdoutBytes: Buffer.alloc(0),
     stderr: "",
     ms: 5,
     timedOut: false,
@@ -148,7 +149,7 @@ describe("executeRequest", () => {
     const engine = createFakeEngine((call) => {
       if (call.argv[0] === "cp") return { exitCode: 0 };
       if (call.argv[0] === "gcc") return { exitCode: 0, stderr: "warning: unused\n", ms: 120 };
-      return { exitCode: 0, stdout: `got ${call.stdin.trim()}\n`, ms: 12 };
+      return { exitCode: 0, stdout: `got ${String(call.stdin).trim()}\n`, ms: 12 };
     });
 
     const outcome = await executeRequest(request(), deps(engine));

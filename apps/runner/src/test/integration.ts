@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
 
-import type { RunnerLanguage } from "@quiz/core/server";
+import { ProjectImage, type RunnerLanguage } from "@quiz/core/server";
 
 import { loadConfig, type RunnerConfig } from "../config.js";
 import { createEngine, remoteArgs, type Engine } from "../engine.js";
-import { availableLanguages, LANGUAGES } from "../images.js";
+import { availableLanguages, hasImage, LANGUAGES } from "../images.js";
 import { probeEngine, proveRuntime } from "../probe.js";
 
 /**
@@ -34,6 +34,8 @@ export interface IntegrationHost {
   readonly languages: readonly RunnerLanguage[];
   readonly config: RunnerConfig;
   has(language: RunnerLanguage): boolean;
+  /** The image of a project run (`quiz-runner-lab-c`, ADR-106 §3) is present. */
+  hasProject(image: ProjectImage): boolean;
 }
 
 let cached: IntegrationHost | null = null;
@@ -58,14 +60,24 @@ export function integrationHost(): IntegrationHost {
       [...remoteArgs(config.PODMAN_SOCKET), "images", "--format", "{{.Repository}}:{{.Tag}}"],
       { encoding: "utf8", timeout: 20_000 },
     );
-    const languages = availableLanguages(images.split("\n"), config);
-    cached = { ok: true, languages, config, has: (language) => languages.includes(language) };
+    const refs = images.split("\n");
+    const languages = availableLanguages(refs, config);
+    cached = {
+      ok: true,
+      languages,
+      config,
+      has: (language) => languages.includes(language),
+      hasProject: (image) => hasImage(refs, config, image),
+    };
   } catch {
-    cached = { ok: false, languages: [], config, has: () => false };
+    cached = { ok: false, languages: [], config, has: () => false, hasProject: () => false };
   }
   if (STRICT) {
     if (!cached.ok) throw new Error("[runner] strict: Podman is not reachable");
-    const missing = LANGUAGES.filter((language) => !cached!.has(language));
+    const missing: string[] = [
+      ...LANGUAGES.filter((language) => !cached!.has(language)),
+      ...ProjectImage.options.filter((image) => !cached!.hasProject(image)),
+    ];
     if (missing.length > 0) {
       throw new Error(`[runner] strict: no image for ${missing.join(", ")} (images/build.sh)`);
     }

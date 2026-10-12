@@ -1,4 +1,4 @@
-import { RunnerLanguage } from "@quiz/core/server";
+import { RunnerLanguage, type ProjectImage } from "@quiz/core/server";
 
 import type { RunnerConfig } from "./config.js";
 
@@ -15,7 +15,7 @@ import type { RunnerConfig } from "./config.js";
 export const LANGUAGES: readonly RunnerLanguage[] = RunnerLanguage.options;
 
 /** `quiz-runner-c:latest` — what images/build.sh tags. */
-export function imageRef(config: RunnerConfig, language: RunnerLanguage): string {
+export function imageRef(config: RunnerConfig, language: RunnerLanguage | ProjectImage): string {
   return `${config.RUNNER_IMAGE_PREFIX}-${language}:${config.RUNNER_IMAGE_TAG}`;
 }
 
@@ -33,8 +33,15 @@ export function availableLanguages(
   refs: readonly string[],
   config: RunnerConfig,
 ): RunnerLanguage[] {
-  return LANGUAGES.filter((language) => {
-    const ref = imageRef(config, language);
-    return refs.some((candidate) => candidate === ref || candidate.endsWith(`/${ref}`));
-  });
+  return LANGUAGES.filter((language) => hasImage(refs, config, language));
+}
+
+/** Whether the engine lists the image of this language or project image. */
+export function hasImage(
+  refs: readonly string[],
+  config: RunnerConfig,
+  name: RunnerLanguage | ProjectImage,
+): boolean {
+  const ref = imageRef(config, name);
+  return refs.some((candidate) => candidate === ref || candidate.endsWith(`/${ref}`));
 }

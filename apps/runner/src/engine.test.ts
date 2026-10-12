@@ -91,6 +91,32 @@ describe("containerArgs", () => {
     ]);
   });
 
+  it("gives a project run the same flags: only the values of a ceiling differ (ADR-106 §3)", () => {
+    const project = engine().containerArgs({
+      ...CREATE,
+      image: "quiz-runner-lab-c:latest",
+      memoryMb: 512,
+      cpus: 2,
+      workdirMb: 256,
+      ttlSeconds: 605,
+    });
+    const code = engine().containerArgs(CREATE);
+    // Same length, same flag at every position; a value may differ only
+    // right after --tmpfs, --memory, --memory-swap or --cpus, and the image and ttl.
+    expect(project).toHaveLength(code.length);
+    const valued = new Set(["--tmpfs", "--memory", "--memory-swap", "--cpus"]);
+    const differing = project
+      .map((arg, i) => (arg === code[i] ? null : i))
+      .filter((i): i is number => i !== null);
+    for (const i of differing) {
+      const isValue = valued.has(code[i - 1]!) || code[i] === CREATE.image || i === code.length - 1;
+      expect(isValue, `argument ${i}: ${code[i]} -> ${project[i]}`).toBe(true);
+    }
+    expect(project).toContain("/work:rw,exec,nosuid,nodev,size=256m,mode=1777");
+    expect(project).not.toContain("-v");
+    expect(project).not.toContain("--mount");
+  });
+
   it("drops --userns=auto, and nothing else, on an engine without it", () => {
     const withAuto = engine().containerArgs(CREATE);
     const without = engine({ usernsAuto: false }).containerArgs(CREATE);

@@ -157,6 +157,24 @@ const EnvSchema = z.object({
     .min(1000)
     .max(600_000)
     .default(RUNNER_BUDGET_DEFAULTS.requestTimeoutMs),
+
+  /*
+   * Project runs (`POST /project`, ADR-106 §3). Ceilings only: the container
+   * gets the flags of `containerArgs()`, unchanged; these set the values of
+   * `--cpus` and of the tmpfs size for a project, and how many may hold a slot.
+   */
+  /** Ceiling on a whole project run; a request's `budgetMs` may only lower it. */
+  RUNNER_PROJECT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(600_000).default(600_000),
+  /**
+   * Project runs admitted at once, waiting or running; beyond it `429`. A
+   * project run holds a slot for minutes: this keeps the code questions'
+   * slots theirs.
+   */
+  RUNNER_PROJECT_QUEUE_MAX: z.coerce.number().int().min(1).max(64).default(2),
+  /** Size of the `/work` and `/tmp` tmpfs of a project run: the unpacked repository and its build. */
+  RUNNER_PROJECT_WORKDIR_MB: z.coerce.number().int().min(32).max(2048).default(256),
+  /** Ceiling on a project's `limits.cpus` (`--cpus`). Its memory is capped by `RUNNER_MAX_MEMORY_MB`. */
+  RUNNER_PROJECT_MAX_CPUS: z.coerce.number().min(0.5).max(16).default(2),
 });
 
 export type RunnerConfig = Omit<z.infer<typeof EnvSchema>, "PODMAN_SOCKET" | "RUNNER_SECCOMP"> & {

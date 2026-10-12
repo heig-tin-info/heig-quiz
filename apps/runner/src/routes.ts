@@ -1,12 +1,19 @@
 import { timingSafeEqual } from "node:crypto";
 
-import { RunnerRequest, type RunnerHealth, type RunnerLanguage } from "@quiz/core/server";
+import {
+  PROJECT_ARCHIVE_MAX_BASE64,
+  ProjectRunRequest,
+  RunnerRequest,
+  type RunnerHealth,
+  type RunnerLanguage,
+} from "@quiz/core/server";
 import type { FastifyInstance } from "fastify";
 
 import type { RunnerConfig } from "./config.js";
 import type { Engine } from "./engine.js";
 import { ExecuteError } from "./execute.js";
-import { availableLanguages } from "./images.js";
+import { availableLanguages, hasImage } from "./images.js";
+import { prepareProject, ProjectArchiveError, runProject } from "./project.js";
 import { QueueFull, type RunQueue } from "./queue.js";
 
 /**
@@ -59,16 +66,25 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     });
   }
 
-  let cache: { at: number; languages: RunnerLanguage[]; error: string | null } | null = null;
+  let cache: {
+    at: number;
+    refs: string[];
+    languages: RunnerLanguage[];
+    error: string | null;
+  } | null = null;
 
-  async function languages(): Promise<{ languages: RunnerLanguage[]; error: string | null }> {
+  async function languages(): Promise<{
+    refs: string[];
+    languages: RunnerLanguage[];
+    error: string | null;
+  }> {
     const now = Date.now();
     if (cache !== null && now - cache.at < IMAGE_CACHE_MS) return cache;
     try {
       const refs = await engine.listImages();
-      cache = { at: now, languages: availableLanguages(refs, config), error: null };
+      cache = { at: now, refs, languages: availableLanguages(refs, config), error: null };
     } catch {
-      cache = { at: now, languages: [], error: "engine_unreachable" };
+      cache = { at: now, refs: [], languages: [], error: "engine_unreachable" };
     }
     return cache;
   }
@@ -160,4 +176,89 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       reply.raw.off("close", onClose);
     }
   });
+
+  /**
+   * `POST /project` (ADR-106 §3): a whole repository, one container, the
+   * same queue and the same flags. Answers 200 a `ProjectRunResult`; 400
+   * `invalid_request`, `archive_invalid` (not a tar) or `archive_refused`
+   * (an entry the sanitizer refuses, named in `entries`: the whole archive
+   * is refused, invariant 12); 413
+   * `archive_too_large`; 429 `queue_full` (the queues, or
+   * `RUNNER_PROJECT_QUEUE_MAX` project runs already admitted); 503
+   * `image_unavailable`, which no retry changes — the API reads the body
+   * and does not retry it — or `engine_error`/`upload_failed`, which a retry may.
+   */
+  let projectsAdmitted = 0;
+  app.post(
+    "/project",
+    // The archive's base64 and the JSON around it; `/run` keeps the app's 4 MB.
+    { bodyLimit: PROJECT_ARCHIVE_MAX_BASE64 + 1024 * 1024 },
+    async (request, reply) => {
+      const archive = (request.body as { archive?: unknown } | null)?.archive;
+      if (typeof archive === "string" && archive.length > PROJECT_ARCHIVE_MAX_BASE64) {
+        return reply.code(413).send({ error: "archive_too_large" });
+      }
+      const parsed = ProjectRunRequest.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: "invalid_request",
+          issues: parsed.error.issues.map((issue) => ({
+            path: issue.path.join("."),
+            message: issue.message,
+          })),
+        });
+      }
+      const found = await languages();
+      if (!hasImage(found.refs, config, parsed.data.image)) {
+        return reply.code(503).send({ error: "image_unavailable", image: parsed.data.image });
+      }
+
+      // Sanitized before it takes a slot: a bad archive costs no container.
+      let prepared;
+      try {
+        prepared = prepareProject(parsed.data);
+      } catch (error) {
+        if (!(error instanceof ProjectArchiveError)) throw error;
+        if (error.reason === "archive_too_large") return reply.code(413).send({ error: error.reason });
+        return reply.code(400).send({
+          error: error.reason,
+          ...(error.reason === "archive_refused" ? { entries: error.entries } : {}),
+        });
+      }
+
+      if (projectsAdmitted >= config.RUNNER_PROJECT_QUEUE_MAX) {
+        return reply.code(429).header("retry-after", "30").send({ error: "queue_full" });
+      }
+      projectsAdmitted += 1;
+      const gone = new AbortController();
+      const onClose = (): void => {
+        if (!reply.raw.writableEnded) gone.abort();
+      };
+      reply.raw.on("close", onClose);
+      try {
+        return await queue.submitTask(
+          "grading",
+          (signal) => runProject(prepared, { engine, config, signal }),
+          gone.signal,
+        );
+      } catch (error) {
+        if (gone.signal.aborted) {
+          request.log.info("client gone, project run abandoned");
+          return reply.hijack();
+        }
+        if (error instanceof QueueFull) {
+          return reply
+            .code(429)
+            .header("retry-after", String(error.retryAfterSeconds))
+            .send({ error: "queue_full" });
+        }
+        const reason = error instanceof ExecuteError ? error.reason : "engine_error";
+        request.log.error({ err: error, reason }, "project run failed");
+        return reply.code(503).send({ error: reason });
+      } finally {
+        projectsAdmitted -= 1;
+        reply.raw.off("close", onClose);
+      }
+    },
+  );
 }

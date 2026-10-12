@@ -57,13 +57,14 @@ export interface QueueStats {
 }
 
 interface Waiter {
-  request: RunnerRequest;
+  /** What runs once a slot is free: a code question's request, or a project run. */
+  task: (signal?: AbortSignal) => Promise<unknown>;
   signal: AbortSignal | undefined;
   /** When it joined its queue, for the aging of a grading request. */
   queuedAt: number;
   /** Stops listening to `signal` once the request leaves the queue. */
   detach: () => void;
-  resolve: (outcome: RunnerOutcome) => void;
+  resolve: (outcome: unknown) => void;
   reject: (error: unknown) => void;
 }
 
@@ -99,21 +100,34 @@ export class RunQueue {
    * signal's reason once it aborts while the request is still waiting.
    */
   submit(request: RunnerRequest, signal?: AbortSignal): Promise<RunnerOutcome> {
+    return this.submitTask(request.priority, (s) => this.options.run(request, s), signal);
+  }
+
+  /**
+   * {@link submit} for any task: the same two queues, the same slots, the
+   * same `queueMax` — a project run (ADR-106 §3) waits its turn like a
+   * code question's request. `task` receives the signal once it runs.
+   */
+  submitTask<T>(
+    priority: Priority,
+    task: (signal?: AbortSignal) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
     if (signal?.aborted) return Promise.reject(signal.reason);
     if (this.depth >= this.options.queueMax) {
       return Promise.reject(new QueueFull(this.retryAfterSeconds()));
     }
-    return new Promise<RunnerOutcome>((resolve, reject) => {
-      const queue = this.waiting[request.priority];
+    return new Promise<T>((resolve, reject) => {
+      const queue = this.waiting[priority];
       const onAbort = (): void => {
         queue.splice(queue.indexOf(waiter), 1);
         reject(signal?.reason);
       };
       const waiter: Waiter = {
-        request,
+        task,
         signal,
         queuedAt: Date.now(),
-        resolve,
+        resolve: resolve as (outcome: unknown) => void,
         reject,
         // Once running, the request is `run`'s to stop: it has the signal.
         detach: () => signal?.removeEventListener("abort", onAbort),
@@ -164,7 +178,7 @@ export class RunQueue {
         deliver();
         this.pump();
       };
-      void this.options.run(waiter.request, waiter.signal).then(
+      void waiter.task(waiter.signal).then(
         (outcome) => settle(() => waiter.resolve(outcome)),
         (error: unknown) => settle(() => waiter.reject(error)),
       );
