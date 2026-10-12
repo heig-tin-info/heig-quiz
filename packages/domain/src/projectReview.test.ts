@@ -57,6 +57,23 @@ describe("renderMaterial", () => {
     expect(text).toContain(MASK);
   });
 
+  it("renders a failure without a classname or a message, a timed-out step's stderr, and no case nor file at all", () => {
+    const text = renderMaterial(
+      evidence({
+        cases: [{ name: "lonely", classname: "", passed: false }],
+        build: null,
+        test: { exitCode: null, stdout: "", stderr: "boom", timedOut: true },
+        files: null,
+      }),
+      [],
+      mask,
+    );
+    expect(text).toContain("- lonely\n");
+    expect(text).toContain("Test step: exit code null (timed out)\nstderr:\nboom");
+    expect(text).not.toContain("stdout:");
+    expect(renderMaterial(evidence({ cases: null, build: null, files: null }), [], mask)).toBe("Tests: 0 of 0 passed.");
+  });
+
   it("caps the whole material", () => {
     const files = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`f${i}`, { content: "z".repeat(MATERIAL_LIMITS.file), truncated: false }]));
     expect(renderMaterial(evidence({ files }), [], mask).length).toBeLessThanOrEqual(MATERIAL_LIMITS.material + 2);

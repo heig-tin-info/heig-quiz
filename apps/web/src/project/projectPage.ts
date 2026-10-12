@@ -73,6 +73,7 @@ export type StatusKey =
   | "project.status.archived"
   | "project.status.draft"
   | "project.status.scheduled"
+  | "project.status.grade"
   | "project.status.release"
   | "project.status.rerelease"
   | "project.status.sync"
@@ -85,6 +86,7 @@ export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string 
   const key = ((): StatusKey => {
     if (p.archivedAt) return "project.status.archived";
     if (p.state === "draft") return p.publishMode === "scheduled" ? "project.status.scheduled" : "project.status.draft";
+    if (p.primaryAction === "grade") return "project.status.grade";
     if (p.primaryAction === "release") return p.releasedAt ? "project.status.rerelease" : "project.status.release";
     if (p.primaryAction === "sync") return "project.status.sync";
     if (p.state === "published") return "project.status.open";
@@ -278,7 +280,10 @@ export function releaseRefusal(error: unknown, project: ProjectDetail, t: TFunct
     const names = repoEntries(project)
       .filter((e) => e.repo !== null && repos.includes(e.repo.id))
       .map((e) => e.label);
-    return t("project.release.refusal.toVerify", { names: names.join(", ") || t("project.release.refusal.someRepos") });
+    const named = names.join(", ") || t("project.release.refusal.someRepos");
+    // ADR-106 §8: a project graded by criteria, a repository not validated yet.
+    if (body.data.error === "not_validated") return t("project.release.refusal.notValidated", { names: named });
+    return t("project.release.refusal.toVerify", { names: named });
   }
   return refusalMessage(error, t);
 }
@@ -380,6 +385,12 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   criteria_invalid: "project.criteria.invalid",
   checkpoint_untagged: "project.refusal.checkpointUntagged",
   unknown_criterion: "project.criteria.tests.unknown",
+  // ADR-106 §8: the grading screen and the release gate.
+  not_criteria: "project.refusal.notCriteria",
+  points_out_of_range: "project.refusal.pointsOutOfRange",
+  criteria_incomplete: "project.refusal.criteriaIncomplete",
+  not_validated: "project.refusal.notValidated",
+  regrade_limit: "project.refusal.regradeLimit",
   seb_required: "project.refusal.sebRequired",
 };
 

@@ -20,7 +20,8 @@ import { scoreGrade, type FinalScoreSource } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { projects } from "../../db/schema.js";
-import { repoScores, releasableScore, slotRuns } from "./detail.js";
+import { repoScores, releasableScore } from "./detail.js";
+import { scoreFacts } from "./scores.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
 import type { ProjectRow } from "./views.js";
 
@@ -56,10 +57,10 @@ export async function projectLiveScores(
     const repo = seats.of(project.id, id);
     return repo === null ? [] : [{ id, repo }];
   });
-  const runs = await slotRuns(db, [...new Map(held.map(({ repo }) => [repo.id, repo] as const)).values()]);
+  const facts = await scoreFacts(db, [...new Map(held.map(({ repo }) => [repo.id, repo] as const)).values()]);
   const cells = new Map<string, ProjectGradeCell>();
   for (const { id, repo } of held) {
-    const { scores, changedAfterRelease } = repoScores(project, repo, runs);
+    const { scores, changedAfterRelease } = repoScores(project, repo, facts);
     const final = releasableScore(project, repo, scores.final);
     if (final?.max != null && final.grade !== null) {
       cells.set(id, { points: final.points, max: final.max, grade: final.grade.grade, source: final.source, changedAfterRelease });

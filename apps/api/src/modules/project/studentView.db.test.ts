@@ -38,6 +38,7 @@ import {
   type SessionKind,
   type StudentActivityCard,
 } from "@quiz/contracts";
+import { parseCriteria } from "@quiz/domain/criteriaParse";
 
 import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
@@ -46,6 +47,7 @@ import {
   githubAccounts,
   githubClassroomLinks,
   githubOrganizations,
+  projectCriteria,
   projectGradeRuns,
   projectRepos,
   projects,
@@ -59,6 +61,7 @@ import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive, type Seeded } from "../../test/live.js";
 import { studentHome as activityHome } from "../activity/service.js";
 import { findStudentProjectView } from "../guards.js";
+import { writeCriterionGrades } from "./criterionGrades.js";
 import { hintRepo, repoContext } from "./repos.js";
 import { repoWorld } from "./testing.js";
 
@@ -775,6 +778,54 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
       }
     } finally {
       unsubscribe();
+    }
+  });
+
+  it("gives a student nothing of a validated criteria repository before the release, then the snapshot's total only (ADR-106 §7, §8)", async () => {
+    const student = await newStudent({ tag: "crit" });
+    const room = await connectedClassroom([student]);
+    const lab = await project(room, "Lab nine-b");
+    await accept(lab.id, student);
+    const repo = await repoOf(lab.id, student.id);
+    const parsed = parseCriteria(`schema_version: 2
+criteria:
+  rendu:
+    tests: {description: Tests, awarded_points: 0, max_points: 20}
+`);
+    if (!parsed.ok) throw new Error("the fixture does not parse");
+    await setProject(lab.id, { gradingMode: "criteria" });
+    await server.app.db.insert(projectCriteria).values({ projectId: lab.id, fileSha: "f", sourceSha: "s", criteria: parsed.criteria, loadedAt: at(NOW) });
+    // Frozen, an indicative CI score, and the criterion validated by the teacher: a criteria total of 13.25 / 20.
+    await setRepo(repo.id, {
+      currentGradeRunId: await run(repo.id, { points: 6, max: 10 }),
+      deadlineAppliedAt: at(DEADLINE),
+      frozenAt: at(DEADLINE, 30 * MINUTE),
+    });
+    await writeCriterionGrades(
+      server.app.db,
+      repo.id,
+      [{ criterionId: "rendu.tests", points: 13.25, max: 20, source: "manual", state: "validated", rationale: "Secret-rationale-x", passId: null }],
+      at(DEADLINE, DAY),
+    );
+    server.clock.set(at(DEADLINE, DAY));
+    const read = async () => {
+      await home(student.headers);
+      await classroomPage(room.classroomId, student.headers);
+      return view(lab.id, student.headers);
+    };
+    const from = studentBodies.length;
+    await read();
+    // The view's `gradingMode` legitimately says "criteria": what must not appear is a total, a source, a state or a row.
+    for (const body of studentBodies.slice(from)) {
+      for (const secret of ["13.25", "\"criteria\":", "\"source\":\"criteria", "validated", "Secret-rationale-x", "rendu.tests"]) expect(body, secret).not.toContain(secret);
+    }
+    const released = await call("POST", `/app/api/projects/${lab.id}/release`, teacher.headers);
+    expect(released.statusCode, released.body).toBe(200);
+    const after = studentBodies.length;
+    expect((await read()).release).toMatchObject({ points: 13.25, max: 20 });
+    // After the release: the snapshot's total, never the source, the rows, nor the state.
+    for (const body of studentBodies.slice(after)) {
+      for (const secret of ["\"criteria\":", "\"source\":\"criteria", "validated", "Secret-rationale-x", "rendu.tests"]) expect(body, secret).not.toContain(secret);
     }
   });
 });

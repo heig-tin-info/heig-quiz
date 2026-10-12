@@ -109,6 +109,9 @@ import {
   ProjectCreate,
   ProjectCriteriaView,
   ProjectDetail,
+  ProjectGradingRepo,
+  ProjectGradingView,
+  PointsOutOfRange,
   ProjectInvitationResent,
   ProjectRefusal,
   ProjectReleaseRefusal,
@@ -149,7 +152,7 @@ import {
   TemplateDetail,
   TemplatePullPreview,
 } from "@quiz/contracts";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 // jsdom has no `fetch`; the mock wraps whatever is there and only defers to
 // it for a URL outside `/app/`, which this test never asks for.
@@ -675,6 +678,7 @@ const UNCHECKED = [
   "/app/api/courses", // CourseSummary[]
   "/app/api/classrooms/:id", // ClassroomDetail
   "/app/api/admin/teachers", // AdminTeacher[]
+  "/app/api/projects/:id/grading", // ProjectGradingView: checked under its flag, by "the mock's grading by criteria"
 ];
 
 // ADR-051 §7: one pending pairing (the mock keeps it in localStorage, which
@@ -713,6 +717,46 @@ describe("the mock's projects (?projects=1)", () => {
     expect(own.filter((p) => p.state === "locked").map((p) => p.phase).sort()).toEqual(["graded", "graded", "released"]);
     const all = (await get("/app/api/activities")) as { kind: string }[];
     expect(all.filter((a) => a.kind === "project")).toHaveLength(8);
+  });
+});
+
+// `?pjcriteria=1` (ADR-106 §8), for these scenes only: two projects graded by criteria, one frozen awaiting its validation, one open.
+describe("the mock's grading by criteria (?pjcriteria=1)", () => {
+  beforeAll(() => {
+    flags.pjcriteria = true;
+  });
+  afterAll(() => {
+    flags.pjcriteria = false;
+  });
+  const send = async (path: string, method: string, body?: unknown) => {
+    const res = await fetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: res.status, body: (await res.json()) as unknown };
+  };
+
+  it("grades by criteria (ADR-106 §8): a teacher's points, Validate, the refusals and the release gate", async () => {
+    const own = (await get(`/app/api/classrooms/${classroomId}/projects`)) as { id: string; title: string; state: string }[];
+    const id = own.find((p) => p.title === "Labo 00 — par critères")!.id;
+    const raw = await get(`/app/api/projects/${id}/grading`);
+    expect(issuesOf(ProjectGradingView, raw)).toEqual([]);
+    const view = raw as ProjectGradingView;
+    const todo = view.repos.find((r) => r.frozen && !r.validation.validated)!;
+    expect(todo.validation.missing).toEqual(["git.commits"]);
+    // The release waits for every repository's validation.
+    const blocked = await send(`/app/api/projects/${id}/release`, "POST");
+    expect(ProjectReleaseRefusal.parse(blocked.body)).toMatchObject({ error: "not_validated" });
+    const refused = await send(`/app/api/projects/${id}/repos/${todo.id}/validate`, "POST");
+    expect([refused.status, (refused.body as { error: string }).error]).toEqual([409, "criteria_incomplete"]);
+    const out = await send(`/app/api/projects/${id}/repos/${todo.id}/criteria/git.commits`, "PUT", { points: 5 });
+    expect(out.status).toBe(422);
+    expect(PointsOutOfRange.parse(out.body)).toMatchObject({ min: 0, max: 1 });
+    const graded = await send(`/app/api/projects/${id}/repos/${todo.id}/criteria/git.commits`, "PUT", { points: 0 });
+    expect(graded.status).toBe(200);
+    expect(ProjectGradingRepo.parse(graded.body).validation).toMatchObject({ missing: [], validated: false });
+    const validated = await send(`/app/api/projects/${id}/repos/${todo.id}/validate`, "POST");
+    expect(ProjectGradingRepo.parse(validated.body)).toMatchObject({ validation: { validated: true }, total: { max: 20 } });
+    // The rest, as proposed: each still lacks its teacher-only criterion, named.
+    const rest = await send(`/app/api/projects/${id}/validate`, "POST");
+    expect([rest.status, (rest.body as { error: string }).error]).toEqual([409, "criteria_incomplete"]);
   });
 });
 

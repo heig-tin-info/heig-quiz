@@ -4,17 +4,18 @@
  * student view of a project is M3-09's, its one exit (N-SEC-20).
  */
 import { and, desc, eq, inArray, isNotNull, isNull, type SQL } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 
 import type { ProjectActivitySummary, ProjectSummary } from "@quiz/contracts";
-import { editableProjectFields, projectListDates, projectPhase, resolveFinalScore, type ProjectLifeLike } from "@quiz/domain";
+import { editableProjectFields, projectListDates, projectPhase, type ProjectLifeLike } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import { classrooms, courses, projectRepos, projects } from "../../db/schema.js";
 import { staffAccess, type Caller } from "../guards.js";
+import { awaitsValidation } from "./criterionGrades.js";
 import { LIVE } from "./deadline.js";
 import { STUDENT_REPO } from "./repos.js";
+import { finalOf, scoreFacts } from "./scores.js";
 
 export type ProjectRow = typeof projects.$inferSelect;
 
@@ -61,58 +62,45 @@ export async function projectSummary(db: Db, row: ProjectRow, now: Date): Promis
   };
 }
 
-/** `releaseCounts` of `deadline.ts` and the `unverified` of `detail.ts`, over the live student repositories of one project. */
+/** `releaseCounts` of `deadline.ts` and the `unverified` and `unvalidated` of `detail.ts`, over the live student repositories of one project. */
 interface PhaseCounts {
   live: number;
   frozen: number;
   unverified: number;
+  unvalidated: number;
 }
 
-const NO_REPOS: PhaseCounts = { live: 0, frozen: 0, unverified: 0 };
+const NO_REPOS: PhaseCounts = { live: 0, frozen: 0, unverified: 0, unvalidated: 0 };
 
 /**
  * The counts the phase of a locked project rests on (`projectPhase`,
- * ADR-104), for every project of `projectIds` in ONE query — a list never
- * loads a project's detail, nor asks GitHub (F-PROJ-13): one row per live
+ * ADR-104), for every project of `projectIds` in a few reads — a list never
+ * loads a project's detail, nor asks GitHub (F-PROJ-13): every live
  * (`LIVE`) student (`STUDENT_REPO`, the page's and the release's set)
- * repository with its three slot runs, folded here through
- * `resolveFinalScore` as the page does. A project with no such repository
- * is absent: zero of each.
+ * repository, its final score through `finalOf` as the page resolves it
+ * (`scoreFacts`: the slot runs and, graded by criteria, the standing,
+ * ADR-106 §7), and whether it waits for its validation (§8). A project
+ * with no such repository is absent: zero of each.
  */
 async function phaseCounts(db: Db, projectIds: string[]): Promise<Map<string, PhaseCounts>> {
   if (projectIds.length === 0) return new Map();
-  const review = alias(projectGradeRuns, "review_run");
-  const frozen = alias(projectGradeRuns, "frozen_run");
-  const current = alias(projectGradeRuns, "current_run");
   const rows = await db
-    .select({
-      projectId: projectRepos.projectId,
-      frozenAt: projectRepos.frozenAt,
-      teacherPoints: projectRepos.teacherPoints,
-      // The slot runs as `resolveFinalScore` reads them; null for an empty slot (a missing left join).
-      review: { points: review.points, max: review.max, parseStatus: review.parseStatus, toVerify: review.toVerify },
-      frozen: { points: frozen.points, max: frozen.max, parseStatus: frozen.parseStatus, toVerify: frozen.toVerify },
-      current: { points: current.points, max: current.max, parseStatus: current.parseStatus, toVerify: current.toVerify },
-    })
+    .select({ repo: projectRepos, gradingMode: projects.gradingMode })
     .from(projectRepos)
     .innerJoin(projects, eq(projects.id, projectRepos.projectId))
-    .leftJoin(review, eq(review.id, projectRepos.reviewGradeRunId))
-    .leftJoin(frozen, eq(frozen.id, projectRepos.frozenGradeRunId))
-    .leftJoin(current, eq(current.id, projectRepos.currentGradeRunId))
     .where(and(inArray(projectRepos.projectId, projectIds), LIVE, STUDENT_REPO));
+  const facts = await scoreFacts(
+    db,
+    rows.map((r) => r.repo),
+  );
   const counts = new Map<string, PhaseCounts>();
-  for (const r of rows) {
-    const c = counts.get(r.projectId) ?? { ...NO_REPOS };
+  for (const { repo, gradingMode } of rows) {
+    const c = counts.get(repo.projectId) ?? { ...NO_REPOS };
     c.live += 1;
-    if (r.frozenAt !== null) c.frozen += 1;
-    const final = resolveFinalScore({
-      teacherPoints: r.teacherPoints,
-      reviewScore: r.review,
-      frozenScore: r.frozen,
-      score: r.current,
-    });
-    if (final?.toVerify) c.unverified += 1;
-    counts.set(r.projectId, c);
+    if (repo.frozenAt !== null) c.frozen += 1;
+    if (awaitsValidation(gradingMode, facts.criteria.get(repo.id))) c.unvalidated += 1;
+    if (finalOf(repo, facts)?.toVerify) c.unverified += 1;
+    counts.set(repo.projectId, c);
   }
   return counts;
 }

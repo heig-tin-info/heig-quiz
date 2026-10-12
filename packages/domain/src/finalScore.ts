@@ -1,8 +1,10 @@
 /**
  * Final score of a student's project repository (F-PROJ-14, ported from
  * heig-classroom's `finalGrade.ts`): the teacher's score wins, else the
- * final review's (the `review` slot, heig-classroom's "LLM"), else the
- * frozen CI score — and, while nothing is frozen yet, the current CI score.
+ * validated criteria's total (ADR-106 §7, a project graded by criteria),
+ * else the final review's (the `review` slot, heig-classroom's "LLM"), else
+ * the frozen CI score — and, while nothing is frozen yet, the current CI
+ * score.
  *
  * Single source of truth: every view and export of a project's scores
  * resolves through this function. Only scores whose annotation parsed (`ok`)
@@ -12,7 +14,7 @@
  */
 
 /** Where a final score comes from (I42: the gradebook names it). */
-export const FINAL_SCORE_SOURCES = ["teacher", "review", "ci"] as const;
+export const FINAL_SCORE_SOURCES = ["teacher", "criteria", "review", "ci"] as const;
 export type FinalScoreSource = (typeof FINAL_SCORE_SOURCES)[number];
 
 /** Structural shape of a score view or of a score run row. */
@@ -33,6 +35,12 @@ export interface FinalScoreInput {
    * heig-classroom's imported rows, which read the CI's maximum.
    */
   teacherMax?: number | null;
+  /**
+   * The repository's validated criteria total (ADR-106 §7, `criteriaScore`):
+   * null until every criterion is validated — never 0 — so the order falls
+   * through.
+   */
+  criteriaScore?: { points: number; max: number } | null;
   /** The final review's score (the `review` slot). */
   reviewScore?: ScoreLike | null;
   /** CI score frozen at the deadline. */
@@ -62,8 +70,9 @@ export function resolveFinalScore(repo: FinalScoreInput): FinalScore | null {
   const review = parsed(repo.reviewScore);
   const ci = parsed(repo.frozenScore) ?? parsed(repo.score);
   if (repo.teacherPoints != null) {
-    return { points: repo.teacherPoints, max: repo.teacherMax ?? review?.max ?? ci?.max ?? null, source: "teacher", toVerify: false };
+    return { points: repo.teacherPoints, max: repo.teacherMax ?? repo.criteriaScore?.max ?? review?.max ?? ci?.max ?? null, source: "teacher", toVerify: false };
   }
+  if (repo.criteriaScore) return { ...repo.criteriaScore, source: "criteria", toVerify: false };
   if (review) return { points: review.points, max: review.max, source: "review", toVerify: review.toVerify === true };
   if (ci) return { points: ci.points, max: ci.max, source: "ci", toVerify: ci.toVerify === true };
   return null;

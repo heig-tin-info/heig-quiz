@@ -68,7 +68,7 @@ import { htmlUrl } from "../../github/git.js";
 import type { StudentProjectScope } from "../guards.js";
 import { countedReceipts, repoCommitCount } from "./commits.js";
 import { isLive } from "./deadline.js";
-import { slotRuns } from "./detail.js";
+import { slotRuns } from "./scores.js";
 import { ProjectError } from "./errors.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
 import { resendInvitation } from "./invitation.js";

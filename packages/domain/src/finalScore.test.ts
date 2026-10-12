@@ -83,6 +83,21 @@ describe("resolveFinalScore", () => {
     expect(resolveFinalScore({ teacherPoints: 3, teacherMax: 6, frozenScore: suspect })).toMatchObject({ source: "teacher", toVerify: false });
   });
 
+  it("ranks the validated criteria between the teacher's score and the review's (ADR-106 §7)", () => {
+    const criteriaScore = { points: 14, max: 20 };
+    expect(resolveFinalScore({ criteriaScore, reviewScore: s(4), frozenScore: { ...s(3), toVerify: true } })).toEqual({
+      points: 14,
+      max: 20,
+      source: "criteria",
+      toVerify: false,
+    });
+    expect(resolveFinalScore({ teacherPoints: 5, teacherMax: 6, criteriaScore })).toMatchObject({ source: "teacher", points: 5 });
+    // An imported override without its own maximum reads the criteria's.
+    expect(resolveFinalScore({ teacherPoints: 5, criteriaScore, reviewScore: s(4) })).toMatchObject({ source: "teacher", max: 20 });
+    // No criteria score (a repository not validated): empty, never 0 — the order falls through.
+    expect(resolveFinalScore({ criteriaScore: null, reviewScore: s(4) })).toMatchObject({ source: "review", points: 4 });
+  });
+
   it("reads a teacher's score with the maximum it was written with (M3-08b)", () => {
     expect(resolveFinalScore({ teacherPoints: 7, teacherMax: 10 })).toEqual({ points: 7, max: 10, source: "teacher", toVerify: false });
     // Written with the run's maximum, a later run with another one never re-reads it.

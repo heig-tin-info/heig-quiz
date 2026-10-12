@@ -571,6 +571,13 @@ export const PROJECT_REFUSALS = [
   // three a day (429).
   "not_criteria",
   "regrade_limit",
+  // ADR-106 §8, the grading screen: a teacher's points outside the
+  // criterion's range (422); a validation while a criterion has no row
+  // (`repos`, {@link CriteriaIncomplete}); a release while a live
+  // repository is not validated (`repos`, {@link ProjectReleaseRefusal}).
+  "points_out_of_range",
+  "criteria_incomplete",
+  "not_validated",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
@@ -1262,6 +1269,8 @@ export type ProjectUnassigned = z.infer<typeof ProjectUnassigned>;
 export const ProjectReleaseRefusal = z.discriminatedUnion("error", [
   z.object({ error: z.literal("not_frozen"), message: z.string(), live: z.number().int(), frozen: z.number().int() }),
   z.object({ error: z.literal("to_verify"), message: z.string(), repos: z.array(z.uuid()) }),
+  // ADR-106 §8: a project graded by criteria, while a live repository is not validated.
+  z.object({ error: z.literal("not_validated"), message: z.string(), repos: z.array(z.uuid()) }),
 ]);
 export type ProjectReleaseRefusal = z.infer<typeof ProjectReleaseRefusal>;
 
@@ -1538,3 +1547,91 @@ export const ProjectRepoCriteria = z.object({
     .nullable(),
 });
 export type ProjectRepoCriteria = z.infer<typeof ProjectRepoCriteria>;
+
+// ---------------------------------------------------------- the grading screen (ADR-106 §8)
+
+/** `/app/api/projects/:id/repos/:rid/criteria/:criterionId`: one criterion of one repository. */
+export const ProjectCriterionParams = ProjectRepoParams.extend({ criterionId: z.string().min(1).max(300) });
+export type ProjectCriterionParams = z.infer<typeof ProjectCriterionParams>;
+
+/**
+ * `PUT /app/api/projects/:id/repos/:rid/criteria/:criterionId` (ADR-106
+ * §8): a teacher's points for one criterion, with a rationale (plain text,
+ * never rendered as markup; none given keeps the rationale of the row it
+ * replaces). Written as a `manual` row, still `proposed`: a teacher's edit
+ * is not a validation. `points` within the criterion's range
+ * — `[max, 0]` for a penalty, `[0, bonus]` for a bonus, `[0, max]` otherwise
+ * — else `422 points_out_of_range`; an unknown criterion is a 404; `409
+ * not_criteria`, and `409 not_frozen` before the repository's definitive
+ * freeze. Answers the repository's {@link ProjectGradingRepo}.
+ */
+export const CriterionGradeWrite = z.strictObject({
+  points: z.number().min(-1000).max(1000),
+  rationale: z.string().max(4000).optional(),
+});
+export type CriterionGradeWrite = z.infer<typeof CriterionGradeWrite>;
+
+/**
+ * Where a repository's validation stands (`repoValidation` of
+ * `@quiz/domain`): validated when every criterion of the snapshot has a
+ * validated row; `missing` the criteria with no row (a teacher-only one
+ * waits for a teacher), `proposed` those Validate marks validated.
+ */
+export const RepoValidation = z.object({ validated: z.boolean(), missing: z.array(z.string()), proposed: z.array(z.string()) });
+export type RepoValidation = z.infer<typeof RepoValidation>;
+
+/**
+ * One repository of the grading screen — and the answer of `GET
+ * …/repos/:rid/criteria`, the same computation: its criteria table and last
+ * evidence ({@link ProjectRepoCriteria}), whose it is, frozen or not, its
+ * validation and, once validated, its criteria total (`criteriaScore`).
+ */
+export const ProjectGradingRepo = ProjectRepoCriteria.extend({
+  id: z.uuid(),
+  /** The student's name, or the group's. */
+  label: z.string(),
+  group: z.boolean(),
+  /** Frozen for good: its criteria can be graded and validated. */
+  frozen: z.boolean(),
+  validation: RepoValidation,
+  total: z.object({ points: z.number(), max: z.number() }).nullable(),
+});
+export type ProjectGradingRepo = z.infer<typeof ProjectGradingRepo>;
+
+/**
+ * `GET /app/api/projects/:id/grading` (ADR-106 §8, staff only, N-SEC-20):
+ * the grading screen — every live student or group repository (a staff
+ * test repository excepted, ADR-077). `409 not_criteria` for a project not
+ * graded by criteria.
+ */
+export const ProjectGradingView = z.object({
+  project: z.object({
+    id: z.uuid(),
+    classroomId: z.uuid(),
+    name: z.string(),
+    deadlineAt: z.iso.datetime(),
+  }),
+  repos: z.array(ProjectGradingRepo),
+});
+export type ProjectGradingView = z.infer<typeof ProjectGradingView>;
+
+/** The `422 points_out_of_range` body of a teacher's points: the criterion's range, which the field says. */
+export const PointsOutOfRange = z.object({ error: z.literal("points_out_of_range"), message: z.string(), min: z.number(), max: z.number() });
+export type PointsOutOfRange = z.infer<typeof PointsOutOfRange>;
+
+/** `POST /app/api/projects/:id/validate` (ADR-106 §8), 202: the repositories this bulk validation validated. */
+export const ProjectValidated = z.object({ validated: z.number().int().nonnegative() });
+export type ProjectValidated = z.infer<typeof ProjectValidated>;
+
+/**
+ * The `409 criteria_incomplete` body of a validation (`POST …/repos/:rid/
+ * validate` and `POST …/validate`): each repository with the criteria that
+ * have no row — a teacher-only criterion is written by a teacher, 0
+ * included, never by default. Nothing was validated.
+ */
+export const CriteriaIncomplete = z.object({
+  error: z.literal("criteria_incomplete"),
+  message: z.string(),
+  repos: z.array(z.object({ repoId: z.uuid(), missing: z.array(z.string()) })),
+});
+export type CriteriaIncomplete = z.infer<typeof CriteriaIncomplete>;

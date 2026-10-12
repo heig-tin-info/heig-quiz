@@ -41,12 +41,14 @@ import type { Db } from "../../db/client.js";
 import { projectRepos, projects } from "../../db/schema.js";
 import { notFoundError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
+import { unvalidatedRepos } from "./criterionGrades.js";
 import { isLive, releaseCounts, repoForUpdate } from "./deadline.js";
-import { releasableScore, repoScores, slotRuns, teacherRunMax } from "./detail.js";
+import { releasableScore, repoScores, teacherRunMax } from "./detail.js";
 import { ProjectError } from "./errors.js";
 import { repoMembers } from "./groupRepos.js";
 import { groupSyncOwed } from "./groupResync.js";
 import { studentRepos, type RepoRow } from "./repos.js";
+import { scoreFacts } from "./scores.js";
 
 /** The teacher's score as the audit records it. */
 const teacherScore = (repo: RepoRow) =>
@@ -70,7 +72,7 @@ export async function overrideScore(
     const { project, repo } = await repoForUpdate(tx, projectId, repoId);
     if (!projectGraded(project.gradingMode)) throw new ProjectError("grading_none", "The project is not graded");
     if (repo.frozenAt === null) throw new ProjectError("not_frozen", "A score can be set once the repository's deadline and grace have passed");
-    const runs = await slotRuns(tx, [repo]);
+    const facts = await scoreFacts(tx, [repo]);
     let values: Partial<RepoRow>;
     if (body.points === null) {
       values = { teacherPoints: null, teacherMax: null, teacherComment: null, teacherGradedBy: null, teacherGradedAt: null };
@@ -78,7 +80,7 @@ export async function overrideScore(
       // The scored run's maximum is the score's; none (a run to verify
       // included, F-PROJ-08): the teacher gives their own (`teacherRunMax`,
       // the rule the page's `scores.scoreMax` reads too).
-      const max = teacherScoreMax(body.points, body.max, teacherRunMax(repo, runs));
+      const max = teacherScoreMax(body.points, body.max, teacherRunMax(repo, facts));
       if ("refusal" in max) throw new ProjectError(max.refusal);
       values = {
         teacherPoints: body.points,
@@ -96,7 +98,7 @@ export async function overrideScore(
       subjectId: repo.id,
       payload: { before: teacherScore(repo), after: teacherScore(updated!) },
     });
-    return repoScores(project, updated!, runs);
+    return repoScores(project, updated!, facts);
   });
 }
 
@@ -106,7 +108,9 @@ export async function overrideScore(
  * (`grading_none`), while a live repository is not frozen for good, or
  * none is (`not_frozen`), while a confirmed *Resync with the set* is not
  * fully applied (`group_sync_pending`, ADR-070's R2: who is in which group,
- * hence whose score it is, is still moving), and while a LIVE repository's final score rests on
+ * hence whose score it is, is still moving), graded by criteria while a
+ * live repository is not validated (`not_validated`, ADR-106 §8: the body
+ * names them), and while a LIVE repository's final score rests on
  * a run to verify (`to_verify`, F-PROJ-08: a score captured under a
  * suspended protection or on a restored head is released only once the
  * teacher's score settles it; the body names the repositories). A non-live
@@ -127,8 +131,17 @@ export async function releaseProject(db: Db, projectId: string, actor: AuditActo
     if (!scoresFinal({ gradingMode: project.gradingMode, ...counts, unverified: 0 })) {
       throw new ProjectError("not_frozen", "The scores are final once every repository's deadline and grace have passed", counts);
     }
-    const runs = await slotRuns(tx, repos);
-    const finals = repos.map((repo) => ({ repo, final: repoScores(project, repo, runs).scores.final }));
+    const facts = await scoreFacts(tx, repos);
+    // Graded by criteria (ADR-106 §8, F-PROJ-26): every live repository validated first.
+    const unvalidated = unvalidatedRepos(
+      project,
+      repos.filter((repo) => isLive(repo, project)),
+      facts.criteria,
+    );
+    if (unvalidated.length > 0) {
+      throw new ProjectError("not_validated", "Every repository's criteria are validated before the release", { repos: unvalidated });
+    }
+    const finals = repos.map((repo) => ({ repo, final: repoScores(project, repo, facts).scores.final }));
     // Over the live repositories only: a non-live one (deleted, or of an
     // archived project) never freezes, so the teacher could never settle its
     // score to verify — it is released as no score (`releasableScore`).

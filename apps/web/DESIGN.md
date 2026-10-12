@@ -2019,6 +2019,13 @@ the folded Settings.
   settings are the form above.
 - Archived: every write disabled; the figures still count its repositories and
   still filter the table. Group mode: counts per group.
+- **Graded by criteria** (ADR-106 §8): **Grade** is the header's primary
+  while a frozen repository waits for its validation. Its screen
+  (`project/grading/`) is the evaluation grading screen's grammar, one
+  repository at a time: the shared `StepBar`, the evidence line with the one
+  primary (Validate → Next → Release, a `HeldButton` while held), then five
+  columns — criterion (rationale folded, plain text), max, points (an `sm`
+  number input bounded to the range), source, state. Row cards on a phone.
 
 ## The pool's concept heat (Concepts tab, "Heat")
 

@@ -186,6 +186,7 @@ describe("ROUTES", () => {
     classroomJournal: { view: "classroomJournal", id: "c-1", path: "10-semaine-1/10-pointeurs.md" },
     classroomGrades: { view: "classroomGrades", id: "c-1" },
     project: { view: "project", id: "p-1" },
+    projectGrading: { view: "projectGrading", id: "p-1" },
     classroomGroups: { view: "classroomGroups", id: "c-1" },
     groupSet: { view: "groupSet", classroomId: "c-1", id: "s-1" },
     projectNew: { view: "projectNew", classroomId: "c-1" },
@@ -282,6 +283,7 @@ describe("ROUTES", () => {
       pollModerate: "polls",
       admin: "admin",
       project: "activities",
+      projectGrading: "activities",
     });
     const unlit = ROUTE_VIEWS.filter((v) => lit[v] === null).sort();
     expect(unlit).toEqual(
@@ -357,6 +359,7 @@ describe("the classroom merge's routes", () => {
       ],
       [{ view: "classroomGrades", id: "c-1" }, "/classrooms/c-1/grades"],
       [{ view: "project", id: "p-1" }, "/projects/p-1"],
+      [{ view: "projectGrading", id: "p-1" }, "/projects/p-1/grading"],
       [{ view: "classroomGroups", id: "c-1" }, "/classrooms/c-1/groups"],
       [{ view: "groupSet", classroomId: "c-1", id: "s-1" }, "/classrooms/c-1/groups/s-1"],
       [{ view: "projectNew", classroomId: "c-1" }, "/classrooms/c-1/projects/new"],

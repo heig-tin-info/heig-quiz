@@ -42,22 +42,24 @@ import {
   type ProjectSlotScore,
   type ProjectStudent,
 } from "@quiz/contracts";
-import { changedAfterRelease, projectPhase, projectPrimaryAction, resolveFinalScore, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
+import { changedAfterRelease, projectPhase, projectPrimaryAction, reviewState, scoreGrade, type ProjectScale } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
-import type { Db, Tx } from "../../db/client.js";
-import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, projectGroups, projectRepos, users } from "../../db/schema.js";
+import type { Db } from "../../db/client.js";
+import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, projectGroups, users } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
 import { countedReceipts, repoCommitCount } from "./commits.js";
+import { unvalidatedRepos } from "./criterionGrades.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
 import { reposWithAccessToRevoke } from "./groupCopy.js";
 import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
 import { studentRepos, type RepoRow } from "./repos.js";
+import { finalOf, scoreFacts, slots, type RunRow, type ScoreFacts } from "./scores.js";
 import { projectSyncState, repoSyncViews } from "./sync.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
@@ -66,7 +68,6 @@ export const LIVE_CONCURRENCY = 8;
 /** How long a page view gives the live state, the installation's token included. */
 export const LIVE_BUDGET_MS = 1_500;
 
-type RunRow = typeof projectGradeRuns.$inferSelect;
 /** The repository's `deadline` row of the dispatch ledger (F-PROJ-11, M3-05b). */
 type DispatchRow = { sha: string; dispatchedAt: Date | null };
 
@@ -169,15 +170,6 @@ function liveView(read: LiveRead | undefined): ProjectRepoLive | null {
   return { commitCount, checksPassed, checksTotal, stale: read.stale };
 }
 
-/** The runs filling the three slots of `repos`, by id (M3-08b: shared with the score's write). */
-export async function slotRuns(db: Db | Tx, repos: readonly RepoRow[]): Promise<Map<string, RunRow>> {
-  const ids = repos.flatMap((repo) =>
-    [repo.currentGradeRunId, repo.frozenGradeRunId, repo.reviewGradeRunId].filter((id): id is string => id !== null),
-  );
-  if (ids.length === 0) return new Map();
-  return new Map((await db.select().from(projectGradeRuns).where(inArray(projectGradeRuns.id, ids))).map((r) => [r.id, r]));
-}
-
 /** The `deadline` ledger rows of `repoIds`, by repository: the final review's state (M3-05b). */
 async function finalDispatches(db: Db, repoIds: string[]): Promise<Map<string, DispatchRow>> {
   if (repoIds.length === 0) return new Map();
@@ -193,19 +185,13 @@ async function finalDispatches(db: Db, repoIds: string[]): Promise<Map<string, D
  * release: the three slots, the teacher's score with the maximum it was
  * written with, the final score resolved and graded by the project's scale,
  * the release's snapshot. The one computation behind the page's rows and
- * the score's write (M3-08b); `runs` holds the repository's slot runs
- * ({@link slotRuns}).
+ * the score's write (M3-08b); `facts` holds the repository's slot runs and
+ * criteria standing ({@link scoreFacts}).
  */
-export function repoScores(project: ProjectRow, repo: RepoRow, runs: Map<string, RunRow>): ProjectRepoScores {
+export function repoScores(project: ProjectRow, repo: RepoRow, facts: ScoreFacts): ProjectRepoScores {
   const scale = project.gradingScale;
-  const [current, frozen, review] = slots(repo, runs);
-  const final = resolveFinalScore({
-    teacherPoints: repo.teacherPoints,
-    teacherMax: repo.teacherMax,
-    reviewScore: review ?? null,
-    frozenScore: frozen ?? null,
-    score: current ?? null,
-  });
+  const [current, frozen, review] = slots(repo, facts.runs);
+  const final = finalOf(repo, facts);
   const released = project.releasedAt !== null;
   return {
     scores: {
@@ -217,7 +203,7 @@ export function repoScores(project: ProjectRow, repo: RepoRow, runs: Map<string,
           ? null
           : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment, gradedAt: isoOrNull(repo.teacherGradedAt) },
       final: final && { ...final, grade: scoreGrade(final.points, final.max, scale) },
-      scoreMax: teacherRunMax(repo, runs),
+      scoreMax: teacherRunMax(repo, facts),
     },
     released: released ? { points: repo.releasedPoints, max: repo.releasedMax } : null,
     changedAfterRelease: changedAfterRelease(released, releasableScore(project, repo, final), {
@@ -230,15 +216,15 @@ export function repoScores(project: ProjectRow, repo: RepoRow, runs: Map<string,
 /**
  * The maximum a teacher's score is held to (`teacherScoreMax`, F-PROJ-14,
  * product owner 2026-10-02): that of the run the final score would come
- * from without the teacher — the review's, else the frozen, else the
- * current — unless that run is to verify (F-PROJ-08), which is no scored
- * run at all: null, and the teacher gives their own maximum. ONE rule for
- * the write (`grades.ts`) and for the page (`scores.scoreMax`, which the
- * sheet's form reads to show the maximum field, M3-12b).
+ * from without the teacher — the validated criteria's (ADR-106 §7), else
+ * the review's, else the frozen, else the current — unless that run is to
+ * verify (F-PROJ-08), which is no scored run at all: null, and the teacher
+ * gives their own maximum. ONE rule for the write (`grades.ts`) and for the
+ * page (`scores.scoreMax`, which the sheet's form reads to show the maximum
+ * field, M3-12b).
  */
-export function teacherRunMax(repo: RepoRow, runs: Map<string, RunRow>): number | null {
-  const [current, frozen, review] = slots(repo, runs);
-  const scored = resolveFinalScore({ reviewScore: review ?? null, frozenScore: frozen ?? null, score: current ?? null });
+export function teacherRunMax(repo: RepoRow, facts: ScoreFacts): number | null {
+  const scored = finalOf({ ...repo, teacherPoints: null, teacherMax: null }, facts);
   return scored && !scored.toVerify ? scored.max : null;
 }
 
@@ -255,11 +241,6 @@ export function releasableScore<T extends { toVerify: boolean }>(project: Projec
   return final !== null && final.toVerify && !isLive(repo, project) ? null : final;
 }
 
-/** The repository's three slot runs — current, frozen, review — from {@link slotRuns}'s map. */
-function slots(repo: RepoRow, runs: Map<string, RunRow>): (RunRow | undefined)[] {
-  return [repo.currentGradeRunId, repo.frozenGradeRunId, repo.reviewGradeRunId].map((id) => (id === null ? undefined : runs.get(id)));
-}
-
 /** The final review's state of a repository, from its row and its ledger row (`reviewState`, `@quiz/domain`). */
 function reviewView(project: ProjectRow, repo: RepoRow, dispatch: DispatchRow | undefined): ProjectRepoReview {
   const state = reviewState({ ...repo, gradingMode: project.gradingMode, dispatch: dispatch ?? null });
@@ -270,7 +251,7 @@ function reviewView(project: ProjectRow, repo: RepoRow, dispatch: DispatchRow | 
 function repoView(
   project: ProjectRow,
   repo: RepoRow,
-  runs: Map<string, RunRow>,
+  scored: ScoreFacts,
   facts: RunFacts | undefined,
   dispatch: DispatchRow | undefined,
   sync: ProjectRepoSync,
@@ -278,7 +259,8 @@ function repoView(
   commits: number,
   toRevoke: ReadonlySet<string>,
 ): ProjectRepoView {
-  const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, runs);
+  const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, scored);
+  const runs = scored.runs;
   return {
     ...repoDeadlineState(repo, project),
     provisionStatus: repo.provisionStatus,
@@ -369,8 +351,8 @@ export async function projectDetail(
   const tests = roster.flatMap((s) => (s.staff ? [seats.of(project.id, s.enrollmentId)] : [])).filter((r) => r !== null);
   const shownRepos = [...repos, ...tests];
   const repoIds = shownRepos.map((repo) => repo.id);
-  const [runs, facts, dispatches, syncs, receipts] = await Promise.all([
-    slotRuns(db, shownRepos),
+  const [scored, facts, dispatches, syncs, receipts] = await Promise.all([
+    scoreFacts(db, shownRepos),
     runFacts(db, repoIds),
     // The CI final review's ledger only: a `criteria` project's `deadline` rows are its platform pass (ADR-106 §6).
     project.gradingMode === "auto" ? finalDispatches(db, repoIds) : new Map<string, DispatchRow>(),
@@ -386,7 +368,7 @@ export async function projectDetail(
   const views = new Map(
     shownRepos.map((repo) => [
       repo.id,
-      repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), repoCommitCount(project, repo, receipts), toRevoke),
+      repoView(project, repo, scored, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), repoCommitCount(project, repo, receipts), toRevoke),
     ]),
   );
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));
@@ -444,13 +426,15 @@ export async function projectDetail(
   // ONE predicate for the primary action and the page's Sync button: the sync's own `ahead` (M3-07).
   const sync = projectSyncState(project, repos, now);
   // The readiness of the release, as the primary action and the phase read it (ADR-104); the lists count the same
-  // repositories (`STUDENT_REPO`, `repos.ts`) through `resolveFinalScore` too (`phaseCounts`, `views.ts`).
+  // repositories (`STUDENT_REPO`, `repos.ts`) through `finalOf` too (`phaseCounts`, `views.ts`).
   const readiness = {
     state: project.state,
     gradingMode: project.gradingMode,
     ...counts,
     // Over the live repositories only: a non-live one never freezes, so its score to verify is released as none.
     unverified: liveRepos.filter((repo) => views.get(repo.id)!.scores.final?.toVerify === true).length,
+    // Graded by criteria: the live repositories still to validate (ADR-106 §8), what the release waits for.
+    unvalidated: unvalidatedRepos(project, liveRepos, scored.criteria).length,
     released: project.releasedAt !== null,
   };
   return {

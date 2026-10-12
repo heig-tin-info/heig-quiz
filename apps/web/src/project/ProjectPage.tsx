@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Archive, ArchiveRestore, Rocket, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, ClipboardCheck, Rocket, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -334,6 +334,11 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
                 loading={publish.isPending}
               >
                 <Rocket /> {t("question.publish")}
+              </Button>
+            ) : project.primaryAction === "grade" ? (
+              // ADR-106 §8: graded by criteria, every repository frozen, some still to validate.
+              <Button data-coach="project.primary" onClick={() => navigate({ view: "projectGrading", id: project.id })}>
+                <ClipboardCheck /> {t("project.grading.open")}
               </Button>
             ) : project.primaryAction === "release" ? (
               <Button
