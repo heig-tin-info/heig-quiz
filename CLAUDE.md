@@ -147,7 +147,12 @@ internal bridge).
     option relaxed says so in the docs, not in a comment. **Nothing from the
     host is mounted**: the sources travel in on `podman exec`'s stdin and
     `/work` is a tmpfs. A file name from a request is sanitized to a name —
-    never a path.
+    never a path. The `project` action (ADR-106 §3) receives ONE
+    size-capped tar on stdin and unpacks it inside the tmpfs with every
+    entry sanitized: relative, no `..`, no absolute path, no symbolic or
+    hard link, no device — else the whole archive is refused; its commands
+    are fixed argv arrays, never a shell string; on the way out a link is
+    never followed and only regular text files are returned.
 13. **Podman in `--remote`**, always
     `podman --remote --url unix://<socket> …`. Without `--remote` the binary
     silently falls back to local rootless mode and every isolation test
@@ -165,8 +170,8 @@ internal bridge).
     ADR-016 amendment of 2026-10-11).
 14. **The source sent to the runner is rebuilt server-side** from the
     template and the student's editable regions — never taken as-is. A
-    project's source is fetched by the server at the frozen sha, never
-    uploaded by a client.
+    project's source is fetched by the server at a commit the server chose
+    from its push receipts (ADR-106 §3), never uploaded by a client.
 
 ### GitHub invariant (ADR-035, N-SEC-16..18)
 
@@ -180,7 +185,10 @@ internal bridge).
     installation tokens live in memory only; no token is ever stored nor
     logged, and the redaction knows `x-access-token:` and `gh?_` (M1-02);
     a token is never in a URL, a file or git's argv: `gitRunner({ token })`
-    hands it to git through the environment only; the user token of an account
+    hands it to git through the environment only; a repository's tarball
+    redirects to a `codeload` URL carrying a `token=`, which is never
+    logged, stored, nor put in an error payload, and the redaction knows
+    `token=` (ADR-106 §3, card L-02b); the user token of an account
     link reads the account once and is discarded (M2-03). Under
     `NODE_ENV=production`, `config.ts` refuses to start with an App id whose
     key file is unreadable, a webhook secret under 32 characters, no App

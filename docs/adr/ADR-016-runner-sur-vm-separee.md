@@ -4,6 +4,11 @@
 
 Accepted (2026-09-21, first production deployment).
 
+**Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md)
+§3** (scope: point 2, what the runner executes; product owner): a second
+action, `project`, with its lab image; the flags of `containerArgs` do not
+change and invariants 10–14 hold, invariant 12 gaining the archive rule.
+
 **Addendum (2026-09-30, ADR-035, the classroom merge):** the code VM
 (`code.chevallier.io`, "the engine VM") also hosts the online workspace
 portal (`apps/codespace`, ADR-047), which already runs there natively
