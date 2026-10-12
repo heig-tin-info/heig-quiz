@@ -4,7 +4,8 @@
  * refusals, and the rules read from it — who proposes each criterion's
  * points ({@link classifyCriterion}), a repository's total
  * ({@link criteriaTotals}, StudentScore's `_clamp`), and what the grading
- * workflow says ({@link workflowTestsCriterion}, {@link workflowNeedsNetwork}).
+ * workflow says ({@link workflowTestsCriterion}), and whether a command the
+ * platform runs needs the network ({@link commandNeedsNetwork}).
  * No YAML here: the parser is `./criteriaParse.ts`
  * (`@quiz/domain/criteriaParse`), so these stay out of the web's bundle.
  */
@@ -120,24 +121,21 @@ export function workflowTestsCriterion(workflowText: string): string | null {
   return TESTS_CRITERION_INPUT.exec(workflowText)?.[1] ?? null;
 }
 
-/** The workflow inputs that run commands on the CI's runner (StudentScore's reusable workflow). */
-const COMMAND_INPUT = /^\s*(?:build-command|test-command|review-test-command)\s*:\s*(.*)$/gm;
-/** A non-empty `apt-packages:` input. */
-const APT_PACKAGES_INPUT = /^\s*apt-packages\s*:\s*["']?[^\s"'#]/m;
-/** What needs the network: a package manager installing something. */
-const INSTALLS = /\bpip3?\s+install\b|\bapt-get\b|\bapt\s/;
+/** The programs that fetch from the network: package managers, downloaders, git. */
+const NETWORK_PROGRAMS = new Set(["pip", "pip3", "apt", "apt-get", "apk", "npm", "pnpm", "yarn", "curl", "wget", "git"]);
 
 /**
- * Whether a repository's grading workflow needs the network to build or
- * test (ADR-106 §1): a non-empty `apt-packages` input, or a `pip install`,
- * an `apt-get` or an `apt` in its build, test or review-test command. The
- * platform's evidence run has none (`--network none`), so such a project
- * cannot be graded by criteria until its workflow drops it.
+ * Whether a command the platform runs needs the network (ADR-106 §1): its
+ * program — the argv's first word, by its base name — is a package manager,
+ * a downloader or git, or it is `python -m pip`. The platform's evidence
+ * run has none (`--network none`), so a project's build or test command
+ * must not be one; the CI's own workflow may install what it needs.
  */
-export function workflowNeedsNetwork(workflowText: string): boolean {
-  if (APT_PACKAGES_INPUT.test(workflowText)) return true;
-  for (const [, command] of workflowText.matchAll(COMMAND_INPUT)) if (INSTALLS.test(command!)) return true;
-  return false;
+export function commandNeedsNetwork(argv: readonly string[]): boolean {
+  // An argv has at least one word (`ProjectArgv`).
+  const program = argv[0]!.split("/").pop()!;
+  if (NETWORK_PROGRAMS.has(program)) return true;
+  return /^python[0-9.]*$/.test(program) && argv[1] === "-m" && (argv[2] === "pip" || argv[2] === "pip3");
 }
 
 // ---------------------------------------------------------------- classification and totals

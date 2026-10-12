@@ -8,7 +8,8 @@
  *   snapshot and answers `409 criteria_invalid` with its errors;
  * - the mode switch: on a draft, on a locked project not released (the
  *   pilot), never on a published one, never after the release; refused
- *   with the parser's errors when the file is missing or invalid; audited;
+ *   with the parser's errors when the file is missing or invalid, and when
+ *   the platform's build or test command needs the network; audited;
  * - the settings validated (argv without a shell, relative outputs);
  * - a sync of a project in `criteria` mode loads the file again;
  * - the routes are the project's staff's (the 404 of a missing project
@@ -39,6 +40,7 @@ const WORKFLOW = [
   "      tests-criterion: git.commits",
   "",
 ].join("\n");
+const LABO_00_WORKFLOW = readFileSync(new URL("../../../../../packages/domain/fixtures/criteria/labo-00-grading.yml", import.meta.url), "utf8");
 const SMALL = "schema_version: 2\ncriteria:\n  tests:\n    pass: {description: Tests, awarded_points: 0, max_points: 4}\n";
 
 const key = appKey();
@@ -201,10 +203,31 @@ describe("the mode switch (ADR-106 §1)", () => {
     expect(await auditOf(project.id, "project.grading_mode")).toEqual([]);
   });
 
-  it("refuses a source whose grading workflow needs the network", async () => {
-    const { project } = await draft({ "criteria.yml": SMALL, ".github/workflows/grading.yml": `${WORKFLOW}      test-command: pip install pytest && pytest\n` });
+  it("judges the network on the platform's commands, never on the CI's workflow", async () => {
+    // Labo 00's real workflow installs pytest on the CI: the default commands need nothing.
+    const { project } = await draft({ "criteria.yml": LABO_00, ".github/workflows/grading.yml": LABO_00_WORKFLOW });
     const res = await toCriteria(project.id);
-    expect(CriteriaInvalid.parse(res.json()).errors).toEqual([{ path: ".github/workflows/grading.yml", code: "workflow_needs_network" }]);
+    expect(res.statusCode, res.body).toBe(200);
+    expect((await rowOf(project.id)).gradingMode).toBe("criteria");
+  });
+
+  it("refuses a switch whose build or test command needs the network, and a patch setting one", async () => {
+    const { project } = await draft({ "criteria.yml": SMALL });
+    const pip = ["pip", "install", "pytest"];
+    const inPatch = await call("PATCH", url(project.id), teacher.headers, { gradingMode: "criteria", testCommand: pip });
+    expect(inPatch.statusCode).toBe(409);
+    expect(CriteriaInvalid.parse(inPatch.json()).errors).toEqual([{ path: "testCommand", code: "command_needs_network" }]);
+
+    // A setting stored before the rule: the switch reads it.
+    await server.app.db.update(projects).set({ buildCommand: ["wget", "x"] }).where(eq(projects.id, project.id));
+    const stored = await toCriteria(project.id);
+    expect(CriteriaInvalid.parse(stored.json()).errors).toEqual([{ path: "buildCommand", code: "command_needs_network" }]);
+    expect((await rowOf(project.id)).gradingMode).toBe("auto");
+    expect(await snapshotOf(project.id)).toBeUndefined();
+
+    const setting = await call("PATCH", url(project.id), teacher.headers, { testCommand: pip });
+    expect([setting.statusCode, setting.json()]).toEqual([422, expect.objectContaining({ error: "command_needs_network", field: "testCommand" })]);
+    expect((await rowOf(project.id)).testCommand).toBeNull();
   });
 
   it("refuses a snapshot leaving a checkpoint's name untagged (ADR-106 §5)", async () => {

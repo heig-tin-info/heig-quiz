@@ -15,7 +15,7 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, inArray, lt, or, isNotNull, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
-import { effectiveTestsCriterion, PROJECT_CRITERIA_DEFAULTS } from "@quiz/contracts";
+import { effectiveCommand, effectiveTestsCriterion, PROJECT_CRITERIA_DEFAULTS } from "@quiz/contracts";
 import {
   PROJECT_ARCHIVE_MAX_BYTES,
   PROJECT_OUTPUTS_MAX,
@@ -223,8 +223,8 @@ async function run(app: FastifyInstance, project: ProjectRow, archive: Uint8Arra
         archive: Buffer.from(archive.buffer, archive.byteOffset, archive.byteLength).toString("base64"),
         image: "lab-c",
         commands: {
-          build: project.buildCommand ?? [...PROJECT_CRITERIA_DEFAULTS.buildCommand],
-          test: project.testCommand ?? [...PROJECT_CRITERIA_DEFAULTS.testCommand],
+          build: effectiveCommand(project, "buildCommand"),
+          test: effectiveCommand(project, "testCommand"),
         },
         outputs,
       }),

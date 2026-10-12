@@ -11,22 +11,31 @@
  * only for a project in `criteria` mode — after a publication and after a
  * sync of the source (`project.criteria_reload`, counts only). Refused
  * `409 criteria_invalid` with closed error codes when the file is missing,
- * too large or invalid, or when the grading workflow needs the network
- * (§1); `409 checkpoint_untagged` when a checkpoint's name would tag no
- * criterion (§5). A refused file leaves the last snapshot as it is. Staff
- * only: neither the file, nor the source's name, ever reaches a student
- * (N-SEC-20).
+ * too large or invalid, or — at the switch — when the project's build or
+ * test command needs the network (§1, `commandNeedsNetwork`; the CI's own
+ * workflow may install what it needs); `409 checkpoint_untagged` when a
+ * checkpoint's name would tag no criterion (§5). A refused file leaves the
+ * last snapshot as it is. Staff only: neither the file, nor the source's
+ * name, ever reaches a student (N-SEC-20).
  */
 import type { FastifyBaseLogger } from "fastify";
 import { and, eq, isNull } from "drizzle-orm";
 
-import { effectiveTestsCriterion, type CriteriaError, type ProjectCriteriaView } from "@quiz/contracts";
+import {
+  COMMAND_SETTINGS,
+  effectiveCommand,
+  effectiveTestsCriterion,
+  type CommandSetting,
+  type CriteriaError,
+  type ProjectCriteriaView,
+  type ProjectPatch,
+} from "@quiz/contracts";
 import {
   classifyCriterion,
+  commandNeedsNetwork,
   criteriaTotals,
   projectFieldRefusal,
   untaggedCheckpoints,
-  workflowNeedsNetwork,
   workflowTestsCriterion,
   type ParsedCriteria,
 } from "@quiz/domain";
@@ -44,7 +53,7 @@ import { lifeOf, type ProjectRow } from "./views.js";
 
 /** The file the platform reads, at the repository's root. */
 export const CRITERIA_FILE = "criteria.yml";
-/** The student repositories' grading workflow: its `tests-criterion` pre-fills the setting, its commands must not need the network. */
+/** The student repositories' grading workflow: its `tests-criterion` pre-fills the setting. */
 export const GRADING_WORKFLOW = ".github/workflows/grading.yml";
 /** A criteria file is a few kilobytes; anything near this is not one. */
 const MAX_BYTES = 256 * 1024;
@@ -69,8 +78,8 @@ const refused = (code: CriteriaError["code"], path = CRITERIA_FILE): CriteriaRea
 /**
  * `criteria.yml` at the head of the project's first branch, in its
  * distribution repository (its source's while it has none), parsed, and
- * the grading workflow beside it. A missing branch or file, one too large,
- * or a workflow that needs the network is a refusal like a parse error;
+ * the grading workflow beside it. A missing branch or file, or one too
+ * large, is a refusal like a parse error;
  * GitHub failing otherwise throws. `409 app_not_installed` when the App no
  * longer acts on the project's organization.
  */
@@ -102,7 +111,6 @@ export async function readCriteria(db: Db, config: AppConfig, project: ProjectRo
   if (!parsed.ok) return parsed;
   const workflow = await fileAt(GRADING_WORKFLOW);
   const text = workflow === null || workflow.tooLarge ? null : workflow.text;
-  if (text !== null && workflowNeedsNetwork(text)) return refused("workflow_needs_network", GRADING_WORKFLOW);
   return {
     ok: true,
     fileSha: file.sha,
@@ -110,6 +118,18 @@ export async function readCriteria(db: Db, config: AppConfig, project: ProjectRo
     criteria: parsed.criteria,
     workflowTestsCriterion: text === null ? null : workflowTestsCriterion(text),
   };
+}
+
+/**
+ * The build and test settings whose effective command — the setting, else
+ * the default — needs the network (ADR-106 §1): the platform's evidence run
+ * has none.
+ */
+export function networkCommands(settings: Pick<ProjectRow, CommandSetting>): CriteriaError[] {
+  return COMMAND_SETTINGS.filter((field) => commandNeedsNetwork(effectiveCommand(settings, field))).map((field) => ({
+    path: field,
+    code: "command_needs_network",
+  }));
 }
 
 /** `409 criteria_invalid`, the errors in its body. */
@@ -225,18 +245,26 @@ export async function reloadCriteria(db: Db, config: AppConfig, project: Project
  * read before the switch's transaction: null when the patch does not switch
  * it. The switch's own refusal is judged first (`projectFieldRefusal`), so a
  * published project answers `not_draft`, not the state of its file; then
- * `criteria_invalid` or `checkpoint_untagged`. Audited by the switch itself.
+ * `criteria_invalid` — a build or test command, as the patch leaves it, that
+ * needs the network (`command_needs_network`, its path the setting's name),
+ * or the file — or `checkpoint_untagged`. Audited by the switch itself.
  */
 export async function criteriaForSwitch(
   db: Db,
   config: AppConfig,
   project: ProjectRow,
-  to: ProjectRow["gradingMode"] | undefined,
+  patch: Pick<ProjectPatch, "gradingMode" | "buildCommand" | "testCommand">,
   now: Date,
 ): Promise<CriteriaSnapshot | null> {
+  const to = patch.gradingMode;
   if (to !== "criteria" || project.gradingMode === "criteria") return null;
   const refusal = projectFieldRefusal(lifeOf(project), "gradingMode", now, to);
   if (refusal) throw new ProjectError(refusal, "gradingMode can no longer change");
+  const network = networkCommands({
+    buildCommand: patch.buildCommand === undefined ? project.buildCommand : patch.buildCommand,
+    testCommand: patch.testCommand === undefined ? project.testCommand : patch.testCommand,
+  });
+  if (network.length > 0) throw criteriaInvalid(network);
   return acceptable(db, project.id, await readCriteria(db, config, project), true);
 }
 
