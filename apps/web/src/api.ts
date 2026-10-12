@@ -1,8 +1,9 @@
 /** Portal API client: session cookies + double-submit CSRF header. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { CSRF_COOKIE, CSRF_HEADER, cookieName, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
+import { CSRF_COOKIE, CSRF_HEADER, IDLE_HEADER, cookieName, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
 
+import { isIdle } from "./idle";
 import { connection } from "./realtime/connection";
 
 import type { Dict } from "./i18n/en";
@@ -74,6 +75,8 @@ export async function api<T>(
   if (init.method && init.method !== "GET") {
     headers.set(CSRF_HEADER, csrfToken());
   }
+  // ADR-107: a request of an idle page is not its person's activity.
+  if (isIdle()) headers.set(IDLE_HEADER, "1");
   if (init.body instanceof Blob) {
     headers.set("content-type", init.body.type || "application/octet-stream");
   } else if (init.body instanceof FormData) {
