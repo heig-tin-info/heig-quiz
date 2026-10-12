@@ -56,6 +56,7 @@ const staffJournal = (over: Partial<JournalStaff> = {}): JournalStaff => ({
   hiddenPaths: [DRAFT],
   warningCount: 1,
   pageCount: 3,
+  files: [],
   proposedName: null,
   ...over,
 });

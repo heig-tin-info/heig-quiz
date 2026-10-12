@@ -36,6 +36,7 @@ const INSTRUCTIONS = [
   "An evaluation (exam or exercise) belongs to a classroom and may only use questions of pools linked to that classroom's course: call link_pool_to_course first.",
   "To make a new quiz (exam or exercise), create a TEMPLATE of the course with create_template, which keeps it for next year, and instantiate_template it into a classroom when the teacher wants it there; call create_evaluation only when the teacher explicitly asks for an evaluation in a classroom.",
   "Look before writing a question: call find_similar_questions with its statement and reuse a close published question (link its pool if needed) rather than duplicating it, so its exam statistics keep growing.",
+  "To write about what a classroom covered, read its journal (the course documentation) with get_journal and get_journal_page.",
   "Before writing a question, call describe_question_types with its type and follow the schema and rules exactly.",
   "Look before creating: list_courses, get_course and list_pools, so nothing is created twice. Evaluations are created as drafts; the teacher opens them from the web app. Give the teacher the returned `url` links.",
 ].join(" ");

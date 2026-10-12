@@ -451,6 +451,7 @@ describe("the student exit (invariant 4)", () => {
       "version",
       "revision",
       "pageCount",
+      "\"files\"",
     ];
     const callers: [string, Headers, string][] = [
       ["a student", student.headers, ""],

@@ -37,6 +37,12 @@ administration routes — editing an approved concept (`patchConcept`) and
 seeing any account's picture (`seesUser`) — and an endless admin token
 keeps them; neither reaches a student's work.
 
+**Amended 2026-10-12 (asked for by the product owner), scope: §C.** The
+reading tools `get_journal` and `get_journal_page` join the closed list, so
+that an assistant reads a classroom's journal; the staff journal payload
+gains `files`, each page and asset with the last change of its content —
+see the addendum at the end of §C.
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,
@@ -216,6 +222,27 @@ the pools fill with near-duplicates.
   `true` protects nothing. The steering is the tool's description,
   `create_question`'s and the handshake instructions; `modules/mcp` still
   touches no database.
+
+**Addendum of 2026-10-12 — read a classroom's journal.** An assistant
+preparing a quiz for a week of the course should read what that week
+covered, and the journal (ADR-049, ADR-057) is where it is written.
+
+- **Two read tools over the journal's own routes.** `get_journal({
+  classroomId })` is `GET /classrooms/:id/journal`, `get_journal_page({
+  classroomId, path })` is `GET /classrooms/:id/journal/pages/*`. Both load
+  the classroom through `readableClassroom` (invariant 6): a token's owner on
+  the course's staff gets the staff payload — drafts and pages not yet
+  visible included, as in their browser — and anyone else the 404 of a
+  missing classroom. Only a teacher holds a token (§A), and a teacher off
+  the staff reads nothing; the student payload stays `studentView.ts`'s
+  alone (invariant 4).
+- **The page without its HTML.** `get_journal_page` drops the rendered
+  `html`: the markdown says the same thing at a fraction of the size.
+- **When each file last changed.** The staff payload gains `files`: every
+  page and asset of the copy with its `updatedAt`, which moves only when the
+  content does (a GitHub ingestion that leaves a blob as it was keeps its
+  row's date; a Quiz-mode save stamps its own). No writing tool: the journal
+  is edited in the web app, or on GitHub.
 
 ## Consequences
 

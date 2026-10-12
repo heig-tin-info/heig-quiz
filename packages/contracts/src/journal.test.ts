@@ -137,7 +137,7 @@ describe("the student payloads (N-SEC-12)", () => {
   it("refuse the hidden paths and counts in the navigation payload", () => {
     const student: JournalStudent = { view: "student", nav: [], homePath: null };
     expect(JournalStudent.parse(student)).toEqual(student);
-    for (const extra of [{ hiddenPaths: ["a.md"] }, { warningCount: 1 }, { pageCount: 2 }, { repository: null }, { mode: "github" }]) {
+    for (const extra of [{ hiddenPaths: ["a.md"] }, { warningCount: 1 }, { pageCount: 2 }, { files: [] }, { repository: null }, { mode: "github" }]) {
       expect(JournalStudent.safeParse({ ...student, ...extra }).success).toBe(false);
     }
   });
@@ -155,6 +155,7 @@ describe("the student payloads (N-SEC-12)", () => {
       hiddenPaths: [],
       warningCount: 0,
       pageCount: 0,
+      files: [{ path: "010-a/README.md", kind: "page", updatedAt: "2026-10-12T08:00:00.000Z" }],
       proposedName: "prg1-2026-journal",
     };
     expect(Journal.parse(staff)).toEqual(staff);

@@ -147,6 +147,7 @@ describe("the classroom's Settings tab", () => {
         hiddenPaths: [],
         warningCount: 0,
         pageCount: 3,
+        files: [],
         proposedName: null,
       }),
       [`DELETE ${ROOM}?confirm=PRG1-2026`]: noContent(),

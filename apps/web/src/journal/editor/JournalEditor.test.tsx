@@ -59,6 +59,7 @@ const journal = (): JournalStaff => ({
   hiddenPaths: [],
   warningCount: 0,
   pageCount: 1,
+  files: [],
   proposedName: null,
 });
 

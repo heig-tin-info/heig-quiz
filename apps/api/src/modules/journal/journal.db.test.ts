@@ -248,6 +248,7 @@ describe("the staff read everything", () => {
       hiddenPaths: [],
       warningCount: 0,
       pageCount: 0,
+      files: [],
       proposedName: "a-journal",
     });
     // A student has no journal to read there: the 404 of a missing one.
