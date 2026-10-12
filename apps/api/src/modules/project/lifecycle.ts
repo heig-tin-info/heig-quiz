@@ -24,8 +24,9 @@ import { isDeepStrictEqual } from "node:util";
 import type { FastifyBaseLogger } from "fastify";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
-import { defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
+import { COMMAND_SETTINGS, defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
 import {
+  commandNeedsNetwork,
   patchedDraftDates,
   PROJECT_PATCH_FIELDS,
   projectFieldRefusal,
@@ -317,7 +318,8 @@ function asColumns(body: ProjectPatch): Partial<Record<ProjectPatchField, unknow
  * the patched value). A switch to `criteria` comes with the snapshot the
  * route read beforehand (`criteriaForSwitch`), stored in this transaction.
  * Audited `project.grading_mode`. A tests criterion must name a criterion
- * of the snapshot (`422 unknown_criterion`).
+ * of the snapshot (`422 unknown_criterion`); a build or test command must
+ * not need the network (`422 command_needs_network`, `commandNeedsNetwork`).
  */
 export async function patchProject(
   db: Db,
@@ -343,6 +345,12 @@ export async function patchProject(
       const ids = criteria ? criteria.criteria.leaves.map((leaf) => leaf.id) : await snapshotIds(tx, project.id);
       if (!ids?.includes(changed.testsCriterion)) {
         throw new ProjectError("unknown_criterion", "The tests criterion names no criterion of the snapshot", { field: "testsCriterion" });
+      }
+    }
+    for (const field of COMMAND_SETTINGS) {
+      const argv = body[field];
+      if (field in changed && argv && commandNeedsNetwork(argv)) {
+        throw new ProjectError("command_needs_network", "The platform runs this command without network", { field });
       }
     }
     // Leaving group mode leaves the set too, and its copy.

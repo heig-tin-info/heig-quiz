@@ -5619,7 +5619,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.criteria.error.branch_missing": "le dépôt n'a pas la branche distribuée",
   "project.criteria.error.missing_file": "la source n'a pas de criteria.yml à sa racine",
   "project.criteria.error.too_large": "le fichier dépasse 256 Ko",
-  "project.criteria.error.workflow_needs_network": "le workflow de notation installe des paquets (apt-packages, pip install, apt-get) : les tests de la plateforme tournent sans réseau",
+  "project.criteria.error.command_needs_network": "cette commande accède au réseau (pip, apt, npm, curl, git…) : la plateforme lance la compilation et les tests sans réseau",
   "project.criteria.tests.default": "Par défaut ({id})",
   "project.criteria.tests.unknown": "Le critère des tests doit être l'un des critères de criteria.yml.",
   "project.refusal.checkpointUntagged": "Le nom d'un point de contrôle ne désigne aucun critère de criteria.yml : ajoutez-le comme jalon, ou supprimez le point de contrôle.",

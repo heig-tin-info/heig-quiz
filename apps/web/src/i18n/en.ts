@@ -5632,7 +5632,7 @@ export const en = {
   "project.criteria.error.branch_missing": "the repository has no handed-out branch",
   "project.criteria.error.missing_file": "the source has no criteria.yml at its root",
   "project.criteria.error.too_large": "the file is larger than 256 KB",
-  "project.criteria.error.workflow_needs_network": "the grading workflow installs packages (apt-packages, pip install, apt-get): the platform's tests run without network",
+  "project.criteria.error.command_needs_network": "this command fetches from the network (pip, apt, npm, curl, git…): the platform runs the build and the tests without network",
   "project.criteria.tests.default": "Default ({id})",
   "project.criteria.tests.unknown": "The tests criterion must be one of the criteria of criteria.yml.",
   "project.refusal.checkpointUntagged": "A checkpoint's name tags no criterion of criteria.yml: add it as a milestone, or remove the checkpoint.",

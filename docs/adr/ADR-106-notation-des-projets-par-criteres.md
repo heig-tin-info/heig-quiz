@@ -76,7 +76,12 @@ Labo-Intersection has a CI checkpoint in flight (`mid-review`, dispatched
   `criteria.yml` (§2): the answer carries the parser's errors, with their
   paths. It is refused too, with its reason, when the source's workflow needs
   packages the lab image lacks (an `apt-packages` input, a `pip install` in
-  its commands): the evidence run has no network (§3).
+  its commands): the evidence run has no network (§3). *Amended 2026-10-12
+  (L-02g): the refusal concerns the commands the platform itself runs — the
+  project's effective `buildCommand` and `testCommand` (§2), refused at the
+  switch and on the settings' write when their program fetches from the
+  network (`pip`, `apt`, `npm`, `curl`, `git`…) — while the CI's workflow
+  may install what it needs.*
 - On a locked project, choosing `criteria` runs nothing by itself: the staff
   start the final pass by **Regrade** (§4).
 

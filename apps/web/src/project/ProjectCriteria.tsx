@@ -102,7 +102,7 @@ const ERROR_LABEL: Record<CriteriaErrorCode, keyof Dict> = {
   branch_missing: "project.criteria.error.branch_missing",
   missing_file: "project.criteria.error.missing_file",
   too_large: "project.criteria.error.too_large",
-  workflow_needs_network: "project.criteria.error.workflow_needs_network",
+  command_needs_network: "project.criteria.error.command_needs_network",
 };
 
 const KIND_TONE: Record<CriterionKind, Tone> = { automatic: "green", llm: "accent", teacher: "zinc" };
