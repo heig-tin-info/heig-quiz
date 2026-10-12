@@ -133,7 +133,9 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
     },
   });
   const regrade = useMutation({
-    mutationFn: (repoId: string) => api<ProjectRegradeAccepted>(`/app/api/projects/${id}/repos/${repoId}/regrade`, { method: "POST" }),
+    // One repository's regrade, or the whole project's (`repoId` undefined).
+    mutationFn: (repoId?: string) =>
+      api<ProjectRegradeAccepted>(`/app/api/projects/${id}${repoId ? `/repos/${repoId}` : ""}/regrade`, { method: "POST" }),
     onSuccess: async () => {
       await refresh();
       toast(t("project.grading.regrade.done"), "success");
@@ -177,6 +179,18 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
       validateRest.mutate();
     }
   };
+  const onRegradeAll = async () => {
+    const frozen = repos.filter((r) => r.frozen).length;
+    if (
+      await confirm({
+        title: t("project.grading.regradeAll.title"),
+        message: t("project.grading.regradeAll.body", { n: frozen }),
+        confirmLabel: t("project.grading.regrade.confirm"),
+      })
+    ) {
+      regrade.mutate(undefined);
+    }
+  };
   const onRegrade = async (target: ProjectGradingRepo) => {
     if (
       await confirm({
@@ -191,6 +205,7 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
   const menuItems: MenuItem[] = [
     { label: t("project.grading.validateRest"), icon: CheckCheck, onSelect: () => void onValidateRest(), disabled: left === 0 },
     ...(repo?.frozen ? [{ label: t("project.grading.regrade"), icon: RefreshCw, onSelect: () => void onRegrade(repo) }] : []),
+    ...(repos.some((r) => r.frozen) ? [{ label: t("project.grading.regradeAll"), icon: RefreshCw, onSelect: () => void onRegradeAll() }] : []),
   ];
 
   const header = (

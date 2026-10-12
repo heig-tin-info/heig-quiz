@@ -17,7 +17,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 
 import type { ProjectRegradeAccepted } from "@quiz/contracts";
 import { PROJECT_REGRADES_PER_DAY, SCHOOL_TIME_ZONE } from "@quiz/domain";
@@ -34,16 +34,24 @@ import type { RepoRow } from "./repos.js";
 import { runEvidencePass } from "./reviewPass.js";
 import type { ProjectRow } from "./views.js";
 
-/** The project's regrades today (the server's day, in the school's zone). */
-async function regradesToday(db: Db, projectId: string, now: Date): Promise<number> {
+type RegradeAction = "project.regrade" | "project_repo.regrade";
+
+/**
+ * The regrades today (the server's day, in the school's zone) of this action:
+ * the project's own, or one repository's — each capped apart (ADR-106 §4 as
+ * amended 2026-10-12: fixing one repository at a time never spends the
+ * project's).
+ */
+async function regradesToday(db: Db, projectId: string, action: RegradeAction, repoId: string | null, now: Date): Promise<number> {
   const [today] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(auditLog)
     .where(
       and(
-        inArray(auditLog.action, ["project.regrade", "project_repo.regrade"]),
+        eq(auditLog.action, action),
         eq(auditLog.subjectType, "project"),
         eq(auditLog.subjectId, projectId),
+        repoId === null ? undefined : sql`${auditLog.payload}->>'repoId' = ${repoId}`,
         sql`${auditLog.createdAt} >= date_trunc('day', ${now.toISOString()}::timestamptz, ${SCHOOL_TIME_ZONE})`,
       ),
     );
@@ -80,14 +88,15 @@ export async function regrade(
         ? [{ id: repo.id }]
         : [];
   if (repos.length === 0) throw new ProjectError("not_frozen", "No repository is frozen for good");
-  if ((await regradesToday(db, project.id, now)) >= PROJECT_REGRADES_PER_DAY) {
-    throw new ProjectError("regrade_limit", "This project was regraded as often as a day allows: try again tomorrow");
+  const action: RegradeAction = repo === null ? "project.regrade" : "project_repo.regrade";
+  if ((await regradesToday(db, project.id, action, repo?.id ?? null, now)) >= PROJECT_REGRADES_PER_DAY) {
+    throw new ProjectError("regrade_limit", "Regraded as often as a day allows: try again tomorrow");
   }
   const passId = randomUUID();
-  // Both on the project, what the day's cap counts; the repository's in the payload.
+  // Both on the project; the repository's in the payload, which its own day's cap counts.
   await audit(db, {
     ...actor,
-    action: repo === null ? "project.regrade" : "project_repo.regrade",
+    action,
     subjectType: "project",
     subjectId: project.id,
     payload: repo === null ? { passId, repos: repos.length } : { passId, repoId: repo.id },

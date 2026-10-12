@@ -219,8 +219,10 @@ llm rows, both through one writer of `project_criterion_grades`.*
   criteria with new ones, reusing the stored evidence of the same
   (repository, target sha, distribution sha) and re-running it otherwise; it
   never supersedes a `manual` row nor a locked one. Capped at **3 a day per
-  project** (ADR-058 L2 (b)), a repository's or the project's regrade
-  counting one. Audited.
+  project** for the project's regrade and **3 a day per repository** for a
+  repository's (ADR-058 L2 (b); amended 2026-10-12: a repository's regrade
+  no longer counts against the project's cap, since fixing one repository
+  at a time is the teacher's ordinary gesture). Audited.
 
 ### 5. Milestones are checkpoints
 

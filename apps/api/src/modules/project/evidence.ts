@@ -20,6 +20,7 @@ import { effectiveCommand, effectiveTestsCriterion, PROJECT_CRITERIA_DEFAULTS } 
 import {
   PROJECT_ARCHIVE_MAX_BYTES,
   PROJECT_OUTPUTS_MAX,
+  PROJECT_TIME_MAX_MS,
   projectPathProblem,
   RunnerBusy,
   RunnerUnavailable,
@@ -62,8 +63,30 @@ export interface EvidenceJob {
   checkpointId?: string | undefined;
 }
 
-/** Evidence jobs a process runs at once: a pass never fills the runner's queue (ADR-101). */
-export const EVIDENCE_CONCURRENCY = 2;
+/**
+ * Evidence jobs a process runs at once: the runner admits ONE project run at
+ * a time (`POST /project`, ADR-106 §3), so a second job was refused (429); a
+ * pass never fills the runner's queue (ADR-101).
+ */
+export const EVIDENCE_CONCURRENCY = 1;
+/**
+ * A project run refused with 429 is resent after the runner's `Retry-After`
+ * (30 s at most): another process's run, or a code question's burst, is over
+ * in minutes, and a pass must not be lost to it. The wait is bounded by the
+ * wall clock and by the attempts (a `Retry-After` of 0 must end too); past
+ * either bound the evidence is stored `timed_out` / `runner_busy`. A run the
+ * client gave up on (`RunnerBusy(null)`, its timeout) is never resent.
+ */
+export const BUSY_WAIT_MAX_MS = 10 * 60_000;
+export const BUSY_ATTEMPTS_MAX = 40;
+/**
+ * The evidence job's expiry, past which pg-boss fails it and its worker takes
+ * the next one — two runs at once. It covers the busy wait (10 min), two
+ * client waits on the run (`PROJECT_TIME_MAX_MS` 10 min + the 1 min queue
+ * allowance, twice: the client resends a 5xx once) and the tarball's
+ * download and composition with slack (8 min): 40 min.
+ */
+export const EVIDENCE_EXPIRY_SECONDS = (BUSY_WAIT_MAX_MS + 2 * PROJECT_TIME_MAX_MS + 10 * 60_000) / 1000;
 
 /** A decompressed tarball past this cannot compose an archive under the runner's cap. */
 const UNPACKED_MAX_BYTES = 2 * PROJECT_ARCHIVE_MAX_BYTES;
@@ -223,7 +246,7 @@ async function run(app: FastifyInstance, project: ProjectRow, archive: Uint8Arra
     .slice(0, PROJECT_OUTPUTS_MAX);
   try {
     const values = fromRun(
-      await app.runner.project({
+      await projectRunPatiently(app, {
         archive: Buffer.from(archive.buffer, archive.byteOffset, archive.byteLength).toString("base64"),
         image: "lab-c",
         commands: {
@@ -241,6 +264,20 @@ async function run(app: FastifyInstance, project: ProjectRow, archive: Uint8Arra
     if (err instanceof RunnerBusy) return { status: "timed_out", reason: "runner_busy" };
     app.log.error({ err }, "evidence: the runner's call failed");
     throw err;
+  }
+}
+
+/** The runner's project run, resent while the runner answers 429 (`BUSY_WAIT_MAX_MS`, `BUSY_ATTEMPTS_MAX`). */
+async function projectRunPatiently(app: FastifyInstance, req: Parameters<FastifyInstance["runner"]["project"]>[0]): Promise<ProjectRunResult | ProjectRunRefusal> {
+  const startedAt = Date.now();
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await app.runner.project(req);
+    } catch (err) {
+      const wait = err instanceof RunnerBusy ? err.retryAfterMs : null;
+      if (wait === null || attempt >= BUSY_ATTEMPTS_MAX || Date.now() + wait > startedAt + BUSY_WAIT_MAX_MS) throw err;
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
   }
 }
 

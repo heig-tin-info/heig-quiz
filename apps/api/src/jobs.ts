@@ -169,6 +169,13 @@ interface SendOptions {
    * reset (N-PERF-07). The in-process runner holds it in a timer.
    */
   startAfter?: Date;
+  /**
+   * A job running longer is failed by pg-boss and its worker takes the next
+   * (pg-boss's default: 15 min). Set on the queue, an existing one included
+   * (`createQueue` keeps an existing queue's options; `updateQueue` changes
+   * this one). The in-process runner ignores it.
+   */
+  expireInSeconds?: number;
 }
 
 interface WorkOptions {
@@ -205,6 +212,7 @@ class PgBossQueue implements JobQueue {
   ) {}
   async createQueue(name: string, options?: SendOptions) {
     await this.boss.createQueue(name, options as never);
+    if (options?.expireInSeconds !== undefined) await this.boss.updateQueue(name, { expireInSeconds: options.expireInSeconds });
   }
   async send<T extends object>(name: string, data: T, options?: SendOptions) {
     await this.boss.send(name, data, (options ?? {}) as never);

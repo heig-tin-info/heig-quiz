@@ -95,7 +95,7 @@ export function isParis(answer: string): boolean {
  * leave a class half graded. Its re-grades have their own budget
  * ({@link LLM_REGRADES_PER_ITEM_PER_DAY}). A project's pass (`project`,
  * ADR-106 §4) likewise: billed to the project's creator, one call per
- * repository, its regrades capped per project
+ * repository, its regrades capped per project and per repository
  * ({@link PROJECT_REGRADES_PER_DAY}).
  */
 export const USER_SHARE_EXEMPT: readonly LlmPurpose[] = ["grade", "project"];
@@ -131,9 +131,9 @@ export function userShareAllows(day: {
 export const LLM_REGRADES_PER_ITEM_PER_DAY = 3;
 
 /**
- * How many regrades a project graded by criteria takes a day (ADR-106 §4,
- * ADR-058 L2 (b)): the project's and a repository's count one each, every
- * one of them sending its repositories back to the model.
+ * How many regrades a project graded by criteria takes a day (ADR-106 §4 as
+ * amended 2026-10-12, ADR-058 L2 (b)), each capped apart: the project's own
+ * (every frozen repository back to the model), and each repository's.
  */
 export const PROJECT_REGRADES_PER_DAY = 3;
 
