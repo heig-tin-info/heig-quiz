@@ -33,7 +33,7 @@ import type {
   StudentConceptMastery,
   EvaluationDrill,
 } from "@quiz/contracts";
-import { allowDrillWritable, DRILL_TYPES, drillLocalDate, drillWeekStarts } from "@quiz/domain";
+import { allowDrillWritable, DRILL_TYPES, drillWeekStarts, localDate } from "@quiz/domain";
 
 import { conceptRefs, seedConceptIds } from "./concept";
 import { evaluationOr404, evaluations, toEvaluation, type MockEvaluation } from "./evaluation";
@@ -312,8 +312,8 @@ const noise = (a: number, b: number) => {
 
 /** One student's weeks, with the days they practised in each (for sessions and "last activity"). */
 function studentWeeks(roomId: string, index: number, claimed: boolean) {
-  const today = drillLocalDate(new Date(now));
-  const starts = drillWeekStarts(drillLocalDate(new Date(now - 13 * 7 * D)), today);
+  const today = localDate(new Date(now));
+  const starts = drillWeekStarts(localDate(new Date(now - 13 * 7 * D)), today);
   const outDays = hasHistory(roomId) ? OPTED_OUT[index] : undefined;
   const level = [1, 0.7, 0.35, 0.9, 0.15, 0.6][index % 6]!;
   return starts.map((weekStart, w) => {

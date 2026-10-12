@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   composeDrillSession,
   drillDayBounds,
-  drillLocalDate,
   DRILL_UNKNOWN_REFERENCE_MS,
   type DrillCandidate,
 } from "./drillSession.js";
+import { localDate } from "./zone.js";
 
 const now = new Date("2026-10-10T08:00:00Z");
 const day = (d: number) => new Date(now.getTime() + d * 86_400_000);
@@ -115,11 +115,11 @@ describe("drillDayBounds", () => {
   });
 });
 
-describe("drillLocalDate", () => {
+describe("localDate", () => {
   it("counts a date on the Zurich clock, summer and winter", () => {
     // 23:30 UTC on 4 October is already the 5th in Zurich (UTC+2).
-    expect(drillLocalDate(new Date("2026-10-04T23:30:00Z"))).toBe("2026-10-05");
+    expect(localDate(new Date("2026-10-04T23:30:00Z"))).toBe("2026-10-05");
     // 22:59 UTC on 31 December is 23:59 in Zurich (UTC+1): still the 31st.
-    expect(drillLocalDate(new Date("2026-12-31T22:59:00Z"))).toBe("2026-12-31");
+    expect(localDate(new Date("2026-12-31T22:59:00Z"))).toBe("2026-12-31");
   });
 });

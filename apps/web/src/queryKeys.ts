@@ -37,6 +37,8 @@ export const adminUsersKey = [...adminTeachersKey, "users"] as const;
  * `admin` hint another administrator's change raises reaches this list.
  */
 export const adminTasksKey = [...adminTeachersKey, "tasks"] as const;
+/** The platform's activity (F-ADMIN-09, ADR-107): aggregates, read when the tab opens. */
+export const adminActivityKey = ["admin-activity"] as const;
 /**
  * The LLM gateway's settings and the month's usage (ADR-058): under
  * `adminTeachersKey`, so the `admin` hint of another administrator's save or

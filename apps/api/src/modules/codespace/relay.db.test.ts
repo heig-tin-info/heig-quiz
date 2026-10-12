@@ -49,6 +49,8 @@ import {
   codespaceRelayJtis,
   codespaceRelays,
   githubAccounts,
+  presenceHours,
+  presenceLastSeen,
   githubClassroomLinks,
   githubOrganizations,
   projectGradeRuns,
@@ -58,6 +60,7 @@ import {
   teacherGrants,
   webhookDeliveries,
 } from "../../db/schema.js";
+import { createPresenceRecorder } from "../presence/service.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
 import { appKey, fakeGithub, json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -329,6 +332,25 @@ describe("POST /app/codespace/git-token (ADR-078 §2)", () => {
     expect(allAudits).not.toContain(grant.token);
     expect(logLines.join("\n")).not.toContain(grant.token);
     expect(logLines.join("\n")).toContain("codespace.git-token issued");
+  });
+
+  it("never counts the portal's service call as the student's activity (ADR-107)", async () => {
+    const f = await launched();
+    await server.app.sitePresence.settled();
+    const db = server.app.db;
+    await db.delete(presenceHours).where(eq(presenceHours.userId, f.student.id));
+    await db.delete(presenceLastSeen).where(eq(presenceLastSeen.userId, f.student.id));
+    // A recorder that has seen nobody: its dedupe cannot hide a write.
+    const kept = server.app.sitePresence;
+    server.app.sitePresence = createPresenceRecorder(db, server.app.log);
+    try {
+      expect((await askToken(f)).statusCode).toBe(200);
+      await server.app.sitePresence.settled();
+    } finally {
+      server.app.sitePresence = kept;
+    }
+    expect(await db.select().from(presenceHours).where(eq(presenceHours.userId, f.student.id))).toEqual([]);
+    expect(await db.select().from(presenceLastSeen).where(eq(presenceLastSeen.userId, f.student.id))).toEqual([]);
   });
 
   it("bounds useUntil by the effective deadline plus the grace near the end, and refuses once it passed", async () => {

@@ -19,7 +19,8 @@
  * assistant's messages past their 30 days (ADR-080 §6); `LIVE_SCHEDULED_TASKS`
  * deletes the integrity journal of the evaluations closed six months ago and
  * never released (ADR-088); `TRAINING_TASKS` installs the training course's
- * content into its public pool (ADR-105 §2). A new task also adds its key to
+ * content into its public pool (ADR-105 §2); `PRESENCE_TASKS` deletes the
+ * hours of activity past their eight days (ADR-107). A new task also adds its key to
  * `SCHEDULED_TASK_KEYS` (`@quiz/contracts`) and its names to the web's
  * dictionaries.
  */
@@ -32,6 +33,7 @@ import { GITHUB_TASKS } from "../github/jobs.js";
 import { LIVE_SCHEDULED_TASKS } from "../live/jobs.js";
 import { NOTIFICATION_TASKS } from "../notifications/jobs.js";
 import { POLL_TASKS } from "../poll/jobs.js";
+import { PRESENCE_TASKS } from "../presence/jobs.js";
 import { REVIEW_TASKS } from "../pool/jobs.js";
 import { RECONCILE_TASKS } from "../project/reconcile.js";
 import { TRAINING_TASKS } from "../training/jobs.js";
@@ -59,6 +61,7 @@ export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
   ...ASSIST_TASKS,
   ...LIVE_SCHEDULED_TASKS,
   ...TRAINING_TASKS,
+  ...PRESENCE_TASKS,
   {
     key: "health.checks",
     defaultIntervalMinutes: 5,
