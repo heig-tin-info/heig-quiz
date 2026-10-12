@@ -116,7 +116,7 @@ export function drillWeekStarts(from: IsoDate, to: IsoDate): IsoDate[] {
 export function drillProgressRange(input: {
   periodStart: string | null;
   periodEnd: string | null;
-  /** Local dates (`drillLocalDate` of `drillSession.ts`). */
+  /** Local dates (`localDate` of `zone.ts`). */
   enabledOn: IsoDate | null;
   firstReviewOn: IsoDate | null;
   today: IsoDate;

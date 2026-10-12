@@ -33,6 +33,7 @@ import {
   scheduledTaskRow,
   systemStatus,
 } from "../system/service.js";
+import { activityOverview } from "../presence/service.js";
 import { createTeacherGrant, listUsers } from "./service.js";
 
 /**
@@ -51,6 +52,11 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
   // Every account, with its role, why, and its teaching footprint (F-ADMIN-01).
   app.get("/app/api/admin/users", { preHandler: requireAdmin }, async () =>
     listUsers(app.db, config),
+  );
+
+  // The platform's activity, aggregates only (F-ADMIN-09, ADR-107).
+  app.get("/app/api/admin/activity", { preHandler: requireAdmin }, async () =>
+    activityOverview(app.db, app.clock.now()),
   );
 
   app.get("/app/api/admin/teachers", { preHandler: requireAdmin }, async () => {

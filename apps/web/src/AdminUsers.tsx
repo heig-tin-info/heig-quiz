@@ -14,6 +14,7 @@ import {
   caseInsensitiveCompare,
   cx,
   EmptyState,
+  isoDateTime,
   PersonAvatar,
   QueryError,
   RelativeTime,
@@ -28,7 +29,7 @@ import {
   type Tone,
 } from "./ui";
 
-type SortKey = "name" | "role" | "lastLoginAt" | "createdAt" | "pools" | "questions" | "classrooms";
+type SortKey = "name" | "role" | "lastSeenAt" | "createdAt" | "pools" | "questions" | "classrooms";
 
 /** "Teachers" means everyone who reaches the teacher interface, admins included. */
 type RoleFilter = "all" | "teachers" | "students";
@@ -44,11 +45,15 @@ const ROLE_TONE: Record<AdminUser["role"], Tone> = {
 
 const ROLE_RANK: Record<AdminUser["role"], number> = { admin: 0, teacher: 1, student: 2 };
 
+/** When the account was last there: its last activity (ADR-107), else its last sign-in; "" for never. */
+const lastActive = (u: AdminUser): string => u.lastSeenAt ?? u.lastLoginAt ?? "";
+
 const displayName = (u: AdminUser) => `${u.givenName} ${u.familyName}`.trim();
 
 /**
  * Every account on the platform (F-ADMIN-01): who they are, their role and
- * why they hold it, when they last signed in, and what they teach with.
+ * why they hold it, when they were last there (ADR-107: here only, never on
+ * a roster), and what they teach with.
  *
  * Read-only: the screen's one action stays "Grant", above. The server sends
  * the whole list in one response (a few hundred rows); searching, filtering
@@ -84,7 +89,9 @@ export function UsersSection() {
         ? `${u.familyName} ${u.givenName}`.trim() || u.email
         : k === "role"
           ? ROLE_RANK[u.role]
-          : (u[k] ?? ""),
+          : k === "lastSeenAt"
+            ? lastActive(u)
+            : (u[k] ?? ""),
     // Staff first: the few rows an admin comes for, above the hundreds of
     // students; ties keep the server's order, by family name.
     { key: "role", dir: 1 },
@@ -95,7 +102,10 @@ export function UsersSection() {
   const columns: Column<SortKey>[] = [
     { key: "name", label: t("admin.col.person") },
     { key: "role", label: t("admin.col.role") },
-    { key: "lastLoginAt", label: t("admin.col.lastSignIn"), className: T.colHigh },
+    // ADR-107: one column for when the account was last there — its last
+    // activity, else its last sign-in (an account not seen since the record
+    // began); the sign-in itself in the cell's tooltip.
+    { key: "lastSeenAt", label: t("admin.col.lastActivity"), className: T.colHigh },
     { key: "createdAt", label: t("admin.col.created"), className: T.colLow },
     { key: "pools", label: t("admin.col.pools"), right: true, className: T.colMid },
     { key: "questions", label: t("admin.col.questions"), right: true, className: T.colMid },
@@ -174,8 +184,11 @@ export function UsersSection() {
                       </span>
                     ) : null}
                   </td>
-                  <td className={cx(T.td, T.colHigh, "whitespace-nowrap text-fg-muted")}>
-                    {u.lastLoginAt ? <RelativeTime iso={u.lastLoginAt} /> : t("admin.never")}
+                  <td
+                    className={cx(T.td, T.colHigh, "whitespace-nowrap text-fg-muted")}
+                    title={u.lastLoginAt ? t("admin.signedIn", { when: isoDateTime(u.lastLoginAt) }) : undefined}
+                  >
+                    {lastActive(u) ? <RelativeTime iso={lastActive(u)} /> : t("admin.never")}
                   </td>
                   <td className={cx(T.td, T.colLow, "whitespace-nowrap text-fg-muted")}>
                     <RelativeTime iso={u.createdAt} />

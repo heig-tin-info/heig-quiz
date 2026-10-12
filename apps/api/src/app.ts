@@ -27,6 +27,7 @@ import { githubApp } from "./github/app.js";
 import { registerHttpMetrics } from "./httpMetrics.js";
 import { activityPlugin } from "./modules/activity/routes.js";
 import { adminPlugin } from "./modules/admin/routes.js";
+import { createPresenceRecorder } from "./modules/presence/service.js";
 import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
 import { registerCodespaceJobs } from "./modules/codespace/jobs.js";
@@ -116,10 +117,13 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // At most one station attestor, chosen once by KIOSK_ATTESTATION (ADR-051);
   // null is `off`, and then no kiosk route exists. A test may swap it.
   app.decorate("kioskAttestor", createKioskAttestor(config, app.log));
+  // ADR-107: the hours of activity, written beside the requests, never in their way.
+  app.decorate("sitePresence", createPresenceRecorder(handle.db, app.log));
   app.addHook("onClose", async () => {
     // Anything still inside a coalescing window is emitted before the bus
     // goes away, so a shutdown never eats the last dashboard frame.
     flushCoalescers();
+    await app.sitePresence.settled();
     await handle.close();
   });
 

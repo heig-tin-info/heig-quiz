@@ -38,11 +38,6 @@ export function drillDayBounds(now: Date, timeZone: string = SCHOOL_TIME_ZONE): 
   return { start: new Date(start), end: new Date(end) };
 }
 
-/** The calendar date (`YYYY-MM-DD`) of an instant on the drill's clock, where its days are counted. */
-export function drillLocalDate(at: Date, timeZone: string = SCHOOL_TIME_ZONE): string {
-  return new Date(at.getTime() + zoneOffset(at, timeZone)).toISOString().slice(0, 10);
-}
-
 export interface DrillCandidate {
   id: string;
   /** Never reviewed. */

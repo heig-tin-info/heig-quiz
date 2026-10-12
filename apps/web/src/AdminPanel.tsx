@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, BookMarked, CalendarClock, Library, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from "lucide-react";
+import { Activity, BookMarked, CalendarClock, ChartColumn, Library, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -39,6 +39,7 @@ import {
   type Column,
   TextInput,
 } from "./ui";
+import { ActivitySection } from "./AdminActivity";
 import { SystemSection } from "./AdminSystem";
 import { TasksSection } from "./AdminTasks";
 import { LlmSection } from "./AdminLlm";
@@ -56,7 +57,8 @@ const nameOf = (r: AdminTeacher): [string, string] => [r.givenName ?? "", r.fami
 /**
  * Administration, one tab per concern, the open one in `?tab=`: the people
  * (the teacher grants, the kiosk stations where the platform has them —
- * `KioskSection`, ADR-051 — then every account), the system status
+ * `KioskSection`, ADR-051 — then every account), the platform's activity
+ * (F-ADMIN-09, ADR-107, aggregates only), the system status
  * (F-ADMIN-07, next to the tasks it points to) and the scheduled tasks
  * (F-ADMIN-06), the LLM gateway (ADR-058) and the concepts' curation queue (ADR-081). The people stay first and the
  * default: the page's one primary action, "Grant", is there. A tab is one entry of `ADMIN_TABS`
@@ -75,6 +77,7 @@ export function AdminPage() {
         idPrefix="admin"
         items={[
           { value: "people", label: t("admin.tab.people"), icon: Users },
+          { value: "activity", label: t("admin.tab.activity"), icon: ChartColumn },
           { value: "system", label: t("admin.tab.system"), icon: Activity },
           { value: "tasks", label: t("admin.tab.tasks"), icon: CalendarClock },
           { value: "llm", label: t("admin.tab.llm"), icon: Sparkles },
@@ -88,6 +91,8 @@ export function AdminPage() {
             <KioskSection />
             <UsersSection />
           </>
+        ) : tab === "activity" ? (
+          <ActivitySection />
         ) : tab === "system" ? (
           <SystemSection onOpenTasks={() => setTab("tasks")} />
         ) : tab === "tasks" ? (
