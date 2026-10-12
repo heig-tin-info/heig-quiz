@@ -156,7 +156,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     session,
     teacher({ ...onProject, body: ProjectPatch }, async ({ req, now, body, scope }) => {
       // A switch to `criteria` reads the source's file first, outside the row's lock (ADR-106 §1).
-      const criteria = await service.criteriaForSwitch(app.db, config, scope.project, body.gradingMode, now);
+      const criteria = await service.criteriaForSwitch(app.db, config, scope.project, body, now);
       const row = await service.patchProject(app.db, scope.project.id, body, actorOf(req), now, criteria);
       // A reopen's locks are lifted by the deadline job, never by 100 calls here (M3-05a).
       if (body.deadlineAt !== undefined) await service.requestDeadlineWork(app, config, row.id);

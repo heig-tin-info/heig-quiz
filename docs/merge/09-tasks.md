@@ -277,7 +277,8 @@ delivered card.
 - **Acceptance**: labo 00's `criteria.yml` parses and totals as StudentScore
   does; a malformed file is refused with its paths; the switch is refused on
   a published or released project, allowed on a locked unreleased one, and
-  refused when the workflow needs packages the lab image lacks; a reload
+  refused when the project's build or test command needs the network (the
+  CI's workflow may install what it needs; amended by L-02g); a reload
   that fails keeps the previous snapshot; a reload that drops a checkpoint's
   tag is `409 checkpoint_untagged`; an `auto` project is unchanged.
 
@@ -360,8 +361,9 @@ delivered card.
 - **Goal**: labo 00 (`heigvd-2026-prog-a/labo-prog-00`, locked, unreleased)
   switched to `criteria`: its `criteria.yml` edited in the source repository
   (tolerant tests instead of `repairs.txt`; no `prompt` on the identity
-  criteria `git.commits` and `rapport.presentation`, so they are
-  teacher-only), a Regrade of its 26 repositories, the result compared with
+  criterion `git.commits`, so it is teacher-only; `rapport.presentation`
+  keeps a prompt that checks only that a name and first-name line is
+  present, names being masked for the model), a Regrade of its 26 repositories, the result compared with
   the review slot; find out why `review_grade_run_id` is NULL on every row
   while its 26 review runs are `ok`.
 - **Acceptance**: every repository has proposals; the comparison is

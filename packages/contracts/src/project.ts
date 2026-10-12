@@ -257,6 +257,15 @@ export const PROJECT_CRITERIA_DEFAULTS = {
 export const effectiveTestsCriterion = (project: { testsCriterion: string | null }): string =>
   project.testsCriterion ?? PROJECT_CRITERIA_DEFAULTS.testsCriterion;
 
+/** The settings holding a command the platform runs (ADR-106 §2, §3). */
+export const COMMAND_SETTINGS = ["buildCommand", "testCommand"] as const;
+export type CommandSetting = (typeof COMMAND_SETTINGS)[number];
+
+/** The argv a project runs for `setting`: its own, else the default — the one place the default applies. */
+export const effectiveCommand = (project: { [K in CommandSetting]: readonly string[] | null }, setting: CommandSetting): string[] => [
+  ...(project[setting] ?? PROJECT_CRITERIA_DEFAULTS[setting]),
+];
+
 /** A criterion's dotted id (`rendu.all-tests-passed`): names without a dot nor a space, joined by dots. */
 export const CriterionId = z
   .string()
@@ -562,6 +571,9 @@ export const PROJECT_REFUSALS = [
   "checkpoint_untagged",
   // ADR-106 §2: a tests criterion that names no criterion of the snapshot (422).
   "unknown_criterion",
+  // ADR-106 §1: a build or test command that needs the network (422, `field`
+  // the setting's name); the evidence run has none.
+  "command_needs_network",
   // M6-06: an invitation asked of a project whose work mode invites nobody
   // (`online_seb`, ADR-047 §2); the work mode's own refusals are
   // `WORK_MODE_REFUSALS` (`codespace.ts`).
@@ -1416,10 +1428,11 @@ export type StudentProject = z.infer<typeof StudentProject>;
 
 /**
  * What reading `criteria.yml` from GitHub can meet besides the parser's
- * refusals: no such branch, no such file, a file too large, and a grading
- * workflow that needs the network (ADR-106 §1: the evidence run has none).
+ * refusals: no such branch, no such file, a file too large — and, at the
+ * switch, a build or test command that needs the network, its path the
+ * setting's name (ADR-106 §1: the evidence run has none).
  */
-export const CRITERIA_READ_ERROR_CODES = ["branch_missing", "missing_file", "too_large", "workflow_needs_network"] as const;
+export const CRITERIA_READ_ERROR_CODES = ["branch_missing", "missing_file", "too_large", "command_needs_network"] as const;
 
 /** Every refusal of a criteria file: a closed list, worded by the web in each language (invariant 1). */
 export const CriteriaErrorCode = z.enum([...CRITERIA_PARSE_ERROR_CODES, ...CRITERIA_READ_ERROR_CODES]);

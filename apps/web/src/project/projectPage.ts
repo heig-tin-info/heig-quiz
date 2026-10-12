@@ -380,6 +380,7 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   criteria_invalid: "project.criteria.invalid",
   checkpoint_untagged: "project.refusal.checkpointUntagged",
   unknown_criterion: "project.criteria.tests.unknown",
+  command_needs_network: "project.criteria.error.command_needs_network",
   seb_required: "project.refusal.sebRequired",
 };
 

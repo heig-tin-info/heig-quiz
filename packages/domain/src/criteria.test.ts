@@ -5,9 +5,9 @@ import { describe, expect, it } from "vitest";
 import {
   clampAwarded,
   classifyCriterion,
+  commandNeedsNetwork,
   criteriaTotals,
   untaggedCheckpoints,
-  workflowNeedsNetwork,
   workflowTestsCriterion,
   type ParsedCriteria,
 } from "./criteria.js";
@@ -111,18 +111,31 @@ describe("untaggedCheckpoints (ADR-106 §5)", () => {
   });
 });
 
-describe("workflowNeedsNetwork (ADR-106 §1)", () => {
-  it("finds labo 00's pip install in its test command", () => {
-    expect(workflowNeedsNetwork(fixture("labo-00-grading.yml"))).toBe(true);
+describe("commandNeedsNetwork (ADR-106 §1)", () => {
+  it("finds a package manager, a downloader or git as the program", () => {
+    for (const argv of [
+      ["pip", "install", "pytest"],
+      ["pip3", "install", "x"],
+      ["/usr/bin/apt-get", "install", "pandoc"],
+      ["apt", "install", "x"],
+      ["apk", "add", "x"],
+      ["npm", "ci"],
+      ["pnpm", "install"],
+      ["yarn"],
+      ["curl", "-O", "https://example.org/x"],
+      ["wget", "x"],
+      ["git", "clone", "x"],
+      ["python", "-m", "pip", "install", "x"],
+      ["python3.12", "-m", "pip3", "install", "x"],
+    ]) {
+      expect(commandNeedsNetwork(argv), argv.join(" ")).toBe(true);
+    }
   });
 
-  it("finds an apt package or an apt-get, and lets a clean workflow through", () => {
-    const workflow = (lines: string) => `jobs:\n  grading:\n    with:\n${lines}\n`;
-    expect(workflowNeedsNetwork(workflow("      build-command: make prepare\n      test-command: pytest --junitxml=report.xml"))).toBe(false);
-    expect(workflowNeedsNetwork(workflow("      apt-packages: pandoc"))).toBe(true);
-    expect(workflowNeedsNetwork(workflow("      apt-packages: ''"))).toBe(false);
-    expect(workflowNeedsNetwork(workflow("      build-command: sudo apt-get install -y pandoc && make"))).toBe(true);
-    expect(workflowNeedsNetwork(workflow("      review-test-command: apt install x; pytest"))).toBe(true);
+  it("lets the defaults and an ordinary command through", () => {
+    for (const argv of [["make", "prepare"], ["pytest", "--junitxml=report.xml", "-q"], ["python3", "-m", "pytest"], ["make", "pip"], ["python", "pip"]]) {
+      expect(commandNeedsNetwork(argv), argv.join(" ")).toBe(false);
+    }
   });
 });
 
