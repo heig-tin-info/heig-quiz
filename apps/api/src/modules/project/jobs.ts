@@ -69,11 +69,19 @@ import { githubApp, githubStatus, ownerRepo } from "../../github/app.js";
 import { pushEmptyCommit } from "../../github/commit.js";
 import { lockStudentRepo, setRepoArchived, unlockStudentRepo } from "../../github/lock.js";
 import { isPlanRestriction } from "../../github/provision.js";
-import { PROJECT_DEADLINE_QUEUE, PROJECT_DISPATCH_QUEUE, PROJECT_GROUP_SYNC_QUEUE, PROJECT_SYNC_QUEUE, type JobQueue } from "../../jobs.js";
+import {
+  PROJECT_DEADLINE_QUEUE,
+  PROJECT_DISPATCH_QUEUE,
+  PROJECT_EVIDENCE_QUEUE,
+  PROJECT_GROUP_SYNC_QUEUE,
+  PROJECT_SYNC_QUEUE,
+  type JobQueue,
+} from "../../jobs.js";
 import type { TickTask } from "../../ticker.js";
 import { requestCodespaceSync } from "../codespace/service.js";
 import { DomainError } from "../http.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
+import { EVIDENCE_CONCURRENCY, runEvidence, type EvidenceJob } from "./evidence.js";
 import { stopGroups, stopProjects } from "./groupCopy.js";
 import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
 import { claimLeases, runLeased, type ProjectJob } from "./lease.js";
@@ -323,7 +331,7 @@ export async function requestDeadlineWork(app: FastifyInstance, config: AppConfi
 /** The ticker's project task (ADR-006 addendum): clock-bound, neither configurable nor disableable. */
 export const PROJECT_TASKS: readonly TickTask[] = [{ name: "project.deadlines", everyMs: PROJECT_TICK_MS, run: projectTick }];
 
-/** The workers of `project.deadline`, `project.dispatch`, `group.sync` and `project.sync`, registered only with Quiz's App (`app.ts`). */
+/** The workers of `project.deadline`, `project.dispatch`, `group.sync`, `project.sync` and `project.evidence`, registered only with Quiz's App (`app.ts`). */
 export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue, config: AppConfig): Promise<void> {
   await queue.createQueue(PROJECT_DEADLINE_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_DEADLINE_QUEUE, (job) => runDeadlineJob(app, config, job));
@@ -334,6 +342,15 @@ export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue,
   // The source's sync (M3-07): sent by the staff's request, never by the ticker.
   await queue.createQueue(PROJECT_SYNC_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_SYNC_QUEUE, (job) => runSyncJob(app, config, job));
+  // The evidence of a project graded by criteria (ADR-106 §3): nothing sends it before L-02c.
+  await queue.createQueue(PROJECT_EVIDENCE_QUEUE, { retryLimit: 0 });
+  await queue.work<EvidenceJob>(
+    PROJECT_EVIDENCE_QUEUE,
+    async (job) => {
+      await runEvidence(app, config, job.repoId);
+    },
+    { localConcurrency: EVIDENCE_CONCURRENCY },
+  );
 }
 
 // ---------------------------------------------------------------- the job

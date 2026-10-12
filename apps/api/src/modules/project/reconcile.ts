@@ -64,6 +64,7 @@ import type { ScheduledTask } from "../../ticker.js";
 import { pushedBy } from "../github/service.js";
 import { followInvitation, installationClients, inviteAccount, notRecorded } from "./access.js";
 import { LIVE } from "./deadline.js";
+import { purgeEvidenceFiles } from "./evidence.js";
 import { ProjectError } from "./errors.js";
 import { aggregateCiStatus, completedRun, ingestCompletedRun, refreshScoreSelection } from "./grading.js";
 import { repoMembers } from "./groupRepos.js";
@@ -453,9 +454,9 @@ async function refreshRepo(step: Step): Promise<void> {
   await refreshHead(step);
 }
 
-/** `reconcile.repos`: every repository in scope, quiet or not. */
-export function reconcileRepos(app: FastifyInstance, config: AppConfig): Promise<string> {
-  return pass(
+/** `reconcile.repos`: every repository in scope, quiet or not; then the evidence files past their retention (ADR-106 §3). */
+export async function reconcileRepos(app: FastifyInstance, config: AppConfig): Promise<string> {
+  const summary = await pass(
     app,
     config,
     "reconcile.repos",
@@ -464,6 +465,7 @@ export function reconcileRepos(app: FastifyInstance, config: AppConfig): Promise
     (repos, c) =>
       `${repos} repositories checked, ${c.reinvited} re-invited, ${c.accepted} invitations accepted, ${c.heads} heads moved, ${c.renamed} renamed, ${c.deleted} deleted, ${c.protected} protected`,
   );
+  return `${summary}; ${await purgeEvidenceFiles(app.db, app.clock.now())} evidence files purged`;
 }
 
 /** The two tasks, in the catalog whether or not the App is configured (the catalog is static): without it they return at once. */

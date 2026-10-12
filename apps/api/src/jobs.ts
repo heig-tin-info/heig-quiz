@@ -113,6 +113,15 @@ export const PROJECT_GROUP_SYNC_QUEUE = "group.sync";
 export const PROJECT_SYNC_QUEUE = "project.sync";
 
 /**
+ * The evidence of one repository of a project graded by criteria (ADR-106
+ * §3): `{ repoId }`. A `standard` queue, no dedupe, no retry, no lease:
+ * idempotent per (repository, target, distribution) — two jobs of one
+ * repository store under its row's lock and never replace an `ok`
+ * evidence; worked `EVIDENCE_CONCURRENCY` at a time (ADR-101).
+ */
+export const PROJECT_EVIDENCE_QUEUE = "project.evidence";
+
+/**
  * The push of one project to the online workspace portal (ADR-047 §6,
  * merge task M6-06): `{ projectId }`, sent after anything the portal reads
  * of an `online` project changed (its mode, name, dates, publication) and

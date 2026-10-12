@@ -49,7 +49,8 @@
  * 2026-10-07), which the `codespace` module's route calls, and the
  * invitation's permission by mode (`collaboratorPermission`).
  * From ADR-106 §2: grading by criteria — the snapshot of the source's
- * `criteria.yml` (`criteria.ts`) and the mode switch.
+ * `criteria.yml` (`criteria.ts`) and the mode switch; §3, the evidence run
+ * (`evidence.ts`, the `project.evidence` job) and the automatic criteria's rows.
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";

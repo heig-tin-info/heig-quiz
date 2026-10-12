@@ -3,7 +3,7 @@
  * a real RSA key for the App's JWT, and a `fetch` stand-in that records
  * every call and answers from routes the test sets. No network is ever
  * reached: a request no route answers is GitHub's 404, and a host other
- * than GitHub's two is an error.
+ * than GitHub's three (the API, the avatars, codeload) is an error.
  *
  * Test support only; nothing in the application imports it.
  */
@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { FastifyInstance, LightMyRequestResponse } from "fastify";
+
+import { CODELOAD_HOST } from "./app.js";
 
 /** A private key file the App can sign its JWT with, and its removal. */
 export function appKey(): { pem: string; remove: () => void } {
@@ -42,6 +44,8 @@ export const on =
       : undefined;
 
 export const AVATAR_HOST = "avatars.githubusercontent.com";
+/** Where GitHub redirects a tarball request, with a `token=` in the query (ADR-106 §3). */
+export { CODELOAD_HOST };
 
 /** Every request to the avatar host, answered by `answer`. */
 export const avatarRoute =
@@ -175,7 +179,11 @@ export function fakeGithub(): FakeGithub {
         // The avatar proxy must never follow GitHub elsewhere (M2-02).
         throw new Error(`an avatar fetched without redirect: "error"`);
       }
-      if (url.host !== "api.github.com" && url.host !== AVATAR_HOST) {
+      if (url.host === CODELOAD_HOST && init.redirect !== "error") {
+        // A tarball's download never follows GitHub further (ADR-106 §3).
+        throw new Error(`a tarball fetched without redirect: "error"`);
+      }
+      if (url.host !== "api.github.com" && url.host !== AVATAR_HOST && url.host !== CODELOAD_HOST) {
         throw new Error(`unexpected request to ${url.href}`);
       }
       for (const route of fake.routes) {

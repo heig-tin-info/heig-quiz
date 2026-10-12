@@ -219,7 +219,7 @@ Project grading by criteria on the platform ([ADR-106](../adr/ADR-106-notation-d
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | L-02a | Criteria snapshot: parser, totals, `project_criteria`, opt-in `criteria` mode | done | ADR-106 | `project-criteria-mode` | #793 | Parser `packages/domain/src/criteriaParse.ts`, snapshot and mode switch (`modules/project/criteria.ts`, migration `0109`); the checkpoint-name check at creation and the `testsCriterion` pre-fill rule go to L-02d/L-02c. |
-| L-02b | Runner `project` action, `lab-c` image, `project.evidence` | todo | L-02a | | | |
+| L-02b | Runner `project` action, `lab-c` image, `project.evidence` | in progress | L-02a | `project-evidence-run` | | Runner: #797. API: `modules/project/evidence.ts` (`runEvidence`, migration `0110`); the evidence job writes the `auto` rows through `writeCriterionGrades` (`criterionGrades.ts`), which L-02c's review job reuses for the llm rows (ADR-106 §4 amended); nothing enqueues the job yet, the milestone path is L-02d's. |
 | L-02c | Final pass, proposals, regrade | todo | L-02a, L-02b | | | |
 | L-02d | Milestone locks | todo | L-02c, L-02e | | | |
 | L-02e | Teacher grading screen, release gate | todo | L-02c | | | |

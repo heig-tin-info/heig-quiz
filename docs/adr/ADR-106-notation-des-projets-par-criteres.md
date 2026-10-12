@@ -175,8 +175,10 @@ A job `project.evidence`, one per repository, produces the evidence of one
 ### 4. The LLM pass
 
 When a repository's evidence completes, it enqueues that repository's
-`project.review` job (one per repository, as `grading.llm`), which writes the
-automatic rows from the JUnit results and calls the model for the llm ones:
+`project.review` job (one per repository, as `grading.llm`), which calls the
+model for the llm criteria. *Amended 2026-10-12 (L-02b): the evidence job
+writes the automatic rows from the JUnit results; the review job writes the
+llm rows, both through one writer of `project_criterion_grades`.*
 
 - **Purpose `project`** joins `LLM_PURPOSES` (ADR-058 §1); the call goes
   through the gateway, billed to the project's creator (`llm_calls.user_id`)

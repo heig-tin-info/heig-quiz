@@ -17,14 +17,22 @@
  * invitations listed and cancelled (a revocation), or refused (`unrevokable`),
  * and a repository by its id. From M3-07, a compare by refs with its
  * counts, and the pull requests (opened, listed by head, read, commented).
+ * From L-02b, a commit's tarball: the API's redirect to `codeload`, whose
+ * URL carries a `token=`, and the gzipped `git archive` it serves (past
+ * the cap for a repository in `oversized`).
  * Test support only; nothing in the application imports it.
  */
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { gzipSync } from "node:zlib";
 
-import { json, type Route } from "../../github/testing.js";
+import { CODELOAD_HOST, json, type Route } from "../../github/testing.js";
+
+/** The `token=` of the fake `codeload` URLs: a test asserts it is nowhere it should not be. */
+export const CODELOAD_TOKEN = "CODELOADSECRET0123456789";
 
 const sh = (...args: string[]) => execFileSync("git", args, { stdio: "pipe" }).toString();
 /** `git` with an environment (a temporary index, an author) and a standard input. */
@@ -86,6 +94,11 @@ export interface RepoWorld {
   comments: Map<string, Map<number, string[]>>;
   /** The App's login, author of the pull requests it opens. */
   botLogin: string;
+  /**
+   * Repositories, by `org/name`, whose tarball `codeload` serves past the
+   * runner's archive cap (ADR-106 §3): `extra` bytes of gzip padding.
+   */
+  oversized: Map<string, number>;
   /** A repository with commits on `branches` (`file` → content), as a teacher pushed it. */
   source: (org: string, name: string, branches: Record<string, Record<string, string>>, commits?: number) => void;
   /** The empty repository `org/name`, as a failed build leaves it. */
@@ -299,6 +312,7 @@ export function repoWorld(): RepoWorld {
     pulls: new Map(),
     comments: new Map(),
     botLogin: "quiz-test[bot]",
+    oversized: new Map(),
     release(ok) {
       writeFileSync(join(dir, "release"), ok ? "0" : "1");
     },
@@ -351,9 +365,23 @@ export function repoWorld(): RepoWorld {
     },
     remove: () => rmSync(dir, { recursive: true, force: true }),
     route: (url, req) => {
+      let m: RegExpExecArray | null;
+      if (url.host === CODELOAD_HOST && (m = /^\/([^/]+)\/([^/]+)\/legacy\.tar\.gz\/([0-9a-f]+)$/.exec(url.pathname))) {
+        // As GitHub: only with the token the redirect handed out; the top directory carries the owner, the name and the sha.
+        const fullName = `${m[1]}/${m[2]}`;
+        if (url.searchParams.get("token") !== CODELOAD_TOKEN || !world.exists(fullName)) return json({ message: "Not Found" }, 404);
+        const prefix = `${m[1]}-${m[2]}-${m[3]!.slice(0, 7)}/`;
+        const tar = execFileSync("git", ["--git-dir", pathOf(fullName), "archive", "--format=tar", `--prefix=${prefix}`, m[3]!]);
+        const padding = world.oversized.get(fullName);
+        const body = padding === undefined ? gzipSync(tar) : Buffer.concat([gzipSync(tar), randomBytes(padding)]);
+        return new Response(body, { status: 200, headers: { "content-type": "application/x-gzip" } });
+      }
       if (url.host !== "api.github.com") return undefined;
       const path = decodeURIComponent(url.pathname);
-      let m: RegExpExecArray | null;
+      if (req.method === "GET" && (m = /^\/repos\/([^/]+)\/([^/]+)\/tarball\/([0-9a-f]+)$/.exec(path)) && world.exists(`${m[1]}/${m[2]}`)) {
+        const location = `https://${CODELOAD_HOST}/${m[1]}/${m[2]}/legacy.tar.gz/${m[3]}?token=${CODELOAD_TOKEN}`;
+        return new Response(null, { status: 302, headers: { location } });
+      }
       if (req.method === "POST" && (m = /^\/orgs\/([^/]+)\/repos$/.exec(path))) {
         const org = m[1]!;
         const name = String((JSON.parse(String(req.body)) as { name: string }).name);

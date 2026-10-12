@@ -37,7 +37,7 @@ import { iso } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { projectCheckpoints, projectCriteria, projects } from "../../db/schema.js";
-import { installationClient, ownerRepo, unless404 } from "../../github/app.js";
+import { branchHead, installationClient, ownerRepo, unless404 } from "../../github/app.js";
 import { projectInstallation } from "../github/service.js";
 import { ProjectError } from "./errors.js";
 import { lifeOf, type ProjectRow } from "./views.js";
@@ -80,15 +80,7 @@ export async function readCriteria(db: Db, config: AppConfig, project: ProjectRo
   const { octokit } = await installationClient(config, org.installationId);
   const { owner, repo } = ownerRepo(project.distributionFullName ?? project.sourceFullName);
   const branch = project.branches[0]!;
-  const head = await unless404(async () => {
-    const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
-      owner,
-      repo,
-      ref: `heads/${branch}`,
-      request: { retries: 0 },
-    });
-    return data.object.sha;
-  });
+  const head = await branchHead(octokit, owner, repo, branch);
   if (head === null) return refused("branch_missing");
   const fileAt = (path: string) =>
     unless404(async () => {
