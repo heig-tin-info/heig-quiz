@@ -52,6 +52,16 @@
      Its ink is 5.46:1 on it. */
   --info-mid: #b8d7f0;
   --on-info-mid: #0d5286;
+  /* The activity heatmap (ADR-107, DESIGN.md "The activity heatmap"): one
+     sequential hue, `info` over `surface` in five steps, light to dark. The
+     ink of each step holds 4.5:1 on it: `fg` up to the fourth step here,
+     `on-fill` on the last. */
+  --heat-1: color-mix(in srgb, var(--info) 12%, var(--surface));
+  --heat-2: color-mix(in srgb, var(--info) 28%, var(--surface));
+  --heat-3: color-mix(in srgb, var(--info) 46%, var(--surface));
+  --heat-4: color-mix(in srgb, var(--info) 68%, var(--surface));
+  --heat-5: var(--info);
+  --heat-ink-4: var(--fg);
   /* The colours a pool's icon may wear (#213), one per `PoolColor` name.
      Decoration only (N-A11Y-03): the name stays the identifier. Each is held
      to 3:1 on `surface` AND on `surface-2` (the card's icon well), the bar of
@@ -190,6 +200,13 @@ html.dark {
   /* 5.70:1 on `info-mid` over `surface`. */
   --info-mid: rgb(88 169 224 / 0.35);
   --on-info-mid: #a6d3f3;
+  /* Dark: the steps re-cut for the dark surface; the last two carry `on-fill`
+     (fg on the fourth would be 3.8:1). */
+  --heat-1: color-mix(in srgb, var(--info) 14%, var(--surface));
+  --heat-2: color-mix(in srgb, var(--info) 30%, var(--surface));
+  --heat-3: color-mix(in srgb, var(--info) 48%, var(--surface));
+  --heat-4: color-mix(in srgb, var(--info) 82%, var(--surface));
+  --heat-ink-4: var(--on-fill);
   /* The same fifteen, lifted for the dark surfaces (≥ 4.7:1 on both). */
   --pool-red: #f87171;
   --pool-orange: #fb923c;
@@ -247,6 +264,12 @@ html.dark {
   --color-info-soft: var(--info-soft);
   --color-info-mid: var(--info-mid);
   --color-on-info-mid: var(--on-info-mid);
+  --color-heat-1: var(--heat-1);
+  --color-heat-2: var(--heat-2);
+  --color-heat-3: var(--heat-3);
+  --color-heat-4: var(--heat-4);
+  --color-heat-5: var(--heat-5);
+  --color-heat-ink-4: var(--heat-ink-4);
 
   --shadow-overlay: var(--shadow-overlay);
   --shadow-popover: var(--shadow-popover);

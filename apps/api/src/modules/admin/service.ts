@@ -6,14 +6,14 @@ import type { AdminUser } from "@quiz/contracts";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { avatars, classrooms, courseStaff, pools, questions, teacherGrants, users } from "../../db/schema.js";
+import { avatars, classrooms, courseStaff, pools, presenceLastSeen, questions, teacherGrants, users } from "../../db/schema.js";
 import { normalizeEmail } from "../../identity.js";
 import { shownAvatar } from "../avatar.js";
 import { roleDecisionsOfAll } from "../../roles.js";
 
 /**
  * Every account that is not anonymized (F-ADMIN-01), with its teaching
- * footprint and why it holds its role.
+ * footprint, why it holds its role, and when it was last seen (ADR-107).
  *
  * One statement for the rows and their counts (correlated subqueries, no
  * N+1), plus the few bulk reads of `roleDecisionsOfAll`. No pagination: the
@@ -40,6 +40,7 @@ export async function listUsers(db: Db, config: AppConfig): Promise<AdminUser[]>
         familyName: users.familyName,
         role: users.role,
         lastLoginAt: users.lastLoginAt,
+        lastSeenAt: presenceLastSeen.at,
         createdAt: users.createdAt,
         pictureUrl: users.pictureUrl,
         avatarAt: avatars.updatedAt,
@@ -51,6 +52,8 @@ export async function listUsers(db: Db, config: AppConfig): Promise<AdminUser[]>
       })
       .from(users)
       .leftJoin(avatars, eq(avatars.userId, users.id))
+      // ADR-107: the last activity is the `presence` module's, read by join.
+      .leftJoin(presenceLastSeen, eq(presenceLastSeen.userId, users.id))
       .where(isNull(users.anonymizedAt))
       .orderBy(users.familyName, users.givenName, users.email),
     roleDecisionsOfAll(db, config),
@@ -62,6 +65,7 @@ export async function listUsers(db: Db, config: AppConfig): Promise<AdminUser[]>
       avatarUrl: shownAvatar(r.id, avatarAt, pictureUrl),
       reason: decision?.role === r.role ? decision.reason : null,
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
+      lastSeenAt: r.lastSeenAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
     };
   });

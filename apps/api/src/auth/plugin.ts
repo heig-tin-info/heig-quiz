@@ -14,6 +14,7 @@ import {
   MePatch,
   CSRF_COOKIE,
   CSRF_HEADER,
+  IDLE_HEADER,
   cookieName,
   type PublicConfig,
   type SessionKind,
@@ -114,6 +115,11 @@ declare module "fastify" {
      * kiosk_attestation_stale`, and the page re-attests and retries once.
      */
     freshAttestation?: boolean;
+    /**
+     * Traffic a page makes on its own, not its person (ADR-107): the event
+     * stream. A request to such a route is never counted as activity.
+     */
+    background?: boolean;
   }
 }
 
@@ -292,6 +298,13 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       } catch (err) {
         req.log.error({ err }, "claim on the person's own request failed");
       }
+    }
+    // The person's own activity (ADR-107): their own session — never an
+    // impersonation (ADR-034); a bearer token returned above — on a route
+    // that is not background traffic, in a page that is not idle. Never
+    // awaited: the writes are the recorder's, beside this request.
+    if (!delegated(found.auth) && !req.routeOptions.config.background && req.headers[IDLE_HEADER] === undefined) {
+      app.sitePresence.touch(found.user.id, app.clock.now());
     }
     // Mirror the sliding renewal on the cookies, else the browser drops them
     // while the server-side session is still alive.
