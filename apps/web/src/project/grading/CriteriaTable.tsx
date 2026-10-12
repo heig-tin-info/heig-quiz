@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronRight, FlaskConical, Sparkles, UserRound } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, FlaskConical, Lock, Sparkles, UserRound } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { CriteriaTableRow, CriterionGradeWrite, CriterionReason } from "@quiz/contracts";
@@ -191,16 +191,30 @@ function SourceTag({ source }: { source: CriteriaTableRow["source"] }) {
   );
 }
 
+/** The row's state, a milestone's lock (ADR-106 §5) inside the badge, after its word. */
 function StateBadge({ row }: { row: CriteriaTableRow }) {
   const t = useT();
+  const lock = row.locked ? (
+    <Tip label={t("project.grading.locked")}>
+      <Lock aria-label={t("project.grading.locked")} role="img" className="size-3" />
+    </Tip>
+  ) : null;
   if (row.state === "validated") {
     return (
       <Badge tone="green" icon={Check}>
         {t("project.grading.state.validated")}
+        {lock}
       </Badge>
     );
   }
-  if (row.state === "proposed") return <Badge tone="amber">{t("project.grading.state.proposed")}</Badge>;
+  if (row.state === "proposed") {
+    return (
+      <Badge tone="amber">
+        {t("project.grading.state.proposed")}
+        {lock}
+      </Badge>
+    );
+  }
   return <Badge tone="zinc">{t("project.grading.state.empty")}</Badge>;
 }
 

@@ -3,8 +3,9 @@
  * `project.review` job, one per repository and pass, after its evidence.
  * ONE structured call of purpose `project` through `app.llm`, billed to the
  * project's creator, for the llm criteria no one holds — not validated, not
- * a teacher's, not already proposed by this pass; the milestone locks are
- * L-02d's. Everything sent is masked before it is cut (N-DATA-05,
+ * a teacher's, not locked by a milestone, not already proposed by this pass
+ * — and, for a milestone pass (§5), those its checkpoint tags only, their
+ * rows locked. Everything sent is masked before it is cut (N-DATA-05,
  * `renderMaterial`): the classroom's roster and the repository's members —
  * names, e-mail addresses, GitHub logins — and the repository's owner and
  * name. Its proposals are `llm` rows in state `proposed`, their rationale
@@ -47,6 +48,7 @@ import { PROJECT_REVIEW_QUEUE } from "../../jobs.js";
 import { llmFailure, type ProjectReviewCriterion } from "../llm/service.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
 import { runEvidence, type EvidenceJob } from "./evidence.js";
+import { passScope } from "./milestone.js";
 import { hintProjectStaff, type RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
 
@@ -57,6 +59,8 @@ export interface ReviewJob {
   passId: string;
   /** The evidence this pass stored. */
   evidenceId: string;
+  /** A milestone pass's checkpoint (§5). */
+  checkpointId?: string | undefined;
 }
 
 /** Review jobs a process runs at once, as `grading.llm`. */
@@ -139,8 +143,9 @@ async function ask(
 
 /**
  * The `project.review` job: the llm proposals of one repository for one
- * pass. Nothing when the repository or its snapshot is gone, or its project
- * left `criteria` mode. The number of rows written.
+ * pass. Nothing when the repository, its snapshot or the milestone's
+ * checkpoint is gone, or its project left `criteria` mode. The number of
+ * rows written.
  */
 export async function runReview(app: FastifyInstance, job: ReviewJob): Promise<number> {
   const db = app.db;
@@ -152,9 +157,11 @@ export async function runReview(app: FastifyInstance, job: ReviewJob): Promise<n
     .where(eq(projectRepos.id, job.repoId));
   if (!row || row.project.gradingMode !== "criteria") return 0;
   const { repo, project, snapshot } = row;
+  const scope = await passScope(db, project.id, snapshot.leaves, job.checkpointId);
+  if (!scope) return 0;
   // Not held, nor already proposed by this pass (a job run twice): spares a needless call, the writer checks again.
   const held = await heldCriteria(db, repo.id, job.passId);
-  const leaves = llmLeaves(snapshot.leaves, effectiveTestsCriterion(project)).filter((leaf) => !held.has(leaf.id));
+  const leaves = llmLeaves(scope.leaves, effectiveTestsCriterion(project)).filter((leaf) => !held.has(leaf.id));
   if (leaves.length === 0) return 0;
   const [evidence] = await db
     .select()
@@ -172,7 +179,13 @@ export async function runReview(app: FastifyInstance, job: ReviewJob): Promise<n
           job.passId,
         )
       : leaves.map((leaf) => zero(leaf, job.passId, missing ?? "grader_error"));
-  const written = await writeCriterionGrades(db, repo.id, inputs, app.clock.now());
+  const now = app.clock.now();
+  const written = await writeCriterionGrades(
+    db,
+    repo.id,
+    inputs.map((input) => ({ ...input, ...scope.lock(now) })),
+    now,
+  );
   await hintProjectStaff(db, [project.id]);
   return written.length;
 }
@@ -186,9 +199,9 @@ export async function runReview(app: FastifyInstance, job: ReviewJob): Promise<n
  * (`JOBS_DISABLED=1`, the tests) the review runs here.
  */
 export async function runEvidencePass(app: FastifyInstance, config: AppConfig, job: EvidenceJob): Promise<void> {
-  const outcome = await runEvidence(app, config, job.repoId);
+  const outcome = await runEvidence(app, config, job.repoId, job.checkpointId);
   if (!outcome || !job.passId) return;
-  const review: ReviewJob = { repoId: job.repoId, passId: job.passId, evidenceId: outcome.evidenceId };
+  const review: ReviewJob = { repoId: job.repoId, passId: job.passId, evidenceId: outcome.evidenceId, checkpointId: job.checkpointId };
   if (app.boss) await app.boss.send(PROJECT_REVIEW_QUEUE, review);
   else await runReview(app, review);
 }

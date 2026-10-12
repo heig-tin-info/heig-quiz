@@ -5,8 +5,9 @@
  * `project.evidence` job — writes the rows. The tarball is fetched through
  * the App, never cloned, and travels in memory and to the runner only; its
  * `codeload` redirect's `token=` never reaches a log, a row or an error
- * (invariant 15). The final pass (`jobs.ts`) and a Regrade (`regrade.ts`)
- * enqueue the job; its review follows (`reviewPass.ts`).
+ * (invariant 15). The final pass (`jobs.ts`), a milestone pass
+ * (`milestone.ts`) and a Regrade (`regrade.ts`) enqueue the job; its review
+ * follows (`reviewPass.ts`).
  */
 import { randomUUID } from "node:crypto";
 import { gunzipSync } from "node:zlib";
@@ -48,6 +49,7 @@ import { redactTokens } from "../../redact.js";
 import { projectInstallation } from "../github/service.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
 import type { RepoRow } from "./repos.js";
+import { passScope } from "./milestone.js";
 import { lastStudentPush } from "./review.js";
 import type { ProjectRow } from "./views.js";
 
@@ -56,6 +58,8 @@ export interface EvidenceJob {
   repoId: string;
   /** The pass this evidence is for (ADR-106 §4, §6): its review follows once the evidence is stored. */
   passId?: string;
+  /** A milestone pass's checkpoint (§5): the evidence at its date, its tagged criteria only, their rows locked. */
+  checkpointId?: string | undefined;
 }
 
 /** Evidence jobs a process runs at once: a pass never fills the runner's queue (ADR-101). */
@@ -344,10 +348,12 @@ const failureReason = (err: unknown): string =>
  * The `project.evidence` job (§3, §4): the repository's evidence at its
  * effective deadline, then one `auto` proposal per automatic criterion
  * worth positive points — 0 with the evidence's status as its reason when
- * there is none. Null when there is nothing to grade: the repository gone,
+ * there is none. For a milestone (`checkpointId`, §5): the evidence at the
+ * checkpoint's date, the criteria it tags only, their rows locked. Null
+ * when there is nothing to grade: the repository or the checkpoint gone,
  * its project not in `criteria` mode or without a snapshot.
  */
-export async function runEvidence(app: FastifyInstance, config: AppConfig, repoId: string): Promise<EvidenceOutcome | null> {
+export async function runEvidence(app: FastifyInstance, config: AppConfig, repoId: string, checkpointId?: string): Promise<EvidenceOutcome | null> {
   const [row] = await app.db
     .select({ repo: projectRepos, project: projects, snapshot: projectCriteria.criteria })
     .from(projectRepos)
@@ -356,9 +362,14 @@ export async function runEvidence(app: FastifyInstance, config: AppConfig, repoI
     .where(eq(projectRepos.id, repoId));
   if (!row || row.project.gradingMode !== "criteria" || !row.project.distributionFullName) return null;
   const { repo, project, snapshot } = row;
-  const evidence = await collectEvidence(app, config, repo, project, effectiveDeadline(repo, project), snapshot.grading.sources);
+  const scope = await passScope(app.db, project.id, snapshot.leaves, checkpointId);
+  if (!scope) return null;
+  const evidence = await collectEvidence(app, config, repo, project, scope.dueAt ?? effectiveDeadline(repo, project), snapshot.grading.sources);
   const testsCriterion = effectiveTestsCriterion(project);
-  const automatic = snapshot.leaves.filter((leaf) => classifyCriterion(leaf, { testsCriterion }) === "automatic" && proratedByTests(leaf));
+  const automatic = scope.leaves.filter(
+    (leaf) => classifyCriterion(leaf, { testsCriterion }) === "automatic" && proratedByTests(leaf),
+  );
+  const now = app.clock.now();
   // Not held, nor already proposed from this evidence (`heldCriteria`); the writer checks again under its lock.
   const held = await heldCriteria(app.db, repo.id, evidence.id);
   const inputs = automatic.filter((leaf) => !held.has(leaf.id)).map(
@@ -370,9 +381,10 @@ export async function runEvidence(app: FastifyInstance, config: AppConfig, repoI
       state: "proposed",
       reason: evidence.status === "ok" ? null : evidence.status,
       passId: evidence.id,
+      ...scope.lock(now),
     }),
   );
-  const rows = await writeCriterionGrades(app.db, repo.id, inputs, app.clock.now());
+  const rows = await writeCriterionGrades(app.db, repo.id, inputs, now);
   return { evidenceId: evidence.id, status: evidence.status, rows: rows.length };
 }
 

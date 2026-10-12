@@ -6019,6 +6019,7 @@ export const en = {
   "project.grading.state.empty": "No points",
   "project.grading.state.proposed": "Proposed",
   "project.grading.state.validated": "Validated",
+  "project.grading.locked": "Locked by a milestone: the final pass and a regrade leave it as it is; your correction keeps it locked.",
   "project.grading.rationale": "Rationale",
   "project.grading.rationale.edit": "Edit the rationale",
   "project.grading.rationale.save": "Save the rationale",

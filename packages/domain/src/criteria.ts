@@ -151,6 +151,15 @@ export function untaggedCheckpoints(checkpointNames: readonly string[], leaves: 
   return checkpointNames.filter((name) => !tags.has(name));
 }
 
+/**
+ * The criteria a pass grades (ADR-106 §5): a milestone pass, those its
+ * checkpoint's name tags only — the automatic one included when tagged;
+ * the final pass (`milestone` null), every one.
+ */
+export function passLeaves<L extends Pick<CriteriaLeaf, "milestone">>(leaves: readonly L[], milestone: string | null): L[] {
+  return milestone === null ? [...leaves] : leaves.filter((leaf) => leaf.milestone === milestone);
+}
+
 /** Who proposes a criterion's points (ADR-106 §2). */
 export const CRITERION_KINDS = ["automatic", "llm", "teacher"] as const;
 export type CriterionKind = (typeof CRITERION_KINDS)[number];

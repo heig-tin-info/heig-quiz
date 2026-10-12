@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { criteriaScore, criteriaTable, repoValidation, type CriterionGradeLike } from "./criteriaTable.js";
+import { criteriaScore, criteriaTable, currentCriterionRows, repoValidation, type CriterionGradeLike } from "./criteriaTable.js";
 
 const snapshot = {
   leaves: [
@@ -19,6 +19,7 @@ const row = (over: Partial<CriterionGradeLike> & Pick<CriterionGradeLike, "crite
   rationale: null,
   reason: null,
   createdAt: at(0),
+  lockedAt: null,
   ...over,
 });
 
@@ -35,8 +36,8 @@ describe("criteriaTable (ADR-106 §6)", () => {
   it("gives the staff each criterion's current row: points, state, source, rationale and reason", () => {
     const table = criteriaTable(snapshot, rows, { audience: "staff", frozen: true, released: false });
     expect(table).toEqual([
-      { criterionId: "rendu.tests", section: "rendu", description: "Tests", max: 10, points: 7.5, state: "proposed", source: "auto" },
-      { criterionId: "rapport.style", section: "rapport", description: "Style", max: 4, points: 3, state: "validated", source: "llm", rationale: XSS },
+      { criterionId: "rendu.tests", section: "rendu", description: "Tests", max: 10, points: 7.5, state: "proposed", locked: false, source: "auto" },
+      { criterionId: "rapport.style", section: "rapport", description: "Style", max: 4, points: 3, state: "validated", locked: false, source: "llm", rationale: XSS },
       {
         criterionId: "rapport.bonus",
         section: "rapport",
@@ -45,11 +46,12 @@ describe("criteriaTable (ADR-106 §6)", () => {
         bonus: 2,
         points: 0,
         state: "proposed",
+        locked: false,
         source: "llm",
         rationale: "provisional",
         reason: "llm_budget",
       },
-      { criterionId: "identity", section: "", description: "Who committed", max: 2, points: null, state: "empty" },
+      { criterionId: "identity", section: "", description: "Who committed", max: 2, points: null, state: "empty", locked: false },
     ]);
   });
 
@@ -90,6 +92,29 @@ describe("criteriaTable (ADR-106 §6)", () => {
     expect(bonus).toMatchObject({ points: 1, state: "validated" });
     expect(bonus).not.toHaveProperty("reason");
   });
+  it("marks a milestone's locked row for both audiences, a failed pass's included, never naming the checkpoint (§5, §9)", () => {
+    const locked = [
+      row({ criterionId: "rendu.tests", source: "auto", points: 0, reason: "no_commit", lockedAt: at(4) }),
+      row({ criterionId: "rapport.style", points: 2, lockedAt: null }),
+      row({ criterionId: "rapport.bonus", points: 1, state: "superseded", lockedAt: at(4) }),
+    ];
+    for (const audience of ["staff", "student"] as const) {
+      const table = criteriaTable(snapshot, locked, { audience, frozen: false, released: false });
+      expect(table.map((l) => l.locked)).toEqual([true, false, false, false]);
+    }
+    const [tests] = criteriaTable(snapshot, locked, { audience: "student", frozen: false, released: false });
+    expect(tests).toEqual({ criterionId: "rendu.tests", section: "rendu", description: "Tests", max: 10, points: null, state: "empty", locked: true });
+  });
+
+  it("stands on the newest validated row over any later proposal", () => {
+    const mixed = [
+      row({ criterionId: "identity", points: 1, state: "validated", createdAt: at(1) }),
+      row({ criterionId: "identity", points: 0, createdAt: at(5) }),
+      row({ criterionId: "identity", points: 2, state: "validated", createdAt: at(3) }),
+    ];
+    expect(currentCriterionRows(mixed).get("identity")).toMatchObject({ points: 2, state: "validated" });
+  });
+
   it("stands on the newest proposal whatever the order of the rows", () => {
     const two = [row({ criterionId: "identity", points: 2, createdAt: at(9) }), row({ criterionId: "identity", points: 1, createdAt: at(3) })];
     expect(criteriaTable(snapshot, two, { audience: "staff", frozen: true, released: false })[3]!.points).toBe(2);

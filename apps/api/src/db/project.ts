@@ -318,8 +318,11 @@ export const projectCriteria = pgTable("project_criteria", {
 
 /**
  * A review checkpoint (F-PROJ-11): at `due_at`, one `grade-milestone`
- * dispatch per repository; never counts for the score. `offset_days` (J−n)
- * keeps it with the deadline: re-resolved while not dispatched.
+ * dispatch per repository; never counts for the score. On a project graded
+ * by criteria it is a milestone (ADR-106 §5): its pass grades and locks the
+ * criteria its name tags, claimed in `grade_dispatches` all the same.
+ * `offset_days` (J−n) keeps it with the deadline: re-resolved while not
+ * dispatched.
  */
 export const projectCheckpoints = pgTable(
   "project_checkpoints",
@@ -870,8 +873,16 @@ export const projectEvidence = pgTable(
  * A criterion's points for a repository (ADR-106 §4), in `gradings`'
  * vocabulary and its supersede chain; written only by
  * `writeCriterionGrades` (`modules/project/criterionGrades.ts`). `pass_id`: the
- * pass that wrote the row — for an `auto` row, its evidence. The
- * milestone lock (§5) comes with L-02d.
+ * pass that wrote the row — for an `auto` row, its evidence.
+ * `locked_by_checkpoint_id` and `locked_at`: the milestone lock (§5),
+ * orthogonal to the state — a row a milestone pass wrote, or a teacher's
+ * row that superseded one; the final pass and a Regrade never supersede it.
+ * Its foreign key is `ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED`,
+ * written by hand in migration 0113 (drizzle cannot express it): a
+ * project's deletion cascades through its checkpoints and its
+ * repositories' rows in one transaction, while a checkpoint that locked
+ * rows can never be deleted alone (its pass was claimed in the ledger
+ * first: `deleteCheckpoint` refuses it, `409 checkpoint_dispatched`).
  */
 export const projectCriterionGrades = pgTable(
   "project_criterion_grades",
@@ -894,6 +905,9 @@ export const projectCriterionGrades = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     /** The teacher of a `manual` row. */
     createdBy: uuid("created_by").references(() => users.id),
+    /** The checkpoint whose milestone pass locked the criterion (§5); null: unlocked. */
+    lockedByCheckpointId: uuid("locked_by_checkpoint_id").references(() => projectCheckpoints.id),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("project_criterion_grades_validated_uq")

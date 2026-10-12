@@ -6003,6 +6003,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.grading.state.empty": "Sans points",
   "project.grading.state.proposed": "Proposé",
   "project.grading.state.validated": "Validé",
+  "project.grading.locked": "Verrouillé par un jalon : la correction finale et une nouvelle correction n'y touchent pas ; votre correction le garde verrouillé.",
   "project.grading.rationale": "Justification",
   "project.grading.rationale.edit": "Modifier la justification",
   "project.grading.rationale.save": "Enregistrer la justification",

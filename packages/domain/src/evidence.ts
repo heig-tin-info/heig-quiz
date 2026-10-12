@@ -62,7 +62,7 @@ function decodeXml(text: string): string {
 function attributes(text: string): Map<string, string> {
   const attrs = new Map<string, string>();
   for (const [, key, double, single] of text.matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
-    attrs.set(key!, decodeXml(double ?? single ?? ""));
+    attrs.set(key!, decodeXml(double ?? single!));
   }
   return attrs;
 }
@@ -79,9 +79,9 @@ const OUTCOME = /<(failure|error|skipped)\b((?:[^>"']|"[^"]*"|'[^']*')*)/;
 export function parseJunit(xml: string): JunitReport {
   const cases: JunitCase[] = [];
   for (const [, attrText, body] of xml.matchAll(TESTCASE)) {
-    const attrs = attributes(attrText ?? "");
+    const attrs = attributes(attrText!);
     const outcome = body === undefined ? null : OUTCOME.exec(body);
-    const message = outcome ? attributes(outcome[2] ?? "").get("message") : undefined;
+    const message = outcome ? attributes(outcome[2]!).get("message") : undefined;
     cases.push({
       name: attrs.get("name") ?? "",
       classname: attrs.get("classname") ?? "",

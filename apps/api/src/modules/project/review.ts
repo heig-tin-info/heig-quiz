@@ -19,11 +19,13 @@
  *   (F-GH-03 warns only).
  * - **A review checkpoint**: at its date, while it lies before the
  *   project's deadline (a checkpoint left behind by a deadline moved
- *   earlier is void and never fires, `checkpointFires`), one
+ *   earlier is void and never fires, `checkpointPass`), one
  *   `grade-milestone` dispatch to every live repository whose deadline has
  *   not come yet ({@link CHECKPOINT_TARGET}; one with a later own deadline
  *   included), on the last commit received before the date that no bot
- *   pushed. Never for the score.
+ *   pushed. Never for the score. A checkpoint of a project graded by
+ *   criteria is a milestone instead: the platform's pass, claimed in the
+ *   same ledger, nothing sent to GitHub (`milestone.ts`, ADR-106 §5).
  *
  * **At most once** (product owner, 2026-10-02): every dispatch is claimed in
  * the `grade_dispatches` ledger (`ON CONFLICT DO NOTHING`, the sha it sends
@@ -47,7 +49,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, lte, sql, type SQL } from "d
 import type { Octokit } from "octokit";
 
 import {
-  checkpointFires,
+  checkpointPass,
   effectiveDeadline,
   planCheckpointReviewDispatch,
   planFinalReviewDispatch,
@@ -72,7 +74,8 @@ import { hintProjectStaff, markRepoDeleted } from "./repos.js";
  * neither its final review nor a checkpoint: a `criteria` project's final
  * pass is the platform's (`jobs.ts`, ADR-106 §6, §10).
  */
-const REVIEWS = sql`(${projects.gradingMode} = 'auto' AND ${projects.archivedAt} IS NULL)`;
+const NOT_ARCHIVED = sql`${projects.archivedAt} IS NULL`;
+const REVIEWS = sql`(${projects.gradingMode} = 'auto' AND ${NOT_ARCHIVED})`;
 
 /**
  * A repository's final review is due: live, frozen for good with a frozen
@@ -96,16 +99,19 @@ const FINAL_REVIEW_DUE = and(
  * a checkpoint's run must never arrive in its freeze. Over a
  * `project_repos` row joined to its project.
  */
-const CHECKPOINT_TARGET = and(LIVE, isNull(projectRepos.deadlineAppliedAt))!;
+export const CHECKPOINT_TARGET = and(LIVE, isNull(projectRepos.deadlineAppliedAt))!;
 
 /**
- * The tick's filter of a checkpoint that fires (`checkpointFires` of
- * `@quiz/domain` is the rule; this its SQL twin, for the claim only). Over
- * a `project_checkpoints` row joined to its project.
+ * The tick's filter of a checkpoint that fires on a project graded `mode`
+ * (`checkpointPass` of `@quiz/domain` is the rule; this its SQL twin, for
+ * the claim only): the CI's dispatch on `auto`, the milestone pass on
+ * `criteria` (`milestone.ts`). Over a `project_checkpoints` row joined to
+ * its project.
  */
-const checkpointDue = (now: Date): SQL =>
+export const checkpointDue = (now: Date, mode: "auto" | "criteria"): SQL =>
   sql`(${projectCheckpoints.dispatchedAt} IS NULL AND ${projectCheckpoints.dueAt} <= ${ts(now)}
-    AND ${projectCheckpoints.dueAt} < ${projects.deadlineAt} AND ${projects.state} <> 'draft' AND ${REVIEWS})`;
+    AND ${projectCheckpoints.dueAt} < ${projects.deadlineAt} AND ${projects.state} <> 'draft' AND ${NOT_ARCHIVED}
+    AND ${projects.gradingMode} = ${mode})`;
 
 /**
  * The ticker's claim (no HTTP): the dispatch lease of every project with a
@@ -113,7 +119,7 @@ const checkpointDue = (now: Date): SQL =>
  */
 export function claimReviewWork(db: Db, now: Date): Promise<ProjectJob[]> {
   const work = sql`(EXISTS (SELECT 1 FROM ${projectRepos} WHERE ${projectRepos.projectId} = ${projects.id} AND ${FINAL_REVIEW_DUE})
-    OR EXISTS (SELECT 1 FROM ${projectCheckpoints} WHERE ${projectCheckpoints.projectId} = ${projects.id} AND ${checkpointDue(now)}))`;
+    OR EXISTS (SELECT 1 FROM ${projectCheckpoints} WHERE ${projectCheckpoints.projectId} = ${projects.id} AND ${checkpointDue(now, "auto")}))`;
   return claimLeases(db, "dispatchJobAt", now, work);
 }
 
@@ -265,7 +271,7 @@ async function dispatchCheckpoint(
       .from(projectCheckpoints)
       .where(and(eq(projectCheckpoints.id, checkpointId), eq(projectCheckpoints.projectId, projectId)))
       .for("share");
-    if (!checkpoint || !checkpointFires(checkpoint, project, now)) return null;
+    if (!checkpoint || checkpointPass(checkpoint, project, now) !== "dispatch") return null;
     const sha = await lastStudentPush(tx, repo.githubRepoId!, project.branches, checkpoint.dueAt);
     const plan = planCheckpointReviewDispatch(project.id, checkpoint, sha);
     if (!plan) return null;
@@ -323,7 +329,7 @@ export async function runReviewJob(app: FastifyInstance, config: AppConfig, job:
         .select()
         .from(projectCheckpoints)
         .where(and(eq(projectCheckpoints.projectId, project.id), isNull(projectCheckpoints.dispatchedAt)))
-    ).filter((c) => checkpointFires(c, project, now));
+    ).filter((c) => checkpointPass(c, project, now) === "dispatch");
     const targets = await db
       .select({ id: projectRepos.id, fullName: projectRepos.fullName })
       .from(projectRepos)

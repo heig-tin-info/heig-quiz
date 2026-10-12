@@ -426,6 +426,9 @@ export type AuditAction =
    * `name` besides; both `dispatched`, `deleted` (404: the repository gone),
    * `unconfirmed` (counts: GitHub's answer never came, never sent again) and
    * `failed` (full names: GitHub refused, sent again on the next pass).
+   * A milestone of a project graded by criteria (ADR-106 §5), by the
+   * ticker: `checkpoint_dispatched` with `payload.checkpointId`, `name` and
+   * `passes` (the milestone passes claimed; nothing goes to GitHub).
    */
   | "project.review_dispatched"
   | "project.checkpoint_dispatched"
