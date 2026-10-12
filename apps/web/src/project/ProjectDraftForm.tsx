@@ -86,7 +86,7 @@ export function ProjectDraftForm({
   const t = useT();
   const [open, setOpen] = useState(false);
   const disabled = patch.isPending || project.archivedAt !== null;
-  const suggested = useProtectedSuggestions(project, open);
+  const offer = useProtectedSuggestions(project, open);
   const changed = advancedCount(project);
   const grading = useGradingModeWrite(write);
   const can = (field: "gradingMode" | "gradingScale" | "graceMinutes" | "deadlineStrategy") => project.editable.includes(field);
@@ -188,7 +188,7 @@ export function ProjectDraftForm({
         <ProtectedFilesRow
           project={project}
           disabled={disabled}
-          suggested={suggested}
+          offer={offer}
           onChange={(protectedFiles) => write({ protectedFiles })}
         />
         <WorkModeSetting projectId={project.id} archived={project.archivedAt !== null} />

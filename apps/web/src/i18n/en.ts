@@ -5672,6 +5672,12 @@ export const en = {
   "project.scale.score_is_grade": "Score is the grade",
   "project.protected": "Protected files",
   "project.advanced.desc": "Branches, source, publication, deadlines, grading, protected files, group work. The defaults suit most projects.",
+  "project.protected.hint": "The platform's evidence run also uses these files from the distribution, in place of the student's. A file absent from the source is simply not restored.",
+  "project.protected.add": "Add",
+  "project.protected.add.label": "Add a file",
+  "project.protected.add.invalid": "A path relative to the repository root, such as tests/test_lab.py: not starting with /, without “..”, 50 files at most.",
+  "project.protected.added": "Files added by path",
+  "project.protected.remove": "Unprotect",
   "project.protected.gradingWarning": "Unprotected, the grading workflow can be changed by the student, and the score with it.",
   "project.groups": "Groups",
 

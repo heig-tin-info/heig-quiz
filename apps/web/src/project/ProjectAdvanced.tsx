@@ -4,7 +4,7 @@ import { GroupSetPicker } from "../group/GroupSetPicker";
 import { useT } from "../i18n";
 import { SettingRow, Switch, ToggleChip } from "../ui";
 import { chosenBranches, chosenProtected, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
-import { ProtectedFiles } from "./ProtectedFiles";
+import { ProtectedFiles, sourceFiles } from "./ProtectedFiles";
 import {
   DeadlineKindRow,
   DeadlineStrategyRow,
@@ -92,10 +92,11 @@ export function ProjectAdvanced({
         <ScaleRow value={draft.scaleKind} onChange={(scaleKind) => update({ scaleKind })} />
       ) : null}
 
-      {detail && detail.suggestedProtected.length > 0 ? (
-        <SettingRow stacked title={t("project.protected")}>
+      {detail ? (
+        <SettingRow stacked title={t("project.protected")} desc={`${t("project.protected.desc")} ${t("project.protected.hint")}`}>
           <ProtectedFiles
             suggested={detail.suggestedProtected}
+            files={sourceFiles(detail)}
             value={chosenProtected(draft, detail)}
             onChange={(protectedFiles) => update({ protectedFiles })}
           />
