@@ -5,6 +5,8 @@
 //   Bash:        refuses `git add -A|.|--all` and `git commit -a|--all`, and a
 //                commit that leaves a modified pnpm-lock.yaml or
 //                pnpm-workspace.yaml behind while a package.json goes in.
+//                Refuses `git reset --soft <ref>` onto a ref that is not an
+//                ancestor of HEAD: the next commit would revert that ref's work.
 //                Refuses starting a test run (vitest, `pnpm … test`) while the
 //                machine is short of memory or already runs many vitest
 //                workers: several agents testing at once took WSL down.
@@ -189,7 +191,21 @@ function checkBash(command) {
       }
       checkLockfile(g.dir, pendingAdds);
     }
+    if (g.sub === "reset" && g.args.includes("--soft")) checkSoftReset(g.dir, g.args);
   }
+}
+
+// `git reset --soft <ref>` keeps the index: onto a ref that is not an ancestor
+// of HEAD (origin/main after someone else's merge), the next commit records
+// the reversal of everything that ref has and HEAD lacks (#806 erased #800).
+function checkSoftReset(dir, args) {
+  const ref = args.find((a) => !a.startsWith("-")) ?? "HEAD";
+  if (git(dir, "merge-base", "--is-ancestor", ref, "HEAD") !== null) return;
+  if (git(dir, "rev-parse", "--verify", "--quiet", `${ref}^{commit}`) === null) return;
+  block(
+    `\`git reset --soft ${ref}\`: ${ref} is not an ancestor of HEAD, so the next commit would silently revert ` +
+      "what it has and HEAD lacks. Squash onto `$(git merge-base HEAD origin/main)`, then rebase onto origin/main.",
+  );
 }
 
 // A package.json going into the commit while pnpm-lock.yaml or

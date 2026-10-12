@@ -138,6 +138,10 @@ jobs:
         with:
           fetch-depth: 2
       - run: node scripts/check-adr-numbers.mjs
+      # Migrations, their journal and the ADRs only grow (#806 erased #800
+      # from a stale index); HEAD^1 is the base of a PR's merge commit, and
+      # the previous main on a push.
+      - run: node scripts/check-deletions.mjs --base HEAD^1
       - run: node --test scripts/*.test.mjs
       # The engine VM's deploy scripts and the staging dispatcher's test
       # (audit H4). No install: bash and the hosted runner's shellcheck,
