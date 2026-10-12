@@ -337,14 +337,12 @@ describe("HttpRunner.project (ADR-106 §3)", () => {
     image: "lab-c",
     commands: { build: ["make", "prepare"], test: ["pytest", "-q"] },
     outputs: ["report.xml"],
-    limits: { timeMs: 60_000, memoryMb: 512, cpus: 1 },
-    budgetMs: 120_000,
   };
   const RESULT: ProjectRunResult = {
     build: { exitCode: 0, stdout: "", stderr: "", ms: 10, timedOut: false, truncated: false },
     test: { exitCode: 1, stdout: "1 failed", stderr: "", ms: 20, timedOut: false, truncated: false },
     files: [
-      { path: "report.xml", content: "<testsuite/>", truncated: false },
+      { path: "report.xml", content: "<testsuite/>", truncated: false, size: 12 },
       { path: "build/prog", binary: true, size: 4096 },
     ],
   };
@@ -363,7 +361,7 @@ describe("HttpRunner.project (ADR-106 §3)", () => {
     server.post("/project", answer(200, RESULT));
     server.post("/noimage/project", answer(503, { error: "image_unavailable", image: "lab-c" }));
     server.post("/engine/project", answer(503, { error: "engine_error" }));
-    server.post("/big/project", answer(413, { error: "archive_too_large" }));
+    server.post("/big/project", answer(413, { error: "archive_too_large_for_workdir" }));
     server.post("/nottar/project", answer(400, { error: "archive_invalid" }));
     server.post("/link/project", answer(400, { error: "archive_refused", entries: ["l: symbolic_link"] }));
     server.post("/schema/project", answer(400, { error: "invalid_request", issues: [] }));
@@ -398,7 +396,7 @@ describe("HttpRunner.project (ADR-106 §3)", () => {
   });
 
   it("maps the archive's refusals and a schema refusal", async () => {
-    expect(await at("/big").project(PROJECT)).toEqual({ refused: "archive_too_large" });
+    expect(await at("/big").project(PROJECT)).toEqual({ refused: "archive_too_large_for_workdir" });
     expect(await at("/nottar").project(PROJECT)).toEqual({ refused: "archive_invalid" });
     expect(await at("/link").project(PROJECT)).toEqual({
       refused: "archive_refused",

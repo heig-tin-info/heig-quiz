@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
 import { createFakeEngine, type FakeEngine } from "./test/fakeEngine.js";
 import { testConfig } from "./test/config.js";
-import { rawTar } from "./test/tarFixture.js";
+import { header, writeTar } from "@quiz/core/tar";
 
 /**
  * The HTTP surface, against a fake engine: the contract of `packages/core` on
@@ -277,12 +277,12 @@ describe("a client that goes away", () => {
 
 describe("POST /project", () => {
   const PROJECT = {
-    archive: rawTar([{ name: "Makefile", data: "prepare:\n" }]).toString("base64"),
+    archive: Buffer.from(
+      writeTar([{ path: "Makefile", type: "file", mode: 0o644, mtime: 0, data: Buffer.from("prepare:\n") }]),
+    ).toString("base64"),
     image: "lab-c",
     commands: { build: ["make", "prepare"], test: ["pytest", "-q"] },
     outputs: ["report.xml"],
-    limits: { timeMs: 60_000, memoryMb: 512, cpus: 1 },
-    budgetMs: 120_000,
   };
 
   function labEngine(): FakeEngine {
@@ -291,67 +291,41 @@ describe("POST /project", () => {
     return engine;
   }
 
-  it("answers a ProjectRunResult", async () => {
+  it("answers a ProjectRunResult, and accepts a body over the 4 MB of /run", async () => {
     const server = await start(labEngine());
-    const res = await server.inject({ method: "POST", url: "/project", payload: PROJECT });
+    const big = Buffer.from(
+      writeTar([{ path: "big.bin", type: "file", mode: 0o644, mtime: 0, data: new Uint8Array(6 << 20) }]),
+    ).toString("base64");
+    const res = await server.inject({ method: "POST", url: "/project", payload: { ...PROJECT, archive: big } });
     expect(res.statusCode).toBe(200);
-    expect(ProjectRunResult.parse(res.json())).toMatchObject({ files: [] });
+    ProjectRunResult.parse(res.json());
   });
 
-  it("refuses an archive with a link in it, whole, with 400 and the entries", async () => {
+  it("refuses an archive with a link in it, whole, with 400 and the entries, before any container", async () => {
     const engine = labEngine();
     const server = await start(engine);
-    const archive = rawTar([
-      { name: "Makefile", data: "x" },
-      { name: "link", type: "2", linkname: "/etc/shadow" },
-    ]).toString("base64");
-    const res = await server.inject({ method: "POST", url: "/project", payload: { ...PROJECT, archive } });
+    const link = new Uint8Array(1536);
+    link.set(header(new TextEncoder().encode("link"), "2", 0, 0o777, 0));
+    const res = await server.inject({
+      method: "POST",
+      url: "/project",
+      payload: { ...PROJECT, archive: Buffer.from(link).toString("base64") },
+    });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: "archive_refused", entries: ["link: symbolic_link"] });
     expect(engine.created).toEqual([]);
   });
 
-  it("accepts a body over the 4 MB of /run, and refuses an archive over its cap with 413", async () => {
-    const server = await start(labEngine());
-    const big = rawTar([{ name: "big.bin", data: Buffer.alloc(6 * 1024 * 1024) }]).toString("base64");
-    const ok = await server.inject({ method: "POST", url: "/project", payload: { ...PROJECT, archive: big } });
-    expect(ok.statusCode).toBe(200);
-
-    const over = await server.inject({
-      method: "POST",
-      url: "/project",
-      payload: { ...PROJECT, archive: "A".repeat(PROJECT_ARCHIVE_MAX_BASE64 + 4) },
-    });
-    expect(over.statusCode).toBe(413);
-    expect(over.json()).toEqual({ error: "archive_too_large" });
-  });
-
   it.each([
     ["a shell string instead of an argv", { commands: { test: "make && pytest" } }],
-    ["an empty argv", { commands: { test: [] } }],
-    ["a program starting with -", { commands: { test: ["--help"] } }],
-    ["an output outside the root", { outputs: ["../etc/passwd"] }],
+    ["an archive over the cap", { archive: "A".repeat(PROJECT_ARCHIVE_MAX_BASE64 + 4) }],
     ["an unknown image", { image: "ubuntu" }],
-    ["a budget over 10 minutes", { budgetMs: 600_001 }],
-  ])("refuses %s with 400", async (_, override) => {
+  ])("refuses %s with 400 invalid_request", async (_, override) => {
     const engine = labEngine();
     const server = await start(engine);
     const res = await server.inject({ method: "POST", url: "/project", payload: { ...PROJECT, ...override } });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toMatchObject({ error: "invalid_request" });
-    expect(engine.created).toEqual([]);
-  });
-
-  it("refuses an archive that is not a tar with 400, before any container", async () => {
-    const engine = labEngine();
-    const server = await start(engine);
-    const res = await server.inject({
-      method: "POST",
-      url: "/project",
-      payload: { ...PROJECT, archive: Buffer.from("x".repeat(700)).toString("base64") },
-    });
-    expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: "archive_invalid" });
     expect(engine.created).toEqual([]);
   });
 
@@ -362,7 +336,17 @@ describe("POST /project", () => {
     expect(res.json()).toEqual({ error: "image_unavailable", image: "lab-c" });
   });
 
-  it("admits at most RUNNER_PROJECT_QUEUE_MAX project runs, then 429", async () => {
+  it("answers 413 archive_too_large_for_workdir when the tmpfs is too small", async () => {
+    const engine = labEngine();
+    const failing = createFakeEngine((call) => (call.argv[0] === "tar" ? { exitCode: 2 } : {}));
+    engine.exec = failing.exec;
+    const server = await start(engine);
+    const res = await server.inject({ method: "POST", url: "/project", payload: PROJECT });
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toEqual({ error: "archive_too_large_for_workdir" });
+  });
+
+  it("admits one project run at a time, then 429", async () => {
     let release = (): void => undefined;
     const held = new Promise<void>((resolve) => {
       release = resolve;
@@ -373,7 +357,7 @@ describe("POST /project", () => {
       await held;
       return create(options);
     };
-    const server = await start(engine, { RUNNER_PROJECT_QUEUE_MAX: 1 });
+    const server = await start(engine);
     const first = server.inject({ method: "POST", url: "/project", payload: PROJECT });
     // The first is admitted and waits in `create`.
     await new Promise((resolve) => setTimeout(resolve, 50));

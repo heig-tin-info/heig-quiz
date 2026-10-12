@@ -24,6 +24,7 @@
  * retried: retrying a full queue is how a full queue stays full.
  */
 import {
+  PROJECT_TIME_MAX_MS,
   ProjectRunRefusal,
   ProjectRunRequest,
   ProjectRunResult,
@@ -131,14 +132,11 @@ function retryAfterMs(res: Response): number | null {
 }
 
 /**
- * How long a project run may wait in the runner's queue: as a grading run.
- * The project job is paced on this side, so the wait is the code questions'
- * runs ahead of it.
+ * How long the API waits for a project run: the runner's longest
+ * (`RUNNER_PROJECT_TIMEOUT_MS` is at most `PROJECT_TIME_MAX_MS`) and the
+ * grading queue's allowance. The project job is paced on this side.
  */
-const PROJECT_QUEUE_ALLOWANCE_MS = QUEUE_ALLOWANCE_MS.grading;
-
-/** The runner's refusals of a project run, by its `error`: an answer, never retried. */
-const PROJECT_REFUSALS = new Set<string>(ProjectRunRefusal.shape.refused.options);
+const PROJECT_WAIT_MS = PROJECT_TIME_MAX_MS + QUEUE_ALLOWANCE_MS.grading;
 
 export class HttpRunner implements RunnerService, ProjectRunnerService {
   private readonly base: string;
@@ -178,32 +176,25 @@ export class HttpRunner implements RunnerService, ProjectRunnerService {
 
   /**
    * `POST /project` (ADR-106 §3). A refusal the runner states — no image
-   * for it, an archive over the cap or not a tar, a request it would not
-   * parse — is an ANSWER and is never retried, even when it comes as a 503
-   * (`image_unavailable`); any other 502/503/504 is retried once, like `run`.
+   * for it, an archive not a tar or with a refused entry, one too large for
+   * the work directory, a request it would not parse — is an ANSWER and is
+   * never retried, whatever its status (`image_unavailable` is a 503); 429 is
+   * `RunnerBusy`; any other 502/503/504 is retried once, like `run`.
    */
   async project(req: ProjectRunRequest): Promise<ProjectRunResult | ProjectRunRefusal> {
     const sent = ProjectRunRequest.parse(req);
-    const waitMs = PROJECT_QUEUE_ALLOWANCE_MS + sent.budgetMs + RUNNER_TTL_SLACK_MS;
     for (let attempt = 0; ; attempt++) {
-      const res = await this.post(`${this.base}/project`, sent, waitMs);
+      const res = await this.post(`${this.base}/project`, sent, PROJECT_WAIT_MS);
       if (res.ok) {
         const parsed = ProjectRunResult.safeParse(await this.json(res));
         if (!parsed.success) throw new RunnerUnavailable("bad_response");
         return parsed.data;
       }
       const body = (await res.json().catch(() => null)) as { error?: unknown; entries?: unknown } | null;
-      const error = body?.error;
+      const refusal = ProjectRunRefusal.safeParse({ refused: body?.error, entries: body?.entries });
+      if (refusal.success) return refusal.data;
 
       if (res.status === 429) throw new RunnerBusy(retryAfterMs(res));
-      if (res.status === 413) return { refused: "archive_too_large" };
-      if (typeof error === "string" && PROJECT_REFUSALS.has(error) && res.status !== 502) {
-        const entries = Array.isArray(body?.entries)
-          ? body.entries.filter((entry): entry is string => typeof entry === "string")
-          : undefined;
-        return { refused: error as ProjectRunRefusal["refused"], ...(entries ? { entries } : {}) };
-      }
-      if (res.status === 400) return { refused: "invalid_request" };
       if (RETRYABLE.has(res.status)) {
         if (attempt < this.retries) continue;
         throw new RunnerUnavailable(`upstream_${res.status}`);

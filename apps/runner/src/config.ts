@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { BlockList, isIP } from "node:net";
 import { fileURLToPath } from "node:url";
 
-import { RUNNER_BUDGET_DEFAULTS } from "@quiz/core/server";
+import { PROJECT_TIME_MAX_MS, RUNNER_BUDGET_DEFAULTS } from "@quiz/core/server";
 import { z } from "zod";
 
 /**
@@ -159,22 +159,14 @@ const EnvSchema = z.object({
     .default(RUNNER_BUDGET_DEFAULTS.requestTimeoutMs),
 
   /*
-   * Project runs (`POST /project`, ADR-106 §3). Ceilings only: the container
-   * gets the flags of `containerArgs()`, unchanged; these set the values of
-   * `--cpus` and of the tmpfs size for a project, and how many may hold a slot.
+   * Project runs (`POST /project`, ADR-106 §3): the runner's configuration,
+   * never a request's. The container gets the flags of `containerArgs()`,
+   * unchanged; these set the run's budget and the size of its tmpfs.
    */
-  /** Ceiling on a whole project run; a request's `budgetMs` may only lower it. */
-  RUNNER_PROJECT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(600_000).default(600_000),
-  /**
-   * Project runs admitted at once, waiting or running; beyond it `429`. A
-   * project run holds a slot for minutes: this keeps the code questions'
-   * slots theirs.
-   */
-  RUNNER_PROJECT_QUEUE_MAX: z.coerce.number().int().min(1).max(64).default(2),
+  /** A whole project run, from its start: the build gets at most half, the tests the rest. */
+  RUNNER_PROJECT_TIMEOUT_MS: z.coerce.number().int().min(30_000).max(PROJECT_TIME_MAX_MS).default(PROJECT_TIME_MAX_MS),
   /** Size of the `/work` and `/tmp` tmpfs of a project run: the unpacked repository and its build. */
   RUNNER_PROJECT_WORKDIR_MB: z.coerce.number().int().min(32).max(2048).default(256),
-  /** Ceiling on a project's `limits.cpus` (`--cpus`). Its memory is capped by `RUNNER_MAX_MEMORY_MB`. */
-  RUNNER_PROJECT_MAX_CPUS: z.coerce.number().min(0.5).max(16).default(2),
 });
 
 export type RunnerConfig = Omit<z.infer<typeof EnvSchema>, "PODMAN_SOCKET" | "RUNNER_SECCOMP"> & {

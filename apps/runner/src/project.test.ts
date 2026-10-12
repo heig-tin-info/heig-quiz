@@ -1,15 +1,12 @@
-import {
-  PROJECT_ARCHIVE_MAX_BYTES,
-  PROJECT_FILE_MAX_BYTES,
-  PROJECT_OUTPUT_MAX_BYTES,
-  type ProjectRunRequest,
-} from "@quiz/core/server";
+import { PROJECT_FILE_MAX_BYTES, PROJECT_OUTPUT_MAX_BYTES, type ProjectRunRequest } from "@quiz/core/server";
+import { readTar, writeTar, type CleanEntry } from "@quiz/core/tar";
 import { describe, expect, it } from "vitest";
 
 import type { ExecResult } from "./engine.js";
 import {
   COLLECT_RESERVE_MS,
-  outputFile,
+  outputsUnderDirectories,
+  parentsOf,
   parseListing,
   prepareProject,
   ProjectArchiveError,
@@ -17,17 +14,18 @@ import {
   runProject,
   UNPACK_ARGV,
 } from "./project.js";
-import { readTar, writeTar } from "./tar.js";
 import { createFakeEngine, type FakeCall } from "./test/fakeEngine.js";
-import { rawTar } from "./test/tarFixture.js";
 import { testConfig } from "./test/config.js";
 
 const config = testConfig();
 
-const ARCHIVE = rawTar([
-  { name: "Makefile", data: "prepare:\n\ttrue\n" },
-  { name: "tests/test_a.py", data: "def test_a(): pass\n" },
-]);
+function file(path: string, content: string | Buffer): CleanEntry {
+  return { path, type: "file", mode: 0o644, mtime: 0, data: Buffer.from(content) };
+}
+
+const ARCHIVE = Buffer.from(
+  writeTar([file("Makefile", "prepare:\n\ttrue\n"), file("tests/test_a.py", "def test_a(): pass\n")]),
+);
 
 function request(overrides: Partial<ProjectRunRequest> = {}): ProjectRunRequest {
   return {
@@ -35,46 +33,45 @@ function request(overrides: Partial<ProjectRunRequest> = {}): ProjectRunRequest 
     image: "lab-c",
     commands: { build: ["make", "prepare"], test: ["pytest", "--junitxml=report.xml", "-q"] },
     outputs: ["report.xml", "build/"],
-    limits: { timeMs: 120_000, memoryMb: 512, cpus: 2 },
-    budgetMs: 300_000,
     ...overrides,
   };
 }
 
-/** The listing `find -printf '%y %s %p\0'` prints. */
-function listing(records: Array<[string, number, string]>): Buffer {
-  return Buffer.from(records.map(([type, size, path]) => `${type} ${size} ./${path}\0`).join(""));
+/** The listing `find -printf` prints: `%y %s %p\0`, or `%y %p\0` without a size. */
+function listing(records: Array<[string, number | null, string]>): Buffer {
+  return Buffer.from(
+    records.map(([type, size, path]) => `${type} ${size === null ? "" : `${size} `}./${path}\0`).join(""),
+  );
 }
 
 type Files = Record<string, Buffer>;
 
-/** An engine whose container holds `files`, answering find, tar -c and head from them. */
+/**
+ * An engine whose container holds `files` (and `links`, symbolic links),
+ * answering both `find` listings and `tar -c` from them.
+ */
 function engineWith(
   files: Files,
   step: (call: FakeCall) => Partial<ExecResult> = () => ({}),
-  extra: Array<[string, number, string]> = [],
+  links: string[] = [],
 ) {
   return createFakeEngine((call) => {
     const [program] = call.argv;
+    if (program === "find" && call.argv.includes("-maxdepth")) {
+      const asked = call.argv.slice(1, call.argv.indexOf("-maxdepth")).map((path) => path.slice(2));
+      return { stdoutBytes: listing(asked.map((path) => [links.includes(path) ? "l" : "d", null, path])) };
+    }
     if (program === "find") {
       return {
         stdoutBytes: listing([
           ...Object.entries(files).map(([path, data]): [string, number, string] => ["f", data.length, path]),
-          ...extra,
+          ...links.map((path): [string, number, string] => ["l", 11, path]),
         ]),
       };
     }
     if (program === "tar" && call.argv[1] === "-c") {
       const paths = call.argv.slice(5).map((path) => path.slice(2));
-      return {
-        stdoutBytes: writeTar(
-          paths.map((path) => ({ path, type: "file", mode: 0o644, mtime: 0, data: files[path]! })),
-        ),
-      };
-    }
-    if (program === "head") {
-      const take = Number(call.argv[2]);
-      return { stdoutBytes: files[call.argv[3]!.slice(2)]!.subarray(0, take) };
+      return { stdoutBytes: Buffer.from(writeTar(paths.map((path) => file(path, files[path]!)))) };
     }
     if (program === "timeout") return step(call);
     return {};
@@ -92,38 +89,17 @@ const programs = (calls: FakeCall[]): string[] => calls.map((call) => call.argv[
 
 describe("prepareProject", () => {
   it("repacks a clean archive before anything runs", () => {
-    const prepared = prepareProject(request());
-    expect(readTar(prepared.tar).map((entry) => entry.path)).toEqual(["Makefile", "tests/", "tests/test_a.py"]);
+    expect(readTar(prepareProject(request()).tar).map((entry) => entry.path)).toEqual([
+      "Makefile",
+      "tests/",
+      "tests/test_a.py",
+    ]);
   });
 
-  it("refuses the WHOLE archive for one bad entry, naming every one (invariant 12)", () => {
-    const archive = rawTar([
-      { name: "Makefile", data: "x" },
-      { name: "evil", type: "2", linkname: "/etc/shadow" },
-      { name: "../up", data: "x" },
-    ]).toString("base64");
-    let refused: ProjectArchiveError | null = null;
-    try {
-      prepareProject(request({ archive }));
-    } catch (error) {
-      refused = error as ProjectArchiveError;
+  it("refuses what is not base64 or not a tar", () => {
+    for (const archive of ["not base64!", Buffer.from("x".repeat(600)).toString("base64")]) {
+      expect(() => prepareProject(request({ archive }))).toThrow(ProjectArchiveError);
     }
-    expect(refused?.reason).toBe("archive_refused");
-    expect(refused?.entries).toEqual(["evil: symbolic_link", "../up: dot_segment"]);
-  });
-
-  it("refuses what is not base64, what is not a tar, and what is too large", () => {
-    const reason = (archive: string): string => {
-      try {
-        prepareProject(request({ archive }));
-        return "accepted";
-      } catch (error) {
-        return (error as ProjectArchiveError).reason;
-      }
-    };
-    expect(reason("not base64!")).toBe("archive_invalid");
-    expect(reason(Buffer.from("x".repeat(600)).toString("base64"))).toBe("archive_invalid");
-    expect(reason(Buffer.alloc(PROJECT_ARCHIVE_MAX_BYTES + 3).toString("base64"))).toBe("archive_too_large");
   });
 });
 
@@ -135,28 +111,35 @@ describe("runProject", () => {
     const prepared = prepareProject(request());
     const result = await runProject(prepared, deps(engine));
 
+    // The runner's configuration, never the request's (ADR-106 §3).
     expect(engine.created).toEqual([
       {
         name: "quiz-run-project",
         image: "quiz-runner-lab-c:latest",
-        memoryMb: 512,
+        memoryMb: config.RUNNER_MAX_MEMORY_MB,
         pidsLimit: 64,
-        cpus: 2,
+        cpus: 1,
         workdirMb: config.RUNNER_PROJECT_WORKDIR_MB,
-        ttlSeconds: 305,
+        ttlSeconds: config.RUNNER_PROJECT_TIMEOUT_MS / 1000 + 5,
       },
     ]);
     const [unpack] = engine.calls;
     expect(unpack!.argv).toEqual(UNPACK_ARGV);
     expect(Buffer.isBuffer(unpack!.stdin) && unpack!.stdin.equals(prepared.tar)).toBe(true);
     expect(programs(engine.calls)).toEqual(["tar", "timeout", "kill", "timeout", "kill", "find", "tar"]);
-    expect(engine.calls[1]!.argv).toEqual(["timeout", "-s", "KILL", "120", "make", "prepare"]);
+    // The build gets half the budget; the tests the rest, minus the outputs' reserve and the grace.
+    const half = config.RUNNER_PROJECT_TIMEOUT_MS / 2000;
+    expect(engine.calls[1]!.argv).toEqual(["timeout", "-s", "KILL", String(half), "make", "prepare"]);
     expect(engine.calls[2]!.argv).toEqual(REAP_ARGV);
-    expect(engine.calls[3]!.argv).toEqual(["timeout", "-s", "KILL", "120", "pytest", "--junitxml=report.xml", "-q"]);
+    const testSeconds = Number(engine.calls[3]!.argv[3]);
+    expect(testSeconds * 1000).toBeLessThanOrEqual(
+      config.RUNNER_PROJECT_TIMEOUT_MS - COLLECT_RESERVE_MS - config.RUNNER_CASE_GRACE_MS,
+    );
+    expect(testSeconds).toBeGreaterThan(half);
     expect(result).toEqual({
       build: { exitCode: 0, stdout: "built\n", stderr: "", ms: 1, timedOut: false, truncated: false },
       test: { exitCode: 0, stdout: "1 passed\n", stderr: "", ms: 1, timedOut: false, truncated: false },
-      files: [{ path: "report.xml", content: "<testsuite/>", truncated: false }],
+      files: [{ path: "report.xml", content: "<testsuite/>", truncated: false, size: 12 }],
     });
     expect(engine.removed).toContain("quiz-run-project");
   });
@@ -172,66 +155,55 @@ describe("runProject", () => {
 
   it("has no build step when the request names none", async () => {
     const engine = engineWith({});
-    const result = await runProject(
-      prepareProject(request({ commands: { test: ["pytest"] } })),
-      deps(engine),
-    );
+    const result = await runProject(prepareProject(request({ commands: { test: ["pytest"] } })), deps(engine));
     expect(result.build).toBeNull();
     expect(engine.calls.filter((call) => call.argv[0] === "timeout")).toHaveLength(1);
   });
 
-  it("caps the clamps: memory by RUNNER_MAX_MEMORY_MB, cpus by RUNNER_PROJECT_MAX_CPUS", async () => {
-    const engine = engineWith({});
-    await runProject(
-      prepareProject(request({ limits: { timeMs: 10_000, memoryMb: 2048, cpus: 4 } })),
-      { ...deps(engine), config: testConfig({ RUNNER_MAX_MEMORY_MB: 768, RUNNER_PROJECT_MAX_CPUS: 1.5 }) },
-    );
-    expect(engine.created[0]).toMatchObject({ memoryMb: 768, cpus: 1.5, pidsLimit: 64 });
-  });
-
-  it("fits each step into the budget, keeping the outputs' reserve", async () => {
-    const engine = engineWith({});
-    await runProject(prepareProject(request({ budgetMs: 30_000 })), deps(engine));
-    const seconds = Math.floor((30_000 - COLLECT_RESERVE_MS - config.RUNNER_CASE_GRACE_MS) / 1000);
-    const steps = engine.calls.filter((call) => call.argv[0] === "timeout");
-    expect(steps[0]!.argv[3]).toBe(String(seconds));
-    expect(steps[0]!.timeoutMs).toBe(seconds * 1000 + config.RUNNER_CASE_GRACE_MS);
-  });
-
   it("starts no step the budget cannot hold, and reports it timed out", async () => {
     const engine = engineWith({});
-    const result = await runProject(prepareProject(request({ budgetMs: 5_000 })), deps(engine));
+    const tight = testConfig({ RUNNER_PROJECT_TIMEOUT_MS: COLLECT_RESERVE_MS + 2_500 });
+    const result = await runProject(prepareProject(request()), { ...deps(engine), config: tight });
     expect(engine.calls.some((call) => call.argv[0] === "timeout")).toBe(false);
     expect(result.build).toMatchObject({ exitCode: null, timedOut: true });
     expect(result.test).toMatchObject({ exitCode: null, timedOut: true });
   });
 
-  it("caps the budget at RUNNER_PROJECT_TIMEOUT_MS", async () => {
-    const engine = engineWith({});
-    await runProject(prepareProject(request({ budgetMs: 600_000 })), {
-      ...deps(engine),
-      config: testConfig({ RUNNER_PROJECT_TIMEOUT_MS: 60_000 }),
-    });
-    expect(engine.created[0]!.ttlSeconds).toBe(65);
-  });
-
-  it("runs nothing more in a container the service's clock or the OOM killer took", async () => {
-    const engine = engineWith({ "report.xml": Buffer.from("x") }, (call) =>
-      call.argv[4] === "make" ? { exitCode: null, timedOut: true } : {},
-    );
+  it.each([
+    ["the service's clock fired", { exitCode: null, timedOut: true }],
+    ["the container is gone", { exitCode: 137, containerGone: true }],
+  ])("runs nothing more once %s", async (_, answer) => {
+    const engine = engineWith({ "report.xml": Buffer.from("x") }, (call) => (call.argv[4] === "make" ? answer : {}));
     const result = await runProject(prepareProject(request()), deps(engine));
-    expect(result.build).toMatchObject({ exitCode: null, timedOut: true });
     expect(result.test).toMatchObject({ exitCode: null, timedOut: true, ms: 0 });
     expect(result.files).toEqual([]);
     expect(programs(engine.calls)).toEqual(["tar", "timeout"]);
   });
 
-  it("fails as upload_failed when the archive does not unpack", async () => {
-    const engine = createFakeEngine((call) => (call.argv[0] === "tar" ? { exitCode: 2 } : {}));
+  it("ends the run, not the request, when the reap fails", async () => {
+    const engine = engineWith({ "report.xml": Buffer.from("x") });
+    const exec = engine.exec.bind(engine);
+    engine.exec = async (name, options) => {
+      if (options.argv[0] === "kill") throw new Error("socket closed");
+      return exec(name, options);
+    };
+    const result = await runProject(prepareProject(request()), deps(engine));
+    expect(result.build).toMatchObject({ exitCode: 0 });
+    expect(result.test).toMatchObject({ exitCode: null, timedOut: true });
+    expect(result.files).toEqual([]);
+  });
+
+  it("refuses an archive that does not fit the work directory, never as a retryable failure", async () => {
+    const engine = createFakeEngine((call) => (call.argv[0] === "tar" ? { exitCode: 2, stderr: "No space left" } : {}));
     await expect(runProject(prepareProject(request()), deps(engine))).rejects.toMatchObject({
-      reason: "upload_failed",
+      reason: "archive_too_large_for_workdir",
     });
     expect(engine.removed).toContain("quiz-run-project");
+  });
+
+  it("is upload_failed, retryable, when the engine lost the container while unpacking", async () => {
+    const engine = createFakeEngine((call) => (call.argv[0] === "tar" ? { exitCode: null, containerGone: true } : {}));
+    await expect(runProject(prepareProject(request()), deps(engine))).rejects.toMatchObject({ reason: "upload_failed" });
   });
 
   it("starts nothing for a caller that has gone", async () => {
@@ -246,32 +218,40 @@ describe("runProject", () => {
 });
 
 describe("the outputs", () => {
-  it("never follows nor returns a symbolic link, a directory or a refused name", () => {
-    const listed = parseListing(
-      listing([
-        ["d", 4096, "build"],
-        ["l", 11, "build/passwd"],
-        ["f", 3, "build/b.txt"],
-        ["f", 3, "build/a.txt"],
-        ["f", 1, "build/bad\nname"],
-        ["f", 9, "report.xml"],
-        ["f", 2, "other.txt"],
-      ]),
-      ["report.xml", "build/", "build/a.txt"],
-    );
-    expect(listed).toEqual([
+  it("drops an output whose parent the build replaced by a link (invariant 12)", async () => {
+    expect(parentsOf("out/sub/report.xml")).toEqual(["out", "out/sub"]);
+    expect(
+      outputsUnderDirectories(["out/x", "build/", "a/b/c"], listing([["l", null, "out"], ["d", null, "a"]])),
+    ).toEqual(["build/"]);
+
+    const engine = engineWith({ "build/ok.txt": Buffer.from("ok") }, () => ({}), ["out"]);
+    const result = await runProject(prepareProject(request({ outputs: ["out/x", "build/"] })), deps(engine));
+    const parents = engine.calls.find((call) => call.argv.includes("-maxdepth"));
+    expect(parents!.argv).toEqual(["find", "./out", "-maxdepth", "0", "-printf", "%y %p\\0"]);
+    const list = engine.calls.find((call) => call.argv[0] === "find" && !call.argv.includes("-maxdepth"));
+    expect(list!.argv).toEqual(["find", "./build", "-printf", "%y %s %p\\0"]);
+    expect(result.files.map((f) => f.path)).toEqual(["build/ok.txt"]);
+  });
+
+  it("returns no symbolic link, no directory, no refused name: regular files in the order of outputs", async () => {
+    expect(
+      parseListing(
+        listing([
+          ["d", 4096, "build"],
+          ["l", 11, "build/passwd"],
+          ["f", 3, "build/b.txt"],
+          ["f", 3, "build/a.txt"],
+          ["f", 1, "build/bad\nname"],
+          ["f", 9, "report.xml"],
+          ["f", 2, "other.txt"],
+        ]),
+        ["report.xml", "build/", "build/a.txt"],
+      ),
+    ).toEqual([
       { path: "report.xml", size: 9 },
       { path: "build/a.txt", size: 3 },
       { path: "build/b.txt", size: 3 },
     ]);
-  });
-
-  it("returns a symlink's target never: a link under build/ is not in the files", async () => {
-    const engine = engineWith({ "build/out.txt": Buffer.from("ok") }, () => ({}), [["l", 11, "build/shadow"]]);
-    const result = await runProject(prepareProject(request()), deps(engine));
-    expect(result.files).toEqual([{ path: "build/out.txt", content: "ok", truncated: false }]);
-    const tarCall = engine.calls.find((call) => call.argv[0] === "tar" && call.argv[1] === "-c");
-    expect(tarCall!.argv).toEqual(["tar", "-c", "-f", "-", "--no-recursion", "./build/out.txt"]);
   });
 
   it("lists with ./ before every path: a path is never an option of find", async () => {
@@ -290,40 +270,28 @@ describe("the outputs", () => {
     const result = await runProject(prepareProject(request({ outputs: ["build/"] })), deps(engine));
     expect(result.files).toEqual([
       { path: "build/latin1.txt", binary: true, size: 4 },
-      { path: "build/notes.md", content: "café ✓", truncated: false },
+      { path: "build/notes.md", content: "café ✓", truncated: false, size: 9 },
       { path: "build/prog", binary: true, size: 6 },
     ]);
   });
 
-  it("cuts a file over its cap through head -c, a character cut in two included", async () => {
-    const big = Buffer.concat([Buffer.alloc(PROJECT_FILE_MAX_BYTES - 1, "a"), Buffer.from("é and more")]);
-    const engine = engineWith({ "build/log.txt": big });
-    const result = await runProject(prepareProject(request({ outputs: ["build/"] })), deps(engine));
-    const head = engine.calls.find((call) => call.argv[0] === "head");
-    expect(head!.argv).toEqual(["head", "-c", String(PROJECT_FILE_MAX_BYTES), "./build/log.txt"]);
-    expect(result.files).toEqual([
-      { path: "build/log.txt", content: "a".repeat(PROJECT_FILE_MAX_BYTES - 1), truncated: true },
-    ]);
-  });
-
-  it("stops reading at the total cap, in the order of the outputs", async () => {
-    const files: Files = { "report.xml": Buffer.from("<r/>") };
-    for (let i = 0; i < 9; i += 1) files[`build/f${i}.txt`] = Buffer.alloc(PROJECT_FILE_MAX_BYTES, "x");
+  it("never reads a file over its cap, nor one past the total, in the order of the outputs", async () => {
+    const files: Files = {
+      "report.xml": Buffer.from("<r/>"),
+      "build/huge.log": Buffer.alloc(PROJECT_FILE_MAX_BYTES + 1, "x"),
+    };
+    for (let i = 0; i < 8; i += 1) files[`build/f${i}.txt`] = Buffer.alloc(PROJECT_FILE_MAX_BYTES, "x");
     const engine = engineWith(files);
     const result = await runProject(prepareProject(request()), deps(engine));
-    expect(result.files[0]).toEqual({ path: "report.xml", content: "<r/>", truncated: false });
-    const read = result.files.reduce((sum, file) => sum + ("content" in file ? file.content.length : 0), 0);
-    expect(read).toBe(PROJECT_OUTPUT_MAX_BYTES);
-    // The eighth build file got what was left, through head -c; the ninth nothing.
-    expect(result.files.slice(-2)).toEqual([
-      { path: "build/f7.txt", content: "x".repeat(PROJECT_FILE_MAX_BYTES - 4), truncated: true },
-      { path: "build/f8.txt", content: "", truncated: true },
-    ]);
-  });
 
-  it("judges a cut file by its complete characters only", () => {
-    const cut = Buffer.from("ab✓").subarray(0, 4);
-    expect(outputFile("a", cut, 5, true)).toEqual({ path: "a", content: "ab", truncated: true });
-    expect(outputFile("a", cut, 5, false)).toEqual({ path: "a", binary: true, size: 5 });
+    const tarCall = engine.calls.find((call) => call.argv[0] === "tar" && call.argv[1] === "-c");
+    expect(tarCall!.argv).not.toContain("./build/huge.log");
+    expect(result.files[0]).toEqual({ path: "report.xml", content: "<r/>", truncated: false, size: 4 });
+    const read = result.files.reduce((sum, f) => sum + ("content" in f ? f.content.length : 0), 0);
+    expect(read).toBeLessThanOrEqual(PROJECT_OUTPUT_MAX_BYTES);
+    expect(result.files).toContainEqual({ path: "build/huge.log", content: "", truncated: true, size: PROJECT_FILE_MAX_BYTES + 1 });
+    // Seven 256 KB files fit beside report.xml; the eighth is past the total.
+    expect(result.files).toContainEqual({ path: "build/f7.txt", content: "", truncated: true, size: PROJECT_FILE_MAX_BYTES });
+    expect(result.files).toContainEqual({ path: "build/f6.txt", content: "x".repeat(PROJECT_FILE_MAX_BYTES), truncated: false, size: PROJECT_FILE_MAX_BYTES });
   });
 });

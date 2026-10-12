@@ -369,132 +369,53 @@ submitted.
 ## Project runs
 
 `POST /project` tests a whole student repository for the `criteria` grading
-mode of projects (ADR-106 §3, amending ADR-016 and ADR-101; CLAUDE.md
-invariant 12). It is the same service, the same bearer, the same two queues
-and the same container: `containerArgs()` does not change — not one flag
-added, none relaxed; `src/engine.test.ts` asserts that a project's container
-differs from a code question's by the VALUES of `--tmpfs`, `--memory`,
-`--cpus`, the image and the ttl only. The code is `src/project.ts` (the run)
-and `src/tar.ts` (the archive).
+mode (ADR-106 §3, amending ADR-016 and ADR-101; CLAUDE.md invariant 12). The
+contract is `ProjectRunRequest` of `packages/core/src/runner.ts`; the code is
+`src/project.ts` and `@quiz/core/tar`. Same service, bearer, queues and
+container: **`containerArgs()` gains no flag and loses none** —
+`src/engine.test.ts` asserts that a project's container differs from a code
+question's only by the values of `--tmpfs`, `--memory`, `--cpus`, the image
+and the ttl. At most ONE project run is admitted at a time (`429` beyond), so
+it never holds more than one slot; the API paces the rest.
 
-### The contract (`packages/core/src/runner.ts`)
+**The archive.** One base64 tar, at most 20 MB, parsed in this process before
+it takes a slot. Every way a tar names an entry is resolved — ustar prefix
+(never an old-GNU header's times), PAX `path`, GNU long name — and judged: a
+regular file or a directory at a normalized relative path, in UTF-8, in no
+conflict with an earlier entry. **One refused entry refuses the whole
+archive** (`400 archive_refused`, every refused entry named): a link, a
+device, a fifo, `..`, an absolute path, `a/./b`, `a//b`, a control character.
+An accepted archive is repacked into a fresh tar (modes `0755`/`0644`, no
+owner) and unpacked by the image's GNU tar from `podman exec`'s stdin in the
+`/work` tmpfs (`--no-same-owner --no-same-permissions --no-overwrite-dir`).
+Nothing is mounted. An archive the tmpfs cannot hold is `413
+archive_too_large_for_workdir`, never a retryable 503.
 
-```
-ProjectRunRequest  { archive: base64 tar (≤ 20 MB decoded), image: "lab-c",
-                     commands: { build?: argv, test: argv },
-                     outputs: relative paths or directories (≤ 16),
-                     limits: { timeMs ≤ 600 000 per step, memoryMb, cpus }, budgetMs ≤ 600 000 }
-ProjectRunResult   { build: Step | null, test: Step,
-                     files: [{ path, content, truncated } | { path, binary: true, size }] }
-Step               { exitCode, stdout, stderr, ms, timedOut, truncated }
-```
+**The steps.** The build argv, then the test argv — always, even after a
+failed build — each a fixed argv under `timeout -s KILL` and the service's
+clock, never a shell. The budget is `RUNNER_PROJECT_TIMEOUT_MS`, the runner's
+and never the request's: the build gets at most half, the tests the rest
+minus 10 s kept for the outputs. After each step `kill -9 -1` reaps what it
+left behind (pid 1, the container's `sleep`, is out of its reach); a failed
+reap ends the run like a lost container: no later step, no outputs. Memory is
+`RUNNER_MAX_MEMORY_MB`, `--cpus 1`, `--pids-limit 64` — enough for `make`,
+gcc and pytest (`src/project.int.test.ts`).
 
-An argv is an array: one element is one argument, verbatim, and no shell ever
-reads it (`make && pytest` as one string is refused by the schema, as is an
-empty argv or a program starting with `-`, which `timeout` would take for an
-option). `projectPathProblem` is the one path rule, shared with the API: a
-normalized relative path — no leading `/`, no `.` or `..` segment, no empty
-segment, no control character, no segment over 255 bytes — one trailing `/`
-naming a directory.
+**The outputs.** Every parent of an output path is checked first with
+`find <parents> -maxdepth 0 -printf '%y %p\0'`, and an output whose parent is
+not a real directory is dropped: `find -P` only refuses a link as the LAST
+component. Then `find ./<output>… -printf '%y %s %p\0'` lists the regular
+files (a link is neither followed nor returned) and ONE
+`tar -c --no-recursion` reads them, every read bounded by the deadline. In the
+order of `outputs`, then by path: a file over 256 KB, or past 2 MB in all,
+comes back empty and `truncated` with its size; a file with a NUL byte or not
+UTF-8 as its size only.
 
-The API's client is `app.runner.project(req)` (`apps/api/src/modules/runner/http.ts`),
-on a separate interface, `ProjectRunnerService`, that only the API's runners
-implement. It answers a result, a `ProjectRunRefusal`, or throws like `run`:
-
-| Status | Body | When | The API |
-| --- | --- | --- | --- |
-| 200 | a `ProjectRunResult` | ran, whatever the build and the tests said | the result |
-| 400 | `invalid_request` | not a `ProjectRunRequest` | refusal, no retry |
-| 400 | `archive_invalid` | not base64, or not a tar (bad checksum, an entry past the end, a broken PAX record) | refusal, no retry |
-| 400 | `archive_refused` + `entries` | one entry or more the sanitizer refuses: the WHOLE archive is refused | refusal with the entries, no retry |
-| 413 | `archive_too_large` | over 20 MB decoded (or over the route's body limit) | refusal, no retry |
-| 429 | `queue_full` | the queues are full, or `RUNNER_PROJECT_QUEUE_MAX` project runs are already admitted | `RunnerBusy` |
-| 503 | `image_unavailable` | no `quiz-runner-lab-c` on this engine | refusal, **not** retried: the client reads the body |
-| 503 | `engine_error`, `upload_failed` | the engine would not start or unpack | retried once, then `RunnerUnavailable` |
-
-The route has its own `bodyLimit` (the archive's base64 and 1 MB around it,
-about 29 MB); `/run` keeps the app's 4 MB.
-
-### The archive: sanitized here, unpacked there
-
-The archive is decoded and parsed **in this process**, before it takes a
-slot (`sanitizeArchive`, unit-tested entry by entry in `src/tar.test.ts`).
-The reader resolves every way a tar names an entry — the ustar prefix, a PAX
-`x` record's `path`, a GNU `L` long name; a PAX `g` global header and a GNU
-`K` long link name are read and ignored — and judges the name it resolves to.
-An entry passes when it is a regular file or a directory at a path
-`projectPathProblem` accepts, in UTF-8, in no conflict with an earlier one (a
-file under a file, a file and a directory of one name, the same file twice).
-One leading `./` is dropped and the root `.` skipped; nothing else is
-rewritten. **A single refused entry refuses the whole archive** — a symbolic
-or hard link, a device, a fifo, any other type, `..`, an absolute path,
-`a/./b`, `a//b`, a control character, an overlong segment — with every
-refused entry named in `entries` (the first hundred).
-
-An accepted archive is not forwarded: its entries are **repacked** into a
-fresh ustar archive (`writeTar`) with new headers — mode `0755` or `0644`
-only, uid 1000, the original mtime clamped to now (so `make` still sees what
-is up to date), a PAX `path` for a name over 100 bytes. That clean tar travels
-on `podman exec`'s stdin to the image's GNU tar:
-
-```
-tar -x -f - --no-same-owner --no-same-permissions --no-overwrite-dir    (in /work)
-```
-
-So the sandbox only ever unpacks a format this service wrote. Nothing from the
-host is mounted and no path of the request ever becomes a path of the host:
-the repository lives in the `/work` tmpfs, `RUNNER_PROJECT_WORKDIR_MB` large.
-
-### The steps and the budget
-
-The build argv (when given), then the test argv — **always**, even after a
-failed build, as the course's StudentScore workflow does. Each is
-`timeout -s KILL <s> <argv…>`, `<s>` the request's `timeMs` capped by what is
-left of the budget minus `RUNNER_CASE_GRACE_MS` and 10 s kept for reading the
-outputs; the service's own clock fires at `<s>` plus the grace. The budget is
-the request's `budgetMs` capped by `RUNNER_PROJECT_TIMEOUT_MS`, from the
-moment the run starts (ADR-101's rule); the container's ttl is that budget
-plus 5 s. A step that cannot start inside it, or after the service's clock
-fired or the OOM killer took the container, comes back `exitCode: null,
-timedOut: true` and no outputs are read. After each step `kill -9 -1` reaps
-every process the step left behind (`kill -1` never reaches the container's
-pid 1, its `sleep`). Memory is `limits.memoryMb` capped by
-`RUNNER_MAX_MEMORY_MB`, `--cpus` is `limits.cpus` capped by
-`RUNNER_PROJECT_MAX_CPUS`, `--pids-limit` stays 64 — `make` with gcc and a
-pytest run fit in it (the integration check below).
-
-### The outputs
-
-```
-find ./<output>… -printf '%y %s %p\0'        the listing (every path behind ./: never an option of find)
-tar -c -f - --no-recursion ./<file>…         ONE archive of the files read whole
-head -c <n> ./<file>                         a file over its cap
-```
-
-Only regular files come back (`%y` = `f`): a symbolic link is neither
-followed nor returned, and neither is a directory or a name the path rule
-refuses. Files come in the order of `outputs`, then by path, each once. Each
-file is read up to `PROJECT_FILE_MAX_BYTES` (256 KB), all of them up to
-`PROJECT_OUTPUT_MAX_BYTES` (2 MB) in that order — list `report.xml` before
-`build/` — and a file past the total comes back empty and `truncated`. A file
-with a NUL byte, or not UTF-8, comes back as `{ path, binary: true, size }`,
-never its bytes (a cut file is judged without its last incomplete
-character). Each step's stdout and stderr are capped at 256 KB too.
-
-### The image, and what it cannot do
-
-`quiz-runner-lab-c` (`images/build.sh lab-c`, the shared `Containerfile`):
-gcc, musl-dev, make, python3, py3-pytest, GNU tar and findutils. No pip, no
-git, no pandoc, no network client — and `--network none`. **A lab whose
-build or tests need `pip install` or `apt` at test time cannot run here, by
-construction**; ADR-106 has the API refuse the `criteria` mode for such a
-project, with the reason.
-
-`src/project.int.test.ts` is the integration check: a tiny repository (a
-Makefile building a C program and planting a symbolic link, a pytest file
-with one passing and one failing test) through the real socket: the build
-passes, pytest exits 1, `report.xml` comes back with both tests, the binary
-as its size only, the link not at all, and no network nor `pip` inside.
+**The image** `quiz-runner-lab-c` (`images/build.sh lab-c`): gcc, musl-dev,
+make, python3, py3-pytest, GNU tar and findutils. No pip, no git, no pandoc,
+and `--network none`: **a lab that needs `pip install` or `apt` at test time
+cannot run here, by construction**; ADR-106 has the API refuse the `criteria`
+mode for it, with the reason.
 
 ## Running it here
 
@@ -600,10 +521,8 @@ Everything is in `src/config.ts`, validated at startup.
 | `RUNNER_COMPILE_TIMEOUT_MS` | 20 000 | Budget of the build step. |
 | `RUNNER_CASE_GRACE_MS` | 2000 | How long past a case's deadline the service waits. |
 | `RUNNER_REQUEST_TIMEOUT_MS` | 120 000 | Ceiling on a whole request, its build and all cases together; a request's `budgetMs` may only lower it. |
-| `RUNNER_PROJECT_TIMEOUT_MS` | 600 000 | Ceiling on a whole project run (`POST /project`); its `budgetMs` may only lower it. `RUNNER_REQUEST_TIMEOUT_MS` keeps governing `/run`. |
+| `RUNNER_PROJECT_TIMEOUT_MS` | 600 000 | A whole project run (`POST /project`), 30 000 to 600 000: the build gets at most half, the tests the rest. Never a request's. `RUNNER_REQUEST_TIMEOUT_MS` keeps governing `/run`. |
 | `RUNNER_PROJECT_WORKDIR_MB` | 256 | Size of the `/work` and `/tmp` tmpfs of a project run (32–2048). `RUNNER_WORKDIR_MB` keeps governing `/run`. |
-| `RUNNER_PROJECT_MAX_CPUS` | 2 | Ceiling on a project's `limits.cpus`, the value of `--cpus`. Its memory is capped by `RUNNER_MAX_MEMORY_MB`. |
-| `RUNNER_PROJECT_QUEUE_MAX` | 2 | Project runs admitted at once, waiting or running; beyond it `429 queue_full`. So project runs never hold more than this many slots. |
 
 The three `RUNNER_MAX_*` ceilings default to the upper bounds of
 `RunnerRequest.limits` (`packages/core/src/runner.ts`), so a fresh deployment

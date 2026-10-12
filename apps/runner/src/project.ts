@@ -1,7 +1,4 @@
-import { randomUUID } from "node:crypto";
-
 import {
-  PROJECT_ARCHIVE_MAX_BYTES,
   PROJECT_FILE_MAX_BYTES,
   PROJECT_OUTPUT_MAX_BYTES,
   RUNNER_TTL_SLACK_MS,
@@ -11,11 +8,10 @@ import {
   type ProjectRunResult,
   type ProjectStep,
 } from "@quiz/core/server";
+import { readTar, sanitizeArchive, TarError } from "@quiz/core/tar";
 
-import type { RunnerConfig } from "./config.js";
-import { caseArgv, classify, ExecuteError, type ExecuteDeps } from "./execute.js";
+import { ExecuteError, runArgv, withContainer, type ExecuteDeps } from "./execute.js";
 import { imageRef } from "./images.js";
-import { readTar, sanitizeArchive, TarError } from "./tar.js";
 
 /**
  * A project run (`POST /project`, ADR-106 §3): a whole student repository in
@@ -23,25 +19,24 @@ import { readTar, sanitizeArchive, TarError } from "./tar.js";
  * added, none relaxed.
  *
  *  1. The archive is decoded and sanitized HERE, before it takes a slot
- *     (`prepareProject`, `tar.ts`): one entry that is not a regular file or
- *     a directory at a normalized relative path refuses the WHOLE archive
- *     (invariant 12); an accepted one is repacked, entry by entry, into a
- *     clean tar.
+ *     (`prepareProject`, `@quiz/core/tar`): one entry that is not a regular
+ *     file or a directory at a normalized relative path refuses the WHOLE
+ *     archive (invariant 12); an accepted one is repacked into a clean tar.
  *  2. That tar travels in on `podman exec`'s stdin to GNU tar in `/work`, a
  *     tmpfs. Nothing from the host is mounted, and no path of the request
- *     ever becomes a path of the host (invariant 12).
+ *     ever becomes a path of the host.
  *  3. The build argv (if any), then the test argv — ALWAYS, even when the
- *     build failed, as the course's own workflow does — each under
- *     `timeout -s KILL` and the service's clock, no shell. Every process left
- *     behind is killed after each step.
- *  4. The output paths are listed with `find -printf` and read back with ONE
- *     `tar -c` (a file over its cap through `head -c`), under the caps.
+ *     build failed, as the course's own workflow does — each under both
+ *     clocks (`runArgv`), no shell. Every process left behind is killed
+ *     after each step.
+ *  4. The outputs: their parents checked without following a link, the
+ *     regular files listed with `find -printf`, read back with ONE `tar -c`.
  */
 
 /** The archive could not be accepted: a client fault, never retried. */
 export class ProjectArchiveError extends Error {
   constructor(
-    readonly reason: "archive_too_large" | "archive_invalid" | "archive_refused",
+    readonly reason: "archive_invalid" | "archive_refused",
     /** For `archive_refused`: the entries refused, `<path>: <reason>`. */
     readonly entries: string[] = [],
   ) {
@@ -53,7 +48,7 @@ export class ProjectArchiveError extends Error {
 export interface PreparedProject {
   request: ProjectRunRequest;
   /** The clean archive: what the container's tar unpacks. */
-  tar: Buffer;
+  tar: Uint8Array;
 }
 
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -63,22 +58,15 @@ export function prepareProject(request: ProjectRunRequest): PreparedProject {
   if (request.archive.length % 4 !== 0 || !BASE64.test(request.archive)) {
     throw new ProjectArchiveError("archive_invalid");
   }
-  const bytes = Buffer.from(request.archive, "base64");
-  if (bytes.length > PROJECT_ARCHIVE_MAX_BYTES) throw new ProjectArchiveError("archive_too_large");
   let clean;
   try {
-    clean = sanitizeArchive(bytes);
+    clean = sanitizeArchive(Buffer.from(request.archive, "base64"));
   } catch (error) {
     if (error instanceof TarError) throw new ProjectArchiveError("archive_invalid");
     throw error;
   }
   if (clean.refused.length > 0) throw new ProjectArchiveError("archive_refused", clean.refused);
   return { request, tar: clean.tar };
-}
-
-/** The run's budget on this deployment: the request's, capped by `RUNNER_PROJECT_TIMEOUT_MS`. */
-export function projectBudgetMs(request: ProjectRunRequest, config: RunnerConfig): number {
-  return Math.min(request.budgetMs, config.RUNNER_PROJECT_TIMEOUT_MS);
 }
 
 /**
@@ -97,11 +85,10 @@ export const REAP_ARGV = ["kill", "-9", "-1"];
 export const COLLECT_RESERVE_MS = 10_000;
 
 const UPLOAD_TIMEOUT_MS = 60_000;
-const SMALL_EXEC_MS = 30_000;
-/** The `find` listing's ceiling, in bytes. */
+/** The `find` listings' ceiling, in bytes. */
 const LISTING_MAX_BYTES = 1024 * 1024;
 
-/** A step that never ran: the budget was spent, or the container was gone. */
+/** A step that never ran: the budget was spent, or the container was lost. */
 function notRun(): ProjectStep {
   return { exitCode: null, stdout: "", stderr: "", ms: 0, timedOut: true, truncated: false };
 }
@@ -110,117 +97,129 @@ export async function runProject(
   prepared: PreparedProject,
   deps: ExecuteDeps,
 ): Promise<ProjectRunResult> {
-  const { engine, config, signal } = deps;
+  const { engine, config } = deps;
   const { request } = prepared;
-  const budget = projectBudgetMs(request, config);
+  // The budget is the runner's, never the request's (ADR-106 §3).
+  const budget = config.RUNNER_PROJECT_TIMEOUT_MS;
   const deadline = Date.now() + budget;
-  const name = (deps.containerName ?? (() => `quiz-run-${randomUUID()}`))();
   const create = {
-    name,
     image: imageRef(config, request.image),
-    memoryMb: Math.min(request.limits.memoryMb, config.RUNNER_MAX_MEMORY_MB),
+    memoryMb: config.RUNNER_MAX_MEMORY_MB,
     pidsLimit: 64,
-    cpus: Math.min(request.limits.cpus, config.RUNNER_PROJECT_MAX_CPUS),
+    cpus: 1,
     workdirMb: config.RUNNER_PROJECT_WORKDIR_MB,
     ttlSeconds: Math.ceil((budget + RUNNER_TTL_SLACK_MS) / 1000),
   };
 
-  const stopIfAborted = (): void => {
-    if (signal?.aborted) throw new ExecuteError("the caller has gone", "aborted");
-  };
-  const onAbort = (): void => void engine.remove(name).catch(() => undefined);
-  signal?.addEventListener("abort", onAbort, { once: true });
-
-  try {
-    stopIfAborted();
-    await engine.create(create);
-    stopIfAborted();
+  return withContainer(deps, create, async ({ name, stopIfAborted }) => {
     const unpacked = await engine.exec(name, {
       argv: UNPACK_ARGV,
-      stdin: prepared.tar,
-      timeoutMs: Math.max(1000, Math.min(UPLOAD_TIMEOUT_MS, deadline - Date.now())),
+      stdin: Buffer.from(prepared.tar.buffer, prepared.tar.byteOffset, prepared.tar.byteLength),
+      timeoutMs: UPLOAD_TIMEOUT_MS,
       maxBytes: 16 * 1024,
     });
-    if (unpacked.exitCode !== 0) {
+    if (unpacked.timedOut || unpacked.containerGone) {
       throw new ExecuteError("could not unpack the archive", "upload_failed");
+    }
+    // The archive is clean (this service wrote it): GNU tar failing on it is
+    // the tmpfs running out — the same answer on every retry, so a refusal.
+    if (unpacked.exitCode !== 0) {
+      throw new ExecuteError("the archive does not fit the work directory", "archive_too_large_for_workdir");
     }
 
     let alive = true;
-    const step = async (argv: string[]): Promise<ProjectStep> => {
+    /**
+     * Whether the leftovers were reaped. A reap that throws or never answers
+     * ends the run like a lost container — no later step, no outputs — and
+     * never becomes an engine error of the whole run.
+     */
+    const reap = async (): Promise<boolean> => {
+      try {
+        const reaped = await engine.exec(name, { argv: REAP_ARGV, stdin: "", timeoutMs: 10_000, maxBytes: 4096 });
+        return !reaped.timedOut && !reaped.containerGone;
+      } catch {
+        return false;
+      }
+    };
+    /** One step, at most `ceilingMs`, and never past what the budget keeps for the outputs. */
+    const step = async (argv: string[], ceilingMs: number): Promise<ProjectStep> => {
       stopIfAborted();
       const room = deadline - Date.now() - COLLECT_RESERVE_MS - config.RUNNER_CASE_GRACE_MS;
-      const stepMs = Math.min(request.limits.timeMs, config.RUNNER_PROJECT_TIMEOUT_MS, room);
-      if (!alive || stepMs < 1000) return notRun();
-      const seconds = Math.floor(stepMs / 1000);
-      const result = await engine.exec(name, {
-        argv: caseArgv(argv, seconds, []),
+      const timeMs = Math.floor(Math.min(ceilingMs, room) / 1000) * 1000;
+      if (!alive || timeMs < 1000) return notRun();
+      const { lost, oom: _oom, ...result } = await runArgv(engine, name, {
+        argv,
         stdin: "",
-        timeoutMs: seconds * 1000 + config.RUNNER_CASE_GRACE_MS,
+        timeMs,
         maxBytes: PROJECT_FILE_MAX_BYTES,
+        graceMs: config.RUNNER_CASE_GRACE_MS,
       });
-      const verdict = classify(result, seconds * 1000);
-      // The service's clock fired or the container died: it is not to be
-      // trusted, and what is in its tmpfs is gone. No later step, no outputs.
-      if (result.timedOut || result.containerGone) alive = false;
-      else await reap();
-      return {
-        exitCode: verdict.exitCode,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        ms: result.ms,
-        timedOut: verdict.timedOut,
-        truncated: result.truncated,
-      };
-    };
-    const reap = async (): Promise<void> => {
-      await engine.exec(name, { argv: REAP_ARGV, stdin: "", timeoutMs: 10_000, maxBytes: 4096 });
+      if (lost || !(await reap())) alive = false;
+      return result;
     };
 
-    const build = request.commands.build === undefined ? null : await step(request.commands.build);
-    const test = await step(request.commands.test);
+    // The build gets at most half the budget, as a rule; the tests the rest.
+    const build = request.commands.build === undefined ? null : await step(request.commands.build, budget / 2);
+    const test = await step(request.commands.test, budget);
     stopIfAborted();
     const files =
       alive && request.outputs.length > 0 && Date.now() < deadline
-        ? await collectOutputs(deps, name, request.outputs)
+        ? await collectOutputs(deps, name, request.outputs, deadline)
         : [];
     return { build, test, files };
-  } finally {
-    signal?.removeEventListener("abort", onAbort);
-    await engine.remove(name).catch(() => undefined);
-  }
+  });
 }
 
-/** One regular file of the listing. */
-interface Listed {
-  path: string;
-  size: number;
+/** `a/b/c` → `["a", "a/b"]`: the directories an output path goes through. */
+export function parentsOf(output: string): string[] {
+  const segments = output.replace(/\/$/, "").split("/");
+  return segments.slice(0, -1).map((_, i) => segments.slice(0, i + 1).join("/"));
+}
+
+/** `find -printf '%y … %p\0'` records: the type letter and the path, `./` dropped. */
+function records(listing: Uint8Array): Array<{ type: string; size: number; path: string }> {
+  const out = [];
+  for (const record of new TextDecoder().decode(listing).split("\0")) {
+    const match = /^(\S) (?:(\d+) )?(.*)$/s.exec(record);
+    if (match === null) continue;
+    out.push({ type: match[1]!, size: Number(match[2] ?? 0), path: match[3]!.replace(/^\.\//, "") });
+  }
+  return out;
+}
+
+/**
+ * The outputs whose every parent is a real directory, from the listing of
+ * `find <parents> -maxdepth 0 -printf '%y %p\0'`. `find -P` refuses to
+ * follow a symbolic link only as the LAST component of a starting point: a
+ * parent the build replaced by a link (`out` -> `/` for `out/report.xml`)
+ * would still be resolved. So an output with a parent not listed as `d` is
+ * dropped (invariant 12: on the way out, a link is never followed).
+ */
+export function outputsUnderDirectories(outputs: readonly string[], listing: Uint8Array): string[] {
+  const directories = new Set(records(listing).filter((r) => r.type === "d").map((r) => r.path));
+  return outputs.filter((output) => parentsOf(output).every((parent) => directories.has(parent)));
 }
 
 /**
  * The regular files under the output paths, in the order of `outputs`, then
- * by path within one; each once. A symbolic link is not followed nor
- * returned; a name the path rule refuses is skipped.
+ * by path within one; each once. Only `f` passes: a symbolic link is neither
+ * followed (`find -P`) nor returned; a name the path rule refuses is skipped.
  */
-export function parseListing(stdout: Buffer, outputs: readonly string[]): Listed[] {
-  const files: Listed[] = [];
-  for (const record of stdout.toString("utf8").split("\0")) {
-    const match = /^(\S) (\d+) (.*)$/s.exec(record);
-    if (match === null || match[1] !== "f") continue;
-    const path = match[3]!.replace(/^\.\//, "");
-    if (projectPathProblem(path) !== null || path.endsWith("/")) continue;
-    files.push({ path, size: Number(match[2]) });
-  }
+export function parseListing(listing: Uint8Array, outputs: readonly string[]): Array<{ path: string; size: number }> {
+  const files = records(listing).filter(
+    (r) => r.type === "f" && projectPathProblem(r.path) === null && !r.path.endsWith("/"),
+  );
   const seen = new Set<string>();
-  const ordered: Listed[] = [];
+  const ordered = [];
   for (const output of outputs) {
     const root = output.replace(/\/$/, "");
     const under = files
       .filter((file) => file.path === root || file.path.startsWith(`${root}/`))
       .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-    for (const file of under) {
-      if (seen.has(file.path)) continue;
-      seen.add(file.path);
-      ordered.push(file);
+    for (const { path, size } of under) {
+      if (seen.has(path)) continue;
+      seen.add(path);
+      ordered.push({ path, size });
     }
   }
   return ordered;
@@ -228,66 +227,75 @@ export function parseListing(stdout: Buffer, outputs: readonly string[]): Listed
 
 const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
 
-/**
- * A file as it comes back: its text, or only its size when it holds a NUL
- * byte or is not UTF-8. A truncated file may end inside a character: up to
- * three trailing bytes are dropped before it is judged.
- */
-export function outputFile(
-  path: string,
-  bytes: Buffer,
-  size: number,
-  truncated: boolean,
-): ProjectOutputFile {
+/** A file read whole: its text, or only its size when it holds a NUL byte or is not UTF-8. */
+export function outputFile(path: string, bytes: Uint8Array): ProjectOutputFile {
+  const size = bytes.length;
   if (bytes.includes(0)) return { path, binary: true, size };
-  for (let cut = 0; cut <= (truncated ? 3 : 0) && cut <= bytes.length; cut += 1) {
-    try {
-      return { path, content: strictUtf8.decode(bytes.subarray(0, bytes.length - cut)), truncated };
-    } catch {
-      // try one byte shorter
-    }
+  try {
+    return { path, content: strictUtf8.decode(bytes), truncated: false, size };
+  } catch {
+    return { path, binary: true, size };
   }
-  return { path, binary: true, size };
 }
 
 /**
- * Reads the output files back under the caps: each file at most
- * `PROJECT_FILE_MAX_BYTES`, all of them at most `PROJECT_OUTPUT_MAX_BYTES`
- * read, in the order of `outputs` (so `report.xml` first is read first). A
- * file past the total comes back empty and truncated.
+ * Reads the output files back under the caps, every read bounded by the
+ * deadline. A file is read whole or not at all: one over
+ * `PROJECT_FILE_MAX_BYTES`, or past the `PROJECT_OUTPUT_MAX_BYTES` read in
+ * the order of `outputs` (so `report.xml` listed first is read first), comes
+ * back empty and truncated, with its size.
  */
 async function collectOutputs(
   deps: ExecuteDeps,
   name: string,
-  outputs: readonly string[],
+  requested: readonly string[],
+  deadline: number,
 ): Promise<ProjectOutputFile[]> {
   const { engine } = deps;
-  // `./` first: a path is never read as an option or an expression of find.
-  const roots = outputs.map((output) => `./${output.replace(/\/$/, "")}`);
+  const left = (): number => Math.max(1000, deadline - Date.now());
+  // `./` before every path: never an option or an expression of find or tar.
+  const dotted = (path: string): string => `./${path.replace(/\/$/, "")}`;
+
+  // The parents first, links not followed (`outputsUnderDirectories`). Every
+  // process of the container is dead (reaped), so none can swap a parent
+  // between this check and the reads below.
+  const parents = [...new Set(requested.flatMap(parentsOf))];
+  let outputs = [...requested];
+  if (parents.length > 0) {
+    const checked = await engine.exec(name, {
+      argv: ["find", ...parents.map(dotted), "-maxdepth", "0", "-printf", "%y %p\\0"],
+      stdin: "",
+      timeoutMs: left(),
+      maxBytes: LISTING_MAX_BYTES,
+    });
+    outputs = outputsUnderDirectories(requested, checked.stdoutBytes);
+  }
+  if (outputs.length === 0) return [];
+
   const listing = await engine.exec(name, {
-    argv: ["find", ...roots, "-printf", "%y %s %p\\0"],
+    argv: ["find", ...outputs.map(dotted), "-printf", "%y %s %p\\0"],
     stdin: "",
-    timeoutMs: SMALL_EXEC_MS,
+    timeoutMs: left(),
     maxBytes: LISTING_MAX_BYTES,
   });
-  const listed = parseListing(listing.stdoutBytes, outputs);
 
   let remaining = PROJECT_OUTPUT_MAX_BYTES;
-  const plan = listed.map((file) => {
-    const take = Math.min(file.size, PROJECT_FILE_MAX_BYTES, remaining);
-    remaining -= take;
-    return { ...file, take };
+  const plan = parseListing(listing.stdoutBytes, outputs).map((file) => {
+    const read = file.size <= PROJECT_FILE_MAX_BYTES && file.size <= remaining;
+    if (read) remaining -= file.size;
+    return { ...file, read };
   });
 
-  const whole = plan.filter((file) => file.take === file.size);
-  const contents = new Map<string, Buffer>();
-  if (whole.length > 0) {
+  const read = plan.filter((file) => file.read);
+  const contents = new Map<string, Uint8Array>();
+  if (read.length > 0 && Date.now() < deadline) {
     const archived = await engine.exec(name, {
-      argv: ["tar", "-c", "-f", "-", "--no-recursion", ...whole.map((file) => `./${file.path}`)],
+      // `tar -c` never follows a link, and `--no-recursion` reads only these files.
+      argv: ["tar", "-c", "-f", "-", "--no-recursion", ...read.map((file) => dotted(file.path))],
       stdin: "",
-      timeoutMs: SMALL_EXEC_MS,
+      timeoutMs: left(),
       // Each file's blocks and up to three header blocks (a GNU long name), the end.
-      maxBytes: whole.reduce((sum, file) => sum + Math.ceil(file.size / 512) * 512 + 1536, 20_480),
+      maxBytes: read.reduce((sum, file) => sum + Math.ceil(file.size / 512) * 512 + 1536, 20_480),
     });
     try {
       for (const entry of readTar(archived.stdoutBytes)) {
@@ -301,26 +309,10 @@ async function collectOutputs(
     }
   }
 
-  const files: ProjectOutputFile[] = [];
-  for (const file of plan) {
-    if (file.take === file.size) {
-      const bytes = contents.get(file.path);
-      files.push(
-        bytes === undefined
-          ? { path: file.path, content: "", truncated: true }
-          : outputFile(file.path, bytes, file.size, false),
-      );
-    } else if (file.take === 0) {
-      files.push({ path: file.path, content: "", truncated: true });
-    } else {
-      const head = await engine.exec(name, {
-        argv: ["head", "-c", String(file.take), `./${file.path}`],
-        stdin: "",
-        timeoutMs: SMALL_EXEC_MS,
-        maxBytes: file.take,
-      });
-      files.push(outputFile(file.path, head.stdoutBytes, file.size, true));
-    }
-  }
-  return files;
+  return plan.map((file) => {
+    const bytes = file.read ? contents.get(file.path) : undefined;
+    return bytes === undefined
+      ? { path: file.path, content: "", truncated: true, size: file.size }
+      : outputFile(file.path, bytes);
+  });
 }

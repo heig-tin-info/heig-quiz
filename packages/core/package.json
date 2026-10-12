@@ -24,6 +24,10 @@
       "types": "./dist/runner.d.ts",
       "default": "./dist/runner.js"
     },
+    "./tar": {
+      "types": "./dist/tar.d.ts",
+      "default": "./dist/tar.js"
+    },
     "./llm": {
       "types": "./dist/llm.d.ts",
       "default": "./dist/llm.js"

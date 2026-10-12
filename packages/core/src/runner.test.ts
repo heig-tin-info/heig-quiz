@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PROJECT_ARCHIVE_MAX_BASE64,
   ProjectRunRequest,
   RUNNER_BUDGET_DEFAULTS,
   RunnerLanguage,
@@ -111,8 +112,6 @@ describe("ProjectRunRequest", () => {
     image: "lab-c",
     commands: { test: ["pytest"] },
     outputs: [],
-    limits: { timeMs: 60_000, memoryMb: 512, cpus: 1 },
-    budgetMs: 120_000,
   };
 
   it("accepts argv arrays and refuses a shell string, an empty argv, an option as program", () => {
@@ -122,11 +121,11 @@ describe("ProjectRunRequest", () => {
     }
   });
 
-  it("bounds the outputs, the time and the budget", () => {
+  it("bounds the outputs and the archive", () => {
     const outputs = Array.from({ length: 17 }, (_, i) => `f${i}`);
     expect(ProjectRunRequest.safeParse({ ...minimal, outputs }).success).toBe(false);
     expect(ProjectRunRequest.safeParse({ ...minimal, outputs: ["../x"] }).success).toBe(false);
-    expect(ProjectRunRequest.safeParse({ ...minimal, budgetMs: 600_001 }).success).toBe(false);
-    expect(ProjectRunRequest.safeParse({ ...minimal, limits: { ...minimal.limits, timeMs: 600_001 } }).success).toBe(false);
+    const over = "A".repeat(PROJECT_ARCHIVE_MAX_BASE64 + 4);
+    expect(ProjectRunRequest.safeParse({ ...minimal, archive: over }).success).toBe(false);
   });
 });

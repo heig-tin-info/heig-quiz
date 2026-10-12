@@ -7,7 +7,8 @@ import {
   type RunnerHealth,
   type RunnerLanguage,
 } from "@quiz/core/server";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { ZodError } from "zod";
 
 import type { RunnerConfig } from "./config.js";
 import type { Engine } from "./engine.js";
@@ -17,7 +18,7 @@ import { prepareProject, ProjectArchiveError, runProject } from "./project.js";
 import { QueueFull, type RunQueue } from "./queue.js";
 
 /**
- * The two routes of the service, and nothing else. The wire shapes are the
+ * The three routes of the service, and nothing else. The wire shapes are the
  * ones `packages/core` exports — the same module the API's client parses its
  * answers with, so a drift is a compile error on both sides at once.
  *
@@ -122,15 +123,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
 
   app.post("/run", async (request, reply) => {
     const parsed = RunnerRequest.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: "invalid_request",
-        issues: parsed.error.issues.map((issue) => ({
-          path: issue.path.join("."),
-          message: issue.message,
-        })),
-      });
-    }
+    if (!parsed.success) return invalid(reply, parsed.error);
     const runnerRequest = parsed.data;
 
     const found = await languages();
@@ -139,75 +132,30 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
         .code(503)
         .send({ error: "language_unavailable", language: runnerRequest.language });
     }
-
-    // The client going away before its answer — the API gave up, a student
-    // closed the tab — frees its slot: dequeued if waiting, container
-    // destroyed if running. `close` also fires after a reply was written,
-    // which `writableEnded` tells apart.
-    const gone = new AbortController();
-    const onClose = (): void => {
-      if (!reply.raw.writableEnded) gone.abort();
-    };
-    reply.raw.on("close", onClose);
-    try {
-      return await queue.submit(runnerRequest, gone.signal);
-    } catch (error) {
-      if (gone.signal.aborted) {
-        // Nobody left to answer: the socket is closed.
-        request.log.info("client gone, run abandoned");
-        return reply.hijack();
-      }
-      if (error instanceof QueueFull) {
-        return reply
-          .code(429)
-          .header("retry-after", String(error.retryAfterSeconds))
-          .send({ error: "queue_full" });
-      }
-      const reason = error instanceof ExecuteError ? error.reason : "engine_error";
-      request.log.error({ err: error, reason }, "run failed");
-      // A request whose files hold no source for its language will never
-      // succeed, however many times it is sent: that is the caller's mistake,
-      // and `HttpRunner` retries a 503 twice before giving up on it.
-      if (reason === "no_source_file") {
-        return reply.code(400).send({ error: reason });
-      }
-      return reply.code(503).send({ error: reason });
-    } finally {
-      reply.raw.off("close", onClose);
-    }
+    // A request whose files hold no source for its language will never
+    // succeed, however many times it is sent: the caller's mistake, a 400.
+    return submit(request, reply, { no_source_file: 400 }, (signal) =>
+      queue.submit(runnerRequest, signal),
+    );
   });
 
   /**
    * `POST /project` (ADR-106 §3): a whole repository, one container, the
-   * same queue and the same flags. Answers 200 a `ProjectRunResult`; 400
-   * `invalid_request`, `archive_invalid` (not a tar) or `archive_refused`
-   * (an entry the sanitizer refuses, named in `entries`: the whole archive
-   * is refused, invariant 12); 413
-   * `archive_too_large`; 429 `queue_full` (the queues, or
-   * `RUNNER_PROJECT_QUEUE_MAX` project runs already admitted); 503
-   * `image_unavailable`, which no retry changes — the API reads the body
-   * and does not retry it — or `engine_error`/`upload_failed`, which a retry may.
+   * same queue and the same flags. Beyond `/run`'s answers: 400
+   * `archive_invalid` (not a tar) or `archive_refused` (an entry the
+   * sanitizer refuses, named in `entries`: the whole archive is refused,
+   * invariant 12), 413 `archive_too_large_for_workdir`, 503
+   * `image_unavailable` — never retried, the API reads the body — and 429
+   * while another project run is admitted.
    */
-  let projectsAdmitted = 0;
+  let projectAdmitted = false;
   app.post(
     "/project",
     // The archive's base64 and the JSON around it; `/run` keeps the app's 4 MB.
     { bodyLimit: PROJECT_ARCHIVE_MAX_BASE64 + 1024 * 1024 },
     async (request, reply) => {
-      const archive = (request.body as { archive?: unknown } | null)?.archive;
-      if (typeof archive === "string" && archive.length > PROJECT_ARCHIVE_MAX_BASE64) {
-        return reply.code(413).send({ error: "archive_too_large" });
-      }
       const parsed = ProjectRunRequest.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.code(400).send({
-          error: "invalid_request",
-          issues: parsed.error.issues.map((issue) => ({
-            path: issue.path.join("."),
-            message: issue.message,
-          })),
-        });
-      }
+      if (!parsed.success) return invalid(reply, parsed.error);
       const found = await languages();
       if (!hasImage(found.refs, config, parsed.data.image)) {
         return reply.code(503).send({ error: "image_unavailable", image: parsed.data.image });
@@ -219,46 +167,78 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
         prepared = prepareProject(parsed.data);
       } catch (error) {
         if (!(error instanceof ProjectArchiveError)) throw error;
-        if (error.reason === "archive_too_large") return reply.code(413).send({ error: error.reason });
         return reply.code(400).send({
           error: error.reason,
           ...(error.reason === "archive_refused" ? { entries: error.entries } : {}),
         });
       }
 
-      if (projectsAdmitted >= config.RUNNER_PROJECT_QUEUE_MAX) {
+      // Never more than ONE slot held by a project run: they last minutes,
+      // the code questions' runs keep the others. The API paces the rest.
+      if (projectAdmitted) {
         return reply.code(429).header("retry-after", "30").send({ error: "queue_full" });
       }
-      projectsAdmitted += 1;
-      const gone = new AbortController();
-      const onClose = (): void => {
-        if (!reply.raw.writableEnded) gone.abort();
-      };
-      reply.raw.on("close", onClose);
+      projectAdmitted = true;
       try {
-        return await queue.submitTask(
-          "grading",
-          (signal) => runProject(prepared, { engine, config, signal }),
-          gone.signal,
+        // The same archive never fits on a retry: a refusal, not a 503.
+        return await submit(request, reply, { archive_too_large_for_workdir: 413 }, (signal) =>
+          queue.submitTask("grading", (running) => runProject(prepared, { engine, config, signal: running }), signal),
         );
-      } catch (error) {
-        if (gone.signal.aborted) {
-          request.log.info("client gone, project run abandoned");
-          return reply.hijack();
-        }
-        if (error instanceof QueueFull) {
-          return reply
-            .code(429)
-            .header("retry-after", String(error.retryAfterSeconds))
-            .send({ error: "queue_full" });
-        }
-        const reason = error instanceof ExecuteError ? error.reason : "engine_error";
-        request.log.error({ err: error, reason }, "project run failed");
-        return reply.code(503).send({ error: reason });
       } finally {
-        projectsAdmitted -= 1;
-        reply.raw.off("close", onClose);
+        projectAdmitted = false;
       }
     },
   );
+}
+
+/** 400 `invalid_request`, the schema's issues listed. */
+function invalid(reply: FastifyReply, error: ZodError): FastifyReply {
+  return reply.code(400).send({
+    error: "invalid_request",
+    issues: error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
+  });
+}
+
+/**
+ * The tail both run routes share: the task through the queue, and every way
+ * it ends. The client going away before its answer — the API gave up, a
+ * student closed the tab — frees its slot: dequeued if waiting, container
+ * destroyed if running (`close` also fires after a reply was written, which
+ * `writableEnded` tells apart). 429 when the queues are full; a failure is
+ * 503 (`HttpRunner` retries it) unless `refusals` names its reason with the
+ * status of a request no retry will change.
+ */
+async function submit<T>(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  refusals: Readonly<Record<string, number>>,
+  task: (signal: AbortSignal) => Promise<T>,
+): Promise<T | FastifyReply> {
+  const gone = new AbortController();
+  const onClose = (): void => {
+    if (!reply.raw.writableEnded) gone.abort();
+  };
+  reply.raw.on("close", onClose);
+  try {
+    return await task(gone.signal);
+  } catch (error) {
+    if (gone.signal.aborted) {
+      // Nobody left to answer: the socket is closed.
+      request.log.info("client gone, run abandoned");
+      return reply.hijack();
+    }
+    if (error instanceof QueueFull) {
+      return reply
+        .code(429)
+        .header("retry-after", String(error.retryAfterSeconds))
+        .send({ error: "queue_full" });
+    }
+    const reason = error instanceof ExecuteError ? error.reason : "engine_error";
+    const status = refusals[reason];
+    if (status !== undefined) return reply.code(status).send({ error: reason });
+    request.log.error({ err: error, reason }, "run failed");
+    return reply.code(503).send({ error: reason });
+  } finally {
+    reply.raw.off("close", onClose);
+  }
 }

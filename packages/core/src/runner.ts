@@ -192,7 +192,10 @@ export const PROJECT_FILE_MAX_BYTES = 256 * 1024;
 export const PROJECT_OUTPUT_MAX_BYTES = 2 * 1024 * 1024;
 /** How many output paths a request may name. */
 export const PROJECT_OUTPUTS_MAX = 16;
-/** The longest a project run may take once it runs, and a step within it. */
+/**
+ * The longest a project run may take once it runs: the ceiling of the
+ * runner's `RUNNER_PROJECT_TIMEOUT_MS`, which the API's wait is built on.
+ */
 export const PROJECT_TIME_MAX_MS = 600_000;
 
 /** The images a project may run in: `quiz-runner-lab-c` (gcc, make, python3, pytest). */
@@ -252,14 +255,8 @@ export const ProjectRunRequest = z.object({
   outputs: z
     .array(z.string().refine((path) => projectPathProblem(path) === null, "not a relative path"))
     .max(PROJECT_OUTPUTS_MAX),
-  limits: z.object({
-    /** Per step (the build, the tests). */
-    timeMs: z.number().int().min(1000).max(PROJECT_TIME_MAX_MS),
-    memoryMb: z.number().int().min(64).max(2048),
-    cpus: z.number().min(0.5).max(4),
-  }),
-  /** The most the whole run may take once it runs, queue wait excluded (ADR-101's rule). */
-  budgetMs: z.number().int().min(1000).max(PROJECT_TIME_MAX_MS),
+  // No limits and no budget: the runner's configuration owns them (ADR-106
+  // §3), never a request.
 });
 export type ProjectRunRequest = z.infer<typeof ProjectRunRequest>;
 
@@ -275,9 +272,13 @@ export const ProjectStep = z.object({
 });
 export type ProjectStep = z.infer<typeof ProjectStep>;
 
-/** An output file: its text (UTF-8, no NUL byte), or only its size when it is not text. */
+/**
+ * An output file: its text (UTF-8, no NUL byte), or only its size when it is
+ * not text. A file over its cap, or past the total, comes back empty and
+ * `truncated`.
+ */
 export const ProjectOutputFile = z.union([
-  z.object({ path: z.string(), content: z.string(), truncated: z.boolean() }),
+  z.object({ path: z.string(), content: z.string(), truncated: z.boolean(), size: z.number().int() }),
   z.object({ path: z.string(), binary: z.literal(true), size: z.number().int() }),
 ]);
 export type ProjectOutputFile = z.infer<typeof ProjectOutputFile>;
@@ -291,15 +292,17 @@ export type ProjectRunResult = z.infer<typeof ProjectRunResult>;
 
 /**
  * A project run the runner refused for a reason no retry changes: no image
- * for it here, an archive over the ceiling, not a tar, or holding an entry
- * the sanitizer refuses — then the WHOLE archive is refused (CLAUDE.md
- * invariant 12) and `entries` names them, `<path>: <reason>` — or a request
- * it would not parse.
+ * for it here, an archive not a tar, or holding an entry the sanitizer
+ * refuses — then the WHOLE archive is refused (CLAUDE.md invariant 12) and
+ * `entries` names them, `<path>: <reason>` — or one that does not fit the
+ * work directory, or a request it would not parse (an archive over the cap
+ * included).
  */
 export const ProjectRunRefusal = z.object({
   refused: z.enum([
     "image_unavailable",
-    "archive_too_large",
+    /** Unpacked, it does not fit the runner's `RUNNER_PROJECT_WORKDIR_MB`. */
+    "archive_too_large_for_workdir",
     "archive_invalid",
     "archive_refused",
     "invalid_request",
