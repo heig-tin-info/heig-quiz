@@ -40,12 +40,15 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 import {
@@ -60,9 +63,13 @@ import {
   WORK_MODES,
   type ProjectGradingScale,
 } from "@quiz/contracts";
+import type { ProjectStep } from "@quiz/core/server";
 import {
   CI_STATUSES,
   DEADLINE_STRATEGIES,
+  EVIDENCE_STATUSES,
+  GRADING_SOURCES,
+  GRADING_STATES,
   GRADE_RUN_KINDS,
   GRADE_RUN_PARSE_STATUSES,
   PROJECT_GRADING_MODES,
@@ -70,6 +77,7 @@ import {
   PUBLISH_MODES,
 } from "@quiz/domain";
 import type { ParsedCriteria } from "@quiz/domain/criteria";
+import type { JunitCase } from "@quiz/domain/evidence";
 
 import { users } from "./auth.js";
 import { githubOrganizations } from "./github.js";
@@ -823,5 +831,73 @@ export const reverts = pgTable(
     uniqueIndex("reverts_repo_head_uq")
       .on(t.repoId, t.headSha)
       .where(sql`${t.headSha} IS NOT NULL`),
+  ],
+);
+
+/**
+ * The evidence of one (repository, target commit, distribution commit)
+ * (ADR-106 §3): the runner's steps, the JUnit cases and the text output
+ * files, or — `status` not `ok` — why there are none. An `ok` row is reused
+ * by a later pass on the same commits (§4); any other is replaced. No
+ * commit: both shas null, the unique constraint treating nulls as equal.
+ * Retention (N-DATA-03): deleted with the repository; the files and the
+ * steps' outputs six months after the release (`purgeEvidenceFiles`).
+ */
+export const projectEvidence = pgTable(
+  "project_evidence",
+  {
+    id: uuid("id").primaryKey(),
+    repoId: uuid("repo_id")
+      .notNull()
+      .references(() => projectRepos.id, { onDelete: "cascade" }),
+    targetSha: text("target_sha"),
+    /** The distribution's head whose protected files were overlaid. */
+    distributionSha: text("distribution_sha"),
+    status: text("status", { enum: EVIDENCE_STATUSES }).notNull(),
+    reason: text("reason"),
+    build: jsonb("build").$type<ProjectStep>(),
+    test: jsonb("test").$type<ProjectStep>(),
+    cases: jsonb("cases").$type<JunitCase[]>(),
+    /** The text output files by path. */
+    files: jsonb("files").$type<Record<string, { content: string; truncated: boolean }>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [unique("project_evidence_repo_shas_uq").on(t.repoId, t.targetSha, t.distributionSha).nullsNotDistinct()],
+);
+
+/**
+ * A criterion's points for a repository (ADR-106 §4), in `gradings`'
+ * vocabulary and its supersede chain; written only by
+ * `writeCriterionGrades` (`modules/project/criterionGrades.ts`). `pass_id`: the
+ * pass that wrote the row — for an `auto` row, its evidence. The
+ * milestone lock (§5) comes with L-02d.
+ */
+export const projectCriterionGrades = pgTable(
+  "project_criterion_grades",
+  {
+    id: uuid("id").primaryKey(),
+    repoId: uuid("repo_id")
+      .notNull()
+      .references(() => projectRepos.id, { onDelete: "cascade" }),
+    criterionId: text("criterion_id").notNull(),
+    points: numeric("points", { precision: 6, scale: 2, mode: "number" }).notNull(),
+    max: numeric("max", { precision: 6, scale: 2, mode: "number" }).notNull(),
+    source: text("source", { enum: GRADING_SOURCES }).notNull(),
+    state: text("state", { enum: GRADING_STATES }).notNull(),
+    /** Plain text, never rendered as markup (§6). */
+    rationale: text("rationale"),
+    /** Why a 0-point row has no evidence: an evidence status, or an LLM failure (L-02c). */
+    reason: text("reason"),
+    passId: uuid("pass_id"),
+    supersedesId: uuid("supersedes_id").references((): AnyPgColumn => projectCriterionGrades.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    /** The teacher of a `manual` row. */
+    createdBy: uuid("created_by").references(() => users.id),
+  },
+  (t) => [
+    uniqueIndex("project_criterion_grades_validated_uq")
+      .on(t.repoId, t.criterionId)
+      .where(sql`${t.state} = 'validated'`),
+    index("project_criterion_grades_repo_idx").on(t.repoId, t.criterionId),
   ],
 );

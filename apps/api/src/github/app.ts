@@ -91,6 +91,9 @@ export interface ReadOptions {
 }
 export const HTTP_READ: ReadOptions = { noRateLimitWait: true };
 
+/** Where GitHub redirects a tarball request; nowhere else is followed (ADR-106 §3). */
+export const CODELOAD_HOST = "codeload.github.com";
+
 /**
  * `octokit` with every request answered at once on a rate limit (M3-06):
  * what a scheduled pass over many repositories uses, so that a quota
@@ -120,6 +123,19 @@ export async function unless404<T>(call: () => Promise<T>): Promise<T | null> {
     if (githubStatus(err) === 404) return null;
     throw err;
   }
+}
+
+/** The head commit of `branch`, or null when the repository or the branch does not exist. */
+export function branchHead(octokit: Octokit, owner: string, repo: string, branch: string): Promise<string | null> {
+  return unless404(async () => {
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
+      owner,
+      repo,
+      ref: `heads/${branch}`,
+      request: { retries: 0 },
+    });
+    return data.object.sha;
+  });
 }
 
 /** GitHub's all-zeros sha: a push's `after` deleting a branch, its `before` creating one. */

@@ -454,7 +454,7 @@ describe("reconcile.grades", () => {
   it("does nothing without Quiz's App", async () => {
     const off = loadConfig({ NODE_ENV: "test" });
     expect(await reconcileGrades(server.app, off)).toBe("GitHub App not configured");
-    expect(await reconcileRepos(server.app, off)).toBe("GitHub App not configured");
+    expect(await reconcileRepos(server.app, off)).toBe("GitHub App not configured; 0 evidence files purged");
   });
 });
 
@@ -474,7 +474,7 @@ describe("reconcile.repos: the invitations", () => {
     expect(repo!.invitationStatus).toBe("pending");
     expired(repo!, students[0]!.login);
 
-    expect(await reconcileRepos(server.app, config)).toBe("1 repositories checked, 1 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted, 0 protected");
+    expect(await reconcileRepos(server.app, config)).toBe("1 repositories checked, 1 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted, 0 protected; 0 evidence files purged");
     expect(invites()).toHaveLength(1);
     let row = await repoRow(repo!.id);
     expect(row.invitationReinvitedAt?.toISOString()).toBe(NOW);
@@ -751,7 +751,7 @@ describe("reconcile.repos: the repository itself", () => {
     expect(entry?.payload).toEqual({ via: "reconcile" });
 
     // Deleted rows are out of scope: nothing more happens to them.
-    expect(await reconcileRepos(server.app, config)).toBe("1 repositories checked, 0 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted, 0 protected");
+    expect(await reconcileRepos(server.app, config)).toBe("1 repositories checked, 0 re-invited, 0 invitations accepted, 0 heads moved, 0 renamed, 0 deleted, 0 protected; 0 evidence files purged");
     expect(await auditOf(gone!.id, "project_repo.deleted")).toHaveLength(1);
   });
 

@@ -33,8 +33,8 @@ export interface RevertOutcome {
   restored: RevertResult | null;
 }
 
-/** The distribution's blob of `path` at `ref`, with its content; null when there is no such file. */
-async function referenceBlob(
+/** The distribution's blob of `path` at `ref` (a branch, or a commit), with its content (base64); null when there is no such file. Read by a restore and by the evidence's overlay (ADR-106 §3). */
+export async function referenceBlob(
   octokit: Octokit,
   owner: string,
   repo: string,

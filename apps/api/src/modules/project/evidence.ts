@@ -1,0 +1,377 @@
+/**
+ * The evidence run of a project graded by criteria (ADR-106 §3) and the
+ * automatic criteria's rows it proposes (§2, §4): `collectEvidence` tests
+ * a repository at its target commit in the runner, `runEvidence` — the
+ * `project.evidence` job — writes the rows. The tarball is fetched through
+ * the App, never cloned, and travels in memory and to the runner only; its
+ * `codeload` redirect's `token=` never reaches a log, a row or an error
+ * (invariant 15). Nothing enqueues the job before L-02c.
+ */
+import { randomUUID } from "node:crypto";
+import { gunzipSync } from "node:zlib";
+
+import type { FastifyInstance } from "fastify";
+import { and, eq, inArray, lt, ne, or, isNotNull, sql } from "drizzle-orm";
+import type { Octokit } from "octokit";
+
+import { effectiveTestsCriterion, PROJECT_CRITERIA_DEFAULTS } from "@quiz/contracts";
+import { PROJECT_ARCHIVE_MAX_BYTES, RunnerBusy, RunnerUnavailable, type ProjectRunRefusal, type ProjectRunResult } from "@quiz/core/server";
+import { readTar, writeTar, type CleanEntry } from "@quiz/core/tar";
+import {
+  automaticPoints,
+  classifyCriterion,
+  effectiveDeadline,
+  parseJunit,
+  proratedByTests,
+  stripTarballRoot,
+  type CriteriaLeaf,
+  type EvidenceStatus,
+} from "@quiz/domain";
+
+import { readCapped } from "../../cappedBody.js";
+import type { AppConfig } from "../../config.js";
+import type { Db } from "../../db/client.js";
+import { projectCriteria, projectCriterionGrades, projectEvidence, projectRepos, projects } from "../../db/schema.js";
+import { branchHead, CODELOAD_HOST, githubStatus, installationClient, ownerRepo } from "../../github/app.js";
+import { referenceBlob } from "../../github/revert.js";
+import { redactTokens } from "../../redact.js";
+import { projectInstallation } from "../github/service.js";
+import { writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
+import type { RepoRow } from "./repos.js";
+import { lastStudentPush } from "./review.js";
+import type { ProjectRow } from "./views.js";
+
+/** The `project.evidence` job's data. */
+export interface EvidenceJob {
+  repoId: string;
+}
+
+/** Evidence jobs a process runs at once: a pass never fills the runner's queue (ADR-101). */
+export const EVIDENCE_CONCURRENCY = 2;
+
+/** The JUnit report the default test command writes. */
+const REPORT_FILE = "report.xml";
+/** A decompressed tarball past this cannot compose an archive under the runner's cap. */
+const UNPACKED_MAX_BYTES = 2 * PROJECT_ARCHIVE_MAX_BYTES;
+const DOWNLOAD_TIMEOUT_MS = 120_000;
+/** A refusal's entries kept in the row's reason. */
+const REASON_MAX = 2_000;
+/** The evidence files' retention after the release (N-DATA-03). */
+const EVIDENCE_FILES_MONTHS = 6;
+
+export type EvidenceRow = typeof projectEvidence.$inferSelect;
+type EvidenceValues = Pick<typeof projectEvidence.$inferInsert, "status" | "reason" | "build" | "test" | "cases" | "files">;
+
+export interface EvidenceOutcome {
+  evidenceId: string;
+  status: EvidenceStatus;
+  /** The `auto` rows written. */
+  rows: number;
+}
+
+/** A tarball that could not be fetched; its message passes through `redactTokens`, never carrying the redirect's token. */
+export class TarballUnavailable extends Error {
+  constructor(what: string) {
+    super(redactTokens(`the repository's tarball could not be fetched: ${what}`));
+    this.name = "TarballUnavailable";
+  }
+}
+
+const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/** The redirect's target, only when it is GitHub's `codeload` over HTTPS. */
+function codeloadUrl(location: string | undefined): string {
+  let url: URL;
+  try {
+    url = new URL(location ?? "");
+  } catch {
+    throw new TarballUnavailable("no redirect to follow");
+  }
+  if (url.protocol !== "https:" || url.host !== CODELOAD_HOST) throw new TarballUnavailable(`a redirect to ${url.host}`);
+  return url.href;
+}
+
+/** The archive at `url`, without credentials (the URL carries its own) and without following further. */
+async function download(url: string): Promise<ReadableStream<Uint8Array>> {
+  let res: Response;
+  try {
+    res = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
+  } catch (err) {
+    throw new TarballUnavailable(messageOf(err));
+  }
+  if (res.ok && res.body !== null) return res.body;
+  await res.body?.cancel().catch(() => undefined);
+  throw new TarballUnavailable(`the download answered ${res.status}`);
+}
+
+/** The repository's gzipped tarball at `sha`, read up to the runner's cap, or why there is none. */
+async function fetchTarball(octokit: Octokit, fullName: string, sha: string): Promise<Uint8Array | "repo_missing" | "archive_too_large"> {
+  const { owner, repo } = ownerRepo(fullName);
+  let location: string | undefined;
+  try {
+    const res = await octokit.request("GET /repos/{owner}/{repo}/tarball/{ref}", {
+      owner,
+      repo,
+      ref: sha,
+      request: { redirect: "manual", parseSuccessResponseBody: false, retries: 0 },
+    });
+    await (res.data as unknown as ReadableStream | null)?.cancel().catch(() => undefined);
+    location = res.headers.location;
+  } catch (err) {
+    if (githubStatus(err) === 404) return "repo_missing";
+    throw new TarballUnavailable(`GitHub answered ${githubStatus(err) ?? messageOf(err)}`);
+  }
+  const body = await download(codeloadUrl(location));
+  const bytes = await readCapped(new Response(body), PROJECT_ARCHIVE_MAX_BYTES).catch((err: unknown) => {
+    throw new TarballUnavailable(messageOf(err));
+  });
+  return bytes ?? "archive_too_large";
+}
+
+/** The tarball decompressed, or null past {@link UNPACKED_MAX_BYTES}. */
+function unpack(gzipped: Uint8Array): Uint8Array | null {
+  try {
+    return gunzipSync(gzipped, { maxOutputLength: UNPACKED_MAX_BYTES });
+  } catch (err) {
+    if (err instanceof RangeError) return null;
+    throw new TarballUnavailable(messageOf(err));
+  }
+}
+
+/** Regular files: `0`, the old `\0`, `7`. Anything else but a directory is dropped (a committed link included). */
+const FILE_TYPES = new Set(["0", "\0", "7"]);
+
+/**
+ * The archive the runner receives (§3): the tarball's tree without its
+ * top-level `<owner>-<repo>-<sha>/`, regular files and directories only,
+ * `overlay` (the distribution's protected files) in place of the student's
+ * copies or added back. Null past the runner's cap. `now`: the mtime, in
+ * seconds, of what the overlay adds.
+ */
+export function composeArchive(tar: Uint8Array, overlay: ReadonlyMap<string, Uint8Array>, now: number): Uint8Array | null {
+  const entries: CleanEntry[] = [];
+  const dirs = new Set<string>();
+  const files = new Set<string>();
+  const directory = (path: string, mtime: number) => {
+    dirs.add(path);
+    entries.push({ path, type: "directory", mode: 0o755, mtime, data: new Uint8Array() });
+  };
+  for (const entry of stripTarballRoot(readTar(tar))) {
+    const path = entry.path.replace(/\/$/, "");
+    if (entry.typeflag === "5") directory(path, entry.mtime);
+    if (!FILE_TYPES.has(entry.typeflag)) continue;
+    files.add(path);
+    const mode = entry.mode & 0o111 ? 0o755 : 0o644;
+    entries.push({ path, type: "file", mode, mtime: entry.mtime, data: overlay.get(path) ?? entry.data });
+  }
+  for (const [path, data] of overlay) {
+    if (files.has(path)) continue;
+    const segments = path.split("/");
+    for (let i = 1; i < segments.length; i += 1) {
+      const dir = segments.slice(0, i).join("/");
+      if (!dirs.has(dir)) directory(dir, now);
+    }
+    entries.push({ path, type: "file", mode: 0o644, mtime: now, data });
+  }
+  const archive = writeTar(entries);
+  return archive.length > PROJECT_ARCHIVE_MAX_BYTES ? null : archive;
+}
+
+/** The distribution's protected files at `sha`, as a restore reads them (ADR-062 addendum 1). */
+async function protectedFiles(octokit: Octokit, project: ProjectRow, sha: string): Promise<Map<string, Uint8Array>> {
+  const { owner, repo } = ownerRepo(project.distributionFullName!);
+  const files = new Map<string, Uint8Array>();
+  for (const path of project.protectedFiles) {
+    const blob = await referenceBlob(octokit, owner, repo, path, sha);
+    if (blob) files.set(path, Buffer.from(blob.content, "base64"));
+  }
+  return files;
+}
+
+/** The runner's answer as the row's values. */
+function fromRun(outcome: ProjectRunResult | ProjectRunRefusal): EvidenceValues {
+  if ("refused" in outcome) {
+    const entries = outcome.entries?.length ? `: ${outcome.entries.join(", ")}` : "";
+    return { status: "refused", reason: `${outcome.refused}${entries}`.slice(0, REASON_MAX) };
+  }
+  const files: Record<string, { content: string; truncated: boolean }> = {};
+  for (const file of outcome.files) if ("content" in file) files[file.path] = { content: file.content, truncated: file.truncated };
+  const report = files[REPORT_FILE];
+  return { status: "ok", build: outcome.build, test: outcome.test, cases: report ? parseJunit(report.content).cases : [], files };
+}
+
+/** The archive run on the `lab-c` image with the project's commands, or why it was not. */
+async function run(app: FastifyInstance, project: ProjectRow, archive: Uint8Array): Promise<EvidenceValues> {
+  try {
+    return fromRun(
+      await app.runner.project({
+        archive: Buffer.from(archive.buffer, archive.byteOffset, archive.byteLength).toString("base64"),
+        image: "lab-c",
+        commands: {
+          build: project.buildCommand ?? [...PROJECT_CRITERIA_DEFAULTS.buildCommand],
+          test: project.testCommand ?? [...PROJECT_CRITERIA_DEFAULTS.testCommand],
+        },
+        outputs: project.evidenceOutputs ?? [...PROJECT_CRITERIA_DEFAULTS.evidenceOutputs],
+      }),
+    );
+  } catch (err) {
+    if (err instanceof RunnerUnavailable) return { status: "runner_unavailable", reason: err.reason };
+    if (err instanceof RunnerBusy) return { status: "timed_out", reason: "runner_busy" };
+    throw err;
+  }
+}
+
+/** The evidence of these commits, nulls equal. */
+const sameCommits = (repoId: string, targetSha: string | null, distributionSha: string | null) =>
+  and(
+    eq(projectEvidence.repoId, repoId),
+    sql`${projectEvidence.targetSha} IS NOT DISTINCT FROM ${targetSha}`,
+    sql`${projectEvidence.distributionSha} IS NOT DISTINCT FROM ${distributionSha}`,
+  );
+
+/**
+ * The evidence of these commits stored, under the repository row's lock: an
+ * `ok` row a concurrent job stored meanwhile is kept and returned; any
+ * other is deleted and this one inserted, a new evidence with a new id.
+ */
+async function store(db: Db, repoId: string, targetSha: string | null, distributionSha: string | null, values: EvidenceValues, now: Date): Promise<EvidenceRow> {
+  return db.transaction(async (tx) => {
+    await tx.select({ id: projectRepos.id }).from(projectRepos).where(eq(projectRepos.id, repoId)).for("update");
+    const [held] = await tx.select().from(projectEvidence).where(sameCommits(repoId, targetSha, distributionSha));
+    // The race guard: a concurrent job on the same commits may have stored an ok row since
+    // collectEvidence checked; that row wins and is never replaced.
+    if (held?.status === "ok") return held;
+    if (held) await tx.delete(projectEvidence).where(eq(projectEvidence.id, held.id));
+    const [row] = await tx
+      .insert(projectEvidence)
+      .values({ id: randomUUID(), repoId, targetSha, distributionSha, ...values, createdAt: now })
+      .returning();
+    return row!;
+  });
+}
+
+/** The installation's client of the project's organization. */
+async function projectOctokit(db: Db, config: AppConfig, project: ProjectRow): Promise<Octokit> {
+  const org = await projectInstallation(db, project.orgId);
+  if (!org) throw new Error("Quiz's GitHub App no longer acts on the project's organization");
+  return (await installationClient(config, org.installationId)).octokit;
+}
+
+/**
+ * The evidence of a repository at `deadline` (§3): the target commit (the
+ * last student push on a handed-out branch, `lastStudentPush`), the
+ * distribution's head, an `ok` evidence of the same commits reused, else
+ * the tarball fetched, composed with the protected files and run.
+ */
+export async function collectEvidence(app: FastifyInstance, config: AppConfig, repo: RepoRow, project: ProjectRow, deadline: Date): Promise<EvidenceRow> {
+  const db = app.db;
+  const now = app.clock.now();
+  const target = repo.githubRepoId === null ? null : await lastStudentPush(db, repo.githubRepoId, project.branches, deadline);
+  if (target === null) return store(db, repo.id, null, null, { status: "no_commit" }, now);
+  if (repo.deletedAt !== null || repo.fullName === null) return store(db, repo.id, target, null, { status: "repo_missing" }, now);
+  const octokit = await projectOctokit(db, config, project);
+  const { owner, repo: name } = ownerRepo(project.distributionFullName!);
+  const distributionSha = await branchHead(octokit, owner, name, project.branches[0]!);
+  if (distributionSha === null) throw new Error("the distribution repository has no handed-out branch");
+  const [reusable] = await db
+    .select()
+    .from(projectEvidence)
+    .where(and(sameCommits(repo.id, target, distributionSha), eq(projectEvidence.status, "ok")));
+  if (reusable) return reusable;
+  const tarball = await fetchTarball(octokit, repo.fullName, target);
+  if (typeof tarball === "string") return store(db, repo.id, target, distributionSha, { status: tarball }, now);
+  const tar = unpack(tarball);
+  const overlay = tar && (await protectedFiles(octokit, project, distributionSha));
+  const archive = tar && overlay && composeArchive(tar, overlay, Math.floor(now.getTime() / 1000));
+  if (!archive) return store(db, repo.id, target, distributionSha, { status: "archive_too_large" }, now);
+  return store(db, repo.id, target, distributionSha, await run(app, project, archive), now);
+}
+
+/**
+ * The criteria the evidence proposes: not validated, not a teacher's, not already graded from
+ * this evidence. Read outside writeCriterionGrades' transaction on purpose: a row validated in
+ * between cannot be lost, since a proposed input only supersedes proposals.
+ */
+async function toPropose(db: Db, repoId: string, leaves: CriteriaLeaf[], evidenceId: string): Promise<CriteriaLeaf[]> {
+  if (leaves.length === 0) return [];
+  const standing = await db
+    .select({ criterionId: projectCriterionGrades.criterionId })
+    .from(projectCriterionGrades)
+    .where(
+      and(
+        eq(projectCriterionGrades.repoId, repoId),
+        ne(projectCriterionGrades.state, "superseded"),
+        or(
+          eq(projectCriterionGrades.state, "validated"),
+          ne(projectCriterionGrades.source, "auto"),
+          eq(projectCriterionGrades.passId, evidenceId),
+        ),
+      ),
+    );
+  const held = new Set(standing.map((r) => r.criterionId));
+  return leaves.filter((leaf) => !held.has(leaf.id));
+}
+
+/**
+ * The `project.evidence` job (§3, §4): the repository's evidence at its
+ * effective deadline, then one `auto` proposal per automatic criterion
+ * worth positive points — 0 with the evidence's status as its reason when
+ * there is none. Null when there is nothing to grade: the repository gone,
+ * its project not in `criteria` mode or without a snapshot.
+ */
+export async function runEvidence(app: FastifyInstance, config: AppConfig, repoId: string): Promise<EvidenceOutcome | null> {
+  const [row] = await app.db
+    .select({ repo: projectRepos, project: projects, snapshot: projectCriteria.criteria })
+    .from(projectRepos)
+    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+    .innerJoin(projectCriteria, eq(projectCriteria.projectId, projects.id))
+    .where(eq(projectRepos.id, repoId));
+  if (!row || row.project.gradingMode !== "criteria" || !row.project.distributionFullName) return null;
+  const { repo, project, snapshot } = row;
+  const evidence = await collectEvidence(app, config, repo, project, effectiveDeadline(repo, project));
+  const testsCriterion = effectiveTestsCriterion(project);
+  const automatic = snapshot.leaves.filter((leaf) => classifyCriterion(leaf, { testsCriterion }) === "automatic" && proratedByTests(leaf));
+  const inputs = (await toPropose(app.db, repo.id, automatic, evidence.id)).map(
+    (leaf): CriterionGradeInput => ({
+      criterionId: leaf.id,
+      points: evidence.status === "ok" ? automaticPoints(leaf, evidence.cases ?? [], testsCriterion) : 0,
+      max: leaf.maxPoints,
+      source: "auto",
+      state: "proposed",
+      reason: evidence.status === "ok" ? null : evidence.status,
+      passId: evidence.id,
+    }),
+  );
+  const rows = await writeCriterionGrades(app.db, repo.id, inputs, app.clock.now());
+  return { evidenceId: evidence.id, status: evidence.status, rows: rows.length };
+}
+
+/**
+ * Retention (N-DATA-03, §3): the files and the steps' stdout and stderr of the
+ * evidence of the projects released more than six months ago are dropped;
+ * the cases and the statuses stay. Run by the daily `reconcile.repos`.
+ */
+export async function purgeEvidenceFiles(db: Db, now: Date): Promise<number> {
+  const before = new Date(now);
+  before.setUTCMonth(before.getUTCMonth() - EVIDENCE_FILES_MONTHS);
+  const released = db
+    .select({ id: projectRepos.id })
+    .from(projectRepos)
+    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+    .where(lt(projects.releasedAt, before));
+  const blank = (step: typeof projectEvidence.build | typeof projectEvidence.test) =>
+    sql`CASE WHEN ${step} IS NULL THEN NULL ELSE ${step} || '{"stdout":"","stderr":""}'::jsonb END`;
+  const output = (step: typeof projectEvidence.build | typeof projectEvidence.test) =>
+    sql`coalesce(${step}->>'stdout', '') <> '' OR coalesce(${step}->>'stderr', '') <> ''`;
+  const purged = await db
+    .update(projectEvidence)
+    .set({ files: null, build: blank(projectEvidence.build), test: blank(projectEvidence.test) })
+    .where(
+      and(
+        inArray(projectEvidence.repoId, released),
+        or(isNotNull(projectEvidence.files), output(projectEvidence.build), output(projectEvidence.test)),
+      ),
+    )
+    .returning({ id: projectEvidence.id });
+  return purged.length;
+}

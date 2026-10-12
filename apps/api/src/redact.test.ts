@@ -118,3 +118,14 @@ describe("GitHub tokens (N-SEC-16)", () => {
     expect(requestLog({ method: "GET", url: "/a?t=ghu_zz", host: "h", ip: "i" }).url).not.toContain("ghu_zz");
   });
 });
+
+describe("a tarball's codeload URL (ADR-106 §3)", () => {
+  const CODELOAD = "https://codeload.github.com/org/lab-alice/legacy.tar.gz/abc123?token=AABBCCDDEEFF0011";
+
+  it("masks its token= wherever it appears in a text", () => {
+    expect(redactTokens(`fetch failed: ${CODELOAD}`)).toBe(
+      "fetch failed: https://codeload.github.com/org/lab-alice/legacy.tar.gz/abc123?token=***",
+    );
+    expect(redactTokens(`GET /x?a=1&token=s3cret&b=2`)).toBe("GET /x?a=1&token=***&b=2");
+  });
+});

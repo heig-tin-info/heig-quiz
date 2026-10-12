@@ -216,12 +216,13 @@ async function dispatchFinal(app: FastifyInstance, octokit: Octokit, projectId: 
 }
 
 /**
- * The commit a checkpoint reviews: the last push received on a handed-out
+ * The commit a checkpoint reviews, and the one an evidence run tests
+ * (ADR-106 §3): the last push received on a handed-out
  * branch at or before its date that no bot made (`is_bot` false: neither
  * the App's nor a workflow's) — the server's receipt, as for the freeze.
  */
-async function checkpointSha(tx: Tx, githubRepoId: number, branches: string[], before: Date): Promise<string | null> {
-  const [row] = await tx
+export async function lastStudentPush(db: Db | Tx, githubRepoId: number, branches: string[], before: Date): Promise<string | null> {
+  const [row] = await db
     .select({ sha: pushReceipts.headSha })
     .from(pushReceipts)
     .where(
@@ -260,7 +261,7 @@ async function dispatchCheckpoint(
       .where(and(eq(projectCheckpoints.id, checkpointId), eq(projectCheckpoints.projectId, projectId)))
       .for("share");
     if (!checkpoint || !checkpointFires(checkpoint, project, now)) return null;
-    const sha = await checkpointSha(tx, repo.githubRepoId!, project.branches, checkpoint.dueAt);
+    const sha = await lastStudentPush(tx, repo.githubRepoId!, project.branches, checkpoint.dueAt);
     const plan = planCheckpointReviewDispatch(project.id, checkpoint, sha);
     if (!plan) return null;
     const dispatchId = await claimDispatch(tx, repo.id, plan, checkpointId, now);
