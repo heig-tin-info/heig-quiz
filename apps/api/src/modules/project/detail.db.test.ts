@@ -550,6 +550,10 @@ describe("the project page (F-PROJ-13)", () => {
     expect(rowOf(await detail(w.projectId), suspended!.id).repo!.review).toMatchObject({ status: "skipped", reason: "archived" });
     await server.app.db.update(projects).set({ gradingMode: "none" }).where(eq(projects.id, w.projectId));
     expect(rowOf(await detail(w.projectId), noRun!.id).repo!.review).toEqual({ ...none, status: "none" });
+    // Graded by criteria (ADR-106 §6): its `deadline` rows are the platform's pass, never a CI dispatch shown.
+    await server.app.db.update(projects).set({ gradingMode: "criteria" }).where(eq(projects.id, w.projectId));
+    expect(rowOf(await detail(w.projectId), asked!.id).repo!.review).toEqual({ ...none, status: "none" });
+    expect(rowOf(await detail(w.projectId), claimed!.id).repo!.review).toEqual({ ...none, status: "none" });
   });
 
   it("publishes a draft; a deleted repository does not hold the release back", async () => {

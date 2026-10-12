@@ -22,6 +22,10 @@ import { z } from "zod";
 
 import {
   CI_STATUSES,
+  CRITERIA_TABLE_STATES,
+  CRITERION_REASONS,
+  EVIDENCE_STATUSES,
+  GRADING_SOURCES,
   CRITERIA_PARSE_ERROR_CODES,
   CRITERION_KINDS,
   DEADLINE_STRATEGIES,
@@ -562,6 +566,11 @@ export const PROJECT_REFUSALS = [
   // (`online_seb`, ADR-047 §2); the work mode's own refusals are
   // `WORK_MODE_REFUSALS` (`codespace.ts`).
   "not_invitable",
+  // ADR-106 §4: a Regrade of a project not graded by criteria (409; a
+  // repository not frozen for good is `not_frozen`), and past the project's
+  // three a day (429).
+  "not_criteria",
+  "regrade_limit",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
@@ -1471,3 +1480,61 @@ export const ProjectCriteriaView = z.object({
     .nullable(),
 });
 export type ProjectCriteriaView = z.infer<typeof ProjectCriteriaView>;
+
+/**
+ * `POST /app/api/projects/:id/regrade` and `…/repos/:rid/regrade` (ADR-106
+ * §4), 202: the repositories sent through a new pass — one model call each,
+ * what the confirmation's cost estimate counts. No body.
+ */
+export const ProjectRegradeAccepted = z.object({ repos: z.number().int().nonnegative() });
+export type ProjectRegradeAccepted = z.infer<typeof ProjectRegradeAccepted>;
+
+/** Why a criterion's row is a 0-point proposal (`CRITERION_REASONS` of `@quiz/domain`): staff only. */
+export const CriterionReason = z.enum(CRITERION_REASONS);
+export type CriterionReason = z.infer<typeof CriterionReason>;
+
+/**
+ * One line of a repository's criteria table (`criteriaTable` of
+ * `@quiz/domain`, ADR-106 §6), the staff's audience: `rationale` is plain
+ * text, shown escaped, never rendered as markup.
+ */
+export const CriteriaTableRow = z.object({
+  criterionId: z.string(),
+  section: z.string(),
+  description: z.string(),
+  max: z.number(),
+  bonus: z.number().optional(),
+  points: z.number().nullable(),
+  state: z.enum(CRITERIA_TABLE_STATES),
+  source: z.enum(GRADING_SOURCES).optional(),
+  rationale: z.string().optional(),
+  reason: CriterionReason.optional(),
+});
+export type CriteriaTableRow = z.infer<typeof CriteriaTableRow>;
+
+/** A step of an evidence run, as the staff read it: its exit code, never its output. */
+const EvidenceStepSummary = z.object({ exitCode: z.number().int().nullable(), timedOut: z.boolean() });
+
+/**
+ * `GET /app/api/projects/:id/repos/:rid/criteria` (ADR-106 §6, staff only,
+ * N-SEC-20): the repository's criteria table and the summary of its last
+ * evidence — its status, the commits, the cases passed, the steps' exit
+ * codes; never a file nor an output. `table` is empty without a snapshot.
+ */
+export const ProjectRepoCriteria = z.object({
+  table: z.array(CriteriaTableRow),
+  evidence: z
+    .object({
+      status: z.enum(EVIDENCE_STATUSES),
+      reason: z.string().nullable(),
+      targetSha: z.string().nullable(),
+      distributionSha: z.string().nullable(),
+      casesPassed: z.number().int().nonnegative(),
+      casesTotal: z.number().int().nonnegative(),
+      build: EvidenceStepSummary.nullable(),
+      test: EvidenceStepSummary.nullable(),
+      createdAt: z.iso.datetime(),
+    })
+    .nullable(),
+});
+export type ProjectRepoCriteria = z.infer<typeof ProjectRepoCriteria>;

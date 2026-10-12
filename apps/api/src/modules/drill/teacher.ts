@@ -38,7 +38,7 @@ import {
   drillConfidenceSplit,
   drillConfidentErrorShare,
   type DrillConfidence,
-  localDate,
+  drillLocalDate,
   drillProgressRange,
   drillMastery,
   drillWeekStarts,
@@ -203,9 +203,9 @@ export async function classroomProgress(
   const range = drillProgressRange({
     periodStart: classroom.periodStart,
     periodEnd: classroom.periodEnd,
-    enabledOn: classroom.drillEnabledAt ? localDate(classroom.drillEnabledAt) : null,
+    enabledOn: classroom.drillEnabledAt ? drillLocalDate(classroom.drillEnabledAt) : null,
     firstReviewOn: rows.map((r) => r.weekStart).sort()[0] ?? null,
-    today: localDate(now),
+    today: drillLocalDate(now),
   });
   if (!range) return { weeks: [] };
   const byWeek = new Map(rows.map((r) => [r.weekStart, r]));

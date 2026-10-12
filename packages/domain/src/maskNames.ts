@@ -21,6 +21,9 @@ export interface MaskedPerson {
   email: string;
 }
 
+/** A handle shorter than this would mask a variable named `a` everywhere. */
+const MIN_HANDLE = 2;
+
 /** Lowercase, without accents: how a name and a word are compared. */
 const fold = (word: string): string =>
   word
@@ -58,8 +61,12 @@ function spells(text: string, tokens: Token[], at: number, name: string[]): bool
  * more, and every e-mail address replaced by {@link MASK}: whole words only,
  * ignoring case and accents. A name that is also an ordinary word (Pascal,
  * Max) is masked everywhere: a lost word costs less than a leaked name.
+ * `handles` — identifiers written as one token, a GitHub login, a
+ * repository's name (ADR-106 §4) — go whole like an e-mail address,
+ * wherever no letter or digit touches them (`labo-00-jdoe` loses `jdoe`),
+ * ignoring case; one of fewer than {@link MIN_HANDLE} characters is kept.
  */
-export function maskNames(text: string, people: readonly MaskedPerson[]): string {
+export function maskNames(text: string, people: readonly MaskedPerson[], handles: readonly string[] = []): string {
   const parts = new Set<string>();
   const names: string[][] = [];
   const emails: string[] = [];
@@ -72,7 +79,13 @@ export function maskNames(text: string, people: readonly MaskedPerson[]): string
     for (const compound of [given, family]) if (compound.length > 1) names.push(compound);
     if (p.email.trim() !== "") emails.push(p.email.trim());
   }
-  const unmailed = emails.length > 0 ? text.replace(new RegExp(emails.map(escape).join("|"), "gi"), MASK) : text;
+  const whole = [...new Set([...emails, ...handles.map((h) => h.trim()).filter((h) => h.length >= MIN_HANDLE)])];
+  // The longest first: a login inside a repository's name or an address goes with it.
+  whole.sort((a, b) => b.length - a.length);
+  const unmailed =
+    whole.length > 0
+      ? text.replace(new RegExp(`(?<![\\p{L}\\p{N}])(?:${whole.map(escape).join("|")})(?![\\p{L}\\p{N}])`, "giu"), MASK)
+      : text;
 
   const tokens = [...unmailed.matchAll(WORD)].map((m) => ({ start: m.index, end: m.index + m[0].length, word: fold(m[0]) }));
   const masked = tokens.map((t) => parts.has(t.word));
@@ -88,4 +101,30 @@ export function maskNames(text: string, people: readonly MaskedPerson[]): string
     from = t.end;
   });
   return out + unmailed.slice(from);
+}
+
+/** A person of a project's classroom or repository, as the masking reads them. */
+export interface ProjectPerson {
+  givenName: string;
+  familyName: string;
+  email: string;
+  /** Their GitHub login, when they linked one. */
+  login?: string | null;
+}
+
+/**
+ * What a project's LLM pass masks (ADR-106 §4, N-DATA-05), as
+ * {@link maskNames} takes it: every person of the classroom's roster and of
+ * the repository — their names, e-mail addresses and GitHub logins — and
+ * `handles`, the repository's own names (its owner, its name: a student's
+ * carries their login, a group's may carry its members').
+ */
+export function projectMaskTerms(
+  people: readonly ProjectPerson[],
+  handles: readonly string[],
+): { people: MaskedPerson[]; handles: string[] } {
+  return {
+    people: people.map((p) => ({ givenName: p.givenName, familyName: p.familyName, email: p.email })),
+    handles: [...people.flatMap((p) => (p.login ? [p.login] : [])), ...handles],
+  };
 }

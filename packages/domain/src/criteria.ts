@@ -170,9 +170,14 @@ export function classifyCriterion(leaf: Pick<CriteriaLeaf, "id" | "prompt" | "te
 
 /** A criterion's points clamped into its range (`_clamp` of `apply.py`): `[0, max]`, `[max, 0]` for a penalty, `[0, bonus]`. */
 export function clampAwarded(leaf: Pick<CriteriaLeaf, "maxPoints" | "bonusPoints">, points: number): number {
-  const top = leaf.bonusPoints ?? leaf.maxPoints;
-  const [low, high] = top >= 0 ? [0, top] : [top, 0];
+  const [low, high] = awardedRange(leaf);
   return Math.max(low, Math.min(high, points));
+}
+
+/** A criterion's range of points, `[low, high]`: `[0, max]`, `[max, 0]` for a penalty, `[0, bonus]` for a bonus. */
+export function awardedRange(leaf: Pick<CriteriaLeaf, "maxPoints" | "bonusPoints">): [number, number] {
+  const top = leaf.bonusPoints ?? leaf.maxPoints;
+  return top >= 0 ? [0, top] : [top, 0];
 }
 
 export interface CriteriaTotals {

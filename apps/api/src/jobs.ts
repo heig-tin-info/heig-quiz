@@ -122,6 +122,16 @@ export const PROJECT_SYNC_QUEUE = "project.sync";
 export const PROJECT_EVIDENCE_QUEUE = "project.evidence";
 
 /**
+ * The LLM pass of one repository of a project graded by criteria (ADR-106
+ * §4): `{ repoId, passId, trigger, evidenceId }`, sent by the evidence job
+ * of a pass once its evidence is stored, whatever its status. As
+ * `grading.llm`: `standard`, no dedupe, no retry (a failure is a 0-point
+ * proposal with its reason, the next Regrade settles it), two at a time per
+ * process; idempotent per (repository, pass).
+ */
+export const PROJECT_REVIEW_QUEUE = "project.review";
+
+/**
  * The push of one project to the online workspace portal (ADR-047 §6,
  * merge task M6-06): `{ projectId }`, sent after anything the portal reads
  * of an `online` project changed (its mode, name, dates, publication) and

@@ -43,11 +43,6 @@ export const AdminUser = z.object({
    */
   reason: z.enum(ROLE_REASONS).nullable(),
   lastLoginAt: z.iso.datetime().nullable(),
-  /**
-   * The last request of the account's own session, to the minute (ADR-107):
-   * shown to the administrator only, never on a roster.
-   */
-  lastSeenAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
   /** Pools this account owns. */
   pools: z.number().int(),
@@ -84,7 +79,6 @@ export const SCHEDULED_TASK_KEYS = [
   "assist.purge",
   "integrity.purge",
   "training.install",
-  "presence.purge",
 ] as const;
 export type ScheduledTaskKey = (typeof SCHEDULED_TASK_KEYS)[number];
 
@@ -137,36 +131,3 @@ export const AdminScheduledTask = z.object({
   nextRunAt: z.iso.datetime().nullable(),
 });
 export type AdminScheduledTask = z.infer<typeof AdminScheduledTask>;
-
-/** People counted apart: `students` by the stored role `student`, `staff` the teachers and admins. */
-export const ActivityCount = z.object({
-  students: z.number().int().nonnegative(),
-  staff: z.number().int().nonnegative(),
-});
-export type ActivityCount = z.infer<typeof ActivityCount>;
-
-/**
- * `GET /app/api/admin/activity` (F-ADMIN-09, ADR-107): the platform's usage,
- * aggregates only. A cell counts the distinct people active in one local
- * hour of the school's time zone (`SCHOOL_TIME_ZONE`); the class hours are
- * `CLASS_HOURS`, both from `@quiz/domain`. Nothing in this answer names
- * anybody; an anonymized account is counted nowhere.
- */
-export const AdminActivity = z.object({
-  generatedAt: z.iso.datetime(),
-  /** Seen within the last 15 minutes. */
-  activeNow: ActivityCount,
-  /** Active in one of the last 24 hours. */
-  last24h: ActivityCount,
-  /** Active on one of the seven days of `days`. */
-  last7d: ActivityCount,
-  /** The share (0–1) of the students' person-hours of `days` outside class hours; null with none. */
-  offHoursStudentShare: z.number().min(0).max(1).nullable(),
-  /** The local date of the oldest hour still kept (eight days at most); null when nothing is recorded. */
-  recordedSince: z.iso.date().nullable(),
-  /** The last seven local dates, oldest first, today last; 24 hours each. */
-  days: z
-    .array(z.object({ date: z.iso.date(), hours: z.array(ActivityCount).length(24) }))
-    .length(7),
-});
-export type AdminActivity = z.infer<typeof AdminActivity>;

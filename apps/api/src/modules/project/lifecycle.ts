@@ -47,7 +47,7 @@ import { createSquashedRepo } from "../../github/squash.js";
 import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
 import type { Caller } from "../guards.js";
 import { DomainError, notFoundError } from "../http.js";
-import { projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
+import { forgetFinalPasses, projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
 import { snapshotIds, storeCriteria, type CriteriaSnapshot } from "./criteria.js";
 import { ProjectError } from "./errors.js";
 import { replaceGroupCopy, stopProjects } from "./groupCopy.js";
@@ -388,6 +388,8 @@ export async function patchProject(
     if (changed.groupSetId !== undefined) await replaceGroupCopy(tx, project.id, row.groupSetId, now);
     if (changed.gradingMode !== undefined) {
       if (criteria) await storeCriteria(tx, project.id, criteria, now);
+      // Leaving `criteria`: its final passes' claims would block the CI's final review (ADR-106 §6).
+      if (project.gradingMode === "criteria") await forgetFinalPasses(tx, project.id);
       await audit(tx, {
         ...actor,
         action: "project.grading_mode",

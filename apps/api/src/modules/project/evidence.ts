@@ -5,38 +5,48 @@
  * `project.evidence` job — writes the rows. The tarball is fetched through
  * the App, never cloned, and travels in memory and to the runner only; its
  * `codeload` redirect's `token=` never reaches a log, a row or an error
- * (invariant 15). Nothing enqueues the job before L-02c.
+ * (invariant 15). The final pass (`jobs.ts`) and a Regrade (`regrade.ts`)
+ * enqueue the job; its review follows (`reviewPass.ts`).
  */
 import { randomUUID } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 
 import type { FastifyInstance } from "fastify";
-import { and, eq, inArray, lt, ne, or, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, or, isNotNull, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { effectiveTestsCriterion, PROJECT_CRITERIA_DEFAULTS } from "@quiz/contracts";
-import { PROJECT_ARCHIVE_MAX_BYTES, RunnerBusy, RunnerUnavailable, type ProjectRunRefusal, type ProjectRunResult } from "@quiz/core/server";
+import {
+  PROJECT_ARCHIVE_MAX_BYTES,
+  PROJECT_OUTPUTS_MAX,
+  projectPathProblem,
+  RunnerBusy,
+  RunnerUnavailable,
+  type ProjectRunRefusal,
+  type ProjectRunResult,
+} from "@quiz/core/server";
 import { readTar, writeTar, type CleanEntry } from "@quiz/core/tar";
 import {
   automaticPoints,
   classifyCriterion,
   effectiveDeadline,
   parseJunit,
+  plainSources,
   proratedByTests,
+  REPORT_FILE,
   stripTarballRoot,
-  type CriteriaLeaf,
   type EvidenceStatus,
 } from "@quiz/domain";
 
 import { readCapped } from "../../cappedBody.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { projectCriteria, projectCriterionGrades, projectEvidence, projectRepos, projects } from "../../db/schema.js";
+import { projectCriteria, projectEvidence, projectRepos, projects } from "../../db/schema.js";
 import { branchHead, CODELOAD_HOST, githubStatus, installationClient, ownerRepo } from "../../github/app.js";
 import { referenceBlob } from "../../github/revert.js";
 import { redactTokens } from "../../redact.js";
 import { projectInstallation } from "../github/service.js";
-import { writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
+import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
 import type { RepoRow } from "./repos.js";
 import { lastStudentPush } from "./review.js";
 import type { ProjectRow } from "./views.js";
@@ -44,13 +54,13 @@ import type { ProjectRow } from "./views.js";
 /** The `project.evidence` job's data. */
 export interface EvidenceJob {
   repoId: string;
+  /** The pass this evidence is for (ADR-106 §4, §6): its review follows once the evidence is stored. */
+  passId?: string;
 }
 
 /** Evidence jobs a process runs at once: a pass never fills the runner's queue (ADR-101). */
 export const EVIDENCE_CONCURRENCY = 2;
 
-/** The JUnit report the default test command writes. */
-const REPORT_FILE = "report.xml";
 /** A decompressed tarball past this cannot compose an archive under the runner's cap. */
 const UNPACKED_MAX_BYTES = 2 * PROJECT_ARCHIVE_MAX_BYTES;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
@@ -201,9 +211,14 @@ function fromRun(outcome: ProjectRunResult | ProjectRunRefusal): EvidenceValues 
 }
 
 /** The archive run on the `lab-c` image with the project's commands, or why it was not. */
-async function run(app: FastifyInstance, project: ProjectRow, archive: Uint8Array): Promise<EvidenceValues> {
+async function run(app: FastifyInstance, project: ProjectRow, archive: Uint8Array, sources: readonly string[]): Promise<EvidenceValues> {
+  const { plain, wildcards } = plainSources(sources);
+  // The sources first (ADR-106 §4), then the project's outputs; a path the runner would refuse is left out.
+  const outputs = [...new Set([...plain, ...(project.evidenceOutputs ?? PROJECT_CRITERIA_DEFAULTS.evidenceOutputs)])]
+    .filter((path) => projectPathProblem(path) === null)
+    .slice(0, PROJECT_OUTPUTS_MAX);
   try {
-    return fromRun(
+    const values = fromRun(
       await app.runner.project({
         archive: Buffer.from(archive.buffer, archive.byteOffset, archive.byteLength).toString("base64"),
         image: "lab-c",
@@ -211,12 +226,16 @@ async function run(app: FastifyInstance, project: ProjectRow, archive: Uint8Arra
           build: project.buildCommand ?? [...PROJECT_CRITERIA_DEFAULTS.buildCommand],
           test: project.testCommand ?? [...PROJECT_CRITERIA_DEFAULTS.testCommand],
         },
-        outputs: project.evidenceOutputs ?? [...PROJECT_CRITERIA_DEFAULTS.evidenceOutputs],
+        outputs,
       }),
     );
+    // A wildcard source names no path the runner can bring back: said in the staff's summary.
+    return values.status === "ok" && wildcards.length > 0 ? { ...values, reason: `sources_skipped: ${wildcards.join(", ")}`.slice(0, REASON_MAX) } : values;
   } catch (err) {
+    // The client turns a transport failure (refused, reset, timed out) into `RunnerUnavailable`.
     if (err instanceof RunnerUnavailable) return { status: "runner_unavailable", reason: err.reason };
     if (err instanceof RunnerBusy) return { status: "timed_out", reason: "runner_busy" };
+    app.log.error({ err }, "evidence: the runner's call failed");
     throw err;
   }
 }
@@ -257,18 +276,14 @@ async function projectOctokit(db: Db, config: AppConfig, project: ProjectRow): P
   return (await installationClient(config, org.installationId)).octokit;
 }
 
+/** GitHub's side of an evidence: an `ok` evidence of the same commits reused, a status without a run, or the archive to run. */
+type Prepared = { distributionSha: string } & ({ reused: EvidenceRow } | { values: EvidenceValues } | { archive: Uint8Array });
+
 /**
- * The evidence of a repository at `deadline` (§3): the target commit (the
- * last student push on a handed-out branch, `lastStudentPush`), the
- * distribution's head, an `ok` evidence of the same commits reused, else
- * the tarball fetched, composed with the protected files and run.
+ * The distribution's head, an `ok` evidence of the same commits reused,
+ * else the tarball fetched and composed with the protected files.
  */
-export async function collectEvidence(app: FastifyInstance, config: AppConfig, repo: RepoRow, project: ProjectRow, deadline: Date): Promise<EvidenceRow> {
-  const db = app.db;
-  const now = app.clock.now();
-  const target = repo.githubRepoId === null ? null : await lastStudentPush(db, repo.githubRepoId, project.branches, deadline);
-  if (target === null) return store(db, repo.id, null, null, { status: "no_commit" }, now);
-  if (repo.deletedAt !== null || repo.fullName === null) return store(db, repo.id, target, null, { status: "repo_missing" }, now);
+async function prepare(db: Db, config: AppConfig, repoId: string, fullName: string, project: ProjectRow, target: string, now: Date): Promise<Prepared> {
   const octokit = await projectOctokit(db, config, project);
   const { owner, repo: name } = ownerRepo(project.distributionFullName!);
   const distributionSha = await branchHead(octokit, owner, name, project.branches[0]!);
@@ -276,41 +291,54 @@ export async function collectEvidence(app: FastifyInstance, config: AppConfig, r
   const [reusable] = await db
     .select()
     .from(projectEvidence)
-    .where(and(sameCommits(repo.id, target, distributionSha), eq(projectEvidence.status, "ok")));
-  if (reusable) return reusable;
-  const tarball = await fetchTarball(octokit, repo.fullName, target);
-  if (typeof tarball === "string") return store(db, repo.id, target, distributionSha, { status: tarball }, now);
+    .where(and(sameCommits(repoId, target, distributionSha), eq(projectEvidence.status, "ok")));
+  if (reusable) return { distributionSha, reused: reusable };
+  const tarball = await fetchTarball(octokit, fullName, target);
+  if (typeof tarball === "string") return { distributionSha, values: { status: tarball } };
   const tar = unpack(tarball);
   const overlay = tar && (await protectedFiles(octokit, project, distributionSha));
   const archive = tar && overlay && composeArchive(tar, overlay, Math.floor(now.getTime() / 1000));
-  if (!archive) return store(db, repo.id, target, distributionSha, { status: "archive_too_large" }, now);
-  return store(db, repo.id, target, distributionSha, await run(app, project, archive), now);
+  return archive ? { distributionSha, archive } : { distributionSha, values: { status: "archive_too_large" } };
 }
 
 /**
- * The criteria the evidence proposes: not validated, not a teacher's, not already graded from
- * this evidence. Read outside writeCriterionGrades' transaction on purpose: a row validated in
- * between cannot be lost, since a proposed input only supersedes proposals.
+ * The evidence of a repository at `deadline` (§3): the target commit (the
+ * last student push on a handed-out branch, `lastStudentPush`), then
+ * GitHub's side ({@link prepare}) — whatever fails there (the App, the
+ * distribution's head, the tarball, a protected file) is stored as
+ * `github_unavailable` with its redacted message, never thrown: the pass's
+ * review still follows, and a Regrade tries again — then the run, which
+ * brings back `sources` too.
  */
-async function toPropose(db: Db, repoId: string, leaves: CriteriaLeaf[], evidenceId: string): Promise<CriteriaLeaf[]> {
-  if (leaves.length === 0) return [];
-  const standing = await db
-    .select({ criterionId: projectCriterionGrades.criterionId })
-    .from(projectCriterionGrades)
-    .where(
-      and(
-        eq(projectCriterionGrades.repoId, repoId),
-        ne(projectCriterionGrades.state, "superseded"),
-        or(
-          eq(projectCriterionGrades.state, "validated"),
-          ne(projectCriterionGrades.source, "auto"),
-          eq(projectCriterionGrades.passId, evidenceId),
-        ),
-      ),
-    );
-  const held = new Set(standing.map((r) => r.criterionId));
-  return leaves.filter((leaf) => !held.has(leaf.id));
+export async function collectEvidence(
+  app: FastifyInstance,
+  config: AppConfig,
+  repo: RepoRow,
+  project: ProjectRow,
+  deadline: Date,
+  sources: readonly string[] = [],
+): Promise<EvidenceRow> {
+  const db = app.db;
+  const now = app.clock.now();
+  const target = repo.githubRepoId === null ? null : await lastStudentPush(db, repo.githubRepoId, project.branches, deadline);
+  if (target === null) return store(db, repo.id, null, null, { status: "no_commit" }, now);
+  if (repo.deletedAt !== null || repo.fullName === null) return store(db, repo.id, target, null, { status: "repo_missing" }, now);
+  let prepared: Prepared;
+  try {
+    prepared = await prepare(db, config, repo.id, repo.fullName, project, target, now);
+  } catch (err) {
+    return store(db, repo.id, target, null, { status: "github_unavailable", reason: failureReason(err) }, now);
+  }
+  if ("reused" in prepared) return prepared.reused;
+  const values = "values" in prepared ? prepared.values : await run(app, project, prepared.archive, sources);
+  return store(db, repo.id, target, prepared.distributionSha, values, now);
 }
+
+/** A failure's message as a row's reason: redacted, without any URL (a `codeload` one carries a `token=`), capped. */
+const failureReason = (err: unknown): string =>
+  redactTokens(messageOf(err))
+    .replace(/https?:\/\/\S+/g, "<url>")
+    .slice(0, REASON_MAX);
 
 /**
  * The `project.evidence` job (§3, §4): the repository's evidence at its
@@ -328,10 +356,12 @@ export async function runEvidence(app: FastifyInstance, config: AppConfig, repoI
     .where(eq(projectRepos.id, repoId));
   if (!row || row.project.gradingMode !== "criteria" || !row.project.distributionFullName) return null;
   const { repo, project, snapshot } = row;
-  const evidence = await collectEvidence(app, config, repo, project, effectiveDeadline(repo, project));
+  const evidence = await collectEvidence(app, config, repo, project, effectiveDeadline(repo, project), snapshot.grading.sources);
   const testsCriterion = effectiveTestsCriterion(project);
   const automatic = snapshot.leaves.filter((leaf) => classifyCriterion(leaf, { testsCriterion }) === "automatic" && proratedByTests(leaf));
-  const inputs = (await toPropose(app.db, repo.id, automatic, evidence.id)).map(
+  // Not held, nor already proposed from this evidence (`heldCriteria`); the writer checks again under its lock.
+  const held = await heldCriteria(app.db, repo.id, evidence.id);
+  const inputs = automatic.filter((leaf) => !held.has(leaf.id)).map(
     (leaf): CriterionGradeInput => ({
       criterionId: leaf.id,
       points: evidence.status === "ok" ? automaticPoints(leaf, evidence.cases ?? [], testsCriterion) : 0,

@@ -450,6 +450,14 @@ export type AuditAction =
   | "project.grading_mode"
   | "project.criteria_reload"
   /**
+   * A Regrade by the staff (ADR-106 §4), what the project's three a day
+   * count, both subject the project: `project.regrade` — `payload.passId`,
+   * `repos` (their count); `project_repo.regrade` — `payload.passId`,
+   * `repoId`.
+   */
+  | "project.regrade"
+  | "project_repo.regrade"
+  /**
    * A review checkpoint authored or removed by the staff (F-PROJ-11; merge
    * task M3-05b), subject the checkpoint: `payload.projectId`, `name`,
    * `dueAt`, `offsetDays` (null: an absolute date).

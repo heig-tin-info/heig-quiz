@@ -50,13 +50,12 @@ The class list is the only way into a classroom: the join code a student could t
 | Profile picture | If the user uploads one |
 | Notifications | Platform messages, preferences, the link to a Microsoft Teams account |
 | Anonymous polls | A hash of the browser's cookie, with no identity |
-| Hours of activity | For each person, the hours (by the server's clock) in which a request of their own session reached the server, kept eight days; and the time of their last request, their last activity (ADR-107, `apps/api/src/modules/presence/`). An administrator acting as a student, an API token, the background traffic of an open page and a page left idle are not counted |
 
 The attempt journal records leaving the page and pasting from outside it only while the evaluation's **Log leaving the page and pasting** setting is on (on by default for an exam, off for an exercise); a paste is recorded as its length and whether the page had just lost the focus, never its content (ADR-088). That record is deleted at the release of the grades, or six months after the close of an evaluation never released.
 
 The time on each question never leaves the server: no screen shows it, to the student or to the teacher; only the pool statistics use it, as an aggregate (see [Statistics](#statistics-and-anonymisation)).
 
-The IP address is not stored in the database, with one exception: a refused Safe Exam Browser access writes it to the audit log. It does appear in the technical log of every request (`apps/api/src/redact.ts`). The platform records neither the browser in use (only the drill's device class above), nor keystrokes, nor any audience measurement beyond the hours of activity above, which the administrator reads as counts.
+The IP address is not stored in the database, with one exception: a refused Safe Exam Browser access writes it to the audit log. It does appear in the technical log of every request (`apps/api/src/redact.ts`). The platform records neither the browser in use (only the drill's device class above), nor keystrokes, nor any audience measurement.
 
 ## Purposes
 
@@ -102,7 +101,7 @@ A teacher who connects an AI assistant to the platform (see [AI assistants](assi
 
 ### The application administrator
 
-One account, named in the server configuration, holds the administrator role (`apps/api/src/roles.ts`). By default it reaches no more than a teacher: the courses and classrooms whose staff it is on. It reaches every course and every classroom only while it has switched on **Super Powers** in its own browser session: a switch that lasts one hour, cannot be extended, never applies to an API token or a connected assistant, and whose switching on, switching off and end are written to the audit log (`superpowers.enabled`, `superpowers.disabled`; ADR-054, `apps/api/src/modules/guards.ts`). It sees the list of all accounts, with their pictures and each account's last activity, without them; and, in the **Activity** tab, the number of people active per hour of the last seven days, split into students and staff — counts only, never who (ADR-107). No teacher sees either.
+One account, named in the server configuration, holds the administrator role (`apps/api/src/roles.ts`). By default it reaches no more than a teacher: the courses and classrooms whose staff it is on. It reaches every course and every classroom only while it has switched on **Super Powers** in its own browser session: a switch that lasts one hour, cannot be extended, never applies to an API token or a connected assistant, and whose switching on, switching off and end are written to the audit log (`superpowers.enabled`, `superpowers.disabled`; ADR-054, `apps/api/src/modules/guards.ts`). It sees the list of all accounts, with their pictures, without them.
 
 To help a student with a problem they report, the administrator, with Super Powers on, may open a view of that student's account (ADR-034, ADR-054): a one-time link, valid five minutes, opens at most one hour as the student. In production that view is read only: it cannot answer or submit anything (`apps/api/src/auth/plugin.ts`). Its start and its end are written to the audit log under the administrator's name. The student is not notified; the student help says, in general terms, that an administrator can open such a view (`apps/web/src/help/student-home.md`).
 
@@ -151,7 +150,7 @@ The platform talks to GitHub through its own GitHub App only; its keys stay out 
 
 ## Retention and what happens to the data after the studies
 
-**Four retention periods are enforced: five years for the drill, 30 days for the help assistant's conversations (below), eight days for the hours of activity, and the correction for the exam integrity journal.** The integrity journal of an evaluation's attempts (leaving the page, pasting from outside it) is deleted when its grades are released, or six months after its close if they never are (`apps/api/src/modules/live/integrity.ts`, ADR-088 §8, N-DATA-03). A drill review is deleted five years after it was made, and a question's drill card five years after its last review; the server checks every six hours (`apps/api/src/modules/drill/jobs.ts`, ADR-041, N-DATA-03). Every other piece of data stays until a teacher deletes it (N-DATA-03). In particular, nothing happens automatically when a student completes or leaves their studies.
+**Three retention periods are enforced: five years for the drill, 30 days for the help assistant's conversations (below), and the correction for the exam integrity journal.** The integrity journal of an evaluation's attempts (leaving the page, pasting from outside it) is deleted when its grades are released, or six months after its close if they never are (`apps/api/src/modules/live/integrity.ts`, ADR-088 §8, N-DATA-03). A drill review is deleted five years after it was made, and a question's drill card five years after its last review; the server checks every six hours (`apps/api/src/modules/drill/jobs.ts`, ADR-041, N-DATA-03). Every other piece of data stays until a teacher deletes it (N-DATA-03). In particular, nothing happens automatically when a student completes or leaves their studies.
 
 What is deleted, and when:
 
@@ -165,7 +164,6 @@ What is deleted, and when:
 | Removing a student from the class list | Their seat goes; their attempts, answers, grades and drill data stay in the database |
 | A student leaving the drill of a classroom | Nothing is deleted |
 | Expired sessions | Deleted automatically, every ten minutes |
-| Hours of activity | Deleted automatically after eight days, every day (`apps/api/src/modules/presence/jobs.ts`); the last activity stays with the account |
 | Expired authorisations of AI assistants | Deleted automatically, every hour (`apps/api/src/auth/oauth/service.ts`) |
 | An exchange of the help assistant (a teacher's question and its answer) | Deleted automatically 30 days after it was written, every day (`apps/api/src/modules/assist/jobs.ts`); the teacher may delete a conversation sooner. A student's name an answer quotes stays until then, even after the student leaves the class list |
 | The help assistant's access token for one question | Deleted when the question ends; one left behind by a crash expires after 15 minutes and is deleted the same day |

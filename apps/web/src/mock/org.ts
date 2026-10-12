@@ -4,8 +4,6 @@
  */
 import { ConditionKind, DEFAULT_MAX_ACTIVE_SESSIONS, LlmSettingsPatch, PoolColor, ScheduledTaskPatch, TeacherCodespaceGrantPatch } from "@quiz/contracts";
 import type {
-  ActivityCount,
-  AdminActivity,
   AdminScheduledTask,
   AdminTeacher,
   AdminUser,
@@ -26,17 +24,7 @@ import type {
   TeacherCodespaceGrant,
   TestMailResult,
 } from "@quiz/contracts";
-import {
-  addMonths,
-  currentOrNextSemester,
-  datesEndingOn,
-  isClassHour,
-  localDate,
-  offHoursStudentShare,
-  SCHOOL_TIME_ZONE,
-  semesterMonths,
-  zoneOffset,
-} from "@quiz/domain";
+import { addMonths, currentOrNextSemester, semesterMonths } from "@quiz/domain";
 import {
   D,
   H,
@@ -417,7 +405,6 @@ const account = (
   role: "teacher",
   reason: null,
   lastLoginAt: iso(-rand() * 30 * D),
-  lastSeenAt: null,
   createdAt: iso(-(100 + rand() * 400) * D),
   pools: 0,
   questions: 0,
@@ -470,15 +457,7 @@ function buildAdminUsers(): AdminUser[] {
       avatarUrl: e.avatarUrl,
     }),
   );
-  // ADR-107: the last activity follows the last sign-in, a few hours to a few
-  // days later, never in the future; derived, not drawn, so the other scenes'
-  // random figures stay where they were.
-  const now = Date.now();
-  return [...staff, ...students].map((u, i) => ({
-    ...u,
-    lastSeenAt:
-      u.lastLoginAt === null ? null : new Date(Math.min(now - (i % 5) * 7 * 60_000, Date.parse(u.lastLoginAt) + (i % 9) * 9 * H)).toISOString(),
-  }));
+  return [...staff, ...students];
 }
 
 const adminUsers = buildAdminUsers();
@@ -902,48 +881,6 @@ on("PATCH", "/app/api/admin/teachers/:gid/codespace", (m, raw) => {
   return grant;
 });
 on("GET", "/app/api/admin/users", () => adminUsers);
-
-/**
- * The platform's activity (ADR-107): a week of a teaching term — busy class
- * hours, a steady evening of students, a few nights and a quiet weekend —
- * shaped by formula, not drawn, so the screenshots stay put. The hours after
- * the current one are empty. `?empty=1`: nothing recorded yet.
- */
-/** Students outside class hours, by local hour: a few at night, a commute, the evening. */
-const OFF_HOUR_STUDENTS = [3, 2, 0, 0, 0, 0, 0, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 12, 14, 15, 13, 8, 5];
-/** Staff outside class hours, on a weekday: the edges of the day, a little of the evening. */
-const OFF_HOUR_STAFF = [0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 1, 1, 0, 0];
-
-function mockActivity(): AdminActivity {
-  const at = new Date();
-  const today = localDate(at);
-  const localHour = new Date(at.getTime() + zoneOffset(at, SCHOOL_TIME_ZONE)).getUTCHours();
-  const days = datesEndingOn(today).map((date, d) => {
-    const weekend = !isClassHour(date, 10);
-    const hours = Array.from({ length: 24 }, (_, h): ActivityCount => {
-      if (flags.empty || (date === today && h > localHour)) return { students: 0, staff: 0 };
-      const w = ((d * 7 + h * 13) % 10) / 10;
-      if (isClassHour(date, h)) return { students: Math.round(24 + 38 * w), staff: Math.round(2 + 5 * w) };
-      return {
-        students: Math.round(OFF_HOUR_STUDENTS[h]! * (weekend ? 0.5 : 1) * (0.5 + w)),
-        staff: weekend ? 0 : OFF_HOUR_STAFF[h]!,
-      };
-    });
-    return { date, hours };
-  });
-  const anything = !flags.empty;
-  const none = { students: 0, staff: 0 };
-  return {
-    generatedAt: at.toISOString(),
-    activeNow: anything ? { students: 17, staff: 3 } : none,
-    last24h: anything ? { students: 142, staff: 11 } : none,
-    last7d: anything ? { students: 318, staff: 19 } : none,
-    offHoursStudentShare: offHoursStudentShare(days),
-    recordedSince: anything ? localDate(new Date(at.getTime() - 8 * D)) : null,
-    days,
-  };
-}
-on("GET", "/app/api/admin/activity", mockActivity);
 on("POST", "/app/api/admin/teachers", (_m, body) => {
   teachers.push({
     id: nextId("t"),

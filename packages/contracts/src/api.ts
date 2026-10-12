@@ -72,14 +72,6 @@ export function cookieName(base: string, secure: boolean): string {
 export const CSRF_COOKIE = "quiz_csrf";
 export const CSRF_HEADER = "x-csrf-token";
 
-/**
- * Set by the SPA on a request made while its person is idle — the page
- * hidden, or no key, click or touch for a while (`apps/web/src/idle.ts`): a
- * poll, a refetch the event stream asked for. Such a request is not counted
- * as the person's activity (ADR-107). It can only narrow what is counted.
- */
-export const IDLE_HEADER = "x-quiz-idle";
-
 /** The quit link of every `.seb` Quiz builds, on Quiz's own host (ADR-027). */
 export const SEB_QUIT_PATH = "/seb/quit";
 

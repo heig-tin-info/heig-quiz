@@ -49,7 +49,6 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-105 — The training course: one per teacher, four missions on real screens, a progress card derived from the data](ADR-105-cours-d-initiation.md)
 - [ADR-093 — Festive touches: the logo dresses up on a few days of the year](ADR-093-touches-festives.md)
 - [ADR-055 — The system status: one registry of health checks, a narrow `/healthz`, a backup report](ADR-055-etat-du-systeme.md)
-- [ADR-107 — Platform activity for the administrator: hours of activity per person, read in aggregate only, kept eight days](ADR-107-activite-de-la-plateforme.md)
 - [ADR-065 — Connection recovery without reloading student work](ADR-065-reconnection-overlay.md)
 
 ### Identity, access and exam confinement
