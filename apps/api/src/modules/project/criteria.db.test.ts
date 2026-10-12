@@ -145,6 +145,26 @@ describe("the criteria snapshot", () => {
     expect(kinds).toContainEqual(["rapport.redaction", "automatic"]);
     expect(kinds).toContainEqual(["git.commits", "llm"]);
     expect(kinds).toContainEqual(["rapport.reponses", "llm"]);
+
+    // The identity criterion: a criterion of the snapshot, automatic even with its prompt; null again for none.
+    const nope = await call("PATCH", url(project.id), teacher.headers, { identityCriterion: "git.nope" });
+    expect([nope.statusCode, nope.json()]).toEqual([422, expect.objectContaining({ error: "unknown_criterion", field: "identityCriterion" })]);
+    const identity = await call("PATCH", url(project.id), teacher.headers, { identityCriterion: "git.commits" });
+    expect(ProjectSummary.parse(identity.json()).identityCriterion).toBe("git.commits");
+    const view2 = ProjectCriteriaView.parse((await call("GET", url(project.id, "/criteria"), teacher.headers)).json());
+    expect(view2.snapshot!.leaves.find((l) => l.id === "git.commits")!.kind).toBe("automatic");
+    // Never a bonus nor a penalty: the check proposes positive points only.
+    for (const leaf of ["bonus.proactivite", "rapport.cle-privee"]) {
+      const invalid = await call("PATCH", url(project.id), teacher.headers, { identityCriterion: leaf });
+      expect([invalid.statusCode, invalid.json()]).toEqual([422, expect.objectContaining({ error: "identity_criterion_invalid", field: "identityCriterion" })]);
+    }
+    // Never the tests criterion as well: set alone, or by moving the tests criterion onto it.
+    const same = await call("PATCH", url(project.id), teacher.headers, { identityCriterion: "rapport.redaction" });
+    expect([same.statusCode, same.json()]).toEqual([422, expect.objectContaining({ error: "criterion_conflict", field: "identityCriterion" })]);
+    const moved = await call("PATCH", url(project.id), teacher.headers, { testsCriterion: "git.commits" });
+    expect([moved.statusCode, moved.json()]).toEqual([422, expect.objectContaining({ error: "criterion_conflict", field: "identityCriterion" })]);
+    await call("PATCH", url(project.id), teacher.headers, { identityCriterion: null });
+    expect((await rowOf(project.id)).identityCriterion).toBeNull();
     expect((await auditOf(project.id, "project.criteria_reload")).map((a) => a.payload)).toEqual([
       expect.objectContaining({ trigger: "reload", ok: true, criteria: 7 }),
     ]);

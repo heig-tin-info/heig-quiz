@@ -19,7 +19,8 @@
  * counts, and the pull requests (opened, listed by head, read, commented).
  * From L-02b, a commit's tarball: the API's redirect to `codeload`, whose
  * URL carries a `token=`, and the gzipped `git archive` it serves (past
- * the cap for a repository in `oversized`).
+ * the cap for a repository in `oversized`). For the identity criterion, a
+ * commit listing from a sha (`?sha=`), and a commit by a given author.
  * Test support only; nothing in the application imports it.
  */
 import { execFileSync } from "node:child_process";
@@ -44,6 +45,12 @@ const AUTHOR = {
   GIT_COMMITTER_NAME: "t",
   GIT_COMMITTER_EMAIL: "t@x",
 };
+
+/** A commit's git author. */
+export interface CommitAuthor {
+  name: string;
+  email: string;
+}
 
 /** A pull request of the fake GitHub, as its REST answers describe one. */
 export interface FakePull {
@@ -110,9 +117,10 @@ export interface RepoWorld {
   git: (fullName: string, ...args: string[]) => string;
   /**
    * A commit on `branch` of `fullName` changing `files` (content, or null
-   * to delete), as a student or a workflow pushes it; its sha.
+   * to delete), as a student or a workflow pushes it; its sha. By `t <t@x>`,
+   * message `work`, unless `as` says otherwise.
    */
-  commit: (fullName: string, branch: string, files: Record<string, string | null>) => string;
+  commit: (fullName: string, branch: string, files: Record<string, string | null>, as?: { author?: CommitAuthor; message?: string }) => string;
   /** The content of `path` at `ref`, or null when there is none. */
   read: (fullName: string, ref: string, path: string) => string | null;
   remove: () => void;
@@ -162,8 +170,32 @@ export function repoWorld(): RepoWorld {
   };
   const writeBlob = (fullName: string, bytes: Buffer) =>
     shWith({}, bytes, "--git-dir", pathOf(fullName), "hash-object", "-w", "--stdin");
-  const commitTree = (fullName: string, tree: string, parents: string[], message: string) =>
-    shWith(AUTHOR, message, "--git-dir", pathOf(fullName), "commit-tree", tree, ...parents.flatMap((p) => ["-p", p]));
+  const commitTree = (fullName: string, tree: string, parents: string[], message: string, author?: CommitAuthor) =>
+    shWith(
+      author ? { ...AUTHOR, GIT_AUTHOR_NAME: author.name, GIT_AUTHOR_EMAIL: author.email } : AUTHOR,
+      message,
+      "--git-dir",
+      pathOf(fullName),
+      "commit-tree",
+      tree,
+      ...parents.flatMap((p) => ["-p", p]),
+    );
+  /**
+   * GitHub's commit listing from `sha`, newest first: the git author, the
+   * message, and the account GitHub matched — by its private address
+   * (`123+login@users.noreply.github.com`) only.
+   */
+  const commitsOf = (fullName: string, sha: string, perPage: number) =>
+    world
+      .git(fullName, "log", `--max-count=${perPage}`, "--format=%H%x1f%an%x1f%ae%x1f%B%x1e", sha)
+      .split("\x1e")
+      .map((record) => record.trim())
+      .filter(Boolean)
+      .map((record) => {
+        const [hash, name, email, message] = record.split("\x1f");
+        const login = /^(?:\d+\+)?([^@]+)@users\.noreply\.github\.com$/.exec(email!)?.[1];
+        return { sha: hash, commit: { author: { name, email }, message: message!.trim() }, author: login ? { login } : null };
+      });
   /** `path`'s blob sha at `ref`, or null. */
   const blobOf = (fullName: string, ref: string, path: string) => {
     const line = sh("--git-dir", pathOf(fullName), "ls-tree", ref, "--", path).trim();
@@ -349,13 +381,13 @@ export function repoWorld(): RepoWorld {
     },
     exists: (fullName) => existsSync(pathOf(fullName)),
     git: (fullName, ...args) => sh("--git-dir", pathOf(fullName), ...args),
-    commit(fullName, branch, files) {
+    commit(fullName, branch, files, as = {}) {
       const head = world.git(fullName, "rev-parse", `refs/heads/${branch}`).trim();
       const entries = Object.entries(files).map(([path, content]) => ({
         path,
         sha: content === null ? null : writeBlob(fullName, Buffer.from(content)),
       }));
-      const sha = commitTree(fullName, buildTree(fullName, head, entries), [head], "work");
+      const sha = commitTree(fullName, buildTree(fullName, head, entries), [head], as.message ?? "work", as.author);
       world.git(fullName, "update-ref", `refs/heads/${branch}`, sha);
       return sha;
     },
@@ -424,9 +456,10 @@ export function repoWorld(): RepoWorld {
       if (rest === "") return json(repoJson(org, name));
       const branches = branchesOf(fullName);
       if (rest === "/commits") {
-        return branches.length === 0
-          ? json({ message: "Git Repository is empty." }, 409)
-          : json([{ sha: world.git(fullName, "rev-parse", branches[0]!).trim() }]);
+        if (branches.length === 0) return json({ message: "Git Repository is empty." }, 409);
+        const from = url.searchParams.get("sha");
+        if (from === null) return json([{ sha: world.git(fullName, "rev-parse", branches[0]!).trim() }]);
+        return json(commitsOf(fullName, from, Number(url.searchParams.get("per_page") ?? 30)));
       }
       if (rest === "/branches") return json(branches.map((b) => ({ name: b, protected: false })));
       if ((m = /^\/git\/matching-refs\/heads\/(.+)$/.exec(rest))) {

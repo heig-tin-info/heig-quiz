@@ -257,6 +257,22 @@ export const PROJECT_CRITERIA_DEFAULTS = {
 export const effectiveTestsCriterion = (project: { testsCriterion: string | null }): string =>
   project.testsCriterion ?? PROJECT_CRITERIA_DEFAULTS.testsCriterion;
 
+/**
+ * The settings `classifyCriterion` (`@quiz/domain`) reads from a project:
+ * its effective tests criterion and its identity criterion (no default:
+ * null is none).
+ */
+export const criterionSettings = (project: { testsCriterion: string | null; identityCriterion: string | null }) => ({
+  testsCriterion: effectiveTestsCriterion(project),
+  identityCriterion: project.identityCriterion,
+});
+
+/** Whether a project's identity criterion is also its effective tests criterion: one criterion, one check (`422 criterion_conflict`). */
+export const criterionConflict = (project: { testsCriterion: string | null; identityCriterion: string | null }): boolean => {
+  const { testsCriterion, identityCriterion } = criterionSettings(project);
+  return identityCriterion !== null && identityCriterion === testsCriterion;
+};
+
 /** The settings holding a command the platform runs (ADR-106 §2, §3). */
 export const COMMAND_SETTINGS = ["buildCommand", "testCommand"] as const;
 export type CommandSetting = (typeof COMMAND_SETTINGS)[number];
@@ -301,6 +317,8 @@ export const EvidencePath = z
 /** A project's criteria settings as stored (`null`: the default of {@link PROJECT_CRITERIA_DEFAULTS}). */
 const ProjectCriteriaSettingsShape = {
   testsCriterion: CriterionId.nullable(),
+  /** The criterion graded from the commits' identity and messages (ADR-106 §2); null: none. */
+  identityCriterion: CriterionId.nullable(),
   buildCommand: ProjectArgv.nullable(),
   testCommand: ProjectArgv.nullable(),
   evidenceOutputs: z.array(EvidencePath).min(1).max(20).nullable(),
@@ -404,6 +422,7 @@ export const ProjectPatch = z
     groupMode: z.boolean().optional(),
     groupSetId: z.uuid().nullable().optional(),
     testsCriterion: ProjectCriteriaSettingsShape.testsCriterion.optional(),
+    identityCriterion: ProjectCriteriaSettingsShape.identityCriterion.optional(),
     buildCommand: ProjectCriteriaSettingsShape.buildCommand.optional(),
     testCommand: ProjectCriteriaSettingsShape.testCommand.optional(),
     evidenceOutputs: ProjectCriteriaSettingsShape.evidenceOutputs.optional(),
@@ -571,6 +590,10 @@ export const PROJECT_REFUSALS = [
   "checkpoint_untagged",
   // ADR-106 §2: a tests criterion that names no criterion of the snapshot (422).
   "unknown_criterion",
+  // ADR-106 §2: an identity criterion that is also the (effective) tests criterion (422, `field: "identityCriterion"`).
+  "criterion_conflict",
+  // ADR-106 §2: an identity criterion whose leaf is a bonus or a penalty, which no check grades (422, `field: "identityCriterion"`).
+  "identity_criterion_invalid",
   // ADR-106 §1: a build or test command that needs the network (422, `field`
   // the setting's name); the evidence run has none.
   "command_needs_network",

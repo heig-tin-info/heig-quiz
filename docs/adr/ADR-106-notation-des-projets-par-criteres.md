@@ -122,9 +122,19 @@ Audited, as every project setting.
   criterion that judges an identity — who committed (labo 00's
   `git.commits`), whose name a report carries (`rapport.presentation`) —
   carries no `prompt` in `criteria.yml`, so it is teacher-only by the rule
-  above (or automatic through a `test:` on the extracted report). A
-  deterministic commit-authors check from the push receipts is a possible
-  follow-up, not part of this decision.
+  above (or automatic through a `test:` on the extracted report). The
+  identity criterion is a project setting, `identityCriterion` (null:
+  none), automatic even with a `prompt`: the evidence run grades it from
+  the commit metadata the platform reads at evidence time — author, e-mail
+  and message of the handed-out branch's commits through the App (the push
+  receipts carry no author), bots and the handed-out commits excluded
+  (`commitIdentityPoints`; a commit by a staff member's personal account
+  counts as the repository's, only the App's and the handed-out commits
+  are left out) — never sent to the model, its rationale with the e-mail
+  masked; it must be worth positive points and is never the tests
+  criterion. A later reload of `criteria.yml` that turns the tests or the
+  identity leaf into a bonus or a penalty leaves it without an automatic
+  row: the teacher grades it until the file is fixed.
 
 ### 3. The evidence run: the platform collects and tests
 

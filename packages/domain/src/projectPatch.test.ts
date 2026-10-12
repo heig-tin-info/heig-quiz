@@ -28,7 +28,7 @@ describe("projectFieldRefusal (F-PROJ-03)", () => {
   });
 
   it("keeps the name, the protected files, the deadline and its strategy open once published", () => {
-    expect(editableProjectFields(project(), NOW)).toEqual(["name", "deadlineAt", "deadlineStrategy", "protectedFiles", "testsCriterion", "buildCommand", "testCommand", "evidenceOutputs"]);
+    expect(editableProjectFields(project(), NOW)).toEqual(["name", "deadlineAt", "deadlineStrategy", "protectedFiles", "testsCriterion", "identityCriterion", "buildCommand", "testCommand", "evidenceOutputs"]);
   });
 
   it("freezes the publication mode and its duration at publication", () => {
@@ -50,7 +50,7 @@ describe("projectFieldRefusal (F-PROJ-03)", () => {
   it("still moves a deadline already applied: the reopen (M3-05a)", () => {
     expect(projectFieldRefusal(project({ state: "locked", deadlineAt: EARLIER }), "deadlineAt", NOW)).toBeNull();
     expect(projectFieldRefusal(project({ state: "locked" }), "deadlineAt", NOW)).toBeNull();
-    expect(editableProjectFields(project({ state: "locked", deadlineAt: EARLIER, released: true }), NOW)).toEqual(["name", "deadlineAt", "protectedFiles", "testsCriterion", "buildCommand", "testCommand", "evidenceOutputs"]);
+    expect(editableProjectFields(project({ state: "locked", deadlineAt: EARLIER, released: true }), NOW)).toEqual(["name", "deadlineAt", "protectedFiles", "testsCriterion", "identityCriterion", "buildCommand", "testCommand", "evidenceOutputs"]);
     // Not released: the grading mode may still go into or out of `criteria` (ADR-106 §1).
     expect(editableProjectFields(project({ state: "locked", deadlineAt: EARLIER }), NOW)).toContain("gradingMode");
   });

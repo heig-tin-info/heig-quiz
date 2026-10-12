@@ -64,9 +64,9 @@ describe("parseCriteria on labo 00", () => {
 
   it("classifies with the tests criterion: automatic first, the rest by its prompt", () => {
     const { leaves } = parsed(fixture("labo-00-revised.yml"));
-    const kinds = leaves.map((l) => classifyCriterion(l, { testsCriterion: "rendu.all-tests-passed" }));
+    const kinds = leaves.map((l) => classifyCriterion(l, { testsCriterion: "rendu.all-tests-passed", identityCriterion: null }));
     expect(kinds).toEqual(["automatic", "llm", "llm", "llm", "llm", "llm", "llm"]);
-    expect(classifyCriterion(leaves[0]!, { testsCriterion: "git.commits" })).toBe("llm");
+    expect(classifyCriterion(leaves[0]!, { testsCriterion: "git.commits", identityCriterion: null })).toBe("llm");
   });
 
   it("totals a sample at 10.5 out of 20, with the penalty and the bonus", () => {
@@ -87,8 +87,14 @@ describe("parseCriteria on labo 00", () => {
 
 describe("classifyCriterion", () => {
   it("makes a criterion with `test` automatic, even with a prompt; one with neither the teacher's", () => {
-    expect(classifyCriterion({ id: "a.b", test: "test_x", prompt: "p" }, { testsCriterion: "a.c" })).toBe("automatic");
-    expect(classifyCriterion({ id: "a.b" }, { testsCriterion: "a.c" })).toBe("teacher");
+    expect(classifyCriterion({ id: "a.b", test: "test_x", prompt: "p" }, { testsCriterion: "a.c", identityCriterion: null })).toBe("automatic");
+    expect(classifyCriterion({ id: "a.b" }, { testsCriterion: "a.c", identityCriterion: null })).toBe("teacher");
+  });
+
+  it("makes the identity criterion automatic, even with a prompt", () => {
+    expect(classifyCriterion({ id: "git.commits", prompt: "p" }, { testsCriterion: "a.c", identityCriterion: "git.commits" })).toBe("automatic");
+    expect(classifyCriterion({ id: "git.commits" }, { testsCriterion: "a.c", identityCriterion: "git.commits" })).toBe("automatic");
+    expect(classifyCriterion({ id: "git.commits", prompt: "p" }, { testsCriterion: "a.c", identityCriterion: null })).toBe("llm");
   });
 
   it("reads `test` from the file", () => {

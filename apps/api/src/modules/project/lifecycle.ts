@@ -24,12 +24,13 @@ import { isDeepStrictEqual } from "node:util";
 import type { FastifyBaseLogger } from "fastify";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
-import { COMMAND_SETTINGS, defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
+import { COMMAND_SETTINGS, criterionConflict, defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
 import {
   commandNeedsNetwork,
   patchedDraftDates,
   PROJECT_PATCH_FIELDS,
   projectFieldRefusal,
+  proratedByTests,
   repoName,
   SLUG_MAX,
   slugify,
@@ -49,7 +50,7 @@ import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
 import type { Caller } from "../guards.js";
 import { DomainError, notFoundError } from "../http.js";
 import { forgetFinalPasses, projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
-import { snapshotIds, storeCriteria, type CriteriaSnapshot } from "./criteria.js";
+import { snapshotLeaves, storeCriteria, type CriteriaSnapshot } from "./criteria.js";
 import { ProjectError } from "./errors.js";
 import { replaceGroupCopy, stopProjects } from "./groupCopy.js";
 import { announcePublished } from "./notify.js";
@@ -317,8 +318,10 @@ function asColumns(body: ProjectPatch): Partial<Record<ProjectPatchField, unknow
  * on a locked project not yet released (`projectFieldRefusal`, which reads
  * the patched value). A switch to `criteria` comes with the snapshot the
  * route read beforehand (`criteriaForSwitch`), stored in this transaction.
- * Audited `project.grading_mode`. A tests criterion must name a criterion
- * of the snapshot (`422 unknown_criterion`); a build or test command must
+ * Audited `project.grading_mode`. A tests or identity criterion must name a criterion
+ * of the snapshot (`422 unknown_criterion`), and the identity criterion is
+ * never the effective tests criterion (`422 criterion_conflict`) nor a bonus
+ * or a penalty (`422 identity_criterion_invalid`); a build or test command must
  * not need the network (`422 command_needs_network`, `commandNeedsNetwork`).
  */
 export async function patchProject(
@@ -341,11 +344,20 @@ export async function patchProject(
       if (refusal) throw new ProjectError(refusal, `${field} can no longer change`);
       changed[field] = value;
     }
-    if (typeof changed.testsCriterion === "string") {
-      const ids = criteria ? criteria.criteria.leaves.map((leaf) => leaf.id) : await snapshotIds(tx, project.id);
-      if (!ids?.includes(changed.testsCriterion)) {
-        throw new ProjectError("unknown_criterion", "The tests criterion names no criterion of the snapshot", { field: "testsCriterion" });
+    for (const field of ["testsCriterion", "identityCriterion"] as const) {
+      const id = changed[field];
+      if (typeof id !== "string") continue;
+      const leaves = criteria ? criteria.criteria.leaves : await snapshotLeaves(tx, project.id);
+      const leaf = leaves?.find((l) => l.id === id);
+      if (!leaf) throw new ProjectError("unknown_criterion", `The ${field} names no criterion of the snapshot`, { field });
+      // The identity check proposes positive points only: a bonus or a penalty would never get its row.
+      if (field === "identityCriterion" && !proratedByTests(leaf)) {
+        throw new ProjectError("identity_criterion_invalid", "The identity criterion is a bonus or a penalty", { field });
       }
+    }
+    // One criterion is graded by one check: never the identity's and the tests' at once.
+    if (("testsCriterion" in changed || "identityCriterion" in changed) && criterionConflict({ ...project, ...changed } as ProjectRow)) {
+      throw new ProjectError("criterion_conflict", "The identity criterion is the tests criterion", { field: "identityCriterion" });
     }
     for (const field of COMMAND_SETTINGS) {
       const argv = body[field];

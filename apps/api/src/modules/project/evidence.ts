@@ -5,7 +5,9 @@
  * `project.evidence` job — writes the rows. The tarball is fetched through
  * the App, never cloned, and travels in memory and to the runner only; its
  * `codeload` redirect's `token=` never reaches a log, a row or an error
- * (invariant 15). The final pass (`jobs.ts`), a milestone pass
+ * (invariant 15). Beside it, the commits of the handed-out branch up to the
+ * target (author, e-mail, message), which grade the identity criterion
+ * (ADR-106 §2): never logged, never sent to the model. The final pass (`jobs.ts`), a milestone pass
  * (`milestone.ts`) and a Regrade (`regrade.ts`) enqueue the job; its review
  * follows (`reviewPass.ts`).
  */
@@ -16,7 +18,7 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, inArray, lt, or, isNotNull, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
-import { effectiveCommand, effectiveTestsCriterion, PROJECT_CRITERIA_DEFAULTS } from "@quiz/contracts";
+import { criterionSettings, effectiveCommand, PROJECT_CRITERIA_DEFAULTS } from "@quiz/contracts";
 import {
   PROJECT_ARCHIVE_MAX_BYTES,
   PROJECT_OUTPUTS_MAX,
@@ -31,19 +33,24 @@ import { readTar, writeTar, type CleanEntry } from "@quiz/core/tar";
 import {
   automaticPoints,
   classifyCriterion,
+  commitIdentityPoints,
+  commitIdentityRationale,
   effectiveDeadline,
   parseJunit,
   plainSources,
   proratedByTests,
   REPORT_FILE,
   stripTarballRoot,
+  type CriteriaLeaf,
+  type CriterionSettings,
+  type EvidenceCommit,
   type EvidenceStatus,
 } from "@quiz/domain";
 
 import { readCapped } from "../../cappedBody.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { projectCriteria, projectEvidence, projectRepos, projects } from "../../db/schema.js";
+import { botCommits, projectCriteria, projectEvidence, projectRepos, projects } from "../../db/schema.js";
 import { branchHead, CODELOAD_HOST, githubStatus, installationClient, ownerRepo } from "../../github/app.js";
 import { referenceBlob } from "../../github/revert.js";
 import { redactTokens } from "../../redact.js";
@@ -97,7 +104,7 @@ const REASON_MAX = 2_000;
 const EVIDENCE_FILES_MONTHS = 6;
 
 export type EvidenceRow = typeof projectEvidence.$inferSelect;
-type EvidenceValues = Pick<typeof projectEvidence.$inferInsert, "status" | "reason" | "build" | "test" | "cases" | "files">;
+type EvidenceValues = Pick<typeof projectEvidence.$inferInsert, "status" | "reason" | "build" | "test" | "cases" | "files" | "commits">;
 
 export interface EvidenceOutcome {
   evidenceId: string;
@@ -290,17 +297,34 @@ const sameCommits = (repoId: string, targetSha: string | null, distributionSha: 
   );
 
 /**
- * The evidence of these commits stored, under the repository row's lock: an
- * `ok` row a concurrent job stored meanwhile is kept and returned; any
- * other is deleted and this one inserted, a new evidence with a new id.
+ * An evidence a later pass on the same commits reuses: `ok`, with its
+ * commits read when the project has an identity criterion (one stored
+ * before them, or whose listing GitHub failed, is run again).
  */
-async function store(db: Db, repoId: string, targetSha: string | null, distributionSha: string | null, values: EvidenceValues, now: Date): Promise<EvidenceRow> {
+const reusable = (row: EvidenceRow, project: Pick<ProjectRow, "identityCriterion">): boolean =>
+  row.status === "ok" && (project.identityCriterion === null || row.commits !== null);
+
+/**
+ * The evidence of these commits stored, under the repository row's lock: a
+ * {@link reusable} row a concurrent job stored meanwhile is kept and
+ * returned; any other is deleted and this one inserted, a new evidence
+ * with a new id.
+ */
+async function store(
+  db: Db,
+  project: ProjectRow,
+  repoId: string,
+  targetSha: string | null,
+  distributionSha: string | null,
+  values: EvidenceValues,
+  now: Date,
+): Promise<EvidenceRow> {
   return db.transaction(async (tx) => {
     await tx.select({ id: projectRepos.id }).from(projectRepos).where(eq(projectRepos.id, repoId)).for("update");
     const [held] = await tx.select().from(projectEvidence).where(sameCommits(repoId, targetSha, distributionSha));
     // The race guard: a concurrent job on the same commits may have stored an ok row since
     // collectEvidence checked; that row wins and is never replaced.
-    if (held?.status === "ok") return held;
+    if (held && reusable(held, project)) return held;
     if (held) await tx.delete(projectEvidence).where(eq(projectEvidence.id, held.id));
     const [row] = await tx
       .insert(projectEvidence)
@@ -317,29 +341,99 @@ async function projectOctokit(db: Db, config: AppConfig, project: ProjectRow): P
   return (await installationClient(config, org.installationId)).octokit;
 }
 
-/** GitHub's side of an evidence: an `ok` evidence of the same commits reused, a status without a run, or the archive to run. */
-type Prepared = { distributionSha: string } & ({ reused: EvidenceRow } | { values: EvidenceValues } | { archive: Uint8Array });
+/** The commits the identity criterion reads: one page of GitHub's listing, the newest. */
+const COMMITS_PAGE = 100;
+/** A commit message's first line kept, at most. */
+const SUBJECT_MAX = 200;
+/**
+ * The bots, by git name or GitHub account: heig-classroom's (`hgc-*`), any
+ * GitHub App's (`…[bot]`, Quiz's and the workflows' included) and Quiz's
+ * own git identity (`heig-quiz`, `github/git.ts`; its commits are in
+ * `bot_commits` too).
+ */
+const BOT_NAME = /^hgc-|^heig-quiz$|\[bot\]$/i;
+
+/** A commit of GitHub's listing, as far as the identity criterion reads it. */
+interface ListedCommit {
+  sha: string;
+  commit: { author?: { name?: string | null; email?: string | null } | null; message: string };
+  author?: { login?: string } | null;
+}
+
+/** The commits of `fullName` reachable from `sha`, newest first, one page; `missing` on GitHub's 404, `unavailable` on any other failure. */
+async function listCommits(octokit: Octokit, fullName: string, sha: string): Promise<ListedCommit[] | "missing" | "unavailable"> {
+  const { owner, repo } = ownerRepo(fullName);
+  try {
+    const res = await octokit.request("GET /repos/{owner}/{repo}/commits", { owner, repo, sha, per_page: COMMITS_PAGE, request: { retries: 0 } });
+    return res.data as ListedCommit[];
+  } catch (err) {
+    return githubStatus(err) === 404 ? "missing" : "unavailable";
+  }
+}
+
+/** What reading a repository's commits came to. */
+type CommitsRead = { kind: "read"; commits: EvidenceCommit[] } | { kind: "repo_missing" } | { kind: "unavailable" };
 
 /**
- * The distribution's head, an `ok` evidence of the same commits reused,
- * else the tarball fetched and composed with the protected files.
+ * The student's commits of their repository up to `target` (ADR-106 §2),
+ * without the bots' — one of Quiz's own commits on it (`bot_commits`) or a
+ * {@link BOT_NAME} name or account — nor the handed-out ones, the commits
+ * of the distribution's handed-out branch (the repository is provisioned
+ * as its copy). A commit by a staff member's own account counts as the
+ * repository's. Either listing failing is `unavailable` (the student's
+ * repository gone, `repo_missing`); a database error propagates. Personal
+ * data: never logged.
+ */
+async function readCommits(db: Db, octokit: Octokit, repoId: string, fullName: string, target: string, project: ProjectRow, distributionSha: string): Promise<CommitsRead> {
+  const listed = await listCommits(octokit, fullName, target);
+  if (listed === "missing") return { kind: "repo_missing" };
+  if (listed === "unavailable") return { kind: "unavailable" };
+  const handedOut = await listCommits(octokit, project.distributionFullName!, distributionSha);
+  if (typeof handedOut === "string") return { kind: "unavailable" };
+  const excluded = new Set([
+    ...handedOut.map((c) => c.sha),
+    ...(await db.select({ sha: botCommits.sha }).from(botCommits).where(eq(botCommits.repoId, repoId))).map((r) => r.sha),
+  ]);
+  const commits = listed
+    .filter((c) => !excluded.has(c.sha) && !BOT_NAME.test(c.commit.author?.name ?? "") && !BOT_NAME.test(c.author?.login ?? ""))
+    .map((c) => ({
+      sha: c.sha,
+      name: c.commit.author?.name ?? "",
+      email: c.commit.author?.email ?? "",
+      subject: (c.commit.message.split("\n")[0] ?? "").trim().slice(0, SUBJECT_MAX),
+    }));
+  return { kind: "read", commits };
+}
+
+/** GitHub's side of an evidence: an `ok` evidence of the same commits reused, a status without a run, or the archive to run. */
+type Prepared = { distributionSha: string } & ({ reused: EvidenceRow } | { values: EvidenceValues } | { archive: Uint8Array; commits: EvidenceCommit[] | null });
+
+/**
+ * The distribution's head, a {@link reusable} evidence of the same commits,
+ * else — for a project with an identity criterion — the student's commits
+ * ({@link readCommits}: null when GitHub fails to list them, which never
+ * blocks the tests), and the tarball fetched and composed with the
+ * protected files.
  */
 async function prepare(db: Db, config: AppConfig, repoId: string, fullName: string, project: ProjectRow, target: string, now: Date): Promise<Prepared> {
   const octokit = await projectOctokit(db, config, project);
   const { owner, repo: name } = ownerRepo(project.distributionFullName!);
   const distributionSha = await branchHead(octokit, owner, name, project.branches[0]!);
   if (distributionSha === null) throw new Error("the distribution repository has no handed-out branch");
-  const [reusable] = await db
+  const [held] = await db
     .select()
     .from(projectEvidence)
     .where(and(sameCommits(repoId, target, distributionSha), eq(projectEvidence.status, "ok")));
-  if (reusable) return { distributionSha, reused: reusable };
+  if (held && reusable(held, project)) return { distributionSha, reused: held };
+  const read = project.identityCriterion === null ? null : await readCommits(db, octokit, repoId, fullName, target, project, distributionSha);
+  if (read?.kind === "repo_missing") return { distributionSha, values: { status: "repo_missing" } };
+  const commits = read?.kind === "read" ? read.commits : null;
   const tarball = await fetchTarball(octokit, fullName, target);
-  if (typeof tarball === "string") return { distributionSha, values: { status: tarball } };
+  if (typeof tarball === "string") return { distributionSha, values: { status: tarball, commits } };
   const tar = unpack(tarball);
   const overlay = tar && (await protectedFiles(octokit, project, distributionSha));
   const archive = tar && overlay && composeArchive(tar, overlay, Math.floor(now.getTime() / 1000));
-  return archive ? { distributionSha, archive } : { distributionSha, values: { status: "archive_too_large" } };
+  return archive ? { distributionSha, archive, commits } : { distributionSha, values: { status: "archive_too_large", commits } };
 }
 
 /**
@@ -362,17 +456,37 @@ export async function collectEvidence(
   const db = app.db;
   const now = app.clock.now();
   const target = repo.githubRepoId === null ? null : await lastStudentPush(db, repo.githubRepoId, project.branches, deadline);
-  if (target === null) return store(db, repo.id, null, null, { status: "no_commit" }, now);
-  if (repo.deletedAt !== null || repo.fullName === null) return store(db, repo.id, target, null, { status: "repo_missing" }, now);
+  if (target === null) return store(db, project, repo.id, null, null, { status: "no_commit" }, now);
+  if (repo.deletedAt !== null || repo.fullName === null) return store(db, project, repo.id, target, null, { status: "repo_missing" }, now);
   let prepared: Prepared;
   try {
     prepared = await prepare(db, config, repo.id, repo.fullName, project, target, now);
   } catch (err) {
-    return store(db, repo.id, target, null, { status: "github_unavailable", reason: failureReason(err) }, now);
+    return store(db, project, repo.id, target, null, { status: "github_unavailable", reason: failureReason(err) }, now);
   }
   if ("reused" in prepared) return prepared.reused;
-  const values = "values" in prepared ? prepared.values : await run(app, project, prepared.archive, sources);
-  return store(db, repo.id, target, prepared.distributionSha, values, now);
+  const values = "values" in prepared ? prepared.values : { ...(await run(app, project, prepared.archive, sources)), commits: prepared.commits };
+  return store(db, project, repo.id, target, prepared.distributionSha, values, now);
+}
+
+/**
+ * An automatic criterion's points from the evidence: the identity
+ * criterion's from the commits, whatever the run came to
+ * (`commitIdentityPoints`, its rationale the facts with the e-mail masked —
+ * the student may read it after the freeze); any other's from the tests
+ * (`automaticPoints`). Without what it reads, 0 with the evidence's status.
+ */
+function autoProposal(
+  leaf: CriteriaLeaf,
+  evidence: EvidenceRow,
+  settings: CriterionSettings,
+): Pick<CriterionGradeInput, "points" | "reason" | "rationale"> {
+  if (leaf.id === settings.identityCriterion) {
+    if (evidence.commits === null) return { points: 0, reason: evidence.status === "ok" ? "github_unavailable" : evidence.status };
+    return { points: commitIdentityPoints(evidence.commits, leaf.maxPoints), reason: null, rationale: commitIdentityRationale(evidence.commits) };
+  }
+  if (evidence.status !== "ok") return { points: 0, reason: evidence.status };
+  return { points: automaticPoints(leaf, evidence.cases ?? [], settings.testsCriterion), reason: null };
 }
 
 /** A failure's message as a row's reason: redacted, without any URL (a `codeload` one carries a `token=`), capped. */
@@ -384,8 +498,8 @@ const failureReason = (err: unknown): string =>
 /**
  * The `project.evidence` job (§3, §4): the repository's evidence at its
  * effective deadline, then one `auto` proposal per automatic criterion
- * worth positive points — 0 with the evidence's status as its reason when
- * there is none. For a milestone (`checkpointId`, §5): the evidence at the
+ * worth positive points ({@link autoProposal}) — 0 with the evidence's
+ * status as its reason when there is none. For a milestone (`checkpointId`, §5): the evidence at the
  * checkpoint's date, the criteria it tags only, their rows locked. Null
  * when there is nothing to grade: the repository or the checkpoint gone,
  * its project not in `criteria` mode or without a snapshot.
@@ -402,21 +516,18 @@ export async function runEvidence(app: FastifyInstance, config: AppConfig, repoI
   const scope = await passScope(app.db, project.id, snapshot.leaves, checkpointId);
   if (!scope) return null;
   const evidence = await collectEvidence(app, config, repo, project, scope.dueAt ?? effectiveDeadline(repo, project), snapshot.grading.sources);
-  const testsCriterion = effectiveTestsCriterion(project);
-  const automatic = scope.leaves.filter(
-    (leaf) => classifyCriterion(leaf, { testsCriterion }) === "automatic" && proratedByTests(leaf),
-  );
+  const settings = criterionSettings(project);
+  const automatic = scope.leaves.filter((leaf) => classifyCriterion(leaf, settings) === "automatic" && proratedByTests(leaf));
   const now = app.clock.now();
   // Not held, nor already proposed from this evidence (`heldCriteria`); the writer checks again under its lock.
   const held = await heldCriteria(app.db, repo.id, evidence.id);
   const inputs = automatic.filter((leaf) => !held.has(leaf.id)).map(
     (leaf): CriterionGradeInput => ({
       criterionId: leaf.id,
-      points: evidence.status === "ok" ? automaticPoints(leaf, evidence.cases ?? [], testsCriterion) : 0,
+      ...autoProposal(leaf, evidence, settings),
       max: leaf.maxPoints,
       source: "auto",
       state: "proposed",
-      reason: evidence.status === "ok" ? null : evidence.status,
       passId: evidence.id,
       ...scope.lock(now),
     }),
@@ -426,7 +537,7 @@ export async function runEvidence(app: FastifyInstance, config: AppConfig, repoI
 }
 
 /**
- * Retention (N-DATA-03, §3): the files and the steps' stdout and stderr of the
+ * Retention (N-DATA-03, §3): the files, the commits and the steps' stdout and stderr of the
  * evidence of the projects released more than six months ago are dropped;
  * the cases and the statuses stay. Run by the daily `reconcile.repos`.
  */
@@ -444,11 +555,11 @@ export async function purgeEvidenceFiles(db: Db, now: Date): Promise<number> {
     sql`coalesce(${step}->>'stdout', '') <> '' OR coalesce(${step}->>'stderr', '') <> ''`;
   const purged = await db
     .update(projectEvidence)
-    .set({ files: null, build: blank(projectEvidence.build), test: blank(projectEvidence.test) })
+    .set({ files: null, commits: null, build: blank(projectEvidence.build), test: blank(projectEvidence.test) })
     .where(
       and(
         inArray(projectEvidence.repoId, released),
-        or(isNotNull(projectEvidence.files), output(projectEvidence.build), output(projectEvidence.test)),
+        or(isNotNull(projectEvidence.files), isNotNull(projectEvidence.commits), output(projectEvidence.build), output(projectEvidence.test)),
       ),
     )
     .returning({ id: projectEvidence.id });

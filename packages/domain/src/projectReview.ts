@@ -5,12 +5,12 @@
  * any cut so that no truncated fragment of a name, an address or a login
  * escapes the mask (N-DATA-05). Pure: the `project` module loads and calls.
  */
-import { classifyCriterion, type CriteriaLeaf } from "./criteria.js";
+import { classifyCriterion, type CriteriaLeaf, type CriterionSettings } from "./criteria.js";
 import { REPORT_FILE, sourcePaths, type JunitCase } from "./evidence.js";
 
-/** The llm criteria of a snapshot under the project's tests criterion. */
-export function llmLeaves(leaves: readonly CriteriaLeaf[], testsCriterion: string): CriteriaLeaf[] {
-  return leaves.filter((leaf) => classifyCriterion(leaf, { testsCriterion }) === "llm");
+/** The llm criteria of a snapshot under the project's tests and identity criteria: an identity criterion never is one. */
+export function llmLeaves(leaves: readonly CriteriaLeaf[], settings: CriterionSettings): CriteriaLeaf[] {
+  return leaves.filter((leaf) => classifyCriterion(leaf, settings) === "llm");
 }
 
 /** One step of an evidence run, as the material reads it. */

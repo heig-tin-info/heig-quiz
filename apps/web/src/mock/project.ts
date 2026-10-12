@@ -45,7 +45,8 @@
 import {
   CriteriaIncomplete,
   CriterionGradeWrite,
-  effectiveTestsCriterion,
+  criterionConflict,
+  criterionSettings,
   PROJECT_DEFAULTS,
   ProjectGroupResync,
   ProjectPatch,
@@ -94,6 +95,7 @@ import {
   projectListDates,
   projectPhase,
   projectPrimaryAction,
+  proratedByTests,
   resolveFinalScore,
   repoValidation,
   reviewState,
@@ -647,6 +649,7 @@ function seeded(): MockProject[] {
       groupMode: false,
       groupSetId: null,
       testsCriterion: null,
+      identityCriterion: null,
       buildCommand: null,
       testCommand: null,
       evidenceOutputs: null,
@@ -1207,10 +1210,27 @@ on("PATCH", "/app/api/projects/:id", (m, raw) => {
     CRITERIA.set(p.summary.id, sampleSnapshot(iso(-2 * H)));
   }
   if (body.gradingMode !== undefined) s.gradingMode = body.gradingMode;
-  if (body.testsCriterion && !SAMPLE_LEAVES.some((leaf) => leaf.id === body.testsCriterion)) {
-    throw refuse(422, "unknown_criterion", "The tests criterion names no criterion of the snapshot", { field: "testsCriterion" });
+  for (const field of ["testsCriterion", "identityCriterion"] as const) {
+    const id = body[field];
+    if (id && !SAMPLE_LEAVES.some((leaf) => leaf.id === id)) {
+      throw refuse(422, "unknown_criterion", `The ${field} names no criterion of the snapshot`, { field });
+    }
   }
-  for (const key of ["testsCriterion", "buildCommand", "testCommand", "evidenceOutputs"] as const) {
+  const identity = SAMPLE_LEAVES.find((leaf) => leaf.id === body.identityCriterion);
+  if (identity && !proratedByTests(identity)) {
+    throw refuse(422, "identity_criterion_invalid", "The identity criterion is a bonus or a penalty", { field: "identityCriterion" });
+  }
+  const touched = body.testsCriterion !== undefined || body.identityCriterion !== undefined;
+  if (
+    touched &&
+    criterionConflict({
+      testsCriterion: body.testsCriterion === undefined ? s.testsCriterion : body.testsCriterion,
+      identityCriterion: body.identityCriterion === undefined ? s.identityCriterion : body.identityCriterion,
+    })
+  ) {
+    throw refuse(422, "criterion_conflict", "The identity criterion is the tests criterion", { field: "identityCriterion" });
+  }
+  for (const key of ["testsCriterion", "identityCriterion", "buildCommand", "testCommand", "evidenceOutputs"] as const) {
     if (body[key] !== undefined) (s as Record<string, unknown>)[key] = body[key];
   }
   if (body.gradingScale !== undefined) s.gradingScale = body.gradingScale;
@@ -1247,7 +1267,7 @@ function sampleSnapshot(loadedAt: string) {
 function criteriaViewOf(p: MockProject): ProjectCriteriaView {
   const snap = CRITERIA.get(p.summary.id);
   if (!snap) return { snapshot: null };
-  const settings = { testsCriterion: effectiveTestsCriterion(p.summary) };
+  const settings = criterionSettings(p.summary);
   return {
     snapshot: {
       ...snap,

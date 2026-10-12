@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { automaticPoints, coversCase, parseJunit, plainSources, proratedByTests, sourcePaths, stripTarballRoot } from "./evidence.js";
+import {
+  automaticPoints,
+  commitIdentityPoints,
+  commitIdentityRationale,
+  coversCase,
+  descriptiveMessage,
+  parseJunit,
+  plainSources,
+  proratedByTests,
+  sourcePaths,
+  stripTarballRoot,
+} from "./evidence.js";
 
 const REPORT = `<?xml version="1.0" encoding="utf-8"?>
 <testsuites><testsuite name="pytest" errors="1" failures="1" skipped="1" tests="5">
@@ -100,5 +111,52 @@ describe("sourcePaths", () => {
 
   it("keeps every path when no glob is given", () => {
     expect(sourcePaths([], paths)).toEqual(paths);
+  });
+});
+
+describe("commitIdentityPoints", () => {
+  type Commit = Parameters<typeof commitIdentityPoints>[0][number];
+  const GOOD = "Rendu du laboratoire 00";
+  const c = (over: Partial<Commit> = {}): Commit => ({ name: "Ada Lovelace", email: "ada.lovelace@heig-vd.ch", subject: GOOD, ...over });
+
+  it.each<[string, Commit[], number]>([
+    ["no student commit", [], 0],
+    ["a real identity and descriptive messages", [c(), c({ subject: "Ajoute le fichier inventaire" })], 1],
+    ["the example identity", [c({ name: "Emmett Lathrop Brown", email: "emmett.brown@heig-vd.ch" })], 0],
+    ["the example's short name", [c({ name: " emmett  brown " })], 0],
+    ["the example address alone", [c({ email: "doc@example.com" })], 0],
+    ["one commit of the example among good ones", [c(), c({ name: "Emmett Brown" })], 0],
+    ["a student named Emmett", [c({ name: "Emmett Dupuis", email: "emmett.dupuis@heig-vd.ch" })], 1],
+    ["no name", [c({ name: "" })], 0],
+    ["no e-mail", [c({ email: " " })], 0],
+    ["a meaningless message", [c(), c({ subject: "update" })], 0.5],
+    ["GitHub's web default message", [c({ subject: "Update README.md" })], 0.5],
+    ["a one-word name", [c({ name: "ada" })], 0.5],
+    ["an address of a local machine", [c({ email: "ada@ada-laptop.local" })], 0.5],
+    ["an address without a domain", [c({ email: "ada@localhost" })], 0.5],
+    ["a weak identity and a meaningless message", [c({ name: "ada", subject: "fix" })], 0],
+    ["GitHub's private address", [c({ email: "123+ada-l@users.noreply.github.com" })], 1],
+    ["accented names", [c({ name: "Zoë D'Aubigné-Müller" })], 1],
+  ])("%s", (_, commits, points) => {
+    expect(commitIdentityPoints(commits, 1)).toBe(points);
+  });
+
+  it("scales to the criterion's points, rounded to the half point", () => {
+    expect(commitIdentityPoints([c({ subject: "wip" })], 3)).toBe(1.5);
+    expect(commitIdentityPoints([c({ subject: "wip" })], 5)).toBe(2.5);
+    expect(commitIdentityPoints([c()], 4)).toBe(4);
+  });
+
+  it("calls a message descriptive from 3 words or 15 characters, never a meaningless one", () => {
+    expect(["Rendu du labo", "Ajoute inventaire.txt", "Correct the parser's edge case"].every(descriptiveMessage)).toBe(true);
+    expect(["a", "fix", "Update", "WIP.", "initial commit", "work in progress", "Add files via upload", "rendu"].some(descriptiveMessage)).toBe(false);
+  });
+
+  it("states the facts, the e-mail's local part masked", () => {
+    const rationale = commitIdentityRationale([c(), c({ subject: "fix" }), c({ email: "ada@gmail.com" })]);
+    expect(rationale).toBe("3 commits · Ada Lovelace <***@heig-vd.ch>, Ada Lovelace <***@gmail.com> · messages: 2 descriptive, 1 short");
+    expect(rationale).not.toContain("ada.lovelace");
+    expect(commitIdentityRationale([])).toBe("0 commits");
+    expect(commitIdentityRationale([c({ name: "", email: "" })])).toBe("1 commit · — <—> · messages: 1 descriptive, 0 short");
   });
 });

@@ -170,17 +170,22 @@ function ListRow({
   );
 }
 
+/** The settings naming one of the snapshot's criteria. */
+type CriterionSetting = "testsCriterion" | "identityCriterion";
+/** The refusals of a criterion setting shown under its select, beside `unknown_criterion` (worded per setting). */
+const CRITERION_REFUSALS = ["criterion_conflict", "identity_criterion_invalid"] as const;
+
 /**
- * A project graded by criteria: the tests criterion (one of the
- * snapshot's), the build and test commands and the outputs kept, and the
- * snapshot's table with its reload.
+ * A project graded by criteria: the tests criterion and the identity
+ * criterion (each one of the snapshot's), the build and test commands and
+ * the outputs kept, and the snapshot's table with its reload.
  */
 export function CriteriaRows({ project, disabled, write }: { project: ProjectDetail; disabled: boolean; write: WriteProject }) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const [reloadErrors, setReloadErrors] = useState<CriteriaError[] | null>(null);
-  const [unknownTests, setUnknownTests] = useState(false);
+  const [refused, setRefused] = useState<{ field: CriterionSetting; message: string } | null>(null);
   const view = useQuery<ProjectCriteriaView>({
     queryKey: projectCriteriaKey(project.id),
     queryFn: () => api(`/app/api/projects/${project.id}/criteria`),
@@ -202,13 +207,47 @@ export function CriteriaRows({ project, disabled, write }: { project: ProjectDet
   if (view.isPending) return <Skeleton className="my-3 h-24" />;
   if (view.isError) return <QueryError title={t("project.criteria.loadFailed")} query={view} />;
   const { snapshot } = view.data;
-  const writeTests = (testsCriterion: string | null) => {
-    setUnknownTests(false);
-    write({ testsCriterion }, (error) => {
-      if (!refusedWith(error, "unknown_criterion")) return false;
-      setUnknownTests(true);
-      return true;
-    });
+  /** A setting naming one of the snapshot's criteria (`tests` → `testsCriterion`), none being `noneLabel`; its refusals shown under it. */
+  const criterionRow = (key: "tests" | "identity", noneLabel: string) => {
+    const field: CriterionSetting = `${key}Criterion`;
+    const id = `criteria-${key}`;
+    const onChange = (value: string | null) => {
+      setRefused(null);
+      write({ [field]: value }, (error) => {
+        if (refusedWith(error, "unknown_criterion")) setRefused({ field, message: t(`project.criteria.${key}.unknown`) });
+        else if (CRITERION_REFUSALS.some((code) => refusedWith(error, code))) setRefused({ field, message: refusalMessage(error, t) });
+        else return false;
+        return true;
+      });
+    };
+    return (
+      <>
+        <SettingRow title={t(`project.criteria.${key}`)} desc={t(`project.criteria.${key}.desc`)}>
+          <Select
+            id={id}
+            aria-label={t(`project.criteria.${key}`)}
+            size="sm"
+            width="w-72"
+            value={project[field] ?? ""}
+            disabled={disabled || snapshot === null}
+            aria-invalid={refused?.field === field || undefined}
+            onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
+          >
+            <option value="">{noneLabel}</option>
+            {snapshot?.leaves.map((leaf) => (
+              <option key={leaf.id} value={leaf.id}>
+                {leaf.id}
+              </option>
+            ))}
+          </Select>
+        </SettingRow>
+        {refused?.field === field ? (
+          <div className="pb-3">
+            <FieldError id={id}>{refused.message}</FieldError>
+          </div>
+        ) : null}
+      </>
+    );
   };
   const columns = [
     { key: "section", label: t("project.criteria.section"), className: T.colHigh },
@@ -219,30 +258,8 @@ export function CriteriaRows({ project, disabled, write }: { project: ProjectDet
 
   return (
     <>
-      <SettingRow title={t("project.criteria.tests")} desc={t("project.criteria.tests.desc")}>
-        <Select
-          id="criteria-tests"
-          aria-label={t("project.criteria.tests")}
-          size="sm"
-          width="w-72"
-          value={project.testsCriterion ?? ""}
-          disabled={disabled || snapshot === null}
-          aria-invalid={unknownTests || undefined}
-          onChange={(e) => writeTests(e.target.value === "" ? null : e.target.value)}
-        >
-          <option value="">{t("project.criteria.tests.default", { id: PROJECT_CRITERIA_DEFAULTS.testsCriterion })}</option>
-          {snapshot?.leaves.map((leaf) => (
-            <option key={leaf.id} value={leaf.id}>
-              {leaf.id}
-            </option>
-          ))}
-        </Select>
-      </SettingRow>
-      {unknownTests ? (
-        <div className="pb-3">
-          <FieldError id="criteria-tests">{t("project.criteria.tests.unknown")}</FieldError>
-        </div>
-      ) : null}
+      {criterionRow("tests", t("project.criteria.tests.default", { id: PROJECT_CRITERIA_DEFAULTS.testsCriterion }))}
+      {criterionRow("identity", t("project.criteria.identity.none"))}
       <ListRow
         key={`b${project.buildCommand?.join(" ")}`}
         title={t("project.criteria.build")}
