@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   attemptTotal,
   bonusTotal,
+  copiedCounting,
   countedPoints,
   countsForStudent,
   gradeBand,
@@ -15,6 +16,7 @@ import {
   MIN_GRADE,
   overridePointsRange,
   type Scale,
+  shownPoints,
 } from "./grade.js";
 
 const linear: Scale = {};
@@ -155,6 +157,31 @@ describe("countedPoints (ADR-108)", () => {
   it("gives 0 for a neutralized cell, whatever its points", () => {
     expect(countedPoints(4, "neutralized")).toBe(0);
     expect(countedPoints(-4, "neutralized")).toBe(0);
+  });
+});
+
+describe("shownPoints (ADR-108)", () => {
+  it("shows a bonus cell floored, a normal or neutralized cell as stored", () => {
+    expect(Object.is(shownPoints(-4, "bonus"), 0)).toBe(true);
+    expect(shownPoints(1.5, "bonus")).toBe(1.5);
+    expect(shownPoints(-4, "normal")).toBe(-4);
+    expect(shownPoints(3, "neutralized")).toBe(3);
+  });
+});
+
+describe("countsForStudent (ADR-108)", () => {
+  it("is false for a neutralized item only", () => {
+    expect(countsForStudent("normal")).toBe(true);
+    expect(countsForStudent("bonus")).toBe(true);
+    expect(countsForStudent("neutralized")).toBe(false);
+  });
+});
+
+describe("copiedCounting (ADR-108)", () => {
+  it("copies a neutralized item as normal, a bonus or normal one as it is", () => {
+    expect(copiedCounting("neutralized")).toBe("normal");
+    expect(copiedCounting("bonus")).toBe("bonus");
+    expect(copiedCounting("normal")).toBe("normal");
   });
 });
 
