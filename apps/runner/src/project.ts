@@ -1,7 +1,6 @@
 import {
   PROJECT_FILE_MAX_BYTES,
   PROJECT_OUTPUT_MAX_BYTES,
-  RUNNER_TTL_SLACK_MS,
   projectPathProblem,
   type ProjectOutputFile,
   type ProjectRunRequest,
@@ -10,7 +9,7 @@ import {
 } from "@quiz/core/server";
 import { readTar, sanitizeArchive, TarError } from "@quiz/core/tar";
 
-import { ExecuteError, runArgv, withContainer, type ExecuteDeps } from "./execute.js";
+import { ExecuteError, runArgv, ttlSeconds, withContainer, type ExecuteDeps } from "./execute.js";
 import { imageRef } from "./images.js";
 
 /**
@@ -108,13 +107,13 @@ export async function runProject(
     pidsLimit: 64,
     cpus: 1,
     workdirMb: config.RUNNER_PROJECT_WORKDIR_MB,
-    ttlSeconds: Math.ceil((budget + RUNNER_TTL_SLACK_MS) / 1000),
+    ttlSeconds: ttlSeconds(budget),
   };
 
   return withContainer(deps, create, async ({ name, stopIfAborted }) => {
     const unpacked = await engine.exec(name, {
       argv: UNPACK_ARGV,
-      stdin: Buffer.from(prepared.tar.buffer, prepared.tar.byteOffset, prepared.tar.byteLength),
+      stdin: prepared.tar,
       timeoutMs: UPLOAD_TIMEOUT_MS,
       maxBytes: 16 * 1024,
     });
@@ -124,7 +123,13 @@ export async function runProject(
     // The archive is clean (this service wrote it): GNU tar failing on it is
     // the tmpfs running out — the same answer on every retry, so a refusal.
     if (unpacked.exitCode !== 0) {
-      throw new ExecuteError("the archive does not fit the work directory", "archive_too_large_for_workdir");
+      // GNU tar's own stderr goes to the log: a failure that is not ENOSPC
+      // stays diagnosable. Nothing of the student's has run yet.
+      throw new ExecuteError(
+        "the archive does not fit the work directory",
+        "archive_too_large_for_workdir",
+        unpacked.stderr,
+      );
     }
 
     let alive = true;

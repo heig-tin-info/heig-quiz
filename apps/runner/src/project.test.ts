@@ -125,7 +125,7 @@ describe("runProject", () => {
     ]);
     const [unpack] = engine.calls;
     expect(unpack!.argv).toEqual(UNPACK_ARGV);
-    expect(Buffer.isBuffer(unpack!.stdin) && unpack!.stdin.equals(prepared.tar)).toBe(true);
+    expect(unpack!.stdin).toEqual(prepared.tar);
     expect(programs(engine.calls)).toEqual(["tar", "timeout", "kill", "timeout", "kill", "find", "tar"]);
     // The build gets half the budget; the tests the rest, minus the outputs' reserve and the grace.
     const half = config.RUNNER_PROJECT_TIMEOUT_MS / 2000;

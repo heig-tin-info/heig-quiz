@@ -18,7 +18,7 @@ import type {
 export interface FakeCall {
   container: string;
   argv: string[];
-  stdin: string | Buffer;
+  stdin: string | Uint8Array;
   timeoutMs: number;
   maxBytes: number;
 }

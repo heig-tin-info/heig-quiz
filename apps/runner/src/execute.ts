@@ -55,6 +55,8 @@ export class ExecuteError extends Error {
   constructor(
     message: string,
     readonly reason: string,
+    /** The service's own diagnostic (a tool's stderr), for the log only, never a student's output. */
+    readonly detail?: string,
   ) {
     super(message);
     this.name = "ExecuteError";
@@ -126,7 +128,12 @@ export function budgetMs(request: RunnerRequest, config: RunnerConfig): number {
 
 /** How long the container is allowed to exist, in seconds: the budget and its slack. */
 export function containerTtlSeconds(request: RunnerRequest, config: RunnerConfig): number {
-  return Math.ceil((budgetMs(request, config) + RUNNER_TTL_SLACK_MS) / 1000);
+  return ttlSeconds(budgetMs(request, config));
+}
+
+/** A container's life for a run of this budget, in seconds: the budget and its slack. */
+export function ttlSeconds(budget: number): number {
+  return Math.ceil((budget + RUNNER_TTL_SLACK_MS) / 1000);
 }
 
 /**

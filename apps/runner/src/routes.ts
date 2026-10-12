@@ -235,7 +235,11 @@ async function submit<T>(
     }
     const reason = error instanceof ExecuteError ? error.reason : "engine_error";
     const status = refusals[reason];
-    if (status !== undefined) return reply.code(status).send({ error: reason });
+    if (status !== undefined) {
+      const detail = error instanceof ExecuteError ? error.detail : undefined;
+      if (detail !== undefined) request.log.warn({ reason, detail }, "run refused");
+      return reply.code(status).send({ error: reason });
+    }
     request.log.error({ err: error, reason }, "run failed");
     return reply.code(503).send({ error: reason });
   } finally {

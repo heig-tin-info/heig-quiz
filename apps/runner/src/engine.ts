@@ -73,7 +73,7 @@ export interface CreateOptions {
 export interface ExecOptions {
   argv: string[];
   /** Text for a program, bytes for a project's archive (ADR-106 §3). */
-  stdin: string | Buffer;
+  stdin: string | Uint8Array;
   /** Service-side wall clock. Past it, `timedOut` comes back true and nothing was reaped. */
   timeoutMs: number;
   /** Per stream. Beyond it the bytes are dropped and `truncated` comes back true. */
@@ -228,7 +228,7 @@ export function createEngine(options: EngineOptions): Engine {
 
   function podman(
     args: string[],
-    io: { stdin?: string | Buffer; timeoutMs: number; maxBytes: number },
+    io: { stdin?: string | Uint8Array; timeoutMs: number; maxBytes: number },
   ): Promise<SpawnResult> {
     return new Promise((resolve) => {
       const started = process.hrtime.bigint();
