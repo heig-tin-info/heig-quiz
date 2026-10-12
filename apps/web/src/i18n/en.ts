@@ -2125,7 +2125,7 @@ export const en = {
   "qt.mcq.e.allowSeveral": "Allow several answers",
   "qt.mcq.e.allowSeveralFromKey": "Set by the correct answers you marked.",
   "qt.mcq.p.chooseOne": "Choose one answer.",
-  "qt.mcq.p.chooseSeveral": "Choose every correct answer.",
+  "qt.mcq.p.chooseSeveral": "Choose every answer that applies.",
   "qt.mcq.p.chooseUpTo": "Choose at most the allowed number of answers.",
   "qt.mcq.p.limitReached": "You have reached the maximum number of selections.",
   "qt.mcq.p.negativeMarking": "Wrong answers cost points; not answering costs nothing.",

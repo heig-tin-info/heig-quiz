@@ -2109,7 +2109,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.mcq.e.allowSeveral": "Autoriser plusieurs réponses",
   "qt.mcq.e.allowSeveralFromKey": "Fixé par les bonnes réponses cochées.",
   "qt.mcq.p.chooseOne": "Choisissez une réponse.",
-  "qt.mcq.p.chooseSeveral": "Choisissez toutes les réponses correctes.",
+  "qt.mcq.p.chooseSeveral": "Cochez toutes les réponses qui s’appliquent.",
   "qt.mcq.p.chooseUpTo": "Choisissez au plus le nombre de réponses autorisé.",
   "qt.mcq.p.limitReached": "Vous avez atteint le nombre maximum de sélections.",
   "qt.mcq.p.negativeMarking": "Une réponse fausse coûte des points ; ne pas répondre ne coûte rien.",
