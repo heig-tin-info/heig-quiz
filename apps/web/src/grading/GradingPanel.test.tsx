@@ -748,7 +748,7 @@ describe("GradingPanel — how a question counts (ADR-108)", () => {
   it("asks with the new total, then writes the choice", async () => {
     const { calls } = mockFetch(
       routes([validated("a1", 2)], {
-        [COUNTING]: ok({ itemId: "i1", counting: "bonus", totalPoints: 3, modifiedAfterRelease: false }),
+        [COUNTING]: ok({ counting: "bonus", modifiedAfterRelease: false }),
       }),
     );
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);

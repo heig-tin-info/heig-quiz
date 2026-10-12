@@ -71,6 +71,8 @@ export {
   gradebookEvaluations,
   totalPointsByEvaluation,
   itemCountsByEvaluation,
+  countedItemsByEvaluation,
+  COUNTS_FOR_STUDENT,
   itemConcepts,
   itemRows,
   itemRowsOf,

@@ -25,7 +25,7 @@ import {
   RegradeBody,
   ValidateGradingBody,
 } from "@quiz/contracts";
-import { evaluationGradingRole, evaluationTotal } from "@quiz/domain";
+import { evaluationGradingRole } from "@quiz/domain";
 
 import { tracer, type AuditAction } from "../../audit.js";
 import { loadEvaluation, staffAnswer, staffGrading, teacherGuard, withCourseRole } from "../guards.js";
@@ -344,7 +344,7 @@ export async function gradingPlugin(app: FastifyInstance) {
       async ({ req, reply, now, params, body, scope }): Promise<ItemCountingResult | FastifyReply> => {
         const outcome = await service.changeItemCounting(app.db, scope.evaluation, params.itemId, body.counting, now);
         if (outcome === null) return notFound(reply);
-        if (outcome.before !== body.counting) {
+        if (outcome.changed) {
           await trace(req, "evaluation.item_counting", "evaluation", scope.evaluation.id, {
             itemId: params.itemId,
             before: outcome.before,
@@ -353,13 +353,7 @@ export async function gradingPlugin(app: FastifyInstance) {
           });
           events.gradingChanged(scope.evaluation);
         }
-        const items = await joinedItems(app.db, scope.evaluation.id);
-        return {
-          itemId: params.itemId,
-          counting: body.counting,
-          totalPoints: evaluationTotal(items.map((i) => i.item)),
-          modifiedAfterRelease: outcome.modifiedAfterRelease,
-        };
+        return { counting: body.counting, modifiedAfterRelease: outcome.modifiedAfterRelease };
       },
     ),
   );

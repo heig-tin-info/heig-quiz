@@ -16,7 +16,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { AttemptScore } from "@quiz/contracts";
-import { attemptTotal, keptAttempt, type ItemCounting } from "@quiz/domain";
+import { attemptTotal, countsForStudent, keptAttempt, type ItemCounting } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts, evaluationItems, gradings } from "../../db/schema.js";
@@ -57,11 +57,15 @@ export async function tallyByAttempt(
     .innerJoin(evaluationItems, eq(evaluationItems.id, gradings.itemId))
     .where(and(inArray(gradings.attemptId, [...attemptIds]), eq(gradings.state, "validated")));
   const cells = new Map<string, { points: number; counting: ItemCounting }[]>();
-  for (const row of rows) cells.set(row.attemptId, [...(cells.get(row.attemptId) ?? []), row]);
+  for (const row of rows) {
+    const list = cells.get(row.attemptId);
+    if (list) list.push(row);
+    else cells.set(row.attemptId, [row]);
+  }
   return new Map(
     [...cells].map(([id, list]) => [
       id,
-      { points: attemptTotal(list), graded: list.filter((c) => c.counting !== "neutralized").length },
+      { points: attemptTotal(list), graded: list.filter((c) => countsForStudent(c.counting)).length },
     ]),
   );
 }

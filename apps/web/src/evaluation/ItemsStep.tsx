@@ -56,7 +56,7 @@ import {
   Tip,
   TextInput,
 } from "../ui";
-import { BonusLabel } from "../BonusLabel";
+import { BonusLabel } from "../CountingLabel";
 import { ConceptNames } from "../concepts/refs";
 import { DifficultyDots } from "../pool/QuestionTable";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";

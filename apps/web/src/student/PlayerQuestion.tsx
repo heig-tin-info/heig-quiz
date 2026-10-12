@@ -17,7 +17,7 @@ import type { RunFn } from "../attempt/run";
 import { useT, type TFunction } from "../i18n";
 import { runCode, runCodeImage } from "../runner/codeRun";
 import { Badge } from "../ui";
-import { CountingLabel } from "../BonusLabel";
+import { CountingLabel } from "../CountingLabel";
 import { ExpandLayer } from "./ExpandLayer";
 import { isAnswered, QuestionHost } from "./QuestionHost";
 

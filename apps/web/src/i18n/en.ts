@@ -4387,7 +4387,6 @@ export const en = {
   "grading.counting.normal": "Count normally",
   "grading.counting.bonus": "Count as bonus",
   "grading.counting.neutralized": "Do not count",
-  "grading.counting.badge.bonus": "Bonus",
   "grading.counting.effect.normal": "Its points count in the total and in every student's points.",
   "grading.counting.effect.bonus": "Its points leave the total but still add to each student's points, never below 0.",
   "grading.counting.effect.neutralized": "Its points leave the total and every student's points. Answers and grades stay stored: you can undo this at any time.",

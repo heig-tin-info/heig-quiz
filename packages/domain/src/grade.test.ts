@@ -3,6 +3,7 @@ import {
   attemptTotal,
   bonusTotal,
   countedPoints,
+  countsForStudent,
   gradeBand,
   gradeFromPoints,
   gradeLetter,
@@ -198,20 +199,22 @@ describe("lacksGradedPoints (ADR-052)", () => {
   });
 });
 
-describe("itemPoints (ADR-052)", () => {
-  it("rounds, and floors a bonus item at 0, never -0", () => {
-    expect(itemPoints(-0.5, "bonus")).toBe(0);
-    expect(Object.is(itemPoints(-0.001, "bonus"), 0)).toBe(true);
-    expect(itemPoints(1.005, "bonus")).toBe(1.01);
+describe("itemPoints (ADR-108)", () => {
+  it("rounds, never -0, and floors nothing: the floor of a bonus is the sum's", () => {
+    expect(itemPoints(-0.5)).toBe(-0.5);
+    expect(itemPoints(2 / 3)).toBe(0.67);
+    expect(itemPoints(1.005)).toBe(1.01);
+    expect(Object.is(itemPoints(-0.001), 0)).toBe(true);
   });
+});
 
-  it("leaves an ordinary item as the type scored it, rounded", () => {
-    expect(itemPoints(-0.5, "normal")).toBe(-0.5);
-    expect(itemPoints(2 / 3, "normal")).toBe(0.67);
-  });
-
-  it("writes a neutralized item as a normal one: the sum leaves it out (ADR-108)", () => {
-    expect(itemPoints(-0.5, "neutralized")).toBe(-0.5);
+describe("countsForStudent (ADR-108)", () => {
+  it("is false for a neutralized item only", () => {
+    expect([countsForStudent("normal"), countsForStudent("bonus"), countsForStudent("neutralized")]).toEqual([
+      true,
+      true,
+      false,
+    ]);
   });
 });
 

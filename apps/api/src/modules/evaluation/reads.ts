@@ -397,26 +397,39 @@ export async function totalPointsByEvaluation(
   return new Map(rows.map((r) => [r.evaluationId, round2(Number(r.points))]));
 }
 
-/**
- * How many items each evaluation holds, in one grouped query. `counted`
- * leaves the neutralized items out (ADR-108): the cells a student's score
- * still waits for (`scoreOf`).
- */
+/** How many items each evaluation holds, in one grouped query. */
 export async function itemCountsByEvaluation(
   db: Db,
   evaluationIds: readonly string[],
-  opts: { counted?: boolean } = {},
+): Promise<Map<string, number>> {
+  return itemCountsWhere(db, evaluationIds);
+}
+
+/**
+ * How many items of each evaluation count for the student
+ * (`@quiz/domain#countsForStudent` in SQL, ADR-108): the cells a student's
+ * score still waits for (`scoreOf`), a neutralized item left out.
+ */
+export async function countedItemsByEvaluation(
+  db: Db,
+  evaluationIds: readonly string[],
+): Promise<Map<string, number>> {
+  return itemCountsWhere(db, evaluationIds, COUNTS_FOR_STUDENT);
+}
+
+/** `countsForStudent` on a query with `evaluation_items` in scope. */
+export const COUNTS_FOR_STUDENT = ne(evaluationItems.counting, "neutralized");
+
+async function itemCountsWhere(
+  db: Db,
+  evaluationIds: readonly string[],
+  where?: SQL,
 ): Promise<Map<string, number>> {
   if (evaluationIds.length === 0) return new Map();
   const rows = await db
     .select({ evaluationId: evaluationItems.evaluationId, n: count() })
     .from(evaluationItems)
-    .where(
-      and(
-        inArray(evaluationItems.evaluationId, [...evaluationIds]),
-        opts.counted ? ne(evaluationItems.counting, "neutralized") : undefined,
-      ),
-    )
+    .where(and(inArray(evaluationItems.evaluationId, [...evaluationIds]), where))
     .groupBy(evaluationItems.evaluationId);
   return new Map(rows.map((r) => [r.evaluationId, r.n]));
 }

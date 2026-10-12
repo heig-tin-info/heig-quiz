@@ -10,9 +10,6 @@ import { useToast } from "../notify";
 import { evaluationKey } from "../queryKeys";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 
-/** The three states, in the order the menu offers them. */
-export const COUNTINGS: readonly ItemCounting[] = ["normal", "bonus", "neutralized"];
-
 /** What each state does to the points, said in the confirmation. */
 const EFFECT: Record<ItemCounting, keyof Dict> = {
   normal: "grading.counting.effect.normal",

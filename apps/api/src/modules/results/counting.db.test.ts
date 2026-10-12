@@ -131,6 +131,9 @@ async function sat() {
   return { evaluation: await reload(db(), running.id), items, guesser, good };
 }
 
+const results = async (evaluationId: string) =>
+  (await get(`/app/api/evaluations/${evaluationId}/results`)).json() as ResultsView;
+
 describe("a bonus item", () => {
   it("is left out of the total, the same in SQL, and lifts a student to a grade capped at 6", async () => {
     const { evaluation, items, good } = await sat();
@@ -146,13 +149,16 @@ describe("a bonus item", () => {
     expect([row.points, row.grade]).toEqual([6, 6]);
   });
 
-  it("is scored with negative marking, but never below 0, and corrected within [0, max]", async () => {
+  it("is scored with negative marking, stored raw, shown and summed at 0, and corrected within [0, max]", async () => {
     const { evaluation, items, guesser } = await sat();
     const stored = await db()
       .select()
       .from(gradings)
       .where(and(eq(gradings.attemptId, guesser.id), eq(gradings.state, "validated")));
-    expect(stored.find((g) => g.itemId === items[1]!.item.id)!.points).toBe(0);
+    // ONE floor, at sum time (ADR-108): the grading keeps the negative rule's −4.
+    expect(stored.find((g) => g.itemId === items[1]!.item.id)!.points).toBe(-4);
+    const row = (await results(evaluation.id)).rows.find((r) => r.attemptId === guesser.id)!;
+    expect([row.perItem[items[1]!.item.id], row.points]).toEqual([0, 0]);
     const queue = (await get(`/app/api/evaluations/${evaluation.id}/grading`)).json() as GradingQueue;
     expect(queue.items.map((i) => [i.points, i.minPoints])).toEqual([
       [2, 0],
@@ -248,8 +254,6 @@ async function satNormal() {
   return { evaluation, courseId: seed.courseId, short: items[0]!.item.id, mcq: items[1]!.item.id, guesser, good };
 }
 
-const results = async (evaluationId: string) =>
-  (await get(`/app/api/evaluations/${evaluationId}/results`)).json() as ResultsView;
 const pointsOf = (view: ResultsView, attemptId: string) => {
   const row = view.rows.find((r) => r.attemptId === attemptId)!;
   return [row.points, row.grade];
@@ -290,9 +294,12 @@ describe("changing how an item counts at grading time (ADR-108)", () => {
 
     const bonus = await setCounting(evaluation.id, mcq, "bonus");
     expect(bonus.statusCode).toBe(200);
-    expect(bonus.json()).toEqual({ itemId: mcq, counting: "bonus", totalPoints: 2, modifiedAfterRelease: false });
+    expect(bonus.json()).toEqual({ counting: "bonus", modifiedAfterRelease: false });
     view = await results(evaluation.id);
     expect(view.items.map((i) => i.counting)).toEqual(["normal", "bonus"]);
+    expect(view.totalPoints).toBe(2);
+    // A bonus never reads "−4 / 4": the cell shows what it counts.
+    expect(view.rows.find((r) => r.attemptId === guesser.id)!.perItem[mcq]).toBe(0);
     // 2 + max(0, −4): the floor is the cell's, not only the total's.
     expect(pointsOf(view, guesser.id)).toEqual([2, 6]);
     expect(pointsOf(view, good.id)).toEqual([6, 6]);
@@ -302,7 +309,7 @@ describe("changing how an item counts at grading time (ADR-108)", () => {
     expect(view.totalPoints).toBe(2);
     expect(pointsOf(view, guesser.id)).toEqual([2, 6]);
     expect(pointsOf(view, good.id)).toEqual([2, 6]);
-    // The cell still shows what it was graded.
+    // A neutralized cell still shows what it was graded, struck through on screen.
     expect(view.rows.find((r) => r.attemptId === guesser.id)!.perItem[mcq]).toBe(-4);
 
     const csv = (await get(`/app/api/evaluations/${evaluation.id}/results.csv`)).body;
@@ -346,7 +353,7 @@ describe("changing how an item counts at grading time (ADR-108)", () => {
 
     // guesser: 0 / 6 → 2 / 2, a 1.0 becomes a 6.0; the other: 6 / 6 → 6 / 2, a 6.0 still.
     const res = await setCounting(evaluation.id, mcq, "bonus");
-    expect(res.json()).toMatchObject({ totalPoints: 2, modifiedAfterRelease: true });
+    expect(res.json()).toEqual({ counting: "bonus", modifiedAfterRelease: true });
     const view = await results(evaluation.id);
     expect(view.modifiedAfterRelease).toBe(true);
     expect(pointsOf(view, guesser.id)).toEqual([2, 6]);
@@ -377,5 +384,41 @@ describe("changing how an item counts at grading time (ADR-108)", () => {
     });
     expect((await joinedItems(db(), template.id)).map((i) => i.item.counting)).toEqual(["normal", "normal"]);
     expect((await joinedItems(db(), evaluation.id)).map((i) => i.item.counting)).toEqual(["normal", "neutralized"]);
+  });
+
+  it("answers 404 to a teacher of another course and for another evaluation's item; a student is refused by role", async () => {
+    const { evaluation, mcq } = await satNormal();
+    const other = await satNormal();
+    const stranger = await server.signIn("teacher");
+    expect((await setCounting(evaluation.id, mcq, "bonus", stranger)).statusCode).toBe(404);
+    // Every grading route is teacher-only before any load: a student session is a 403 `forbidden`.
+    const asStudent = await setCounting(evaluation.id, mcq, "bonus", students[0]!);
+    expect([asStudent.statusCode, asStudent.json().error]).toEqual([403, "forbidden"]);
+    expect((await setCounting(evaluation.id, other.mcq, "bonus")).statusCode).toBe(404);
+    expect((await joinedItems(db(), other.evaluation.id))[1]!.item.counting).toBe("normal");
+  });
+
+  it("awaits no grade of a neutralized item: the student's pending count and the grading progress", async () => {
+    const { evaluation, mcq, guesser } = await satNormal();
+    // The guesser's mcq answer back to "not graded yet".
+    await db()
+      .update(gradings)
+      .set({ state: "superseded" })
+      .where(and(eq(gradings.attemptId, guesser.id), eq(gradings.itemId, mcq)));
+    const progress = async () =>
+      (await get(`/app/api/evaluations/${evaluation.id}/grading/progress`)).json() as { done: number; total: number };
+    expect(await progress()).toMatchObject({ done: 3, total: 4 });
+    expect((await send("POST", `/app/api/evaluations/${evaluation.id}/release`, { confirm: true })).statusCode).toBe(200);
+    const feedback = async () =>
+      (await get(`/app/api/attempts/${guesser.id}/feedback`, students[0])).json() as StudentFeedback;
+    let shown = await feedback();
+    if (!shown.available) throw new Error("feedback expected");
+    expect([shown.pendingCount, shown.grade]).toEqual([1, null]);
+
+    expect((await setCounting(evaluation.id, mcq, "neutralized")).statusCode).toBe(200);
+    expect(await progress()).toMatchObject({ done: 2, total: 2 });
+    shown = await feedback();
+    if (!shown.available) throw new Error("feedback expected");
+    expect([shown.pendingCount, shown.points, shown.totalPoints, shown.grade]).toEqual([0, 2, 2, 6]);
   });
 });

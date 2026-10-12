@@ -60,11 +60,9 @@ export type BuilderCounting = z.infer<typeof BuilderCounting>;
 export const ItemCountingBody = z.object({ counting: ItemCounting });
 export type ItemCountingBody = z.infer<typeof ItemCountingBody>;
 
-/** The answer of the counting act: the item's counting now, the total it makes, and whether a released grade moved. */
+/** The answer of the counting act: the item's counting now, and whether a released grade may have moved. */
 export const ItemCountingResult = z.object({
-  itemId: z.uuid(),
   counting: ItemCounting,
-  totalPoints: z.number(),
   /** The evaluation was released: it is now "modified after publication" (F-GRADE-09). */
   modifiedAfterRelease: z.boolean(),
 });

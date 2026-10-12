@@ -4383,7 +4383,6 @@ export const fr: Record<keyof Dict, string> = {
   "grading.counting.normal": "Compter normalement",
   "grading.counting.bonus": "Compter en bonus",
   "grading.counting.neutralized": "Ne pas compter",
-  "grading.counting.badge.bonus": "Bonus",
   "grading.counting.effect.normal": "Ses points comptent dans le total et dans les points de chaque étudiant.",
   "grading.counting.effect.bonus": "Ses points sortent du total mais s'ajoutent encore aux points de chaque étudiant, jamais en dessous de 0.",
   "grading.counting.effect.neutralized": "Ses points sortent du total et des points de chaque étudiant. Les réponses et les notes restent enregistrées : vous pouvez revenir en arrière à tout moment.",

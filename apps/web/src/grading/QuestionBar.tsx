@@ -1,7 +1,9 @@
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 import type { ItemCounting } from "@quiz/contracts";
+import { ITEM_COUNTINGS } from "@quiz/domain";
 
+import { CountingLabel } from "../CountingLabel";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { typeLabel } from "../questionTypes";
@@ -15,19 +17,12 @@ const COUNTING_LABEL: Record<ItemCounting, keyof Dict> = {
   neutralized: "grading.counting.neutralized",
 };
 
-/** The badge beside the points of an item that does not count normally. */
-const COUNTING_BADGE: Partial<Record<ItemCounting, keyof Dict>> = {
-  bonus: "grading.counting.badge.bonus",
-  neutralized: "counting.neutralized",
-};
-
 /**
  * The question bar's part of the counting act (ADR-108): the menu's
  * states, the current one ticked, a choice that would leave nothing in the
  * total greyed out; `onChange` asks and writes (`useItemCounting`).
  */
 export interface CountingMenu {
-  options: readonly ItemCounting[];
   refused: (counting: ItemCounting) => boolean;
   onChange: (counting: ItemCounting) => void;
 }
@@ -108,9 +103,7 @@ export function QuestionBar({
         <span className="flex flex-wrap items-center gap-1.5">
           <Badge tone="zinc">{typeLabel(t, item.type)}</Badge>
           <Badge tone="zinc">{t("grading.points", { n: item.points })}</Badge>
-          {COUNTING_BADGE[item.counting] ? (
-            <Badge tone="zinc">{t(COUNTING_BADGE[item.counting]!)}</Badge>
-          ) : null}
+          <CountingLabel counting={item.counting} />
         </span>
         <span className="min-w-0 truncate text-[13px] text-fg-muted">
           {item.internalName}
@@ -131,7 +124,7 @@ export function QuestionBar({
         {counting ? (
           <Menu
             label={t("grading.counting.menu")}
-            items={counting.options.map((option) => {
+            items={ITEM_COUNTINGS.map((option) => {
               const current = option === item.counting;
               const refused = !current && counting.refused(option);
               return {

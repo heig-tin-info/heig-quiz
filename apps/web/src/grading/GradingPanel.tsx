@@ -48,7 +48,7 @@ import {
 } from "./rows";
 import { useGradingActions, type BatchScope } from "./useGradingActions";
 import { useGradingData } from "./useGradingData";
-import { COUNTINGS, useItemCounting } from "./useItemCounting";
+import { useItemCounting } from "./useItemCounting";
 import { useGradingKeys } from "./useGradingKeys";
 import { useGradingView } from "./view";
 
@@ -324,7 +324,6 @@ export function GradingPanel({
         counting={
           item && countingAct.offered && !readOnly
             ? {
-                options: COUNTINGS,
                 refused: (option) => countingAct.refused(item.id, option),
                 onChange: (option) => void countingAct.change(item, option),
               }

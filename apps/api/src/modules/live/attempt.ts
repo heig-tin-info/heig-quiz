@@ -62,7 +62,7 @@ import {
 } from "../evaluation/service.js";
 import {
   isLatestAttempt,
-  itemCountsByEvaluation,
+  countedItemsByEvaluation,
   joinedItems,
   parameterizedItems,
   retakePolicyOf,
@@ -1569,7 +1569,7 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
   const [grades, totals, itemCounts, keptTallies] = await Promise.all([
     releasedGradesOf(db, userId, rows, perEvaluation),
     totalPointsByEvaluation(db, scoredIds),
-    itemCountsByEvaluation(db, scoredIds, { counted: true }),
+    countedItemsByEvaluation(db, scoredIds),
     tallyByAttempt(
       db,
       scored

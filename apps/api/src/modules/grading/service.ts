@@ -37,6 +37,7 @@ import type {
 import { reasonOf, RUNNER_WAITING_REASONS } from "@quiz/contracts";
 import {
   attemptTotal,
+  countsForStudent,
   isBatchable,
   LLM_REGRADES_PER_ITEM_PER_DAY,
   SCHOOL_TIME_ZONE,
@@ -379,7 +380,9 @@ export async function progressOf(db: Db, evaluationId: string): Promise<GradingP
     .select({ id: attempts.id })
     .from(attempts)
     .where(eq(attempts.evaluationId, evaluationId));
-  const total = items.length * attemptRows.length;
+  // A neutralized item (ADR-108) awaits no grade: neither in the total nor done.
+  const counted = new Set(items.filter((i) => countsForStudent(i.item.counting)).map((i) => i.item.id));
+  const total = counted.size * attemptRows.length;
   const standing = await standingGradings(db, evaluationId);
 
   let done = 0;
@@ -387,6 +390,7 @@ export async function progressOf(db: Db, evaluationId: string): Promise<GradingP
   let llm = 0;
   let failed = 0;
   for (const row of standing.values()) {
+    if (!counted.has(row.itemId)) continue;
     if (row.state === "validated") {
       done += 1;
       continue;
@@ -652,15 +656,17 @@ export async function gradingQueue(
   let validated = 0;
   let proposed = 0;
   for (const item of items) {
+    // A neutralized item's answers stay on the panel, out of the counts (ADR-108).
+    const counts = countsForStudent(item.item.counting);
     for (const attempt of attemptRows) {
       const grading = context.standing.get(pairKey(attempt.id, item.item.id)) ?? null;
-      if (grading?.state === "validated") validated += 1;
-      else if (grading?.state === "proposed") proposed += 1;
+      if (counts && grading?.state === "validated") validated += 1;
+      else if (counts && grading?.state === "proposed") proposed += 1;
       entries.push(entryOf({ attempt, item }, grading, context, query.anonymous));
     }
   }
 
-  const total = items.length * attemptRows.length;
+  const total = items.filter((i) => countsForStudent(i.item.counting)).length * attemptRows.length;
   return {
     items: items.map((i) => ({
       id: i.item.id,
@@ -1083,25 +1089,38 @@ export async function changeItemCounting(
   itemId: string,
   counting: ItemCounting,
   now: Date,
-): Promise<{ before: ItemCounting; modifiedAfterRelease: boolean } | null> {
+): Promise<CountingChange | null> {
+  const watch = await watchCounting(db, evaluation, itemId);
+  const outcome = await db.transaction(async (tx): Promise<CountingChange | null> => {
+    const before = await setItemCounting(tx, evaluation, itemId, counting);
+    if (before === null) return null;
+    // Choosing the counting it already has changes nothing, and flags nothing.
+    if (before === counting) return { changed: false, before, modifiedAfterRelease: false };
+    return { changed: true, before, modifiedAfterRelease: await setModifiedAfterRelease(tx, evaluation.id, now) };
+  });
+  if (outcome?.changed) await watch.announce();
+  return outcome;
+}
+
+/** What {@link changeItemCounting} did: whether anything moved, from what, and the release flag. */
+export interface CountingChange {
+  changed: boolean;
+  before: ItemCounting;
+  modifiedAfterRelease: boolean;
+}
+
+/** The grades shown before a counting change; nothing to read on an evaluation not released. */
+async function watchCounting(db: Db, evaluation: EvaluationRecord, itemId: string) {
+  if (evaluation.releasedAt === null) return { announce: async () => {} };
   const owners = await db
     .select({ attemptId: attempts.id })
     .from(attempts)
     .where(eq(attempts.evaluationId, evaluation.id));
-  const watch = await watchReleasedGrades(
+  return watchReleasedGrades(
     db,
     owners.map((o) => ({ attemptId: o.attemptId, itemId })),
     pointsByAttempt,
   );
-  const outcome = await db.transaction(async (tx) => {
-    const before = await setItemCounting(tx, evaluation, itemId, counting);
-    if (before === null) return null;
-    // Choosing the counting it already has changes nothing, and flags nothing.
-    if (before === counting) return { before, modifiedAfterRelease: false };
-    return { before, modifiedAfterRelease: await setModifiedAfterRelease(tx, evaluation.id, now) };
-  });
-  if (outcome && outcome.before !== counting) await watch.announce();
-  return outcome;
 }
 
 /**
@@ -1159,7 +1178,9 @@ export function pointsAcrossRegrade(
     }
     const perAttempt = new Map<string, { points: number; counting: ItemCounting }[]>();
     for (const cell of byCell.values()) {
-      perAttempt.set(cell.attemptId, [...(perAttempt.get(cell.attemptId) ?? []), cell]);
+      const list = perAttempt.get(cell.attemptId);
+      if (list) list.push(cell);
+      else perAttempt.set(cell.attemptId, [cell]);
     }
     return new Map([...perAttempt].map(([id, points]) => [id, attemptTotal(points)]));
   };

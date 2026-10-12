@@ -24,7 +24,7 @@ import {
   EvaluationError,
   questionRefused,
 } from "./shared.js";
-import { attemptCount as countAttempts, byId, classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
+import { attemptCount, byId, classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
 import type { ItemRecord } from "./shared.js";
 import { countingCoursePool, type Caller } from "../guards.js";
 
@@ -200,7 +200,7 @@ export async function setItemCounting(
     .where(eq(evaluationItems.evaluationId, row.id));
   const item = items.find((i) => i.id === itemId);
   if (!item) return null;
-  if (itemListLock(locked.state, await countAttempts(tx, row.id)) === null) {
+  if (itemListLock(locked.state, await attemptCount(tx, row.id)) === null) {
     throw new EvaluationError("counting_not_frozen");
   }
   const next = items.map((i) => (i.id === itemId ? { ...i, counting } : i));

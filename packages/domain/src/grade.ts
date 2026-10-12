@@ -91,9 +91,29 @@ export type ItemCounting = (typeof ITEM_COUNTINGS)[number];
  * reversible any number of times.
  */
 export function countedPoints(points: number, counting: ItemCounting): number {
-  if (counting === "neutralized") return 0;
+  if (!countsForStudent(counting)) return 0;
   // `+ 0` turns a `-0` into a `0`.
   return counting === "bonus" ? Math.max(0, points) + 0 : points;
+}
+
+/**
+ * The points a student's copy and the results grid SHOW for one cell
+ * (ADR-108): a bonus cell as it counts, floored at 0 — a bonus never reads
+ * "−4 / 2" —, a neutralized or normal cell as stored (a neutralized one is
+ * drawn struck through). The grading panel shows the stored points, which
+ * the teacher edits.
+ */
+export function shownPoints(points: number, counting: ItemCounting): number {
+  return counting === "bonus" ? countedPoints(points, counting) : points;
+}
+
+/**
+ * Whether an item counts for the student (ADR-108): a neutralized item does
+ * not — its cells add nothing, and an ungraded answer of it is not awaited
+ * (it is never "pending", for the student nor on the teacher's progress).
+ */
+export function countsForStudent(counting: ItemCounting): boolean {
+  return counting !== "neutralized";
 }
 
 /**
@@ -165,18 +185,17 @@ export function lacksGradedPoints(mode: EvaluationModeName, total: number): bool
 
 /**
  * THE points of one automatically graded item: what its question type gave,
- * rounded by {@link round2} to the granularity of `gradings.points`, and
- * floored at 0 on a BONUS item (ADR-052). A bonus item is graded like any
- * other — under negative marking (ADR-026) with the negative rule, so a wrong
- * choice still lowers a partial score — but it can only add to the total,
- * never take from it. Every automatic grade goes through this one function.
- * A neutralized item is written as a normal one: {@link countedPoints} keeps
- * it out of every sum, and the stored score survives a change back (ADR-108).
+ * rounded by {@link round2} to the granularity of `gradings.points`. Stored
+ * RAW whatever the item's counting (ADR-108): a bonus item is graded like
+ * any other — under negative marking (ADR-026) with the negative rule — and
+ * its floor at 0 is applied where the student's points are read
+ * ({@link countedPoints}), never written, so a change of counting is
+ * reversible. (Bonus gradings written before ADR-108 were floored at write
+ * time and stay so.) Every automatic grade goes through this one function.
  */
-export function itemPoints(raw: number, counting: ItemCounting): number {
-  const points = round2(raw);
+export function itemPoints(raw: number): number {
   // `+ 0` turns a `-0` into a `0`, as in {@link attemptTotal}.
-  return counting === "bonus" ? Math.max(0, points) + 0 : points;
+  return round2(raw) + 0;
 }
 
 /**

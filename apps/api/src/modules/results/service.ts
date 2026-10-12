@@ -41,6 +41,8 @@ import { AI_KEY, INSTANCE_WARNING_KEY, JUSTIFICATION_KEY } from "@quiz/contracts
 import {
   evaluationTotal,
   attemptTotal,
+  countsForStudent,
+  shownPoints,
   correctionPublishRefusal,
   debrief,
   describe,
@@ -219,7 +221,8 @@ async function computeResults(
       for (const item of items) {
         const grading = validated.get(pairKey(attempt.id, item.item.id));
         if (!grading) continue;
-        perItem[item.item.id] = grading.points;
+        // As the student's copy shows it: a bonus floored (ADR-108).
+        perItem[item.item.id] = shownPoints(grading.points, item.item.counting);
       }
     }
     // Per item, the points as graded — negative ones included (ADR-026);
@@ -817,7 +820,8 @@ async function reviewedItems(
       itemId: item.item.id,
       position: item.item.position,
       type: item.question.type,
-      points: grading ? grading.points : null,
+      // A bonus never reads "−4 / 2"; a neutralized cell keeps its points, struck through (ADR-108).
+      points: grading ? shownPoints(grading.points, item.item.counting) : null,
       maxPoints: item.item.points,
       counting: item.item.counting,
       verdict: grading ? verdictOf(grading) : null,
@@ -842,7 +846,7 @@ async function reviewedItems(
   );
   // Must equal `pendingCells` (grading/kept.ts), the count of the Grades page and the card.
   // A neutralized item (ADR-108) counts nowhere: its ungraded answers hold nothing back.
-  const pendingCount = result.filter((r) => r.points === null && r.counting !== "neutralized").length;
+  const pendingCount = result.filter((r) => r.points === null && countsForStudent(r.counting)).length;
   // The total is the frozen one while it still holds (D-06); the per-item
   // points above always come from the gradings, which the snapshot mirrors.
   const hit =
@@ -895,7 +899,7 @@ export async function studentFeedback(
       ...pending(gate.reason),
       score: scoreOf(
         tally,
-        items.filter((i) => i.item.counting !== "neutralized").length,
+        items.filter((i) => countsForStudent(i.item.counting)).length,
         evaluationTotal(items.map((i) => i.item)),
       ),
       ...retake,

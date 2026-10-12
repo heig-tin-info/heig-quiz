@@ -45,18 +45,30 @@ reversibly.
    counting_poll`); never down to a total of 0 (`409 illegal_transition`,
    reason `no_graded_points`, `lacksGradedPoints`). It is loaded through the
    staff access loader of the grading routes; after the release it is the
-   course owner's (`403 owner_required`, ADR-068 §3). Reversible any number of
-   times; choosing the current state changes nothing. Audited as
-   `evaluation.item_counting` with the item id, before and after.
-4. **Floor at sum time, never rewrite a grading.** Stored gradings are never
-   touched. ONE pure function, `countedPoints(points, counting)` —
-   neutralized → 0, bonus → `max(0, p)`, normal → `p` — is applied by
-   `attemptTotal`, which now takes `{ points, counting }` cells, so every
-   student sum goes through it: the results grade table, the kept attempt,
-   `pointsByAttempt`, the dashboard, the preview, the CSV total, the
-   gradebook, the live grades, the release snapshot. `itemPoints(raw,
-   counting)` still floors a bonus item when an automatic grade is written;
-   a neutralized item is written as a normal one.
+   course owner's (`403 owner_required`, ADR-068 §3). Allowed as soon as the
+   list is frozen, **including while an exam or an exercise is still open**:
+   deliberate, since an exercise runs for weeks and takes (partial) retakes.
+   Reversible any number of times; choosing the current state changes
+   nothing. Audited as `evaluation.item_counting` with the item id, before
+   and after.
+4. **ONE floor, at sum time; never rewrite a grading.** Stored gradings are
+   never touched by the act, and an automatic grade is stored RAW whatever
+   the counting: `itemPoints(raw)` only rounds (amends ADR-052 §3, which
+   floored a bonus item at write time). ONE pure function,
+   `countedPoints(points, counting)` — neutralized → 0, bonus → `max(0, p)`,
+   normal → `p` — is applied by `attemptTotal`, which now takes `{ points,
+   counting }` cells, so every student sum goes through it: the results
+   grade table, the kept attempt, `pointsByAttempt`, the dashboard, the
+   preview, the CSV total, the gradebook, the live grades, the release
+   snapshot. The cell a student's copy, the preview and the results grid
+   SHOW is `shownPoints`: a bonus floored (never "−4 / 2"), a neutralized
+   one as stored, struck through. The grading panel shows the stored points,
+   which the teacher edits; a manual correction of a bonus item stays in
+   `[0, max]` (`scoresNegatively`). Because the floor is never written, a
+   change of counting is reversible: a bonus made normal again counts its
+   negative points. **Limit:** bonus gradings written before this decision
+   were floored at write time and stay so; made normal, such a cell counts
+   0, not its lost negative score.
 5. **The total** (`evaluationTotal`, and `totalPointsByEvaluation` in SQL)
    leaves out both bonus and neutralized items.
 6. **After the release**: the act marks the evaluation modified after
@@ -68,8 +80,11 @@ reversibly.
 7. **The student**: a neutralized item stays on the feedback page with the
    answer, labelled "Not counted", its points struck through; a bonus keeps
    "Bonus question". A neutralized item's ungraded answers hold nothing back
-   (they are not pending). It creates no drill card (ADR-041 §1). Item
-   statistics are unchanged.
+   (they are not pending, `countsForStudent`), nor on the teacher's grading
+   progress and queue counts. It creates no drill card (ADR-041 §1) from
+   then on; **limit:** the cards an exam's release or an exercise's hand-in
+   already created are kept, not retired, when the item is neutralized
+   later. Item statistics are unchanged.
 8. **CSV**: a neutralized item's header ends with ` (not counted)`, beside the
    ` (bonus)` rule (headers stay English, like `total`); its points are shown
    and left out of `total`.
@@ -80,8 +95,8 @@ reversibly.
     ("Count normally / Count as bonus / Do not count", the current one
     ticked, a choice that would leave no total greyed out). A choice asks
     through `useConfirm()` with the new total ("5 → 3 pts") and, once
-    released, that students whose grade changes are told. A "Bonus" or "Not
-    counted" badge sits beside the points badge.
+    released, that students whose grade changes are told. The item's
+    "Bonus question" or "Not counted" label sits beside the points badge.
 
 ## Consequences
 

@@ -54,6 +54,7 @@ import {
   gradeFromPoints,
   itemPoints,
   previewDurationS,
+  shownPoints,
   type ItemCounting,
 } from "@quiz/domain";
 
@@ -413,8 +414,8 @@ async function gradeItem(
         }
       : {
           status: "graded",
-          // Floored on a bonus item, as the grading pass writes it (ADR-052).
-          points: itemPoints(result.points, item.item.counting),
+          // Stored raw, as the grading pass writes it (ADR-108).
+          points: itemPoints(result.points),
           details: result.details,
         };
   try {
@@ -500,7 +501,8 @@ export async function gradePreview(
       position: rank,
       type: item.question.type,
       status: outcome.status,
-      points: outcome.points,
+      // As the student's copy shows it: a bonus floored (ADR-108).
+      points: outcome.points === null ? null : shownPoints(outcome.points, item.item.counting),
       maxPoints: item.item.points,
       verdict:
         outcome.status === "graded" && outcome.points !== null

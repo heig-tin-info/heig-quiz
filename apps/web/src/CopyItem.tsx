@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { StudentResultItem } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
-import { CountingLabel } from "./BonusLabel";
+import { CountingLabel } from "./CountingLabel";
 import { useT } from "./i18n";
 import { MarkdownView } from "./markdown/MarkdownView";
 import { QuestionReviewHost } from "./questionTypes";

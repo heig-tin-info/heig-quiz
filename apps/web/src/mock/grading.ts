@@ -519,8 +519,8 @@ function buildGradingWorld(
           points: number;
           details: unknown;
         };
-        // A bonus item is floored at 0, as the server writes it (ADR-052).
-        points = itemPoints(halfPoints(graded.points * item.points), item.counting);
+        // Stored raw, as the server writes it (ADR-108).
+        points = itemPoints(halfPoints(graded.points * item.points));
         details = graded.details;
       }
 
@@ -996,12 +996,7 @@ on("PUT", "/app/api/evaluations/:id/items/:itemId/counting", (m, body) => {
   frozen.counting = counting;
   graded.counting = counting;
   if (changed && e.evaluation.releasedAt !== null) e.evaluation.modifiedAfterRelease = true;
-  return {
-    itemId,
-    counting,
-    totalPoints: gradedTotalPointsOf(e),
-    modifiedAfterRelease: changed && e.evaluation.releasedAt !== null,
-  };
+  return { counting, modifiedAfterRelease: changed && e.evaluation.releasedAt !== null };
 });
 
 function resultsView(e: MockGradingWorld) {
