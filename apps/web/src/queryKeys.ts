@@ -139,6 +139,8 @@ export const projectSourceKey = (id: string, repo: string) => [...projectSources
 export const projectKey = (id: string) => ["project", id] as const;
 export const projectRunsKey = (id: string, rid: string) => [...projectKey(id), "repos", rid, "runs"] as const;
 export const projectCheckpointsKey = (id: string) => [...projectKey(id), "checkpoints"] as const;
+/** The snapshot of the source's `criteria.yml` (ADR-106 §2): under the project's key, so a write re-reads it. */
+export const projectCriteriaKey = (id: string) => [...projectKey(id), "criteria"] as const;
 /** The online workspace of a project (ADR-047, M6-06): its mode and sync, and its open workspaces live from the portal. */
 export const projectWorkspaceKey = (id: string) => [...projectKey(id), "workspace"] as const;
 export const projectWorkspaceSessionsKey = (id: string) => [...projectWorkspaceKey(id), "sessions"] as const;

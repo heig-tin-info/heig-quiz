@@ -69,6 +69,7 @@ import {
   PROJECT_STATES,
   PUBLISH_MODES,
 } from "@quiz/domain";
+import type { ParsedCriteria } from "@quiz/domain/criteria";
 
 import { users } from "./auth.js";
 import { githubOrganizations } from "./github.js";
@@ -239,6 +240,19 @@ export const projects = pgTable(
      * (`reminderClaimAfterMove`, `@quiz/domain`).
      */
     reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
+    /**
+     * Grading by criteria (`grading_mode = 'criteria'`, ADR-106 §2): the
+     * dotted id of the criterion the tests score (null: none), and the
+     * argv of the build and of the tests and the output paths the evidence
+     * keeps — null for the defaults of `PROJECT_CRITERIA_DEFAULTS`
+     * (`@quiz/contracts`). Edited by the staff in any state; the tests
+     * criterion is pre-filled, while null, from the grading workflow's
+     * `tests-criterion` input when a snapshot is loaded.
+     */
+    testsCriterion: text("tests_criterion"),
+    buildCommand: jsonb("build_command").$type<string[]>(),
+    testCommand: jsonb("test_command").$type<string[]>(),
+    evidenceOutputs: jsonb("evidence_outputs").$type<string[]>(),
     /** The final scores made the students' and the gradebook's (F-PROJ-14). */
     releasedAt: timestamp("released_at", { withTimezone: true }),
     releasedBy: uuid("released_by").references(() => users.id),
@@ -274,6 +288,24 @@ export const projects = pgTable(
       .where(sql`${t.state} = 'draft' AND ${t.publishMode} = 'scheduled' AND ${t.archivedAt} IS NULL`),
   ],
 );
+
+/**
+ * The snapshot of a project's `criteria.yml` (ADR-106 §2): the criteria
+ * parsed by `parseCriteria` (`@quiz/domain/criteria`), read from the
+ * distribution repository's head (`source_sha`, the commit; `file_sha`, the
+ * file's blob). One per project, replaced by each load that parses — the
+ * mode switch, a staff's reload, a publication or a sync of a project in
+ * `criteria` mode; a file that does not parse leaves the last one.
+ */
+export const projectCriteria = pgTable("project_criteria", {
+  projectId: uuid("project_id")
+    .primaryKey()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  fileSha: text("file_sha").notNull(),
+  sourceSha: text("source_sha").notNull(),
+  criteria: jsonb("criteria").$type<ParsedCriteria>().notNull(),
+  loadedAt: timestamp("loaded_at", { withTimezone: true }).notNull(),
+});
 
 /**
  * A review checkpoint (F-PROJ-11): at `due_at`, one `grade-milestone`

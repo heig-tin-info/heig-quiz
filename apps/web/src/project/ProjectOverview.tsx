@@ -2,6 +2,7 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import type { ProjectDetail, ProjectPatch, ProjectSummary } from "@quiz/contracts";
+import { projectGraded } from "@quiz/domain";
 
 import { refusedWith } from "../api";
 import { useConfirm } from "../confirm";
@@ -300,9 +301,9 @@ function SourceTile({
           [t("project.publishMode"), t(`project.publishMode.${project.publishMode}`)],
           [
             t("project.gradingMode"),
-            project.gradingMode === "auto"
-              ? `${t("project.gradingMode.auto")} · ${t(`project.scale.${project.gradingScale.kind}`)}`
-              : t("project.gradingMode.none"),
+            !projectGraded(project.gradingMode)
+              ? t("project.gradingMode.none")
+              : `${t(`project.gradingMode.${project.gradingMode}`)} · ${t(`project.scale.${project.gradingScale.kind}`)}`,
           ],
         ]}
       />

@@ -517,6 +517,9 @@ importers:
       ts-fsrs:
         specifier: ^5.4.2
         version: 5.4.2
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
     devDependencies:
       typescript:
         specifier: ^6.0.3

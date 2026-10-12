@@ -25,7 +25,7 @@ import {
   type WorkModeRefusal,
   type WorkspaceStartRefusal,
 } from "@quiz/contracts";
-import { isVoidCheckpoint, reopens } from "@quiz/domain";
+import { isVoidCheckpoint, projectGraded, reopens } from "@quiz/domain";
 
 import { ApiError, refusalCodeOf, wordedRefusal } from "../api";
 import { studentName } from "../group/groupRules";
@@ -256,7 +256,7 @@ export function syncTag(repo: ProjectRepoView): SyncView | null {
 export type TeacherScoreBlock = "grading_none" | "not_frozen" | null;
 
 export function teacherScoreBlock(repo: ProjectRepoView, project: Pick<ProjectDetail, "gradingMode">): TeacherScoreBlock {
-  if (project.gradingMode !== "auto") return "grading_none";
+  if (!projectGraded(project.gradingMode)) return "grading_none";
   if (repo.frozenAt === null) return "not_frozen";
   return null;
 }
@@ -376,6 +376,10 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   work_mode_frozen: "project.workspace.refusal.work_mode_frozen",
   work_mode_group: "project.workspace.refusal.work_mode_group",
   not_online: "project.refusal.notOnline",
+  // ADR-106 §2: a `criteria.yml` missing or invalid (its errors are listed where it was asked).
+  criteria_invalid: "project.criteria.invalid",
+  checkpoint_untagged: "project.refusal.checkpointUntagged",
+  unknown_criterion: "project.criteria.tests.unknown",
   seb_required: "project.refusal.sebRequired",
 };
 
@@ -610,7 +614,7 @@ export type RailStep =
   | { kind: "release"; at: string | null };
 
 export function railSteps(p: ProjectDetail, checkpoints: ReviewCheckpoint[]): RailStep[] {
-  const graded = p.gradingMode === "auto";
+  const graded = projectGraded(p.gradingMode);
   const draft = p.state === "draft" ? draftView(p) : null;
   const manualDraft = draft?.publishMode === "manual";
   const afterDays = draft?.kind === "duration" && manualDraft ? draft.days : null;
@@ -651,7 +655,7 @@ export function advancedCount(
     p.graceMinutes !== PROJECT_DEFAULTS.graceMinutes,
     p.deadlineStrategy !== PROJECT_DEFAULTS.deadlineStrategy,
     p.gradingMode !== PROJECT_DEFAULTS.gradingMode,
-    p.gradingMode === "auto" && p.gradingScale.kind !== PROJECT_DEFAULTS.scaleKind,
+    projectGraded(p.gradingMode) && p.gradingScale.kind !== PROJECT_DEFAULTS.scaleKind,
   ].filter(Boolean).length;
 }
 

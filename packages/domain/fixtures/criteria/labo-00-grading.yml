@@ -1,0 +1,42 @@
+name: grading
+
+# Notation à deux paliers, mince enveloppe autour du pipeline réutilisable de
+# heig-tin-info/score.
+#   - à chaque push         -> palier objectif : les tests de conformité du
+#                              rendu (tests/test_rendu.py), note indicative
+#   - repository_dispatch   -> revue complète par LLM déclenchée par
+#                              heig-classroom à la deadline (note définitive,
+#                              criteria.yml annoté par le bot de correction)
+# Ne modifiez pas ce fichier : il est protégé et toute modification est
+# annulée par la plateforme (un pipeline altéré invalide la note).
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:   # bouton « grade now » de l'enseignant dans heig-classroom
+  repository_dispatch:
+    types: [grade-final, grade-milestone]
+
+permissions:
+  contents: write   # le job llm-review commet le fichier de revue
+  checks: write
+
+jobs:
+  grading:
+    uses: heig-tin-info/score/.github/workflows/grading.yml@0.7.5
+    # Les secrets d'organisation ne traversent pas la frontière d'organisation
+    # avec `secrets: inherit` (le workflow réutilisable vit dans heig-tin-info) :
+    # la clé doit être transmise explicitement.
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    with:
+      criteria-file: criteria.yml
+      # `make prepare` n'échoue jamais : il extrait le rapport Word en texte et
+      # dresse l'inventaire du dépôt (build/) pour la revue LLM. La compilation
+      # de rendu/hello.c est vérifiée par les tests, pas par cette étape, afin
+      # qu'un hello.c cassé n'empêche pas les autres vérifications de tourner.
+      build-command: make prepare
+      test-command: pip install pytest && pytest --junitxml=report.xml
+      review-test-command: pip install pytest && pytest -vv
+      tests-criterion: rendu.all-tests-passed
+      score-spec: "StudentScore[llm]==0.7.5"
+      scale: "6"

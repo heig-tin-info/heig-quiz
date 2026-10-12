@@ -49,6 +49,7 @@ import type {
 } from "@quiz/contracts";
 import {
   effectiveDeadline,
+  projectGraded,
   scoreGrade,
   studentCiReading,
   studentProjectGroup,
@@ -249,7 +250,7 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts }:
   if (chosen === null) return { ...stored, run: null, score: null };
   const { run, frozen } = chosen;
   const score: StudentProjectScore | null =
-    project.gradingMode === "auto" && run.parseStatus === "ok" && run.points !== null
+    projectGraded(project.gradingMode) && run.parseStatus === "ok" && run.points !== null
       ? { points: run.points, max: run.max, grade: scoreGrade(run.points, run.max, project.gradingScale), frozen }
       : null;
   return {

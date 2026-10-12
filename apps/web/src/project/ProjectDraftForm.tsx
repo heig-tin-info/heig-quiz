@@ -8,12 +8,15 @@ import {
   type ProjectSummary,
 } from "@quiz/contracts";
 
+import { PROJECT_GRADING_MODES, projectGraded } from "@quiz/domain";
+
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
 import { Alert, Badge, Card, Disclosure, SectionHeading, SettingRow, Switch, useNumberDraft } from "../ui";
 import { Facts } from "./ProjectOverview";
 import { ProjectDraftPublication, publicationKey } from "./ProjectDraftPublication";
 import { GroupSetBody } from "./ProjectGroupSet";
+import { CriteriaErrors, CriteriaRows, useGradingModeWrite } from "./ProjectCriteria";
 import { ProjectRail } from "./ProjectRail";
 import { DeadlineStrategyRow, GraceMinutesRow, GradingModeRow, ScaleRow } from "./ProjectSettingRows";
 import { ProtectedFilesRow, useProtectedSuggestions } from "./ProjectSettings";
@@ -85,6 +88,7 @@ export function ProjectDraftForm({
   const disabled = patch.isPending || project.archivedAt !== null;
   const suggested = useProtectedSuggestions(project, open);
   const changed = advancedCount(project);
+  const grading = useGradingModeWrite(write);
   const can = (field: "gradingMode" | "gradingScale" | "graceMinutes" | "deadlineStrategy") => project.editable.includes(field);
 
   return (
@@ -167,11 +171,14 @@ export function ProjectDraftForm({
           onChange={(deadlineStrategy) => write({ deadlineStrategy })}
         />
         <GradingModeRow
+          modes={PROJECT_GRADING_MODES}
           value={project.gradingMode}
           disabled={disabled || !can("gradingMode")}
-          onChange={(gradingMode) => write({ gradingMode })}
+          onChange={grading.writeMode}
         />
-        {project.gradingMode === "auto" ? (
+        <CriteriaErrors errors={grading.errors} />
+        {project.gradingMode === "criteria" ? <CriteriaRows project={project} disabled={disabled} write={write} /> : null}
+        {projectGraded(project.gradingMode) ? (
           <ScaleRow
             value={project.gradingScale.kind}
             disabled={disabled || !can("gradingScale")}
@@ -187,7 +194,7 @@ export function ProjectDraftForm({
         <WorkModeSetting projectId={project.id} archived={project.archivedAt !== null} />
       </Disclosure>
 
-      {project.gradingMode === "auto" ? <ProjectRail project={project} /> : null}
+      {projectGraded(project.gradingMode) ? <ProjectRail project={project} /> : null}
     </div>
   );
 }

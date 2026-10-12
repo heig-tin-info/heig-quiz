@@ -1488,6 +1488,63 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(writes(calls)[1]!.body).toEqual({ gradingScale: { kind: "score_is_grade", rounding: "nearest" } });
   });
 
+  it("lists the errors of a refused switch to grading by criteria (ADR-106 §1)", async () => {
+    const { calls } = routes(makeDraft(), {
+      [WORKSPACE]: workspace("free"),
+      [`PATCH ${BASE}`]: fail(409, {
+        error: "criteria_invalid",
+        message: "criteria.yml is missing or invalid",
+        errors: [
+          { path: "criteria.yml", code: "missing_file" },
+          { path: "criteria/a/max_points", code: "awarded_out_of_range", params: { awarded: 5, max: 4 } },
+        ],
+      }),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Advanced options/ }));
+    await userEvent.click(screen.getByRole("radio", { name: "By criteria" }));
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({ gradingMode: "criteria" });
+    expect(await screen.findByText("criteria.yml is missing or invalid")).toBeInTheDocument();
+    expect(screen.getByText(/the source has no criteria.yml at its root/)).toBeInTheDocument();
+    expect(screen.getByText(/5 points lie outside the criterion's range \(4\)/)).toBeInTheDocument();
+  });
+
+  it("shows the criteria of a draft graded by criteria, with their kind, and reloads them", async () => {
+    const view = {
+      snapshot: {
+        fileSha: "f1",
+        sourceSha: "abcdef123456",
+        loadedAt: PAST,
+        grading: { context: null, sources: [] },
+        sections: [{ id: "rendu", path: ["rendu"], description: null }],
+        leaves: [
+          { id: "rendu.tests", sectionPath: ["rendu"], description: "Tests pass", maxPoints: 12, kind: "automatic" },
+          { id: "rendu.report", sectionPath: ["rendu"], description: "Report", maxPoints: 4, prompt: "p", kind: "llm", milestone: "mid" },
+          { id: "rendu.bonus", sectionPath: ["rendu"], description: "Extra", maxPoints: 0, bonusPoints: 1, kind: "teacher" },
+        ],
+        max: 16,
+        bonusMax: 1,
+      },
+    };
+    const { calls } = routes(makeDraft({ gradingMode: "criteria", testsCriterion: "rendu.tests" }), {
+      [WORKSPACE]: workspace("free"),
+      [`GET ${BASE}/criteria`]: ok(view),
+      [`POST ${BASE}/criteria/reload`]: ok(view),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Advanced options/ }));
+    expect(await screen.findByText("Tests pass")).toBeInTheDocument();
+    expect(screen.getByText("Read from criteria.yml at abcdef1: 16 points, +1 bonus.")).toBeInTheDocument();
+    expect(screen.getByText("AI")).toBeInTheDocument();
+    expect(screen.getByText("+1")).toBeInTheDocument();
+    expect(screen.getByText("mid")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tests criterion")).toHaveValue("rendu.tests");
+    expect(screen.getByLabelText("Build command")).toHaveAttribute("placeholder", "make prepare");
+    await userEvent.click(screen.getByRole("button", { name: "Reload from source" }));
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/criteria/reload` })]));
+  });
+
   it("draws every control disabled for an archived draft, and what `editable` does not name", async () => {
     routes(makeDraft({ archivedAt: PAST, editable: ["name"] }));
     renderPage();

@@ -10,9 +10,19 @@ import { projectGrade, type ProjectGrade, type ProjectScale } from "./projectGra
 export const PROJECT_STATES = ["draft", "published", "locked"] as const;
 export type ProjectStateName = (typeof PROJECT_STATES)[number];
 
-/** F-PROJ-01: `none` — no score shown and no review dispatched. */
-export const PROJECT_GRADING_MODES = ["auto", "none"] as const;
+/**
+ * F-PROJ-01: `auto` — the CI's score and its review dispatched; `none` —
+ * no score shown and no review dispatched; `criteria` — graded by the
+ * platform against the source's `criteria.yml` (ADR-106 §2): scored like
+ * `auto` meanwhile, no review dispatched to the CI.
+ */
+export const PROJECT_GRADING_MODES = ["auto", "none", "criteria"] as const;
 export type ProjectGradingModeName = (typeof PROJECT_GRADING_MODES)[number];
+
+/** Whether a project is graded at all: scores, a teacher's score, a release, a gradebook column. */
+export function projectGraded(mode: ProjectGradingModeName): boolean {
+  return mode !== "none";
+}
 
 /** F-PROJ-03: publish by hand (now), or by the ticker at the start. */
 export const PUBLISH_MODES = ["manual", "scheduled"] as const;
@@ -68,7 +78,7 @@ export interface PrimaryActionInput {
  * project does not hold it back.
  */
 export function scoresFinal(p: Pick<PrimaryActionInput, "gradingMode" | "live" | "frozen" | "unverified">): boolean {
-  return p.gradingMode === "auto" && p.live > 0 && p.frozen === p.live && p.unverified === 0;
+  return projectGraded(p.gradingMode) && p.live > 0 && p.frozen === p.live && p.unverified === 0;
 }
 
 // ---------------------------------------------------------------- the staff's phase (ADR-104)

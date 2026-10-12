@@ -448,7 +448,7 @@ describe("patch (F-PROJ-03)", () => {
       publishMode: "manual",
     });
     expect(open.statusCode, open.body).toBe(200);
-    expect(ProjectSummary.parse(open.json()).editable).toEqual(["name", "deadlineAt", "deadlineStrategy", "protectedFiles"]);
+    expect(ProjectSummary.parse(open.json()).editable).toEqual(["name", "deadlineAt", "deadlineStrategy", "protectedFiles", "testsCriterion", "buildCommand", "testCommand", "evidenceOutputs"]);
     expect(refusal(await patch(project.id, { graceMinutes: 5 }))).toEqual([409, "not_draft"]);
     expect(refusal(await patch(project.id, { gradingMode: "none" }))).toEqual([409, "not_draft"]);
     expect(refusal(await patch(project.id, { groupMode: true }))).toEqual([409, "not_draft"]);

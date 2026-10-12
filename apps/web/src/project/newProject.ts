@@ -37,7 +37,8 @@ export interface ProjectDraft {
   graceMinutes: string;
   sourceStrategy: SourceStrategy;
   deadlineStrategy: DeadlineStrategy;
-  gradingMode: ProjectGradingMode;
+  /** `criteria` is chosen on the draft (ADR-106 §1). */
+  gradingMode: Exclude<ProjectGradingMode, "criteria">;
   scaleKind: ProjectScaleKind;
   /** null: the source's suggestions (`suggestedProtected`), the default even while Advanced stays folded. */
   protectedFiles: string[] | null;

@@ -43,6 +43,7 @@
  * can be seen (`arriveProjectActivity`).
  */
 import {
+  effectiveTestsCriterion,
   PROJECT_DEFAULTS,
   ProjectGroupResync,
   ProjectPatch,
@@ -53,6 +54,8 @@ import {
   type GroupConsequence,
   type GradeRunView,
   type ProjectActivitySummary,
+  type ProjectCriteriaView,
+  type ProjectCriterion,
   type ProjectDetail,
   type ProjectDetailGroup,
   type ProjectDetailRow,
@@ -73,8 +76,11 @@ import {
   changedAfterRelease,
   checkpointDueAt,
   checkpointRefusal,
+  classifyCriterion,
+  criteriaTotals,
   editableProjectFields,
   patchedDraftDates,
+  projectFieldRefusal,
   projectListDates,
   projectPhase,
   projectPrimaryAction,
@@ -83,6 +89,7 @@ import {
   scoreGrade,
   teacherScoreMax,
   type ProjectDatesChange,
+  type ProjectLifeLike,
 } from "@quiz/domain";
 
 import {
@@ -610,6 +617,10 @@ function seeded(): MockProject[] {
       protectedFiles: PROTECTED,
       groupMode: false,
       groupSetId: null,
+      testsCriterion: null,
+      buildCommand: null,
+      testCommand: null,
+      evidenceOutputs: null,
       source: { fullName: `${ORG}/${name.replace(/^labo-(\d)-.*$/, "prg1-labo-0$1")}-${name.split("-").slice(2).join("-")}` },
       distribution: { fullName: `${ORG}/${name}-squashed` },
       deadlineAppliedAt: seed.state === "locked" ? iso(seed.deadline) : null,
@@ -618,7 +629,8 @@ function seeded(): MockProject[] {
       accepted: seed.state !== "draft",
       editable: [],
     };
-    summary.editable = editableProjectFields({ state: summary.state, deadlineAt: new Date(summary.deadlineAt) }, new Date(now));
+    const releasedAt = seed.state === "locked" && !flags.unreleased && !seed.groupSet && !seed.unreleased ? iso(-5 * D) : null;
+    summary.editable = editableProjectFields(lifeOf(summary, releasedAt), new Date(now));
     // `?groups=1`: the draft is a group project with no set yet; the group seeds follow the pairs.
     if (flags.groups && seed.id === "pj-draft") summary.groupMode = true;
     if (seed.groupSet) Object.assign(summary, { groupMode: true, groupSetId: seed.groupSet });
@@ -629,7 +641,7 @@ function seeded(): MockProject[] {
       summary,
       classroom: { id: room.id, name: room.name, courseCode: course?.code ?? "" },
       // The stopped group project waits for its release: the resync is still allowed (M3-16b).
-      releasedAt: seed.state === "locked" && !flags.unreleased && !seed.groupSet && !seed.unreleased ? iso(-5 * D) : null,
+      releasedAt,
       repos: seed.groupSet
         ? seedGroupRepos(seed, summary, copy ?? following, classroomRoster(room.id))
         : seed.noRepos
@@ -1093,10 +1105,8 @@ on("PATCH", "/app/api/projects/:id", (m, raw) => {
   const s = p.summary;
   for (const [field, value] of Object.entries(body)) {
     if (value === undefined || JSON.stringify(value) === JSON.stringify((s as Record<string, unknown>)[field])) continue;
-    if (!s.editable.includes(field as ProjectSummary["editable"][number])) {
-      const code = field === "publishMode" || field === "durationMinutes" ? "publish_mode_frozen" : field === "deadlineStrategy" ? "strategy_frozen" : "not_draft";
-      throw refuse(409, code, `${field} cannot change now`);
-    }
+    const code = projectFieldRefusal(lifeOf(s, p.releasedAt), field as ProjectSummary["editable"][number], new Date(now), value);
+    if (code) throw refuse(409, code, `${field} cannot change now`);
   }
   // The dates the patch leaves: the rule of the API's `patchProject` (`patchedDraftDates`).
   const changed: ProjectDatesChange = {};
@@ -1159,10 +1169,73 @@ on("PATCH", "/app/api/projects/:id", (m, raw) => {
   if (body.deadlineStrategy !== undefined) s.deadlineStrategy = body.deadlineStrategy;
   if (body.protectedFiles !== undefined) s.protectedFiles = body.protectedFiles;
   if (body.graceMinutes !== undefined) s.graceMinutes = body.graceMinutes;
+  if (body.gradingMode === "criteria" && s.gradingMode !== "criteria") {
+    // ADR-106 §1: the switch reads the source's file; `?criteriafail=1` stands for one missing.
+    if (flags.criteriafail) throw criteriaMissing();
+    CRITERIA.set(p.summary.id, sampleSnapshot(iso(-2 * H)));
+  }
   if (body.gradingMode !== undefined) s.gradingMode = body.gradingMode;
+  if (body.testsCriterion && !SAMPLE_LEAVES.some((leaf) => leaf.id === body.testsCriterion)) {
+    throw refuse(422, "unknown_criterion", "The tests criterion names no criterion of the snapshot", { field: "testsCriterion" });
+  }
+  for (const key of ["testsCriterion", "buildCommand", "testCommand", "evidenceOutputs"] as const) {
+    if (body[key] !== undefined) (s as Record<string, unknown>)[key] = body[key];
+  }
   if (body.gradingScale !== undefined) s.gradingScale = body.gradingScale;
-  s.editable = editableProjectFields({ state: s.state, deadlineAt: new Date(s.deadlineAt) }, new Date(now));
+  s.editable = editableProjectFields(lifeOf(s, p.releasedAt), new Date(now));
   return s;
+});
+
+// ---------------------------------------------------------------- grading by criteria (ADR-106 §2)
+
+/** The facts of a summary the patch rule reads (`lifeOf` of the API). */
+function lifeOf(s: ProjectSummary, releasedAt: string | null): ProjectLifeLike {
+  return { state: s.state, deadlineAt: new Date(s.deadlineAt), released: releasedAt !== null, gradingMode: s.gradingMode };
+}
+
+/** Labo 00's criteria, shortened: what a switch or a reload reads in the mock. */
+const SAMPLE_LEAVES: Omit<ProjectCriterion, "kind">[] = [
+  { id: "rendu.all-tests-passed", sectionPath: ["rendu"], description: "Les tests automatiques passent", maxPoints: 12, prompt: "…" },
+  { id: "rapport.reponses", sectionPath: ["rapport"], description: "Le rapport répond aux neuf points de l'énoncé", maxPoints: 4, prompt: "…" },
+  { id: "rapport.presentation", sectionPath: ["rapport"], description: "Le rapport est bien présenté", maxPoints: 2, prompt: "…", milestone: "mid" },
+  { id: "rapport.redaction", sectionPath: ["rapport"], description: "La rédaction est soignée", maxPoints: 1, prompt: "…" },
+  { id: "rapport.cle-privee", sectionPath: ["rapport"], description: "Aucune clé SSH privée dans le dépôt", maxPoints: -3, prompt: "…" },
+  { id: "git.commits", sectionPath: ["git"], description: "L'historique Git est propre, l'identité configurée", maxPoints: 1 },
+  { id: "bonus.proactivite", sectionPath: ["bonus"], description: "Au-delà du minimum demandé", maxPoints: 0, bonusPoints: 1, prompt: "…" },
+];
+
+/** The snapshots, by project. */
+const CRITERIA = new Map<string, Omit<NonNullable<ProjectCriteriaView["snapshot"]>, "leaves" | "max" | "bonusMax">>();
+
+function sampleSnapshot(loadedAt: string) {
+  const sections = ["rendu", "rapport", "git", "bonus"].map((id) => ({ id, path: [id], description: null }));
+  return { fileSha: "3f1c2a9", sourceSha: "9b4e7d21c0a5", loadedAt, grading: { context: null, sources: [] }, sections };
+}
+
+function criteriaViewOf(p: MockProject): ProjectCriteriaView {
+  const snap = CRITERIA.get(p.summary.id);
+  if (!snap) return { snapshot: null };
+  const settings = { testsCriterion: effectiveTestsCriterion(p.summary) };
+  return {
+    snapshot: {
+      ...snap,
+      ...criteriaTotals(SAMPLE_LEAVES, {}),
+      leaves: SAMPLE_LEAVES.map((leaf) => ({ ...leaf, kind: classifyCriterion(leaf, settings) })),
+    },
+  };
+}
+
+/** `?criteriafail=1`: the source holds no `criteria.yml`. */
+const criteriaMissing = () =>
+  refuse(409, "criteria_invalid", "criteria.yml is missing or invalid", { errors: [{ path: "criteria.yml", code: "missing_file" }] });
+
+on("GET", "/app/api/projects/:id/criteria", (m) => criteriaViewOf(projectOr404(m.groups!.id!)));
+
+on("POST", "/app/api/projects/:id/criteria/reload", (m) => {
+  const p = projectOr404(m.groups!.id!);
+  if (flags.criteriafail) throw criteriaMissing();
+  CRITERIA.set(p.summary.id, sampleSnapshot(iso(0)));
+  return criteriaViewOf(p);
 });
 
 on("POST", "/app/api/projects/:id/publish", (m) => {
@@ -1181,7 +1254,7 @@ on("POST", "/app/api/projects/:id/publish", (m) => {
   }
   s.state = "published";
   if (s.publishMode === "manual") s.startAt = iso(0);
-  s.editable = editableProjectFields({ state: s.state, deadlineAt: new Date(s.deadlineAt) }, new Date(now));
+  s.editable = editableProjectFields(lifeOf(s, p.releasedAt), new Date(now));
   return s;
 });
 

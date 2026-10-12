@@ -218,7 +218,7 @@ Project grading by criteria on the platform ([ADR-106](../adr/ADR-106-notation-d
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| L-02a | Criteria snapshot: parser, totals, `project_criteria`, opt-in `criteria` mode | todo | ADR-106 | | | |
+| L-02a | Criteria snapshot: parser, totals, `project_criteria`, opt-in `criteria` mode | done | ADR-106 | `project-criteria-mode` | #793 | Parser `packages/domain/src/criteriaParse.ts`, snapshot and mode switch (`modules/project/criteria.ts`, migration `0109`); the checkpoint-name check at creation and the `testsCriterion` pre-fill rule go to L-02d/L-02c. |
 | L-02b | Runner `project` action, `lab-c` image, `project.evidence` | todo | L-02a | | | |
 | L-02c | Final pass, proposals, regrade | todo | L-02a, L-02b | | | |
 | L-02d | Milestone locks | todo | L-02c, L-02e | | | |

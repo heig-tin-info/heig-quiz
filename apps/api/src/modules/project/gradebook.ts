@@ -29,7 +29,7 @@ export function gradebookProjects(db: Db, classroomId: string): Promise<ProjectR
   return db
     .select()
     .from(projects)
-    .where(and(eq(projects.classroomId, classroomId), ne(projects.state, "draft"), eq(projects.gradingMode, "auto")));
+    .where(and(eq(projects.classroomId, classroomId), ne(projects.state, "draft"), ne(projects.gradingMode, "none")));
 }
 
 /** A seat's grade as the staff read it. */

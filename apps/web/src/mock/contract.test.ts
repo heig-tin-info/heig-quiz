@@ -105,6 +105,7 @@ import {
   ProjectAcceptance,
   ProjectActivitySummary,
   ProjectCreate,
+  ProjectCriteriaView,
   ProjectDetail,
   ProjectInvitationResent,
   ProjectRefusal,
@@ -586,6 +587,8 @@ const CHECKED: Case[] = [
   ...projectIds.map((id) =>
     each("/app/api/projects/:id/checkpoints", `/app/api/projects/${id}/checkpoints`, ReviewCheckpoint),
   ),
+  // Grading by criteria (ADR-106 §2): each project's settings and snapshot.
+  ...projectIds.map((id) => one("/app/api/projects/:id/criteria", `/app/api/projects/${id}/criteria`, ProjectCriteriaView)),
   // The online workspace (M6-06, `?codespace=1`): each project's, and its open workspaces.
   ...projectIds.map((id) => one("/app/api/projects/:id/workspace", `/app/api/projects/${id}/workspace`, ProjectWorkspace)),
   ...projectIds.map((id) =>

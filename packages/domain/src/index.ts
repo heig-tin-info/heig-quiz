@@ -122,6 +122,7 @@ export * from "./projectAccept.js";
 export * from "./projectRuns.js";
 export * from "./projectStudent.js";
 export * from "./deadlineReminder.js";
+export * from "./criteria.js";
 export * from "./projectPatch.js";
 export * from "./projectView.js";
 export * from "./projectReconcile.js";
