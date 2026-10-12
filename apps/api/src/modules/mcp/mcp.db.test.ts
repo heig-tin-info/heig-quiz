@@ -129,6 +129,8 @@ describe("the transport", () => {
         "describe_question_types",
         "list_evaluations",
         "get_evaluation",
+        "get_journal",
+        "get_journal_page",
         "create_course",
         "create_classroom",
         "create_pool",
@@ -160,6 +162,8 @@ describe("the transport", () => {
         "get_question",
         "list_evaluations",
         "get_evaluation",
+        "get_journal",
+        "get_journal_page",
         "describe_question_types",
         "list_templates",
       ].sort(),
@@ -167,6 +171,50 @@ describe("the transport", () => {
     for (const t of result.tools) expect(t.inputSchema.type, t.name).toBe("object");
     // Nothing destructive is exposed.
     expect(names.some((n: string) => /delete|remove|close|release/.test(n))).toBe(false);
+  });
+});
+
+describe("a classroom's journal", () => {
+  it("reads the staff's journal, each file with its last change, and a page as markdown", async () => {
+    const course = await ok("create_course", { name: "Journal", code: "JRN-MCP" });
+    const room = await ok("create_classroom", { courseId: course.id, name: "Journal 2026" });
+    expect((await ok("get_journal", { classroomId: room.id })).mode).toBeNull();
+
+    const write = (method: "POST" | "PUT", url: string, payload: unknown, headers = {}) =>
+      server.app.inject({ method, url: `/app/api/classrooms/${room.id}/journal${url}`, headers: { ...teacher.headers, ...headers }, payload } as never);
+    expect((await write("POST", "", { mode: "quiz" })).statusCode).toBe(201);
+    expect((await write("POST", "/pages", { path: "010-intro/README.md", title: "Intro" })).statusCode).toBe(201);
+    const opened = await ok("get_journal_page", { classroomId: room.id, path: "010-intro/README.md" });
+    server.clock.advance(60_000);
+    const markdown = "---\ndraft: true\n---\n# Intro\n\nPointers.\n";
+    const saved = await write("PUT", "/pages/010-intro/README.md", { markdown, baseVersion: opened.version });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const png = await write("POST", "/assets/010-intro/fig.png", Buffer.from("PNG"), { "content-type": "image/png" });
+    expect(png.statusCode, png.body).toBe(201);
+
+    const journal = await ok("get_journal", { classroomId: room.id });
+    expect(journal).toMatchObject({ mode: "quiz", hiddenPaths: ["010-intro/README.md"], url: expect.stringContaining(`/classrooms/${room.id}/journal`) });
+    expect(journal.files.map((f: { path: string; kind: string }) => [f.path, f.kind])).toEqual([
+      ["010-intro/README.md", "page"],
+      ["010-intro/fig.png", "asset"],
+      ["README.md", "page"],
+    ]);
+
+    const page = await ok("get_journal_page", { classroomId: room.id, path: "010-intro/README.md" });
+    expect(page).toMatchObject({ title: "Intro", draft: true, hidden: true, markdown: expect.stringContaining("Pointers.") });
+    expect(page).not.toHaveProperty("html");
+    expect(page.url).toMatch(/\/journal\/010-intro\/README\.md$/);
+    // The date the list gives is the page's own, and the save moved it past the home page's.
+    const dated = (path: string) => journal.files.find((f: { path: string }) => f.path === path).updatedAt;
+    expect(dated("010-intro/README.md")).toBe(page.updatedAt);
+    expect(Date.parse(dated("010-intro/README.md"))).toBeGreaterThan(Date.parse(dated("README.md")));
+
+    const outside = await call("get_journal_page", { classroomId: room.id, path: "../secret.md" });
+    expect(outside.data).toMatchObject({ error: "invalid_arguments" });
+    // A teacher off the course's staff: the 404 of a missing classroom.
+    const colleague = await tokenFor((await server.signIn("teacher")).headers);
+    const refused = await call("get_journal", { classroomId: room.id }, colleague);
+    expect(refused.data).toMatchObject({ error: "refused", status: 404 });
   });
 });
 

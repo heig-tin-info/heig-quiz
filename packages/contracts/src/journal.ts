@@ -283,6 +283,17 @@ export const JournalStudent = z.strictObject({
 });
 export type JournalStudent = z.infer<typeof JournalStudent>;
 
+/**
+ * A file of the staff's copy, a page or an asset, with the last time its
+ * content changed: an ingestion that leaves a file as it was keeps its date.
+ */
+export const JournalFile = z.strictObject({
+  path: z.string(),
+  kind: z.enum(["page", "asset"]),
+  updatedAt: z.iso.datetime({ offset: true }),
+});
+export type JournalFile = z.infer<typeof JournalFile>;
+
 /** `GET /classrooms/:id/journal` for the staff. */
 export const JournalStaff = z.strictObject({
   view: z.literal("staff"),
@@ -301,6 +312,8 @@ export const JournalStaff = z.strictObject({
    * Quiz-mode journal destroys, said in its confirmation (F-JRN-04).
    */
   pageCount: z.number().int().min(0),
+  /** Every page and asset of the copy, by path, hidden pages included. */
+  files: z.array(JournalFile),
   /** What "Create a journal" proposes (F-JRN-02); null once there is one. */
   proposedName: z.string().nullable(),
 });

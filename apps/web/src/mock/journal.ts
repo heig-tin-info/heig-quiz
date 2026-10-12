@@ -375,6 +375,7 @@ function staffJournal(classroomId: string): JournalStaff {
       hiddenPaths: [],
       warningCount: 0,
       pageCount: 0,
+      files: [],
       proposedName: `${room.name.toLowerCase()}-journal`,
     };
   }
@@ -387,6 +388,7 @@ function staffJournal(classroomId: string): JournalStaff {
     hiddenPaths: PAGES.filter(hidden).map((p) => p.path),
     warningCount: PAGES.filter((p) => (p.warnings ?? []).length > 0).length,
     pageCount: PAGES.length,
+    files: PAGES.map((p) => ({ path: p.path, kind: "page" as const, updatedAt: iso(-3 * D) })),
     proposedName: null,
   };
 }

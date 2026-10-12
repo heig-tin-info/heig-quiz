@@ -26,6 +26,8 @@ import {
   EvaluationCreate,
   EvaluationPatch,
   EvaluationPreset,
+  encodeJournalPath,
+  JournalPagePath,
   CoursePoolMode,
   OAUTH_SCOPE,
   ParametersDraft,
@@ -395,6 +397,42 @@ export const TOOLS: Tool[] = [
     input: z.object({ evaluationId: Id }),
     annotations: READ,
     run: (api, a) => api.get(`/evaluations/${a.evaluationId}`),
+  }),
+
+  tool({
+    name: "get_journal",
+    title: "Get the journal of a classroom",
+    description:
+      "A classroom's journal (its course documentation, held in Quiz or copied from a GitHub repository): " +
+      "`mode` (null: the classroom has none), the `repository` of a GitHub-mode one with its last synchronisation, " +
+      "the navigation tree, the pages students do not see yet (`hiddenPaths`: drafts, future `visible_from`), and " +
+      "`files`, every page and asset with `updatedAt`, the last time its content changed. Read a page with get_journal_page.",
+    input: z.object({ classroomId: Id }),
+    annotations: READ,
+    run: async (api, a) => ({
+      ...(await api.get(`/classrooms/${a.classroomId}/journal`)),
+      url: api.link(`/classrooms/${a.classroomId}/journal`),
+    }),
+  }),
+
+  tool({
+    name: "get_journal_page",
+    title: "Get a page of a classroom's journal",
+    description:
+      "One page of a classroom's journal: its markdown source, its title, `updatedAt` (the last change of its " +
+      "content), `draft` and `visibleFrom`, `hidden` (not served to students right now), its rendering `warnings`, " +
+      "and in GitHub mode `editUrl`, where to edit it on github.com.",
+    input: z.object({
+      classroomId: Id,
+      path: JournalPagePath.describe("The page's path in the journal, as get_journal's `files` lists it (`010-intro/README.md`)"),
+    }),
+    annotations: READ,
+    run: async (api, a) => {
+      const path = encodeJournalPath(a.path);
+      // The rendered HTML says what the markdown says, at many times its size.
+      const { html: _html, ...page } = await api.get(`/classrooms/${a.classroomId}/journal/pages/${path}`);
+      return { ...page, url: api.link(`/classrooms/${a.classroomId}/journal/${path}`) };
+    },
   }),
 
   // --- Writing -------------------------------------------------------------

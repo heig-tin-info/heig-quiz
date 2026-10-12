@@ -427,6 +427,7 @@ describe("ClassroomView — the Journal tab", () => {
     hiddenPaths: [],
     warningCount: 0,
     pageCount: 0,
+    files: [],
     proposedName: attached ? null : "prg1-2026-journal",
   });
 

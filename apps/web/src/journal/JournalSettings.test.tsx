@@ -68,6 +68,7 @@ const staff = (repo: JournalRepository | null, over: Partial<JournalStaff> = {})
   hiddenPaths: [],
   warningCount: 0,
   pageCount: 0,
+  files: [],
   proposedName: repo ? null : "prg1-2026-journal",
   ...over,
 });

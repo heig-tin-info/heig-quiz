@@ -62,7 +62,10 @@ function repositoryView(row: GithubJournal): JournalRepository {
   };
 }
 
-/** `GET /classrooms/:id/journal` for the staff: every page, what students do not see, the sync state. */
+/**
+ * `GET /classrooms/:id/journal` for the staff: every page, what students do
+ * not see, the sync state, and every file with its last change.
+ */
 export async function staffJournal(db: Db, room: { id: string; name: string }): Promise<JournalStaff> {
   const row = await journalRow(db, room.id);
   if (!row) {
@@ -75,6 +78,7 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
       hiddenPaths: [],
       warningCount: 0,
       pageCount: 0,
+      files: [],
       proposedName: journalRepoName(room.name),
     };
   }
@@ -86,9 +90,18 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
       title: journalPages.title,
       hidden: hiddenFromStudents(),
       warned: sql<boolean>`jsonb_array_length(${journalPages.warnings}) > 0`,
+      updatedAt: journalPages.updatedAt,
     })
     .from(journalPages)
     .where(eq(journalPages.classroomId, room.id));
+  const assets = await db
+    .select({ path: journalAssets.path, updatedAt: journalAssets.updatedAt })
+    .from(journalAssets)
+    .where(eq(journalAssets.classroomId, room.id));
+  const files = [
+    ...pages.map((p) => ({ path: p.path, kind: "page" as const, updatedAt: p.updatedAt.toISOString() })),
+    ...assets.map((a) => ({ path: a.path, kind: "asset" as const, updatedAt: a.updatedAt.toISOString() })),
+  ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const github = githubJournal(row);
   return {
     view: "staff",
@@ -99,6 +112,7 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
     hiddenPaths: pages.filter((p) => p.hidden).map((p) => p.path).sort(),
     warningCount: pages.filter((p) => p.warned).length,
     pageCount: pages.length,
+    files,
     proposedName: null,
   };
 }
