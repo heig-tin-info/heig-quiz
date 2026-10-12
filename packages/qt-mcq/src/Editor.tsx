@@ -13,6 +13,13 @@
  *    teacher is told in one sentence what the student will see. A radio group
  *    asking for the mode next to the checkboxes that already answer it is two
  *    controls for one fact, and they can disagree.
+ *    A poll (`ungraded`) is the one case the key cannot answer: its key is
+ *    optional, and an opinion poll with none may still want several ticks
+ *    ("which of these notions have you seen?"). There, and only there, one
+ *    checkbox "Allow several answers" decides — while NO choice is ticked.
+ *    Once one is, the key decides again (one key: off; two or more: on) and
+ *    the checkbox shows it, disabled: still one control per fact at a time
+ *    (ADR-014, amendment 2026-10-12).
  *  - Where a choice goes, twice. The ↑ / ↓ buttons are gone: the row has a
  *    drag handle, and that handle is a BUTTON, so the keyboard reorders
  *    through the very same affordance (focus it, Space, arrows, Space).
@@ -496,9 +503,60 @@ export function McqEditor({
         </DndContext>
 
         <IssueList issues={choiceIssues.map(locate)} />
+        {ungraded ? (
+          <SeveralAnswers config={config} correctCount={correctCount} disabled={disabled} s={s} onChange={onChange} />
+        ) : null}
       </section>
 
       {ungraded ? null : scoring}
+    </div>
+  );
+}
+
+/**
+ * "Allow several answers", in a poll only (ADR-014, amendment 2026-10-12).
+ *
+ * With no key, it IS the mode. With a key, the key is the mode — `setChoices`
+ * already wrote it — and the box only shows it, disabled, with the reason
+ * under it. Turning it off drops the answer cap with the mode it belonged
+ * to, as `setChoices` does on its way to `single`.
+ */
+function SeveralAnswers({
+  config,
+  correctCount,
+  disabled,
+  s,
+  onChange,
+}: {
+  config: McqConfig;
+  correctCount: number;
+  disabled: boolean | undefined;
+  s: Strings;
+  onChange: (next: McqConfig) => void;
+}) {
+  const fromKey = correctCount > 0;
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="inline-flex items-start gap-2 text-[13px] text-fg">
+        <input
+          type="checkbox"
+          className="mt-0.5 size-4 accent-accent"
+          checked={config.mode === "multiple"}
+          disabled={disabled || fromKey}
+          aria-describedby={fromKey ? "mcq-several-hint" : undefined}
+          onChange={(e) => {
+            const next: McqConfig = { ...config, mode: e.target.checked ? "multiple" : "single" };
+            if (!e.target.checked) delete next.maxSelections;
+            onChange(next);
+          }}
+        />
+        {s.allowSeveral}
+      </label>
+      {fromKey ? (
+        <p id="mcq-several-hint" className={cx(hint, "pl-6")}>
+          {s.allowSeveralFromKey}
+        </p>
+      ) : null}
     </div>
   );
 }

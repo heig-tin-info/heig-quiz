@@ -10,7 +10,7 @@ import { McqEditor } from "./Editor.js";
 import { McqPlayer } from "./Player.js";
 import { McqReview } from "./Review.js";
 import { multipleConfig, SECRET_CONFIG } from "./test/fixtures.js";
-import { emptyMcqDraft, MCQ_MAX_CHOICES } from "./schema.js";
+import { emptyMcqDraft, MCQ_MAX_CHOICES, type McqConfig } from "./schema.js";
 import { mcqServer } from "./server.js";
 
 const student = mcqServer.toStudent(SECRET_CONFIG, { seed: 3, itemId: "i", shuffle: false });
@@ -237,6 +237,68 @@ describe("McqEditor — the derived mode", () => {
     render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
     const handle = screen.getByRole("button", { name: "Reorder choice B" });
     expect(handle.textContent).toBe("");
+  });
+});
+
+/*
+ * A poll's key is optional, so the key cannot always say how many ticks a
+ * participant may give (ADR-014, amendment 2026-10-12): with no key, one
+ * checkbox decides; with one, the key decides and the box only shows it.
+ */
+describe("McqEditor — several answers in a poll", () => {
+  const several = () => screen.getByRole("checkbox", { name: "Allow several answers" });
+  // Not through `multipleConfig`: the full schema refuses a config with no key.
+  const keyless = (mode: "single" | "multiple"): McqConfig => ({
+    ...multipleConfig(),
+    mode,
+    choices: [
+      { text: "a", correct: false },
+      { text: "b", correct: false },
+      { text: "c", correct: false },
+    ],
+  });
+
+  it("is not offered by the full editor, where the key decides", () => {
+    render(<McqEditor config={keyless("single")} onChange={() => {}} />);
+    expect(screen.queryByRole("checkbox", { name: "Allow several answers" })).toBeNull();
+  });
+
+  it("decides the mode while no choice is marked correct", async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<McqEditor config={keyless("single")} onChange={onChange} ungraded />);
+    expect(several()).not.toBeChecked();
+    expect(several()).toBeEnabled();
+    await userEvent.click(several());
+    expect(onChange.mock.calls[0]?.[0].mode).toBe("multiple");
+
+    rerender(<McqEditor config={{ ...keyless("multiple"), maxSelections: 2 }} onChange={onChange} ungraded />);
+    expect(several()).toBeChecked();
+    await userEvent.click(several());
+    const next = onChange.mock.calls[1]?.[0];
+    expect(next.mode).toBe("single");
+    expect(next.maxSelections).toBeUndefined();
+  });
+
+  it("is off and disabled with exactly one correct choice", () => {
+    const config = { ...keyless("single"), choices: [{ text: "a", correct: true }, { text: "b", correct: false }] };
+    render(<McqEditor config={config} onChange={() => {}} ungraded />);
+    expect(several()).not.toBeChecked();
+    expect(several()).toBeDisabled();
+    expect(screen.getByText("Set by the correct answers you marked.")).toBeVisible();
+  });
+
+  it("is on and disabled with two correct choices or more", () => {
+    render(<McqEditor config={multipleConfig()} onChange={() => {}} ungraded />);
+    expect(several()).toBeChecked();
+    expect(several()).toBeDisabled();
+  });
+
+  it("follows the key when the key changes it", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={keyless("multiple")} onChange={onChange} ungraded />);
+    // Ticking one key in a several-answers poll: one key is single.
+    await userEvent.click(screen.getByLabelText("Choice A is correct"));
+    expect(onChange.mock.calls[0]?.[0].mode).toBe("single");
   });
 });
 

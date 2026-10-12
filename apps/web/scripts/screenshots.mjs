@@ -1034,6 +1034,24 @@ const scenes = [
     path: "/polls",
     act: (p) => p.getByRole("button", { name: /start the poll|lancer le sondage/i }).click(),
   },
+  // ADR-014, amendment 2026-10-12: an opinion poll that allows several
+  // answers, and a row of "Recent polls" opened in the editor, prefilled.
+  {
+    name: "poll-launcher-several",
+    role: "teacher",
+    path: "/polls",
+    act: (p) => p.getByRole("checkbox", { name: /allow several answers|autoriser plusieurs réponses/i }).check(),
+  },
+  {
+    name: "poll-launcher-reopened",
+    role: "teacher",
+    path: "/polls",
+    act: async (p) => {
+      await p.getByRole("tab", { name: /recent polls|derniers polls/i }).click();
+      await p.locator("li > [role=button]").first().click();
+      await p.getByRole("tab", { name: /ask a new question|poser une nouvelle question/i, selected: true }).waitFor();
+    },
+  },
   // "From pools" (#162): the pool screen's search over every pool; with a
   // classroom as the audience, the "Classroom pools | All pools" control.
   { name: "poll-launcher-pools", role: "teacher", path: "/polls", act: (p) => p.getByRole("tab", { name: /from pools|depuis les pools/i }).click() },

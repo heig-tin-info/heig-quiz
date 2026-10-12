@@ -2106,6 +2106,8 @@ export const fr: Record<keyof Dict, string> = {
   "qt.mcq.e.maxSelectionsHint": "Vide : pas de limite.",
   "qt.mcq.e.neverShuffle": "Ne jamais mélanger cette question",
   "qt.mcq.e.neverShuffleHint": "Même quand l'évaluation mélange les choix.",
+  "qt.mcq.e.allowSeveral": "Autoriser plusieurs réponses",
+  "qt.mcq.e.allowSeveralFromKey": "Fixé par les bonnes réponses cochées.",
   "qt.mcq.p.chooseOne": "Choisissez une réponse.",
   "qt.mcq.p.chooseSeveral": "Choisissez toutes les réponses correctes.",
   "qt.mcq.p.chooseUpTo": "Choisissez au plus le nombre de réponses autorisé.",
@@ -4918,6 +4920,10 @@ export const fr: Record<keyof Dict, string> = {
   "poll.newHint":
     "Rien n'est encore enregistré : la question vit avec ce sondage. Garder cette question, sur l'écran du sondage, la range dans votre banque Polls.",
   "poll.keyOptional": "Indiquer une bonne réponse est facultatif : sans elle, le sondage recueille simplement des avis.",
+  "poll.openFailed": "Impossible d'ouvrir cette question.",
+  "poll.fromRecent.same": "Inchangée, cette question est relancée telle quelle, avec son historique.",
+  "poll.fromRecent.edited":
+    "Modifiée, elle devient une nouvelle question, encore enregistrée nulle part. L'originale et ses résultats restent tels quels.",
   "poll.incomplete":
     "La question n'est pas encore complète. Les champs à revoir sont signalés ci-dessous.",
   "poll.openProjection": "Ouvrir la projection",

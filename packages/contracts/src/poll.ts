@@ -177,6 +177,22 @@ export const PollQuestionPick = z.object({
 export type PollQuestionPick = z.infer<typeof PollQuestionPick>;
 
 /**
+ * `GET /app/api/polls/questions/:id`: one row of "Recent polls" opened in
+ * the launcher's editor (ADR-014, amendment 2026-10-12). Staff only, and in
+ * the very scope of the list: a question the list would not show is a 404.
+ */
+export const PollQuestionContent = z.object({
+  type: PollQuestionType,
+  /**
+   * The config of the latest published version — the one `POST /polls`
+   * freezes, so "unchanged" runs exactly what the editor showed — answer key
+   * included: the teacher may already run, and so read, this question.
+   */
+  config: z.unknown(),
+});
+export type PollQuestionContent = z.infer<typeof PollQuestionContent>;
+
+/**
  * `GET /app/api/polls/pool-questions`, the launcher's "From pools" (issue
  * #162): the search of the pool screen — same parameters, same grammar once
  * the web app has parsed the box — run across EVERY pool the caller reaches,

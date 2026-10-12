@@ -732,9 +732,11 @@ export const TOOLS: Tool[] = [
       "Creates AND STARTS a one-question live poll: participants join with the returned code or " +
       "`joinUrl`. With `classroomId`, only that classroom's students (signed in) and its staff may answer, " +
       "by name; without it, the poll belongs to no classroom and anyone with the code answers anonymously. " +
-      "Either pass `questionId` (a published `mcq` or `short` question) or write one inline with `type` + " +
-      "`config` (not saved in any pool; an opinion poll may have no correct answer). Only call it when the " +
-      "teacher wants to poll NOW.",
+      "Either pass `questionId` (a published `mcq`, `short` or `brainstorm` question) or write one inline " +
+      "with `type` + `config` (not saved in any pool; an opinion poll may have no correct answer). For an " +
+      "`mcq` that lets each participant tick several choices, set `config.mode: \"multiple\"` (e.g. " +
+      "\"which of these notions have you seen?\", with no correct choice). Only call it when the teacher " +
+      "wants to poll NOW.",
     input: z.object({
       classroomId: Id.optional().describe(
         "The classroom whose students answer; omit for an anonymous poll open to anyone with the code",
