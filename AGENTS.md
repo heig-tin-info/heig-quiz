@@ -29,6 +29,18 @@ deploying, not for editing.
   nor production ever sees a commit the checks did not pass.
 - Rebase often (`git pull --rebase origin main` on your branch): small diffs,
   rare conflicts.
+- **Squash onto the merge base, never onto `origin/main`.** `origin/main` is
+  shared by every worktree and moves whenever any session fetches; `git reset
+  --soft origin/main` then keeps your old index on top of commits it lacks,
+  and the next commit silently reverts them (#806 erased #800 whole). Squash
+  with `git reset --soft $(git merge-base HEAD origin/main)`, then
+  `git rebase origin/main` — or let `gh pr merge --squash` do it.
+- **Before merging, read what the PR deletes:**
+  `git diff --diff-filter=D --name-only origin/main...HEAD` lists nothing you
+  did not mean to delete. `checks` refuses a PR that deletes a migration, a
+  migration snapshot, a journal entry or an ADR
+  (`scripts/check-deletions.mjs`), and the guard hook refuses a
+  `git reset --soft` onto a ref that is not an ancestor of HEAD.
 
 ## 3. Stage by path
 
@@ -74,7 +86,8 @@ cd ../heig-quiz-<subject> && git stash pop
 - `.claude/hooks/guard.mjs`, a `PreToolUse` hook, enforces sections 1–3
   mechanically: it refuses `git add -A|.|-u`, `git commit -a`, a
   `package.json` committed without the pending `pnpm-lock.yaml` or
-  `pnpm-workspace.yaml`, and an edit to a tracked file in a checkout on
+  `pnpm-workspace.yaml`, a `git reset --soft` onto a ref that is not an
+  ancestor of HEAD, and an edit to a tracked file in a checkout on
   `main`. Whoever merges in the main checkout sets `QUIZ_ALLOW_MAIN=1`.
 
 ## 7. One machine, shared RAM
