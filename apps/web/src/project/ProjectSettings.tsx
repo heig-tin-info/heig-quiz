@@ -3,12 +3,15 @@ import { useState } from "react";
 
 import type { ProjectDetail, ProjectSourceDetail } from "@quiz/contracts";
 
+import { PROJECT_GRADING_MODES } from "@quiz/domain";
+
 import { api } from "../api";
 import { useT } from "../i18n";
 import { projectSourceKey } from "../queryKeys";
 import { Badge, Disclosure, SettingRow } from "../ui";
 import { repoShortName, type WriteProject } from "./projectPage";
-import { DeadlineStrategyRow } from "./ProjectSettingRows";
+import { CriteriaRows, CriteriaSwitchRow } from "./ProjectCriteria";
+import { DeadlineStrategyRow, GradingModeRow } from "./ProjectSettingRows";
 import { ProtectedFiles } from "./ProtectedFiles";
 import { WorkModeSetting } from "./ProjectWorkspace";
 
@@ -68,7 +71,9 @@ export function ProtectedFilesRow({
  * does not name is drawn disabled: the server decides, the screen follows
  * (`projectFieldRefusal`). The deadline itself is edited in its tile
  * (`ProjectOverview`), the name in the header. A draft has its own form
- * (`ProjectDraftForm`).
+ * (`ProjectDraftForm`). Grading by criteria (ADR-106): its settings and
+ * the snapshot of `criteria.yml` in that mode; before it, on a locked
+ * project not yet released, the one switch to it.
  */
 export function ProjectSettings({
   project,
@@ -113,6 +118,17 @@ export function ProjectSettings({
         onChange={(protectedFiles) => write({ protectedFiles })}
       />
       <WorkModeSetting projectId={project.id} archived={project.archivedAt !== null} />
+      {project.gradingMode === "criteria" ? (
+        <>
+          {/* Out of `criteria` while the project is locked and unreleased (ADR-106 §1). */}
+          {project.editable.includes("gradingMode") ? (
+            <GradingModeRow modes={PROJECT_GRADING_MODES} value={project.gradingMode} disabled={busy} onChange={(gradingMode) => write({ gradingMode })} />
+          ) : null}
+          <CriteriaRows project={project} disabled={busy} write={write} />
+        </>
+      ) : project.editable.includes("gradingMode") ? (
+        <CriteriaSwitchRow disabled={busy} write={write} />
+      ) : null}
     </Disclosure>
   );
 }

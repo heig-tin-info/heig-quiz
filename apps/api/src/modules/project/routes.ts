@@ -148,13 +148,33 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id",
     session,
     teacher({ ...onProject, body: ProjectPatch }, async ({ req, now, body, scope }) => {
-      const row = await service.patchProject(app.db, scope.project.id, body, actorOf(req), now);
+      // A switch to `criteria` reads the source's file first, outside the row's lock (ADR-106 §1).
+      const criteria = await service.criteriaForSwitch(app.db, config, scope.project, body.gradingMode, now);
+      const row = await service.patchProject(app.db, scope.project.id, body, actorOf(req), now, criteria);
       // A reopen's locks are lifted by the deadline job, never by 100 calls here (M3-05a).
       if (body.deadlineAt !== undefined) await service.requestDeadlineWork(app, config, row.id);
       // The portal reads the name and the dates of an online project (ADR-047 §6): nothing else moves it.
       if (PORTAL_FIELDS.some((field) => body[field] !== undefined)) await requestCodespaceSync(app, config, row.id);
       return service.projectSummary(app.db, row, now);
     }),
+  );
+
+  /**
+   * Grading by criteria (ADR-106 §2): the snapshot of the source's
+   * `criteria.yml` and the settings, and its reload from the distribution
+   * repository's head (`409 criteria_invalid` keeps the last snapshot).
+   * The project's staff, like its settings.
+   */
+  app.get(
+    "/app/api/projects/:id/criteria",
+    session,
+    teacher(onProject, async ({ scope }) => service.criteriaView(app.db, scope.project)),
+  );
+
+  app.post(
+    "/app/api/projects/:id/criteria/reload",
+    session,
+    teacher(onProject, async ({ req, now, scope }) => service.reloadCriteria(app.db, config, scope.project, actorOf(req), now)),
   );
 
   /** D19, F-PROJ-16: the rows only, in any state; nothing is deleted on GitHub. */
@@ -173,6 +193,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     teacher(onProject, async ({ req, now, scope }) => {
       const row = await service.publishProject(app.db, scope.project.id, now, actorOf(req));
       await requestCodespaceSync(app, config, row.id);
+      await service.refreshCriteria(app.db, config, row.id, "publish", actorOf(req), now, req.log);
       return service.projectSummary(app.db, row, now);
     }),
   );

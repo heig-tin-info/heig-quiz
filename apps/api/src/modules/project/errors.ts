@@ -65,6 +65,10 @@ const STATUS: Record<Code, number> = {
   group_sync_pending: 409,
   // The work mode (ADR-047 as amended 2026-10-07, M6-06): a role or a grant the caller lacks is a 403.
   not_invitable: 409,
+  // Grading by criteria (ADR-106 §2): the source's `criteria.yml` missing or invalid.
+  criteria_invalid: 409,
+  checkpoint_untagged: 409,
+  unknown_criterion: 422,
   owner_required: 403,
   codespace_not_granted: 403,
   work_mode_frozen: 409,

@@ -22,6 +22,8 @@ import { z } from "zod";
 
 import {
   CI_STATUSES,
+  CRITERIA_PARSE_ERROR_CODES,
+  CRITERION_KINDS,
   DEADLINE_STRATEGIES,
   FINAL_SCORE_SOURCES,
   GRADE_RUN_KINDS,
@@ -38,6 +40,7 @@ import {
   STUDENT_PROJECT_STATUSES,
   slugify,
 } from "@quiz/domain";
+
 
 import { StudentProjectWorkspace } from "./codespace.js";
 import { Rounding } from "./evaluation.js";
@@ -230,6 +233,66 @@ export const ProtectedPath = z
     "not a relative path",
   );
 
+// ---------------------------------------------------------- grading by criteria (ADR-106 §2)
+
+/**
+ * The settings' defaults (ADR-106 §2, §3), applied where they are read:
+ * what a project whose `tests_criterion`, `build_command`, `test_command` or
+ * `evidence_outputs` is null classifies, runs and keeps. A null tests
+ * criterion is pre-filled from the grading workflow's `tests-criterion`
+ * input when a snapshot is loaded.
+ */
+export const PROJECT_CRITERIA_DEFAULTS = {
+  testsCriterion: "rendu.all-tests-passed",
+  buildCommand: ["make", "prepare"],
+  testCommand: ["pytest", "--junitxml=report.xml", "-q"],
+  evidenceOutputs: ["report.xml", "build/"],
+} as const;
+
+/** The tests criterion a project classifies with: its own, else the default — the one place the default applies. */
+export const effectiveTestsCriterion = (project: { testsCriterion: string | null }): string =>
+  project.testsCriterion ?? PROJECT_CRITERIA_DEFAULTS.testsCriterion;
+
+/** A criterion's dotted id (`rendu.all-tests-passed`): names without a dot nor a space, joined by dots. */
+export const CriterionId = z
+  .string()
+  .max(300)
+  .regex(/^[^.\s]+(\.[^.\s]+)*$/, "not a criterion id");
+
+/**
+ * A command as its argv, run without a shell (ADR-106 §2): 1 to 20
+ * arguments, none empty, none holding a shell metacharacter or a space —
+ * `["make", "prepare"]`, never `["make prepare"]` nor `"make && …"`.
+ */
+export const ProjectArgv = z
+  .array(
+    z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[^\s;&|`$<>(){}*?!~'"\\]+$/, "an argument holds a shell metacharacter or a space"),
+  )
+  .min(1)
+  .max(20);
+
+/** An evidence output kept after the tests: a relative file, or a directory with its trailing `/`. */
+export const EvidencePath = z
+  .string()
+  .min(1)
+  .max(300)
+  .refine(
+    (p) => !p.includes("\\") && !p.includes("\0") && p.replace(/\/$/, "").split("/").every((part) => part !== "" && part !== "." && part !== ".."),
+    "not a relative path",
+  );
+
+/** A project's criteria settings as stored (`null`: the default of {@link PROJECT_CRITERIA_DEFAULTS}). */
+const ProjectCriteriaSettingsShape = {
+  testsCriterion: CriterionId.nullable(),
+  buildCommand: ProjectArgv.nullable(),
+  testCommand: ProjectArgv.nullable(),
+  evidenceOutputs: z.array(EvidencePath).min(1).max(20).nullable(),
+};
+
 /** A project's name: something must be left of it as a slug (`<slug>-<login>`). */
 const ProjectName = z
   .string()
@@ -268,7 +331,8 @@ export const ProjectCreate = z
     graceMinutes: GraceMinutes.default(PROJECT_DEFAULTS.graceMinutes),
     sourceStrategy: SourceStrategy.default(PROJECT_DEFAULTS.sourceStrategy),
     deadlineStrategy: DeadlineStrategy.default(PROJECT_DEFAULTS.deadlineStrategy),
-    gradingMode: ProjectGradingMode.default(PROJECT_DEFAULTS.gradingMode),
+    // `criteria` is chosen on the draft, which reads its `criteria.yml` (ADR-106 §1).
+    gradingMode: ProjectGradingMode.exclude(["criteria"]).default(PROJECT_DEFAULTS.gradingMode),
     gradingScale: ProjectGradingScale.optional(),
     protectedFiles: z.array(ProtectedPath).max(50).default([]),
     groupMode: z.boolean().default(false),
@@ -326,6 +390,10 @@ export const ProjectPatch = z
     protectedFiles: z.array(ProtectedPath).max(50).optional(),
     groupMode: z.boolean().optional(),
     groupSetId: z.uuid().nullable().optional(),
+    testsCriterion: ProjectCriteriaSettingsShape.testsCriterion.optional(),
+    buildCommand: ProjectCriteriaSettingsShape.buildCommand.optional(),
+    testCommand: ProjectCriteriaSettingsShape.testCommand.optional(),
+    evidenceOutputs: ProjectCriteriaSettingsShape.evidenceOutputs.optional(),
   })
   .refine((b) => Object.values(b).some((v) => v !== undefined), { message: "Nothing to update" });
 export type ProjectPatch = z.infer<typeof ProjectPatch>;
@@ -368,6 +436,8 @@ export const ProjectSummary = z.object({
   groupMode: z.boolean(),
   /** The group set a group project follows (ADR-070 §4); null when none is chosen yet. */
   groupSetId: z.uuid().nullable(),
+  /** Grading by criteria (ADR-106 §2): the settings as stored, null for a default. */
+  ...ProjectCriteriaSettingsShape,
   source: z.object({ fullName: z.string() }),
   distribution: z.object({ fullName: z.string() }).nullable(),
   deadlineAppliedAt: z.iso.datetime().nullable(),
@@ -479,6 +549,15 @@ export const PROJECT_REFUSALS = [
   "classroom_archived",
   "needs_confirmation",
   "group_sync_pending",
+  // ADR-106 §2: the mode switched to `criteria` (or a reload) on a source
+  // whose `criteria.yml` is missing or does not parse; the body names the
+  // errors (`errors`, {@link CriteriaError}).
+  "criteria_invalid",
+  // ADR-106 §5: a snapshot (switch or reload) that tags no criterion with a
+  // checkpoint's name; the body names them (`checkpoints`).
+  "checkpoint_untagged",
+  // ADR-106 §2: a tests criterion that names no criterion of the snapshot (422).
+  "unknown_criterion",
   // M6-06: an invitation asked of a project whose work mode invites nobody
   // (`online_seb`, ADR-047 §2); the work mode's own refusals are
   // `WORK_MODE_REFUSALS` (`codespace.ts`).
@@ -1323,3 +1402,72 @@ export const StudentProject = StudentProjectCard.omit({ invitation: true, repoFu
   serverNow: z.iso.datetime(),
 });
 export type StudentProject = z.infer<typeof StudentProject>;
+
+// ---------------------------------------------------------- the criteria snapshot (ADR-106 §2)
+
+/**
+ * What reading `criteria.yml` from GitHub can meet besides the parser's
+ * refusals: no such branch, no such file, a file too large, and a grading
+ * workflow that needs the network (ADR-106 §1: the evidence run has none).
+ */
+export const CRITERIA_READ_ERROR_CODES = ["branch_missing", "missing_file", "too_large", "workflow_needs_network"] as const;
+
+/** Every refusal of a criteria file: a closed list, worded by the web in each language (invariant 1). */
+export const CriteriaErrorCode = z.enum([...CRITERIA_PARSE_ERROR_CODES, ...CRITERIA_READ_ERROR_CODES]);
+export type CriteriaErrorCode = z.infer<typeof CriteriaErrorCode>;
+
+/** One refusal: where (`criteria/rapport/reponses/max_points`, or the file), its code, the values its wording names. */
+export const CriteriaError = z.object({
+  path: z.string(),
+  code: CriteriaErrorCode,
+  params: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
+});
+export type CriteriaError = z.infer<typeof CriteriaError>;
+
+/** The body of `409 criteria_invalid`. */
+export const CriteriaInvalid = z.object({ error: z.literal("criteria_invalid"), message: z.string(), errors: z.array(CriteriaError) });
+export type CriteriaInvalid = z.infer<typeof CriteriaInvalid>;
+
+/** Who proposes a criterion's points (`classifyCriterion` of `@quiz/domain`). */
+export const CriterionKind = z.enum(CRITERION_KINDS);
+export type CriterionKind = z.infer<typeof CriterionKind>;
+
+export const ProjectCriterion = z.object({
+  id: z.string(),
+  sectionPath: z.array(z.string()),
+  description: z.string(),
+  maxPoints: z.number(),
+  bonusPoints: z.number().optional(),
+  prompt: z.string().optional(),
+  test: z.string().optional(),
+  milestone: z.string().optional(),
+  kind: CriterionKind,
+});
+export type ProjectCriterion = z.infer<typeof ProjectCriterion>;
+
+/**
+ * `GET /app/api/projects/:id/criteria` and the answer of its reload (staff
+ * only, N-SEC-20): the last snapshot of the source's `criteria.yml` — null
+ * before the first that parsed — each criterion with its kind under the
+ * project's settings (which its summary carries), and its totals (`max`:
+ * the positive maxima; `bonusMax`).
+ */
+export const ProjectCriteriaView = z.object({
+  snapshot: z
+    .object({
+      fileSha: z.string(),
+      sourceSha: z.string(),
+      loadedAt: z.iso.datetime(),
+      grading: z.object({
+        context: z.string().nullable(),
+        student: z.object({ level: z.string().optional(), knows: z.array(z.string()).optional(), learning: z.array(z.string()).optional() }).optional(),
+        sources: z.array(z.string()),
+      }),
+      sections: z.array(z.object({ id: z.string(), path: z.array(z.string()), description: z.string().nullable() })),
+      leaves: z.array(ProjectCriterion),
+      max: z.number(),
+      bonusMax: z.number(),
+    })
+    .nullable(),
+});
+export type ProjectCriteriaView = z.infer<typeof ProjectCriteriaView>;

@@ -106,21 +106,22 @@ export function DeadlineStrategyRow({ value, disabled, onChange }: RowProps<Dead
   );
 }
 
-export function GradingModeRow({ value, disabled, onChange }: RowProps<ProjectGradingMode>) {
+/**
+ * The grading mode, among the `modes` offered: `criteria` only where the
+ * project exists already (a draft, ADR-106 §1), since choosing it reads the
+ * source's `criteria.yml` — and then each mode says what it does.
+ */
+export function GradingModeRow<M extends ProjectGradingMode>({
+  value,
+  disabled,
+  onChange,
+  modes,
+}: RowProps<M> & { modes: readonly M[] }) {
   const t = useT();
+  const options = modes.map((mode) => ({ value: mode, label: t(`project.gradingMode.${mode}`) }));
   return (
-    <SettingRow title={t("project.gradingMode")}>
-      <Segmented
-        name="gradingMode"
-        label={t("project.gradingMode")}
-        value={value}
-        disabled={disabled}
-        onChange={onChange}
-        options={[
-          { value: "auto", label: t("project.gradingMode.auto") },
-          { value: "none", label: t("project.gradingMode.none") },
-        ]}
-      />
+    <SettingRow title={t("project.gradingMode")} desc={modes.includes("criteria" as M) ? t(`project.gradingMode.desc.${value}`) : undefined}>
+      <Segmented name="gradingMode" label={t("project.gradingMode")} value={value} disabled={disabled} onChange={onChange} options={options} />
     </SettingRow>
   );
 }

@@ -7,7 +7,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, type SQL } from "drizzle-orm
 import { alias } from "drizzle-orm/pg-core";
 
 import type { ProjectActivitySummary, ProjectSummary } from "@quiz/contracts";
-import { editableProjectFields, projectListDates, projectPhase, resolveFinalScore } from "@quiz/domain";
+import { editableProjectFields, projectListDates, projectPhase, resolveFinalScore, type ProjectLifeLike } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -17,6 +17,9 @@ import { LIVE } from "./deadline.js";
 import { STUDENT_REPO } from "./repos.js";
 
 export type ProjectRow = typeof projects.$inferSelect;
+
+/** The facts of a row the patch rule reads (`ProjectLifeLike`): its release a boolean. */
+export const lifeOf = (row: ProjectRow): ProjectLifeLike => ({ ...row, released: row.releasedAt !== null });
 
 /** One project for its staff (`ProjectSummary`): the settings, the repositories, what may still change. */
 export async function projectSummary(db: Db, row: ProjectRow, now: Date): Promise<ProjectSummary> {
@@ -44,13 +47,17 @@ export async function projectSummary(db: Db, row: ProjectRow, now: Date): Promis
     protectedFiles: row.protectedFiles,
     groupMode: row.groupMode,
     groupSetId: row.groupSetId,
+    testsCriterion: row.testsCriterion,
+    buildCommand: row.buildCommand,
+    testCommand: row.testCommand,
+    evidenceOutputs: row.evidenceOutputs,
     source: { fullName: row.sourceFullName },
     distribution: row.distributionFullName === null ? null : { fullName: row.distributionFullName },
     deadlineAppliedAt: isoOrNull(row.deadlineAppliedAt),
     archivedAt: isoOrNull(row.archivedAt),
     createdAt: iso(row.createdAt),
     accepted: repo !== undefined,
-    editable: editableProjectFields(row, now),
+    editable: editableProjectFields(lifeOf(row), now),
   };
 }
 

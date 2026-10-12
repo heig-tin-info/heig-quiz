@@ -21,7 +21,7 @@
  *
  * `now` is the server's clock (invariant 5), never read here.
  */
-import type { ProjectStateName } from "./projectView.js";
+import type { ProjectGradingModeName, ProjectStateName } from "./projectView.js";
 
 /** The fields `ProjectPatch` may carry, in the form's order. */
 export const PROJECT_PATCH_FIELDS = [
@@ -37,23 +37,37 @@ export const PROJECT_PATCH_FIELDS = [
   "protectedFiles",
   "groupMode",
   "groupSetId",
+  // Grading by criteria (ADR-106 §2): editable in any state.
+  "testsCriterion",
+  "buildCommand",
+  "testCommand",
+  "evidenceOutputs",
 ] as const;
 export type ProjectPatchField = (typeof PROJECT_PATCH_FIELDS)[number];
 
 /** Why a field cannot change now: the code of the 409. */
-export type ProjectFieldRefusal = "not_draft" | "publish_mode_frozen" | "strategy_frozen";
+export type ProjectFieldRefusal = "not_draft" | "publish_mode_frozen" | "strategy_frozen" | "released";
 
 /** The facts of a project the rule reads. */
 export interface ProjectLifeLike {
   state: ProjectStateName;
   deadlineAt: Date;
+  /** The scores were released (`released_at`). */
+  released: boolean;
+  gradingMode: ProjectGradingModeName;
 }
 
-/** Why `field` of `project` cannot change at `now`, or null when it may. */
+/**
+ * Why `field` of `project` cannot change at `now`, or null when it may.
+ * `value` is the patched value, which the grading mode's rule reads
+ * ({@link gradingModeRefusal}); without it, whether the field may change
+ * at all (`editable`).
+ */
 export function projectFieldRefusal(
   project: ProjectLifeLike,
   field: ProjectPatchField,
   now: Date,
+  value?: unknown,
 ): ProjectFieldRefusal | null {
   if (project.state === "draft") return null;
   // `locked` is the deadline applied: a reopen makes it `published` again (M3-05a).
@@ -62,15 +76,39 @@ export function projectFieldRefusal(
     case "name":
     case "protectedFiles":
     case "deadlineAt":
+    case "testsCriterion":
+    case "buildCommand":
+    case "testCommand":
+    case "evidenceOutputs":
       return null;
     case "deadlineStrategy":
       return applied || now.getTime() >= project.deadlineAt.getTime() ? "strategy_frozen" : null;
     case "publishMode":
     case "durationMinutes":
       return "publish_mode_frozen";
+    case "gradingMode":
+      return gradingModeRefusal(project, value as ProjectGradingModeName | undefined);
     default:
       return "not_draft";
   }
+}
+
+/**
+ * Why a project's grading mode cannot become `to` (F-PROJ-03 as amended by
+ * ADR-106 §1), or null when it may: any mode on a draft; past it, one
+ * deliberate exception — into or out of `criteria` on a `locked` project not
+ * yet released (the pilot). Never on a `published` project (`not_draft`),
+ * never after the release (`released`). Without `to`: whether the mode may
+ * change at all.
+ */
+export function gradingModeRefusal(
+  project: Pick<ProjectLifeLike, "state" | "released" | "gradingMode">,
+  to?: ProjectGradingModeName,
+): "not_draft" | "released" | null {
+  if (project.state === "draft") return null;
+  if (project.state !== "locked") return "not_draft";
+  if (project.released) return "released";
+  return to === undefined || to === "criteria" || project.gradingMode === "criteria" ? null : "not_draft";
 }
 
 /** The fields of `project` that may change at `now` (`ProjectSummary.editable`). */

@@ -63,6 +63,7 @@ import { githubStatus, installationClient, isZeroSha, ownerRepo, unless404 } fro
 import { openSyncWorkspace, SourceRewritten, updateSquashedRepo, type SyncWorkspace } from "../../github/sync.js";
 import { PROJECT_SYNC_QUEUE } from "../../jobs.js";
 import { projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
+import { refreshCriteria } from "./criteria.js";
 import { isLive } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { claimLeases, LEASE_MS, releaseLease, runLeased, type LeasedRun, type ProjectJob } from "./lease.js";
@@ -205,6 +206,8 @@ export async function requestSync(
       ...subject,
       payload: { changed: update.changed, sourceHeads: update.sourceHeads },
     });
+    // The criteria follow the distribution (ADR-106 §2), best-effort.
+    await refreshCriteria(app.db, config, project.id, "sync", actor, now, log);
     if (app.boss) await app.boss.send(PROJECT_SYNC_QUEUE, job);
     else await runSyncJob(app, config, job).catch((err: unknown) => log.error({ err, project: project.id }, "project sync job failed"));
   } catch (err) {

@@ -33,7 +33,7 @@
 import { eq } from "drizzle-orm";
 
 import type { ProjectReleaseResult, ProjectRepoScores, ScoreOverride } from "@quiz/contracts";
-import { scoresFinal, teacherScoreMax } from "@quiz/domain";
+import { projectGraded, scoresFinal, teacherScoreMax } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
@@ -68,7 +68,7 @@ export async function overrideScore(
 ): Promise<ProjectRepoScores> {
   return db.transaction(async (tx) => {
     const { project, repo } = await repoForUpdate(tx, projectId, repoId);
-    if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
+    if (!projectGraded(project.gradingMode)) throw new ProjectError("grading_none", "The project is not graded");
     if (repo.frozenAt === null) throw new ProjectError("not_frozen", "A score can be set once the repository's deadline and grace have passed");
     const runs = await slotRuns(tx, [repo]);
     let values: Partial<RepoRow>;
@@ -120,7 +120,7 @@ export async function releaseProject(db: Db, projectId: string, actor: AuditActo
   const { result, project, repos } = await db.transaction(async (tx) => {
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw notFoundError("project");
-    if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
+    if (!projectGraded(project.gradingMode)) throw new ProjectError("grading_none", "The project is not graded");
     if (groupSyncOwed(project)) throw new ProjectError("group_sync_pending", "A resync of the groups is still being applied on GitHub");
     const repos = await studentRepos(tx, project);
     const counts = releaseCounts(project, repos);

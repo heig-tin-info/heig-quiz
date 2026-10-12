@@ -439,6 +439,17 @@ export type AuditAction =
   | "project.synced"
   | "project.sync_failed"
   /**
+   * Grading by criteria (ADR-106 §2), subject the project.
+   * `grading_mode`: the mode switched, `payload.from`, `to`, `fileSha` (the
+   * `criteria.yml` loaded with a switch to `criteria`, else null);
+   * `criteria_reload`: the source's `criteria.yml` read, `payload.trigger`
+   * (`grading_mode`, `reload`, `publish`, `sync`), `ok`, and either
+   * `fileSha`, `sourceSha`, `criteria` (their count) or `errors` (their
+   * count; a refused file leaves the last snapshot).
+   */
+  | "project.grading_mode"
+  | "project.criteria_reload"
+  /**
    * A review checkpoint authored or removed by the staff (F-PROJ-11; merge
    * task M3-05b), subject the checkpoint: `payload.projectId`, `name`,
    * `dueAt`, `offsetDays` (null: an absolute date).

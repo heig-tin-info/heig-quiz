@@ -15,6 +15,9 @@ import {
   SourceStrategyRow,
 } from "./ProjectSettingRows";
 
+/** `criteria` is chosen on the draft, which reads its `criteria.yml` (ADR-106 §1). */
+const CREATION_MODES = ["auto", "none"] as const;
+
 /**
  * "Advanced options" of the new project (F-PROJ-01, docs/spec/08 §8.2):
  * every setting a novice never needs to read, each at its default. A line
@@ -83,7 +86,7 @@ export function ProjectAdvanced({
         onChange={(e) => update({ graceMinutes: e.target.value })}
       />
 
-      <GradingModeRow value={draft.gradingMode} onChange={(gradingMode) => update({ gradingMode })} />
+      <GradingModeRow modes={CREATION_MODES} value={draft.gradingMode} onChange={(gradingMode) => update({ gradingMode })} />
 
       {draft.gradingMode === "auto" ? (
         <ScaleRow value={draft.scaleKind} onChange={(scaleKind) => update({ scaleKind })} />

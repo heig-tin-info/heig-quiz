@@ -1,6 +1,7 @@
 import { FolderGit2, GraduationCap, Loader2, Lock, LockOpen, Snowflake, Users } from "lucide-react";
 
 import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
+import { projectGraded } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
@@ -232,7 +233,7 @@ export function ProjectRepos({
   const t = useT();
   const entries = repoEntries(project);
   const shown = filterEntries(entries, filter, project);
-  const graded = project.gradingMode === "auto";
+  const graded = projectGraded(project.gradingMode);
   const { sorted, sort, toggle } = useSortableTable<RepoEntry, SortKey>(
     shown,
     (entry, key) => (key === "student" ? entry.label : (entry.repo?.scores.final?.points ?? -1)),

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   editableProjectFields,
+  gradingModeRefusal,
   patchedDraftDates,
   PROJECT_PATCH_FIELDS,
   projectFieldRefusal,
@@ -16,6 +17,8 @@ const EARLIER = new Date("2026-10-01T22:00:00Z");
 const project = (over: Partial<ProjectLifeLike> = {}): ProjectLifeLike => ({
   state: "published",
   deadlineAt: LATER,
+  released: false,
+  gradingMode: "auto",
   ...over,
 });
 
@@ -25,7 +28,7 @@ describe("projectFieldRefusal (F-PROJ-03)", () => {
   });
 
   it("keeps the name, the protected files, the deadline and its strategy open once published", () => {
-    expect(editableProjectFields(project(), NOW)).toEqual(["name", "deadlineAt", "deadlineStrategy", "protectedFiles"]);
+    expect(editableProjectFields(project(), NOW)).toEqual(["name", "deadlineAt", "deadlineStrategy", "protectedFiles", "testsCriterion", "buildCommand", "testCommand", "evidenceOutputs"]);
   });
 
   it("freezes the publication mode and its duration at publication", () => {
@@ -47,7 +50,28 @@ describe("projectFieldRefusal (F-PROJ-03)", () => {
   it("still moves a deadline already applied: the reopen (M3-05a)", () => {
     expect(projectFieldRefusal(project({ state: "locked", deadlineAt: EARLIER }), "deadlineAt", NOW)).toBeNull();
     expect(projectFieldRefusal(project({ state: "locked" }), "deadlineAt", NOW)).toBeNull();
-    expect(editableProjectFields(project({ state: "locked", deadlineAt: EARLIER }), NOW)).toEqual(["name", "deadlineAt", "protectedFiles"]);
+    expect(editableProjectFields(project({ state: "locked", deadlineAt: EARLIER, released: true }), NOW)).toEqual(["name", "deadlineAt", "protectedFiles", "testsCriterion", "buildCommand", "testCommand", "evidenceOutputs"]);
+    // Not released: the grading mode may still go into or out of `criteria` (ADR-106 §1).
+    expect(editableProjectFields(project({ state: "locked", deadlineAt: EARLIER }), NOW)).toContain("gradingMode");
+  });
+});
+
+describe("gradingModeRefusal (ADR-106 §1)", () => {
+  it("lets a draft take any mode", () => {
+    expect(gradingModeRefusal(project({ state: "draft" }), "none")).toBeNull();
+  });
+
+  it("lets an unreleased locked project go into or out of criteria, and nothing else", () => {
+    const locked = project({ state: "locked" });
+    expect(gradingModeRefusal(locked, "criteria")).toBeNull();
+    expect(gradingModeRefusal(locked, "none")).toBe("not_draft");
+    expect(gradingModeRefusal(project({ state: "locked", gradingMode: "criteria" }), "auto")).toBeNull();
+    expect(projectFieldRefusal(locked, "gradingMode", NOW, "criteria")).toBeNull();
+  });
+
+  it("refuses a published project and a released one", () => {
+    expect(gradingModeRefusal(project(), "criteria")).toBe("not_draft");
+    expect(gradingModeRefusal(project({ state: "locked", released: true }), "criteria")).toBe("released");
   });
 });
 

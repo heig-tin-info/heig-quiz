@@ -48,11 +48,12 @@ import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
 import type { Caller } from "../guards.js";
 import { DomainError, notFoundError } from "../http.js";
 import { projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
+import { snapshotIds, storeCriteria, type CriteriaSnapshot } from "./criteria.js";
 import { ProjectError } from "./errors.js";
 import { replaceGroupCopy, stopProjects } from "./groupCopy.js";
 import { announcePublished } from "./notify.js";
 import { classroomClient, fetchSource, type Source } from "./sources.js";
-import type { ProjectRow } from "./views.js";
+import { lifeOf, type ProjectRow } from "./views.js";
 
 /**
  * A slug is reused with `-2` … `-20` (heig-classroom cbcc780), and so is the
@@ -310,6 +311,13 @@ function asColumns(body: ProjectPatch): Partial<Record<ProjectPatchField, unknow
  * project's classroom (`422 unknown_group_set`); naming it makes the copy,
  * naming another replaces it, and leaving group mode clears it and deletes
  * the copy.
+ *
+ * The grading mode (ADR-106 §1): any on a draft; into or out of `criteria`
+ * on a locked project not yet released (`projectFieldRefusal`, which reads
+ * the patched value). A switch to `criteria` comes with the snapshot the
+ * route read beforehand (`criteriaForSwitch`), stored in this transaction.
+ * Audited `project.grading_mode`. A tests criterion must name a criterion
+ * of the snapshot (`422 unknown_criterion`).
  */
 export async function patchProject(
   db: Db,
@@ -317,6 +325,8 @@ export async function patchProject(
   body: ProjectPatch,
   actor: AuditActor,
   now: Date,
+  /** The snapshot of a switch to `criteria` (`criteriaForSwitch`); null for any other patch. */
+  criteria: CriteriaSnapshot | null,
 ): Promise<ProjectRow> {
   return db.transaction(async (tx) => {
     const askedSet = body.groupSetId ? await groupSetOf(tx, body.groupSetId) : undefined;
@@ -325,9 +335,15 @@ export async function patchProject(
     const changed: Partial<Record<ProjectPatchField, unknown>> = {};
     for (const [field, value] of Object.entries(asColumns(body)) as [ProjectPatchField, unknown][]) {
       if (isDeepStrictEqual(value, project[field])) continue;
-      const refusal = projectFieldRefusal(project, field, now);
+      const refusal = projectFieldRefusal(lifeOf(project), field, now, value);
       if (refusal) throw new ProjectError(refusal, `${field} can no longer change`);
       changed[field] = value;
+    }
+    if (typeof changed.testsCriterion === "string") {
+      const ids = criteria ? criteria.criteria.leaves.map((leaf) => leaf.id) : await snapshotIds(tx, project.id);
+      if (!ids?.includes(changed.testsCriterion)) {
+        throw new ProjectError("unknown_criterion", "The tests criterion names no criterion of the snapshot", { field: "testsCriterion" });
+      }
     }
     // Leaving group mode leaves the set too, and its copy.
     if (changed.groupMode === false && body.groupSetId === undefined && project.groupSetId !== null) changed.groupSetId = null;
@@ -370,6 +386,16 @@ export async function patchProject(
         .returning()) as [ProjectRow];
     }
     if (changed.groupSetId !== undefined) await replaceGroupCopy(tx, project.id, row.groupSetId, now);
+    if (changed.gradingMode !== undefined) {
+      if (criteria) await storeCriteria(tx, project.id, criteria, now);
+      await audit(tx, {
+        ...actor,
+        action: "project.grading_mode",
+        subjectType: "project",
+        subjectId: project.id,
+        payload: { from: project.gradingMode, to: changed.gradingMode, fileSha: criteria?.fileSha ?? null },
+      });
+    }
     // The checkpoints, the repositories following it, and the reopen of a
     // deadline already applied (F-PROJ-09, M3-05a).
     if (movedTo !== undefined) row = await projectDeadlineMoved(tx, row, movedTo as Date, actor, now);
