@@ -45,15 +45,18 @@ import {
   overridePointsRange,
   round2,
   scoresNegatively,
+  type ItemCounting,
   type StoodItem,
 } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
-import { answers, attempts, auditLog, gradings, questionVersions, users } from "../../db/schema.js";
+import { answers, attempts, auditLog, evaluationItems, gradings, questionVersions, users } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 import {
   flagReleasedEvaluationsOf,
+  setItemCounting,
+  setModifiedAfterRelease,
   joinedItem,
   joinedItems,
   negativeMarkingEnabled,
@@ -742,7 +745,7 @@ function pointsRangeOf(
   const negative = scoresNegatively(
     item?.question.type ?? "",
     negativeMarkingEnabled(evaluation),
-    item?.item.bonus ?? false,
+    item?.item.counting ?? "normal",
   );
   return overridePointsRange(maxPoints, negative);
 }
@@ -1064,6 +1067,44 @@ export async function pointsByAttempt(
 }
 
 /**
+ * The grading-time counting act (ADR-108): `itemId` of `evaluation` becomes
+ * `normal`, `bonus` or `neutralized`. The write is the evaluation module's
+ * (`setItemCounting`: the frozen-list gate, the total that must stay above
+ * 0); this orchestrates around it what a grading write does after the
+ * release (ADR-030 §h): the grades the students are shown are read before,
+ * the evaluation is marked modified after publication in the same
+ * transaction as the change (so the frozen snapshot stops being served), and
+ * the students whose shown grade moved are told after the commit. Stored
+ * gradings are never touched. Null for an item the evaluation does not hold.
+ */
+export async function changeItemCounting(
+  db: Db,
+  evaluation: EvaluationRecord,
+  itemId: string,
+  counting: ItemCounting,
+  now: Date,
+): Promise<{ before: ItemCounting; modifiedAfterRelease: boolean } | null> {
+  const owners = await db
+    .select({ attemptId: attempts.id })
+    .from(attempts)
+    .where(eq(attempts.evaluationId, evaluation.id));
+  const watch = await watchReleasedGrades(
+    db,
+    owners.map((o) => ({ attemptId: o.attemptId, itemId })),
+    pointsByAttempt,
+  );
+  const outcome = await db.transaction(async (tx) => {
+    const before = await setItemCounting(tx, evaluation, itemId, counting);
+    if (before === null) return null;
+    // Choosing the counting it already has changes nothing, and flags nothing.
+    if (before === counting) return { before, modifiedAfterRelease: false };
+    return { before, modifiedAfterRelease: await setModifiedAfterRelease(tx, evaluation.id, now) };
+  });
+  if (outcome && outcome.before !== counting) await watch.announce();
+  return outcome;
+}
+
+/**
  * {@link pointsByAttempt} as the student saw it BEFORE a regrade touched
  * `cells`: on each of those cells that holds no validated grading, the
  * grading a regrade stood down counts instead — the newest `superseded` row
@@ -1089,8 +1130,10 @@ export function pointsAcrossRegrade(
         itemId: gradings.itemId,
         points: gradings.points,
         state: gradings.state,
+        counting: evaluationItems.counting,
       })
       .from(gradings)
+      .innerJoin(evaluationItems, eq(evaluationItems.id, gradings.itemId))
       .where(
         and(
           inArray(gradings.attemptId, [...attemptIds]),
@@ -1106,17 +1149,17 @@ export function pointsAcrossRegrade(
       .orderBy(asc(gradings.gradedAt));
     // Per cell: a validated grading wins; otherwise, on a touched cell, the
     // newest stood-down one (ascending order: the last one read).
-    const byCell = new Map<PairKey, { attemptId: string; points: number; validated: boolean }>();
+    const byCell = new Map<PairKey, { attemptId: string; points: number; counting: ItemCounting; validated: boolean }>();
     for (const row of rows) {
       const key = pairKey(row.attemptId, row.itemId);
       const validated = row.state === "validated";
       if (!validated && !touched.has(key)) continue;
       if (byCell.get(key)?.validated) continue;
-      byCell.set(key, { attemptId: row.attemptId, points: row.points, validated });
+      byCell.set(key, { attemptId: row.attemptId, points: row.points, counting: row.counting, validated });
     }
-    const perAttempt = new Map<string, number[]>();
+    const perAttempt = new Map<string, { points: number; counting: ItemCounting }[]>();
     for (const cell of byCell.values()) {
-      perAttempt.set(cell.attemptId, [...(perAttempt.get(cell.attemptId) ?? []), cell.points]);
+      perAttempt.set(cell.attemptId, [...(perAttempt.get(cell.attemptId) ?? []), cell]);
     }
     return new Map([...perAttempt].map(([id, points]) => [id, attemptTotal(points)]));
   };

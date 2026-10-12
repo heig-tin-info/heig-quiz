@@ -18,6 +18,7 @@ import { countsAsCompleted,
   poolRoleAllows,
   round2,
   splitTemplate,
+  type ItemCounting,
 } from "@quiz/domain";
 import type { BlocksAnswer, BlocksConfig } from "@quiz/qt-blocks/client";
 import { blocksServer } from "@quiz/qt-blocks/server";
@@ -349,7 +350,7 @@ interface MockItem {
   position: number;
   points: number;
   milestone: boolean;
-  bonus: boolean;
+  counting: ItemCounting;
   intro: string | null;
   questionId: string;
   questionVersionId: string;
@@ -485,7 +486,7 @@ function makeItems(count: number): MockItem[] {
       milestone: i === 1 || i === 4,
       // One bonus question (ADR-052) in a list long enough to keep others
       // that count: the builder's candy toggle and the student's label.
-      bonus: count >= 4 && i === 2,
+      counting: count >= 4 && i === 2 ? "bonus" : "normal",
       // ADR-084: the instructions before the first question, and a transition
       // after the first section break — the builder's text bands.
       intro: i === 0 ? MOCK_INTRO_FIRST : i === 2 ? MOCK_INTRO_PART2 : null,
@@ -906,7 +907,7 @@ export const evaluationOr404 = (id: string) => {
   return e;
 };
 
-/** The server's total: bonus items left out (ADR-052). */
+/** The server's total: bonus and neutralized items left out (ADR-052, ADR-108). */
 const totalPointsOf = (e: MockEvaluation) => evaluationTotal(e.items);
 const attemptCountOf = (e: MockEvaluation) => e.rows.filter((r) => r.attemptId !== null).length;
 /** Like the server: the staff's rehearsals do not count (ADR-068 §3). */
@@ -1573,7 +1574,7 @@ on("GET", "/app/api/evaluations/:id/pull-template", (m) => {
     versionNumber: i.versionNumber,
     points: i.points,
     milestone: i.milestone,
-    bonus: i.bonus,
+    counting: i.counting,
     intro: i.intro,
   });
   return {
@@ -1679,7 +1680,7 @@ function addItemsTo(e: MockEvaluation, questionIds: string[]): void {
       position: e.items.length,
       points: q.type === "code" ? 3 : 1,
       milestone: false,
-      bonus: false,
+      counting: "normal",
       intro: null,
       questionId: q.id,
       questionVersionId: uuid(),
@@ -1697,7 +1698,7 @@ function patchItemOf(e: MockEvaluation, itemId: string, body: Record<string, unk
   if (!item) throw new MockError(404, "Item not found");
   if (typeof body.points === "number") item.points = body.points;
   if (typeof body.milestone === "boolean") item.milestone = body.milestone;
-  if (typeof body.bonus === "boolean") item.bonus = body.bonus;
+  if (body.counting === "normal" || body.counting === "bonus") item.counting = body.counting;
   if (typeof body.intro === "string" || body.intro === null) {
     item.intro = typeof body.intro === "string" && body.intro.trim() !== "" ? body.intro : null;
   }
@@ -1752,12 +1753,12 @@ on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
 
 /**
  * The content the revision follows: the items (order, points, milestones,
- * bonus flags, versions) and every stored setting — everything but the title.
+ * countings, versions) and every stored setting — everything but the title.
  */
 const contentOf = (e: MockEvaluation) =>
   JSON.stringify([
     e.mode,
-    e.items.map((i) => [i.id, i.points, i.milestone, i.bonus, i.intro, i.versionNumber]),
+    e.items.map((i) => [i.id, i.points, i.milestone, i.counting, i.intro, i.versionNumber]),
     e.settings,
     e.gradingScale,
     e.feedbackPolicy,

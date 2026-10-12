@@ -30,8 +30,8 @@ function row(overrides: Partial<EvaluationRecord> = {}): EvaluationRecord {
 
 /** What readiness reads of an ordinary item list of two questions. */
 const TWO_ITEMS = [
-  { points: 1, bonus: false },
-  { points: 1, bonus: false },
+  { points: 1, counting: "normal" as const },
+  { points: 1, counting: "normal" as const },
 ];
 const ctx = (overrides: Partial<Parameters<typeof guardTransition>[2]> = {}) => ({
   items: TWO_ITEMS,
@@ -83,7 +83,7 @@ describe("readiness (assertReady)", () => {
   });
 
   it("needs a question that counts towards the total (ADR-052)", () => {
-    for (const items of [[{ points: 2, bonus: true }], [{ points: 0, bonus: false }]]) {
+    for (const items of [[{ points: 2, counting: "bonus" as const }], [{ points: 0, counting: "normal" as const }]]) {
       refusal(() => assertReady(row(), "lobby", items), { reason: "no_graded_points" });
     }
   });

@@ -105,6 +105,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-044 — The grading table: one question at a time, anonymous by default](ADR-044-grille-de-correction.md)
 - [ADR-050 — Publishing the correction of an exercise that is still running](ADR-050-publier-la-correction-d-un-exercice.md)
 - [ADR-052 — Bonus questions replace the threshold grade scale](ADR-052-questions-bonus.md)
+- [ADR-108 — How an item counts: normal, bonus or neutralized, changeable at grading time](ADR-108-comptage-d-un-item-a-la-correction.md)
 - [ADR-066 — A wide question beside a pinned rail](ADR-066-question-large-et-rail-fixe.md)
 - [ADR-067 — Grading an exercise at hand-in](ADR-067-correction-a-la-remise-des-exercices.md)
 - [ADR-069 — A calculator provided on the student's screen](ADR-069-calculatrice-fournie.md)

@@ -373,7 +373,8 @@ export function gradebookEvaluations(db: Db, classroomId: string): Promise<Evalu
 
 /**
  * The total points of each evaluation, in one grouped query:
- * `@quiz/domain#evaluationTotal` in SQL, bonus items left out (ADR-052).
+ * `@quiz/domain#evaluationTotal` in SQL, bonus and neutralized items left out
+ * (ADR-052, ADR-108).
  */
 export async function totalPointsByEvaluation(
   db: Db,
@@ -389,23 +390,33 @@ export async function totalPointsByEvaluation(
     .where(
       and(
         inArray(evaluationItems.evaluationId, [...evaluationIds]),
-        eq(evaluationItems.bonus, false),
+        eq(evaluationItems.counting, "normal"),
       ),
     )
     .groupBy(evaluationItems.evaluationId);
   return new Map(rows.map((r) => [r.evaluationId, round2(Number(r.points))]));
 }
 
-/** How many items each evaluation holds, in one grouped query. */
+/**
+ * How many items each evaluation holds, in one grouped query. `counted`
+ * leaves the neutralized items out (ADR-108): the cells a student's score
+ * still waits for (`scoreOf`).
+ */
 export async function itemCountsByEvaluation(
   db: Db,
   evaluationIds: readonly string[],
+  opts: { counted?: boolean } = {},
 ): Promise<Map<string, number>> {
   if (evaluationIds.length === 0) return new Map();
   const rows = await db
     .select({ evaluationId: evaluationItems.evaluationId, n: count() })
     .from(evaluationItems)
-    .where(inArray(evaluationItems.evaluationId, [...evaluationIds]))
+    .where(
+      and(
+        inArray(evaluationItems.evaluationId, [...evaluationIds]),
+        opts.counted ? ne(evaluationItems.counting, "neutralized") : undefined,
+      ),
+    )
     .groupBy(evaluationItems.evaluationId);
   return new Map(rows.map((r) => [r.evaluationId, r.n]));
 }
@@ -441,7 +452,7 @@ export async function itemRowsOf(db: DbOrTx, joined: readonly JoinedItem[]): Pro
     position: j.item.position,
     points: j.item.points,
     milestone: j.item.milestone,
-    bonus: j.item.bonus,
+    counting: j.item.counting,
     intro: j.item.intro,
     questionId: j.question.id,
     questionVersionId: j.version.id,

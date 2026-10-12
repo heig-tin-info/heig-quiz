@@ -352,7 +352,7 @@ describe("items (F-EVAL-02, F-EVAL-03)", () => {
     });
     const items = await service.itemRows(db, seed.evaluationId);
     await expect(
-      service.patchItem(db, row, items[0]!.id, { points: 9, bonus: false }, ctx),
+      service.patchItem(db, row, items[0]!.id, { points: 9, counting: "normal" }, ctx),
     ).rejects.toMatchObject({ code: "locked" });
     await expect(service.deleteItem(db, row, items[0]!.id, ctx)).rejects.toMatchObject({
       code: "locked",
@@ -382,7 +382,7 @@ describe("the item list freezes once the evaluation is opened (issue #79)", () =
         frozen,
       );
       await expect(
-        service.patchItem(db, row, items[0]!.id, { points: 9, bonus: false }, ctx),
+        service.patchItem(db, row, items[0]!.id, { points: 9, counting: "normal" }, ctx),
         state,
       ).rejects.toMatchObject(frozen);
       await expect(
@@ -431,7 +431,7 @@ describe("the item list freezes once the evaluation is opened (issue #79)", () =
     };
     const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, Payload | undefined][] = [
       ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }],
-      ["patch item", "PATCH", itemUrl, { points: 3, bonus: false }],
+      ["patch item", "PATCH", itemUrl, { points: 3, counting: "normal" }],
       ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }],
       ["delete item", "DELETE", itemUrl, undefined],
       ["update versions", "POST", `${base}/items/update-versions`, {}],
@@ -928,7 +928,7 @@ describe("the order of the refusals, over HTTP", () => {
     const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, Payload | undefined, unknown][] = [
       ["patch evaluation", "PATCH", base, { durationS: 600 }, locked],
       ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }, locked],
-      ["patch item", "PATCH", itemUrl, { points: 3, bonus: false }, locked],
+      ["patch item", "PATCH", itemUrl, { points: 3, counting: "normal" }, locked],
       ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }, locked],
       ["delete item", "DELETE", itemUrl, undefined, locked],
       [

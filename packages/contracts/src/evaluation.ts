@@ -19,6 +19,7 @@ import {
   EVALUATION_MODES,
   EVALUATION_STATES,
   FEEDBACK_WHEN,
+  ITEM_COUNTINGS,
   isIpRange,
   LOBBIES,
   MAX_CONDITION_LENGTH,
@@ -39,6 +40,35 @@ import { ConceptRef } from "./concept.js";
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
 export const EvaluationMode = z.enum(EVALUATION_MODES);
 export type EvaluationMode = z.infer<typeof EvaluationMode>;
+
+/**
+ * ADR-052, ADR-108: how an item counts. `normal`; `bonus`, out of the total,
+ * floored at 0, still lifting the student; `neutralized`, out of the total
+ * and out of every student's points. One stored state per item.
+ */
+export const ItemCounting = z.enum(ITEM_COUNTINGS);
+export type ItemCounting = z.infer<typeof ItemCounting>;
+
+/** What the builder offers (ADR-052 §2): `neutralized` is a grading-time act only (ADR-108). */
+export const BuilderCounting = ItemCounting.exclude(["neutralized"]);
+export type BuilderCounting = z.infer<typeof BuilderCounting>;
+
+/**
+ * `PUT /evaluations/:id/items/:itemId/counting` (ADR-108): the grading-time
+ * act, allowed only once the item list is frozen; any of the three states.
+ */
+export const ItemCountingBody = z.object({ counting: ItemCounting });
+export type ItemCountingBody = z.infer<typeof ItemCountingBody>;
+
+/** The answer of the counting act: the item's counting now, the total it makes, and whether a released grade moved. */
+export const ItemCountingResult = z.object({
+  itemId: z.uuid(),
+  counting: ItemCounting,
+  totalPoints: z.number(),
+  /** The evaluation was released: it is now "modified after publication" (F-GRADE-09). */
+  modifiedAfterRelease: z.boolean(),
+});
+export type ItemCountingResult = z.infer<typeof ItemCountingResult>;
 
 /** The named presets of settings at creation: a mode, `poll` aside. */
 export const EvaluationPreset = EvaluationMode.exclude(["poll"]);
@@ -329,7 +359,7 @@ export type Rounding = z.infer<typeof Rounding>;
 /**
  * F-EVAL-10: grade = 1 + 5 × points / total, capped at 6, rounded to the
  * tenth. Linear only: the `threshold` kind is gone (ADR-052), and the bonus
- * items (`ItemRow.bonus`) are how points past the total are given. The
+ * items (`ItemRow.counting`) are how points past the total are given. The
  * object keeps its `kind` so the jsonb column keeps its shape.
  */
 export const GradingScale = z.object({
@@ -445,10 +475,11 @@ export const ItemRow = z.object({
   points: z.number(),
   milestone: z.boolean(),
   /**
-   * ADR-052: a bonus item's points are left out of the evaluation's total, so
-   * they can only lift a student; its score is floored at 0.
+   * ADR-052, ADR-108: a bonus item's points are left out of the evaluation's
+   * total, so they can only lift a student; its score is floored at 0. A
+   * neutralized item is out of the total and out of every student's points.
    */
-  bonus: z.boolean(),
+  counting: ItemCounting,
   /** ADR-084: the text shown to the student before this item; null for none. */
   intro: z.string().nullable(),
   questionId: z.uuid(),
@@ -665,8 +696,8 @@ export const ItemPatch = z
   .object({
     points: z.number().min(0).max(1000).optional(),
     milestone: z.boolean().optional(),
-    /** ADR-052; locked with the points (`assertItemListEditable`). */
-    bonus: z.boolean().optional(),
+    /** ADR-052: normal or bonus only; locked with the points (`assertItemListEditable`). */
+    counting: BuilderCounting.optional(),
     /**
      * ADR-084: the passage before the item, markdown; `null` or a blank
      * text removes it. Locked with the points.
@@ -825,7 +856,7 @@ export const TemplatePullItem = TemplateItemRef.extend({
   versionNumber: z.number().int(),
   points: z.number(),
   milestone: z.boolean(),
-  bonus: z.boolean(),
+  counting: ItemCounting,
   /** ADR-084: a different intro makes the item `changed`. */
   intro: z.string().nullable(),
 });
@@ -835,7 +866,7 @@ export type TemplatePullItem = z.infer<typeof TemplatePullItem>;
  * `GET /evaluations/:id/pull-template` — what pulling the template's current
  * revision would do to the evaluation's QUESTIONS, the only thing a pull
  * replaces: items `added` (in the template only), `removed` (in the
- * evaluation only), `changed` (another version, points, milestone, bonus or intro),
+ * evaluation only), `changed` (another version, points, milestone, counting or intro),
  * whether the order moves, and "rev. `from` → `to`". `unlinkedItems` would
  * refuse the pull (`422 template_pool_unlinked`); `deprecatedItems` only warn.
  */
@@ -886,7 +917,8 @@ export type EvaluationStateBody = z.infer<typeof EvaluationStateBody>;
  * an evaluation whose `closesAt` has passed, whatever its timing (ADR-086),
  * and `opens_at_past` a schedule for a time already past, both against the
  * server's clock (#178). `no_graded_points` refuses to open an exam or an
- * exercise whose total — bonus items left out — is 0 (ADR-052).
+ * exercise whose total — bonus and neutralized items left out — is 0
+ * (ADR-052); the grading-time counting change refuses it too (ADR-108).
  */
 export const TransitionRefusal = z.object({
   error: z.literal("illegal_transition"),

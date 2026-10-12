@@ -112,6 +112,7 @@ export {
   defaultPoints,
   addItems,
   patchItem,
+  setItemCounting,
   deleteItem,
   reorderItems,
   updateVersions,

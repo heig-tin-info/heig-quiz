@@ -112,7 +112,7 @@ export function makeDashboard(rows = 3, items = 4): DashboardView {
       type: i % 2 === 0 ? "mcq" : "short",
       internalName: `Question ${i + 1}`,
       milestone: false,
-      bonus: false,
+      counting: "normal",
     })),
     rows: Array.from({ length: rows }, (_, i) => makeRow(i, itemIds)),
     totals: itemIds.map((itemId) => ({
@@ -130,7 +130,7 @@ export function makeItemRow(index: number, overrides: Partial<ItemRow> = {}): It
     position: index + 1,
     points: 1,
     milestone: false,
-    bonus: false,
+    counting: "normal",
     intro: null,
     questionId: id("question", index),
     questionVersionId: id("version", index),

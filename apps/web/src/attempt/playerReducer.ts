@@ -15,7 +15,7 @@
  * F-EVAL-07 ("un drapeau par item au-delà duquel on ne revient pas") and
  * F-LIVE-09 ("permet d'y aller si la navigation l'autorise").
  */
-import type { AttemptItem, AttemptView, Navigation } from "@quiz/contracts";
+import type { AttemptItem, AttemptView, ItemCounting, Navigation } from "@quiz/contracts";
 import { answerMark, lockedItems } from "@quiz/domain";
 
 import type { Segment } from "../ui";
@@ -26,8 +26,8 @@ export interface PlayerItem {
   points: number;
   type: string;
   milestone: boolean;
-  /** ADR-052: labelled "Bonus question"; its points are not in the total. */
-  bonus: boolean;
+  /** ADR-052, ADR-108: a bonus is labelled "Bonus question"; its points are not in the total. */
+  counting: ItemCounting;
   /** ADR-084: the teacher's passage shown before the item; null for none. */
   intro: string | null;
   /**
@@ -115,7 +115,7 @@ const toItem = (item: AttemptItem): PlayerItem => ({
   points: item.points,
   type: item.type,
   milestone: item.milestone,
-  bonus: item.bonus,
+  counting: item.counting,
   intro: item.intro,
   markedDone: item.markedDone,
   skipped: item.skipped,

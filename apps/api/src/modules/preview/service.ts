@@ -54,6 +54,7 @@ import {
   gradeFromPoints,
   itemPoints,
   previewDurationS,
+  type ItemCounting,
 } from "@quiz/domain";
 
 import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
@@ -413,7 +414,7 @@ async function gradeItem(
       : {
           status: "graded",
           // Floored on a bonus item, as the grading pass writes it (ADR-052).
-          points: itemPoints(result.points, item.item.bonus),
+          points: itemPoints(result.points, item.item.counting),
           details: result.details,
         };
   try {
@@ -468,7 +469,7 @@ export async function gradePreview(
   const answers = new Map(Object.entries(input.answers));
 
   const items: PreviewCorrectionItem[] = [];
-  const scored: number[] = [];
+  const scored: { points: number; counting: ItemCounting }[] = [];
   let pending = 0;
   for (const [rank, shown] of view.items.entries()) {
     const item = byId.get(shown.id);
@@ -491,7 +492,7 @@ export async function gradePreview(
       now,
       input.log,
     );
-    if (outcome.points !== null) scored.push(outcome.points);
+    if (outcome.points !== null) scored.push({ points: outcome.points, counting: item.item.counting });
     // An answer to grade by hand is expected, not a failure: not counted here.
     if (!["graded", "no_key", "manual"].includes(outcome.status)) pending += 1;
     items.push({

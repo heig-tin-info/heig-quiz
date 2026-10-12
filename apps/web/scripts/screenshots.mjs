@@ -1412,6 +1412,13 @@ const scenes = [
   { name: "grading-code-expanded", role: "teacher", path: "/evaluations/closed/grading", act: async (p) => {
       await p.locator('[role="button"][aria-expanded="false"]').first().click();
     } },
+  // ADR-108: how a question counts, the question bar's ⋯ menu and its confirmation.
+  { name: "grading-counting-menu", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: (p) =>
+      p.getByRole("button", { name: "How this question counts" }).click() },
+  { name: "grading-counting-confirm", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: "How this question counts" }).click();
+      await p.getByRole("menuitem", { name: "Count as bonus" }).click();
+    } },
   { name: "grading-mcq", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 1) },
   { name: "grading-circuit", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 2) },
   { name: "grading-short", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 3) },

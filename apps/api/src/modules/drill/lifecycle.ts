@@ -191,6 +191,9 @@ async function createCards(
   const defaults = gradeDefaults(evaluation);
   const rows: (typeof drillCards.$inferInsert)[] = [];
   for (const j of items) {
+    // A neutralized item was judged incoherent at grading time (ADR-108):
+    // it is not a question worth reviewing.
+    if (j.item.counting === "neutralized") continue;
     // The card serves the question as it stands now (ADR-041 §7).
     const version = current.get(j.question.id) ?? j.version;
     // Whether it can be drilled is a matter of structure: a parameterized

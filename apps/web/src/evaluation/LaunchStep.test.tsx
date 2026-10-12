@@ -165,7 +165,7 @@ describe("LaunchStep checklist (#152)", () => {
     mockFetch({});
     render(
       makeEvaluationDetail({
-        items: [{ ...makeItemRow(0), bonus: true }],
+        items: [{ ...makeItemRow(0), counting: "bonus" }],
         totalPoints: 0,
       }),
     );

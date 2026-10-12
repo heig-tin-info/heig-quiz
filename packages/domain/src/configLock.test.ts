@@ -98,17 +98,17 @@ describe("negative marking (ADR-026)", () => {
 
   it("concerns the choice questions only: mcq and categorize (ADR-036)", () => {
     for (const type of ["mcq", "categorize"]) {
-      expect(scoresNegatively(type, true, false), type).toBe(true);
-      expect(scoresNegatively(type, false, false), type).toBe(false);
+      expect(scoresNegatively(type, true, "normal"), type).toBe(true);
+      expect(scoresNegatively(type, false, "normal"), type).toBe(false);
     }
     for (const type of ["short", "cloze", "code", "codeimage", "circuit", "rich"]) {
-      expect(scoresNegatively(type, true, false), type).toBe(false);
+      expect(scoresNegatively(type, true, "normal"), type).toBe(false);
     }
   });
 
   it("never lets a bonus item score below 0 (ADR-052)", () => {
-    expect(scoresNegatively("mcq", true, true)).toBe(false);
-    expect(scoresNegatively("mcq", true, false)).toBe(true);
+    expect(scoresNegatively("mcq", true, "bonus")).toBe(false);
+    expect(scoresNegatively("mcq", true, "normal")).toBe(true);
   });
 
   it("is frozen with the rest of the settings", () => {

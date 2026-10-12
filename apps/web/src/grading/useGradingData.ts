@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import type { GradingQueue, GradingQueueItem, GradingSteps } from "@quiz/contracts";
+import type { GradingQueue, GradingQueueItem, GradingSteps, ItemCounting } from "@quiz/contracts";
 import { negativeMarkingOf } from "@quiz/contracts";
 import { negativeMarkingOn, overridePointsRange, scoresNegatively } from "@quiz/domain";
 
@@ -26,6 +26,8 @@ export interface GradingItem extends GradingQueueItem {
    * own stale badge. Re-grade is then emphasised.
    */
   stale: boolean;
+  /** How the item counts (ADR-052, ADR-108): the question bar's badge and menu. */
+  counting: ItemCounting;
 }
 
 /** A parameterized question's table and the question as written (ADR-056 §9). */
@@ -68,8 +70,9 @@ export function useGradingData(evaluationId: string, itemId: string | null, name
       internalName: i.internalName,
       type: i.type,
       points: i.points,
+      counting: i.counting,
       // A bonus item never goes below 0 (ADR-052).
-      minPoints: overridePointsRange(i.points, scoresNegatively(i.type, negative, i.bonus)).min,
+      minPoints: overridePointsRange(i.points, scoresNegatively(i.type, negative, i.counting)).min,
       questionId: i.questionId,
       canEdit: editable.has(i.questionId),
       stale: stale.has(i.id),

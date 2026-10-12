@@ -14,7 +14,7 @@ const item = (position: number, questionId: string, extra: Partial<PullItem> = {
   versionNumber: 1,
   points: 1,
   milestone: false,
-  bonus: false,
+  counting: "normal",
   intro: null,
   ...extra,
 });
@@ -64,9 +64,9 @@ describe("itemListDiff", () => {
     expect(isEmptyDiff(diff)).toBe(false);
   });
 
-  it("sees a bonus flag that changed (ADR-052)", () => {
-    const diff = itemListDiff([item(0, "a")], [item(0, "a", { bonus: true })]);
-    expect(diff.changed.map((c) => c.to.bonus)).toEqual([true]);
+  it("sees a counting that changed (ADR-052)", () => {
+    const diff = itemListDiff([item(0, "a")], [item(0, "a", { counting: "bonus" })]);
+    expect(diff.changed.map((c) => c.to.counting)).toEqual(["bonus"]);
   });
 
   it("sees an intro added, edited or removed as a change of the item (ADR-084)", () => {

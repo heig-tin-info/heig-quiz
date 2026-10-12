@@ -189,7 +189,7 @@ export function liveGrader(
       // manual circuit): shown as a verdict it would paint every written
       // answer red. No preview, the cell keeps its progress colour.
       if (!isGraded(result) || result.state === "proposed") return null;
-      const points = itemPoints(result.points, item.item.bonus);
+      const points = itemPoints(result.points, item.item.counting);
       const maxPoints = result.maxPoints;
       return {
         verdict: verdictOf({ points, maxPoints, state: "validated" }),

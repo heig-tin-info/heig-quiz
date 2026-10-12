@@ -209,7 +209,7 @@ describe("ItemsStep — the docked preview and the question's columns", () => {
 describe("ItemsStep — bonus questions (ADR-052)", () => {
   it("toggles a row's bonus flag, and names it beside the question", async () => {
     const user = userEvent.setup();
-    const bonus = makeItemRow(1, { internalName: "array-decay", bonus: true, points: 2 });
+    const bonus = makeItemRow(1, { internalName: "array-decay", counting: "bonus", points: 2 });
     const { calls } = mockFetch({
       [`PATCH /app/api/evaluations/${EVALUATION_ID}/items/${frozen.id}`]: ok([]),
     });
@@ -228,7 +228,7 @@ describe("ItemsStep — bonus questions (ADR-052)", () => {
 
     await user.click(within(rowOf("pointer-decl")).getByRole("button", { name: /^bonus$/i }));
     await waitFor(() =>
-      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ bonus: true }),
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ counting: "bonus" }),
     );
   });
 

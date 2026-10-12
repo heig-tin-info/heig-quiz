@@ -30,7 +30,7 @@ export function makeAttemptItem(
     points: 1,
     type: "mcq",
     milestone: false,
-    bonus: false,
+    counting: "normal",
     intro: null,
     student: ADDRESS_MCQ,
     answer: null,

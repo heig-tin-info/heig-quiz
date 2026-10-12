@@ -501,7 +501,7 @@ export function PlayerView({
             <QuestionHeading
               index={state.index}
               {...(rail ? {} : { points: item.points })}
-              bonus={item.bonus}
+              counting={item.counting}
               validated={validated}
               acquired={acquired}
               mark={mark}

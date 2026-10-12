@@ -964,7 +964,7 @@ function attemptItems(
       points: entry.item.points,
       type: entry.question.type,
       milestone: entry.item.milestone,
-      bonus: entry.item.bonus,
+      counting: entry.item.counting,
       // ADR-084: the teacher's passage before the item — an item property,
       // like the two flags above, carried by the one builder of the attempt.
       intro: entry.item.intro,
@@ -1569,7 +1569,7 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
   const [grades, totals, itemCounts, keptTallies] = await Promise.all([
     releasedGradesOf(db, userId, rows, perEvaluation),
     totalPointsByEvaluation(db, scoredIds),
-    itemCountsByEvaluation(db, scoredIds),
+    itemCountsByEvaluation(db, scoredIds, { counted: true }),
     tallyByAttempt(
       db,
       scored

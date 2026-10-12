@@ -3,11 +3,11 @@ import type { ReactNode } from "react";
 import type { StudentResultItem } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
-import { BonusLabel } from "./BonusLabel";
+import { CountingLabel } from "./BonusLabel";
 import { useT } from "./i18n";
 import { MarkdownView } from "./markdown/MarkdownView";
 import { QuestionReviewHost } from "./questionTypes";
-import { Badge, Card, NotePanel } from "./ui";
+import { Badge, Card, cx, NotePanel } from "./ui";
 
 /**
  * One question of a graded copy: its number and points, the type's own
@@ -38,12 +38,18 @@ export function CopyItem({
           {t("feedback.question", { n: item.position + 1 })}
         </h2>
         {subtitle ? <span className="min-w-0 truncate text-[13px] text-fg-muted">{subtitle}</span> : null}
-        {item.bonus ? <BonusLabel /> : null}
+        <CountingLabel counting={item.counting} />
         <span className="flex-1" />
         {item.points === null ? (
           <Badge tone="zinc">{t("feedback.notGraded")}</Badge>
         ) : (
-          <span className="shrink-0 text-[15px] font-semibold tabular-nums">
+          // A neutralized item's points stay readable, struck through: they count nowhere (ADR-108).
+          <span
+            className={cx(
+              "shrink-0 text-[15px] font-semibold tabular-nums",
+              item.counting === "neutralized" && "text-fg-muted line-through",
+            )}
+          >
             {formatPoints(item.points)} / {item.maxPoints}
           </span>
         )}

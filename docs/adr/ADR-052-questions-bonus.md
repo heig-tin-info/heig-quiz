@@ -18,6 +18,12 @@ item shape).
 
 Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
 
+Amended 2026-10-12 by [ADR-108](ADR-108-comptage-d-un-item-a-la-correction.md): the
+`bonus` column becomes `counting` (normal, bonus, neutralized); §2 the builder
+is unchanged but a grading-time act may change an item once frozen; §3–§4 a
+bonus is floored at sum time too; §5 the total leaves out neutralized items;
+§7 a copy turns neutralized into normal; §9 the CSV marks ` (not counted)`.
+
 ## Context
 
 F-EVAL-10 offered two grade scales: `linear`, grade = 1 + 5 × points / total,
