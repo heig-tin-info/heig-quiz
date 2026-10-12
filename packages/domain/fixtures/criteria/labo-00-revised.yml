@@ -1,0 +1,181 @@
+# Critères d'évaluation du laboratoire 00 : prise en main de l'ordinateur
+#
+# Deux paliers (voir .github/workflows/grading.yml) :
+#   - à chaque push, le CI n'attribue que `rendu.all-tests-passed`, au prorata
+#     des tests de tests/test_rendu.py qui passent : note indicative, 4.0 au
+#     plus quand tout est conforme ;
+#   - à la deadline, la revue LLM note tous les critères, le rapport Word étant
+#     lu dans son extraction texte build/rapport.md produite par `make prepare`.
+---
+schema_version: 2
+
+grading:
+  context: |
+    Tu es un correcteur impartial et bienveillant du premier laboratoire d'un
+    cours d'introduction à la programmation en C, en première année de
+    Bachelor à la HEIG-VD. Ce laboratoire ne demande aucune programmation : il
+    vérifie que l'étudiant a lu l'énoncé jusqu'au bout, installé ses outils,
+    rédigé un rapport Word répondant à neuf points et publié un dossier de
+    rendu conforme sur GitHub. L'évaluation porte sur la conformité du rendu
+    et sur le rapport.
+
+    Tu ne vois pas le document Word lui-même mais son extraction en texte
+    (build/rapport.md) : les styles Word y sont rendus par des marqueurs
+    (« # » pour le style Titre, « Sous-titre : » pour le style Sous-titre,
+    « ## » pour Titre 1) et chaque image par une ligne « [image : ...] » avec
+    sa taille. Tu ne peux donc pas juger le contenu des captures d'écran,
+    seulement leur présence et leur emplacement. L'inventaire du dépôt
+    (build/inventaire.txt) donne les fichiers publiés, les métadonnées du
+    document et l'historique Git. La sortie de pytest (test-output.txt)
+    détaille les vérifications automatiques déjà effectuées.
+
+    Évalue uniquement à partir de ces preuves. En cas de doute légitime,
+    accorde le bénéfice du doute. Justifie chaque point attribué ou retiré en
+    une ou deux phrases, en français, adressées à l'étudiant (vouvoiement),
+    de façon factuelle : ce qui est constaté, ce qui était attendu.
+
+    Politique de correction du rendu. Une faute de nommage (casse du dossier
+    ou d'un fichier, double extension, point en trop) ne doit pas empêcher
+    d'évaluer le reste du travail. Lorsque test-output.repaired.txt existe, il
+    contient la sortie de pytest sur une copie du dépôt où seuls les noms ont
+    été corrigés (repairs.txt liste chaque correction) : c'est lui qui fait
+    foi pour les tests de contenu. Chaque test qui vérifie un nom corrigé
+    reste compté comme échoué : la faute est pénalisée, une fois par test
+    concerné. Les fichiers superflus et les exécutables publiés ne sont
+    jamais corrigés et restent pénalisés par leurs tests. Le contenu d'un
+    fichier n'est jamais corrigé.
+
+    La note est calculée par la formule linéaire 1 + 5 × points / maximum,
+    plafonnée à 6 et arrondie au dixième ; le bonus s'ajoute aux points.
+  student:
+    level: 1ère année Bachelor, HEIG-VD, premier laboratoire du semestre
+    knows:
+      - utilisation courante de Windows et de Microsoft Word
+    learning:
+      - la ligne de commande, Linux sous WSL et le gestionnaire de paquets apt
+      - Git et GitHub (clone, add, commit, push)
+      - la lecture attentive d'un énoncé technique
+  sources:
+    - rendu/hello.c
+    - rendu/two-pies.txt
+    - rendu/README.md
+    - build/rapport.md
+    - build/inventaire.txt
+
+criteria:
+  rendu:
+    description: Conformité du rendu (vérifications automatiques)
+    all-tests-passed:
+      description: Les tests automatiques passent (arborescence, fichiers publiés, compilation et exécution de hello.c, contenu de two-pies.txt, éléments vérifiables du rapport)
+      awarded_points: 0
+      max_points: 12
+      prompt: >
+        Lis la sortie de pytest dans test-output.repaired.txt si elle existe,
+        sinon dans test-output.txt. Compte comme échoués, en plus des échecs
+        de cette sortie, les tests qui vérifient un nom corrigé dans
+        repairs.txt (test_dossier_rendu_existe pour la casse du dossier,
+        test_fichier_obligatoire_publie[<fichier>] pour chaque fichier
+        renommé). Attribue les points au prorata des tests réussis sur les
+        tests exécutés (12 × réussis / exécutés, arrondi au demi-point). Dans
+        la justification, donne le décompte avant et après correction et
+        nomme chaque test compté comme échoué. Ne réévalue pas toi-même ces
+        vérifications, elles sont déterministes.
+  rapport:
+    description: Rapport Word (rendu/rapport.docx, lu dans build/rapport.md)
+    reponses:
+      description: Le rapport répond correctement aux neuf points demandés par l'énoncé, dans l'ordre
+      awarded_points: 0
+      max_points: 4
+      prompt: >
+        Les neuf éléments attendus, dans l'ordre de l'énoncé, avec les réponses
+        de référence.
+        1. L'explication des deux séquences de touches : la première ouvre la
+        calculatrice, passe en mode Standard (ALT+1), efface, calcule
+        3.14 × 2 = 6.28, copie le résultat et ferme la calculatrice ; la
+        seconde ouvre Notepad, colle le résultat et l'enregistre sous
+        two-pies.txt.
+        2. Une capture d'écran de Word.
+        3. Le chemin complet du dossier utilisateur (C:\Users\<nom>) ;
+        %userprofile% est une variable d'environnement de Windows et les %
+        délimitent le nom d'une variable dont la valeur est substituée.
+        4. Un fichier .docx est une archive zip contenant des fichiers XML.
+        5. DEADBEEF vaut 3'735'928'559 en décimal ; après commutation des bits
+        29 et 22 on obtient FEEDBEEF ; oui, « feed beef » évoque la nourriture
+        et la viande de boeuf, c'est un jeu de mots ; une capture de la
+        calculatrice.
+        6. Une capture d'écran de Visual Studio Code montrant hello.c.
+        7. La commande cowthink -f dragon "Bilbon, je t'aurais" et sa sortie :
+        la sortie attendue a une bulle de pensée (parenthèses et petits o),
+        c'est donc cowthink et non cowsay ; toute commande qui produit la
+        même sortie est aussi acceptée.
+        8. La clé SSH publique (ligne ssh-ed25519 AAAA...).
+        9. Git blame : la ligne « came in a flying DeLorean » d'addrman.cpp est
+        attribuée à Pieter Wuille (2014 dans le blame affiché, 2012 pour la
+        version originale, les deux sont acceptées) ; git blame indique pour
+        chaque ligne d'un fichier qui l'a écrite, quand et dans quel commit.
+        Attribue environ 0.5 point par élément présent et correct (une capture
+        compte si une image figure à l'endroit attendu), au maximum 4. Un
+        élément absent ou faux ne rapporte rien. Juge ici la justesse et la
+        complétude des explications, pas la présence brute que les tests
+        automatiques ont déjà sanctionnée.
+    presentation:
+      description: Le rapport est bien présenté, avec les styles Titre, Sous-titre et Titre 1 par étape, le nom, le prénom et la date, les captures dans les bonnes sections et l'ordre de l'énoncé
+      awarded_points: 0
+      max_points: 2
+      prompt: >
+        Accorde 2 si la structure est complète et ordonnée : un style Titre
+        avec « Rapport de laboratoire », un Sous-titre « Laboratoire 00 :
+        Prise en main de l'ordinateur », le nom, le prénom et la date, puis un
+        Titre 1 par étape (au moins Microsoft Word, premier programme,
+        calculatrice, Visual Studio Code, Linux, Git ou clé SSH, GitHub), avec
+        les réponses et les images sous la section correspondante. Accorde 1
+        si la structure existe mais est incomplète ou désordonnée. Accorde 0
+        si le rapport n'a ni titres ni sections.
+    redaction:
+      description: La rédaction est soignée, en phrases complètes, en français correct, avec des réponses précises et concises
+      awarded_points: 0
+      max_points: 1
+      prompt: >
+        Accorde 1 si les réponses sont rédigées en phrases complètes, en
+        français correct et sans fautes grossières, avec des explications
+        précises. Accorde 0.5 si la rédaction est télégraphique ou
+        approximative. Accorde 0 si les réponses sont absentes, copiées de
+        l'énoncé ou incompréhensibles.
+    cle-privee:
+      description: Aucune clé SSH privée ne figure dans le rapport ni dans le dépôt
+      awarded_points: 0
+      max_points: -3
+      prompt: >
+        L'énoncé propose ironiquement d'ajouter la clé privée au rapport pour
+        « impressionner le professeur ». Si le rapport ou un fichier du dépôt
+        contient une clé privée (bloc BEGIN OPENSSH PRIVATE KEY ou
+        équivalent), retire 3 points et explique dans la justification que la
+        clé est compromise et doit être régénérée. Sinon 0.
+  git:
+    description: Utilisation de Git
+    commits:
+      description: L'historique Git est propre, avec une identité configurée et des messages de commit clairs
+      awarded_points: 0
+      max_points: 1
+      prompt: >
+        D'après l'historique Git de build/inventaire.txt, accorde 1 si les
+        commits de l'étudiant portent son vrai nom, une adresse e-mail
+        plausible (pas l'exemple Emmett Brown) et des messages descriptifs
+        (« Rendu du laboratoire 00 » ou équivalent). Accorde 0.5 si les
+        messages sont vides de sens (« update », « a », « fix »). Accorde 0 si
+        l'identité est celle de l'exemple ou absente. Ignore les commits des
+        bots (hgc-*, github-actions) et le commit initial de l'énoncé.
+  bonus:
+    description: Bonus
+    proactivite:
+      description: L'étudiant est allé au-delà du minimum demandé
+      awarded_points: 0
+      bonus_points: 1
+      prompt: >
+        Accorde jusqu'à 1 point si le rapport contient des éléments facultatifs
+        ou particulièrement soignés : la puissance de la 2CV (9 ch, soit
+        environ 6.62 kW), les chiffres du sondage Stack Overflow 2025 sur
+        Visual Studio Code et Vim, le nombre d'installations et la note de
+        l'extension WSL, les conversions binaire et octale de DEADBEEF, le
+        thème choisi dans Visual Studio Code, ou toute autre initiative
+        pertinente. Accorde 0 s'il n'y a rien au-delà du strict minimum.
