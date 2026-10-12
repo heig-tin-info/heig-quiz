@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import type { ProjectDetail, ProjectSourceDetail } from "@quiz/contracts";
+import { PROTECTED_FILE_SUGGESTIONS, type ProjectDetail, type ProjectSourceDetail } from "@quiz/contracts";
 
 import { PROJECT_GRADING_MODES } from "@quiz/domain";
 
@@ -12,14 +12,24 @@ import { Badge, Disclosure, SettingRow } from "../ui";
 import { repoShortName, type WriteProject } from "./projectPage";
 import { CriteriaRows, CriteriaSwitchRow } from "./ProjectCriteria";
 import { DeadlineStrategyRow, GradingModeRow } from "./ProjectSettingRows";
-import { ProtectedFiles } from "./ProtectedFiles";
+import { ProtectedFiles, sourceFiles } from "./ProtectedFiles";
 import { WorkModeSetting } from "./ProjectWorkspace";
 
+/** The protected files on offer: the suggestions as checkboxes, the source's files as completions. */
+export interface ProtectedOffer {
+  suggested: readonly string[];
+  files: readonly string[];
+}
+
 /**
- * The protected files on offer (F-PROJ-01): the source's suggestions, and a
- * file protected today that the source no longer suggests stays on the list.
+ * The protected files on offer (F-PROJ-01): the source's suggestions, and
+ * every file of its tree as a completion of a path added by hand. A file
+ * protected today that the source does not suggest is an added path
+ * (`ProtectedFiles`). Until the source is read, the suggestions protected
+ * today stand for its own, so that none of them is drawn as an added chip
+ * meanwhile (the source's unchecked suggestions still appear once it is read).
  */
-export function useProtectedSuggestions(project: ProjectDetail, enabled: boolean): string[] {
+export function useProtectedSuggestions(project: ProjectDetail, enabled: boolean): ProtectedOffer {
   const sourceRepo = repoShortName(project.source.fullName);
   const source = useQuery<ProjectSourceDetail>({
     queryKey: projectSourceKey(project.classroomId, sourceRepo),
@@ -27,27 +37,31 @@ export function useProtectedSuggestions(project: ProjectDetail, enabled: boolean
     queryFn: () =>
       api(`/app/api/classrooms/${project.classroomId}/projects/sources/${encodeURIComponent(sourceRepo)}`),
   });
-  return [...new Set([...(source.data?.suggestedProtected ?? []), ...project.protectedFiles])];
+  const known: readonly string[] = PROTECTED_FILE_SUGGESTIONS;
+  return {
+    suggested: source.data?.suggestedProtected ?? project.protectedFiles.filter((p) => known.includes(p)),
+    files: sourceFiles(source.data),
+  };
 }
 
 /** The protected files: an editor while `editable` names them, the list otherwise. */
 export function ProtectedFilesRow({
   project,
   disabled,
-  suggested,
+  offer,
   onChange,
 }: {
   project: ProjectDetail;
   disabled: boolean;
-  suggested: string[];
+  offer: ProtectedOffer;
   onChange: (protectedFiles: string[]) => void;
 }) {
   const t = useT();
   return (
-    <SettingRow stacked title={t("project.protected")} desc={t("project.protected.desc")}>
+    <SettingRow stacked title={t("project.protected")} desc={`${t("project.protected.desc")} ${t("project.protected.hint")}`}>
       {project.editable.includes("protectedFiles") ? (
         <fieldset disabled={disabled} className="min-w-0">
-          <ProtectedFiles suggested={suggested} value={project.protectedFiles} onChange={onChange} />
+          <ProtectedFiles suggested={offer.suggested} files={offer.files} value={project.protectedFiles} onChange={onChange} />
         </fieldset>
       ) : project.protectedFiles.length > 0 ? (
         <ul className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[13px] text-fg-muted">
@@ -88,7 +102,7 @@ export function ProjectSettings({
   const t = useT();
   const [open, setOpen] = useState(false);
   const busy = pending || project.archivedAt !== null;
-  const suggested = useProtectedSuggestions(project, open);
+  const offer = useProtectedSuggestions(project, open);
   const protectedCount = project.protectedFiles.length;
 
   return (
@@ -114,7 +128,7 @@ export function ProjectSettings({
       <ProtectedFilesRow
         project={project}
         disabled={busy}
-        suggested={suggested}
+        offer={offer}
         onChange={(protectedFiles) => write({ protectedFiles })}
       />
       <WorkModeSetting projectId={project.id} archived={project.archivedAt !== null} />

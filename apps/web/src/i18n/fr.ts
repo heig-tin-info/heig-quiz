@@ -5659,6 +5659,12 @@ export const fr: Record<keyof Dict, string> = {
   "project.scale.score_is_grade": "Le score est la note",
   "project.protected": "Fichiers protégés",
   "project.advanced.desc": "Branches, source, publication, échéances, notation, fichiers protégés, travail en groupe. Les valeurs par défaut conviennent à la plupart des projets.",
+  "project.protected.hint": "La plateforme utilise aussi ces fichiers de la distribution, à la place de ceux de l'étudiant, pour exécuter les tests. Un fichier absent de la source n'est simplement pas restauré.",
+  "project.protected.add": "Ajouter",
+  "project.protected.add.label": "Ajouter un fichier",
+  "project.protected.add.invalid": "Un chemin relatif à la racine du dépôt, comme tests/test_lab.py : sans / initial, sans « .. », 50 fichiers au plus.",
+  "project.protected.added": "Fichiers ajoutés par chemin",
+  "project.protected.remove": "Ne plus protéger",
   "project.protected.gradingWarning": "Non protégé, le workflow d'évaluation peut être modifié par l'étudiant, et le score avec lui.",
   "project.groups": "Groupes",
 
