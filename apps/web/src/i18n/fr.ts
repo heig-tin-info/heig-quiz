@@ -6051,7 +6051,11 @@ export const fr: Record<keyof Dict, string> = {
   "project.grading.regrade": "Recorriger ce dépôt",
   "project.grading.regrade.title": "Recorriger {name} ?",
   "project.grading.regrade.body":
-    "Les tests tournent à nouveau et l'IA propose à nouveau : 1 appel. Les lignes validées et celles des enseignants restent. Au plus trois recorrections par jour et par projet.",
+    "Les tests tournent à nouveau et l'IA propose à nouveau : 1 appel. Les lignes validées et celles des enseignants restent. Au plus trois recorrections par jour et par dépôt.",
+  "project.grading.regradeAll": "Recorriger tous les dépôts",
+  "project.grading.regradeAll.title": "Recorriger tous les dépôts gelés ?",
+  "project.grading.regradeAll.body":
+    "Les tests sont relancés et l'IA propose à nouveau pour chaque dépôt, appels : {n}. Les lignes validées et celles des enseignants restent. Au plus trois recorrections du projet entier par jour.",
   "project.grading.regrade.confirm": "Recorriger",
   "project.grading.regrade.done": "Recorrection lancée : les propositions arrivent dans un instant.",
   "project.grading.keys": "← → entre les dépôts",

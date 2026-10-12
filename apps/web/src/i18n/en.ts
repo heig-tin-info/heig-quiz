@@ -6067,7 +6067,11 @@ export const en = {
   "project.grading.regrade": "Regrade this repository",
   "project.grading.regrade.title": "Regrade {name}?",
   "project.grading.regrade.body":
-    "The tests run again and the AI proposes again: 1 call. Validated rows and teachers' rows stay. At most three regrades a day per project.",
+    "The tests run again and the AI proposes again: 1 call. Validated rows and teachers' rows stay. At most three regrades a day per repository.",
+  "project.grading.regradeAll": "Regrade every repository",
+  "project.grading.regradeAll.title": "Regrade every frozen repository?",
+  "project.grading.regradeAll.body":
+    "The tests run again and the AI proposes again for each repository, calls: {n}. Validated rows and teachers' rows stay. At most three regrades of the whole project a day.",
   "project.grading.regrade.confirm": "Regrade",
   "project.grading.regrade.done": "Regrade started: the proposals arrive in a moment.",
   "project.grading.keys": "← → between repositories",

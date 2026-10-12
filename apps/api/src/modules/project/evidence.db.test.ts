@@ -12,7 +12,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { ProjectSummary } from "@quiz/contracts";
-import { RunnerUnavailable, type ProjectRunRefusal, type ProjectRunRequest, type ProjectRunResult } from "@quiz/core/server";
+import { RunnerBusy, RunnerUnavailable, type ProjectRunRefusal, type ProjectRunRequest, type ProjectRunResult } from "@quiz/core/server";
 import { readTar } from "@quiz/core/tar";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 
@@ -32,7 +32,7 @@ import { setRemoteBaseForTests } from "../../github/git.js";
 import { appKey, CODELOAD_HOST, fakeGithub, orgsRoute } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
-import { purgeEvidenceFiles, runEvidence, TarballUnavailable } from "./evidence.js";
+import { BUSY_ATTEMPTS_MAX, purgeEvidenceFiles, runEvidence, TarballUnavailable } from "./evidence.js";
 import { CODELOAD_TOKEN, repoWorld } from "./testing.js";
 
 const CRITERIA = `schema_version: 2
@@ -291,6 +291,37 @@ describe("the evidence of a repository", () => {
     await receipt(repo, "a".repeat(40), before(5));
     expect(await runEvidence(server.app, config, repo.id)).toMatchObject({ status: "repo_missing", rows: 3 });
     expect((await pointsOf(repo.id))["rendu.parse"]).toEqual([0, 4, "repo_missing"]);
+  });
+
+  it("waits for a busy runner, and gives up past the bound", async () => {
+    const repo = await studentRepo(l, "lab-busy");
+    await receipt(repo, world.commit(repo.fullName, "main", { "src/b.py": "1\n" }), before(5));
+    // One 429 with no delay to honour, then the run: the evidence is ok and the request was sent twice.
+    let calls = 0;
+    answer = () => (++calls === 1 ? Promise.reject(new RunnerBusy(0)) : Promise.resolve(RESULT));
+    const sentBefore = sent.length;
+    expect(await runEvidence(server.app, config, repo.id)).toMatchObject({ status: "ok" });
+    expect(sent.length - sentBefore).toBe(2);
+    // Busy at every attempt: sent BUSY_ATTEMPTS_MAX times, then stored as timed_out / runner_busy, never a throw.
+    const other = await studentRepo(l, "lab-busier");
+    await receipt(other, world.commit(other.fullName, "main", { "src/b.py": "1\n" }), before(5));
+    answer = () => Promise.reject(new RunnerBusy(0));
+    const otherBefore = sent.length;
+    expect(await runEvidence(server.app, config, other.id)).toMatchObject({ status: "timed_out" });
+    expect(sent.length - otherBefore).toBe(BUSY_ATTEMPTS_MAX);
+    expect((await evidenceOf(other.id))[0]!.reason).toBe("runner_busy");
+    answer = () => Promise.resolve(RESULT);
+  });
+
+  it("never resends a run the client gave up on (its timeout, no Retry-After)", async () => {
+    const repo = await studentRepo(l, "lab-slow");
+    await receipt(repo, world.commit(repo.fullName, "main", { "src/b.py": "1\n" }), before(5));
+    answer = () => Promise.reject(new RunnerBusy(null));
+    const sentBefore = sent.length;
+    expect(await runEvidence(server.app, config, repo.id)).toMatchObject({ status: "timed_out" });
+    expect(sent.length - sentBefore).toBe(1);
+    expect((await evidenceOf(repo.id))[0]!.reason).toBe("runner_busy");
+    answer = () => Promise.resolve(RESULT);
   });
 
   it("records the runner refusing the archive, or unreachable, as the criteria's reason", async () => {

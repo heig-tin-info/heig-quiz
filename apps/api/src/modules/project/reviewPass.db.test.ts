@@ -531,25 +531,34 @@ describe("Regrade", () => {
     expect(style).toHaveLength(1);
     expect(style[0]!.supersedesId).toBe(firstStyle.id);
 
+    // The caps are apart (ADR-106 §4 as amended): a repository's regrade never spends the project's.
     expect((await server.app.inject({ method: "POST", url: regradeUrl(l), headers: teacher.headers })).statusCode).toBe(202);
-    const fourth = await server.app.inject({ method: "POST", url: regradeUrl(l, b.id), headers: teacher.headers });
+    expect((await server.app.inject({ method: "POST", url: regradeUrl(l), headers: teacher.headers })).statusCode).toBe(202);
+    const fourth = await server.app.inject({ method: "POST", url: regradeUrl(l), headers: teacher.headers });
     expect(fourth.statusCode).toBe(429);
     expect(fourth.json()).toMatchObject({ error: "regrade_limit" });
+    expect((await server.app.inject({ method: "POST", url: regradeUrl(l, b.id), headers: teacher.headers })).statusCode).toBe(202);
+    expect((await server.app.inject({ method: "POST", url: regradeUrl(l, a.id), headers: teacher.headers })).statusCode).toBe(202);
+    expect((await server.app.inject({ method: "POST", url: regradeUrl(l, a.id), headers: teacher.headers })).statusCode).toBe(202);
+    const fifth = await server.app.inject({ method: "POST", url: regradeUrl(l, a.id), headers: teacher.headers });
+    expect(fifth.statusCode).toBe(429);
 
     const audits = await server.app.db
       .select()
       .from(auditLog)
       .where(and(eq(auditLog.action, "project_repo.regrade"), eq(auditLog.subjectId, l.projectId)));
-    expect(audits).toEqual([
-      expect.objectContaining({ actorUserId: teacher.id, subjectType: "project", payload: expect.objectContaining({ repoId: a.id }) }),
-    ]);
+    // Four repository regrades (a, b, a, a), the refused one unaudited; three of the project's.
+    expect(audits).toHaveLength(4);
+    expect(audits.every((row) => row.actorUserId === teacher.id && row.subjectType === "project")).toBe(true);
+    expect(audits.map((row) => (row.payload as { repoId: string }).repoId).sort()).toEqual([a.id, a.id, a.id, b.id].sort());
     const projectAudits = await server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "project.regrade"), eq(auditLog.subjectId, l.projectId)));
-    expect(projectAudits).toHaveLength(2);
+    expect(projectAudits).toHaveLength(3);
 
-    // The next day, the cap is new.
+    // The next day, the caps are new.
     server.clock.set("2026-10-03T08:00:00.000Z");
     try {
-      expect((await server.app.inject({ method: "POST", url: regradeUrl(l, b.id), headers: teacher.headers })).statusCode).toBe(202);
+      expect((await server.app.inject({ method: "POST", url: regradeUrl(l, a.id), headers: teacher.headers })).statusCode).toBe(202);
+      expect((await server.app.inject({ method: "POST", url: regradeUrl(l), headers: teacher.headers })).statusCode).toBe(202);
     } finally {
       server.clock.set(NOW);
     }

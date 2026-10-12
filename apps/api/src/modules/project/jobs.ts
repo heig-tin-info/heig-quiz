@@ -87,7 +87,7 @@ import type { TickTask } from "../../ticker.js";
 import { requestCodespaceSync } from "../codespace/service.js";
 import { DomainError } from "../http.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
-import { EVIDENCE_CONCURRENCY, type EvidenceJob } from "./evidence.js";
+import { EVIDENCE_CONCURRENCY, EVIDENCE_EXPIRY_SECONDS, type EvidenceJob } from "./evidence.js";
 import { stopGroups, stopProjects } from "./groupCopy.js";
 import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
 import { claimLeases, runLeased, type ProjectJob } from "./lease.js";
@@ -378,7 +378,7 @@ export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue,
   await queue.createQueue(PROJECT_SYNC_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_SYNC_QUEUE, (job) => runSyncJob(app, config, job));
   // The evidence of a project graded by criteria (ADR-106 §3), sent by the final pass and a Regrade; its review follows (§4).
-  await queue.createQueue(PROJECT_EVIDENCE_QUEUE, { retryLimit: 0 });
+  await queue.createQueue(PROJECT_EVIDENCE_QUEUE, { retryLimit: 0, expireInSeconds: EVIDENCE_EXPIRY_SECONDS });
   await queue.work<EvidenceJob>(PROJECT_EVIDENCE_QUEUE, (job) => runEvidencePass(app, config, job), {
     localConcurrency: EVIDENCE_CONCURRENCY,
   });

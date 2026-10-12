@@ -459,10 +459,10 @@ export type AuditAction =
   | "project.grading_mode"
   | "project.criteria_reload"
   /**
-   * A Regrade by the staff (ADR-106 §4), what the project's three a day
-   * count, both subject the project: `project.regrade` — `payload.passId`,
-   * `repos` (their count); `project_repo.regrade` — `payload.passId`,
-   * `repoId`.
+   * A Regrade by the staff (ADR-106 §4), both subject the project, each
+   * action counted by its own three a day: `project.regrade` —
+   * `payload.passId`, `repos` (their count), the project's cap;
+   * `project_repo.regrade` — `payload.passId`, `repoId`, that repository's.
    */
   | "project.regrade"
   | "project_repo.regrade"
