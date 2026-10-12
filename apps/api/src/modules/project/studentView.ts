@@ -13,10 +13,14 @@
  * the run their score comes from and that score, indicative until the
  * release (`studentScoreRun` of `@quiz/domain`: the current CI score, the
  * frozen one once their deadline is applied), the number of commits their
- * repository received from no bot by their deadline (M3-14i; the card carries these
- * too, as the state of their work) — and, once released, the
+ * repository received from no bot by their deadline (M3-14i; the card
+ * carries these too, as the state of their work) — and, once released, the
  * final score's snapshot, its grade and the teacher's comment as the
- * release wrote it.
+ * release wrote it. On a project graded by `criteria` (ADR-106 §9), the
+ * criteria table of their OWN repository, the domain's `student` audience
+ * of `criteriaTable`: obtained empty until graded, indicative until
+ * validated and released, the lock of a milestone; the rationales only
+ * after the repository's definitive freeze, provisional until the release.
  *
  * What it never carries: the source or distribution repository (not even
  * their existence), another student's repository or score, a push or a run
@@ -25,8 +29,12 @@
  * webhooks keep moving on an open repository), the review's or the
  * teacher's score before the release, the staff's flags (`to_verify`,
  * `multiple`, `malformed`, the suspended protection), a draft or an
- * archived project. The leak test of `studentView.db.test.ts` searches
- * every student response for them.
+ * archived project; of the criteria rows, a row's source, reason, model,
+ * pass or checkpoint, a superseded row, an evidence file, a rationale
+ * before the definitive freeze (a milestone's included), another
+ * repository's rows, or any row of a project in another mode. The leak
+ * test of `studentView.db.test.ts` searches every student response for
+ * them.
  *
  * The repository is the seat's: read through a STUDENT seat only — a staff
  * seat (a teacher in the student view, ADR-018) holds none, so the view
@@ -42,12 +50,14 @@ import type {
   ProjectInvitationResent,
   StudentProject,
   ProjectSeatKind,
+  StudentCriteriaRow,
   StudentProjectCard,
   StudentProjectRepo,
   StudentProjectScore,
   StudentProjectWork,
 } from "@quiz/contracts";
 import {
+  criteriaTable,
   effectiveDeadline,
   projectGraded,
   scoreGrade,
@@ -67,6 +77,7 @@ import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, pro
 import { htmlUrl } from "../../github/git.js";
 import type { StudentProjectScope } from "../guards.js";
 import { countedReceipts, repoCommitCount } from "./commits.js";
+import { criteriaStandings } from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
 import { slotRuns } from "./scores.js";
 import { ProjectError } from "./errors.js";
@@ -261,6 +272,23 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, { runs, receipts }:
 }
 
 /**
+ * The criteria table of `repo` (ADR-106 §9): null unless its project is
+ * graded by `criteria` with a snapshot (`criteriaStandings` reads none
+ * otherwise). Frozen and released by the server's columns: the
+ * repository's definitive freeze, the project's release.
+ */
+async function studentCriteria(db: Db, project: ProjectRow, repo: ProvisionedRepo | null): Promise<StudentCriteriaRow[] | null> {
+  if (repo === null || project.gradingMode !== "criteria") return null;
+  const standing = (await criteriaStandings(db, [repo])).get(repo.id);
+  if (!standing) return null;
+  return criteriaTable(standing.snapshot, standing.rows, {
+    audience: "student",
+    frozen: repo.frozenAt !== null,
+    released: project.releasedAt !== null,
+  });
+}
+
+/**
  * `GET /app/api/student/projects/:id` (F-PROJ-15): the student payload of
  * the project `scope` loaded through `studentProjectView` (invariant 6),
  * for `userId` — the caller, or the impersonated student (ADR-034). A
@@ -280,7 +308,11 @@ export async function studentProject(
   const seat = scope.seat === null ? null : scope.seat.staff ? ("staff" as const) : ("student" as const);
   const repo = provisioned(row);
   const live = liveRepo(row, project);
-  const [linked, read] = await Promise.all([githubLinked(db, userId), readings(db, live === null ? [] : [live])]);
+  const [linked, read, criteria] = await Promise.all([
+    githubLinked(db, userId),
+    readings(db, live === null ? [] : [live]),
+    studentCriteria(db, project, repo),
+  ]);
   const { facts } = cardFacts({ project, classroomName: scope.room.name, courseCode: scope.course.code, repo: row }, linked, now);
   return {
     ...facts,
@@ -309,6 +341,7 @@ export async function studentProject(
             grade: scoreGrade(repo?.releasedPoints ?? null, repo?.releasedMax ?? null, project.gradingScale),
             comment: repo?.releasedComment ?? null,
           },
+    criteria,
     // ADR-047 (M6-06): the mode alone, when the project runs in the portal and the feature is on.
     workspace: codespace && project.workMode !== "free" ? { mode: project.workMode } : null,
     serverNow: iso(now),

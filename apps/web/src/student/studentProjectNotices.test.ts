@@ -45,6 +45,7 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
   status: "in_progress",
   githubLinked: true,
   gradingMode: "auto",
+  criteria: null,
   repo: repo(),
   release: null,
   serverNow: at(0),

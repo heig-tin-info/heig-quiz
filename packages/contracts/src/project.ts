@@ -1398,6 +1398,43 @@ export const StudentProjectCard = z.object({
 });
 export type StudentProjectCard = z.infer<typeof StudentProjectCard>;
 
+/** Why a criterion's row is a 0-point proposal (`CRITERION_REASONS` of `@quiz/domain`): staff only. */
+export const CriterionReason = z.enum(CRITERION_REASONS);
+export type CriterionReason = z.infer<typeof CriterionReason>;
+
+/**
+ * One line of a repository's criteria table (`criteriaTable` of
+ * `@quiz/domain`, ADR-106 §6), the staff's audience (the student's is
+ * {@link StudentCriteriaRow}): `rationale` is plain text, shown escaped,
+ * never rendered as markup.
+ */
+export const CriteriaTableRow = z.object({
+  criterionId: z.string(),
+  section: z.string(),
+  description: z.string(),
+  max: z.number(),
+  bonus: z.number().optional(),
+  points: z.number().nullable(),
+  state: z.enum(CRITERIA_TABLE_STATES),
+  /** Locked by a milestone pass (ADR-106 §5): the final pass and a Regrade leave it alone. */
+  locked: z.boolean(),
+  source: z.enum(GRADING_SOURCES).optional(),
+  rationale: z.string().optional(),
+  reason: CriterionReason.optional(),
+});
+export type CriteriaTableRow = z.infer<typeof CriteriaTableRow>;
+
+/**
+ * One line of the student's criteria table (ADR-106 §9, N-SEC-20): the
+ * `student` audience of `criteriaTable` — criterion, expected (its
+ * description), max, obtained (null until a pass or a teacher graded it,
+ * and for a failed pass), `indicative` until validated and released, the
+ * milestone's lock; the rationale only after the repository's definitive
+ * freeze, plain text. Never a row's source nor its reason.
+ */
+export const StudentCriteriaRow = CriteriaTableRow.omit({ source: true, reason: true });
+export type StudentCriteriaRow = z.infer<typeof StudentCriteriaRow>;
+
 /**
  * What the release gave the student (F-PROJ-14): the final score's
  * snapshot, its grade, and the teacher's comment AS THE RELEASE WROTE IT
@@ -1431,6 +1468,12 @@ export const StudentProject = StudentProjectCard.omit({ invitation: true, repoFu
   gradingMode: ProjectGradingMode,
   repo: StudentProjectRepo.nullable(),
   release: StudentProjectRelease.nullable(),
+  /**
+   * The criteria table of their own repository (ADR-106 §9): null unless the
+   * project is graded by `criteria` and they hold a repository; final once
+   * every row is `validated` (validated and released).
+   */
+  criteria: z.array(StudentCriteriaRow).nullable(),
   /** The online workspace (ADR-047, M6-06): the mode when the project runs in the portal and the feature is on; null otherwise. */
   workspace: StudentProjectWorkspace.nullable(),
   serverNow: z.iso.datetime(),
@@ -1514,31 +1557,6 @@ export type ProjectCriteriaView = z.infer<typeof ProjectCriteriaView>;
  */
 export const ProjectRegradeAccepted = z.object({ repos: z.number().int().nonnegative() });
 export type ProjectRegradeAccepted = z.infer<typeof ProjectRegradeAccepted>;
-
-/** Why a criterion's row is a 0-point proposal (`CRITERION_REASONS` of `@quiz/domain`): staff only. */
-export const CriterionReason = z.enum(CRITERION_REASONS);
-export type CriterionReason = z.infer<typeof CriterionReason>;
-
-/**
- * One line of a repository's criteria table (`criteriaTable` of
- * `@quiz/domain`, ADR-106 §6), the staff's audience: `rationale` is plain
- * text, shown escaped, never rendered as markup.
- */
-export const CriteriaTableRow = z.object({
-  criterionId: z.string(),
-  section: z.string(),
-  description: z.string(),
-  max: z.number(),
-  bonus: z.number().optional(),
-  points: z.number().nullable(),
-  state: z.enum(CRITERIA_TABLE_STATES),
-  /** Locked by a milestone pass (ADR-106 §5): the final pass and a Regrade leave it alone. */
-  locked: z.boolean(),
-  source: z.enum(GRADING_SOURCES).optional(),
-  rationale: z.string().optional(),
-  reason: CriterionReason.optional(),
-});
-export type CriteriaTableRow = z.infer<typeof CriteriaTableRow>;
 
 /** A step of an evidence run, as the staff read it: its exit code, never its output. */
 const EvidenceStepSummary = z.object({ exitCode: z.number().int().nullable(), timedOut: z.boolean() });

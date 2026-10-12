@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronRight, FlaskConical, Lock, Sparkles, UserRound } from "lucide-react";
+import { AlertTriangle, Check, FlaskConical, Lock, Sparkles, UserRound } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { CriteriaTableRow, CriterionGradeWrite, CriterionReason } from "@quiz/contracts";
@@ -6,6 +6,7 @@ import { awardedRange } from "@quiz/domain";
 
 import { useT, type Dict } from "../../i18n";
 import { Badge, Button, cx, FieldError, fieldErrorProps, T, TableHead, Textarea, TextInput, Tip, useNumberDraft, type Column } from "../../ui";
+import { RationaleFold, RationaleText } from "./RationaleFold";
 
 type Source = NonNullable<CriteriaTableRow["source"]>;
 
@@ -83,8 +84,6 @@ export function CriteriaTable({
 
 function CriterionRow({ row, writable, onGrade }: { row: CriteriaTableRow; writable: boolean; onGrade: GradeWrite }) {
   const t = useT();
-  const [open, setOpen] = useState(false);
-  const foldId = useId();
   return (
     <tr role="row" className={cx(T.row, T.stack.row, "align-top")}>
       <td role="cell" className={cx(T.td, T.stack.main, "@max-md:whitespace-normal")}>
@@ -94,21 +93,11 @@ function CriterionRow({ row, writable, onGrade }: { row: CriteriaTableRow; writa
             <span className="font-mono">{row.criterionId}</span>
             {row.bonus !== undefined ? <Badge tone="green">{t("project.grading.bonus", { n: row.bonus })}</Badge> : null}
             {row.max < 0 ? <Badge tone="amber">{t("project.grading.penalty")}</Badge> : null}
-            {row.rationale !== undefined || (writable && row.points !== null) ? (
-              <button
-                type="button"
-                aria-expanded={open}
-                aria-controls={foldId}
-                onClick={() => setOpen((o) => !o)}
-                className="inline-flex items-center gap-0.5 rounded-sm font-medium text-fg-muted transition-colors hover:text-fg"
-              >
-                <ChevronRight aria-hidden className={cx("size-3.5 transition-transform", open && "rotate-90")} />
-                {t("project.grading.rationale")}
-              </button>
-            ) : null}
           </span>
-          {open ? (
-            <Rationale id={foldId} row={row} writable={writable && row.points !== null} onGrade={onGrade} />
+          {row.rationale !== undefined || (writable && row.points !== null) ? (
+            <RationaleFold>
+              <Rationale row={row} writable={writable && row.points !== null} onGrade={onGrade} />
+            </RationaleFold>
           ) : null}
         </span>
       </td>
@@ -223,23 +212,13 @@ function StateBadge({ row }: { row: CriteriaTableRow }) {
  * node, line breaks kept), and, for a criterion with points, an edit that
  * writes it with the same points (a teacher's row).
  */
-function Rationale({
-  id,
-  row,
-  writable,
-  onGrade,
-}: {
-  id: string;
-  row: CriteriaTableRow;
-  writable: boolean;
-  onGrade: GradeWrite;
-}) {
+function Rationale({ row, writable, onGrade }: { row: CriteriaTableRow; writable: boolean; onGrade: GradeWrite }) {
   const t = useT();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(row.rationale ?? "");
   if (editing) {
     return (
-      <span id={id} className="mt-1 flex max-w-[70ch] flex-col items-start gap-2">
+      <>
         <Textarea
           aria-label={t("project.grading.rationale")}
           value={text}
@@ -257,19 +236,17 @@ function Rationale({
         >
           {t("project.grading.rationale.save")}
         </Button>
-      </span>
+      </>
     );
   }
   return (
-    <span id={id} className="mt-1 flex max-w-[70ch] flex-col items-start gap-1">
-      <span className="whitespace-pre-wrap text-[13px] text-fg-muted">
-        {row.rationale ?? t("project.grading.rationale.none")}
-      </span>
+    <>
+      <RationaleText>{row.rationale ?? t("project.grading.rationale.none")}</RationaleText>
       {writable ? (
         <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
           {t("project.grading.rationale.edit")}
         </Button>
       ) : null}
-    </span>
+    </>
   );
 }

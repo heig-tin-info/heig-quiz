@@ -21,6 +21,7 @@ import type {
   StudentHome as StudentHomeData,
   StudentProject,
   StudentProjectCard,
+  StudentCriteriaRow,
 } from "@quiz/contracts";
 import {
   D,
@@ -778,6 +779,61 @@ const cardFacts = (): CardFacts[] => {
 };
 
 /**
+ * `?pjcriteria=1` (ADR-106 §9, L-02f): the open, the frozen and the released
+ * project are graded by criteria, and their views carry the student's table
+ * in each state — before the definitive freeze (points indicative, the llm
+ * criteria not graded yet, no rationale), after it (the provisional
+ * rationales; the teacher-only criterion still empty), and released (every
+ * row validated, the rationales final; 18 / 20 as the release says).
+ */
+const studentCriteria = (card: CardFacts): StudentCriteriaRow[] | null => {
+  if (!flags.pjcriteria) return null;
+  const state = card.id === STUDENT_PROJECT_OPEN ? "open" : card.id === STUDENT_PROJECT_FROZEN ? "frozen" : card.id === STUDENT_PROJECT_PAST ? "released" : null;
+  if (state === null) return null;
+  const final = state === "released";
+  const leaf = (criterionId: string, description: string, max: number, points: Record<typeof state, number | null>, rationale?: string, locked = false) => {
+    const obtained = points[state];
+    return {
+      criterionId,
+      section: criterionId.split(".")[0]!,
+      description,
+      max,
+      points: obtained,
+      state: obtained === null ? ("empty" as const) : final ? ("validated" as const) : ("indicative" as const),
+      locked,
+      ...(rationale !== undefined && state !== "open" && obtained !== null ? { rationale } : {}),
+    };
+  };
+  return [
+    leaf("rendu.compile", "Le programme compile sans avertissement", 2, { open: 2, frozen: 2, released: 2 }),
+    leaf("rendu.tests", "Les tests fournis passent", 6, { open: 4, frozen: 5, released: 6 }),
+    leaf(
+      "code.pointeurs",
+      "Utilisation correcte des pointeurs et de l'arithmétique des pointeurs",
+      4,
+      { open: 3.5, frozen: 3.5, released: 3.5 },
+      "Les parcours de tableau utilisent l'arithmétique des pointeurs à bon escient.\nDans inverser, l'indice n - i déborde d'une case quand n est pair.",
+      true,
+    ),
+    leaf(
+      "code.memoire",
+      "Toute mémoire allouée est libérée",
+      4,
+      { open: null, frozen: 2.5, released: 3 },
+      "La liste est libérée, mais le tampon de lecture de lire_ligne ne l'est jamais.",
+    ),
+    leaf(
+      "rapport.analyse",
+      "Le rapport justifie les choix de conception",
+      3,
+      { open: null, frozen: 2, released: 2.5 },
+      "Le choix d'un tableau dynamique est motivé ; la complexité de l'insertion n'est pas discutée.",
+    ),
+    leaf("git.commits", "Historique de commits lisible et régulier", 1, { open: null, frozen: null, released: 1 }),
+  ];
+};
+
+/**
  * The view of one of the cards above: its repository as the card names it
  * (deleted on the one GitHub lost), a current score on the open one, the
  * frozen score and the release on the past one, nothing yet on a pending
@@ -787,6 +843,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
   const { invitation, repoFullName, repoUrl, ...facts } = card;
   const sha = (seed: string) => seed.repeat(40).slice(0, 40);
   const released = card.status === "released";
+  const criteria = studentCriteria(card);
   // The open project's repository moves with each push of `?notices=1`: another commit, two points more.
   const pushes = card.id === STUDENT_PROJECT_OPEN ? pushedHere : 0;
   const at = released ? iso(-7 * D - 3 * H) : pushes > 0 ? new Date().toISOString() : iso(-2 * H);
@@ -818,11 +875,12 @@ const studentProjectView = (card: CardFacts): StudentProject => {
   return {
     ...facts,
     seat: flags.staffseat ? ("staff" as const) : ("student" as const),
-    gradingMode: "auto",
+    gradingMode: criteria === null ? "auto" : "criteria",
     repo,
     release: released
       ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." }
       : null,
+    criteria,
     // `?codespace=1` (ADR-047, M6-06): the open project runs in the workspace, the invited one under Safe Exam Browser.
     workspace: !flags.codespace
       ? null
