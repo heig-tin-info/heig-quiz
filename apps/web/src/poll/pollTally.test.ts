@@ -6,6 +6,7 @@ import type { PollTally, PollTeacherView } from "@quiz/contracts";
 
 import {
   hasKey,
+  isMultipleChoice,
   joinHost,
   percentOf,
   pollRows,
@@ -128,6 +129,15 @@ describe("pollRows — short", () => {
       }),
     );
     expect(rows.map((r) => r.label)).toEqual(["b", "a"]);
+  });
+});
+
+describe("isMultipleChoice", () => {
+  it("is true for an mcq in multiple mode only", () => {
+    expect(isMultipleChoice({ type: "mcq", student: { mode: "multiple" } })).toBe(true);
+    expect(isMultipleChoice({ type: "mcq", student: { mode: "single" } })).toBe(false);
+    expect(isMultipleChoice({ type: "short", student: { mode: "multiple" } })).toBe(false);
+    expect(isMultipleChoice({ type: "mcq", student: null })).toBe(false);
   });
 });
 

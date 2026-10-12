@@ -2091,8 +2091,10 @@ export const en = {
   "qt.mcq.e.maxSelectionsHint": "Empty means no limit.",
   "qt.mcq.e.neverShuffle": "Never shuffle this question",
   "qt.mcq.e.neverShuffleHint": "Even when the evaluation shuffles choices.",
+  "qt.mcq.e.allowSeveral": "Allow several answers",
+  "qt.mcq.e.allowSeveralFromKey": "Set by the correct answers you marked.",
   "qt.mcq.p.chooseOne": "Choose one answer.",
-  "qt.mcq.p.chooseSeveral": "Choose every correct answer.",
+  "qt.mcq.p.chooseSeveral": "Choose every answer that applies.",
   "qt.mcq.p.chooseUpTo": "Choose at most the allowed number of answers.",
   "qt.mcq.p.limitReached": "You have reached the maximum number of selections.",
   "qt.mcq.p.negativeMarking": "Wrong answers cost points; not answering costs nothing.",
@@ -4892,6 +4894,10 @@ export const en = {
   "poll.newHint":
     "Nothing is saved yet: the question lives with this poll. Keep this question, on the poll screen, puts it in your Polls pool.",
   "poll.keyOptional": "Marking a correct answer is optional: without one, the poll simply collects opinions.",
+  "poll.openFailed": "Could not open this question.",
+  "poll.fromRecent.same": "Unchanged, this question runs again as it was, with its history.",
+  "poll.fromRecent.edited":
+    "Edited, this becomes a new question, saved nowhere yet. The original and its results stay as they were.",
   "poll.incomplete":
     "The question is not complete yet. The fields that need attention are marked below.",
   "poll.openProjection": "Open projection",

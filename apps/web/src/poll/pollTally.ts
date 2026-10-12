@@ -97,6 +97,16 @@ export function hasKey(question: Pick<QuestionLike, "type" | "solution">): boole
   return Array.isArray(key) && key.length > 0;
 }
 
+/**
+ * Whether the question is an mcq that lets a participant tick several
+ * choices. Its shares are of the respondents and may add up past 100 %, so
+ * they are bars, never the slices of one ring (ADR-014, amendment 2026-10-12).
+ */
+export function isMultipleChoice(question: Pick<QuestionLike, "type" | "student">): boolean {
+  const student = question.student as Partial<McqStudent> | null;
+  return question.type === "mcq" && student?.mode === "multiple";
+}
+
 /** The prompt of the question, whatever its type; `""` for one without (a cloze). */
 export function promptOf<Q extends Pick<QuestionLike, "student">>(question: Q): string {
   const student = question.student as Partial<McqStudent & ShortStudent> | null;

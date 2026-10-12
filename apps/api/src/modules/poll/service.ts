@@ -38,6 +38,7 @@ import {
   type PollPoolPage,
   type PollPoolSearch,
   type PollPublicView,
+  type PollQuestionContent,
   type PollQuestionPick,
   type PollSettings,
   type PollSummary,
@@ -910,6 +911,36 @@ function rosterOfRun(
   return rosters.get(classroomId) ?? 0;
 }
 
+/** The latest published version of each question, by question id. */
+async function latestPublished(db: Db, ids: readonly string[]) {
+  const versions = await db
+    .select()
+    .from(questionVersions)
+    .where(and(inArray(questionVersions.questionId, [...ids]), isNotNull(questionVersions.number)))
+    .orderBy(asc(questionVersions.questionId), desc(questionVersions.number));
+  const latest = new Map<string, (typeof versions)[number]>();
+  for (const version of versions) if (!latest.has(version.questionId)) latest.set(version.questionId, version);
+  return latest;
+}
+
+/**
+ * A question opened in the launcher's editor (ADR-014, amendment
+ * 2026-10-12): its type and the config of the version a relaunch freezes,
+ * key included. The route loads the question through `reachableQuestion` —
+ * what the caller may relaunch, they may open — and this answers null (its
+ * 404) for one a poll cannot run: deleted, of another type, parameterized
+ * or never published (`assertPollable`'s conditions).
+ */
+export async function pollQuestionContent(
+  db: Db,
+  question: typeof questions.$inferSelect,
+): Promise<PollQuestionContent | null> {
+  if (question.deletedAt !== null || !isPollable(question.type) || question.randomizable) return null;
+  const version = (await latestPublished(db, [question.id])).get(question.id);
+  if (!version) return null;
+  return { type: question.type, config: loadConfig(question.type, version) };
+}
+
 /**
  * The launcher's "Recent polls" (issue #161, ADR-014 addendum 2026-09-27):
  * the questions of the polls the caller LAUNCHED, one row per question, most
@@ -971,13 +1002,7 @@ export async function questionPicks(
   const ids = rows.map((r) => r.question.id);
   const typeById = new Map(rows.map((r) => [r.question.id, r.question.type] as const));
 
-  const versions = await db
-    .select()
-    .from(questionVersions)
-    .where(and(inArray(questionVersions.questionId, ids), isNotNull(questionVersions.number)))
-    .orderBy(asc(questionVersions.questionId), desc(questionVersions.number));
-  const latest = new Map<string, (typeof versions)[number]>();
-  for (const version of versions) if (!latest.has(version.questionId)) latest.set(version.questionId, version);
+  const latest = await latestPublished(db, ids);
 
   // What each FINISHED run counts: its answers, the answers the grading pass
   // gave full marks (validated gradings only), and its roster. A running

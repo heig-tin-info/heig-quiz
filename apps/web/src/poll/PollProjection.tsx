@@ -19,7 +19,7 @@ import { PollBars } from "./PollBars";
 import { PollDonut } from "./PollDonut";
 import { ProjectionFooter } from "./ProjectionFooter";
 import { ProjectionHeader, projectionPhase, stepFrom } from "./ProjectionHeader";
-import { hasKey, pollRows, PROJECTION_ROW_CAP, promptOf, questionScale } from "./pollTally";
+import { hasKey, isMultipleChoice, pollRows, PROJECTION_ROW_CAP, promptOf, questionScale } from "./pollTally";
 import { useStageFit } from "./useStageFit";
 import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
 
@@ -227,12 +227,15 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
    * The donut is the wall's own choice, never the server's: the phones keep
    * what the switches give them. It is offered for an mcq whose vote is over
    * and whose votes are shown — a ring that grows while the room votes is a
-   * race to the biggest slice.
+   * race to the biggest slice. Not for a several-answers mcq: its shares are
+   * of the respondents and add up past 100 %, which no ring can hold
+   * (ADR-014, amendment 2026-10-12).
    */
   const [donutOn, setDonut] = useState(false);
   const donutOffered =
     view !== null &&
     view.question.type === "mcq" &&
+    !isMultipleChoice(view.question) &&
     projectionPhase(view) === "ended" &&
     view.settings.votes;
   const donut = donutOffered && donutOn;

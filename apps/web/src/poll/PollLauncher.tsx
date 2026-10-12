@@ -3,6 +3,7 @@ import { FileQuestion } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
+  PollQuestionContent,
   PollQuestionType,
   type PollAudience,
   type PollQuestionPick,
@@ -84,6 +85,21 @@ import { useCourses } from "../course/parts";
  * The key is optional there: with no correct answer marked, the poll asks
  * for opinions and its reveal is the distribution. One muted line under the
  * type picker says so; nothing blocks on it.
+ *
+ * ### A recent poll opens in that editor
+ *
+ * Pressing a row of "Recent polls" does not start it: it opens the question
+ * in "Ask a new question", prefilled with its type and content, key shown
+ * (ADR-014, amendment 2026-10-12). "Start the poll" stays the one action:
+ * left as it was, the question is relaunched — same identity, history and
+ * use count; edited, it starts as a new unsaved question and the original,
+ * a pool's included, is never written. The line under the editor says which
+ * of the two the button will do. Opening a question REPLACES the editor's
+ * working copy of that type, on purpose: the teacher asked for that question.
+ *
+ * "Left as it was" is reference identity: the editors emit a new config only
+ * on a real edit (none normalises on mount), so the draft is still the very
+ * object that was loaded. An edit undone by hand counts as an edit.
  */
 
 /** A poll runs the types of `PollQuestionType`; the picker is limited to them. */
@@ -129,15 +145,18 @@ function audienceOf(choice: string): PollAudience {
   return choice === ANYONE ? { kind: "anonymous" } : { kind: "classroom", classroomId: choice };
 }
 
-/** A row of "Recent polls": how often it ran, and how its last runs went. */
+/**
+ * A row of "Recent polls": how often it ran, and how its last runs went.
+ * Pressing it opens the question in the editor; `busy` while it loads.
+ */
 function RecentRow({
   pick,
-  selected,
-  onSelect,
+  busy,
+  onOpen,
 }: {
   pick: PollQuestionPick;
-  selected: boolean;
-  onSelect: () => void;
+  busy: boolean;
+  onOpen: () => void;
 }) {
   const t = useT();
   return (
@@ -145,8 +164,8 @@ function RecentRow({
       type={pick.type}
       name={pick.internalName}
       prompt={pick.prompt}
-      selected={selected}
-      onSelect={onSelect}
+      busy={busy}
+      onSelect={onOpen}
       aside={<OutcomeBadge outcome={pick.outcome} />}
       meta={
         <>
@@ -176,10 +195,10 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
   const [tab, setTab] = useState<"new" | "pick" | "pools">("new");
   const [query, setQuery] = useState("");
-  const [questionId, setQuestionId] = useState<string | null>(null);
-  // One selection per list: a question picked in one tab is never started
-  // from the other, where it is not on screen.
+  // The question picked in "From pools"; "Recent polls" opens the editor instead.
   const [poolQuestionId, setPoolQuestionId] = useState<string | null>(null);
+  // The recent poll the editor was prefilled from, if any.
+  const [origin, setOrigin] = useState<{ id: string; type: PollType; config: unknown } | null>(null);
   const [choice, setChoice] = useState<string>(ANYONE);
   const [type, setType] = useState<PollType>("mcq");
   // One working copy per type, so a switch back and forth loses nothing.
@@ -212,12 +231,11 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
     [query, picks.data],
   );
 
-  const picked = tab === "pools" ? poolQuestionId : questionId;
   const start = useMutation({
-    mutationFn: () =>
+    mutationFn: (questionId: string) =>
       api<PollTeacherView>("/app/api/polls", {
         method: "POST",
-        body: JSON.stringify({ questionId: picked, audience }),
+        body: JSON.stringify({ questionId, audience }),
       }),
     onSuccess: (view) => navigate({ view: "poll", id: view.evaluation.id }),
   });
@@ -233,27 +251,48 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const refused = refusedIssues(inline.error);
   const issues = useMemo(() => (refused ? toConfigIssues(t, refused) : undefined), [refused, t]);
 
-  // ONE primary action per screen, whichever tab: start the poll — on the
-  // picked question, or on the one written below.
+  // A row of "Recent polls" opens in the editor, prefilled (ADR-014,
+  // amendment 2026-10-12); the content read is the list's own scope.
+  const open = useMutation({
+    mutationFn: async (id: string) => ({
+      id,
+      ...PollQuestionContent.parse(await api(`/app/api/polls/questions/${id}`)),
+    }),
+    onSuccess: (content) => {
+      setType(content.type);
+      setDrafts((all) => ({ ...all, [content.type]: content.config }));
+      setOrigin(content);
+      start.reset();
+      inline.reset();
+      setTab("new");
+    },
+  });
+  // Unchanged since it was opened: the same question runs again.
+  const fromOrigin = origin !== null && origin.type === type;
+  const relaunch = fromOrigin && drafts[type] === origin.config ? origin.id : null;
+
+  // ONE primary action per screen: start the poll — on the question picked
+  // in a pool, or on the one in the editor. "Recent polls" has none of its
+  // own: a row opens in the editor, where this button waits.
   const primary =
-    tab !== "new" ? (
+    tab === "pools" ? (
       <Button
         data-coach="polls.launch"
-        onClick={() => start.mutate()}
+        onClick={() => poolQuestionId !== null && start.mutate(poolQuestionId)}
         loading={start.isPending}
-        disabled={picked === null}
+        disabled={poolQuestionId === null}
       >
         {t("poll.startAction")}
       </Button>
-    ) : (
+    ) : tab === "new" ? (
       <Button
         data-coach="polls.launch"
-        onClick={() => inline.mutate()}
-        loading={inline.isPending}
+        onClick={() => (relaunch !== null ? start.mutate(relaunch) : inline.mutate())}
+        loading={start.isPending || inline.isPending}
       >
         {t("poll.startAction")}
       </Button>
-    );
+    ) : null;
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -281,7 +320,11 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
       </div>
       <Tabs
         value={tab}
-        onChange={setTab}
+        onChange={(next) => {
+          // A refusal belongs to the tab that asked; the next one starts clean.
+          start.reset();
+          setTab(next);
+        }}
         label={t("poll.launcher")}
         items={[
           { value: "new", label: t("poll.tab.new") },
@@ -339,15 +382,17 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
                   <RecentRow
                     key={pick.id}
                     pick={pick}
-                    selected={questionId === pick.id}
-                    onSelect={() => setQuestionId(pick.id)}
+                    busy={open.isPending && open.variables === pick.id}
+                    onOpen={() => {
+                      if (!open.isPending) open.mutate(pick.id);
+                    }}
                   />
                 ))}
               </ul>
             </div>
           )}
 
-          <FormError error={start.error} title={t("poll.startFailed")} />
+          <FormError error={open.error} title={t("poll.openFailed")} />
         </div>
       ) : (
         <div className="mt-5 space-y-6">
@@ -356,7 +401,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
               {t("poll.incomplete")}
             </Alert>
           ) : (
-            <FormError error={inline.error} title={t("poll.startFailed")} />
+            <FormError error={inline.error ?? start.error} title={t("poll.startFailed")} />
           )}
           <fieldset>
             <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
@@ -377,7 +422,13 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
             ungraded
             {...(issues === undefined ? {} : { issues })}
           />
-          <p className="border-t border-line pt-4 text-[13px] text-fg-muted">{t("poll.newHint")}</p>
+          <p className="border-t border-line pt-4 text-[13px] text-fg-muted">
+            {!fromOrigin
+              ? t("poll.newHint")
+              : relaunch !== null
+                ? t("poll.fromRecent.same")
+                : t("poll.fromRecent.edited")}
+          </p>
         </div>
       )}
     </div>

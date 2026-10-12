@@ -12,7 +12,9 @@ export function promptLine(prompt: string, max = 120): string {
 /**
  * One question the launcher can start, in either list ("Recent polls",
  * "From pools"): the type, the internal name, the statement's first line and
- * a quiet line of facts. Pressing it selects it; "Start the poll" runs it.
+ * a quiet line of facts. In "From pools", pressing it selects it and "Start
+ * the poll" runs it (`selected`); in "Recent polls" it opens the question in
+ * the editor (no `selected`, `busy` while it loads).
  *
  * `aside` sits BESIDE the pressable part, not inside it: the outcome donut
  * takes the focus to show its rates, and a focusable thing inside a button is
@@ -25,6 +27,7 @@ export function PickRow({
   meta,
   aside,
   selected,
+  busy,
   onSelect,
 }: {
   type: string;
@@ -32,7 +35,9 @@ export function PickRow({
   prompt: string;
   meta: ReactNode;
   aside?: ReactNode;
-  selected: boolean;
+  /** Absent where pressing opens rather than selects: no pressed state then. */
+  selected?: boolean;
+  busy?: boolean;
   onSelect: () => void;
 }) {
   return (
@@ -45,7 +50,11 @@ export function PickRow({
       <div
         {...pressable(onSelect)}
         aria-pressed={selected}
-        className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-field p-3 text-left"
+        aria-busy={busy || undefined}
+        className={cx(
+          "flex min-w-0 flex-1 items-start gap-3 rounded-field p-3 text-left",
+          busy ? "cursor-progress" : "cursor-pointer",
+        )}
       >
         <span className="mt-0.5">
           <TypeGlyph type={type} />

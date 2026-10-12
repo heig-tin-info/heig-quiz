@@ -5,6 +5,7 @@ import {
   type ActivitySummary,
   type PollPoolPage,
   type PollPublicView,
+  type PollQuestionContent,
   type PollQuestionPick,
 } from "@quiz/contracts";
 import {
@@ -1096,6 +1097,19 @@ on("GET", "/app/api/polls/questions", (): PollQuestionPick[] => {
         return a.lastUsedAt === null ? 1 : -1;
       return (b.lastUsedAt ?? "").localeCompare(a.lastUsedAt ?? "");
     });
+});
+
+/**
+ * One row of "Recent polls" opened in the launcher's editor (ADR-014,
+ * amendment 2026-10-12): its type and frozen config, key included.
+ */
+on("GET", "/app/api/polls/questions/:id", (m): PollQuestionContent => {
+  const id = m.groups!.id!;
+  const q =
+    unsavedPast.find((u) => u.id === id) ??
+    teacherPolls.find((tp) => tp.unsaved?.id === id)?.unsaved ??
+    questionOr404(id);
+  return { type: q.type as PollQuestionType, config: frozenConfig(q) };
 });
 
 /**

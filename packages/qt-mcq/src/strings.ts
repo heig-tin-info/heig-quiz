@@ -76,13 +76,20 @@ export const mcqEditorStrings = {
    */
   neverShuffle: "Never shuffle this question",
   neverShuffleHint: "Even when the evaluation shuffles choices.",
+  /**
+   * A poll only (`ungraded`, ADR-014 amendment 2026-10-12): whether a
+   * participant may tick several choices. It decides while no choice is
+   * marked correct; once one is, the key decides and the hint says so.
+   */
+  allowSeveral: "Allow several answers",
+  allowSeveralFromKey: "Set by the correct answers you marked.",
 } as const;
 
 export type McqEditorStringKey = keyof typeof mcqEditorStrings;
 
 export const mcqPlayerStrings = {
   chooseOne: "Choose one answer.",
-  chooseSeveral: "Choose every correct answer.",
+  chooseSeveral: "Choose every answer that applies.",
   chooseUpTo: "Choose at most the allowed number of answers.",
   limitReached: "You have reached the maximum number of selections.",
   /** Negative marking (ADR-026): shown on every choice question it applies to. */

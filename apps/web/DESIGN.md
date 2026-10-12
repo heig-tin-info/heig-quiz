@@ -1570,7 +1570,9 @@ moving them apart or re-wrapping a label.
 shown, the chart button of the control strip (or Space) swaps the bars for one
 large ring beside its legend (`poll/PollDonut.tsx`). It is the wall's own
 choice — local state, never sent to the phones — and it is not offered while
-the room votes: a pie growing live is a race to the biggest slice. The ring is
+the room votes: a pie growing live is a race to the biggest slice. Nor for an
+mcq that allows several answers: its shares are of the respondents and add up
+past 100 %, which the parts of one whole cannot show — bars only. The ring is
 `clamp(240px, 42vh, 520px)`, 22 % thick, with the total of the votes in the
 hole in the mono figure style.
 

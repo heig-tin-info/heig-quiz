@@ -8,9 +8,10 @@ import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { PollLauncher } from "./PollLauncher";
 
 /*
- * The launcher: one question and one audience, then the wall. Both tabs end
- * in "Start the poll": on a picked question, or on one written in the type's
- * own editor and saved nowhere (ADR-014, addendum 2026-09-23).
+ * The launcher: one question and one audience, then the wall. It ends in
+ * "Start the poll": on a question picked in a pool, or on the one in the
+ * type's own editor — written there and saved nowhere (ADR-014, addendum
+ * 2026-09-23), or opened from "Recent polls" (amendment 2026-10-12).
  */
 
 /*
@@ -151,34 +152,107 @@ describe("PollLauncher", () => {
     expect(screen.queryByRole("switch")).toBeNull();
   });
 
-  it("starts the poll on the picked question and the chosen classroom", async () => {
+  /*
+   * A row of "Recent polls" opens in the editor, prefilled (ADR-014,
+   * amendment 2026-10-12). Unchanged, it relaunches the same question;
+   * edited, it starts a new unsaved one.
+   */
+  const CONTENT = {
+    type: "mcq",
+    config: {
+      configVersion: 2,
+      prompt: "How many bytes is a pointer on LP64?",
+      choices: [
+        { text: "4", correct: false },
+        { text: "8", correct: true },
+      ],
+      mode: "single",
+      policy: "inherit",
+      shuffleChoices: true,
+    },
+  };
+  const running = ok({
+    evaluation: { id: "e1", classroomId: ROOM, title: "t", state: "running", code: "QZ1", createdAt: new Date().toISOString() },
+    joinUrl: "/p/QZ1",
+    settings: { anonymous: true, revealed: false, votes: false },
+    question: { id: QUESTION, type: "mcq", student: {}, solution: {} },
+    tally: { joined: 0, answered: 0, choices: [], answers: [] },
+  });
+
+  it("opens a recent poll in the editor, and relaunches it unchanged", async () => {
+    const user = userEvent.setup();
     const { calls } = mockFetch({
       [`GET ${QUESTIONS}`]: ok(picks),
+      [`GET ${QUESTIONS}/${QUESTION}`]: ok(CONTENT),
       [`GET ${COURSES}`]: ok(courses),
-      "POST /app/api/polls": ok({
-        evaluation: { id: "e1", classroomId: ROOM, title: "t", state: "running", code: "QZ1", createdAt: new Date().toISOString() },
-        joinUrl: "/p/QZ1",
-        settings: { anonymous: true, revealed: false, votes: false },
-        question: { id: QUESTION, type: "mcq", student: {}, solution: {} },
-        tally: { joined: 0, answered: 0, choices: [], answers: [] },
-      }),
+      "POST /app/api/polls": running,
     });
     const navigate = vi.fn();
     renderWithProviders(<PollLauncher navigate={navigate} />);
 
-    // Nothing picked yet: the one primary action is not available.
-    await userEvent.click(screen.getByRole("tab", { name: /Recent polls/ }));
+    await user.click(screen.getByRole("tab", { name: /Recent polls/ }));
     await screen.findByText("sizeof-ptr-64");
-    expect(screen.getByRole("button", { name: "Start the poll" })).toBeDisabled();
-    await userEvent.click(screen.getByText("sizeof-ptr-64"));
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Who answers" }), ROOM);
-    await userEvent.click(screen.getByRole("button", { name: "Start the poll" }));
+    // The list has no Start of its own: a row opens the editor.
+    expect(screen.queryByRole("button", { name: "Start the poll" })).toBeNull();
+    await user.click(screen.getByText("sizeof-ptr-64"));
 
+    expect(await screen.findByRole("tab", { name: /Ask a new question/, selected: true })).toBeVisible();
+    expect(await screen.findByLabelText("Text of choice B")).toBeVisible();
+    // The key shows, as the teacher wrote it.
+    expect(screen.getByRole("checkbox", { name: "Choice B is correct" })).toBeChecked();
+    expect(screen.getByText(/Unchanged, this question runs again/)).toBeVisible();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Who answers" }), ROOM);
+    await user.click(screen.getByRole("button", { name: "Start the poll" }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "poll", id: "e1" }));
     expect(calls.find((c) => c.url === "/app/api/polls")?.body).toEqual({
       questionId: QUESTION,
       audience: { kind: "classroom", classroomId: ROOM },
     });
-    expect(navigate).toHaveBeenCalledWith({ view: "poll", id: "e1" });
+    expect(calls.some((c) => c.url === "/app/api/polls/inline")).toBe(false);
+  }, 20_000);
+
+  it("starts an edited recent poll as a new question, the original untouched", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({
+      [`GET ${QUESTIONS}`]: ok(picks),
+      [`GET ${QUESTIONS}/${QUESTION}`]: ok(CONTENT),
+      [`GET ${COURSES}`]: ok(courses),
+      "POST /app/api/polls/inline": running,
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<PollLauncher navigate={navigate} />);
+
+    await user.click(screen.getByRole("tab", { name: /Recent polls/ }));
+    await user.click(await screen.findByText("sizeof-ptr-64"));
+    await user.click(await screen.findByRole("checkbox", { name: "Choice A is correct" }));
+    expect(screen.getByText(/Edited, this becomes a new question/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Start the poll" }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "poll", id: "e1" }));
+    const body = calls.find((c) => c.url === "/app/api/polls/inline")?.body as {
+      type: string;
+      config: { choices: { correct: boolean }[]; mode: string };
+    };
+    expect(body.type).toBe("mcq");
+    expect(body.config.choices.map((c) => c.correct)).toEqual([true, true]);
+    expect(body.config.mode).toBe("multiple");
+    expect(calls.some((c) => c.url === "/app/api/polls")).toBe(false);
+  }, 20_000);
+
+  it("says so when a recent poll cannot be opened", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      [`GET ${QUESTIONS}`]: ok(picks),
+      [`GET ${QUESTIONS}/${QUESTION}`]: fail(404, { error: "not_found" }),
+      [`GET ${COURSES}`]: ok(courses),
+    });
+    renderWithProviders(<PollLauncher navigate={vi.fn()} />);
+
+    await user.click(screen.getByRole("tab", { name: /Recent polls/ }));
+    await user.click(await screen.findByText("sizeof-ptr-64"));
+    expect(await screen.findByText("Could not open this question.")).toBeVisible();
+    expect(screen.getByRole("tab", { name: /Recent polls/, selected: true })).toBeVisible();
   });
 
   it("filters the list rather than re-fetching it", async () => {

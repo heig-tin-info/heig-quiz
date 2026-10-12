@@ -1443,6 +1443,46 @@ describe("the launcher's recent polls", () => {
     expect(refused.statusCode).toBe(404);
   });
 
+  /*
+   * A question opened in the launcher's editor (ADR-014, amendment
+   * 2026-10-12): the config, key included, to whoever may relaunch it
+   * (`reachableQuestion`), and the 404 of a missing question to anyone else.
+   */
+  it("opens a question's content to whoever may relaunch it, and to nobody else", async () => {
+    const own = await get(`/app/api/polls/questions/${named.questionId}`, lecturer.headers);
+    expect(own.statusCode).toBe(200);
+    expect(own.json()).toMatchObject({
+      type: "mcq",
+      config: {
+        prompt: "Named: capital of Vaud?",
+        choices: [{ text: "Lausanne", correct: true }, { text: "Yverdon" }, { text: "Nyon" }],
+        mode: "single",
+      },
+    });
+
+    // A colleague on the same course's staff: the 404 of a missing question.
+    const colleague = await server.signIn("teacher");
+    await server.app.db.insert(courseStaff).values({ courseId: room.courseId, userId: colleague.id });
+    const theirs = await get(`/app/api/polls/questions/${named.questionId}`, colleague.headers);
+    expect(theirs.statusCode).toBe(404);
+    expect(theirs.json()).toEqual({ error: "not_found" });
+
+    // Another teacher's saved question: out of the lecturer's reach, a 404;
+    // its owner reaches it through the pool predicate and reads it.
+    const foreign = await get(`/app/api/polls/questions/${questionId}`, lecturer.headers);
+    expect(foreign.statusCode).toBe(404);
+    expect(foreign.json()).toEqual({ error: "not_found" });
+    const owned = await get(`/app/api/polls/questions/${questionId}`, teacher.headers);
+    expect(owned.statusCode).toBe(200);
+    expect(owned.json()).toMatchObject({ type: "mcq", config: { prompt: MCQ_CONFIG.prompt } });
+
+    const missing = await get(`/app/api/polls/questions/${crypto.randomUUID()}`, lecturer.headers);
+    expect(missing.statusCode).toBe(404);
+    expect((await get("/app/api/polls/questions/x", lecturer.headers)).statusCode).toBe(404);
+    // Staff only: a student holds no launcher.
+    expect((await get(`/app/api/polls/questions/${named.questionId}`, students[0]!.headers)).statusCode).toBe(403);
+  });
+
   it("marks a kept question saved, and keeps its history", async () => {
     const kept = await post(`/app/api/evaluations/${opinion.id}/poll/keep`, lecturer.headers);
     expect(kept.statusCode).toBe(200);

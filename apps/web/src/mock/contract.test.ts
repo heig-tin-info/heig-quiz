@@ -97,6 +97,7 @@ import {
   OAuthRequestView,
   PollPoolPage,
   PollPublicView,
+  PollQuestionContent,
   PollQuestionPick,
   PollSummary,
   PollTeacherView,
@@ -209,6 +210,9 @@ for (const pool of pools) {
   const page = (await get(`/app/api/pools/${pool.id}/questions`)) as { items: Ref[] };
   questionIds.push(...page.items.map((q) => q.id));
 }
+
+/** "Recent polls": every row opens in the launcher's editor. */
+const recentPollIds = ((await get("/app/api/polls/questions")) as Ref[]).map((p) => p.id);
 
 const courses = (await get("/app/api/courses")) as (Ref & { classrooms: Ref[] })[];
 const classroomId = courses[0]!.classrooms[0]!.id;
@@ -507,6 +511,9 @@ const CHECKED: Case[] = [
   each("/app/api/activities", "/app/api/activities", ActivitySummary),
   one("/app/api/activities/stats", "/app/api/activities/stats", ActivityStats),
   each("/app/api/polls/questions", "/app/api/polls/questions", PollQuestionPick),
+  ...recentPollIds.map((id) =>
+    one("/app/api/polls/questions/:id", `/app/api/polls/questions/${id}`, PollQuestionContent),
+  ),
   one("/app/api/polls/pool-questions", "/app/api/polls/pool-questions", PollPoolPage),
   ...polls.map((p) =>
     one("/app/api/evaluations/:id/poll", `/app/api/evaluations/${p.id}/poll`, PollTeacherView),

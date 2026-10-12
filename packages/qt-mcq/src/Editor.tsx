@@ -13,6 +13,13 @@
  *    teacher is told in one sentence what the student will see. A radio group
  *    asking for the mode next to the checkboxes that already answer it is two
  *    controls for one fact, and they can disagree.
+ *    A poll (`ungraded`) is the one case the key cannot answer: its key is
+ *    optional, and an opinion poll with none may still want several ticks
+ *    ("which of these notions have you seen?"). There, and only there, one
+ *    checkbox "Allow several answers" decides — while NO choice is ticked.
+ *    Once one is, the key decides again (one key: off; two or more: on) and
+ *    the checkbox shows it, disabled: still one control per fact at a time
+ *    (ADR-014, amendment 2026-10-12).
  *  - Where a choice goes, twice. The ↑ / ↓ buttons are gone: the row has a
  *    drag handle, and that handle is a BUTTON, so the keyboard reorders
  *    through the very same affordance (focus it, Space, arrows, Space).
@@ -53,6 +60,7 @@ import {
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
 import {
   AsideSection,
+  CheckboxField,
   cx,
   gripClass,
   GripIcon,
@@ -496,6 +504,28 @@ export function McqEditor({
         </DndContext>
 
         <IssueList issues={choiceIssues.map(locate)} />
+        {/*
+         * "Allow several answers", a poll only (ADR-014, amendment
+         * 2026-10-12): with no key it IS the mode; with one, the key is the
+         * mode (`setChoices` wrote it) and the box only shows it, disabled.
+         * Off drops the answer cap with the mode it belonged to.
+         */}
+        {ungraded ? (
+          <div className="flex flex-col gap-1">
+            <CheckboxField
+              className="inline-flex items-center gap-2 text-[13px] text-fg"
+              label={s.allowSeveral}
+              checked={multiple}
+              disabled={disabled || correctCount > 0}
+              onChange={(checked) => {
+                const next: McqConfig = { ...config, mode: checked ? "multiple" : "single" };
+                if (!checked) delete next.maxSelections;
+                onChange(next);
+              }}
+            />
+            {correctCount > 0 ? <p className={cx(hint, "pl-6")}>{s.allowSeveralFromKey}</p> : null}
+          </div>
+        ) : null}
       </section>
 
       {ungraded ? null : scoring}

@@ -11,6 +11,12 @@ preserves incidents, alternatives, migration details and original section number
 Amended 2026-10-04: the launcher's defaults are safe for a projected screen
 ([Launcher](#launcher)); they supersede "opens on Recent polls when it has rows"
 and "remembers the last choice" of the 2026-09-27 addenda.
+Amended 2026-10-12: an mcq written in the launcher may allow several answers
+without a key, a several-answers mcq has no donut, and a row of "Recent polls"
+opens the launcher's editor prefilled
+([Several answers and reopening a recent poll](#several-answers-and-reopening-a-recent-poll));
+this narrows "Recent polls can retrieve and relaunch" of
+[Questions and retrieval](#questions-and-retrieval) to an unchanged question.
 
 ## Context
 
@@ -93,6 +99,43 @@ A classroom audience is an explicit choice for each poll; the launcher does not
 remember one, so a poll is never filed under, nor restricted to, a class by a
 leftover from the previous one. Decided by the product owner (2026-10-04).
 
+### Several answers and reopening a recent poll
+
+Decided by the product owner (2026-10-12).
+
+**Several answers.** The mcq editor in its ungraded (launcher) use has one
+checkbox, "Allow several answers". With no correct choice marked it decides
+`mode` (`single` or `multiple`), for an opinion poll such as "which of these
+notions have you seen?". With exactly one correct choice the mode is `single`
+and the checkbox is off and disabled; with two or more it is `multiple`, on and
+disabled: the key decides, as in the full editor, which is unchanged and never
+shows the checkbox. The tally already counts each respondent's ticks, and
+shares stay of the respondents, so they may add up past 100 %.
+
+**No donut for several answers.** The projection's donut is not offered for an
+mcq in `multiple` mode; its bars stay. A ring shows the parts of one whole,
+which shares over 100 % are not.
+
+**Recent polls opens the editor.** Pressing a row of "Recent polls" opens the
+"Ask a new question" tab prefilled with that question's type and config, answer
+key shown (the owner chose not to hide it). It replaces the editor's working
+copy of that type, on purpose: the teacher asked for that question. "Recent
+polls" has no start action of its own; "Start the poll" in the editor remains
+the one primary action:
+
+- not edited since it was loaded: `POST /app/api/polls` with its
+  `questionId` — the same question, keeping its identity, history and use count;
+- edited: `POST /app/api/polls/inline` — a new unsaved question; the original
+  and its results are untouched. A saved pool question edited there likewise
+  becomes an unsaved copy: the launcher never writes a pool.
+
+The content comes from `GET /app/api/polls/questions/:id` (staff), loaded
+through the predicate a relaunch uses (`reachableQuestion`: a pool question
+the caller reaches, or an unsaved question of a poll they launched) — what
+they may run, they may open — and otherwise, or for a question a poll cannot
+run, the 404 of a missing question. It returns the config of the latest
+published version, the one a relaunch freezes.
+
 ### Display, answers and ending
 
 `votes` and `revealed` are independent, reversible switches, initially off.
@@ -155,7 +198,7 @@ rejected. Nothing about a poll justifies releasing grades to absent roster membe
   tally, idle closure, recent outcomes and pool search.
 - `apps/api/src/modules/poll/routes.ts`: managed/public loaders and CSRF. Teacher
   routes `/app/api/polls` (`GET` list, `POST` create-and-start, `questions`,
-  `pool-questions`, `inline`) and `/app/api/evaluations/:id/poll` (`GET`, `reveal`,
+  `questions/:id`, `pool-questions`, `inline`) and `/app/api/evaluations/:id/poll` (`GET`, `reveal`,
   `end`, `again`, `keep`); public routes
   `GET /app/api/p/:code`, `POST …/join`, `POST …/answer`.
 - `packages/contracts/src/poll.ts`, `packages/domain/src/pollTally.ts` and

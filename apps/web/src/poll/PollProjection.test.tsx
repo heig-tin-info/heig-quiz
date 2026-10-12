@@ -120,6 +120,29 @@ describe("PollProjection", () => {
     expect(screen.queryByRole("list", { name: "Donut chart" })).toBeNull();
   });
 
+  it("offers no donut for an mcq that allows several answers", async () => {
+    const several = view({
+      evaluation: { state: "closed" } as never,
+      question: {
+        student: {
+          prompt: "Which notions have you seen?",
+          mode: "multiple",
+          choices: [
+            { id: 0, text: "pointers" },
+            { id: 1, text: "structs" },
+          ],
+        },
+        solution: { correct: [] },
+      } as never,
+    });
+    mockFetch({ [`GET ${POLL}`]: ok(several) });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByText("pointers");
+    expect(screen.queryByRole("button", { name: "Donut chart" })).toBeNull();
+    await userEvent.keyboard(" ");
+    expect(screen.queryByRole("list", { name: "Donut chart" })).toBeNull();
+  });
+
   it("offers no donut while the room is still voting", async () => {
     mockFetch({ [`GET ${POLL}`]: ok(view()) });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
