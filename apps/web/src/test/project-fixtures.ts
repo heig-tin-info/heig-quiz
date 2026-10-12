@@ -124,6 +124,7 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
     groupMode: false,
     groupSetId: null,
     testsCriterion: null,
+    identityCriterion: null,
     buildCommand: null,
     testCommand: null,
     evidenceOutputs: null,

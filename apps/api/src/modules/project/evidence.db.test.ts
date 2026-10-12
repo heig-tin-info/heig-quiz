@@ -4,7 +4,8 @@
  * and a runner double: the target commit, the tarball through `codeload`
  * (its token nowhere), the overlay and the stripped root, the no-evidence
  * statuses, the `auto` rows and their supersede chain, the reuse of an
- * `ok` evidence, the deletion with the project, the retention.
+ * `ok` evidence, the deletion with the project, the retention; the identity
+ * criterion graded from the commits (bots and the handed-out commit ignored).
  */
 import { randomUUID } from "node:crypto";
 
@@ -18,6 +19,7 @@ import { parseCriteria } from "@quiz/domain/criteriaParse";
 
 import { loadConfig } from "../../config.js";
 import {
+  botCommits,
   courseStaff,
   githubClassroomLinks,
   githubOrganizations,
@@ -91,14 +93,14 @@ interface Lab {
 }
 
 /** A project in `criteria` mode, published from a source whose `tests/test_lab.py` is protected. */
-async function lab(): Promise<Lab> {
+async function lab(criteria = CRITERIA): Promise<Lab> {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: [], questions: 0 });
   await db.insert(courseStaff).values({ courseId: seeded.courseId, userId: teacher.id }).onConflictDoNothing();
   const n = nextOrg++;
   const login = `org-${n}`;
   world.orgIds[login] = n;
-  world.source(login, "lab", { main: { "README.md": "# Lab", Makefile: "prepare:\n", [PROTECTED]: DIST_TEST, "criteria.yml": CRITERIA } });
+  world.source(login, "lab", { main: { "README.md": "# Lab", Makefile: "prepare:\n", [PROTECTED]: DIST_TEST, "criteria.yml": criteria } });
   const orgId = randomUUID();
   await db.insert(githubOrganizations).values({ id: orgId, login, githubOrgId: n, installationId: n });
   await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacher.id, linkedAt: new Date() });
@@ -110,7 +112,7 @@ async function lab(): Promise<Lab> {
   });
   expect(res.statusCode, res.body).toBe(201);
   const project = ProjectSummary.parse(res.json());
-  const parsed = parseCriteria(CRITERIA);
+  const parsed = parseCriteria(criteria);
   if (!parsed.ok) throw new Error("the fixture does not parse");
   await db.update(projects).set({ gradingMode: "criteria", protectedFiles: [PROTECTED] }).where(eq(projects.id, project.id));
   await db.insert(projectCriteria).values({ projectId: project.id, fileSha: "f", sourceSha: "s", criteria: parsed.criteria, loadedAt: new Date() });
@@ -208,6 +210,9 @@ describe("the evidence of a repository", () => {
     expect(evidence!.cases).toHaveLength(4);
     // Text outputs only: the binary is not kept.
     expect(Object.keys(evidence!.files!)).toEqual(["report.xml"]);
+    // No identity criterion: the commits are not read.
+    expect(evidence!.commits).toBeNull();
+    expect(gh.calls.some((c) => c.includes("lab-alice/commits"))).toBe(false);
 
     expect(sent.at(-1)).toMatchObject({
       image: "lab-c",
@@ -399,6 +404,74 @@ describe("the evidence of a repository", () => {
   });
 });
 
+describe("the identity criterion (ADR-106 §2)", () => {
+  const ADA = { name: "Ada Lovelace", email: "ada.lovelace@heig-vd.ch" };
+  const BOT = { name: "quiz-test[bot]", email: "1+quiz-test[bot]@users.noreply.github.com" };
+  let l: Lab;
+  beforeAll(async () => {
+    l = await lab(`${CRITERIA}  git:\n    commits: {description: Git history, awarded_points: 0, max_points: 1, prompt: "Who committed?"}\n`);
+    await server.app.db.update(projects).set({ identityCriterion: "git.commits" }).where(eq(projects.id, l.projectId));
+  });
+
+  /** A student's repository provisioned as a copy of the distribution, then their commits, each received before the deadline. */
+  async function history(name: string, commits: { author: { name: string; email: string }; message: string }[]) {
+    const repo = await studentRepo(l, name);
+    world.git(repo.fullName, "fetch", "-q", "--update-head-ok", `${world.dir}/${l.distribution}.git`, "+main:main");
+    const shas: string[] = [];
+    for (const [i, as] of commits.entries()) {
+      shas.push(world.commit(repo.fullName, "main", { [`src/${i}.c`]: `${i}\n` }, as));
+      await receipt(repo, shas.at(-1)!, before(60 - i));
+    }
+    return { ...repo, shas };
+  }
+  const identityRow = async (repoId: string) => (await liveRows(repoId)).find((r) => r.criterionId === "git.commits");
+
+  it("grades the student's commits only: neither the bots' nor the handed-out ones", async () => {
+    const repo = await history("id-ada", [{ author: ADA, message: "Ajoute le parseur de lignes" }]);
+    // The App's own commit by its account, and a commit it recorded (a deadline's), by an identity that would fail.
+    await receipt(repo, world.commit(repo.fullName, "main", { "README.md": "x" }, { author: BOT, message: "a" }), before(40), true);
+    const recorded = world.commit(repo.fullName, "main", { "README.md": "y" }, { author: { name: "t", email: "t@x" }, message: "update" });
+    await server.app.db.insert(botCommits).values({ repoId: repo.id, sha: recorded, kind: "deadline" });
+    await receipt(repo, recorded, before(30), true);
+    const last = world.commit(repo.fullName, "main", { "src/b.c": "2\n" }, { author: ADA, message: "Corrige le cas de la ligne vide" });
+    await receipt(repo, last, before(10));
+
+    expect(await runEvidence(server.app, config, repo.id)).toMatchObject({ status: "ok", rows: 4 });
+    expect(await identityRow(repo.id)).toMatchObject({ points: 1, max: 1, source: "auto", state: "proposed", reason: null });
+    expect((await identityRow(repo.id))!.rationale).toBe("2 commits · Ada Lovelace <***@heig-vd.ch> · messages: 2 descriptive, 0 short");
+    // Newest first, the student's two only.
+    expect((await evidenceOf(repo.id))[0]!.commits!.map((c) => c.sha)).toEqual([last, repo.shas[0]]);
+    // The address is in no row but the evidence's commits.
+    expect(JSON.stringify(await liveRows(repo.id))).not.toContain(ADA.email);
+  });
+
+  it("runs the tests when GitHub fails to list the commits: the identity 0 with github_unavailable, the rest graded", async () => {
+    const repo = await history("id-listfail", [{ author: ADA, message: "Ajoute le parseur de lignes" }]);
+    const routes = gh.routes;
+    gh.routes = [(url) => (url.host === "api.github.com" && url.pathname.endsWith("/commits") && url.searchParams.has("sha") ? new Response("{}", { status: 502 }) : undefined), ...routes];
+    try {
+      expect(await runEvidence(server.app, config, repo.id)).toMatchObject({ status: "ok", rows: 4 });
+    } finally {
+      gh.routes = routes;
+    }
+    expect(await identityRow(repo.id)).toMatchObject({ points: 0, reason: "github_unavailable", rationale: null });
+    expect((await pointsOf(repo.id))["rendu.all-tests-passed"]).toEqual([5, 10, null]);
+    expect((await evidenceOf(repo.id))[0]).toMatchObject({ status: "ok", commits: null });
+  });
+
+  it("grades the identity even when the tests could not run, and gives 0 with the status without a commit", async () => {
+    const big = await history("id-big", [{ author: ADA, message: "Ajoute les données de test" }]);
+    world.oversized.set(big.fullName, 21 * 1024 * 1024);
+    expect(await runEvidence(server.app, config, big.id)).toMatchObject({ status: "archive_too_large" });
+    expect(await identityRow(big.id)).toMatchObject({ points: 1, reason: null });
+    expect((await pointsOf(big.id))["rendu.all-tests-passed"]).toEqual([0, 10, "archive_too_large"]);
+
+    const none = await studentRepo(l, "id-none");
+    expect(await runEvidence(server.app, config, none.id)).toMatchObject({ status: "no_commit" });
+    expect(await identityRow(none.id)).toMatchObject({ points: 0, reason: "no_commit", rationale: null });
+  });
+});
+
 describe("the evidence files' retention (N-DATA-03)", () => {
   it("drops the files and the outputs six months after the release, keeping the cases and the status", async () => {
     const released = async (at: string) => {
@@ -413,7 +486,7 @@ describe("the evidence files' retention (N-DATA-03)", () => {
     const recent = await released("2026-09-01T00:00:00Z");
     expect(await purgeEvidenceFiles(server.app.db, new Date(NOW))).toBe(1);
     const [purged] = await evidenceOf(old.id);
-    expect(purged).toMatchObject({ status: "ok", files: null, test: expect.objectContaining({ stdout: "", stderr: "", exitCode: 1 }) });
+    expect(purged).toMatchObject({ status: "ok", files: null, commits: null, test: expect.objectContaining({ stdout: "", stderr: "", exitCode: 1 }) });
     expect(purged!.cases).toHaveLength(4);
     expect((await evidenceOf(recent.id))[0]!.files).not.toBeNull();
     expect(await purgeEvidenceFiles(server.app.db, new Date(NOW))).toBe(0);

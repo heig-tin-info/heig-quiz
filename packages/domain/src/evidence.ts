@@ -3,8 +3,9 @@
  * tests said ({@link parseJunit}, pytest's JUnit XML) and what an automatic criterion
  * is worth from it ({@link automaticPoints}); and the tarball's paths
  * without GitHub's top-level directory ({@link stripTarballRoot}), which
- * carries the student's login. Pure: the `project` module fetches, runs
- * and stores.
+ * carries the student's login; what the identity criterion is worth from
+ * the commits' metadata ({@link commitIdentityPoints}). Pure: the `project`
+ * module fetches, runs and stores.
  */
 import type { CriteriaLeaf } from "./criteria.js";
 
@@ -175,4 +176,99 @@ export function sourcePaths(sources: readonly string[], paths: readonly string[]
   const { plain } = plainSources(sources);
   if (sources.length === 0) return [...paths];
   return paths.filter((path) => plain.some((source) => (source.endsWith("/") ? path.startsWith(source) : path === source)));
+}
+
+// ---------------------------------------------------------- the identity criterion (ADR-106 §2)
+
+/**
+ * A student's commit of the handed-out branch up to the evidence's target
+ * (bots' and handed-out commits are not kept), as the evidence keeps it for
+ * the identity criterion: personal data, never sent to the model nor shown
+ * as such (the rationale masks the e-mail).
+ */
+export interface EvidenceCommit {
+  sha: string;
+  /** The author's git identity, empty when the commit carries none. */
+  name: string;
+  email: string;
+  /** The message's first line. */
+  subject: string;
+}
+
+/** The example identity of the lab's instructions (`git config user.name "Emmett Lathrop Brown"`), by its full name only. */
+const EXAMPLE_NAME = /^emmett( lathrop)? brown$/i;
+const EXAMPLE_EMAIL = /@example\.(com|org|net)$/i;
+/** `local@domain.tld`, the domain neither a local machine's nor reserved. */
+const EMAIL = /^[^\s@]+@([^\s@]+\.[a-z]{2,})$/i;
+const LOCAL_DOMAIN = /(^|\.)(localhost|localdomain|local|lan|home|internal|invalid|test)$/i;
+/** A name's word: letters, with an apostrophe, a hyphen or a dot inside (`O'Neil`, `Jean-Luc`, `J.`). */
+const NAME_WORD = /^\p{L}[\p{L}\p{M}'’.-]*$/u;
+/** Messages that say nothing, whatever their length; compared lower-cased, without the final punctuation. */
+const MEANINGLESS = new Set([
+  "a", "add", "change", "changes", "commit", "commit message", "done", "first commit", "fix", "fixes", "initial commit",
+  "maj", "modif", "modifs", "no message", "ok", "save", "test", "tests", "update", "updates", "wip", "work in progress",
+]);
+/** GitHub's web editor's defaults: `Update README.md`, `Create notes.txt`, `Add files via upload`. */
+const GITHUB_DEFAULT_MESSAGE = /^(update|create|delete) \S+$|^add files via upload$/i;
+
+/** Whether a name is a person's: at least two words of letters. */
+const realName = (name: string) => name.trim().split(/\s+/).filter((word) => NAME_WORD.test(word)).length >= 2;
+
+/** Whether an address is plausible (GitHub's private address included). */
+function plausibleEmail(email: string): boolean {
+  const domain = EMAIL.exec(email.trim())?.[1];
+  return domain !== undefined && !LOCAL_DOMAIN.test(domain);
+}
+
+/** Whether a commit's message says what it does: 3 words or 15 characters, not a meaningless one nor GitHub's default. */
+export function descriptiveMessage(subject: string): boolean {
+  const text = subject.trim();
+  if (MEANINGLESS.has(text.toLowerCase().replace(/[.!…\s]+$/, "")) || GITHUB_DEFAULT_MESSAGE.test(text)) return false;
+  return text.split(/\s+/).length >= 3 || text.length >= 15;
+}
+
+type IdentityVerdict = "missing" | "example" | "weak" | "ok";
+
+function identityOf(commit: Pick<EvidenceCommit, "name" | "email">): IdentityVerdict {
+  const name = commit.name.trim();
+  const email = commit.email.trim();
+  if (name === "" || email === "") return "missing";
+  if (EXAMPLE_NAME.test(name.replace(/\s+/g, " ")) || EXAMPLE_EMAIL.test(email)) return "example";
+  return realName(name) && plausibleEmail(email) ? "ok" : "weak";
+}
+
+/**
+ * The identity criterion's points from the student's commits of the
+ * handed-out branch (ADR-106 §2, labo 00's `git.commits`): 0 when there is
+ * none, or when one carries no identity or the instructions' example one
+ * (Emmett Brown, an `example.com` address); otherwise every point when
+ * each identity is a person's (a name of two words of letters, a plausible
+ * address) and each message is descriptive ({@link descriptiveMessage});
+ * half of them, rounded to the half point, for one of the two faults; none
+ * for both.
+ */
+export function commitIdentityPoints(commits: readonly Pick<EvidenceCommit, "name" | "email" | "subject">[], max: number): number {
+  const verdicts = new Set(commits.map(identityOf));
+  if (commits.length === 0 || verdicts.has("missing") || verdicts.has("example")) return 0;
+  const faults = (verdicts.has("weak") ? 1 : 0) + (commits.every((c) => descriptiveMessage(c.subject)) ? 0 : 1);
+  return toHalf(max * [1, 0.5, 0][faults]!);
+}
+
+/** An address with its local part masked: `***@heig-vd.ch`; `—` when there is none. */
+const maskedEmail = (email: string) => (email.includes("@") ? `***@${email.slice(email.lastIndexOf("@") + 1)}` : email.trim() === "" ? "—" : "***");
+/** The distinct identities a rationale names. */
+const IDENTITIES_SHOWN = 3;
+
+/**
+ * The identity row's rationale: the facts, language-neutral, safe to show
+ * to the repository's students after the freeze — the student's commits,
+ * their distinct identities (the name, the e-mail's local part masked) and
+ * how many messages are descriptive. `3 commits · Ada Lovelace <***@heig-vd.ch> · messages: 2 descriptive, 1 short`.
+ */
+export function commitIdentityRationale(commits: readonly Pick<EvidenceCommit, "name" | "email" | "subject">[]): string {
+  if (commits.length === 0) return "0 commits";
+  const identities = [...new Set(commits.map((c) => `${c.name.trim().slice(0, 80) || "—"} <${maskedEmail(c.email)}>`))];
+  const shown = identities.slice(0, IDENTITIES_SHOWN).join(", ") + (identities.length > IDENTITIES_SHOWN ? ` (+${identities.length - IDENTITIES_SHOWN})` : "");
+  const descriptive = commits.filter((c) => descriptiveMessage(c.subject)).length;
+  return `${commits.length} commit${commits.length === 1 ? "" : "s"} · ${shown} · messages: ${descriptive} descriptive, ${commits.length - descriptive} short`;
 }

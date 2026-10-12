@@ -313,8 +313,11 @@ delivered card.
   locked row; the fourth regrade of a day is refused; the pure render
   function's output for a rationale `<script>alert(1)</script>` carries it
   as text, never as markup.
-- **Follow-up**: a deterministic commit-authors check from the push
-  receipts, if a course wants one (ADR-106 §2).
+- **Follow-up** (delivered): the deterministic commit-authors check is the
+  project setting `identityCriterion` (ADR-106 §2), graded by the evidence
+  job from the commits it reads through the App — the push receipts carry
+  no author — never by the model; refused as the tests criterion too
+  (`422 criterion_conflict`).
 
 ### L-02d — Milestone locks (ADR-106 §5)
 - **Depends on**: L-02c, L-02e.

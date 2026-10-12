@@ -21,14 +21,17 @@ const evidence = (over: Partial<MaterialEvidence> = {}): MaterialEvidence => ({
 const mask = (text: string) => maskNames(text, [], ["jdoe42"]);
 
 describe("llmLeaves", () => {
-  it("keeps the criteria the model proposes: a prompt, neither the tests criterion nor a test", () => {
+  it("keeps the criteria the model proposes: a prompt, neither the tests criterion, the identity criterion nor a test", () => {
     const leaves = [
       { id: "r.tests", sectionPath: ["r"], description: "T", maxPoints: 4, prompt: "?" },
       { id: "r.style", sectionPath: ["r"], description: "S", maxPoints: 2, prompt: "?" },
       { id: "r.unit", sectionPath: ["r"], description: "U", maxPoints: 2, prompt: "?", test: "t" },
       { id: "r.who", sectionPath: ["r"], description: "W", maxPoints: 2 },
+      { id: "g.commits", sectionPath: ["g"], description: "C", maxPoints: 1, prompt: "Who committed?" },
     ];
-    expect(llmLeaves(leaves, "r.tests").map((l) => l.id)).toEqual(["r.style"]);
+    expect(llmLeaves(leaves, { testsCriterion: "r.tests", identityCriterion: null }).map((l) => l.id)).toEqual(["r.style", "g.commits"]);
+    // The identity criterion is never sent to the model, even with a prompt.
+    expect(llmLeaves(leaves, { testsCriterion: "r.tests", identityCriterion: "g.commits" }).map((l) => l.id)).toEqual(["r.style"]);
   });
 });
 

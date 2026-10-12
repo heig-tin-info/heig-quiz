@@ -385,6 +385,8 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   criteria_invalid: "project.criteria.invalid",
   checkpoint_untagged: "project.refusal.checkpointUntagged",
   unknown_criterion: "project.criteria.tests.unknown",
+  criterion_conflict: "project.criteria.identity.conflict",
+  identity_criterion_invalid: "project.criteria.identity.invalid",
   // ADR-106 §8: the grading screen and the release gate.
   not_criteria: "project.refusal.notCriteria",
   points_out_of_range: "project.refusal.pointsOutOfRange",

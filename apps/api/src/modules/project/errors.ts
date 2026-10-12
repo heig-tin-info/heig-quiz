@@ -69,6 +69,8 @@ const STATUS: Record<Code, number> = {
   criteria_invalid: 409,
   checkpoint_untagged: 409,
   unknown_criterion: 422,
+  criterion_conflict: 422,
+  identity_criterion_invalid: 422,
   command_needs_network: 422,
   // A Regrade (ADR-106 §4).
   not_criteria: 409,

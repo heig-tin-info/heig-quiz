@@ -49,6 +49,7 @@ export async function projectSummary(db: Db, row: ProjectRow, now: Date): Promis
     groupMode: row.groupMode,
     groupSetId: row.groupSetId,
     testsCriterion: row.testsCriterion,
+    identityCriterion: row.identityCriterion,
     buildCommand: row.buildCommand,
     testCommand: row.testCommand,
     evidenceOutputs: row.evidenceOutputs,

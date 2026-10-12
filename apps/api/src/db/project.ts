@@ -77,7 +77,7 @@ import {
   PUBLISH_MODES,
 } from "@quiz/domain";
 import type { ParsedCriteria } from "@quiz/domain/criteria";
-import type { JunitCase } from "@quiz/domain/evidence";
+import type { EvidenceCommit, JunitCase } from "@quiz/domain/evidence";
 import type { CriterionReason } from "@quiz/domain/criteriaTable";
 
 import { users } from "./auth.js";
@@ -259,6 +259,8 @@ export const projects = pgTable(
      * `tests-criterion` input when a snapshot is loaded.
      */
     testsCriterion: text("tests_criterion"),
+    /** The criterion the evidence grades from the commits' identity and messages (`commitIdentityPoints`); null: none, no default. */
+    identityCriterion: text("identity_criterion"),
     buildCommand: jsonb("build_command").$type<string[]>(),
     testCommand: jsonb("test_command").$type<string[]>(),
     evidenceOutputs: jsonb("evidence_outputs").$type<string[]>(),
@@ -864,6 +866,14 @@ export const projectEvidence = pgTable(
     cases: jsonb("cases").$type<JunitCase[]>(),
     /** The text output files by path. */
     files: jsonb("files").$type<Record<string, { content: string; truncated: boolean }>>(),
+    /**
+     * The commits of the handed-out branch up to the target, newest first
+     * (one page of GitHub's listing): what the identity criterion reads.
+     * Personal data (names, e-mail addresses): never logged, never sent to
+     * the model, dropped with the files (N-DATA-03). Null: not read (no
+     * commit, GitHub failing, an evidence stored before).
+     */
+    commits: jsonb("commits").$type<EvidenceCommit[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (t) => [unique("project_evidence_repo_shas_uq").on(t.repoId, t.targetSha, t.distributionSha).nullsNotDistinct()],

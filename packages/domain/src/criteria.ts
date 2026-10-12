@@ -164,14 +164,22 @@ export function passLeaves<L extends Pick<CriteriaLeaf, "milestone">>(leaves: re
 export const CRITERION_KINDS = ["automatic", "llm", "teacher"] as const;
 export type CriterionKind = (typeof CRITERION_KINDS)[number];
 
+/** The project's settings a criterion's kind reads: its tests criterion, and its identity criterion (null: none). */
+export interface CriterionSettings {
+  testsCriterion: string;
+  identityCriterion: string | null;
+}
+
 /**
- * `automatic` for the project's tests criterion or a criterion carrying
- * `test` — even with a `prompt`, the tests decide alone; `llm` for one with
- * a `prompt`; `teacher` otherwise (its points wait for the teacher alone:
- * a criterion that judges an identity carries no prompt, ADR-106).
+ * `automatic` for the project's tests criterion, its identity criterion
+ * (graded from the commits' metadata, `commitIdentityPoints`) or a
+ * criterion carrying `test` — even with a `prompt`, the check decides
+ * alone, and an identity is never sent to the model; `llm` for one with a
+ * `prompt`; `teacher` otherwise (its points wait for the teacher alone: a
+ * criterion that judges an identity carries no prompt, ADR-106).
  */
-export function classifyCriterion(leaf: Pick<CriteriaLeaf, "id" | "prompt" | "test">, settings: { testsCriterion: string }): CriterionKind {
-  if (leaf.id === settings.testsCriterion || leaf.test !== undefined) return "automatic";
+export function classifyCriterion(leaf: Pick<CriteriaLeaf, "id" | "prompt" | "test">, settings: CriterionSettings): CriterionKind {
+  if (leaf.id === settings.testsCriterion || leaf.id === settings.identityCriterion || leaf.test !== undefined) return "automatic";
   return leaf.prompt !== undefined ? "llm" : "teacher";
 }
 

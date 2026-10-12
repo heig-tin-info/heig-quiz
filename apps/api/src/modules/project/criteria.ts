@@ -24,7 +24,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import {
   COMMAND_SETTINGS,
   effectiveCommand,
-  effectiveTestsCriterion,
+  criterionSettings,
   type CommandSetting,
   type CriteriaError,
   type ProjectCriteriaView,
@@ -191,10 +191,10 @@ async function auditReload(db: Db, projectId: string, read: CriteriaRead, kept: 
   });
 }
 
-/** The ids of the project's snapshot, null without one. */
-export async function snapshotIds(db: Db | Tx, projectId: string): Promise<string[] | null> {
+/** The criteria of the project's snapshot, null without one. */
+export async function snapshotLeaves(db: Db | Tx, projectId: string): Promise<ParsedCriteria["leaves"] | null> {
   const [row] = await db.select({ criteria: projectCriteria.criteria }).from(projectCriteria).where(eq(projectCriteria.projectId, projectId));
-  return row ? row.criteria.leaves.map((leaf) => leaf.id) : null;
+  return row ? row.criteria.leaves : null;
 }
 
 /** `GET /app/api/projects/:id/criteria`: the snapshot, each criterion classified under the project's settings. */
@@ -203,7 +203,7 @@ export async function criteriaView(db: Db | Tx, project: ProjectRow): Promise<Pr
   if (!row) return { snapshot: null };
   const { leaves, sections, grading } = row.criteria;
   const { max, bonusMax } = criteriaTotals(leaves, {});
-  const settings = { testsCriterion: effectiveTestsCriterion(project) };
+  const settings = criterionSettings(project);
   return {
     snapshot: {
       fileSha: row.fileSha,

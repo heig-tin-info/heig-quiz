@@ -39,6 +39,7 @@ export const PROJECT_PATCH_FIELDS = [
   "groupSetId",
   // Grading by criteria (ADR-106 §2): editable in any state.
   "testsCriterion",
+  "identityCriterion",
   "buildCommand",
   "testCommand",
   "evidenceOutputs",
@@ -77,6 +78,7 @@ export function projectFieldRefusal(
     case "protectedFiles":
     case "deadlineAt":
     case "testsCriterion":
+    case "identityCriterion":
     case "buildCommand":
     case "testCommand":
     case "evidenceOutputs":

@@ -56,6 +56,7 @@ import {
   githubOrganizations,
   projectCheckpoints,
   projectCriteria,
+  projectEvidence,
   projectGradeRuns,
   projectRepos,
   projects,
@@ -899,6 +900,17 @@ describe("the criteria table (ADR-106 §9, N-SEC-20, L-02f)", () => {
         { criterionId: "rapport.analyse", points: 0.63, max: 4, source: "llm", state: "proposed", rationale: "Rationale-second-student", passId: randomUUID() },
       ]);
       await write(otherRepo.id, [{ criterionId: "rendu.tests", points: 3.91, max: 4, source: "auto", state: "proposed", rationale: "Rationale-other-mode", passId: randomUUID() }]);
+      // The evidence's commits, the identity criterion's personal data (ADR-106 §2): their address never reaches a student.
+      const commitEmail = "ada.commit-secret@heig-vd.ch";
+      await server.app.db.insert(projectEvidence).values({
+        id: passId,
+        repoId: mine.id,
+        targetSha: "c".repeat(40),
+        distributionSha: "d".repeat(40),
+        status: "ok",
+        commits: [{ sha: "c".repeat(40), name: "Ada Commit-Secret", email: commitEmail, subject: "Rendu du labo" }],
+        createdAt: at(NOW, -DAY),
+      });
 
       const admin = await server.signIn("admin");
       const impersonation = await sessionOf(first.id, { kind: "impersonation", actorUserId: admin.id });
@@ -1003,6 +1015,9 @@ describe("the criteria table (ADR-106 §9, N-SEC-20, L-02f)", () => {
         theirs.id,
         second.login,
         second.id,
+        commitEmail,
+        "Commit-Secret",
+        "c".repeat(40),
       ];
       const bodies = studentBodies.slice(from);
       expect(bodies.length).toBeGreaterThan(40);

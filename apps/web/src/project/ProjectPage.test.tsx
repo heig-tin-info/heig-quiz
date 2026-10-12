@@ -1531,10 +1531,15 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
       [WORKSPACE]: workspace("free"),
       [`GET ${BASE}/criteria`]: ok(view),
       [`POST ${BASE}/criteria/reload`]: ok(view),
+      [`PATCH ${BASE}`]: ok({}),
     });
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: /Advanced options/ }));
     expect(await screen.findByText("Tests pass")).toBeInTheDocument();
+    // The identity criterion: none, then one of the snapshot's.
+    expect(screen.getByLabelText("Git identity criterion")).toHaveValue("");
+    await userEvent.selectOptions(screen.getByLabelText("Git identity criterion"), "rendu.bonus");
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "PATCH", url: BASE, body: { identityCriterion: "rendu.bonus" } })]));
     expect(screen.getByText("Read from criteria.yml at abcdef1: 16 points, +1 bonus.")).toBeInTheDocument();
     expect(screen.getByText("AI")).toBeInTheDocument();
     expect(screen.getByText("+1")).toBeInTheDocument();
@@ -1542,7 +1547,32 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(screen.getByLabelText("Tests criterion")).toHaveValue("rendu.tests");
     expect(screen.getByLabelText("Build command")).toHaveAttribute("placeholder", "make prepare");
     await userEvent.click(screen.getByRole("button", { name: "Reload from source" }));
-    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/criteria/reload` })]));
+    await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "PATCH" }), expect.objectContaining({ method: "POST", url: `${BASE}/criteria/reload` })]));
+  });
+
+  it("shows the identity criterion's conflict with the tests criterion under its select", async () => {
+    const view = {
+      snapshot: {
+        fileSha: "f",
+        sourceSha: "abcdef1234",
+        loadedAt: PAST,
+        grading: { context: null, sources: [] },
+        sections: [{ id: "rendu", path: ["rendu"], description: null }],
+        leaves: [{ id: "rendu.tests", sectionPath: ["rendu"], description: "Tests pass", maxPoints: 12, kind: "automatic" }],
+        max: 12,
+        bonusMax: 0,
+      },
+    };
+    routes(makeDraft({ gradingMode: "criteria", testsCriterion: "rendu.tests" }), {
+      [WORKSPACE]: workspace("free"),
+      [`GET ${BASE}/criteria`]: ok(view),
+      [`PATCH ${BASE}`]: fail(422, { error: "criterion_conflict", message: "conflict", field: "identityCriterion" }),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Advanced options/ }));
+    await userEvent.selectOptions(await screen.findByLabelText("Git identity criterion"), "rendu.tests");
+    expect(await screen.findByText(/The identity criterion cannot be the tests criterion/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Git identity criterion")).toHaveAttribute("aria-invalid", "true");
   });
 
   it("draws every control disabled for an archived draft, and what `editable` does not name", async () => {

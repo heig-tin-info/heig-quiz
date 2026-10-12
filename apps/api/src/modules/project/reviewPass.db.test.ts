@@ -305,6 +305,28 @@ describe("the review job", () => {
     expect(style.rationale).toBe("<script>alert(1)</script>");
   });
 
+  it("grades the identity criterion by its check and never asks the model about it, nor sends a commit's author", async () => {
+    useGateway();
+    const withPrompt = await lab(CRITERIA.replace("{description: Who committed the work,", '{description: Who committed the work, prompt: "Who committed?",'));
+    await server.app.db.update(projects).set({ identityCriterion: "git.commits" }).where(eq(projects.id, withPrompt.projectId));
+    const repo = await studentRepo(withPrompt, "rv-identity");
+    const sha = world.commit(
+      repo.fullName,
+      "main",
+      { "build/rapport.md": "# Rapport" },
+      { author: { name: "Zoé Bernasconi", email: repo.email }, message: "Rendu du laboratoire 00" },
+    );
+    await server.app.db.insert(pushReceipts).values({ id: randomUUID(), githubRepoId: repo.githubRepoId, branch: "main", headSha: sha, receivedAt: before(30), isBot: false });
+    seen.length = 0;
+    next = reply({ "rapport.style": { points: 3, rationale: "ok" }, "rapport.crash": { points: 0, rationale: "ok" }, "rapport.extra": { points: 0, rationale: "ok" } });
+    await runEvidencePass(server.app, config, { repoId: repo.id, passId: randomUUID() });
+
+    expect((await liveRows(repo.id)).filter((r) => r.criterionId === "git.commits").map((r) => r.source)).toEqual(["auto"]);
+    expect(seen).toHaveLength(1);
+    const request = `${seen[0]!.system}\n${seen[0]!.prompt}`;
+    for (const leak of [repo.email, "Bernasconi", "Who committed", "git.commits", "Rendu du laboratoire 00", sha]) expect(request).not.toContain(leak);
+  });
+
   it.each([
     ["budget_exhausted", "llm_budget"],
     ["not_configured", "llm_not_configured"],

@@ -165,6 +165,7 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
     groupMode: body.groupMode,
     groupSetId: body.groupSetId ?? null,
     testsCriterion: null,
+    identityCriterion: null,
     buildCommand: null,
     testCommand: null,
     evidenceOutputs: null,
