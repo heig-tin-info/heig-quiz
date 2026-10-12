@@ -118,19 +118,22 @@ which shares over 100 % are not.
 
 **Recent polls opens the editor.** Pressing a row of "Recent polls" opens the
 "Ask a new question" tab prefilled with that question's type and config, answer
-key shown (the owner chose not to hide it). "Recent polls" has no start action
-of its own; "Start the poll" in the editor remains the one primary action:
+key shown (the owner chose not to hide it). It replaces the editor's working
+copy of that type, on purpose: the teacher asked for that question. "Recent
+polls" has no start action of its own; "Start the poll" in the editor remains
+the one primary action:
 
-- config deep-equal to the one loaded: `POST /app/api/polls` with its
+- not edited since it was loaded: `POST /app/api/polls` with its
   `questionId` — the same question, keeping its identity, history and use count;
 - edited: `POST /app/api/polls/inline` — a new unsaved question; the original
   and its results are untouched. A saved pool question edited there likewise
   becomes an unsaved copy: the launcher never writes a pool.
 
-The content comes from `GET /app/api/polls/questions/:id` (staff), loaded in
-the very scope of the "Recent polls" list — the caller's own polled questions,
-saved ones only while pool access remains, and their personal pool's — and
-otherwise the 404 of a missing question. It returns the config of the latest
+The content comes from `GET /app/api/polls/questions/:id` (staff), loaded
+through the predicate a relaunch uses (`reachableQuestion`: a pool question
+the caller reaches, or an unsaved question of a poll they launched) — what
+they may run, they may open — and otherwise, or for a question a poll cannot
+run, the 404 of a missing question. It returns the config of the latest
 published version, the one a relaunch freezes.
 
 ### Display, answers and ending

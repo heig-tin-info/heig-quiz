@@ -911,51 +911,6 @@ function rosterOfRun(
   return rosters.get(classroomId) ?? 0;
 }
 
-/**
- * The questions "Recent polls" may show: those the caller ran (`ranIds`)
- * and those of their personal pool — `only` narrows both to one id — that
- * are still pollable, live, and, for a pool question, still reached through
- * `poolWhere`. The ONE scope of the list and of the content read below.
- */
-async function pickableQuestions(
-  db: Db,
-  input: { userId: string; poolWhere: SQL | undefined },
-  ranIds: readonly string[],
-  only?: string,
-) {
-  const personal = await db
-    .select({ id: questions.id })
-    .from(questions)
-    .innerJoin(pools, eq(pools.id, questions.poolId))
-    .where(
-      and(
-        eq(pools.ownerId, input.userId),
-        eq(pools.isPersonal, true),
-        only === undefined ? undefined : eq(questions.id, only),
-      ),
-    );
-
-  const candidates = [...new Set([...ranIds, ...personal.map((p) => p.id)])].filter(
-    (id) => only === undefined || id === only,
-  );
-  if (candidates.length === 0) return [];
-
-  return db
-    .select({ question: questions })
-    .from(questions)
-    .leftJoin(pools, eq(pools.id, questions.poolId))
-    .where(
-      and(
-        inArray(questions.id, candidates),
-        inArray(questions.type, [...POLLABLE_TYPES]),
-        // ADR-056 §10: a parameterized question is never offered.
-        eq(questions.randomizable, false),
-        isNull(questions.deletedAt),
-        input.poolWhere === undefined ? undefined : or(isNull(questions.poolId), input.poolWhere),
-      ),
-    );
-}
-
 /** The latest published version of each question, by question id. */
 async function latestPublished(db: Db, ids: readonly string[]) {
   const versions = await db
@@ -969,42 +924,21 @@ async function latestPublished(db: Db, ids: readonly string[]) {
 }
 
 /**
- * One row of "Recent polls" opened in the launcher's editor (ADR-014,
- * amendment 2026-10-12): its type and the config of the version a relaunch
- * freezes, key included. Null — the route's 404 — for anything the list
- * itself would not show the caller (`pickableQuestions`), or a question with
- * no published version.
+ * A question opened in the launcher's editor (ADR-014, amendment
+ * 2026-10-12): its type and the config of the version a relaunch freezes,
+ * key included. The route loads the question through `reachableQuestion` —
+ * what the caller may relaunch, they may open — and this answers null (its
+ * 404) for one a poll cannot run: deleted, of another type, parameterized
+ * or never published (`assertPollable`'s conditions).
  */
-export async function questionPickContent(
+export async function pollQuestionContent(
   db: Db,
-  input: { userId: string; poolWhere: SQL | undefined; questionId: string },
+  question: typeof questions.$inferSelect,
 ): Promise<PollQuestionContent | null> {
-  const ran = await db
-    .select({ id: evaluations.id })
-    .from(evaluations)
-    .innerJoin(evaluationItems, eq(evaluationItems.evaluationId, evaluations.id))
-    .innerJoin(questionVersions, eq(questionVersions.id, evaluationItems.questionVersionId))
-    .where(
-      and(
-        eq(evaluations.mode, "poll"),
-        eq(evaluations.createdBy, input.userId),
-        eq(questionVersions.questionId, input.questionId),
-      ),
-    )
-    .limit(1);
-  const [row] = await pickableQuestions(
-    db,
-    input,
-    ran.length > 0 ? [input.questionId] : [],
-    input.questionId,
-  );
-  if (!row) return null;
-  const version = (await latestPublished(db, [row.question.id])).get(row.question.id);
+  if (question.deletedAt !== null || !isPollable(question.type) || question.randomizable) return null;
+  const version = (await latestPublished(db, [question.id])).get(question.id);
   if (!version) return null;
-  return {
-    type: row.question.type as PollType,
-    config: loadConfig(row.question.type, version),
-  };
+  return { type: question.type, config: loadConfig(question.type, version) };
 }
 
 /**
@@ -1041,7 +975,29 @@ export async function questionPicks(
     .where(and(eq(evaluations.mode, "poll"), eq(evaluations.createdBy, input.userId)))
     .orderBy(desc(evaluations.createdAt));
 
-  const rows = await pickableQuestions(db, input, runRows.map((r) => r.questionId));
+  const personal = await db
+    .select({ id: questions.id })
+    .from(questions)
+    .innerJoin(pools, eq(pools.id, questions.poolId))
+    .where(and(eq(pools.ownerId, input.userId), eq(pools.isPersonal, true)));
+
+  const candidates = [...new Set([...runRows.map((r) => r.questionId), ...personal.map((p) => p.id)])];
+  if (candidates.length === 0) return [];
+
+  const rows = await db
+    .select({ question: questions })
+    .from(questions)
+    .leftJoin(pools, eq(pools.id, questions.poolId))
+    .where(
+      and(
+        inArray(questions.id, candidates),
+        inArray(questions.type, [...POLLABLE_TYPES]),
+        // ADR-056 §10: a parameterized question is never offered.
+        eq(questions.randomizable, false),
+        isNull(questions.deletedAt),
+        input.poolWhere === undefined ? undefined : or(isNull(questions.poolId), input.poolWhere),
+      ),
+    );
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.question.id);
   const typeById = new Map(rows.map((r) => [r.question.id, r.question.type] as const));

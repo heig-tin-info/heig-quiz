@@ -178,8 +178,9 @@ export type PollQuestionPick = z.infer<typeof PollQuestionPick>;
 
 /**
  * `GET /app/api/polls/questions/:id`: one row of "Recent polls" opened in
- * the launcher's editor (ADR-014, amendment 2026-10-12). Staff only, and in
- * the very scope of the list: a question the list would not show is a 404.
+ * the launcher's editor (ADR-014, amendment 2026-10-12). Staff only, loaded
+ * like a relaunch (`POST /app/api/polls`): a question the caller could not
+ * run is a 404.
  */
 export const PollQuestionContent = z.object({
   type: PollQuestionType,

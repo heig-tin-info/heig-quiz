@@ -172,11 +172,12 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   );
 
   /**
-   * One row of "Recent polls", opened in the launcher's editor (ADR-014,
-   * amendment 2026-10-12): its type and the config a relaunch would freeze,
-   * key included. LOADED in the scope of the list itself — a question the
-   * caller's "Recent polls" would not show is the 404 of a missing one
-   * (invariant 6).
+   * A question opened in the launcher's editor — a row of "Recent polls"
+   * (ADR-014, amendment 2026-10-12): its type and the config a relaunch
+   * would freeze, key included. LOADED through `reachableQuestion`, the very
+   * predicate `POST /polls` relaunches through: what the caller may run they
+   * may open. Anything else, or a question a poll cannot run, is the 404 of
+   * a missing one (invariant 6).
    */
   app.get(
     "/app/api/polls/questions/:id",
@@ -185,11 +186,8 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       {
         params: IdParam,
         load: async (req, reply, p) => {
-          const content = await service.questionPickContent(app.db, {
-            userId: req.user!.id,
-            poolWhere: accessWhere(callerOf(req), poolAccess(req.user!.id)),
-            questionId: p.id,
-          });
+          const question = await reachableQuestion(req, p.id);
+          const content = question ? await service.pollQuestionContent(app.db, question) : null;
           if (content) return content;
           await notFound(reply);
           return null;

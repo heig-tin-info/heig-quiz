@@ -60,6 +60,7 @@ import {
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
 import {
   AsideSection,
+  CheckboxField,
   cx,
   gripClass,
   GripIcon,
@@ -503,60 +504,31 @@ export function McqEditor({
         </DndContext>
 
         <IssueList issues={choiceIssues.map(locate)} />
+        {/*
+         * "Allow several answers", a poll only (ADR-014, amendment
+         * 2026-10-12): with no key it IS the mode; with one, the key is the
+         * mode (`setChoices` wrote it) and the box only shows it, disabled.
+         * Off drops the answer cap with the mode it belonged to.
+         */}
         {ungraded ? (
-          <SeveralAnswers config={config} correctCount={correctCount} disabled={disabled} s={s} onChange={onChange} />
+          <div className="flex flex-col gap-1">
+            <CheckboxField
+              className="inline-flex items-center gap-2 text-[13px] text-fg"
+              label={s.allowSeveral}
+              checked={multiple}
+              disabled={disabled || correctCount > 0}
+              onChange={(checked) => {
+                const next: McqConfig = { ...config, mode: checked ? "multiple" : "single" };
+                if (!checked) delete next.maxSelections;
+                onChange(next);
+              }}
+            />
+            {correctCount > 0 ? <p className={cx(hint, "pl-6")}>{s.allowSeveralFromKey}</p> : null}
+          </div>
         ) : null}
       </section>
 
       {ungraded ? null : scoring}
-    </div>
-  );
-}
-
-/**
- * "Allow several answers", in a poll only (ADR-014, amendment 2026-10-12).
- *
- * With no key, it IS the mode. With a key, the key is the mode — `setChoices`
- * already wrote it — and the box only shows it, disabled, with the reason
- * under it. Turning it off drops the answer cap with the mode it belonged
- * to, as `setChoices` does on its way to `single`.
- */
-function SeveralAnswers({
-  config,
-  correctCount,
-  disabled,
-  s,
-  onChange,
-}: {
-  config: McqConfig;
-  correctCount: number;
-  disabled: boolean | undefined;
-  s: Strings;
-  onChange: (next: McqConfig) => void;
-}) {
-  const fromKey = correctCount > 0;
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="inline-flex items-start gap-2 text-[13px] text-fg">
-        <input
-          type="checkbox"
-          className="mt-0.5 size-4 accent-accent"
-          checked={config.mode === "multiple"}
-          disabled={disabled || fromKey}
-          aria-describedby={fromKey ? "mcq-several-hint" : undefined}
-          onChange={(e) => {
-            const next: McqConfig = { ...config, mode: e.target.checked ? "multiple" : "single" };
-            if (!e.target.checked) delete next.maxSelections;
-            onChange(next);
-          }}
-        />
-        {s.allowSeveral}
-      </label>
-      {fromKey ? (
-        <p id="mcq-several-hint" className={cx(hint, "pl-6")}>
-          {s.allowSeveralFromKey}
-        </p>
-      ) : null}
     </div>
   );
 }

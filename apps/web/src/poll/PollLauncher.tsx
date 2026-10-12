@@ -20,7 +20,6 @@ import { useT } from "../i18n";
 import { OutcomeBadge, OutcomeLegend } from "./OutcomeDonut";
 import { PickRow, promptLine } from "./PickRow";
 import { PoolPicks } from "./PoolPicks";
-import { relaunchId, type RelaunchOrigin } from "./relaunch";
 import { QuestionTypePicker } from "../pool/QuestionTypePicker";
 import { toConfigIssues } from "../question/issues";
 import { QuestionEditorHost } from "../questionTypes";
@@ -93,9 +92,14 @@ import { useCourses } from "../course/parts";
  * in "Ask a new question", prefilled with its type and content, key shown
  * (ADR-014, amendment 2026-10-12). "Start the poll" stays the one action:
  * left as it was, the question is relaunched — same identity, history and
- * use count (`relaunchId`); edited, it starts as a new unsaved question and
- * the original, a pool's included, is never written. The line under the
- * editor says which of the two the button will do.
+ * use count; edited, it starts as a new unsaved question and the original,
+ * a pool's included, is never written. The line under the editor says which
+ * of the two the button will do. Opening a question REPLACES the editor's
+ * working copy of that type, on purpose: the teacher asked for that question.
+ *
+ * "Left as it was" is reference identity: the editors emit a new config only
+ * on a real edit (none normalises on mount), so the draft is still the very
+ * object that was loaded. An edit undone by hand counts as an edit.
  */
 
 /** A poll runs the types of `PollQuestionType`; the picker is limited to them. */
@@ -194,7 +198,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   // The question picked in "From pools"; "Recent polls" opens the editor instead.
   const [poolQuestionId, setPoolQuestionId] = useState<string | null>(null);
   // The recent poll the editor was prefilled from, if any.
-  const [origin, setOrigin] = useState<RelaunchOrigin | null>(null);
+  const [origin, setOrigin] = useState<{ id: string; type: PollType; config: unknown } | null>(null);
   const [choice, setChoice] = useState<string>(ANYONE);
   const [type, setType] = useState<PollType>("mcq");
   // One working copy per type, so a switch back and forth loses nothing.
@@ -264,8 +268,8 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
     },
   });
   // Unchanged since it was opened: the same question runs again.
-  const relaunch = relaunchId(origin, type, config);
   const fromOrigin = origin !== null && origin.type === type;
+  const relaunch = fromOrigin && drafts[type] === origin.config ? origin.id : null;
 
   // ONE primary action per screen: start the poll — on the question picked
   // in a pool, or on the one in the editor. "Recent polls" has none of its

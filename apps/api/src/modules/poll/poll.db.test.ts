@@ -1444,10 +1444,11 @@ describe("the launcher's recent polls", () => {
   });
 
   /*
-   * A row opened in the launcher's editor (ADR-014, amendment 2026-10-12):
-   * the config, key included, in the scope of the list and nowhere else.
+   * A question opened in the launcher's editor (ADR-014, amendment
+   * 2026-10-12): the config, key included, to whoever may relaunch it
+   * (`reachableQuestion`), and the 404 of a missing question to anyone else.
    */
-  it("opens a recent question's content to its launcher, and to nobody else", async () => {
+  it("opens a question's content to whoever may relaunch it, and to nobody else", async () => {
     const own = await get(`/app/api/polls/questions/${named.questionId}`, lecturer.headers);
     expect(own.statusCode).toBe(200);
     expect(own.json()).toMatchObject({
@@ -1466,10 +1467,14 @@ describe("the launcher's recent polls", () => {
     expect(theirs.statusCode).toBe(404);
     expect(theirs.json()).toEqual({ error: "not_found" });
 
-    // Another teacher's saved question the lecturer never ran nor reaches.
+    // Another teacher's saved question: out of the lecturer's reach, a 404;
+    // its owner reaches it through the pool predicate and reads it.
     const foreign = await get(`/app/api/polls/questions/${questionId}`, lecturer.headers);
     expect(foreign.statusCode).toBe(404);
     expect(foreign.json()).toEqual({ error: "not_found" });
+    const owned = await get(`/app/api/polls/questions/${questionId}`, teacher.headers);
+    expect(owned.statusCode).toBe(200);
+    expect(owned.json()).toMatchObject({ type: "mcq", config: { prompt: MCQ_CONFIG.prompt } });
 
     const missing = await get(`/app/api/polls/questions/${crypto.randomUUID()}`, lecturer.headers);
     expect(missing.statusCode).toBe(404);
