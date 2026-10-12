@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { BlockList, isIP } from "node:net";
 import { fileURLToPath } from "node:url";
 
-import { RUNNER_BUDGET_DEFAULTS } from "@quiz/core/server";
+import { PROJECT_TIME_MAX_MS, RUNNER_BUDGET_DEFAULTS } from "@quiz/core/server";
 import { z } from "zod";
 
 /**
@@ -157,6 +157,16 @@ const EnvSchema = z.object({
     .min(1000)
     .max(600_000)
     .default(RUNNER_BUDGET_DEFAULTS.requestTimeoutMs),
+
+  /*
+   * Project runs (`POST /project`, ADR-106 §3): the runner's configuration,
+   * never a request's. The container gets the flags of `containerArgs()`,
+   * unchanged; these set the run's budget and the size of its tmpfs.
+   */
+  /** A whole project run, from its start: the build gets at most half, the tests the rest. */
+  RUNNER_PROJECT_TIMEOUT_MS: z.coerce.number().int().min(30_000).max(PROJECT_TIME_MAX_MS).default(PROJECT_TIME_MAX_MS),
+  /** Size of the `/work` and `/tmp` tmpfs of a project run: the unpacked repository and its build. */
+  RUNNER_PROJECT_WORKDIR_MB: z.coerce.number().int().min(32).max(2048).default(256),
 });
 
 export type RunnerConfig = Omit<z.infer<typeof EnvSchema>, "PODMAN_SOCKET" | "RUNNER_SECCOMP"> & {

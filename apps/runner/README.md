@@ -1,9 +1,10 @@
 # `@quiz/runner` — the code execution service
 
-One HTTP service, two routes, one container per request.
+One HTTP service, three routes, one container per request.
 
 ```
 POST /run      a RunnerRequest  ->  a RunnerOutcome        (packages/core/src/runner.ts)
+POST /project  a ProjectRunRequest -> a ProjectRunResult   (a whole repository: Project runs, below)
 GET  /health   a RunnerHealth: languages, queue, engine
 ```
 
@@ -81,7 +82,7 @@ What was deliberately *not* carried over:
 | --- | --- |
 | `--network codespace`, `--dns=none`, `--add-host` | A quiz runner has no git channel to open: `--network none`, and Podman refuses `--dns=none` with it. |
 | `--security-opt apparmor=codespace` | That profile exists to let `gdb` ptrace inside a codespace. Nothing here debugs; Podman's built-in profile applies when the host has AppArmor. |
-| `-v <dir>:/work:U` | Nothing from the host is mounted, ever. `/work` is a tmpfs and the sources travel in on `podman exec`'s stdin. |
+| `-v <dir>:/work:U` | Nothing from the host is mounted, ever. `/work` is a tmpfs and the sources travel in on `podman exec`'s stdin — a project's too, as ONE sanitized tar ([Project runs](#project-runs)). |
 | code-server, gdb, git, curl | An editor is not a grader. |
 
 ## The flags of every container
@@ -296,8 +297,9 @@ images/build.sh c python        # only the ones named
 | `quiz-runner-js` | alpine 3.20 | `nodejs` | ~170 MB |
 | `quiz-runner-rust` | alpine 3.20 | `rust` (rustc 1.78, gcc as its linker; no cargo registry) | ~820 MB |
 | `quiz-runner-spice` | alpine 3.20 | `ngspice` (42) | ~65 MB |
+| `quiz-runner-lab-c` | alpine 3.20 | `gcc`, `musl-dev`, `make`, `python3`, `py3-pytest`, GNU `tar` and `findutils`: a project run's image, not a language ([Project runs](#project-runs)) | ~200 MB |
 
-Alpine-based, one toolchain each — the Alpine five share `images/Containerfile`
+Alpine-based, one toolchain each — the Alpine six (`lab-c` included) share `images/Containerfile`
 and differ by the packages `images/build.sh` passes it; `js` has its own
 `images/js/Containerfile` — a non-root `uid 1000` — asserted image by
 image, by a program that prints its own uid (`src/podman.int.test.ts`) — no
@@ -363,6 +365,57 @@ invariants 11 and 12. The second line of defence is that a student never
 writes a netlist: the type assembles it from the schematic and the teacher's
 stimuli (invariant 14), so no `.control` block of a student's making is ever
 submitted.
+
+## Project runs
+
+`POST /project` tests a whole student repository for the `criteria` grading
+mode (ADR-106 §3, amending ADR-016 and ADR-101; CLAUDE.md invariant 12). The
+contract is `ProjectRunRequest` of `packages/core/src/runner.ts`; the code is
+`src/project.ts` and `@quiz/core/tar`. Same service, bearer, queues and
+container: **`containerArgs()` gains no flag and loses none** —
+`src/engine.test.ts` asserts that a project's container differs from a code
+question's only by the values of `--tmpfs`, `--memory`, `--cpus`, the image
+and the ttl. At most ONE project run is admitted at a time (`429` beyond), so
+it never holds more than one slot; the API paces the rest.
+
+**The archive.** One base64 tar, at most 20 MB, parsed in this process before
+it takes a slot. Every way a tar names an entry is resolved — ustar prefix
+(never an old-GNU header's times), PAX `path`, GNU long name — and judged: a
+regular file or a directory at a normalized relative path, in UTF-8, in no
+conflict with an earlier entry. **One refused entry refuses the whole
+archive** (`400 archive_refused`, every refused entry named): a link, a
+device, a fifo, `..`, an absolute path, `a/./b`, `a//b`, a control character.
+An accepted archive is repacked into a fresh tar (modes `0755`/`0644`, no
+owner) and unpacked by the image's GNU tar from `podman exec`'s stdin in the
+`/work` tmpfs (`--no-same-owner --no-same-permissions --no-overwrite-dir`).
+Nothing is mounted. An archive the tmpfs cannot hold is `413
+archive_too_large_for_workdir`, never a retryable 503.
+
+**The steps.** The build argv, then the test argv — always, even after a
+failed build — each a fixed argv under `timeout -s KILL` and the service's
+clock, never a shell. The budget is `RUNNER_PROJECT_TIMEOUT_MS`, the runner's
+and never the request's: the build gets at most half, the tests the rest
+minus 10 s kept for the outputs. After each step `kill -9 -1` reaps what it
+left behind (pid 1, the container's `sleep`, is out of its reach); a failed
+reap ends the run like a lost container: no later step, no outputs. Memory is
+`RUNNER_MAX_MEMORY_MB`, `--cpus 1`, `--pids-limit 64` — enough for `make`,
+gcc and pytest (`src/project.int.test.ts`).
+
+**The outputs.** Every parent of an output path is checked first with
+`find <parents> -maxdepth 0 -printf '%y %p\0'`, and an output whose parent is
+not a real directory is dropped: `find -P` only refuses a link as the LAST
+component. Then `find ./<output>… -printf '%y %s %p\0'` lists the regular
+files (a link is neither followed nor returned) and ONE
+`tar -c --no-recursion` reads them, every read bounded by the deadline. In the
+order of `outputs`, then by path: a file over 256 KB, or past 2 MB in all,
+comes back empty and `truncated` with its size; a file with a NUL byte or not
+UTF-8 as its size only.
+
+**The image** `quiz-runner-lab-c` (`images/build.sh lab-c`): gcc, musl-dev,
+make, python3, py3-pytest, GNU tar and findutils. No pip, no git, no pandoc,
+and `--network none`: **a lab that needs `pip install` or `apt` at test time
+cannot run here, by construction**; ADR-106 has the API refuse the `criteria`
+mode for it, with the reason.
 
 ## Running it here
 
@@ -468,6 +521,8 @@ Everything is in `src/config.ts`, validated at startup.
 | `RUNNER_COMPILE_TIMEOUT_MS` | 20 000 | Budget of the build step. |
 | `RUNNER_CASE_GRACE_MS` | 2000 | How long past a case's deadline the service waits. |
 | `RUNNER_REQUEST_TIMEOUT_MS` | 120 000 | Ceiling on a whole request, its build and all cases together; a request's `budgetMs` may only lower it. |
+| `RUNNER_PROJECT_TIMEOUT_MS` | 600 000 | A whole project run (`POST /project`), 30 000 to 600 000: the build gets at most half, the tests the rest. Never a request's. `RUNNER_REQUEST_TIMEOUT_MS` keeps governing `/run`. |
+| `RUNNER_PROJECT_WORKDIR_MB` | 256 | Size of the `/work` and `/tmp` tmpfs of a project run (32–2048). `RUNNER_WORKDIR_MB` keeps governing `/run`. |
 
 The three `RUNNER_MAX_*` ceilings default to the upper bounds of
 `RunnerRequest.limits` (`packages/core/src/runner.ts`), so a fresh deployment

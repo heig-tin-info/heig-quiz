@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { RUNNER_BUDGET_DEFAULTS, RunnerLanguage, RunnerOutcome, RunnerRequest, requestBudgetMs } from "./runner.js";
+import {
+  PROJECT_ARCHIVE_MAX_BASE64,
+  ProjectRunRequest,
+  RUNNER_BUDGET_DEFAULTS,
+  RunnerLanguage,
+  RunnerOutcome,
+  RunnerRequest,
+  projectPathProblem,
+  requestBudgetMs,
+} from "./runner.js";
 
 const minimal = {
   language: "c",
@@ -74,5 +83,49 @@ describe("RunnerOutcome", () => {
 
   it("refuses a missing compile block", () => {
     expect(RunnerOutcome.safeParse({ cases: [] }).success).toBe(false);
+  });
+});
+
+describe("projectPathProblem", () => {
+  it.each([
+    ["report.xml", null],
+    ["build/", null],
+    ["src/a b/é.c", null],
+    ["", "empty"],
+    ["/", "empty"],
+    ["/etc/passwd", "absolute"],
+    ["../x", "dot_segment"],
+    ["a/./b", "dot_segment"],
+    ["a//b", "empty_segment"],
+    ["a\u0000b", "control_character"],
+    ["a\u007fb", "control_character"],
+    [`${"é".repeat(128)}`, "segment_too_long"],
+    [`${"a/".repeat(2049)}`, "too_long"],
+  ])("judges %j as %s", (path, problem) => {
+    expect(projectPathProblem(path)).toBe(problem);
+  });
+});
+
+describe("ProjectRunRequest", () => {
+  const minimal = {
+    archive: "AAAA",
+    image: "lab-c",
+    commands: { test: ["pytest"] },
+    outputs: [],
+  };
+
+  it("accepts argv arrays and refuses a shell string, an empty argv, an option as program", () => {
+    expect(ProjectRunRequest.safeParse(minimal).success).toBe(true);
+    for (const test of ["make && pytest", [], ["-rf"], ["a\u0000b"]]) {
+      expect(ProjectRunRequest.safeParse({ ...minimal, commands: { test } }).success).toBe(false);
+    }
+  });
+
+  it("bounds the outputs and the archive", () => {
+    const outputs = Array.from({ length: 17 }, (_, i) => `f${i}`);
+    expect(ProjectRunRequest.safeParse({ ...minimal, outputs }).success).toBe(false);
+    expect(ProjectRunRequest.safeParse({ ...minimal, outputs: ["../x"] }).success).toBe(false);
+    const over = "A".repeat(PROJECT_ARCHIVE_MAX_BASE64 + 4);
+    expect(ProjectRunRequest.safeParse({ ...minimal, archive: over }).success).toBe(false);
   });
 });

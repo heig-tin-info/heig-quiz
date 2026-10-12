@@ -174,3 +174,149 @@ export interface RunnerService {
   run(req: RunnerRequest): Promise<RunnerOutcome>;
   health(): Promise<RunnerHealth>;
 }
+
+/*
+ * Project runs (ADR-106 §3): a whole student repository, tested in the same
+ * hardened container as a code question. ONE archive travels in on stdin and
+ * is unpacked inside the container, every entry sanitized first; a fixed argv
+ * builds then tests it, no shell; a capped list of text files comes back.
+ */
+
+/** The decoded archive's ceiling, in bytes. */
+export const PROJECT_ARCHIVE_MAX_BYTES = 20 * 1024 * 1024;
+/** The longest base64 text that can decode to {@link PROJECT_ARCHIVE_MAX_BYTES}. */
+export const PROJECT_ARCHIVE_MAX_BASE64 = Math.ceil(PROJECT_ARCHIVE_MAX_BYTES / 3) * 4;
+/** One output file's ceiling, in bytes, and one step's per stream. */
+export const PROJECT_FILE_MAX_BYTES = 256 * 1024;
+/** The ceiling of all the output files of one run together, in bytes read. */
+export const PROJECT_OUTPUT_MAX_BYTES = 2 * 1024 * 1024;
+/** How many output paths a request may name. */
+export const PROJECT_OUTPUTS_MAX = 16;
+/**
+ * The longest a project run may take once it runs: the ceiling of the
+ * runner's `RUNNER_PROJECT_TIMEOUT_MS`, which the API's wait is built on.
+ */
+export const PROJECT_TIME_MAX_MS = 600_000;
+
+/** The images a project may run in: `quiz-runner-lab-c` (gcc, make, python3, pytest). */
+export const ProjectImage = z.enum(["lab-c"]);
+export type ProjectImage = z.infer<typeof ProjectImage>;
+
+/** One path segment's ceiling, in UTF-8 bytes (Linux's NAME_MAX). */
+const SEGMENT_MAX_BYTES = 255;
+/** A whole path's ceiling, in UTF-8 bytes (Linux's PATH_MAX). */
+const PATH_MAX_BYTES = 4096;
+
+const encoder = new TextEncoder();
+
+/**
+ * Why a path of a project — an archive entry, an output — is refused, or
+ * `null` when it is a normalized relative path: no leading `/`, no `.` or
+ * `..` segment, no empty segment (`a//b`), no control character, no segment
+ * over 255 bytes. One trailing `/` is allowed: it names a directory. The
+ * runner's sanitizer and the API share this rule; it never rewrites a path.
+ */
+export function projectPathProblem(path: string): string | null {
+  const body = path.endsWith("/") ? path.slice(0, -1) : path;
+  if (body === "") return "empty";
+  if (encoder.encode(path).length > PATH_MAX_BYTES) return "too_long";
+  // C0 controls and DEL: a name a terminal, a log line or a tar header could misread.
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(path)) return "control_character";
+  if (body.startsWith("/")) return "absolute";
+  for (const segment of body.split("/")) {
+    if (segment === "") return "empty_segment";
+    if (segment === "." || segment === "..") return "dot_segment";
+    if (encoder.encode(segment).length > SEGMENT_MAX_BYTES) return "segment_too_long";
+  }
+  return null;
+}
+
+/**
+ * A command line as an argv: one element is ONE argument, verbatim; no shell
+ * ever reads it. The program may not start with `-`, which `timeout` would
+ * take for one of its own options.
+ */
+export const ProjectArgv = z
+  .array(z.string().min(1).max(1024).refine((arg) => !arg.includes("\0"), "no NUL byte"))
+  .min(1)
+  .max(64)
+  // zod runs a refinement even when `min` failed: an empty argv reaches it.
+  .refine((argv) => !(argv[0] ?? "").startsWith("-"), "the program cannot start with '-'");
+export type ProjectArgv = z.infer<typeof ProjectArgv>;
+
+export const ProjectRunRequest = z.object({
+  /** A tar archive, base64; its entries are sanitized by the runner, never trusted. */
+  archive: z.string().min(1).max(PROJECT_ARCHIVE_MAX_BASE64),
+  image: ProjectImage,
+  /** `build` (optional) then `test`, ALWAYS: the tests run even when the build failed. */
+  commands: z.object({ build: ProjectArgv.optional(), test: ProjectArgv }),
+  /** Files or directories (trailing `/` or not) to bring back, relative to the root. */
+  outputs: z
+    .array(z.string().refine((path) => projectPathProblem(path) === null, "not a relative path"))
+    .max(PROJECT_OUTPUTS_MAX),
+  // No limits and no budget: the runner's configuration owns them (ADR-106
+  // §3), never a request.
+});
+export type ProjectRunRequest = z.infer<typeof ProjectRunRequest>;
+
+/** One step of a project run: the build or the tests. */
+export const ProjectStep = z.object({
+  /** null when it did not exit by itself (killed at its deadline, not started). */
+  exitCode: z.number().int().nullable(),
+  stdout: z.string(),
+  stderr: z.string(),
+  ms: z.number(),
+  timedOut: z.boolean(),
+  truncated: z.boolean(),
+});
+export type ProjectStep = z.infer<typeof ProjectStep>;
+
+/**
+ * An output file: its text (UTF-8, no NUL byte), or only its size when it is
+ * not text. A file over its cap, or past the total, comes back empty and
+ * `truncated`.
+ */
+export const ProjectOutputFile = z.union([
+  z.object({ path: z.string(), content: z.string(), truncated: z.boolean(), size: z.number().int() }),
+  z.object({ path: z.string(), binary: z.literal(true), size: z.number().int() }),
+]);
+export type ProjectOutputFile = z.infer<typeof ProjectOutputFile>;
+
+export const ProjectRunResult = z.object({
+  build: ProjectStep.nullable(),
+  test: ProjectStep,
+  files: z.array(ProjectOutputFile),
+});
+export type ProjectRunResult = z.infer<typeof ProjectRunResult>;
+
+/**
+ * A project run the runner refused for a reason no retry changes: no image
+ * for it here, an archive not a tar, or holding an entry the sanitizer
+ * refuses — then the WHOLE archive is refused (CLAUDE.md invariant 12) and
+ * `entries` names them, `<path>: <reason>` — or one that does not fit the
+ * work directory, or a request it would not parse (an archive over the cap
+ * included).
+ */
+export const ProjectRunRefusal = z.object({
+  refused: z.enum([
+    "image_unavailable",
+    /** Unpacked, it does not fit the runner's `RUNNER_PROJECT_WORKDIR_MB`. */
+    "archive_too_large_for_workdir",
+    "archive_invalid",
+    "archive_refused",
+    "invalid_request",
+  ]),
+  entries: z.array(z.string()).optional(),
+});
+export type ProjectRunRefusal = z.infer<typeof ProjectRunRefusal>;
+
+/**
+ * A runner that can test a whole repository. Separate from {@link RunnerService}
+ * on purpose: only the API's runner implements it, not the many doubles of a
+ * code question's runner.
+ */
+export interface ProjectRunnerService {
+  /** Throws {@link RunnerUnavailable} or {@link RunnerBusy} like `run`; a refusal is an answer. */
+  project(req: ProjectRunRequest): Promise<ProjectRunResult | ProjectRunRefusal>;
+}

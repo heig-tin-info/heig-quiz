@@ -2,7 +2,7 @@
 #
 # Builds the runner images: `quiz-runner-<lang>:latest`, one per language.
 #
-#   images/build.sh              # c cpp python js spice rust  (all six)
+#   images/build.sh              # c cpp python js spice rust lab-c  (all seven)
 #   images/build.sh c python     # only those
 #   images/build.sh rust         # one image, e.g. after an Alpine bump
 #
@@ -42,6 +42,14 @@ fi
 #   spice   ngspice alone (Alpine 3.20 ships 42), a batch simulator: the
 #           `circuit` question type is graded by simulating the student's
 #           schematic (ADR-019). No X, no editor.
+#   lab-c   the image of a PROJECT run (POST /project, ADR-106 §3): a whole
+#           student repository built with `make` and tested with `pytest`.
+#           gcc + musl-dev + make for the build, python3 + py3-pytest for the
+#           tests, GNU tar (the archive is unpacked inside the container) and
+#           GNU findutils (`find -printf` lists the output files). No pip, no
+#           git, no pandoc: a lab whose tests need `pip install` or `apt` at
+#           test time cannot run here, by construction (no network, and no
+#           package manager that could reach one).
 packages() {
   case "$1" in
     c) echo "gcc musl-dev" ;;
@@ -49,12 +57,13 @@ packages() {
     python) echo "python3" ;;
     rust) echo "rust" ;;
     spice) echo "ngspice" ;;
+    lab-c) echo "gcc musl-dev make python3 py3-pytest tar findutils" ;;
   esac
 }
 
 languages=("$@")
 if [ ${#languages[@]} -eq 0 ]; then
-  languages=(c cpp python js spice rust)
+  languages=(c cpp python js spice rust lab-c)
 fi
 
 for lang in "${languages[@]}"; do

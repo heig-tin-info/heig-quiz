@@ -8,7 +8,7 @@ import {
 } from "@quiz/core/server";
 
 import type { RunnerConfig } from "./config.js";
-import type { Engine, ExecResult } from "./engine.js";
+import type { CreateOptions, Engine, ExecResult } from "./engine.js";
 import { imageRef } from "./images.js";
 import { planFor, sanitizeFileName, splitCompileArgs, type LanguagePlan } from "./languages.js";
 
@@ -55,6 +55,8 @@ export class ExecuteError extends Error {
   constructor(
     message: string,
     readonly reason: string,
+    /** The service's own diagnostic (a tool's stderr), for the log only, never a student's output. */
+    readonly detail?: string,
   ) {
     super(message);
     this.name = "ExecuteError";
@@ -126,7 +128,12 @@ export function budgetMs(request: RunnerRequest, config: RunnerConfig): number {
 
 /** How long the container is allowed to exist, in seconds: the budget and its slack. */
 export function containerTtlSeconds(request: RunnerRequest, config: RunnerConfig): number {
-  return Math.ceil((budgetMs(request, config) + RUNNER_TTL_SLACK_MS) / 1000);
+  return ttlSeconds(budgetMs(request, config));
+}
+
+/** A container's life for a run of this budget, in seconds: the budget and its slack. */
+export function ttlSeconds(budget: number): number {
+  return Math.ceil((budget + RUNNER_TTL_SLACK_MS) / 1000);
 }
 
 /**
@@ -173,9 +180,7 @@ export async function executeRequest(
 
   const limits = effectiveLimits(request, config);
   const outputBytes = limits.outputBytes;
-  const name = (deps.containerName ?? (() => `quiz-run-${randomUUID()}`))();
   const create = {
-    name,
     image: imageRef(config, request.language),
     memoryMb: limits.memoryMb,
     pidsLimit: 64,
@@ -184,43 +189,26 @@ export async function executeRequest(
     ttlSeconds: containerTtlSeconds(request, config),
   };
 
-  const { signal } = deps;
-  const stopIfAborted = (): void => {
-    if (signal?.aborted) throw new ExecuteError("the caller has gone", "aborted");
-  };
-  const onAbort = (): void => void engine.remove(name).catch(() => undefined);
-  signal?.addEventListener("abort", onAbort, { once: true });
-
-  /** Creates the container and puts it back in the state a case expects. */
-  const start = async (): Promise<{ ok: boolean; stdout: string; stderr: string; ms: number }> => {
-    stopIfAborted();
-    await engine.create(create);
-    // An abort during `create` found no container to remove yet.
-    stopIfAborted();
-    for (const file of files) {
-      // `cp /dev/stdin <name>` and not a shell redirection: the file name is
-      // an argument, so it cannot become part of a command line.
-      const written = await engine.exec(name, {
-        argv: ["cp", "/dev/stdin", file.name],
-        stdin: file.content,
-        timeoutMs: 30_000,
-        maxBytes: 16 * 1024,
-      });
-      if (written.exitCode !== 0) {
-        throw new ExecuteError(`could not write ${file.name}`, "upload_failed");
+  return withContainer(deps, create, async ({ name, stopIfAborted, recreate }) => {
+    /** Puts a fresh container in the state a case expects: the sources, the build. */
+    const start = async (): Promise<{ ok: boolean; stdout: string; stderr: string; ms: number }> => {
+      for (const file of files) {
+        // `cp /dev/stdin <name>` and not a shell redirection: the file name is
+        // an argument, so it cannot become part of a command line.
+        const written = await engine.exec(name, {
+          argv: ["cp", "/dev/stdin", file.name],
+          stdin: file.content,
+          timeoutMs: 30_000,
+          maxBytes: 16 * 1024,
+        });
+        if (written.exitCode !== 0) {
+          throw new ExecuteError(`could not write ${file.name}`, "upload_failed");
+        }
       }
-    }
-    return compile(engine, name, plan, config, outputBytes);
-  };
-
-  try {
-    const built = await start();
-    const compiled = {
-      ok: built.ok,
-      stdout: built.stdout,
-      stderr: built.stderr,
-      ms: built.ms,
+      return compile(engine, name, plan, config, outputBytes);
     };
+
+    const compiled = await start();
     // A build failure is a complete answer: there is nothing to run, and
     // `finalizeRunnerCode` reads the empty case list as "every case failed".
     if (!compiled.ok || request.action === "check") {
@@ -241,35 +229,28 @@ export async function executeRequest(
         cases.push(dead(limits.timeMs));
         continue;
       }
-      const seconds = Math.max(1, Math.ceil(limits.timeMs / 1000));
-      const result = await engine.exec(name, {
-        // The in-container reaper, then the program and its own `argv[1..]`.
-        // The service's own deadline is below.
-        argv: caseArgv(plan.run, seconds, testCase.args),
+      // The program and its own `argv[1..]`, under both clocks.
+      const { lost, ...result } = await runArgv(engine, name, {
+        argv: [...plan.run, ...testCase.args],
         stdin: testCase.stdin,
-        timeoutMs: limits.timeMs + config.RUNNER_CASE_GRACE_MS,
+        timeMs: limits.timeMs,
         maxBytes: outputBytes,
+        graceMs: config.RUNNER_CASE_GRACE_MS,
       });
-      const verdict = classify(result, limits.timeMs);
-      cases.push({
-        exitCode: verdict.exitCode,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        ms: result.ms,
-        timedOut: verdict.timedOut,
-        oom: verdict.oom,
-        truncated: result.truncated,
-      });
+      cases.push(result);
 
       // Either the service's clock fired — and then the in-container reaper
       // failed, so the container is not to be trusted — or the container died
       // under the OOM killer. Both mean: destroy it, build a fresh one, and
       // keep the remaining cases honest. No rebuild once no case could run
       // after it: the rest are past the budget anyway.
-      if (result.timedOut || result.containerGone) {
-        await engine.remove(name);
+      if (lost) {
         const restarted =
-          Date.now() + caseCost > deadline ? null : await start().catch(() => null);
+          Date.now() + caseCost > deadline
+            ? null
+            : await recreate()
+                .then(start)
+                .catch(() => null);
         if (restarted === null || !restarted.ok) {
           while (cases.length < request.cases.length) cases.push(dead(limits.timeMs));
           break;
@@ -278,10 +259,102 @@ export async function executeRequest(
     }
 
     return { compile: compiled, cases };
+  });
+}
+
+/** What `withContainer` hands its body. */
+export interface Container {
+  name: string;
+  /** Throws `aborted` once the caller has gone. */
+  stopIfAborted: () => void;
+  /** Destroys the container and creates it again, empty. */
+  recreate: () => Promise<void>;
+}
+
+/**
+ * One container for the length of `body`: created hardened (`containerArgs`),
+ * destroyed in a `finally` whatever happened, and at once when the caller goes
+ * away (`deps.signal`) — the same `remove` that ends a case past its
+ * deadline. Shared by a code question's run and a project run.
+ */
+export async function withContainer<T>(
+  deps: ExecuteDeps,
+  create: Omit<CreateOptions, "name">,
+  body: (container: Container) => Promise<T>,
+): Promise<T> {
+  const { engine, signal } = deps;
+  const name = (deps.containerName ?? (() => `quiz-run-${randomUUID()}`))();
+  const stopIfAborted = (): void => {
+    if (signal?.aborted) throw new ExecuteError("the caller has gone", "aborted");
+  };
+  const make = async (): Promise<void> => {
+    stopIfAborted();
+    await engine.create({ ...create, name });
+    // An abort during `create` found no container to remove yet.
+    stopIfAborted();
+  };
+  const onAbort = (): void => void engine.remove(name).catch(() => undefined);
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    await make();
+    return await body({
+      name,
+      stopIfAborted,
+      recreate: async () => {
+        await engine.remove(name);
+        await make();
+      },
+    });
   } finally {
     signal?.removeEventListener("abort", onAbort);
     await engine.remove(name).catch(() => undefined);
   }
+}
+
+/** One program run under both clocks, as {@link runArgv} reports it. */
+export interface ArgvRun {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  ms: number;
+  timedOut: boolean;
+  oom: boolean;
+  truncated: boolean;
+  /**
+   * The service's clock fired (the in-container reaper failed) or the
+   * container died: it is not to be trusted any more.
+   */
+  lost: boolean;
+}
+
+/**
+ * Runs `argv` in the container under `timeout -s KILL <s>` (`caseArgv`) and
+ * the service's own clock, `timeMs` plus the grace, and classifies the end
+ * (`classify`). A code question's case and a project's step both run here.
+ */
+export async function runArgv(
+  engine: Engine,
+  name: string,
+  run: { argv: readonly string[]; stdin: string; timeMs: number; maxBytes: number; graceMs: number },
+): Promise<ArgvRun> {
+  const seconds = Math.max(1, Math.ceil(run.timeMs / 1000));
+  const result = await engine.exec(name, {
+    argv: caseArgv(run.argv, seconds, []),
+    stdin: run.stdin,
+    timeoutMs: run.timeMs + run.graceMs,
+    maxBytes: run.maxBytes,
+  });
+  const verdict = classify(result, run.timeMs);
+  return {
+    exitCode: verdict.exitCode,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    ms: result.ms,
+    timedOut: verdict.timedOut,
+    oom: verdict.oom,
+    truncated: result.truncated,
+    lost: result.timedOut || result.containerGone,
+  };
 }
 
 /** A case that never ran: the container could not be brought back. */

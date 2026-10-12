@@ -18,7 +18,7 @@ import type {
 export interface FakeCall {
   container: string;
   argv: string[];
-  stdin: string;
+  stdin: string | Uint8Array;
   timeoutMs: number;
   maxBytes: number;
 }
@@ -62,16 +62,20 @@ export function createFakeEngine(handler: FakeHandler = () => ({})): FakeEngine 
     async exec(container: string, options: ExecOptions): Promise<ExecResult> {
       const call: FakeCall = { container, ...options };
       calls.push(call);
-      const base: ExecResult = {
+      const answer = handler(call);
+      const stdout = answer.stdout ?? "";
+      return {
         exitCode: 0,
-        stdout: "",
         stderr: "",
         ms: 1,
         timedOut: false,
         truncated: false,
         containerGone: false,
+        ...answer,
+        stdout,
+        // The raw bytes follow the text unless the handler gave bytes of its own.
+        stdoutBytes: answer.stdoutBytes ?? Buffer.from(stdout),
       };
-      return { ...base, ...handler(call) };
     },
     async remove(name: string) {
       removed.push(name);

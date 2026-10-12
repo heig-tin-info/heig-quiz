@@ -220,6 +220,7 @@ describe("a code question: the outputs come from running the reference (ADR-059 
         })),
       }),
       health: real.health.bind(real),
+      project: real.project.bind(real),
     };
     try {
       const res = await call(owner, "POST", `/app/api/questions/${codeId}/generate`, { config: codeDraft, explanation: "" });
