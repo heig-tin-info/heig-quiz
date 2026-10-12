@@ -7,6 +7,7 @@ import {
   classifyCriterion,
   commandNeedsNetwork,
   criteriaTotals,
+  passLeaves,
   untaggedCheckpoints,
   workflowTestsCriterion,
   type ParsedCriteria,
@@ -108,6 +109,15 @@ describe("untaggedCheckpoints (ADR-106 §5)", () => {
   it("names the checkpoints no criterion is tagged with", () => {
     expect(untaggedCheckpoints(["mid", "early"], [{ milestone: "mid" }, {}])).toEqual(["early"]);
     expect(untaggedCheckpoints([], [])).toEqual([]);
+  });
+});
+
+describe("passLeaves (ADR-106 §5)", () => {
+  const leaves = [{ id: "a", milestone: "mid" }, { id: "b" }, { id: "c", milestone: "late" }];
+  it("keeps a milestone's tagged criteria only, and every criterion for the final pass", () => {
+    expect(passLeaves(leaves, "mid").map((l) => l.id)).toEqual(["a"]);
+    expect(passLeaves(leaves, "none")).toEqual([]);
+    expect(passLeaves(leaves, null).map((l) => l.id)).toEqual(["a", "b", "c"]);
   });
 });
 

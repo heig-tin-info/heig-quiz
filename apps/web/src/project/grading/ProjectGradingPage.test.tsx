@@ -25,6 +25,7 @@ const line = (over: Partial<CriteriaTableRow> & Pick<CriteriaTableRow, "criterio
   max: 4,
   points: 3,
   state: "proposed",
+  locked: false,
   source: "llm",
   ...over,
 });
@@ -37,9 +38,9 @@ function repo(id: string, label: string, over: Partial<ProjectGradingRepo> = {})
     frozen: true,
     validation: { validated: false, missing: ["git.commits"], proposed: ["rendu.tests", "rapport.reponses"] },
     table: [
-      line({ criterionId: "rendu.tests", description: "Tests pass", section: "rendu", max: 12, points: 9, source: "auto" }),
+      line({ criterionId: "rendu.tests", description: "Tests pass", section: "rendu", max: 12, points: 9, source: "auto", locked: true }),
       line({ criterionId: "rapport.reponses", description: "Answers", rationale: XSS }),
-      { criterionId: "git.commits", section: "git", description: "Clean history", max: 1, points: null, state: "empty" },
+      { criterionId: "git.commits", section: "git", description: "Clean history", max: 1, points: null, state: "empty", locked: false },
     ],
     evidence: {
       status: "ok",
@@ -84,6 +85,10 @@ describe("the grading screen's states", () => {
     renderPage();
     const table = await screen.findByRole("table", { name: "Criteria of Bernasconi Zoé" });
     expect(within(table).getByText("Tests pass")).toBeInTheDocument();
+    // A milestone's lock beside the state, on its row only (ADR-106 §5).
+    const locks = within(table).getAllByRole("img", { name: /^Locked by a milestone/ });
+    expect(locks).toHaveLength(1);
+    expect(locks[0]!.closest("tr")).toHaveTextContent("Tests pass");
     expect(screen.getByText("Tests: 9 of 12 passed")).toBeInTheDocument();
     // The missing teacher-only criterion is named above the table, Validate held.
     expect(screen.getByText("Give these criteria points first, 0 included:")).toBeInTheDocument();

@@ -1298,7 +1298,8 @@ const RATIONALES: Record<string, string[]> = {
  * project graded by criteria — the tests' row, the model's proposals with
  * their rationale (one quoting a script, shown as text), a failed pass
  * (`llm_budget`) on one; every third repository already validated, the
- * teacher-only `git.commits` written by the teacher there and nowhere else.
+ * teacher-only `git.commits` written by the teacher there and nowhere else;
+ * the tests' row of every other repository locked by a milestone (§5).
  */
 function seedCriteria(p: MockProject): void {
   CRITERIA.set(p.summary.id, sampleSnapshot(p.summary.deadlineAt));
@@ -1310,14 +1311,15 @@ function seedCriteria(p: MockProject): void {
     const rows: MockCriterionRow[] = [];
     const add = (criterionId: string, points: number, source: MockCriterionRow["source"], rationale: string | null = null) => {
       const leaf = SAMPLE_LEAVES.find((l) => l.id === criterionId)!;
-      rows.push({ criterionId, points, max: leaf.maxPoints, source, state: validated ? "validated" : "proposed", rationale, reason: null, createdAt: at });
+      rows.push({ criterionId, points, max: leaf.maxPoints, source, state: validated ? "validated" : "proposed", rationale, reason: null, createdAt: at, lockedAt: null });
     };
     const tests = [12, 9, 6, 10.5, 12, 7.5][i % 6]!;
     add("rendu.all-tests-passed", tests, "auto");
+    if (i % 2 === 0) rows.at(-1)!.lockedAt = at;
     const pick = (id: string, k: number) => RATIONALES[id]![k % RATIONALES[id]!.length]!;
     if (failed) {
       for (const id of ["rapport.reponses", "rapport.presentation", "rapport.redaction", "rapport.cle-privee", "bonus.proactivite"]) {
-        rows.push({ criterionId: id, points: 0, max: SAMPLE_LEAVES.find((l) => l.id === id)!.maxPoints, source: "llm", state: "proposed", rationale: null, reason: "llm_budget", createdAt: at });
+        rows.push({ criterionId: id, points: 0, max: SAMPLE_LEAVES.find((l) => l.id === id)!.maxPoints, source: "llm", state: "proposed", rationale: null, reason: "llm_budget", createdAt: at, lockedAt: null });
       }
     } else {
       add("rapport.reponses", [4, 2.5, 3][i % 3]!, "llm", pick("rapport.reponses", i));
@@ -1386,8 +1388,14 @@ function frozenRepoOr409(p: MockProject, rid: string): MockRepo {
 /** The writer's rule (`writeCriterionGrades`): a teacher's or a validated row supersedes whatever stands on its criterion. */
 function writeRow(r: MockRepo, row: MockCriterionRow): void {
   const rows = CRITERION_ROWS.get(r.id) ?? [];
-  for (const old of rows) if (old.criterionId === row.criterionId && old.state !== "superseded") old.state = "superseded";
-  rows.push(row);
+  let lockedAt: Date | null = null;
+  for (const old of rows) {
+    if (old.criterionId !== row.criterionId || old.state === "superseded") continue;
+    old.state = "superseded";
+    lockedAt = old.lockedAt ?? lockedAt;
+  }
+  // A row superseding a milestone's locked one keeps the lock (ADR-106 §5).
+  rows.push({ ...row, lockedAt: row.lockedAt ?? lockedAt });
   CRITERION_ROWS.set(r.id, rows);
 }
 
@@ -1438,6 +1446,7 @@ on("PUT", "/app/api/projects/:id/repos/:rid/criteria/:criterionId", (m, raw): Pr
     rationale: body.rationale ?? before?.rationale ?? null,
     reason: null,
     createdAt: new Date(),
+    lockedAt: null,
   });
   return gradingRepoOf(p, r);
 });

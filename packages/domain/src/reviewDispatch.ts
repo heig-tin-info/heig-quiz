@@ -128,20 +128,23 @@ export function checkpointRefusal(dueAt: Date, deadlineAt: Date, now: Date): "du
 }
 
 /**
- * A checkpoint fires now: not dispatched, its date come, not void, on a
- * project out of its draft that reviews (graded `auto`, not archived).
+ * What a checkpoint fires now, by its project's grading mode: the CI's
+ * `grade-milestone` dispatch (`auto`, F-PROJ-11) or the platform's milestone
+ * pass (`criteria`, ADR-106 §5) — once not dispatched, its date come, not
+ * void, on a project out of its draft and not archived. Null otherwise, and
+ * always for a project graded `none`.
  */
-export function checkpointFires(
+export function checkpointPass(
   checkpoint: { dueAt: Date; dispatchedAt: Date | null },
   project: { deadlineAt: Date; state: string; gradingMode: string; archivedAt: Date | null },
   now: Date,
-): boolean {
-  return (
+): "dispatch" | "milestone" | null {
+  const fires =
     checkpoint.dispatchedAt === null &&
     checkpoint.dueAt.getTime() <= now.getTime() &&
     !isVoidCheckpoint(checkpoint.dueAt, project.deadlineAt) &&
     project.state !== "draft" &&
-    project.gradingMode === "auto" &&
-    project.archivedAt === null
-  );
+    project.archivedAt === null;
+  if (!fires) return null;
+  return project.gradingMode === "auto" ? "dispatch" : project.gradingMode === "criteria" ? "milestone" : null;
 }

@@ -3,10 +3,16 @@
  * `writeGradings` (`modules/grading/service.ts`): the evidence job writes
  * the automatic rows through it, the review job (L-02c) the llm rows, the
  * grading screen (L-02e) the teacher's.
+ *
+ * **A milestone's lock** (§5, L-02d): a row a milestone pass wrote carries
+ * `locked_by_checkpoint_id` and `locked_at`; its criterion is then held
+ * against every machine proposal (the final pass, a Regrade), and every row
+ * that supersedes it — a teacher's correction, a validation — inherits the
+ * lock.
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
 import { criteriaScore, currentCriterionRows, repoValidation, type ParsedCriteria, type RepoValidation } from "@quiz/domain";
 
@@ -26,6 +32,7 @@ const STANDING_COLUMNS = {
   rationale: projectCriterionGrades.rationale,
   reason: projectCriterionGrades.reason,
   createdAt: projectCriterionGrades.createdAt,
+  lockedAt: projectCriterionGrades.lockedAt,
 };
 type StandingRow = Pick<CriterionGradeRow, keyof typeof STANDING_COLUMNS>;
 
@@ -89,8 +96,8 @@ export function awaitsValidation(gradingMode: string, standing: CriteriaStanding
 
 /**
  * The criteria of a repository a machine may not propose: a standing
- * validated or teacher's row — and, with `passId`, a row of that pass (a
- * job run twice proposes nothing again).
+ * validated, teacher's or locked row (a milestone's, §5) — and, with
+ * `passId`, a row of that pass (a job run twice proposes nothing again).
  */
 export async function heldCriteria(db: Db | Tx, repoId: string, passId?: string): Promise<Set<string>> {
   const rows = await db
@@ -103,6 +110,7 @@ export async function heldCriteria(db: Db | Tx, repoId: string, passId?: string)
         or(
           eq(projectCriterionGrades.state, "validated"),
           eq(projectCriterionGrades.source, "manual"),
+          isNotNull(projectCriterionGrades.lockedByCheckpointId),
           passId === undefined ? sql`false` : eq(projectCriterionGrades.passId, passId),
         ),
       ),
@@ -111,11 +119,13 @@ export async function heldCriteria(db: Db | Tx, repoId: string, passId?: string)
 }
 
 /**
- * A deadline moved later before the release (ADR-106 §5, §6): the
- * machine's standing proposals (`auto`, `llm`) of the reopened
- * repositories superseded, with no successor — the next freeze's pass
- * proposes again. A validated row and a teacher's stay. In the caller's
- * transaction, which holds the repositories' rows.
+ * A deadline moved later before the release (ADR-106 §5, §6; F-PROJ-09's
+ * reopen): the final pass's rows of the reopened repositories — the
+ * machine's (`auto`, `llm`) standing rows, proposed or validated, so their
+ * validations are undone — superseded, with no successor: the next
+ * freeze's pass proposes again. A teacher's row and a milestone's locked
+ * row stay. In the caller's transaction, which holds the repositories'
+ * rows.
  */
 export async function supersedeProposals(tx: Tx, repoIds: readonly string[]): Promise<number> {
   if (repoIds.length === 0) return 0;
@@ -125,8 +135,9 @@ export async function supersedeProposals(tx: Tx, repoIds: readonly string[]): Pr
     .where(
       and(
         inArray(projectCriterionGrades.repoId, [...repoIds]),
-        eq(projectCriterionGrades.state, "proposed"),
+        ne(projectCriterionGrades.state, "superseded"),
         inArray(projectCriterionGrades.source, ["auto", "llm"]),
+        isNull(projectCriterionGrades.lockedByCheckpointId),
       ),
     )
     .returning({ id: projectCriterionGrades.id });
@@ -144,6 +155,9 @@ export interface CriterionGradeInput {
   reason?: CriterionGradeRow["reason"];
   passId: string | null;
   createdBy?: string | null;
+  /** A milestone pass's lock (§5); a row without one inherits the lock of the row it supersedes. */
+  lockedByCheckpointId?: string | null;
+  lockedAt?: Date | null;
 }
 
 /**
@@ -161,8 +175,10 @@ export interface CriterionGradeInput {
  *   written while a model was being asked always wins (the callers' own
  *   check only spares a needless call).
  *
- * A criterion appears at most once per call. The rows written come back in
- * the order of `inputs`.
+ * A new row without a lock of its own keeps the lock of a row it
+ * supersedes (§5): a teacher's correction or a validation of a locked row
+ * stays locked. A criterion appears at most once per call. The rows written
+ * come back in the order of `inputs`.
  */
 export async function writeCriterionGrades(
   db: Db,
@@ -213,8 +229,15 @@ async function writeLocked(tx: Tx, repoId: string, all: readonly CriterionGradeI
         ),
       ),
     )
-    .returning({ id: projectCriterionGrades.id, criterionId: projectCriterionGrades.criterionId, createdAt: projectCriterionGrades.createdAt });
-  const previous = new Map<string, { id: string; createdAt: Date }>();
+    .returning({
+      id: projectCriterionGrades.id,
+      criterionId: projectCriterionGrades.criterionId,
+      createdAt: projectCriterionGrades.createdAt,
+      lockedByCheckpointId: projectCriterionGrades.lockedByCheckpointId,
+      lockedAt: projectCriterionGrades.lockedAt,
+    });
+  // The newest row each criterion lost, and its lock: every standing row of a locked criterion carries it.
+  const previous = new Map<string, (typeof superseded)[number]>();
   for (const row of superseded) {
     const held = previous.get(row.criterionId);
     if (!held || row.createdAt >= held.createdAt) previous.set(row.criterionId, row);
@@ -222,13 +245,18 @@ async function writeLocked(tx: Tx, repoId: string, all: readonly CriterionGradeI
   return tx
     .insert(projectCriterionGrades)
     .values(
-      inputs.map((input) => ({
-        ...input,
-        id: randomUUID(),
-        repoId,
-        supersedesId: previous.get(input.criterionId)?.id ?? null,
-        createdAt: now,
-      })),
+      inputs.map((input) => {
+        const lost = previous.get(input.criterionId);
+        return {
+          ...input,
+          id: randomUUID(),
+          repoId,
+          supersedesId: lost?.id ?? null,
+          lockedByCheckpointId: input.lockedByCheckpointId ?? lost?.lockedByCheckpointId ?? null,
+          lockedAt: input.lockedAt ?? lost?.lockedAt ?? null,
+          createdAt: now,
+        };
+      }),
     )
     .returning();
 }

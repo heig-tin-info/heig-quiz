@@ -114,7 +114,8 @@ async function runsWithReceipts(tx: Tx, repoIds: string[]) {
  *   REOPENED: `deadline_applied_at`, `frozen_at`, the frozen and review
  *   slots, the deadline commit's mark and the staff's hand cleared, its
  *   `deadline` dispatches forgotten (F-PROJ-09) and, graded by criteria and
- *   not released, the machine's proposals superseded (ADR-106 §6); its lock is lifted by the
+ *   not released, the final pass's rows superseded, validated or not, the
+ *   milestones' locked rows kept (ADR-106 §5, §6); its lock is lifted by the
  *   next `project.deadline` job (`requestDeadlineWork`, the caller's);
  * - the staff's unlock of the others no longer holds either (it held until
  *   the deadline moved);
@@ -144,8 +145,9 @@ export async function effectiveDeadlineMoved(tx: Tx, project: ProjectRow, repoId
     await tx
       .delete(gradeDispatches)
       .where(and(inArray(gradeDispatches.repoId, reopened), eq(gradeDispatches.trigger, "deadline")));
-    // Graded by criteria (ADR-106 §5, §6): the final pass's proposals go with its claim, before the
-    // release only — a released project's rows never change by a side effect. Validations: L-02d.
+    // Graded by criteria (ADR-106 §5, §6): the final pass's rows and their validations go with its claim,
+    // the milestones' locked rows stay — before the release only: a released project's rows never change
+    // by a side effect.
     if (project.releasedAt === null) await supersedeProposals(tx, reopened);
   }
   await tx

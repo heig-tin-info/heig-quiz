@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   checkpointDueAt,
-  checkpointFires,
+  checkpointPass,
   checkpointRefusal,
   isVoidCheckpoint,
   planCheckpointReviewDispatch,
@@ -95,12 +95,13 @@ describe("the checkpoints' rules (M3-05b)", () => {
     const later = at("2026-10-05T08:00:01Z");
     const project = { deadlineAt: deadline, state: "published", gradingMode: "auto", archivedAt: null };
     const open = { dueAt: due, dispatchedAt: null };
-    expect(checkpointFires(open, project, at("2026-10-05T07:59:59Z"))).toBe(false);
-    expect(checkpointFires(open, project, later)).toBe(true);
-    expect(checkpointFires({ dueAt: due, dispatchedAt: later }, project, later)).toBe(false);
-    expect(checkpointFires(open, { ...project, deadlineAt: due }, later)).toBe(false);
-    expect(checkpointFires(open, { ...project, state: "draft" }, later)).toBe(false);
-    expect(checkpointFires(open, { ...project, gradingMode: "none" }, later)).toBe(false);
-    expect(checkpointFires(open, { ...project, archivedAt: later }, later)).toBe(false);
+    expect(checkpointPass(open, project, at("2026-10-05T07:59:59Z"))).toBeNull();
+    expect(checkpointPass(open, project, later)).toBe("dispatch");
+    expect(checkpointPass(open, { ...project, gradingMode: "criteria" }, later)).toBe("milestone");
+    expect(checkpointPass({ dueAt: due, dispatchedAt: later }, project, later)).toBeNull();
+    expect(checkpointPass(open, { ...project, deadlineAt: due }, later)).toBeNull();
+    expect(checkpointPass(open, { ...project, state: "draft" }, later)).toBeNull();
+    expect(checkpointPass(open, { ...project, gradingMode: "none" }, later)).toBeNull();
+    expect(checkpointPass(open, { ...project, archivedAt: later }, later)).toBeNull();
   });
 });

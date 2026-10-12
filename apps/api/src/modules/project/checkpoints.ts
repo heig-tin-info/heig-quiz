@@ -5,19 +5,20 @@
  * `criteria.yml`'s `milestone:` entries — and a date, absolute or J−n of the
  * project's deadline (`checkpointDueAt`, calendar days in Europe/Zurich,
  * re-resolved by `rescheduleCheckpoints` while not dispatched). Its
- * dispatch is `review.ts`'s.
+ * dispatch is `review.ts`'s; on a project graded by criteria it is a
+ * milestone, whose pass is `milestone.ts`'s (ADR-106 §5).
  */
 import { randomUUID } from "node:crypto";
 
 import { and, asc, eq } from "drizzle-orm";
 
 import type { ReviewCheckpoint, ReviewCheckpointCreate } from "@quiz/contracts";
-import { checkpointDueAt, checkpointRefusal } from "@quiz/domain";
+import { checkpointDueAt, checkpointRefusal, untaggedCheckpoints } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { gradeDispatches, projectCheckpoints, projects } from "../../db/schema.js";
+import { gradeDispatches, projectCheckpoints, projectCriteria, projects } from "../../db/schema.js";
 import { ProjectError } from "./errors.js";
 
 type CheckpointRow = typeof projectCheckpoints.$inferSelect;
@@ -47,8 +48,10 @@ export async function listCheckpoints(db: Db, projectId: string): Promise<Review
  * project's deadline as it stands (read under the project's row lock, so a
  * deadline moving at the same time comes first or re-resolves it), ahead of
  * now (`422 due_past`) and before the deadline (`422 due_after_deadline`);
- * a name already taken on the project is `409 duplicate_checkpoint`.
- * Audited `project_checkpoint.create`.
+ * a name already taken on the project is `409 duplicate_checkpoint`; on a
+ * project graded by criteria, a name that tags no criterion of its
+ * snapshot is `409 checkpoint_untagged` (ADR-106 §5). Audited
+ * `project_checkpoint.create`.
  */
 export async function createCheckpoint(
   db: Db,
@@ -67,6 +70,12 @@ export async function createCheckpoint(
         refusal,
         refusal === "due_past" ? "The checkpoint's date has passed" : "A checkpoint must come before the project's deadline",
       );
+    }
+    if (project!.gradingMode === "criteria") {
+      const [snapshot] = await tx.select({ criteria: projectCriteria.criteria }).from(projectCriteria).where(eq(projectCriteria.projectId, projectId));
+      if (snapshot && untaggedCheckpoints([body.name], snapshot.criteria.leaves).length > 0) {
+        throw new ProjectError("checkpoint_untagged", "A checkpoint's name tags no criterion", { checkpoints: [body.name] });
+      }
     }
     const [row] = await tx
       .insert(projectCheckpoints)
@@ -88,8 +97,11 @@ export async function createCheckpoint(
 /**
  * `DELETE /app/api/projects/:id/checkpoints/:cid`: refused once a dispatch
  * of it was claimed for any repository (`409 checkpoint_dispatched`): the
- * ledger keeps what was asked of GitHub. The checkpoint's row lock orders
- * this against the dispatch job's claim, which reads it under a share lock.
+ * ledger keeps what was asked of GitHub — and a milestone's pass, claimed
+ * the same way, is what locks rows (ADR-106 §5; the deferred foreign key of
+ * `locked_by_checkpoint_id` is the backstop). The checkpoint's row lock
+ * orders this against the dispatch job's claim, which reads it under a
+ * share lock, and the milestone's, which takes it.
  * A void checkpoint (after a deadline moved earlier) is deletable. False
  * when the project has no such checkpoint. Audited `project_checkpoint.delete`.
  */

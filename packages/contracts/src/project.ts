@@ -1161,7 +1161,11 @@ export type ProjectCheckpointParams = z.infer<typeof ProjectCheckpointParams>;
  * (422) — the resolved date at or before now, or at or after the project's
  * deadline; `duplicate_checkpoint` (409) — the name is taken on the project;
  * `checkpoint_dispatched` (409) — a deletion once a dispatch of it was
- * claimed for any repository (the ledger keeps what was asked of GitHub).
+ * claimed for any repository (the ledger keeps what was asked of GitHub; a
+ * milestone's pass, which locks rows, is claimed there too, ADR-106 §5). On
+ * a project graded by criteria,
+ * a creation whose name tags no criterion is the lifecycle's
+ * `checkpoint_untagged` (409).
  */
 export const PROJECT_CHECKPOINT_REFUSALS = ["due_past", "due_after_deadline", "duplicate_checkpoint", "checkpoint_dispatched"] as const;
 export const ProjectCheckpointErrorCode = z.enum(PROJECT_CHECKPOINT_REFUSALS);
@@ -1528,6 +1532,8 @@ export const CriteriaTableRow = z.object({
   bonus: z.number().optional(),
   points: z.number().nullable(),
   state: z.enum(CRITERIA_TABLE_STATES),
+  /** Locked by a milestone pass (ADR-106 §5): the final pass and a Regrade leave it alone. */
+  locked: z.boolean(),
   source: z.enum(GRADING_SOURCES).optional(),
   rationale: z.string().optional(),
   reason: CriterionReason.optional(),

@@ -38,6 +38,8 @@ export interface CriterionGradeLike {
   rationale: string | null;
   reason: CriterionReason | null;
   createdAt: Date;
+  /** A milestone's lock (§5): set, the final pass and a Regrade leave the row alone; null, unlocked. */
+  lockedAt: Date | null;
 }
 
 /** One line of the table. `source`, `reason` are the staff's only; `rationale` the student's only after the freeze. */
@@ -51,6 +53,8 @@ export interface CriteriaTableRow {
   bonus?: number | undefined;
   points: number | null;
   state: CriteriaTableState;
+  /** Locked by a milestone (§5): both audiences, never the checkpoint itself. */
+  locked: boolean;
   source?: (typeof GRADING_SOURCES)[number] | undefined;
   rationale?: string | undefined;
   reason?: CriterionReason | undefined;
@@ -83,7 +87,8 @@ export function currentCriterionRows<R extends CriterionGradeLike>(rows: readonl
  * The table, one line per criterion of the snapshot in its order. The
  * staff read each row's points, state, source, rationale and reason. A
  * student reads the points, every row not validated-and-released marked
- * `indicative`; the rationale only after the freeze — provisional until
+ * `indicative`; both read whether a milestone locked it (`locked`, never
+ * which checkpoint); the rationale only after the freeze — provisional until
  * the release, then from the validated rows only; never a source, a reason
  * or a superseded row (§9). Rows of a criterion the snapshot no longer
  * holds are left out.
@@ -104,10 +109,12 @@ export function criteriaTable(
       ...(leaf.bonusPoints === undefined ? {} : { bonus: leaf.bonusPoints }),
       points: null,
       state: "empty",
+      locked: false,
     };
     const row = current.get(leaf.id);
     if (!row) return line;
     line.points = row.points;
+    line.locked = row.lockedAt !== null;
     if (staff) {
       line.state = row.state === "validated" ? "validated" : "proposed";
       line.source = row.source;
