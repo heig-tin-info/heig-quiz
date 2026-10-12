@@ -40,6 +40,7 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
   status: "in_progress",
   githubLinked: true,
   gradingMode: "auto",
+  criteria: null,
   repo: {
     fullName: "heig/labo-1-lea",
     url: "https://github.com/heig/labo-1-lea",
@@ -467,5 +468,54 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     renderWithProviders(<StudentProjectPage id="p1" navigate={navigate} />, { route: "/projects/p1?workspace=bogus", queryClient });
     await screen.findByRole("button", { name: "Open workspace" });
     expect(screen.queryByText("The workspace did not open")).toBeNull();
+  });
+});
+
+describe("the criteria table (ADR-106 §9, L-02f)", () => {
+  const XSS = "<script>alert(1)</script> <b>bold</b>";
+  type Row = NonNullable<StudentProject["criteria"]>[number];
+  const row = (over: Partial<Row>): Row => ({
+    criterionId: "rendu.tests",
+    section: "rendu",
+    description: "Tests pass",
+    max: 4,
+    points: null,
+    state: "empty",
+    locked: false,
+    ...over,
+  });
+  const criteria = (final: boolean): Row[] => [
+    row({ criterionId: "rendu.tests", description: "Tests pass", points: 2.5, state: final ? "validated" : "indicative" }),
+    row({ criterionId: "code.jalon", description: "Milestone", points: 1.5, state: final ? "validated" : "indicative", locked: true, rationale: XSS }),
+    row(final ? { criterionId: "git.commits", description: "Commits", points: 1, state: "validated" } : { criterionId: "git.commits", description: "Commits" }),
+  ];
+
+  it("marks the unvalidated rows indicative, an empty one with a dash, a locked one with a lock, and shows a rationale as text", async () => {
+    mockFetch({ [URL]: ok(project({ gradingMode: "criteria", criteria: criteria(false) })) });
+    render();
+    expect(await screen.findByRole("heading", { name: "Criteria" })).toBeInTheDocument();
+    expect(screen.getByText("Provisional, until your teacher validates")).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Criteria" });
+    const [, tests, jalon, commits] = within(table).getAllByRole("row");
+    expect(within(tests!).getByText("indicative")).toBeInTheDocument();
+    expect(within(tests!).getByText("2.5")).toBeInTheDocument();
+    expect(within(jalon!).getByRole("img", { name: /locked/ })).toBeInTheDocument();
+    expect(within(commits!).getByText("—")).toBeInTheDocument();
+    expect(within(commits!).queryByText("indicative")).toBeNull();
+    // Folded, then the rationale as a text node: no element of its markup reaches the page.
+    expect(within(jalon!).queryByText(XSS)).toBeNull();
+    await userEvent.click(within(jalon!).getByRole("button", { name: "Rationale" }));
+    expect(within(jalon!).getByText(XSS)).toBeInTheDocument();
+    expect(document.querySelector("script, b")).toBeNull();
+    // No action of its own: the page's one action is the header's.
+    expect(within(table).queryAllByRole("button").map((b) => b.textContent)).toEqual(["Rationale"]);
+  });
+
+  it("says final once every row is validated, without the indicative badge", async () => {
+    mockFetch({ [URL]: ok(project({ gradingMode: "criteria", criteria: criteria(true), status: "released" })) });
+    render();
+    expect(await screen.findByText("Final")).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Criteria" });
+    expect(within(table).queryByText("indicative")).toBeNull();
   });
 });

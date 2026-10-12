@@ -873,6 +873,15 @@ const scenes = [
   { name: "student-project-deleted", role: "student", path: `/projects/${SPROJ.deleted}?projects=1` },
   { name: "student-project-released", role: "student", path: `/projects/${SPROJ.past}?projects=1` },
   { name: "student-project-frozen", role: "student", path: `/projects/${SPROJ.frozen}?projects=1` },
+  // ADR-106 §9 (L-02f, `?pjcriteria=1`): the criteria table after the definitive freeze (the provisional
+  // rationales, one unfolded) and released (final); the open project keeps the state before the freeze.
+  {
+    name: "student-project-criteria",
+    role: "student",
+    path: `/projects/${SPROJ.frozen}?projects=1&pjcriteria=1`,
+    act: (p) => p.getByRole("button", { name: /^(rationale|justification)$/i }).locator("visible=true").first().click(),
+  },
+  { name: "student-project-criteria-released", role: "student", path: `/projects/${SPROJ.past}?projects=1&pjcriteria=1` },
   // ADR-077: a teacher on a staff seat tests the project: the real actions, their own repository.
   { name: "student-project-staff-seat", role: "student", path: `/projects/${SPROJ.accept}?projects=1&staffseat=1` },
   { name: "student-project-staff-seat-repo", role: "student", path: `/projects/${SPROJ.open}?projects=1&staffseat=1` },

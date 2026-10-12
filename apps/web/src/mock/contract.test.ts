@@ -172,8 +172,16 @@ localStorage.setItem("quiz-mock-codespace", "1");
 localStorage.setItem("quiz-mock-groups", "1");
 await import("./index");
 const { routes, flags } = await import("./runtime");
-const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT, STUDENT_PROJECT_IDS, STUDENT_PROJECT_ACCEPT, STUDENT_PROJECT_SOON } =
-  await import("./student");
+const {
+  STUDENT_ATTEMPT,
+  STUDENT_RETAKE_ATTEMPT,
+  STUDENT_PROJECT_IDS,
+  STUDENT_PROJECT_ACCEPT,
+  STUDENT_PROJECT_SOON,
+  STUDENT_PROJECT_OPEN,
+  STUDENT_PROJECT_FROZEN,
+  STUDENT_PROJECT_PAST,
+} = await import("./student");
 
 interface Issue {
   code: string;
@@ -757,6 +765,21 @@ describe("the mock's grading by criteria (?pjcriteria=1)", () => {
     // The rest, as proposed: each still lacks its teacher-only criterion, named.
     const rest = await send(`/app/api/projects/${id}/validate`, "POST");
     expect([rest.status, (rest.body as { error: string }).error]).toEqual([409, "criteria_incomplete"]);
+  });
+
+  it("gives the student's open, frozen and released projects their criteria table (ADR-106 §9)", async () => {
+    const tableOf = async (id: string) => {
+      const raw = await get(`/app/api/student/projects/${id}`);
+      expect(issuesOf(StudentProject, raw)).toEqual([]);
+      return (raw as StudentProject).criteria!;
+    };
+    const open = await tableOf(STUDENT_PROJECT_OPEN);
+    expect(open.some((r) => r.rationale !== undefined)).toBe(false);
+    const frozen = await tableOf(STUDENT_PROJECT_FROZEN);
+    expect([frozen.some((r) => r.rationale !== undefined), frozen.filter((r) => r.state === "empty").length]).toEqual([true, 1]);
+    const released = await tableOf(STUDENT_PROJECT_PAST);
+    expect(released.every((r) => r.state === "validated")).toBe(true);
+    expect(released.reduce((sum, r) => sum + (r.points ?? 0), 0)).toBe(18);
   });
 });
 

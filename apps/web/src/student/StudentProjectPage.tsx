@@ -9,7 +9,9 @@
  * repository and its invitation (with the student's own Resend, F-PROJ-07),
  * the evaluated commit, its CI run and status, the current score marked
  * indicative, the frozen score after the deadline (still indicative), and,
- * once released, the final score, the grade and the teacher's comment. The
+ * once released, the final score, the grade and the teacher's comment; on a
+ * project graded by criteria, the criteria table under the score
+ * (`ProjectCriteria.tsx`, ADR-106 §9), indicative until the release. The
  * clock is the server's (invariant 5): the payload's `serverNow` is sampled
  * into `useServerClock`, and every countdown and gate reads its offset.
  *
@@ -69,6 +71,7 @@ import {
   Stat,
 } from "../ui";
 import { RowActionControl, StatusBadge } from "./ActivityRow";
+import { CriteriaSection } from "./ProjectCriteria";
 import { notStarted, ProjectCommitMeta, ProjectTimingMeta, projectStatus, useProjectAction, useStudentReadOnly } from "./ProjectRow";
 import {
   factsOfProject,
@@ -223,6 +226,8 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
       ) : project.gradingMode !== "none" && live ? (
         <ScoreSection repo={live} />
       ) : null}
+
+      {project.criteria ? <CriteriaSection rows={project.criteria} /> : null}
     </div>
   );
 }

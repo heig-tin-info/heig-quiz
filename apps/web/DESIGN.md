@@ -1708,7 +1708,8 @@ container (`@lg`) its rows collapse into a divided list of small cards — the
 identity bold with kind and date under it, the figure that matters (the
 grade) on the right, the status badge below — and the `<table>` is hidden.
 Same rows, same order, same "opens on press". Applied today: the student's
-Grades (`student/StudentGrades.tsx`).
+Grades (`student/StudentGrades.tsx`) and the criteria table of a
+project (`student/ProjectCriteria.tsx`).
 
 ### When a row stops being a row
 
@@ -2341,7 +2342,14 @@ button; below, the repository (the invitation only while pending), the
 latest CI run, and the score (or the result after the release) as stat
 cards and a teacher's comment in one frame, at the rhythm of an
 evaluation's results page. The CI and the score are not repeated in the
-header.
+header. On a project graded by criteria, a **Criteria** section follows the
+score (ADR-106 §9): three columns — the criterion (its description, its
+rationale folded under it as plain text once the server sends one), the
+maximum, the points obtained (`—` until graded, a zinc "indicative" badge
+until final, a `Lock` for a milestone's row); the caption says
+"Provisional…" or "Final". It has no action. Under 32 rem of container its
+rows become the divided list of small cards a student's table becomes
+(Tables), the points over the maximum on the right, the marks under them.
 
 ## The participant's poll page (`/p/:CODE`)
 

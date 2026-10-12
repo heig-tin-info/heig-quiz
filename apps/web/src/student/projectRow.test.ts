@@ -110,6 +110,7 @@ describe("projectActionKind", () => {
       status: "in_progress",
       githubLinked: true,
       gradingMode: "auto",
+      criteria: null,
       repo: {
         fullName: "heig/labo-1-lea",
         url: "https://github.com/heig/labo-1-lea",

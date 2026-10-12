@@ -80,6 +80,7 @@ describe("the student's project card (F-PROJ-04)", () => {
       },
       release: null,
       workspace: null,
+      criteria: null,
       serverNow: START,
     };
     expect(StudentProject.parse(view)).toEqual(view);

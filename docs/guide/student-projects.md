@@ -77,6 +77,9 @@ Under **Score**, the page shows the score of the latest commit that was graded: 
 - Some projects are not graded: there is no score and no release.
 - Your teacher may also review your work after the deadline. That review is not shown until the release.
 
+If your project is graded **by criteria**, a **Criteria** table follows the score: each criterion, its maximum and the points obtained so far, marked **indicative** until your teacher validates and publishes them. A dash means the criterion is not graded yet; a lock, that a checkpoint graded it and the final grading leaves it as it is.
+After the deadline, a **Rationale** under a criterion explains its points, provisional until the release; once the scores are published, the table says **Final**.
+
 ## 6. The deadline
 
 The deadline is the server's, like for an evaluation, and the page shows a countdown. If your teacher locked the project, your repository becomes **read-only** at the deadline: pushes are refused and the page reads **Read-only since the deadline**. Otherwise it stays open, but pushes made after the deadline do not count. Either way, what you pushed before the deadline counts, whatever the date written in your commit, and a grading run started in time may still finish a few minutes later. The score is then **frozen**, and the page shows **Evaluated commit**: the one that counts.

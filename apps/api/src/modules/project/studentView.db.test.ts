@@ -21,7 +21,14 @@
  *   source and distribution repositories, a draft, the staff's flags, the
  *   review's and the teacher's score before the release — searched for in
  *   every response of the first student, for each student caller, and in
- *   every bus message their topics would carry.
+ *   every bus message their topics would carry;
+ * - the criteria table (ADR-106 §9, L-02f): the student's own rows only,
+ *   indicative until validated and released, a failed and a teacher-only
+ *   row empty, the lock of a milestone; no rationale before the definitive
+ *   freeze (a milestone's included), then the current rows' only — a
+ *   superseded rationale, a row's source, reason, pass and checkpoint, the
+ *   second student's rows and a project in another mode searched for in
+ *   every response and message of the first.
  */
 import { randomUUID } from "node:crypto";
 
@@ -47,6 +54,7 @@ import {
   githubAccounts,
   githubClassroomLinks,
   githubOrganizations,
+  projectCheckpoints,
   projectCriteria,
   projectGradeRuns,
   projectRepos,
@@ -114,7 +122,7 @@ async function newStudent(opts: { linked?: boolean; tag?: string } = {}): Promis
   return { ...signed, githubUserId, login };
 }
 
-const call = (method: "GET" | "POST" | "PATCH", url: string, headers: Headers, payload?: object) =>
+const call = (method: "GET" | "POST" | "PATCH" | "PUT", url: string, headers: Headers, payload?: object) =>
   server.app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
 
 interface Room extends Seeded {
@@ -157,6 +165,30 @@ const repoOf = async (projectId: string, userId: string) =>
 const setRepo = (id: string, patch: RepoPatch) => server.app.db.update(projectRepos).set(patch).where(eq(projectRepos.id, id));
 const setProject = (id: string, patch: Partial<typeof projects.$inferInsert>) =>
   server.app.db.update(projects).set(patch).where(eq(projects.id, id));
+
+/** `projectId` switched to grading by criteria, with `yml` as its snapshot (ADR-106 §1, §2). */
+async function toCriteria(projectId: string, yml: string) {
+  const parsed = parseCriteria(yml);
+  if (!parsed.ok) throw new Error("the fixture does not parse");
+  await setProject(projectId, { gradingMode: "criteria" });
+  await server.app.db.insert(projectCriteria).values({ projectId, fileSha: "f", sourceSha: "s", criteria: parsed.criteria, loadedAt: at(NOW) });
+}
+
+/** The criteria of the L-02f test: an automatic, a teacher's, three llm (one a milestone's) and a teacher-only criterion. */
+const CRITERIA_YML = `schema_version: 2
+criteria:
+  rendu:
+    tests: {description: Tests pass, awarded_points: 0, max_points: 4}
+    build: {description: It builds, awarded_points: 0, max_points: 4}
+  rapport:
+    analyse: {description: Analysis, awarded_points: 0, max_points: 4}
+    jalon: {description: Milestone, awarded_points: 0, max_points: 4}
+    style: {description: Style, awarded_points: 0, max_points: 4}
+  git:
+    commits: {description: Commits, awarded_points: 0, max_points: 4}
+`;
+/** A rationale the page must show as text, never as markup (ADR-106 §6, N-SEC-14). */
+const XSS_RATIONALE = "<script>alert(1)</script> Rationale-llm-current";
 
 type RunPatch = Partial<typeof projectGradeRuns.$inferInsert>;
 /** A stored run of the repository: a scored `ci` run 7/10 at NOW unless `patch` says otherwise. */
@@ -402,6 +434,8 @@ describe("the student's project (F-PROJ-15)", () => {
       gradingMode: "auto",
       repo: null,
       release: null,
+      // Not graded by criteria: no criteria table (ADR-106 §9).
+      criteria: null,
       // No online workspace on this platform (ADR-047 §5): `CODESPACE_URL` is empty.
       workspace: null,
       serverNow: NOW,
@@ -781,20 +815,17 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
     }
   });
 
-  it("gives a student nothing of a validated criteria repository before the release, then the snapshot's total only (ADR-106 §7, §8)", async () => {
+  it("gives a student no total of a validated criteria repository before the release, then the criteria total, never a row's source (ADR-106 §7, §8)", async () => {
     const student = await newStudent({ tag: "crit" });
     const room = await connectedClassroom([student]);
     const lab = await project(room, "Lab nine-b");
     await accept(lab.id, student);
     const repo = await repoOf(lab.id, student.id);
-    const parsed = parseCriteria(`schema_version: 2
+    await toCriteria(lab.id, `schema_version: 2
 criteria:
   rendu:
     tests: {description: Tests, awarded_points: 0, max_points: 20}
 `);
-    if (!parsed.ok) throw new Error("the fixture does not parse");
-    await setProject(lab.id, { gradingMode: "criteria" });
-    await server.app.db.insert(projectCriteria).values({ projectId: lab.id, fileSha: "f", sourceSha: "s", criteria: parsed.criteria, loadedAt: at(NOW) });
     // Frozen, an indicative CI score, and the criterion validated by the teacher: a criteria total of 13.25 / 20.
     await setRepo(repo.id, {
       currentGradeRunId: await run(repo.id, { points: 6, max: 10 }),
@@ -804,7 +835,7 @@ criteria:
     await writeCriterionGrades(
       server.app.db,
       repo.id,
-      [{ criterionId: "rendu.tests", points: 13.25, max: 20, source: "manual", state: "validated", rationale: "Secret-rationale-x", passId: null }],
+      [{ criterionId: "rendu.tests", points: 13.25, max: 20, source: "manual", state: "validated", rationale: "Own-rationale-x", passId: null }],
       at(DEADLINE, DAY),
     );
     server.clock.set(at(DEADLINE, DAY));
@@ -814,18 +845,180 @@ criteria:
       return view(lab.id, student.headers);
     };
     const from = studentBodies.length;
-    await read();
-    // The view's `gradingMode` legitimately says "criteria": what must not appear is a total, a source, a state or a row.
-    for (const body of studentBodies.slice(from)) {
-      for (const secret of ["13.25", "\"criteria\":", "\"source\":\"criteria", "validated", "Secret-rationale-x", "rendu.tests"]) expect(body, secret).not.toContain(secret);
-    }
+    // Before the release: no total; after it, the criteria total, not the CI's 6 / 10.
+    expect((await read()).release).toBeNull();
     const released = await call("POST", `/app/api/projects/${lab.id}/release`, teacher.headers);
     expect(released.statusCode, released.body).toBe(200);
-    const after = studentBodies.length;
     expect((await read()).release).toMatchObject({ points: 13.25, max: 20 });
-    // After the release: the snapshot's total, never the source, the rows, nor the state.
-    for (const body of studentBodies.slice(after)) {
-      for (const secret of ["\"criteria\":", "\"source\":\"criteria", "validated", "Secret-rationale-x", "rendu.tests"]) expect(body, secret).not.toContain(secret);
+    for (const body of studentBodies.slice(from)) {
+      for (const secret of ['"source":', '"reason":']) expect(body, secret).not.toContain(secret);
+    }
+  });
+});
+
+// ---------------------------------------------------------------- the criteria table (ADR-106 §9)
+
+describe("the criteria table (ADR-106 §9, N-SEC-20, L-02f)", () => {
+  it("shows the student their own rows only: indicative, no rationale before the freeze, provisional ones after it, the validated ones once released", async () => {
+    const messages: BusMessage[] = [];
+    const unsubscribe = subscribe((m) => messages.push(m));
+    try {
+      const first = await newStudent({ tag: "ada" });
+      const second = await newStudent({ tag: "yuri" });
+      const room = await connectedClassroom([first, second]);
+      const lab = await project(room, "Lab ten");
+      const other = await project(room, "Lab ten-auto");
+      await accept(lab.id, first);
+      await accept(lab.id, second);
+      await accept(other.id, first);
+      await toCriteria(lab.id, CRITERIA_YML);
+      const mine = await repoOf(lab.id, first.id);
+      const theirs = await repoOf(lab.id, second.id);
+      const otherRepo = await repoOf(other.id, first.id);
+      const checkpointId = randomUUID();
+      await server.app.db.insert(projectCheckpoints).values({ id: checkpointId, projectId: lab.id, name: "mid", dueAt: at(NOW, -DAY) });
+      const passId = randomUUID();
+      const milestonePass = randomUUID();
+      const write = (repoId: string, rows: Parameters<typeof writeCriterionGrades>[2], when = at(NOW, -DAY)) =>
+        writeCriterionGrades(server.app.db, repoId, rows, when);
+      // The first student's rows: an automatic proposal, an llm proposal over a superseded one, a milestone's locked
+      // row, a failed pass, a validated row; no row for the teacher-only criterion.
+      await write(mine.id, [{ criterionId: "rapport.analyse", points: 1.75, max: 4, source: "llm", state: "proposed", rationale: "Rationale-superseded-old", passId: randomUUID() }], at(NOW, -2 * DAY));
+      await write(mine.id, [
+        { criterionId: "rapport.jalon", points: 1.5, max: 4, source: "llm", state: "proposed", rationale: "Rationale-milestone-lock", passId: milestonePass, lockedByCheckpointId: checkpointId, lockedAt: at(NOW, -DAY) },
+      ]);
+      await write(mine.id, [
+        { criterionId: "rendu.tests", points: 2.5, max: 4, source: "auto", state: "proposed", passId },
+        { criterionId: "rapport.analyse", points: 3.25, max: 4, source: "llm", state: "proposed", rationale: XSS_RATIONALE, passId },
+        { criterionId: "rapport.style", points: 0, max: 4, source: "llm", state: "proposed", reason: "llm_budget", passId },
+        { criterionId: "rendu.build", points: 2.75, max: 4, source: "manual", state: "validated", rationale: "Rationale-validated-row", passId: null, createdBy: teacher.id },
+      ]);
+      // The second student's rows, and a row of the first on a project in another mode.
+      await write(theirs.id, [
+        { criterionId: "rendu.tests", points: 1.37, max: 4, source: "auto", state: "proposed", passId: randomUUID() },
+        { criterionId: "rapport.analyse", points: 0.63, max: 4, source: "llm", state: "proposed", rationale: "Rationale-second-student", passId: randomUUID() },
+      ]);
+      await write(otherRepo.id, [{ criterionId: "rendu.tests", points: 3.91, max: 4, source: "auto", state: "proposed", rationale: "Rationale-other-mode", passId: randomUUID() }]);
+
+      const admin = await server.signIn("admin");
+      const impersonation = await sessionOf(first.id, { kind: "impersonation", actorUserId: admin.id });
+      const { token } = await createApiToken(server.app.db, first.id, { name: "criteria", expiresInDays: null });
+      const seb = await sessionOf(first.id, { kind: "seb", evaluationId: room.evaluationId });
+      const callers: Headers[] = [first.headers, impersonation, { authorization: `Bearer ${token}` }];
+      const read = async (): Promise<StudentProject> => {
+        expect((await viewRaw(lab.id, seb)).statusCode).toBe(401);
+        // A teacher in the student view holds no repository: no table.
+        expect((await view(lab.id, teacher.headers)).criteria).toBeNull();
+        expect((await view(other.id, first.headers)).criteria).toBeNull();
+        let seen: StudentProject | null = null;
+        for (const headers of callers) {
+          await home(headers);
+          await classroomPage(room.classroomId, headers);
+          const got = await view(lab.id, headers);
+          if (seen) expect(got.criteria).toEqual(seen.criteria);
+          seen = got;
+        }
+        return seen!;
+      };
+      const rowsOf = (v: StudentProject) => Object.fromEntries(v.criteria!.map((r) => [r.criterionId, r]));
+      const from = studentBodies.length;
+
+      // Before the definitive freeze: points, indicative; the failed row and the teacher-only one empty; no rationale at all.
+      const open = await read();
+      expect(open.criteria!.map((r) => r.criterionId)).toEqual(["rendu.tests", "rendu.build", "rapport.analyse", "rapport.jalon", "rapport.style", "git.commits"]);
+      expect(rowsOf(open)).toEqual({
+        "rendu.tests": { criterionId: "rendu.tests", section: "rendu", description: "Tests pass", max: 4, points: 2.5, state: "indicative", locked: false },
+        "rendu.build": { criterionId: "rendu.build", section: "rendu", description: "It builds", max: 4, points: 2.75, state: "indicative", locked: false },
+        "rapport.analyse": { criterionId: "rapport.analyse", section: "rapport", description: "Analysis", max: 4, points: 3.25, state: "indicative", locked: false },
+        "rapport.jalon": { criterionId: "rapport.jalon", section: "rapport", description: "Milestone", max: 4, points: 1.5, state: "indicative", locked: true },
+        "rapport.style": { criterionId: "rapport.style", section: "rapport", description: "Style", max: 4, points: null, state: "empty", locked: false },
+        "git.commits": { criterionId: "git.commits", section: "git", description: "Commits", max: 4, points: null, state: "empty", locked: false },
+      });
+      const beforeFreeze = studentBodies.slice(from);
+      for (const body of beforeFreeze) {
+        for (const secret of ["Rationale-", "alert(1)", "rationale"]) expect(body, secret).not.toContain(secret);
+      }
+
+      // After the definitive freeze: the provisional rationales of the current rows, never the superseded one.
+      await setRepo(mine.id, { deadlineAppliedAt: at(DEADLINE), frozenAt: at(DEADLINE, 30 * MINUTE) });
+      await setRepo(theirs.id, { deadlineAppliedAt: at(DEADLINE), frozenAt: at(DEADLINE, 30 * MINUTE) });
+      server.clock.set(at(DEADLINE, DAY));
+      const frozen = await read();
+      expect(Object.values(rowsOf(frozen)).map((r) => [r.criterionId, r.state, r.rationale ?? null])).toEqual([
+        ["rendu.tests", "indicative", null],
+        ["rendu.build", "indicative", "Rationale-validated-row"],
+        ["rapport.analyse", "indicative", XSS_RATIONALE],
+        ["rapport.jalon", "indicative", "Rationale-milestone-lock"],
+        ["rapport.style", "empty", null],
+        ["git.commits", "empty", null],
+      ]);
+
+      // The teacher writes the missing criteria, validates the rest and releases.
+      for (const [repoId, criterionId, points, rationale] of [
+        [mine.id, "rapport.style", 1, "Rationale-teacher-style"],
+        [mine.id, "git.commits", 4, null],
+        [theirs.id, "rendu.build", 0, null],
+        [theirs.id, "rapport.jalon", 0, null],
+        [theirs.id, "rapport.style", 0, null],
+        [theirs.id, "git.commits", 0, null],
+      ] as const) {
+        const graded = await call("PUT", `/app/api/projects/${lab.id}/repos/${repoId}/criteria/${criterionId}`, teacher.headers, { points, ...(rationale ? { rationale } : {}) });
+        expect(graded.statusCode, graded.body).toBe(200);
+      }
+      const validated = await call("POST", `/app/api/projects/${lab.id}/validate`, teacher.headers);
+      expect([validated.statusCode, validated.json()], validated.body).toEqual([202, { validated: 2 }]);
+      // Validated, not released: still indicative.
+      expect((await read()).criteria!.map((r) => r.state)).toEqual(Array(6).fill("indicative"));
+      expect((await call("POST", `/app/api/projects/${lab.id}/release`, teacher.headers)).statusCode).toBe(200);
+      const done = await read();
+      expect(Object.values(rowsOf(done)).map((r) => [r.criterionId, r.points, r.state, r.rationale ?? null])).toEqual([
+        ["rendu.tests", 2.5, "validated", null],
+        ["rendu.build", 2.75, "validated", "Rationale-validated-row"],
+        ["rapport.analyse", 3.25, "validated", XSS_RATIONALE],
+        ["rapport.jalon", 1.5, "validated", "Rationale-milestone-lock"],
+        ["rapport.style", 1, "validated", "Rationale-teacher-style"],
+        ["git.commits", 4, "validated", null],
+      ]);
+      // The released total is the release's snapshot: 15 / 24 (ADR-106 §7), as before this table.
+      expect(done.release).toMatchObject({ points: 15, max: 24 });
+      expect(rowsOf(done)["rapport.jalon"]!.locked).toBe(true);
+
+      // Searched in every response of the first student's callers, and every message on their topics (05 §5.7).
+      const forbidden = [
+        "Rationale-superseded-old",
+        "Rationale-second-student",
+        "Rationale-other-mode",
+        "1.75", // the superseded row's points
+        "1.37", // the second student's points
+        "0.63",
+        "3.91", // a row of a project in another mode
+        "llm_budget",
+        '"source":',
+        '"reason":',
+        '"passId"',
+        "model",
+        passId,
+        milestonePass,
+        checkpointId,
+        theirs.id,
+        second.login,
+        second.id,
+      ];
+      const bodies = studentBodies.slice(from);
+      expect(bodies.length).toBeGreaterThan(40);
+      for (const body of bodies) {
+        for (const secret of forbidden) expect(body, secret).not.toContain(secret);
+      }
+      const firstListens = new Set([`user:${first.id}`, `classroom:${room.classroomId}`]);
+      for (const m of messages) {
+        if (m.kind === "end" || !m.topics.some((t) => firstListens.has(t))) continue;
+        const sent = JSON.stringify(m);
+        for (const secret of ["Rationale-", "alert(1)", "llm_budget", '"source":', '"reason":', passId, milestonePass, checkpointId, theirs.id]) {
+          expect(sent, secret).not.toContain(secret);
+        }
+      }
+    } finally {
+      unsubscribe();
     }
   });
 });
