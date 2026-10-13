@@ -33,6 +33,7 @@ import {
   ParametersDraft,
   PoolCreate,
   PollQuestionType,
+  ProjectCreate,
   QuestionCreate,
   QuestionPatchFields,
   SimilarQuestionSearch,
@@ -71,6 +72,8 @@ export interface Api {
   patch(path: string, body: unknown): Promise<any>;
   /** The web app's URL of a screen, for the model to hand the teacher. */
   link(path: string): string;
+  /** Whether Quiz's GitHub App is configured, so the project routes exist; absent: off. */
+  github?: boolean;
 }
 
 interface ToolAnnotations {
@@ -226,6 +229,20 @@ async function createQuiz(
   }
   return { ...(await api.get(`/${kind}/${created.id}`)), url: api.link(`/${kind}/${created.id}`) };
 }
+
+/** The project routes exist only with Quiz's GitHub App (`app.ts`): without it, say so rather than a 404. */
+function requireGithub(api: Api) {
+  if (!api.github) {
+    throw new ToolRefusal("GitHub projects are not enabled on this platform (no GitHub App is configured); nothing was done.");
+  }
+}
+
+/**
+ * `create_project`'s fields: `ProjectCreate`'s, publication left out — a
+ * project made here is a draft published by MANUAL publication only, from
+ * the web app (ADR-022, addendum of 2026-10-13).
+ */
+const { publishMode: _publishMode, startAt: _startAt, ...ProjectDraftFields } = ProjectCreate.shape;
 
 export const TOOLS: Tool[] = [
   // --- Reading -------------------------------------------------------------
@@ -766,6 +783,62 @@ export const TOOLS: Tool[] = [
         joinUrl: view.joinUrl,
         projectionUrl: api.link(`/evaluations/${view.evaluation.id}/poll`),
       };
+    },
+  }),
+
+  // --- GitHub projects (F-PROJ; ADR-022, addendum of 2026-10-13) ----------
+
+  tool({
+    name: "list_projects",
+    title: "List the GitHub projects of a classroom",
+    description:
+      "The GitHub projects (labs handed out as one repository per student or group) of a classroom, drafts " +
+      "included, with their state and deadline. Check it before `create_project`, so nothing is created twice. " +
+      "Needs a seat on the course's staff: 404 otherwise.",
+    input: z.object({ classroomId: Id }),
+    annotations: READ,
+    run: async (api, a) => {
+      requireGithub(api);
+      return (await api.get(`/classrooms/${a.classroomId}/projects`)).map((p: { id: string }) => ({
+        ...p,
+        url: api.link(`/projects/${p.id}`),
+      }));
+    },
+  }),
+
+  tool({
+    name: "list_project_sources",
+    title: "List the source repositories a project may hand out",
+    description:
+      "The repositories of the classroom's GitHub organization that a project may use as its source (`sourceRepo` " +
+      "of `create_project`), with their default branch; students' repositories are left out. A classroom not " +
+      "connected to an organization is refused.",
+    input: z.object({ classroomId: Id }),
+    annotations: READ,
+    run: async (api, a) => {
+      requireGithub(api);
+      return api.get(`/classrooms/${a.classroomId}/projects/sources`);
+    },
+  }),
+
+  tool({
+    name: "create_project",
+    title: "Create a GitHub project",
+    description:
+      "Creates a GitHub project in a classroom as a DRAFT: nothing reaches the students until the teacher " +
+      "publishes it from the web app (manual publication only; the deadline is `deadlineAt`, an ISO date-time, " +
+      "or `durationMinutes` counted from the publication — exactly one of them). `sourceRepo` is a name from " +
+      "`list_project_sources`; `branches` defaults to its default branch. Creating it ALREADY builds the " +
+      "project's distribution repository in the classroom's GitHub organization (a copy of the source, never " +
+      "deleted by Quiz), so check `list_projects` first and do not create the same project twice. Needs a seat " +
+      "on the course's staff: 404 otherwise.",
+    // The contract's cross-field rules (a deadline or a duration, the group set) are the route's: its 400 comes back.
+    input: z.object({ classroomId: Id, ...ProjectDraftFields }).strict(),
+    annotations: WRITE,
+    run: async (api, { classroomId, ...body }) => {
+      requireGithub(api);
+      const project = await api.post(`/classrooms/${classroomId}/projects`, { ...body, publishMode: "manual" });
+      return { ...project, url: api.link(`/projects/${project.id}`) };
     },
   }),
 ];

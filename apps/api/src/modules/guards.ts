@@ -392,15 +392,25 @@ async function notFound(reply: FastifyReply): Promise<null> {
 /**
  * The reply-aware door of a `find…` finder (invariant 6): its entity, or the
  * 404 of a missing one. The access predicate stays in the finder's query.
- * `portalOnly`: any session but the caller's own portal one
- * ({@link ownPortalSession}) gets the same 404, BEFORE anything is loaded.
+ * `admit` says which callers are let in at all, BEFORE anything is loaded
+ * (anyone else gets the same 404): `any` (the default); `portal`, the
+ * caller's own portal session only ({@link ownPortalSession}); or
+ * `portalOrToken`, that or a personal or OAuth token (`authVia: "token"`,
+ * the MCP server's; never the help assistant's, ADR-022).
  */
+type Admit = "any" | "portal" | "portalOrToken";
+
+function admits(admit: Admit, req: FastifyRequest): boolean {
+  if (admit === "any") return true;
+  return ownPortalSession(req.auth) || (admit === "portalOrToken" && req.authVia === "token");
+}
+
 function routeLoader<P, T>(
   find: (app: FastifyInstance, req: FastifyRequest, params: P) => Promise<T | null>,
-  { portalOnly = false }: { portalOnly?: boolean } = {},
+  { admit = "any" }: { admit?: Admit } = {},
 ) {
   return async (app: FastifyInstance, req: FastifyRequest, reply: FastifyReply, params: P): Promise<T | null> => {
-    if (portalOnly && !ownPortalSession(req.auth)) return notFound(reply);
+    if (!admits(admit, req)) return notFound(reply);
     return (await find(app, req, params)) ?? notFound(reply);
   };
 }
@@ -585,7 +595,10 @@ export const accessibleClassroom = routeLoader(classroomOfRequest);
 // Projects (F-PROJ, merge task M3-02): the staff's routes, portal sessions
 // only. A project is reached through its classroom's course, `staffAccess`
 // in the WHERE; an impersonation, a `seb` or `kiosk` session, a Bearer
-// token and anyone off the staff get the 404 of a missing project.
+// token and anyone off the staff get the 404 of a missing project — except
+// that the three authoring routes of a classroom (its projects, its sources,
+// the creation) also take a personal or OAuth token
+// (`projectsAuthoringClassroom`, ADR-022 addendum of 2026-10-13).
 // ---------------------------------------------------------------------------
 
 /** The project, its classroom and course, if the caller is on the course's staff; null otherwise. */
@@ -603,7 +616,7 @@ export async function findAccessibleProject(db: Db, user: Caller, projectId: str
 /** {@link findAccessibleProject} for the caller's own portal session, answering the 404 (invariant 6). */
 export const accessibleProject = routeLoader(
   (app, req, params: { id: string }) => findAccessibleProject(app.db, callerOf(req), params.id),
-  { portalOnly: true },
+  { admit: "portal" },
 );
 
 /**
@@ -628,14 +641,23 @@ export async function findAccessibleProjectRepo(db: Db, user: Caller, projectId:
 export const accessibleProjectRepo = routeLoader(
   (app, req, params: { id: string; rid: string }) =>
     findAccessibleProjectRepo(app.db, callerOf(req), params.id, params.rid),
-  { portalOnly: true },
+  { admit: "portal" },
 );
 
 /**
  * {@link accessibleClassroom} for the projects' and the group sets' (ADR-070)
  * classroom routes: the caller's own portal session only.
  */
-export const projectsClassroom = routeLoader(classroomOfRequest, { portalOnly: true });
+export const projectsClassroom = routeLoader(classroomOfRequest, { admit: "portal" });
+
+/**
+ * {@link projectsClassroom} for the three routes an MCP client creates a
+ * draft project through (ADR-022, addendum of 2026-10-13): a classroom's
+ * projects, its sources and the creation. A token's owner on the course's
+ * staff reaches them as in their own portal session; every other project
+ * route stays portal-only.
+ */
+export const projectsAuthoringClassroom = routeLoader(classroomOfRequest, { admit: "portalOrToken" });
 
 // ---------------------------------------------------------------------------
 // Group sets (ADR-070, merge task M3-15a): the staff's routes, portal
@@ -660,7 +682,7 @@ export async function findAccessibleGroupSet(db: Db, user: Caller, setId: string
 /** {@link findAccessibleGroupSet} for the caller's own portal session, answering the 404 (invariant 6). */
 export const accessibleGroupSet = routeLoader(
   (app, req, params: { id: string }) => findAccessibleGroupSet(app.db, callerOf(req), params.id),
-  { portalOnly: true },
+  { admit: "portal" },
 );
 
 // ---------------------------------------------------------------------------
@@ -776,7 +798,7 @@ export async function findStudentProject(db: Db, userId: string, projectId: stri
  */
 export const studentProject = routeLoader(
   (app, req, params: { id: string }) => findStudentProject(app.db, callerOf(req).id, params.id),
-  { portalOnly: true },
+  { admit: "portal" },
 );
 
 /** A project loaded through {@link findStudentProjectView}: the student payload's scope. */

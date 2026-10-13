@@ -1,7 +1,7 @@
 /**
  * `POST /app/api/mcp` — the MCP server (ADR-022, F-LLM-06): an LLM client
  * (Claude, ChatGPT, Codex, any MCP host) authors pools, questions,
- * evaluations and polls as the teacher whose personal API token it holds.
+ * evaluations, polls and draft GitHub projects as the teacher whose personal API token it holds.
  *
  * Streamable HTTP transport, stateless: every POST carries one JSON-RPC
  * message (or a batch) and is answered in `application/json`. There is no
@@ -16,8 +16,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { OAUTH_SCOPE } from "@quiz/contracts";
 
 import { MCP_PATH } from "../../auth/oauth/service.js";
-import type { AppConfig } from "../../config.js";
-import { handleMessage, RPC } from "./protocol.js";
+import type { AppConfig } from "../../config.js";import { handleMessage, RPC } from "./protocol.js";
 import { injectedApi } from "./service.js";
 
 

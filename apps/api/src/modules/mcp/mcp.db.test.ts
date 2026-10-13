@@ -90,6 +90,8 @@ describe("the transport", () => {
     expect(result.capabilities.tools).toBeDefined();
     expect(result.instructions).toContain("link_pool_to_course");
     expect(result.instructions).toContain("create_template");
+    expect(result.instructions).toContain("create_project");
+    expect(result.instructions).toContain("DRAFT the teacher publishes");
 
     const unknown = await rpc("initialize", { protocolVersion: "1999-01-01" });
     expect(unknown.result.protocolVersion).toBe("2025-06-18");
@@ -146,6 +148,9 @@ describe("the transport", () => {
         "create_template",
         "add_questions_to_template",
         "instantiate_template",
+        "list_projects",
+        "list_project_sources",
+        "create_project",
       ].sort(),
     );
     // …and its reading half, the one set annotated read-only.
@@ -166,6 +171,8 @@ describe("the transport", () => {
         "get_journal_page",
         "describe_question_types",
         "list_templates",
+        "list_projects",
+        "list_project_sources",
       ].sort(),
     );
     for (const t of result.tools) expect(t.inputSchema.type, t.name).toBe("object");
@@ -676,5 +683,21 @@ describe("templates first (ADR-022, addendum of 2026-10-01)", () => {
       [open.id]: "read",
       [own.id]: "edit",
     });
+  });
+});
+
+describe("GitHub projects without Quiz's App", () => {
+  it("refuses every project tool with a clear reason, not the 404 of a missing route", async () => {
+    const course = await ok("create_course", { name: "Sans GitHub", code: "NO-GH" });
+    const room = await ok("create_classroom", { courseId: course.id, name: "Sans GitHub 2026" });
+    for (const [name, args] of [
+      ["list_projects", { classroomId: room.id }],
+      ["list_project_sources", { classroomId: room.id }],
+      ["create_project", { classroomId: room.id, name: "Lab 1", sourceRepo: "lab", durationMinutes: 10_080 }],
+    ] as const) {
+      const { isError, data } = await call(name, args);
+      expect(isError, name).toBe(true);
+      expect(data.error, name).toContain("GitHub projects are not enabled");
+    }
   });
 });

@@ -397,7 +397,8 @@ assistant only, and F-LLM-07 (docs/spec/02).
    pinned by a test: `update_question`, `update_evaluation`,
    `add_questions_to_evaluation`, `create_evaluation`,
    `instantiate_template`, `create_pool`, `create_classroom`, `create_poll`,
-   `create_course`.
+   `create_course`, and `create_project` (MCP only, ADR-022 addendum of
+   2026-10-13: the assistant's token reaches no project route).
 5. **The screen's write commands, behind a confirmation.** A palette
    command with `effect: "write"` is listed to the model as such and, named
    by it, comes back as a card naming the command (`confirm_command`); the
