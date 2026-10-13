@@ -49,11 +49,11 @@ function Step({
   action?: ReactNode;
 }) {
   return (
-    <li className={cx("group relative min-w-0 flex-1 pb-5 pl-7 last:pb-0 xl:pb-0 xl:pl-0 xl:pr-4 xl:pt-7", muted && "opacity-60")}>
-      {/* The line, vertical on a phone and horizontal beside the next step; the marker sits on it. */}
+    <li className={cx("group relative min-w-0 flex-1 pb-5 pl-7 last:pb-0 xl:px-2 xl:pb-0 xl:pt-7 xl:text-center", muted && "opacity-60")}>
+      {/* The line, vertical on a phone; on xl, horizontal from this step's centred marker to the next one's. */}
       <span
         aria-hidden
-        className="absolute bottom-0 left-[6px] top-3 w-px bg-line group-last:hidden xl:bottom-auto xl:left-0 xl:right-0 xl:top-[6px] xl:h-px xl:w-auto"
+        className="absolute bottom-0 left-[6px] top-3 w-px bg-line group-last:hidden xl:-right-1/2 xl:bottom-auto xl:left-1/2 xl:top-[6px] xl:h-px xl:w-auto"
       >
         {/* The countdown's bar: 3 px of accent over the hairline, growing down (a phone) or right (xl). */}
         {fill > 0 ? (
@@ -67,7 +67,7 @@ function Step({
       <span
         aria-hidden
         className={cx(
-          "absolute left-0 top-1 size-3.5 rounded-full border-2 xl:top-0",
+          "absolute left-0 top-1 size-3.5 rounded-full border-2 xl:left-1/2 xl:top-0 xl:-translate-x-1/2",
           done ? "border-fg-muted bg-fg-muted" : "border-line-strong bg-surface",
         )}
       />

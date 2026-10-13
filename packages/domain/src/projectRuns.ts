@@ -5,6 +5,8 @@
  * and the receipts; these rules decide.
  */
 
+import type { CiStatusName } from "./projectStudent.js";
+
 /** F-PROJ-09: a ruleset that blocks pushes, or one empty commit of the App per branch. */
 export const DEADLINE_STRATEGIES = ["lock", "commit"] as const;
 export type DeadlineStrategyName = (typeof DEADLINE_STRATEGIES)[number];
@@ -34,6 +36,22 @@ export const GRADING_WORKFLOW_PATH = ".github/workflows/grading.yml";
  */
 export function runKind(run: { event: string; path: string }): GradeRunKindName {
   return run.event === "repository_dispatch" && run.path === GRADING_WORKFLOW_PATH ? "review" : "ci";
+}
+
+/**
+ * A head's CI badge from GitHub's runs on it: `fail` once a completed run
+ * failed, `pending` while one runs, else `pass` (`none`: no run). The
+ * review Quiz dispatches is not the student's CI and is left out: after
+ * the deadline it runs on a locked branch and may fail to commit its
+ * review file, which says nothing of the student's push.
+ */
+export function ciStatusOf(runs: readonly { event: string; path: string; status: string | null; conclusion: string | null }[]): CiStatusName {
+  const own = runs.filter((r) => runKind({ event: r.event, path: r.path }) === "ci");
+  if (own.length === 0) return "none";
+  const completed = own.filter((r) => r.status === "completed");
+  const failed = (c: string | null) => c !== null && !["success", "skipped", "neutral"].includes(c);
+  if (completed.some((r) => failed(r.conclusion))) return "fail";
+  return completed.length < own.length ? "pending" : "pass";
 }
 
 /**

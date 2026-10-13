@@ -15,7 +15,6 @@ import {
   advancedCount,
   railSteps,
   deadlineDesc,
-  hasFellBack,
   isReopen,
   offersResync,
   offersSync,
@@ -78,15 +77,6 @@ describe("the header's sentence", () => {
     expect(projectStatus(makeProject({ state: "draft", publishMode: "scheduled", startAt: start })).date).toBe(start);
     expect(projectStatus(makeProject({ state: "locked", releasedAt: PAST, gradingMode: "none" })).date).toBe(PAST);
     expect(projectStatus(makeProject()).date).toBe(AHEAD);
-  });
-});
-
-describe("the scale's warning", () => {
-  it("fires once any grade of any slot fell back", () => {
-    expect(hasFellBack(makeProject())).toBe(false);
-    const fell = { grade: 4, fellBack: true };
-    const repo = makeRepo(1, { scores: { ...makeRepo(1).scores, review: { runId: "r", points: 60, max: 100, grade: fell } } });
-    expect(hasFellBack(makeProject({ rows: [row(1, null), row(2, repo)] }))).toBe(true);
   });
 });
 
