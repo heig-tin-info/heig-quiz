@@ -27,7 +27,9 @@ export {
  * tool reaches exactly what the token's owner reaches, and a refusal is an
  * `ApiError` with the route's own status and body. `webUrl` makes the web
  * app's links a tool hands back. `extra` adds headers to every call (the
- * assistant's tool name, `ASSIST_TOOL_HEADER`, ADR-080 P3).
+ * assistant's tool name, `ASSIST_TOOL_HEADER`, ADR-080 P3). `github` says
+ * whether the project routes exist: they are registered only with Quiz's
+ * App configured (`app.ts`).
  */
 export function injectedApi(
   app: FastifyInstance,
@@ -35,6 +37,7 @@ export function injectedApi(
   webUrl: string,
   extra: Readonly<Record<string, string>> = {},
 ): Api {
+  const github = app.hasRoute({ method: "GET", url: "/app/api/classrooms/:id/projects" });
   const call = async (
     method: "GET" | "POST" | "PUT" | "PATCH",
     path: string,
@@ -76,5 +79,6 @@ export function injectedApi(
     put: (path, body) => call("PUT", path, body),
     patch: (path, body) => call("PATCH", path, body),
     link: (path) => `${webUrl}${path}`,
+    github,
   };
 }

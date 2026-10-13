@@ -38,6 +38,7 @@ const INSTRUCTIONS = [
   "Look before writing a question: call find_similar_questions with its statement and reuse a close published question (link its pool if needed) rather than duplicating it, so its exam statistics keep growing.",
   "To write about what a classroom covered, read its journal (the course documentation) with get_journal and get_journal_page.",
   "Before writing a question, call describe_question_types with its type and follow the schema and rules exactly.",
+  "A classroom may also hand out GitHub projects (one repository per student or group, from a source repository of its organization): list_projects, list_project_sources, then create_project, which makes a DRAFT the teacher publishes from the web app (it already builds the distribution repository on GitHub, so never create one twice).",
   "Look before creating: list_courses, get_course and list_pools, so nothing is created twice. Evaluations are created as drafts; the teacher opens them from the web app. Give the teacher the returned `url` links.",
 ].join(" ");
 

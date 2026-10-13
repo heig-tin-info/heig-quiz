@@ -43,6 +43,13 @@ that an assistant reads a classroom's journal; the staff journal payload
 gains `files`, each page and asset with the last change of its content —
 see the addendum at the end of §C.
 
+**Amended 2026-10-13 (issue #788, product owner's decision of 2026-10-13),
+scope: §C, and the project routes' "own portal session only" rule of merge
+task M3-02.** The reading tools `list_projects` and `list_project_sources`
+and the writing tool `create_project` join the closed list, so an assistant
+creates a GitHub project as a draft; three project routes now take a
+personal or OAuth token — see the addendum at the end of §C.
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,
@@ -114,13 +121,14 @@ converted with `z.toJSONSchema`.
 Reading: `list_courses`, `get_course`, `list_pools`, `get_pool`,
 `get_pool_question_stats`, `find_similar_questions`, `list_questions`,
 `get_question`, `list_evaluations`, `get_evaluation`,
-`describe_question_types`, `list_templates`.
+`describe_question_types`, `list_templates`, `get_journal`,
+`get_journal_page`, `list_projects`, `list_project_sources`.
 
 Writing: `create_course`, `create_classroom`, `create_pool`,
 `link_pool_to_course`, `create_category`, `create_question`,
 `update_question`, `create_evaluation`, `add_questions_to_evaluation`,
 `update_evaluation`, `create_poll`, `create_template`,
-`add_questions_to_template`, `instantiate_template`.
+`add_questions_to_template`, `instantiate_template`, `create_project`.
 
 - `describe_question_types` hands the model the JSON Schema of the type's
   `configSchema` — generated, so it cannot drift from the publication gate —
@@ -243,6 +251,39 @@ covered, and the journal (ADR-049, ADR-057) is where it is written.
   content does (a GitHub ingestion that leaves a blob as it was keeps its
   row's date; a Quiz-mode save stamps its own). No writing tool: the journal
   is edited in the web app, or on GitHub.
+
+**Addendum of 2026-10-13 — create a GitHub project as a draft** (#788,
+decided by the product owner). A teacher asked the assistant for a lab and
+it had to fall back on the web form.
+
+- **Three tools over three routes.** `list_projects({ classroomId })` is
+  `GET /classrooms/:id/projects`, `list_project_sources({ classroomId })`
+  `GET /classrooms/:id/projects/sources` (the organization's repositories a
+  project may hand out, students' repositories left out), and
+  `create_project({ classroomId, …ProjectCreate })` `POST
+  /classrooms/:id/projects`, each through `app.inject` like every tool (§B):
+  the classroom is loaded through its course's `staffAccess` (invariant 6),
+  the body validated by `ProjectCreate` (invariant 7), the creation audited
+  `project.create` as `api_key`.
+- **The narrowed M3-02 rule.** Every project route served the caller's own
+  portal session only, and a Bearer token got the 404 of a missing entity.
+  Those three routes now take a personal or OAuth token too (loader
+  `projectsAuthoringClassroom`, `authVia: "token"`); every other project
+  route — the project page, its patch, publication, archive, deletion, a
+  source's detail, the grading — stays portal-only, and the help assistant's
+  token (ADR-080 §8) reaches none of them.
+- **Manual publication only.** `create_project` takes `ProjectCreate`
+  without `publishMode` and `startAt`: the project is a `draft` the teacher
+  publishes from the web app. A `scheduled` one would be published by the
+  ticker and its class notified with no teacher in the loop. Its deadline is
+  `deadlineAt` or `durationMinutes` from the publication.
+- **A draft with an effect on GitHub.** The creation already builds the
+  distribution repository in the classroom's organization (ADR-062), never
+  deleted by Quiz; the tool's description says so and steers the model to
+  `list_projects` first.
+- **Without Quiz's App** the project routes do not exist (`app.ts`); the
+  three tools then refuse with a reason a model can repeat ("GitHub projects
+  are not enabled"), rather than a 404 it would read as "not accessible".
 
 ## Consequences
 

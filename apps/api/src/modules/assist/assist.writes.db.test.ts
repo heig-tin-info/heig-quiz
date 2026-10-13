@@ -312,7 +312,7 @@ describe("the writes it may prepare (decision 4)", () => {
 
   it("never reaches an excluded write, whatever the model names", async () => {
     // The ONE list of decision 4's exclusions: every MCP write but the five the assistant prepares.
-    const excluded = ["update_question", "update_evaluation", "add_questions_to_evaluation", "create_evaluation", "instantiate_template", "create_pool", "create_classroom", "create_poll", "create_course"];
+    const excluded = ["update_question", "update_evaluation", "add_questions_to_evaluation", "create_evaluation", "instantiate_template", "create_pool", "create_classroom", "create_poll", "create_course", "create_project"];
     const writes = TOOLS.filter((t) => t.annotations.readOnlyHint !== true).map((t) => t.name);
     expect(writes.filter((w) => !(ASSIST_WRITE_TOOLS as readonly string[]).includes(w)).sort()).toEqual([...excluded].sort());
     script = calling(...excluded.map((name): [string, unknown] => [name, {}]));

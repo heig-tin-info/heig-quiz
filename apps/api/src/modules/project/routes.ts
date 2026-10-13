@@ -18,7 +18,10 @@
  * a project is reached through its course's `staffAccess`, by the caller's
  * own portal session only (`projectsClassroom`, `accessibleProject`); a
  * student, a teacher off the staff, an impersonation, a `seb` or `kiosk`
- * session get the 404 of a missing entity.
+ * session get the 404 of a missing entity. A classroom's projects, its
+ * sources and the creation also take a personal or OAuth token
+ * (`projectsAuthoringClassroom`), so the MCP server creates a draft through
+ * them (ADR-022, addendum of 2026-10-13).
  *
  * The student's side: Accept (M3-03) and their own resend of an invitation
  * (M3-09a), on a project of a classroom where the caller holds a claimed
@@ -59,6 +62,7 @@ import {
   accessibleProject,
   accessibleProjectRepo,
   callerOf,
+  projectsAuthoringClassroom,
   projectsClassroom,
   studentProject,
   studentProjectView,
@@ -82,7 +86,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   const teacher = teacherRoute(app);
   const student = studentRoute(app);
   const session = { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) };
-  const onClassroom = { params: IdParam, load: projectsClassroom.bind(null, app) };
+  const onClassroom = { params: IdParam, load: projectsAuthoringClassroom.bind(null, app) };
   const onProject = { params: IdParam, load: accessibleProject.bind(null, app) };
   // What reaches the students — the release — is the course owner's call
   // (ADR-068): an assistant gets `403 owner_required`.

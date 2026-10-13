@@ -1149,7 +1149,7 @@ export const en = {
   "oauth.consent.can": "It will be able to",
   "oauth.consent.can.read": "Read your courses, classrooms, pools, questions and evaluations",
   "oauth.consent.can.write": "Create courses, classrooms, pools and questions, and publish questions",
-  "oauth.consent.can.draft": "Prepare evaluations as drafts, and launch a poll when you ask for one",
+  "oauth.consent.can.draft": "Prepare evaluations and GitHub projects as drafts, and launch a poll when you ask for one",
   "oauth.consent.cannot": "It will not be able to",
   "oauth.consent.cannot.delete": "Delete anything",
   "oauth.consent.cannot.run": "Open, start or close an evaluation",
