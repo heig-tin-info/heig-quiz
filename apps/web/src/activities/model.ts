@@ -335,6 +335,10 @@ function eventsOf(a: ActivitySummary, now: number): NextEvent[] {
   return events.filter((e) => new Date(e.at).getTime() >= now);
 }
 
+/** The first thing that will happen to any of the rows from `now` on, or null. */
+export const nextEventOf = (rows: readonly ActivitySummary[], now: number): NextEvent | null =>
+  first(rows.flatMap((a) => eventsOf(a, now)));
+
 const first = (events: NextEvent[]): NextEvent | null =>
   events.reduce<NextEvent | null>(
     (min, e) => (min === null || new Date(e.at).getTime() < new Date(min.at).getTime() ? e : min),

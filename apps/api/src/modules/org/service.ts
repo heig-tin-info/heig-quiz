@@ -42,6 +42,7 @@ import {
 import { shownAvatar } from "../avatar.js";
 import { countTemplates } from "../evaluation/service.js";
 import { purgeProjectReceipts } from "../github/service.js";
+import { journalSignals } from "../journal/service.js";
 import { releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "../project/service.js";
 import { accessRevoked } from "../realtime/bus.js";
 import { rosterRefusal } from "./errors.js";
@@ -119,9 +120,11 @@ async function staffOf(db: Db, courseIds: string[]) {
 
 /**
  * The course cards of `GET /courses`: every course `access` lets through
- * (`accessWhere(user, staffAccess(user.id))`), with its live classrooms and
- * their headcounts, its staff, whether the viewer hid it (#155) and the
- * viewer's role on it (ADR-068: `owner` under Super Powers, else their seat's).
+ * (`accessWhere(user, staffAccess(user.id))`), with its live classrooms,
+ * their headcounts and where their journal stands (`journalSignals`, one
+ * query; a teacher's route, never a student's), its staff, whether the
+ * viewer hid it (#155) and the viewer's role on it (ADR-068: `owner` under
+ * Super Powers, else their seat's).
  *
  * A hidden course is still IN the list, flagged: hiding takes a course out
  * of the viewer's navigation only (ADR-032), and the pickers and the MCP
@@ -173,6 +176,7 @@ export async function listCourses(
     : [];
   const staff = await staffOf(db, ids);
   const templates = await countTemplates(db, ids);
+  const journals = await journalSignals(db, rooms.map((r) => r.id));
   return rows.map((c) => ({
     id: c.id,
     name: c.name,
@@ -204,6 +208,7 @@ export async function listCourses(
         archivedAt: r.archivedAt?.toISOString() ?? null,
         students: r.students,
         claimed: r.claimed,
+        journal: journals.get(r.id) ?? null,
       })),
     staff: staff
       .filter((s) => s.courseId === c.id)

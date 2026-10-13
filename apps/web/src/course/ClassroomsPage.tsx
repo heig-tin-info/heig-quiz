@@ -6,7 +6,7 @@ import { rightNowClassrooms } from "../CourseNav";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { Button, Card, EmptyState, PageHeader, QueryError, Skeleton } from "../ui";
-import { ClassroomRow, useCourses } from "./parts";
+import { ClassroomRow, useClassroomSignals, useCourses } from "./parts";
 
 const ROUTE: Route = { view: "classrooms" };
 
@@ -20,6 +20,7 @@ const ROUTE: Route = { view: "classrooms" };
 export function ClassroomsPage({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
   const courses = useCourses();
+  const signalsOf = useClassroomSignals();
   const rooms = rightNowClassrooms(courses.data ?? [], ROUTE);
   const byCourse = new Map<string, ClassroomSummary[]>();
   for (const room of rooms) byCourse.set(room.courseId, [...(byCourse.get(room.courseId) ?? []), room]);
@@ -55,7 +56,13 @@ export function ClassroomsPage({ navigate }: { navigate: (r: Route) => void }) {
               </p>
               <div className="space-y-0.5">
                 {list.map((room) => (
-                  <ClassroomRow key={room.id} room={room} students={room.students} navigate={navigate} />
+                  <ClassroomRow
+                    key={room.id}
+                    room={room}
+                    students={room.students}
+                    signals={signalsOf(room)}
+                    navigate={navigate}
+                  />
                 ))}
               </div>
             </Card>

@@ -1,15 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
-import { Archive, EyeOff, School } from "lucide-react";
-import { useState } from "react";
+import { Archive, BookOpen, CalendarClock, EyeOff, School, Users } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
-import type { ClassroomDetail, CourseCondition, CourseDetail, CourseRole, CourseSummary } from "@quiz/contracts";
+import type {
+  ActivitySummary,
+  ClassroomDetail,
+  ClassroomSummary,
+  CourseCondition,
+  CourseDetail,
+  CourseRole,
+  CourseSummary,
+} from "@quiz/contracts";
 import { courseRoleAllows } from "@quiz/domain";
 
 import { api, type ReadOptions } from "../api";
-import { useT } from "../i18n";
+import { useI18n, useT } from "../i18n";
 import type { Route } from "../router";
-import { Badge, cx, ToggleChip } from "../ui";
-import { classroomKey, courseConditionsKey, courseKey, coursesKey } from "../queryKeys";
+import { Badge, cx, relativeTime, ToggleChip, useNow } from "../ui";
+import { activitiesKey, classroomKey, courseConditionsKey, courseKey, coursesKey } from "../queryKeys";
+import { classroomSignals, type ClassroomSignals } from "./classroomSignals";
 
 /**
  * The pieces of a course that its two readings share: the card on the
@@ -101,19 +110,39 @@ export function HiddenBadge({ course }: { course: CourseSummary }) {
 }
 
 /**
+ * The signals of the caller's classroom rows (#805), from `GET /activities`
+ * (the list the Activities page reads, same key) and the room's own summary.
+ * Undefined while the activities load or when they failed: the row then
+ * keeps its first line alone — never a "0" that means "not known yet".
+ */
+export function useClassroomSignals(): (room: ClassroomSummary) => ClassroomSignals | undefined {
+  const activities = useQuery<ActivitySummary[]>({
+    queryKey: activitiesKey,
+    queryFn: () => api("/app/api/activities"),
+  });
+  // "Live" and "next" move with the clock, not only with the list.
+  const now = useNow(30_000);
+  const rows = activities.data;
+  return (room) => (rows === undefined || activities.isError ? undefined : classroomSignals(rows, room, now));
+}
+
+/**
  * One classroom of a course, live or archived: it opens the classroom.
  * An archived one is muted, wears the archive icon and has no headcount; it
- * is restored from its own page, which already offers that.
+ * is restored from its own page, which already offers that. `signals` adds a
+ * second, muted line of what is happening in it (#805).
  */
 export function ClassroomRow({
   room,
   archived = false,
   students,
+  signals,
   navigate,
 }: {
   room: { id: string; name: string; period: string };
   archived?: boolean;
   students?: number;
+  signals?: ClassroomSignals;
   navigate: (r: Route) => void;
 }) {
   const t = useT();
@@ -123,19 +152,97 @@ export function ClassroomRow({
       type="button"
       onClick={() => navigate({ view: "classroom", id: room.id })}
       className={cx(
-        "flex w-full items-center gap-3 rounded-field px-2.5 py-2 text-left transition-colors hover:bg-surface-2",
+        "flex w-full items-start gap-3 rounded-field px-2.5 py-2 text-left transition-colors hover:bg-surface-2",
         archived && "text-fg-muted hover:text-fg",
       )}
     >
-      <Icon className="size-4 shrink-0 text-fg-faint" />
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{room.name}</span>
-      {room.period ? <span className="shrink-0 text-xs text-fg-faint">{room.period}</span> : null}
-      {students !== undefined ? (
-        <span className="shrink-0 text-xs tabular-nums text-fg-muted">
-          {t(students === 1 ? "classrooms.students.one" : "classrooms.students", { n: students })}
+      <Icon className="mt-0.5 size-4 shrink-0 text-fg-faint" />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-3">
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{room.name}</span>
+          {room.period ? <span className="shrink-0 text-xs text-fg-faint">{room.period}</span> : null}
+          {students !== undefined ? (
+            <span className="shrink-0 text-xs tabular-nums text-fg-muted">
+              {t(students === 1 ? "classrooms.students.one" : "classrooms.students", { n: students })}
+            </span>
+          ) : null}
         </span>
-      ) : null}
+        {signals ? <SignalLine signals={signals} /> : null}
+      </span>
     </button>
+  );
+}
+
+/** A count in words, its singular apart: `{n} things` / `1 thing`. */
+function counted(t: ReturnType<typeof useT>, n: number, key: "evaluations" | "projects" | "live" | "toGrade"): string {
+  return t(n === 1 ? (`classrooms.signal.${key}.one` as const) : (`classrooms.signal.${key}` as const), { n });
+}
+
+/**
+ * The row's second line: only what applies, never a zero. What is live and
+ * what waits on the staff are badges in ADR-104's tones (green open, amber
+ * awaited); everything else is muted text, so the row stays one link.
+ */
+function SignalLine({ signals }: { signals: ClassroomSignals }) {
+  const t = useT();
+  const { locale } = useI18n();
+  const now = useNow(30_000);
+  const when = (iso: string) => relativeTime(iso, now, locale, t);
+  const { live, toGrade, next, journal, enrollment, evaluations, projects } = signals;
+  const items: { key: string; node: ReactNode }[] = [];
+  if (live > 0) items.push({ key: "live", node: <Badge tone="green">{counted(t, live, "live")}</Badge> });
+  if (toGrade > 0) items.push({ key: "grade", node: <Badge tone="amber">{counted(t, toGrade, "toGrade")}</Badge> });
+  if (next) {
+    items.push({
+      key: "next",
+      node: (
+        <Signal icon={CalendarClock}>
+          {next.row.title}{" "}
+          {t(next.what === "opens" ? "activities.summary.opens" : "activities.summary.closes")} {when(next.at)}
+        </Signal>
+      ),
+    });
+  }
+  const journalText = journal?.lastPage
+    ? [
+        t("classrooms.signal.journal.last", { title: journal.lastPage.title }),
+        journal.nextPage ? t("classrooms.signal.journal.next", { when: when(journal.nextPage.at) }) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : journal?.nextPage
+      ? t("classrooms.signal.journal.nextOnly", { when: when(journal.nextPage.at) })
+      : null;
+  if (journalText) items.push({ key: "journal", node: <Signal icon={BookOpen}>{journalText}</Signal> });
+  if (enrollment) {
+    items.push({
+      key: "enrollment",
+      node: <Signal icon={Users}>{t("classrooms.signal.enrollment", { claimed: enrollment.claimed, students: enrollment.students })}</Signal>,
+    });
+  }
+  const counts = [
+    evaluations > 0 ? counted(t, evaluations, "evaluations") : null,
+    projects > 0 ? counted(t, projects, "projects") : null,
+  ].filter(Boolean);
+  if (counts.length > 0) items.push({ key: "counts", node: <span className="tabular-nums">{counts.join(" · ")}</span> });
+  if (items.length === 0) return null;
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
+      {items.map((item) => (
+        <span key={item.key} className="min-w-0 max-w-full">
+          {item.node}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function Signal({ icon: Icon, children }: { icon: typeof BookOpen; children: ReactNode }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      <Icon className="size-3.5 shrink-0 text-fg-faint" />
+      <span className="truncate">{children}</span>
+    </span>
   );
 }
 

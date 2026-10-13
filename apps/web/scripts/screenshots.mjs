@@ -171,6 +171,9 @@ const scenes = [
   // templates, EMB none (the empty state), and an id nobody reaches is the
   // not-found state.
   { name: "course-page", role: "teacher", path: "/courses/c1" },
+  // The classroom rows' signals (#805), with PRG1-2026's journal.
+  { name: "course-page-signals", role: "teacher", path: "/courses/c1?journal=1" },
+  { name: "classrooms-signals", role: "teacher", path: "/classrooms?journal=1" },
   { name: "course-page-templates", role: "teacher", path: "/courses/c1/templates" },
   { name: "course-page-no-templates", role: "teacher", path: "/courses/c2/templates" },
   { name: "course-page-pools", role: "teacher", path: "/courses/c1/pools" },

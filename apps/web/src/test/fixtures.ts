@@ -76,6 +76,7 @@ export function makeClassroomSummary(overrides: Partial<ClassroomSummary> = {}):
     archivedAt: null,
     students: 24,
     claimed: 20,
+    journal: null,
     ...overrides,
   };
 }

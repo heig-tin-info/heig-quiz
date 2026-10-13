@@ -211,6 +211,28 @@ export interface ClassroomSummary {
   archivedAt: string | null;
   students: number;
   claimed: number;
+  /**
+   * Where the classroom's journal stands for its students (#805), null when
+   * it has none. STAFF only: this summary is served by `GET /courses`, a
+   * teacher's route, and never to a student. The rule is the student view's
+   * (`visibleToStudents` of the `journal` module): not a draft, and
+   * `visible_from` passed on the DATABASE's clock. The same in both modes
+   * (ADR-057).
+   */
+  journal: ClassroomJournalSignal | null;
+}
+
+/** A page of the journal named on a classroom's row: its title (its path without one) and its moment. */
+export interface JournalPageMark {
+  title: string;
+  at: string;
+}
+
+export interface ClassroomJournalSignal {
+  /** The page that most recently became visible to students: the later of its `visible_from` and its creation. */
+  lastPage: JournalPageMark | null;
+  /** The next page a `visible_from` will show them (never a draft); `at` is that `visible_from`. */
+  nextPage: JournalPageMark | null;
 }
 
 export interface CourseSummary {

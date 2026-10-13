@@ -12,10 +12,10 @@
  * (invariant 4). Reads never touch GitHub: a page view is a SELECT, and a
  * GitHub outage leaves the journal readable (N-RES-07).
  */
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
-import type { JournalPageStaff, JournalRepository, JournalStaff } from "@quiz/contracts";
+import type { ClassroomJournalSignal, JournalPageStaff, JournalRepository, JournalStaff } from "@quiz/contracts";
 import { buildNav, homePage, journalRepoName } from "@quiz/docrender";
 
 import { isoOrNull } from "../../clock.js";
@@ -48,6 +48,49 @@ async function journalRow(db: Db, classroomId: string): Promise<JournalRow | nul
 
 /** Not served to students right now: the negation of THE predicate. */
 const hiddenFromStudents = () => sql<boolean>`NOT (${visibleToStudents()})`;
+
+/** A moment as epoch milliseconds out of the database, so no driver's timestamp parsing is involved. */
+const epochMs = (at: SQL) => sql<number | null>`(extract(epoch from ${at}) * 1000)::float8`.mapWith(Number);
+const isoOfMs = (ms: number | null): string | null => (ms === null ? null : new Date(ms).toISOString());
+
+/**
+ * Where each classroom's journal stands for its students (#805), for the
+ * staff's classroom rows (`listCourses`): the page that most recently
+ * became visible to them and the next one a `visible_from` will show. ONE
+ * grouped query for every classroom listed. "Visible" is THE predicate of
+ * the student view ({@link visibleToStudents}: not a draft, `visible_from`
+ * passed on the database's clock); "next" is a page that is not a draft
+ * with a `visible_from` still ahead of that clock. A page became visible at
+ * the later of its `visible_from` and its creation. The same in both modes
+ * (ADR-057). Staff only: no student payload carries it. A classroom
+ * without a journal is absent from the map.
+ */
+export async function journalSignals(db: Db, classroomIds: string[]): Promise<Map<string, ClassroomJournalSignal>> {
+  if (classroomIds.length === 0) return new Map();
+  const visible = sql`${journalPages.id} IS NOT NULL AND ${visibleToStudents()}`;
+  const scheduled = sql`${journalPages.draft} = false AND ${journalPages.visibleFrom} > now()`;
+  const shownAt = sql`greatest(${journalPages.visibleFrom}, ${journalPages.createdAt})`;
+  const name = sql`coalesce(${journalPages.title}, ${journalPages.path})`;
+  const rows = await db
+    .select({
+      classroomId: classroomJournals.classroomId,
+      lastTitle: sql<string | null>`(array_agg(${name} ORDER BY ${shownAt} DESC, ${journalPages.path}) FILTER (WHERE ${visible}))[1]`,
+      lastAt: epochMs(sql`max(${shownAt}) FILTER (WHERE ${visible})`),
+      nextTitle: sql<string | null>`(array_agg(${name} ORDER BY ${journalPages.visibleFrom}, ${journalPages.path}) FILTER (WHERE ${scheduled}))[1]`,
+      nextAt: epochMs(sql`min(${journalPages.visibleFrom}) FILTER (WHERE ${scheduled})`),
+    })
+    .from(classroomJournals)
+    .leftJoin(journalPages, eq(journalPages.classroomId, classroomJournals.classroomId))
+    .where(inArray(classroomJournals.classroomId, classroomIds))
+    .groupBy(classroomJournals.classroomId);
+  const mark = (title: string | null, at: number | null) => {
+    const iso = isoOfMs(at);
+    return title === null || iso === null ? null : { title, at: iso };
+  };
+  return new Map(
+    rows.map((r) => [r.classroomId, { lastPage: mark(r.lastTitle, r.lastAt), nextPage: mark(r.nextTitle, r.nextAt) }]),
+  );
+}
 
 function repositoryView(row: GithubJournal): JournalRepository {
   return {
