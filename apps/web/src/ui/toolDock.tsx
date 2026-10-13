@@ -25,7 +25,8 @@
  * and the docks is a few lines tall, so it opens instead as a full-height
  * bottom sheet over a dimmed page — MODAL there (focus trapped, the page
  * scroll locked), the one exception to the non-modal panel (DESIGN.md,
- * "Low screens"; ADR-080 amendment).
+ * "Low screens"; ADR-080 amendment). Which one is decided when the panel
+ * opens and holds until it closes, whatever a rotation does meanwhile.
  */
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
 
@@ -86,7 +87,14 @@ export function ToolDock({
   const trigger = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const panel = useRef<HTMLElement>(null);
-  const sheet = useLowScreen() && sheetWhenLow && open;
+  const low = useLowScreen();
+  // Decided once, when the panel opens, and kept until it closes: a phone
+  // rotated with the panel open must neither drop the sheet's layer (and its
+  // focus) under the teacher's typing, nor trap the focus mid-sentence.
+  const latched = useRef<boolean | null>(null);
+  if (!open) latched.current = null;
+  else latched.current ??= low && sheetWhenLow;
+  const sheet = latched.current === true;
   // The sheet traps the focus and gives it back; the panel's own Escape closes it.
   useLayer(panel, () => close(), { enabled: sheet, escape: false });
   const titleId = useId();

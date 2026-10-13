@@ -693,6 +693,9 @@ const scenes = [
   // full-page capture would pin it to the very bottom of the page.
   { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch" },
   { name: "eval-config-launch-fold", role: "teacher", path: "/evaluations/draft?step=launch", fold: true },
+  // The end of the launch step on a phone (#450): the sticky dock comes to
+  // rest over the page's end spacer, never under the assistant's button.
+  { name: "eval-config-launch-end", role: "teacher", path: "/evaluations/draft?step=launch", fold: true, act: (p) => p.evaluate(() => window.scrollTo(0, document.body.scrollHeight)) },
   { name: "eval-config-launch-scheduled", role: "teacher", path: "/evaluations/scheduled?step=launch" },
   { name: "eval-config-launch-skip", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=launch" },
   {

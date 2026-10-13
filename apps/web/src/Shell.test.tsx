@@ -165,6 +165,25 @@ describe("Shell content width (#93)", () => {
   });
 });
 
+describe("Shell end spacer (#450)", () => {
+  // What floats over the page's bottom edge: the bottom bar, a FAB, a docked
+  // tool (the assistant's button). One spacer after the page clears them all.
+  const END = "h-[calc(var(--bottom-nav-h)+var(--fab-h)+var(--tool-dock-h))]";
+
+  it("follows the page on a frame page with the bottom bar", () => {
+    renderShell({ route: { view: "home" } });
+    const spacer = screen.getByRole("main").nextElementSibling;
+    expect(spacer).toHaveClass(END);
+    expect(spacer).toHaveAttribute("aria-hidden", "true");
+    expect(document.querySelectorAll(`[class~="${END}"]`)).toHaveLength(1);
+  });
+
+  it("follows the page on one without it (the question editor), the assistant's button over it", () => {
+    renderShell({ route: { view: "question", id: "q1" } });
+    expect(screen.getByRole("main").nextElementSibling).toHaveClass(END);
+  });
+});
+
 describe("Shell sidebar", () => {
   it("shows the teacher navigation and the classrooms of the query", () => {
     renderShell();

@@ -15,7 +15,11 @@ const normal = window.matchMedia;
 afterEach(() => vi.stubGlobal("matchMedia", normal));
 
 function dock(sheetWhenLow: boolean) {
-  return render(
+  return render(tool(sheetWhenLow));
+}
+
+function tool(sheetWhenLow: boolean) {
+  return (
     <ToolDock
       icon={Wrench}
       openLabel="Open tool"
@@ -33,7 +37,7 @@ function dock(sheetWhenLow: boolean) {
           </button>
         </>
       )}
-    </ToolDock>,
+    </ToolDock>
   );
 }
 
@@ -68,5 +72,39 @@ describe("ToolDock", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.body.style.overflow).toBe("");
     expect(trigger).toHaveFocus();
+  });
+
+  it("keeps the sheet it opened as while the phone rotates to portrait, focus and all", async () => {
+    lowScreen();
+    const { rerender } = dock(true);
+    await userEvent.click(screen.getByRole("button", { name: "Open tool" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Field" }), "ab");
+    vi.stubGlobal("matchMedia", normal);
+    rerender(tool(true));
+    expect(screen.getByRole("dialog", { name: "Tool" })).toHaveAttribute("aria-modal", "true");
+    expect(screen.getByRole("textbox", { name: "Field" })).toHaveFocus();
+    expect(document.body.style.overflow).toBe("hidden");
+  });
+
+  it("keeps the floating panel it opened as while the phone rotates to landscape: no trap mid-typing", async () => {
+    const { rerender } = dock(true);
+    await userEvent.click(screen.getByRole("button", { name: "Open tool" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Field" }), "ab");
+    lowScreen();
+    rerender(tool(true));
+    expect(screen.getByRole("dialog", { name: "Tool" })).toHaveAttribute("aria-modal", "false");
+    expect(screen.getByRole("textbox", { name: "Field" })).toHaveFocus();
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  it("decides again at the next opening", async () => {
+    const { rerender } = dock(true);
+    const trigger = screen.getByRole("button", { name: "Open tool" });
+    await userEvent.click(trigger);
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    lowScreen();
+    rerender(tool(true));
+    await userEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Tool" })).toHaveAttribute("aria-modal", "true");
   });
 });
