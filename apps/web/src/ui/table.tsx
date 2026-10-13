@@ -172,6 +172,7 @@ function SortHeader<K extends string>({
   children,
   className = "",
   right,
+  width,
 }: {
   k: K;
   /** `null` while the table stands in the order its rows arrived in. */
@@ -179,7 +180,8 @@ function SortHeader<K extends string>({
   onToggle: (k: K) => void;
   children: ReactNode;
   className?: string;
-  right?: boolean;
+  right?: boolean | undefined;
+  width?: string | undefined;
 }) {
   const active = sort !== null && sort.key === k;
   return (
@@ -188,6 +190,7 @@ function SortHeader<K extends string>({
       role="columnheader"
       aria-sort={active ? (sort.dir === 1 ? "ascending" : "descending") : undefined}
       className={cx(T.th, right && "text-right", className)}
+      style={width === undefined ? undefined : { width }}
     >
       <button
         type="button"
@@ -271,6 +274,11 @@ export type Column<K extends string> = {
   right?: boolean;
   /** Extra classes: a `T.col*` priority, a width, `T.stickyEnd`. */
   className?: string;
+  /**
+   * A fixed width (a CSS length), for tables that must line up column for
+   * column (`table-fixed`: the classroom's Activities tables).
+   */
+  width?: string | undefined;
   /** Its role in the row-card mode (`stack`), when the table opts in. */
   stack?: "lead" | "main" | "end" | "sub";
 } & ({ key: K; sortable?: true } | { key: string; sortable: false });
@@ -317,6 +325,7 @@ export function TableHead<K extends string>({
               scope="col"
               role="columnheader"
               className={cx(T.th, c.right && "text-right", c.className, role(c))}
+              style={c.width === undefined ? undefined : { width: c.width }}
             >
               {c.srOnly ? <span className="sr-only">{c.label}</span> : c.label}
             </th>
@@ -327,6 +336,7 @@ export function TableHead<K extends string>({
               sort={sort}
               onToggle={onToggle}
               right={c.right}
+              width={c.width}
               className={cx(c.className, role(c))}
             >
               {c.srOnly ? <span className="sr-only">{c.label}</span> : c.label}

@@ -881,6 +881,8 @@ const activityOf = (p: MockProject): ProjectActivitySummary => ({
   ...projectListDates(p.summary),
   source: p.summary.source,
   distribution: p.summary.distribution,
+  // Like the server: the provisioned repositories, an archived project's included.
+  participantCount: p.repos.filter((r) => r.provisionStatus === "ok" && !r.deleted).length,
 });
 
 /** Every project the staff persona's lists show: none without `?projects=1`, but those created; the archive aside. */

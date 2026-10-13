@@ -979,6 +979,8 @@ const evaluationSummary = (e: MockEvaluation) => ({
   itemCount: e.items.length,
   totalPoints: totalPointsOf(e),
   attemptCount: attemptCountOf(e),
+  // Like the server: the students who took it, never a staff seat (ADR-018).
+  participantCount: e.rows.filter((r) => !r.staff && r.attemptId !== null).length,
   deletionRole: deletionRoleOf(e),
   opensAt: e.opensAt,
   closesAt: e.closesAt,
@@ -1043,6 +1045,8 @@ const evaluationDetail = (e: MockEvaluation) => ({
   items: e.items.map(itemRow),
   ...itemListFacts(e),
   attemptCount: attemptCountOf(e),
+  // Like the server: the students who took it, never a staff seat (ADR-018).
+  participantCount: e.rows.filter((r) => !r.staff && r.attemptId !== null).length,
   deletionRole: deletionRoleOf(e),
   editable: isConfigEditable(e.state, attemptCountOf(e)),
   self: selfOf(e),

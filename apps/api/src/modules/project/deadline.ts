@@ -51,18 +51,23 @@ export const ts = (at: Date): SQL => sql`${at.toISOString()}::timestamptz`;
 export const EFFECTIVE_DEADLINE = sql`coalesce(${projectRepos.deadlineAt}, ${projects.deadlineAt})`;
 
 /**
- * A repository that takes deadline work: GitHub holds it for the project
- * (provisioned, not deleted), and its project is not archived — an archived
- * project takes no new work (#476). Over a `project_repos` row joined to
- * its project; {@link isLive} is its TypeScript twin.
+ * A repository GitHub holds for the project: provisioned, not deleted. What
+ * a list's Participants count (`views.ts`), an archived project's included.
  */
-export const LIVE = and(
+export const PROVISIONED = and(
   isNull(projectRepos.deletedAt),
   eq(projectRepos.provisionStatus, "ok"),
   isNotNull(projectRepos.fullName),
   isNotNull(projectRepos.githubRepoId),
-  isNull(projects.archivedAt),
 )!;
+
+/**
+ * A repository that takes deadline work: {@link PROVISIONED}, and its
+ * project is not archived — an archived project takes no new work (#476).
+ * Over a `project_repos` row joined to its project; {@link isLive} is its
+ * TypeScript twin.
+ */
+export const LIVE = and(PROVISIONED, isNull(projects.archivedAt))!;
 
 /** {@link LIVE}, for a row already read. */
 export function isLive(repo: RepoRow, project: ProjectRow): boolean {

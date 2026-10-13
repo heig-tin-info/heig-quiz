@@ -8,7 +8,8 @@ import { makeCourseSummary } from "../test/fixtures";
 import { EVALUATION_ID, id, liveAt } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { isoDateTime } from "../ui";
-import { EvaluationList, NewEvaluationModal } from "./EvaluationList";
+import { ClassroomActivities } from "../ClassroomActivities";
+import { NewEvaluationModal } from "./NewEvaluationModal";
 
 /*
  * The list on the classroom page: the badges, the one primary action, and
@@ -28,6 +29,7 @@ function summary(over: Partial<EvaluationSummary> = {}): EvaluationSummary {
     itemCount: 4,
     totalPoints: 7,
     attemptCount: 0,
+    participantCount: 0,
     deletionRole: "assistant",
     opensAt: null,
     closesAt: null,
@@ -43,7 +45,7 @@ const list = (rows: EvaluationSummary[]) => ({
   [`GET /app/api/classrooms/${CLASSROOM}/evaluations`]: ok(rows),
 });
 
-describe("EvaluationList", () => {
+describe("the evaluations of the Activities tab", () => {
   it("shows one badge per state: the time left inside a running one, an outline for a released one (ADR-104)", async () => {
     mockFetch(
       list([
@@ -53,7 +55,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 4), state: "released", title: "Quiz 2" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
     expect(await screen.findByText("draft")).toBeInTheDocument();
     // The timer is in the pill, named for a screen reader; a lobby's clock
     // has not started, so it gets none.
@@ -76,7 +78,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 3), state: "running", title: "By hand", startedAt: "2026-10-13T09:15:00.000Z" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
     const row = async (title: string) => within((await screen.findByText(title)).closest("tr")!);
     const planned = await row("Planned");
     expect(planned.getByText("scheduled").className).toContain("text-info");
@@ -101,7 +103,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 2), state: "running", title: "Live quiz" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={navigate} doors={{ onNew: vi.fn() }} />);
 
     await user.click(await screen.findByText("Draft quiz"));
     expect(navigate).toHaveBeenLastCalledWith({ view: "evaluation", id: EVALUATION_ID });
@@ -119,7 +121,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 2), state: "released", title: "Published quiz" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={navigate} doors={{ onNew: vi.fn() }} />);
 
     await user.click(await screen.findByText("Closed quiz"));
     expect(navigate).toHaveBeenLastCalledWith({ view: "grading", evaluationId: EVALUATION_ID });
@@ -139,7 +141,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 2), state: "draft", title: "Draft quiz" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={navigate} doors={{ onNew: vi.fn() }} />);
 
     await user.click(await screen.findByRole("button", { name: /Closed quiz/ }));
     expect(await screen.findByRole("menuitem", { name: "Results" })).toBeInTheDocument();
@@ -170,7 +172,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 2), title: "Draft quiz" }),
       ]),
     });
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
 
     await user.click(await screen.findByRole("button", { name: /Released quiz/ }));
     const refused = await screen.findByRole("menuitem", { name: /Delete evaluation/ });
@@ -187,7 +189,7 @@ describe("EvaluationList", () => {
     const onNew = vi.fn();
     mockFetch(list([]));
     const { unmount } = renderWithProviders(
-      <EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={onNew} />,
+      <ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew }} />,
     );
     await user.click(await screen.findByRole("button", { name: /new evaluation/i }));
     expect(onNew).toHaveBeenCalledOnce();
@@ -195,7 +197,7 @@ describe("EvaluationList", () => {
 
     // With rows, "New evaluation" is the page header's (#295), not the list's.
     mockFetch(list([summary()]));
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={onNew} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew }} />);
     await screen.findByText("Quiz 3");
     expect(screen.queryByRole("button", { name: /new evaluation/i })).toBeNull();
   });
@@ -205,14 +207,14 @@ describe("EvaluationList", () => {
     const onSelect = vi.fn();
     mockFetch(list([]));
     const { unmount } = renderWithProviders(
-      <EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} newProject={{ onSelect }} />,
+      <ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn(), newProject: { onSelect } }} />,
     );
     await user.click(await screen.findByRole("button", { name: /new project/i }));
     expect(onSelect).toHaveBeenCalledOnce();
     unmount();
 
     mockFetch(list([]));
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} newProject={null} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn(), newProject: null }} />);
     await screen.findByRole("button", { name: /new evaluation/i });
     expect(screen.queryByRole("button", { name: /new project/i })).toBeNull();
   });
@@ -247,7 +249,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 2), title: "Alpha", state: "closed" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
     await screen.findByText("Zebra");
 
     // The list arrives the way the classroom works through it, and stays there.
@@ -266,59 +268,23 @@ describe("EvaluationList", () => {
     );
   });
 
-  it("groups by state in lifecycle order or by mode, keeps the sort inside a group, and remembers the choice", async () => {
-    const user = userEvent.setup();
-    mockFetch(
-      list([
-        summary({ title: "Zebra", state: "closed" }),
-        summary({ id: id("evaluation", 2), title: "Alpha", state: "closed", mode: "exercise" }),
-        summary({ id: id("evaluation", 3), title: "Beta", state: "draft" }),
-        summary({ id: id("evaluation", 4), title: "Gamma", state: "running", mode: "poll" }),
-      ]),
-    );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
-    await screen.findByText("Zebra");
-    const group = screen.getByRole("radiogroup", { name: "Group by" });
-    // A band is a row whose one cell spans the table; its count follows the label.
-    const lines = () =>
-      screen
-        .getAllByRole("row")
-        .slice(1)
-        .map((row) => {
-          const cells = within(row).getAllByRole("cell");
-          return cells.length === 1 ? `[${cells[0]!.textContent}]` : (within(cells[0]!).getAllByText(/./)[0]!.textContent ?? "");
-        });
-    expect(lines()).toEqual(["Zebra", "Alpha", "Beta", "Gamma"]);
-
-    await user.click(within(group).getByRole("radio", { name: "Status" }));
-    expect(lines()).toEqual(["[draft1]", "Beta", "[running1]", "Gamma", "[closed2]", "Zebra", "Alpha"]);
-    expect(localStorage.getItem("quiz-evaluations-group")).toBe("status");
-
-    // A column sort applies inside each group.
-    await user.click(screen.getByRole("button", { name: "Title" }));
-    expect(lines()).toEqual(["[draft1]", "Beta", "[running1]", "Gamma", "[closed2]", "Alpha", "Zebra"]);
-
-    await user.click(within(group).getByRole("radio", { name: "Mode" }));
-    expect(lines()).toEqual(["[Exam2]", "Beta", "Zebra", "[Exercise1]", "Alpha", "[Poll1]", "Gamma"]);
-  });
-
-  it("offers no grouping for a single evaluation", async () => {
+  it("offers no layout switch for a single evaluation", async () => {
     mockFetch(list([summary()]));
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
     await screen.findByText("Quiz 3");
-    expect(screen.queryByRole("radiogroup", { name: "Group by" })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "Layout" })).toBeNull();
   });
 
   it("renders the empty and the failed states", async () => {
     mockFetch(list([]));
     const { unmount } = renderWithProviders(
-      <EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />,
+      <ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />,
     );
     expect(await screen.findByText(/no evaluation yet/i)).toBeInTheDocument();
     unmount();
 
     mockFetch({});
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
     expect(await screen.findByText(/evaluation not found/i)).toBeInTheDocument();
   });
 
@@ -356,7 +322,7 @@ describe("EvaluationList", () => {
         ]),
         [`POST /app/api/evaluations/${EVALUATION_ID}/template`]: ok(template),
       });
-      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+      renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
 
       await user.click(await screen.findByRole("button", { name: /A poll/ }));
       await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument());
@@ -454,7 +420,7 @@ describe("EvaluationList", () => {
           summary({ id: id("evaluation", 5), title: "Scheduled behind", state: "scheduled", ...BEHIND }),
         ]),
       );
-      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+      renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
       await screen.findByText("Behind draft");
       const badges = screen.getAllByRole("button", { name: /from its template/i });
       expect(badges.map((b) => b.getAttribute("aria-label"))).toEqual([
@@ -477,7 +443,7 @@ describe("EvaluationList", () => {
           return ok({ detail: {}, deprecatedItems: [] });
         },
       });
-      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} onNew={vi.fn()} />);
+      renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={navigate} doors={{ onNew: vi.fn() }} />);
 
       await user.click(await screen.findByRole("button", { name: /from its template/i }));
       // The badge opens the confirmation, not the evaluation.
@@ -513,7 +479,7 @@ describe("EvaluationList", () => {
           unlinkedItems: [{ position: 0, questionId: id("question", 0), internalName: "sizeof-ptr" }],
         }),
       });
-      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+      renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
       await user.click(await screen.findByRole("button", { name: /from its template/i }));
       const dialog = await screen.findByRole("dialog");
       expect(await within(dialog).findByText(/only the new revision is recorded/i)).toBeInTheDocument();
@@ -542,7 +508,7 @@ describe("Rename from a row's menu (#804)", () => {
         return ok({});
       },
     });
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
 
     await user.click(await screen.findByRole("button", { name: /Quiz 3/ }));
     await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
@@ -581,7 +547,7 @@ describe("Rename from a row's menu (#804)", () => {
       ...list([summary({ title: "Quiz 3" })]),
       [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: { status: 409, body: { message: "Refused by the server" } },
     });
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
     await user.click(await screen.findByRole("button", { name: /Quiz 3/ }));
     await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
     const dialog = await screen.findByRole("dialog", { name: /Rename evaluation/ });

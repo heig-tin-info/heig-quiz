@@ -9,9 +9,9 @@ import { randomUUID } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import { GroupConsequences, ProjectDetail } from "@quiz/contracts";
+import { GroupConsequences, ProjectActivitySummary, ProjectDetail } from "@quiz/contracts";
 
-import { projectRepos, pushReceipts } from "../../db/schema.js";
+import { enrollments, projectGroupMembers, projectRepos, pushReceipts } from "../../db/schema.js";
 import { claimGroupSyncWork, runGroupSyncJob } from "./groupSync.js";
 import { accept, call, config, freshOrgId, groupOf, groupProject, moveTo, newStudent, NOW, repoRows, server, setOk, staff, useGroupWorld } from "./groupTesting.js";
 import { projectTick } from "./jobs.js";
@@ -133,5 +133,37 @@ describe("the project page of a group project (M3-16b)", () => {
     const rowOf = (s: { id: string }) => rows.find((r) => r.student.enrollmentId === line(s))!;
     expect([rowOf(cid!).group, rowOf(cid!).repo?.fullName]).toEqual([null, own]);
     expect([rowOf(ben!).group?.name, rowOf(ben!).repo?.fullName, rowOf(ben!).repo?.accessToRevoke]).toEqual(["Group 1", a, true]);
+  });
+
+  it("counts a group's members as the list's Participants: an unclaimed seat and a departing one in, a staff seat and a group with no repository out (ADR-018)", async () => {
+    const [ana, ben, cid] = [await newStudent(), await newStudent(), await newStudent()];
+    const { project, room } = await groupProject([ana!, ben!, cid!], [[0, 1], [2]]);
+    const participants = async () => {
+      const res = await staff("GET", `/app/api/classrooms/${room.id}/projects`);
+      expect(res.statusCode, res.body).toBe(200);
+      return ProjectActivitySummary.array().parse(res.json()).find((r) => r.id === project.id)!.participantCount;
+    };
+    // Nobody accepted: no repository, no participant.
+    expect(await participants()).toBe(0);
+    expect((await accept(project.id, ana!)).statusCode).toBe(200);
+    // Group 1's repository: Ana and Ben; Cid's Group 2 has none.
+    expect(await participants()).toBe(2);
+    const groupId = (await repoRows(project.id))[0]!.groupId!;
+    const seat = async (staffSeat: boolean, departingAt: Date | null = null) => {
+      const id = randomUUID();
+      await server.app.db.insert(enrollments).values({
+        id,
+        classroomId: room.id,
+        nom: "Seat",
+        prenom: staffSeat ? "Staff" : "Unclaimed",
+        email: `seat-${id}@heig.test`,
+        staff: staffSeat,
+      });
+      await server.app.db.insert(projectGroupMembers).values({ id: randomUUID(), projectId: project.id, groupId, enrollmentId: id, departingAt });
+    };
+    await seat(false);
+    await seat(false, new Date(NOW));
+    await seat(true);
+    expect(await participants()).toBe(4);
   });
 });

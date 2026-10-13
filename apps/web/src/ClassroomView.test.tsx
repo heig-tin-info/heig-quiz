@@ -65,6 +65,7 @@ const summary = (over: Partial<EvaluationSummary>): EvaluationSummary => ({
   itemCount: 4,
   totalPoints: 7,
   attemptCount: 0,
+  participantCount: 0,
   deletionRole: "assistant",
   opensAt: null,
   closesAt: null,
@@ -220,7 +221,7 @@ describe("ClassroomView", () => {
     expect(screen.getByRole("tab", { name: /Roster/ })).toHaveTextContent("2");
   });
 
-  it("names the tab Activities, with no count, and counts the evaluations under their heading", async () => {
+  it("names the tab Activities, with no count, and counts the exams under their heading", async () => {
     mockFetch({
       [`GET ${ROOM}`]: ok(makeClassroomDetail()),
       [`GET ${EVALUATIONS}`]: ok([summary({ title: "Test 0" }), summary({ title: "Test 1" })]),
@@ -228,17 +229,17 @@ describe("ClassroomView", () => {
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
     const tab = await screen.findByRole("tab", { name: /Activities/ });
     expect(tab).toHaveTextContent(/^Activities$/);
-    expect(await screen.findByRole("heading", { name: /Evaluations/ })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: /Exams/ })).toBeVisible();
     expect(await screen.findByText("Test 1")).toBeVisible();
-    expect(screen.getByRole("region", { name: /Evaluations/ })).toHaveTextContent(/Evaluations\s*2/);
+    expect(screen.getByRole("region", { name: /Exams/ })).toHaveTextContent(/Exams\s*2/);
   });
 
-  it("keeps the Evaluations heading above the empty state", async () => {
+  it("draws the empty state alone when the classroom has no activity", async () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${EVALUATIONS}`]: ok([]) });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
     await screen.findByRole("tab", { name: /Activities/ });
     await screen.findByText("No evaluation yet");
-    expect(screen.getByRole("heading", { name: /Evaluations/ })).toBeVisible();
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
   it("moves between the two tabs and writes the choice to the URL", async () => {

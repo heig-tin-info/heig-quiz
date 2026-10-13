@@ -53,6 +53,7 @@ function project(over: Partial<ProjectActivitySummary> = {}): ProjectActivitySum
     deadlineAt: "2026-10-05T22:00:00.000Z",
     source: { fullName: "heig/lab-source" },
     distribution: { fullName: "heig/lab-squashed" },
+    participantCount: 0,
     ...over,
   };
 }

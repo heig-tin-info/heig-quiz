@@ -74,6 +74,7 @@ const LAB: ProjectActivitySummary = {
   deadlineAt: liveAt(7 * 24 * 60 * MIN),
   source: { fullName: "heig/lab-source" },
   distribution: { fullName: "heig/lab-squashed" },
+  participantCount: 0,
 };
 const LAB3: ProjectActivitySummary = { ...LAB, id: id("project", 2), title: "Labo 3", state: "draft", phase: "draft" };
 

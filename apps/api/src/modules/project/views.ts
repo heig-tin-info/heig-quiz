@@ -3,17 +3,17 @@
  * project, and the rows of the Activities lists. Never a student's: the
  * student view of a project is M3-09's, its one exit (N-SEC-20).
  */
-import { and, desc, eq, inArray, isNotNull, isNull, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, not, sql, type SQL } from "drizzle-orm";
 
 import type { ProjectActivitySummary, ProjectSummary } from "@quiz/contracts";
 import { editableProjectFields, projectListDates, projectPhase, type ProjectLifeLike } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, projectRepos, projects } from "../../db/schema.js";
+import { classrooms, courses, enrollments, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
 import { staffAccess, type Caller } from "../guards.js";
 import { awaitsValidation } from "./criterionGrades.js";
-import { LIVE } from "./deadline.js";
+import { LIVE, PROVISIONED } from "./deadline.js";
 import { STUDENT_REPO } from "./repos.js";
 import { finalOf, scoreFacts } from "./scores.js";
 
@@ -106,6 +106,33 @@ async function phaseCounts(db: Db, projectIds: string[]): Promise<Map<string, Ph
   return counts;
 }
 
+/**
+ * The Participants of every project of `projectIds`, in one read (ADR-018,
+ * amended 2026-10-13): the people behind its provisioned (`PROVISIONED`)
+ * student (`STUDENT_REPO`) repositories — an individual repository's
+ * owner, a group's non-staff members (a seat not claimed yet, one on its
+ * way out included). A repository whose group was deleted counts its owner.
+ * A member is their account once claimed, so no one counts twice; an
+ * archived project keeps its count. A project with none is absent.
+ */
+async function participantCounts(db: Db, projectIds: string[]): Promise<Map<string, number>> {
+  if (projectIds.length === 0) return new Map();
+  const person = sql`case when ${projectRepos.groupId} is null then ${projectRepos.userId}
+    else coalesce(${enrollments.userId}, ${enrollments.id}) end`;
+  const rows = await db
+    .select({
+      projectId: projectRepos.projectId,
+      n: sql<number>`count(distinct ${person})`.mapWith(Number),
+    })
+    .from(projectRepos)
+    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+    .leftJoin(projectGroupMembers, eq(projectGroupMembers.groupId, projectRepos.groupId))
+    .leftJoin(enrollments, and(eq(enrollments.id, projectGroupMembers.enrollmentId), not(enrollments.staff)))
+    .where(and(inArray(projectRepos.projectId, projectIds), PROVISIONED, STUDENT_REPO))
+    .groupBy(projectRepos.projectId);
+  return new Map(rows.map((r) => [r.projectId, r.n]));
+}
+
 /** The Activities rows of the projects `where` selects, newest first. */
 async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActivitySummary[]> {
   const rows = await db
@@ -131,10 +158,8 @@ async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActi
     .where(where)
     .orderBy(desc(projects.createdAt));
   // Only a locked project's phase reads its repositories (`projectPhase`): the counts of those alone.
-  const counts = await phaseCounts(
-    db,
-    rows.filter((r) => r.state === "locked").map((r) => r.id),
-  );
+  const locked = rows.filter((r) => r.state === "locked").map((r) => r.id);
+  const [counts, participants] = await Promise.all([phaseCounts(db, locked), participantCounts(db, rows.map((r) => r.id))]);
   return rows.map((r) => {
     const dates = projectListDates(r);
     return {
@@ -154,6 +179,7 @@ async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActi
       deadlineAt: isoOrNull(dates.deadlineAt),
       source: { fullName: r.source },
       distribution: r.distribution === null ? null : { fullName: r.distribution },
+      participantCount: participants.get(r.id) ?? 0,
     };
   });
 }

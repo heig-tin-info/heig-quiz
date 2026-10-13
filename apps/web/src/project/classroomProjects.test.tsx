@@ -6,15 +6,17 @@ import type { ProjectActivitySummary } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { isoDateTime } from "../ui";
-import { ProjectGroup } from "./ProjectGroup";
+import { ClassroomActivities } from "../ClassroomActivities";
 
 /*
- * The classroom's Projects group (M3-10): drawn only while the classroom has
- * a project, a failure with its retry, a row per project that opens its
- * page (M3-12).
+ * The Projects table of a classroom's Activities tab (M3-10): drawn only
+ * while the classroom has a project, a failure with its retry, a row per
+ * project that opens its page (M3-12).
  */
 
 const PROJECTS = "/app/api/classrooms/r1/projects";
+/** The classroom has no evaluation: the projects alone. */
+const NO_EVALUATIONS = { "GET /app/api/classrooms/r1/evaluations": ok([]) };
 const ROOM = { id: "00000000-0000-4000-8000-0000000000aa", name: "PRG1-2026", courseCode: "PRG1" };
 const project = (n: number, over: Partial<ProjectActivitySummary> = {}): ProjectActivitySummary => ({
   kind: "project",
@@ -28,18 +30,20 @@ const project = (n: number, over: Partial<ProjectActivitySummary> = {}): Project
   deadlineAt: "2026-10-05T22:00:00.000Z",
   source: { fullName: "heig/lab-source" },
   distribution: { fullName: "heig/lab-squashed" },
+  participantCount: 5,
   ...over,
 });
 
 function renderGroup(locale: "en" | "fr" = "en") {
   const navigate = vi.fn();
-  renderWithProviders(<ProjectGroup classroomId="r1" navigate={navigate} />, { locale });
+  renderWithProviders(<ClassroomActivities classroomId="r1" navigate={navigate} doors={{ onNew: vi.fn() }} />, { locale });
   return navigate;
 }
 
-describe("the classroom's Projects group", () => {
+describe("the classroom's Projects table", () => {
   it("lists each project with its state, its start and its deadline, and opens it", async () => {
     const { calls } = mockFetch({
+      ...NO_EVALUATIONS,
       [`GET ${PROJECTS}`]: ok([
         project(1, { state: "locked" }),
         project(2),
@@ -55,8 +59,9 @@ describe("the classroom's Projects group", () => {
     expect(within(rows[1]!).getByText("published")).toBeInTheDocument();
     expect(within(rows[2]!).getByText("draft")).toBeInTheDocument();
     expect(within(region).getByRole("columnheader", { name: /Deadline/ })).toBeInTheDocument();
-    // No count of repositories or scores: those come with M3-08.
-    expect(within(region).getAllByRole("columnheader")).toHaveLength(4);
+    // Title, start, deadline, participants and the actions: no questions nor points.
+    expect(within(region).getAllByRole("columnheader")).toHaveLength(5);
+    expect(within(region).getByRole("columnheader", { name: /Participants/ })).toBeInTheDocument();
     await userEvent.click(within(region).getByText("Labo 2"));
     expect(navigate).toHaveBeenCalledWith({ view: "project", id: project(2).id });
     expect(calls.every((c) => c.method === "GET")).toBe(true);
@@ -66,6 +71,7 @@ describe("the classroom's Projects group", () => {
     // An hour past three days: the badge floors to the minute, and the render is not instant.
     const inThreeDays = new Date(Date.now() + 3 * 86_400_000 + 3_600_000).toISOString();
     mockFetch({
+      ...NO_EVALUATIONS,
       [`GET ${PROJECTS}`]: ok([
         project(1, { title: "Undated", state: "draft", startAt: null, deadlineAt: null }),
         project(2, { title: "Planned", state: "draft" }),
@@ -97,6 +103,7 @@ describe("the classroom's Projects group", () => {
 
   it("tells a scheduled draft from one in preparation: blue, with its start in sight (#795)", async () => {
     mockFetch({
+      ...NO_EVALUATIONS,
       [`GET ${PROJECTS}`]: ok([
         project(1, { title: "Preparing", state: "draft", startAt: null }),
         project(2, { title: "Planned", state: "draft", phase: "scheduled" }),
@@ -114,6 +121,7 @@ describe("the classroom's Projects group", () => {
 
   it("reads the badge from the phase: a locked project is graded in amber, released in outline green (ADR-104)", async () => {
     mockFetch({
+      ...NO_EVALUATIONS,
       [`GET ${PROJECTS}`]: ok([
         project(1, { title: "Waiting", state: "locked" }),
         project(2, { title: "Graded", state: "locked", phase: "graded" }),
@@ -134,6 +142,7 @@ describe("the classroom's Projects group", () => {
 
   it("links the repositories in sight on the row, without opening the project (M3-14a, M3-14h)", async () => {
     mockFetch({
+      ...NO_EVALUATIONS,
       [`GET ${PROJECTS}`]: ok([
         project(1, { title: "Built" }),
         project(2, { title: "Building", distribution: null }),
@@ -159,8 +168,8 @@ describe("the classroom's Projects group", () => {
     expect(within(building!).queryByRole("link", { name: "Distribution repository" })).toBeNull();
   });
 
-  it("draws nothing for a classroom without a project", async () => {
-    const { fetchMock } = mockFetch({ [`GET ${PROJECTS}`]: ok([]) });
+  it("draws no table for a classroom without a project", async () => {
+    const { fetchMock } = mockFetch({ ...NO_EVALUATIONS, [`GET ${PROJECTS}`]: ok([]) });
     renderGroup();
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
@@ -168,7 +177,7 @@ describe("the classroom's Projects group", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 
-  it("draws nothing while the list loads: whether the group exists is not known yet", () => {
+  it("draws no table while the lists load: whether there is a project is not known yet", () => {
     mockFetch({});
     vi.mocked(fetch).mockImplementation(() => new Promise<Response>(() => {}));
     renderGroup();
@@ -177,7 +186,7 @@ describe("the classroom's Projects group", () => {
   });
 
   it("draws nothing on a platform without projects (404)", async () => {
-    const { fetchMock } = mockFetch({ [`GET ${PROJECTS}`]: fail(404, { message: "Not found" }) });
+    const { fetchMock } = mockFetch({ ...NO_EVALUATIONS, [`GET ${PROJECTS}`]: fail(404, { message: "Not found" }) });
     renderGroup();
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
@@ -185,7 +194,7 @@ describe("the classroom's Projects group", () => {
   });
 
   it("says when the list failed, with a retry", async () => {
-    mockFetch({ [`GET ${PROJECTS}`]: fail(500, { message: "boom" }) });
+    mockFetch({ ...NO_EVALUATIONS, [`GET ${PROJECTS}`]: fail(500, { message: "boom" }) });
     renderGroup();
     expect(await screen.findByText("Could not load the projects")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
@@ -193,6 +202,7 @@ describe("the classroom's Projects group", () => {
 
   it("speaks French", async () => {
     mockFetch({
+      ...NO_EVALUATIONS,
       [`GET ${PROJECTS}`]: ok([
         project(1, { state: "locked" }),
         project(2, { state: "locked", phase: "graded" }),
@@ -218,6 +228,7 @@ describe("Rename from a project row's menu (#804)", () => {
       return ok({});
     };
     const { calls } = mockFetch({
+      ...NO_EVALUATIONS,
       [`GET ${PROJECTS}`]: () =>
         ok([
           project(1, { title: names[project(1).id]!, state: "draft" }),
