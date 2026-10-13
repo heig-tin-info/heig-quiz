@@ -100,7 +100,11 @@ function expectedAnswers(q: ByQuestion): ReactNode[] {
     ));
   }
   const expected = (q.solution as Partial<ShortSolution> | null)?.expected;
-  return Array.isArray(expected) ? expected : [];
+  return (Array.isArray(expected) ? expected : []).map((text, i) => (
+    <span key={i} className="font-mono">
+      {text}
+    </span>
+  ));
 }
 
 /** An essay's model answer, when the teacher wrote one. */
@@ -279,7 +283,7 @@ function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean
       {revealed && hasExpected ? (
         <p className={cx("text-fg-muted", s.note)}>
           {t("correction.expected")}{" "}
-          <span className="font-mono font-semibold text-success">
+          <span className="font-semibold text-success">
             {expected.map((answer, i) => (
               <Fragment key={i}>
                 {i > 0 ? " · " : null}
@@ -465,25 +469,30 @@ export function CorrectionProgram({
       {key === null ? null : (
         <figure className="flex min-w-0 flex-col gap-2">
           <figcaption className={cx("font-medium text-fg-muted", s.caption)}>{label}</figcaption>
-          <pre
-            // Readable, a focusable scroll region: it runs past the screen
-            // edge on a phone, and a keyboard cannot reach into a container
-            // that holds nothing focusable (W10). Hatched, it is not there.
-            {...(shown === null
-              ? { "aria-hidden": true }
-              : { tabIndex: 0, role: "region", "aria-label": label })}
-            className={cx(
-              "overflow-x-auto rounded-card border border-line font-mono leading-relaxed",
-              s.code,
-              revealed
-                ? "bg-surface"
-                : shown !== null
-                  ? "bg-surface-2"
-                  : "select-none bg-[repeating-linear-gradient(135deg,var(--surface-2)_0_8px,var(--surface-3)_8px_16px)] text-transparent",
-            )}
-          >
-            {shown ?? key}
-          </pre>
+          {shown === null ? (
+            // Hidden with nothing to start from: a hatched block of a fixed
+            // height, never the reference itself made transparent.
+            <div
+              aria-hidden
+              className="h-40 rounded-card border border-line bg-[repeating-linear-gradient(135deg,var(--surface-2)_0_8px,var(--surface-3)_8px_16px)]"
+            />
+          ) : (
+            <pre
+              // A focusable scroll region: it runs past the screen edge on a
+              // phone, and a keyboard cannot reach into a container that
+              // holds nothing focusable (W10).
+              tabIndex={0}
+              role="region"
+              aria-label={label}
+              className={cx(
+                "overflow-x-auto rounded-card border border-line font-mono leading-relaxed",
+                s.code,
+                revealed ? "bg-surface" : "bg-surface-2",
+              )}
+            >
+              {shown}
+            </pre>
+          )}
         </figure>
       )}
       {q.casePassRate.length > 0 ? (
@@ -513,14 +522,25 @@ export function CorrectionProgram({
   );
 }
 
+/** One piece of a question the correction draws, at either density. */
+type Piece = (props: { q: ByQuestion; revealed: boolean; density: Density }) => ReactNode;
+
 /**
- * The types whose key the correction draws itself: an mcq's letters, a
- * cloze's blanks, a short or math answer's expected answers, a categorize
- * board. The Results tab leaves any other type's statement and key to the
- * type's own review.
+ * The types whose key the correction draws itself, and how: an mcq's
+ * letters, a cloze's blanks IN its statement, a short or math answer's
+ * expected answers over the answer groups, a categorize board. `statement`
+ * replaces the prompt; `answers` replaces the answer groups, `null` for none.
+ * The one place to add a type. The Results tab leaves any other type's
+ * statement and key to the type's own review.
  */
-const DRAWS_KEY = new Set(["mcq", "cloze", "short", "math", "categorize"]);
-export const drawsKey = (type: string): boolean => DRAWS_KEY.has(type);
+const DRAWN: Partial<Record<string, { statement?: Piece; answers?: Piece | null }>> = {
+  mcq: { answers: Choices },
+  cloze: { statement: ClozeText, answers: null },
+  short: {},
+  math: {},
+  categorize: { answers: CategorizeKey },
+};
+export const drawsKey = (type: string): boolean => DRAWN[type] !== undefined;
 
 /**
  * The statement: the prompt, or a cloze's text with its blanks in place. A
@@ -538,14 +558,14 @@ export function CorrectionStatement({
 }) {
   const t = useT();
   const prompt = promptOf(q);
-  const statement =
-    q.item.type === "cloze" ? (
-      <ClozeText q={q} revealed={revealed} density={density} />
-    ) : prompt ? (
-      <div className={SCALE[density].prompt}>
-        <MarkdownView source={prompt} inline />
-      </div>
-    ) : null;
+  const Statement = DRAWN[q.item.type]?.statement;
+  const statement = Statement ? (
+    <Statement q={q} revealed={revealed} density={density} />
+  ) : prompt ? (
+    <div className={SCALE[density].prompt}>
+      <MarkdownView source={prompt} inline />
+    </div>
+  ) : null;
   if (!q.parameterized || statement === null) return statement;
   return (
     <div className="flex flex-col gap-2">
@@ -572,10 +592,9 @@ export function CorrectionAnswers({
   revealed: boolean;
   density?: Density;
 }) {
-  if (q.item.type === "mcq") return <Choices q={q} revealed={revealed} density={density} />;
-  if (q.item.type === "cloze") return null;
-  if (q.item.type === "categorize") return <CategorizeKey q={q} revealed={revealed} density={density} />;
-  return <AnswerRows q={q} revealed={revealed} density={density} />;
+  const drawn = DRAWN[q.item.type]?.answers;
+  const Answers = drawn === undefined ? AnswerRows : drawn;
+  return Answers ? <Answers q={q} revealed={revealed} density={density} /> : null;
 }
 
 export function CorrectionQuestion({

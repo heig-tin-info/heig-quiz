@@ -83,6 +83,8 @@ describe("CorrectionQuestion, a program", () => {
     draw({ ...CODE, student: { prompt: "p", segments: [] } }, false);
     expect(screen.getByText("Reference solution, hidden until the answers are revealed")).toBeVisible();
     expect(screen.queryByRole("region", { name: /Reference solution/ })).toBeNull();
+    // The hidden reference is not in the page at all, not even transparent.
+    expect(document.body.textContent).not.toContain("printf");
   });
 });
 
