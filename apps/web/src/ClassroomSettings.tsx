@@ -12,7 +12,7 @@
  * squint test must find alone. Archive restores, so it stays `secondary`.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, School, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ClassroomPatch, type ClassroomDetail } from "@quiz/contracts";
@@ -28,7 +28,7 @@ import { useErrorToast, useToast } from "./notify";
 import { useIsCourseOwner } from "./course/parts";
 import { invalidateHint } from "./realtime/hints";
 import type { Navigate } from "./router";
-import { Button, Card, Field, FormDialog, SectionHeading, SettingRow } from "./ui";
+import { Button, Card, ClassroomIcon, Field, FormDialog, SectionHeading, SettingRow } from "./ui";
 
 export function ClassroomSettings({
   room,
@@ -47,7 +47,7 @@ export function ClassroomSettings({
   return (
     <div className="max-w-3xl space-y-8">
       <section className="space-y-3">
-        <SectionHeading icon={School} title={t("classroomSettings.general")} />
+        <SectionHeading icon={ClassroomIcon} title={t("classroomSettings.general")} />
         <Card className="divide-y divide-line px-5">
           <SettingRow title={t("classroomSettings.name")} desc={room.name}>
             <Button variant="secondary" onClick={() => setRenaming(true)}>

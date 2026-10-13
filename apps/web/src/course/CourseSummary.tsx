@@ -1,10 +1,10 @@
-import { FileStack, School } from "lucide-react";
+import { FileStack } from "lucide-react";
 
 import type { CourseSummary } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import { Actions, Card, cx, Dash, PeopleStack, SectionHeading, T } from "../ui";
+import { Actions, Card, ClassroomIcon, cx, Dash, PeopleStack, SectionHeading, T } from "../ui";
 import { CourseIcon } from "./CourseIcon";
 import { CoursePools } from "./CoursePools";
 import { ArchivedClassrooms, ClassroomRow, HiddenBadge, useClassroomSignals } from "./parts";
@@ -144,7 +144,7 @@ export function CourseRow({
                 onClick={() => navigate({ view: "classroom", id: room.id })}
                 className="rounded-field px-1.5 py-0.5 font-medium transition-colors hover:bg-surface-2 hover:underline"
               >
-                <School className="mr-1 inline size-3.5 text-fg-faint" />
+                <ClassroomIcon className="mr-1 inline size-3.5 text-fg-faint" />
                 {room.name}
               </button>
             ))}

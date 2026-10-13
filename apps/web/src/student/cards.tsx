@@ -25,7 +25,6 @@ import {
   PencilLine,
   Presentation,
   Repeat,
-  School,
   Timer,
   Users,
 } from "lucide-react";
@@ -47,6 +46,7 @@ import { routeToPath, type Navigate, type Route } from "../router";
 import {
   Badge,
   Card,
+  ClassroomIcon,
   cx,
   EmptyState,
   isoDateParts,
@@ -531,7 +531,7 @@ function ClassroomCard({
       aria-label={room.name}
       className="flex flex-wrap items-center gap-x-5 gap-y-2 p-5"
     >
-      <School className="size-5 shrink-0 text-fg-faint" aria-hidden />
+      <ClassroomIcon className="size-5 shrink-0 text-fg-faint" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="text-[15px] font-semibold tracking-tight">{room.name}</p>
         <p className="text-sm text-fg-muted">

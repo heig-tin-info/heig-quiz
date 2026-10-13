@@ -26,7 +26,7 @@
  *   - Finish: cards on the canvas, hairlines, no shadow.
  */
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, School } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { useEffect } from "react";
 
 import type { StudentActivities, StudentActivityCard, StudentClassroomPage } from "@quiz/contracts";
@@ -44,6 +44,7 @@ import {
   Badge,
   Button,
   Card,
+  ClassroomIcon,
   EmptyState,
   PageError,
   PageHeader,
@@ -139,7 +140,7 @@ export function StudentClassroom({
   if (isNotFound(page.error)) {
     return (
       <EmptyState
-        icon={School}
+        icon={ClassroomIcon}
         titleAs="h1"
         title={t("classrooms.notFound")}
         action={

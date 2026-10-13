@@ -1,8 +1,8 @@
-import { CalendarRange, Dumbbell, Library, School, Trophy, UserRound, Vote } from "lucide-react";
+import { CalendarRange, Dumbbell, Library, Trophy, UserRound, Vote } from "lucide-react";
 
 import type { Dict } from "./i18n";
 import { bottomSlotOf, type BottomSlotId, type Route, type StudentSlotId, type TeacherSlotId } from "./router";
-import type { IconType } from "./ui";
+import { ClassroomIcon, type IconType } from "./ui";
 
 /**
  * The bottom navigation bar on a phone: its two sets of slots, the student's
@@ -28,7 +28,7 @@ export interface BottomSlot<Id extends BottomSlotId = BottomSlotId> {
 /** The student's, in the order they are drawn; Drill (#317) in the middle. */
 export const STUDENT_SLOTS: readonly BottomSlot<StudentSlotId>[] = [
   { id: "activities", route: { view: "home" }, icon: CalendarRange, label: "nav.activities" },
-  { id: "courses", route: { view: "studentCourses" }, icon: School, label: "nav.courses" },
+  { id: "courses", route: { view: "studentCourses" }, icon: ClassroomIcon, label: "nav.courses" },
   { id: "drill", route: { view: "drill" }, icon: Dumbbell, label: "nav.drill" },
   { id: "grades", route: { view: "studentGrades" }, icon: Trophy, label: "bnav.grades" },
   { id: "profile", route: { view: "settings" }, icon: UserRound, label: "bnav.profile" },
@@ -45,7 +45,7 @@ export const TEACHER_SLOTS: readonly BottomSlot<TeacherSlotId>[] = [
   { id: "activities", route: { view: "activities" }, icon: CalendarRange, label: "nav.activities" },
   { id: "courses", route: { view: "home" }, icon: Library, label: "nav.courses" },
   { id: "polls", route: { view: "polls" }, icon: Vote, label: "poll.nav" },
-  { id: "classrooms", route: { view: "classrooms" }, icon: School, label: "classrooms.title" },
+  { id: "classrooms", route: { view: "classrooms" }, icon: ClassroomIcon, label: "classrooms.title" },
   { id: "profile", route: { view: "settings" }, icon: UserRound, label: "bnav.profile" },
 ];
 

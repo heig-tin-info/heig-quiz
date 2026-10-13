@@ -51,6 +51,8 @@
 //             layers + page.
 //   groupBy   the "Group by" caption and pills over a list (GroupBySwitch),
 //             on controls.
+//   icons     the app's own glyphs on lucide's grid (ClassroomIcon).
+//             Imports no sibling.
 //
 // `QueryError`, `PageError` and `FormError` come from the app side (they read an
 // `ApiError`), so that nothing under `ui/` imports the HTTP client.
@@ -80,6 +82,7 @@ export * from "./disclosure";
 export * from "./heldButton";
 export * from "./groupBy";
 export * from "./toolDock";
+export * from "./icons";
 export { FormError, PageError, QueryError } from "../queryError";
 export * from "./ring";
 export * from "./useNumberDraft";

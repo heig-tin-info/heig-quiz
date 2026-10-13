@@ -1,4 +1,4 @@
-import { FileStack, FolderTree, Library, Plus, School, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
+import { FileStack, FolderTree, Library, Plus, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type { CourseSummary } from "@quiz/contracts";
@@ -12,6 +12,7 @@ import {
   Badge,
   Button,
   Card,
+  ClassroomIcon,
   EmptyState,
   type MenuItem,
   PageError,
@@ -155,7 +156,7 @@ function Course({
           items={[
             // No number while a list is loading or failed: a "0" that means
             // "not known yet" is worse than no count at all.
-            { value: "classrooms", label: t("classrooms.title"), count: course.classrooms.length, icon: School },
+            { value: "classrooms", label: t("classrooms.title"), count: course.classrooms.length, icon: ClassroomIcon },
             { value: "templates", label: t("courses.tab.templates"), count: templates.data?.length, icon: FileStack },
             { value: "pools", label: t("courses.tab.pools"), count: pools?.length, icon: FolderTree },
             { value: "members", label: t("courses.tab.members"), count: course.staff.length, icon: Users },
