@@ -18,12 +18,13 @@ import { useConfirm } from "../confirm";
 import { useT, type Locale } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
 import { Button, Chip, Field, FormError, Sheet, Textarea } from "../ui";
+import { FillWithAi, fillEmpty } from "./ConceptFillAi";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
 import { ConceptRelations } from "./ConceptRelations";
-import { conceptName, refName } from "./names";
+import { conceptName, langName, refName } from "./names";
 
 type Side = { label: string; qualifier: string; description: string };
-type Sides = Record<ConceptLang, Side>;
+export type Sides = Record<ConceptLang, Side>;
 
 const sidesOf = (c: AdminConcept): Sides => ({
   fr: { label: c.labels.fr ?? "", qualifier: c.qualifiers.fr, description: c.descriptions.fr },
@@ -170,7 +171,8 @@ function Aliases({ concept }: { concept: AdminConcept }) {
  * it: **Delete** when nothing refers to it, otherwise **Merge into…**, which
  * opens the dialog that folds it into a validated concept (a concept in use
  * is merged, never deleted: ADR-081 third addendum §7). A merge waits for the
- * edits to be saved, so it never drops them silently.
+ * edits to be saved, so it never drops them silently. "Fill with AI" puts a
+ * model's proposal in the empty fields; Save stays the only write.
  */
 export function ConceptSheet({
   concept,
@@ -273,10 +275,11 @@ export function ConceptSheet({
       }
     >
       <div className="space-y-8">
+        <FillWithAi conceptId={concept.id} sides={sides} onFill={(proposal) => setSides((s) => fillEmpty(s, proposal))} />
         {CONCEPT_LANGS.map((lang) => (
           <fieldset key={lang} className="space-y-4">
             <legend className="mb-3 text-base font-bold tracking-tight">
-              {lang === "fr" ? t("admin.concepts.lang.fr") : t("admin.concepts.lang.en")}
+              {langName(t, lang)}
             </legend>
             <Field
               label={t("admin.concepts.label")}

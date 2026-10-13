@@ -88,6 +88,7 @@ import {
   ConceptList,
   ConceptSuggestions,
   ConceptDuplicatesAi,
+  ConceptFill,
   ConceptWriteRefusal,
   KioskStation,
   PairPreview,
@@ -1175,6 +1176,20 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     expect(pairs.length).toBeGreaterThan(0);
     const ids = new Set(before.concepts.map((c) => c.id));
     for (const p of pairs) expect([ids.has(p.a), ids.has(p.b), p.a !== p.b]).toEqual([true, true, true]);
+    expect(await queue()).toEqual(before);
+  });
+
+  it("proposes the empty fields of a concept with Fill with AI, a taken label as taken, writing nothing", async () => {
+    const before = await queue();
+    const twos = before.concepts.find((c) => c.labels.fr === "Complément à 2")!;
+    const form = { fr: { label: "Complément à 2", qualifier: "", description: "" }, en: { label: "", qualifier: "", description: "" } };
+    const res = await call("POST", `/app/api/admin/concepts/${twos.id}/fill`, form);
+    expect(res.status).toBe(200);
+    expect(issuesOf(ConceptFill, res.body)).toEqual([]);
+    const fill = res.body as unknown as ConceptFill;
+    expect(fill.fr.label).toBeNull();
+    expect(fill.en.taken?.label).toBe("Two's complement");
+    expect(fill.en.description).not.toBeNull();
     expect(await queue()).toEqual(before);
   });
 

@@ -8,8 +8,10 @@
  * admin dropped (`c01`, dropped as a chapter label, is one from the start).
  */
 import {
+  CONCEPT_FILL_CLOSE_MAX,
   ConceptAliasAdd,
   ConceptCreate,
+  ConceptFillRequest,
   ConceptMerge,
   ConceptPatch,
   ConceptRelationAdd,
@@ -17,6 +19,7 @@ import {
   type AdminConcept,
   type AdminConceptList,
   type ConceptDuplicatesAi,
+  type ConceptFill,
   type Concept,
   type ConceptExists,
   type ConceptRef,
@@ -35,6 +38,7 @@ import {
   mergedRelations,
   relationsOf,
   qualifiedConceptKey,
+  resolveConceptLabel,
   splitQualifiedLabel,
   type RelationEdges,
 } from "@quiz/domain";
@@ -220,6 +224,64 @@ on("POST", "/app/api/admin/concepts/duplicates/ai", (): ConceptDuplicatesAi => {
     [live("Fuite mémoire"), live("Allocation dynamique"), "related", french ? "Une fuite est un défaut d'allocation dynamique." : "A leak is a dynamic-allocation fault."],
   ] as const;
   return { pairs: pairs.flatMap(([a, b, kind, reason]) => (a && b ? [{ a: a.id, b: b.id, kind, reason }] : [])), truncated: false };
+});
+
+/** The mock model's dictionary for "Fill with AI": French and English labels of the seeded concepts. */
+const FILL_PAIRS: [fr: string, en: string][] = [
+  ["Récursivité", "Recursion"],
+  ["Fuite mémoire", "Memory leak"],
+  ["Table de hachage", "Hash table"],
+  ["Complément à 2", "Two's complement"],
+  ["Allocation dynamique", "Dynamic allocation"],
+];
+
+/**
+ * "Fill with AI" on the concept sheet (ADR-081 §7, amendment of 2026-10-13):
+ * a translation from the dictionary above, else the other label as is, and a
+ * description that says it is the mock's; only the empty fields, a label that
+ * names another concept as `taken`, as the server answers.
+ */
+on("POST", "/app/api/admin/concepts/:id/fill", (m, raw): ConceptFill => {
+  if (flags.nollm) throw refuse(409, "llm_not_configured", "No AI key is configured", { reason: "not_configured" });
+  const body = ConceptFillRequest.safeParse(raw);
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  const self = concepts.find((x) => x.id === m.groups!.id);
+  if (!self) throw refuse(404, "not_found", "No such concept");
+  if (self.status === "merged") throw refuse(409, "concept_merged", "A merged concept is not edited");
+  const form = body.data;
+  if (form.fr.label === "" && form.en.label === "") throw refuse(422, "concept_label_missing", "A concept to fill needs a label", { lang: "fr" });
+  const others = concepts.filter((c) => c.id !== self.id);
+  const vocab = others.map(resolvable);
+  const ref = (id: string, lang: "fr" | "en"): ConceptRef[] => {
+    const c = others.find((x) => x.id === id);
+    if (!c) return [];
+    const side = c.labels[lang] !== null ? lang : lang === "fr" ? "en" : "fr";
+    return [{ id: c.id, label: c.labels[side] ?? "", qualifier: c.qualifiers[side], status: c.status }];
+  };
+  const proposal = (lang: "fr" | "en"): ConceptFill["fr"] => {
+    const other = lang === "fr" ? "en" : "fr";
+    const known = form[lang].label || form[other].label;
+    const pair = FILL_PAIRS.find((p) => p[lang === "fr" ? 1 : 0] === form[other].label);
+    const label = form[lang].label === "" ? (pair?.[lang === "fr" ? 0 : 1] ?? form[other].label) : null;
+    const outcome = label === null ? null : resolveConceptLabel(label, vocab);
+    return {
+      label: label === null ? null : { label, qualifier: form[other].qualifier },
+      taken:
+        outcome?.kind === "resolved"
+          ? (ref(outcome.id, lang)[0] ?? null)
+          : outcome?.kind === "ambiguous"
+            ? (ref(outcome.candidates[0]!, lang)[0] ?? null)
+            : null,
+      close: outcome?.kind === "unknown" ? outcome.candidates.slice(0, CONCEPT_FILL_CLOSE_MAX).flatMap((id) => ref(id, lang)) : [],
+      description:
+        form[lang].description === ""
+          ? lang === "fr"
+            ? `${label ?? known} : notion proposée par l'IA de démonstration, à relire.`
+            : `${label ?? known}: a concept described by the demonstration AI, to be reviewed.`
+          : null,
+    };
+  };
+  return { fr: proposal("fr"), en: proposal("en") };
 });
 
 on("POST", "/app/api/admin/concepts/:id/validate", (m): Concept => {

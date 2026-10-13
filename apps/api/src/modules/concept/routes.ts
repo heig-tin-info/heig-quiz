@@ -24,6 +24,11 @@
  *   duplicate pairs, from labels and qualifiers alone (fifth addendum §4,
  *   purpose `concepts`); nothing stored. 409 `llm_not_configured`, 429
  *   `llm_budget_exhausted` or `rate_limited`, 502 `llm_failed`.
+ * - `POST /app/api/admin/concepts/:id/fill` (the sheet's form): the model's
+ *   proposal for its empty fields, from this concept's labels, qualifiers
+ *   and descriptions alone (ADR-081 §7, amendment of 2026-10-13, purpose
+ *   `concepts`); nothing stored. 422 `concept_label_missing` (no label to
+ *   start from), 409 `concept_merged`, 404, and the gateway's refusals as above.
  * - `POST /app/api/admin/concepts/:id/validate`: 422
  *   `concept_label_missing`, 409 `concept_merged`, 404.
  * - `POST /app/api/admin/concepts/:id/aliases` `{ alias, force? }`: adds a
@@ -56,6 +61,7 @@ import {
   ConceptAliasAdd,
   ConceptAliasParams,
   ConceptCreate,
+  ConceptFillRequest,
   ConceptMerge,
   type ConceptList,
   ConceptPatch,
@@ -127,6 +133,20 @@ export async function conceptPlugin(app: FastifyInstance) {
     if (!asks.spend(`concepts:${req.user!.id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
     try {
       return await service.aiDuplicates(app.db, app.llmGateway, req.user!.id, readerLang(req));
+    } catch (error) {
+      return sendFailure(reply, error, now, llmArms);
+    }
+  });
+
+  app.post("/app/api/admin/concepts/:id/fill", { preHandler: requireAdmin }, async (req, reply) => {
+    const now = app.clock.now();
+    const params = IdParam.safeParse(req.params);
+    if (!params.success) return notFound(reply);
+    const body = ConceptFillRequest.safeParse(req.body);
+    if (!body.success) return invalid(reply, body.error);
+    if (!asks.spend(`concepts:${req.user!.id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
+    try {
+      return await service.fillConcept(app.db, app.llmGateway, { id: params.data.id, form: body.data, userId: req.user!.id });
     } catch (error) {
       return sendFailure(reply, error, now, llmArms);
     }

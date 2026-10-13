@@ -2,7 +2,7 @@
  * How a concept is named to a reader (ADR-081): in their language, else the
  * other one, with its qualifier when it has one.
  */
-import type { Concept } from "@quiz/contracts";
+import type { Concept, ConceptLang } from "@quiz/contracts";
 
 import type { Locale, TFunction } from "../i18n";
 
@@ -53,3 +53,7 @@ export function broaderTrail(concept: Concept, byId: ReadonlyMap<string, Concept
   }
   return trail;
 }
+
+/** A language of a concept as the sheet names it: "French", "English". */
+export const langName = (t: TFunction, lang: ConceptLang): string =>
+  lang === "fr" ? t("admin.concepts.lang.fr") : t("admin.concepts.lang.en");
