@@ -861,6 +861,7 @@ function readinessOf(p: MockProject) {
   const live = p.repos.filter((r) => isLive(p, r));
   return {
     state: p.summary.state,
+    publishMode: p.summary.publishMode,
     gradingMode: p.summary.gradingMode,
     live: live.length,
     frozen: live.filter((r) => r.frozenAt !== null).length,

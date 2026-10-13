@@ -188,13 +188,18 @@ export function buttonClass(
   return cx(BUTTON_BASE, BUTTON_VARIANT[variant], BUTTON_SIZE[size], extra);
 }
 
-/** A badge's tone: its pale fill and its ink. */
+/**
+ * A badge's tone: its pale fill and its ink. `info`, the calm blue, says
+ * "scheduled": ready, and opening on its own at a known time (ADR-104,
+ * amendment of 2026-10-13).
+ */
 const BADGE_TONE = {
   neutral: { fill: "bg-surface-3", ink: "text-fg-muted" },
   success: { fill: "bg-success-soft", ink: "text-success" },
   warning: { fill: "bg-warning-soft", ink: "text-warning" },
   danger: { fill: "bg-danger-soft", ink: "text-danger" },
   accent: { fill: "bg-accent-soft", ink: "text-accent" },
+  info: { fill: "bg-info-soft", ink: "text-info" },
 } as const;
 
 export type BadgeTone = keyof typeof BADGE_TONE;

@@ -13,14 +13,17 @@ import type { BadgeStyle } from "../ui";
  * (`evaluation/common.ts`), keyed by the server's PHASE — the state, with
  * `locked` refined by the freeze and the release: green while it is
  * published — open to the students, whether or not anyone is "in the room"
- * —, zinc at rest: a draft nobody sees yet, a project locked at its deadline
- * whose scores are not final; amber once they are and the staff's release
- * is awaited (`graded`, an evaluation's `grading`); outline green once
- * released. Never the accent. "Open to the students" is also what
- * {@link projectTimerAt} encodes; the timer is never derived from the colour.
+ * —, blue while a draft waits for its scheduled publication (`scheduled`,
+ * an evaluation's `scheduled`, #795), zinc at rest: a draft still in
+ * preparation, a project locked at its deadline whose scores are not final;
+ * amber once they are and the staff's release is awaited (`graded`, an
+ * evaluation's `grading`); outline green once released. Never the accent.
+ * "Open to the students" is also what {@link projectTimerAt} encodes; the
+ * timer is never derived from the colour.
  */
 const PHASE_STYLE: Record<ProjectPhase, BadgeStyle> = {
   draft: { tone: "zinc" },
+  scheduled: { tone: "blue" },
   published: { tone: "green" },
   locked: { tone: "zinc" },
   graded: { tone: "amber" },

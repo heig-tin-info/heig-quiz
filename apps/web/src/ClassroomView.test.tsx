@@ -68,6 +68,7 @@ const summary = (over: Partial<EvaluationSummary>): EvaluationSummary => ({
   deletionRole: "assistant",
   opensAt: null,
   closesAt: null,
+  startedAt: null,
   createdAt: new Date(0).toISOString(),
   originRevision: null,
   templateRevision: null,

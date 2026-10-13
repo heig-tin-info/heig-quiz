@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ProjectActivitySummary } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { isoDateTime } from "../ui";
 import { ProjectGroup } from "./ProjectGroup";
 
 /*
@@ -92,6 +93,23 @@ describe("the classroom's Projects group", () => {
     expect(titles().at(-1)).toBe("Undated");
     await userEvent.click(within(region).getByRole("button", { name: /Start/ }));
     expect(titles().at(-1)).toBe("Undated");
+  });
+
+  it("tells a scheduled draft from one in preparation: blue, with its start in sight (#795)", async () => {
+    mockFetch({
+      [`GET ${PROJECTS}`]: ok([
+        project(1, { title: "Preparing", state: "draft", startAt: null }),
+        project(2, { title: "Planned", state: "draft", phase: "scheduled" }),
+      ]),
+    });
+    renderGroup();
+    const region = await screen.findByRole("region", { name: "Projects" });
+    const row = (title: string) => within(within(region).getByText(title).closest("tr")!);
+    expect(row("Planned").getByText("scheduled").className).toContain("text-info");
+    expect(row("Planned").getByText(isoDateTime("2026-09-21T08:00:00.000Z"))).toBeInTheDocument();
+    expect(row("Preparing").getByText("draft").className).not.toContain("text-info");
+    // A draft runs nothing out: no timer on either.
+    expect(within(region).queryByText(/closes in/)).toBeNull();
   });
 
   it("reads the badge from the phase: a locked project is graded in amber, released in outline green (ADR-104)", async () => {

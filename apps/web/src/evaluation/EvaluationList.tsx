@@ -13,6 +13,7 @@ import {
   Badge,
   Button,
   Card,
+  Dash,
   EmptyState,
   Field,
   FormDialog,
@@ -22,6 +23,7 @@ import {
   QueryError,
   SectionHeading,
   GroupBySwitch,
+  isoDateTime,
   Select,
   Skeleton,
   T,
@@ -180,17 +182,25 @@ function RenameEvaluationDialog({
   );
 }
 
-type EvaluationSort = "title" | "mode" | "questions" | "points" | "attempts";
+type EvaluationSort = "title" | "mode" | "start" | "questions" | "points" | "attempts";
 
-/** What each column of the list is ordered on; the mode by its own word. */
+/**
+ * When a row started, or is to open (#795): an evaluation opened by hand has
+ * no `opensAt`, only the `startedAt` of its first run. Null when neither.
+ */
+const startOf = (row: EvaluationSummary): string | null => row.startedAt ?? row.opensAt;
+
+/** What each column of the list is ordered on; the mode by its own word, no start last. */
 function evaluationRank(
   row: EvaluationSummary,
   key: EvaluationSort,
   t: TFunction,
-): string | number {
+): string | number | null {
   switch (key) {
     case "mode":
       return t(`eval.mode.${row.mode}`);
+    case "start":
+      return startOf(row);
     case "questions":
       return row.itemCount;
     case "points":
@@ -316,6 +326,7 @@ export function EvaluationList({
   const columns: Column<EvaluationSort>[] = [
     { key: "title", label: t("eval.titleLabel") },
     { key: "mode", label: t("eval.mode") },
+    { key: "start", label: t("eval.col.start"), className: T.colHigh },
     { key: "questions", label: t("eval.step.questions"), right: true, className: T.colHigh },
     { key: "points", label: t("eval.col.points"), right: true, className: T.colMid },
     { key: "attempts", label: t("eval.col.attempts"), right: true, className: T.colLow },
@@ -445,6 +456,11 @@ export function EvaluationList({
                         ) : (
                           t(`eval.mode.${row.mode}`)
                         )}
+                      </td>
+                      {/* When it started or opens (`startOf`), as the Projects table below says its
+                          start (#795); neither yet, a dash. */}
+                      <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>
+                        {startOf(row) === null ? <Dash /> : isoDateTime(startOf(row)!)}
                       </td>
                       <td className={`${T.td} ${T.colHigh} text-right tabular-nums`}>{row.itemCount}</td>
                       <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{row.totalPoints}</td>

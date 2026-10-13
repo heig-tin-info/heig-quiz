@@ -145,6 +145,22 @@ describe("the schedule view", () => {
     expect(done).not.toContain("ring-");
   });
 
+  it("rings a scheduled project in blue like a scheduled evaluation, a draft in preparation dashed (#795)", async () => {
+    wide(true);
+    const user = userEvent.setup();
+    const planned = { ...LAB, id: id("project", 2), title: "Labo 3 — listes", state: "draft" as const, phase: "scheduled" as const };
+    const preparing = { ...LAB, id: id("project", 3), title: "Labo 4 — arbres", state: "draft" as const, phase: "draft" as const };
+    mockFetch({ "GET /app/api/activities": ok([planned, preparing]) });
+    renderWithProviders(<ActivitiesPage navigate={vi.fn()} />);
+    // Filed by its state (a known gap of the 2026-10-13 amendment): under Drafts.
+    await user.click(await screen.findByRole("tab", { name: /Drafts/ }));
+    const bar = async (name: RegExp) => (await screen.findByRole("button", { name })).className;
+    expect(await bar(/^Labo 3 — listes — scheduled, /)).toContain("ring-info");
+    const draft = await bar(/^Labo 4 — arbres — draft, /);
+    expect(draft).toContain("border-dashed");
+    expect(draft).not.toContain("ring-info");
+  });
+
   it("lends its gestures to the sidebar's strip, not a sentence above the track", async () => {
     wide(true);
     mockFetch({ "GET /app/api/activities": ok([SERIES]) });

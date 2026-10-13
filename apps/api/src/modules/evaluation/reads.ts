@@ -722,6 +722,7 @@ export async function listEvaluations(
     deletionRole: deletionRoleOf(r, tries.get(r.id)?.students ?? 0),
     opensAt: isoOrNull(r.opensAt),
     closesAt: isoOrNull(r.closesAt),
+    startedAt: isoOrNull(r.startedAt),
     createdAt: iso(r.createdAt),
     originRevision: r.originRevision,
     templateRevision: templateRevisions.get(r.id) ?? null,

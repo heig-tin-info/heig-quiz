@@ -66,14 +66,12 @@ export function ProjectGroup({
     queryFn: () => api(`/app/api/classrooms/${classroomId}/projects`),
   });
   const rows = list.data ?? [];
+  // An empty date (null) sorts last, whichever way the column goes (`useSortableTable`).
   const { sorted, sort, toggle } = useSortableTable<ProjectActivitySummary, SortKey>(
     rows,
-    (row, key) => (key === "start" ? row.startAt : key === "deadline" ? row.deadlineAt : row.title) ?? "",
+    (row, key) => (key === "start" ? row.startAt : key === "deadline" ? row.deadlineAt : row.title),
     null,
   );
-  // An empty date sorts last, whichever way the column goes.
-  const dateOf = (row: ProjectActivitySummary) => (sort?.key === "start" ? row.startAt : sort?.key === "deadline" ? row.deadlineAt : "");
-  const ordered = [...sorted.filter((r) => dateOf(r) !== null), ...sorted.filter((r) => dateOf(r) === null)];
 
   if (list.isError && !githubAbsent(list.error)) {
     return (
@@ -99,7 +97,7 @@ export function ProjectGroup({
         <table className={T.table}>
           <TableHead columns={columns} sort={sort} onToggle={toggle} />
           <tbody>
-            {ordered.map((row) => {
+            {sorted.map((row) => {
               return (
                 <tr
                   key={row.id}

@@ -3779,6 +3779,7 @@ export const en = {
   "eval.empty.body": "An evaluation is an ordered list of questions taken from the course pools.",
   "eval.createFailed": "Creation failed.",
   "eval.notFound": "Evaluation not found",
+  "eval.col.start": "Start",
   "eval.col.points": "Points",
   "eval.col.attempts": "Attempts",
   "eval.state.draft": "draft",
@@ -5558,6 +5559,7 @@ export const en = {
   "project.loadFailed": "Could not load the projects",
   // The staff's badge reads the server's phase: the state, `locked` refined by the freeze and the release (ADR-104).
   "project.state.draft": "draft",
+  "project.state.scheduled": "scheduled",
   "project.state.published": "published",
   "project.state.locked": "locked",
   "project.state.graded": "graded",

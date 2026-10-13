@@ -455,6 +455,8 @@ export const EvaluationSummary = z.object({
   deletionRole: CourseRole,
   opensAt: z.iso.datetime().nullable(),
   closesAt: z.iso.datetime().nullable(),
+  /** When it first ran: an evaluation opened by hand has no `opensAt`, only this. */
+  startedAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
   /** As {@link Evaluation}: the template revision the questions came from. */
   originRevision: z.number().int().nullable(),

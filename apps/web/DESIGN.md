@@ -547,22 +547,29 @@ live in `ui/state.ts`, each written once.
   time left: minutes, then in the last five a bold countdown by the second
   behind a warning sign; the pill's ring and hairline follow the ink.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
-  accent, and an **outline** face (`variant="outline"`: no fill, the tone's
-  ink and a 1 px inset ring in the same colour) for a state that is finished
-  and asks nothing.
+  blue / accent, and an **outline** face (`variant="outline"`: no fill, the
+  tone's ink and a 1 px inset ring in the same colour) for a state that is
+  finished and asks nothing.
   Status is a badge; a count is plain text. **The staff's state grammar**
   (ADR-104, one table per kind in `evaluation/common.ts` and
   `project/common.ts`): green = open to the students (`running`,
   `published`); amber = the staff's own correction or publication awaited
-  (`lobby`, `paused`, `grading`, a project `graded`); zinc = at rest
-  (`draft`, `scheduled`, `closed`, `locked`); outline green = `released`,
-  an evaluation's or a project's. A project's badge reads the server's
-  PHASE (`state`, with `locked` refined into `locked` / `graded` /
-  `released`), never the stored state alone. No solid fill: the soft
+  (`lobby`, `paused`, `grading`, a project `graded`); blue = scheduled,
+  ready and opening on its own at a known time (an evaluation `scheduled`,
+  a project `scheduled`; the `info` token, the gantt's scheduled bar);
+  zinc = at rest (`draft`, `closed`, `locked`); outline green =
+  `released`, an evaluation's or a project's. A project's badge reads the
+  server's PHASE (`state`, with `draft` refined into `draft` / `scheduled`
+  by its publish mode and `locked` into `locked` / `graded` /
+  `released`), never the stored state alone. A further pill tone follows
+  ADR-104's rule (its 2026-10-13 amendment). Nothing blinks. No solid fill: the soft
   green plus the `TimeLeft` timer (icon and "3 h", only in the two tables of
   a classroom's Activities tab; outside a badge, also on a published
   project's lifecycle rail) is what marks a live row, so the pill never
-  competes with the row's one primary action. The student's activity cards
+  competes with the row's one primary action. Both tables of that tab show
+  when a row starts (Start: an evaluation's `startedAt`, else its
+  `opensAt`; a project's start; a row with none sorts last).
+  The student's activity cards
   keep their own grammar (amber waits on the student, see "The student's
   activity card"). The accent tone is
   rarely right: on the student's activity cards it is never used (the button
