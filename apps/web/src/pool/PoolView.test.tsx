@@ -321,7 +321,8 @@ describe("PoolView", () => {
     renderWithProviders(<PoolView id="p1" navigate={navigate} />);
     await user.click(await screen.findByText("ptr-null-check"));
     expect(await screen.findByText("Never published — this is its draft")).toBeVisible();
-    expect(previewCalls(calls)[0]).toMatchObject({ body: { source: "draft" } });
+    // The banner reads the row, the request follows from an effect: wait for it.
+    await waitFor(() => expect(previewCalls(calls)[0]).toMatchObject({ body: { source: "draft" } }));
     // Same tab: the anchor keeps its href for a middle-click, a plain click navigates.
     const link = screen.getByRole("link", { name: /Open in the editor/ });
     expect(link).not.toHaveAttribute("target");
@@ -473,10 +474,13 @@ describe("PoolView", () => {
         await screen.findByRole("complementary", { name: "Preview ptr-null-check" }),
       ).toBeVisible();
       expect(rowOf("ptr-arith-01")).not.toHaveAttribute("aria-current");
-      expect(previewCalls(calls).map((c) => c.url)).toEqual([
-        "/app/api/questions/q1/preview",
-        "/app/api/questions/q2/preview",
-      ]);
+      // The pane is named from the row before its request leaves: wait for it.
+      await waitFor(() =>
+        expect(previewCalls(calls).map((c) => c.url)).toEqual([
+          "/app/api/questions/q1/preview",
+          "/app/api/questions/q2/preview",
+        ]),
+      );
 
       await user.keyboard("{Escape}");
       expect(screen.queryByRole("complementary")).toBeNull();
