@@ -33,7 +33,7 @@ Kiosk station
 - A teacher reaches the students of a course only through a seat on that course's staff; a student sees only their own work.
 - Data is kept until a teacher deletes it (N-DATA-03). A few kinds of data have a shorter, automatic retention (the integrity journal, the drill, the help assistant, the hours of activity, GitHub's notifications, a project's evidence files). Nothing is deleted when a student finishes their studies, and there is no account deletion.
 - Content, including some student answers and student code with the names masked, is sent to an AI model (Anthropic) through one gateway that logs every call.
-- The servers are rented from Hetzner, in Europe; the off-site encrypted copy of the backups is in Helsinki. Nothing is hosted in Switzerland.
+- The servers are rented from Hetzner: the application machine in Nuremberg (Germany), the code machine and the off-site encrypted copy of the backups in Helsinki (Finland). Nothing is hosted in Switzerland.
 - Reads of personal data are, with one exception, not traced.
 
 ## Personal data
@@ -156,7 +156,7 @@ The audit log (`apps/api/src/audit.ts`) records the actions that change somethin
 | Service | Role | What it receives | Where |
 | --- | --- | --- | --- |
 | Switch edu-ID | Identity provider | The sign-in; it is the one that sends the identity | Switzerland (Switch) |
-| Hetzner Online (cloud servers) | Hosting | Everything: the application machine holds the database, the backups and the logs (see [Hosting](#hosting-and-location)) | Europe; country **To be confirmed** |
+| Hetzner Online (cloud servers) | Hosting | Everything: the application machine holds the database, the backups and the logs (see [Hosting](#hosting-and-location)) | Germany (application machine, Nuremberg) and Finland (code machine, Helsinki) |
 | Hetzner Storage Box, Helsinki | Off-site copy of the backups | Encrypted archives only, which it cannot read | Helsinki, Finland |
 | Anthropic (Claude) | AI model, once an administrator has stored a key | Question content; some student answers and student code, masked of names; a teacher's assistant questions and what it reads (below) | A United States company; where the requests are processed: **To be confirmed** |
 | GitHub | Projects and journals, for a classroom connected to an organisation | The repositories the platform creates for students and the invitations of their linked GitHub accounts; a journal kept in a repository is only read | A United States company (Microsoft); where the data is held: **To be confirmed** |
@@ -165,7 +165,7 @@ The audit log (`apps/api/src/audit.ts`) records the actions that change somethin
 | Google (Chrome Verified Access) | Proves a kiosk station is one of the school's Chromebooks (ADR-051) | The station's response to a challenge; no student data (`apps/api/src/modules/kiosk/attestation.ts`) | A United States company; where it is processed: **To be confirmed** |
 | The host of the edu-ID picture | Source of a portrait not uploaded | A request from the server, which then serves the picture itself: a browser never contacts that host (`apps/api/src/modules/avatar.ts`) | Wherever edu-ID's picture address points |
 
-Anthropic, GitHub and Google are United States companies: sending data to them is a transfer outside Switzerland and Europe, and which agreements cover it is not recorded in the repository (**To be confirmed**).
+Anthropic, GitHub and Google are United States companies: sending data to them is a transfer outside Switzerland and Europe, and no agreement specific to the platform covers it: only each provider's standard terms apply. Where each of them processes the data: **To be confirmed**.
 
 E-mails and Teams messages carry titles, names of classrooms and pools, counts, and sometimes a colleague's name ("{name} shared the pool … with you"); never a grade or a question's content (`apps/api/src/modules/notifications/templates.ts`). Whether e-mail and Teams are enabled in production: **To be confirmed**.
 
@@ -199,7 +199,7 @@ The platform runs on two virtual machines rented from Hetzner (`docs/development
 - the **application machine** carries the application, the PostgreSQL database, the daily database dumps and the technical logs. It also hosts two other services (heig-classroom and evaluation-tb) under separate accounts. The database is not exposed on the network;
 - the **code machine** runs the code students submit for a question, in isolated containers: no network, no secret, nothing of the machine mounted, limits on memory, processes and time (`apps/runner/README.md`). It receives the program and its test data, with no student name or identifier (`packages/core/src/runner.ts`). The same machine runs the **online workspace** of projects (`apps/codespace`, ADR-047), which keeps a working directory per student and project, and a small database of its users (name, e-mail address) and sessions.
 
-The specification asks for "a server in Europe" (N-DATA-01). Both machines are in Hetzner datacenters in Europe; the country and datacenter of each: **To be confirmed**. Hosting in Switzerland is an option the product owner will decide on (open question 56 of `docs/spec/06-questions-ouvertes.md`).
+The specification asks for "a server in Europe" (N-DATA-01). The application machine is in Hetzner's Nuremberg datacenter (Germany), the code machine in Helsinki (Finland). Hosting in Switzerland is an option the product owner will decide on (open question 56 of `docs/spec/06-questions-ouvertes.md`).
 
 A **staging** environment runs on the application machine under a separate system account. It receives a copy of the production data that is **pseudonymised on the production side before it leaves**: names, e-mail addresses, edu-ID identifiers, pictures, GitHub logins, the teacher's notes, the audit payloads and the notifications are replaced or emptied; grades, answers, content and the free text people wrote in them stay real (`scripts/staging-pseudonymize.sql`, ADR-028, update of 2026-10-11). Three things stay real as well: the accounts on the keep list (`STAGING_KEEP_EMAILS`, the product owner's and testers'), left untouched with their addresses, roster rows and GitHub account; the GitHub organisation logins and repository names, which name a person when the App was installed on a personal account; and the help assistant's conversations, which may quote students' names and grades. Only the addresses on its sign-in allowlist can sign in, and its reference configuration turns off e-mail and Teams notifications.
 
@@ -333,17 +333,17 @@ AI model:
 
 Hosting:
 
-- nothing is hosted in Switzerland; the machines are in Europe, the off-site copy in Finland;
+- nothing is hosted in Switzerland; the application machine is in Germany, the code machine and the off-site copy in Finland;
 - the daily database dumps sit unencrypted on the machine they protect;
 - the off-site copy's key is on the application machine: whoever takes that machine can also read the data deleted since, up to the archives' retention (ADR-009).
 
 ## To be confirmed
 
 - Whether a revision of the LPrD is under way, and its effect on this page.
-- Which agreements cover the transfers to Anthropic, GitHub and Google, United States companies, and where they process the data.
+- Where Anthropic, GitHub and Google, United States companies, process the data (no agreement specific to the platform covers these transfers).
 - Who is responsible for the processing, the contact for students' requests, and any declaration to the cantonal authority or the school's data protection officer.
-- The retention period the institution wants after the studies.
-- The country and datacenter of each Hetzner machine; whether Hetzner's machine backup is enabled; the encryption of the disks and of those backups.
+- The retention period the institution requires for exam copies and grades, after the studies included.
+- Whether Hetzner's machine backup is enabled; the encryption of the disks and of those backups.
 - The retention of the technical logs (containers, web server, system journal) on the machines.
 - Who holds personal accounts with administrator rights on the production machines.
 - Whether e-mail and Teams notifications are enabled in production.
