@@ -65,6 +65,7 @@ import {
 import {
   richEditorStrings,
   richGradingStrings,
+  richKeyStrings,
   richPlayerStrings,
   richReviewStrings,
 } from "@quiz/qt-rich/client";
@@ -110,6 +111,7 @@ import {
   IMAGE_GRADING_STRINGS,
   IMAGE_PLAYER_STRINGS,
   IMAGE_REVIEW_STRINGS,
+  KEY_STRINGS as CODE_KEY_STRINGS,
   PLAYER_STRINGS,
   referenceRegions,
   REVIEW_STRINGS,
@@ -400,6 +402,10 @@ export const keyStrings = {
   short: (t: TFunction) => translated(t, shortKeyStrings, "qt.short.k"),
   math: (t: TFunction) => translated(t, mathKeyStrings, "qt.math.k"),
   categorize: (t: TFunction) => translated(t, categorizeKeyStrings, "qt.categorize.k"),
+  // One program key for both: a code image's caption is `code`'s.
+  code: (t: TFunction) => translated(t, CODE_KEY_STRINGS, "qt.code.k"),
+  codeimage: (t: TFunction) => translated(t, CODE_KEY_STRINGS, "qt.code.k"),
+  rich: (t: TFunction) => translated(t, richKeyStrings, "qt.rich.k"),
 } satisfies Partial<Record<QuestionTypeId, (t: TFunction) => object>>;
 
 /**

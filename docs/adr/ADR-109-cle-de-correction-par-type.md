@@ -3,6 +3,9 @@
 ## Status
 
 Accepted (2026-10-13, issue #828; its shape decided by the product owner).
+Amended the same day by the
+[amendment](#amendment-2026-10-13-the-program-and-the-essay-draw-their-key)
+(the program and the essay draw their key; §7 reversed for them).
 
 Scope: the optional `Key` surface of the question-type client contract
 (`packages/core/src/client.ts`) and its host, the correction projection and
@@ -63,7 +66,9 @@ render differently: that duplication is deferred, not solved.
    host draws stay in its `SCALE`; those only one type draws live in its
    `Key.tsx`. The words move with them, under `qt.<type>.k.*`; a cloze's
    "correct" and "wrong" stay the head's `correction.outcome.*`, mapped.
-7. **`code` and `rich` wait.** The program (template, reference, test cases)
+7. **`code` and `rich` wait** (reversed by the
+   [amendment](#amendment-2026-10-13-the-program-and-the-essay-draw-their-key)
+   for `code`, `codeimage` and `rich`). The program (template, reference, test cases)
    and an essay's model answer stay in the host for now: they have their own
    treatment on the Results tab beside the type's review, and moving them is
    a separate change. diagram, circuit and blocks gain a `Key` next.
@@ -86,3 +91,36 @@ render differently: that duplication is deferred, not solved.
   decide and keeps the host type-blind.
 - **Move `SegmentedBar` into `@quiz/ui`**: it reads the app's i18n and
   tooltip layer; lending it keeps one bar and no new package dependency.
+
+## Amendment 2026-10-13: the program and the essay draw their key
+
+Settled with the product owner on 2026-10-13 (#828, second part). It
+reverses §7 for `code`, `codeimage` and `rich`; diagram, circuit and blocks
+still wait. The rest stands.
+
+1. **A third slot, `cases`.** `KeyProps.cases` is the host's bars of the
+   test cases (`ByQuestion.casePassRate`), beside `prompt` and `rows`, and
+   `null` when the type counts no case. The host keeps drawing them, so the
+   rules of ADR-033 stay in one place: a case reads by its `label`, never its
+   `name`, and the papers it never ran on are "not run". `KeyStats` does not
+   carry the pass rates. A type without a `Key` still gets them from the
+   host, in the program's two columns (`blocks`, until it draws its own key).
+2. **One program key for `code` and `codeimage`**, in `qt-code`
+   (`ProgramKey`): the reference solution, or hidden the code the class
+   started from, with the cases beside it and the answer groups under it (a
+   code image's accuracy buckets). It takes over what the host drew; the
+   target image of a code image stays out of the debrief. Its words are
+   `qt.code.k.*`, read by both types.
+3. **The essay's key, `rich`:** its model answer, once revealed, after the
+   statement. Several paragraphs, lists and formulas need a block renderer:
+   `KeyProps.renderBlock`, lent by the host as `renderMarkdown` is, at each
+   density's size.
+4. **No key draws a rubric**, the grading criteria, at either density. They
+   are the grader's (ADR-037) and stay on the grading screen; the wall is
+   read by a class. The `Key` doc comment in `@quiz/core/client` says so,
+   and the essay's key is tested for it.
+5. **The Results "Questions" tab changes for these three types.** Drawing a
+   key, they leave the type's own review (`QuestionReviewHost`): the card
+   shows the statement, the key and the cases, no longer the empty student
+   copy ("no answer", a score of "—") nor an essay's criteria. The wall is
+   unchanged, markup for markup.

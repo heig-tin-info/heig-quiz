@@ -19,71 +19,69 @@ import { CorrectionQuestion, drawsKey } from "./CorrectionQuestion";
 const draw = (q: Parameters<typeof CorrectionQuestion>[0]["q"], revealed: boolean, explained = false) =>
   renderWithProviders(<CorrectionQuestion q={q} number={1} revealed={revealed} explained={explained} />);
 
-const TEMPLATE = "#include <stdio.h>\n\nint main(int argc, char* argv[]) {\n\n}\n";
-const REFERENCE = '#include <stdio.h>\n\nint main(int argc, char* argv[]) {\n    printf("%07d\\n", argc);\n}\n';
+const TEMPLATE = "#include <stdio.h>\n\nint main(void) {\n\n}\n";
+const REFERENCE = '#include <stdio.h>\n\nint main(void) {\n    printf("hi");\n}\n';
 
 const CODE = makeByQuestion({
   item: byQuestionItem(0, "code"),
-  student: { prompt: "Print `argc`.", segments: splitTemplate(TEMPLATE, "c") },
+  student: { prompt: "Print `hi`.", segments: splitTemplate(TEMPLATE, "c") },
   solution: { referenceSolution: REFERENCE },
-  casePassRate: [{ name: "none", label: "No argument", passed: 1, total: 2 }],
+  explanation: "`printf` writes to stdout.",
+  outcomes: { correct: 1, partial: 0, wrong: 1, blank: 2 },
+  casePassRate: [{ name: "hidden-1", label: "Hidden case 1", passed: 1, total: 2 }],
 });
 
-const LOCKED = "int f(void) {\n// @@lock\n    int x = 1;\n// @@endlock\n    return 0;\n}\n";
-
 describe("CorrectionQuestion, a program", () => {
-  it("shows the starting code while hidden, named as such, never the reference", () => {
-    draw(CODE, false);
-    const start = screen.getByRole("region", { name: "Starting code" });
-    expect(start.textContent).toBe(TEMPLATE);
-    expect(screen.queryByText(/printf/)).toBeNull();
-  });
-
-  it("shows the reference, whole, once revealed", () => {
-    draw(CODE, true);
-    expect(screen.getByRole("region", { name: "Reference solution" }).textContent).toBe(REFERENCE);
-  });
-
-  it("draws a reference cut on `@@next` lines inside its template's locked text", () => {
-    draw(
-      {
-        ...CODE,
-        student: { prompt: "p", segments: splitTemplate(LOCKED, "c") },
-        solution: { referenceSolution: "int f(void) {\n// @@next\n    return x;" },
-      },
-      true,
-    );
-    expect(screen.getByRole("region", { name: "Reference solution" }).textContent).toBe(
-      "int f(void) {\n    int x = 1;\n    return x;\n",
-    );
-  });
-
-  it("names the hatched block of a program with no template to start from", () => {
-    draw({ ...CODE, student: { prompt: "p", segments: [] } }, false);
-    expect(screen.getByText("Reference solution, hidden until the answers are revealed")).toBeVisible();
-    expect(screen.queryByRole("region", { name: /Reference solution/ })).toBeNull();
-    // The hidden reference is not in the page at all, not even transparent.
-    expect(document.body.textContent).not.toContain("printf");
+  it("lends its key the test cases, set beside the code, after the explanation", async () => {
+    expect(drawsKey("code")).toBe(true);
+    draw(CODE, true, true);
+    const code = await screen.findByRole("region", { name: "Reference solution" });
+    const cases = screen.getByRole("list", { name: "Test cases" });
+    expect(code.closest("figure")!.parentElement).toBe(cases.parentElement);
+    const explanation = screen.getByText("writes to stdout.", { exact: false });
+    expect(explanation.compareDocumentPosition(code) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // `label`, never `name` (ADR-033); the papers it never ran on, "not run".
+    expect(within(cases).getByText("Hidden case 1")).toBeVisible();
+    expect(screen.queryByText("hidden-1")).toBeNull();
+    expect(within(cases).getByRole("img")).toHaveAccessibleName("passed: 1 · failed: 1 · not run: 2");
   });
 });
 
 describe("CorrectionQuestion, an essay", () => {
-  it("shows an essay's model answer once revealed, never its rubric", () => {
+  it("shows an essay's model answer once revealed, never its rubric", async () => {
     const essay = makeByQuestion({
       item: byQuestionItem(3, "rich"),
-      student: { prompt: "Explain `malloc`." },
+      student: { prompt: "Explain `malloc`.", format: "markdown" },
       solution: { rubric: "secret-rubric", reference: "It allocates on the heap." },
     });
+    expect(drawsKey("rich")).toBe(true);
     draw(essay, false);
+    await screen.findAllByText("malloc", { exact: false });
     expect(screen.queryByText("It allocates on the heap.")).toBeNull();
     draw(essay, true);
-    expect(screen.getByText("Model answer")).toBeVisible();
+    expect(await screen.findByText("Model answer")).toBeVisible();
     expect(screen.getByText("It allocates on the heap.")).toBeVisible();
-    expect(screen.queryByText(/secret-rubric/)).toBeNull();
+    expect(document.body.innerHTML).not.toContain("secret-rubric");
   });
 });
 
 describe("CorrectionQuestion, a type without a key of its own", () => {
+  it("still draws its test cases, in the program's columns", () => {
+    expect(drawsKey("blocks")).toBe(false);
+    draw(
+      makeByQuestion({
+        item: byQuestionItem(7, "blocks"),
+        student: { prompt: "Reach the dock." },
+        outcomes: { correct: 2, partial: 0, wrong: 1, blank: 0 },
+        casePassRate: [{ name: "w1", label: "Warehouse 1", passed: 2, total: 3 }],
+      }),
+      true,
+    );
+    const cases = screen.getByRole("list", { name: "Test cases" });
+    expect(within(cases).getByText("2 of 3")).toBeVisible();
+    expect(within(cases).getByRole("img")).toHaveAccessibleName("passed: 2 · failed: 1");
+  });
+
   const DIAGRAM = makeByQuestion({
     item: byQuestionItem(4, "diagram"),
     student: { prompt: "Draw the automaton." },

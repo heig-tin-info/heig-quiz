@@ -66,7 +66,8 @@ function SpeakingBar({ parts }: KeyBarProps) {
 /**
  * The props a host lends a type's answer key (`KeyProps`, ADR-109), for a
  * package's own test of its `Key`: no statement frame, inline markdown as
- * its source, a bar that speaks ("correct: 2 · wrong: 1"), no answer groups.
+ * its source, a bar that speaks ("correct: 2 · wrong: 1"), no answer groups
+ * and no test cases.
  */
 export function keyHostProps(stats: Partial<KeyStats> = {}) {
   return {
@@ -74,8 +75,10 @@ export function keyHostProps(stats: Partial<KeyStats> = {}) {
     stats: { outcomes: { correct: 0, partial: 0, wrong: 0, blank: 0 }, distribution: [], ...stats },
     prompt: null as ReactNode,
     rows: null as ReactNode,
+    cases: null as ReactNode,
     statement: (body: ReactNode) => body,
     Bar: SpeakingBar,
     renderMarkdown: (source: string) => source,
+    renderBlock: (source: string) => source,
   };
 }

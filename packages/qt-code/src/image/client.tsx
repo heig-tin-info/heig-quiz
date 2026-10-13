@@ -44,6 +44,9 @@ export const codeimageClient: QuestionTypeClient<
   Editor: lazy(() => import("./Editor.js")),
   Player: lazy(() => import("./Player.js")),
   Review: lazy(() => import("./Review.js")),
+  // `code`'s program key: the reference beside the cases, then the accuracy
+  // buckets; the target image stays out of the debrief.
+  Key: lazy(async () => ({ default: (await import("../Key.js")).ProgramKey })),
 
   /** Empty, not seeded — `code`'s rule: an untouched question stays "not answered". */
   emptyAnswer() {

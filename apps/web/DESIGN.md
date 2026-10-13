@@ -2154,15 +2154,17 @@ the Results "Questions" tab on the wall. It takes the projection's
   where there is one.
 - **The same pieces on the page**: the Results "Questions" tab draws them
   with the `page` density, always revealed. The sizes of both densities
-  live in three places, each once: those the host and several keys share
-  (count, answer, note, caption) in `CORRECTION_SCALE` of `@quiz/ui`, those
-  only the host draws (prompt, answer row, program, test case) in `SCALE` of
-  `results/CorrectionQuestion.tsx`, and those only one type draws (an mcq's
-  choice row and letter, a cloze's text) in that type's `Key.tsx`. A type
-  with an answer key of its own (`QuestionTypeClient.Key`, ADR-109: an mcq, a
-  cloze, a short or math answer, a categorize board) is drawn whole by it;
-  any other type keeps its own review for the
-  statement and gets the answer groups and the program below it. "Present",
+  live in three places, each once: those the host and the keys share
+  (count, answer, note, caption, a program's two columns) in
+  `CORRECTION_SCALE` of `@quiz/ui`, those only the host draws (prompt,
+  answer row, test case) in `SCALE` of `results/CorrectionQuestion.tsx`, and
+  those only one type draws (an mcq's choice row and letter, a cloze's text,
+  a program's code) in that type's `Key.tsx`. A type with an answer key of
+  its own (`QuestionTypeClient.Key`, ADR-109: an mcq, a cloze, a short or
+  math answer, a categorize board, a program, an essay) is drawn whole by
+  it, the host lending it the test cases' bars; any other type keeps its own
+  review for the statement and gets the answer groups and the test cases
+  below it. "Present",
   in the Results header beside "Grading panel", opens this screen once the
   evaluation is over.
 - **An exercise's correction, published while it runs** (ADR-050): a

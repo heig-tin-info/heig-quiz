@@ -357,10 +357,11 @@ export interface KeyStats {
  * as the class saw it, its key, and how the class answered it.
  *
  * The host draws the generic pieces and lends them as SLOTS: `prompt` (the
- * statement, framed) and `rows` (the answer groups, one bar each). The key
- * places, replaces or omits them: an mcq keeps the prompt and draws its
- * choices instead of the rows; a cloze draws its text through `statement`
- * and no rows. A type without a `Key` gets the prompt and the rows.
+ * statement, framed), `rows` (the answer groups, one bar each) and `cases`
+ * (the test cases' bars). The key places, replaces or omits them: an mcq
+ * keeps the prompt and draws its choices instead of the rows; a cloze draws
+ * its text through `statement` and no rows; a program sets the cases beside
+ * its code. A type without a `Key` gets the prompt, the cases and the rows.
  */
 export interface KeyProps<TStudent, TSolution> {
   student: TStudent;
@@ -378,6 +379,12 @@ export interface KeyProps<TStudent, TSolution> {
   /** The host's answer groups, one bar each; it draws nothing when there are none to list. */
   rows: ReactNode;
   /**
+   * The host's bars of the test cases, how many papers passed each one
+   * (ADR-033: a case named as the class may read it); `null` when the type
+   * counts no case.
+   */
+  cases: ReactNode;
+  /**
    * The host's frame around a statement the type draws ITSELF in place of
    * `prompt` (a cloze's text with its blanks): the caption of a
    * parameterized question above it (ADR-056 §9), and whatever the host
@@ -388,6 +395,12 @@ export interface KeyProps<TStudent, TSolution> {
   Bar: ComponentType<KeyBarProps>;
   /** The host's sanitised inline markdown (`MarkdownRenderer`). */
   renderMarkdown: MarkdownRenderer;
+  /**
+   * The host's sanitised markdown as blocks — paragraphs, lists, formulas —
+   * at the density's size, for a text of several paragraphs (an essay's
+   * model answer).
+   */
+  renderBlock: MarkdownRenderer;
 }
 
 /**
@@ -443,8 +456,10 @@ export interface QuestionTypeClient<
    * projection and the Results "Questions" tab draw it, `React.lazy` like
    * the surfaces above. STAFF ONLY: it reads the key the per-question view
    * serves the course's staff, which never goes through `toStudent`, and it
-   * must never be mounted on a student surface. Absent, the host draws the
-   * prompt and the answer groups itself.
+   * must never be mounted on a student surface. It never draws a rubric —
+   * the grading criteria — at either density: they are the grader's
+   * (ADR-037), and the wall is read by a class. Absent, the host draws the
+   * prompt, the test cases and the answer groups itself.
    */
   readonly Key?: LazyExoticComponent<ComponentType<KeyProps<TStudent, TSolution>>>;
 

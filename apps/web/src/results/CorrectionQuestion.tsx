@@ -5,11 +5,9 @@ import type { AnswerDistributionEntry, ByQuestion } from "@quiz/contracts";
 import type { KeyProps } from "@quiz/core/client";
 import { displayedRate } from "@quiz/domain";
 import type { ClozeTextRenderer } from "@quiz/qt-cloze/client";
-import { referenceProgram, type ProgramStudent } from "@quiz/qt-code/client";
-import type { RichSolution } from "@quiz/qt-rich/client";
 import { answeredCount, CORRECTION_SCALE, CorrectionCount, type Density } from "@quiz/ui";
 
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { promptOf, PROJECTION_ROW_CAP } from "../poll/pollTally";
@@ -27,9 +25,9 @@ import { BAR_TONES, cx, NotePanel, SegmentedBar, type BarPart, type BarTone } fr
  *
  * The answer key is the type's own when it has one (`QuestionTypeClient.Key`,
  * ADR-109): an mcq's choices, a cloze's blanks in its text, a short or math
- * answer's expected answers, a categorize board. This host draws the rest —
- * the head, the generic statement and answer groups it lends the key, the
- * program of a `code` question, an essay's model answer.
+ * answer's expected answers, a categorize board, a program, an essay's model
+ * answer. This host draws the rest — the head, and the generic statement,
+ * test cases and answer groups it lends the key.
  *
  * The sizes come from `SCALE`: `wall` is the projection's own `clamp()` scale
  * (DESIGN.md, "Correction projection"), `page` the same pieces at the scale
@@ -46,8 +44,6 @@ const SCALE = {
     ...CORRECTION_SCALE.wall,
     prompt: "max-w-[64ch] text-balance text-[clamp(24px,2.7vw,40px)] font-bold leading-tight tracking-[-0.025em]",
     answerRow: "grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_3rem] gap-[clamp(12px,2vw,24px)] py-2.5",
-    program: "gap-6",
-    code: "p-5 text-[clamp(14px,1.25vw,19px)]",
     caseRow: "grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 pb-3 pt-2.5",
     caseLabel: "text-[clamp(15px,1.3vw,19px)]",
   },
@@ -55,25 +51,10 @@ const SCALE = {
     ...CORRECTION_SCALE.page,
     prompt: "text-[15px] font-medium",
     answerRow: "grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_2.5rem] gap-4 py-2",
-    program: "gap-4",
-    code: "p-4 text-xs",
     caseRow: "grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1.5 py-2",
     caseLabel: "text-[13px]",
   },
 } as const satisfies Record<Density, Record<string, string>>;
-
-/** The `code` key, when the payload carries one and the policy let it out. */
-export function referenceSolution(solution: unknown): string | null {
-  const value = (solution as { referenceSolution?: unknown } | null)?.referenceSolution;
-  return typeof value === "string" && value.trim() !== "" ? value : null;
-}
-
-/** An essay's model answer, when the teacher wrote one. */
-function modelAnswer(q: ByQuestion): string | null {
-  if (q.item.type !== "rich") return null;
-  const reference = (q.solution as Partial<RichSolution> | null)?.reference;
-  return typeof reference === "string" && reference.trim() !== "" ? reference : null;
-}
 
 /** A group's verdict as a tone: right, wrong, or both at once. */
 const verdictTone = (entry: Pick<AnswerDistributionEntry, "correct">): BarTone =>
@@ -197,94 +178,48 @@ export function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: 
 }
 
 /**
- * A program: the reference solution, and how the class fared on each test
- * case, its passes out of its runs beside the bar.
- *
- * The reference is drawn whole — the template's locked text around its
- * pieces, as the student's editor showed them — and, hidden, it is the code
- * the class started from in its place, named as such: the reveal fills in
- * the regions the students wrote. A program with no template to start from
- * keeps a hatched block, named too, so it never reads as an empty field.
+ * How the class fared on each test case of a program (`casePassRate`, filled
+ * by `code` and `blocks`): its passes out of its runs beside the bar, the
+ * papers it never ran on as "not run". `null` when the type counts no case.
+ * A program's key sets it beside its code (`KeyProps.cases`).
  */
-export function CorrectionProgram({
-  q,
-  revealed,
-  density = "wall",
-}: {
-  q: ByQuestion;
-  revealed: boolean;
-  density?: Density;
-}) {
-  const t = useT();
+function caseBars(q: ByQuestion, density: Density, t: TFunction): ReactNode {
+  if (q.casePassRate.length === 0) return null;
   const s = SCALE[density];
-  const reference = referenceSolution(q.solution);
-  const segments = (q.student as Partial<ProgramStudent> | null)?.segments;
-  const whole = (text: string) => (Array.isArray(segments) ? referenceProgram(segments, text) : null);
-  // The raw reference when the template cannot hold it: never nothing.
-  const key = reference === null ? null : (whole(reference) ?? reference);
-  const start = whole("");
-  const shown = revealed ? key : start?.trim() ? start : null;
-  const label = t(
-    revealed ? "results.byQuestion.reference" : shown === null ? "correction.code.hidden" : "correction.code.start",
-  );
   const n = answeredCount(q);
-  if (key === null && q.casePassRate.length === 0) return null;
   return (
-    <div className={cx("grid items-start lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]", s.program)}>
-      {key === null ? null : (
-        <figure className="flex min-w-0 flex-col gap-2">
-          <figcaption className={cx("font-medium text-fg-muted", s.caption)}>{label}</figcaption>
-          {shown === null ? (
-            // Hidden with nothing to start from: a hatched block of a fixed
-            // height, never the reference itself made transparent.
-            <div
-              aria-hidden
-              className="h-40 rounded-card border border-line bg-[repeating-linear-gradient(135deg,var(--surface-2)_0_8px,var(--surface-3)_8px_16px)]"
+    <ul className="flex flex-col" aria-label={t("results.byQuestion.cases")}>
+      {q.casePassRate.map((c) => (
+        <li key={c.name} className={cx("grid items-center border-b border-line px-1", s.caseRow)}>
+          {/* `label`, never `name`: a hidden case reads as a student
+              reads it unless the policy shows hidden names (ADR-033). */}
+          <span className={cx("font-semibold", s.caseLabel)}>{c.label}</span>
+          <CorrectionCount density={density}>
+            {t("results.byQuestion.casePass", { passed: c.passed, total: c.total })}
+          </CorrectionCount>
+          <span className="col-span-2">
+            <SegmentedBar
+              parts={[
+                { tone: "success", label: t("correction.case.passed"), value: c.passed },
+                { tone: "danger", label: t("correction.case.failed"), value: c.total - c.passed },
+                { tone: "warning", label: t("correction.case.notRun"), value: n - c.total },
+              ]}
             />
-          ) : (
-            <pre
-              // A focusable scroll region: it runs past the screen edge on a
-              // phone, and a keyboard cannot reach into a container that
-              // holds nothing focusable (W10).
-              tabIndex={0}
-              role="region"
-              aria-label={label}
-              className={cx(
-                "overflow-x-auto rounded-card border border-line font-mono leading-relaxed",
-                s.code,
-                revealed ? "bg-surface" : "bg-surface-2",
-              )}
-            >
-              {shown}
-            </pre>
-          )}
-        </figure>
-      )}
-      {q.casePassRate.length > 0 ? (
-        <ul className="flex flex-col" aria-label={t("results.byQuestion.cases")}>
-          {q.casePassRate.map((c) => (
-            <li key={c.name} className={cx("grid items-center border-b border-line px-1", s.caseRow)}>
-              {/* `label`, never `name`: a hidden case reads as a student
-                  reads it unless the policy shows hidden names (ADR-033). */}
-              <span className={cx("font-semibold", s.caseLabel)}>{c.label}</span>
-              <CorrectionCount density={density}>
-                {t("results.byQuestion.casePass", { passed: c.passed, total: c.total })}
-              </CorrectionCount>
-              <span className="col-span-2">
-                <SegmentedBar
-                  parts={[
-                    { tone: "success", label: t("correction.case.passed"), value: c.passed },
-                    { tone: "danger", label: t("correction.case.failed"), value: c.total - c.passed },
-                    { tone: "warning", label: t("correction.case.notRun"), value: n - c.total },
-                  ]}
-                />
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
+}
+
+/**
+ * The test cases of a type that draws no key of its own (`blocks`): in the
+ * program's columns, where a key would set its code beside them.
+ */
+export function CorrectionCases({ q, density }: { q: ByQuestion; density: Density }) {
+  const t = useT();
+  const cases = caseBars(q, density, t);
+  return cases === null ? null : <div className={SCALE[density].program}>{cases}</div>;
 }
 
 /**
@@ -307,15 +242,21 @@ export const drawsKey = (type: string): boolean => keyOf(type) !== undefined;
 /** The app's sanitised markdown, inline: what a key's choice, card or formula is set in. */
 const renderInline = (source: string) => <MarkdownView source={source} inline />;
 
+/** The app's sanitised markdown as blocks, per density: an explanation, an essay's model answer. */
+const RENDER_BLOCK = {
+  wall: (source: string) => <MarkdownView source={source} className="text-[clamp(15px,1.3vw,19px)]" />,
+  page: (source: string) => <MarkdownView size="sm" source={source} />,
+} as const satisfies Record<Density, (source: string) => ReactNode>;
+
 /**
  * The statement and the key of a question: the type's `Key`, given the
- * prompt and the answer groups to place, replace or omit — or, for a type
- * without one, the prompt and the answer groups.
+ * prompt, the test cases and the answer groups to place, replace or omit —
+ * or, for a type without one, the prompt, the test cases and the answer
+ * groups.
  *
  * A parameterized question's statement is the instance of its example
  * values, and says so above it: no student read these very numbers (ADR-056
- * §9). `after` follows the statement — on the wall, the explanation and the
- * program.
+ * §9). `after` follows the statement — on the wall, the explanation.
  */
 export function CorrectionKey({
   q,
@@ -361,6 +302,7 @@ export function CorrectionKey({
     return (
       <>
         {prompt}
+        <CorrectionCases q={q} density={density} />
         {/* The blanks alone say nothing the head does not: with no key beside
             them, a row of them needs groups. */}
         {q.distribution.length > 0 ? rows : null}
@@ -381,9 +323,11 @@ export function CorrectionKey({
         stats={q}
         prompt={prompt}
         rows={rows}
+        cases={caseBars(q, density, t)}
         statement={statement}
         Bar={SegmentedBar}
         renderMarkdown={renderInline}
+        renderBlock={RENDER_BLOCK[density]}
         strings={strings?.(t)}
         renderText={ClozeMarkdownText}
       />
@@ -405,7 +349,6 @@ export function CorrectionQuestion({
   explained: boolean;
 }) {
   const t = useT();
-  const model = revealed ? modelAnswer(q) : null;
   return (
     <>
       <Head q={q} number={number} />
@@ -414,23 +357,11 @@ export function CorrectionQuestion({
         revealed={revealed}
         density="wall"
         after={
-          <>
-            {explained && q.explanation ? (
-              <NotePanel eyebrow={t("correction.explanation")}>
-                <MarkdownView source={q.explanation} className="text-[clamp(15px,1.3vw,19px)]" />
-              </NotePanel>
-            ) : null}
-            <CorrectionProgram q={q} revealed={revealed} />
-          </>
+          explained && q.explanation ? (
+            <NotePanel eyebrow={t("correction.explanation")}>{RENDER_BLOCK.wall(q.explanation)}</NotePanel>
+          ) : null
         }
       />
-      {/* An essay's model answer — never its grading criteria, which stay the
-          teacher's (ADR-037). The Results tab has it from the type's review. */}
-      {model ? (
-        <NotePanel eyebrow={t("correction.modelAnswer")}>
-          <MarkdownView source={model} className="text-[clamp(15px,1.3vw,19px)]" />
-        </NotePanel>
-      ) : null}
     </>
   );
 }

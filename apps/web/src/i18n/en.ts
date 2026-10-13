@@ -2286,6 +2286,7 @@ export const en = {
   "qt.rich.r.reference": "Model answer",
   "qt.rich.r.score": "Score",
   "qt.rich.g.essay": "Essay",
+  "qt.rich.k.modelAnswer": "Model answer",
 
   // --- qt-categorize strings ---
   "qt.categorize.e.prompt": "Statement",
@@ -2574,6 +2575,9 @@ export const en = {
   "qt.code.g.compileFailed": "Does not compile",
   "qt.code.g.atRunner": "runner…",
   "qt.code.g.runFailed": "Not run",
+  "qt.code.k.reference": "Reference solution",
+  "qt.code.k.start": "Starting code",
+  "qt.code.k.hidden": "Reference solution, hidden until the answers are revealed",
 
   // --- qt-code: codeimage (ADR-021) — only what a picture adds; the program
   // half reads the qt.code.* sentences above ---
@@ -4581,7 +4585,6 @@ export const en = {
   "results.byQuestion.empty.body": "Add questions to the evaluation to see them here.",
   "results.byQuestion.correct": "correct answer",
   "results.byQuestion.key": "Question and answer key",
-  "results.byQuestion.reference": "Reference solution",
   "results.present": "Present",
   "correction.title": "Correction",
   "correction.back": "Back to the results",
@@ -4598,9 +4601,6 @@ export const en = {
   "correction.reveal": "Reveal the answers",
   "correction.hide": "Hide the answers",
   "correction.explanation": "Explanation",
-  "correction.code.start": "Starting code",
-  "correction.code.hidden": "Reference solution, hidden until the answers are revealed",
-  "correction.modelAnswer": "Model answer",
   "bar.part": "{word}: {n}",
   "correction.outcome.correct": "correct",
   "correction.outcome.partial": "partial",
