@@ -16,7 +16,7 @@ export interface PointsBounds {
 
 type PointsKind = "max" | "penalty" | "bonus";
 
-export function pointsKind({ max, bonus }: PointsBounds): PointsKind {
+function pointsKind({ max, bonus }: PointsBounds): PointsKind {
   return bonus !== undefined ? "bonus" : max < 0 ? "penalty" : "max";
 }
 
@@ -49,14 +49,14 @@ export function pointsSuffix(bounds: PointsBounds): string {
 export function PointsPill({
   bounds,
   label,
-  invalid = false,
   ...props
 }: Omit<InputHTMLAttributes<HTMLInputElement>, "size" | "min" | "max"> & {
   bounds: PointsBounds;
   label?: string;
-  invalid?: boolean;
 }) {
   const t = useT();
+  // Invalid as the caller's `fieldErrorProps` says it, the one source of the state.
+  const invalid = props["aria-invalid"] === true || props["aria-invalid"] === "true";
   const rangeId = useId();
   const kind = KIND[pointsKind(bounds)];
   return (
@@ -84,7 +84,6 @@ export function PointsPill({
         placeholder="—"
         {...props}
         aria-label={label}
-        aria-invalid={invalid || undefined}
         aria-describedby={[rangeId, props["aria-describedby"]].filter(Boolean).join(" ")}
         className="min-w-0 flex-1 appearance-none bg-transparent p-0 text-right tabular-nums text-fg outline-none placeholder:text-fg-faint [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
@@ -137,7 +136,6 @@ export function PointsInput({
           setInvalid(false);
           draft.onBlur();
         }}
-        invalid={invalid}
         {...fieldErrorProps(errorId, invalid)}
       />
       <FieldError id={errorId} className="whitespace-nowrap text-xs">

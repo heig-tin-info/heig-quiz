@@ -455,7 +455,6 @@ function AdjustForm({
           autoFocus
           value={points}
           onChange={(e) => setPoints(e.target.value)}
-          invalid={showPointsError}
           {...fieldErrorProps(pointsId, showPointsError)}
         />
         <FieldError id={pointsId}>{showPointsError ? t("grading.override.pointsInvalid", range) : null}</FieldError>

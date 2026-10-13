@@ -6060,7 +6060,6 @@ export const fr: Record<keyof Dict, string> = {
   "project.grading.col.state": "État",
   "project.grading.bonus": "bonus +{n}",
   "project.grading.penalty": "pénalité",
-  "project.grading.range": "De {min} à {max}",
   "project.grading.source.auto": "CI",
   "project.grading.source.llm": "IA",
   "project.grading.source.manual": "Enseignant",

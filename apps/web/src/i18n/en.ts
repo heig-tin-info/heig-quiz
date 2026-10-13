@@ -6076,7 +6076,6 @@ export const en = {
   "project.grading.col.state": "State",
   "project.grading.bonus": "bonus +{n}",
   "project.grading.penalty": "penalty",
-  "project.grading.range": "From {min} to {max}",
   "project.grading.source.auto": "CI",
   "project.grading.source.llm": "AI",
   "project.grading.source.manual": "Teacher",
