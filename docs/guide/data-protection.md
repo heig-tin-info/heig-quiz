@@ -4,11 +4,28 @@ This page describes what the platform does with the personal data of its users, 
 
 ## Framework and approach
 
-The platform is used by teachers of the HEIG-VD, a public institution of the canton of Vaud and a member of the HES-SO. The reference text is the Vaud law on the protection of personal data (Loi vaudoise sur la protection des données personnelles, LPrD, BLV 172.65), currently under revision. The European GDPR is not the reference.
+The platform is used by teachers of the HEIG-VD, a public institution of the canton of Vaud and a member of the HES-SO. The reference text is the Vaud law on the protection of personal data (Loi vaudoise sur la protection des données personnelles, LPrD, BLV 172.65). The European GDPR is not the reference. Whether a revision of the LPrD is under way, and what it would change for this page: **To be confirmed**.
 
 This page does not say whether the processing meets that law; judging it is not the role of a piece of software's documentation. It describes, in good faith, what is in place, what is not, and what remains to be checked. The section [Known limits](#known-limits) lists what is missing; the gaps are tracked in issue [#274](https://github.com/heig-tin-info/heig-quiz/issues/274). The rules the platform is meant to follow are the N-DATA requirements of the specification (`docs/spec/03-exigences-non-fonctionnelles.md`).
 
 Who is formally responsible for the processing (the HEIG-VD, a department, the teacher), and whether it has been declared to an authority or to the school's data protection officer: **To be confirmed**.
+
+## Words used on this page
+
+Pool
+:   A teacher's collection of questions, used by the evaluations of the courses it is linked to.
+
+Staff seat
+:   A teacher's place on a course's staff, as owner or assistant; it is what gives access to the course's classrooms and students.
+
+Drill
+:   Spaced practice: a student reviews, at growing intervals, questions already met in an evaluation.
+
+Super Powers
+:   A one-hour switch by which the application administrator reaches every course and classroom of the platform.
+
+Kiosk station
+:   One of the school's Chromebooks locked on the platform, on which a student sits an exam after pairing it with their phone.
 
 ## In short
 
@@ -62,8 +79,8 @@ The platform receives data from three sources: Switch edu-ID at sign-in, the cla
 | --- | --- | --- | --- |
 | Which student accepted which repository, the GitHub accounts invited to it, groups | `project_repos`, `project_repo_access`, `student_groups`, `project_groups` (`db/project.ts`, `db/group.ts`) | the student, the teacher | A teacher deletes the project or classroom; the repositories themselves stay on GitHub |
 | Receipt time, head and commit count of each push | `push_receipts` (`db/github.ts`) | GitHub | A teacher deletes |
-| CI runs, scores, the teacher's score and comment; for a project graded by criteria, the evidence of each graded commit (test results, outputs, files) and the proposed and validated points per criterion with their rationales | `project_grade_runs`, `project_evidence`, `project_criterion_grades` (`db/project.ts`, ADR-106) | GitHub, AI proposal, teacher | Evidence files: six months after the release (`modules/project/evidence.ts`); the rest: a teacher deletes |
-| GitHub's notifications to the platform (webhooks) | `webhook_deliveries` (`db/github.ts`) | GitHub | Content erased 30 days after processing |
+| CI runs, scores, the teacher's score and comment; for a project graded by criteria, the evidence of each graded commit (test results, outputs, files) and the proposed and validated points per criterion with their rationales | `project_grade_runs`, `project_evidence`, `project_criterion_grades` (`db/project.ts`, ADR-106) | GitHub, AI proposal, teacher | Evidence files, commits and build and test output: six months after the release (`modules/project/evidence.ts`); the test cases and their statuses, and the rest: a teacher deletes |
+| GitHub's notifications to the platform (webhooks) | `webhook_deliveries` (`db/github.ts`) | GitHub | Content erased once processed and 30 days after receipt |
 | Online workspace: launches per student and project | `codespace_launches` (`db/codespace.ts`, ADR-078) | server | A teacher deletes the project |
 | Classroom journal: pages, files, revisions with their author | `journal_*` (`db/journal.ts`) | teacher, or a copy of a GitHub repository | The journal or classroom is deleted |
 
@@ -98,7 +115,7 @@ The data is used to:
 - produce statistics, per evaluation for the teacher and per question in a pool;
 - keep a trace of changes (the audit log) and diagnose failures (the technical log, the hours of activity).
 
-The code contains no advertising and no commercial use. The platform loads no analytics script, and no font, library or image from a third party: everything is served by the server itself (`apps/api/src/csp.ts`).
+The code contains no advertising and no commercial use. The platform loads no analytics script, and no font, library or image from a third party: everything is served by the server itself, except the one fetch of the Teams tab described under [Security measures](#security-measures) (`apps/api/src/csp.ts`).
 
 ## Who reaches what
 
@@ -116,9 +133,9 @@ When a classroom has the drill, its staff see each student's drill activity: the
 
 A teacher who can read a question pool, a pool shared with them or a public one included, sees the aggregated statistics of its questions over every exam that used them, other teachers' classes included (see [Statistics](#statistics)).
 
-Profile pictures are served only to someone who already sees that person: a colleague on a course staff, the staff of a course where the person sits a classroom, the person themselves and the administrator (`seesUser` in `apps/api/src/modules/guards.ts`). A student never receives another student's picture.
+Profile pictures are served only to someone who already sees that person: a colleague on a course staff, the staff of a course where the person sits a classroom, anyone who can read a pool the person owns (a public pool included), the person themselves and the administrator (`seesUser` in `apps/api/src/modules/guards.ts`). A student never receives another student's picture.
 
-A teacher who connects an external AI assistant to the platform (see [AI assistants](assistants.md)) gives it access to courses, pools and evaluations, the names and addresses of a course's staff included; none of its tools reaches a classroom's list of students. The in-app help assistant differs on one point: it can also read the final results of the teacher's own classrooms, students' names included (see [Third parties](#anthropic-the-ai-model)).
+A teacher who connects an external AI assistant to the platform (see [AI assistants](assistants.md)) gives it access to courses, pools and evaluations, the names and addresses of a course's staff included; none of its tools reaches a classroom's list of students. The in-app help assistant differs on one point: it can also read the final results of the teacher's own classrooms, students' names included (see [Anthropic, the AI model](#anthropic-the-ai-model)).
 
 ### The application administrator
 
@@ -128,7 +145,7 @@ To help a student with a problem they report, the administrator, with Super Powe
 
 ### The system administrators
 
-Whoever administers the machines reaches the database, the backups and the logs, hence all the data, through system tools (SSH, `psql`) that the platform does not trace. The deployment runbook describes the policy: one personal account per person, sign-in by key only, no direct root sign-in, and `sudo` writing who did what to the system journal (`docs/development/deployment.md`, *Human access*). Which persons hold these accounts on the production machines, today: **To be confirmed**.
+Whoever administers the machines reaches the database, the backups and the logs, hence all the data, through system tools (SSH, `psql`) that the platform does not trace. The deployment runbook describes the policy: one personal account per person, sign-in by key only, no root sign-in on the application machine and, on the code machine, root only for the deployment's forced commands, and `sudo` writing who did what to the system journal (`docs/development/deployment.md`, *Human access*). Which persons hold these accounts on the production machines, today: **To be confirmed**.
 
 ### What is traced
 
@@ -136,19 +153,21 @@ The audit log (`apps/api/src/audit.ts`) records the actions that change somethin
 
 ## Third parties
 
-| Service | Role | What it receives |
-| --- | --- | --- |
-| Switch edu-ID | Identity provider | The sign-in; it is the one that sends the identity |
-| Hetzner Online (cloud servers) | Hosting | Everything: the application machine holds the database, the backups and the logs (see [Hosting](#hosting-and-location)) |
-| Hetzner Storage Box, Helsinki | Off-site copy of the backups | Encrypted archives only, which it cannot read |
-| Anthropic (Claude) | AI model, once an administrator has stored a key | Question content; some student answers and student code, masked of names; a teacher's assistant questions and what it reads (below) |
-| GitHub | Projects and journals, for a classroom connected to an organisation | The repositories the platform creates for students and the invitations of their linked GitHub accounts; a journal kept in a repository is only read |
-| Scaleway Transactional Email (Paris region by default) | E-mail notifications, when enabled | The recipient's address, the title of the evaluation or name of the pool; never a grade (`apps/api/src/modules/notifications/`) |
-| Microsoft Teams | Notifications, for a linked account | A notification with the title concerned; limited to the authorised organisations |
-| Google (Chrome Verified Access) | Proves a kiosk station is one of the school's Chromebooks (ADR-051) | The station's response to a challenge; no student data (`apps/api/src/modules/kiosk/attestation.ts`) |
-| The host of the edu-ID picture | Source of a portrait not uploaded | A request from the server, which then serves the picture itself: a browser never contacts that host (`apps/api/src/modules/avatar.ts`) |
+| Service | Role | What it receives | Where |
+| --- | --- | --- | --- |
+| Switch edu-ID | Identity provider | The sign-in; it is the one that sends the identity | Switzerland (Switch) |
+| Hetzner Online (cloud servers) | Hosting | Everything: the application machine holds the database, the backups and the logs (see [Hosting](#hosting-and-location)) | Europe; country **To be confirmed** |
+| Hetzner Storage Box, Helsinki | Off-site copy of the backups | Encrypted archives only, which it cannot read | Helsinki, Finland |
+| Anthropic (Claude) | AI model, once an administrator has stored a key | Question content; some student answers and student code, masked of names; a teacher's assistant questions and what it reads (below) | A United States company; where the requests are processed: **To be confirmed** |
+| GitHub | Projects and journals, for a classroom connected to an organisation | The repositories the platform creates for students and the invitations of their linked GitHub accounts; a journal kept in a repository is only read | A United States company (Microsoft); where the data is held: **To be confirmed** |
+| Scaleway Transactional Email (Paris region by default) | E-mail notifications, when enabled | The recipient's address, the title of the evaluation or name of the pool; never a grade (`apps/api/src/modules/notifications/`) | France (Paris) by default |
+| Microsoft Teams | Notifications, for a linked account | A notification with the title concerned; limited to the authorised organisations | The tenant's Microsoft 365 region: **To be confirmed** |
+| Google (Chrome Verified Access) | Proves a kiosk station is one of the school's Chromebooks (ADR-051) | The station's response to a challenge; no student data (`apps/api/src/modules/kiosk/attestation.ts`) | A United States company; where it is processed: **To be confirmed** |
+| The host of the edu-ID picture | Source of a portrait not uploaded | A request from the server, which then serves the picture itself: a browser never contacts that host (`apps/api/src/modules/avatar.ts`) | Wherever edu-ID's picture address points |
 
-E-mails and Teams messages carry titles, names of classrooms and pools, and counts; never a grade or a question's content (`apps/api/src/modules/notifications/templates.ts`). Whether e-mail and Teams are enabled in production: **To be confirmed**.
+Anthropic, GitHub and Google are United States companies: sending data to them is a transfer outside Switzerland and Europe, and which agreements cover it is not recorded in the repository (**To be confirmed**).
+
+E-mails and Teams messages carry titles, names of classrooms and pools, counts, and sometimes a colleague's name ("{name} shared the pool … with you"); never a grade or a question's content (`apps/api/src/modules/notifications/templates.ts`). Whether e-mail and Teams are enabled in production: **To be confirmed**.
 
 ### Anthropic, the AI model
 
@@ -156,7 +175,7 @@ Every call goes through one gateway on the platform's one key, stored encrypted 
 
 | Purpose | Triggered by | What is sent | Masking |
 | --- | --- | --- | --- |
-| Generating a question's answer, describing a pool, suggesting concepts, sorting concepts (ADR-059, ADR-081, ADR-095) | A teacher or the administrator | Question content, concept labels, pool names; never a student's data | Not needed |
+| Generating a question's answer, describing a pool, suggesting concepts, sorting concepts, a public pool's domain label (ADR-059, ADR-081, ADR-095) | A teacher or the administrator; the domain label also when a pool is published and in the nightly pass (`modules/pool/domain.ts`) | Question content, concept labels, pool names; never a student's data | Not needed |
 | Nightly review of published questions (ADR-060) | A pool owner who turned it on | Question content | Not needed |
 | Proposing a grade for essays and diagrams (ADR-063) | Automatically, after an evaluation closes | Statement, rubric, model answer, the student's answer | Names and e-mail addresses of the classroom's students and of whoever sat are replaced by `[student]` (`packages/domain/src/maskNames.ts`); no identifier, evaluation or classroom is sent |
 | Moderating a brainstorm's ideas (ADR-072) | A teacher who turned the AI assistance on | The question and the ideas, under throwaway ids | Names of the roster and of the joined accounts masked; an anonymous guest's idea leaves as typed, which the page says beforehand |
@@ -182,7 +201,7 @@ The platform runs on two virtual machines rented from Hetzner (`docs/development
 
 The specification asks for "a server in Europe" (N-DATA-01). Both machines are in Hetzner datacenters in Europe; the country and datacenter of each: **To be confirmed**. Hosting in Switzerland is an option the product owner will decide on (open question 56 of `docs/spec/06-questions-ouvertes.md`).
 
-A **staging** environment runs on the application machine under a separate system account. It receives a copy of the production data that is **pseudonymised on the production side before it leaves**: names, e-mail addresses, edu-ID identifiers, pictures, GitHub logins, the teacher's notes, the audit payloads and the notifications are replaced or emptied; grades, answers, content and the free text people wrote in them stay real (`scripts/staging-pseudonymize.sql`, ADR-028, update of 2026-10-11). Only the addresses on its sign-in allowlist can sign in, and its reference configuration turns off e-mail and Teams notifications.
+A **staging** environment runs on the application machine under a separate system account. It receives a copy of the production data that is **pseudonymised on the production side before it leaves**: names, e-mail addresses, edu-ID identifiers, pictures, GitHub logins, the teacher's notes, the audit payloads and the notifications are replaced or emptied; grades, answers, content and the free text people wrote in them stay real (`scripts/staging-pseudonymize.sql`, ADR-028, update of 2026-10-11). Three things stay real as well: the accounts on the keep list (`STAGING_KEEP_EMAILS`, the product owner's and testers'), left untouched with their addresses, roster rows and GitHub account; the GitHub organisation logins and repository names, which name a person when the App was installed on a personal account; and the help assistant's conversations, which may quote students' names and grades. Only the addresses on its sign-in allowlist can sign in, and its reference configuration turns off e-mail and Teams notifications.
 
 ## Retention and deletion
 
@@ -199,7 +218,7 @@ Automatic deletions:
 | Help-assistant conversations | 30 days after each exchange | `apps/api/src/modules/assist/jobs.ts`, ADR-080 |
 | Hours of activity | After eight days | `apps/api/src/modules/presence/jobs.ts`, ADR-107 |
 | Content of GitHub's notifications | 30 days after processing | `apps/api/src/modules/github/deliveries.ts` |
-| Evidence files of a project graded by criteria | Six months after its release | `apps/api/src/modules/project/evidence.ts`, ADR-106 |
+| Evidence files, commits and build and test output of a project graded by criteria (the test cases and statuses stay) | Six months after its release | `apps/api/src/modules/project/evidence.ts`, ADR-106 |
 
 Deletions by a teacher:
 
@@ -208,7 +227,7 @@ Deletions by a teacher:
 | Deleting an evaluation | Its attempts, answers, attempt journals, gradings, notifications, and the drill cards it gave rise to are deleted |
 | Deleting a classroom or a course | The same for all its evaluations and projects, plus the class list and the classroom's drill data |
 | Deleting a project | Its rows on the platform; nothing on GitHub |
-| Removing a student from the class list | Their seat and gradebook marks go; their attempts, answers, grades and drill data stay |
+| Removing a student from the class list | Their seat, gradebook marks, group memberships and repository-access rows go (their GitHub access is revoked first); their attempts, answers, grades and drill data stay |
 | Archiving a classroom | Nothing is deleted: the classroom is only hidden |
 
 What is never deleted automatically: the accounts, the e-mail addresses and edu-ID information kept, the notifications, the AI call log, the poll participants without an account, the kiosk pairings, the audit log (which keeps, among others, the name and address of a student removed from a class list), the imported heig-classroom audit log, and the online workspace's working directories (no deletion of them is in the repository).
@@ -224,7 +243,7 @@ A deleted piece of data stays in the backups until they rotate (`docs/developmen
 | Nightly off-site copy of every backup of the machine (borg, append-only) | Hetzner Storage Box, Helsinki | Encrypted before it leaves (`repokey-blake2`); the key is on the application machine and in the administrators' vault | 7 daily, 8 weekly and 12 monthly archives, pruned by hand from the operator's workstation |
 | Online workspace data | Pulled daily onto the application machine, then in the off-site copy | Not described | 14 archives on the application machine |
 
-Through the monthly off-site archives, a deleted piece of data can therefore survive about a year after its deletion. The staging copy keeps it until its next refresh.
+Through the monthly off-site archives, a deleted piece of data can therefore survive about a year after its deletion. That retention holds only when someone runs the pruning by hand (`scripts/offsite-backup/prune.sh`, "once a month is enough" in the runbook): the application machine cannot remove an archive, so without pruning the archives accumulate and nothing leaves the off-site copy. The staging copy keeps it until its next refresh.
 
 ## Statistics
 
@@ -245,7 +264,7 @@ Sign-in and sessions:
 - requests that change something are protected against cross-site request forgery (`apps/api/src/auth/plugin.ts`);
 - the development sign-in, which lets anyone pick a fictitious identity, stops the server from starting in production, as does a test database (`apps/api/src/config.ts`);
 - API tokens and AI-assistant authorisations are stored as hashes only (ADR-022, ADR-023);
-- the content security policy admits only the site's own scripts and images (`apps/api/src/csp.ts`).
+- the content security policy admits only the site's own scripts and images; the one exception is the Microsoft Teams tab, which may fetch Microsoft's list of Teams hosts from `res.cdn.office.net` (`apps/api/src/csp.ts`).
 
 Network and storage:
 
@@ -253,7 +272,7 @@ Network and storage:
 - the database is reached only by the application, over a network internal to the machine;
 - secrets are in files reserved to the service account, never in the repository or the database; the AI key is stored encrypted (ADR-010, ADR-058);
 - the off-site copy is encrypted before it leaves, and the application machine can add archives to it but not remove one (ADR-009);
-- SSH by key only, no direct root sign-in, `fail2ban` and a provider firewall (`docs/development/deployment.md`, *Human access*);
+- SSH by key only, no root sign-in except the code machine's forced deployment commands, `fail2ban` and a provider firewall (`docs/development/deployment.md`, *Human access*);
 - students' code runs in containers with no network, no secret and no access to the machine's files (`apps/runner/README.md`).
 
 Not established from the repository: the encryption of the machines' disks and of Hetzner's backups, and the retention of the technical logs on the machines (**To be confirmed**).
@@ -288,7 +307,7 @@ Retention and deletion:
 - removing a student from a class list leaves their attempts, answers, grades, drill data and released-grade snapshot in the database;
 - the audit log is never purged and contains names and addresses; its protection against change also prevents removing them;
 - the AI call log, the notifications, the poll participants without an account, the kiosk pairings and the online workspace's working directories have no retention period;
-- the off-site copy keeps monthly archives for a year, so a deletion reaches every backup only after about a year, while the specification asks for deletion "including in backups beyond 30 days" (N-DATA-03).
+- the off-site copy keeps monthly archives for a year, so a deletion reaches every backup only after about a year, while the specification asks for deletion "including in backups beyond 30 days" (N-DATA-03); and that year holds only if the off-site copy is pruned by hand, otherwise its archives keep everything.
 
 Statistics:
 
@@ -320,6 +339,8 @@ Hosting:
 
 ## To be confirmed
 
+- Whether a revision of the LPrD is under way, and its effect on this page.
+- Which agreements cover the transfers to Anthropic, GitHub and Google, United States companies, and where they process the data.
 - Who is responsible for the processing, the contact for students' requests, and any declaration to the cantonal authority or the school's data protection officer.
 - The retention period the institution wants after the studies.
 - The country and datacenter of each Hetzner machine; whether Hetzner's machine backup is enabled; the encryption of the disks and of those backups.
