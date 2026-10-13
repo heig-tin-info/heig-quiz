@@ -1,9 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import type { ProjectPatch, ProjectSummary } from "@quiz/contracts";
+import { ProjectPatch, type ProjectSummary } from "@quiz/contracts";
 
 import { api } from "../api";
+import { useT } from "../i18n";
+import { useToast } from "../notify";
 import { activitiesKey, classroomGroupSetsKey, classroomProjectsKey, projectKey } from "../queryKeys";
+import { refusalMessage } from "./projectPage";
 
 /** What a write to a project changed besides its page: the classroom's lists and the Activities. */
 export function useProjectRefresh(id: string, classroomId: string | null) {
@@ -39,4 +42,32 @@ export function useProjectPatch(
       await refresh();
     },
   });
+}
+
+/**
+ * Renaming a project, wherever it starts: its name in place (`ProjectPage`)
+ * or "Rename" on its row of the classroom's list (`ProjectGroup`). The
+ * page's writer, the name checked by the route's schema first, "Saved" or
+ * the refusal in words. A name changes in every state
+ * (`projectFieldRefusal`); the slug, and so the repositories, never do.
+ * `onDone` runs once the write and the refresh landed.
+ */
+export function useRenameProject(id: string, classroomId: string | null) {
+  const t = useT();
+  const toast = useToast();
+  const patch = useProjectPatch(id, classroomId);
+  const rename = (name: string, onDone?: () => void) => {
+    const parsed = ProjectPatch.safeParse({ name });
+    if (!parsed.success) return;
+    patch.mutate(parsed.data, {
+      onSuccess: () => {
+        toast(t("sync.saved"), "success");
+        onDone?.();
+      },
+      onError: (error) => toast(refusalMessage(error, t), "error"),
+    });
+  };
+  /** The name a save in flight carries, for `EditableTitle`'s `pending`. */
+  const pendingName = patch.isPending ? patch.variables?.name : undefined;
+  return { rename, pending: patch.isPending, pendingName };
 }

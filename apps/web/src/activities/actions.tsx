@@ -11,7 +11,7 @@ import { useErrorToast } from "../notify";
 import { repoHref } from "../project/projectPage";
 import { activitiesKey, pollKey } from "../queryKeys";
 import type { Route } from "../router";
-import { IconLink, Menu, type MenuItem } from "../ui";
+import { Actions, IconLink, Menu, type MenuItem } from "../ui";
 import { typeOf } from "./model";
 
 /** The confirmation of ending a poll, on its projection as in a list. */
@@ -61,9 +61,9 @@ export const endable = (row: ActivitySummary) => typeOf(row) === "poll" && row.s
  * than one more click (`Actions` › `menu`). A project's two repositories
  * on GitHub are links in sight on the row (M3-14h, product owner: the menu
  * of M3-14a hid them), always the same two, so nothing flickers; its one
- * place is its page (M3-12), so it has no menu unless the list offers
- * `onRename` (the classroom's projects, #804), which the menu then holds
- * beside the links.
+ * place is its page (M3-12), so it has no menu; where the list offers
+ * `onRename` (the classroom's projects, #804), a Rename icon button stands
+ * beside the links (`Actions`: one action is a button).
  */
 export function ActivityMenu({
   row,
@@ -75,25 +75,24 @@ export function ActivityMenu({
   navigate: (r: Route) => void;
   /** Only a poll ends from a list. */
   onEnd?: (row: ActivitySummary) => void;
-  /** "Rename", where the list renames its rows (#804). */
-  onRename?: (row: ActivitySummary) => void;
+  /** A project's "Rename", where the list renames its rows (#804). */
+  onRename?: (row: ProjectActivitySummary) => void;
 }) {
   const t = useT();
-  const rename: MenuItem[] = onRename
-    ? [{ label: t("common.rename"), icon: Pencil, onSelect: () => onRename(row) }]
-    : [];
   if (row.kind === "project") {
     if (!onRename) return <ProjectRepoLinks row={row} />;
     return (
-      <span onClick={(e) => e.stopPropagation()} className="inline-flex items-center">
+      <span className="inline-flex items-center">
         <ProjectRepoLinks row={row} />
-        <Menu label={t("live.row.actions", { name: row.title })} items={rename} />
+        <Actions
+          label={t("live.row.actions", { name: row.title })}
+          items={[{ label: t("common.rename"), icon: Pencil, onSelect: () => onRename(row) }]}
+        />
       </span>
     );
   }
   const items: MenuItem[] = [
     ...evaluationLinkItems(row, t, navigate),
-    ...rename,
     ...(endable(row)
       ? [{ label: t("poll.end"), icon: Square, danger: true, separator: true, onSelect: () => onEnd?.(row) }]
       : []),

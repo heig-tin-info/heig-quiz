@@ -214,7 +214,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
           <span className="flex flex-wrap items-baseline gap-3">
             <EditableTitle
               value={evaluation.title}
-              onSave={(title) => rename(title)}
+              onSave={rename}
               editLabel={t("eval.rename.of", { title: evaluation.title })}
               inputLabel={t("eval.titleLabel")}
             />

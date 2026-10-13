@@ -58,7 +58,7 @@ import {
   type UnassignedStudent,
 } from "./projectPage";
 import { RepoSheet } from "./RepoSheet";
-import { useProjectPatch, useProjectRefresh } from "./useProjectPatch";
+import { useProjectPatch, useProjectRefresh, useRenameProject } from "./useProjectPatch";
 
 /**
  * The staff's project page (F-PROJ-13, M3-12), `/projects/:id`, in two
@@ -131,6 +131,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const patch = useProjectPatch(id, classroomId, (body) => {
     if (body.groupSetId) setNoSet(false);
   });
+  const renaming = useRenameProject(id, classroomId);
   /** The page's one write: a refusal is a toast, unless the caller said it in place (`WriteProject`). */
   const write: WriteProject = (body, onError) =>
     patch.mutate(body, {
@@ -283,8 +284,8 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
             {project.editable.includes("name") ? (
               <EditableTitle
                 value={project.name}
-                pending={patch.isPending ? patch.variables?.name : undefined}
-                onSave={(name) => patch.mutate({ name })}
+                pending={renaming.pendingName}
+                onSave={renaming.rename}
                 editLabel={t("project.rename", { name: project.name })}
                 inputLabel={t("project.name")}
               />

@@ -9,7 +9,6 @@ import { openProps, StateBadge } from "../activities/views";
 import { api } from "../api";
 import { githubAbsent } from "../github/api";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
 import { classroomProjectsKey } from "../queryKeys";
 import type { Route } from "../router";
 import {
@@ -24,8 +23,7 @@ import {
   TextFieldDialog,
   useSortableTable,
 } from "../ui";
-import { refusalMessage } from "./projectPage";
-import { useProjectPatch } from "./useProjectPatch";
+import { useRenameProject } from "./useProjectPatch";
 
 type SortKey = "title" | "start" | "deadline";
 
@@ -50,8 +48,7 @@ type Renamed = Pick<ProjectActivitySummary, "id" | "title">;
  * not clickable. Its counts come with M3-08. A date that is not fixed yet (a
  * draft published by hand) is a dash and sorts last; a published project's
  * deadline says how far it is. The row ends with its two repositories on
- * GitHub, as links in sight (M3-14a, M3-14h), and a menu whose one item is
- * Rename (#804).
+ * GitHub, as links in sight (M3-14a, M3-14h), and a Rename button (#804).
  */
 export function ProjectGroup({
   classroomId,
@@ -137,10 +134,8 @@ export function ProjectGroup({
 }
 
 /**
- * "Rename" from a row's menu (#804): the page's own writer (`useProjectPatch`),
- * so the same route, the same schema and the same refresh as the name renamed
- * in place. A name changes in every state (`projectFieldRefusal`); the slug,
- * and so the repositories on GitHub, stay what they were at the creation.
+ * "Rename" from a row (#804): the page's own rename (`useRenameProject`), so
+ * the same route, schema, refresh and toasts as the name renamed in place.
  */
 function RenameProjectDialog({
   project,
@@ -152,29 +147,16 @@ function RenameProjectDialog({
   onClose: () => void;
 }) {
   const t = useT();
-  const toast = useToast();
-  const patch = useProjectPatch(project.id, classroomId);
+  const { rename, pending } = useRenameProject(project.id, classroomId);
   return (
     <TextFieldDialog
       title={t("project.rename", { name: project.title })}
       label={t("project.name")}
       initial={project.title}
       submitLabel={t("common.rename")}
-      maxLength={200}
       valid={(name) => ProjectPatch.safeParse({ name }).success}
-      submitting={patch.isPending}
-      onSubmit={(name) =>
-        patch.mutate(
-          { name },
-          {
-            onSuccess: () => {
-              toast(t("sync.saved"), "success");
-              onClose();
-            },
-            onError: (error) => toast(refusalMessage(error, t), "error"),
-          },
-        )
-      }
+      submitting={pending}
+      onSubmit={(name) => rename(name, onClose)}
       onClose={onClose}
     />
   );

@@ -124,8 +124,9 @@ describe("the classroom's Projects group", () => {
     const navigate = renderGroup();
     const region = await screen.findByRole("region", { name: "Projects" });
     const [built, building] = within(region).getAllByRole("row").slice(1);
-    // The two links are on the row, never folded into its menu (which holds Rename, #804).
-    expect(within(built!).getAllByRole("button", { name: /Actions for/ })).toHaveLength(1);
+    // No menu: the two links are on the row, beside the one Rename button (#804).
+    expect(within(region).queryByRole("button", { name: /Actions for/ })).toBeNull();
+    expect(within(built!).getByRole("button", { name: "Rename" })).toBeInTheDocument();
     const source = within(built!).getByRole("link", { name: "Source repository" });
     expect(source).toHaveAttribute("href", "https://github.com/heig/lab-source");
     expect(source).toHaveAttribute("target", "_blank");
@@ -217,8 +218,7 @@ describe("Rename from a project row's menu (#804)", () => {
       ["Labo 1", "Lab 1: pointers"],
       ["Labo 2", "Lab 2: strings"],
     ] as const) {
-      await user.click(within(row(from)).getByRole("button", { name: new RegExp(from) }));
-      await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
+      await user.click(within(row(from)).getByRole("button", { name: "Rename" }));
       const dialog = await screen.findByRole("dialog", { name: `Rename project: ${from}` });
       const field = within(dialog).getByRole("textbox", { name: "Name" });
       expect(field).toHaveValue(from);

@@ -172,7 +172,6 @@ function RenameEvaluationDialog({
       label={t("eval.titleLabel")}
       initial={evaluation.title}
       submitLabel={t("common.rename")}
-      maxLength={200}
       valid={(title) => EvaluationPatch.safeParse({ title }).success}
       submitting={pending}
       onSubmit={(title) => rename(title, onClose)}

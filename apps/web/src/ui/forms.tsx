@@ -83,7 +83,7 @@ export function FormDialog({
  * as on the button.
  *
  * `valid` is the route's own schema (invariant 7), so a value the server
- * would refuse never leaves the browser; by default, anything but blanks.
+ * would refuse never leaves the browser.
  * The submit stays disabled while the value is the one it opened on: saving
  * an unchanged name is not an action. `onSubmit` receives the value trimmed;
  * the caller closes the dialog when its write succeeds.
@@ -91,25 +91,21 @@ export function FormDialog({
 export function TextFieldDialog({
   title,
   label,
-  initial = "",
+  initial,
   submitLabel,
-  valid = (value) => value.trim() !== "",
-  maxLength,
+  valid,
   submitting,
-  error,
   onSubmit,
   onClose,
 }: {
   title: string;
   /** The field's label ("Title", "Name"). */
   label: string;
-  initial?: string;
+  initial: string;
   /** The verb of the action ("Rename", "Create"), never "OK". */
   submitLabel: string;
-  valid?: (value: string) => boolean;
-  maxLength?: number;
+  valid: (value: string) => boolean;
   submitting?: boolean;
-  error?: ReactNode;
   onSubmit: (value: string) => void;
   onClose: () => void;
 }) {
@@ -127,19 +123,17 @@ export function TextFieldDialog({
       submitLabel={submitLabel}
       submitting={submitting}
       canSubmit={canSubmit}
-      error={error}
       dense
     >
       <Field
         label={label}
         fullWidth
         autoFocus
-        maxLength={maxLength}
         value={value}
         onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") submit();
+          if (e.key === "Enter" && !e.nativeEvent.isComposing) submit();
         }}
       />
     </FormDialog>
