@@ -337,6 +337,40 @@ Hosting:
 - the daily database dumps sit unencrypted on the machine they protect;
 - the off-site copy's key is on the application machine: whoever takes that machine can also read the data deleted since, up to the archives' retention (ADR-009).
 
+## Working hypotheses
+
+Pending the answers listed in [To be confirmed](#to-be-confirmed), the following hypotheses were formed on 2026-10-13 from public sources. They are hypotheses, not legal advice; a question was sent to the HEIG-VD on the controller, the applicable law and the transfers.
+
+**Applicable law and controller.**
+
+- The HEIG-VD's own privacy policy relies on the LPrD, names the HEIG-VD as the controller of its processing and the Vaud data protection authority (APDI) as the supervisory authority; it names no data protection officer ([HEIG-VD, privacy policy](https://heig-vd.ch/politique-de-confidentialite)).
+- The LPrD also applies to a private person entrusted with a public task, for that task (art. 3 para. 2 let. e LPrD).
+- Hypothesis A (most likely): an evaluation that counts towards a grade is part of the HEIG-VD's public task, so its processing falls under the LPrD, supervised by the APDI. The platform's author operates it in practice, with no formal mandate from the school; that mandate is the gap.
+- Hypothesis B: what lies outside official teaching (accounts, free practice, shared pools) falls on the author as a private person, under the federal data protection act (LPD) and the federal commissioner (FDPIC).
+
+**How long a grade can be contested.** Under the Vaud law on universities (LHEV, art. 79 to 82) and the canton's 2026 summary ([État de Vaud, FAQ](https://www.vd.ch/fileadmin/user_upload/themes/formation/Voies_droit_par_les_HE_2026_FAQ.pdf)):
+
+1. a complaint to the school's direction within 10 days of the decision; the direction decides within 20 days;
+2. an appeal to the cantonal department (DEF) within 10 days;
+3. an appeal to the HES-SO intercantonal appeals commission within 30 days.
+
+An uncontested grade is therefore final within weeks; a pending case can last a year or two. Hypothesis: the data of an evaluation must outlive any pending case, not every evaluation for years.
+
+**Length of studies.** A bachelor of the HES-SO Engineering and Architecture domain lasts at most 12 semesters, six years (regulation of the bachelor programmes of the domain, art. 2).
+
+**Retention of exam copies elsewhere.**
+
+| Institution | Rule |
+| --- | --- |
+| EPFL, internal directive on examinations (version of 2023) | Bachelor 4 years 6 months, master 3 years 6 months, first year 6 months |
+| UNIL, Faculty of Geosciences and Environment, 2026 memo | No automatic archiving; after the 30-day appeal period the teacher may ask for archiving; a five-year period is mentioned |
+| HEIG-VD, privacy policy | "For some data, the retention period is for example ten years", exams not specified |
+| Vaud archiving act (LArch) | Each authority keeps a retention schedule signed with the cantonal archives |
+
+Hypotheses: if the HEIG-VD falls under the LArch, its retention schedule sets the period for exam documents, and the school's records office, rather than a data protection officer, can say which. About five years after an evaluation is a defensible period (close to the EPFL's, it covers the appeals and most courses of study). Since the platform keeps everything until the teacher deletes it, nothing is lost too early; the opposite risk, keeping without limit, conflicts with the principle of proportionality.
+
+**Transfers outside Switzerland.** Germany and Finland are in the European Union, which Switzerland recognises as offering adequate protection. For the United States, since 15 September 2024 the Swiss-U.S. Data Privacy Framework covers certified companies only: GitHub (Microsoft) and Google are certified; whether Anthropic is must be checked. A Vaud public body may have stricter rules on cloud services. These points come from general knowledge and are to be verified.
+
 ## To be confirmed
 
 - Whether a revision of the LPrD is under way, and its effect on this page.
