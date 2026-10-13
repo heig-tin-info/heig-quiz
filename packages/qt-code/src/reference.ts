@@ -27,7 +27,7 @@
 import { NEXT_MARKER, splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import type { CodeLanguage, CodeSegment, ProgramConfig } from "./schema.js";
-import { editableSegments, isNextMarkerLine } from "./segments.js";
+import { editableSegments, isNextMarkerLine, stripMarkerLines } from "./segments.js";
 
 /** What the cut reads: the template, its language and the reference itself. */
 type ReferenceSource = Pick<ProgramConfig, "template" | "language" | "referenceSolution">;
@@ -76,9 +76,11 @@ const pieceToRegion = (piece: string, segment: CodeSegment): string =>
  * "try" on an untouched question runs what the teacher sees.
  */
 export function referenceRegions(config: ReferenceSource): string[] | null {
-  const regions = templateRegions(config);
-  const reference = config.referenceSolution;
+  return fitReference(templateRegions(config), config.referenceSolution);
+}
 
+/** {@link referenceRegions} over the editable regions already cut. */
+function fitReference(regions: readonly CodeSegment[], reference: string): string[] | null {
   // A template with nothing editable has no region to fill: only an empty
   // reference fits it.
   if (regions.length === 0) return reference.trim() === "" ? [] : null;
@@ -91,6 +93,24 @@ export function referenceRegions(config: ReferenceSource): string[] | null {
   const cut = referencePieces(reference);
   if (cut.length !== regions.length) return null;
   return cut.map((piece, i) => pieceToRegion(piece, regions[i]!));
+}
+
+/**
+ * The whole program the reference stands for, for DISPLAY: the template's
+ * locked text, its marker lines dropped, with each editable region filled by
+ * its piece — what the correction puts on the wall, rather than pieces cut
+ * on `@@next` lines. It reads the segments of a student view, so a surface
+ * that holds no config can draw it; an empty reference is the template the
+ * student started from, as {@link referenceRegions} reads it. `null` when
+ * the reference does not fit the template.
+ */
+export function referenceProgram(segments: readonly CodeSegment[], reference: string): string | null {
+  const regions = fitReference(editableSegments(segments), reference);
+  if (regions === null) return null;
+  let next = 0;
+  return segments
+    .map((segment) => (segment.kind === "editable" ? regions[next++]! : stripMarkerLines(segment.text)))
+    .join("");
 }
 
 /** What the reference editor shows, and what it could not place. */

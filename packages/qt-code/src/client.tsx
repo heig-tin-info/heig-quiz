@@ -62,8 +62,8 @@ export const codeClient: QuestionTypeClient<
  * behind the editor's "try" button. A plain function, so it costs the bundle
  * nothing and stays out of the lazy chunks.
  */
-export { referenceRegions } from "./reference.js";
-export type { CodeAnswer, CodeConfig, CodeDetails, CodeRuntime, CodeStudent } from "./schema.js";
+export { referenceProgram, referenceRegions } from "./reference.js";
+export type { CodeAnswer, CodeConfig, CodeDetails, CodeRuntime, CodeSegment, CodeStudent } from "./schema.js";
 /*
  * The three surfaces are deliberately NOT re-exported here: a static
  * `export ... from "./Editor.js"` would pull them (and Monaco's loader) back
