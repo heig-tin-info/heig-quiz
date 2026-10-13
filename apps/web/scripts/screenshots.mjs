@@ -2148,6 +2148,11 @@ for (const width of widths.length ? widths : [1440]) {
         if (dark) localStorage.setItem("quiz-theme", "dark");
         for (const [k, v] of Object.entries(ls ?? {})) localStorage.setItem(k, v);
         for (const [k, v] of Object.entries(ss ?? {})) sessionStorage.setItem(k, v);
+        // An exam ignores the browser's Answers and Results (#796): a
+        // dashboard scene carries them over as this tab's choice.
+        const live = /\/evaluations\/([^/?#]+)\/live/.exec(location.pathname);
+        const habit = ls?.["quiz-live-toggles-v2"];
+        if (live && habit) sessionStorage.setItem(`quiz-live-toggles-exam:${live[1]}`, habit);
       },
       { role: scene.role, ls: scene.ls, ss: scene.ss, dark },
     );

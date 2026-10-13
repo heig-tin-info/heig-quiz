@@ -72,8 +72,12 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const confirm = useConfirm();
   const toastError = useErrorToast();
   const toast = useToast();
-  // The display switches (F-DASH-02), remembered per browser (#80).
-  const [toggles, setToggles] = useLiveToggles();
+  // The title and the classroom are the evaluation's, not the grid's read
+  // model — one extra cached request, shared with the configuration screen.
+  const detail = useEvaluation(id);
+  // The display switches (F-DASH-02), remembered per browser (#80) — except
+  // Answers and Results, which start off on every exam (#796).
+  const [toggles, setToggles] = useLiveToggles(id, detail.data?.evaluation.mode);
   const [fullscreen, toggleFullscreen] = useFullscreen();
   /**
    * What is open over the grid, one at a time (issue #353): one answer (a
@@ -114,10 +118,6 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   // re-reads it on the one shared tick of `useNow`, so they all agree
   // (DESIGN.md, Countdown) and the page itself does not re-render per second.
   const serverNow = clock.now;
-
-  // The title and the classroom are the evaluation's, not the grid's read
-  // model — one extra cached request, shared with the configuration screen.
-  const detail = useEvaluation(id);
 
   /**
    * A poll has no grid: one question, no roster, and its screen is the

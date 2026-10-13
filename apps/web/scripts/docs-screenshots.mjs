@@ -1321,6 +1321,11 @@ async function capture(world, scene, theme, phone) {
           localStorage.setItem("quiz-locale", "en");
           localStorage.setItem("quiz-theme", t);
           for (const [k, v] of Object.entries(storage)) localStorage.setItem(k, v);
+          // An exam ignores the browser's Answers and Results (#796): a
+          // dashboard scene carries them over as this tab's choice.
+          const live = /\/evaluations\/([^/?#]+)\/live/.exec(location.pathname);
+          const habit = storage["quiz-live-toggles-v2"];
+          if (live && habit) sessionStorage.setItem(`quiz-live-toggles-exam:${live[1]}`, habit);
         } catch {
           /* a private window; the defaults are then the system's */
         }

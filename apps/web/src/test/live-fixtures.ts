@@ -6,6 +6,8 @@ import type {
   ItemRow,
 } from "@quiz/contracts";
 
+import { examTogglesKey, LIVE_TOGGLES_KEY, type LiveToggles } from "../live/toggles";
+
 /*
  * WP8 payload fixtures (evaluation configuration and live dashboard), typed
  * against @quiz/contracts so a wire change breaks the tests rather than
@@ -204,4 +206,14 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
     courseId: "c1",
     ...overrides,
   };
+}
+
+/**
+ * Stores the dashboard's switches as a teacher who chose them would have:
+ * in the browser, and for this exam in this tab, since an exam ignores the
+ * browser's Answers and Results (#796).
+ */
+export function rememberLiveToggles(toggles: LiveToggles, evaluationId = EVALUATION_ID): void {
+  localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify(toggles));
+  sessionStorage.setItem(examTogglesKey(evaluationId), JSON.stringify(toggles));
 }
