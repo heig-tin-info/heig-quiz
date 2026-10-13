@@ -31,6 +31,7 @@ function summary(over: Partial<EvaluationSummary> = {}): EvaluationSummary {
     deletionRole: "assistant",
     opensAt: null,
     closesAt: null,
+    startedAt: null,
     createdAt: liveAt(-3600_000),
     originRevision: null,
     templateRevision: null,
@@ -70,6 +71,8 @@ describe("EvaluationList", () => {
       list([
         summary({ state: "draft", title: "Being written" }),
         summary({ id: id("evaluation", 2), state: "scheduled", title: "Planned", opensAt }),
+        // Opened by hand: no opensAt, only the start of its run.
+        summary({ id: id("evaluation", 3), state: "running", title: "By hand", startedAt: "2026-10-13T09:15:00.000Z" }),
       ]),
     );
     renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
@@ -77,6 +80,7 @@ describe("EvaluationList", () => {
     const planned = await row("Planned");
     expect(planned.getByText("scheduled").className).toContain("text-info");
     expect(planned.getByText(isoDateTime(opensAt))).toBeInTheDocument();
+    expect((await row("By hand")).getByText(isoDateTime("2026-10-13T09:15:00.000Z"))).toBeInTheDocument();
     const draft = await row("Being written");
     expect(draft.getByText("draft").className).not.toContain("text-info");
     // Never scheduled: a dash where the time would be.

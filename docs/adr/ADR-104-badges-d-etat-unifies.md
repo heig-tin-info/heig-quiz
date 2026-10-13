@@ -184,8 +184,8 @@ scheduled still said "draft" exactly like one in preparation (#795).
    `PHASE_STYLE` in `project/common.ts`).
 2. **A project's `scheduled` phase.** §5's phases become `draft |
    scheduled | published | locked | graded | released`: a project in the
-   `draft` state whose publish mode is `scheduled` (the contract then
-   requires its start) is `scheduled`; a draft published by hand stays
+   `draft` state whose publish mode is `scheduled` (the create and
+   patch contracts then require its start) is `scheduled`; a draft published by hand stays
    `draft`. Labels "scheduled" / "planifié". As §5 says, the buckets and
    the sorting keep reading the state.
 3. **The gantt's scheduled ring follows the tone.** §4's info ring is now

@@ -982,6 +982,7 @@ const evaluationSummary = (e: MockEvaluation) => ({
   deletionRole: deletionRoleOf(e),
   opensAt: e.opensAt,
   closesAt: e.closesAt,
+  startedAt: e.startedAt,
   createdAt: e.createdAt,
   originRevision: e.originRevision,
   templateRevision: templateRevisionOf(e),

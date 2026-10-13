@@ -85,7 +85,8 @@ export type StatusKey =
 export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string } {
   const key = ((): StatusKey => {
     if (p.archivedAt) return "project.status.archived";
-    if (p.state === "draft") return p.publishMode === "scheduled" ? "project.status.scheduled" : "project.status.draft";
+    if (p.phase === "scheduled") return "project.status.scheduled";
+    if (p.phase === "draft") return "project.status.draft";
     if (p.primaryAction === "grade") return "project.status.grade";
     if (p.primaryAction === "release") return p.releasedAt ? "project.status.rerelease" : "project.status.release";
     if (p.primaryAction === "sync") return "project.status.sync";

@@ -135,8 +135,8 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
     createdAt: PAST,
     accepted: accepted > 0,
     editable: ["name", "deadlineAt", "deadlineStrategy", "protectedFiles"],
-    // The phase follows the state unless a test refines a locked one (ADR-104).
-    phase: over.state ?? "published",
+    // The phase follows the state, a scheduled draft's included, unless a test refines a locked one (ADR-104).
+    phase: over.state === "draft" && over.publishMode === "scheduled" ? "scheduled" : (over.state ?? "published"),
     releasedAt: null,
     groupsDrifted: false,
     groupSyncPending: false,

@@ -111,8 +111,9 @@ export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode"
 };
 
 /**
- * A draft whose publication is scheduled (its start is then always set: the
- * contract requires it) is `scheduled`, a draft published by hand `draft`.
+ * A draft whose publication is scheduled is `scheduled` (its start is
+ * required by the create and patch contracts only, not by the row), a draft
+ * published by hand `draft`.
  * Then the state: a project moved back to `published` by a later deadline
  * is `published`, whatever its kept `releasedAt` says (F-PROJ-09). Then
  * `released` as soon as it was, even when a score changed since (the page's

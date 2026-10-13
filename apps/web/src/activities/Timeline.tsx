@@ -135,22 +135,25 @@ const BAR_FILL = {
 /**
  * The fill of a bar is its badge's tone (`KIND`'s `stateStyle`, ADR-104):
  * green open to the students — a running evaluation, a published project —,
- * amber awaiting the staff (the waiting room, a pause). Three exceptions a
- * badge does not draw: a dashed outline for a draft, a calm blue ring for
- * what is planned, the recessed surface for everything over — the badge's
- * outline face (a released evaluation) never reaches the bar.
+ * amber awaiting the staff (the waiting room, a pause), a calm blue ring
+ * for a blue badge — what is scheduled, an evaluation's or a project's
+ * (ADR-104, amendment of 2026-10-13). Two exceptions a badge does not draw:
+ * a dashed outline for a draft in preparation, the recessed surface for
+ * everything over — the badge's outline face (a released evaluation) never
+ * reaches the bar.
  */
 function barClass(a: ActivitySummary): string {
+  const { tone } = kindOf(a).stateStyle(a);
+  if (tone === "blue") return "bg-info-soft text-info ring-1 ring-inset ring-info";
   if (a.state === "draft") return "border border-dashed border-fg-faint bg-surface text-fg-muted";
-  if (a.state === "scheduled") return "bg-info-soft text-info ring-1 ring-inset ring-info";
   if (bucketOf(a.state) === "ended") return ENDED_BAR;
-  return BAR_FILL[kindOf(a).stateStyle(a).tone as keyof typeof BAR_FILL] ?? ENDED_BAR;
+  return BAR_FILL[tone as keyof typeof BAR_FILL] ?? ENDED_BAR;
 }
 
 /** The dot beside a lane's name: the bar's colour, at full strength for the pale ones. */
 function dotClass(a: ActivitySummary): string {
+  if (kindOf(a).stateStyle(a).tone === "blue") return "bg-info";
   if (a.state === "draft") return "border border-dashed border-fg-faint";
-  if (a.state === "scheduled") return "bg-info";
   if (bucketOf(a.state) === "ended") return "bg-line-strong";
   return barClass(a).split(" ")[0]!;
 }

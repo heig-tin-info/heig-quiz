@@ -55,7 +55,8 @@ describe("the teacher's authoring surface (§4.3)", () => {
     const list = await get(`/app/api/classrooms/${seed.classroomId}/evaluations`, teacher.headers);
     expect(list.statusCode).toBe(200);
     expect(list.json()).toHaveLength(1);
-    expect(list.json()[0]).toMatchObject({ id: seed.evaluationId, itemCount: 2 });
+    // Not run yet: no start (#795: the list's Start reads `startedAt`, else `opensAt`).
+    expect(list.json()[0]).toMatchObject({ id: seed.evaluationId, itemCount: 2, startedAt: null, opensAt: null });
 
     const detail = await get(`/app/api/evaluations/${seed.evaluationId}`, teacher.headers);
     expect(detail.statusCode).toBe(200);

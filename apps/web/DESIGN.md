@@ -561,14 +561,14 @@ live in `ui/state.ts`, each written once.
   `released`, an evaluation's or a project's. A project's badge reads the
   server's PHASE (`state`, with `draft` refined into `draft` / `scheduled`
   by its publish mode and `locked` into `locked` / `graded` /
-  `released`), never the stored state alone. A new pill tone needs a
-  meaning distinct from these five, recorded by an amendment of ADR-104,
-  and is never the accent. Nothing blinks. No solid fill: the soft
+  `released`), never the stored state alone. A further pill tone follows
+  ADR-104's rule (its 2026-10-13 amendment). Nothing blinks. No solid fill: the soft
   green plus the `TimeLeft` timer (icon and "3 h", only in the two tables of
   a classroom's Activities tab; outside a badge, also on a published
   project's lifecycle rail) is what marks a live row, so the pill never
   competes with the row's one primary action. Both tables of that tab show
-  when a row starts (Start: an evaluation's `opensAt`, a project's start).
+  when a row starts (Start: an evaluation's `startedAt`, else its
+  `opensAt`; a project's start; a row with none sorts last).
   The student's activity cards
   keep their own grammar (amber waits on the student, see "The student's
   activity card"). The accent tone is

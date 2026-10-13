@@ -31,10 +31,13 @@ export const caseInsensitiveCompare = (x: string | number, y: string | number) =
  * asks for another one. A list the server already ordered — evaluations by
  * state and date, versions newest first — carries a meaning in that order,
  * and reshuffling it on mount throws it away before anybody clicked anything.
+ *
+ * A `rank` of `null` has no value to sort by (a date not set yet): such a
+ * row sorts last whichever way the column goes.
  */
 export function useSortableTable<T, K extends string>(
   rows: readonly T[],
-  rank: (row: T, key: K) => string | number,
+  rank: (row: T, key: K) => string | number | null,
   initial: SortState<NoInfer<K>> | null,
   compare: (x: string | number, y: string | number) => number = defaultCompare,
 ) {
@@ -45,7 +48,12 @@ export function useSortableTable<T, K extends string>(
     () =>
       sort === null
         ? rows
-        : [...rows].sort((a, b) => compare(rank(a, sort.key), rank(b, sort.key)) * sort.dir),
+        : [...rows].sort((a, b) => {
+            const x = rank(a, sort.key);
+            const y = rank(b, sort.key);
+            if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+            return compare(x, y) * sort.dir;
+          }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rank/compare are stable per table
     [rows, sort],
   );

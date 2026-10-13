@@ -511,9 +511,12 @@ describe("the project page (F-PROJ-13)", () => {
       const open = await sibling(w, "locked");
       await repoOf({ ...w, projectId: open }, s1!.id, { deadlineAppliedAt: frozenAt });
       const empty = await sibling(w, "locked");
+      const planned = await sibling(w, "draft");
+      await server.app.db.update(projects).set({ publishMode: "scheduled" }).where(eq(projects.id, planned));
       const calls = gh.calls.length;
       const rows = await list(w.classroomId);
       const phase = (id: string) => rows.find((r) => r.id === id)!.phase;
+      expect(phase(planned)).toBe("scheduled");
       expect(phase(w.projectId)).toBe("graded");
       expect(phase(open)).toBe("locked");
       // Locked with no live repository: nothing is final.
