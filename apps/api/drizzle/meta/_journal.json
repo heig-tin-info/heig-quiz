@@ -806,6 +806,13 @@
       "when": 1791839664936,
       "tag": "0114_identity_criterion",
       "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1791873051971,
+      "tag": "0115_journal_rendered_with",
+      "breakpoints": true
     }
   ]
 }

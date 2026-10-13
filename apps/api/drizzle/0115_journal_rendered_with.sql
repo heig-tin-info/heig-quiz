@@ -1,0 +1,1 @@
+ALTER TABLE "classroom_journals" ADD COLUMN "rendered_with" integer DEFAULT 0 NOT NULL;

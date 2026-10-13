@@ -12,10 +12,10 @@
  */
 import { and, eq, notInArray, sql } from "drizzle-orm";
 
-import { navSortKey, parentOf, prettifyName, renderPage, type RenderedPage } from "@quiz/docrender";
+import { navSortKey, parentOf, prettifyName, renderPage, RENDERER_VERSION, type RenderedPage } from "@quiz/docrender";
 
 import type { Tx } from "../../db/client.js";
-import { classroomJournals, journalPages } from "../../db/schema.js";
+import { classroomJournals, journalAssets, journalPages } from "../../db/schema.js";
 import { visibleToStudents } from "./studentView.js";
 
 /**
@@ -96,8 +96,9 @@ export function renderSources(
 
 /**
  * The rendered pages written, by path, and every other page of the journal
- * deleted. A page's `version` (Quiz mode's lock) is never touched here: the
- * write that changed its source bumps it.
+ * deleted; the journal stamped with the renderer that rendered them
+ * (`rendered_with`). A page's `version` (Quiz mode's lock) is never touched
+ * here: the write that changed its source bumps it.
  */
 export async function storePages(tx: Tx, classroomId: string, pages: readonly RenderedRow[], now: Date): Promise<void> {
   for (const { moved, ...page } of pages) {
@@ -116,6 +117,58 @@ export async function storePages(tx: Tx, classroomId: string, pages: readonly Re
         ? and(eq(journalPages.classroomId, classroomId), notInArray(journalPages.path, kept))
         : eq(journalPages.classroomId, classroomId),
     );
+  // An older process writing during an overlapping deployment stamps its stale
+  // rendering current; it stays until the journal's next write.
+  await tx
+    .update(classroomJournals)
+    .set({ renderedWith: RENDERER_VERSION })
+    .where(eq(classroomJournals.classroomId, classroomId));
+}
+
+/** What the database holds to render a journal from (every page unmoved). */
+export interface StoredSources {
+  sources: PageSource[];
+  /** The cached assets: what a page may show. */
+  assets: Set<string>;
+  /**
+   * The assets an earlier rendering found too large to serve (its
+   * `asset_too_large` warnings: the ingestion read their sizes in the tree),
+   * so a reference to one keeps saying so.
+   */
+  oversized: Set<string>;
+}
+
+/** A journal's stored pages and assets, as {@link renderSources} takes them. */
+export async function storedSources(tx: Tx, classroomId: string): Promise<StoredSources> {
+  const stored = await tx
+    .select({
+      id: journalPages.id,
+      path: journalPages.path,
+      markdown: journalPages.markdown,
+      blobSha: journalPages.blobSha,
+      warnings: journalPages.warnings,
+    })
+    .from(journalPages)
+    .where(eq(journalPages.classroomId, classroomId));
+  const assets = await tx.select({ path: journalAssets.path }).from(journalAssets).where(eq(journalAssets.classroomId, classroomId));
+  return {
+    sources: stored.map(({ warnings: _w, ...page }) => ({ ...page, moved: false })),
+    assets: new Set(assets.map((a) => a.path)),
+    oversized: new Set(stored.flatMap((p) => p.warnings.flatMap((w) => (w.code === "asset_too_large" ? [w.path] : [])))),
+  };
+}
+
+/**
+ * Every page of a classroom's journal rendered again from what the database
+ * holds ({@link storedSources}) — no GitHub call, no source moved: the output
+ * an ingestion of the same commit, or a Quiz-mode write, would store. Called
+ * with the row locked.
+ */
+export async function renderStored(tx: Tx, classroomId: string, now: Date): Promise<void> {
+  const { sources, assets, oversized } = await storedSources(tx, classroomId);
+  const { pages } = renderSources(classroomId, sources, assets, oversized);
+  await storePages(tx, classroomId, pages, now);
+  await renderStudentPages(tx, classroomId);
 }
 
 /**

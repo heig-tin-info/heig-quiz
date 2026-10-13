@@ -174,6 +174,20 @@ function decodePath(href: string): string {
 const EXTERNAL = /^(https?|mailto):/i;
 
 /**
+ * The version of what {@link renderPage} outputs for a given source. A
+ * journal's HTML is stored, rendered when the journal is written; one stored
+ * by an older version is rendered again from its stored sources (the API's
+ * `journal.renderer` sweep). Bump it with any change to the HTML, the table
+ * of contents or the warnings a source yields — `prettifyName` and
+ * `navSortKey`, stored with each page, included — or pages rendered before
+ * the change keep the old output until their journal is next written (#818).
+ * `render.test.ts` pins a fixture's output to this version.
+ *
+ * 1: before the version existed. 2: task lists drawn as a course plan (#657).
+ */
+export const RENDERER_VERSION = 2;
+
+/**
  * The rendered page. One `Marked` instance per call, closed over the warnings
  * and the context: a shared instance would need the two to be globals, and the
  * rendering of one page must not be able to leak into the next.
