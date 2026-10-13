@@ -1,9 +1,10 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useToast } from "./notify";
 import { renderWithProviders } from "./test/render";
+import { lowScreen } from "./test/viewport";
 
 /*
  * The toast's one action (M3-16a: Undo after a move, ADR-070 §6): it runs
@@ -40,5 +41,24 @@ describe("a toast's action", () => {
     expect(onUndo).toHaveBeenCalledExactlyOnceWith(2);
     // Leaving: its exit animation plays, then the element goes.
     expect(screen.getByText("Move 2").closest("[role=status]")).toHaveClass("toast-leave");
+  });
+});
+
+describe("a toast on a low screen (#450)", () => {
+  const normal = window.matchMedia;
+  afterEach(() => vi.stubGlobal("matchMedia", normal));
+
+  it("lands in the top stack, the bottom right being taken by the bar, the FAB and the docks", async () => {
+    lowScreen();
+    renderWithProviders(<Probe onUndo={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: "move 1" }));
+    const stack = screen.getByText("Move 1").closest("[aria-live]");
+    expect(stack?.className).toMatch(/\btop-\[/);
+  });
+
+  it("stays at the bottom otherwise", async () => {
+    renderWithProviders(<Probe onUndo={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: "move 1" }));
+    expect(screen.getByText("Move 1").closest("[aria-live]")?.className).toMatch(/\bbottom-\[/);
   });
 });

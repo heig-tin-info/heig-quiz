@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 
 import { apiErrorMessage } from "./api";
 import { useT, type Dict } from "./i18n";
-import { Z } from "./ui";
+import { useLowScreen, Z } from "./ui";
 
 /**
  * Toasts, bottom right, slide-in/out (see `toast-*` keyframes in style.css).
@@ -19,7 +19,9 @@ import { Z } from "./ui";
  *   the one standing with the same key, so only the latest move can be
  *   undone. `options.corner: "top"` puts it in the top-right stack instead,
  *   under the page's top bar when one publishes `--bar-h`, for a notice
- *   that must not land on a footer's actions.
+ *   that must not land on a footer's actions. On a low screen (a phone in
+ *   landscape, `useLowScreen`) every toast takes the top stack: the bottom
+ *   right already holds the bar, a FAB and a tool dock (#450).
  */
 
 /**
@@ -130,6 +132,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [dismiss],
   );
 
+  // A low screen has no room left at the bottom right: every toast goes to the top.
+  const low = useLowScreen();
+  const atTop = (t: Toast) => t.corner === "top" || low;
+
   const notify = useCallback((sentence: string) => push(Bell, "text-accent", sentence), [push]);
 
   const toast = useCallback(
@@ -146,14 +152,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           and the dismiss buttons stay reachable with the keyboard (the
           wrapper is click-through, each toast is not). */}
       <ToastStack
-        toasts={toasts.filter((t) => t.corner === undefined)}
+        toasts={toasts.filter((t) => !atTop(t))}
         className="bottom-[calc(1rem+var(--bottom-nav-h)+var(--fab-h)+var(--tool-dock-h))]"
         dismiss={dismiss}
         drop={drop}
       />
       {/* Under the page's top bar, if it has one (`--bar-h`, the player's). */}
       <ToastStack
-        toasts={toasts.filter((t) => t.corner === "top")}
+        toasts={toasts.filter(atTop)}
         className="top-[calc(var(--banner-h)+var(--bar-h)+0.5rem)]"
         dismiss={dismiss}
         drop={drop}

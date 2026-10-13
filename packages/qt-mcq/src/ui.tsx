@@ -181,9 +181,12 @@ export function LetteredChoice({
 export function Tip({
   label,
   align = "center",
+  className,
   children,
 }: {
   label: string;
+  /** Classes for the wrapper, which is the flex item in a row (its `order`). */
+  className?: string;
   /**
    * `end` pins the bubble's right edge to the control's: a control at the
    * right edge of the column (the `+` of the list) would otherwise push half
@@ -193,7 +196,7 @@ export function Tip({
   children: ReactNode;
 }): ReactNode {
   return (
-    <span className="group/tip relative inline-flex">
+    <span className={cx("group/tip relative inline-flex", className)}>
       {children}
       <span
         aria-hidden

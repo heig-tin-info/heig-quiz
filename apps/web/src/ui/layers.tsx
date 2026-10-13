@@ -104,6 +104,17 @@ export function useMinWidth(px: number): boolean {
 }
 
 /**
+ * A low screen (#450): under `lg` and at most 480 px tall — a phone in
+ * landscape. The bottom bar, a FAB and a tool dock leave too little height
+ * there for a floating panel above them or a toast stack between them, so
+ * the help assistant opens as a full-height sheet and the toasts move to the
+ * top (DESIGN.md, "Low screens"). False where `matchMedia` does not exist.
+ */
+export function useLowScreen(): boolean {
+  return useMediaQuery(`(max-width: ${LG_PX - 0.02}px) and (max-height: 480px)`);
+}
+
+/**
  * True on a coarse pointer (touch, no hover) — a phone or tablet, where the
  * soft keyboard has to fight the on-screen content for space. False where
  * `matchMedia` does not exist (a test) or the pointer is fine (mouse,

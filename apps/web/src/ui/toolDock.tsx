@@ -19,12 +19,20 @@
  * `--tool-dock-h` for the whole stack), and the owner holds which one is
  * open through `open`/`onOpenChange`, so one panel shows at a time. Every
  * panel rises above the whole stack.
+ *
+ * `sheetWhenLow` (the help assistant, #450): on a low screen
+ * (`useLowScreen`, a phone in landscape) the panel left between the top bar
+ * and the docks is a few lines tall, so it opens instead as a full-height
+ * bottom sheet over a dimmed page — MODAL there (focus trapped, the page
+ * scroll locked), the one exception to the non-modal panel (DESIGN.md,
+ * "Low screens"; ADR-080 amendment). Which one is decided when the panel
+ * opens and holds until it closes, whatever a rotation does meanwhile.
  */
 import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
 
 import { cx } from "@quiz/ui";
 
-import { Z } from "./layers";
+import { useLayer, useLowScreen, useScrollLock, Z } from "./layers";
 
 /** A dock's place in a group (ADR-090): what the group's owner hands each tool. */
 export interface ToolDockSeat {
@@ -45,6 +53,7 @@ export function ToolDock({
   onOpenChange,
   onOpen,
   dockProps,
+  sheetWhenLow = false,
   children,
 }: {
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
@@ -64,6 +73,8 @@ export function ToolDock({
   onOpen?: () => void;
   /** Extra attributes on the wrapper (a `data-*` a stylesheet reads). */
   dockProps?: Record<`data-${string}`, string | boolean>;
+  /** On a low screen, open as a modal full-height bottom sheet (above). */
+  sheetWhenLow?: boolean;
   /** The panel's content; the element with id `titleId` names it. */
   children: (close: () => void, titleId: string) => ReactNode;
 }) {
@@ -75,6 +86,17 @@ export function ToolDock({
   };
   const trigger = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+  const panel = useRef<HTMLElement>(null);
+  const low = useLowScreen();
+  // Decided once, when the panel opens, and kept until it closes: a phone
+  // rotated with the panel open must neither drop the sheet's layer (and its
+  // focus) under the teacher's typing, nor trap the focus mid-sentence.
+  const latched = useRef<boolean | null>(null);
+  if (!open) latched.current = null;
+  else latched.current ??= low && sheetWhenLow;
+  const sheet = latched.current === true;
+  // The sheet traps the focus and gives it back; the panel's own Escape closes it.
+  useLayer(panel, () => close(), { enabled: sheet, escape: false });
   const titleId = useId();
   // The latest `onOpen`, kept outside render; the effect below runs after this one.
   const onOpenRef = useRef(onOpen);
@@ -93,11 +115,13 @@ export function ToolDock({
 
   return (
     <div data-tool-dock data-tool-dock-slot={slot} {...dockProps}>
+      {sheet ? <SheetBackdrop /> : null}
       {open || keepMounted ? (
         <section
+          ref={panel}
           id={panelId}
           role="dialog"
-          aria-modal="false"
+          aria-modal={sheet}
           aria-labelledby={titleId}
           hidden={!open}
           onKeyDown={(e) => {
@@ -105,14 +129,29 @@ export function ToolDock({
             e.stopPropagation();
             close();
           }}
-          style={{
-            bottom: `calc(${offset} + var(--tool-dock-h) + 1rem)`,
-            maxHeight: `calc(100dvh - var(--banner-h) - ${offset} - var(--tool-dock-h) - 2rem)`,
-          }}
+          style={
+            sheet
+              ? undefined
+              : {
+                  bottom: `calc(${offset} + var(--tool-dock-h) + 1rem)`,
+                  maxHeight: `calc(100dvh - var(--banner-h) - ${offset} - var(--tool-dock-h) - 2rem)`,
+                }
+          }
           className={cx(
-            "fixed right-4 max-w-[calc(100vw-2rem)] rounded-sheet border border-line bg-surface shadow-overlay sm:right-6",
-            panelClassName,
-            Z.tool,
+            "fixed border-line bg-surface shadow-overlay",
+            sheet
+              ? // A bottom sheet as under `lg` (`Sheet`): full width, the window
+                // less a strip of the page, top corners rounded, the
+                // home-indicator inset kept clear.
+                cx(
+                  "inset-x-0 bottom-0 flex h-[calc(100dvh-var(--banner-h)-0.75rem)] flex-col rounded-t-sheet border-t pb-[env(safe-area-inset-bottom)]",
+                  Z.modal,
+                )
+              : cx(
+                  "right-4 max-w-[calc(100vw-2rem)] rounded-sheet border sm:right-6",
+                  panelClassName,
+                  Z.tool,
+                ),
           )}
         >
           {children(close, titleId)}
@@ -137,4 +176,10 @@ export function ToolDock({
       </button>
     </div>
   );
+}
+
+/** Under the low screen's sheet: the page dimmed, its scroll locked. No click closes it: the draft would go. */
+function SheetBackdrop() {
+  useScrollLock();
+  return <div aria-hidden className={cx("layer-backdrop fixed inset-0 bg-fg/30 backdrop-blur-[2px]", Z.modal)} />;
 }

@@ -35,6 +35,12 @@ beforeEach(() => {
 });
 
 describe("LaunchStep checklist (#152)", () => {
+  it("carries its action bar as one (data-action-bar): the assistant steps aside while it is sticky (#450)", () => {
+    mockFetch({});
+    render(makeEvaluationDetail());
+    expect(screen.getByRole("button", { name: /open the waiting room/i }).closest("[data-action-bar]")).not.toBeNull();
+  });
+
   it("reads Ready when nothing needs a look, and keeps unlinked accounts as information", async () => {
     mockFetch({});
     render(makeEvaluationDetail());

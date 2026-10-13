@@ -235,8 +235,10 @@ function Checklist({
        * reach on a phone — the primary full width, the secondary as an icon
        * button beside it, and ONE status line above them. One DOM for both,
        * so a label or a disabled state can never differ between the two.
+       * `data-action-bar`: while it is sticky, the assistant's button steps
+       * aside rather than sit on the primary (style.css, #450).
        */}
-      <div data-bottom-dock="" className="sticky bottom-0 z-20 -mx-4 border-t border-line bg-surface px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-2.5 sm:static sm:mx-0 sm:flex sm:items-center sm:gap-4 sm:rounded-card sm:border sm:px-5 sm:py-4">
+      <div data-bottom-dock="" data-action-bar="" className="sticky bottom-0 z-20 -mx-4 border-t border-line bg-surface px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-2.5 sm:static sm:mx-0 sm:flex sm:items-center sm:gap-4 sm:rounded-card sm:border sm:px-5 sm:py-4">
         <p role="status" className="text-center text-[13px] text-fg-muted sm:flex-1 sm:text-left">
           {status}
         </p>

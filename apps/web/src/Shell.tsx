@@ -684,6 +684,10 @@ export function Shell({
         >
           {children}
         </main>
+        {/* The page's end clears whatever floats over its bottom edge: the
+            bottom bar, a FAB, a docked tool (the assistant's button). Each
+            height is zero while its layer is absent (style.css). */}
+        <div aria-hidden className="h-[calc(var(--bottom-nav-h)+var(--fab-h)+var(--tool-dock-h))]" />
         {bottomNav ? <BottomNav route={route} navigate={navigate} teacherUi={teacherUi} drill={drill} /> : null}
       </div>
 

@@ -534,6 +534,13 @@ export function McqEditor({
 }
 
 /**
+ * A choice's text: the rest of the row; under `sm`, the whole first line
+ * beside the 32 px letter and its 8 px gap, which pushes the handle and the
+ * actions to a line of their own.
+ */
+const choiceField = "min-w-0 flex-1 max-sm:basis-[calc(100%-2.5rem)]";
+
+/**
  * One row: the handle, the letter, the text, the bin (and the `+` on the last).
  *
  * The LETTER IS THE CHECKBOX (`Pastille`). The row used to carry a grip, a
@@ -604,7 +611,10 @@ function ChoiceRow({
       ref={setNodeRef}
       style={style}
       className={cx(
-        "group/grip flex items-start gap-2 rounded-field",
+        // Under `sm` the row wraps: the letter and the text on the first
+        // line, the handle and the row's actions on a second one, at the
+        // right — beside them, the text would be a column of a few words (#450).
+        "group/grip flex flex-wrap items-start gap-x-2 gap-y-1 rounded-field sm:flex-nowrap",
         isDragging && "relative z-10 bg-surface ring-1 ring-line-strong",
       )}
     >
@@ -614,7 +624,7 @@ function ChoiceRow({
        * something a drag can start from. The tooltip names the gesture; the
        * accessible name is what the keyboard sensor announces.
        */}
-      <Tip label={`${s.reorderChoice} ${letter}`}>
+      <Tip label={`${s.reorderChoice} ${letter}`} className="max-sm:order-1 max-sm:ml-auto">
         <button
           type="button"
           className={cx(gripClass, "mt-1.25")}
@@ -667,12 +677,12 @@ function ChoiceRow({
             { keys: "Tab", label: s.addChoice },
             { keys: "Enter", label: s.nextChoice },
           ]}
-          className={cx("min-w-0 flex-1", invalid && "rounded-field ring-1 ring-danger")}
+          className={cx(choiceField, invalid && "rounded-field ring-1 ring-danger")}
         />
       ) : (
         <TextInput
           id={choiceId(index)}
-          className="min-w-0 flex-1"
+          className={choiceField}
           aria-label={`${s.choiceText} ${letter}`}
           aria-invalid={invalid || undefined}
           value={choice.text}
@@ -689,33 +699,35 @@ function ChoiceRow({
         />
       )}
 
-      {wand !== null && wand !== "slot" ? (
-        <Tip label={`${s.generateChoice} ${letter}`}>
-          <IconButton
-            label={`${s.generateChoice} ${letter}`}
-            className={cx("mt-1.25 hover:text-accent", wand.generating && "animate-pulse text-accent")}
-            aria-busy={wand.generating || undefined}
-            disabled={disabled || wand.waiting}
-            onClick={wand.onGenerate}
-          >
-            <WandIcon />
-          </IconButton>
-        </Tip>
-      ) : wand === "slot" ? (
-        <span aria-hidden className="size-7 shrink-0" />
-      ) : null}
+      <span className="flex shrink-0 items-start gap-2 max-sm:order-1">
+        {wand !== null && wand !== "slot" ? (
+          <Tip label={`${s.generateChoice} ${letter}`}>
+            <IconButton
+              label={`${s.generateChoice} ${letter}`}
+              className={cx("mt-1.25 hover:text-accent", wand.generating && "animate-pulse text-accent")}
+              aria-busy={wand.generating || undefined}
+              disabled={disabled || wand.waiting}
+              onClick={wand.onGenerate}
+            >
+              <WandIcon />
+            </IconButton>
+          </Tip>
+        ) : wand === "slot" ? (
+          <span aria-hidden className="size-7 shrink-0" />
+        ) : null}
 
-      <IconButton
-        label={`${s.removeChoice} ${letter}`}
-        danger
-        className="mt-1.25"
-        disabled={disabled || !removable}
-        onClick={onRemove}
-      >
-        <TrashIcon />
-      </IconButton>
+        <IconButton
+          label={`${s.removeChoice} ${letter}`}
+          danger
+          className="mt-1.25"
+          disabled={disabled || !removable}
+          onClick={onRemove}
+        >
+          <TrashIcon />
+        </IconButton>
 
-      {trailing ?? <span aria-hidden className="size-7 shrink-0" />}
+        {trailing ?? <span aria-hidden className="size-7 shrink-0" />}
+      </span>
     </li>
   );
 }

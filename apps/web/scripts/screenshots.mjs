@@ -693,6 +693,9 @@ const scenes = [
   // full-page capture would pin it to the very bottom of the page.
   { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch" },
   { name: "eval-config-launch-fold", role: "teacher", path: "/evaluations/draft?step=launch", fold: true },
+  // The end of the launch step on a phone (#450): the sticky dock comes to
+  // rest over the page's end spacer, never under the assistant's button.
+  { name: "eval-config-launch-end", role: "teacher", path: "/evaluations/draft?step=launch", fold: true, act: (p) => p.evaluate(() => window.scrollTo(0, document.body.scrollHeight)) },
   { name: "eval-config-launch-scheduled", role: "teacher", path: "/evaluations/scheduled?step=launch" },
   { name: "eval-config-launch-skip", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=launch" },
   {
@@ -1332,6 +1335,11 @@ const scenes = [
   { name: "editor-mcq-wand", role: "teacher", path: "/questions/q2", settle: 1500, act: async (p) => { await p.getByRole("textbox", { name: "Text of choice B" }).fill(""); await p.getByRole("button", { name: "Suggest this choice B" }).hover(); await p.waitForTimeout(400); } },
   { name: "editor-code", role: "teacher", path: "/questions/q1", settle: 5000 },
   { name: "editor-code-generated", role: "teacher", path: "/questions/q1", settle: 5000, fold: true, act: async (p) => { await p.getByRole("button", { name: "Generate answers" }).click(); await p.getByText("Answers suggested by the AI").waitFor(); } },
+  // The MCQ editor on a phone (#450), at --width=390: under `sm` a choice's
+  // handle and actions go to a line under its text; the page's end clears the
+  // assistant's button. `-end` is the bottom of the page, in the viewport.
+  { name: "editor-mcq-phone", role: "teacher", path: "/questions/q2", settle: 2000 },
+  { name: "editor-mcq-phone-end", role: "teacher", path: "/questions/q2", settle: 2000, fold: true, act: (p) => p.evaluate(() => window.scrollTo(0, document.body.scrollHeight)) },
   // ADR-082, the AI card above Properties (run with --width=390 too: it
   // follows the explanation there). A new MCQ: no statement yet, so the card
   // says why there is no "Generate answers"; then a statement and no answers.
@@ -1830,6 +1838,16 @@ const scenes = [
   // chat it opens (the mock answers as the development stub), its history.
   { name: "assist-closed", role: "teacher", path: "/pools/p1", fold: true, act: skipCoach },
   { name: "assist-open", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();
+      await p.getByRole("textbox", { name: /question/i }).fill("À quoi sert l'option Grouper du tableau ?");
+      await p.keyboard.press("Enter");
+      await p.waitForTimeout(800);
+    } },
+  // A low screen (#450): take it at --width=844 --height=390, a phone in
+  // landscape, where the chat opens as a full-height sheet; at 390×844 it
+  // stays the floating panel. `fab-toast` at 844×390 shows the toasts at the top.
+  { name: "assist-low-screen", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await skipCoach(p);
       await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();
       await p.getByRole("textbox", { name: /question/i }).fill("À quoi sert l'option Grouper du tableau ?");
