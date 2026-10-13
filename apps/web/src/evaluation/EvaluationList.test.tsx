@@ -493,3 +493,72 @@ describe("EvaluationList", () => {
     });
   });
 });
+
+describe("Rename from a row's menu (#804)", () => {
+  it("renames a running exam and a poll through the heading's PATCH, and the list updates", async () => {
+    const user = userEvent.setup();
+    let titles = { exam: "Quiz 3", poll: "A very long poll title that the list truncates" };
+    const { calls } = mockFetch({
+      [`GET /app/api/classrooms/${CLASSROOM}/evaluations`]: () =>
+        ok([
+          summary({ state: "running", title: titles.exam }),
+          summary({ id: id("evaluation", 2), mode: "poll", state: "closed", title: titles.poll }),
+        ]),
+      [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: (call) => {
+        titles = { ...titles, exam: (call.body as { title: string }).title };
+        return ok({});
+      },
+      [`PATCH /app/api/evaluations/${id("evaluation", 2)}`]: (call) => {
+        titles = { ...titles, poll: (call.body as { title: string }).title };
+        return ok({});
+      },
+    });
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: /Quiz 3/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
+    const dialog = await screen.findByRole("dialog", { name: "Rename evaluation: Quiz 3" });
+    const field = within(dialog).getByRole("textbox", { name: "Title" });
+    const submit = within(dialog).getByRole("button", { name: "Rename" });
+    // Prefilled, and nothing to save until it changes; blanks are refused by the schema.
+    expect(field).toHaveValue("Quiz 3");
+    expect(submit).toBeDisabled();
+    await user.clear(field);
+    await user.type(field, "   ");
+    expect(submit).toBeDisabled();
+    await user.clear(field);
+    await user.type(field, "  Quiz 3 (retake)  {Enter}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(calls).toContainEqual({
+      url: `/app/api/evaluations/${EVALUATION_ID}`,
+      method: "PATCH",
+      body: { title: "Quiz 3 (retake)" },
+    });
+    expect(await screen.findByText("Quiz 3 (retake)")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /A very long poll/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
+    const pollDialog = await screen.findByRole("dialog", { name: /Rename evaluation: A very long/ });
+    const pollField = within(pollDialog).getByRole("textbox", { name: "Title" });
+    await user.clear(pollField);
+    await user.type(pollField, "Short poll");
+    await user.click(within(pollDialog).getByRole("button", { name: "Rename" }));
+    expect(await screen.findByText("Short poll")).toBeInTheDocument();
+  });
+
+  it("keeps the dialog open and says the server's refusal", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      ...list([summary({ title: "Quiz 3" })]),
+      [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: { status: 409, body: { message: "Refused by the server" } },
+    });
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    await user.click(await screen.findByRole("button", { name: /Quiz 3/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
+    const dialog = await screen.findByRole("dialog", { name: /Rename evaluation/ });
+    await user.type(within(dialog).getByRole("textbox", { name: "Title" }), " bis");
+    await user.click(within(dialog).getByRole("button", { name: "Rename" }));
+    expect(await screen.findByText("Refused by the server")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /Rename evaluation/ })).toBeInTheDocument();
+  });
+});

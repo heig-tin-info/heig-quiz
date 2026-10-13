@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { GitBranch, Square, Users } from "lucide-react";
+import { GitBranch, Pencil, Square, Users } from "lucide-react";
 
 import type { ActivitySummary, PollTeacherView, ProjectActivitySummary } from "@quiz/contracts";
 
@@ -58,25 +58,42 @@ export const endable = (row: ActivitySummary) => typeOf(row) === "poll" && row.s
  * leads (the click on the row goes to its kind's `home`), and End for a
  * running poll. Always a menu, never icon buttons: its length follows the
  * state, and a row that flickers between shapes under the pointer is worse
- * than one more click (`Actions` › `menu`). A project has no menu: its
- * one place is its page (M3-12), and its two repositories on GitHub are
- * links in sight on the row (M3-14h, product owner: the menu of M3-14a hid
- * them), always the same two, so nothing flickers.
+ * than one more click (`Actions` › `menu`). A project's two repositories
+ * on GitHub are links in sight on the row (M3-14h, product owner: the menu
+ * of M3-14a hid them), always the same two, so nothing flickers; its one
+ * place is its page (M3-12), so it has no menu unless the list offers
+ * `onRename` (the classroom's projects, #804), which the menu then holds
+ * beside the links.
  */
 export function ActivityMenu({
   row,
   navigate,
   onEnd,
+  onRename,
 }: {
   row: ActivitySummary;
   navigate: (r: Route) => void;
   /** Only a poll ends from a list. */
   onEnd?: (row: ActivitySummary) => void;
+  /** "Rename", where the list renames its rows (#804). */
+  onRename?: (row: ActivitySummary) => void;
 }) {
   const t = useT();
-  if (row.kind === "project") return <ProjectRepoLinks row={row} />;
+  const rename: MenuItem[] = onRename
+    ? [{ label: t("common.rename"), icon: Pencil, onSelect: () => onRename(row) }]
+    : [];
+  if (row.kind === "project") {
+    if (!onRename) return <ProjectRepoLinks row={row} />;
+    return (
+      <span onClick={(e) => e.stopPropagation()} className="inline-flex items-center">
+        <ProjectRepoLinks row={row} />
+        <Menu label={t("live.row.actions", { name: row.title })} items={rename} />
+      </span>
+    );
+  }
   const items: MenuItem[] = [
     ...evaluationLinkItems(row, t, navigate),
+    ...rename,
     ...(endable(row)
       ? [{ label: t("poll.end"), icon: Square, danger: true, separator: true, onSelect: () => onEnd?.(row) }]
       : []),

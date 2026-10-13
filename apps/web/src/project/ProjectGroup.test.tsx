@@ -124,8 +124,8 @@ describe("the classroom's Projects group", () => {
     const navigate = renderGroup();
     const region = await screen.findByRole("region", { name: "Projects" });
     const [built, building] = within(region).getAllByRole("row").slice(1);
-    // No menu: the two links are on the row.
-    expect(within(region).queryByRole("button", { name: /Actions for/ })).toBeNull();
+    // The two links are on the row, never folded into its menu (which holds Rename, #804).
+    expect(within(built!).getAllByRole("button", { name: /Actions for/ })).toHaveLength(1);
     const source = within(built!).getByRole("link", { name: "Source repository" });
     expect(source).toHaveAttribute("href", "https://github.com/heig/lab-source");
     expect(source).toHaveAttribute("target", "_blank");
@@ -187,5 +187,54 @@ describe("the classroom's Projects group", () => {
     expect(within(region).getByText("corrigé")).toBeInTheDocument();
     expect(within(region).getByText("rendu")).toBeInTheDocument();
     expect(within(region).getByRole("columnheader", { name: /Échéance/ })).toBeInTheDocument();
+  });
+});
+
+describe("Rename from a project row's menu (#804)", () => {
+  it("renames a draft and a locked project through the page's PATCH, beside the repository links", async () => {
+    const user = userEvent.setup();
+    const names: Record<string, string> = { [project(1).id]: "Labo 1", [project(2).id]: "Labo 2" };
+    const patch = (pid: string) => (call: { body: unknown }) => {
+      names[pid] = (call.body as { name: string }).name;
+      return ok({});
+    };
+    const { calls } = mockFetch({
+      [`GET ${PROJECTS}`]: () =>
+        ok([
+          project(1, { title: names[project(1).id]!, state: "draft" }),
+          project(2, { title: names[project(2).id]!, state: "locked" }),
+        ]),
+      [`PATCH /app/api/projects/${project(1).id}`]: patch(project(1).id),
+      [`PATCH /app/api/projects/${project(2).id}`]: patch(project(2).id),
+    });
+    renderGroup();
+    const region = await screen.findByRole("region", { name: "Projects" });
+    const row = (title: string) => within(region).getByText(title).closest("tr")!;
+    // The repositories stay links in sight; the menu sits beside them.
+    expect(within(row("Labo 2")).getByRole("link", { name: "Source repository" })).toBeInTheDocument();
+
+    for (const [from, to] of [
+      ["Labo 1", "Lab 1: pointers"],
+      ["Labo 2", "Lab 2: strings"],
+    ] as const) {
+      await user.click(within(row(from)).getByRole("button", { name: new RegExp(from) }));
+      await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
+      const dialog = await screen.findByRole("dialog", { name: `Rename project: ${from}` });
+      const field = within(dialog).getByRole("textbox", { name: "Name" });
+      expect(field).toHaveValue(from);
+      await user.clear(field);
+      // ProjectName: a name needs a letter or a digit.
+      await user.type(field, "--");
+      expect(within(dialog).getByRole("button", { name: "Rename" })).toBeDisabled();
+      await user.clear(field);
+      await user.type(field, to);
+      await user.click(within(dialog).getByRole("button", { name: "Rename" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(await within(region).findByText(to)).toBeInTheDocument();
+    }
+    expect(calls.filter((c) => c.method === "PATCH").map((c) => c.body)).toEqual([
+      { name: "Lab 1: pointers" },
+      { name: "Lab 2: strings" },
+    ]);
   });
 });

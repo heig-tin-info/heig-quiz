@@ -1,7 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { EvaluationPatch } from "@quiz/contracts";
+
 import { api } from "../api";
-import type { EditTarget } from "./editTarget";
+import { useT } from "../i18n";
+import { useErrorToast, useToast } from "../notify";
+import { activitiesKey, evaluationsKey } from "../queryKeys";
+import { evaluationTarget, type EditTarget } from "./editTarget";
 
 /**
  * The one writer of a configuration screen, an evaluation's or a template's.
@@ -29,3 +34,36 @@ export function useConfigPatch<P>(target: EditTarget<P>) {
 
 /** The writer a screen holds, for the body `P`. */
 export type ConfigWriter<P> = ReturnType<typeof useConfigPatch<P>>;
+
+/**
+ * Renaming an evaluation, wherever it starts: its heading in place
+ * (`EvaluationConfig`) or "Rename" in a row's menu of the classroom's list
+ * (`EvaluationList`). The configuration's own `PATCH` (`useConfigPatch`), the
+ * title checked by the route's schema first, then the lists that show the
+ * title refreshed. A title stays writable in every state (`WRITABLE_UNDER`),
+ * so nothing here asks which one the evaluation is in. `onDone` runs once
+ * the write and the refresh landed (the dialog closes then).
+ */
+export function useRenameEvaluation(id: string, classroomId: string | null) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const toastError = useErrorToast();
+  const patch = useConfigPatch(evaluationTarget(id));
+  const rename = (title: string, onDone?: () => void) => {
+    const parsed = EvaluationPatch.safeParse({ title });
+    if (!parsed.success) return;
+    patch.mutate(parsed.data, {
+      onSuccess: async () => {
+        await Promise.all([
+          classroomId ? qc.invalidateQueries({ queryKey: evaluationsKey(classroomId) }) : null,
+          qc.invalidateQueries({ queryKey: activitiesKey }),
+        ]);
+        toast(t("sync.saved"), "success");
+        onDone?.();
+      },
+      onError: toastError("eval.saveFailed"),
+    });
+  };
+  return { rename, pending: patch.isPending };
+}

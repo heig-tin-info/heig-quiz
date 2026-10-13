@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useT } from "../i18n";
-import { Button } from "./controls";
+import { Button, Field } from "./controls";
 import { Modal } from "./layers";
 
 /**
@@ -73,5 +73,75 @@ export function FormDialog({
         {error}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * A dialog of ONE text field: a name to give or change ("Rename", "New
+ * folder"). It owns the field's draft, opens it on `initial` with the text
+ * selected (a rename usually replaces the whole name), and submits on Enter
+ * as on the button.
+ *
+ * `valid` is the route's own schema (invariant 7), so a value the server
+ * would refuse never leaves the browser; by default, anything but blanks.
+ * The submit stays disabled while the value is the one it opened on: saving
+ * an unchanged name is not an action. `onSubmit` receives the value trimmed;
+ * the caller closes the dialog when its write succeeds.
+ */
+export function TextFieldDialog({
+  title,
+  label,
+  initial = "",
+  submitLabel,
+  valid = (value) => value.trim() !== "",
+  maxLength,
+  submitting,
+  error,
+  onSubmit,
+  onClose,
+}: {
+  title: string;
+  /** The field's label ("Title", "Name"). */
+  label: string;
+  initial?: string;
+  /** The verb of the action ("Rename", "Create"), never "OK". */
+  submitLabel: string;
+  valid?: (value: string) => boolean;
+  maxLength?: number;
+  submitting?: boolean;
+  error?: ReactNode;
+  onSubmit: (value: string) => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const next = value.trim();
+  const canSubmit = next !== initial.trim() && valid(value);
+  const submit = () => {
+    if (canSubmit && !submitting) onSubmit(next);
+  };
+  return (
+    <FormDialog
+      title={title}
+      onClose={onClose}
+      onSubmit={submit}
+      submitLabel={submitLabel}
+      submitting={submitting}
+      canSubmit={canSubmit}
+      error={error}
+      dense
+    >
+      <Field
+        label={label}
+        fullWidth
+        autoFocus
+        maxLength={maxLength}
+        value={value}
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") submit();
+        }}
+      />
+    </FormDialog>
   );
 }

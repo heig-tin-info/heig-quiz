@@ -255,6 +255,11 @@ const scenes = [
   // page opens on the evaluations, which is where the work is once the
   // classroom has students, so every roster scene names its tab.
   { name: "classroom", role: "teacher", path: "/classrooms/r1" },
+  // #804: "Rename" from an evaluation row's menu, its one-field dialog.
+  { name: "classroom-rename-evaluation", role: "teacher", path: "/classrooms/r1", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(actions for|actions pour)/i }).first().click();
+      await p.getByRole("menuitem", { name: /^(rename|renommer)$/i }).click();
+    } },
   // #153: the sidebar's Classrooms section, one label per row, on the
   // classroom whose name outgrows 240 px — and that row's tip.
   { name: "sidebar-classrooms", role: "teacher", path: "/classrooms/r4", fold: true },

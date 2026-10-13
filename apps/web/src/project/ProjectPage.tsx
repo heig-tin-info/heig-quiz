@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import type {
   ProjectDetail,
-  ProjectPatch,
   ProjectReleaseResult,
   ProjectSummary,
   ProjectSyncAccepted,
@@ -16,7 +15,7 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
-import { activitiesKey, classroomGroupSetsKey, classroomProjectsKey, projectKey } from "../queryKeys";
+import { activitiesKey, classroomProjectsKey, projectKey } from "../queryKeys";
 import type { Navigate } from "../router";
 import { Trail, useClassroomCrumbs } from "../Trail";
 import {
@@ -59,6 +58,7 @@ import {
   type UnassignedStudent,
 } from "./projectPage";
 import { RepoSheet } from "./RepoSheet";
+import { useProjectPatch, useProjectRefresh } from "./useProjectPatch";
 
 /**
  * The staff's project page (F-PROJ-13, M3-12), `/projects/:id`, in two
@@ -125,24 +125,11 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   useNoticeToasts(detail, (prev, next) => projectNotices(prev, next).map((n) => projectNoticeToast(n, t)));
 
   /** What a write changed besides the page: the classroom's lists and the Activities. */
-  const refresh = async () => {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: projectKey(id) }),
-      classroomId ? qc.invalidateQueries({ queryKey: classroomProjectsKey(classroomId) }) : null,
-      // A set named, or another one, changes what the sets say they are used by.
-      classroomId ? qc.invalidateQueries({ queryKey: classroomGroupSetsKey(classroomId) }) : null,
-      qc.invalidateQueries({ queryKey: activitiesKey }),
-    ]);
-  };
+  const refresh = useProjectRefresh(id, classroomId);
   const failed = (error: unknown) => toast(refusalMessage(error, t), "error");
 
-  const patch = useMutation({
-    mutationFn: (body: ProjectPatch) =>
-      api<ProjectSummary>(`/app/api/projects/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-    onSuccess: async (_, body) => {
-      if (body.groupSetId) setNoSet(false);
-      await refresh();
-    },
+  const patch = useProjectPatch(id, classroomId, (body) => {
+    if (body.groupSetId) setNoSet(false);
   });
   /** The page's one write: a refusal is a toast, unless the caller said it in place (`WriteProject`). */
   const write: WriteProject = (body, onError) =>

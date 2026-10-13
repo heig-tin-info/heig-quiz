@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, Copy, FileStack, FolderGit2, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Copy, FileStack, FolderGit2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { EvaluationMode, EvaluationState, type EvaluationSummary } from "@quiz/contracts";
+import { EvaluationMode, EvaluationPatch, EvaluationState, type EvaluationSummary } from "@quiz/contracts";
 import { courseRoleAllows, templatePullable } from "@quiz/domain";
 
 import { api } from "../api";
@@ -27,6 +27,7 @@ import {
   T,
   TableBand,
   TableHead,
+  TextFieldDialog,
   TimeLeft,
   usePersistentChoice,
   useSortableTable,
@@ -46,6 +47,7 @@ import {
 import { PullTemplateDialog, TemplateBehindBadge } from "./templatePull";
 import { useClassroom, useCourseRole } from "../course/parts";
 import { useEvaluations } from "./api";
+import { useRenameEvaluation } from "./usePatch";
 
 /**
  * The evaluations of one classroom, under its roster.
@@ -144,6 +146,38 @@ export function NewEvaluationModal({
         <ModeChoice value={mode} onChange={setMode} />
       )}
     </FormDialog>
+  );
+}
+
+/**
+ * "Rename" from a row's menu (#804): the title alone, without opening the
+ * evaluation. The heading's own rename (`useRenameEvaluation`), so the same
+ * schema, the same toast, and any state — a running exam's title changes for
+ * its students as it does from the heading.
+ */
+function RenameEvaluationDialog({
+  evaluation,
+  classroomId,
+  onClose,
+}: {
+  evaluation: Pick<EvaluationSummary, "id" | "title">;
+  classroomId: string;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const { rename, pending } = useRenameEvaluation(evaluation.id, classroomId);
+  return (
+    <TextFieldDialog
+      title={t("eval.rename.of", { title: evaluation.title })}
+      label={t("eval.titleLabel")}
+      initial={evaluation.title}
+      submitLabel={t("common.rename")}
+      maxLength={200}
+      valid={(title) => EvaluationPatch.safeParse({ title }).success}
+      submitting={pending}
+      onSubmit={(title) => rename(title, onClose)}
+      onClose={onClose}
+    />
   );
 }
 
@@ -262,6 +296,8 @@ export function EvaluationList({
   const [pulling, setPulling] = useState<string | null>(null);
   /** The row being saved as a template of the course (ADR-031). */
   const [savingTemplate, setSavingTemplate] = useState<EvaluationSummary | null>(null);
+  /** The row being renamed (#804). */
+  const [renaming, setRenaming] = useState<EvaluationSummary | null>(null);
   const classroom = useClassroom(classroomId);
   const myRole = useCourseRole(classroom.data?.course.id);
 
@@ -421,6 +457,12 @@ export function EvaluationList({
                           label={t("live.row.actions", { name: row.title })}
                           items={[
                             ...evaluationLinkItems(row, t, navigate),
+                            // The heading's rename, in any state (#804).
+                            {
+                              label: t("common.rename"),
+                              icon: Pencil,
+                              onSelect: () => setRenaming(row),
+                            },
                             {
                               label: t("eval.duplicate"),
                               icon: Copy,
@@ -476,6 +518,13 @@ export function EvaluationList({
           title={savingTemplate.title}
           course={classroom.data.course}
           onClose={() => setSavingTemplate(null)}
+        />
+      ) : null}
+      {renaming ? (
+        <RenameEvaluationDialog
+          evaluation={renaming}
+          classroomId={classroomId}
+          onClose={() => setRenaming(null)}
         />
       ) : null}
       {pulling ? (

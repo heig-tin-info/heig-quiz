@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { FolderGit2 } from "lucide-react";
+import { useState } from "react";
 
-import type { ProjectActivitySummary } from "@quiz/contracts";
+import { ProjectPatch, type ProjectActivitySummary } from "@quiz/contracts";
 
 import { ActivityMenu } from "../activities/actions";
 import { openProps, StateBadge } from "../activities/views";
 import { api } from "../api";
 import { githubAbsent } from "../github/api";
 import { useT } from "../i18n";
+import { useToast } from "../notify";
 import { classroomProjectsKey } from "../queryKeys";
 import type { Route } from "../router";
 import {
@@ -19,10 +21,16 @@ import {
   SectionHeading,
   T,
   TableHead,
+  TextFieldDialog,
   useSortableTable,
 } from "../ui";
+import { refusalMessage } from "./projectPage";
+import { useProjectPatch } from "./useProjectPatch";
 
 type SortKey = "title" | "start" | "deadline";
+
+/** What the rename dialog reads of a row. */
+type Renamed = Pick<ProjectActivitySummary, "id" | "title">;
 
 /**
  * The classroom's projects (F-PROJ-01, M3-10), a section under the evaluations'
@@ -42,7 +50,8 @@ type SortKey = "title" | "start" | "deadline";
  * not clickable. Its counts come with M3-08. A date that is not fixed yet (a
  * draft published by hand) is a dash and sorts last; a published project's
  * deadline says how far it is. The row ends with its two repositories on
- * GitHub, as links in sight (M3-14a, M3-14h).
+ * GitHub, as links in sight (M3-14a, M3-14h), and a menu whose one item is
+ * Rename (#804).
  */
 export function ProjectGroup({
   classroomId,
@@ -52,6 +61,8 @@ export function ProjectGroup({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
+  /** The row being renamed (#804). */
+  const [renaming, setRenaming] = useState<Renamed | null>(null);
   // `GET /classrooms/:id/projects` (M3-02), archived ones excepted.
   const list = useQuery<ProjectActivitySummary[]>({
     queryKey: classroomProjectsKey(classroomId),
@@ -110,7 +121,7 @@ export function ProjectGroup({
                     {row.deadlineAt === null ? <Dash /> : isoDateTime(row.deadlineAt)}
                   </td>
                   <td className={`${T.td} text-right`} onClick={(e) => e.stopPropagation()}>
-                    <ActivityMenu row={row} navigate={navigate} />
+                    <ActivityMenu row={row} navigate={navigate} onRename={setRenaming} />
                   </td>
                 </tr>
               );
@@ -118,6 +129,53 @@ export function ProjectGroup({
           </tbody>
         </table>
       </Card>
+      {renaming ? (
+        <RenameProjectDialog project={renaming} classroomId={classroomId} onClose={() => setRenaming(null)} />
+      ) : null}
     </section>
+  );
+}
+
+/**
+ * "Rename" from a row's menu (#804): the page's own writer (`useProjectPatch`),
+ * so the same route, the same schema and the same refresh as the name renamed
+ * in place. A name changes in every state (`projectFieldRefusal`); the slug,
+ * and so the repositories on GitHub, stay what they were at the creation.
+ */
+function RenameProjectDialog({
+  project,
+  classroomId,
+  onClose,
+}: {
+  project: Renamed;
+  classroomId: string;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const patch = useProjectPatch(project.id, classroomId);
+  return (
+    <TextFieldDialog
+      title={t("project.rename", { name: project.title })}
+      label={t("project.name")}
+      initial={project.title}
+      submitLabel={t("common.rename")}
+      maxLength={200}
+      valid={(name) => ProjectPatch.safeParse({ name }).success}
+      submitting={patch.isPending}
+      onSubmit={(name) =>
+        patch.mutate(
+          { name },
+          {
+            onSuccess: () => {
+              toast(t("sync.saved"), "success");
+              onClose();
+            },
+            onError: (error) => toast(refusalMessage(error, t), "error"),
+          },
+        )
+      }
+      onClose={onClose}
+    />
   );
 }
