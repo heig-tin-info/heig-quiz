@@ -767,6 +767,20 @@ live in `ui/state.ts`, each written once.
   Width is a prop, never a class beside `inputClass`: Tailwind settles two
   width or height utilities on one element by their order in the generated
   stylesheet, not by the order they were written in.
+- Points (`PointsInput`, `PointsPill` in `ui/PointsInput.tsx`): the points of
+  a grade and their maximum are ONE pill, "3 / 4" — the input right-aligned
+  and tabular, the "/ max" after it in `fg-muted`, not selectable and hidden
+  from a screen reader, whose name says it instead ("Tests, points out of
+  4"; a penalty "penalty points, at most 3", a bonus "bonus points, at most
+  1"). 112 px (`w-28`) by 34 px (`md`), side padding 14 px: a criteria table
+  and a grading form show the same field. The pill IS the field's chrome —
+  `line-strong` border, `fg-faint` on hover, the accent border and the soft
+  `accent/20` ring through `focus-within`, `danger` when the value is out of
+  range — and the input inside draws none. The suffix reads `/ 4`, a penalty
+  `/ −3` (a real minus sign), a bonus `/ +1`. It replaced a Max column beside
+  an Awarded column: two columns asked the eye to join what one control says
+  (F-PROJ-25, as amended 2026-10-13). It is 34 px in a table row too, on
+  purpose: it is the one thing of the row the teacher writes.
 - Help of a whole page (`PageHeader`'s `help`, `PageHelpButton`): a round
   34 px button outlined like a secondary one, in the header's action row,
   after the page's actions and before the overflow "…" — never beside the

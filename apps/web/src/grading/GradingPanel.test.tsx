@@ -677,7 +677,10 @@ describe("GradingPanel — adjusting an answer (F-GRADE-05)", () => {
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
     const panel = await adjust("a1");
 
-    const points = within(panel).getByRole("spinbutton", { name: /Points/ });
+    // One pill, the points over the item's maximum (F-PROJ-25 as amended), under a visible label.
+    const points = within(panel).getByRole("spinbutton", { name: "Points, points out of 2" });
+    expect(points.parentElement).toHaveTextContent("/ 2");
+    expect(within(panel).getByText("Points", { selector: "label" })).toBeInTheDocument();
     await userEvent.clear(points);
     await userEvent.type(points, "1.5");
     await userEvent.type(within(panel).getByRole("textbox", { name: /Comment/ }), "Half the idea.");

@@ -17,11 +17,12 @@ import { emptyAnswerOf, QuestionHost } from "../student/QuestionHost";
 import {
   Button,
   ErrorText,
-  Field,
+  FieldLabel,
   FormError,
   IconButton,
   NotePanel,
   PaneOrSheet,
+  PointsPill,
   Textarea,
   Section,
 } from "../ui";
@@ -422,6 +423,7 @@ function AdjustForm({
     points.trim() === "" || !Number.isFinite(value) || value < minPoints || value > maxPoints;
   const commentInvalid = comment.trim() === "";
   const range = { min: formatPoints(minPoints), max: formatPoints(maxPoints) };
+  const pointsId = useId();
 
   return (
     <form
@@ -437,19 +439,24 @@ function AdjustForm({
         onSave({ points: value, comment: comment.trim() });
       }}
     >
-      <Field
-        label={t("grading.override.points")}
-        hint={minPoints < 0 ? t("grading.override.range", range) : t("grading.override.max", range)}
-        type="number"
-        step="0.5"
-        min={minPoints}
-        max={maxPoints}
-        autoFocus
-        width="w-32"
-        value={points}
-        onChange={(e) => setPoints(e.target.value)}
-        aria-invalid={touched && pointsInvalid}
-      />
+      {/* The points over their maximum, one pill (F-PROJ-25 as amended):
+          the maximum is its suffix, so the label line says the range only
+          when the floor is not 0 (negative marking). */}
+      <div className="flex flex-col gap-1.5">
+        <FieldLabel htmlFor={pointsId} hint={minPoints < 0 ? t("grading.override.range", range) : undefined}>
+          {t("grading.override.points")}
+        </FieldLabel>
+        <PointsPill
+          id={pointsId}
+          label={t("grading.override.points")}
+          max={maxPoints}
+          min={minPoints}
+          autoFocus
+          value={points}
+          onChange={(e) => setPoints(e.target.value)}
+          invalid={touched && pointsInvalid}
+        />
+      </div>
       {touched && pointsInvalid ? (
         <ErrorText>{t("grading.override.pointsInvalid", range)}</ErrorText>
       ) : null}
