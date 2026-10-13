@@ -242,9 +242,8 @@ amendment); where the timer rides and what it means stand.
 2. **The second timer only in the last ten minutes.** `TimeLeft` ticks on
    the shared minute timer of `useNow`, and on the shared second timer
    only while under ten minutes and before the deadline, so a list of
-   rows does not re-render every second for deadlines days away. The
-   minute tick that lands in the band moves it to the second timer, so the
-   seconds may start up to a minute late; the figure stays floored.
+   rows does not re-render every second for deadlines days away. A timer
+   armed for the ten-minute mark switches it at that exact moment.
 3. **Not the other clocks.** The live header's countdown and the Super
    Powers banner keep `formatRemaining` (`ui/live.tsx`), a by-the-second
    countdown rounded up, which they need for a screen with one clock to

@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "./api";
 import { useErrorToast } from "./notify";
@@ -1950,6 +1950,10 @@ describe("timeLeft", () => {
 });
 
 describe("TimeLeft", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows the figure beside its glyph, says what it is to a screen reader, and keeps the stamp", () => {
     const iso = new Date(Date.now() + 3 * 3_600_000 + 30_000).toISOString();
     renderWithProviders(<TimeLeft iso={iso} />);
@@ -1986,7 +1990,49 @@ describe("TimeLeft", () => {
       vi.advanceTimersByTime(1_000);
     });
     expect(screen.getByText("9 min 29 s")).toBeInTheDocument();
-    vi.useRealTimers();
+  });
+
+  it("starts counting seconds exactly at the ten-minute mark, not at the next minute tick", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-09-21T12:00:00.000Z"));
+    renderWithProviders(<TimeLeft iso="2026-09-21T12:10:30.000Z" />);
+    expect(screen.getByText("10 min")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(31_000);
+    });
+    expect(screen.getByText("9 min 59 s")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(screen.getByText("9 min 58 s")).toBeInTheDocument();
+  });
+
+  it("goes back to the minute timer once the deadline passes", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-09-21T12:00:00.000Z"));
+    renderWithProviders(<TimeLeft iso="2026-09-21T12:00:05.000Z" />);
+    expect(screen.getByText("5 s")).toBeInTheDocument();
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => {
+      vi.advanceTimersByTime(6_000);
+    });
+    expect(screen.getByText("0 s")).toBeInTheDocument();
+    // The minute interval alone, the second one released.
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it("arms no switch for a deadline beyond setTimeout's range", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-09-21T12:00:00.000Z"));
+    renderWithProviders(<TimeLeft iso="2026-10-21T12:00:00.000Z" />);
+    expect(screen.getByText("30 d")).toBeInTheDocument();
+    // Only the shared minute timer: an overflowing setTimeout would fire at
+    // once and put the badge on the second timer.
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(vi.getTimerCount()).toBe(1);
   });
 });
 

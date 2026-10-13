@@ -1,5 +1,5 @@
 import { Timer } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type { DateFormat } from "@quiz/contracts";
 
@@ -157,6 +157,9 @@ function Stamp({ iso, className = "", children }: { iso: string; className?: str
 /** One second, in ms: the tick of {@link TimeLeft} in its last ten minutes. */
 export const SECOND = 1_000;
 
+/** The longest delay `setTimeout` takes before it overflows and fires at once. */
+const MAX_TIMEOUT = 2 ** 31 - 1;
+
 /** Under this much time left, {@link timeLeft} counts the seconds too. */
 const SECONDS_BAND = 10 * MINUTE;
 
@@ -212,9 +215,26 @@ function inSecondsBand(iso: string, now: number): boolean {
  */
 export function TimeLeft({ iso, className = "" }: { iso: string | null; className?: string }) {
   const t = useT();
-  // Read at each render: a minute tick that lands in the last ten minutes
-  // re-renders, and the clock moves to the second timer from there.
-  const now = useNow(iso !== null && inSecondsBand(iso, Date.now()) ? SECOND : MINUTE);
+  // Whether the figure counts seconds: read once at mount, then switched on
+  // by a timer exactly at the ten-minute mark, and off past the deadline.
+  const [fast, setFast] = useState(() => iso !== null && inSecondsBand(iso, Date.now()));
+  useEffect(() => {
+    if (iso === null) return;
+    const left = Date.parse(iso) - Date.now();
+    setFast(left > 0 && left < SECONDS_BAND);
+    const delay = left - SECONDS_BAND;
+    // setTimeout overflows past 2^31-1 ms (~24.8 days): a deadline that far
+    // is re-armed when the badge mounts again, long before it matters.
+    if (delay < 0 || delay >= MAX_TIMEOUT) return;
+    const timer = setTimeout(() => setFast(true), delay);
+    return () => clearTimeout(timer);
+  }, [iso]);
+  const now = useNow(fast ? SECOND : MINUTE);
+  // Only the deadline turns it off: `now` may still be the minute timer's
+  // last reading, older than the ten-minute mark, when `fast` turns on.
+  useEffect(() => {
+    if (fast && iso !== null && Date.parse(iso) <= now) setFast(false);
+  }, [fast, iso, now]);
   if (iso === null) return null;
   const left = timeLeft(iso, now, t);
   return (
