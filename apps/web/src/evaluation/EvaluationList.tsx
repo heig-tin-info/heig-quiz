@@ -47,6 +47,7 @@ import {
   useInstantiate,
 } from "./templates";
 import { PullTemplateDialog, TemplateBehindBadge } from "./templatePull";
+import { isScheduled } from "../activities/model";
 import { useClassroom, useCourseRole } from "../course/parts";
 import { useEvaluations } from "./api";
 import { useRenameEvaluation } from "./usePatch";
@@ -182,7 +183,7 @@ function RenameEvaluationDialog({
   );
 }
 
-type EvaluationSort = "title" | "mode" | "start" | "questions" | "points" | "attempts";
+type EvaluationSort = "title" | "mode" | "start" | "end" | "questions" | "points" | "attempts";
 
 /**
  * When a row started, or is to open (#795): an evaluation opened by hand has
@@ -201,6 +202,8 @@ function evaluationRank(
       return t(`eval.mode.${row.mode}`);
     case "start":
       return startOf(row);
+    case "end":
+      return row.closesAt;
     case "questions":
       return row.itemCount;
     case "points":
@@ -281,6 +284,7 @@ export function EvaluationList({
   onNew,
   newProject,
   newVariant = "primary",
+  scheduledOnly = false,
 }: {
   classroomId: string;
   navigate: (r: Route) => void;
@@ -297,6 +301,11 @@ export function EvaluationList({
    * (ADR-105 §4, the same demotion as the header's "New ▾").
    */
   newVariant?: ButtonVariant;
+  /**
+   * The classroom's "Scheduled" filter (#787): only the scheduled rows, and
+   * no section at all where none is — the projects' may hold what it finds.
+   */
+  scheduledOnly?: boolean;
 }) {
   const t = useT();
   const qc = useQueryClient();
@@ -311,13 +320,14 @@ export function EvaluationList({
   const myRole = useCourseRole(classroom.data?.course.id);
 
   const list = useEvaluations(classroomId);
+  const rows = scheduledOnly ? (list.data ?? []).filter(isScheduled) : (list.data ?? []);
 
   /* No initial sort: the server hands the evaluations over in the order this
      classroom works through them — the drafts being written, then what is
      scheduled, then what is over — and that order is the answer to "what is
      next" nobody clicked for. A click on a label replaces it. */
   const { sorted, sort, toggle } = useSortableTable<EvaluationSummary, EvaluationSort>(
-    list.data ?? [],
+    rows,
     (row, key) => evaluationRank(row, key, t),
     null,
   );
@@ -327,6 +337,7 @@ export function EvaluationList({
     { key: "title", label: t("eval.titleLabel") },
     { key: "mode", label: t("eval.mode") },
     { key: "start", label: t("eval.col.start"), className: T.colHigh },
+    { key: "end", label: t("eval.col.end"), className: T.colHigh },
     { key: "questions", label: t("eval.step.questions"), right: true, className: T.colHigh },
     { key: "points", label: t("eval.col.points"), right: true, className: T.colMid },
     { key: "attempts", label: t("eval.col.attempts"), right: true, className: T.colLow },
@@ -356,6 +367,9 @@ export function EvaluationList({
   /** Where a row leads (`evaluationHome`, shared with the Activities section). */
   const open = (row: EvaluationSummary) => navigate(evaluationHome(row));
 
+  // A failed read still says so, filter or not.
+  if (scheduledOnly && rows.length === 0 && !list.isError) return null;
+
   return (
     <section aria-labelledby="classroom-evaluations" className="space-y-3">
       {/* No button: "New evaluation" sits in the page header, where "Add
@@ -366,7 +380,7 @@ export function EvaluationList({
       <SectionHeading
         icon={ClipboardList}
         title={<span id="classroom-evaluations">{t("eval.title")}</span>}
-        count={list.data?.length}
+        count={list.data ? rows.length : undefined}
       />
       {list.isLoading ? (
         <Skeleton className="h-40 w-full" />
@@ -398,7 +412,7 @@ export function EvaluationList({
       ) : (
         <>
           {/* The pool's control (`GroupBySwitch`). One row has nothing to group. */}
-          {list.data.length < 2 ? null : (
+          {rows.length < 2 ? null : (
             <GroupBySwitch
               name="evaluations-group"
               value={groupBy}
@@ -459,8 +473,12 @@ export function EvaluationList({
                       </td>
                       {/* When it started or opens (`startOf`), as the Projects table below says its
                           start (#795); neither yet, a dash. */}
-                      <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>
+                      <td className={`${T.td} ${T.colHigh} whitespace-nowrap tabular-nums text-fg-muted`}>
                         {startOf(row) === null ? <Dash /> : isoDateTime(startOf(row)!)}
+                      </td>
+                      {/* When it closes, as the Projects table says its deadline (#787). */}
+                      <td className={`${T.td} ${T.colHigh} whitespace-nowrap tabular-nums text-fg-muted`}>
+                        {row.closesAt === null ? <Dash /> : isoDateTime(row.closesAt)}
                       </td>
                       <td className={`${T.td} ${T.colHigh} text-right tabular-nums`}>{row.itemCount}</td>
                       <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{row.totalPoints}</td>

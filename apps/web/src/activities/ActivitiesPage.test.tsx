@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,6 +6,7 @@ import type { ActivitySummary, EvaluationActivitySummary, ProjectActivitySummary
 
 import { id, liveAt } from "../test/live-fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { activitiesKey } from "../queryKeys";
 import { ActivitiesPage } from "./ActivitiesPage";
 
 /*
@@ -81,8 +82,8 @@ const render = (rows: ActivitySummary[] = ALL, navigate = vi.fn()) => {
     "GET /app/api/activities": ok(rows),
     "GET /app/api/activities/stats": ok({ studentsInProgress: 42 }),
   });
-  renderWithProviders(<ActivitiesPage navigate={navigate} />);
-  return { navigate, ...stub };
+  const { queryClient } = renderWithProviders(<ActivitiesPage navigate={navigate} />);
+  return { navigate, queryClient, ...stub };
 };
 
 /** This week's list of the phone schedule (the summary tiles name titles too). */
@@ -196,6 +197,36 @@ describe("ActivitiesPage", () => {
     expect(screen.getByRole("button", { name: "Project", pressed: true })).toBeInTheDocument();
     expect(within(screen.getByRole("table")).getByText("Labo 2 — pointeurs")).toBeInTheDocument();
     expect(within(screen.getByRole("table")).queryByText("Quiz 3 — pointers")).not.toBeInTheDocument();
+  });
+
+  it("narrows the current tab to what is scheduled, of either kind, the scheduled project included (#787)", async () => {
+    const user = userEvent.setup();
+    const planned: ProjectActivitySummary = { ...LAB, id: id("project", 4), title: "Labo 4 — planned", state: "draft", phase: "scheduled" };
+    render([...ALL, LAB, LAB3, planned]);
+    // A scheduled project is planned: it counts under the current tab, not under Drafts.
+    expect(await screen.findByRole("tab", { name: /Drafts\s*1/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Scheduled", pressed: false }));
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Série 6 — SPI")).toBeInTheDocument();
+    expect(within(table).getByText("Labo 4 — planned")).toBeInTheDocument();
+    expect(within(table).queryByText("Série 5 — UART")).not.toBeInTheDocument();
+    expect(within(table).queryByText("Labo 2 — pointeurs")).not.toBeInTheDocument();
+    // Only the current tab has the chip.
+    await user.click(screen.getByRole("tab", { name: /Ended/ }));
+    expect(screen.queryByRole("button", { name: "Scheduled" })).not.toBeInTheDocument();
+  });
+
+  it("drops the Scheduled filter when the last scheduled row opens (#787)", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = render([SERIES, NEXT]);
+    await user.click(await screen.findByRole("button", { name: "Scheduled", pressed: false }));
+    expect(within(screen.getByRole("table")).queryByText("Série 5 — UART")).not.toBeInTheDocument();
+    act(() => {
+      queryClient.setQueryData(activitiesKey, [SERIES, { ...NEXT, state: "running" }]);
+    });
+    expect(await within(screen.getByRole("table")).findByText("Série 5 — UART")).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).getByText("Série 6 — SPI")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Scheduled" })).not.toBeInTheDocument();
   });
 
   it("says so when the open tab holds nothing", async () => {

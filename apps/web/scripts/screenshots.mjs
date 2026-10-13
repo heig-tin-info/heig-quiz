@@ -142,6 +142,8 @@ const scenes = [
   // M3-10: the projects among the activities (`?projects=1`: five on r1, a graded and a released one among them, ADR-104).
   { name: "activities-projects", role: "teacher", path: "/activities?projects=1" },
   { name: "activities-projects-schedule", role: "teacher", path: "/activities?projects=1", ls: { "quiz-activities-view": "schedule" } },
+  // #787: the current tab narrowed to what is scheduled, a scheduled project among them.
+  { name: "activities-scheduled", role: "teacher", path: "/activities?projects=1", act: (p) => p.getByRole("button", { name: /^(scheduled|planifiées)$/i }).click() },
   // Teacher home (the courses)
   { name: "teacher-home", role: "teacher", path: "/" },
   { name: "teacher-home-empty", role: "teacher", path: "/?empty=1" },
@@ -258,6 +260,13 @@ const scenes = [
   // page opens on the evaluations, which is where the work is once the
   // classroom has students, so every roster scene names its tab.
   { name: "classroom", role: "teacher", path: "/classrooms/r1" },
+  // #787: the Activities tab's "Scheduled" filter, evaluations and projects at once.
+  { name: "classroom-scheduled", role: "teacher", path: "/classrooms/r1?projects=1", act: async (p) => {
+      // The classroom's tour and coach bubble would sit over the chip.
+      await skipCoach(p);
+      await gotIt(p);
+      await p.getByRole("button", { name: /^(scheduled|planifiées)$/i }).click();
+    } },
   // #804: "Rename" from an evaluation row's menu, its one-field dialog.
   { name: "classroom-rename-evaluation", role: "teacher", path: "/classrooms/r1", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^(actions for|actions pour)/i }).first().click();

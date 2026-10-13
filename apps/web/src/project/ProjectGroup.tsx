@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ProjectPatch, type ProjectActivitySummary } from "@quiz/contracts";
 
 import { ActivityMenu } from "../activities/actions";
+import { isScheduled } from "../activities/model";
 import { openProps, StateBadge } from "../activities/views";
 import { api } from "../api";
 import { githubAbsent } from "../github/api";
@@ -30,6 +31,14 @@ type SortKey = "title" | "start" | "deadline";
 /** What the rename dialog reads of a row. */
 type Renamed = Pick<ProjectActivitySummary, "id" | "title">;
 
+/** `GET /classrooms/:id/projects` (M3-02), archived ones excepted. */
+export function useClassroomProjects(classroomId: string) {
+  return useQuery<ProjectActivitySummary[]>({
+    queryKey: classroomProjectsKey(classroomId),
+    queryFn: () => api(`/app/api/classrooms/${classroomId}/projects`),
+  });
+}
+
 /**
  * The classroom's projects (F-PROJ-01, M3-10), a section under the evaluations'
  * on the Activities tab (#683): this one only exists while the classroom HAS a project. A classroom that never used
@@ -53,19 +62,18 @@ type Renamed = Pick<ProjectActivitySummary, "id" | "title">;
 export function ProjectGroup({
   classroomId,
   navigate,
+  scheduledOnly = false,
 }: {
   classroomId: string;
   navigate: (r: Route) => void;
+  /** The classroom's "Scheduled" filter (#787): only the projects in their scheduled phase. */
+  scheduledOnly?: boolean;
 }) {
   const t = useT();
   /** The row being renamed (#804). */
   const [renaming, setRenaming] = useState<Renamed | null>(null);
-  // `GET /classrooms/:id/projects` (M3-02), archived ones excepted.
-  const list = useQuery<ProjectActivitySummary[]>({
-    queryKey: classroomProjectsKey(classroomId),
-    queryFn: () => api(`/app/api/classrooms/${classroomId}/projects`),
-  });
-  const rows = list.data ?? [];
+  const list = useClassroomProjects(classroomId);
+  const rows = scheduledOnly ? (list.data ?? []).filter(isScheduled) : (list.data ?? []);
   // An empty date (null) sorts last, whichever way the column goes (`useSortableTable`).
   const { sorted, sort, toggle } = useSortableTable<ProjectActivitySummary, SortKey>(
     rows,

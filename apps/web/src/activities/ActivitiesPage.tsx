@@ -32,6 +32,7 @@ import {
   activityOrder,
   awaitsRelease,
   isLive,
+  isScheduled,
   matchesType,
   tabOf,
   TABS,
@@ -69,7 +70,9 @@ import {
  *
  * Three tabs split the list by age: what runs or is planned (the default:
  * what the teacher came for), the drafts nobody launched, and what is over.
- * The type chips narrow whichever tab is open. Above them, the summary
+ * The type chips narrow whichever tab is open; the current tab narrows to
+ * what is scheduled (#787), the ended one to what waits for its results.
+ * Above them, the summary
  * tiles (`Summary.tsx`) count what runs, what waits for its results, the
  * week ahead and the projects, each one a way into the rows it counts.
  *
@@ -100,6 +103,8 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const [tab, setTab] = usePersistentChoice<Tab>("quiz-activities-tab", TABS, "current");
   // The Ended tab narrowed to what waits for its results (the summary's tile).
   const [unreleased, setUnreleased] = useState(false);
+  // The current tab narrowed to what is in the pipe (#787): scheduled, of either kind.
+  const [scheduled, setScheduled] = useState(false);
   const { end, pending } = useEndPoll();
   const wide = useMinWidth(640);
 
@@ -107,13 +112,23 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const live = ordered.filter((row): row is EvaluationActivitySummary => isLive(row, now));
   const typed = ordered.filter((row) => matchesType(row, types));
   const inTab = (t: Tab) => typed.filter((row) => tabOf(row) === t);
-  const narrowing = unreleased && tab === "ended";
-  const shown = inTab(tab).filter((row) => !narrowing || awaitsRelease(row));
+  // The one narrowing chip of the open tab, if pressed: what it keeps.
+  // As the chip shows: only where it can find something, so the last
+  // scheduled row opening drops the filter instead of emptying the tab.
+  const narrow =
+    unreleased && tab === "ended"
+      ? awaitsRelease
+      : scheduled && tab === "current" && ordered.some(isScheduled)
+        ? isScheduled
+        : null;
+  const narrowing = narrow !== null;
+  const shown = inTab(tab).filter((row) => narrow === null || narrow(row));
   const tabTotal = ordered.filter((row) => tabOf(row) === tab).length;
   const filtering = types.size > 0 || narrowing;
   const clearFilters = () => {
     setTypes(new Set());
     setUnreleased(false);
+    setScheduled(false);
   };
   const pick = (target: SummaryTarget) => {
     clearFilters();
@@ -226,8 +241,19 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
               />
             ))}
           </div>
-          {/* Only where it can find something: the Ended tab, holding a run
-              whose results are not out. */}
+          {/* Only where it can find something: the current tab, holding a
+              scheduled row (#787); the Ended tab, holding a run whose
+              results are not out. */}
+          {tab === "current" && ordered.some(isScheduled) ? (
+            <>
+              <span aria-hidden className="mx-1 hidden h-5 w-px bg-line sm:block" />
+              <ToggleChip
+                label={t("activities.filter.scheduled")}
+                pressed={scheduled}
+                onToggle={() => setScheduled((v) => !v)}
+              />
+            </>
+          ) : null}
           {tab === "ended" && ordered.some(awaitsRelease) ? (
             <>
               <span aria-hidden className="mx-1 hidden h-5 w-px bg-line sm:block" />

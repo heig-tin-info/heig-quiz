@@ -152,10 +152,10 @@ describe("the schedule view", () => {
     const preparing = { ...LAB, id: id("project", 3), title: "Labo 4 — arbres", state: "draft" as const, phase: "draft" as const };
     mockFetch({ "GET /app/api/activities": ok([planned, preparing]) });
     renderWithProviders(<ActivitiesPage navigate={vi.fn()} />);
-    // Filed by its state (a known gap of the 2026-10-13 amendment): under Drafts.
-    await user.click(await screen.findByRole("tab", { name: /Drafts/ }));
+    // A scheduled project is planned: under the current tab (#787); the draft under Drafts.
     const bar = async (name: RegExp) => (await screen.findByRole("button", { name })).className;
     expect(await bar(/^Labo 3 — listes — scheduled, /)).toContain("ring-info");
+    await user.click(await screen.findByRole("tab", { name: /Drafts/ }));
     const draft = await bar(/^Labo 4 — arbres — draft, /);
     expect(draft).toContain("border-dashed");
     expect(draft).not.toContain("ring-info");
