@@ -5779,6 +5779,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.rail.atPublication": "à la publication",
   "project.rail.afterPublication": "{n} jours après la publication",
   "project.rail.afterPublication.one": "1 jour après la publication",
+  "project.rail.progress": "Temps écoulé de la publication à l'échéance",
   "project.workspace": "Espace de travail",
   "project.workspace.mode": "Où travaillent les étudiants",
   "project.workspace.mode.free": "Leurs outils",

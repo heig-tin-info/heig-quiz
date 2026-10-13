@@ -659,6 +659,55 @@ export function railSteps(p: ProjectDetail, checkpoints: ReviewCheckpoint[]): Ra
 }
 
 /**
+ * The share of the window `start` → `end` that has elapsed at `now`, clamped
+ * to 0..1: 0 before the start, 1 from the end on. A window of zero length (or
+ * an inverted one, start after end) has no inside: 0 before its end, 1 from it.
+ */
+export function elapsedFraction(start: string, end: string, now: number): number {
+  const from = Date.parse(start);
+  const to = Date.parse(end);
+  if (to <= from) return now >= to ? 1 : 0;
+  return Math.min(1, Math.max(0, (now - from) / (to - from)));
+}
+
+/** The rail's own clock while the students are in (issue #798, ADR-104 §3 amendment). */
+export interface RailCountdown {
+  /** The deadline the time left counts to. */
+  deadline: string;
+  /** Publication → deadline, elapsed, 0..1: the value of the progress bar. */
+  progress: number;
+  /**
+   * One per step, aligned with `steps`: how much of the line leaving that
+   * step toward the next one is filled, 0..1. Each segment runs between the
+   * dates of its two ends, so the fill passes a checkpoint's marker when that
+   * checkpoint is due; from the Deadline on, 0.
+   */
+  fills: number[];
+}
+
+/**
+ * The countdown the rail draws, or null when it has none: only while the
+ * project is published (the students are in — a published project's start
+ * and deadline are dates), and until the server applied the deadline
+ * (`deadlinePassed`, its word, never the browser's clock — invariant 5).
+ * After that the rail is the plain one, its done markers saying the rest.
+ */
+export function railCountdown(p: ProjectDetail, steps: RailStep[], now: number): RailCountdown | null {
+  if (p.state !== "published" || deadlinePassed(p)) return null;
+  const deadline = p.deadlineAt;
+  const end = steps.findIndex((s) => s.kind === "deadline");
+  const at = (s: RailStep): string | null =>
+    s.kind === "published" ? s.at : s.kind === "checkpoint" ? s.checkpoint.dueAt : s.kind === "deadline" && "at" in s ? s.at : null;
+  const fills = steps.map((s, i) => {
+    if (i >= end) return 0;
+    const from = at(s);
+    const to = at(steps[i + 1]!);
+    return from !== null && to !== null ? elapsedFraction(from, to, now) : 0;
+  });
+  return { deadline, progress: elapsedFraction(p.startAt, deadline, now), fills };
+}
+
+/**
  * How many settings under a draft's "Advanced options" differ from the
  * defaults (the badge beside its title, so a folded card never hides a change).
  */

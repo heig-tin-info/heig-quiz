@@ -125,3 +125,44 @@ project" under one amber swatch.
   Activities tab are the only staff surface with no clock at all.
 - **Keeping amber for a published project.** Rejected: one colour with two
   meanings in two tables that sit one above the other.
+
+## Amendment 2026-10-13: the project rail carries its own clock
+
+Settled with the product owner on 2026-10-13 (#798, asked by a teacher). It
+amends §3 for the project page only; the badge's timer, its two places and
+the rest of this record stand.
+
+1. **While a project is `published` and the server has not applied its
+   deadline** (`deadlinePassed`, the server's word — invariant 5 of
+   `CLAUDE.md`), the lifecycle rail (`ProjectRail`) draws a clock of its
+   own: the line from Published toward the Deadline fills with a 3 px bar in
+   the `accent`, in proportion to the time elapsed from the publication to
+   the deadline (clamped 0..100 %, `elapsedFraction` and `railCountdown` of
+   `project/projectPage.ts`); and under the deadline's date the time left is
+   written large in the `accent`, through `TimeLeft` and the `time.left.*`
+   keys — §3's format ("4 d", "3 h", "35 min", "<1 min", never negative),
+   ticking on the shared minute timer of `useNow`, no new clock. Each segment
+   between two markers fills by its own two dates, so the bar passes a
+   review checkpoint's marker when that checkpoint is due.
+2. **Not a control, so not a second primary action.** The rail's accent is
+   ink on a line and a figure, never a button or a filled surface one could
+   press; the header's one primary button (Publish, Sync, Release —
+   invariant 2) stays the only accent a teacher acts on, and the squint
+   test still finds it: with the accent stripped, the rail still reads (a
+   bar and a figure under a date).
+3. **The page's only clock.** §3 rejected two countdowns of the same
+   deadline on one page. So the Deadline tile (`ProjectOverview`) drops its
+   relative line ("in 2 weeks") while the rail carries the time left, and
+   keeps "passed" once the server applied the deadline. The header's status
+   sentence keeps the absolute date only.
+4. **After the deadline the rail is the plain one.** Once the deadline is
+   applied (or the project is locked, graded, released), no bar and no time
+   left: the done markers already say it is over. Completing the segment in
+   a neutral ink was the alternative; it was set aside as one more mark that
+   says what the filled Deadline marker already says, on a rail that should
+   go quiet once nothing runs out.
+5. **Accessibility.** The bar is drawn in segments, `aria-hidden`; one
+   `role="progressbar"` (`aria-valuenow` 0..100, named "Time elapsed from
+   publication to the deadline") carries its value, and `TimeLeft` says
+   "closes in …" to a screen reader. The fill has a transition only under
+   `motion-safe`: nothing moves under `prefers-reduced-motion`.

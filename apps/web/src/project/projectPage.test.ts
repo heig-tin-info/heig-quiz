@@ -8,6 +8,8 @@ import {
   checkpointStatus,
   commitTone,
   deadlinePassed,
+  elapsedFraction,
+  railCountdown,
   filterEntries,
   projectTally,
   advancedCount,
@@ -645,6 +647,67 @@ describe("the lifecycle rail's steps", () => {
     const steps = railSteps(reopened, []);
     expect(steps.find((s) => s.kind === "deadline")).toMatchObject({ done: false });
     expect(steps.find((s) => s.kind === "freeze")).toMatchObject({ done: false, later: 1, lastLater: later });
+  });
+});
+
+describe("elapsedFraction", () => {
+  const start = "2026-10-01T08:00:00.000Z";
+  const end = "2026-10-01T10:00:00.000Z";
+  const at = (iso: string) => Date.parse(iso);
+
+  it("is the elapsed share of the window", () => {
+    expect(elapsedFraction(start, end, at("2026-10-01T08:30:00.000Z"))).toBe(0.25);
+    expect(elapsedFraction(start, end, at("2026-10-01T09:00:00.000Z"))).toBe(0.5);
+  });
+
+  it("is clamped: 0 before the start, 1 from the end on", () => {
+    expect(elapsedFraction(start, end, at("2026-09-30T08:00:00.000Z"))).toBe(0);
+    expect(elapsedFraction(start, end, at(start))).toBe(0);
+    expect(elapsedFraction(start, end, at(end))).toBe(1);
+    expect(elapsedFraction(start, end, at("2026-10-02T08:00:00.000Z"))).toBe(1);
+  });
+
+  it("has no inside for a window of zero length or an inverted one", () => {
+    expect(elapsedFraction(start, start, at(start) - 1)).toBe(0);
+    expect(elapsedFraction(start, start, at(start))).toBe(1);
+    expect(elapsedFraction(end, start, at(start) - 1)).toBe(0);
+    expect(elapsedFraction(end, start, at(end))).toBe(1);
+  });
+});
+
+describe("railCountdown", () => {
+  const start = "2026-10-01T08:00:00.000Z";
+  const deadline = "2026-10-11T08:00:00.000Z";
+  const now = Date.parse("2026-10-06T08:00:00.000Z"); // halfway
+  const open = makeProject({ state: "published", startAt: start, deadlineAt: deadline, deadlineAppliedAt: null });
+
+  it("fills each segment up to the deadline by its own dates, and nothing after it", () => {
+    const sent = makeCheckpoint(1, { name: "sent", dueAt: "2026-10-03T08:00:00.000Z", dispatchedAt: start });
+    const next = makeCheckpoint(2, { name: "next", dueAt: "2026-10-09T08:00:00.000Z" });
+    const steps = railSteps(open, [sent, next]);
+    const c = railCountdown(open, steps, now)!;
+    expect(c.deadline).toBe(deadline);
+    expect(c.progress).toBe(0.5);
+    // published→sent full, sent→next half (3rd → 9th, now the 6th), next→deadline empty, then Deadline, Freeze, Release.
+    expect(c.fills).toEqual([1, 0.5, 0, 0, 0, 0]);
+  });
+
+  it("is clamped before the start and once the browser's clock is past the deadline the server has not applied yet", () => {
+    const steps = railSteps(open, []);
+    expect(railCountdown(open, steps, Date.parse(start) - 60_000)).toMatchObject({ progress: 0, fills: [0, 0, 0, 0] });
+    expect(railCountdown(open, steps, Date.parse(deadline) + 60_000)).toMatchObject({ progress: 1, fills: [1, 0, 0, 0] });
+  });
+
+  it("is none unless published with a deadline the server has not applied", () => {
+    const none = (p: ReturnType<typeof makeProject>) => railCountdown(p, railSteps(p, []), now);
+    expect(none({ ...open, state: "draft" })).toBeNull();
+    expect(none({ ...open, state: "locked" })).toBeNull();
+    expect(none({ ...open, deadlineAppliedAt: deadline })).toBeNull();
+  });
+
+  it("has a zero-length window full from its start", () => {
+    const instant = { ...open, deadlineAt: start };
+    expect(railCountdown(instant, railSteps(instant, []), Date.parse(start))).toMatchObject({ progress: 1 });
   });
 });
 

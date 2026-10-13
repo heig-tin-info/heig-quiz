@@ -5793,6 +5793,7 @@ export const en = {
   "project.rail.atPublication": "at publication",
   "project.rail.afterPublication": "{n} days after publication",
   "project.rail.afterPublication.one": "1 day after publication",
+  "project.rail.progress": "Time elapsed from publication to the deadline",
   "project.workspace": "Workspace",
   "project.workspace.mode": "Where students work",
   "project.workspace.mode.free": "Own tools",

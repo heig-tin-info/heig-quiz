@@ -1,5 +1,5 @@
 import { Flag, Plus, Trash2 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import type { ProjectDetail, ReviewCheckpoint } from "@quiz/contracts";
 
@@ -15,27 +15,35 @@ import {
   RelativeTime,
   SectionHeading,
   Skeleton,
+  TimeLeft,
   type Tone,
+  useNow,
 } from "../ui";
 import { useCheckpoints } from "./ProjectCheckpoints";
-import { railSteps, type CheckpointStatus, type RailStep } from "./projectPage";
+import { railCountdown, railSteps, type CheckpointStatus, type RailStep } from "./projectPage";
 
 const STATUS_TONE: Record<CheckpointStatus, Tone> = { dispatched: "green", void: "zinc", scheduled: "amber" };
 
 /** A date: never broken, never cut. */
 const When = ({ iso }: { iso: string }) => <span className="whitespace-nowrap tabular-nums">{isoDateTime(iso)}</span>;
 
-/** One step of the rail: a marker on the line, a title, its date and the lines that qualify it. */
+/**
+ * One step of the rail: a marker on the line, a title, its date and the lines
+ * that qualify it. `fill` (0..1) is how much of the line leaving it the
+ * countdown's accent bar covers, while the project is open.
+ */
 function Step({
   title,
   done,
   muted,
+  fill = 0,
   children,
   action,
 }: {
   title: ReactNode;
   done: boolean;
   muted?: boolean;
+  fill?: number;
   children?: ReactNode;
   action?: ReactNode;
 }) {
@@ -45,7 +53,16 @@ function Step({
       <span
         aria-hidden
         className="absolute bottom-0 left-[6px] top-3 w-px bg-line group-last:hidden xl:bottom-auto xl:left-0 xl:right-0 xl:top-[6px] xl:h-px xl:w-auto"
-      />
+      >
+        {/* The countdown's bar: 3 px of accent over the hairline, growing down (a phone) or right (xl). */}
+        {fill > 0 ? (
+          <span
+            data-testid="rail-fill"
+            style={{ "--fill": `${(fill * 100).toFixed(2)}%` } as CSSProperties}
+            className="absolute left-1/2 top-0 h-[var(--fill)] w-[3px] -translate-x-1/2 rounded-full bg-accent motion-safe:transition-[width,height] motion-safe:duration-200 xl:left-0 xl:top-1/2 xl:h-[3px] xl:w-[var(--fill)] xl:translate-x-0 xl:-translate-y-1/2"
+          />
+        ) : null}
+      </span>
       <span
         aria-hidden
         className={cx(
@@ -75,16 +92,24 @@ function Step({
 export function ProjectRail({ project }: { project: ProjectDetail }) {
   const t = useT();
   const { list, onDelete, openAdd, dialog } = useCheckpoints(project);
+  // The rail's own clock (ADR-104 §3, amendment of 2026-10-13): the shared minute timer, never a page tick.
+  const now = useNow(60_000);
   const auto = project.gradingMode === "auto";
   const archived = project.archivedAt !== null;
   // A draft takes checkpoints too (F-PROJ-01); a locked project's deadline is behind them.
   const canAdd = auto && project.state !== "locked" && !archived;
 
-  const stepOf = (step: RailStep, key: string): ReactNode => {
+  const checkpoints: ReviewCheckpoint[] = list.data ?? [];
+  const steps = railSteps(project, checkpoints);
+  const countdown = railCountdown(project, steps, now);
+
+  const stepOf = (step: RailStep, i: number): ReactNode => {
+    const key = `${step.kind}-${i}`;
+    const fill = countdown?.fills[i];
     switch (step.kind) {
       case "published":
         return (
-          <Step key={key} title={t("project.rail.published")} done={step.done}>
+          <Step key={key} title={t("project.rail.published")} done={step.done} fill={fill}>
             <p>{step.at ? <When iso={step.at} /> : t("project.rail.atPublication")}</p>
           </Step>
         );
@@ -96,6 +121,7 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
             title={<span className="font-mono text-[13px] font-semibold">{c.name}</span>}
             done={status === "dispatched"}
             muted={status === "void"}
+            fill={fill}
             action={
               status !== "dispatched" && !archived ? (
                 <Actions
@@ -142,6 +168,11 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
                   ? t("project.rail.afterPublication.one")
                   : t("project.rail.afterPublication", { n: step.afterDays })}
             </p>
+            {countdown ? (
+              <p className="pt-0.5 text-lg font-semibold leading-tight text-accent [&_svg]:size-4">
+                <TimeLeft iso={countdown.deadline} />
+              </p>
+            ) : null}
           </Step>
         );
       case "freeze":
@@ -162,7 +193,6 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
     }
   };
 
-  const checkpoints: ReviewCheckpoint[] = list.data ?? [];
   return (
     <section aria-labelledby="project-rail" className="space-y-3" data-coach="project.checkpoints">
       <SectionHeading
@@ -183,9 +213,18 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
         <QueryError title={t("project.checkpoints.failed")} query={list} />
       ) : (
         <Card className="px-4 py-4">
-          <ol className="flex flex-col xl:flex-row">
-            {railSteps(project, checkpoints).map((step, i) => stepOf(step, `${step.kind}-${i}`))}
-          </ol>
+          <ol className="flex flex-col xl:flex-row">{steps.map(stepOf)}</ol>
+          {countdown ? (
+            // The bar is drawn in segments between the markers; this is its one value for a screen reader.
+            <span
+              role="progressbar"
+              className="sr-only"
+              aria-label={t("project.rail.progress")}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(countdown.progress * 100)}
+            />
+          ) : null}
           {auto && checkpoints.length === 0 ? (
             <p className="mt-4 text-[13px] text-fg-muted">{t("project.checkpoints.empty")}</p>
           ) : null}
