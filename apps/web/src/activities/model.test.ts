@@ -10,6 +10,7 @@ import {
   closesOf,
   foldable,
   isLive,
+  isScheduled,
   isoWeek,
   tabOf,
   matchesType,
@@ -192,6 +193,28 @@ describe("tabOf", () => {
     expect(tabOf(project())).toBe("current");
     expect(tabOf(row({ state: "grading" }))).toBe("ended");
     expect(tabOf(project({ state: "locked" }))).toBe("ended");
+  });
+});
+
+describe("isScheduled (#787)", () => {
+  it("keeps a scheduled evaluation and a project in its scheduled phase", () => {
+    expect(isScheduled(row({ state: "scheduled" }))).toBe(true);
+    expect(isScheduled(project({ state: "draft", phase: "scheduled" }))).toBe(true);
+  });
+
+  it("leaves a draft in preparation and whatever already runs", () => {
+    expect(isScheduled(row({ state: "draft" }))).toBe(false);
+    expect(isScheduled(row({ state: "running" }))).toBe(false);
+    expect(isScheduled(project({ state: "draft" }))).toBe(false);
+    expect(isScheduled(project())).toBe(false);
+  });
+
+  it("reads a classroom's evaluation row, which has no kind", () => {
+    expect(isScheduled({ state: "scheduled" })).toBe(true);
+  });
+
+  it("files a scheduled project under the current tab, not under Drafts", () => {
+    expect(tabOf(project({ state: "draft", phase: "scheduled" }))).toBe("current");
   });
 });
 

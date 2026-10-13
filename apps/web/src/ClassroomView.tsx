@@ -19,6 +19,7 @@ import type { ClassroomQueryTab } from "@quiz/domain";
 
 import { NewActivity, newProjectAction } from "./activities/NewActivity";
 import { api, useMe } from "./api";
+import { ClassroomActivities } from "./ClassroomActivities";
 import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./ClassroomPeriod";
 import { ClassroomSettings } from "./ClassroomSettings";
 import { ClassroomDrill } from "./drill/ClassroomDrill";
@@ -31,9 +32,8 @@ import { useT } from "./i18n";
 import { useStaffJournal } from "./journal/api";
 import { JournalReader } from "./journal/JournalReader";
 // WP8: evaluation + dashboard
-import { EvaluationList, NewEvaluationModal } from "./evaluation/EvaluationList";
+import { NewEvaluationModal } from "./evaluation/EvaluationList";
 import { useErrorToast, useToast } from "./notify";
-import { ProjectGroup } from "./project/ProjectGroup";
 import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
 import { useSearchParam, type Navigate, type Route } from "./router";
@@ -428,16 +428,16 @@ export function ClassroomView({
             {trainingStatus ? (
               <TrainingCard status={trainingStatus} onStudent={seated ? undefined : revealJoin} navigate={navigate} />
             ) : null}
-            {/* WP8: evaluation + dashboard */}
-            <EvaluationList
+            {/* WP8: evaluation + dashboard; M3-10: the projects under them; #787: the Scheduled filter. */}
+            <ClassroomActivities
               classroomId={id}
               navigate={navigate}
-              onNew={() => setLayer("evaluation")}
-              newProject={newProjectAction(id, github.isSuccess ? github.data : undefined, navigate, openConnect, t)}
-              newVariant={cardAccent ? "secondary" : "primary"}
+              evaluations={{
+                onNew: () => setLayer("evaluation"),
+                newProject: newProjectAction(id, github.isSuccess ? github.data : undefined, navigate, openConnect, t),
+                newVariant: cardAccent ? "secondary" : "primary",
+              }}
             />
-            {/* M3-10: the projects, a group of their own under the evaluations. */}
-            <ProjectGroup classroomId={id} navigate={navigate} />
           </div>
         ) : tab === "journal" ? (
           <JournalReader classroomId={id} path={journalPath} navigate={navigate} studentView={false} />

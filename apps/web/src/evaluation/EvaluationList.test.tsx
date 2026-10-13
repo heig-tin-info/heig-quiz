@@ -67,10 +67,11 @@ describe("EvaluationList", () => {
 
   it("tells a scheduled one from a draft in blue, and says when each starts (#786, #795)", async () => {
     const opensAt = "2026-11-02T08:00:00.000Z";
+    const closesAt = "2026-11-09T22:00:00.000Z";
     mockFetch(
       list([
         summary({ state: "draft", title: "Being written" }),
-        summary({ id: id("evaluation", 2), state: "scheduled", title: "Planned", opensAt }),
+        summary({ id: id("evaluation", 2), state: "scheduled", title: "Planned", opensAt, closesAt }),
         // Opened by hand: no opensAt, only the start of its run.
         summary({ id: id("evaluation", 3), state: "running", title: "By hand", startedAt: "2026-10-13T09:15:00.000Z" }),
       ]),
@@ -80,12 +81,15 @@ describe("EvaluationList", () => {
     const planned = await row("Planned");
     expect(planned.getByText("scheduled").className).toContain("text-info");
     expect(planned.getByText(isoDateTime(opensAt))).toBeInTheDocument();
+    // And when it ends, as a project says its deadline (#787).
+    expect(planned.getByText(isoDateTime(closesAt))).toBeInTheDocument();
     expect((await row("By hand")).getByText(isoDateTime("2026-10-13T09:15:00.000Z"))).toBeInTheDocument();
     const draft = await row("Being written");
     expect(draft.getByText("draft").className).not.toContain("text-info");
     // Never scheduled: a dash where the time would be.
     expect(draft.queryByText(/\d{2}:\d{2}/)).toBeNull();
     expect(screen.getByRole("columnheader", { name: /Start/ })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /End/ })).toBeInTheDocument();
   });
 
   it("opens the dashboard for a live one and the configuration for a draft", async () => {

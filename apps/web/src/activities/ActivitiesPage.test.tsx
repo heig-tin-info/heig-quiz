@@ -198,6 +198,23 @@ describe("ActivitiesPage", () => {
     expect(within(screen.getByRole("table")).queryByText("Quiz 3 — pointers")).not.toBeInTheDocument();
   });
 
+  it("narrows the current tab to what is scheduled, of either kind, the scheduled project included (#787)", async () => {
+    const user = userEvent.setup();
+    const planned: ProjectActivitySummary = { ...LAB, id: id("project", 4), title: "Labo 4 — planned", state: "draft", phase: "scheduled" };
+    render([...ALL, LAB, LAB3, planned]);
+    // A scheduled project is planned: it counts under the current tab, not under Drafts.
+    expect(await screen.findByRole("tab", { name: /Drafts\s*1/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Scheduled", pressed: false }));
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Série 6 — SPI")).toBeInTheDocument();
+    expect(within(table).getByText("Labo 4 — planned")).toBeInTheDocument();
+    expect(within(table).queryByText("Série 5 — UART")).not.toBeInTheDocument();
+    expect(within(table).queryByText("Labo 2 — pointeurs")).not.toBeInTheDocument();
+    // Only the current tab has the chip.
+    await user.click(screen.getByRole("tab", { name: /Ended/ }));
+    expect(screen.queryByRole("button", { name: "Scheduled" })).not.toBeInTheDocument();
+  });
+
   it("says so when the open tab holds nothing", async () => {
     render([DONE]);
     expect(await screen.findByText("Nothing in progress or planned")).toBeInTheDocument();

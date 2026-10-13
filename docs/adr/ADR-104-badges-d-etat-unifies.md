@@ -191,17 +191,19 @@ scheduled still said "draft" exactly like one in preparation (#795).
 3. **The gantt's scheduled ring follows the tone.** §4's info ring is now
    drawn for a bar whose badge is blue (`KIND`'s `stateStyle`), so a
    scheduled project wears it as a scheduled evaluation does; the dashed
-   draft outline stays for a draft in preparation. A known, accepted gap:
-   the `/activities` tabs file by the state, so a scheduled project sits
-   under Drafts (`tabOf` in `activities/model.ts`), while a scheduled
-   evaluation sits under Current.
+   draft outline stays for a draft in preparation. The `/activities` tabs
+   first filed a scheduled project under Drafts, by its state; since #787
+   (2026-10-13) `tabOf` in `activities/model.ts` files it under Current,
+   beside a scheduled evaluation (`isScheduled`, which the "Scheduled"
+   filter of `/activities` and of a classroom's Activities tab also reads).
 4. **The start in sight.** The evaluations table of a classroom's
    Activities tab gains a Start column — when it started (`startedAt`, an
    evaluation opened by hand has no `opensAt`), else when it is to open
    (`opensAt`), as an absolute date and time, a dash when neither is set —
    as the Projects table under it already had, so a scheduled row says
    when it begins without opening it. A row without a date sorts last in
-   either direction.
+   either direction. Since #787 an End column (`closesAt`) follows it, as
+   the projects' Deadline follows their Start.
 5. **Nothing blinks.** The suggestion that a running badge blink (#786) is
    declined: motion pulls the eye from the row's one primary action, and
    the soft green with its timer (§3) already marks a live row.

@@ -12,6 +12,8 @@ import type {
   EvaluationActivitySummary,
   EvaluationMode,
   EvaluationState,
+  EvaluationSummary,
+  ProjectActivitySummary,
   ProjectState,
 } from "@quiz/contracts";
 import { activityBucket, isLiveNow, type ActivityBucket } from "@quiz/domain";
@@ -26,15 +28,27 @@ import type { BadgeStyle } from "../ui";
 export type Bucket = ActivityBucket;
 
 /**
+ * Ready, and opening on its own at a known time (ADR-104's blue): an
+ * evaluation `scheduled`, a project in the `scheduled` phase (a draft whose
+ * publish mode is scheduled). What the "Scheduled" filter keeps (#787), on
+ * `/activities` and on a classroom's Activities tab — so it reads the rows
+ * of either list, the classroom's evaluations having no `kind`.
+ */
+export function isScheduled(a: Pick<EvaluationSummary, "state"> | Pick<ProjectActivitySummary, "phase">): boolean {
+  return "phase" in a ? a.phase === "scheduled" : a.state === "scheduled";
+}
+
+/**
  * The tabs of the section: what runs or is planned (the default — what needs
  * the teacher), what is not launched yet, and what is over. A draft is
- * "upcoming" by its age but not by its tab: nothing is planned for it.
+ * "upcoming" by its age but not by its tab: nothing is planned for it —
+ * except a scheduled project, a draft by its state but planned (#787).
  */
 export type Tab = "current" | "drafts" | "ended";
 export const TABS: readonly Tab[] = ["current", "drafts", "ended"];
 
 export function tabOf(a: ActivitySummary): Tab {
-  if (a.state === "draft") return "drafts";
+  if (a.state === "draft" && !isScheduled(a)) return "drafts";
   return bucketOf(a.state) === "ended" ? "ended" : "current";
 }
 
