@@ -47,7 +47,7 @@ const form = (fr: Partial<typeof empty>, en: Partial<typeof empty> = {}): Concep
   en: { ...empty, ...en },
 });
 
-async function concept(fr: string | null, en: string | null, extra: { status?: "proposed" | "validated" | "merged"; mergedInto?: string; description?: string } = {}) {
+async function concept(fr: string | null, en: string | null, extra: { status?: "proposed" | "validated" | "merged"; mergedInto?: string; description?: string; qualifierFr?: string } = {}) {
   const id = randomUUID();
   await db()
     .insert(concepts)
@@ -57,7 +57,8 @@ async function concept(fr: string | null, en: string | null, extra: { status?: "
       mergedInto: extra.mergedInto ?? null,
       createdBy: teacher.id,
       labelFr: fr,
-      keyFr: fr === null ? null : qualifiedConceptKey(fr, ""),
+      keyFr: fr === null ? null : qualifiedConceptKey(fr, extra.qualifierFr ?? ""),
+      qualifierFr: extra.qualifierFr ?? "",
       labelEn: en,
       keyEn: en === null ? null : qualifiedConceptKey(en, ""),
       descriptionFr: extra.description ?? "",
@@ -146,6 +147,24 @@ describe("POST /admin/concepts/:id/fill", () => {
     const close = ConceptFill.parse((await fill(admin, id, form({ label: "Pointeur", description: "d" }, { description: "d" }))).json());
     expect(close.en.taken).toBeNull();
     expect(close.en.close.map((c) => c.id)).toEqual([near]);
+  });
+
+  it("answers a label shared by homonyms as taken, and resolves a label written with its qualifier as split", async () => {
+    const id = await concept(null, "Address");
+    const memory = await concept("Adresse", "Memory address", { status: "validated", qualifierFr: "mémoire" });
+    const network = await concept("Adresse", "Network address", { status: "validated", qualifierFr: "réseau" });
+    const ask = () => fill(admin, id, form({}, { label: "Address", description: "d" }));
+
+    reply = { fr: { label: "Adresse", qualifier: "", description: "" }, en: empty };
+    const ambiguous = ConceptFill.parse((await ask()).json());
+    expect(ambiguous.fr.label).toEqual({ label: "Adresse", qualifier: "" });
+    expect([memory, network]).toContain(ambiguous.fr.taken?.id);
+
+    server.clock.advance(61_000);
+    reply = { fr: { label: "Adresse (réseau)", qualifier: "", description: "" }, en: empty };
+    const split = ConceptFill.parse((await ask()).json());
+    expect(split.fr.label).toEqual({ label: "Adresse", qualifier: "réseau" });
+    expect(split.fr.taken?.id).toBe(network);
   });
 
   it("makes no call when nothing is empty, and refuses a form without a label or a merged concept", async () => {

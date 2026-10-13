@@ -34,7 +34,8 @@ import { loadAliases, perLang, toConceptRef, toResolvable } from "./row.js";
 /** Two descriptions of about 120 tokens, two labels. */
 const MAX_TOKENS = 700;
 
-type Field = "label" | "qualifier" | "description";
+/** What is asked for: a qualifier comes only with the label it qualifies. */
+type Field = "label" | "description";
 const LANG_NAME = { fr: "French", en: "English" } as const satisfies Record<ConceptLang, string>;
 
 const SYSTEM = [
@@ -53,7 +54,7 @@ const SYSTEM = [
 const ReplySide = z.object({ label: z.string(), qualifier: z.string(), description: z.string() });
 const Reply = z.object({ fr: ReplySide, en: ReplySide });
 
-/** The fields to fill: empty ones; a qualifier only with its label. */
+/** The fields to fill: an empty label (its qualifier comes with it) and an empty description. */
 const wanted = (form: ConceptFillRequest, lang: ConceptLang): Field[] => {
   const side = form[lang];
   return [...(side.label === "" ? (["label"] as const) : []), ...(side.description === "" ? (["description"] as const) : [])];
@@ -120,10 +121,11 @@ export async function fillConcept(
     if (!asked[lang].includes("label")) return out;
     const label = oneLine(reply.label, CONCEPT_LABEL_MAX);
     const qualifier = oneLine(reply.qualifier, CONCEPT_QUALIFIER_MAX);
+    // A label typed as « Adresse (mémoire) » is split here, then resolved as split.
     const fresh = conceptToCreate(qualifier === "" ? label : `${label} (${qualifier})`);
     if (!fresh) return out;
     out.label = { label: fresh.label, qualifier: fresh.qualifier };
-    const outcome = resolveConceptLabel(qualifier === "" ? fresh.label : `${fresh.label} (${fresh.qualifier})`, vocab);
+    const outcome = resolveConceptLabel(fresh.qualifier === "" ? fresh.label : `${fresh.label} (${fresh.qualifier})`, vocab);
     if (outcome.kind === "resolved") out.taken = ref(outcome.id, lang);
     else if (outcome.kind === "ambiguous") out.taken = ref(outcome.candidates[0]!, lang);
     else out.close = outcome.candidates.slice(0, CONCEPT_FILL_CLOSE_MAX).flatMap((id) => ref(id, lang) ?? []);

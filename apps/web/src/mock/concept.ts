@@ -8,6 +8,7 @@
  * admin dropped (`c01`, dropped as a chapter label, is one from the start).
  */
 import {
+  CONCEPT_FILL_CLOSE_MAX,
   ConceptAliasAdd,
   ConceptCreate,
   ConceptFillRequest,
@@ -265,8 +266,13 @@ on("POST", "/app/api/admin/concepts/:id/fill", (m, raw): ConceptFill => {
     const outcome = label === null ? null : resolveConceptLabel(label, vocab);
     return {
       label: label === null ? null : { label, qualifier: form[other].qualifier },
-      taken: outcome?.kind === "resolved" ? (ref(outcome.id, lang)[0] ?? null) : null,
-      close: outcome?.kind === "unknown" ? outcome.candidates.slice(0, 3).flatMap((id) => ref(id, lang)) : [],
+      taken:
+        outcome?.kind === "resolved"
+          ? (ref(outcome.id, lang)[0] ?? null)
+          : outcome?.kind === "ambiguous"
+            ? (ref(outcome.candidates[0]!, lang)[0] ?? null)
+            : null,
+      close: outcome?.kind === "unknown" ? outcome.candidates.slice(0, CONCEPT_FILL_CLOSE_MAX).flatMap((id) => ref(id, lang)) : [],
       description:
         form[lang].description === ""
           ? lang === "fr"

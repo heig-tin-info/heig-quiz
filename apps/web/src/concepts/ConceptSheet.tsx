@@ -21,7 +21,7 @@ import { Button, Chip, Field, FormError, Sheet, Textarea } from "../ui";
 import { FillWithAi, fillEmpty } from "./ConceptFillAi";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
 import { ConceptRelations } from "./ConceptRelations";
-import { conceptName, refName } from "./names";
+import { conceptName, langName, refName } from "./names";
 
 type Side = { label: string; qualifier: string; description: string };
 export type Sides = Record<ConceptLang, Side>;
@@ -279,7 +279,7 @@ export function ConceptSheet({
         {CONCEPT_LANGS.map((lang) => (
           <fieldset key={lang} className="space-y-4">
             <legend className="mb-3 text-base font-bold tracking-tight">
-              {lang === "fr" ? t("admin.concepts.lang.fr") : t("admin.concepts.lang.en")}
+              {langName(t, lang)}
             </legend>
             <Field
               label={t("admin.concepts.label")}

@@ -8,7 +8,12 @@ import { useT } from "../i18n";
 import { useLlmAvailability } from "../llmAvailability";
 import { Alert, Button } from "../ui";
 import type { Sides } from "./ConceptSheet";
-import { refName } from "./names";
+import { langName, refName } from "./names";
+
+type Proposal = ConceptFill[ConceptLang];
+
+/** The proposed label, unless it names another concept: what may go in the form. */
+const usable = (p: Proposal) => (p.taken ? null : p.label);
 
 /**
  * The form with the model's proposal in its EMPTY fields only: a field the
@@ -21,9 +26,10 @@ export function fillEmpty(sides: Sides, proposal: ConceptFill): Sides {
   for (const lang of CONCEPT_LANGS) {
     const side = { ...sides[lang] };
     const p = proposal[lang];
-    if (p.label && !p.taken && side.label.trim() === "") {
-      side.label = p.label.label;
-      if (side.qualifier.trim() === "") side.qualifier = p.label.qualifier;
+    const label = usable(p);
+    if (label && side.label.trim() === "") {
+      side.label = label.label;
+      if (side.qualifier.trim() === "") side.qualifier = label.qualifier;
     }
     if (p.description && side.description.trim() === "") side.description = p.description;
     next[lang] = side;
@@ -33,7 +39,7 @@ export function fillEmpty(sides: Sides, proposal: ConceptFill): Sides {
 
 /** Whether the proposal brings anything to the form. */
 const brings = (proposal: ConceptFill) =>
-  CONCEPT_LANGS.some((lang) => (proposal[lang].label && !proposal[lang].taken) || proposal[lang].description);
+  CONCEPT_LANGS.some((lang) => usable(proposal[lang]) !== null || proposal[lang].description !== null);
 
 /**
  * "Fill with AI" on the concept sheet (ADR-081 §7, amendment of 2026-10-13):
@@ -59,7 +65,6 @@ export function FillWithAi({ conceptId, sides, onFill }: { conceptId: string; si
     form.success &&
     some((lang) => form.data[lang].label !== "") &&
     some((lang) => form.data[lang].label === "" || form.data[lang].description === "");
-  const langName = (lang: ConceptLang) => (lang === "fr" ? t("admin.concepts.lang.fr") : t("admin.concepts.lang.en"));
 
   return (
     <section aria-label={t("admin.concepts.fill")} className="space-y-3">
@@ -89,7 +94,7 @@ export function FillWithAi({ conceptId, sides, onFill }: { conceptId: string; si
             const label = refName(p.label);
             if (p.taken) {
               return (
-                <Alert key={lang} tone="warning" title={t("admin.concepts.fill.taken.title", { lang: langName(lang) })}>
+                <Alert key={lang} tone="warning" title={t("admin.concepts.fill.taken.title", { lang: langName(t, lang) })}>
                   {t("admin.concepts.fill.taken", { label, name: refName(p.taken) })}
                 </Alert>
               );
