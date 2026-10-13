@@ -31,7 +31,8 @@ export const isNotOver = (error: unknown): boolean => refusedWith(error, "not_ov
  *
  * The pieces are the correction projection's, at the page's density and
  * always revealed: this is the teacher's reading of the projection. An mcq,
- * a cloze and a short answer are drawn by them whole; any other type keeps
+ * a cloze, a short or math answer and a categorize board are drawn by them
+ * whole (`drawsKey`); any other type keeps
  * its own `Review` for the statement and the key — with no answer and no
  * grading details, the question the way it was asked — and gets the
  * projection's answer groups, program and test cases below it.

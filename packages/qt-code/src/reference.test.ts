@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { joinReference, referenceEditorView, referenceRegions } from "./reference.js";
+import { splitTemplate } from "@quiz/domain/lockedTemplate";
+
+import { joinReference, referenceEditorView, referenceProgram, referenceRegions } from "./reference.js";
 import { CodeConfig, type CodeLanguage } from "./schema.js";
 
 /** A config carrying `template` and `referenceSolution`, and nothing else of note. */
@@ -83,6 +85,30 @@ describe("referenceRegions", () => {
 
   it("leaves an empty piece empty rather than dropping it", () => {
     expect(referenceRegions(config("c", TWO_REGIONS_C, "// @@next\nb"))).toEqual(["\n", "b\n"]);
+  });
+});
+
+describe("referenceProgram", () => {
+  it("is the whole reference of a one-region template", () => {
+    const solution = "int main(void) {\n    return 1;\n}\n";
+    expect(referenceProgram(splitTemplate(ONE_REGION, "c"), solution)).toBe(solution);
+  });
+
+  it("fills each editable region of the template and keeps its locked text", () => {
+    const solution = "int sum(const int *t, int n)\n// @@next\n    return 1;";
+    expect(referenceProgram(splitTemplate(TWO_REGIONS_C, "c"), solution)).toBe(
+      "int sum(const int *t, int n)\n    /* your code */\n}\n\nint main(void) {\n    return 1;\n",
+    );
+  });
+
+  it("is the template the student started from when the reference is empty", () => {
+    expect(referenceProgram(splitTemplate(TWO_REGIONS_C, "c"), "")).toBe(
+      "int sum(const int *t, int n)\n{\n    /* your code */\n}\n\nint main(void) {\n    return 0;\n}\n",
+    );
+  });
+
+  it("returns null when the reference does not fit the template", () => {
+    expect(referenceProgram(splitTemplate(TWO_REGIONS_C, "c"), "one piece")).toBeNull();
   });
 });
 

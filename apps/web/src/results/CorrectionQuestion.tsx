@@ -1,9 +1,13 @@
 import { Dices } from "lucide-react";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import type { AnswerDistributionEntry, ByQuestion } from "@quiz/contracts";
 import { displayedRate } from "@quiz/domain";
+import type { CategorizeSolution, CategorizeStudent } from "@quiz/qt-categorize/client";
 import type { ClozeSolution, ClozeStudent } from "@quiz/qt-cloze/client";
+import { referenceProgram, type ProgramStudent } from "@quiz/qt-code/client";
+import type { MathSolution } from "@quiz/qt-math/client";
+import type { RichSolution } from "@quiz/qt-rich/client";
 import type { ShortSolution } from "@quiz/qt-short/client";
 
 import { useT } from "../i18n";
@@ -78,6 +82,32 @@ export type Density = keyof typeof SCALE;
 export function referenceSolution(solution: unknown): string | null {
   const value = (solution as { referenceSolution?: unknown } | null)?.referenceSolution;
   return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
+/**
+ * The answers a written one is measured against, when the key names any: a
+ * short answer's accepted texts, a math answer's formulas — set as math, and
+ * with its credit when it earns less than full marks.
+ */
+function expectedAnswers(q: ByQuestion): ReactNode[] {
+  if (q.item.type === "math") {
+    const answers = (q.solution as Partial<MathSolution> | null)?.answers;
+    return (Array.isArray(answers) ? answers : []).map((a, i) => (
+      <span key={i}>
+        <MarkdownView source={`$${a.value}$`} as="span" inline />
+        {a.points < 1 ? ` (${a.points})` : null}
+      </span>
+    ));
+  }
+  const expected = (q.solution as Partial<ShortSolution> | null)?.expected;
+  return Array.isArray(expected) ? expected : [];
+}
+
+/** An essay's model answer, when the teacher wrote one. */
+function modelAnswer(q: ByQuestion): string | null {
+  if (q.item.type !== "rich") return null;
+  const reference = (q.solution as Partial<RichSolution> | null)?.reference;
+  return typeof reference === "string" && reference.trim() !== "" ? reference : null;
 }
 
 /** A group's verdict as a tone: right, wrong, or both at once. */
@@ -230,8 +260,8 @@ function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean
   const listed = !q.parameterized && (rows.length > 0 || blank > 0);
   const overflow = q.distribution.length - rows.length;
   const top = Math.max(1, blank, ...rows.map((r) => r.count));
-  const expected = (q.solution as Partial<ShortSolution> | null)?.expected;
-  const hasExpected = Array.isArray(expected) && expected.length > 0;
+  const expected = expectedAnswers(q);
+  const hasExpected = expected.length > 0;
   // The blanks alone say nothing the head does not: a row of them needs
   // groups or a key beside it.
   if (rows.length === 0 && !hasExpected) return null;
@@ -249,7 +279,14 @@ function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean
       {revealed && hasExpected ? (
         <p className={cx("text-fg-muted", s.note)}>
           {t("correction.expected")}{" "}
-          <span className="font-mono font-semibold text-success">{expected.join(" · ")}</span>
+          <span className="font-mono font-semibold text-success">
+            {expected.map((answer, i) => (
+              <Fragment key={i}>
+                {i > 0 ? " · " : null}
+                {answer}
+              </Fragment>
+            ))}
+          </span>
         </p>
       ) : null}
       {listed ? (
@@ -335,8 +372,70 @@ function ClozeText({ q, revealed, density }: { q: ByQuestion; revealed: boolean;
 }
 
 /**
+ * A categorize board: its columns, and the cards to sort. Hidden, every card
+ * waits above the empty columns, as the class found them; revealed, each card
+ * sits in the column the key puts it in — in the key's order when the order
+ * counts — and the distractors stay above, "in no column". No count: the
+ * type groups no answers (its verdicts are the head's bar).
+ */
+function CategorizeKey({ q, revealed, density }: { q: ByQuestion; revealed: boolean; density: Density }) {
+  const t = useT();
+  const s = SCALE[density];
+  const student = q.student as CategorizeStudent | null;
+  if (!student) return null;
+  const text = new Map(student.cards.map((card) => [card.id, card.text]));
+  const key = new Map(((q.solution as CategorizeSolution | null)?.columns ?? []).map((c) => [c.id, c.cards]));
+  const placed = new Set([...key.values()].flat());
+  const pool = student.cards.map((card) => card.id).filter((id) => !revealed || !placed.has(id));
+  const card = (id: string, rank: number | null, tone: string) => (
+    <li key={id} className={cx("flex min-w-0 items-baseline gap-2 rounded-field border px-3 py-1.5 font-medium", s.answer, tone)}>
+      {rank === null ? null : <span className="font-mono tabular-nums text-fg-muted">{rank}.</span>}
+      <span className="min-w-0 [overflow-wrap:anywhere]">
+        <MarkdownView source={text.get(id) ?? ""} inline />
+      </span>
+    </li>
+  );
+  return (
+    <div className="flex flex-col gap-4">
+      {pool.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <p className={cx("font-medium text-fg-muted", s.caption)}>
+            {t(revealed ? "correction.categorize.none" : "correction.categorize.cards")}
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {pool.map((id) =>
+              card(id, null, revealed ? "border-line text-fg-muted" : "border-line-strong bg-surface"),
+            )}
+          </ul>
+        </div>
+      ) : null}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3">
+        {student.columns.map((column) => (
+          <section key={column.id} className="flex min-w-0 flex-col rounded-card border border-line">
+            <h3 className={cx("border-b border-line px-3 py-2 font-semibold", s.answer)}>{column.label}</h3>
+            <ol aria-label={column.label} className="flex min-h-12 flex-col gap-2 p-3">
+              {revealed
+                ? (key.get(column.id) ?? []).map((id, index) =>
+                    card(id, student.ordered ? index + 1 : null, "border-success bg-success-soft"),
+                  )
+                : null}
+            </ol>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * A program: the reference solution, and how the class fared on each test
  * case, its passes out of its runs beside the bar.
+ *
+ * The reference is drawn whole — the template's locked text around its
+ * pieces, as the student's editor showed them — and, hidden, it is the code
+ * the class started from in its place, named as such: the reveal fills in
+ * the regions the students wrote. A program with no template to start from
+ * keeps a hatched block, named too, so it never reads as an empty field.
  */
 export function CorrectionProgram({
   q,
@@ -350,28 +449,42 @@ export function CorrectionProgram({
   const t = useT();
   const s = SCALE[density];
   const reference = referenceSolution(q.solution);
+  const segments = (q.student as Partial<ProgramStudent> | null)?.segments;
+  const whole = (text: string) => (Array.isArray(segments) ? referenceProgram(segments, text) : null);
+  // The raw reference when the template cannot hold it: never nothing.
+  const key = reference === null ? null : (whole(reference) ?? reference);
+  const start = whole("");
+  const shown = revealed ? key : start?.trim() ? start : null;
+  const label = t(
+    revealed ? "results.byQuestion.reference" : shown === null ? "correction.code.hidden" : "correction.code.start",
+  );
   const n = counted(q);
-  if (reference === null && q.casePassRate.length === 0) return null;
+  if (key === null && q.casePassRate.length === 0) return null;
   return (
     <div className={cx("grid items-start lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]", s.program)}>
-      {reference === null ? null : (
-        <pre
-          // Revealed, a focusable scroll region: it runs past the screen edge
-          // on a phone, and a keyboard cannot reach into a container that
-          // holds nothing focusable (W10). Hidden, it is not there at all.
-          {...(revealed
-            ? { tabIndex: 0, role: "region", "aria-label": t("results.byQuestion.reference") }
-            : { "aria-hidden": true })}
-          className={cx(
-            "overflow-x-auto rounded-card border border-line font-mono leading-relaxed",
-            s.code,
-            revealed
-              ? "bg-surface"
-              : "select-none bg-[repeating-linear-gradient(135deg,var(--surface-2)_0_8px,var(--surface-3)_8px_16px)] text-transparent",
-          )}
-        >
-          {reference}
-        </pre>
+      {key === null ? null : (
+        <figure className="flex min-w-0 flex-col gap-2">
+          <figcaption className={cx("font-medium text-fg-muted", s.caption)}>{label}</figcaption>
+          <pre
+            // Readable, a focusable scroll region: it runs past the screen
+            // edge on a phone, and a keyboard cannot reach into a container
+            // that holds nothing focusable (W10). Hatched, it is not there.
+            {...(shown === null
+              ? { "aria-hidden": true }
+              : { tabIndex: 0, role: "region", "aria-label": label })}
+            className={cx(
+              "overflow-x-auto rounded-card border border-line font-mono leading-relaxed",
+              s.code,
+              revealed
+                ? "bg-surface"
+                : shown !== null
+                  ? "bg-surface-2"
+                  : "select-none bg-[repeating-linear-gradient(135deg,var(--surface-2)_0_8px,var(--surface-3)_8px_16px)] text-transparent",
+            )}
+          >
+            {shown ?? key}
+          </pre>
+        </figure>
       )}
       {q.casePassRate.length > 0 ? (
         <ul className="flex flex-col" aria-label={t("results.byQuestion.cases")}>
@@ -402,10 +515,12 @@ export function CorrectionProgram({
 
 /**
  * The types whose key the correction draws itself: an mcq's letters, a
- * cloze's blanks, a short answer's expected answer. The Results tab leaves any
- * other type's statement and key to the type's own review.
+ * cloze's blanks, a short or math answer's expected answers, a categorize
+ * board. The Results tab leaves any other type's statement and key to the
+ * type's own review.
  */
-export const drawsKey = (type: string): boolean => type === "mcq" || type === "cloze" || type === "short";
+const DRAWS_KEY = new Set(["mcq", "cloze", "short", "math", "categorize"]);
+export const drawsKey = (type: string): boolean => DRAWS_KEY.has(type);
 
 /**
  * The statement: the prompt, or a cloze's text with its blanks in place. A
@@ -444,9 +559,9 @@ export function CorrectionStatement({
 }
 
 /**
- * What the class answered, after the statement: an mcq's choices, or the
- * answer groups the type counts. Nothing for a cloze (its blanks are IN the
- * statement), nor for a type that counts none.
+ * What the class answered, after the statement: an mcq's choices, a
+ * categorize board, or the answer groups the type counts. Nothing for a
+ * cloze (its blanks are IN the statement), nor for a type that counts none.
  */
 export function CorrectionAnswers({
   q,
@@ -459,6 +574,7 @@ export function CorrectionAnswers({
 }) {
   if (q.item.type === "mcq") return <Choices q={q} revealed={revealed} density={density} />;
   if (q.item.type === "cloze") return null;
+  if (q.item.type === "categorize") return <CategorizeKey q={q} revealed={revealed} density={density} />;
   return <AnswerRows q={q} revealed={revealed} density={density} />;
 }
 
@@ -476,6 +592,7 @@ export function CorrectionQuestion({
   explained: boolean;
 }) {
   const t = useT();
+  const model = revealed ? modelAnswer(q) : null;
   return (
     <>
       <Head q={q} number={number} />
@@ -487,6 +604,13 @@ export function CorrectionQuestion({
       ) : null}
       <CorrectionProgram q={q} revealed={revealed} />
       <CorrectionAnswers q={q} revealed={revealed} />
+      {/* An essay's model answer — never its grading criteria, which stay the
+          teacher's (ADR-037). The Results tab has it from the type's review. */}
+      {model ? (
+        <NotePanel eyebrow={t("correction.modelAnswer")}>
+          <MarkdownView source={model} className="text-[clamp(15px,1.3vw,19px)]" />
+        </NotePanel>
+      ) : null}
     </>
   );
 }

@@ -2110,12 +2110,21 @@ the Results "Questions" tab on the wall. It takes the projection's
   "ticked" only (how the room voted, which the ticks alone do not tell the
   key from), its letter stays neutral; a blank keeps its width without ink
   over one muted length, the share that filled it in — the right / wrong
-  split IS the key; the reference solution is hatched `surface-2` /
-  `surface-3`. R reveals; E adds the explanation, only where there is one.
+  split IS the key; a program shows, captioned "Starting code", the template
+  the class started from on `surface-2`, and the reveal fills in its
+  regions with the reference (captioned "Reference solution", whole, its
+  locked text around its pieces); a program with no template keeps the
+  reference hatched `surface-2` / `surface-3`, and says in its caption that
+  it is hidden — never an unnamed grey field. A categorize board shows its
+  cards above empty columns; revealed, each card sits in its key's column
+  (`success-soft` / `success`, numbered when the order counts), the
+  distractors above, "in no column". An essay's model answer (never its
+  rubric) appears at the reveal. R reveals; E adds the explanation, only
+  where there is one.
 - **The same pieces on the page**: the Results "Questions" tab draws them
   with the `page` density, always revealed. The sizes of both densities are
-  one table, `SCALE` in `results/CorrectionQuestion.tsx`. An mcq, a cloze and
-  a short answer are drawn whole; any other type keeps its own review for the
+  one table, `SCALE` in `results/CorrectionQuestion.tsx`. An mcq, a cloze, a
+  short or math answer and a categorize board are drawn whole; any other type keeps its own review for the
   statement and gets the answer groups and the program below it. "Present",
   in the Results header beside "Grading panel", opens this screen once the
   evaluation is over.
