@@ -644,14 +644,22 @@ span.md-body:not(.md-inline) { display: block; }
   border-radius: 5px;
   padding: 0 4px;
 }
+/* A code block owns its size and its leading, on the <pre> itself (issue
+   #831). Set on the inner <code> only, the 13 px reached the glyphs but not
+   the block's lines: their height comes from the <pre>, which inherited its
+   host's — a student prompt is `text-lg leading-relaxed`, 18 px x 1.625, so
+   every line of code took 29 px instead of 21. Code is scanned, not read:
+   the leading stays 1.6 whatever the prose around it uses. */
 .md-body pre {
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: var(--radius-field);
   padding: 12px 14px;
   overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.6;
 }
-.md-body pre code { background: none; border: 0; border-radius: 0; padding: 0; font-size: 13px; }
+.md-body pre code { background: none; border: 0; border-radius: 0; padding: 0; font-size: inherit; }
 .md-body img {
   max-width: 100%;
   height: auto;
@@ -746,8 +754,6 @@ span.md-body:not(.md-inline) { display: block; }
 .md-body.md-doc h1 { font-size: 28px; letter-spacing: -0.02em; }
 .md-body.md-doc h4, .md-body.md-doc h5, .md-body.md-doc h6 { font-weight: 600; }
 .md-body.md-doc hr { margin: 32px 0; }
-/* Code is scanned, not read: it keeps the tighter leading. */
-.md-body.md-doc pre { line-height: 1.6; }
 .md-body.md-doc .md-math-display { margin: 16px 0; }
 /* After the heading rules, which would otherwise outrank `.md-body > :first-child`. */
 .md-body.md-doc > :first-child { margin-top: 0; }
