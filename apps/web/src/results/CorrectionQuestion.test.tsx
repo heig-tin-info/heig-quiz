@@ -16,8 +16,11 @@ import { CorrectionQuestion, drawsKey } from "./CorrectionQuestion";
  * answer groups of a type without a key — and how it frames a type's key.
  */
 
-const draw = (q: Parameters<typeof CorrectionQuestion>[0]["q"], revealed: boolean, explained = false) =>
-  renderWithProviders(<CorrectionQuestion q={q} number={1} revealed={revealed} explained={explained} />);
+const draw = (q: Parameters<typeof CorrectionQuestion>[0]["q"], revealed: boolean, explained = false, locale?: "fr") =>
+  renderWithProviders(
+    <CorrectionQuestion q={q} number={1} revealed={revealed} explained={explained} />,
+    locale === undefined ? {} : { locale },
+  );
 
 const TEMPLATE = "#include <stdio.h>\n\nint main(void) {\n\n}\n";
 const REFERENCE = '#include <stdio.h>\n\nint main(void) {\n    printf("hi");\n}\n';
@@ -65,25 +68,55 @@ describe("CorrectionQuestion, an essay", () => {
   });
 });
 
-describe("CorrectionQuestion, a type without a key of its own", () => {
-  it("still draws its test cases, in the program's columns", () => {
-    expect(drawsKey("blocks")).toBe(false);
-    draw(
-      makeByQuestion({
-        item: byQuestionItem(7, "blocks"),
-        student: { prompt: "Reach the dock." },
-        outcomes: { correct: 2, partial: 0, wrong: 1, blank: 0 },
-        casePassRate: [{ name: "w1", label: "Warehouse 1", passed: 2, total: 3 }],
-      }),
-      true,
-    );
-    const cases = screen.getByRole("list", { name: "Test cases" });
-    expect(within(cases).getByText("2 of 3")).toBeVisible();
-    expect(within(cases).getByRole("img")).toHaveAccessibleName("passed: 2 · failed: 1");
+describe("CorrectionQuestion, a canvas", () => {
+  const BLOCKS = makeByQuestion({
+    item: byQuestionItem(7, "blocks"),
+    student: {
+      prompt: "Reach the dock.",
+      toolbox: ["forward"],
+      starter: [],
+      visibleCases: [{ name: "Aisle", map: [">..D"], battery: 9, points: 1 }],
+    },
+    solution: {
+      referenceSolution: [{ kind: "forward" }],
+      cases: [{ name: "Secret aisle", map: ["^.D"], battery: 9, points: 1, visible: false }],
+    },
+    outcomes: { correct: 2, partial: 0, wrong: 1, blank: 0 },
+    casePassRate: [{ name: "w1", label: "Warehouse 1", passed: 2, total: 3 }],
   });
 
-  const DIAGRAM = makeByQuestion({
-    item: byQuestionItem(4, "diagram"),
+  it("lends a program of blocks its warehouses' bars, beside its program in the canvas's words", async () => {
+    expect(drawsKey("blocks")).toBe(true);
+    draw(BLOCKS, true, undefined, "fr");
+    const program = await screen.findByRole("region", { name: "Solution de référence" });
+    expect(program).toHaveTextContent("avancer");
+    const cases = screen.getByRole("list", { name: "Cas de test" });
+    expect(within(cases).getByText("Warehouse 1")).toBeVisible();
+    expect(cases.parentElement).toBe(screen.getByRole("list", { name: "Entrepôts" }).parentElement);
+    // A hidden warehouse is never drawn, even revealed.
+    expect(document.body.innerHTML).not.toContain("Secret aisle");
+  });
+
+  it("draws a diagram's and a circuit's reference only once revealed", async () => {
+    expect(drawsKey("diagram")).toBe(true);
+    expect(drawsKey("circuit")).toBe(true);
+    const diagram = makeByQuestion({
+      item: byQuestionItem(4, "diagram"),
+      student: { prompt: "Draw the classes.", kind: "class" },
+      solution: { reference: { nodes: [{ id: "n1", t: "class", x: 0, y: 0, name: "SecretShape" }], links: [] }, rubric: "secret-rubric" },
+    });
+    draw(diagram, false);
+    expect(await screen.findByText("Reference diagram, hidden until the answers are revealed")).toBeVisible();
+    expect(document.body.innerHTML).not.toContain("SecretShape");
+    draw(diagram, true);
+    expect(await screen.findByRole("img", { name: "Reference diagram" })).toHaveTextContent("SecretShape");
+    expect(document.body.innerHTML).not.toContain("secret-rubric");
+  });
+});
+
+describe("CorrectionQuestion, a type without a key of its own", () => {
+  const BRAINSTORM = makeByQuestion({
+    item: byQuestionItem(4, "brainstorm"),
     student: { prompt: "Draw the automaton." },
     outcomes: { correct: 2, partial: 0, wrong: 1, blank: 1 },
     distribution: [
@@ -93,15 +126,21 @@ describe("CorrectionQuestion, a type without a key of its own", () => {
   });
 
   it("draws the prompt and the answer groups, the blanks last", () => {
-    expect(drawsKey("diagram")).toBe(false);
-    draw(DIAGRAM, true);
+    expect(drawsKey("brainstorm")).toBe(false);
+    draw(BRAINSTORM, true);
     expect(screen.getByText("Draw the automaton.")).toBeVisible();
     const rows = within(screen.getByRole("list")).getAllByRole("listitem");
     expect(rows.map((li) => li.textContent)).toEqual(["accepted2", "refused1", "no answer1"]);
   });
 
+  it("still shows test cases it would count, rather than dropping them", () => {
+    draw({ ...BRAINSTORM, casePassRate: [{ name: "c1", label: "Case 1", passed: 1, total: 2 }] }, true);
+    const cases = screen.getByRole("list", { name: "Test cases" });
+    expect(within(cases).getByText("Case 1")).toBeVisible();
+  });
+
   it("lists no lone blanks: they say nothing the head does not", () => {
-    draw({ ...DIAGRAM, distribution: [] }, true);
+    draw({ ...BRAINSTORM, distribution: [] }, true);
     expect(screen.queryByRole("list")).toBeNull();
   });
 });

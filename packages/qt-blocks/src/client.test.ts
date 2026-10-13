@@ -33,7 +33,7 @@ describe("blocksClient", () => {
    * chunk or in the API.
    */
   it("keeps Blockly in the bundle, reached by one dynamic import", () => {
-    for (const file of ["client.tsx", "server.ts", "schema.ts", "grade.ts", "grading.tsx", "pseudo.ts", "strings.ts", "Player.tsx", "Editor.tsx", "Review.tsx", "Simulation.tsx", "CaseTable.tsx", "MapEditor.tsx", "WarehouseMap.tsx"]) {
+    for (const file of ["client.tsx", "server.ts", "schema.ts", "grade.ts", "grading.tsx", "pseudo.ts", "strings.ts", "Player.tsx", "Editor.tsx", "Review.tsx", "Key.tsx", "Simulation.tsx", "CaseTable.tsx", "MapEditor.tsx", "WarehouseMap.tsx"]) {
       expect(source(file), file).not.toMatch(/from "blockly|import\("blockly|blocklyBundle\.js"/);
     }
     const host = source("BlocklyHost.tsx");

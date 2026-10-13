@@ -2033,6 +2033,9 @@ export const fr: Record<keyof Dict, string> = {
   "qt.blocks.g.more.one": "1 ligne de plus",
   "qt.blocks.g.expand": "Afficher tout le programme",
   "qt.blocks.g.collapse": "Replier le programme",
+  "qt.blocks.k.reference": "Solution de référence",
+  "qt.blocks.k.start": "Programme de départ",
+  "qt.blocks.k.hidden": "Solution de référence, masquée jusqu'à la révélation des réponses",
   "qt.categorize.label": "Classement",
   "qt.categorize.hint": "Des cartes à ranger dans des colonnes.",
   "qt.diagram.label": "Diagramme",
@@ -2930,6 +2933,8 @@ export const fr: Record<keyof Dict, string> = {
   "qt.circuit.g.issues.one": "1 problème de câblage",
   "qt.circuit.g.atSimulator": "simulation…",
   "qt.circuit.g.notSimulated": "Non simulé",
+  "qt.circuit.k.reference": "Circuit de référence",
+  "qt.circuit.k.hidden": "Circuit de référence, masqué jusqu'à la révélation des réponses",
 
   // --- qt-diagram (docs/spec/04 §4.14, ADR-046); `c` is the engine's canvas ---
   "qt.diagram.e.prompt": "Énoncé",
@@ -2999,6 +3004,9 @@ export const fr: Record<keyof Dict, string> = {
   "qt.diagram.g.elements.one": "1 élément",
   "qt.diagram.g.links": "{n} liens",
   "qt.diagram.g.links.one": "1 lien",
+  "qt.diagram.k.reference": "Diagramme de référence",
+  "qt.diagram.k.start": "Diagramme de départ",
+  "qt.diagram.k.hidden": "Diagramme de référence, masqué jusqu'à la révélation des réponses",
   "qt.diagram.c.canvas": "Diagramme",
   "qt.diagram.c.toolbox": "Outils",
   "qt.diagram.c.select": "Sélectionner",

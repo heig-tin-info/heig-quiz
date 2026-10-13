@@ -54,6 +54,7 @@ export const circuitClient: QuestionTypeClient<
   Editor: lazy(() => import("./Editor.js")),
   Player: lazy(() => import("./Player.js")),
   Review: lazy(() => import("./Review.js")),
+  Key: lazy(async () => ({ default: (await import("./Key.js")).CircuitKey })),
 
   /** An empty box. Nothing is seeded: the student draws everything. */
   emptyAnswer() {
@@ -105,6 +106,7 @@ export {
   CANVAS_STRINGS,
   EDITOR_STRINGS,
   GRADING_STRINGS,
+  KEY_STRINGS,
   KIND_LABELS,
   PLAYER_STRINGS,
   REVIEW_STRINGS,

@@ -5,7 +5,10 @@
 Accepted (2026-10-13, issue #828; its shape decided by the product owner).
 Amended the same day by the
 [amendment](#amendment-2026-10-13-the-program-and-the-essay-draw-their-key)
-(the program and the essay draw their key; §7 reversed for them).
+(the program and the essay draw their key; §7 reversed for them), then by
+the [second amendment](#amendment-2026-10-13-the-three-canvases-draw-their-key)
+(diagram, circuit and blocks draw theirs; every type that counts test cases
+now has a key).
 
 Scope: the optional `Key` surface of the question-type client contract
 (`packages/core/src/client.ts`) and its host, the correction projection and
@@ -68,7 +71,9 @@ render differently: that duplication is deferred, not solved.
    "correct" and "wrong" stay the head's `correction.outcome.*`, mapped.
 7. **`code` and `rich` wait** (reversed by the
    [amendment](#amendment-2026-10-13-the-program-and-the-essay-draw-their-key)
-   for `code`, `codeimage` and `rich`). The program (template, reference, test cases)
+   for `code`, `codeimage` and `rich`; ended by the
+   [second amendment](#amendment-2026-10-13-the-three-canvases-draw-their-key)
+   for the three canvases). The program (template, reference, test cases)
    and an essay's model answer stay in the host for now: they have their own
    treatment on the Results tab beside the type's review, and moving them is
    a separate change. diagram, circuit and blocks gain a `Key` next.
@@ -96,7 +101,9 @@ render differently: that duplication is deferred, not solved.
 
 Settled with the product owner on 2026-10-13 (#828, second part). It
 reverses §7 for `code`, `codeimage` and `rich`; diagram, circuit and blocks
-still wait. The rest stands.
+still wait (ended by the
+[second amendment](#amendment-2026-10-13-the-three-canvases-draw-their-key)).
+The rest stands.
 
 1. **A third slot, `cases`.** `KeyProps.cases` is the host's bars of the
    test cases (`ByQuestion.casePassRate`), beside `prompt` and `rows`, and
@@ -104,7 +111,10 @@ still wait. The rest stands.
    rules of ADR-033 stay in one place: a case reads by its `label`, never its
    `name`, and the papers it never ran on are "not run". `KeyStats` does not
    carry the pass rates. A type without a `Key` still gets them from the
-   host, in the program's two columns (`blocks`, until it draws its own key).
+   host, in the program's two columns (`blocks`, until it draws its own key;
+   ended by the
+   [second amendment](#amendment-2026-10-13-the-three-canvases-draw-their-key),
+   §6).
 2. **One program key for `code` and `codeimage`**, in `qt-code`
    (`ProgramKey`): the reference solution, or hidden the code the class
    started from, with the cases beside it and the answer groups under it (a
@@ -124,3 +134,37 @@ still wait. The rest stands.
    shows the statement, the key and the cases, no longer the empty student
    copy ("no answer", a score of "—") nor an essay's criteria. The wall is
    unchanged, markup for markup.
+
+## Amendment 2026-10-13: the three canvases draw their key
+
+Settled with the product owner on 2026-10-13 (#828, last part). `diagram`,
+`circuit` and `blocks` gain a `Key`, which ends §7; the rest stands.
+
+1. **The reference, drawn by the type's read-only renderer**: a diagram's
+   (`DiagramView`, [ADR-046](ADR-046-type-diagramme.md)), a schematic
+   (`SchematicView`), a program of blocks
+   ([ADR-103](ADR-103-type-blocs.md)). The host lends the canvas's words
+   (`canvasStrings`) as it lends `strings`.
+2. **Hidden, nothing hints at the reference.** A diagram shows its starter,
+   or a hatched block — never the counts of elements and links its review
+   prints beside the reference. A circuit, whose students start from an
+   empty box, shows a hatched block. A program of blocks shows its starter,
+   the warehouses the class could see and the host's bars of their passes.
+   A hidden warehouse's map (`solution.cases`) never appears, revealed or
+   not: the key reads the student view's visible ones only.
+3. **One frame per density** (`KeyFrame` of `@quiz/ui`): one element of a
+   fixed height, hatched while hidden, measured for the renderer's height in
+   pixels. The reveal changes what is inside it, never its size; on the wall
+   it follows the screen, so a diagram is read across a room. No Expand.
+4. **A program of blocks is text on the wall**, in the canvas's words
+   (`pseudoCode`): a Blockly workspace would take the focus, and with it the
+   arrows and the space bar the projection's stepper answers to. The page
+   keeps the read-only workspace. Each key stays a chunk of its own; the
+   engine and Blockly load with it, never before.
+5. **No rubric**, a diagram's included, at either density; nor a diagram's
+   text forms (ADR-046 §4). They stay on the grading screen.
+6. **The Results "Questions" tab changes for these three types**, as the
+   first amendment's §5 did for its own: their review leaves the card, and a
+   circuit gains a key there (its review with no answer showed none). The
+   host's bars of test cases for a type without a key (first amendment, §1)
+   go: every type that counts cases now draws a key and places them.

@@ -80,6 +80,7 @@ import { diagramStrings as DIAGRAM_CANVAS_STRINGS, type DiagramStrings } from "@
 import {
   diagramEditorStrings,
   diagramGradingStrings,
+  diagramKeyStrings,
   diagramPlayerStrings,
   diagramReviewStrings,
 } from "@quiz/qt-diagram/client";
@@ -93,6 +94,7 @@ import {
   blocksCanvasStrings,
   blocksEditorStrings,
   blocksGradingStrings,
+  blocksKeyStrings,
   blocksPlayerStrings,
   blocksReviewStrings,
 } from "@quiz/qt-blocks/client";
@@ -126,6 +128,7 @@ import {
   CANVAS_STRINGS,
   EDITOR_STRINGS as CIRCUIT_EDITOR_STRINGS,
   GRADING_STRINGS as CIRCUIT_GRADING_STRINGS,
+  KEY_STRINGS as CIRCUIT_KEY_STRINGS,
   KIND_LABELS,
   PLAYER_STRINGS as CIRCUIT_PLAYER_STRINGS,
   REVIEW_STRINGS as CIRCUIT_REVIEW_STRINGS,
@@ -406,6 +409,9 @@ export const keyStrings = {
   code: (t: TFunction) => translated(t, CODE_KEY_STRINGS, "qt.code.k"),
   codeimage: (t: TFunction) => translated(t, CODE_KEY_STRINGS, "qt.code.k"),
   rich: (t: TFunction) => translated(t, richKeyStrings, "qt.rich.k"),
+  diagram: (t: TFunction) => translated(t, diagramKeyStrings, "qt.diagram.k"),
+  circuit: (t: TFunction) => translated(t, CIRCUIT_KEY_STRINGS, "qt.circuit.k"),
+  blocks: (t: TFunction) => translated(t, blocksKeyStrings, "qt.blocks.k"),
 } satisfies Partial<Record<QuestionTypeId, (t: TFunction) => object>>;
 
 /**

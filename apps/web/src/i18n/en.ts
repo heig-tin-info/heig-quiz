@@ -2049,6 +2049,9 @@ export const en = {
   "qt.blocks.g.more.one": "1 more line",
   "qt.blocks.g.expand": "Show the whole program",
   "qt.blocks.g.collapse": "Fold the program",
+  "qt.blocks.k.reference": "Reference solution",
+  "qt.blocks.k.start": "Starting program",
+  "qt.blocks.k.hidden": "Reference solution, hidden until the answers are revealed",
   "qt.categorize.label": "Categorize",
   "qt.categorize.hint": "Cards to sort into columns.",
   "qt.diagram.label": "Diagram",
@@ -2935,6 +2938,8 @@ export const en = {
   "qt.circuit.g.issues.one": "1 wiring problem",
   "qt.circuit.g.atSimulator": "simulator…",
   "qt.circuit.g.notSimulated": "Not simulated",
+  "qt.circuit.k.reference": "Reference circuit",
+  "qt.circuit.k.hidden": "Reference circuit, hidden until the answers are revealed",
 
   // --- qt-diagram (docs/spec/04 §4.14, ADR-046); `c` is the engine's canvas ---
   "qt.diagram.e.prompt": "Statement",
@@ -3003,6 +3008,9 @@ export const en = {
   "qt.diagram.g.elements.one": "1 element",
   "qt.diagram.g.links": "{n} links",
   "qt.diagram.g.links.one": "1 link",
+  "qt.diagram.k.reference": "Reference diagram",
+  "qt.diagram.k.start": "Starting diagram",
+  "qt.diagram.k.hidden": "Reference diagram, hidden until the answers are revealed",
   "qt.diagram.c.canvas": "Diagram",
   "qt.diagram.c.toolbox": "Tools",
   "qt.diagram.c.select": "Select",

@@ -14,7 +14,7 @@
  */
 import type { KeyProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
-import { CORRECTION_SCALE, cx } from "@quiz/ui";
+import { CORRECTION_SCALE, cx, KeyFigure, KeyHatch } from "@quiz/ui";
 
 import { referenceProgram } from "./reference.js";
 import type { ProgramStudent } from "./schema.js";
@@ -58,15 +58,10 @@ export function ProgramKey({
       {key === null && cases === null ? null : (
         <div className={scale.program}>
           {key === null ? null : (
-            <figure className="flex min-w-0 flex-col gap-2">
-              <figcaption className={cx("font-medium text-fg-muted", scale.caption)}>{label}</figcaption>
+            <KeyFigure density={density} caption={label}>
               {shown === null ? (
-                // Hidden with nothing to start from: a hatched block of a fixed
-                // height, never the reference itself made transparent.
-                <div
-                  aria-hidden
-                  className="h-40 rounded-card border border-line bg-[repeating-linear-gradient(135deg,var(--surface-2)_0_8px,var(--surface-3)_8px_16px)]"
-                />
+                // Hidden with nothing to start from: a hatched block of a fixed height.
+                <KeyHatch className="h-40" />
               ) : (
                 <pre
                   // A focusable scroll region: it runs past the screen edge on a
@@ -84,7 +79,7 @@ export function ProgramKey({
                   {shown}
                 </pre>
               )}
-            </figure>
+            </KeyFigure>
           )}
           {cases}
         </div>
