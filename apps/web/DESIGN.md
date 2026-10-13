@@ -2663,7 +2663,11 @@ placement over an `offset` and `Z.tool`.
   red. It is a tool dock (`data-tool-dock`), so the toasts rise above it
   (`--tool-dock-h`). Under `lg`, while the pool's bulk bar is up
   (`data-bulk-bar`), it steps aside (`style.css`): the bar spans the bottom
-  edge there, and the selection is the task of the moment. Every page's end
+  edge there, and the selection is the task of the moment. Under `sm` it
+  steps aside too while a screen's sticky action bar is up — a bar that
+  carries `data-action-bar`, the launch step's dock and the phone pairing's
+  — rather than sit on its primary (`style.css`, #450); a new sticky bottom
+  action bar carries the attribute. Every page's end
   spacer includes `--tool-dock-h` (`Shell.tsx`), so the button never sits on
   the page's last control.
 - **The panel**: a non-modal floating layer 12 px above the button on

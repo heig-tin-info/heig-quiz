@@ -161,6 +161,14 @@
     display: none;
   }
 }
+/* And while a screen's action bar is up (`data-action-bar`: a bar sticky at
+   the bottom under `sm`, the launch step's dock): its primary is the
+   screen's action, and the button would sit on it (#450). */
+@variant max-sm {
+  :root:has([data-action-bar]) [data-assist-dock] {
+    display: none;
+  }
+}
 @variant max-lg {
   :root {
     /* An anchored section lands under the sticky top bar, not behind it. */
