@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Archive, ArchiveRestore, ClipboardCheck, Rocket, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, ClipboardCheck, FolderGit2, LayoutDashboard, Rocket, Send, Settings, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -16,21 +16,24 @@ import { useT } from "../i18n";
 import { useNoticeToasts } from "../notifications/notices";
 import { useToast } from "../notify";
 import { activitiesKey, classroomProjectsKey, projectKey } from "../queryKeys";
-import type { Navigate } from "../router";
+import { useSearchParam, type Navigate } from "../router";
 import { Trail, useClassroomCrumbs } from "../Trail";
 import {
   Alert,
   Badge,
   Button,
   buttonClass,
+  Card,
   EditableTitle,
+  EmptyState,
   isoDateTime,
   Menu,
   PageError,
   PageHeader,
   PageSkeleton,
   QueryError,
-  Skeleton,
+  TabPanel,
+  Tabs,
   type MenuItem,
 } from "../ui";
 import { projectPhaseLabel, projectPhaseStyle } from "./common";
@@ -69,14 +72,18 @@ import { useProjectPatch, useProjectRefresh, useRenameProject } from "./useProje
  * tiles and no table: nobody can accept a draft (ADR-077 §1). With no Source
  * tile, Sync (the source is ahead) is a secondary button of the header.
  *
- * A PUBLISHED project is a dashboard. The header — its name (renamed in place), its state, what is happening and
- * the ONE primary action the server names —, four tiles (the acceptance as a
- * ring, the deadline edited in place, the progress, the source and its sync;
- * their sub-figures filter the table), the lifecycle rail with the review
- * checkpoints, one row per student of the roster with their repository (per
- * group in a group project, M3-16b, with its drift and *Resync*), the live
- * workspace, and the settings still open to change (F-PROJ-03) in a folded
- * card at the bottom. A row opens its repository's sheet:
+ * A PUBLISHED or LOCKED project is a dashboard in tabs (F-PROJ-13 as amended
+ * 2026-10-13), the active one in the URL (`?tab=`). The header — its name
+ * (renamed in place), its state, what is happening and the ONE primary
+ * action the server names — stands above them all. Summary: the group set,
+ * four tiles (the acceptance as a ring, the deadline edited in place, the
+ * progress, the source and its sync), the lifecycle rail with the review
+ * checkpoints and the live workspace; a tile's sub-figure opens Repositories
+ * filtered by it. Repositories: one row per student of the roster with their
+ * repository (per group in a group project, M3-16b, with its drift and
+ * *Resync*). Grading, in `criteria` mode only: the way to the grading
+ * screen. Settings: what is still open to change (F-PROJ-03). A row opens
+ * its repository's sheet:
  * the history of its runs, its scores and the teacher's, its own deadline and
  * its lock. See DESIGN.md › The project page (staff).
  *
@@ -105,6 +112,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const toast = useToast();
   const confirm = useConfirm();
   const [openRepo, setOpenRepo] = useState<string | null>(null);
+  const [tabParam, setTab] = useSearchParam("tab", "summary");
   /** The tile sub-figure narrowing the repositories' table, or null for all of them. */
   const [filter, setFilter] = useState<RepoFilter | null>(null);
   const [unassigned, setUnassigned] = useState<UnassignedStudent[] | null>(null);
@@ -268,6 +276,21 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const setPage = groupSetPageOf(project);
   const { sync } = project;
   const isDraft = project.state === "draft";
+  const tabs: Parameters<typeof Tabs<ProjectTab>>[0]["items"] = [
+    { value: "summary", label: t("project.tab.summary"), icon: LayoutDashboard },
+    { value: "repositories", label: t("project.repos"), icon: FolderGit2, coach: "project.repos" },
+    ...(project.gradingMode === "criteria"
+      ? [{ value: "grading" as const, label: t("project.tab.grading"), icon: ClipboardCheck }]
+      : []),
+    { value: "settings", label: t("project.settings"), icon: Settings },
+  ];
+  /** A `?tab=` naming no tab of this project (Grading out of `criteria` mode, a hand edit) is the Summary. */
+  const tab: ProjectTab = tabs.find((it) => it.value === tabParam)?.value ?? "summary";
+  /** A sub-figure of the Summary opens Repositories narrowed to it; cleared, the table shows every row. */
+  const pickFilter = (next: RepoFilter | null) => {
+    setFilter(next);
+    if (next !== null) setTab("repositories");
+  };
   const syncButton = (variant: "primary" | "secondary", coach: "project.primary" | "project.sync") => (
     <SyncButton sync={sync} onSync={() => syncNow.mutate()} syncing={syncNow.isPending} variant={variant} coach={coach} />
   );
@@ -397,23 +420,61 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         <ProjectDraftForm project={project} patch={patch} write={write} navigate={navigate} />
       ) : (
         <>
-          {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
-          <ProjectOverview
-            project={project}
-            patch={patch}
-            filter={filter}
-            onFilter={setFilter}
-            onSync={() => syncNow.mutate()}
-            syncing={syncNow.isPending}
-          />
-          <ProjectRail project={project} />
-          <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
-          <ProjectWorkspace projectId={project.id} archived={archived} />
-          <ProjectSettings project={project} pending={patch.isPending} write={write} />
+          <Tabs<ProjectTab> value={tab} onChange={setTab} items={tabs} idPrefix="project" label={t("project.page")} />
+          <TabPanel idPrefix="project" value={tab} className="space-y-8">
+            {tab === "summary" ? (
+              <>
+                {project.groupMode ? <ProjectGroupSet project={project} patch={patch} navigate={navigate} /> : null}
+                <ProjectOverview
+                  project={project}
+                  patch={patch}
+                  filter={filter}
+                  onFilter={pickFilter}
+                  onSync={() => syncNow.mutate()}
+                  syncing={syncNow.isPending}
+                />
+                <ProjectRail project={project} />
+                <ProjectWorkspace projectId={project.id} archived={archived} />
+              </>
+            ) : tab === "repositories" ? (
+              <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
+            ) : tab === "grading" ? (
+              <GradingTab projectId={project.id} navigate={navigate} />
+            ) : (
+              <ProjectSettings project={project} pending={patch.isPending} write={write} />
+            )}
+          </TabPanel>
         </>
       )}
 
       {openRepo ? <RepoSheet project={project} repoId={openRepo} onClose={() => setOpenRepo(null)} /> : null}
     </div>
+  );
+}
+
+/** The tabs of a published or locked project's page (F-PROJ-13 as amended 2026-10-13). */
+type ProjectTab = "summary" | "repositories" | "grading" | "settings";
+
+/** The Grading tab, in `criteria` mode: for now, the way to the grading screen (ADR-106 §8). */
+function GradingTab({ projectId, navigate }: { projectId: string; navigate: Navigate }) {
+  const t = useT();
+  return (
+    <Card>
+      <EmptyState
+        icon={ClipboardCheck}
+        title={t("project.gradingTab.title")}
+        action={
+          <AppLink
+            route={{ view: "projectGrading", id: projectId }}
+            navigate={navigate}
+            className={buttonClass("secondary")}
+          >
+            {t("project.grading.openLink")}
+          </AppLink>
+        }
+      >
+        {t("project.gradingTab.body")}
+      </EmptyState>
+    </Card>
   );
 }

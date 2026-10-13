@@ -280,7 +280,8 @@ export const TOURS: readonly CoachTour[] = [
         target: at("project.repos"),
         title: "coach.project.repos.title",
         body: "coach.project.repos.body",
-        placement: "top",
+        // The Repositories tab, under the header (F-PROJ-13 as amended 2026-10-13): the bubble hangs below it.
+        placement: "bottom",
       },
       {
         id: "project.repo",

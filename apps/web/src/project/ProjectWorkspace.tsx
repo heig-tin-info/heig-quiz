@@ -54,7 +54,7 @@ export function useWorkspace(projectId: string) {
 
 /**
  * Where the students work (ADR-047 as amended 2026-10-07, M6-06): a setting
- * of the project, in the page's folded Settings. Chosen by an owner of the
+ * of the project, in the page's Settings tab. Chosen by an owner of the
  * course whose account has the workspace grant, until a workspace was
  * opened — the server says which modes the caller may set, and why not the
  * others: `allowed`, `refusal`. Nothing at all when the feature is off (the

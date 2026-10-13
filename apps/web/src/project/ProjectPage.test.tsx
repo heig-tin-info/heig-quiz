@@ -55,10 +55,12 @@ function routes(project: ProjectDetail | RouteHandler, extra: Record<string, Rou
   });
 }
 
-function renderPage(locale: "en" | "fr" = "en") {
+/** The page, opened on `tab` (`?tab=`, F-PROJ-13 as amended 2026-10-13); the Summary by default. */
+function renderPage(locale: "en" | "fr" = "en", tab?: "repositories" | "grading" | "settings") {
   const navigate = vi.fn();
   const queryClient = makeQueryClient();
-  renderWithProviders(<ProjectPage id={makeProject().id} navigate={navigate} />, { locale, queryClient });
+  const route = tab ? `/?tab=${tab}` : "/";
+  renderWithProviders(<ProjectPage id={makeProject().id} navigate={navigate} />, { locale, queryClient, route });
   return { navigate, queryClient };
 }
 
@@ -99,7 +101,7 @@ describe("the page's states", () => {
 
   it("shows the empty roster with the way to add students", async () => {
     routes(makeProject({ rows: [], counts: { live: 0, frozen: 0 } }));
-    const { navigate } = renderPage();
+    const { navigate } = renderPage("en", "repositories");
     expect(await screen.findByText("No student in the roster")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Add students" }));
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: CLASSROOM_ID, tab: "roster" });
@@ -109,7 +111,7 @@ describe("the page's states", () => {
   it("draws the teacher's test repository when no student is in the roster", async () => {
     const teacherRow = { ...makeProject().rows[0]!, repo: makeRepo(1), staff: true };
     routes(makeProject({ rows: [teacherRow], counts: { live: 0, frozen: 0 } }));
-    renderPage();
+    renderPage("en", "repositories");
     const region = await screen.findByRole("region", { name: "Repositories" });
     expect(within(region).queryByText("No student in the roster")).toBeNull();
     const rows = within(region.querySelector("table")!).getAllByRole("row").slice(1);
@@ -122,7 +124,7 @@ describe("the page's states", () => {
 describe("the last commit's count", () => {
   const withRepo = (over: Partial<ProjectRepoView>) => routes(makeProject({ rows: [row(1, makeRepo(1, over))] }));
   const countCell = async (text: string) => {
-    renderPage();
+    renderPage("en", "repositories");
     return await screen.findByText(text);
   };
 
@@ -243,7 +245,7 @@ describe("the one primary action", () => {
 });
 
 describe("the teacher's tour (M7-01)", () => {
-  it("finds every step's anchor on a published project whose source is ahead, with a repository to open", async () => {
+  it("finds every step's anchor on a published project whose source is ahead, the row's on the Repositories tab", async () => {
     routes(
       makeProject({
         primaryAction: "release",
@@ -255,7 +257,11 @@ describe("the teacher's tour (M7-01)", () => {
     await screen.findByRole("button", { name: "Sync" });
     const tour = TOURS.find((t) => t.id === "project")!;
     expect(tour.audience).toBe("teacher");
-    for (const step of tour.steps) expect(document.querySelector(step.target), step.id).not.toBeNull();
+    const present = () => tour.steps.filter((step) => document.querySelector(step.target) !== null).map((step) => step.id);
+    // The Summary: the tab strip names Repositories; a row to open lives in its tab (the tour skips it here).
+    expect(present()).toEqual(tour.steps.map((step) => step.id).filter((id) => id !== "project.repo"));
+    await userEvent.click(screen.getByRole("tab", { name: "Repositories" }));
+    expect(present()).toContain("project.repo");
   });
 
   it("keeps the primary, the sync and the checkpoints anchors on a draft, which has no repository to show (the tour skips them)", async () => {
@@ -409,7 +415,7 @@ describe("the settings", () => {
     await waitFor(() => expect(writes(calls)).toHaveLength(1));
     expect(writes(calls)[0]!.body).toEqual({ deadlineAt: new Date("2099-06-01T23:59").toISOString() });
 
-    await userEvent.click(screen.getByRole("button", { name: /Settings/ }));
+    await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
     await userEvent.click(screen.getByRole("radio", { name: "Mark" }));
     await waitFor(() => expect(writes(calls)).toHaveLength(2));
     expect(writes(calls)[1]!.body).toEqual({ deadlineStrategy: "commit" });
@@ -426,9 +432,9 @@ describe("the settings", () => {
     routes(makeProject({ state: "locked", editable: ["name", "deadlineAt", "protectedFiles"] }));
     renderPage();
     await screen.findByRole("heading", { level: 1 });
-    await userEvent.click(screen.getByRole("button", { name: /Settings/ }));
-    expect(screen.getByRole("radio", { name: "Lock" })).toBeDisabled();
     expect(screen.getByLabelText("Change the deadline")).toBeEnabled();
+    await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(screen.getByRole("radio", { name: "Lock" })).toBeDisabled();
   });
 
   it("says a past deadline under the field, and puts the stored one back", async () => {
@@ -493,7 +499,7 @@ describe("the repositories", () => {
 
   it("draws one row per student with the repository's state as tags", async () => {
     routes(flagged);
-    renderPage();
+    renderPage("en", "repositories");
     const table = (await screen.findByRole("region", { name: "Repositories" })).querySelector("table")!;
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(11);
@@ -524,7 +530,7 @@ describe("the repositories", () => {
 
   it("says when GitHub's state is refreshing", async () => {
     routes(makeProject({ liveStale: true }));
-    renderPage();
+    renderPage("en", "repositories");
     expect(await screen.findByText("Refreshing GitHub's state…")).toBeInTheDocument();
   });
 
@@ -548,7 +554,7 @@ describe("the repositories", () => {
         return ok({ ...repo, locked: true, staffLock: true });
       },
     });
-    renderPage();
+    renderPage("en", "repositories");
     await userEvent.click(await screen.findByRole("row", { name: /Martin Benoît/ }));
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByRole("heading", { name: "Martin Benoît" })).toBeInTheDocument();
@@ -587,7 +593,7 @@ describe("the repositories", () => {
   it("offers no deadline nor lock on a deleted repository, and says why", async () => {
     const repo = makeRepo(1, { flags: { ...makeRepo(1).flags, deleted: true } });
     routes(makeProject({ rows: [row(1, repo)] }), { [`GET ${BASE}/repos/${repo.id}/runs`]: ok(makeRunList({ runs: [] })) });
-    renderPage();
+    renderPage("en", "repositories");
     await userEvent.click(await screen.findByRole("row", { name: /Martin Benoît/ }));
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByText(/No action on this repository/)).toBeInTheDocument();
@@ -663,6 +669,9 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
   it("draws one row per group — its members by name and login, its repository once — then the students in none", async () => {
     routes(groupProject(), { [SETS]: ok([]) });
     renderPage();
+    // Counted per group, the staff's test row apart: two groups with a repository, one student in none.
+    expect(within(await screen.findByTestId("project-tiles")).getByText(/^\d+ \/ 3$/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Repositories" }));
     const table = await screen.findByRole("table");
     expect(within(table).getByRole("columnheader", { name: /Group/ })).toBeInTheDocument();
     const rows = within(table).getAllByRole("row").slice(1);
@@ -673,8 +682,6 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
     expect(within(rows[0]!).getByText("access to revoke")).toBeInTheDocument();
     expect(within(rows[1]!).getByText("No member")).toBeInTheDocument();
     expect(within(rows[2]!).getByText("no group")).toBeInTheDocument();
-    // Counted per group, the staff's test row apart: two groups with a repository, one student in none.
-    expect(within(screen.getByTestId("project-tiles")).getByText(/^\d+ \/ 3$/)).toBeInTheDocument();
     // A group's sheet: titled by the group, its members listed, whether it follows the set.
     await userEvent.click(rows[0]!);
     const sheet = await screen.findByRole("dialog", { name: "Groupe 1" });
@@ -696,7 +703,7 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
     ["archived", { archivedAt: PAST }],
   ])("hides the drift once %s", async (_, over) => {
     routes(groupProject({ groupsDrifted: true, ...over }), { [SETS]: ok([]) });
-    renderPage();
+    renderPage("en", "repositories");
     await screen.findByRole("table");
     expect(screen.queryByText("The group set changed since these groups stopped following it")).toBeNull();
     expect(screen.queryByRole("button", { name: "Resync with the set" })).toBeNull();
@@ -867,7 +874,7 @@ describe("the sheet's writes (M3-12b)", () => {
         },
       },
     );
-    renderPage();
+    renderPage("en", "repositories");
     const sheet = await openSheet();
     // A scored run: the maximum is its, no field for it.
     expect(within(sheet).queryByRole("spinbutton", { name: "Out of" })).toBeNull();
@@ -902,7 +909,7 @@ describe("the sheet's writes (M3-12b)", () => {
       ...runsRoute(repo),
       [`PATCH ${BASE}/repos/${repo.id}/score`]: () => reply,
     });
-    renderPage();
+    renderPage("en", "repositories");
     const sheet = await openSheet();
     expect(within(sheet).getByText(/No scored run to take the maximum from/)).toBeInTheDocument();
     const save = within(sheet).getByRole("button", { name: "Save" });
@@ -925,7 +932,7 @@ describe("the sheet's writes (M3-12b)", () => {
   it("offers no score form on a project graded none", async () => {
     const repo = frozenRepo(1);
     routes(frozenProject({ gradingMode: "none" }), runsRoute(repo));
-    renderPage();
+    renderPage("en", "repositories");
     const sheet = await openSheet();
     expect(within(sheet).queryByRole("button", { name: "Save" })).toBeNull();
     expect(within(sheet).getByText("This project is not graded: no score, no release.")).toBeInTheDocument();
@@ -943,7 +950,7 @@ describe("the sheet's writes (M3-12b)", () => {
       },
     });
     reply = ok({ invitationStatus: "pending", resentAt: PAST });
-    renderPage();
+    renderPage("en", "repositories");
     const sheet = await openSheet();
     const resend = within(sheet).getByRole("button", { name: "Resend" });
     await userEvent.click(resend);
@@ -972,7 +979,7 @@ describe("the sheet's writes (M3-12b)", () => {
         },
       },
     );
-    renderPage();
+    renderPage("en", "repositories");
     const sheet = await openSheet();
     expect(within(sheet).getByText("protected files in conflict")).toBeInTheDocument();
     expect(within(sheet).getByText(/The runs marked “to verify” meanwhile stay so/)).toBeInTheDocument();
@@ -999,7 +1006,7 @@ describe("the sheet's writes (M3-12b)", () => {
       row(8, frozenRepo(8)),
     ];
     routes(frozenProject({ rows }), runsRoute(frozenRepo(7)));
-    renderPage();
+    renderPage("en", "repositories");
     const table = (await screen.findByRole("region", { name: "Repositories" })).querySelector("table")!;
     const text = within(table).getAllByRole("row").slice(1).map((r) => r.textContent!);
     expect(text[0]).not.toMatch(/review/);
@@ -1130,10 +1137,16 @@ describe("in French", () => {
     await screen.findByRole("heading", { level: 1 });
     expect(status()).toMatch(/^Ouvert jusqu'au /);
     expect(screen.getByText("publié")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Déroulement" })).toBeInTheDocument();
+    expect(within(screen.getByRole("tablist")).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Résumé",
+      "Dépôts",
+      "Réglages",
+    ]);
+    await userEvent.click(screen.getByRole("tab", { name: "Dépôts" }));
     expect(screen.getByRole("region", { name: "Dépôts" })).toBeInTheDocument();
     expect(within(screen.getByRole("table")).getByText("à vérifier")).toBeInTheDocument();
     expect(screen.getByText("non accepté")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Déroulement" })).toBeInTheDocument();
   });
 
   it("offers the release, the review's state and the teacher's score in French", async () => {
@@ -1141,7 +1154,7 @@ describe("in French", () => {
     routes(frozenProject({ primaryAction: "release", rows: [row(1, repo), row(2, null)] }), {
       [`GET ${BASE}/repos/${repo.id}/runs`]: ok(makeRunList({ runs: [] })),
     });
-    renderPage("fr");
+    renderPage("fr", "repositories");
     await userEvent.click(await screen.findByRole("button", { name: "Publier les scores" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Publier les scores ?")).toBeInTheDocument();
@@ -1155,7 +1168,7 @@ describe("in French", () => {
   });
 });
 
-describe("the dashboard (tiles, filter, rail, folded settings)", () => {
+describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
   const tiles = () => screen.getByTestId("project-tiles");
   const repoTable = async () => (await screen.findByRole("region", { name: "Repositories" })).querySelector("table")!;
   const bodyRows = (table: HTMLElement) => within(table).getAllByRole("row").slice(1);
@@ -1175,7 +1188,8 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
     expect(within(grid).getByText("Source")).toBeInTheDocument();
   });
 
-  it("filters the table with a tile's sub-figure, and 'Show all' clears it; the staff's row is under All only", async () => {
+  // F-PROJ-13 as amended 2026-10-13: a figure of the Summary opens Repositories filtered by it.
+  it("opens Repositories filtered by a tile's sub-figure, and 'Show all' clears it; the staff's row is under All only", async () => {
     const staff = { ...row(3, makeRepo(3, { commits: 0, lastCommit: null })), staff: true };
     routes(
       makeProject({
@@ -1183,30 +1197,38 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
       }),
     );
     renderPage();
-    const table = await repoTable();
-    expect(bodyRows(table)).toHaveLength(4);
-    const button = within(tiles()).getByRole("button", { name: /no commit/ });
+    const button = within(await screen.findByTestId("project-tiles")).getByRole("button", { name: /no commit/ });
+    expect(screen.queryByRole("region", { name: "Repositories" })).toBeNull();
     expect(button).toHaveAttribute("aria-pressed", "false");
     // One student without a commit; the teacher's test repository is not counted.
     expect(button).toHaveTextContent("1");
     await userEvent.click(button);
-    expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("tab", { name: "Repositories" })).toHaveAttribute("aria-selected", "true");
+    expect(window.location.search).toBe("?tab=repositories");
+    const table = await repoTable();
     expect(bodyRows(table)).toHaveLength(1);
     expect(screen.getByTestId("project-filter")).toHaveTextContent("Showing: no commit");
     await userEvent.click(screen.getByRole("button", { name: "Show all" }));
     expect(bodyRows(table)).toHaveLength(4);
     expect(screen.queryByTestId("project-filter")).toBeNull();
-    // Pressing the same figure again also clears it.
+    // Back on the Summary, the figure in force reads pressed, and pressing it again clears it there.
+    await userEvent.click(screen.getByRole("tab", { name: "Summary" }));
     await userEvent.click(within(tiles()).getByRole("button", { name: /not accepted/ }));
-    expect(bodyRows(table)).toHaveLength(1);
-    await userEvent.click(within(tiles()).getByRole("button", { name: /not accepted/ }));
-    expect(bodyRows(table)).toHaveLength(4);
+    expect(bodyRows(await repoTable())).toHaveLength(1);
+    await userEvent.click(screen.getByRole("tab", { name: "Summary" }));
+    const notAccepted = within(tiles()).getByRole("button", { name: /not accepted/ });
+    expect(notAccepted).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(notAccepted);
+    expect(notAccepted).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("tab", { name: "Summary" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(screen.getByRole("tab", { name: "Repositories" }));
+    expect(bodyRows(await repoTable())).toHaveLength(4);
   });
 
   it("draws a zero figure disabled, and a figure with rows enabled", async () => {
     routes(makeProject({ rows: [row(1, makeRepo(1, { flags: { ...makeRepo(1).flags, multiple: true } }))] }));
     renderPage();
-    await repoTable();
+    await screen.findByTestId("project-tiles");
     const alerts = within(tiles()).getByRole("button", { name: /alerts/ });
     expect(alerts).toBeEnabled();
     const ciFail = within(tiles()).getByRole("button", { name: /CI failing/ });
@@ -1216,12 +1238,13 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
   it("has no Deadline column; a repository with its own deadline says so in its State cell", async () => {
     routes(makeProject({ rows: [row(1, makeRepo(1, { deadlineAt: AHEAD })), row(2, makeRepo(2))] }));
     renderPage();
+    expect(within(await screen.findByTestId("project-tiles")).getByText("With their own deadline")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Repositories" }));
     const table = await repoTable();
     expect(within(table).queryByRole("columnheader", { name: /Deadline/ })).toBeNull();
     const rows = bodyRows(table);
     expect(rows[0]!.textContent).toMatch(/own deadline \d{4}/);
     expect(rows[1]!.textContent).not.toMatch(/own deadline/);
-    expect(within(tiles()).getByText("With their own deadline")).toBeInTheDocument();
   });
 
   it("says '0 commits' in amber, and in red once the deadline was applied with nothing received", async () => {
@@ -1235,7 +1258,7 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
         ],
       }),
     );
-    renderPage();
+    renderPage("en", "repositories");
     const rows = bodyRows(await repoTable());
     const count = (i: number) => within(rows[i]!).getByText(/commits?$/);
     // The tone matrix is `commitTone`'s unit tests'; here only that the tone reaches the cell.
@@ -1247,21 +1270,45 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
 
   it("keeps the Score column off a project graded none", async () => {
     routes(makeProject({ gradingMode: "none" }));
-    renderPage();
+    renderPage("en", "repositories");
     expect(within(await repoTable()).queryByRole("columnheader", { name: /Score/ })).toBeNull();
   });
 
-  it("holds the strategy, the protected files and the work mode in the folded Settings", async () => {
+  it("is tabbed — Summary, Repositories, Settings — and adds Grading in criteria mode only", async () => {
+    routes(makeProject());
+    renderPage();
+    const tabNames = async () =>
+      within(await screen.findByRole("tablist")).getAllByRole("tab").map((tab) => tab.textContent);
+    expect(await tabNames()).toEqual(["Summary", "Repositories", "Settings"]);
+    expect(screen.getByRole("tab", { name: "Summary" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel")).toContainElement(screen.getByTestId("project-tiles"));
+  });
+
+  it("opens a criteria project's Grading tab, which links to the grading screen", async () => {
+    routes(makeProject({ gradingMode: "criteria" }));
+    const { navigate } = renderPage("en", "grading");
+    expect(await screen.findByRole("tab", { name: "Grading" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(screen.getByRole("link", { name: "Grading screen" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "projectGrading", id: makeProject().id });
+  });
+
+  it("falls back on the Summary for a ?tab= this project has not", async () => {
+    routes(makeProject({ gradingMode: "auto" }));
+    renderPage("en", "grading");
+    expect(await screen.findByRole("tab", { name: "Summary" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab", { name: "Grading" })).toBeNull();
+    expect(screen.getByTestId("project-tiles")).toBeInTheDocument();
+  });
+
+  it("holds the strategy, the protected files and the work mode in the Settings tab", async () => {
     routes(makeProject(), {
       [`GET ${BASE}/workspace`]: ok({ mode: "free", allowed: ["free", "online"], refusal: null, syncedAt: null, syncError: null }),
     });
     renderPage();
-    const settings = await screen.findByRole("button", { name: /Settings/ });
-    expect(settings).toHaveAttribute("aria-expanded", "false");
-    // The count of what is protected stays in view folded.
-    expect(settings).toHaveTextContent("2");
+    const settings = await screen.findByRole("tab", { name: "Settings" });
     expect(screen.queryByRole("radio", { name: "Mark" })).toBeNull();
     await userEvent.click(settings);
+    expect(window.location.search).toBe("?tab=settings");
     expect(screen.getByRole("radio", { name: "Mark" })).toBeEnabled();
     expect(await screen.findByRole("checkbox", { name: "README.md" })).toBeInTheDocument();
     expect(await screen.findByRole("radiogroup", { name: "Where students work" })).toBeInTheDocument();
@@ -1379,7 +1426,8 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(screen.getByRole("button", { name: /Advanced options/ })).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("project-tiles")).toBeNull();
     expect(screen.queryByRole("region", { name: "Repositories" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Settings/ })).toBeNull();
+    // F-PROJ-13 as amended 2026-10-13: a draft stays a configuration form, without tabs.
+    expect(screen.queryByRole("tablist")).toBeNull();
     // The facts fixed at creation, and the way to change them.
     expect(screen.getByText(/delete this draft and create it again/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /prg1-labo-02-pointeurs/ })).toBeInTheDocument();
