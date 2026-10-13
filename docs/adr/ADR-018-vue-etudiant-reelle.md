@@ -8,6 +8,8 @@ Accepted (2026-09-22), consolidated through 2026-10-01.
 [ADR-056](ADR-056-questions-parametrees.md) governs parameter instances.
 This consolidation changes no decision. The [historical record](history/ADR-018-vue-etudiant-reelle.md)
 retains the original decision numbers and seven UI amendments.
+Amended 2026-10-13: what a list's Participants count includes
+([Participants in the lists](#participants-in-the-lists)).
 
 ## Context
 
@@ -70,6 +72,17 @@ staff seat may accept an individual project to test it. Its repository is
 visible and badged on the staff page and counted nowhere: no count, no release,
 no gradebook, no notification. A group project is not testable from a staff
 seat (ADR-070 §2).
+
+### Participants in the lists
+
+*Amended 2026-10-13 (product owner).* The Participants column of a classroom's
+Activities tab counts people, not attempts or repositories: for an evaluation,
+the distinct students and poll guests who have an attempt (a retake counts
+once); for a project, the owners of its provisioned student repositories, or a
+group repository's non-staff members (a seat not claimed yet included). It
+never counts a staff seat's rehearsal nor a staff test repository. The
+evaluation's `attemptCount`, which locks the item list (F-EVAL-26), still counts
+every attempt, the staff's included.
 
 ### Stateless evaluation preview
 

@@ -503,6 +503,30 @@ describe("the project page (F-PROJ-13)", () => {
       expect(await phaseOf(w)).toBe("published");
     });
 
+    it("counts the Participants of each project: its students' provisioned repositories, never a staff test repository nor one being built (ADR-018)", async () => {
+      const w = await world({ students: 3 });
+      const [s1, s2, s3] = w.students;
+      await repoOf(w, s1!.id);
+      await repoOf(w, s2!.id);
+      // Still being built: not a participant yet.
+      await repoOf(w, s3!.id, { provisionStatus: "pending", githubRepoId: null, fullName: null });
+      await server.app.db.insert(enrollments).values({
+        id: randomUUID(),
+        classroomId: w.classroomId,
+        nom: "Staff",
+        prenom: "Seat",
+        email: `staff-${randomUUID()}@heig.test`,
+        userId: teacher.id,
+        staff: true,
+      });
+      await repoOf(w, teacher.id);
+      const other = await sibling(w, "published");
+      const rows = await list(w.classroomId);
+      const count = (id: string) => rows.find((r) => r.id === id)!.participantCount;
+      expect(count(w.projectId)).toBe(2);
+      expect(count(other)).toBe(0);
+    });
+
     it("gives each project of a list its own counts, in one pass and without GitHub", async () => {
       const w = await world({ students: 2, state: "locked" });
       const [s1, s2] = w.students;

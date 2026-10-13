@@ -697,11 +697,13 @@ export async function listEvaluations(
     totalPointsByEvaluation(db, ids),
   ]);
   // Students, not attempt rows: a retake (F-EVAL-15) is not a second student.
-  // The staff's rehearsals are counted apart for the deletion's role (ADR-068 §3).
+  // The staff's rehearsals are counted apart for the deletion's role (ADR-068 §3)
+  // and left out of the list's Participants (ADR-018), which a guest joins.
   const attemptStats = await db
     .select({
       evaluationId: attempts.evaluationId,
       n: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId}))`.mapWith(Number),
+      participants: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId})) filter (where ${isStudentAttempt})`.mapWith(Number),
       students: sql<number>`count(*) filter (where ${isStudentAttempt})`.mapWith(Number),
     })
     .from(attempts)
@@ -719,6 +721,7 @@ export async function listEvaluations(
     itemCount: itemCounts.get(r.id) ?? 0,
     totalPoints: totals.get(r.id) ?? 0,
     attemptCount: tries.get(r.id)?.n ?? 0,
+    participantCount: tries.get(r.id)?.participants ?? 0,
     deletionRole: deletionRoleOf(r, tries.get(r.id)?.students ?? 0),
     opensAt: isoOrNull(r.opensAt),
     closesAt: isoOrNull(r.closesAt),

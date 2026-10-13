@@ -64,6 +64,7 @@ const LAB: ProjectActivitySummary = {
   deadlineAt: liveAt(7 * DAYS),
   source: { fullName: "heig/lab-source" },
   distribution: { fullName: "heig/lab-squashed" },
+  participantCount: 0,
 };
 
 describe("spanOf", () => {

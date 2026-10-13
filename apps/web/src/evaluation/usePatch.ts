@@ -38,7 +38,7 @@ export type ConfigWriter<P> = ReturnType<typeof useConfigPatch<P>>;
 /**
  * Renaming an evaluation, wherever it starts: its heading in place
  * (`EvaluationConfig`) or "Rename" in a row's menu of the classroom's list
- * (`EvaluationList`). The configuration's own `PATCH` (`useConfigPatch`), the
+ * (`ClassroomActivities`). The configuration's own `PATCH` (`useConfigPatch`), the
  * title checked by the route's schema first, then the lists that show the
  * title refreshed. A title stays writable in every state (`WRITABLE_UNDER`),
  * so nothing here asks which one the evaluation is in. `onDone` runs once

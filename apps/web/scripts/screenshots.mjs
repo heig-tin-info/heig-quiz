@@ -260,6 +260,9 @@ const scenes = [
   // page opens on the evaluations, which is where the work is once the
   // classroom has students, so every roster scene names its tab.
   { name: "classroom", role: "teacher", path: "/classrooms/r1" },
+  // The Activities tab, Grouped (one table per kind) and All (one table), projects included.
+  { name: "classroom-grouped", role: "teacher", path: "/classrooms/r1?projects=1", ls: { "quiz-evaluations-group": "grouped" }, act: async (p) => { await skipCoach(p); await gotIt(p); } },
+  { name: "classroom-all", role: "teacher", path: "/classrooms/r1?projects=1", ls: { "quiz-evaluations-group": "all" }, act: async (p) => { await skipCoach(p); await gotIt(p); } },
   // #787: the Activities tab's "Scheduled" filter, evaluations and projects at once.
   { name: "classroom-scheduled", role: "teacher", path: "/classrooms/r1?projects=1", act: async (p) => {
       // The classroom's tour and coach bubble would sit over the chip.

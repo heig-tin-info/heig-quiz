@@ -1,42 +1,16 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, Copy, FileStack, FolderGit2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, FileStack, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { EvaluationMode, EvaluationPatch, EvaluationState, type EvaluationSummary } from "@quiz/contracts";
-import { courseRoleAllows, templatePullable } from "@quiz/domain";
+import { EvaluationPatch, type EvaluationSummary } from "@quiz/contracts";
+import { courseRoleAllows } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
-import { useT, type Dict, type TFunction } from "../i18n";
+import { useT } from "../i18n";
 import type { Route } from "../router";
-import {
-  Badge,
-  Button,
-  Card,
-  Dash,
-  EmptyState,
-  Field,
-  FormDialog,
-  FormError,
-  Menu,
-  pressable,
-  QueryError,
-  SectionHeading,
-  GroupBySwitch,
-  isoDateTime,
-  Select,
-  Skeleton,
-  T,
-  TableBand,
-  TableHead,
-  TextFieldDialog,
-  TimeLeft,
-  usePersistentChoice,
-  useSortableTable,
-  type Column,
-  type ButtonVariant,
-} from "../ui";
-import { evaluationHome, evaluationLinkItems, evaluationStateLabel, evaluationTimerAt, stateStyle } from "./common";
+import { Field, FormDialog, FormError, Select, TextFieldDialog, type MenuItem } from "../ui";
+import { evaluationLinkItems } from "./common";
 import { evaluationsKey } from "../queryKeys";
 import { ModeChoice, type CreatedMode } from "./ModeChoice";
 import {
@@ -46,20 +20,14 @@ import {
   useDuplicateErrorToast,
   useInstantiate,
 } from "./templates";
-import { PullTemplateDialog, TemplateBehindBadge } from "./templatePull";
-import { isScheduled } from "../activities/model";
+import { PullTemplateDialog } from "./templatePull";
 import { useClassroom, useCourseRole } from "../course/parts";
-import { useEvaluations } from "./api";
 import { useRenameEvaluation } from "./usePatch";
 
 /**
- * The evaluations of one classroom, under its roster.
- *
- * It is a list and not a grid of cards: what a teacher looks for here is one
- * line — which quiz, in which state, how many students have taken it — and a
- * table reads those four facts in one scan. The single action of the tab is
- * "New evaluation", which the classroom's page header carries (it owns the
- * dialog below); everything else is per row, in the overflow menu.
+ * A classroom's evaluations, the part the Activities tab's tables do not
+ * draw themselves (`ClassroomActivities`): the "New evaluation" dialog the
+ * page header opens, and what a row does besides opening.
  */
 
 export function NewEvaluationModal({
@@ -183,130 +151,16 @@ function RenameEvaluationDialog({
   );
 }
 
-type EvaluationSort = "title" | "mode" | "start" | "end" | "questions" | "points" | "attempts";
-
 /**
- * When a row started, or is to open (#795): an evaluation opened by hand has
- * no `opensAt`, only the `startedAt` of its first run. Null when neither.
+ * What an evaluation row of the classroom's Activities tab does besides
+ * opening (`ClassroomActivities`): its overflow menu, the template pull its
+ * badge opens (F-EVAL-26), and the dialogs those lead to (`layers`, drawn
+ * once beside the tables). The menu is the same whichever table holds the
+ * row: where else it leads, Rename (#804), Duplicate, Save as template
+ * (never a poll's, `422 template_poll`) and Delete, greyed out with its
+ * reason where the course role does not allow it (ADR-068 §3).
  */
-const startOf = (row: EvaluationSummary): string | null => row.startedAt ?? row.opensAt;
-
-/** What each column of the list is ordered on; the mode by its own word, no start last. */
-function evaluationRank(
-  row: EvaluationSummary,
-  key: EvaluationSort,
-  t: TFunction,
-): string | number | null {
-  switch (key) {
-    case "mode":
-      return t(`eval.mode.${row.mode}`);
-    case "start":
-      return startOf(row);
-    case "end":
-      return row.closesAt;
-    case "questions":
-      return row.itemCount;
-    case "points":
-      return row.totalPoints;
-    case "attempts":
-      return row.attemptCount;
-    default:
-      return row.title;
-  }
-}
-
-/**
- * "Group by" on the list (the pool's control, `FilterBar`): none, the state
- * badge, or the mode. Remembered per browser, as the pool's is — a teacher
- * who reads their evaluations by state reads them so every time.
- */
-type EvaluationGroupBy = "none" | "status" | "mode";
-const GROUP_BY: readonly EvaluationGroupBy[] = ["none", "status", "mode"];
-const GROUP_KEY = "quiz-evaluations-group";
-const GROUP_LABEL: Record<EvaluationGroupBy, keyof Dict> = {
-  none: "common.group.none",
-  status: "eval.group.status",
-  mode: "eval.mode",
-};
-
-interface EvaluationGroup {
-  key: string;
-  /** The band's words, or `null` for the single group of `none`. */
-  label: string | null;
-  rows: readonly EvaluationSummary[];
-}
-
-/**
- * Each grouping as data: its keys in the order the groups are drawn (the
- * enum's — a state in lifecycle order, draft to released), the key of a
- * row, and the band's words.
- */
-const GROUPINGS: Record<
-  Exclude<EvaluationGroupBy, "none">,
-  {
-    keys: readonly string[];
-    of: (row: EvaluationSummary) => string;
-    label: (key: string, t: TFunction) => string;
-  }
-> = {
-  status: {
-    keys: EvaluationState.options,
-    of: (row) => row.state,
-    label: (key, t) => evaluationStateLabel(key as EvaluationState, t),
-  },
-  mode: {
-    keys: EvaluationMode.options,
-    of: (row) => row.mode,
-    label: (key, t) => t(`eval.mode.${key as EvaluationMode}`),
-  },
-};
-
-/**
- * The rows cut into groups, each keeping the order it was handed (the
- * server's, or the column the teacher sorted on); only the groups that hold
- * a row are drawn.
- */
-function groupEvaluations(
-  rows: readonly EvaluationSummary[],
-  by: EvaluationGroupBy,
-  t: TFunction,
-): EvaluationGroup[] {
-  if (by === "none") return [{ key: "all", label: null, rows }];
-  const { keys, of, label } = GROUPINGS[by];
-  return keys
-    .map((key) => ({ key, label: label(key, t), rows: rows.filter((row) => of(row) === key) }))
-    .filter((group) => group.rows.length > 0);
-}
-
-export function EvaluationList({
-  classroomId,
-  navigate,
-  onNew,
-  newProject,
-  newVariant = "primary",
-  scheduledOnly = false,
-}: {
-  classroomId: string;
-  navigate: (r: Route) => void;
-  /** Opens the page's "New evaluation" dialog, from the empty state. */
-  onNew: () => void;
-  /**
-   * The header menu's "Project" (`newProjectAction`), offered beside "New
-   * evaluation" in the empty state; absent where a project has no door.
-   */
-  newProject?: { description?: string; onSelect: () => void } | null;
-  /**
-   * The empty state's "New evaluation": `secondary` on the training
-   * classroom while the progress card's button is the screen's one accent
-   * (ADR-105 §4, the same demotion as the header's "New ▾").
-   */
-  newVariant?: ButtonVariant;
-  /**
-   * The classroom's "Scheduled" filter (#787): only the scheduled rows, and
-   * no section at all where none is — the projects' may hold what it finds.
-   */
-  scheduledOnly?: boolean;
-}) {
+export function useEvaluationRowActions(classroomId: string, navigate: (r: Route) => void) {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
@@ -318,31 +172,6 @@ export function EvaluationList({
   const [renaming, setRenaming] = useState<EvaluationSummary | null>(null);
   const classroom = useClassroom(classroomId);
   const myRole = useCourseRole(classroom.data?.course.id);
-
-  const list = useEvaluations(classroomId);
-  const rows = scheduledOnly ? (list.data ?? []).filter(isScheduled) : (list.data ?? []);
-
-  /* No initial sort: the server hands the evaluations over in the order this
-     classroom works through them — the drafts being written, then what is
-     scheduled, then what is over — and that order is the answer to "what is
-     next" nobody clicked for. A click on a label replaces it. */
-  const { sorted, sort, toggle } = useSortableTable<EvaluationSummary, EvaluationSort>(
-    rows,
-    (row, key) => evaluationRank(row, key, t),
-    null,
-  );
-  const [groupBy, setGroupBy] = usePersistentChoice(GROUP_KEY, GROUP_BY, "none");
-  const groups = groupEvaluations(sorted, groupBy, t);
-  const columns: Column<EvaluationSort>[] = [
-    { key: "title", label: t("eval.titleLabel") },
-    { key: "mode", label: t("eval.mode") },
-    { key: "start", label: t("eval.col.start"), className: T.colHigh },
-    { key: "end", label: t("eval.col.end"), className: T.colHigh },
-    { key: "questions", label: t("eval.step.questions"), right: true, className: T.colHigh },
-    { key: "points", label: t("eval.col.points"), right: true, className: T.colMid },
-    { key: "attempts", label: t("eval.col.attempts"), right: true, className: T.colLow },
-    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: "w-10" },
-  ];
 
   const invalidate = () => qc.invalidateQueries({ queryKey: evaluationsKey(classroomId) });
   const duplicateFailed = useDuplicateErrorToast();
@@ -364,186 +193,37 @@ export function EvaluationList({
     onSuccess: invalidate,
   });
 
-  /** Where a row leads (`evaluationHome`, shared with the Activities section). */
-  const open = (row: EvaluationSummary) => navigate(evaluationHome(row));
+  const menuItems = (row: EvaluationSummary): MenuItem[] => [
+    ...evaluationLinkItems(row, t, navigate),
+    { label: t("common.rename"), icon: Pencil, onSelect: () => setRenaming(row) },
+    { label: t("eval.duplicate"), icon: Copy, onSelect: () => duplicate.mutate(row) },
+    ...(row.mode === "poll" || !classroom.data
+      ? []
+      : [{ label: t("templates.save"), icon: FileStack, onSelect: () => setSavingTemplate(row) }]),
+    {
+      label: t("eval.delete"),
+      icon: Trash2,
+      danger: true,
+      separator: true,
+      ...(courseRoleAllows(myRole, row.deletionRole)
+        ? {}
+        : { disabled: true, description: t("eval.delete.ownerOnly") }),
+      onSelect: async () => {
+        if (
+          await confirm({
+            title: t("eval.deleteConfirm", { name: row.title }),
+            confirmLabel: t("common.delete"),
+            danger: true,
+          })
+        ) {
+          remove.mutate(row);
+        }
+      },
+    },
+  ];
 
-  // A failed read still says so, filter or not.
-  if (scheduledOnly && rows.length === 0 && !list.isError) return null;
-
-  return (
-    <section aria-labelledby="classroom-evaluations" className="space-y-3">
-      {/* No button: "New evaluation" sits in the page header, where "Add
-          students" stands on the roster tab — one primary per tab, always in
-          the same place. The heading is the sibling of the projects' one
-          (`ProjectGroup`, M3-10): the tab is "Activities", each list names
-          itself and carries its own count (none while it loads or failed). */}
-      <SectionHeading
-        icon={ClipboardList}
-        title={<span id="classroom-evaluations">{t("eval.title")}</span>}
-        count={list.data ? rows.length : undefined}
-      />
-      {list.isLoading ? (
-        <Skeleton className="h-40 w-full" />
-      ) : list.isError || !list.data ? (
-        <QueryError title={t("eval.notFound")} query={list} />
-      ) : list.data.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={ClipboardList}
-            title={t("eval.empty.title")}
-            action={
-              /* The header's "New ▾" folded open: an empty tab has room to
-                 show both doors, the evaluation still the primary. */
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button variant={newVariant} onClick={onNew}>
-                  <Plus /> {t("eval.new")}
-                </Button>
-                {newProject ? (
-                  <Button variant="secondary" title={newProject.description} onClick={newProject.onSelect}>
-                    <FolderGit2 /> {t("project.new")}
-                  </Button>
-                ) : null}
-              </div>
-            }
-          >
-            {t("eval.empty.body")}
-          </EmptyState>
-        </Card>
-      ) : (
-        <>
-          {/* The pool's control (`GroupBySwitch`). One row has nothing to group. */}
-          {rows.length < 2 ? null : (
-            <GroupBySwitch
-              name="evaluations-group"
-              value={groupBy}
-              onChange={setGroupBy}
-              options={GROUP_BY.map((g) => ({ value: g, label: t(GROUP_LABEL[g]) }))}
-            />
-          )}
-          {/* The three counts leave in turn as the card narrows (`T` › column
-              priority): the attempts first, then the points, then the number
-              of questions. The title with its state badge, the mode and the
-              row menu are what the list is for, and they stay. A grouping
-              cuts the rows into bands and keeps the sort inside each. */}
-          <Card className={`${T.container} overflow-hidden`}>
-            <table className={T.table}>
-              <TableHead columns={columns} sort={sort} onToggle={toggle} />
-              {groups.map((group) => (
-                <tbody key={group.key}>
-                  {group.label === null ? null : (
-                    <TableBand span={columns.length} label={group.label} count={group.rows.length} />
-                  )}
-                  {group.rows.map((row) => (
-                    <tr
-                      key={row.id}
-                      className={`${T.row} ${T.rowHover} cursor-pointer`}
-                      {...pressable(() => open(row), "row")}
-                    >
-                      <td className={T.td}>
-                        <span className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold">{row.title}</span>
-                          {/* The time left rides in the badge (`evaluationTimerAt`, ADR-104). */}
-                          <Badge {...stateStyle(row.state)}>
-                            {evaluationStateLabel(row.state, t)}
-                            <TimeLeft iso={evaluationTimerAt(row)} />
-                          </Badge>
-                          {/* Its template moved (F-EVAL-26): shown only where the
-                              pull would be accepted, as the pull's own door. */}
-                          {templatePullable(row) ? (
-                            <TemplateBehindBadge
-                              from={row.originRevision!}
-                              to={row.templateRevision!}
-                              title={row.title}
-                              onOpen={() => setPulling(row.id)}
-                            />
-                          ) : null}
-                        </span>
-                      </td>
-                      <td className={`${T.td} text-fg-muted`}>
-                        {/* A poll is the one mode that changes where the whole row
-                            leads, so it is a badge and the other two stay words:
-                            the badge is what a teacher scans a list of thirty
-                            evaluations for. Zinc, never the accent — "New
-                            evaluation" owns the red on this screen. */}
-                        {row.mode === "poll" ? (
-                          <Badge tone="zinc">{t("eval.mode.poll")}</Badge>
-                        ) : (
-                          t(`eval.mode.${row.mode}`)
-                        )}
-                      </td>
-                      {/* When it started or opens (`startOf`), as the Projects table below says its
-                          start (#795); neither yet, a dash. */}
-                      <td className={`${T.td} ${T.colHigh} whitespace-nowrap tabular-nums text-fg-muted`}>
-                        {startOf(row) === null ? <Dash /> : isoDateTime(startOf(row)!)}
-                      </td>
-                      {/* When it closes, as the Projects table says its deadline (#787). */}
-                      <td className={`${T.td} ${T.colHigh} whitespace-nowrap tabular-nums text-fg-muted`}>
-                        {row.closesAt === null ? <Dash /> : isoDateTime(row.closesAt)}
-                      </td>
-                      <td className={`${T.td} ${T.colHigh} text-right tabular-nums`}>{row.itemCount}</td>
-                      <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{row.totalPoints}</td>
-                      <td className={`${T.td} ${T.colLow} text-right tabular-nums`}>
-                        {row.attemptCount === 0 ? "—" : row.attemptCount}
-                      </td>
-                      <td className={`${T.td} text-right`} onClick={(e) => e.stopPropagation()}>
-                        <Menu
-                          label={t("live.row.actions", { name: row.title })}
-                          items={[
-                            ...evaluationLinkItems(row, t, navigate),
-                            // The heading's rename, in any state (#804).
-                            {
-                              label: t("common.rename"),
-                              icon: Pencil,
-                              onSelect: () => setRenaming(row),
-                            },
-                            {
-                              label: t("eval.duplicate"),
-                              icon: Copy,
-                              onSelect: () => duplicate.mutate(row),
-                            },
-                            // A poll has nothing to keep (`422 template_poll`).
-                            ...(row.mode === "poll" || !classroom.data
-                              ? []
-                              : [
-                                  {
-                                    label: t("templates.save"),
-                                    icon: FileStack,
-                                    onSelect: () => setSavingTemplate(row),
-                                  },
-                                ]),
-                            // Students' work or a release makes it an owner's
-                            // act (ADR-068 §3): greyed out, saying why.
-                            {
-                              label: t("eval.delete"),
-                              icon: Trash2,
-                              danger: true,
-                              separator: true,
-                              ...(courseRoleAllows(myRole, row.deletionRole)
-                                ? {}
-                                : { disabled: true, description: t("eval.delete.ownerOnly") }),
-                              onSelect: async () => {
-                                if (
-                                  await confirm({
-                                    title: t("eval.deleteConfirm", { name: row.title }),
-                                    confirmLabel: t("common.delete"),
-                                    danger: true,
-                                  })
-                                ) {
-                                  remove.mutate(row);
-                                }
-                              },
-                            },
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              ))}
-            </table>
-          </Card>
-        </>
-      )}
+  const layers = (
+    <>
       {savingTemplate && classroom.data ? (
         <SaveAsTemplateDialog
           evaluationId={savingTemplate.id}
@@ -554,19 +234,13 @@ export function EvaluationList({
         />
       ) : null}
       {renaming ? (
-        <RenameEvaluationDialog
-          evaluation={renaming}
-          classroomId={classroomId}
-          onClose={() => setRenaming(null)}
-        />
+        <RenameEvaluationDialog evaluation={renaming} classroomId={classroomId} onClose={() => setRenaming(null)} />
       ) : null}
       {pulling ? (
-        <PullTemplateDialog
-          evaluationId={pulling}
-          classroomId={classroomId}
-          onClose={() => setPulling(null)}
-        />
+        <PullTemplateDialog evaluationId={pulling} classroomId={classroomId} onClose={() => setPulling(null)} />
       ) : null}
-    </section>
+    </>
   );
+
+  return { menuItems, pull: setPulling, layers };
 }

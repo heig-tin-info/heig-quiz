@@ -447,6 +447,12 @@ export const EvaluationSummary = z.object({
   totalPoints: z.number(),
   attemptCount: z.number().int(),
   /**
+   * The distinct people who took it: students and poll guests, never a staff
+   * seat's rehearsal (ADR-018) — the list's Participants. `attemptCount`
+   * counts the staff too, for what their attempts lock (F-EVAL-26).
+   */
+  participantCount: z.number().int(),
+  /**
    * The course role deleting the evaluation needs (`evaluationDeletionRole`,
    * ADR-068 §3 amended 2026-10-10): `owner` once a student attempt, a release
    * or a published correction exists. The screens offer Delete only to a

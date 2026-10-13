@@ -793,6 +793,7 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
         "987654321", // the sync pull request's number
         "syncOutcome",
         "sourceAhead",
+        "participantCount", // the staff list's count (ADR-018, amended 2026-10-13)
       ];
       expect(studentBodies.length).toBeGreaterThan(from + 30);
       for (const body of studentBodies.slice(from)) {

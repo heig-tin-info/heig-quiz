@@ -52,6 +52,7 @@ describe("ActivitySummary (ADR-035 §2)", () => {
       deadlineAt: "2026-10-15T22:00:00.000Z",
       source: { fullName: "heig-tin-info/lab-2" },
       distribution: { fullName: "heig-tin-info/lab-2-prg1-2026" },
+      participantCount: 14,
     } as const;
     expect(ActivitySummary.parse(project)).toEqual(project);
     // The phase refines a locked state (ADR-104): the state stays, the badge's word is the phase.
@@ -72,6 +73,7 @@ describe("ActivitySummary (ADR-035 §2)", () => {
       deadlineAt: null,
       source: { fullName: "heig-tin-info/lab-3" },
       distribution: null,
+      participantCount: 0,
     } as const;
     expect(ActivitySummary.parse(draft)).toEqual(draft);
   });

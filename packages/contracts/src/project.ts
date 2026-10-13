@@ -182,6 +182,11 @@ export const ProjectActivitySummary = z.object({
   source: z.object({ fullName: z.string() }),
   /** Null while the students' repository is being built. */
   distribution: z.object({ fullName: z.string() }).nullable(),
+  /**
+   * The students behind its provisioned repositories, a group's members
+   * each (ADR-018, amended 2026-10-13): never a staff test repository.
+   */
+  participantCount: z.number().int(),
 });
 export type ProjectActivitySummary = z.infer<typeof ProjectActivitySummary>;
 

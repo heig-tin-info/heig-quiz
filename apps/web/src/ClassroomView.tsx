@@ -68,8 +68,8 @@ import { useClassroom } from "./course/parts";
  * same slot whichever tab is open: "Add students" on the roster — an empty
  * roster is the only thing that blocks everything a classroom is for — and
  * "New evaluation" on the Activities tab (#295, #683), a "New ▾" of Evaluation
- * and Project since M3-10 (`NewActivity`), whose projects are a section under
- * the evaluations' (`ProjectGroup`). The tab's value stays `evaluations`, so
+ * and Project since M3-10 (`NewActivity`), whose projects share the tab's
+ * tables (`ClassroomActivities`). The tab's value stays `evaluations`, so
  * old links keep working. The third tab, the drill
  * (ADR-041, #317), is a read view — each student's practice — so the slot
  * stays empty there. The fourth, Settings (F-ORG-13, D24), is a route of its
@@ -432,7 +432,7 @@ export function ClassroomView({
             <ClassroomActivities
               classroomId={id}
               navigate={navigate}
-              evaluations={{
+              doors={{
                 onNew: () => setLayer("evaluation"),
                 newProject: newProjectAction(id, github.isSuccess ? github.data : undefined, navigate, openConnect, t),
                 newVariant: cardAccent ? "secondary" : "primary",

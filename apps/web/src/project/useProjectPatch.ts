@@ -46,7 +46,7 @@ export function useProjectPatch(
 
 /**
  * Renaming a project, wherever it starts: its name in place (`ProjectPage`)
- * or "Rename" on its row of the classroom's list (`ProjectGroup`). The
+ * or "Rename" on its row of the classroom's list (`ClassroomActivities`). The
  * page's writer, the name checked by the route's schema first, "Saved" or
  * the refusal in words. A name changes in every state
  * (`projectFieldRefusal`); the slug, and so the repositories, never do.

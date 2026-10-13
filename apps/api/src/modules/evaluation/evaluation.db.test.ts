@@ -25,6 +25,7 @@ import {
   coursePools,
   enrollments,
   evaluationItems,
+  guestParticipants,
   evaluations,
   pools,
   questions,
@@ -949,5 +950,37 @@ describe("the order of the refusals, over HTTP", () => {
       expect(res.statusCode, name).toBe(409);
       expect(res.json(), name).toEqual(expected);
     }
+  });
+});
+
+describe("the list's Participants (ADR-018, amended 2026-10-13)", () => {
+  it("counts each student and poll guest once, a retake included, never a staff rehearsal", async () => {
+    const teacher = await server.signIn("teacher");
+    const seed = await seedLive(db, { teacherId: teacher.id, students: 2 });
+    const [first, second] = seed.studentIds;
+    // The first student's retake: two attempt rows, one participant.
+    await db.insert(attempts).values({ id: randomUUID(), evaluationId: seed.evaluationId, userId: first!, seed: 1, state: "submitted" });
+    await db.insert(attempts).values({ id: randomUUID(), evaluationId: seed.evaluationId, userId: first!, seed: 2, attemptNumber: 2 });
+    await addAttempt(seed.evaluationId, second!);
+    // The teacher's rehearsal on their staff seat (ADR-018).
+    await db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: seed.classroomId,
+      nom: "Teacher",
+      prenom: "T",
+      email: `staff-${randomUUID()}@heig.test`,
+      userId: teacher.id,
+      staff: true,
+    });
+    await addAttempt(seed.evaluationId, teacher.id);
+    // A poll's guest.
+    const guestId = randomUUID();
+    await db.insert(guestParticipants).values({ id: guestId, evaluationId: seed.evaluationId, tokenHash: `hash-${guestId}` });
+    await db.insert(attempts).values({ id: randomUUID(), evaluationId: seed.evaluationId, guestId, seed: 1 });
+
+    const [row] = (await service.listEvaluations(db, seed.classroomId)).filter((e) => e.id === seed.evaluationId);
+    expect(row!.participantCount).toBe(3);
+    // The staff's rehearsal still counts where it locks the item list (F-EVAL-26).
+    expect(row!.attemptCount).toBe(4);
   });
 });
