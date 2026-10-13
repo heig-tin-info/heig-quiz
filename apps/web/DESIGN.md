@@ -964,7 +964,8 @@ live in `ui/state.ts`, each written once.
   What a pick does — close, stay open for another concept — is the call site's.
 - Toast: bottom-right, above the phone's bottom bar when it is up
   (`--bottom-nav-h`), the floating action button (`--fab-h`) and a docked
-  tool (`--tool-dock-h`), `surface` + hairline + overlay shadow. Tones
+  tool (`--tool-dock-h`); on a low screen, top-right with the `top` corner's
+  toasts ("Low screens"). `surface` + hairline + overlay shadow. Tones
   `success` / `error` / `warning`, plus `progress` (a neutral spinner) for
   "this has started", which is the only report an action taken from a menu
   can get. A failed mutation reports through `useErrorToast()` (`notify.tsx`):
@@ -2259,7 +2260,8 @@ folds to its icons — both UIs get a bar at the bottom: ONE component
   own (the player's, PollJoin's "Send", the launch step's dock): two bars at
   the bottom fight for the thumb, and the one that is the screen's action must
   win. In the teacher UI, also hidden on its full-screen working surfaces:
-  the live dashboard, the question editor (its own sticky save bar), the
+  the live dashboard, the question editor (it autosaves; Publish is in its
+  header), the
   evaluation's configuration (whose last step is the launch dock) and the
   grading screen. A new page does not get the bar until its route has a slot
   for its UI; a teacher screen without one keeps the drawer.
@@ -2319,6 +2321,52 @@ moves to a floating action button at the bottom right under `lg`
   - while a list's selection bar is up (`data-bulk-bar`, the pool's bulk
     actions), the FAB steps aside and `--fab-h` falls back to zero: the bar
     spans the bottom edge there and the selection is the task of the moment.
+- **Low screens.** A phone in landscape keeps the FAB where it is; what
+  gives way there is what would stack on it: the toasts move to the top and
+  the assistant's panel becomes a sheet ("Low screens", below).
+
+## Low screens (#450)
+
+A low screen is under `lg` and at most 480 px tall (`useLowScreen`,
+`ui/layers.tsx`): a phone in landscape, about 390 px of window, 330 on iOS
+once its own bars are drawn. The bottom right holds the bottom bar, a FAB
+and a tool dock there, so nothing more stacks on them:
+
+- **Toasts go to the top** — every toast, not only the `top` corner's
+  (`notify.tsx`). A toast may cover the top bar's avatar for its 6 s; that
+  beats covering the actions at the bottom.
+- **The help assistant opens as a sheet**: full width, the window's height
+  less a 12 px strip of the page, its top corners rounded, over a dimmed
+  page — the bottom sheet of `Sheet` under `lg`. Above the docks, the
+  floating panel had a few lines left (about 98 px at 844×390, 40 on iOS).
+  The sheet is MODAL: focus trapped, the page's scroll locked, Escape or the
+  cross closes it and focus returns to the button. This is the one
+  deliberate exception to the non-modal panel of ADR-080 (§7, amendment of
+  2026-10-13): reading the page behind a 40 px chat is not an option, and
+  the conversation itself survives the close. No click on the dimmed strip
+  closes it, as for a form sheet: the draft would go.
+- The page's end spacer is the same as everywhere: `--bottom-nav-h`,
+  `--fab-h` and `--tool-dock-h` together (`Shell.tsx`).
+
+## The question editor on a phone (#450)
+
+A teacher edits on a computer; a phone is for a quick fix seen in class or
+on the train. What the editor supports at 390 px:
+
+- **Editable**: the statement, the choices (an MCQ's choice puts its handle
+  and its actions on a line under its text, under `sm`, so the text keeps
+  the row's width), the properties, the explanation, the student preview
+  and **Publish** (in the header). The editor autosaves; there is no save
+  bar.
+- **Canvas editors** — circuit, diagram, blocks, code — are shown, not
+  designed for a phone: the circuit and the diagram are edited through
+  **Expand** (the full-screen layer, `EditorExpandLayer`), since their
+  canvas and toolbars need the whole window; the blocks workspace and the
+  code editor have no Expand yet and stay in the page's width. Making all
+  four comfortable on a phone is a backlog item, not a promise.
+- The assistant's button stays over the page; the end spacer
+  (`--tool-dock-h`) keeps the last control of the page, a diagram's
+  Expand among them, clear of it.
 
 ## The student's "Coming up", by day
 
@@ -2615,12 +2663,18 @@ placement over an `offset` and `Z.tool`.
   red. It is a tool dock (`data-tool-dock`), so the toasts rise above it
   (`--tool-dock-h`). Under `lg`, while the pool's bulk bar is up
   (`data-bulk-bar`), it steps aside (`style.css`): the bar spans the bottom
-  edge there, and the selection is the task of the moment.
+  edge there, and the selection is the task of the moment. Every page's end
+  spacer includes `--tool-dock-h` (`Shell.tsx`), so the button never sits on
+  the page's last control.
 - **The panel**: a non-modal floating layer 12 px above the button on
   `Z.tool`, `rounded-sheet`, hairline, overlay shadow; 384 px wide, never
   wider than the screen less 32 px, at most 576 px tall and never taller
   than the window under the top bar. The page stays usable behind it;
   Escape or the cross closes it and focus returns to the button.
+- **Low screens**: under `lg` and at most 480 px tall, the panel opens as
+  a modal full-height bottom sheet instead (`ToolDock`'s `sheetWhenLow`) —
+  the deliberate exception to the non-modal panel ("Low screens", ADR-080
+  §7 amendment of 2026-10-13).
 - **Inside**: a header (the 15 px bold title, a `zinc` badge when the
   development stub answers, then History, New and Close as small icon
   buttons); the conversation; the data notice, one 12 px `fg-faint` line

@@ -5,7 +5,8 @@
 Accepted (2026-10-07, decisions of the product owner on issue #559, after a spec challenge): the whole
 feature in three phases, P1 (§1–§7, requirement F-LLM-07), P2 (§8) and P3 (§9). Amended 2026-10-08 by
 the P2, P2b and P3 amendments, folded on 2026-10-09 into §8, §10 and §9 (their items keep their numbers;
-the notes they made in §1, §2, §3 and §5 stay there).
+the notes they made in §1, §2, §3 and §5 stay there). Amended 2026-10-13 (§7, issue #450): on a low
+screen the panel is a modal sheet.
 
 Scope: the in-app chat of the teacher UI, the `assist` purpose of the LLM
 gateway, the conversations it stores.
@@ -229,6 +230,14 @@ Its wrapper is a tool dock: the toasts rise above it (`--tool-dock-h`).
 Under `lg`, while the pool's bulk bar spans the bottom edge, the button
 steps aside. Checked at 1440 and 390 px (`apps/web/DESIGN.md`, "The help
 assistant").
+
+*Amended 2026-10-13 (issue #450, approved by the product owner): on a low
+screen — under `lg` and at most 480 px tall, a phone in landscape — the
+non-modal panel is left a few lines between the top bar and the bottom
+docks, so it opens instead as a full-height bottom sheet, modal (focus
+trapped, page scroll locked); the toasts move to the top there. The one
+deliberate exception to the non-modal panel (`apps/web/DESIGN.md`, "Low
+screens").*
 
 ### 8. P2 — read tools
 
