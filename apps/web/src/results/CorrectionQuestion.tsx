@@ -11,7 +11,7 @@ import { useT, type TFunction } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { promptOf, PROJECTION_ROW_CAP } from "../poll/pollTally";
-import { keyStrings, questionType, typeLabel } from "../questionTypes";
+import { canvasStringsProp, keyStrings, questionType, typeLabel } from "../questionTypes";
 import { BAR_TONES, cx, NotePanel, SegmentedBar, type BarPart, type BarTone } from "../ui";
 
 /**
@@ -26,8 +26,9 @@ import { BAR_TONES, cx, NotePanel, SegmentedBar, type BarPart, type BarTone } fr
  * The answer key is the type's own when it has one (`QuestionTypeClient.Key`,
  * ADR-109): an mcq's choices, a cloze's blanks in its text, a short or math
  * answer's expected answers, a categorize board, a program, an essay's model
- * answer. This host draws the rest — the head, and the generic statement,
- * test cases and answer groups it lends the key.
+ * answer, a diagram, a schematic, a program of blocks. This host draws the
+ * rest — the head, and the generic statement, test cases and answer groups
+ * it lends the key.
  *
  * The sizes come from `SCALE`: `wall` is the projection's own `clamp()` scale
  * (DESIGN.md, "Correction projection"), `page` the same pieces at the scale
@@ -179,9 +180,10 @@ export function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: 
 
 /**
  * How the class fared on each test case of a program (`casePassRate`, filled
- * by `code` and `blocks`): its passes out of its runs beside the bar, the
- * papers it never ran on as "not run". `null` when the type counts no case.
- * A program's key sets it beside its code (`KeyProps.cases`).
+ * by `code`, `codeimage` and `blocks`, which all draw a key): its passes out
+ * of its runs beside the bar, the papers it never ran on as "not run". `null`
+ * when the type counts no case. A program's key sets it beside its code
+ * (`KeyProps.cases`).
  */
 function caseBars(q: ByQuestion, density: Density, t: TFunction): ReactNode {
   if (q.casePassRate.length === 0) return null;
@@ -213,22 +215,15 @@ function caseBars(q: ByQuestion, density: Density, t: TFunction): ReactNode {
 }
 
 /**
- * The test cases of a type that draws no key of its own (`blocks`): in the
- * program's columns, where a key would set its code beside them.
- */
-export function CorrectionCases({ q, density }: { q: ByQuestion; density: Density }) {
-  const t = useT();
-  const cases = caseBars(q, density, t);
-  return cases === null ? null : <div className={SCALE[density].program}>{cases}</div>;
-}
-
-/**
  * Every prop a type's `Key` accepts: the contract's, and what a concrete key
- * adds (its `strings`, a cloze's `renderText`), which the registry's erased
- * type cannot show — the cast `QuestionReviewHost` makes for `Review`.
+ * adds (its `strings`, a canvas's `canvasStrings`, a cloze's `renderText`),
+ * which the registry's erased type cannot show — the cast
+ * `QuestionReviewHost` makes for `Review`.
  */
 type KeyHostProps = KeyProps<unknown, unknown> & {
   strings?: unknown;
+  /** `diagram`, `circuit`, `blocks`: the words of their canvas (`canvasStringsProp`). */
+  canvasStrings?: unknown;
   /** `cloze`: its text with the blanks in place (`ClozeMarkdownText`). */
   renderText?: ClozeTextRenderer;
 };
@@ -251,8 +246,8 @@ const RENDER_BLOCK = {
 /**
  * The statement and the key of a question: the type's `Key`, given the
  * prompt, the test cases and the answer groups to place, replace or omit —
- * or, for a type without one, the prompt, the test cases and the answer
- * groups.
+ * or, for a type without one, the prompt, the test cases (none today: every
+ * type that counts them draws a key) and the answer groups.
  *
  * A parameterized question's statement is the instance of its example
  * values, and says so above it: no student read these very numbers (ADR-056
@@ -302,7 +297,9 @@ export function CorrectionKey({
     return (
       <>
         {prompt}
-        <CorrectionCases q={q} density={density} />
+        {/* Every type that counts test cases draws a key today; one that
+            would not still shows its bars, under its statement. */}
+        {caseBars(q, density, t)}
         {/* The blanks alone say nothing the head does not: with no key beside
             them, a row of them needs groups. */}
         {q.distribution.length > 0 ? rows : null}
@@ -329,6 +326,7 @@ export function CorrectionKey({
         renderMarkdown={renderInline}
         renderBlock={RENDER_BLOCK[density]}
         strings={strings?.(t)}
+        {...canvasStringsProp(q.item.type, t)}
         renderText={ClozeMarkdownText}
       />
     </Suspense>

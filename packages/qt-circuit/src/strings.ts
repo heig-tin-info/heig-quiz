@@ -13,10 +13,10 @@
  * like any other. A count-dependent sentence has a `<key>.one` sibling, used
  * for 1.
  *
- * Four dictionaries reach the host: the editor's (`qt.circuit.e.*`), the
- * player's (`qt.circuit.p.*`), the review's (`qt.circuit.r.*`) and the
- * canvas's (`qt.circuit.c.*`, owned by `./canvas`). The component KINDS are a
- * fifth, keyed by `ComponentKind` rather than by sentence, because the same
+ * Five dictionaries reach the host: the editor's (`qt.circuit.e.*`), the
+ * player's (`qt.circuit.p.*`), the review's (`qt.circuit.r.*`), the debrief
+ * key's (`qt.circuit.k.*`) and the canvas's (`qt.circuit.c.*`, owned by
+ * `./canvas`). The component KINDS are a sixth, keyed by `ComponentKind` rather than by sentence, because the same
  * twelve words label a palette chip, a symbol and a diagnostic.
  */
 import { COMPONENT_KINDS, LIBRARY, type ComponentKind } from "./library.js";
@@ -280,6 +280,18 @@ export const REVIEW_STRINGS = {
 };
 
 export type CircuitReviewStrings = typeof REVIEW_STRINGS;
+
+/**
+ * The words of the debrief's answer key (`Key`, ADR-109): the caption of the
+ * reference schematic it shows, or of the hatched block standing for it.
+ */
+export const KEY_STRINGS = {
+  reference: "Reference circuit",
+  /** Hidden: a hatched block, since a student starts from an empty box. */
+  hidden: "Reference circuit, hidden until the answers are revealed",
+};
+
+export type CircuitKeyStrings = typeof KEY_STRINGS;
 
 /**
  * The words of the grading table's one circuit column (ADR-044): what the

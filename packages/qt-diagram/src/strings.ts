@@ -82,6 +82,20 @@ export const diagramReviewStrings = {
 
 export type DiagramReviewStringKey = keyof typeof diagramReviewStrings;
 
+/**
+ * The words of the debrief's answer key (`Key`, ADR-109): the caption of the
+ * diagram it shows.
+ */
+export const diagramKeyStrings = {
+  reference: "Reference diagram",
+  /** Hidden: the starter the class drew from. */
+  start: "Starting diagram",
+  /** Hidden, with no starter: a hatched block. */
+  hidden: "Reference diagram, hidden until the answers are revealed",
+} as const;
+
+export type DiagramKeyStringKey = keyof typeof diagramKeyStrings;
+
 /** The words of the grading table's one diagram column (ADR-044). */
 export const diagramGradingStrings = {
   diagram: "Diagram",

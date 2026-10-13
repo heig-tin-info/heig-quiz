@@ -68,10 +68,30 @@ const ESSAY = makeByQuestion({
 
 const BLOCKS = makeByQuestion({
   item: byQuestionItem(5, "blocks"),
-  student: { prompt: "Reach the dock.", visibleCases: [], toolbox: [] },
-  solution: { referenceSolution: null },
+  student: {
+    prompt: "Reach the dock.",
+    starter: [],
+    visibleCases: [{ name: "Aisle", map: [">..D"], battery: 9, points: 1 }],
+    toolbox: ["forward"],
+  },
+  solution: {
+    referenceSolution: [{ kind: "forward" }],
+    cases: [{ name: "Secret aisle", map: ["^.D"], battery: 9, points: 1, visible: false }],
+  },
   outcomes: { correct: 2, partial: 0, wrong: 1, blank: 0 },
   casePassRate: [{ name: "w1", label: "Warehouse 1", passed: 2, total: 3 }],
+});
+
+const DIAGRAM = makeByQuestion({
+  item: byQuestionItem(6, "diagram"),
+  student: { prompt: "Draw the classes.", kind: "class" },
+  solution: { reference: { nodes: [{ id: "n1", t: "class", x: 0, y: 0, name: "Shape" }], links: [] }, rubric: "secret-rubric" },
+});
+
+const CIRCUIT = makeByQuestion({
+  item: byQuestionItem(7, "circuit"),
+  student: { prompt: "Wire a low-pass filter." },
+  solution: { reference: { components: [], wires: [] } },
 });
 
 describe("ByQuestionView", () => {
@@ -155,12 +175,38 @@ describe("ByQuestionView", () => {
     expect(screen.queryByText("Grading criteria")).toBeNull();
   });
 
-  it("leaves any other type's statement to its review, with the test cases below", async () => {
+  it("draws a program of blocks' key itself: the reference, the cases and the visible warehouses beside it", async () => {
     renderWithProviders(<ByQuestionView questions={[BLOCKS]} />);
+    // The read-only workspace; jsdom has no Blockly, so its text fallback.
+    expect(await screen.findByLabelText("Reference solution")).toHaveTextContent("move forward");
+    expect(screen.getByText("Reach the dock.", { exact: false })).toBeVisible();
     const cases = screen.getByRole("list", { name: "Test cases" });
     expect(within(cases).getByText("2 of 3")).toBeVisible();
     expect(within(cases).getByRole("img")).toHaveAccessibleName("passed: 2 · failed: 1");
-    expect(await screen.findByText("Reach the dock.", { exact: false })).toBeVisible();
+    expect(within(screen.getByRole("list", { name: "Warehouses" })).getByText("Aisle")).toBeVisible();
+    expect(document.body.innerHTML).not.toContain("Secret aisle");
+    // Never the empty student copy of the type's review.
+    expect(screen.queryByText("Program")).toBeNull();
+    expect(screen.queryByText(/\/ 1 point/)).toBeNull();
+  });
+
+  it("draws a diagram's reference, never its criteria nor its text forms", async () => {
+    renderWithProviders(<ByQuestionView questions={[DIAGRAM]} />);
+    expect(await screen.findByRole("img", { name: "Reference diagram" })).toHaveTextContent("Shape");
+    expect(document.body.innerHTML).not.toContain("secret-rubric");
+    expect(screen.queryByText("Grading criteria")).toBeNull();
+    expect(screen.queryByText("Text form")).toBeNull();
+    expect(screen.queryByText("Score")).toBeNull();
+  });
+
+  it("draws a circuit's reference schematic", async () => {
+    renderWithProviders(<ByQuestionView questions={[CIRCUIT]} />);
+    expect(await screen.findByRole("img", { name: "Reference circuit" })).toBeVisible();
+  });
+
+  it("leaves a type without a key to its own review", async () => {
+    renderWithProviders(<ByQuestionView questions={[makeByQuestion({ item: byQuestionItem(9, "brainstorm"), student: { prompt: "Name a sort." } })]} />);
+    expect(await screen.findByText("Name a sort.", { exact: false })).toBeVisible();
   });
 });
 

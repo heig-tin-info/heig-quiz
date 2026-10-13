@@ -1,11 +1,11 @@
 /**
  * The pieces of the debrief's answer key (ADR-033, ADR-109) that the host and
  * more than one type's `Key` draw: the scale both densities share, the count
- * at the end of a row, and the "Expected answer" line of a written answer.
- * A size only one type draws lives in that type's package; one only the host
+ * at the end of a row, the "Expected answer" line of a written answer, and
+ * the caption and the frame of a key that is a drawing. A size only one type draws lives in that type's package; one only the host
  * draws, in `apps/web/src/results/CorrectionQuestion.tsx`.
  */
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { KeyProps, KeyStats } from "@quiz/core/client";
 
 import { cx } from "./styles.js";
@@ -47,6 +47,104 @@ export const answeredCount = ({ outcomes: o }: Pick<KeyStats, "outcomes">): numb
 export function CorrectionCount({ density, children }: { density: Density; children: ReactNode }) {
   return (
     <span className={cx("text-right tabular-nums text-fg-muted", CORRECTION_SCALE[density].count)}>{children}</span>
+  );
+}
+
+/**
+ * A key's drawing under its caption: a program, a diagram, a schematic. The
+ * caption says which — the reference, what the class started from, or that
+ * it is hidden — so a block never reads as an unnamed field.
+ */
+export function KeyFigure({ density, caption, children }: { density: Density; caption: string; children: ReactNode }) {
+  return (
+    <figure className="flex min-w-0 flex-col gap-2">
+      <figcaption className={cx("font-medium text-fg-muted", CORRECTION_SCALE[density].caption)}>{caption}</figcaption>
+      {children}
+    </figure>
+  );
+}
+
+/** A hidden key's hatching: `surface-2` and `surface-3` stripes, framed. */
+const HATCH =
+  "rounded-card border border-line bg-[repeating-linear-gradient(135deg,var(--surface-2)_0_8px,var(--surface-3)_8px_16px)]";
+
+/**
+ * Where a key's drawing stands while it is hidden and the class had nothing
+ * to start from: a hatched block of the size the drawing will take, never
+ * the drawing itself made transparent, so nothing moves at the reveal.
+ */
+export function KeyHatch({ className }: { className: string }) {
+  return <div aria-hidden className={cx(className, HATCH)} />;
+}
+
+/**
+ * The height of a drawn key's frame, per density (DESIGN.md, "Correction
+ * projection"): on the wall it follows the screen, so a diagram is read
+ * across a room, and no taller than a narrow screen's drawing needs; on the
+ * page it is the Results tab's.
+ */
+const FRAME = { wall: "h-[clamp(240px,min(56vh,70vw),760px)]", page: "h-80" } as const satisfies Record<Density, string>;
+
+/**
+ * The height a drawing gets before its frame is measured, or where nothing
+ * lays out (a test): `FRAME.page`'s 320 px (`h-80`) inside its `p-4` padding
+ * and its 1 px border, both sides.
+ */
+const UNMEASURED = 320 - 2 * 16 - 2;
+
+/**
+ * The frame of a key that is a drawing — a diagram, a schematic, a program
+ * of blocks: ONE element of a fixed height per density, hatched while hidden
+ * with nothing to stand in, recessed around what the class started from
+ * (`revealed` false), on the surface around the key. The reveal changes what
+ * is inside it, never its size, so nothing below moves.
+ *
+ * `children` draws `shown` into it at the height it measures inside its
+ * padding: the renderers take a height in pixels (`DiagramView`'s
+ * `maxHeight`, `SchematicView`'s and `BlocklyHost`'s `height`).
+ * `framed: false` leaves the border and the padding to a drawing that has
+ * its own.
+ */
+export function KeyFrame<T>({
+  density,
+  shown,
+  revealed,
+  framed = true,
+  children,
+}: {
+  density: Density;
+  /** What to draw; `null`: hidden with nothing to stand in. */
+  shown: T | null;
+  /** `shown` is the key; otherwise, what the class started from. */
+  revealed: boolean;
+  framed?: boolean;
+  children: (shown: T, height: number) => ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(UNMEASURED);
+  useEffect(() => {
+    const frame = ref.current;
+    if (frame === null || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry !== undefined) setHeight(Math.floor(entry.contentRect.height));
+    });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div
+      ref={ref}
+      aria-hidden={shown === null || undefined}
+      className={cx(
+        "flex min-w-0 items-center justify-center",
+        FRAME[density],
+        shown === null
+          ? HATCH
+          : framed && cx("rounded-card border border-line p-4", revealed ? "bg-surface" : "bg-surface-2"),
+      )}
+    >
+      {shown === null ? null : children(shown, height)}
+    </div>
   );
 }
 

@@ -156,6 +156,19 @@ export const blocksReviewStrings = {
 export type BlocksReviewStringKey = keyof typeof blocksReviewStrings;
 export type BlocksReviewStrings = Readonly<Record<BlocksReviewStringKey, string>>;
 
+/**
+ * The words of the debrief's answer key (`Key`, ADR-109): the caption of the
+ * program it shows. The program and the warehouses speak the canvas's words.
+ */
+export const blocksKeyStrings = {
+  reference: "Reference solution",
+  /** Hidden: the starter the class's workspace held. */
+  start: "Starting program",
+  /** Hidden, with no starter: a hatched block. */
+  hidden: "Reference solution, hidden until the answers are revealed",
+} as const;
+export type BlocksKeyStringKey = keyof typeof blocksKeyStrings;
+
 /** The column's own words; it spells the program and names itself in the canvas's. */
 export const blocksGradingStrings = {
   warehouses: "{passed}/{total} docks",

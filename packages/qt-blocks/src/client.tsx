@@ -34,6 +34,7 @@ export const blocksClient: QuestionTypeClient<BlocksConfig, BlocksAnswer, Blocks
   Editor: lazy(async () => ({ default: (await import("./Editor.js")).BlocksEditor })),
   Player: lazy(async () => ({ default: (await import("./Player.js")).BlocksPlayer })),
   Review: lazy(async () => ({ default: (await import("./Review.js")).BlocksReview })),
+  Key: lazy(async () => ({ default: (await import("./Key.js")).BlocksKey })),
 
   /** The empty program: the player shows the starter for it (`isBlocksAnswered`). */
   emptyAnswer: () => ({ program: [] }),
@@ -45,6 +46,7 @@ export {
   blocksCanvasStrings,
   blocksEditorStrings,
   blocksGradingStrings,
+  blocksKeyStrings,
   blocksPlayerStrings,
   blocksReviewStrings,
 } from "./strings.js";

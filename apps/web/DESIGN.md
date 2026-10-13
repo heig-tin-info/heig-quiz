@@ -2150,8 +2150,18 @@ the Results "Questions" tab on the wall. It takes the projection's
   cards above empty columns; revealed, each card sits in its key's column
   (`success-soft` / `success`, numbered when the order counts), the
   distractors above, "in no column". An essay's model answer (never its
-  rubric) appears at the reveal. R reveals; E adds the explanation, only
-  where there is one.
+  rubric) appears at the reveal. A drawing — a diagram, a schematic, a
+  program of blocks — stands in one frame (`KeyFrame`, `@quiz/ui`) of a fixed
+  height, `clamp(240px, min(56vh, 70vw), 760px)` on the wall and 320 px on
+  the page: hidden, it holds what the class started from on `surface-2`
+  (a diagram's starter, a program of blocks' starter), captioned "Starting
+  diagram" / "Starting program", or it is hatched like a program with no
+  template; revealed, the reference on `surface`. Never the counts of a
+  diagram's elements, never a hidden warehouse. A program of blocks is text
+  on the wall (`pseudoCode`, `clamp(16px,1.5vw,22px)` mono), the visible
+  warehouses as thumbnails under the bars of their passes; the page draws
+  the read-only workspace. R reveals; E adds the explanation, only where
+  there is one.
 - **The same pieces on the page**: the Results "Questions" tab draws them
   with the `page` density, always revealed. The sizes of both densities
   live in three places, each once: those the host and the keys share
@@ -2159,12 +2169,11 @@ the Results "Questions" tab on the wall. It takes the projection's
   `CORRECTION_SCALE` of `@quiz/ui`, those only the host draws (prompt,
   answer row, test case) in `SCALE` of `results/CorrectionQuestion.tsx`, and
   those only one type draws (an mcq's choice row and letter, a cloze's text,
-  a program's code) in that type's `Key.tsx`. A type with an answer key of
-  its own (`QuestionTypeClient.Key`, ADR-109: an mcq, a cloze, a short or
-  math answer, a categorize board, a program, an essay) is drawn whole by
+  a program's code) in that type's `Key.tsx`; a drawing's frame, shared by
+  three keys, in `KeyFrame`. A type with an answer key of its own
+  (a type that declares `QuestionTypeClient.Key`, ADR-109) is drawn whole by
   it, the host lending it the test cases' bars; any other type keeps its own
-  review for the statement and gets the answer groups and the test cases
-  below it. "Present",
+  review for the statement and gets the answer groups below it. "Present",
   in the Results header beside "Grading panel", opens this screen once the
   evaluation is over.
 - **An exercise's correction, published while it runs** (ADR-050): a

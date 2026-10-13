@@ -29,6 +29,7 @@ export const diagramClient: DiagramClient = {
   Editor: lazy(async () => ({ default: (await import("./Editor.js")).DiagramQuestionEditor })),
   Player: lazy(async () => ({ default: (await import("./Player.js")).DiagramPlayer })),
   Review: lazy(async () => ({ default: (await import("./Review.js")).DiagramReview })),
+  Key: lazy(async () => ({ default: (await import("./Key.js")).DiagramKey })),
 
   /** The answer starts as a copy of the starter (docs/04 §4.14). */
   emptyAnswer: (student) => ({ scene: startingScene(student.starter) }),
@@ -37,6 +38,12 @@ export const diagramClient: DiagramClient = {
 };
 
 /* The surfaces stay out of the values exported here, or the `lazy` above is undone (see qt-mcq). */
-export { diagramEditorStrings, diagramGradingStrings, diagramPlayerStrings, diagramReviewStrings } from "./strings.js";
+export {
+  diagramEditorStrings,
+  diagramGradingStrings,
+  diagramKeyStrings,
+  diagramPlayerStrings,
+  diagramReviewStrings,
+} from "./strings.js";
 export { emptyDiagramDraft } from "./schema.js";
 export type { DiagramAnswer, DiagramConfig, DiagramDetails, DiagramSolution, DiagramStudent } from "./schema.js";

@@ -8,7 +8,7 @@ import { useI18n, useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { typeLabel, QuestionReviewHost } from "../questionTypes";
 import { Badge, Card, EmptyState, NotePanel, percent, SectionHeading } from "../ui";
-import { AnswerRows, CorrectionCases, CorrectionKey, drawsKey } from "./CorrectionQuestion";
+import { AnswerRows, CorrectionKey, drawsKey } from "./CorrectionQuestion";
 import { questionAnchor, QuestionSummary } from "./QuestionSummary";
 
 /**
@@ -27,10 +27,11 @@ export const isNotOver = (error: unknown): boolean => refusedWith(error, "not_ov
  * The pieces are the correction projection's, at the page's density and
  * always revealed: this is the teacher's reading of the projection. A type
  * with an answer key of its own (`drawsKey`, ADR-109: an mcq, a cloze, a
- * short or math answer, a categorize board, a program, an essay) is drawn by
- * it whole; any other type keeps its own `Review` for the statement and the
+ * short or math answer, a categorize board, a program, an essay, a diagram,
+ * a schematic, a program of blocks) is drawn by it whole, its test cases
+ * included; any other type keeps its own `Review` for the statement and the
  * key — with no answer and no grading details, the question the way it was
- * asked — and gets the projection's answer groups and test cases below it.
+ * asked — and gets the projection's answer groups below it.
  */
 export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
   const t = useT();
@@ -96,10 +97,6 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
                 </>
               )}
             </div>
-
-            {/* A key sets the test cases beside its program; without one,
-                they stand under the type's review. */}
-            {keyed ? null : <CorrectionCases q={q} density="page" />}
 
             {q.explanation ? (
               <NotePanel eyebrow={t("results.byQuestion.explanation")}>
