@@ -696,8 +696,18 @@ export function railCountdown(p: ProjectDetail, steps: RailStep[], now: number):
   if (p.state !== "published" || deadlinePassed(p)) return null;
   const deadline = p.deadlineAt;
   const end = steps.findIndex((s) => s.kind === "deadline");
-  const at = (s: RailStep): string | null =>
-    s.kind === "published" ? s.at : s.kind === "checkpoint" ? s.checkpoint.dueAt : s.kind === "deadline" && "at" in s ? s.at : null;
+  const at = (s: RailStep): string | null => {
+    switch (s.kind) {
+      case "published":
+        return s.at;
+      case "checkpoint":
+        return s.checkpoint.dueAt;
+      case "deadline":
+        return deadline;
+      default:
+        return null;
+    }
+  };
   const fills = steps.map((s, i) => {
     if (i >= end) return 0;
     const from = at(s);

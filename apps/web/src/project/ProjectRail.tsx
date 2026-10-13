@@ -11,6 +11,7 @@ import {
   Card,
   cx,
   isoDateTime,
+  MINUTE,
   QueryError,
   RelativeTime,
   SectionHeading,
@@ -93,7 +94,7 @@ export function ProjectRail({ project }: { project: ProjectDetail }) {
   const t = useT();
   const { list, onDelete, openAdd, dialog } = useCheckpoints(project);
   // The rail's own clock (ADR-104 §3, amendment of 2026-10-13): the shared minute timer, never a page tick.
-  const now = useNow(60_000);
+  const now = useNow(MINUTE);
   const auto = project.gradingMode === "auto";
   const archived = project.archivedAt !== null;
   // A draft takes checkpoints too (F-PROJ-01); a locked project's deadline is behind them.

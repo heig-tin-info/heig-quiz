@@ -208,7 +208,7 @@ function DeadlineTile({
   return (
     <Stat label={t("project.deadline")} value={<span className="text-[17px]">{isoDateTime(project.deadlineAt)}</span>}>
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        {/* While open, the time left is the rail's, the page's one clock (ADR-104 §3, amendment of 2026-10-13). */}
+        {/* While open, the rail holds the time left (ADR-104). */}
         {deadlinePassed(project) ? t("project.deadline.passed") : null}
         <Badge tone="zinc">{t(`project.deadlineStrategy.${project.deadlineStrategy}`)}</Badge>
       </p>

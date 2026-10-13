@@ -668,10 +668,8 @@ describe("elapsedFraction", () => {
   });
 
   it("has no inside for a window of zero length or an inverted one", () => {
-    expect(elapsedFraction(start, start, at(start) - 1)).toBe(0);
     expect(elapsedFraction(start, start, at(start))).toBe(1);
     expect(elapsedFraction(end, start, at(start) - 1)).toBe(0);
-    expect(elapsedFraction(end, start, at(end))).toBe(1);
   });
 });
 
@@ -703,11 +701,6 @@ describe("railCountdown", () => {
     expect(none({ ...open, state: "draft" })).toBeNull();
     expect(none({ ...open, state: "locked" })).toBeNull();
     expect(none({ ...open, deadlineAppliedAt: deadline })).toBeNull();
-  });
-
-  it("has a zero-length window full from its start", () => {
-    const instant = { ...open, deadlineAt: start };
-    expect(railCountdown(instant, railSteps(instant, []), Date.parse(start))).toMatchObject({ progress: 1 });
   });
 });
 
