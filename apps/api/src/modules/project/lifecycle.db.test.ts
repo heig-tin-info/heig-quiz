@@ -760,6 +760,30 @@ describe("the organization's repository browser (M3-11)", () => {
     expect((await call("GET", `${base(room.id)}/sources/lab-1-squashed`, teacher.headers)).statusCode).toBe(404);
   });
 
+  it("leaves out the repositories Quiz made for a project's students, by their id, never their name (#822)", async () => {
+    const room = await connectedClassroom();
+    const project = await create(room.id);
+    // A student's repository, renamed on GitHub: no name rule would catch it.
+    world.source(room.login, "renamed-by-hand", { main: { "README.md": "# Mine" } });
+    // A teacher's source whose name looks like a student's: still a source.
+    world.source(room.login, "lab-1-bob", { main: { "README.md": "# Lab" } });
+    await server.app.db.insert(projectRepos).values({
+      id: randomUUID(),
+      projectId: project.id,
+      userId: student.id,
+      githubRepoId: world.ids.get(`${room.login}/renamed-by-hand`)!,
+      fullName: `${room.login}/renamed-by-hand`,
+      acceptedAt: new Date(NOW),
+    });
+    const list = ProjectSourceRepo.array().parse((await call("GET", `${base(room.id)}/sources`, teacher.headers)).json());
+    expect(list.map((r) => r.name).sort()).toEqual(["lab", "lab-1-bob"]);
+    expect((await call("GET", `${base(room.id)}/sources/renamed-by-hand`, teacher.headers)).statusCode).toBe(404);
+    expect(refusal(await call("POST", base(room.id), teacher.headers, { ...LAB, sourceRepo: "renamed-by-hand" }))).toEqual([
+      422,
+      "source_not_found",
+    ]);
+  });
+
   it("hides and refuses a repository Quiz knows as a course the caller does not teach (ADR-100 §5)", async () => {
     const room = await connectedClassroom();
     // Another course's project (the outsider's) hands out `theirs`, a repository of the same organization.

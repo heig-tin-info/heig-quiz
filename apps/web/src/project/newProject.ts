@@ -19,7 +19,7 @@ import { SCHOOL_TIME_ZONE, type ProjectScaleKind } from "@quiz/domain";
 
 import { ApiError } from "../api";
 import type { Dict } from "../i18n";
-import { fromLocalInput, localTimeZone } from "../ui";
+import { fromLocalInput, humanize, localTimeZone } from "../ui";
 
 /** What the teacher fills in. Strings where an input holds one: the form keeps what was typed. */
 export interface ProjectDraft {
@@ -65,6 +65,16 @@ export const emptyDraft = (): ProjectDraft => ({
   groupMode: false,
   groupSetId: null,
 });
+
+/**
+ * A source picked: its branches and protected files read again, and the
+ * name follows it ("prg1-labo-04" → "Prg1 Labo 04") while it is empty or
+ * still the previous source's — never over a name the teacher typed.
+ */
+export function pickSource(draft: ProjectDraft, sourceRepo: string): Partial<ProjectDraft> {
+  const follows = draft.name.trim() === "" || draft.name === humanize(draft.sourceRepo);
+  return { sourceRepo, branches: null, protectedFiles: null, ...(follows ? { name: humanize(sourceRepo) } : {}) };
+}
 
 /** The fields a message can stand under, and the DOM id of each control (focus, `fieldErrorProps`). */
 export const FIELD_ID = {

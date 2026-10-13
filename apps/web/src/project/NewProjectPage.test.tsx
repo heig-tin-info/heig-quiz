@@ -94,6 +94,21 @@ describe("the new project form", () => {
     expect(body).not.toHaveProperty("durationMinutes");
   });
 
+  it("names the project after the source picked, never over a name typed (#821)", async () => {
+    routes();
+    renderPage();
+    const name = await screen.findByLabelText("Name");
+    const source = await screen.findByLabelText("Source repository");
+    await userEvent.selectOptions(source, "prg1-labo-04");
+    expect(name).toHaveValue("Prg1 Labo 04");
+    await userEvent.selectOptions(source, "prg1-libre");
+    expect(name).toHaveValue("Prg1 Libre");
+    await userEvent.clear(name);
+    await userEvent.type(name, "Labo 4");
+    await userEvent.selectOptions(source, "prg1-labo-04");
+    expect(name).toHaveValue("Labo 4");
+  });
+
   it("says what is missing and sends nothing", async () => {
     const { calls } = routes();
     renderPage();
