@@ -22,10 +22,11 @@ import {
   liveAt,
   makeDashboard,
   makeEvaluationDetail,
+  rememberLiveToggles,
 } from "../test/live-fixtures";
 import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
-import { examTogglesKey, LIVE_TOGGLES_KEY } from "./toggles";
+import { examTogglesKey, LIVE_TOGGLES_KEY, type LiveToggles } from "./toggles";
 import { dashboardKey } from "../queryKeys";
 
 /*
@@ -74,7 +75,7 @@ const navigate = vi.fn();
  * browser and, the fixture being an exam, for this exam in this tab (#796).
  * `null` leaves the storage alone, for the tests about the preference itself.
  */
-const ALL_ON = JSON.stringify({ names: true, answers: true, results: true });
+const ALL_ON: LiveToggles = { names: true, answers: true, results: true };
 
 /** The fixture is an exam; this serves the same evaluation as an exercise. */
 const exerciseDetail = makeEvaluationDetail();
@@ -84,12 +85,9 @@ const exercise = { [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(exerciseDet
 function setup(
   view = makeDashboard(3, 4),
   extra: Record<string, ReturnType<typeof ok>> = {},
-  stored: string | null = ALL_ON,
+  stored: LiveToggles | null = ALL_ON,
 ) {
-  if (stored !== null) {
-    localStorage.setItem(LIVE_TOGGLES_KEY, stored);
-    sessionStorage.setItem(examTogglesKey(EVALUATION_ID), stored);
-  }
+  if (stored !== null) rememberLiveToggles(stored);
   const queryClient = makeQueryClient();
   queryClient.setQueryData(dashboardKey(EVALUATION_ID, true, true), initialGrid(view));
   const stubs = mockFetch({
@@ -262,7 +260,7 @@ describe("LiveDashboard — keyboard", () => {
 
   it("remembers the switches of an exercise across a reload (#80)", async () => {
     const user = userEvent.setup();
-    localStorage.setItem(LIVE_TOGGLES_KEY, ALL_ON);
+    localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify(ALL_ON));
     const first = setup(undefined, exercise, null);
     await screen.findByText("Nadia Roux 0");
     await waitFor(() =>
@@ -292,7 +290,7 @@ describe("LiveDashboard — keyboard", () => {
 
   // #796: answers and results left on (an exercise, say) never open an exam.
   it("opens an exam with answers and results off, whatever the browser remembers", async () => {
-    localStorage.setItem(LIVE_TOGGLES_KEY, ALL_ON);
+    localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify(ALL_ON));
     const { calls } = setup(undefined, {}, null);
     expect(await screen.findByText("Nadia Roux 0")).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "false");
@@ -338,7 +336,8 @@ describe("LiveDashboard — keyboard", () => {
   });
 
   it("opens with the defaults when the stored preference is malformed", async () => {
-    setup(undefined, {}, "{not json");
+    localStorage.setItem(LIVE_TOGGLES_KEY, "{not json");
+    setup(undefined, {}, null);
     expect(await screen.findByText("Student 1")).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "false");
   });
@@ -534,7 +533,7 @@ describe("LiveDashboard — inspection", () => {
     const { calls } = setup(
       makeDashboard(3, 4),
       paperOf(1),
-      JSON.stringify({ names: true, answers: false, results: false }),
+      { names: true, answers: false, results: false },
     );
     await user.click(await screen.findByRole("button", { name: /Nadia Roux 1 · Question 2/ }));
     const dialog = await screen.findByRole("dialog", { name: "Nadia Roux 1 · Question 2" });
@@ -589,7 +588,7 @@ describe("LiveDashboard — one question for the class (F-DASH-07, #353)", () =>
     const { calls } = setup(
       makeDashboard(3, 4),
       snapshot,
-      JSON.stringify({ names: false, answers: false, results: false }),
+      { names: false, answers: false, results: false },
     );
     await user.click(await screen.findByRole("button", { name: "Open question 2 for every student" }));
     const dialog = await screen.findByRole("dialog", { name: "Question 2 · the whole class" });

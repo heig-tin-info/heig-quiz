@@ -215,5 +215,6 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
  */
 export function rememberLiveToggles(toggles: LiveToggles, evaluationId = EVALUATION_ID): void {
   localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify(toggles));
-  sessionStorage.setItem(examTogglesKey(evaluationId), JSON.stringify(toggles));
+  const { answers, results } = toggles;
+  sessionStorage.setItem(examTogglesKey(evaluationId), JSON.stringify({ answers, results }));
 }

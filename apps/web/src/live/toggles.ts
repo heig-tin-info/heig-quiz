@@ -75,35 +75,48 @@ export function parseLiveToggles(raw: string | null): LiveToggles {
   return out;
 }
 
-/** The key of one exam's Answers and Results, in `sessionStorage` (#796). */
+/**
+ * The key of one exam's Answers and Results, in `sessionStorage` (#796).
+ * Written by hand, too, by `scripts/screenshots.mjs` (`liveAllOn`) and
+ * `scripts/docs-screenshots.mjs` (its init script): change it there as well.
+ */
 export function examTogglesKey(evaluationId: string): string {
   return `quiz-live-toggles-exam:${evaluationId}`;
 }
+
+/** What an exam keeps of its own: names are never an exam's (#796). */
+export type ExamToggles = Pick<LiveToggles, "answers" | "results">;
 
 interface Stored {
   evaluationId: string;
   /** The browser's habit, every field. */
   browser: LiveToggles;
-  /** This exam's Answers and Results, in this tab (`names` unused). */
-  exam: LiveToggles;
+  /** This exam's Answers and Results, in this tab. */
+  exam: ExamToggles;
+}
+
+function pickExam({ answers, results }: LiveToggles): ExamToggles {
+  return { answers, results };
 }
 
 function readAll(evaluationId: string): Stored {
   return {
     evaluationId,
     browser: parseLiveToggles(readStored(LIVE_TOGGLES_KEY)),
-    exam: parseLiveToggles(readStored(examTogglesKey(evaluationId), "session")),
+    exam: pickExam(parseLiveToggles(readStored(examTogglesKey(evaluationId), "session"))),
   };
 }
 
 /**
  * Only an exercise takes Answers and Results from the browser's habit; an
  * exam does not, and neither does a mode not loaded yet — the safe frame
- * comes first, the colours a request later.
+ * comes first, the colours a request later. So a switch pressed on an
+ * exercise before its mode has loaded lands in that tab's exam entry, and is
+ * superseded by the browser's habit as soon as the mode says exercise.
  */
 function shown(stored: Stored, mode: EvaluationMode | undefined): LiveToggles {
   if (mode === "exercise") return stored.browser;
-  return { names: stored.browser.names, answers: stored.exam.answers, results: stored.exam.results };
+  return { names: stored.browser.names, ...stored.exam };
 }
 
 /**
@@ -131,11 +144,9 @@ export function useLiveToggles(
         // when two shortcuts land in the same tick. Writing is idempotent, so
         // StrictMode's double call costs nothing.
         writeStored(LIVE_TOGGLES_KEY, JSON.stringify(browser));
-        if (exam) {
-          const sitting = { answers: next.answers, results: next.results };
-          writeStored(examTogglesKey(prev.evaluationId), JSON.stringify(sitting), "session");
-        }
-        return { ...prev, browser, exam: exam ? next : prev.exam };
+        const sitting = exam ? pickExam(next) : prev.exam;
+        if (exam) writeStored(examTogglesKey(prev.evaluationId), JSON.stringify(sitting), "session");
+        return { ...prev, browser, exam: sitting };
       });
     },
     [exam],

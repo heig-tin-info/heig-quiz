@@ -1322,10 +1322,15 @@ async function capture(world, scene, theme, phone) {
           localStorage.setItem("quiz-theme", t);
           for (const [k, v] of Object.entries(storage)) localStorage.setItem(k, v);
           // An exam ignores the browser's Answers and Results (#796): a
-          // dashboard scene carries them over as this tab's choice.
+          // dashboard scene carries them over as this tab's choice. The ids
+          // are the seeded world's, known only at run time, hence the path
+          // (key: `examTogglesKey`, src/live/toggles.ts).
           const live = /\/evaluations\/([^/?#]+)\/live/.exec(location.pathname);
           const habit = storage["quiz-live-toggles-v2"];
-          if (live && habit) sessionStorage.setItem(`quiz-live-toggles-exam:${live[1]}`, habit);
+          if (live && habit) {
+            const { answers, results } = JSON.parse(habit);
+            sessionStorage.setItem(`quiz-live-toggles-exam:${live[1]}`, JSON.stringify({ answers, results }));
+          }
         } catch {
           /* a private window; the defaults are then the system's */
         }
