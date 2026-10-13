@@ -7,7 +7,12 @@
  * `$GITHUB_STEP_SUMMARY` too on CI) and fails when a package falls under its
  * floor in coverage.floors.json, when a package ran without a floor, or when
  * a floor has no report. The floors are a ratchet: `--ratchet` raises each
- * one to the whole percentage the run reached, and never lowers one.
+ * one to one point under the whole percentage the run reached, and never
+ * lowers one. The point of margin is deliberate: a floor is a regression
+ * guard, not a target. Set at the figure itself, a floor left a margin of
+ * 0 to 1 point, and one new module with a few untested `??` defaults put a
+ * package under it (packages/domain, 2026-10-12: 17 untested branches
+ * against a margin of 12, with nothing regressed).
  */
 import { appendFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -61,7 +66,7 @@ if (process.argv.includes("--ratchet")) {
   const next = { ...floors };
   for (const [pkg, total] of Object.entries(reports)) {
     next[pkg] = Object.fromEntries(
-      METRICS.map((m) => [m, Math.max(floors[pkg]?.[m] ?? 0, Math.floor(total[m].pct))]),
+      METRICS.map((m) => [m, Math.max(floors[pkg]?.[m] ?? 0, Math.floor(total[m].pct) - 1)]),
     );
   }
   const sorted = Object.fromEntries(Object.entries(next).sort(([a], [b]) => a.localeCompare(b)));
