@@ -56,7 +56,7 @@ else
 fi
 
 # One host writes this repository; a second one would need --glob-archives.
-borg prune --list --keep-daily 7 --keep-weekly 8 --keep-monthly 12
+borg prune --list --keep-daily 7 --keep-weekly 4 --keep-monthly 3
 borg compact
 install -d -m 0700 "$(dirname "$STATE")"
 borg list --short | sort > "$STATE"

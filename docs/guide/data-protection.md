@@ -240,10 +240,10 @@ A deleted piece of data stays in the backups until they rotate (`docs/developmen
 | --- | --- | --- | --- |
 | Daily database dump | On the application machine itself | None | 30 days |
 | Hetzner's backup of the whole machine | Hetzner | **To be confirmed** | 7 days; that it is enabled: **To be confirmed** |
-| Nightly off-site copy of every backup of the machine (borg, append-only) | Hetzner Storage Box, Helsinki | Encrypted before it leaves (`repokey-blake2`); the key is on the application machine and in the administrators' vault | 7 daily, 8 weekly and 12 monthly archives, pruned by hand from the operator's workstation |
+| Nightly off-site copy of every backup of the machine (borg, append-only) | Hetzner Storage Box, Helsinki | Encrypted before it leaves (`repokey-blake2`); the key is on the application machine and in the administrators' vault | 7 daily, 4 weekly and 3 monthly archives (about three months of archives), pruned by hand from the operator's workstation |
 | Online workspace data | Pulled daily onto the application machine, then in the off-site copy | Not described | 14 archives on the application machine |
 
-Through the monthly off-site archives, a deleted piece of data can therefore survive about a year after its deletion. That retention holds only when someone runs the pruning by hand (`scripts/offsite-backup/prune.sh`, "once a month is enough" in the runbook): the application machine cannot remove an archive, so without pruning the archives accumulate and nothing leaves the off-site copy. The staging copy keeps it until its next refresh.
+Through the monthly off-site archives, a deleted piece of data can therefore survive about four months after its deletion (each archive holds the last 30 days of dumps, and archives are kept about three months), up to five months when the copy is pruned once a month; the specification states about four months (N-DATA-03). That retention holds only when someone runs the pruning by hand (`scripts/offsite-backup/prune.sh`, "once a month is enough" in the runbook): the application machine cannot remove an archive, so without pruning the archives accumulate and nothing leaves the off-site copy. The staging copy keeps it until its next refresh.
 
 ## Statistics
 
@@ -307,7 +307,7 @@ Retention and deletion:
 - removing a student from a class list leaves their attempts, answers, grades, drill data and released-grade snapshot in the database;
 - the audit log is never purged and contains names and addresses; its protection against change also prevents removing them;
 - the AI call log, the notifications, the poll participants without an account, the kiosk pairings and the online workspace's working directories have no retention period;
-- the off-site copy keeps monthly archives for a year, so a deletion reaches every backup only after about a year, while the specification asks for deletion "including in backups beyond 30 days" (N-DATA-03); and that year holds only if the off-site copy is pruned by hand, otherwise its archives keep everything.
+- the off-site copy's four to five months hold only if it is pruned by hand; otherwise its archives keep everything.
 
 Statistics:
 

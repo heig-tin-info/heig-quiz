@@ -9,6 +9,8 @@ same VM, promotion by sha); **host moved to Hetzner on 2026-09-25**
 on the host, backups are Hetzner Backups plus an on-VM `pg_dump`). **Decision 4 is
 amended by ADR-055**: `/healthz` stays narrow (database, and coarse words),
 and the technical administration screen is the admin's System status.
+**Amended 2026-10-13**: the off-site copy keeps about three months of
+archives (7 daily, 4 weekly, 3 monthly) instead of a year.
 
 **Decision 3 is amended (2026-10-09, #235, the product owner's decisions):
 the off-site copy is a borg repository on a Hetzner Storage Box, written
@@ -41,7 +43,11 @@ stand in the place of point 3's object storage:
   gone, or when a day after the newest of those, up to yesterday, has no
   archive (unless told the gap is an outage), or when it has no record of a
   previous run. It cannot see a deletion of an archive whose day still has
-  another one, nor of today's. Retention: 7 daily, 8 weekly, 12 monthly.
+  another one, nor of today's. Retention: 7 daily, 4 weekly, 3 monthly, so
+  about three months of archives (amended 2026-10-13 from 7/8/12). Each
+  archive holds the last 30 days of dumps, so a deletion leaves the off-site
+  copy after about four months, up to five with a monthly manual prune
+  (N-DATA-03).
 
 The box is in Helsinki: outside Switzerland, like the VM itself since the
 move to Hetzner (2026-09-25), against rejected alternative 1; it holds only
