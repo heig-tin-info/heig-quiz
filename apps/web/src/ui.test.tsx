@@ -1903,27 +1903,49 @@ describe("timeLeft", () => {
   const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
   const WORDS: Record<string, string> = {
     "time.left.days": "{n} d",
+    "time.left.dayHour": "{d} d {h} h",
     "time.left.hours": "{n} h",
+    "time.left.hourMin": "{h} h {m} min",
     "time.left.minutes": "{n} min",
-    "time.left.underMinute": "<1 min",
+    "time.left.minSec": "{m} min {s} s",
+    "time.left.seconds": "{n} s",
   };
   const en = ((key: string, vars?: Record<string, string | number>) =>
-    WORDS[key]!.replace("{n}", String(vars?.n))) as Parameters<typeof timeLeft>[2];
+    WORDS[key]!.replace(/\{(\w+)\}/g, (_, k: string) => String(vars?.[k]))) as Parameters<typeof timeLeft>[2];
+  const S = 1_000;
+  const MIN = 60_000;
   const HOUR = 3_600_000;
+  const DAY = 24 * HOUR;
 
-  it("says the largest unit that is not zero, floored to the minute", () => {
-    expect(timeLeft(at(4 * 24 * HOUR + 5 * HOUR), now, en)).toBe("4 d");
-    expect(timeLeft(at(3 * HOUR + 59 * 60_000), now, en)).toBe("3 h");
-    expect(timeLeft(at(35 * 60_000 + 59_000), now, en)).toBe("35 min");
-    expect(timeLeft(at(24 * HOUR), now, en)).toBe("1 d");
-    expect(timeLeft(at(60 * 60_000), now, en)).toBe("1 h");
+  it("says days and hours from a day, the hours left out when zero", () => {
+    expect(timeLeft(at(2 * DAY + 5 * HOUR + 59 * MIN), now, en)).toBe("2 d 5 h");
+    expect(timeLeft(at(4 * DAY + 30 * MIN), now, en)).toBe("4 d");
+    expect(timeLeft(at(DAY), now, en)).toBe("1 d");
   });
 
-  it("never goes under a minute, nor negative: a deadline in its grace reads the same as one about to pass", () => {
-    expect(timeLeft(at(59_000), now, en)).toBe("<1 min");
-    expect(timeLeft(at(0), now, en)).toBe("<1 min");
-    expect(timeLeft(at(-3_000), now, en)).toBe("<1 min");
-    expect(timeLeft(at(-2 * 24 * HOUR), now, en)).toBe("<1 min");
+  it("says hours and minutes under a day, minutes alone under an hour", () => {
+    expect(timeLeft(at(DAY - S), now, en)).toBe("23 h 59 min");
+    expect(timeLeft(at(HOUR + 40 * MIN + 59 * S), now, en)).toBe("1 h 40 min");
+    expect(timeLeft(at(3 * HOUR + 30 * S), now, en)).toBe("3 h");
+    expect(timeLeft(at(HOUR), now, en)).toBe("1 h");
+    expect(timeLeft(at(HOUR - S), now, en)).toBe("59 min");
+    expect(timeLeft(at(35 * MIN + 59 * S), now, en)).toBe("35 min");
+    expect(timeLeft(at(10 * MIN), now, en)).toBe("10 min");
+  });
+
+  it("counts the seconds in the last ten minutes", () => {
+    expect(timeLeft(at(10 * MIN - S), now, en)).toBe("9 min 59 s");
+    expect(timeLeft(at(9 * MIN + 32 * S + 999), now, en)).toBe("9 min 32 s");
+    expect(timeLeft(at(5 * MIN), now, en)).toBe("5 min");
+    expect(timeLeft(at(MIN), now, en)).toBe("1 min");
+    expect(timeLeft(at(59 * S), now, en)).toBe("59 s");
+    expect(timeLeft(at(999), now, en)).toBe("0 s");
+  });
+
+  it("never goes negative: a deadline in its grace reads 0 s until the state catches up", () => {
+    expect(timeLeft(at(0), now, en)).toBe("0 s");
+    expect(timeLeft(at(-3_000), now, en)).toBe("0 s");
+    expect(timeLeft(at(-2 * DAY), now, en)).toBe("0 s");
   });
 });
 
@@ -1944,6 +1966,27 @@ describe("TimeLeft", () => {
     renderWithProviders(<TimeLeft iso={new Date(Date.now() + 2 * 86_400_000 + 60_000).toISOString()} />, { locale: "fr" });
     expect(screen.getByText("2 j")).toBeInTheDocument();
     expect(screen.getByText("ferme dans 2 j")).toBeInTheDocument();
+  });
+
+  it("writes hours and padded minutes in French", () => {
+    renderWithProviders(<TimeLeft iso={new Date(Date.now() + 3_600_000 + 5 * 60_000 + 30_000).toISOString()} />, { locale: "fr" });
+    expect(screen.getByText("1 h 05")).toBeInTheDocument();
+  });
+
+  it("ticks every second in the last ten minutes, and to the minute before", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-09-21T12:00:00.000Z"));
+    renderWithProviders(<TimeLeft iso="2026-09-21T12:10:30.000Z" />);
+    expect(screen.getByText("10 min")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByText("9 min 30 s")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(screen.getByText("9 min 29 s")).toBeInTheDocument();
+    vi.useRealTimers();
   });
 });
 

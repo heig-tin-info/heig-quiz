@@ -154,22 +154,50 @@ function Stamp({ iso, className = "", children }: { iso: string; className?: str
   );
 }
 
+/** One second, in ms: the tick of {@link TimeLeft} in its last ten minutes. */
+export const SECOND = 1_000;
+
+/** Under this much time left, {@link timeLeft} counts the seconds too. */
+const SECONDS_BAND = 10 * MINUTE;
+
 /**
- * The time left before `iso`, compact, in the largest unit that is not zero:
- * "4 d", "3 h", "35 min" — to the minute, never a second, so the number on
- * a row is the one a teacher would say. Floored, never rounded up: a badge
- * never promises more than what is left. Never negative either: a deadline
- * just passed (the server's +3 s grace of invariant 5, a project's lock within
- * the minute, F-PROJ-09) reads "<1 min" until the state catches up. Pure,
- * so it is testable; {@link TimeLeft} feeds it the clock.
+ * The time left before `iso`, compact, in two units (ADR-104 §3, amended
+ * 2026-10-13, #794): days and hours from a day ("2 d 5 h"), hours and
+ * minutes under a day ("1 h 40 min"), minutes alone under an hour
+ * ("35 min"), minutes and seconds in the last ten minutes ("9 min 32 s",
+ * "45 s"). A second unit that is zero is left out ("2 d", "3 h"). Floored,
+ * never rounded up: a badge never promises more than what is left. Never
+ * negative either: a deadline just passed (the server's +3 s grace of
+ * invariant 5, a project's lock within the minute, F-PROJ-09) reads "0 s"
+ * until the state catches up. Pure, so it is testable; {@link TimeLeft}
+ * feeds it the clock.
  */
 export function timeLeft(iso: string, now: number, t: TFunction): string {
-  const minutes = Math.floor((new Date(iso).getTime() - now) / MINUTE);
-  if (minutes < 1) return t("time.left.underMinute");
-  if (minutes < 60) return t("time.left.minutes", { n: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t("time.left.hours", { n: hours });
-  return t("time.left.days", { n: Math.floor(hours / 24) });
+  const ms = Math.max(0, new Date(iso).getTime() - now);
+  const totalSeconds = Math.floor(ms / SECOND);
+  const totalMinutes = Math.floor(ms / MINUTE);
+  if (ms < SECONDS_BAND) {
+    const s = totalSeconds % 60;
+    if (totalMinutes === 0) return t("time.left.seconds", { n: s });
+    return s === 0 ? t("time.left.minutes", { n: totalMinutes }) : t("time.left.minSec", { m: totalMinutes, s });
+  }
+  if (totalMinutes < 60) return t("time.left.minutes", { n: totalMinutes });
+  const totalHours = Math.floor(totalMinutes / 60);
+  if (totalHours < 24) {
+    const m = totalMinutes % 60;
+    return m === 0
+      ? t("time.left.hours", { n: totalHours })
+      : t("time.left.hourMin", { h: totalHours, m, mm: String(m).padStart(2, "0") });
+  }
+  const d = Math.floor(totalHours / 24);
+  const h = totalHours % 24;
+  return h === 0 ? t("time.left.days", { n: d }) : t("time.left.dayHour", { d, h });
+}
+
+/** Whether {@link timeLeft} shows seconds for `iso` at `now`: the last ten minutes, before the deadline. */
+function inSecondsBand(iso: string, now: number): boolean {
+  const ms = new Date(iso).getTime() - now;
+  return ms > 0 && ms < SECONDS_BAND;
 }
 
 /**
@@ -177,13 +205,16 @@ export function timeLeft(iso: string, now: number, t: TFunction): string {
  * figure inside a state badge (ADR-104), on a {@link Stamp} like
  * {@link RelativeTime}, with the sentence ("closes in 3 h") for a screen
  * reader, so the icon is never the only thing that says what the number is.
- * Ticks by itself on the shared minute timer of `useNow`, never the page.
- * Nothing for a null `iso`, so a badge composes "label, then the time left
- * if any" in one line.
+ * Ticks by itself, never the page: on the shared minute timer of `useNow`,
+ * and on the shared second timer only in the last ten minutes, where the
+ * figure counts seconds. Nothing for a null `iso`, so a badge composes
+ * "label, then the time left if any" in one line.
  */
 export function TimeLeft({ iso, className = "" }: { iso: string | null; className?: string }) {
   const t = useT();
-  const now = useNow(MINUTE);
+  // Read at each render: a minute tick that lands in the last ten minutes
+  // re-renders, and the clock moves to the second timer from there.
+  const now = useNow(iso !== null && inSecondsBand(iso, Date.now()) ? SECOND : MINUTE);
   if (iso === null) return null;
   const left = timeLeft(iso, now, t);
   return (

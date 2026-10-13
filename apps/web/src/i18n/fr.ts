@@ -1312,9 +1312,12 @@ export const fr: Record<keyof Dict, string> = {
   "dur.dayHour": "{d} j {h} h",
   "time.now": "à l'instant",
   "time.left.days": "{n} j",
+  "time.left.dayHour": "{d} j {h} h",
   "time.left.hours": "{n} h",
+  "time.left.hourMin": "{h} h {mm}",
   "time.left.minutes": "{n} min",
-  "time.left.underMinute": "<1 min",
+  "time.left.minSec": "{m} min {s} s",
+  "time.left.seconds": "{n} s",
   "time.closesIn": "ferme dans {time}",
 
   // --- Live primitives (ui/live.tsx) ---
