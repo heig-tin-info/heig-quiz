@@ -9,7 +9,7 @@ import { EVALUATION_ID, id, liveAt } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { isoDateTime } from "../ui";
 import { ClassroomActivities } from "../ClassroomActivities";
-import { NewEvaluationModal } from "./EvaluationList";
+import { NewEvaluationModal } from "./NewEvaluationModal";
 
 /*
  * The list on the classroom page: the badges, the one primary action, and

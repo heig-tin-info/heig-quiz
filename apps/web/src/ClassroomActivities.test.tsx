@@ -178,7 +178,7 @@ describe("ClassroomActivities", () => {
     );
     await screen.findByText("Lab");
     await user.click(screen.getByRole("radio", { name: "All" }));
-    expect(localStorage.getItem("quiz-evaluations-group")).toBe("all");
+    expect(localStorage.getItem("quiz-activities-layout")).toBe("all");
     expect(screen.getAllByRole("region")).toHaveLength(1);
     const table = within(section("Activities")!);
     expect(table.getByRole("columnheader", { name: /Mode/ })).toBeInTheDocument();
@@ -197,8 +197,8 @@ describe("ClassroomActivities", () => {
     expect(titles()).toEqual(["A poll", "Being written", "Lab", "Old exam"]);
   });
 
-  it("reads a stored former grouping as Grouped", async () => {
-    localStorage.setItem("quiz-evaluations-group", "status");
+  it("reads an unknown stored layout as Grouped", async () => {
+    localStorage.setItem("quiz-activities-layout", "status");
     render([evaluation(1, { title: "An exam" }), evaluation(2, { title: "A poll", mode: "poll" })], []);
     await screen.findByText("An exam");
     expect(screen.getByRole("radio", { name: "Grouped" })).toBeChecked();
@@ -208,7 +208,7 @@ describe("ClassroomActivities", () => {
 
   it("keeps the scheduled rows alone in the All table", async () => {
     const user = userEvent.setup();
-    localStorage.setItem("quiz-evaluations-group", "all");
+    localStorage.setItem("quiz-activities-layout", "all");
     render(
       [evaluation(1, { title: "Being written" }), evaluation(2, { title: "Planned exam", state: "scheduled", opensAt: liveAt(86_400_000) })],
       [project(1, { title: "Running lab" }), project(2, { title: "Planned lab", state: "draft", phase: "scheduled" })],

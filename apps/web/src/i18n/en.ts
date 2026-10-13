@@ -5207,6 +5207,7 @@ export const en = {
   "activities.layout": "Layout",
   "activities.layout.grouped": "Grouped",
   "activities.layout.all": "All",
+  "activities.col.end": "End / Deadline",
   "activities.summary.open": "In progress",
   "activities.summary.students": "{n} students involved",
   "activities.summary.students.one": "1 student involved",

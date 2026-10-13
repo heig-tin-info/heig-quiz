@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { ProjectPatch, type ProjectActivitySummary } from "@quiz/contracts";
 
@@ -29,7 +29,14 @@ export function useClassroomProjects(classroomId: string) {
  * row's button calls `rename`, and `layers` draws its dialog beside the
  * tables.
  */
-export function useProjectRename(classroomId: string) {
+export interface ProjectRowActions {
+  /** Opens the rename dialog of the row. */
+  rename: (row: Renamed) => void;
+  /** The dialog, drawn once beside the tables. */
+  layers: ReactNode;
+}
+
+export function useProjectRename(classroomId: string): ProjectRowActions {
   const [renaming, setRenaming] = useState<Renamed | null>(null);
   const layers = renaming ? (
     <RenameProjectDialog project={renaming} classroomId={classroomId} onClose={() => setRenaming(null)} />

@@ -1,11 +1,11 @@
 import { ClipboardList, FolderGit2, Plus } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { ClassroomTable, startOf, typeOfRow, type ClassroomRow } from "./activities/ClassroomTable";
+import { ClassroomTable, startOf, typeOfRow, type ClassroomRow, type RowContext } from "./activities/ClassroomTable";
 import { isScheduled, type ActivityType } from "./activities/model";
 import { TYPE_ICON } from "./activities/views";
 import { useEvaluations } from "./evaluation/api";
-import { useEvaluationRowActions } from "./evaluation/EvaluationList";
+import { useEvaluationRowActions } from "./evaluation/rowActions";
 import { githubAbsent } from "./github/api";
 import { useT, type Dict } from "./i18n";
 import { useClassroomProjects, useProjectRename } from "./project/classroomProjects";
@@ -38,14 +38,10 @@ export interface ActivityDoors {
   newVariant?: ButtonVariant;
 }
 
-/**
- * Grouped (one table per kind) or All (one table). Remembered per browser
- * under the key the former "Group by" used: a stored none, status or mode
- * reads as the default.
- */
+/** Grouped (one table per kind) or All (one table), remembered per browser. */
 type Layout = "grouped" | "all";
 const LAYOUTS: readonly Layout[] = ["grouped", "all"];
-const LAYOUT_KEY = "quiz-evaluations-group";
+const LAYOUT_KEY = "quiz-activities-layout";
 
 /** The Grouped tables, in this order, each with its heading's words. */
 const GROUP_ORDER: readonly ActivityType[] = ["exam", "exercise", "project", "poll"];
@@ -87,6 +83,58 @@ function Section({
   );
 }
 
+/** The tab with neither an evaluation nor a project: the header's "New ▾" folded open. */
+function EmptyActivities({ doors }: { doors: ActivityDoors }) {
+  const t = useT();
+  return (
+    <Card>
+      <EmptyState
+        icon={ClipboardList}
+        title={t("eval.empty.title")}
+        action={
+          /* An empty tab has room to show both doors, the evaluation still the primary. */
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant={doors.newVariant ?? "primary"} onClick={doors.onNew}>
+              <Plus /> {t("eval.new")}
+            </Button>
+            {doors.newProject ? (
+              <Button variant="secondary" title={doors.newProject.description} onClick={doors.newProject.onSelect}>
+                <FolderGit2 /> {t("project.new")}
+              </Button>
+            ) : null}
+          </div>
+        }
+      >
+        {t("eval.empty.body")}
+      </EmptyState>
+    </Card>
+  );
+}
+
+/** One table per kind, in `GROUP_ORDER`; a kind with no row draws none. */
+function GroupedTables({ rows, ctx }: { rows: readonly ClassroomRow[]; ctx: RowContext }) {
+  const t = useT();
+  return GROUP_ORDER.map((kind) => {
+    const shown = rows.filter((row) => typeOfRow(row) === kind);
+    return shown.length === 0 ? null : (
+      <Section key={kind} id={`classroom-${kind}`} icon={TYPE_ICON[kind]} title={t(GROUP_TITLE[kind])} count={shown.length}>
+        <ClassroomTable layout={kind} rows={shown} ctx={ctx} />
+      </Section>
+    );
+  });
+}
+
+/** Everything in one table. */
+function AllTable({ rows, ctx }: { rows: readonly ClassroomRow[]; ctx: RowContext }) {
+  const t = useT();
+  if (rows.length === 0) return null;
+  return (
+    <Section id="classroom-activities" icon={ClipboardList} title={t("activities.title")} count={rows.length}>
+      <ClassroomTable layout="all" rows={byStart(rows)} ctx={ctx} />
+    </Section>
+  );
+}
+
 /**
  * A classroom's Activities tab: its evaluations and its projects (M3-10),
  * as one table per kind — exams, exercises, projects, polls, a kind with no
@@ -123,8 +171,11 @@ export function ClassroomActivities({
   const [layout, setLayout] = usePersistentChoice(LAYOUT_KEY, LAYOUTS, "grouped");
   const evaluationList = useEvaluations(classroomId);
   const projectList = useClassroomProjects(classroomId);
-  const evaluation = useEvaluationRowActions(classroomId, navigate);
-  const project = useProjectRename(classroomId);
+  const ctx: RowContext = {
+    navigate,
+    evaluation: useEvaluationRowActions(classroomId, navigate),
+    project: useProjectRename(classroomId),
+  };
   const evaluationRows = evaluationList.data ?? [];
   const projectRows = projectList.data ?? [];
   const any = evaluationRows.some(isScheduled) || projectRows.some(isScheduled);
@@ -138,10 +189,13 @@ export function ClassroomActivities({
   const all: ClassroomRow[] = [...evaluationRows, ...projectRows];
   const rows = scheduledOnly ? all.filter(isScheduled) : all;
   const projectsFailed = projectList.isError && !githubAbsent(projectList.error);
-  const empty = evaluationList.isSuccess && all.length === 0 && !projectList.isLoading;
-  const table = (layoutOf: ActivityType | "all", shown: readonly ClassroomRow[]) => (
-    <ClassroomTable layout={layoutOf} rows={shown} navigate={navigate} evaluation={evaluation} project={project} />
-  );
+
+  const tables = () => {
+    if (evaluationList.isLoading) return <Skeleton className="h-40 w-full" />;
+    if (evaluationList.isSuccess && all.length === 0 && !projectList.isLoading) return <EmptyActivities doors={doors} />;
+    if (layout === "all") return <AllTable rows={rows} ctx={ctx} />;
+    return <GroupedTables rows={rows} ctx={ctx} />;
+  };
 
   return (
     <div className="space-y-3">
@@ -173,52 +227,11 @@ export function ClassroomActivities({
             <QueryError title={t("eval.notFound")} query={evaluationList} />
           </Section>
         ) : null}
-        {evaluationList.isLoading ? (
-          <Skeleton className="h-40 w-full" />
-        ) : empty ? (
-          <Card>
-            <EmptyState
-              icon={ClipboardList}
-              title={t("eval.empty.title")}
-              action={
-                /* The header's "New ▾" folded open: an empty tab has room to
-                   show both doors, the evaluation still the primary. */
-                <div className="flex flex-wrap justify-center gap-2">
-                  <Button variant={doors.newVariant ?? "primary"} onClick={doors.onNew}>
-                    <Plus /> {t("eval.new")}
-                  </Button>
-                  {doors.newProject ? (
-                    <Button variant="secondary" title={doors.newProject.description} onClick={doors.newProject.onSelect}>
-                      <FolderGit2 /> {t("project.new")}
-                    </Button>
-                  ) : null}
-                </div>
-              }
-            >
-              {t("eval.empty.body")}
-            </EmptyState>
-          </Card>
-        ) : layout === "all" ? (
-          rows.length === 0 ? null : (
-            <Section id="classroom-activities" icon={ClipboardList} title={t("activities.title")} count={rows.length}>
-              {table("all", byStart(rows))}
-            </Section>
-          )
-        ) : (
-          GROUP_ORDER.map((kind) => {
-            const shown = rows.filter((row) => typeOfRow(row) === kind);
-            return shown.length === 0 ? null : (
-              <Section key={kind} id={`classroom-${kind}`} icon={TYPE_ICON[kind]} title={t(GROUP_TITLE[kind])} count={shown.length}>
-                {table(kind, shown)}
-              </Section>
-            );
-          })
-        )}
+        {tables()}
         {projectsFailed ? <QueryError title={t("project.loadFailed")} query={projectList} /> : null}
       </div>
-      {evaluation.layers}
-      {project.layers}
+      {ctx.evaluation.layers}
+      {ctx.project.layers}
     </div>
   );
 }
-

@@ -79,7 +79,8 @@ seat (ADR-070 §2).
 Activities tab counts people, not attempts or repositories: for an evaluation,
 the distinct students and poll guests who have an attempt (a retake counts
 once); for a project, the owners of its provisioned student repositories, or a
-group repository's non-staff members (a seat not claimed yet included). It
+group repository's non-staff members (a seat not claimed yet included, and a
+member on their way out of the group, whose access is not revoked yet). It
 never counts a staff seat's rehearsal nor a staff test repository. The
 evaluation's `attemptCount`, which locks the item list (F-EVAL-26), still counts
 every attempt, the staff's included.

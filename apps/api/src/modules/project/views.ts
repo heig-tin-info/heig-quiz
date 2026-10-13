@@ -158,16 +158,8 @@ async function activityRows(db: Db, where: SQL | undefined): Promise<ProjectActi
     .where(where)
     .orderBy(desc(projects.createdAt));
   // Only a locked project's phase reads its repositories (`projectPhase`): the counts of those alone.
-  const [counts, participants] = await Promise.all([
-    phaseCounts(
-      db,
-      rows.filter((r) => r.state === "locked").map((r) => r.id),
-    ),
-    participantCounts(
-      db,
-      rows.map((r) => r.id),
-    ),
-  ]);
+  const locked = rows.filter((r) => r.state === "locked").map((r) => r.id);
+  const [counts, participants] = await Promise.all([phaseCounts(db, locked), participantCounts(db, rows.map((r) => r.id))]);
   return rows.map((r) => {
     const dates = projectListDates(r);
     return {

@@ -5202,6 +5202,7 @@ export const fr: Record<keyof Dict, string> = {
   "activities.layout": "Disposition",
   "activities.layout.grouped": "Par type",
   "activities.layout.all": "Toutes",
+  "activities.col.end": "Fin / Échéance",
   "activities.summary.open": "En cours",
   "activities.summary.students": "{n} étudiants concernés",
   "activities.summary.students.one": "1 étudiant concerné",

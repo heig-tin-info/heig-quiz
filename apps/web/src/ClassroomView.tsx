@@ -32,7 +32,7 @@ import { useT } from "./i18n";
 import { useStaffJournal } from "./journal/api";
 import { JournalReader } from "./journal/JournalReader";
 // WP8: evaluation + dashboard
-import { NewEvaluationModal } from "./evaluation/EvaluationList";
+import { NewEvaluationModal } from "./evaluation/NewEvaluationModal";
 import { useErrorToast, useToast } from "./notify";
 import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
