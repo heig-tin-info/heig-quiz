@@ -1,17 +1,14 @@
 /**
  * The student's Grades page (`GET /student/results`, F-RES-04, F-ORG-14):
  * the home's Past (`studentBoard`), every classroom's, archived ones
- * included, by classroom. Depends on `attempt.ts`, and reads the
- * gradebook's `counts` flag (ADR-074 §6, amendment of 2026-10-13).
+ * included, by classroom. Depends on `attempt.ts` only; its rows carry the
+ * gradebook column's `counts` (ADR-074 §6, amendment of 2026-10-13).
  */
-import { inArray } from "drizzle-orm";
-
 import { countsByDefault, evaluationColumnKind, isFinishedAttempt } from "@quiz/domain";
 import type { CardResults, EvaluationGradeRow, GradeGroup, GradeStatus, StudentGrades } from "@quiz/contracts";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { gradebookColumns } from "../../db/schema.js";
 import { gradeReadable } from "../results/service.js";
 import { studentBoard, type PastEntry } from "./attempt.js";
 
@@ -32,7 +29,6 @@ export async function studentGrades(
   classroomId?: string,
 ): Promise<StudentGrades> {
   const { past } = await studentBoard(db, userId, now, classroomId);
-  const stored = await storedCounts(db, past.map((entry) => entry.row.evaluation.id));
   const groups = new Map<string, GradeGroup>();
   for (const entry of past) {
     if (entry.row.staff && entry.row.attempt === null) continue;
@@ -48,8 +44,7 @@ export async function studentGrades(
       },
       rows: [],
     };
-    const { evaluation } = entry.row;
-    group.rows.push(gradeRow(entry, stored.get(evaluation.id) ?? countsByDefault(evaluationColumnKind(evaluation.mode))));
+    group.rows.push(gradeRow(entry, countsOf(entry)));
     groups.set(id, group);
   }
   const newest = (g: GradeGroup) => g.rows[0]!.date;
@@ -59,22 +54,16 @@ export async function studentGrades(
 }
 
 /**
- * The teacher's `counts` of the evaluations that have a stored gradebook
- * column, by evaluation id; the others count by their mode's default. Read
- * only: the table is the gradebook's. The flag alone ever reaches the
- * student, never the weight (ADR-074, amendment of 2026-10-13). The
- * classroom's Grades tab takes the same flag from the gradebook's own
- * `settingsOf` instead; `gradebook.db.test.ts` ("tells the student whether
- * each column counts…") guards that the two agree.
+ * Whether the evaluation counts toward the mean: the teacher's flag on its
+ * stored gradebook column (`storedCounts`, joined by `studentEvaluationRows`),
+ * else its mode's default. The flag alone ever reaches the student, never the
+ * weight (ADR-074, amendment of 2026-10-13). The classroom's Grades tab takes
+ * the same flag from the gradebook's own `settingsOf` instead;
+ * `gradebook.db.test.ts` ("tells the student whether each column counts…")
+ * guards that the two agree.
  */
-async function storedCounts(db: Db, evaluationIds: string[]): Promise<Map<string, boolean>> {
-  if (evaluationIds.length === 0) return new Map();
-  const rows = await db
-    .select({ evaluationId: gradebookColumns.evaluationId, counts: gradebookColumns.counts })
-    .from(gradebookColumns)
-    .where(inArray(gradebookColumns.evaluationId, evaluationIds));
-  return new Map(rows.map((row) => [row.evaluationId!, row.counts]));
-}
+const countsOf = ({ row }: PastEntry): boolean =>
+  row.storedCounts ?? countsByDefault(evaluationColumnKind(row.evaluation.mode));
 
 /**
  * Where a finished evaluation stands for the student; see `GradeStatus`. A
