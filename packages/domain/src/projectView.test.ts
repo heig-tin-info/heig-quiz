@@ -78,7 +78,7 @@ describe("projectPrimaryAction (F-PROJ-13)", () => {
   });
 
   it("grades a frozen project by criteria while a repository is to validate, then releases (ADR-106 §8)", () => {
-    const criteria = { ...base, gradingMode: "criteria" as const, state: "locked" as const };
+    const criteria = { ...base, gradingMode: "criteria" as const, state: "locked" as const, publishMode: "manual" as const };
     expect(projectPrimaryAction({ ...criteria, frozen: 2, unvalidated: 3 })).toBe("none");
     expect(projectPrimaryAction({ ...criteria, frozen: 3, unvalidated: 1 })).toBe("grade");
     // A score to verify beneath an unvalidated repository: the validation settles it first.
@@ -160,12 +160,18 @@ describe("projectListDates", () => {
 });
 
 describe("projectPhase (ADR-104)", () => {
-  const final = { gradingMode: "auto" as const, live: 3, frozen: 3, unverified: 0, released: false };
+  const final = { gradingMode: "auto" as const, publishMode: "manual" as const, live: 3, frozen: 3, unverified: 0, released: false };
 
   it("follows the state while it is not locked, a kept release notwithstanding (F-PROJ-09)", () => {
     expect(projectPhase({ ...final, state: "draft" })).toBe("draft");
     expect(projectPhase({ ...final, state: "published" })).toBe("published");
     expect(projectPhase({ ...final, state: "published", released: true })).toBe("published");
+  });
+
+  it("tells a scheduled draft from one published by hand, and only a draft (#795)", () => {
+    expect(projectPhase({ ...final, state: "draft", publishMode: "scheduled" })).toBe("scheduled");
+    expect(projectPhase({ ...final, state: "published", publishMode: "scheduled" })).toBe("published");
+    expect(projectPhase({ ...final, state: "locked", publishMode: "scheduled" })).toBe("graded");
   });
 
   it("is graded once every live repository is frozen with nothing left to verify", () => {

@@ -429,6 +429,7 @@ export async function projectDetail(
   // repositories (`STUDENT_REPO`, `repos.ts`) through `finalOf` too (`phaseCounts`, `views.ts`).
   const readiness = {
     state: project.state,
+    publishMode: project.publishMode,
     gradingMode: project.gradingMode,
     ...counts,
     // Over the live repositories only: a non-live one never freezes, so its score to verify is released as none.

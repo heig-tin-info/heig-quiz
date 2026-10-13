@@ -7,6 +7,7 @@ import type { EvaluationSummary } from "@quiz/contracts";
 import { makeCourseSummary } from "../test/fixtures";
 import { EVALUATION_ID, id, liveAt } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { isoDateTime } from "../ui";
 import { EvaluationList, NewEvaluationModal } from "./EvaluationList";
 
 /*
@@ -61,6 +62,26 @@ describe("EvaluationList", () => {
     expect(within(screen.getByText("lobby").closest("span")!).queryByText(/closes in/)).toBeNull();
     // Released: finished, nothing awaited — the outline face.
     expect(screen.getByText("released").className).toContain("ring-current");
+  });
+
+  it("tells a scheduled one from a draft in blue, and says when each starts (#786, #795)", async () => {
+    const opensAt = "2026-11-02T08:00:00.000Z";
+    mockFetch(
+      list([
+        summary({ state: "draft", title: "Being written" }),
+        summary({ id: id("evaluation", 2), state: "scheduled", title: "Planned", opensAt }),
+      ]),
+    );
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+    const row = async (title: string) => within((await screen.findByText(title)).closest("tr")!);
+    const planned = await row("Planned");
+    expect(planned.getByText("scheduled").className).toContain("text-info");
+    expect(planned.getByText(isoDateTime(opensAt))).toBeInTheDocument();
+    const draft = await row("Being written");
+    expect(draft.getByText("draft").className).not.toContain("text-info");
+    // Never scheduled: a dash where the time would be.
+    expect(draft.queryByText(/\d{2}:\d{2}/)).toBeNull();
+    expect(screen.getByRole("columnheader", { name: /Start/ })).toBeInTheDocument();
   });
 
   it("opens the dashboard for a live one and the configuration for a draft", async () => {

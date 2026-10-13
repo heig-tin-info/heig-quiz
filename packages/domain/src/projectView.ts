@@ -96,18 +96,24 @@ function allFrozen(p: Pick<PrimaryActionInput, "gradingMode" | "live" | "frozen"
 
 /**
  * What the staff's badge says of a project (ADR-104, product owner
- * 2026-10-11): the state, with `locked` refined by what happened since the
+ * 2026-10-11): the state, with `draft` refined by its publish mode —
+ * `scheduled` when the scheduler publishes it at its start (amendment of
+ * 2026-10-13, #795) — and `locked` refined by what happened since the
  * deadline — `graded` once the scores are final ({@link scoresFinal}) and
  * the release awaited, `released` once the staff released them. The
  * database stops at `locked`; the phase is derived, never stored.
  */
-export const PROJECT_PHASES = ["draft", "published", "locked", "graded", "released"] as const;
+export const PROJECT_PHASES = ["draft", "scheduled", "published", "locked", "graded", "released"] as const;
 export type ProjectPhase = (typeof PROJECT_PHASES)[number];
 
-export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode" | "live" | "frozen" | "unverified" | "unvalidated" | "released">;
+export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode" | "live" | "frozen" | "unverified" | "unvalidated" | "released"> & {
+  publishMode: PublishModeName;
+};
 
 /**
- * The state first: a project moved back to `published` by a later deadline
+ * A draft whose publication is scheduled (its start is then always set: the
+ * contract requires it) is `scheduled`, a draft published by hand `draft`.
+ * Then the state: a project moved back to `published` by a later deadline
  * is `published`, whatever its kept `releasedAt` says (F-PROJ-09). Then
  * `released` as soon as it was, even when a score changed since (the page's
  * primary action says a re-release waits; the list does not). Then `graded`
@@ -115,6 +121,7 @@ export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode"
  * still to verify, stays `locked`.
  */
 export function projectPhase(p: ProjectPhaseInput): ProjectPhase {
+  if (p.state === "draft") return p.publishMode === "scheduled" ? "scheduled" : "draft";
   if (p.state !== "locked") return p.state;
   if (p.released) return "released";
   return scoresFinal(p) ? "graded" : "locked";

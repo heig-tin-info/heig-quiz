@@ -1,4 +1,4 @@
-# ADR-104 — One state grammar for the staff's badges: green open, amber awaited, outline finished
+# ADR-104 — One state grammar for the staff's badges: green open, amber awaited, blue scheduled, outline finished
 
 ## Status
 
@@ -7,6 +7,11 @@ Accepted (2026-10-11, product owner Yves Chevallier).
 Amended 2026-10-13 (#798): §3 for the project page only — the lifecycle
 rail carries the page's one clock
 ([amendment](#amendment-2026-10-13-the-project-rail-carries-its-own-clock)).
+
+Amended 2026-10-13 (#786, #795): §1's zinc, §4's scheduled bar and §5's
+phases — blue for what is scheduled, a project's `scheduled` phase, and the
+rule for any further pill tone
+([amendment](#amendment-2026-10-13-blue-for-what-is-scheduled-and-the-rule-for-a-new-pill-tone)).
 
 Scope: the state badge of an evaluation and of a project on every staff
 surface of `apps/web` (the classroom's Activities tab, `/activities`, the
@@ -25,8 +30,8 @@ M3-10 ("amber badge and bar" for a published project) and M3-14a finding
 no. 6 (the time left in the Projects table's Deadline cell). Builds on
 ADR-094 (the `packages/ui` class lists).
 
-The 2026-10-13 amendment amends `apps/web/DESIGN.md` again (the project
-page's Lifecycle rail and Deadline tile).
+The two 2026-10-13 amendments amend `apps/web/DESIGN.md` again: #798 the
+project page's Lifecycle rail and Deadline tile, #786/#795 the Badge entry.
 
 ## Context
 
@@ -160,3 +165,50 @@ the rest of this record stand.
 4. **After the deadline the rail is the plain one**: no bar and no time
    left, the done markers already say it is over. Completing the segment in
    a neutral ink was set aside as one more mark saying the same thing.
+
+## Amendment 2026-10-13: blue for what is scheduled, and the rule for a new pill tone
+
+Scope: §1's zinc, §4's scheduled bar, §5's phases, and how the grammar
+grows. Decided by the
+product owner on 2026-10-13, after a teacher's two reports: a scheduled
+evaluation's grey pill read as a draft's (#786), and every project he had
+scheduled still said "draft" exactly like one in preparation (#795).
+
+1. **Blue = scheduled**: ready, and it will open on its own at a known
+   time. An evaluation `scheduled` and a project in the `scheduled` phase
+   wear the soft blue — the `info` tone of `packages/ui`'s `badge`, `blue`
+   in `apps/web`'s `Tone`, the token the gantt's scheduled bar and its
+   legend already wore (§4). Zinc keeps what is at rest: a draft still in
+   preparation, `closed`, `locked`. The two tone tables stay the only place
+   a state meets its colour (`STATE_STYLE` in `evaluation/common.ts`,
+   `PHASE_STYLE` in `project/common.ts`).
+2. **A project's `scheduled` phase.** §5's phases become `draft |
+   scheduled | published | locked | graded | released`: a project in the
+   `draft` state whose publish mode is `scheduled` (the contract then
+   requires its start) is `scheduled`; a draft published by hand stays
+   `draft`. Labels "scheduled" / "planifié". As §5 says, the buckets and
+   the sorting keep reading the state.
+3. **The gantt's scheduled ring follows the tone.** §4's info ring is now
+   drawn for a bar whose badge is blue (`KIND`'s `stateStyle`), so a
+   scheduled project wears it as a scheduled evaluation does; the dashed
+   draft outline stays for a draft in preparation. A known, accepted gap:
+   the `/activities` tabs file by the state, so a scheduled project sits
+   under Drafts (`tabOf` in `activities/model.ts`), while a scheduled
+   evaluation sits under Current.
+4. **The start in sight.** The evaluations table of a classroom's
+   Activities tab gains a Start column — when it started (`startedAt`, an
+   evaluation opened by hand has no `opensAt`), else when it is to open
+   (`opensAt`), as an absolute date and time, a dash when neither is set —
+   as the Projects table under it already had, so a scheduled row says
+   when it begins without opening it. A row without a date sorts last in
+   either direction.
+5. **Nothing blinks.** The suggestion that a running badge blink (#786) is
+   declined: motion pulls the eye from the row's one primary action, and
+   the soft green with its timer (§3) already marks a live row.
+6. **A new pill tone needs a meaning of its own.** A pill tone joins this
+   grammar only for a meaning distinct from the ones it holds — green open
+   to the students, amber awaiting the staff, blue scheduled, zinc at rest,
+   the outline finished — and only by an amendment of this record that
+   names it, with its tokens readable at 4.5:1 in both themes and its entry
+   in the tone tables of item 1. A pill is never the accent: the brand red
+   belongs to the screen's one primary action.

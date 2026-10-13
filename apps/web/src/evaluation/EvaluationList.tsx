@@ -13,6 +13,7 @@ import {
   Badge,
   Button,
   Card,
+  Dash,
   EmptyState,
   Field,
   FormDialog,
@@ -22,6 +23,7 @@ import {
   QueryError,
   SectionHeading,
   GroupBySwitch,
+  isoDateTime,
   Select,
   Skeleton,
   T,
@@ -180,7 +182,7 @@ function RenameEvaluationDialog({
   );
 }
 
-type EvaluationSort = "title" | "mode" | "questions" | "points" | "attempts";
+type EvaluationSort = "title" | "mode" | "start" | "questions" | "points" | "attempts";
 
 /** What each column of the list is ordered on; the mode by its own word. */
 function evaluationRank(
@@ -191,6 +193,8 @@ function evaluationRank(
   switch (key) {
     case "mode":
       return t(`eval.mode.${row.mode}`);
+    case "start":
+      return row.opensAt ?? "";
     case "questions":
       return row.itemCount;
     case "points":
@@ -316,6 +320,7 @@ export function EvaluationList({
   const columns: Column<EvaluationSort>[] = [
     { key: "title", label: t("eval.titleLabel") },
     { key: "mode", label: t("eval.mode") },
+    { key: "start", label: t("eval.col.start"), className: T.colHigh },
     { key: "questions", label: t("eval.step.questions"), right: true, className: T.colHigh },
     { key: "points", label: t("eval.col.points"), right: true, className: T.colMid },
     { key: "attempts", label: t("eval.col.attempts"), right: true, className: T.colLow },
@@ -445,6 +450,11 @@ export function EvaluationList({
                         ) : (
                           t(`eval.mode.${row.mode}`)
                         )}
+                      </td>
+                      {/* When it opens, as the Projects table below says its start (#795): a
+                          scheduled evaluation reads when it begins; one never scheduled, a dash. */}
+                      <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>
+                        {row.opensAt === null ? <Dash /> : isoDateTime(row.opensAt)}
                       </td>
                       <td className={`${T.td} ${T.colHigh} text-right tabular-nums`}>{row.itemCount}</td>
                       <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{row.totalPoints}</td>

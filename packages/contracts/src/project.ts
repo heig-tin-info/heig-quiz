@@ -58,10 +58,11 @@ export type ProjectState = z.infer<typeof ProjectState>;
 
 /**
  * What the staff's badge says (ADR-104, `projectPhase` of `@quiz/domain`):
- * the state, with `locked` refined into `locked` (scores not final),
- * `graded` (final, the release awaited) and `released`. Derived by the
- * server from the frozen repositories and the release; never stored, never
- * a student's.
+ * the state, with `draft` refined into `draft` (published by hand) and
+ * `scheduled` (published by the scheduler at its start), and `locked`
+ * refined into `locked` (scores not final), `graded` (final, the release
+ * awaited) and `released`. Derived by the server from the publish mode, the
+ * frozen repositories and the release; never stored, never a student's.
  */
 export const ProjectPhase = z.enum(PROJECT_PHASES);
 export type ProjectPhase = z.infer<typeof ProjectPhase>;
@@ -167,7 +168,7 @@ export const ProjectActivitySummary = z.object({
   title: z.string(),
   /** The stored state: what the buckets, the sorting and the gantt read. */
   state: ProjectState,
-  /** What the badge says ({@link ProjectPhase}): the state, `locked` refined by the freeze and the release. */
+  /** What the badge says ({@link ProjectPhase}): the state, `draft` refined by the publish mode, `locked` by the freeze and the release. */
   phase: ProjectPhase,
   classroom: z.object({ id: z.uuid(), name: z.string(), courseCode: z.string() }),
   /**

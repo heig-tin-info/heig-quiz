@@ -32,6 +32,7 @@ describe("badge", () => {
   it("wears the tone's soft fill", () => {
     expect(badge("success")).toContain("text-success bg-success-soft");
     expect(badge()).toContain("text-fg-muted bg-surface-3");
+    expect(badge("info")).toContain("text-info bg-info-soft");
   });
 
   it("outlined, keeps the ink and rings it in the same colour, with no fill", () => {

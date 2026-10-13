@@ -492,6 +492,17 @@ describe("the project page (F-PROJ-13)", () => {
       expect(await phaseOf(w)).toBe("graded");
     });
 
+    it("is scheduled for a draft the scheduler publishes, draft for one published by hand (#795)", async () => {
+      const w = await world({ students: 1, state: "draft" });
+      await server.app.db.update(projects).set({ publishMode: "manual" }).where(eq(projects.id, w.projectId));
+      expect(await phaseOf(w)).toBe("draft");
+      await server.app.db.update(projects).set({ publishMode: "scheduled" }).where(eq(projects.id, w.projectId));
+      expect(await phaseOf(w)).toBe("scheduled");
+      // Once published, the state comes first.
+      await server.app.db.update(projects).set({ state: "published" }).where(eq(projects.id, w.projectId));
+      expect(await phaseOf(w)).toBe("published");
+    });
+
     it("gives each project of a list its own counts, in one pass and without GitHub", async () => {
       const w = await world({ students: 2, state: "locked" });
       const [s1, s2] = w.students;

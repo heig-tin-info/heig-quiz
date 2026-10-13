@@ -22,7 +22,8 @@ import type { BadgeStyle, IconType, MenuItem } from "../ui";
 /**
  * The staff's colour grammar for a state (ADR-104), shared with a project's
  * (`project/common.ts`): green is open to the students, amber is the staff's
- * own correction or publication awaited, zinc is at rest, and the outline
+ * own correction or publication awaited, blue is scheduled — ready, it
+ * opens on its own at a known time (#786) —, zinc is at rest, and the outline
  * is finished with nothing awaited — released, still green, as nothing of
  * it is red. The accent is NOT used: a badge in the brand red would compete
  * with the one primary action of whatever screen it sits on. "Open to the
@@ -31,7 +32,7 @@ import type { BadgeStyle, IconType, MenuItem } from "../ui";
  */
 const STATE_STYLE: Record<EvaluationState, BadgeStyle> = {
   draft: { tone: "zinc" },
-  scheduled: { tone: "zinc" },
+  scheduled: { tone: "blue" },
   lobby: { tone: "amber" },
   running: { tone: "green" },
   paused: { tone: "amber" },

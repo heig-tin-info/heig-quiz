@@ -110,7 +110,7 @@ export function modKey(): string {
   return /mac|iphone|ipad|ipod/i.test(platform) ? "⌘" : "Ctrl";
 }
 
-export type Tone = "green" | "amber" | "red" | "zinc" | "accent";
+export type Tone = "green" | "amber" | "red" | "zinc" | "accent" | "blue";
 
 /**
  * The level of one check of a checklist — the launch step's (#152) and a
@@ -154,6 +154,7 @@ const BADGE_TONES: Record<Tone, BadgeTone> = {
   red: "danger",
   zinc: "neutral",
   accent: "accent",
+  blue: "info",
 };
 
 /**
