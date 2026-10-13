@@ -14,9 +14,10 @@ export interface PointsBounds {
   bonus?: number;
 }
 
-type PointsKind = "max" | "penalty" | "bonus";
+/** What a criterion is to the sums: counted against its maximum, a penalty (max < 0), or a bonus. */
+export type PointsKind = "max" | "penalty" | "bonus";
 
-function pointsKind({ max, bonus }: PointsBounds): PointsKind {
+export function pointsKind({ max, bonus }: PointsBounds): PointsKind {
   return bonus !== undefined ? "bonus" : max < 0 ? "penalty" : "max";
 }
 

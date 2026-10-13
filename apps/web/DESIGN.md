@@ -2001,8 +2001,8 @@ A **published or locked project reads as a dashboard in tabs** (F-PROJ-13 as
 amended 2026-10-13), the header above them and the active tab in the URL
 (`?tab=`, the evaluation pages' grammar): *Summary* (the group set, four
 tiles, the lifecycle rail, what is live of the workspace), *Repositories*
-(the table and its filter line), *Grading* (in `criteria` mode only; for now a
-card on the way to the grading screen) and *Settings*. A `?tab=` the project
+(the table and its filter line), *Grading* (in `criteria` mode only; the
+statistics and the criteria matrix, below) and *Settings*. A `?tab=` the project
 has not (Grading out of `criteria` mode) is the Summary. The alerts a header
 action raises (a refused release) stay above the tabs: they answer the
 header, whatever the tab.
@@ -2075,6 +2075,29 @@ header, whatever the tab.
   primary (Validate → Next → Release, a `HeldButton` while held), then five
   columns — criterion (rationale folded, plain text), max, points (an `sm`
   number input bounded to the range), source, state. Row cards on a phone.
+- **The Grading tab** (`project/grading/GradingTab.tsx`, rules in
+  `matrix.ts`; ADR-106 §8 as amended 2026-10-13): read only, no primary —
+  the grading screen is a ghost link of the matrix's heading. On top, the
+  statistics of the VALIDATED repositories, "n of N validated" in the
+  heading: the results' `Summary`, `Histogram` and `GradeStats` (`charts/`), then
+  a card of horizontal `SegmentedBar`s, one per column of the matrix's
+  current fold, weakest first, filled by the band of the mean share
+  (`danger` / `warning` / `success`), the penalties and bonuses counted in
+  a line each under a hairline. An `EmptyState` while none is validated.
+  Below, the MATRIX — the gradebook's rules (no seven-column limit, the
+  card scrolls, the name sticky on the left, the total and the mark pinned
+  right from `@2xl`): the heads are the criterion ids in mono 12 px
+  (truncated at 8 rem, id and description in the tooltip and the
+  accessible name) over their maximum in 11 px faint; a section is folded
+  by default, its head a button (`aria-expanded`, a chevron, its maximum),
+  its cell the sum; unfolded, it spans its columns on a header row of its
+  own and folds back from there. A section with one criterion is that
+  criterion. Penalties and bonuses come last, never summed. A cell is
+  tinted by the band of its share (`ratioBand`: under 60 % fail, under 70 %
+  borderline, whatever the project's scale; `*-soft`; a penalty applied is `danger-soft`, a
+  bonus never tinted); a proposed point is italic `fg-muted`; a repository
+  not frozen yet is `fg-faint` with no tint; no points is `Dash`. A row is
+  `pressable` and opens the grading screen on it (`?repo=`).
 
 ## The pool's concept heat (Concepts tab, "Heat")
 

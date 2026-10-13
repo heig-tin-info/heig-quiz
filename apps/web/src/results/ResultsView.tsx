@@ -11,7 +11,7 @@ import {
 import { useMemo, useState } from "react";
 
 import type { ResultRow, ReleaseResponse, ResultsView as ResultsPayload } from "@quiz/contracts";
-import type { RESULTS_TABS } from "@quiz/domain";
+import { isPassing, type RESULTS_TABS } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -40,10 +40,10 @@ import {
 import { ByQuestionView, isNotOver } from "./ByQuestionView";
 import { ExportButton } from "./ExportButton";
 import { GradeTable, useGradeSort } from "./GradeTable";
-import { Histogram } from "./Histogram";
+import { Histogram } from "../charts/Histogram";
 import { StudentCopy } from "./StudentCopy";
-import { StudentStats } from "./StudentStats";
-import { Summary } from "./Summary";
+import { GradeStats } from "../charts/GradeStats";
+import { Summary } from "../charts/Summary";
 import { useIsCourseOwner } from "../course/parts";
 import { evaluationKey, resultsKey, resultsViewKey } from "../queryKeys";
 import { useEvaluation, useResultsByQuestion } from "../evaluation/api";
@@ -180,6 +180,8 @@ export function ResultsView({
       <PageError title={t("results.loadFailed")} query={results} />
     );
   }
+  /** The CLASS: a teacher's own test walk is a row of the table and not one of its students (ADR-018). */
+  const classRows = view.rows.filter((r) => !r.staff);
 
   return (
     <div className="space-y-6">
@@ -251,9 +253,7 @@ export function ResultsView({
             value: "students",
             label: t("results.tab.students"),
             icon: Users,
-            // The CLASS: a teacher's own test walk is a row of the table and
-            // not one of its students (ADR-018).
-            count: view.rows.filter((r) => !r.staff).length,
+            count: classRows.length,
           },
           {
             value: "questions",
@@ -276,7 +276,14 @@ export function ResultsView({
             <Summary
               title={t("results.histogram.title")}
               chart={<Histogram buckets={view.stats.histogram} className="h-40 lg:h-56" />}
-              stats={<StudentStats stats={view.stats} rows={view.rows} />}
+              stats={
+                <GradeStats
+                  description={view.stats}
+                  countLabel={t("results.stat.students", { n: view.stats.count })}
+                  passing={classRows.filter((r) => isPassing(r.grade)).length}
+                  total={classRows.length}
+                />
+              }
             />
             <GradeTable table={table} openId={copy ? copyId : null} onOpen={setCopyId} />
             {copy ? (

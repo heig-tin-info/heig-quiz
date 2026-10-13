@@ -326,6 +326,22 @@ of `packages/contracts`, reads behind `staffAccess` and every write also
 behind `requireCourseRole` (invariant 6), each audit action in the closed
 union (invariant 9).
 
+*Amended 2026-10-13 (product owner): the project page's **Grading** tab
+(F-PROJ-13 as amended the same day) reads the screen's own view, no new
+route. It holds a read-only matrix — a row per repository of that view
+(a student's or a group's; the staff test repository is not in it), a
+column per criterion, folded by the snapshot's sections (§2): a folded
+section shows the sum of its criteria over the sum of their positive
+maxima and unfolds from its head; a penalty or a bonus keeps a column of
+its own, never summed into a section; the total is the repository's
+`criteria` total (§7, clamped, never re-summed on screen) and the mark
+comes by the project's scale. A row opens this screen on its repository.
+Above it, statistics over the **validated** repositories only ("n of N
+validated"): the marks' distribution, each criterion's (or folded
+section's) mean share of its maximum, weakest first, and how often each
+penalty applied and each bonus was given. The tab has no primary action:
+the header's stays the page's one.*
+
 ### 9. The student view
 
 Through the one exit `modules/project/studentView.ts` (N-SEC-20), the
