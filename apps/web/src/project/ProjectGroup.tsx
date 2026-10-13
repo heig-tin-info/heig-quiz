@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { FolderGit2 } from "lucide-react";
+import { useState } from "react";
 
-import type { ProjectActivitySummary } from "@quiz/contracts";
+import { ProjectPatch, type ProjectActivitySummary } from "@quiz/contracts";
 
 import { ActivityMenu } from "../activities/actions";
 import { openProps, StateBadge } from "../activities/views";
@@ -19,10 +20,15 @@ import {
   SectionHeading,
   T,
   TableHead,
+  TextFieldDialog,
   useSortableTable,
 } from "../ui";
+import { useRenameProject } from "./useProjectPatch";
 
 type SortKey = "title" | "start" | "deadline";
+
+/** What the rename dialog reads of a row. */
+type Renamed = Pick<ProjectActivitySummary, "id" | "title">;
 
 /**
  * The classroom's projects (F-PROJ-01, M3-10), a section under the evaluations'
@@ -42,7 +48,7 @@ type SortKey = "title" | "start" | "deadline";
  * not clickable. Its counts come with M3-08. A date that is not fixed yet (a
  * draft published by hand) is a dash and sorts last; a published project's
  * deadline says how far it is. The row ends with its two repositories on
- * GitHub, as links in sight (M3-14a, M3-14h).
+ * GitHub, as links in sight (M3-14a, M3-14h), and a Rename button (#804).
  */
 export function ProjectGroup({
   classroomId,
@@ -52,6 +58,8 @@ export function ProjectGroup({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
+  /** The row being renamed (#804). */
+  const [renaming, setRenaming] = useState<Renamed | null>(null);
   // `GET /classrooms/:id/projects` (M3-02), archived ones excepted.
   const list = useQuery<ProjectActivitySummary[]>({
     queryKey: classroomProjectsKey(classroomId),
@@ -110,7 +118,7 @@ export function ProjectGroup({
                     {row.deadlineAt === null ? <Dash /> : isoDateTime(row.deadlineAt)}
                   </td>
                   <td className={`${T.td} text-right`} onClick={(e) => e.stopPropagation()}>
-                    <ActivityMenu row={row} navigate={navigate} />
+                    <ActivityMenu row={row} navigate={navigate} onRename={setRenaming} />
                   </td>
                 </tr>
               );
@@ -118,6 +126,38 @@ export function ProjectGroup({
           </tbody>
         </table>
       </Card>
+      {renaming ? (
+        <RenameProjectDialog project={renaming} classroomId={classroomId} onClose={() => setRenaming(null)} />
+      ) : null}
     </section>
+  );
+}
+
+/**
+ * "Rename" from a row (#804): the page's own rename (`useRenameProject`), so
+ * the same route, schema, refresh and toasts as the name renamed in place.
+ */
+function RenameProjectDialog({
+  project,
+  classroomId,
+  onClose,
+}: {
+  project: Renamed;
+  classroomId: string;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const { rename, pending } = useRenameProject(project.id, classroomId);
+  return (
+    <TextFieldDialog
+      title={t("project.rename", { name: project.title })}
+      label={t("project.name")}
+      initial={project.title}
+      submitLabel={t("common.rename")}
+      valid={(name) => ProjectPatch.safeParse({ name }).success}
+      submitting={pending}
+      onSubmit={(name) => rename(name, onClose)}
+      onClose={onClose}
+    />
   );
 }

@@ -34,7 +34,8 @@
 //   live      the live primitives (PLAN-MVP §6.4).
 //   bar       a thin segmented bar of counts (SegmentedBar), vertical bars
 //             (Bars, StackedBars) and their legend, on layers.
-//   forms     the short form in a dialog (FormDialog), on layers + controls.
+//   forms     the short form in a dialog (FormDialog) and its one-text-field
+//             case (TextFieldDialog), on layers + controls.
 //   combobox  the ARIA combobox with virtual focus (useCombobox,
 //             ComboboxList, ComboboxOption), on layers and menu.
 //   selection the floating bar of a list's ticked rows (SelectionBar), on

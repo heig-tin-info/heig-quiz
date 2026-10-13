@@ -327,6 +327,7 @@ export const en = {
   "common.confirm": "Confirm",
   "common.moreActions": "More actions",
   "common.save": "Save",
+  "common.rename": "Rename",
   "common.create": "Create",
   "common.delete": "Delete",
   "common.edit": "Edit",

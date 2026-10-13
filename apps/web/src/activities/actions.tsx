@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { GitBranch, Square, Users } from "lucide-react";
+import { GitBranch, Pencil, Square, Users } from "lucide-react";
 
 import type { ActivitySummary, PollTeacherView, ProjectActivitySummary } from "@quiz/contracts";
 
@@ -11,7 +11,7 @@ import { useErrorToast } from "../notify";
 import { repoHref } from "../project/projectPage";
 import { activitiesKey, pollKey } from "../queryKeys";
 import type { Route } from "../router";
-import { IconLink, Menu, type MenuItem } from "../ui";
+import { Actions, IconLink, Menu, type MenuItem } from "../ui";
 import { typeOf } from "./model";
 
 /** The confirmation of ending a poll, on its projection as in a list. */
@@ -58,23 +58,39 @@ export const endable = (row: ActivitySummary) => typeOf(row) === "poll" && row.s
  * leads (the click on the row goes to its kind's `home`), and End for a
  * running poll. Always a menu, never icon buttons: its length follows the
  * state, and a row that flickers between shapes under the pointer is worse
- * than one more click (`Actions` › `menu`). A project has no menu: its
- * one place is its page (M3-12), and its two repositories on GitHub are
- * links in sight on the row (M3-14h, product owner: the menu of M3-14a hid
- * them), always the same two, so nothing flickers.
+ * than one more click (`Actions` › `menu`). A project's two repositories
+ * on GitHub are links in sight on the row (M3-14h, product owner: the menu
+ * of M3-14a hid them), always the same two, so nothing flickers; its one
+ * place is its page (M3-12), so it has no menu; where the list offers
+ * `onRename` (the classroom's projects, #804), a Rename icon button stands
+ * beside the links (`Actions`: one action is a button).
  */
 export function ActivityMenu({
   row,
   navigate,
   onEnd,
+  onRename,
 }: {
   row: ActivitySummary;
   navigate: (r: Route) => void;
   /** Only a poll ends from a list. */
   onEnd?: (row: ActivitySummary) => void;
+  /** A project's "Rename", where the list renames its rows (#804). */
+  onRename?: (row: ProjectActivitySummary) => void;
 }) {
   const t = useT();
-  if (row.kind === "project") return <ProjectRepoLinks row={row} />;
+  if (row.kind === "project") {
+    if (!onRename) return <ProjectRepoLinks row={row} />;
+    return (
+      <span className="inline-flex items-center">
+        <ProjectRepoLinks row={row} />
+        <Actions
+          label={t("live.row.actions", { name: row.title })}
+          items={[{ label: t("common.rename"), icon: Pencil, onSelect: () => onRename(row) }]}
+        />
+      </span>
+    );
+  }
   const items: MenuItem[] = [
     ...evaluationLinkItems(row, t, navigate),
     ...(endable(row)

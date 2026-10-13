@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { EvaluationPatch } from "@quiz/contracts";
 import { courseRoleAllows, EVALUATION_STEPS, isEvaluationOver, itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
@@ -46,7 +45,7 @@ import { LaunchStep } from "./LaunchStep";
 import { missingTiming, TIMING_FIELD_ID } from "./timing";
 import { TimingStep } from "./TimingStep";
 import { SaveAsTemplateDialog, useDuplicateErrorToast } from "./templates";
-import { useConfigPatch } from "./usePatch";
+import { useConfigPatch, useRenameEvaluation } from "./usePatch";
 import { evaluationKey, evaluationsKey } from "../queryKeys";
 import { useClassroom, useCourseRole } from "../course/parts";
 import { useEvaluation } from "./api";
@@ -98,6 +97,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const detail = useEvaluation(id);
   const patch = useConfigPatch(evaluationTarget(id));
   const classroomId = detail.data?.evaluation.classroomId ?? null;
+  const { rename } = useRenameEvaluation(id, classroomId);
   const crumbs = useEvaluationCrumbs(classroomId, id, detail.data?.evaluation.title);
   const classroom = useClassroom(classroomId);
   const myRole = useCourseRole(detail.data?.courseId);
@@ -201,14 +201,6 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
     window.open(routeToPath({ view: "evaluationPreview", id }), "_blank", "noopener");
   };
 
-  const rename = (title: string) => {
-    const parsed = EvaluationPatch.safeParse({ title });
-    if (!parsed.success) return;
-    patch.mutate(parsed.data, {
-      onSuccess: () => toast(t("sync.saved"), "success"),
-      onError: toastError("eval.saveFailed"),
-    });
-  };
 
   return (
     <div className="w-full space-y-6" style={pane.box(step === "questions")}>

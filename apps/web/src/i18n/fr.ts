@@ -326,6 +326,7 @@ export const fr: Record<keyof Dict, string> = {
   "common.confirm": "Confirmer",
   "common.moreActions": "Plus d'actions",
   "common.save": "Enregistrer",
+  "common.rename": "Renommer",
   "common.create": "Créer",
   "common.delete": "Supprimer",
   "common.edit": "Modifier",
