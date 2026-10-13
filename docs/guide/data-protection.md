@@ -333,7 +333,7 @@ AI model:
 
 Hosting:
 
-- nothing is hosted in Switzerland; the machines are in Europe, the off-site copy in Finland;
+- nothing is hosted in Switzerland; the application machine is in Germany, the code machine and the off-site copy in Finland;
 - the daily database dumps sit unencrypted on the machine they protect;
 - the off-site copy's key is on the application machine: whoever takes that machine can also read the data deleted since, up to the archives' retention (ADR-009).
 
