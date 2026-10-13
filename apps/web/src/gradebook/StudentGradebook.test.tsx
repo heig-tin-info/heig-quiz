@@ -81,29 +81,29 @@ describe("the student's own cells", () => {
     expect(screen.queryByText(/Weight/)).toBeNull();
   });
 
-  it("draws what counts, then the practice apart, its grade indicative in the ink (#803)", async () => {
+  it("draws what counts, then what does not, its grade indicative in the ink (#803)", async () => {
     renderTab(book());
-    const counting = await screen.findByRole("region", { name: "Exams and projects" });
-    const practice = screen.getByRole("region", { name: "Exercises" });
-    expect(within(practice).getByText(/these grades are indicative/)).toBeInTheDocument();
+    const counting = await screen.findByRole("region", { name: "Count toward your average" });
+    const aside = screen.getByRole("region", { name: "Indicative" });
+    expect(within(aside).getByText(/These grades are indicative/)).toBeInTheDocument();
     expect(within(counting).queryByText("Series 1")).toBeNull();
-    const grade = within(practice).getByText("3.0");
+    const grade = within(aside).getByText("3.0");
     expect(grade.className).not.toContain("text-danger");
     // The group is the one word for it: no badge on the row.
-    expect(within(practice).queryByText("indicative")).toBeNull();
+    expect(within(aside).queryByText("indicative")).toBeNull();
   });
 
-  it("draws no practice group when everything counts", async () => {
+  it("draws no indicative group when everything counts", async () => {
     const all = book();
     renderTab({ ...all, columns: all.columns.filter((c) => c.counts) });
-    expect(await screen.findByRole("region", { name: "Exams and projects" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Exercises" })).toBeNull();
+    expect(await screen.findByRole("region", { name: "Count toward your average" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Indicative" })).toBeNull();
   });
 
   it("draws the mean and the weights once the payload carries them", async () => {
     renderTab(book({ mean: 4.3 }, true));
     expect(await within(await row("Test 2")).findByText(/Weight 100 %/)).toBeInTheDocument();
-    // A practice column carries no weight: it does not count.
+    // A column that does not count carries no weight: it does not count.
     expect(within(await row("Series 1")).queryByText(/Weight/)).toBeNull();
     const mean = await row("Mean");
     expect(within(mean).getByText("4.3")).toBeInTheDocument();

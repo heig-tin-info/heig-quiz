@@ -62,7 +62,10 @@ export async function studentGrades(
  * The teacher's `counts` of the evaluations that have a stored gradebook
  * column, by evaluation id; the others count by their mode's default. Read
  * only: the table is the gradebook's. The flag alone ever reaches the
- * student, never the weight (ADR-074, amendment of 2026-10-13).
+ * student, never the weight (ADR-074, amendment of 2026-10-13). The
+ * classroom's Grades tab takes the same flag from the gradebook's own
+ * `settingsOf` instead; `gradebook.db.test.ts` ("tells the student whether
+ * each column counts…") guards that the two agree.
  */
 async function storedCounts(db: Db, evaluationIds: string[]): Promise<Map<string, boolean>> {
   if (evaluationIds.length === 0) return new Map();

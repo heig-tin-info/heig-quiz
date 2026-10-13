@@ -1,6 +1,6 @@
 ---
 audience: student
 kind: changed
-en: "**Grades** now lists your exams and projects first, then your exercises apart: an exercise's grade is practice, indicative, and does not count toward your average unless your teacher includes it."
-fr: "**Notes** affiche d'abord vos examens et projets, puis vos exercices à part : la note d'un exercice est un entraînement, indicative, et ne compte pas dans votre moyenne sauf si votre enseignant l'y inclut."
+en: "**Grades** now shows first the grades that count toward your average, then the indicative ones apart: an exercise's grade does not count unless your teacher includes it."
+fr: "**Notes** affiche d'abord les notes qui comptent pour votre moyenne, puis à part les notes indicatives : la note d'un exercice ne compte pas, sauf si votre enseignant l'y inclut."
 ---

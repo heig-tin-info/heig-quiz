@@ -1,7 +1,7 @@
 /**
  * The student's Grades tab of a classroom (F-GBOOK-05, F-RES-04, ADR-074,
  * M5-04): their own cells, one row per column of the gradebook, in the
- * global Grades page's two groups — what counts, then the practice, its
+ * global Grades page's two groups — what counts, then what does not, its
  * grades indicative (`CountsGroups`, #803). The server
  * narrows everything (`GET /student/classrooms/:id/gradebook`, the gradebook's
  * student exit): this tab filters and computes nothing, and a field the
@@ -12,7 +12,7 @@
  *   - Type: the activity is the bold 14 px identity, kind and date under it
  *     in 13 px muted; the grade the one number, semibold on the right.
  *   - Color: no accent, no primary — a page you read, not act on (invariant 2).
- *     Grades that count wear their band's colour, practice grades the ink;
+ *     Grades that count wear their band's colour, indicative grades the ink;
  *     the absence its own `info` sigil.
  *   - Space: a card per group, hairline rows, the mean last in the group
  *     that counts; the same on a phone and on a desktop
@@ -115,7 +115,7 @@ function Mean({ data }: { data: GradebookStudent }) {
   );
 }
 
-/** A student cell: the grade, the absence, or in words why there is none; `neutral`, a practice grade in the ink. */
+/** A student cell: the grade, the absence, or in words why there is none; `neutral`, an indicative grade (it does not count) in the ink. */
 function CellFace({ cell, neutral, t }: { cell: GradebookStudentCell | undefined; neutral: boolean; t: TFunction }) {
   switch (cell?.kind) {
     case "grade":

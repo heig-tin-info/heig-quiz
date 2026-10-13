@@ -7,7 +7,6 @@ import {
   countsByDefault,
   evaluationColumnKind,
   gradebookMean,
-  groupByCounts,
   hasGrade,
   notTakenCell,
   resolveCell,
@@ -26,24 +25,6 @@ describe("what counts by default (D06)", () => {
   it("reads an evaluation's mode as its column's kind", () => {
     expect(evaluationColumnKind("exam")).toBe("exam");
     expect(evaluationColumnKind("exercise")).toBe("exercise");
-  });
-});
-
-describe("a student's grades in two groups (#803)", () => {
-  const row = (title: string, counts: boolean) => ({ title, counts });
-
-  it("puts what counts first, the practice after, each in its own order", () => {
-    const rows = [row("X2", false), row("E2", true), row("X1", false), row("E1", true)];
-    expect(groupByCounts(rows)).toEqual([
-      { counts: true, rows: [row("E2", true), row("E1", true)] },
-      { counts: false, rows: [row("X2", false), row("X1", false)] },
-    ]);
-  });
-
-  it("leaves an empty group out", () => {
-    expect(groupByCounts([row("X1", false)])).toEqual([{ counts: false, rows: [row("X1", false)] }]);
-    expect(groupByCounts([row("E1", true)])).toEqual([{ counts: true, rows: [row("E1", true)] }]);
-    expect(groupByCounts([])).toEqual([]);
   });
 });
 

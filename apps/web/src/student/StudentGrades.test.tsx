@@ -150,7 +150,7 @@ describe("the student's Grades", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("draws what counts first, then the exercises apart, their grades indicative in the ink (#803)", async () => {
+  it("draws what counts first, then what does not count, its grades indicative in the ink (#803)", async () => {
     const room: GradeGroup = {
       ...groups[0]!,
       rows: [
@@ -162,24 +162,24 @@ describe("the student's Grades", () => {
     };
     mockFetch({ [URL]: ok([room]) });
     render();
-    const counting = await screen.findByRole("region", { name: "Exams and projects" });
-    const practice = screen.getByRole("region", { name: "Exercises" });
-    expect(within(practice).getByText(/these grades are indicative/)).toBeInTheDocument();
-    // Exams and projects come first.
-    expect(counting.compareDocumentPosition(practice)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const counting = await screen.findByRole("region", { name: "Count toward your average" });
+    const aside = screen.getByRole("region", { name: "Indicative" });
+    expect(within(aside).getByText(/These grades are indicative/)).toBeInTheDocument();
+    // What counts comes first.
+    expect(counting.compareDocumentPosition(aside)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(within(counting).getAllByText("Série bonus").length).toBeGreaterThan(0);
     expect(within(counting).getAllByText("Quiz 1").length).toBeGreaterThan(0);
-    expect(within(practice).queryAllByText("Série bonus")).toHaveLength(0);
+    expect(within(aside).queryAllByText("Série bonus")).toHaveLength(0);
     expect(within(counting).getAllByText("2.5")[0]!.className).toContain("text-danger");
-    expect(within(practice).getAllByText("2.5")[0]!.className).not.toContain("text-danger");
-    expect(within(practice).queryByText("indicative")).toBeNull();
+    expect(within(aside).getAllByText("2.5")[0]!.className).not.toContain("text-danger");
+    expect(within(aside).queryByText("indicative")).toBeNull();
   });
 
   it("draws no empty group", async () => {
     mockFetch({ [URL]: ok([groups[1]!]) });
     render();
-    expect(await screen.findByRole("region", { name: "Exams and projects" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Exercises" })).toBeNull();
+    expect(await screen.findByRole("region", { name: "Count toward your average" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Indicative" })).toBeNull();
   });
 
   it("says there is nothing yet", async () => {

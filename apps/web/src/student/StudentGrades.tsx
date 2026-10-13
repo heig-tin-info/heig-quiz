@@ -8,8 +8,8 @@
  * alone, marked indicative), and whether it opens a feedback page. This page
  * computes nothing; it draws.
  *
- * Inside a classroom, the rows that count toward the mean ("Exams and
- * projects") come before the practice ("Exercises"), whose grades are
+ * Inside a classroom, the rows that count toward the mean ("Count toward
+ * your average") come before the others ("Indicative"), whose grades are
  * indicative (`CountsGroups`, #803): the server's effective `counts` decides.
  *
  * The four decisions:
@@ -18,7 +18,7 @@
  *     bold 13 px identity, the grade the one number set in semibold.
  *   - Color: no accent and no primary — a page you read, not act on
  *     (invariant 2). A grade that counts wears its band's colour (`Grade`),
- *     a practice grade the ink; the status its badge's tone.
+ *     an indicative grade the ink; the status its badge's tone.
  *   - Space: 24 under the header, 32 between classrooms, 12 between a
  *     classroom's heading and its first group, 20 between groups.
  *   - Finish: a card per classroom, hairline rows, the hover of a row that
@@ -260,7 +260,7 @@ function Points({ row }: { row: GradeRow }) {
 /**
  * The grade, or where there is none: "indicative" beside points read before
  * the release (F-RES-04), a dash otherwise. A row that does not count keeps
- * its grade in the ink: practice, indicative (#803).
+ * its grade in the ink: indicative (#803).
  */
 function GradeCell({ row }: { row: GradeRow }) {
   const t = useT();

@@ -60,20 +60,6 @@ export function countsByDefault(kind: GradebookColumnKind): boolean {
 /** The column kind of an evaluation's mode: an exam, or an exercise (a poll never has a column). */
 export const evaluationColumnKind = (mode: EvaluationModeName): Exclude<GradebookColumnKind, "project"> => (mode === "exam" ? "exam" : "exercise");
 
-/**
- * A student's grades in two groups, as their Grades page and their
- * classroom's Grades tab draw them (F-ORG-14, F-GBOOK-05, #803): what counts
- * toward the mean (`counts`, the column's EFFECTIVE flag: the teacher's, or
- * the kind's default) first — exams, projects, an exercise the teacher
- * included —, then the practice, whose grades are indicative. The order
- * within each is kept; an empty group is left out.
- */
-export function groupByCounts<T extends { counts: boolean }>(rows: readonly T[]): { counts: boolean; rows: T[] }[] {
-  return [true, false]
-    .map((counts) => ({ counts, rows: rows.filter((row) => row.counts === counts) }))
-    .filter((group) => group.rows.length > 0);
-}
-
 /** What a cell holds, before any mark. */
 export type CellOutcome = { kind: "grade"; grade: number } | { kind: "absent" } | { kind: "empty" };
 

@@ -23,7 +23,7 @@ const TONE_TEXT = { danger: "text-danger", warning: "text-warning" } as const;
 export function Grade({ value, neutral = false }: { value: number; neutral?: boolean }) {
   const t = useT();
   const label = t(`grade.letter.${gradeLetter(value)}`);
-  // An indicative grade (practice that does not count, #803) keeps the ink: no band says "fail" there.
+  // An indicative grade (one that does not count, #803) keeps the ink: no band says "fail" there.
   const tone = neutral ? undefined : GRADE_BAND_TONE[gradeBand(value)];
   return (
     <Tip label={label}>

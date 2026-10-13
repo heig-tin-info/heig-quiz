@@ -1898,13 +1898,15 @@ What replaces them:
   points, or "grade not shared". The mean is the last row of the group that
   counts, on `surface-2`, present only when the payload carries it.
 - **Two groups, on the tab and on the global Grades page alike** (#803,
-  `CountsGroups` in `gradebook/groups.tsx`): "Exams and projects" — every
+  `CountsGroups` in `gradebook/groups.tsx`), split by the effective `counts`
+  and named by it, never by a kind: "Count toward your average" — every
   column that counts toward the mean, an exercise the teacher included too —
-  then "Exercises", the practice. Each is an `h3` sub-heading at 14 px
+  then "Indicative", what does not count (an exercise by default, an exam the
+  teacher left out). Each is an `h3` sub-heading at 14 px
   semibold inside its section, as the student's Coming up days are, 8 px to
-  its card, 20 between the groups; an empty group is not drawn. The practice
-  says once, in a 13 px `fg-muted` line under its heading, that its grades
-  are indicative; its grades are in the ink (`Grade`'s `neutral`: no red
+  its card, 20 between the groups; an empty group is not drawn. The
+  indicative group says once, in a 13 px `fg-muted` line under its heading,
+  that its grades do not count unless the teacher includes them; its grades are in the ink (`Grade`'s `neutral`: no red
   under 4, no orange), with no badge on the row — the line says it, once.
 
 ## Poll outcome donut (launcher, "Recent polls")

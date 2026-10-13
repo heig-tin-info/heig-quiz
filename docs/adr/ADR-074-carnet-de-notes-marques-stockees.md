@@ -198,9 +198,10 @@ point 4 of the amendment of 2026-10-08). Everything else stands.
    before; the class means stay staff-only.
 3. **Why.** A student read every exercise's released grade beside the
    exams', in the same red under 4, and took practice for a verdict. The
-   two pages now draw what counts ("Exams and projects") apart from the
-   practice ("Exercises"), whose grades are indicative and in the ink
-   (F-ORG-14, F-RES-04, F-GBOOK-05). Grouping by the evaluation's mode would
+   two pages now draw what counts ("Count toward your average") apart from
+   what does not ("Indicative"), whose grades are in the ink (F-ORG-14,
+   F-RES-04, F-GBOOK-05); the groups are named by the flag, never by a kind,
+   since an exam the teacher leaves out is indicative too. Grouping by the evaluation's mode would
    have been simpler but wrong for an exercise the teacher includes in the
    mean, which is not indicative; grouping by the flag tells the student
    what the teacher decided, which is the student's to know (it says how
