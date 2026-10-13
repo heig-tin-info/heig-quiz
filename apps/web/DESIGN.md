@@ -767,6 +767,16 @@ live in `ui/state.ts`, each written once.
   Width is a prop, never a class beside `inputClass`: Tailwind settles two
   width or height utilities on one element by their order in the generated
   stylesheet, not by the order they were written in.
+- Points (`PointsInput`, `PointsPill` in `ui/PointsInput.tsx`): the points
+  and their maximum are one pill, "3 / 4": the input right-aligned and
+  tabular, then the suffix in `fg-muted`, unselectable — `/ 4`, a penalty
+  `/ −3` (a real minus sign), a bonus `/ +1`. `w-28` by 34 px (`md`, in a
+  table row too: it is the one thing of the row the teacher writes), 14 px
+  side padding. The pill is the chrome: `line-strong` border, `fg-faint` on
+  hover, accent border and `accent/20` ring through `focus-within`, `danger`
+  when out of range; the input inside draws none. A screen reader hears the
+  range as the input's description ("points out of 4"), never the suffix.
+  Where the points cannot be written, the same figures as text.
 - Help of a whole page (`PageHeader`'s `help`, `PageHelpButton`): a round
   34 px button outlined like a secondary one, in the header's action row,
   after the page's actions and before the overflow "…" — never beside the

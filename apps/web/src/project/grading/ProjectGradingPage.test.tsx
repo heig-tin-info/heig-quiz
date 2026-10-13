@@ -85,6 +85,15 @@ describe("the grading screen's states", () => {
     renderPage();
     const table = await screen.findByRole("table", { name: "Criteria of Bernasconi Zoé" });
     expect(within(table).getByText("Tests pass")).toBeInTheDocument();
+    // The maximum and the points awarded are one column, one pill (F-PROJ-25 as amended).
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Criterion", "Points", "Source", "State"]);
+    const tests = within(table).getByRole("spinbutton", { name: "Tests pass", description: "points out of 12" });
+    expect(tests).toHaveValue(9);
+    expect(tests.closest("td")).toHaveTextContent("/ 12");
+    // No points yet: an empty pill, its placeholder a dash.
+    const none = within(table).getByRole("spinbutton", { name: "Clean history", description: "points out of 1" });
+    expect(none).toHaveValue(null);
+    expect(none).toHaveAttribute("placeholder", "—");
     // A milestone's lock beside the state, on its row only (ADR-106 §5).
     const locks = within(table).getAllByRole("img", { name: /^Locked by a milestone/ });
     expect(locks).toHaveLength(1);
@@ -123,7 +132,7 @@ describe("grading", () => {
       [`POST ${BASE}/repos/${A}/validate`]: ok(validated),
     });
     renderPage();
-    const input = await screen.findByRole("spinbutton", { name: "Points for Clean history, from 0 to 1" });
+    const input = await screen.findByRole("spinbutton", { name: "Clean history", description: "points out of 1" });
     // Out of range: said on the field, never sent.
     await userEvent.type(input, "3{Enter}");
     expect(input).toHaveAttribute("aria-invalid", "true");

@@ -84,6 +84,7 @@ const ALLOW_RAW_SELECT: Allowed = {
 const ALLOW_RAW_INPUT: Allowed = {
   "packages/ui/src/controls.tsx": { count: 1, reason: "the shared TextInput primitive itself" },
   "apps/web/src/ui/page.tsx": { count: 1, reason: "the in-place editor of a page title, drawn at the heading's own size and weight" },
+  "apps/web/src/ui/PointsInput.tsx": { count: 1, reason: "the points inside their pill: the pill is the field's chrome, the value and its maximum one control" },
   "apps/web/src/CommandPalette.tsx": { count: 1, reason: "the palette's top band IS the field; a second chrome inside the panel is noise" },
   "apps/web/src/concepts/ConceptPicker.tsx": { count: 1, reason: "the typing cursor inside a token field: chips and input share one box" },
   "packages/qt-mcq/src/ui.tsx": { count: 1, reason: "the radio or checkbox of a choice, its type decided at run time (a box drawn over it)" },

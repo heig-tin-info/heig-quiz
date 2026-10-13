@@ -103,7 +103,7 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
     // Out of range (the field already says it): the toast names the range the server holds.
     onError: (error) => {
       const range = error instanceof ApiError ? PointsOutOfRange.safeParse(error.body) : null;
-      if (range?.success) toast(`${refusalMessage(error, t)} ${t("project.grading.range", { min: range.data.min, max: range.data.max })}`, "error");
+      if (range?.success) toast(`${refusalMessage(error, t)} ${t("ui.points.range", { min: range.data.min, max: range.data.max })}`, "error");
       else failed(error);
     },
   });

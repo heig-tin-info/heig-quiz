@@ -51,6 +51,8 @@
 //             layers + page.
 //   groupBy   the "Group by" caption and pills over a list (GroupBySwitch),
 //             on controls.
+//   PointsInput the points of a grade as one pill, the value over its
+//             maximum (PointsPill, PointsInput), on controls and layers.
 //   icons     the app's own glyphs on lucide's grid (ClassroomIcon).
 //             Imports no sibling.
 //
@@ -86,3 +88,4 @@ export * from "./icons";
 export { FormError, PageError, QueryError } from "../queryError";
 export * from "./ring";
 export * from "./useNumberDraft";
+export * from "./PointsInput";

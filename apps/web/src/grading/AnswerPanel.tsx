@@ -17,11 +17,14 @@ import { emptyAnswerOf, QuestionHost } from "../student/QuestionHost";
 import {
   Button,
   ErrorText,
-  Field,
+  FieldError,
+  fieldErrorProps,
+  FieldLabel,
   FormError,
   IconButton,
   NotePanel,
   PaneOrSheet,
+  PointsPill,
   Textarea,
   Section,
 } from "../ui";
@@ -422,6 +425,8 @@ function AdjustForm({
     points.trim() === "" || !Number.isFinite(value) || value < minPoints || value > maxPoints;
   const commentInvalid = comment.trim() === "";
   const range = { min: formatPoints(minPoints), max: formatPoints(maxPoints) };
+  const pointsId = useId();
+  const showPointsError = touched && pointsInvalid;
 
   return (
     <form
@@ -437,22 +442,23 @@ function AdjustForm({
         onSave({ points: value, comment: comment.trim() });
       }}
     >
-      <Field
-        label={t("grading.override.points")}
-        hint={minPoints < 0 ? t("grading.override.range", range) : t("grading.override.max", range)}
-        type="number"
-        step="0.5"
-        min={minPoints}
-        max={maxPoints}
-        autoFocus
-        width="w-32"
-        value={points}
-        onChange={(e) => setPoints(e.target.value)}
-        aria-invalid={touched && pointsInvalid}
-      />
-      {touched && pointsInvalid ? (
-        <ErrorText>{t("grading.override.pointsInvalid", range)}</ErrorText>
-      ) : null}
+      {/* The points over their maximum, one pill (F-PROJ-25 as amended):
+          the maximum is its suffix, so the label line says the range only
+          when the floor is not 0 (negative marking). */}
+      <div className="flex flex-col gap-1.5">
+        <FieldLabel htmlFor={pointsId} hint={minPoints < 0 ? t("grading.override.range", range) : undefined}>
+          {t("grading.override.points")}
+        </FieldLabel>
+        <PointsPill
+          id={pointsId}
+          bounds={{ max: maxPoints }}
+          autoFocus
+          value={points}
+          onChange={(e) => setPoints(e.target.value)}
+          {...fieldErrorProps(pointsId, showPointsError)}
+        />
+        <FieldError id={pointsId}>{showPointsError ? t("grading.override.pointsInvalid", range) : null}</FieldError>
+      </div>
       <div className="space-y-1.5">
         <Textarea
           label={t("grading.override.comment")}

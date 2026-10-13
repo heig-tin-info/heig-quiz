@@ -1,11 +1,11 @@
 import { AlertTriangle, Check, FlaskConical, Lock, Sparkles, UserRound } from "lucide-react";
-import { useId, useState } from "react";
+import { useState } from "react";
 
 import type { CriteriaTableRow, CriterionGradeWrite, CriterionReason } from "@quiz/contracts";
-import { awardedRange } from "@quiz/domain";
+import { formatPoints } from "@quiz/domain";
 
 import { useT, type Dict } from "../../i18n";
-import { Badge, Button, cx, FieldError, fieldErrorProps, T, TableHead, Textarea, TextInput, Tip, useNumberDraft, type Column } from "../../ui";
+import { Badge, Button, cx, PointsInput, pointsSuffix, T, TableHead, Textarea, Tip, type Column } from "../../ui";
 import { RationaleFold, RationaleText } from "./RationaleFold";
 
 type Source = NonNullable<CriteriaTableRow["source"]>;
@@ -38,12 +38,13 @@ const REASON_KEY: Record<CriterionReason, keyof Dict> = {
 export type GradeWrite = (criterionId: string, body: CriterionGradeWrite) => void;
 
 /**
- * One repository's criteria (ADR-106 §8), five columns: the criterion (its
+ * One repository's criteria (ADR-106 §8), four columns: the criterion (its
  * description, its id, its section, a bonus or a penalty, the rationale
- * folded under it), the maximum, the points awarded — an inline number
- * input bounded to the criterion's range, written when the teacher leaves
- * it —, the source as an icon (CI, AI, teacher) and the state, with the
- * reason of a failed or missing pass. A rationale is plain text: rendered
+ * folded under it), the points — one pill, the points awarded over the
+ * maximum (`PointsInput`, F-PROJ-25 as amended), bounded to the criterion's
+ * range and written when the teacher leaves it —, the source as an icon
+ * (CI, AI, teacher) and the state, with the reason of a failed or missing
+ * pass. A rationale is plain text: rendered
  * as a text node, never as markup (N-SEC-14). Under a 28 rem container the
  * rows turn into cards (`T.stack`): the criterion and its input on the
  * first line, the rest under them.
@@ -63,8 +64,7 @@ export function CriteriaTable({
   const t = useT();
   const columns: Column<string>[] = [
     { key: "criterion", label: t("project.grading.col.criterion"), stack: "main" },
-    { key: "max", label: t("project.grading.col.max"), right: true, className: "@md:w-px whitespace-nowrap", stack: "sub" },
-    { key: "awarded", label: t("project.grading.col.awarded"), right: true, className: "@md:w-px whitespace-nowrap", stack: "end" },
+    { key: "points", label: t("project.grading.col.points"), right: true, className: "@md:w-px whitespace-nowrap", stack: "end" },
     { key: "source", label: t("project.grading.col.source"), className: "@md:w-px whitespace-nowrap", stack: "sub" },
     { key: "state", label: t("project.grading.col.state"), className: "@md:w-px whitespace-nowrap", stack: "sub" },
   ];
@@ -101,13 +101,8 @@ function CriterionRow({ row, writable, onGrade }: { row: CriteriaTableRow; writa
           ) : null}
         </span>
       </td>
-      <td role="cell" className={cx(T.td, T.stack.sub, "text-right tabular-nums text-fg-muted")}>
-        {/* On a card the number stands alone: it says what it counts. */}
-        <span className="hidden @max-md:inline">{t("project.grading.col.max")} </span>
-        {row.bonus !== undefined ? `+${row.bonus}` : row.max}
-      </td>
       <td role="cell" className={cx(T.td, T.stack.end, "text-right")}>
-        <AwardedInput key={`${row.criterionId}:${row.points}`} row={row} writable={writable} onGrade={onGrade} />
+        <AwardedPoints key={`${row.criterionId}:${row.points}`} row={row} writable={writable} onGrade={onGrade} />
       </td>
       <td role="cell" className={cx(T.td, T.stack.sub)}>
         <SourceTag source={row.source} />
@@ -127,43 +122,19 @@ function CriterionRow({ row, writable, onGrade }: { row: CriteriaTableRow; writa
 }
 
 /**
- * The points awarded, written when the teacher leaves the field (Enter
- * leaves it): a value outside the criterion's range is said on the field
- * and never sent; an empty field sends nothing — a criterion is never
- * cleared to "no points" by a teacher, 0 is a value.
+ * The points awarded over the maximum: the pill, written when the teacher
+ * leaves it, or the same figures as text before the row can be written.
  */
-function AwardedInput({ row, writable, onGrade }: { row: CriteriaTableRow; writable: boolean; onGrade: GradeWrite }) {
-  const t = useT();
-  const errorId = useId();
-  const [min, max] = awardedRange({ maxPoints: row.max, ...(row.bonus === undefined ? {} : { bonusPoints: row.bonus }) });
-  const [invalid, setInvalid] = useState(false);
-  const draft = useNumberDraft(row.points, (n) => {
-    if (n === null) return;
-    const outside = n < min || n > max;
-    setInvalid(outside);
-    if (!outside) onGrade(row.criterionId, { points: n });
-  });
-  if (!writable) return <span className="tabular-nums">{row.points ?? "—"}</span>;
-  return (
-    <span className="inline-flex flex-col items-end gap-0.5">
-      <TextInput
-        {...draft}
-        size="sm"
-        type="number"
-        inputMode="decimal"
-        step={0.5}
-        min={min}
-        max={max}
-        placeholder="—"
-        aria-label={t("project.grading.awarded.label", { criterion: row.description, min, max })}
-        className={cx("w-20 text-right tabular-nums", invalid && "border-danger")}
-        {...fieldErrorProps(errorId, invalid)}
-      />
-      <FieldError id={errorId} className="whitespace-nowrap text-xs">
-        {invalid ? t("project.grading.range", { min, max }) : null}
-      </FieldError>
-    </span>
-  );
+function AwardedPoints({ row, writable, onGrade }: { row: CriteriaTableRow; writable: boolean; onGrade: GradeWrite }) {
+  const bounds = { max: row.max, ...(row.bonus === undefined ? {} : { bonus: row.bonus }) };
+  if (!writable) {
+    return (
+      <span className="whitespace-nowrap tabular-nums">
+        {row.points === null ? "—" : formatPoints(row.points)} <span className="text-fg-muted">{pointsSuffix(bounds)}</span>
+      </span>
+    );
+  }
+  return <PointsInput bounds={bounds} value={row.points} label={row.description} onCommit={(points) => onGrade(row.criterionId, { points })} />;
 }
 
 function SourceTag({ source }: { source: CriteriaTableRow["source"] }) {
