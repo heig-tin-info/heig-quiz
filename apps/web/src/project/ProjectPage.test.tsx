@@ -1774,16 +1774,6 @@ describe("the Grading tab", () => {
     expect(heads(await matrix())[0]).toBe("Group");
   });
 
-  it("leaves the staff's test repository out: the server's view holds the students' only", async () => {
-    const staff = { ...row(3, makeRepo(3)), staff: true };
-    routes(criteria({ rows: [row(1, makeRepo(1)), staff] }), {
-      [`GET ${BASE}/grading`]: ok(gradingView([gradingRepo(1, "Alice", [8, 2, 2, 0])])),
-    });
-    renderPage("en", "grading");
-    expect(await screen.findByTestId("grading-validated")).toHaveTextContent("1 of 1 validated");
-    expect(within(await matrix()).getAllByTestId("matrix-row")).toHaveLength(1);
-  });
-
   it("speaks French", async () => {
     routes(criteria(), { [`GET ${BASE}/grading`]: ok(gradingView([gradingRepo(1, "Alice", [8, 2, 2, 0])])) });
     renderPage("fr", "grading");

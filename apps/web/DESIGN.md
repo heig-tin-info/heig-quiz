@@ -2079,9 +2079,9 @@ header, whatever the tab.
   `matrix.ts`; ADR-106 §8 as amended 2026-10-13): read only, no primary —
   the grading screen is a ghost link of the matrix's heading. On top, the
   statistics of the VALIDATED repositories, "n of N validated" in the
-  heading: the results' `Summary` (the `Histogram` and four `Stat`s), then
+  heading: the results' `Summary`, `Histogram` and `GradeStats` (`charts/`), then
   a card of horizontal `SegmentedBar`s, one per column of the matrix's
-  current fold, weakest first, filled by the grade band of the mean share
+  current fold, weakest first, filled by the band of the mean share
   (`danger` / `warning` / `success`), the penalties and bonuses counted in
   a line each under a hairline. An `EmptyState` while none is validated.
   Below, the MATRIX — the gradebook's rules (no seven-column limit, the
@@ -2093,7 +2093,8 @@ header, whatever the tab.
   its cell the sum; unfolded, it spans its columns on a header row of its
   own and folds back from there. A section with one criterion is that
   criterion. Penalties and bonuses come last, never summed. A cell is
-  tinted by its band (`*-soft`; a penalty applied is `danger-soft`, a
+  tinted by the band of its share (`ratioBand`: under 60 % fail, under 70 %
+  borderline, whatever the project's scale; `*-soft`; a penalty applied is `danger-soft`, a
   bonus never tinted); a proposed point is italic `fg-muted`; a repository
   not frozen yet is `fg-faint` with no tint; no points is `Dash`. A row is
   `pressable` and opens the grading screen on it (`?repo=`).

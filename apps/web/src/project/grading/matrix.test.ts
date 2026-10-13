@@ -9,6 +9,7 @@ import {
   criteriaTree,
   headerRows,
   markStats,
+  ratioBand,
   rowsById,
   visibleColumns,
   type MatrixColumn,
@@ -124,17 +125,21 @@ describe("cellValue and cellHeat", () => {
 
   it("sums a folded section over the points given; empty when none was", () => {
     const rows = rowsById({ table: table({ "code.memoire": null, "code.structure.modules": 1 }, "proposed") });
-    expect(cellValue(at("code"), rows)).toEqual({ points: 3, max: 6, state: "proposed", role: "normal" });
+    expect(cellValue(at("code"), rows)).toEqual({ points: 3, max: 6, state: "proposed", role: "max" });
     const none = rowsById({ table: table({ "code.memoire": null, "code.structure.modules": null, "code.structure.entetes": null, "code.style.nommage": null }) });
     expect(cellValue(at("code"), none)).toMatchObject({ points: null, state: "empty" });
     expect(cellValue(at("code"), rowsById({ table: table() }))).toMatchObject({ points: 6, state: "validated" });
   });
 
-  it("reads the share as a grade band; a penalty applied fails, a bonus has no heat", () => {
-    expect(cellHeat({ points: 8, max: 8, state: "validated", role: "normal" })).toBe("pass");
-    expect(cellHeat({ points: 4, max: 8, state: "validated", role: "normal" })).toBe("fail");
-    expect(cellHeat({ points: 5, max: 8, state: "validated", role: "normal" })).toBe("borderline");
-    expect(cellHeat({ points: null, max: 8, state: "empty", role: "normal" })).toBeNull();
+  it("bands a ratio by plain thresholds: under 60 % a fail, under 70 % a borderline", () => {
+    expect([0, 0.59, 0.6, 0.69, 0.7, 1].map(ratioBand)).toEqual(["fail", "fail", "borderline", "borderline", "pass", "pass"]);
+  });
+
+  it("reads the share as a band; a penalty applied fails, a bonus has no heat", () => {
+    expect(cellHeat({ points: 8, max: 8, state: "validated", role: "max" })).toBe("pass");
+    expect(cellHeat({ points: 4, max: 8, state: "validated", role: "max" })).toBe("fail");
+    expect(cellHeat({ points: 5, max: 8, state: "validated", role: "max" })).toBe("borderline");
+    expect(cellHeat({ points: null, max: 8, state: "empty", role: "max" })).toBeNull();
     expect(cellHeat({ points: -3, max: -3, state: "validated", role: "penalty" })).toBe("fail");
     expect(cellHeat({ points: 0, max: -3, state: "validated", role: "penalty" })).toBeNull();
     expect(cellHeat({ points: 1, max: 1, state: "validated", role: "bonus" })).toBeNull();

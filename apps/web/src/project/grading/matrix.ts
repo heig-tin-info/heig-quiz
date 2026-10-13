@@ -1,5 +1,7 @@
 import type { CriteriaTableRow, ProjectGradingRepo, ProjectGradingScale } from "@quiz/contracts";
-import { describe, gradeBand, gradeFromPoints, histogram, projectGrade, type Description, type GradeBand, type HistogramBucket } from "@quiz/domain";
+import { describe, histogram, isPassing, projectGrade, type Description, type GradeBand, type HistogramBucket } from "@quiz/domain";
+
+import { pointsKind, type PointsKind } from "../../ui/PointsInput";
 
 /**
  * The pure rules of the Grading tab's matrix (ADR-106 §8 as amended
@@ -14,9 +16,6 @@ import { describe, gradeBand, gradeFromPoints, histogram, projectGrade, type Des
  * their own after the tree (`extras`), and their statistics are counts.
  */
 
-/** What a criterion is to the sums: a normal one, a penalty (max < 0), or a bonus (`bonus` set). */
-export type CriterionRole = "normal" | "penalty" | "bonus";
-
 export interface MatrixLeaf {
   kind: "leaf";
   id: string;
@@ -25,7 +24,8 @@ export interface MatrixLeaf {
   description: string;
   /** Its maximum; a bonus's are its `bonus` points. */
   max: number;
-  role: CriterionRole;
+  /** Counted against its maximum (`max`), a penalty or a bonus (`pointsKind`, the points field's rule). */
+  role: PointsKind;
 }
 
 export interface MatrixGroup {
@@ -50,11 +50,8 @@ export interface CriteriaTree {
   extras: MatrixLeaf[];
 }
 
-export const roleOf = (row: Pick<CriteriaTableRow, "max" | "bonus">): CriterionRole =>
-  row.bonus !== undefined ? "bonus" : row.max < 0 ? "penalty" : "normal";
-
 const leafOf = (row: CriteriaTableRow): MatrixLeaf => {
-  const role = roleOf(row);
+  const role = pointsKind(row);
   return {
     kind: "leaf",
     id: row.criterionId,
@@ -98,14 +95,14 @@ export function criteriaTree(table: readonly CriteriaTableRow[]): CriteriaTree {
   for (const row of table) {
     const leaf = leafOf(row);
     // Out of its section, a penalty or a bonus is named in full.
-    if (leaf.role !== "normal") extras.push({ ...leaf, label: leaf.id });
+    if (leaf.role !== "max") extras.push({ ...leaf, label: leaf.id });
     else groupAt(row.section).children.push(leaf);
   }
   const finish = (node: MatrixNode): MatrixNode => {
     if (node.kind === "leaf") return node;
     const children = node.children.map(finish);
     const leaves = children.flatMap(leavesOf);
-    return { ...node, children, leafIds: leaves.map((l) => l.id), max: leaves.reduce((s, l) => s + Math.max(0, l.max), 0) };
+    return { ...node, children, leafIds: leaves.map((l) => l.id), max: leaves.reduce((s, l) => s + l.max, 0) };
   };
   // A section holding penalties or bonuses only is left with no child: it draws nothing.
   const prune = (node: MatrixNode): MatrixNode[] =>
@@ -163,7 +160,7 @@ export interface CellValue {
   max: number;
   /** A section's: validated when all are, empty when none has a row, proposed otherwise. */
   state: CellState;
-  role: CriterionRole;
+  role: PointsKind;
 }
 
 /** A repository's rows by criterion. */
@@ -180,13 +177,26 @@ export function cellValue(column: MatrixColumn, rows: ReadonlyMap<string, Criter
   const given = lines.filter((l): l is CriteriaTableRow => l !== undefined && l.points !== null);
   const state: CellState =
     given.length === 0 ? "empty" : lines.every((l) => l?.state === "validated") ? "validated" : "proposed";
-  return { points: given.length === 0 ? null : given.reduce((s, l) => s + l.points!, 0), max: column.max, state, role: "normal" };
+  return { points: given.length === 0 ? null : given.reduce((s, l) => s + l.points!, 0), max: column.max, state, role: "max" };
+}
+
+/** Under this share of its maximum a cell is a fail, under the next a borderline: the pass mark's 60 % and a 4.5's 70 % on the linear scale. */
+const FAIL_BELOW = 0.6;
+const BORDERLINE_BELOW = 0.7;
+
+/**
+ * The band of a share of a maximum (0 … 1), for the heat of a cell and the
+ * bars of the statistics: a plain threshold on the ratio, the linear
+ * scale's pass mark and borderline, INDEPENDENT of the project's grading
+ * scale — a heat reads a criterion, never converts it to a mark.
+ */
+export function ratioBand(ratio: number): GradeBand {
+  return ratio < FAIL_BELOW ? "fail" : ratio < BORDERLINE_BELOW ? "borderline" : "pass";
 }
 
 /**
- * The heat of a cell: a normal criterion's or a section's share of its
- * maximum, read as the grade band it would be (`gradeBand`, the Histogram's
- * tones); a penalty applied is a fail; a bonus, an empty cell or a
+ * The heat of a cell: a criterion's or a section's share of its maximum
+ * (`ratioBand`); a penalty applied is a fail; a bonus, an empty cell or a
  * maximum of 0 has none.
  */
 export function cellHeat(cell: CellValue): GradeBand | null {
@@ -194,7 +204,7 @@ export function cellHeat(cell: CellValue): GradeBand | null {
   if (cell.role === "bonus") return null;
   if (cell.role === "penalty") return cell.points < 0 ? "fail" : null;
   if (!(cell.max > 0)) return null;
-  return gradeBand(gradeFromPoints(cell.points, cell.max, {}));
+  return ratioBand(cell.points / cell.max);
 }
 
 /** The repositories the statistics count: validated (every criterion), with their total. */
@@ -215,7 +225,7 @@ export interface MarkStats {
 /** The marks of the validated repositories: their description and their histogram. */
 export function markStats(repos: readonly ProjectGradingRepo[], scale: ProjectGradingScale): MarkStats {
   const marks = validatedRepos(repos).map((r) => repoMark(r, scale)!);
-  return { description: describe(marks), histogram: histogram(marks), passing: marks.filter((m) => gradeBand(m) !== "fail").length };
+  return { description: describe(marks), histogram: histogram(marks), passing: marks.filter(isPassing).length };
 }
 
 export interface CriterionStat {
@@ -246,7 +256,7 @@ export function criteriaStats(columns: readonly MatrixColumn[], repos: readonly 
   const bonuses: ExtraStat[] = [];
   for (const column of columns) {
     const values = cells(column);
-    const role = column.kind === "leaf" ? column.role : "normal";
+    const role = column.kind === "leaf" ? column.role : "max";
     if (role === "penalty") penalties.push({ column, count: values.filter((v) => (v.points ?? 0) < 0).length });
     else if (role === "bonus") bonuses.push({ column, count: values.filter((v) => (v.points ?? 0) > 0).length });
     else if (column.max > 0 && values.length > 0) {

@@ -10,6 +10,7 @@ import { AppLink } from "../../AppLink";
 import { Grade } from "../../Grade";
 import { useT } from "../../i18n";
 import { projectGradingKey } from "../../queryKeys";
+import { GradeStats } from "../../charts/GradeStats";
 import { Histogram } from "../../charts/Histogram";
 import { Summary } from "../../charts/Summary";
 import type { Navigate } from "../../router";
@@ -24,12 +25,12 @@ import {
   SectionHeading,
   SegmentedBar,
   Skeleton,
-  Stat,
   T,
   type BarTone,
 } from "../../ui";
 import {
   cellHeat,
+  ratioBand,
   cellValue,
   criteriaStats,
   criteriaTree,
@@ -322,30 +323,26 @@ function GradingStats({
   const t = useT();
   const marks = markStats(repos, project.gradingScale);
   const criteria = criteriaStats(columns, repos);
-  const { count, mean, median, stdev } = marks.description;
+  const { count } = marks.description;
   return (
     <div className="space-y-3">
       <Summary
         title={t("results.histogram.title")}
         chart={<Histogram buckets={marks.histogram} className="h-40 lg:h-48" />}
         stats={
-          <>
-            <Stat label={t("results.stat.mean")} value={<Grade value={mean} />} aside={t("project.matrix.repos", { n: count })} />
-            <Stat label={t("results.stat.median")} value={<Grade value={median} />} />
-            <Stat label={t("results.stat.stdev")} value={stdev.toFixed(2)} />
-            <Stat
-              label={t("results.stat.passRate")}
-              value={`${Math.round((marks.passing / count) * 100)}%`}
-              aside={`${marks.passing} / ${count}`}
-            />
-          </>
+          <GradeStats
+            description={marks.description}
+            countLabel={t("project.matrix.repos", { n: count })}
+            passing={marks.passing}
+            total={count}
+          />
         }
       />
       <Card className="space-y-4 p-5">
         <SectionHeading title={t("project.matrix.byCriterion")} description={t("project.matrix.byCriterion.desc")} />
         <ul className="space-y-2" data-testid="criteria-bars">
           {criteria.criteria.map(({ column, ratio }) => {
-            const band = cellHeat({ points: ratio, max: 1, state: "validated", role: "normal" })!;
+            const band = ratioBand(ratio);
             const percent = Math.round(ratio * 100);
             return (
               <li key={columnKey(column)} className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_3rem] items-center gap-3 text-[13px]">
