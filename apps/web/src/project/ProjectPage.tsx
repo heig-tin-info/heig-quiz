@@ -23,9 +23,7 @@ import {
   Badge,
   Button,
   buttonClass,
-  Card,
   EditableTitle,
-  EmptyState,
   isoDateTime,
   Menu,
   PageError,
@@ -39,6 +37,7 @@ import {
 import { projectPhaseLabel, projectPhaseStyle } from "./common";
 import { FIELD_ID } from "./newProject";
 import { ProjectDraftForm } from "./ProjectDraftForm";
+import { GradingTab } from "./grading/GradingTab";
 import { ProjectGroupSet } from "./ProjectGroupSet";
 import { projectNotices, projectNoticeToast } from "./projectNotices";
 import { SyncButton } from "./parts";
@@ -81,8 +80,10 @@ import { useProjectPatch, useProjectRefresh, useRenameProject } from "./useProje
  * checkpoints and the live workspace; a tile's sub-figure opens Repositories
  * filtered by it. Repositories: one row per student of the roster with their
  * repository (per group in a group project, M3-16b, with its drift and
- * *Resync*). Grading, in `criteria` mode only: the way to the grading
- * screen. Settings: what is still open to change (F-PROJ-03). A row opens
+ * *Resync*). Grading, in `criteria` mode only: the statistics of the
+ * validated repositories and the read-only matrix of their criteria, a row
+ * opening the grading screen (`grading/GradingTab`). Settings: what is
+ * still open to change (F-PROJ-03). A row opens
  * its repository's sheet:
  * the history of its runs, its scores and the teacher's, its own deadline and
  * its lock. See DESIGN.md › The project page (staff).
@@ -439,7 +440,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
             ) : tab === "repositories" ? (
               <ProjectRepos project={project} onOpen={setOpenRepo} navigate={navigate} filter={filter} onFilter={setFilter} />
             ) : tab === "grading" ? (
-              <GradingTab projectId={project.id} navigate={navigate} />
+              <GradingTab project={project} navigate={navigate} />
             ) : (
               <ProjectSettings project={project} pending={patch.isPending} write={write} />
             )}
@@ -454,27 +455,3 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
 
 /** The tabs of a published or locked project's page (F-PROJ-13 as amended 2026-10-13). */
 type ProjectTab = "summary" | "repositories" | "grading" | "settings";
-
-/** The Grading tab, in `criteria` mode: for now, the way to the grading screen (ADR-106 §8). */
-function GradingTab({ projectId, navigate }: { projectId: string; navigate: Navigate }) {
-  const t = useT();
-  return (
-    <Card>
-      <EmptyState
-        icon={ClipboardCheck}
-        title={t("project.gradingTab.title")}
-        action={
-          <AppLink
-            route={{ view: "projectGrading", id: projectId }}
-            navigate={navigate}
-            className={buttonClass("secondary")}
-          >
-            {t("project.grading.openLink")}
-          </AppLink>
-        }
-      >
-        {t("project.gradingTab.body")}
-      </EmptyState>
-    </Card>
-  );
-}

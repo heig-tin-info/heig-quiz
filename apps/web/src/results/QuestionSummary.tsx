@@ -3,7 +3,7 @@ import { displayedRate } from "@quiz/domain";
 
 import { useI18n, useT } from "../i18n";
 import { BarLegend, percent, Stat, StackedBars, type BarPart, type BarTone } from "../ui";
-import { Summary } from "./Summary";
+import { Summary } from "../charts/Summary";
 
 /** The four outcomes of a question, in the correction's tones (`CorrectionQuestion`'s head). */
 const OUTCOMES = [

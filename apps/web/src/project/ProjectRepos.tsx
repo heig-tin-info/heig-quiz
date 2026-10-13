@@ -1,15 +1,13 @@
-import { ClipboardCheck, FolderGit2, GraduationCap, Loader2, Lock, LockOpen, Snowflake, Users } from "lucide-react";
+import { FolderGit2, GraduationCap, Loader2, Lock, LockOpen, Snowflake, Users } from "lucide-react";
 
 import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
 import { projectGraded } from "@quiz/domain";
 
-import { AppLink } from "../AppLink";
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
 import {
   Badge,
   Button,
-  buttonClass,
   Card,
   cx,
   EmptyState,
@@ -236,8 +234,6 @@ export function ProjectRepos({
   const entries = repoEntries(project);
   const shown = filterEntries(entries, filter, project);
   const graded = projectGraded(project.gradingMode);
-  // Graded by criteria, a repository frozen for good: there is something to grade (ADR-106 §8).
-  const gradedByCriteria = project.gradingMode === "criteria" && project.counts.frozen > 0;
   const { sorted, sort, toggle } = useSortableTable<RepoEntry, SortKey>(
     shown,
     (entry, key) => (key === "student" ? entry.label : (entry.repo?.scores.final?.points ?? -1)),
@@ -250,23 +246,9 @@ export function ProjectRepos({
       title={<span id="project-repos">{t("project.repos")}</span>}
       count={entries.length}
       actions={
-        project.liveStale || gradedByCriteria ? (
-          <span className="inline-flex items-center gap-3">
-            {project.liveStale ? (
-              <span className="inline-flex items-center gap-1.5 text-xs text-fg-faint" role="status">
-                <Loader2 className="size-3.5 animate-spin" /> {t("project.liveStale")}
-              </span>
-            ) : null}
-            {/* ADR-106 §8: the grading screen, a secondary way in beside the header's primary action. */}
-            {gradedByCriteria ? (
-              <AppLink
-                route={{ view: "projectGrading", id: project.id }}
-                navigate={navigate}
-                className={buttonClass("ghost", "sm")}
-              >
-                <ClipboardCheck /> {t("project.grading.openLink")}
-              </AppLink>
-            ) : null}
+        project.liveStale ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-fg-faint" role="status">
+            <Loader2 className="size-3.5 animate-spin" /> {t("project.liveStale")}
           </span>
         ) : undefined
       }

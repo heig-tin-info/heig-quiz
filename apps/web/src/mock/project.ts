@@ -1248,11 +1248,20 @@ function lifeOf(s: ProjectSummary, releasedAt: string | null): ProjectLifeLike {
   return { state: s.state, deadlineAt: new Date(s.deadlineAt), released: releasedAt !== null, gradingMode: s.gradingMode };
 }
 
-/** Labo 00's criteria, shortened: what a switch or a reload reads in the mock. */
+/**
+ * Labo 00's criteria, shortened: what a switch or a reload reads in the mock.
+ * `code` nests two sections beside a leaf of its own, so the matrix of the
+ * Grading tab has a tree to fold (ADR-106 §2); 20 points, a penalty and a bonus.
+ */
 const SAMPLE_LEAVES: Omit<ProjectCriterion, "kind">[] = [
-  { id: "rendu.all-tests-passed", sectionPath: ["rendu"], description: "Les tests automatiques passent", maxPoints: 12, prompt: "…" },
-  { id: "rapport.reponses", sectionPath: ["rapport"], description: "Le rapport répond aux neuf points de l'énoncé", maxPoints: 4, prompt: "…" },
-  { id: "rapport.presentation", sectionPath: ["rapport"], description: "Le rapport est bien présenté", maxPoints: 2, prompt: "…", milestone: "mid" },
+  { id: "rendu.all-tests-passed", sectionPath: ["rendu"], description: "Les tests automatiques passent", maxPoints: 8, prompt: "…" },
+  { id: "code.structure.modules", sectionPath: ["code", "structure"], description: "Le programme est découpé en modules cohérents", maxPoints: 2, prompt: "…" },
+  { id: "code.structure.entetes", sectionPath: ["code", "structure"], description: "Chaque module a un en-tête minimal et protégé", maxPoints: 1, prompt: "…" },
+  { id: "code.style.nommage", sectionPath: ["code", "style"], description: "Les identificateurs sont explicites et cohérents", maxPoints: 1, prompt: "…" },
+  { id: "code.style.format", sectionPath: ["code", "style"], description: "Le code est formaté de façon uniforme", maxPoints: 1, prompt: "…" },
+  { id: "code.memoire", sectionPath: ["code"], description: "Toute mémoire allouée est libérée", maxPoints: 1, prompt: "…" },
+  { id: "rapport.reponses", sectionPath: ["rapport"], description: "Le rapport répond aux neuf points de l'énoncé", maxPoints: 3, prompt: "…" },
+  { id: "rapport.presentation", sectionPath: ["rapport"], description: "Le rapport est bien présenté", maxPoints: 1, prompt: "…", milestone: "mid" },
   { id: "rapport.redaction", sectionPath: ["rapport"], description: "La rédaction est soignée", maxPoints: 1, prompt: "…" },
   { id: "rapport.cle-privee", sectionPath: ["rapport"], description: "Aucune clé SSH privée dans le dépôt", maxPoints: -3, prompt: "…" },
   { id: "git.commits", sectionPath: ["git"], description: "L'historique Git est propre, l'identité configurée", maxPoints: 1 },
@@ -1263,7 +1272,7 @@ const SAMPLE_LEAVES: Omit<ProjectCriterion, "kind">[] = [
 const CRITERIA = new Map<string, Omit<NonNullable<ProjectCriteriaView["snapshot"]>, "leaves" | "max" | "bonusMax">>();
 
 function sampleSnapshot(loadedAt: string) {
-  const sections = ["rendu", "rapport", "git", "bonus"].map((id) => ({ id, path: [id], description: null }));
+  const sections = ["rendu", "code", "code.structure", "code.style", "rapport", "git", "bonus"].map((id) => ({ id, path: id.split("."), description: null }));
   return { fileSha: "3f1c2a9", sourceSha: "9b4e7d21c0a5", loadedAt, grading: { context: null, sources: [] }, sections };
 }
 
@@ -1336,17 +1345,22 @@ function seedCriteria(p: MockProject): void {
       const leaf = SAMPLE_LEAVES.find((l) => l.id === criterionId)!;
       rows.push({ criterionId, points, max: leaf.maxPoints, source, state: validated ? "validated" : "proposed", rationale, reason: null, createdAt: at, lockedAt: null });
     };
-    const tests = [12, 9, 6, 10.5, 12, 7.5][i % 6]!;
+    const tests = [8, 6, 4, 7, 8, 5][i % 6]!;
     add("rendu.all-tests-passed", tests, "auto");
     if (i % 2 === 0) rows.at(-1)!.lockedAt = at;
     const pick = (id: string, k: number) => RATIONALES[id]![k % RATIONALES[id]!.length]!;
     if (failed) {
-      for (const id of ["rapport.reponses", "rapport.presentation", "rapport.redaction", "rapport.cle-privee", "bonus.proactivite"]) {
+      for (const id of SAMPLE_LEAVES.filter((l) => l.prompt !== undefined && l.id !== "rendu.all-tests-passed").map((l) => l.id)) {
         rows.push({ criterionId: id, points: 0, max: SAMPLE_LEAVES.find((l) => l.id === id)!.maxPoints, source: "llm", state: "proposed", rationale: null, reason: "llm_budget", createdAt: at, lockedAt: null });
       }
     } else {
-      add("rapport.reponses", [4, 2.5, 3][i % 3]!, "llm", pick("rapport.reponses", i));
-      add("rapport.presentation", i % 2 === 0 ? 2 : 1, "llm", pick("rapport.presentation", i));
+      add("code.structure.modules", [2, 1.5, 1, 2, 0.5][i % 5]!, "llm");
+      add("code.structure.entetes", i % 3 === 2 ? 0 : 1, "llm");
+      add("code.style.nommage", [1, 0.5, 1, 0][i % 4]!, "llm");
+      add("code.style.format", i % 5 === 3 ? 0.5 : 1, "llm");
+      add("code.memoire", [1, 0, 0.5][i % 3]!, "llm");
+      add("rapport.reponses", [3, 1.5, 2.5, 1][i % 4]!, "llm", pick("rapport.reponses", i));
+      add("rapport.presentation", i % 2 === 0 ? 1 : 0.5, "llm", pick("rapport.presentation", i));
       add("rapport.redaction", i % 2 === 0 ? 1 : 0.5, "llm", pick("rapport.redaction", i));
       add("rapport.cle-privee", i % 7 === 5 ? -3 : 0, "llm", pick("rapport.cle-privee", i % 7 === 5 ? 1 : 0));
       add("bonus.proactivite", i % 4 === 1 ? 1 : 0, "llm", pick("bonus.proactivite", i % 4 === 1 ? 1 : 0));
@@ -1358,10 +1372,10 @@ function seedCriteria(p: MockProject): void {
       reason: null,
       targetSha: r.lastCommit?.sha ?? sha(i),
       distributionSha: sha(500),
-      casesPassed: Math.round(tests),
+      casesPassed: Math.round((tests * 12) / 8),
       casesTotal: 12,
       build: { exitCode: 0, timedOut: false },
-      test: { exitCode: tests === 12 ? 0 : 1, timedOut: false },
+      test: { exitCode: tests === 8 ? 0 : 1, timedOut: false },
       createdAt: at.toISOString(),
     });
   });

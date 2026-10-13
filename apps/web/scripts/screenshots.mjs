@@ -387,10 +387,18 @@ const scenes = [
   },
   { name: "project-grading-empty", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c2/grading?projects=1&pjcriteria=1" },
   // Its project page: Grade, the primary action while a repository is to
-  // validate; its Grading tab (the way to that screen) and its Settings tab
-  // (the criteria's rows).
+  // validate; its Grading tab (the statistics of the validated repositories
+  // over the matrix, folded by section; then `code` unfolded) and its
+  // Settings tab (the criteria's rows).
   { name: "project-criteria", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1", settle: 2500, fold: true },
-  { name: "project-criteria-grading", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=grading", settle: 2500 },
+  { name: "project-matrix", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=grading", settle: 2500 },
+  {
+    name: "project-matrix-open",
+    role: "teacher",
+    path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=grading",
+    settle: 2500,
+    act: (p) => p.getByRole("table").getByRole("button", { name: /^code/ }).click(),
+  },
   { name: "project-criteria-settings", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=settings", settle: 2500 },
   {
     name: "project-unassigned",

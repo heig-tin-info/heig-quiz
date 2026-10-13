@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ProjectDetail, ProjectRepoScores, ProjectRepoView } from "@quiz/contracts";
+import type { CriteriaTableRow, ProjectDetail, ProjectGradingRepo, ProjectGradingView, ProjectRepoScores, ProjectRepoView } from "@quiz/contracts";
 
 import {
   AHEAD,
@@ -1284,10 +1284,11 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     expect(screen.getByRole("tabpanel")).toContainElement(screen.getByTestId("project-tiles"));
   });
 
-  it("opens a criteria project's Grading tab, which links to the grading screen", async () => {
-    routes(makeProject({ gradingMode: "criteria" }));
+  it("opens a criteria project's Grading tab; with no repository, it links to the grading screen", async () => {
+    routes(makeProject({ gradingMode: "criteria" }), { [`GET ${BASE}/grading`]: ok(gradingView([])) });
     const { navigate } = renderPage("en", "grading");
     expect(await screen.findByRole("tab", { name: "Grading" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByText("Grading by criteria")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("link", { name: "Grading screen" }));
     expect(navigate).toHaveBeenCalledWith({ view: "projectGrading", id: makeProject().id });
   });
@@ -1657,5 +1658,137 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(steps[0]).toMatch(/^Publishedat publication/);
     expect(steps[1]).toMatch(/^midD−3/);
     expect(steps[2]).toMatch(/^Deadline7 days after publication/);
+  });
+});
+
+// ---------------------------------------------------------------- the Grading tab (ADR-106 §8 as amended 2026-10-13)
+
+/** One criterion's line of a repository's table. */
+function criterion(criterionId: string, section: string, max: number, points: number | null, over: Partial<CriteriaTableRow> = {}): CriteriaTableRow {
+  return { criterionId, section, description: `About ${criterionId}`, max, points, state: points === null ? "empty" : "validated", locked: false, ...over };
+}
+
+/** `rendu` one leaf, `code` two (a section to fold), a penalty. */
+function gradingRepo(n: number, label: string, points: [number, number, number, number], over: Partial<ProjectGradingRepo> = {}): ProjectGradingRepo {
+  const validated = over.validation?.validated ?? true;
+  const state = validated ? "validated" : "proposed";
+  return {
+    id: `0190d3c4-0000-7000-8000-0000000001${String(n).padStart(2, "0")}`,
+    label,
+    group: false,
+    frozen: true,
+    validation: { validated, missing: [], proposed: [] },
+    table: [
+      criterion("rendu.tests", "rendu", 8, points[0], { state }),
+      criterion("code.modules", "code", 2, points[1], { state }),
+      criterion("code.memoire", "code", 2, points[2], { state }),
+      criterion("rapport.cle", "rapport", -3, points[3], { state }),
+    ],
+    evidence: null,
+    total: validated ? { points: Math.max(0, points[0] + points[1] + points[2] + points[3]), max: 12 } : null,
+    ...over,
+  };
+}
+
+function gradingView(repos: ProjectGradingRepo[]): ProjectGradingView {
+  return { project: { id: makeProject().id, classroomId: CLASSROOM_ID, name: "Labo 2", deadlineAt: PAST }, repos };
+}
+
+describe("the Grading tab", () => {
+  const criteria = (over: Partial<ProjectDetail> = {}) => makeProject({ gradingMode: "criteria", ...over });
+  const matrix = async () => within(await screen.findByRole("region", { name: /Criteria by repository/ })).getByRole("table");
+  const heads = (table: HTMLElement) => within(table).getAllByRole("columnheader").map((h) => h.textContent);
+  const cells = (tr: HTMLElement, n = 4) => within(tr).getAllByRole("cell").slice(0, n).map((c) => c.textContent);
+
+  it("folds the sections by default, unfolds one from its head, and keeps a lone criterion and the penalty apart", async () => {
+    routes(criteria(), { [`GET ${BASE}/grading`]: ok(gradingView([gradingRepo(1, "Alice", [8, 2, 1, 0]), gradingRepo(2, "Bob", [4, 1, 0, -3])])) });
+    renderPage("en", "grading");
+    const table = await matrix();
+    // `rendu` holds one criterion: drawn as it, with no button; `code` folded with its maximum; the penalty last.
+    expect(heads(table)).toEqual([
+      "Student",
+      expect.stringMatching(/^rendu\.tests — About rendu\.tests8$/),
+      "code4",
+      expect.stringMatching(/^rapport\.cle/),
+      "Total",
+      "Mark",
+    ]);
+    const code = within(table).getByRole("button", { name: /code/ });
+    expect(code).toHaveAttribute("aria-expanded", "false");
+    // The folded section's cell is its sum; the total is the payload's.
+    expect(cells(within(table).getAllByTestId("matrix-row")[0]!)).toEqual(["8", "3", "0", "11/12"]);
+    await userEvent.click(code);
+    expect(within(table).getByRole("button", { name: /code/ })).toHaveAttribute("aria-expanded", "true");
+    expect(heads(table)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^modules — About code\.modules/), expect.stringMatching(/^memoire/)]),
+    );
+    expect(cells(within(table).getAllByTestId("matrix-row")[1]!, 5)).toEqual(["4", "1", "0", "-3", "2/12"]);
+  });
+
+  it("opens the grading screen on a row's repository, by a click and by Enter", async () => {
+    const repos = [gradingRepo(1, "Alice", [8, 2, 1, 0]), gradingRepo(2, "Bob", [4, 1, 0, -3])];
+    routes(criteria(), { [`GET ${BASE}/grading`]: ok(gradingView(repos)) });
+    const { navigate } = renderPage("en", "grading");
+    const rows = within(await matrix()).getAllByTestId("matrix-row");
+    await userEvent.click(within(rows[1]!).getByText("Bob"));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "projectGrading", id: makeProject().id }, { query: { repo: repos[1]!.id } });
+    rows[0]!.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(navigate).toHaveBeenLastCalledWith({ view: "projectGrading", id: makeProject().id }, { query: { repo: repos[0]!.id } });
+    // Unfolding a section is not opening a row.
+    navigate.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: /code/ }));
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("counts the validated repositories only, worst criterion first, the penalty apart", async () => {
+    routes(criteria(), {
+      [`GET ${BASE}/grading`]: ok(
+        gradingView([
+          gradingRepo(1, "Alice", [8, 2, 2, 0]),
+          gradingRepo(2, "Bob", [4, 2, 2, -3]),
+          gradingRepo(3, "Chloé", [0, 0, 0, 0], { validation: { validated: false, missing: [], proposed: ["rendu.tests"] } }),
+        ]),
+      ),
+    });
+    renderPage("en", "grading");
+    expect(await screen.findByTestId("grading-validated")).toHaveTextContent("2 of 3 validated");
+    const bars = within(screen.getByTestId("criteria-bars")).getAllByRole("listitem").map((li) => li.textContent);
+    expect(bars).toEqual(["rendu.tests75%", "code100%"]);
+    expect(screen.getByTestId("criteria-extras")).toHaveTextContent("rapport.cle · penalty applied in 1 of 2 repositories");
+    // Chloé is in the matrix but not validated: her points in italics, no total, no mark.
+    const chloe = within(await matrix()).getAllByTestId("matrix-row")[2]!;
+    expect(within(chloe).getAllByRole("cell")[0]!.className).toMatch(/italic/);
+    expect(within(chloe).getAllByRole("cell").at(-1)!.textContent).toBe("—");
+  });
+
+  it("says when no repository is validated yet, and names a group project's rows by group", async () => {
+    routes(criteria({ groupMode: true }), {
+      [`GET ${BASE}/grading`]: ok(
+        gradingView([gradingRepo(1, "Binôme A", [8, 2, 2, 0], { group: true, validation: { validated: false, missing: [], proposed: [] } })]),
+      ),
+    });
+    renderPage("en", "grading");
+    expect(await screen.findByText("No repository validated yet")).toBeInTheDocument();
+    expect(screen.queryByTestId("criteria-bars")).toBeNull();
+    expect(heads(await matrix())[0]).toBe("Group");
+  });
+
+  it("leaves the staff's test repository out: the server's view holds the students' only", async () => {
+    const staff = { ...row(3, makeRepo(3)), staff: true };
+    routes(criteria({ rows: [row(1, makeRepo(1)), staff] }), {
+      [`GET ${BASE}/grading`]: ok(gradingView([gradingRepo(1, "Alice", [8, 2, 2, 0])])),
+    });
+    renderPage("en", "grading");
+    expect(await screen.findByTestId("grading-validated")).toHaveTextContent("1 of 1 validated");
+    expect(within(await matrix()).getAllByTestId("matrix-row")).toHaveLength(1);
+  });
+
+  it("speaks French", async () => {
+    routes(criteria(), { [`GET ${BASE}/grading`]: ok(gradingView([gradingRepo(1, "Alice", [8, 2, 2, 0])])) });
+    renderPage("fr", "grading");
+    expect(await screen.findByTestId("grading-validated")).toHaveTextContent("1 sur 1 validés");
+    const table = within(screen.getByRole("region", { name: /Critères par dépôt/ })).getByRole("table");
+    expect(within(table).getByRole("columnheader", { name: "Note" })).toBeInTheDocument();
   });
 });

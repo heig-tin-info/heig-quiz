@@ -40,10 +40,10 @@ import {
 import { ByQuestionView, isNotOver } from "./ByQuestionView";
 import { ExportButton } from "./ExportButton";
 import { GradeTable, useGradeSort } from "./GradeTable";
-import { Histogram } from "./Histogram";
+import { Histogram } from "../charts/Histogram";
 import { StudentCopy } from "./StudentCopy";
 import { StudentStats } from "./StudentStats";
-import { Summary } from "./Summary";
+import { Summary } from "../charts/Summary";
 import { useIsCourseOwner } from "../course/parts";
 import { evaluationKey, resultsKey, resultsViewKey } from "../queryKeys";
 import { useEvaluation, useResultsByQuestion } from "../evaluation/api";
