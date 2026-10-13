@@ -603,24 +603,15 @@ sha256:… <token>` on the runner VM). The scripts pull
 `<image>:<sha>@sha256:…` — the digest decides, the tag names it for people —
 and tag it `:<sha>` locally; `.env.image` then holds
 `IMAGE_TAG=<sha>@sha256:…`. A request without a digest still deploys by the
-sha tag, so a rollback to a run from before this change works as it did.
+sha tag (a manual deploy, or a rerun of a run from before the digest).
 The one exception is the frozen staging dispatcher (below), which requires
-the digest: the CI always sends it the portal's, whatever the variable.
+the digest.
 
-The digest is sent only while the REPOSITORY variable `DEPLOY_BY_DIGEST`
-is `1`. A checkout whose deploy script predates it would read the digest as
-part of the token and fail its registry login, so set the variable only
-once every checkout the CI deploys to runs a commit that has it (the
-digest-aware scripts parse `[<digest>]`): the staging and production
-checkouts on the application VM (`grep -c QUIZ_DEPLOY_DIGEST deploy.sh` in
-`/home/srvstg/quiz-staging` and `/srv/quiz`) and the runner VM's
-production checkout (`/opt/quiz-runner`;
-`grep -c QUIZ_DEPLOY_DIGEST infra/engine/deploy.sh`).
-Then `gh variable set DEPLOY_BY_DIGEST --repo heig-tin-info/heig-quiz --body 1`.
-While it is set, a deploy step whose digest is missing fails instead of
-falling back to the tag. The gate leaves `ci.yml` once it is set for good
-(#747). A checkout left behind must be brought forward by one deploy
-without the variable before it is switched on again.
+The digest is always sent: a deploy step whose digest is missing fails
+instead of falling back to the tag. Until 2026-10-13 a repository variable,
+`DEPLOY_BY_DIGEST`, gated it while the checkouts on both VMs moved to a
+digest-aware deploy script; the gate left `ci.yml` once every checkout parsed
+the digest (#747), and the variable can be deleted.
 
 ### The environments
 
@@ -652,7 +643,7 @@ the following; check them after any change of administrators
 - No repository-level secret: a key at the repository level reaches every
   job of every workflow, pull requests' included. The deploy hosts, users
   and host keys are repository VARIABLES (not secret), and so are
-  `CODESPACE_DEPLOY`, `DEPLOY_BY_DIGEST`, `DEPLOY_FORCE_SHA` and
+  `CODESPACE_DEPLOY`, `DEPLOY_FORCE_SHA` and
   `CODESPACE_FORCE_SHA`.
 
 Creating `staging-portal` (the PO, once, protection FIRST, then the key):
