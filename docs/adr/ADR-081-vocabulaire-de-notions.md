@@ -15,7 +15,9 @@ the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
 [fifth addendum](#fifth-addendum-2026-10-10-the-curation-of-the-vocabulary)
 (curation, step 5: its queue, the merge and the aliases are implemented; the probable duplicates are not) and the
 [sixth addendum](#sixth-addendum-2026-10-10-the-concepts-of-a-course-steps-7-9)
-(the concepts of a course, steps 7a to 7d and 9a implemented). The work is tracked by #599, under a parent issue that groups #557
+(the concepts of a course, steps 7a to 7d and 9a implemented) and the
+[amendment of 2026-10-13](#amendment-2026-10-13-fill-with-ai-on-the-admins-sheet)
+(the model's fill of §7 on the admin's concept sheet, implemented). The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
@@ -356,7 +358,10 @@ where named.
 5. **The question editor's picker creates** a `proposed` concept from the
    cut-over on: a label in the interface language and an optional
    qualifier; the concepts already used in the pool first (§5). The model's
-   fill of the other language and "Suggest concepts" come later (#557).
+   fill of the other language and "Suggest concepts" come later (#557); the
+   fill is on the admin's sheet since the
+   [amendment of 2026-10-13](#amendment-2026-10-13-fill-with-ai-on-the-admins-sheet),
+   not yet in the picker.
    The picker shows a concept's qualifier wherever it has one (only
    homonyms carry one), amending §5's "only when ambiguous" for the picker.
 6. **The pool's Tags tab becomes a read-only "Notions" tab**: the concepts
@@ -739,3 +744,43 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
       and the question editor's picker (it chooses a link, which stays exact).
     - **Web:** the mock applies the same domain function; the course filter
       hint says narrower concepts are included. No other screen changes.
+
+## Amendment 2026-10-13: Fill with AI on the admin's sheet
+
+Settled with the product owner on 2026-10-13 (#817). It carries out the
+model's fill of §7 ("fills the other language's label, the descriptions…;
+the teacher sees and may edit them"), deferred by the third addendum §5, on
+the admin's concept sheet only. The rest stands.
+
+1. **Surface.** The concept sheet of the curation screen (`/admin/concepts`)
+   gets a secondary **Fill with AI** button; Save stays the primary action.
+   It is shown only when the platform has a model
+   (`GET /generate/availability`), and enabled when the form holds a label
+   and has an empty label or description. The teacher's picker is out of
+   scope (a later step); the suggested broader concept of §7 is not part of
+   it.
+2. **What leaves (open question 43).** The sheet's form as it stands, saved
+   or not: this concept's labels, qualifiers and descriptions in both
+   languages, nothing else — no id, alias, relation, question, pool,
+   journal, course or person.
+3. **The route.** `POST /app/api/admin/concepts/:id/fill`, the admin's,
+   under the existing purpose `concepts` (the gateway's cap, the
+   `llm_calls` ledger, the same per-minute budget as the probable
+   duplicates). Nothing is stored and nothing is audited: the proposal goes
+   back to the sheet. A form with no empty field makes no call; one without
+   any label is a 422 `concept_label_missing`; a merged concept a 409
+   `concept_merged`.
+4. **Only empty fields, never an overwrite.** The model proposes a label
+   (with the translation of the qualifier when the other language has one)
+   only for an empty label, a description only for an empty one, clamped to
+   `CONCEPT_LABEL_MAX`, `CONCEPT_QUALIFIER_MAX` and
+   `CONCEPT_DESCRIPTION_MAX`. The sheet puts them in the fields still empty
+   when the answer arrives; what the admin typed meanwhile wins.
+5. **A proposed label goes through the resolver** (`resolveConceptLabel`,
+   against the vocabulary less this concept), as Suggest concepts does: one
+   that already names another concept comes back as `taken` and is NOT put
+   in the form — the sheet says "did you mean" that concept, this one being
+   perhaps its duplicate, instead of a 409 `concept_exists` on Save; one only close to some
+   is filled, and the sheet names them.
+6. **The sheet's Save (`PATCH /concepts/:id`, audited `concept.edit`) is
+   the only write**, unchanged.

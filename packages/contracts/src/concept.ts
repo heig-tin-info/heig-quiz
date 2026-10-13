@@ -160,6 +160,38 @@ export const ConceptSuggestions = z.object({
 });
 export type ConceptSuggestions = z.infer<typeof ConceptSuggestions>;
 
+/**
+ * "Fill with AI" on the admin's concept sheet (ADR-081 §7, amendment of
+ * 2026-10-13): the sheet's form as it stands, saved or not — this concept's
+ * labels, qualifiers and descriptions, nothing else. An empty field is one to
+ * fill.
+ */
+const FillSide = z.object({
+  label: z.string().trim().max(CONCEPT_LABEL_MAX),
+  qualifier: z.string().trim().max(CONCEPT_QUALIFIER_MAX),
+  description: z.string().trim().max(CONCEPT_DESCRIPTION_MAX),
+});
+export const ConceptFillRequest = perLang(FillSide).strict();
+export type ConceptFillRequest = z.infer<typeof ConceptFillRequest>;
+
+/** Concepts named as close to a proposed label, at most. */
+export const CONCEPT_FILL_CLOSE_MAX = 3;
+/**
+ * The model's proposal for one language, only for the fields that were
+ * empty; nothing is stored. `label` (with its qualifier) when the label was
+ * empty; `taken` when that label already names another concept — the sheet
+ * then says "did you mean" instead of filling it, since the save would be a
+ * 409 `concept_exists`; `close` names the concepts it is only close to.
+ */
+const FillProposal = z.object({
+  label: NewConceptName.nullable(),
+  taken: ConceptRef.nullable(),
+  close: z.array(ConceptRef).max(CONCEPT_FILL_CLOSE_MAX),
+  description: z.string().min(1).max(CONCEPT_DESCRIPTION_MAX).nullable(),
+});
+export const ConceptFill = perLang(FillProposal);
+export type ConceptFill = z.infer<typeof ConceptFill>;
+
 /** A label must hold a letter or a digit, so that its key is never empty. */
 const ConceptLabel = z
   .string()

@@ -45,6 +45,7 @@ export { addRelation, removeRelation } from "./relations.js";
 import { lockRelations } from "./relations.js";
 export { listAdminConcepts } from "./admin.js";
 export { aiDuplicates } from "./duplicatesAi.js";
+export { fillConcept } from "./fillAi.js";
 export { suggestConcepts, SUGGEST_DRAFT_MAX } from "./suggest.js";
 export { mergeConcept } from "./merge.js";
 export { conceptsCoveredByCourse, coverage, coveredConcepts, courseConceptsOf, setCourseConcepts } from "./courseConcepts.js";

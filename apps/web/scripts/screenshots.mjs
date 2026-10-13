@@ -1690,6 +1690,17 @@ const scenes = [
       await p.getByRole("button", { name: /^merge dynamic alocation into/i }).click();
       await p.getByRole("dialog").waitFor();
     } },
+  // ADR-081 amendment of 2026-10-13 (#817): Fill with AI puts the proposal in the empty fields; a taken label is a "did you mean".
+  { name: "admin-concepts-fill", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^edit récursivité/i }).click();
+      await p.getByRole("button", { name: /^fill with ai$/i }).click();
+      await p.getByText(/check them, then save/i).waitFor();
+    } },
+  { name: "admin-concepts-fill-taken", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^edit complément à 2/i }).click();
+      await p.getByRole("button", { name: /^fill with ai$/i }).click();
+      await p.getByText(/already names the concept/i).waitFor();
+    } },
   // Curated aliases (fifth addendum, PR3): the sheet's Aliases section, then the collision warning an alias equal to another concept's label raises.
   { name: "admin-concepts-aliases", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^edit pointer$/i }).click();
