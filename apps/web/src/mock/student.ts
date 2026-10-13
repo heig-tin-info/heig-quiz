@@ -996,6 +996,8 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     mode: "exam",
     date: iso(-D),
     feedbackAttemptId: null,
+    // The mode's default (ADR-074 §6): an exam counts, an exercise does not.
+    counts: (over.mode ?? "exam") === "exam",
     score: null,
     ...over,
   });
@@ -1042,6 +1044,10 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
           feedbackAttemptId: STUDENT_PAST_ATTEMPT,
           score: score(8.5, 12),
         }),
+        // A released exercise below 4: practice, its grade indicative, in the ink (#803).
+        row({ title: "Série 1 — Variables", mode: "exercise", status: "released", date: iso(-12 * D), score: score(5, 10) }),
+        // An exercise the teacher included in the mean: it sits with the exams (ADR-074 §6).
+        row({ title: "Série bonus — Récursivité", mode: "exercise", counts: true, status: "released", date: iso(-10 * D), score: score(7, 10) }),
         // Released, never taken: the scale minimum (F-RES-02).
         row({ title: "Quiz 1 — Types et opérateurs", status: "missed", date: iso(-15 * D), score: score(0, 10) }),
         ...series,

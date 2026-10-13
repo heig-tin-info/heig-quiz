@@ -1,6 +1,8 @@
 /**
  * The student's Grades tab of a classroom (F-GBOOK-05, F-RES-04, ADR-074,
- * M5-04): their own cells, one row per column of the gradebook. The server
+ * M5-04): their own cells, one row per column of the gradebook, in the
+ * global Grades page's two groups — what counts, then the practice, its
+ * grades indicative (`CountsGroups`, #803). The server
  * narrows everything (`GET /student/classrooms/:id/gradebook`, the gradebook's
  * student exit): this tab filters and computes nothing, and a field the
  * payload lacks — the mean, a weight — is a thing the teacher has not
@@ -10,8 +12,10 @@
  *   - Type: the activity is the bold 14 px identity, kind and date under it
  *     in 13 px muted; the grade the one number, semibold on the right.
  *   - Color: no accent, no primary — a page you read, not act on (invariant 2).
- *     Grades wear their band's colour; the absence its own `info` sigil.
- *   - Space: one card, hairline rows, the same on a phone and on a desktop
+ *     Grades that count wear their band's colour, practice grades the ink;
+ *     the absence its own `info` sigil.
+ *   - Space: a card per group, hairline rows, the mean last in the group
+ *     that counts; the same on a phone and on a desktop
  *     (a list never needs the sideways scroll of the staff's matrix).
  *   - Finish: a cell that has no grade says why, in words — "grade not
  *     shared", "indicative" — never an empty box.
@@ -29,6 +33,7 @@ import { useT, type TFunction } from "../i18n";
 import { Badge, Card, Dash, EmptyState, isoDateParts, QueryError, Skeleton } from "../ui";
 import { useStudentGradebook } from "./api";
 import { AbsentSigil, GradeOrDash, MODE_LABEL } from "./cells";
+import { CountsGroups } from "./groups";
 
 export function StudentGradebook({ classroomId }: { classroomId: string }) {
   const t = useT();
@@ -58,34 +63,42 @@ export function StudentGradebook({ classroomId }: { classroomId: string }) {
     );
   }
   return (
-    <Card>
-      <ul className="divide-y divide-line">
-        {data.columns.map((column) => (
-          <li key={column.activityId} className="flex items-start gap-3 px-4 py-3.5">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold leading-snug">{column.title}</p>
-              <p className="mt-0.5 text-[13px] text-fg-muted">{caption(column, t)}</p>
-            </div>
-            <div className="shrink-0 text-right text-[17px] font-semibold leading-snug tabular-nums">
-              <CellFace cell={data.cells[column.activityId]} t={t} />
-            </div>
-          </li>
-        ))}
-        <Mean data={data} />
-      </ul>
-    </Card>
+    <CountsGroups rows={data.columns}>
+      {(columns, counts) => (
+        <Card>
+          <ul className="divide-y divide-line">
+            {columns.map((column) => (
+              <li key={column.activityId} className="flex items-start gap-3 px-4 py-3.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold leading-snug">{column.title}</p>
+                  <p className="mt-0.5 text-[13px] text-fg-muted">{caption(column, t)}</p>
+                </div>
+                <div className="shrink-0 text-right text-[17px] font-semibold leading-snug tabular-nums">
+                  <CellFace cell={data.cells[column.activityId]} neutral={!counts} t={t} />
+                </div>
+              </li>
+            ))}
+            {/* The mean is of the columns that count: it closes their group. */}
+            {counts ? <Mean data={data} /> : null}
+          </ul>
+        </Card>
+      )}
+    </CountsGroups>
   );
 }
 
-/** Kind and date, then the weight once the teacher publishes the mean (the payload carries it only then). */
+/** Kind and date, then the weight of a column that counts once the teacher publishes the mean (the payload carries it only then). */
 function caption(column: GradebookStudentColumn, t: TFunction): string {
   const parts = [t(MODE_LABEL[column.mode]), isoDateParts(column.date).date];
-  if (column.counts === false) parts.push(t("gbook.notCounted"));
-  else if (column.weight !== undefined) parts.push(t("gbook.weight", { weight: String(column.weight) }));
+  if (column.counts && column.weight !== undefined) parts.push(t("gbook.weight", { weight: String(column.weight) }));
   return parts.join(" · ");
 }
 
-/** The mean, last, only when the payload has it: published by the teacher (`null`: nothing to average yet). */
+/**
+ * The mean, last of the group that counts, only when the payload has it:
+ * published by the teacher (`null`: nothing to average yet). With no column
+ * that counts, there is no such group and nothing to average: no mean drawn.
+ */
 function Mean({ data }: { data: GradebookStudent }) {
   const t = useT();
   if (data.mean === undefined) return null;
@@ -102,11 +115,11 @@ function Mean({ data }: { data: GradebookStudent }) {
   );
 }
 
-/** A student cell: the grade, the absence, or in words why there is none. */
-function CellFace({ cell, t }: { cell: GradebookStudentCell | undefined; t: TFunction }) {
+/** A student cell: the grade, the absence, or in words why there is none; `neutral`, a practice grade in the ink. */
+function CellFace({ cell, neutral, t }: { cell: GradebookStudentCell | undefined; neutral: boolean; t: TFunction }) {
   switch (cell?.kind) {
     case "grade":
-      return <GradeOrDash value={cell.grade} />;
+      return <GradeOrDash value={cell.grade} neutral={neutral} />;
     case "absent":
       return <AbsentSigil why={t("gbook.absent.student")} />;
     case "withheld":

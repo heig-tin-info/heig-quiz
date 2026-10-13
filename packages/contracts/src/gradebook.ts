@@ -198,7 +198,11 @@ export const GradebookStudentCell = z.object({
 });
 export type GradebookStudentCell = z.infer<typeof GradebookStudentCell>;
 
-/** A column as a student reads it: `weight` and `counts` only once the mean is published. */
+/**
+ * A column as a student reads it: whether it counts toward the mean always
+ * (the flag alone, so the tab draws practice apart; ADR-074, amendment of
+ * 2026-10-13), its `weight` only once the mean is published.
+ */
 export const GradebookStudentColumn = z.object({
   kind: GradebookActivityKind,
   activityId: z.uuid(),
@@ -206,7 +210,7 @@ export const GradebookStudentColumn = z.object({
   title: z.string(),
   date: z.iso.datetime(),
   weight: GradebookWeight.optional(),
-  counts: z.boolean().optional(),
+  counts: z.boolean(),
 });
 export type GradebookStudentColumn = z.infer<typeof GradebookStudentColumn>;
 

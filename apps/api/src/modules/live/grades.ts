@@ -1,13 +1,17 @@
 /**
  * The student's Grades page (`GET /student/results`, F-RES-04, F-ORG-14):
  * the home's Past (`studentBoard`), every classroom's, archived ones
- * included, by classroom. Depends on `attempt.ts` only.
+ * included, by classroom. Depends on `attempt.ts`, and reads the
+ * gradebook's `counts` flag (ADR-074 §6, amendment of 2026-10-13).
  */
-import { isFinishedAttempt } from "@quiz/domain";
+import { inArray } from "drizzle-orm";
+
+import { countsByDefault, evaluationColumnKind, isFinishedAttempt } from "@quiz/domain";
 import type { CardResults, EvaluationGradeRow, GradeGroup, GradeStatus, StudentGrades } from "@quiz/contracts";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
+import { gradebookColumns } from "../../db/schema.js";
 import { gradeReadable } from "../results/service.js";
 import { studentBoard, type PastEntry } from "./attempt.js";
 
@@ -28,6 +32,7 @@ export async function studentGrades(
   classroomId?: string,
 ): Promise<StudentGrades> {
   const { past } = await studentBoard(db, userId, now, classroomId);
+  const stored = await storedCounts(db, past.map((entry) => entry.row.evaluation.id));
   const groups = new Map<string, GradeGroup>();
   for (const entry of past) {
     if (entry.row.staff && entry.row.attempt === null) continue;
@@ -43,13 +48,29 @@ export async function studentGrades(
       },
       rows: [],
     };
-    group.rows.push(gradeRow(entry));
+    const { evaluation } = entry.row;
+    group.rows.push(gradeRow(entry, stored.get(evaluation.id) ?? countsByDefault(evaluationColumnKind(evaluation.mode))));
     groups.set(id, group);
   }
   const newest = (g: GradeGroup) => g.rows[0]!.date;
   return [...groups.values()]
     .map((g) => ({ ...g, rows: g.rows.sort((a, b) => b.date.localeCompare(a.date)) }))
     .sort((a, b) => newest(b).localeCompare(newest(a)));
+}
+
+/**
+ * The teacher's `counts` of the evaluations that have a stored gradebook
+ * column, by evaluation id; the others count by their mode's default. Read
+ * only: the table is the gradebook's. The flag alone ever reaches the
+ * student, never the weight (ADR-074, amendment of 2026-10-13).
+ */
+async function storedCounts(db: Db, evaluationIds: string[]): Promise<Map<string, boolean>> {
+  if (evaluationIds.length === 0) return new Map();
+  const rows = await db
+    .select({ evaluationId: gradebookColumns.evaluationId, counts: gradebookColumns.counts })
+    .from(gradebookColumns)
+    .where(inArray(gradebookColumns.evaluationId, evaluationIds));
+  return new Map(rows.map((row) => [row.evaluationId!, row.counts]));
 }
 
 /**
@@ -90,7 +111,7 @@ function scoreOf({ row, counted, released, early }: PastEntry): EvaluationGradeR
   return null;
 }
 
-function gradeRow(entry: PastEntry): EvaluationGradeRow {
+function gradeRow(entry: PastEntry, counts: boolean): EvaluationGradeRow {
   const { row, card, counted } = entry;
   const { evaluation, attempt } = row;
   return {
@@ -112,6 +133,7 @@ function gradeRow(entry: PastEntry): EvaluationGradeRow {
     }),
     // `results` is the counted attempt's own (`resultsState`).
     feedbackAttemptId: card.results === "available" ? (counted?.id ?? null) : null,
+    counts,
     score: scoreOf(entry),
   };
 }

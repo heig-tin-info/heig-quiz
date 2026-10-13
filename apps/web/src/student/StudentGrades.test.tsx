@@ -21,6 +21,7 @@ const row = (over: Partial<EvaluationGradeRow> & Pick<EvaluationGradeRow, "evalu
   date: "2026-09-20T10:00:00.000Z",
   status: "released",
   feedbackAttemptId: null,
+  counts: (over.mode ?? "exam") === "exam",
   score: null,
   ...over,
 });
@@ -133,6 +134,7 @@ describe("the student's Grades", () => {
           title: "Lab 2",
           date: "2026-09-25T10:00:00.000Z",
           status: "released",
+          counts: true,
           score: { points: 15, totalPoints: 20, grade: 4.8 },
         },
       ],
@@ -146,6 +148,38 @@ describe("the student's Grades", () => {
     expect(lab.getByText("released")).toBeInTheDocument();
     await userEvent.click(lab.getByText("Lab 2"));
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("draws what counts first, then the exercises apart, their grades indicative in the ink (#803)", async () => {
+    const room: GradeGroup = {
+      ...groups[0]!,
+      rows: [
+        row({ evaluationId: "x1", title: "Série 1", mode: "exercise", score: { points: 3, totalPoints: 10, grade: 2.5, pendingCount: 0 } }),
+        // An exercise the teacher counts in the mean: with the exams, its grade in its band's colour.
+        row({ evaluationId: "x2", title: "Série bonus", mode: "exercise", counts: true, score: { points: 3, totalPoints: 10, grade: 2.5, pendingCount: 0 } }),
+        row({ evaluationId: "e1", title: "Quiz 1", score: { points: 9, totalPoints: 10, grade: 5.5, pendingCount: 0 } }),
+      ],
+    };
+    mockFetch({ [URL]: ok([room]) });
+    render();
+    const counting = await screen.findByRole("region", { name: "Exams and projects" });
+    const practice = screen.getByRole("region", { name: "Exercises" });
+    expect(within(practice).getByText(/these grades are indicative/)).toBeInTheDocument();
+    // Exams and projects come first.
+    expect(counting.compareDocumentPosition(practice)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(within(counting).getAllByText("Série bonus").length).toBeGreaterThan(0);
+    expect(within(counting).getAllByText("Quiz 1").length).toBeGreaterThan(0);
+    expect(within(practice).queryAllByText("Série bonus")).toHaveLength(0);
+    expect(within(counting).getAllByText("2.5")[0]!.className).toContain("text-danger");
+    expect(within(practice).getAllByText("2.5")[0]!.className).not.toContain("text-danger");
+    expect(within(practice).queryByText("indicative")).toBeNull();
+  });
+
+  it("draws no empty group", async () => {
+    mockFetch({ [URL]: ok([groups[1]!]) });
+    render();
+    expect(await screen.findByRole("region", { name: "Exams and projects" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Exercises" })).toBeNull();
   });
 
   it("says there is nothing yet", async () => {

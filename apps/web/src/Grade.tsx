@@ -17,12 +17,14 @@ const TONE_TEXT = { danger: "text-danger", warning: "text-warning" } as const;
  * (`gradeBand`), and its ECTS label ("Satisfactory (D)") on hover. The same
  * for the teacher and for the student: seeing that a 3.5 is a fail is the
  * point. The label is also in the text for a screen reader, since the Tip's
- * bubble is aria-hidden and a colour says nothing to it.
+ * bubble is aria-hidden and a colour says nothing to it. `neutral` drops
+ * the band's colour, for a grade that is only indicative.
  */
-export function Grade({ value }: { value: number }) {
+export function Grade({ value, neutral = false }: { value: number; neutral?: boolean }) {
   const t = useT();
   const label = t(`grade.letter.${gradeLetter(value)}`);
-  const tone = GRADE_BAND_TONE[gradeBand(value)];
+  // An indicative grade (practice that does not count, #803) keeps the ink: no band says "fail" there.
+  const tone = neutral ? undefined : GRADE_BAND_TONE[gradeBand(value)];
   return (
     <Tip label={label}>
       <span className={tone ? TONE_TEXT[tone] : undefined}>

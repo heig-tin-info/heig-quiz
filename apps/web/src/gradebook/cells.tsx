@@ -35,8 +35,8 @@ export function AbsentSigil({ why }: { why: string }) {
 }
 
 /** A grade, or a dash where there is none (a null mean, an empty cell). */
-export const GradeOrDash = ({ value }: { value: number | null }) =>
-  value === null ? <Dash /> : <Grade value={value} />;
+export const GradeOrDash = ({ value, neutral }: { value: number | null; neutral?: boolean }) =>
+  value === null ? <Dash /> : <Grade value={value} neutral={neutral} />;
 
 /** A student as the matrix and its dialogs name them. */
 export const fullName = (row: Pick<GradebookStaffRow, "prenom" | "nom">) => `${row.prenom} ${row.nom}`.trim();

@@ -157,7 +157,9 @@ export async function studentGradebook(db: Db, scope: ReadableClassroom, userId:
       mode: entry.mode,
       title: entry.title,
       date: iso(entry.date),
-      ...(published ? { weight: settings.weight, counts: settings.counts } : {}),
+      // The flag alone always (the tab draws practice apart); the weight with the mean only (ADR-074, 2026-10-13).
+      counts: settings.counts,
+      ...(published ? { weight: settings.weight } : {}),
     })),
     cells,
     ...meanKey(gradebookMean(counted)),

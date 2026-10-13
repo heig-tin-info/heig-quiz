@@ -27,6 +27,8 @@ Amended 2026-10-09: the consequence on the student's global Grades page records 
 
 Amended 2026-10-10 (security audit L1, following [ADR-068](ADR-068-roles-de-l-equipe-du-cours.md) §3 of the same day): §9 only — a mark over a derived absence of a released column is an owner's act.
 
+Amended 2026-10-13 (product owner, #803): §7's student exit only — a column's `counts` flag (the boolean alone) reaches the student before the mean is published; the weight still does not. See *Amendment of 2026-10-13* at the end of the Decision.
+
 ## Context
 
 D06 made the gradebook one table per classroom: a column per evaluation or
@@ -156,7 +158,8 @@ gain the class means. Everything else stands.
    `class_mean` line (F-GBOOK-04).
 4. **The student's view is unchanged**: the mean only when published, and
    with it each column's weight (now in percent) and counted flag, as §7
-   and F-GBOOK-05 had it.
+   and F-GBOOK-05 had it (*amended 2026-10-13: the counted flag reaches the
+   student always, the weight still with the mean only; below*).
 5. **Migration** (`0089_gradebook_weight_percent`). A coefficient 2 next to
    1s meant double weight; ×100 would give 200, outside the new range. So
    each classroom is **normalised to its largest weight**: the weights are
@@ -178,6 +181,31 @@ gain the class means. Everything else stands.
 6. The weight change stays audited as `gradebook.column_updated`, its
    before and after now in percent. Duplicating a classroom copies no
    gradebook column (none did before), so no weight either.
+
+### Amendment of 2026-10-13 (product owner, Yves Chevallier, #803)
+
+Scope: what the student's exit carries of a column's settings (§7 and
+point 4 of the amendment of 2026-10-08). Everything else stands.
+
+1. **Whether a column counts reaches the student always.** The student's
+   cells (`GradebookStudentColumn.counts`) and every row of the global
+   Grades page (`EvaluationGradeRow.counts`, `ProjectGradeRow.counts`) carry
+   the column's **effective** `counts`: the stored column's flag when a row
+   exists, otherwise the kind's default of §6 (`countsByDefault`: an exam
+   and a project count, an exercise does not). The boolean alone, before
+   the mean is published too.
+2. **The weight stays withheld** until the teacher publishes the mean, as
+   before; the class means stay staff-only.
+3. **Why.** A student read every exercise's released grade beside the
+   exams', in the same red under 4, and took practice for a verdict. The
+   two pages now draw what counts ("Exams and projects") apart from the
+   practice ("Exercises"), whose grades are indicative and in the ink
+   (F-ORG-14, F-RES-04, F-GBOOK-05). Grouping by the evaluation's mode would
+   have been simpler but wrong for an exercise the teacher includes in the
+   mean, which is not indicative; grouping by the flag tells the student
+   what the teacher decided, which is the student's to know (it says how
+   they are graded), while the weight — the share of each column in a mean
+   the teacher has not chosen to show — stays the teacher's until then.
 
 ## Consequences
 
