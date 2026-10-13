@@ -44,7 +44,7 @@ import {
   pushReceipts,
 } from "../../db/schema.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
+import { appKey, fakeGithub, orgsRoute, type Route } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { repoWorld } from "./testing.js";
@@ -782,6 +782,35 @@ describe("the organization's repository browser (M3-11)", () => {
       422,
       "source_not_found",
     ]);
+  });
+
+  it("reads past a first page of non-sources, every page failing at once on an exhausted quota", async () => {
+    const room = await connectedClassroom();
+    const repo = (name: string, id: number) => ({ id, name, archived: false, private: true, default_branch: "main", pushed_at: NOW });
+    let quota = true;
+    const pages: (string | null)[] = [];
+    const listing: Route = (url, init) => {
+      if (init.method !== "GET" || url.pathname !== `/orgs/${room.login}/repos`) return undefined;
+      const page = url.searchParams.get("page");
+      pages.push(page);
+      if (page === "1") return Response.json(Array.from({ length: 100 }, (_, i) => repo(`old-${i}-squashed`, 990_000 + i)));
+      if (quota) return Response.json([repo("lab", world.ids.get(`${room.login}/lab`)!)]);
+      return Response.json(
+        { message: "API rate limit exceeded" },
+        { status: 403, headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 3600) } },
+      );
+    };
+    gh.routes.unshift(listing);
+    try {
+      const list = ProjectSourceRepo.array().parse((await call("GET", `${base(room.id)}/sources`, teacher.headers)).json());
+      expect(list.map((r) => r.name)).toEqual(["lab"]);
+      expect(pages).toEqual(["1", "2"]);
+      // The second page carries HTTP_READ too: answered at once, never waited out for an hour.
+      quota = false;
+      expect((await call("GET", `${base(room.id)}/sources`, teacher.headers)).statusCode).not.toBe(200);
+    } finally {
+      gh.routes.splice(gh.routes.indexOf(listing), 1);
+    }
   });
 
   it("hides and refuses a repository Quiz knows as a course the caller does not teach (ADR-100 §5)", async () => {

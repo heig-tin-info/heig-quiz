@@ -1000,15 +1000,31 @@ export async function classroomInstallation(
 // ---------------------------------------------------------------- push receipts of a deletion
 
 /**
- * Every GitHub repository a project references, with the project and its
+ * The GitHub repositories Quiz made for a project, with the project and its
  * classroom (`repo_id`, `project_id`, `classroom_id`): its students' and
- * groups' repositories, its distribution, its source. One list for what a
- * deletion purges and for what a course's staff alone may read (ADR-100).
+ * groups' repositories, its distribution. Never a source ({@link heldRepos}).
  */
-const PROJECT_REPO_REFS = sql`
+const PROJECT_MADE_REPOS = sql`
   SELECT r.github_repo_id AS repo_id, p.id AS project_id, p.classroom_id FROM project_repos r JOIN projects p ON p.id = r.project_id WHERE r.github_repo_id IS NOT NULL
-  UNION SELECT p.distribution_repo_id, p.id, p.classroom_id FROM projects p WHERE p.distribution_repo_id IS NOT NULL
-  UNION SELECT p.source_repo_id, p.id, p.classroom_id FROM projects p`;
+  UNION SELECT p.distribution_repo_id, p.id, p.classroom_id FROM projects p WHERE p.distribution_repo_id IS NOT NULL`;
+
+/**
+ * Every GitHub repository a project references: those Quiz made for it,
+ * and its source. One list for what a deletion purges and for what a
+ * course's staff alone may read (ADR-100).
+ */
+const PROJECT_REPO_REFS = sql`${PROJECT_MADE_REPOS} UNION SELECT p.source_repo_id, p.id, p.classroom_id FROM projects p`;
+
+/** The GitHub repositories, among `ids`, that Quiz made for a project (`PROJECT_MADE_REPOS`). */
+export async function heldRepos(db: Db, ids: number[]): Promise<Set<number>> {
+  if (ids.length === 0) return new Set();
+  const list = sql.join(
+    ids.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const result = await db.execute(sql`SELECT DISTINCT m.repo_id FROM (${PROJECT_MADE_REPOS}) m WHERE m.repo_id IN (${list})`);
+  return new Set((result as unknown as { rows: { repo_id: number | string }[] }).rows.map((r) => Number(r.repo_id)));
+}
 
 /** The projects a deletion takes with it: one project, a classroom's, or a course's. */
 export type ProjectsGone = { projectId: string } | { classroomId: string } | { courseId: string };
