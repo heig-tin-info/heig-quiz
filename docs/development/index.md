@@ -329,7 +329,8 @@ file with the tests. A floor is a regression guard, not a target: the point
 of margin is what lets a new, slightly less covered module in without a red
 report, while a real regression still fails (a floor set at the figure
 itself left `packages/domain` 0.3 point of margin, and one new module put
-it under). The floors are checked by the coverage command; a plain test run does not
+it under). Every floor was lowered by that one point once, on 2026-10-13,
+so that each package starts with its margin; none is lowered again. The floors are checked by the coverage command; a plain test run does not
 measure coverage (`vitest.shared.ts`), except in `packages/domain`, whose own
 config requires 100 % of its lines on every plain `pnpm test`.
 
