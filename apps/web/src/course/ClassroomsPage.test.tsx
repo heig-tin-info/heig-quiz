@@ -6,7 +6,9 @@ import type { ActivitySummary, CourseSummary } from "@quiz/contracts";
 
 import { makeClassroomSummary, makeCourseSummary } from "../test/fixtures";
 import { makeQueryClient, renderWithProviders } from "../test/render";
+import { classroomSignals } from "./classroomSignals";
 import { ClassroomsPage } from "./ClassroomsPage";
+import { ClassroomRow } from "./parts";
 
 /*
  * The phone's Classrooms page (#449): the sidebar's "right now" list
@@ -74,7 +76,7 @@ describe("ClassroomsPage", () => {
   it("adds the row's signals once the activities are known, never a zero (#805)", () => {
     renderPage([makeCourseSummary({ id: "k1", classrooms: [room] })], [grading]);
     expect(screen.getByText("1 to grade")).toBeInTheDocument();
-    expect(screen.getByText("Journal: Week 2")).toBeInTheDocument();
+    expect(screen.getByText("Week 2")).toBeInTheDocument();
     expect(screen.getByText("18 of 24 signed in")).toBeInTheDocument();
     expect(screen.getByText("1 evaluation")).toBeInTheDocument();
     expect(screen.queryByText(/live now|project/)).toBeNull();
@@ -83,7 +85,16 @@ describe("ClassroomsPage", () => {
   it("keeps the row's first line alone while the activities are not known", () => {
     renderPage([makeCourseSummary({ id: "k1", classrooms: [room] })]);
     expect(screen.getByText("PRG1-A")).toBeInTheDocument();
-    expect(screen.queryByText("Journal: Week 2")).toBeNull();
+    expect(screen.queryByText("Week 2")).toBeNull();
     expect(screen.queryByText("18 of 24 signed in")).toBeNull();
+  });
+
+  it("draws the live badge alone on a compact row (the home course card)", () => {
+    const running: ActivitySummary = { ...grading, id: "00000000-0000-4000-8000-000000000002", state: "running", updatedAt: new Date().toISOString() };
+    const signals = classroomSignals([grading, running], room, Date.now());
+    renderWithProviders(<ClassroomRow room={room} signals={signals} compact navigate={vi.fn()} />);
+    expect(screen.getByText("Live now")).toBeInTheDocument();
+    expect(screen.queryByText("1 to grade")).toBeNull();
+    expect(screen.queryByText("Week 2")).toBeNull();
   });
 });

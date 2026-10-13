@@ -12,7 +12,7 @@
  * (invariant 4). Reads never touch GitHub: a page view is a SELECT, and a
  * GitHub outage leaves the journal readable (N-RES-07).
  */
-import { and, count, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import type { ClassroomJournalSignal, JournalPageStaff, JournalRepository, JournalStaff } from "@quiz/contracts";
@@ -49,10 +49,6 @@ async function journalRow(db: Db, classroomId: string): Promise<JournalRow | nul
 /** Not served to students right now: the negation of THE predicate. */
 const hiddenFromStudents = () => sql<boolean>`NOT (${visibleToStudents()})`;
 
-/** A moment as epoch milliseconds out of the database, so no driver's timestamp parsing is involved. */
-const epochMs = (at: SQL) => sql<number | null>`(extract(epoch from ${at}) * 1000)::float8`.mapWith(Number);
-const isoOfMs = (ms: number | null): string | null => (ms === null ? null : new Date(ms).toISOString());
-
 /**
  * Where each classroom's journal stands for its students (#805), for the
  * staff's classroom rows (`listCourses`): the page that most recently
@@ -61,13 +57,17 @@ const isoOfMs = (ms: number | null): string | null => (ms === null ? null : new 
  * the student view ({@link visibleToStudents}: not a draft, `visible_from`
  * passed on the database's clock); "next" is a page that is not a draft
  * with a `visible_from` still ahead of that clock. A page became visible at
- * the later of its `visible_from` and its creation. The same in both modes
+ * the later of its `visible_from` and its creation — an approximation: a
+ * Quiz-mode page created as a draft and un-drafted later reads as visible
+ * since its creation, as no column records the un-drafting (an edit's
+ * `updated_at` would make a typo fix the "last page"). The same in both modes
  * (ADR-057). Staff only: no student payload carries it. A classroom
  * without a journal is absent from the map.
  */
 export async function journalSignals(db: Db, classroomIds: string[]): Promise<Map<string, ClassroomJournalSignal>> {
   if (classroomIds.length === 0) return new Map();
-  const visible = sql`${journalPages.id} IS NOT NULL AND ${visibleToStudents()}`;
+  // No page (the left join's null row): `draft = false` is null, so it is filtered out.
+  const visible = visibleToStudents();
   const scheduled = sql`${journalPages.draft} = false AND ${journalPages.visibleFrom} > now()`;
   const shownAt = sql`greatest(${journalPages.visibleFrom}, ${journalPages.createdAt})`;
   const name = sql`coalesce(${journalPages.title}, ${journalPages.path})`;
@@ -75,16 +75,16 @@ export async function journalSignals(db: Db, classroomIds: string[]): Promise<Ma
     .select({
       classroomId: classroomJournals.classroomId,
       lastTitle: sql<string | null>`(array_agg(${name} ORDER BY ${shownAt} DESC, ${journalPages.path}) FILTER (WHERE ${visible}))[1]`,
-      lastAt: epochMs(sql`max(${shownAt}) FILTER (WHERE ${visible})`),
+      lastAt: sql<Date | null>`max(${shownAt}) FILTER (WHERE ${visible})`.mapWith(journalPages.visibleFrom),
       nextTitle: sql<string | null>`(array_agg(${name} ORDER BY ${journalPages.visibleFrom}, ${journalPages.path}) FILTER (WHERE ${scheduled}))[1]`,
-      nextAt: epochMs(sql`min(${journalPages.visibleFrom}) FILTER (WHERE ${scheduled})`),
+      nextAt: sql<Date | null>`min(${journalPages.visibleFrom}) FILTER (WHERE ${scheduled})`.mapWith(journalPages.visibleFrom),
     })
     .from(classroomJournals)
     .leftJoin(journalPages, eq(journalPages.classroomId, classroomJournals.classroomId))
     .where(inArray(classroomJournals.classroomId, classroomIds))
     .groupBy(classroomJournals.classroomId);
-  const mark = (title: string | null, at: number | null) => {
-    const iso = isoOfMs(at);
+  const mark = (title: string | null, at: Date | null) => {
+    const iso = isoOrNull(at);
     return title === null || iso === null ? null : { title, at: iso };
   };
   return new Map(

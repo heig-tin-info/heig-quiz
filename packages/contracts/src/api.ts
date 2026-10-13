@@ -229,7 +229,12 @@ export interface JournalPageMark {
 }
 
 export interface ClassroomJournalSignal {
-  /** The page that most recently became visible to students: the later of its `visible_from` and its creation. */
+  /**
+   * The page that most recently became visible to students: the later of
+   * its `visible_from` and its creation. A page created as a draft and
+   * un-drafted later counts from its creation (no column records the
+   * un-drafting).
+   */
   lastPage: JournalPageMark | null;
   /** The next page a `visible_from` will show them (never a draft); `at` is that `visible_from`. */
   nextPage: JournalPageMark | null;

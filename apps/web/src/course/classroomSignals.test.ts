@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { EvaluationActivitySummary, ProjectActivitySummary } from "@quiz/contracts";
 
-import { classroomSignals, liveOnly } from "./classroomSignals";
+import { classroomSignals } from "./classroomSignals";
 
 const ROOM = "00000000-0000-4000-8000-0000000000aa";
 const OTHER = "00000000-0000-4000-8000-0000000000bb";
@@ -55,6 +55,7 @@ const room = { id: ROOM, students: 24, claimed: 24, journal: null };
 describe("classroomSignals (#805)", () => {
   it("is all zeros and nulls for a quiet classroom: the row draws nothing", () => {
     expect(classroomSignals([], room, NOW)).toEqual({
+      now: NOW,
       live: 0,
       toGrade: 0,
       next: null,
@@ -75,7 +76,7 @@ describe("classroomSignals (#805)", () => {
     expect(s.evaluations).toBe(0);
   });
 
-  it("counts as live an evaluation in the room and a project open to the students, never a take-home", () => {
+  it("counts as live what the Activities page does: an evaluation in the room, never a take-home nor a project", () => {
     const s = classroomSignals(
       [
         evaluation({ state: "running" }),
@@ -87,7 +88,7 @@ describe("classroomSignals (#805)", () => {
       room,
       NOW,
     );
-    expect(s.live).toBe(3);
+    expect(s.live).toBe(2);
   });
 
   it("counts to grade: grading, a closed exam, a graded project — not a closed exercise nor a poll", () => {
@@ -132,11 +133,5 @@ describe("classroomSignals (#805)", () => {
     const s = classroomSignals([evaluation(), evaluation({ mode: "poll" }), project()], { ...room, journal }, NOW);
     expect([s.evaluations, s.projects]).toEqual([2, 1]);
     expect(s.journal).toBe(journal);
-  });
-
-  it("keeps the live count alone for the home card, and nothing while unknown", () => {
-    const full = classroomSignals([evaluation({ state: "running" }), evaluation({ state: "grading" })], room, NOW);
-    expect(liveOnly(full)).toMatchObject({ live: 1, toGrade: 0, evaluations: 0, next: null });
-    expect(liveOnly(undefined)).toBeUndefined();
   });
 });

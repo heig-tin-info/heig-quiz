@@ -7,7 +7,6 @@ import type { Route } from "../router";
 import { Actions, Card, cx, Dash, PeopleStack, SectionHeading, T } from "../ui";
 import { CourseIcon } from "./CourseIcon";
 import { CoursePools } from "./CoursePools";
-import { liveOnly } from "./classroomSignals";
 import { ArchivedClassrooms, ClassroomRow, HiddenBadge, useClassroomSignals } from "./parts";
 import { useCourseActions } from "./useCourseActions";
 
@@ -76,7 +75,8 @@ export function CourseCard({
               key={room.id}
               room={room}
               students={room.students}
-              signals={liveOnly(signalsOf(room))}
+              signals={signalsOf(room)}
+              compact
               navigate={navigate}
             />
           ))

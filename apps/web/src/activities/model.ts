@@ -324,6 +324,16 @@ export interface ActivitiesSummary {
 export const awaitsRelease = (a: ActivitySummary): boolean =>
   a.kind === "evaluation" && a.mode !== "poll" && (a.state === "closed" || a.state === "grading");
 
+/**
+ * What waits on the staff's correction (ADR-104's amber "staff awaited"),
+ * the "to grade" of a classroom row (#805): {@link awaitsRelease} without
+ * the closed exercises — the product owner (2026-10-13): an exercise closed
+ * asks nothing, while a closed exam waits for its grading — plus a project
+ * whose scores are final and whose release waits (phase `graded`).
+ */
+export const awaitsStaff = (a: ActivitySummary): boolean =>
+  a.kind === "project" ? a.phase === "graded" : awaitsRelease(a) && (a.state === "grading" || a.mode === "exam");
+
 /** What will happen to a row from `now` on: its opening if still ahead, its closing if it is not over. */
 function eventsOf(a: ActivitySummary, now: number): NextEvent[] {
   if (tabOf(a) !== "current") return [];

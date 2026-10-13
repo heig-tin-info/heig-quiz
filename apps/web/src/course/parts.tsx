@@ -13,8 +13,9 @@ import type {
 } from "@quiz/contracts";
 import { courseRoleAllows } from "@quiz/domain";
 
+import { nextEventWhen } from "../activities/Summary";
 import { api, type ReadOptions } from "../api";
-import { useI18n, useT } from "../i18n";
+import { useI18n, useT, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import { Badge, cx, relativeTime, ToggleChip, useNow } from "../ui";
 import { activitiesKey, classroomKey, courseConditionsKey, courseKey, coursesKey } from "../queryKeys";
@@ -130,19 +131,22 @@ export function useClassroomSignals(): (room: ClassroomSummary) => ClassroomSign
  * One classroom of a course, live or archived: it opens the classroom.
  * An archived one is muted, wears the archive icon and has no headcount; it
  * is restored from its own page, which already offers that. `signals` adds a
- * second, muted line of what is happening in it (#805).
+ * second, muted line of what is happening in it (#805); `compact` keeps only
+ * its live badge (the home course card).
  */
 export function ClassroomRow({
   room,
   archived = false,
   students,
   signals,
+  compact = false,
   navigate,
 }: {
   room: { id: string; name: string; period: string };
   archived?: boolean;
   students?: number;
   signals?: ClassroomSignals;
+  compact?: boolean;
   navigate: (r: Route) => void;
 }) {
   const t = useT();
@@ -167,14 +171,16 @@ export function ClassroomRow({
             </span>
           ) : null}
         </span>
-        {signals ? <SignalLine signals={signals} /> : null}
+        {signals ? <SignalLine signals={signals} compact={compact} /> : null}
       </span>
     </button>
   );
 }
 
+type Countable = "evaluations" | "projects" | "live" | "toGrade";
+
 /** A count in words, its singular apart: `{n} things` / `1 thing`. */
-function counted(t: ReturnType<typeof useT>, n: number, key: "evaluations" | "projects" | "live" | "toGrade"): string {
+function counted(t: TFunction, n: number, key: Countable): string {
   return t(n === 1 ? (`classrooms.signal.${key}.one` as const) : (`classrooms.signal.${key}` as const), { n });
 }
 
@@ -183,54 +189,48 @@ function counted(t: ReturnType<typeof useT>, n: number, key: "evaluations" | "pr
  * what waits on the staff are badges in ADR-104's tones (green open, amber
  * awaited); everything else is muted text, so the row stays one link.
  */
-function SignalLine({ signals }: { signals: ClassroomSignals }) {
+function SignalLine({ signals, compact }: { signals: ClassroomSignals; compact: boolean }) {
   const t = useT();
   const { locale } = useI18n();
-  const now = useNow(30_000);
-  const when = (iso: string) => relativeTime(iso, now, locale, t);
-  const { live, toGrade, next, journal, enrollment, evaluations, projects } = signals;
-  const items: { key: string; node: ReactNode }[] = [];
-  if (live > 0) items.push({ key: "live", node: <Badge tone="green">{counted(t, live, "live")}</Badge> });
-  if (toGrade > 0) items.push({ key: "grade", node: <Badge tone="amber">{counted(t, toGrade, "toGrade")}</Badge> });
-  if (next) {
-    items.push({
-      key: "next",
-      node: (
+  const { now, live, toGrade, next, journal, enrollment, evaluations, projects } = signals;
+  const items: [string, ReactNode][] = [];
+  if (live > 0) items.push(["live", <Badge tone="green">{counted(t, live, "live")}</Badge>]);
+  if (!compact) {
+    if (toGrade > 0) items.push(["grade", <Badge tone="amber">{counted(t, toGrade, "toGrade")}</Badge>]);
+    if (next) {
+      items.push([
+        "next",
         <Signal icon={CalendarClock}>
-          {next.row.title}{" "}
-          {t(next.what === "opens" ? "activities.summary.opens" : "activities.summary.closes")} {when(next.at)}
-        </Signal>
-      ),
-    });
+          {next.row.title} {nextEventWhen(next, now, locale, t)}
+        </Signal>,
+      ]);
+    }
+    // The book carries "journal": the last page students see, then when the next one shows.
+    if (journal?.lastPage) items.push(["journal", <Signal icon={BookOpen}>{journal.lastPage.title}</Signal>]);
+    if (journal?.nextPage) {
+      const when = relativeTime(journal.nextPage.at, now, locale, t);
+      items.push(["journalNext", <Signal icon={BookOpen}>{t("classrooms.signal.journal.next", { when })}</Signal>]);
+    }
+    if (enrollment) {
+      items.push([
+        "enrollment",
+        <Signal icon={Users}>
+          {t("classrooms.signal.enrollment", { claimed: enrollment.claimed, students: enrollment.students })}
+        </Signal>,
+      ]);
+    }
+    const counts = [
+      evaluations > 0 ? counted(t, evaluations, "evaluations") : null,
+      projects > 0 ? counted(t, projects, "projects") : null,
+    ].filter(Boolean);
+    if (counts.length > 0) items.push(["counts", <span className="tabular-nums">{counts.join(" · ")}</span>]);
   }
-  const journalText = journal?.lastPage
-    ? [
-        t("classrooms.signal.journal.last", { title: journal.lastPage.title }),
-        journal.nextPage ? t("classrooms.signal.journal.next", { when: when(journal.nextPage.at) }) : null,
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : journal?.nextPage
-      ? t("classrooms.signal.journal.nextOnly", { when: when(journal.nextPage.at) })
-      : null;
-  if (journalText) items.push({ key: "journal", node: <Signal icon={BookOpen}>{journalText}</Signal> });
-  if (enrollment) {
-    items.push({
-      key: "enrollment",
-      node: <Signal icon={Users}>{t("classrooms.signal.enrollment", { claimed: enrollment.claimed, students: enrollment.students })}</Signal>,
-    });
-  }
-  const counts = [
-    evaluations > 0 ? counted(t, evaluations, "evaluations") : null,
-    projects > 0 ? counted(t, projects, "projects") : null,
-  ].filter(Boolean);
-  if (counts.length > 0) items.push({ key: "counts", node: <span className="tabular-nums">{counts.join(" · ")}</span> });
   if (items.length === 0) return null;
   return (
     <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
-      {items.map((item) => (
-        <span key={item.key} className="min-w-0 max-w-full">
-          {item.node}
+      {items.map(([key, node]) => (
+        <span key={key} className="min-w-0 max-w-full">
+          {node}
         </span>
       ))}
     </span>
