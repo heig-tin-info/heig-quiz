@@ -22,10 +22,11 @@ import {
   liveAt,
   makeDashboard,
   makeEvaluationDetail,
+  rememberLiveToggles,
 } from "../test/live-fixtures";
 import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
-import { LIVE_TOGGLES_KEY } from "./toggles";
+import { examTogglesKey, LIVE_TOGGLES_KEY, type LiveToggles } from "./toggles";
 import { dashboardKey } from "../queryKeys";
 
 /*
@@ -70,17 +71,23 @@ const navigate = vi.fn();
 /*
  * The switches start OFF on a first visit (#227), but most of this file is
  * about the grid with names, answers and results on — so `setup` stores that
- * preference first, as a teacher who turned them on would have. `null`
- * leaves the storage alone, for the tests about the preference itself.
+ * preference first, as a teacher who turned them on would have — in the
+ * browser and, the fixture being an exam, for this exam in this tab (#796).
+ * `null` leaves the storage alone, for the tests about the preference itself.
  */
-const ALL_ON = JSON.stringify({ names: true, answers: true, results: true });
+const ALL_ON: LiveToggles = { names: true, answers: true, results: true };
+
+/** The fixture is an exam; this serves the same evaluation as an exercise. */
+const exerciseDetail = makeEvaluationDetail();
+exerciseDetail.evaluation = { ...exerciseDetail.evaluation, mode: "exercise" };
+const exercise = { [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(exerciseDetail) };
 
 function setup(
   view = makeDashboard(3, 4),
   extra: Record<string, ReturnType<typeof ok>> = {},
-  stored: string | null = ALL_ON,
+  stored: LiveToggles | null = ALL_ON,
 ) {
-  if (stored !== null) localStorage.setItem(LIVE_TOGGLES_KEY, stored);
+  if (stored !== null) rememberLiveToggles(stored);
   const queryClient = makeQueryClient();
   queryClient.setQueryData(dashboardKey(EVALUATION_ID, true, true), initialGrid(view));
   const stubs = mockFetch({
@@ -251,10 +258,14 @@ describe("LiveDashboard — keyboard", () => {
     await waitFor(() => expect(results()).toHaveAttribute("aria-checked", "false"));
   });
 
-  it("remembers the switches across a reload (#80)", async () => {
+  it("remembers the switches of an exercise across a reload (#80)", async () => {
     const user = userEvent.setup();
-    const first = setup();
+    localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify(ALL_ON));
+    const first = setup(undefined, exercise, null);
     await screen.findByText("Nadia Roux 0");
+    await waitFor(() =>
+      expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "true"),
+    );
     await user.keyboard("n");
     await user.click(screen.getByRole("switch", { name: /answers/i }));
     await waitFor(() =>
@@ -267,12 +278,51 @@ describe("LiveDashboard — keyboard", () => {
     });
     first.unmount();
 
-    setup(undefined, {}, null);
+    setup(undefined, exercise, null);
     expect(await screen.findByText("Student 1")).toBeInTheDocument();
     expect(screen.queryByText("Nadia Roux 0")).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /names/i })).toHaveAttribute("aria-checked", "false");
+    await waitFor(() =>
+      expect(screen.getByRole("switch", { name: /results/i })).toHaveAttribute("aria-checked", "true"),
+    );
     expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "false");
-    expect(screen.getByRole("switch", { name: /results/i })).toHaveAttribute("aria-checked", "true");
+  });
+
+  // #796: answers and results left on (an exercise, say) never open an exam.
+  it("opens an exam with answers and results off, whatever the browser remembers", async () => {
+    localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify(ALL_ON));
+    const { calls } = setup(undefined, {}, null);
+    expect(await screen.findByText("Nadia Roux 0")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("switch", { name: /results/i })).toHaveAttribute("aria-checked", "false");
+    // Not even one request asked the server for them.
+    expect(calls.some((c) => /includeAnswers=1|results=1/.test(c.url))).toBe(false);
+  });
+
+  it("keeps an exam's answers on across a reload, for that exam only (#796)", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify({ names: true, answers: false, results: false }));
+    const first = setup(undefined, {}, null);
+    await screen.findByText("Nadia Roux 0");
+    await user.keyboard("r");
+    await waitFor(() =>
+      expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "true"),
+    );
+    // The browser's habit is untouched; the choice is this exam's, in this tab.
+    expect(JSON.parse(localStorage.getItem(LIVE_TOGGLES_KEY) ?? "null")).toEqual({
+      names: true,
+      answers: false,
+      results: false,
+    });
+    expect(JSON.parse(sessionStorage.getItem(examTogglesKey(EVALUATION_ID)) ?? "null")).toEqual({
+      answers: true,
+      results: false,
+    });
+    first.unmount();
+
+    setup(undefined, {}, null);
+    await screen.findByText("Nadia Roux 0");
+    expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "true");
   });
 
   // #227: a projected screen's first frame shows nobody's name or answer.
@@ -286,7 +336,8 @@ describe("LiveDashboard — keyboard", () => {
   });
 
   it("opens with the defaults when the stored preference is malformed", async () => {
-    setup(undefined, {}, "{not json");
+    localStorage.setItem(LIVE_TOGGLES_KEY, "{not json");
+    setup(undefined, {}, null);
     expect(await screen.findByText("Student 1")).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "false");
   });
@@ -482,7 +533,7 @@ describe("LiveDashboard — inspection", () => {
     const { calls } = setup(
       makeDashboard(3, 4),
       paperOf(1),
-      JSON.stringify({ names: true, answers: false, results: false }),
+      { names: true, answers: false, results: false },
     );
     await user.click(await screen.findByRole("button", { name: /Nadia Roux 1 · Question 2/ }));
     const dialog = await screen.findByRole("dialog", { name: "Nadia Roux 1 · Question 2" });
@@ -537,7 +588,7 @@ describe("LiveDashboard — one question for the class (F-DASH-07, #353)", () =>
     const { calls } = setup(
       makeDashboard(3, 4),
       snapshot,
-      JSON.stringify({ names: false, answers: false, results: false }),
+      { names: false, answers: false, results: false },
     );
     await user.click(await screen.findByRole("button", { name: "Open question 2 for every student" }));
     const dialog = await screen.findByRole("dialog", { name: "Question 2 · the whole class" });

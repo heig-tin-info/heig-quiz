@@ -53,7 +53,7 @@ A column darkening downward is the class moving through the quiz. With **Answers
 
 ### The three switches and the projector
 
-Three switches sit above the grid: **Names**, **Answers** and **Results**. They exist for the projector, and they are all **off** the first time you open a dashboard; your browser then remembers how you left them. Turn **Names** off and each row becomes `Student 1`, `Student 2`..., in an order that is shuffled per evaluation and stable across reloads, so the number says nothing about the roster's alphabetical order. Turn **Answers** off and the glyphs disappear; the cells keep only their state. **Results** is what turns a progress cell into a verdict cell once grading exists.
+Three switches sit above the grid: **Names**, **Answers** and **Results**. They exist for the projector, and they are all **off** the first time you open a dashboard; your browser then remembers how you left them. On an exam, **Answers** and **Results** start off on every new exam whatever you chose before, so an exercise left with its answers on never puts them on the projector during an exam; switch them on for that exam and they stay on across a reload of the same tab. Turn **Names** off and each row becomes `Student 1`, `Student 2`..., in an order that is shuffled per evaluation and stable across reloads, so the number says nothing about the roster's alphabetical order. Turn **Answers** off and the glyphs disappear; the cells keep only their state. **Results** is what turns a progress cell into a verdict cell once grading exists.
 
 The arrows icon at the top right, or the `F` key, puts the dashboard in full screen for projection.
 

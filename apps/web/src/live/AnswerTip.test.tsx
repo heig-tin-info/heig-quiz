@@ -8,7 +8,13 @@ import type { Stmt } from "@quiz/domain/blocks";
 import { initialGrid } from "../realtime/grid";
 import { elapse, flowingClock } from "../test/clock";
 import { resetEventStream } from "../realtime/useEventStream";
-import { EVALUATION_ID, id, makeDashboard, makeEvaluationDetail } from "../test/live-fixtures";
+import {
+  EVALUATION_ID,
+  id,
+  makeDashboard,
+  makeEvaluationDetail,
+  rememberLiveToggles,
+} from "../test/live-fixtures";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { attemptInspectKey, dashboardKey } from "../queryKeys";
 import { ANSWER_TIP_DELAY, AnswerTextView } from "./AnswerTip";
@@ -98,7 +104,7 @@ function setup(answer: () => string | Held) {
   // answers, so it opens as a teacher who turned them on — unless a test
   // stored its own preference first.
   if (localStorage.getItem(LIVE_TOGGLES_KEY) === null) {
-    localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify({ names: true, answers: true, results: true }));
+    rememberLiveToggles({ names: true, answers: true, results: true });
   }
   const view = dashboard();
   const queryClient = makeQueryClient();
@@ -183,7 +189,7 @@ describe("AnswerTip (#94)", () => {
   });
 
   it("offers nothing, and fetches nothing, while the answers are hidden", async () => {
-    localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify({ names: true, answers: false, results: true }));
+    rememberLiveToggles({ names: true, answers: false, results: true });
     // The hover delay is jumped rather than waited for.
     flowingClock();
     const { calls } = setup(() => "secret");

@@ -54,7 +54,16 @@ const heightOpt = opt("height").map(Number).find(Boolean);
  * a user guide: the scenes about what the grid shows turn them on, as a
  * teacher who flipped the switches would have.
  */
-const LIVE_ALL_ON = { "quiz-live-toggles-v2": JSON.stringify({ names: true, answers: true, results: true }) };
+const ALL_ON = JSON.stringify({ names: true, answers: true, results: true });
+/**
+ * An exam ignores the browser's Answers and Results (#796): they are the
+ * tab's, per evaluation (`examTogglesKey` in src/live/toggles.ts), so the
+ * scene stores them there too, for the evaluation it opens.
+ */
+const liveAllOn = (evaluationId) => ({
+  ls: { "quiz-live-toggles-v2": ALL_ON },
+  ss: { [`quiz-live-toggles-exam:${evaluationId}`]: JSON.stringify({ answers: true, results: true }) },
+});
 
 /** The mock's evaluation, taken by the student persona (WP9). */
 const TAKE = "/take/11111111-1111-4111-8111-111111111111";
@@ -725,7 +734,7 @@ const scenes = [
       await p.getByRole("menuitem", { name: /reset my test attempt|réinitialiser ma tentative/i }).click();
     } },
   // The staff row, badged, in the three places attempts are listed.
-  { name: "live-running-staff", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live?mytest=1" },
+  { name: "live-running-staff", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live?mytest=1" },
   { name: "grading-staff", role: "teacher", path: "/evaluations/closed/grading?mytest=1" },
   { name: "results-staff", role: "teacher", path: "/evaluations/closed/results?mytest=1" },
   // The banner the walk comes back through: the student view, entered from an
@@ -735,42 +744,42 @@ const scenes = [
   // it sticks over the player's own top bar, and the fold shows both.
   { name: "student-view-attempt", role: "teacher", path: `${TAKE}?scene=running`, fold: true, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/running/live" } },
   // The frame's teacher/student switch (ADR-018 addendum), both ways round.
-  { name: "view-switch-teacher", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, settle: 3000 },
+  { name: "view-switch-teacher", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, settle: 3000 },
   { name: "view-switch-student", role: "teacher", path: "/", fold: true, settle: 3000, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/running/live" } },
-  { name: "live-running", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live" },
-  { name: "live-running-many", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live?many=1" },
+  { name: "live-running", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live" },
+  { name: "live-running-many", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live?many=1" },
   // ADR-051 §8: stations (one suspended, one not attested) and a SEB row, and the supervisor's fallback.
-  { name: "live-kiosk", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live?kiosk=1&seb=1" },
-  { name: "live-kiosk-assign", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live?kiosk=1&seb=1", fold: true, act: (p) => p.getByRole("button", { name: "Assign a station" }).first().dispatchEvent("click") },
+  { name: "live-kiosk", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live?kiosk=1&seb=1" },
+  { name: "live-kiosk-assign", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live?kiosk=1&seb=1", fold: true, act: (p) => p.getByRole("button", { name: "Assign a station" }).first().dispatchEvent("click") },
   { name: "live-lobby", role: "teacher", path: "/evaluations/lobby/live" },
-  { name: "live-closed", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/closed/live" },
+  { name: "live-closed", role: "teacher", ...liveAllOn("closed"), path: "/evaluations/closed/live" },
   // #353: what a click opens is what was clicked — the row's eye the whole
   // paper, a cell that one answer, a column header the question for the class.
-  { name: "live-inspect", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open the whole paper" }).first().click() },
+  { name: "live-inspect", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open the whole paper" }).first().click() },
   // ADR-088 §7: the row's integrity badge, the paper's Journal section it
   // opens, and the evaluation's list behind "Journal" in the status line.
-  { name: "live-integrity-badge", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true },
-  { name: "live-integrity-inspect", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /open the journal$/ }).first().click() },
-  { name: "live-integrity-list", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Journal/ }).click() },
-  { name: "live-answer", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /· Question 1$/ }).first().click() },
-  { name: "live-question", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open question 6 for every student" }).click() },
+  { name: "live-integrity-badge", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true },
+  { name: "live-integrity-inspect", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /open the journal$/ }).first().click() },
+  { name: "live-integrity-list", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Journal/ }).click() },
+  { name: "live-answer", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /· Question 1$/ }).first().click() },
+  { name: "live-question", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open question 6 for every student" }).click() },
   { name: "live-question-hidden", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: "Open question 1 for every student" }).click() },
   // #94: the complete answer of one cell, on hover (fetched on demand).
-  { name: "live-tip-code", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Rochat, Louis · Question 1( · flagged.*)?$/ }).hover() },
-  { name: "live-tip-cloze", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Favre, Ethan · Question 5$/ }).hover() },
-  { name: "live-tip-mcq", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Gauthier, Samuel · Question 6$/ }).hover() },
-  { name: "live-extend-menu", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^extend$/i }).first().click() },
-  { name: "live-fullscreen", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^full screen$/i }).first().click() },
+  { name: "live-tip-code", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Rochat, Louis · Question 1( · flagged.*)?$/ }).hover() },
+  { name: "live-tip-cloze", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Favre, Ethan · Question 5$/ }).hover() },
+  { name: "live-tip-mcq", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Gauthier, Samuel · Question 6$/ }).hover() },
+  { name: "live-extend-menu", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^extend$/i }).first().click() },
+  { name: "live-fullscreen", role: "teacher", ...liveAllOn("running"), path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^full screen$/i }).first().click() },
   { name: "live-empty", role: "teacher", path: "/evaluations/running/live?empty=1", settle: 900 },
   { name: "live-loading", role: "teacher", path: "/evaluations/running/live?slow=1", settle: 300 },
   { name: "live-error", role: "teacher", path: "/evaluations/running/live?fail=1", settle: 2500 },
   // F-EVAL-15: an exercise with retakes — attempt badges, no Reopen.
-  { name: "live-retakes", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/paused/live" },
+  { name: "live-retakes", role: "teacher", ...liveAllOn("paused"), path: "/evaluations/paused/live" },
   // ADR-050: an exercise's correction, published without closing it — the
   // overflow item, its confirmation, the header once done, and the projection.
-  { name: "live-correction-menu", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/paused/live", fold: true, act: (p) => p.getByRole("button", { name: /^(actions)$/i }).first().click() },
-  { name: "live-correction-confirm", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/paused/live", fold: true, act: correctionAsk },
-  { name: "live-correction-published", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/paused/live", fold: true, act: correctionPublish },
+  { name: "live-correction-menu", role: "teacher", ...liveAllOn("paused"), path: "/evaluations/paused/live", fold: true, act: (p) => p.getByRole("button", { name: /^(actions)$/i }).first().click() },
+  { name: "live-correction-confirm", role: "teacher", ...liveAllOn("paused"), path: "/evaluations/paused/live", fold: true, act: correctionAsk },
+  { name: "live-correction-published", role: "teacher", ...liveAllOn("paused"), path: "/evaluations/paused/live", fold: true, act: correctionPublish },
   { name: "correction-open-exercise", role: "teacher", path: "/evaluations/paused/live", fold: true, act: correctionPresent },
 
   // The drill (ADR-041, #317): the student's tab, and the teacher's switches.

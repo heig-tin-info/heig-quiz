@@ -7,11 +7,10 @@ import type { CourseRole, EvaluationDetail } from "@quiz/contracts";
 import { dashboardKey } from "../queryKeys";
 import { initialGrid } from "../realtime/grid";
 import { resetEventStream } from "../realtime/useEventStream";
-import { EVALUATION_ID, makeDashboard, makeEvaluationDetail } from "../test/live-fixtures";
+import { EVALUATION_ID, makeDashboard, makeEvaluationDetail, rememberLiveToggles } from "../test/live-fixtures";
 import { makeCourseSummary } from "../test/fixtures";
 import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
-import { LIVE_TOGGLES_KEY } from "./toggles";
 
 /*
  * "Publish the correction" of a running exercise (ADR-050): a tertiary
@@ -45,7 +44,7 @@ function setup(
   publishReply = ok({ correctionPublishedAt: "2026-09-30T10:00:00.000Z", queued: 1 }),
   myRole: CourseRole = "owner",
 ) {
-  localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify({ names: true, answers: true, results: true }));
+  rememberLiveToggles({ names: true, answers: true, results: true });
   const view = makeDashboard(2, 2);
   const queryClient = makeQueryClient();
   queryClient.setQueryData(dashboardKey(EVALUATION_ID, true, true), initialGrid(view));
