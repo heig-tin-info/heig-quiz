@@ -5,8 +5,6 @@
  * heig-classroom's `org-repos` routes (`modules/assignments/actions.ts`).
  * Reads serving a request: a rate limit fails at once (`HTTP_READ`).
  */
-import { eq } from "drizzle-orm";
-
 import {
   PROTECTED_FILE_SUGGESTIONS,
   type ProjectSourceDetail,
@@ -15,16 +13,33 @@ import {
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { projects } from "../../db/schema.js";
 import { githubStatus, HTTP_READ, installationClient, unless404, type InstallationClient } from "../../github/app.js";
-import { classroomInstallation, offLimitsRepos, type InstalledOrg } from "../github/service.js";
+import { classroomInstallation, heldRepos, offLimitsRepos, type InstalledOrg } from "../github/service.js";
 import type { Caller } from "../guards.js";
 import { ProjectError } from "./errors.js";
 
 /** The platform's own repositories, never a source: `<slug>-squashed`, `<slug>-squashed-N`. */
 const DISTRIBUTION = /-squashed(-\d+)?$/;
+/** The browser's list: at most this many sources, read from at most `SOURCE_PAGES` pages of the organization. */
+const MAX_SOURCES = 100;
+const SOURCE_PAGES = 10;
+const PER_PAGE = 100;
 /** The tree is a picker, not a mirror. */
 export const MAX_TREE_ENTRIES = 800;
+
+/**
+ * GitHub's pages, from the first, until a short one or `max` are read.
+ * Each page is one `request` of the caller's, so every page carries its
+ * `HTTP_READ`: `octokit.paginate` passes the request options to the first
+ * page only, and a later one would wait out a rate limit (`failFast`).
+ */
+async function* pagesOf<T>(read: (page: number) => Promise<T[]>, max = Number.POSITIVE_INFINITY): AsyncGenerator<T[]> {
+  for (let page = 1; page <= max; page++) {
+    const data = await read(page);
+    yield data;
+    if (data.length < PER_PAGE) return;
+  }
+}
 
 /** The App's client on the classroom's organization; `409 not_connected` or `app_not_installed` otherwise. */
 export async function classroomClient(
@@ -50,12 +65,8 @@ export interface Source {
  * The repository `name` of the classroom's organization, if it may be a
  * source; null otherwise: unknown to GitHub there; resolved into another
  * organization (GitHub follows a renamed or transferred repository, the
- * owner is checked by its immutable id); or one of the platform's own
- * distribution repositories, by its name or because a project holds it
- * (a project handed out from another's distribution would have its
- * solution-free copy as its source, and its receipts tangled with it); or
- * a repository Quiz knows as a course's where the caller holds no seat
- * (`offLimitsRepos`, ADR-100 §5) — the 404 of a missing one.
+ * owner is checked by its immutable id); or one {@link notSources} names —
+ * the 404 of a missing one.
  */
 export async function fetchSource(
   db: Db,
@@ -78,16 +89,22 @@ export async function fetchSource(
     org.githubOrgId !== null
       ? Number(data.owner.id) === org.githubOrgId
       : data.owner.login.toLowerCase() === org.login.toLowerCase();
-  if (!sameOrg || DISTRIBUTION.test(data.name)) return null;
+  if (!sameOrg) return null;
   const id = Number(data.id);
-  const [held] = await db.select({ id: projects.id }).from(projects).where(eq(projects.distributionRepoId, id)).limit(1);
-  if (held || (await offLimitsRepos(db, caller, [id])).size > 0) return null;
-  const branches = await client.octokit.paginate(client.octokit.rest.repos.listBranches, {
-    owner: org.login,
-    repo: data.name,
-    per_page: 100,
-    request: HTTP_READ,
-  });
+  if ((await notSources(db, caller, [{ id, name: data.name }])).has(id)) return null;
+  const branches: { name: string }[] = [];
+  for await (const page of pagesOf(async (page) => {
+    const { data: list } = await client.octokit.request("GET /repos/{owner}/{repo}/branches", {
+      owner: org.login,
+      repo: data.name,
+      per_page: PER_PAGE,
+      page,
+      request: HTTP_READ,
+    });
+    return list;
+  })) {
+    branches.push(...page);
+  }
   return {
     id,
     name: data.name,
@@ -98,28 +115,54 @@ export async function fetchSource(
 }
 
 /**
- * The organization's repositories, the most recently pushed first (one page
- * of 100, as heig-classroom), less those Quiz knows as a course's where the
- * caller holds no seat (ADR-100 §5).
+ * The repositories among `repos` that may never be a source: the
+ * platform's own, by the distribution's name (`<slug>-squashed`) or because
+ * a project holds it — its distribution, a student's or a group's
+ * repository (a project handed out from another's would have a student's
+ * work, or a solution-free copy, as its source, and its receipts tangled
+ * with it) —, and those Quiz knows as a course's where the caller holds no
+ * seat (`offLimitsRepos`, ADR-100 §5). The one rule the browser and the
+ * creation share.
+ */
+async function notSources(db: Db, caller: Caller, repos: { id: number; name: string }[]): Promise<Set<number>> {
+  const ids = repos.map((r) => r.id);
+  if (ids.length === 0) return new Set();
+  const [held, offLimits] = await Promise.all([heldRepos(db, ids), offLimitsRepos(db, caller, ids)]);
+  const excluded = new Set([...held, ...offLimits]);
+  for (const r of repos) if (DISTRIBUTION.test(r.name)) excluded.add(r.id);
+  return excluded;
+}
+
+/**
+ * The organization's sources, the most recently pushed first: its
+ * repositories less the archived ones and {@link notSources}, read page by
+ * page until `MAX_SOURCES` are kept — the students' repositories, pushed to
+ * last, would otherwise fill the first page — or `SOURCE_PAGES` are read.
  */
 export async function listSources(db: Db, config: AppConfig, classroomId: string, caller: Caller): Promise<ProjectSourceRepo[]> {
   const { org, client } = await classroomClient(db, config, classroomId);
-  const { data } = await client.octokit.request("GET /orgs/{org}/repos", {
-    org: org.login,
-    sort: "pushed",
-    direction: "desc",
-    per_page: 100,
-    request: HTTP_READ,
-  });
-  const offLimits = await offLimitsRepos(db, caller, data.map((r) => Number(r.id)));
-  return data
-    .filter((r) => !r.archived && !DISTRIBUTION.test(r.name) && !offLimits.has(Number(r.id)))
-    .map((r) => ({
-      name: r.name,
-      defaultBranch: r.default_branch ?? "main",
-      private: r.private,
-      pushedAt: r.pushed_at ?? null,
-    }));
+  const pages = pagesOf(async (page) => {
+    const { data } = await client.octokit.request("GET /orgs/{org}/repos", {
+      org: org.login,
+      sort: "pushed",
+      direction: "desc",
+      per_page: PER_PAGE,
+      page,
+      request: HTTP_READ,
+    });
+    return data;
+  }, SOURCE_PAGES);
+  const sources: ProjectSourceRepo[] = [];
+  for await (const data of pages) {
+    const page = data.filter((r) => !r.archived).map((r) => ({ ...r, id: Number(r.id) }));
+    const excluded = await notSources(db, caller, page);
+    for (const r of page) {
+      if (excluded.has(r.id)) continue;
+      sources.push({ name: r.name, defaultBranch: r.default_branch ?? "main", private: r.private, pushedAt: r.pushed_at ?? null });
+    }
+    if (sources.length >= MAX_SOURCES) break;
+  }
+  return sources.slice(0, MAX_SOURCES);
 }
 
 /** One source of the organization ({@link fetchSource}); null when it may not be one. */

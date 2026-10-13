@@ -44,7 +44,7 @@ import {
   pushReceipts,
 } from "../../db/schema.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
+import { appKey, fakeGithub, orgsRoute, type Route } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { repoWorld } from "./testing.js";
@@ -758,6 +758,59 @@ describe("the organization's repository browser (M3-11)", () => {
     world.foreignOwner.add(`${room.login}/moved`);
     expect((await call("GET", `${base(room.id)}/sources/moved`, teacher.headers)).statusCode).toBe(404);
     expect((await call("GET", `${base(room.id)}/sources/lab-1-squashed`, teacher.headers)).statusCode).toBe(404);
+  });
+
+  it("leaves out the repositories Quiz made for a project's students, by their id, never their name (#822)", async () => {
+    const room = await connectedClassroom();
+    const project = await create(room.id);
+    // A student's repository, renamed on GitHub: no name rule would catch it.
+    world.source(room.login, "renamed-by-hand", { main: { "README.md": "# Mine" } });
+    // A teacher's source whose name looks like a student's: still a source.
+    world.source(room.login, "lab-1-bob", { main: { "README.md": "# Lab" } });
+    await server.app.db.insert(projectRepos).values({
+      id: randomUUID(),
+      projectId: project.id,
+      userId: student.id,
+      githubRepoId: world.ids.get(`${room.login}/renamed-by-hand`)!,
+      fullName: `${room.login}/renamed-by-hand`,
+      acceptedAt: new Date(NOW),
+    });
+    const list = ProjectSourceRepo.array().parse((await call("GET", `${base(room.id)}/sources`, teacher.headers)).json());
+    expect(list.map((r) => r.name).sort()).toEqual(["lab", "lab-1-bob"]);
+    expect((await call("GET", `${base(room.id)}/sources/renamed-by-hand`, teacher.headers)).statusCode).toBe(404);
+    expect(refusal(await call("POST", base(room.id), teacher.headers, { ...LAB, sourceRepo: "renamed-by-hand" }))).toEqual([
+      422,
+      "source_not_found",
+    ]);
+  });
+
+  it("reads past a first page of non-sources, every page failing at once on an exhausted quota", async () => {
+    const room = await connectedClassroom();
+    const repo = (name: string, id: number) => ({ id, name, archived: false, private: true, default_branch: "main", pushed_at: NOW });
+    let quota = true;
+    const pages: (string | null)[] = [];
+    const listing: Route = (url, init) => {
+      if (init.method !== "GET" || url.pathname !== `/orgs/${room.login}/repos`) return undefined;
+      const page = url.searchParams.get("page");
+      pages.push(page);
+      if (page === "1") return Response.json(Array.from({ length: 100 }, (_, i) => repo(`old-${i}-squashed`, 990_000 + i)));
+      if (quota) return Response.json([repo("lab", world.ids.get(`${room.login}/lab`)!)]);
+      return Response.json(
+        { message: "API rate limit exceeded" },
+        { status: 403, headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 3600) } },
+      );
+    };
+    gh.routes.unshift(listing);
+    try {
+      const list = ProjectSourceRepo.array().parse((await call("GET", `${base(room.id)}/sources`, teacher.headers)).json());
+      expect(list.map((r) => r.name)).toEqual(["lab"]);
+      expect(pages).toEqual(["1", "2"]);
+      // The second page carries HTTP_READ too: answered at once, never waited out for an hour.
+      quota = false;
+      expect((await call("GET", `${base(room.id)}/sources`, teacher.headers)).statusCode).not.toBe(200);
+    } finally {
+      gh.routes.splice(gh.routes.indexOf(listing), 1);
+    }
   });
 
   it("hides and refuses a repository Quiz knows as a course the caller does not teach (ADR-100 §5)", async () => {

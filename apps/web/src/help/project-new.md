@@ -11,6 +11,9 @@ classroom's organization, from the source repository you choose.
 A **Name**, a **Source repository** of the classroom's organization and a
 **Deadline**. The source, the branches and the history are fixed once the
 project is created; to change them, delete the draft and start again.
+Picking a source fills in the name from it, unless you typed one. The list
+leaves out the repositories Quiz made for a project (the students' and the
+distribution ones).
 
 ## Advanced options
 

@@ -12,6 +12,9 @@ source que vous choisissez.
 Un **Nom**, un **Dépôt source** de l'organisation de la classe et une
 **Échéance**. Le dépôt source, les branches et l'historique sont figés à la
 création : pour les changer, supprimez le brouillon et recommencez.
+Choisir un dépôt source remplit le nom à partir du sien, sauf si vous en
+avez saisi un. La liste omet les dépôts que Quiz a créés pour un projet
+(ceux des étudiants et ceux de distribution).
 
 ## Options avancées
 

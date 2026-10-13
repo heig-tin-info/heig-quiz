@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ProjectSourceDetail } from "@quiz/contracts";
 
 import { ApiError } from "../api";
-import { chosenBranches, emptyDraft, projectBody, refusalPlace, type ProjectDraft } from "./newProject";
+import { chosenBranches, emptyDraft, pickSource, projectBody, refusalPlace, type ProjectDraft } from "./newProject";
 
 const DETAIL: ProjectSourceDetail = {
   name: "labo",
@@ -64,6 +64,23 @@ describe("the new project's body", () => {
       const { missing } = projectBody(draft({ deadlineKind: "duration", durationDays }), DETAIL);
       expect(missing).toEqual({ duration: "project.missing.duration" });
     }
+  });
+});
+
+describe("picking a source (#821)", () => {
+  it("names an unnamed project after the source, and follows the next source picked", () => {
+    expect(pickSource(emptyDraft(), "prg1-labo_04")).toEqual({
+      sourceRepo: "prg1-labo_04",
+      branches: null,
+      protectedFiles: null,
+      name: "Prg1 Labo 04",
+    });
+    expect(pickSource(draft({ name: "Labo", sourceRepo: "labo" }), "labo-2")).toMatchObject({ name: "Labo 2" });
+    expect(pickSource(draft({ name: "Labo 2", sourceRepo: "labo-2" }), "")).toMatchObject({ name: "" });
+  });
+
+  it("never overwrites a name the teacher typed", () => {
+    expect(pickSource(draft({ name: "Arbres binaires", sourceRepo: "labo" }), "labo-2")).not.toHaveProperty("name");
   });
 });
 

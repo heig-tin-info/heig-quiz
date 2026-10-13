@@ -38,6 +38,7 @@ import {
   emptyDraft,
   FIELD_ID,
   foreignZone,
+  pickSource,
   projectBody,
   refusalPlace,
   type ProjectDraft,
@@ -266,7 +267,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
                   id={FIELD_ID.source}
                   label={t("project.source")}
                   value={draft.sourceRepo}
-                  onChange={(e) => update({ sourceRepo: e.target.value, branches: null, protectedFiles: null })}
+                  onChange={(e) => update(pickSource(draft, e.target.value))}
                   className="font-mono"
                   {...fieldErrorProps(FIELD_ID.source, message("source"))}
                 >

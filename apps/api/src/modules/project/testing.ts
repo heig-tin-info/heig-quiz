@@ -202,6 +202,12 @@ export function repoWorld(): RepoWorld {
     const [meta] = line.split("\t");
     return line && meta!.split(" ")[1] === "blob" ? meta!.split(" ")[2]! : null;
   };
+  /** GitHub's paging: `page` (from 1) of `per_page` (30 by default). */
+  const pageOf = <T>(url: URL, all: T[]): T[] => {
+    const size = Number(url.searchParams.get("per_page") ?? 30);
+    const page = Number(url.searchParams.get("page") ?? 1);
+    return all.slice((page - 1) * size, page * size);
+  };
   const repoJson = (org: string, name: string) => ({
     id: world.ids.get(`${org}/${name}`),
     name,
@@ -447,7 +453,7 @@ export function repoWorld(): RepoWorld {
       if ((m = /^\/orgs\/([^/]+)\/repos$/.exec(path))) {
         const org = m[1]!;
         const names = [...world.ids.keys()].filter((f) => f.startsWith(`${org}/`)).map((f) => f.slice(org.length + 1));
-        return json(names.map((n) => repoJson(org, n)));
+        return json(pageOf(url, names).map((n) => repoJson(org, n)));
       }
       if (!(m = /^\/repos\/([^/]+)\/([^/]+)(\/.*)?$/.exec(path))) return undefined;
       const [org, name, rest = ""] = [m[1]!, m[2]!, m[3]];
@@ -461,7 +467,7 @@ export function repoWorld(): RepoWorld {
         if (from === null) return json([{ sha: world.git(fullName, "rev-parse", branches[0]!).trim() }]);
         return json(commitsOf(fullName, from, Number(url.searchParams.get("per_page") ?? 30)));
       }
-      if (rest === "/branches") return json(branches.map((b) => ({ name: b, protected: false })));
+      if (rest === "/branches") return json(pageOf(url, branches).map((b) => ({ name: b, protected: false })));
       if ((m = /^\/git\/matching-refs\/heads\/(.+)$/.exec(rest))) {
         if (branches.length === 0) return json({ message: "Git Repository is empty." }, 409);
         return json(branches.filter((b) => b === m![1]).map((b) => ({ ref: `refs/heads/${b}` })));
