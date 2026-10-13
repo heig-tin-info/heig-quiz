@@ -151,27 +151,27 @@ const COLUMNS: Record<
 > = {
   mode: {
     label: "eval.mode",
-    width: 7,
+    width: 5,
     rank: (row, t) => typeName(typeOfRow(row), t),
     cell: (row, t) => typeName(typeOfRow(row), t),
   },
   start: {
     label: "eval.col.start",
-    width: 9.5,
+    width: 8,
     className: T.colHigh,
     rank: startOf,
     cell: (row) => dateOrDash(startOf(row)),
   },
   end: {
     label: "eval.col.end",
-    width: 9.5,
+    width: 8,
     className: T.colHigh,
     rank: (row) => specOf(row).end(row),
     cell: (row) => dateOrDash(specOf(row).end(row)),
   },
   questions: {
     label: "eval.step.questions",
-    width: 6.5,
+    width: 5.25,
     className: T.colHigh,
     right: true,
     rank: (row) => specOf(row).questions(row),
@@ -179,7 +179,7 @@ const COLUMNS: Record<
   },
   points: {
     label: "eval.col.points",
-    width: 5,
+    width: 4.5,
     className: T.colMid,
     right: true,
     rank: (row) => specOf(row).points(row),
@@ -187,7 +187,7 @@ const COLUMNS: Record<
   },
   participants: {
     label: "eval.col.participants",
-    width: 7.5,
+    width: 6,
     className: T.colLow,
     right: true,
     rank: (row) => row.participantCount,
@@ -212,13 +212,13 @@ const LAYOUTS: Record<TableLayout, { columns: readonly DataKey[]; labels?: Parti
 };
 
 /**
- * The columns that line up from one table to the next, in their order. The
- * title takes what the fixed columns leave, so each of these sits at the
- * same distance from the right edge in every table: a column a kind lacks
- * gives its width to the next one it has (right-aligned, its figures stay
- * under the other tables').
+ * The columns that line up from one table to the next, in their order: an
+ * exam's, which has every column but the mode. The title takes what the
+ * fixed columns leave, so each of these sits at the same distance from the
+ * right edge in every table: a column a kind lacks gives its width to the
+ * next one it has (right-aligned, its figures stay under the other tables').
  */
-const ALIGNED: readonly DataKey[] = ["start", "end", "questions", "points", "participants"];
+const ALIGNED: readonly DataKey[] = LAYOUTS.exam.columns;
 
 function widthsOf(columns: readonly DataKey[]): Partial<Record<DataKey, string>> {
   const widths: Partial<Record<DataKey, string>> = {};
