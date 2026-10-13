@@ -25,6 +25,7 @@ export const richClient: RichClient = {
   Editor: lazy(async () => ({ default: (await import("./Editor.js")).RichEditor })),
   Player: lazy(async () => ({ default: (await import("./Player.js")).RichPlayer })),
   Review: lazy(async () => ({ default: (await import("./Review.js")).RichReview })),
+  Key: lazy(async () => ({ default: (await import("./Key.js")).RichKey })),
 
   emptyAnswer: () => ({ text: "" }),
   isAnswered: isRichAnswered,
@@ -32,6 +33,12 @@ export const richClient: RichClient = {
 };
 
 /* The surfaces stay out of the values exported here, or the `lazy` above is undone (see qt-short). */
-export { richEditorStrings, richGradingStrings, richPlayerStrings, richReviewStrings } from "./strings.js";
+export {
+  richEditorStrings,
+  richGradingStrings,
+  richKeyStrings,
+  richPlayerStrings,
+  richReviewStrings,
+} from "./strings.js";
 export { emptyRichDraft } from "./schema.js";
 export type { RichAnswer, RichConfig, RichDetails, RichFormat, RichSolution, RichStudent } from "./schema.js";

@@ -8,7 +8,7 @@ import { useI18n, useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { typeLabel, QuestionReviewHost } from "../questionTypes";
 import { Badge, Card, EmptyState, NotePanel, percent, SectionHeading } from "../ui";
-import { AnswerRows, CorrectionKey, CorrectionProgram, drawsKey } from "./CorrectionQuestion";
+import { AnswerRows, CorrectionCases, CorrectionKey, drawsKey } from "./CorrectionQuestion";
 import { questionAnchor, QuestionSummary } from "./QuestionSummary";
 
 /**
@@ -27,10 +27,10 @@ export const isNotOver = (error: unknown): boolean => refusedWith(error, "not_ov
  * The pieces are the correction projection's, at the page's density and
  * always revealed: this is the teacher's reading of the projection. A type
  * with an answer key of its own (`drawsKey`, ADR-109: an mcq, a cloze, a
- * short or math answer, a categorize board) is drawn by it whole; any other
- * type keeps its own `Review` for the statement and the key — with no answer
- * and no grading details, the question the way it was asked — and gets the
- * projection's answer groups, program and test cases below it.
+ * short or math answer, a categorize board, a program, an essay) is drawn by
+ * it whole; any other type keeps its own `Review` for the statement and the
+ * key — with no answer and no grading details, the question the way it was
+ * asked — and gets the projection's answer groups and test cases below it.
  */
 export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
   const t = useT();
@@ -49,6 +49,7 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
       <QuestionSummary questions={questions} />
       {questions.map((q) => {
         const answered = q.outcomes.correct + q.outcomes.partial + q.outcomes.wrong;
+        const keyed = drawsKey(q.item.type);
         return (
           <Card key={q.item.id} id={questionAnchor(q.item.id)} className="scroll-mt-6 space-y-4 p-5">
             <SectionHeading
@@ -72,7 +73,7 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
               <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
                 {t("results.byQuestion.key")}
               </p>
-              {drawsKey(q.item.type) ? (
+              {keyed ? (
                 <CorrectionKey q={q} revealed density="page" />
               ) : (
                 <>
@@ -96,11 +97,9 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
               )}
             </div>
 
-            {/* A `code` question keeps its key in `solution.referenceSolution`,
-                and the type's review only prints it beside a graded answer —
-                which this view has none of. F-RES-03 asks for the answer, so
-                the program draws it, with the test cases. */}
-            <CorrectionProgram q={q} revealed density="page" />
+            {/* A key sets the test cases beside its program; without one,
+                they stand under the type's review. */}
+            {keyed ? null : <CorrectionCases q={q} density="page" />}
 
             {q.explanation ? (
               <NotePanel eyebrow={t("results.byQuestion.explanation")}>

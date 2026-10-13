@@ -221,3 +221,15 @@ export const GRADING_STRINGS = {
 };
 
 export type CodeGradingStrings = typeof GRADING_STRINGS;
+
+/**
+ * The words of the debrief's program key (`Key`, ADR-109), `code`'s and
+ * `codeimage`'s alike: the caption of the code it shows.
+ */
+export const KEY_STRINGS = {
+  reference: "Reference solution",
+  /** Hidden: the template the class started from. */
+  start: "Starting code",
+  /** Hidden, with no template to start from: a hatched block. */
+  hidden: "Reference solution, hidden until the answers are revealed",
+};

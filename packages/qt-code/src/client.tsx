@@ -43,6 +43,7 @@ export const codeClient: QuestionTypeClient<
   Editor: lazy(() => import("./Editor.js")),
   Player: lazy(() => import("./Player.js")),
   Review: lazy(() => import("./Review.js")),
+  Key: lazy(async () => ({ default: (await import("./Key.js")).ProgramKey })),
 
   /**
    * Empty, not seeded: the player displays the template's editable text when a
@@ -62,7 +63,7 @@ export const codeClient: QuestionTypeClient<
  * behind the editor's "try" button. A plain function, so it costs the bundle
  * nothing and stays out of the lazy chunks.
  */
-export { referenceProgram, referenceRegions } from "./reference.js";
+export { referenceRegions } from "./reference.js";
 export type { CodeAnswer, CodeConfig, CodeDetails, CodeRuntime, CodeSegment, CodeStudent } from "./schema.js";
 /*
  * The three surfaces are deliberately NOT re-exported here: a static
@@ -72,7 +73,7 @@ export type { CodeAnswer, CodeConfig, CodeDetails, CodeRuntime, CodeSegment, Cod
  */
 export type { CodeEditorProps } from "./Editor.js";
 export type { CodeRunOptions, CodeRunStage } from "./Player.js";
-export { EDITOR_STRINGS, GRADING_STRINGS, PLAYER_STRINGS, REVIEW_STRINGS } from "./strings.js";
+export { EDITOR_STRINGS, GRADING_STRINGS, KEY_STRINGS, PLAYER_STRINGS, REVIEW_STRINGS } from "./strings.js";
 /** The program half both player views share: what a browser request is built from. */
 export type { ProgramConfig, ProgramStudent } from "./schema.js";
 

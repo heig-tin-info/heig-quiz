@@ -148,7 +148,8 @@ export const ByQuestion = z.object({
   /** Every answer group, most frequent first. */
   distribution: z.array(AnswerDistributionEntry),
   /**
-   * `code` only: how many attempts passed each test case. `label` is the
+   * How many attempts passed each test case: `code`'s cases, `blocks`'s
+   * visible warehouses; empty for any other type. `label` is the
    * name the class may read: a hidden case reads as a student reads it
    * unless the feedback policy shows hidden case names (ADR-033).
    */

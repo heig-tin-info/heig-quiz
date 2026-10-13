@@ -35,6 +35,7 @@ import {
 import {
   richEditorStrings,
   richGradingStrings,
+  richKeyStrings,
   richPlayerStrings,
   richReviewStrings,
 } from "@quiz/qt-rich/client";
@@ -66,6 +67,7 @@ import {
   IMAGE_GRADING_STRINGS,
   IMAGE_PLAYER_STRINGS,
   IMAGE_REVIEW_STRINGS,
+  KEY_STRINGS as CODE_KEY_STRINGS,
   PLAYER_STRINGS,
   REVIEW_STRINGS,
 } from "@quiz/qt-code/client";
@@ -175,6 +177,8 @@ const DICTIONARIES: [string, object][] = [
   ["qt.short.k", shortKeyStrings],
   ["qt.math.k", mathKeyStrings],
   ["qt.categorize.k", categorizeKeyStrings],
+  ["qt.code.k", CODE_KEY_STRINGS],
+  ["qt.rich.k", richKeyStrings],
 ];
 
 /**

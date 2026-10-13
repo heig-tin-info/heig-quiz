@@ -59,6 +59,21 @@ const CODE = makeByQuestion({
   casePassRate: [{ name: "visible-1", label: "visible-1", passed: 2, total: 3 }],
 });
 
+const ESSAY = makeByQuestion({
+  item: byQuestionItem(4, "rich"),
+  student: { prompt: "Explain `malloc`.", format: "markdown" },
+  solution: { rubric: "secret-rubric", reference: "It allocates on the heap." },
+  outcomes: { correct: 0, partial: 1, wrong: 0, blank: 0 },
+});
+
+const BLOCKS = makeByQuestion({
+  item: byQuestionItem(5, "blocks"),
+  student: { prompt: "Reach the dock.", visibleCases: [], toolbox: [] },
+  solution: { referenceSolution: null },
+  outcomes: { correct: 2, partial: 0, wrong: 1, blank: 0 },
+  casePassRate: [{ name: "w1", label: "Warehouse 1", passed: 2, total: 3 }],
+});
+
 describe("ByQuestionView", () => {
   it("draws an mcq as the projection does, revealed, its choices in markdown", async () => {
     renderWithProviders(<ByQuestionView questions={[MCQ]} />);
@@ -120,15 +135,32 @@ describe("ByQuestionView", () => {
     expect(screen.queryByRole("list")).toBeNull();
   });
 
-  it("leaves any other type's statement to its review, with the program below", async () => {
+  it("draws a program's key itself: the statement, the reference, the cases beside it", async () => {
     renderWithProviders(<ByQuestionView questions={[CODE]} />);
-    expect(await screen.findByText("Not answered.")).toBeVisible();
-    expect(screen.getByRole("region", { name: "Reference solution" })).toHaveTextContent("return a + b;");
-    // Printed once: the review keeps it for a graded answer.
-    expect(screen.getAllByText("return a + b;")).toHaveLength(1);
+    expect(await screen.findByRole("region", { name: "Reference solution" })).toHaveTextContent("return a + b;");
+    expect(screen.getByText("sum", { exact: false })).toBeVisible();
     const cases = screen.getByRole("list", { name: "Test cases" });
     expect(within(cases).getByText("2 of 3")).toBeVisible();
     expect(within(cases).getByRole("img")).toHaveAccessibleName("passed: 2 · failed: 1");
+    // Never the empty student copy of the type's review.
+    expect(screen.queryByText("Not answered.")).toBeNull();
+    expect(screen.queryByText(/Score/)).toBeNull();
+  });
+
+  it("draws an essay's model answer, never its grading criteria", async () => {
+    renderWithProviders(<ByQuestionView questions={[ESSAY]} />);
+    expect(await screen.findByText("Model answer")).toBeVisible();
+    expect(screen.getByText("It allocates on the heap.")).toBeVisible();
+    expect(document.body.innerHTML).not.toContain("secret-rubric");
+    expect(screen.queryByText("Grading criteria")).toBeNull();
+  });
+
+  it("leaves any other type's statement to its review, with the test cases below", async () => {
+    renderWithProviders(<ByQuestionView questions={[BLOCKS]} />);
+    const cases = screen.getByRole("list", { name: "Test cases" });
+    expect(within(cases).getByText("2 of 3")).toBeVisible();
+    expect(within(cases).getByRole("img")).toHaveAccessibleName("passed: 2 · failed: 1");
+    expect(await screen.findByText("Reach the dock.", { exact: false })).toBeVisible();
   });
 });
 

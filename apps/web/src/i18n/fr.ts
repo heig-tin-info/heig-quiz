@@ -2271,6 +2271,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.rich.r.reference": "Réponse modèle",
   "qt.rich.r.score": "Score",
   "qt.rich.g.essay": "Rédaction",
+  "qt.rich.k.modelAnswer": "Réponse modèle",
 
   // --- qt-categorize strings ---
   "qt.categorize.e.prompt": "Énoncé",
@@ -2565,6 +2566,9 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.g.compileFailed": "Ne compile pas",
   "qt.code.g.atRunner": "exécution…",
   "qt.code.g.runFailed": "Non exécuté",
+  "qt.code.k.reference": "Solution de référence",
+  "qt.code.k.start": "Code de départ",
+  "qt.code.k.hidden": "Solution de référence, masquée jusqu'à la révélation des réponses",
 
   // --- qt-code : codeimage (ADR-021) ---
   "qt.codeimage.e.referenceSolutionHint":
@@ -4580,7 +4584,6 @@ export const fr: Record<keyof Dict, string> = {
     "Ajoutez des questions à l'évaluation pour les voir ici.",
   "results.byQuestion.correct": "bonne réponse",
   "results.byQuestion.key": "Énoncé et corrigé",
-  "results.byQuestion.reference": "Solution de référence",
   "results.present": "Projeter",
   "correction.title": "Correction",
   "correction.back": "Retour aux résultats",
@@ -4597,9 +4600,6 @@ export const fr: Record<keyof Dict, string> = {
   "correction.reveal": "Révéler les réponses",
   "correction.hide": "Masquer les réponses",
   "correction.explanation": "Explication",
-  "correction.code.start": "Code de départ",
-  "correction.code.hidden": "Solution de référence, masquée jusqu'à la révélation des réponses",
-  "correction.modelAnswer": "Réponse modèle",
   "bar.part": "{word}\u202f: {n}",
   "correction.outcome.correct": "juste",
   "correction.outcome.partial": "partiel",

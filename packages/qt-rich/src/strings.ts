@@ -53,6 +53,13 @@ export const richReviewStrings = {
 
 export type RichReviewStringKey = keyof typeof richReviewStrings;
 
+/** The words of the debrief's answer key (`Key`, ADR-109). */
+export const richKeyStrings = {
+  modelAnswer: "Model answer",
+} as const;
+
+export type RichKeyStringKey = keyof typeof richKeyStrings;
+
 /** The words of the grading table's one essay column (ADR-044). */
 export const richGradingStrings = {
   essay: "Essay",
