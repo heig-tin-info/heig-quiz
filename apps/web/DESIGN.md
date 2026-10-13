@@ -560,7 +560,8 @@ live in `ui/state.ts`, each written once.
   PHASE (`state`, with `locked` refined into `locked` / `graded` /
   `released`), never the stored state alone. No solid fill: the soft
   green plus the `TimeLeft` timer (icon and "3 h", only in the two tables of
-  a classroom's Activities tab) is what marks a live row, so the pill never
+  a classroom's Activities tab; outside a badge, also on a published
+  project's lifecycle rail) is what marks a live row, so the pill never
   competes with the row's one primary action. The student's activity cards
   keep their own grammar (amber waits on the student, see "The student's
   activity card"). The accent tone is
@@ -1978,8 +1979,9 @@ the folded Settings.
   `success`, pending `warning`, not accepted `fg-faint` at 50 %. A group
   project's ring has two parts (an invitation is one member's). A provisioning
   error, a student in no group and a repository whose student left are not
-  parts: they are said in a line of words. *Deadline* — the date, its relative
-  line ("passed" is the server's word, never the browser's clock), the strategy
+  parts: they are said in a line of words. *Deadline* — the date, "passed" once
+  the server applied it (its word, never the browser's clock; while open the
+  time left is the rail's, the page's one clock), the strategy
   as a zinc badge, grace, frozen k / n, how many have their own deadline, and
   the field that edits it (the reopen confirmation and `deadline_past` are
   unchanged). *Progress* — "n pushed". *Source* — the repositories, branches,
@@ -1999,7 +2001,15 @@ the folded Settings.
   never breaks or truncates (one rule for all of them, `When`) while the
   sentences around it ("at publication") may wrap, and a checkpoint's token
   (D−n, J−n) sits on the line of its status badge, never cut from it. Done
-  steps have a filled marker. A void
+  steps have a filled marker. **While published** and until the server
+  applies the deadline, the rail carries the page's one clock (ADR-104 §3,
+  amendment of 2026-10-13): the line from Published to Deadline fills with a
+  3 px `accent` bar in proportion to the time elapsed (each segment by the
+  dates of its two markers), and the time left (`TimeLeft`, "3 h") sits
+  under the deadline's date, `text-lg` semibold `accent`. Not a control, so
+  it does not compete with the header's primary button. One
+  `role="progressbar"` carries the value; the fill moves only under
+  `motion-safe`. After the deadline the rail is the plain one. A void
   checkpoint follows the Freeze, greyed, "never fires", still deletable. Graded
   `none`: no checkpoints and no Release. "Add a checkpoint" is offered until
   the project is locked (a draft takes

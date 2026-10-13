@@ -136,7 +136,8 @@ export function RelativeTime({ iso, className = "" }: { iso: string; className?:
   );
 }
 
-const MINUTE = 60_000;
+/** One minute, in ms: the tick of every minute clock (`useNow(MINUTE)`). */
+export const MINUTE = 60_000;
 
 /**
  * A moment written as something else (a distance, a time left): the full

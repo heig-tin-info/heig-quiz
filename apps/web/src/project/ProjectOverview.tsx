@@ -15,7 +15,6 @@ import {
   fieldErrorProps,
   isoDateTime,
   RingChart,
-  RelativeTime,
   Stat,
   type RingPart,
 } from "../ui";
@@ -209,7 +208,8 @@ function DeadlineTile({
   return (
     <Stat label={t("project.deadline")} value={<span className="text-[17px]">{isoDateTime(project.deadlineAt)}</span>}>
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        {deadlinePassed(project) ? t("project.deadline.passed") : <RelativeTime iso={project.deadlineAt} />}
+        {/* While open, the rail holds the time left (ADR-104). */}
+        {deadlinePassed(project) ? t("project.deadline.passed") : null}
         <Badge tone="zinc">{t(`project.deadlineStrategy.${project.deadlineStrategy}`)}</Badge>
       </p>
       <Facts rows={rows} />

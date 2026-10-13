@@ -4,6 +4,10 @@
 
 Accepted (2026-10-11, product owner Yves Chevallier).
 
+Amended 2026-10-13 (#798): §3 for the project page only — the lifecycle
+rail carries the page's one clock
+([amendment](#amendment-2026-10-13-the-project-rail-carries-its-own-clock)).
+
 Scope: the state badge of an evaluation and of a project on every staff
 surface of `apps/web` (the classroom's Activities tab, `/activities`, the
 evaluation's configuration, the live header, the project page) and the bars
@@ -20,6 +24,9 @@ delivered choices recorded in `docs/merge/history/09-tasks-delivered.md` —
 M3-10 ("amber badge and bar" for a published project) and M3-14a finding
 no. 6 (the time left in the Projects table's Deadline cell). Builds on
 ADR-094 (the `packages/ui` class lists).
+
+The 2026-10-13 amendment amends `apps/web/DESIGN.md` again (the project
+page's Lifecycle rail and Deadline tile).
 
 ## Context
 
@@ -125,3 +132,31 @@ project" under one amber swatch.
   Activities tab are the only staff surface with no clock at all.
 - **Keeping amber for a published project.** Rejected: one colour with two
   meanings in two tables that sit one above the other.
+
+## Amendment 2026-10-13: the project rail carries its own clock
+
+Settled with the product owner on 2026-10-13 (#798, asked by a teacher). It
+amends §3 for the project page only; the badge's timer, its two places and
+the rest of this record stand.
+
+1. **The clock.** While a project is `published` and the server has not
+   applied its deadline (`deadlinePassed`, the server's word — invariant 5
+   of `CLAUDE.md`), the lifecycle rail (`ProjectRail`) fills its line from
+   Published toward the Deadline in proportion to the time elapsed from the
+   publication to the deadline (clamped 0..100 %), and writes the time left
+   under the deadline's date through `TimeLeft` — §3's format, on the shared
+   minute timer of `useNow`, no new clock. Each segment between two markers
+   fills by its own two dates: the markers are evenly spaced, so a straight
+   fraction would cross a review checkpoint at the wrong time. The value
+   given to a screen reader is the overall fraction.
+2. **The colour: the `accent`.** The bar and the figure are not a control,
+   so they are not a second primary action: the header's one primary button
+   (Publish, Sync, Release — invariant 2) stays the only accent a teacher
+   acts on, and with the accent stripped the rail still reads.
+3. **The page's only clock.** §3 rejected two countdowns of the same
+   deadline on one page, so the Deadline tile (`ProjectOverview`) drops its
+   relative line while the rail carries the time left, and keeps "passed"
+   once the server applied the deadline.
+4. **After the deadline the rail is the plain one**: no bar and no time
+   left, the done markers already say it is over. Completing the segment in
+   a neutral ink was set aside as one more mark saying the same thing.

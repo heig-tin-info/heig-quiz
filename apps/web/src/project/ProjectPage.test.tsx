@@ -1305,6 +1305,31 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
     expect(within(rail).getByRole("button", { name: "Add a checkpoint" })).toBeInTheDocument();
   });
 
+  it("carries the page's one clock on the rail while open: the time left under the deadline and the elapsed bar (#798)", async () => {
+    routes(makeProject());
+    renderPage();
+    const rail = await screen.findByRole("region", { name: "Lifecycle" });
+    // Published a week ago, the deadline in two weeks: a third elapsed.
+    const bar = within(rail).getByRole("progressbar", { name: "Time elapsed from publication to the deadline" });
+    expect(Number(bar.getAttribute("aria-valuenow"))).toBeGreaterThanOrEqual(33);
+    expect(Number(bar.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(34);
+    expect(within(rail).getAllByTestId("rail-fill")).toHaveLength(1);
+    const deadline = within(rail).getAllByRole("listitem")[1]!;
+    expect(deadline.textContent).toMatch(/^Deadline/);
+    expect(within(deadline).getByText(/^closes in 1[34] d$/)).toBeInTheDocument();
+    // The Deadline tile leaves the distance to the rail: one clock on the page.
+    expect(within(tiles()).queryByText(/^in \d+ (days|weeks)$/)).toBeNull();
+  });
+
+  it("draws no clock on the rail once the deadline is applied", async () => {
+    routes(frozenProject());
+    renderPage();
+    const rail = await screen.findByRole("region", { name: "Lifecycle" });
+    expect(within(rail).queryByRole("progressbar")).toBeNull();
+    expect(within(rail).queryByTestId("rail-fill")).toBeNull();
+    expect(within(rail).queryByText(/^closes in/)).toBeNull();
+  });
+
   it("offers a new checkpoint on a draft (F-PROJ-01)", async () => {
     routes(makeDraft());
     renderPage();
