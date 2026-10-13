@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { isScheduled } from "./activities/model";
 import { useEvaluations } from "./evaluation/api";
@@ -19,7 +19,7 @@ import { ToggleChip } from "./ui";
  * The chip shows only where it can find something (the two lists' own
  * reads, cached: no request of its own), and the filter holds only while it
  * does — a scheduled exam that opens leaves the filter, it never empties
- * the tab. Not remembered: a filter a teacher forgot would hide what runs.
+ * the tab, and the chip comes back unpressed. Not remembered: a filter a teacher forgot would hide what runs.
  */
 export function ClassroomActivities({
   classroomId,
@@ -37,6 +37,11 @@ export function ClassroomActivities({
   const projectRows = useClassroomProjects(classroomId).data ?? [];
   const any = evaluationRows.some(isScheduled) || projectRows.some(isScheduled);
   const scheduledOnly = pressed && any;
+  // Once the filter has dropped, it stays off for the visit: a row scheduled
+  // later must not bring back a filter the teacher no longer sees as on.
+  useEffect(() => {
+    if (!any) setPressed(false);
+  }, [any]);
   return (
     <>
       <div className="space-y-3">

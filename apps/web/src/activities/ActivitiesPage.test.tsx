@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,6 +6,7 @@ import type { ActivitySummary, EvaluationActivitySummary, ProjectActivitySummary
 
 import { id, liveAt } from "../test/live-fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { activitiesKey } from "../queryKeys";
 import { ActivitiesPage } from "./ActivitiesPage";
 
 /*
@@ -81,8 +82,8 @@ const render = (rows: ActivitySummary[] = ALL, navigate = vi.fn()) => {
     "GET /app/api/activities": ok(rows),
     "GET /app/api/activities/stats": ok({ studentsInProgress: 42 }),
   });
-  renderWithProviders(<ActivitiesPage navigate={navigate} />);
-  return { navigate, ...stub };
+  const { queryClient } = renderWithProviders(<ActivitiesPage navigate={navigate} />);
+  return { navigate, queryClient, ...stub };
 };
 
 /** This week's list of the phone schedule (the summary tiles name titles too). */
@@ -212,6 +213,19 @@ describe("ActivitiesPage", () => {
     expect(within(table).queryByText("Labo 2 — pointeurs")).not.toBeInTheDocument();
     // Only the current tab has the chip.
     await user.click(screen.getByRole("tab", { name: /Ended/ }));
+    expect(screen.queryByRole("button", { name: "Scheduled" })).not.toBeInTheDocument();
+  });
+
+  it("drops the Scheduled filter when the last scheduled row opens (#787)", async () => {
+    const user = userEvent.setup();
+    const { queryClient } = render([SERIES, NEXT]);
+    await user.click(await screen.findByRole("button", { name: "Scheduled", pressed: false }));
+    expect(within(screen.getByRole("table")).queryByText("Série 5 — UART")).not.toBeInTheDocument();
+    act(() => {
+      queryClient.setQueryData(activitiesKey, [SERIES, { ...NEXT, state: "running" }]);
+    });
+    expect(await within(screen.getByRole("table")).findByText("Série 5 — UART")).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).getByText("Série 6 — SPI")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Scheduled" })).not.toBeInTheDocument();
   });
 

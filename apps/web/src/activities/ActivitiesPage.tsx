@@ -113,8 +113,14 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const typed = ordered.filter((row) => matchesType(row, types));
   const inTab = (t: Tab) => typed.filter((row) => tabOf(row) === t);
   // The one narrowing chip of the open tab, if pressed: what it keeps.
+  // As the chip shows: only where it can find something, so the last
+  // scheduled row opening drops the filter instead of emptying the tab.
   const narrow =
-    unreleased && tab === "ended" ? awaitsRelease : scheduled && tab === "current" ? isScheduled : null;
+    unreleased && tab === "ended"
+      ? awaitsRelease
+      : scheduled && tab === "current" && ordered.some(isScheduled)
+        ? isScheduled
+        : null;
   const narrowing = narrow !== null;
   const shown = inTab(tab).filter((row) => narrow === null || narrow(row));
   const tabTotal = ordered.filter((row) => tabOf(row) === tab).length;

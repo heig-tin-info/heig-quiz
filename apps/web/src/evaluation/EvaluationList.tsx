@@ -367,7 +367,8 @@ export function EvaluationList({
   /** Where a row leads (`evaluationHome`, shared with the Activities section). */
   const open = (row: EvaluationSummary) => navigate(evaluationHome(row));
 
-  if (scheduledOnly && rows.length === 0) return null;
+  // A failed read still says so, filter or not.
+  if (scheduledOnly && rows.length === 0 && !list.isError) return null;
 
   return (
     <section aria-labelledby="classroom-evaluations" className="space-y-3">

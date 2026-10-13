@@ -196,6 +196,9 @@ scheduled still said "draft" exactly like one in preparation (#795).
    (2026-10-13) `tabOf` in `activities/model.ts` files it under Current,
    beside a scheduled evaluation (`isScheduled`, which the "Scheduled"
    filter of `/activities` and of a classroom's Activities tab also reads).
+   A scheduled project's start and deadline therefore now count in the
+   "Next 7 days" tile, in `nextEventOf` and in the classroom list's next
+   event (#805, `course/classroomSignals.ts`), which read `tabOf`.
 4. **The start in sight.** The evaluations table of a classroom's
    Activities tab gains a Start column — when it started (`startedAt`, an
    evaluation opened by hand has no `opensAt`), else when it is to open
