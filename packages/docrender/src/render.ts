@@ -178,8 +178,10 @@ const EXTERNAL = /^(https?|mailto):/i;
  * journal's HTML is stored, rendered when the journal is written; one stored
  * by an older version is rendered again from its stored sources (the API's
  * `journal.renderer` sweep). Bump it with any change to the HTML, the table
- * of contents or the warnings a source yields, or pages rendered before the
- * change keep the old output until their journal is next written (#818).
+ * of contents or the warnings a source yields — `prettifyName` and
+ * `navSortKey`, stored with each page, included — or pages rendered before
+ * the change keep the old output until their journal is next written (#818).
+ * `render.test.ts` pins a fixture's output to this version.
  *
  * 1: before the version existed. 2: task lists drawn as a course plan (#657).
  */

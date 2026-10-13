@@ -48,7 +48,7 @@ import type { Db, Tx } from "../../db/client.js";
 import { classroomJournals, journalAssets, journalPageRevisions, journalPages, users } from "../../db/schema.js";
 import { JournalError } from "./errors.js";
 import { journalChanged } from "./events.js";
-import { renderAt, renderSources, renderStudentPages, storePages, type PageSource } from "./rendering.js";
+import { renderAt, renderSources, renderStudentPages, storePages, storedSources } from "./rendering.js";
 import { staffJournal, staffPage } from "./service.js";
 import { freshVersion, type Room, type WriteContext } from "./writes.js";
 
@@ -87,20 +87,14 @@ async function pageVersion(tx: Tx, classroomId: string, path: string): Promise<n
  * returns, read in the transaction.
  */
 async function apply(tx: Tx, ctx: WriteContext, classroomId: string, edit: Edit, now: Date): Promise<JournalFileWritten | null> {
-  const stored = await tx
-    .select({ id: journalPages.id, path: journalPages.path, markdown: journalPages.markdown, blobSha: journalPages.blobSha })
-    .from(journalPages)
-    .where(eq(journalPages.classroomId, classroomId));
-  const sources: PageSource[] = stored
-    .filter((s) => s.path !== edit?.path)
-    .map((s) => ({ ...s, moved: false }));
+  const { sources: stored, assets, oversized } = await storedSources(tx, classroomId);
+  const sources = stored.filter((s) => s.path !== edit?.path);
   const before = stored.find((s) => s.path === edit?.path);
   if (edit && "markdown" in edit) {
     const { path, markdown } = edit;
     sources.push({ id: before?.id ?? randomUUID(), path, markdown, blobSha: sha256(markdown), moved: true });
   }
-  const assets = await tx.select({ path: journalAssets.path }).from(journalAssets).where(eq(journalAssets.classroomId, classroomId));
-  const { pages } = renderSources(classroomId, sources, new Set(assets.map((a) => a.path)));
+  const { pages } = renderSources(classroomId, sources, assets, oversized);
   const created = edit && "markdown" in edit && !before ? edit.path : null;
   await storePages(tx, classroomId, pages.map((p) => (p.path === created ? { ...p, version: freshVersion() } : p)), now);
   await renderStudentPages(tx, classroomId);

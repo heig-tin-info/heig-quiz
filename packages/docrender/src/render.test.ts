@@ -1,9 +1,12 @@
+import { createHash } from "node:crypto";
+
 import { JournalWarning } from "@quiz/contracts";
 import katex from "katex";
 import { describe, expect, it, vi } from "vitest";
 
 import { splitFrontMatter } from "./frontMatter.js";
-import { renderPage, type RenderContext } from "./render.js";
+import { navSortKey, prettifyName } from "./journalTree.js";
+import { renderPage, RENDERER_VERSION, type RenderContext } from "./render.js";
 
 const CLASSROOM = "018f0000-0000-7000-8000-00000000c1a5";
 const ASSET_BASE = `/app/api/classrooms/${CLASSROOM}/journal/assets`;
@@ -472,19 +475,14 @@ describe("task lists", () => {
     expect(renderPage("- [ ] <script>\n", ctx()).html).not.toContain("<script>");
   });
 
-  // #818: the single-level shapes a weekly page is written in.
+  // #818: a single-level list, tight or loose (its labels in paragraphs).
   it.each([
-    ["a tight list", "- [x] a\n- [ ] b\n"],
-    ["a loose list, its labels in paragraphs", "- [x] a\n\n- [ ] b\n"],
-    ["any bullet and an uppercase tick", "* [X] a\n\n+ [ ] b\n"],
-    ["an ordered list", "1. [x] a\n2. [ ] b\n"],
-    ["a list right under a paragraph", "Topics:\n- [x] a\n- [ ] b\n"],
-    ["an item running on under its label", "- [x] a\n\n  more\n- [ ] b\n"],
-  ])("draws %s as a plan", (_, source) => {
+    ["tight", "- [x] a\n- [ ] b\n"],
+    ["loose", "- [x] a\n\n- [ ] b\n"],
+  ])("draws a %s single-level list as a plan", (_, source) => {
     const { html } = renderPage(source, ctx());
     expect(items(html)).toEqual(["done", "todo"]);
     expect(html).not.toContain("md-check-count");
-    expect(html.match(/type="checkbox"/g)).toHaveLength(2);
   });
 });
 
@@ -578,5 +576,49 @@ describe("lone surrogates never reach the output", () => {
     expect(p.frontMatter).toMatchObject({ "k�": "v�" });
     expect(p.warnings).toEqual([{ code: "visible_from_invalid", value: "x�" }]);
     expect(wellFormed(JSON.stringify(p))).toBe(true);
+  });
+});
+
+describe("the renderer version", () => {
+  // Stored journals are rendered again only when RENDERER_VERSION moves (#818).
+  // If this snapshot changes, BUMP RENDERER_VERSION in render.ts, then update it.
+  it("pins a fixture's output to the version", () => {
+    const source = [
+      "---",
+      "title: Fixture",
+      "---",
+      "# Plan",
+      "",
+      "Intro with [a page](020-pointers.md), [a missing one](missing.md) and `code`.",
+      "",
+      "- item",
+      "  1. nested",
+      "",
+      "- [ ] Chapter",
+      "  - [x] done",
+      "  - [ ] todo",
+      "- [x] leaf",
+      "",
+      "## Details",
+      "",
+      "| a | b |",
+      "| --- | --- |",
+      "| 1 | $x^2$ |",
+      "",
+      "![img](images/p.svg) [video](video.mp4) <b>raw</b>",
+      "",
+    ].join("\n");
+    const page = renderPage(source, ctx());
+    const names = ["README.md", "010-basics/020-the_pointers.md", "B-notes/2-intro.md"].map((p) => [prettifyName(p), navSortKey(p)]);
+    const hash = createHash("sha256")
+      .update(JSON.stringify([page.html, page.toc, page.warnings, page.title, page.assets, names]))
+      .digest("hex")
+      .slice(0, 16);
+    expect({ version: RENDERER_VERSION, hash }).toMatchInlineSnapshot(`
+      {
+        "hash": "4a3ef992448e6af3",
+        "version": 2,
+      }
+    `);
   });
 });

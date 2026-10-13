@@ -117,21 +117,29 @@ export async function storePages(tx: Tx, classroomId: string, pages: readonly Re
         ? and(eq(journalPages.classroomId, classroomId), notInArray(journalPages.path, kept))
         : eq(journalPages.classroomId, classroomId),
     );
+  // An older process writing during an overlapping deployment stamps its stale
+  // rendering current; it stays until the journal's next write.
   await tx
     .update(classroomJournals)
     .set({ renderedWith: RENDERER_VERSION })
     .where(eq(classroomJournals.classroomId, classroomId));
 }
 
-/**
- * Every page of a classroom's journal rendered again from what the database
- * holds — no GitHub call, no source moved: the stored markdown, the cached
- * assets, and the assets an earlier rendering found too large to serve (its
- * `asset_too_large` warnings: the ingestion read their sizes in the tree).
- * The output an ingestion of the same commit, or a Quiz-mode write, would
- * store. Called with the row locked.
- */
-export async function renderStored(tx: Tx, classroomId: string, now: Date): Promise<void> {
+/** What the database holds to render a journal from (every page unmoved). */
+export interface StoredSources {
+  sources: PageSource[];
+  /** The cached assets: what a page may show. */
+  assets: Set<string>;
+  /**
+   * The assets an earlier rendering found too large to serve (its
+   * `asset_too_large` warnings: the ingestion read their sizes in the tree),
+   * so a reference to one keeps saying so.
+   */
+  oversized: Set<string>;
+}
+
+/** A journal's stored pages and assets, as {@link renderSources} takes them. */
+export async function storedSources(tx: Tx, classroomId: string): Promise<StoredSources> {
   const stored = await tx
     .select({
       id: journalPages.id,
@@ -143,9 +151,22 @@ export async function renderStored(tx: Tx, classroomId: string, now: Date): Prom
     .from(journalPages)
     .where(eq(journalPages.classroomId, classroomId));
   const assets = await tx.select({ path: journalAssets.path }).from(journalAssets).where(eq(journalAssets.classroomId, classroomId));
-  const oversized = new Set(stored.flatMap((p) => p.warnings.flatMap((w) => (w.code === "asset_too_large" ? [w.path] : []))));
-  const sources = stored.map(({ warnings: _w, ...page }): PageSource => ({ ...page, moved: false }));
-  const { pages } = renderSources(classroomId, sources, new Set(assets.map((a) => a.path)), oversized);
+  return {
+    sources: stored.map(({ warnings: _w, ...page }) => ({ ...page, moved: false })),
+    assets: new Set(assets.map((a) => a.path)),
+    oversized: new Set(stored.flatMap((p) => p.warnings.flatMap((w) => (w.code === "asset_too_large" ? [w.path] : [])))),
+  };
+}
+
+/**
+ * Every page of a classroom's journal rendered again from what the database
+ * holds ({@link storedSources}) — no GitHub call, no source moved: the output
+ * an ingestion of the same commit, or a Quiz-mode write, would store. Called
+ * with the row locked.
+ */
+export async function renderStored(tx: Tx, classroomId: string, now: Date): Promise<void> {
+  const { sources, assets, oversized } = await storedSources(tx, classroomId);
+  const { pages } = renderSources(classroomId, sources, assets, oversized);
   await storePages(tx, classroomId, pages, now);
   await renderStudentPages(tx, classroomId);
 }

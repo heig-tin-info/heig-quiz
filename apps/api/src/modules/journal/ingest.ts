@@ -400,17 +400,22 @@ export async function sweepRenderer(app: FastifyInstance): Promise<string[]> {
     .where(lt(classroomJournals.renderedWith, RENDERER_VERSION));
   const rendered: string[] = [];
   for (const { classroomId } of due) {
-    const done = await app.db.transaction(async (tx) => {
-      const [row] = await tx
-        .select({ renderedWith: classroomJournals.renderedWith })
-        .from(classroomJournals)
-        .where(eq(classroomJournals.classroomId, classroomId))
-        .for("update", { skipLocked: true });
-      if (!row || row.renderedWith >= RENDERER_VERSION) return false;
-      await renderStored(tx, classroomId, app.clock.now());
-      return true;
-    });
-    if (done) rendered.push(classroomId);
+    try {
+      const done = await app.db.transaction(async (tx) => {
+        const [row] = await tx
+          .select({ renderedWith: classroomJournals.renderedWith })
+          .from(classroomJournals)
+          .where(eq(classroomJournals.classroomId, classroomId))
+          .for("update", { skipLocked: true });
+        if (!row || row.renderedWith >= RENDERER_VERSION) return false;
+        await renderStored(tx, classroomId, app.clock.now());
+        return true;
+      });
+      if (done) rendered.push(classroomId);
+    } catch (err) {
+      // One journal that fails to render must not hold the others back; the next tick retries it.
+      app.log.warn({ classroomId, error: String((err as Error)?.message ?? err) }, "journal re-rendering failed");
+    }
   }
   journalChanged(rendered);
   return rendered;
