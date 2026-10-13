@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ciStatusOf,
   deadlineWantsLock,
   effectiveDeadline,
   GRADING_WORKFLOW_PATH,
@@ -31,6 +32,25 @@ describe("runKind", () => {
     // A student workflow listening to repository_dispatch cannot impersonate the review.
     expect(runKind({ event: "repository_dispatch", path: ".github/workflows/own.yml" })).toBe("ci");
     expect(runKind({ event: "", path: GRADING_WORKFLOW_PATH })).toBe("ci");
+  });
+});
+
+describe("ciStatusOf", () => {
+  const ci = (conclusion: string | null, status = "completed") => ({ event: "push", path: GRADING_WORKFLOW_PATH, status, conclusion });
+  const review = (conclusion: string | null) => ({ event: "repository_dispatch", path: GRADING_WORKFLOW_PATH, status: "completed", conclusion });
+
+  it("fails on a failed run, waits on a running one, else passes", () => {
+    expect(ciStatusOf([])).toBe("none");
+    expect(ciStatusOf([ci("success"), ci("skipped")])).toBe("pass");
+    expect(ciStatusOf([ci("success"), ci(null, "in_progress")])).toBe("pending");
+    expect(ciStatusOf([ci("failure"), ci(null, "queued")])).toBe("fail");
+  });
+
+  it("leaves out the review Quiz dispatched: its failure is not the student's", () => {
+    expect(ciStatusOf([ci("success"), review("failure")])).toBe("pass");
+    expect(ciStatusOf([review("failure")])).toBe("none");
+    // A student's own workflow on repository_dispatch is theirs.
+    expect(ciStatusOf([ci("success"), { ...review("failure"), path: ".github/workflows/own.yml" }])).toBe("fail");
   });
 });
 

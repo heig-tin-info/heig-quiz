@@ -5766,9 +5766,6 @@ export const en = {
   "project.unassigned.title": "Cannot publish: {n} students are in no group",
   "project.unassigned.none": "Cannot publish: the project has no group yet",
   "project.unassigned.body": "Put every claimed student in a group, then publish again.",
-  "project.fellBack.title": "Some grades use the linear scale",
-  "project.fellBack.body":
-    "“Score is the grade” applies to a score out of 6. A score with another maximum was converted by the linear scale instead.",
   "project.liveStale": "Refreshing GitHub's state…",
   "project.settings": "Settings",
   "project.settings.desc": "What happens at the deadline, the protected files and where students work.",

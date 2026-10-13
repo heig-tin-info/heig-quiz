@@ -45,7 +45,6 @@ import { ProjectRepos } from "./ProjectRepos";
 import { ProjectSettings } from "./ProjectSettings";
 import { ProjectWorkspace } from "./ProjectWorkspace";
 import {
-  hasFellBack,
   offersSync,
   projectRefetchInterval,
   projectStatus,
@@ -391,11 +390,6 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
             </ul>
           ) : null}
           <p className="mt-1">{t("project.unassigned.body")}</p>
-        </Alert>
-      ) : null}
-      {hasFellBack(project) ? (
-        <Alert tone="warning" icon={AlertTriangle} title={t("project.fellBack.title")}>
-          {t("project.fellBack.body")}
         </Alert>
       ) : null}
 

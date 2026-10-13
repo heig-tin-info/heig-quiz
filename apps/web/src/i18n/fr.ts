@@ -5752,9 +5752,6 @@ export const fr: Record<keyof Dict, string> = {
   "project.unassigned.title": "Publication impossible : {n} étudiants sans groupe",
   "project.unassigned.none": "Publication impossible : le projet n'a encore aucun groupe",
   "project.unassigned.body": "Placez chaque étudiant inscrit dans un groupe, puis publiez à nouveau.",
-  "project.fellBack.title": "Certaines notes suivent le barème linéaire",
-  "project.fellBack.body":
-    "« Le score est la note » s'applique à un score sur 6. Un score avec un autre maximum a été converti par le barème linéaire.",
   "project.liveStale": "Mise à jour de l'état GitHub…",
   "project.settings": "Réglages",
   "project.settings.desc": "Ce qui se passe à l'échéance, les fichiers protégés et le lieu de travail des étudiants.",

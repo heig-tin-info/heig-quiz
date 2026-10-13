@@ -103,15 +103,6 @@ export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string 
   return { key, date };
 }
 
-/** Whether any grade of the page was converted by the linear scale instead of "score is the grade" (one warning). */
-export function hasFellBack(p: ProjectDetail): boolean {
-  return p.rows.some(({ repo }) => {
-    if (!repo) return false;
-    const { current, frozen, review, final } = repo.scores;
-    return [current, frozen, review, final].some((s) => s?.grade?.fellBack);
-  });
-}
-
 /**
  * The line under the deadline field: a manual draft counted as a duration
  * says so; a locked project warns that a later date reopens it; otherwise

@@ -26,6 +26,7 @@ import type { Octokit } from "octokit";
 import { z } from "zod";
 
 import {
+  ciStatusOf,
   effectiveDeadline,
   extractScore,
   GRADING_WORKFLOW_PATH,
@@ -324,7 +325,7 @@ async function readAnnotations(
   return { score: extractScore(notices), tests };
 }
 
-/** Pass / fail over every run of a commit (F-PROJ-10): the CI state of a repository. */
+/** Pass / fail over the student's runs of a commit (F-PROJ-10, `ciStatusOf`): the CI state of a repository. */
 export async function aggregateCiStatus(
   octokit: Octokit,
   fullName: string,
@@ -337,12 +338,7 @@ export async function aggregateCiStatus(
     head_sha: headSha,
     per_page: 50,
   });
-  const runs = data.workflow_runs;
-  if (runs.length === 0) return "none";
-  const completed = runs.filter((r) => r.status === "completed");
-  const failed = (c: string | null) => c !== null && !["success", "skipped", "neutral"].includes(c);
-  if (completed.some((r) => failed(r.conclusion))) return "fail";
-  return completed.length < runs.length ? "pending" : "pass";
+  return ciStatusOf(data.workflow_runs);
 }
 
 /**

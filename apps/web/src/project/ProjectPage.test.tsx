@@ -522,19 +522,10 @@ describe("the repositories", () => {
     expect(text(2)).toMatch(/sync failed/);
   });
 
-  it("warns once on the scale when a grade fell back, and says when GitHub's state is refreshing", async () => {
-    routes(
-      makeProject({
-        liveStale: true,
-        rows: [
-          row(1, makeRepo(1, { scores: { ...makeRepo(1).scores, final: { points: 80, max: 100, source: "ci", toVerify: false, grade: { grade: 5, fellBack: true } } } })),
-          row(2, makeRepo(2, { scores: { ...makeRepo(2).scores, final: { points: 60, max: 100, source: "ci", toVerify: false, grade: { grade: 4, fellBack: true } } } })),
-        ],
-      }),
-    );
+  it("says when GitHub's state is refreshing", async () => {
+    routes(makeProject({ liveStale: true }));
     renderPage();
-    expect(await screen.findAllByText("Some grades use the linear scale")).toHaveLength(1);
-    expect(screen.getByText("Refreshing GitHub's state…")).toBeInTheDocument();
+    expect(await screen.findByText("Refreshing GitHub's state…")).toBeInTheDocument();
   });
 
   it("opens a row's sheet with its runs, the slots marked, and writes a deadline and a lock from it", async () => {
