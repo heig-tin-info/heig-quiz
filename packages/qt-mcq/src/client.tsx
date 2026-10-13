@@ -34,6 +34,7 @@ export const mcqClient: McqClient = {
   Editor: lazy(async () => ({ default: (await import("./Editor.js")).McqEditor })),
   Player: lazy(async () => ({ default: (await import("./Player.js")).McqPlayer })),
   Review: lazy(async () => ({ default: (await import("./Review.js")).McqReview })),
+  Key: lazy(async () => ({ default: (await import("./Key.js")).McqKey })),
 
   emptyAnswer: () => ({ selected: [] }),
   isAnswered: isMcqAnswered,
@@ -49,6 +50,7 @@ export const mcqClient: McqClient = {
 export {
   mcqEditorStrings,
   mcqGradingStrings,
+  mcqKeyStrings,
   mcqPlayerStrings,
   mcqReviewStrings,
 } from "./strings.js";
@@ -67,3 +69,5 @@ export type { McqAnswer, McqConfig, McqDetails, McqSolution, McqStudent } from "
  * reveal on a phone draws the letter itself the way the review does.
  */
 export { choiceLetter, LetteredChoice } from "./ui.js";
+/* The choices joined with the key, in the served order: the poll projection's rows and the debrief's key. */
+export { letteredChoices, type KeyedChoice } from "./schema.js";

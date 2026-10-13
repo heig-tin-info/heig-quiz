@@ -87,8 +87,9 @@ describe("CorrectionProjection", () => {
     // The class in one bar, with its figures in words.
     expect(within(first).getByRole("img", { name: /correct: 2 · wrong: 1 · no answer: 1/ })).toBeVisible();
     // Hidden: the ticks of each choice, counted, named without a verdict and
-    // drawn without one; no expected answer on the wall.
-    const choices = within(first).getByRole("list");
+    // drawn without one; no expected answer on the wall. The choices are the
+    // type's own key, a chunk of its own (ADR-109).
+    const choices = await within(first).findByRole("list");
     expect(within(choices).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["A1 byte2", "B2 bytes1"]);
     expect(within(choices).getAllByRole("img").map((bar) => bar.getAttribute("aria-label"))).toEqual([
       "ticked: 2",

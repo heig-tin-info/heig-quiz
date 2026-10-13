@@ -1,7 +1,8 @@
 /**
  * The static browser-side question-type registry (PLAN-MVP §1.5, decision D1).
  *
- * Every entry exposes `Editor`/`Player`/`Review` through `React.lazy`, so that
+ * Every entry exposes `Editor`/`Player`/`Review` — and, for a type that draws
+ * one, its staff-only debrief `Key` (ADR-109) — through `React.lazy`, so that
  * Monaco never enters the initial bundle (N-PERF-05).
  */
 import { circuitClient } from "@quiz/qt-circuit/client";

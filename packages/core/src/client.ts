@@ -314,6 +314,83 @@ export interface ReviewProps<TStudent, TAnswer, TSolution, TDetails> {
 }
 
 /**
+ * One part of a bar a key draws (`KeyProps.Bar`): what it counts, as a
+ * meaning, never a raw colour. A part without `label` makes the bar mute.
+ */
+export interface KeyBarPart {
+  tone: "success" | "danger" | "muted";
+  value: number;
+  label?: string;
+}
+
+/** The props of the host's thin bar (`KeyProps.Bar`): `total` defaults to the sum of the parts. */
+export interface KeyBarProps {
+  parts: readonly KeyBarPart[];
+  total?: number;
+  className?: string;
+}
+
+/**
+ * How the class answered one question, as the debrief counts it: the part of
+ * the per-question view (`ByQuestion` of `@quiz/contracts`) a key reads.
+ * Structural, because `@quiz/contracts` depends on this package; the host
+ * hands its `ByQuestion` over as it is, so a change of the contract that
+ * breaks a key breaks the host at compile time.
+ */
+export interface KeyStats {
+  outcomes: { correct: number; partial: number; wrong: number; blank: number };
+  /** Every answer group, most frequent first: an mcq's choice ticks, a cloze blank's texts (`part`). */
+  distribution: readonly {
+    key: string;
+    /** `""` for an empty answer. */
+    label: string;
+    count: number;
+    correct: boolean | null;
+    part: number | null;
+  }[];
+  /** ADR-056 §9: every student had their own numbers, nothing is grouped by what was written. */
+  parameterized?: boolean | undefined;
+}
+
+/**
+ * The props of a type's answer key (`QuestionTypeClient.Key`): the question
+ * as the class saw it, its key, and how the class answered it.
+ *
+ * The host draws the generic pieces and lends them as SLOTS: `prompt` (the
+ * statement, framed) and `rows` (the answer groups, one bar each). The key
+ * places, replaces or omits them: an mcq keeps the prompt and draws its
+ * choices instead of the rows; a cloze draws its text through `statement`
+ * and no rows. A type without a `Key` gets the prompt and the rows.
+ */
+export interface KeyProps<TStudent, TSolution> {
+  student: TStudent;
+  solution: TSolution | null;
+  /**
+   * The key is shown. Hidden, a key draws the question as the class found
+   * it and how the class answered it, never which answer is right.
+   */
+  revealed: boolean;
+  /** `wall`: the correction projection's `clamp()` scale; `page`: the Results "Questions" tab. */
+  density: "wall" | "page";
+  stats: KeyStats;
+  /** The host's statement: the prompt, inside `statement`'s frame. `null` for a type without one. */
+  prompt: ReactNode;
+  /** The host's answer groups, one bar each; it draws nothing when there are none to list. */
+  rows: ReactNode;
+  /**
+   * The host's frame around a statement the type draws ITSELF in place of
+   * `prompt` (a cloze's text with its blanks): the caption of a
+   * parameterized question above it (ADR-056 §9), and whatever the host
+   * shows right after a statement.
+   */
+  statement: (body: ReactNode) => ReactNode;
+  /** The host's thin segmented bar, lent like `renderMarkdown`: a package cannot import the app. */
+  Bar: ComponentType<KeyBarProps>;
+  /** The host's sanitised inline markdown (`MarkdownRenderer`). */
+  renderMarkdown: MarkdownRenderer;
+}
+
+/**
  * The parts of a review a reader may choose to hide. `false` hides; `true`
  * and `undefined` show.
  *
@@ -361,6 +438,15 @@ export interface QuestionTypeClient<
   readonly Editor: LazyExoticComponent<ComponentType<EditorProps<TConfig>>>;
   readonly Player: LazyExoticComponent<ComponentType<PlayerProps<TStudent, TAnswer, TSolution>>>;
   readonly Review: LazyExoticComponent<ComponentType<ReviewProps<TStudent, TAnswer, TSolution, TDetails>>>;
+  /**
+   * The answer key of the debrief (ADR-033, ADR-109): the correction
+   * projection and the Results "Questions" tab draw it, `React.lazy` like
+   * the surfaces above. STAFF ONLY: it reads the key the per-question view
+   * serves the course's staff, which never goes through `toStudent`, and it
+   * must never be mounted on a student surface. Absent, the host draws the
+   * prompt and the answer groups itself.
+   */
+  readonly Key?: LazyExoticComponent<ComponentType<KeyProps<TStudent, TSolution>>>;
 
   /** Empty answer for a fresh item (e.g. `{ selected: [] }`). */
   emptyAnswer(student: TStudent): TAnswer;

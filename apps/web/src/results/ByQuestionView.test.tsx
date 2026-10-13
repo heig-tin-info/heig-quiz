@@ -85,8 +85,8 @@ describe("ByQuestionView", () => {
 
   it("draws a short answer's key itself, even with nobody to count", async () => {
     renderWithProviders(<ByQuestionView questions={[SHORT_UNANSWERED]} />);
-    expect(await screen.findByText("Nobody answered this question.")).toBeVisible();
-    expect(screen.getByText("Expected answer")).toBeVisible();
+    expect(await screen.findByText("Expected answer")).toBeVisible();
+    expect(screen.getByText("Nobody answered this question.")).toBeVisible();
     // Never the empty student copy of the type's review.
     expect(screen.queryByText(/Score/)).toBeNull();
   });

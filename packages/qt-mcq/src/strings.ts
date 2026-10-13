@@ -131,3 +131,16 @@ export const mcqGradingStrings = {
   expected: "Expected",
   notExpected: "Not expected",
 } as const;
+
+/**
+ * The words of the debrief's answer key (`Key`, ADR-109): what each choice's
+ * bar says in its bubble and its accessible name, the count after it.
+ */
+export const mcqKeyStrings = {
+  /** Hidden: how the class voted, which the ticks alone do not tell the key from. */
+  ticked: "ticked",
+  key: "correct answer · ticked",
+  distractor: "wrong answer · ticked",
+} as const;
+
+export type McqKeyStringKey = keyof typeof mcqKeyStrings;

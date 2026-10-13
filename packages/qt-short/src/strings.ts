@@ -92,6 +92,14 @@ export const shortReviewStrings = {
 
 export type ShortReviewStringKey = keyof typeof shortReviewStrings;
 
+/** The words of the debrief's answer key (`Key`, ADR-109). */
+export const shortKeyStrings = {
+  /** Before the accepted answers, above the class's answer groups. */
+  expected: "Expected answer",
+} as const;
+
+export type ShortKeyStringKey = keyof typeof shortKeyStrings;
+
 /** The words of the grading table's one column (ADR-044). */
 export const shortGradingStrings = {
   answer: "Answer",

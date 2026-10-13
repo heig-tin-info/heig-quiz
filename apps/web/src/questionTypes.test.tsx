@@ -5,12 +5,14 @@ import { fmt, plural } from "@quiz/core/client";
 import {
   mcqEditorStrings,
   mcqGradingStrings,
+  mcqKeyStrings,
   mcqPlayerStrings,
   mcqReviewStrings,
 } from "@quiz/qt-mcq/client";
 import {
   shortEditorStrings,
   shortGradingStrings,
+  shortKeyStrings,
   shortPlayerStrings,
   shortReviewStrings,
 } from "@quiz/qt-short/client";
@@ -18,6 +20,7 @@ import {
   MATH_PROBLEM_KEYS,
   mathEditorStrings,
   mathGradingStrings,
+  mathKeyStrings,
   mathPlayerStrings,
   mathProblemStrings,
   mathReviewStrings,
@@ -25,6 +28,7 @@ import {
 import {
   clozeEditorStrings,
   clozeGradingStrings,
+  clozeKeyStrings,
   clozePlayerStrings,
   clozeReviewStrings,
 } from "@quiz/qt-cloze/client";
@@ -37,6 +41,7 @@ import {
 import {
   categorizeEditorStrings,
   categorizeGradingStrings,
+  categorizeKeyStrings,
   categorizePlayerStrings,
   categorizeReviewStrings,
 } from "@quiz/qt-categorize/client";
@@ -81,6 +86,8 @@ import {
   diagramCanvasStrings,
   editorStrings,
   gradingStrings,
+  KEY_HOST_MAPPED_KEYS,
+  keyStrings,
   MCQ_HOST_MAPPED_KEYS,
   playerStrings,
   questionType,
@@ -162,6 +169,12 @@ const DICTIONARIES: [string, object][] = [
   ["qt.blocks.g", blocksGradingStrings],
   // The world's words: block labels, verdicts, the warehouse (ADR-103 §9).
   ["qt.blocks.c", blocksCanvasStrings],
+  // The debrief's answer keys (ADR-109), for the types that draw one.
+  ["qt.mcq.k", mcqKeyStrings],
+  ["qt.cloze.k", clozeKeyStrings],
+  ["qt.short.k", shortKeyStrings],
+  ["qt.math.k", mathKeyStrings],
+  ["qt.categorize.k", categorizeKeyStrings],
 ];
 
 /**
@@ -176,6 +189,7 @@ const MAPPED_ELSEWHERE: Record<string, readonly string[]> = {
   "qt.math.e": MATH_PROBLEM_KEYS,
   "qt.math.p": MATH_PROBLEM_KEYS,
   "qt.math.r": MATH_PROBLEM_KEYS,
+  "qt.cloze.k": KEY_HOST_MAPPED_KEYS,
 };
 
 describe("grading columns (ADR-044)", () => {
@@ -229,6 +243,19 @@ describe("question type strings", () => {
         expect(typeHint(t, id)).not.toBe(client.hintKey);
       }
     }
+  });
+
+  it("words the answer key of exactly the types that draw one", () => {
+    const drawing = QUESTION_TYPE_IDS.filter((id) => questionType(id)?.Key !== undefined);
+    expect(Object.keys(keyStrings).sort()).toEqual([...drawing].sort());
+  });
+
+  it.each(Object.entries(keyStrings))("%s: the answer key's words reach French, the outcomes the head's", (id, strings) => {
+    const fr = sentences(strings(makeT("fr")));
+    const en = Object.fromEntries(sentences(strings(makeT("en"))));
+    for (const [key, value] of fr) expect(value, `${id} key ${key}`).not.toMatch(rawKey);
+    expect(fr.some(([key, value]) => value !== en[key]), id).toBe(true);
+    if (id === "cloze") expect(strings(makeT("fr"))).toMatchObject({ correct: "juste", wrong: "faux" });
   });
 
   it("words the MCQ policies once, for the editor and the two settings screens", () => {

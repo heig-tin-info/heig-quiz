@@ -44,6 +44,7 @@ export const clozeClient: ClozeClient = {
   Editor: lazy(async () => ({ default: (await import("./Editor.js")).ClozeEditor })),
   Player: lazy(async () => ({ default: (await import("./Player.js")).ClozePlayer })),
   Review: lazy(async () => ({ default: (await import("./Review.js")).ClozeReview })),
+  Key: lazy(async () => ({ default: (await import("./Key.js")).ClozeKey })),
 
   emptyAnswer: (student) => ({ blanks: student.blanks.map(() => null) }),
   isAnswered: isClozeAnswered,
@@ -60,6 +61,7 @@ export type { ClozeTextRenderer } from "./text.js";
 export {
   clozeEditorStrings,
   clozeGradingStrings,
+  clozeKeyStrings,
   clozePlayerStrings,
   clozeReviewStrings,
 } from "./strings.js";

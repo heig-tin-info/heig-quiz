@@ -33,6 +33,7 @@ export const mathClient: MathClient = {
   Editor: lazy(async () => ({ default: (await import("./Editor.js")).MathEditor })),
   Player: lazy(async () => ({ default: (await import("./Player.js")).MathPlayer })),
   Review: lazy(async () => ({ default: (await import("./Review.js")).MathReview })),
+  Key: lazy(async () => ({ default: (await import("./Key.js")).MathKey })),
 
   emptyAnswer: () => ({ latex: "" }),
   isAnswered: isMathAnswered,
@@ -40,6 +41,6 @@ export const mathClient: MathClient = {
 };
 
 /* Strings and the empty draft only: a static re-export of a surface would undo the `lazy` above. */
-export { MATH_PROBLEM_KEYS, mathEditorStrings, mathGradingStrings, mathPlayerStrings, mathProblemStrings, mathReviewStrings } from "./strings.js";
+export { MATH_PROBLEM_KEYS, mathEditorStrings, mathGradingStrings, mathKeyStrings, mathPlayerStrings, mathProblemStrings, mathReviewStrings } from "./strings.js";
 export { emptyMathDraft } from "./schema.js";
 export type { MathAnswer, MathConfig, MathDetails, MathPlot, MathSolution, MathStudent, MathSymbol } from "./schema.js";
