@@ -29,6 +29,7 @@
  * mean; an empty cell left out), the class's overall one the plain mean of
  * the students' means (a student with none left out).
  */
+import type { EvaluationModeName } from "./evaluationConfig.js";
 import { MIN_GRADE } from "./grade.js";
 import { roundToTenth } from "./round.js";
 
@@ -55,6 +56,9 @@ export type GradebookColumnKind = (typeof GRADEBOOK_COLUMN_KINDS)[number];
 export function countsByDefault(kind: GradebookColumnKind): boolean {
   return kind !== "exercise";
 }
+
+/** The column kind of an evaluation's mode: an exam, or an exercise (a poll never has a column). */
+export const evaluationColumnKind = (mode: EvaluationModeName): Exclude<GradebookColumnKind, "project"> => (mode === "exam" ? "exam" : "exercise");
 
 /** What a cell holds, before any mark. */
 export type CellOutcome = { kind: "grade"; grade: number } | { kind: "absent" } | { kind: "empty" };

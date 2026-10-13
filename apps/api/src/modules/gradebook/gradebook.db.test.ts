@@ -28,7 +28,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { GradebookStaff, GradebookStudent, CSRF_COOKIE, type FeedbackPolicy, type GradebookStaffCell } from "@quiz/contracts";
+import { GradebookStaff, GradebookStudent, StudentGrades, CSRF_COOKIE, type FeedbackPolicy, type GradebookStaffCell } from "@quiz/contracts";
 import { gradebookMean, gradeFromPoints } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
@@ -49,6 +49,7 @@ import {
   projects,
 } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { evaluationRows } from "../../test/grades.js";
 import { kioskStation } from "../../test/kiosk.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
@@ -701,12 +702,38 @@ describe("the student's own cells (F-GBOOK-05, F-RES-04) and what must never rea
         }
         // The mean is not published: the key does not exist.
         expect("mean" in raw, who).toBe(false);
-        // The weights and the counted flags are the teacher's, shown with the mean only.
+        // The weights are the teacher's, shown with the mean only (the counted flag is not: ADR-074, 2026-10-13).
         for (const column of raw["columns"] as Record<string, unknown>[]) expect(column).not.toHaveProperty("weight");
       }
     } finally {
       await call("DELETE", markUrl("evaluation", "E3", seats[0]!), teacher.headers);
       await call("DELETE", markUrl("project", "P2", seats[1]!), teacher.headers);
+    }
+  });
+
+  it("tells the student whether each column counts, on the tab and the Grades page alike — the flag alone, no weight before the mean is published (#803)", async () => {
+    /** The effective flag of E1, X1 and P1 on the tab, and of E1 and X1 on the Grades page; no weight anywhere. */
+    const flags = async () => {
+      const { parsed, raw } = await studentRead(students[0]!.headers);
+      for (const column of raw["columns"] as Record<string, unknown>[]) expect(column).not.toHaveProperty("weight");
+      const tab = (name: string) => parsed.columns.find((c) => c.activityId === col[name])!.counts;
+      const res = await call("GET", "/app/api/student/results", students[0]!.headers);
+      expect(res.statusCode, res.body).toBe(200);
+      expect(res.body).not.toContain('"weight"');
+      const rows = evaluationRows(StudentGrades.parse(res.json()));
+      const page = (name: string) => rows.find((r) => r.evaluationId === col[name])!.counts;
+      return { E1: [tab("E1"), page("E1")], X1: [tab("X1"), page("X1")], P1: tab("P1") };
+    };
+    // The kinds' defaults: an exam and a project count, an exercise does not.
+    expect(await flags()).toEqual({ E1: [true, true], X1: [false, false], P1: true });
+    // The teacher includes the exercise and leaves the exam out: their word wins, the weight stays theirs.
+    await call("PATCH", colUrl("evaluation", "X1"), teacher.headers, { counts: true, weight: 30 });
+    await call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { counts: false });
+    try {
+      expect(await flags()).toEqual({ E1: [false, false], X1: [true, true], P1: true });
+    } finally {
+      await call("PATCH", colUrl("evaluation", "X1"), teacher.headers, { counts: false, weight: 100 });
+      await call("PATCH", colUrl("evaluation", "E1"), teacher.headers, { counts: true });
     }
   });
 

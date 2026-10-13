@@ -100,6 +100,7 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
     title: "Lab 2",
     date: DEADLINE,
     status: "released",
+    counts: true,
     score: { points: 4.5, totalPoints: 6, grade: 4.5 },
   } as const;
 
@@ -112,6 +113,7 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
       date: START,
       status: "released",
       feedbackAttemptId: null,
+      counts: true,
       score: { points: 12, totalPoints: 18, grade: 4.3, pendingCount: 0 },
     } as const;
     const grades = [
@@ -130,7 +132,7 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
   });
 
   it("carries neither the score's source, the teacher's comment nor the repository (N-SEC-20)", () => {
-    expect(Object.keys(ProjectGradeRow.shape).sort()).toEqual(["date", "kind", "projectId", "score", "status", "title"]);
+    expect(Object.keys(ProjectGradeRow.shape).sort()).toEqual(["counts", "date", "kind", "projectId", "score", "status", "title"]);
     expect(Object.keys(ProjectGradeRow.shape.score.shape).sort()).toEqual(["grade", "points", "totalPoints"]);
     const leaky = {
       ...row,

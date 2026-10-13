@@ -5,6 +5,7 @@ import {
   cellGrade,
   classMean,
   countsByDefault,
+  evaluationColumnKind,
   gradebookMean,
   hasGrade,
   notTakenCell,
@@ -19,6 +20,11 @@ describe("what counts by default (D06)", () => {
     expect(countsByDefault("exam")).toBe(true);
     expect(countsByDefault("project")).toBe(true);
     expect(countsByDefault("exercise")).toBe(false);
+  });
+
+  it("reads an evaluation's mode as its column's kind", () => {
+    expect(evaluationColumnKind("exam")).toBe("exam");
+    expect(evaluationColumnKind("exercise")).toBe("exercise");
   });
 });
 

@@ -404,6 +404,14 @@ export const EvaluationGradeRow = z.object({
    */
   feedbackAttemptId: z.uuid().nullable(),
   /**
+   * Whether the evaluation counts toward the classroom's mean: its gradebook
+   * column's flag, or the mode's default (an exam counts, an exercise does
+   * not). The flag alone, before the mean is published too — never the
+   * weight (ADR-074, amendment of 2026-10-13): the page draws a row that
+   * does not count as practice, its grade indicative (#803).
+   */
+  counts: z.boolean(),
+  /**
    * The points and the Swiss grade, ONLY once the results are released and
    * the feedback policy lets the student read them — never under `none`
    * (F-RES-04). On an `available` row, the points the feedback page shows
@@ -438,6 +446,8 @@ export const ProjectGradeRow = z.object({
   title: z.string(),
   date: z.iso.datetime(),
   status: z.literal("released"),
+  /** Whether it counts toward the mean, as an evaluation's row says (a project does by default). */
+  counts: z.boolean(),
   score: z.object({ points: z.number(), totalPoints: z.number(), grade: z.number() }),
 });
 export type ProjectGradeRow = z.infer<typeof ProjectGradeRow>;

@@ -44,6 +44,7 @@ import {
   enrollments,
   evaluationItems,
   evaluations,
+  gradebookColumns,
   isStaffAttempt,
   pools,
   questionVersions,
@@ -320,7 +321,10 @@ export async function joinedItem(
  * `classroomId` narrows it to one of those classrooms (the student's
  * classroom page, M5-01): the same rows, never a second query shape.
  * `staff`: the seat is a staff seat (ADR-018), which the Grades page lists
- * only once it holds an attempt.
+ * only once it holds an attempt. `storedCounts`: the teacher's `counts` of the
+ * evaluation's gradebook column, null where none is stored (read by join, the
+ * table is the gradebook's; at most one per evaluation,
+ * `gradebook_columns_evaluation_uq`), for the Grades page's groups (#803).
  */
 export function studentEvaluationRows(db: Db, userId: string, classroomId?: string) {
   return db
@@ -336,6 +340,7 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
       // The seat's extra time, in the conditions of a trusted-client card (ADR-079 §7).
       timeBonusPercent: enrollments.timeBonusPercent,
       attempt: attempts,
+      storedCounts: gradebookColumns.counts,
     })
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
@@ -345,6 +350,7 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
       attempts,
       and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId), isLatestAttempt),
     )
+    .leftJoin(gradebookColumns, eq(gradebookColumns.evaluationId, evaluations.id))
     .where(
       and(
         eq(enrollments.userId, userId),

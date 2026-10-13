@@ -8,15 +8,19 @@
  * alone, marked indicative), and whether it opens a feedback page. This page
  * computes nothing; it draws.
  *
+ * Inside a classroom, the rows that count toward the mean ("Count toward
+ * your average") come before the others ("Indicative"), whose grades are
+ * indicative (`CountsGroups`, #803): the server's effective `counts` decides.
+ *
  * The four decisions:
- *   - Type: the classroom's name is the 16 px title of its group; inside a
- *     row the activity is the bold 13 px identity, the grade the one number
- *     set in semibold.
+ *   - Type: the classroom's name is the 16 px title of its section, each
+ *     group a 14 px semibold sub-heading; inside a row the activity is the
+ *     bold 13 px identity, the grade the one number set in semibold.
  *   - Color: no accent and no primary — a page you read, not act on
- *     (invariant 2). The grade wears its band's colour (`Grade`), the status
- *     its badge's tone.
+ *     (invariant 2). A grade that counts wears its band's colour (`Grade`),
+ *     an indicative grade the ink; the status its badge's tone.
  *   - Space: 24 under the header, 32 between classrooms, 12 between a
- *     classroom's heading and its table.
+ *     classroom's heading and its first group, 20 between groups.
  *   - Finish: a card per classroom, hairline rows, the hover of a row that
  *     opens something and of no other.
  *
@@ -31,6 +35,7 @@ import type { GradeGroup, GradeRow, GradeStatus, StudentGrades as StudentGradesD
 
 import { api } from "../api";
 import { Grade } from "../Grade";
+import { CountsGroups } from "../gradebook/groups";
 import { feedbackLink } from "../grading";
 import { useT, type Dict, type TFunction } from "../i18n";
 import { studentGradesKey } from "../queryKeys";
@@ -115,10 +120,14 @@ function ClassroomGrades({ group, navigate }: { group: GradeGroup; navigate: (r:
         }
         description={`${room.courseCode} — ${room.courseName}${room.period ? ` · ${room.period}` : ""}`}
       />
-      <Card className={cx(T.container, "overflow-hidden")}>
-        <GradeTable rows={group.rows} open={open} />
-        <GradeList rows={group.rows} open={open} />
-      </Card>
+      <CountsGroups rows={group.rows}>
+        {(rows) => (
+          <Card className={cx(T.container, "overflow-hidden")}>
+            <GradeTable rows={rows} open={open} />
+            <GradeList rows={rows} open={open} />
+          </Card>
+        )}
+      </CountsGroups>
     </section>
   );
 }
@@ -250,13 +259,14 @@ function Points({ row }: { row: GradeRow }) {
 
 /**
  * The grade, or where there is none: "indicative" beside points read before
- * the release (F-RES-04), a dash otherwise.
+ * the release (F-RES-04), a dash otherwise. A row that does not count keeps
+ * its grade in the ink: indicative (#803).
  */
 function GradeCell({ row }: { row: GradeRow }) {
   const t = useT();
   if (!row.score) return <Dash />;
   if (row.score.grade === null) return <Badge tone="zinc">{t("sgrades.indicative")}</Badge>;
-  return <Grade value={row.score.grade} />;
+  return <Grade value={row.score.grade} neutral={!row.counts} />;
 }
 
 /** Under the status of points read before the release: the questions still to grade. */

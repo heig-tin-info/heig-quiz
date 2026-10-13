@@ -1,9 +1,10 @@
 /**
  * The student's Grades page (`GET /student/results`, F-RES-04, F-ORG-14):
  * the home's Past (`studentBoard`), every classroom's, archived ones
- * included, by classroom. Depends on `attempt.ts` only.
+ * included, by classroom. Depends on `attempt.ts` only; its rows carry the
+ * gradebook column's `counts` (ADR-074 §6, amendment of 2026-10-13).
  */
-import { isFinishedAttempt } from "@quiz/domain";
+import { countsByDefault, evaluationColumnKind, isFinishedAttempt } from "@quiz/domain";
 import type { CardResults, EvaluationGradeRow, GradeGroup, GradeStatus, StudentGrades } from "@quiz/contracts";
 
 import { iso } from "../../clock.js";
@@ -43,7 +44,7 @@ export async function studentGrades(
       },
       rows: [],
     };
-    group.rows.push(gradeRow(entry));
+    group.rows.push(gradeRow(entry, countsOf(entry)));
     groups.set(id, group);
   }
   const newest = (g: GradeGroup) => g.rows[0]!.date;
@@ -51,6 +52,18 @@ export async function studentGrades(
     .map((g) => ({ ...g, rows: g.rows.sort((a, b) => b.date.localeCompare(a.date)) }))
     .sort((a, b) => newest(b).localeCompare(newest(a)));
 }
+
+/**
+ * Whether the evaluation counts toward the mean: the teacher's flag on its
+ * stored gradebook column (`storedCounts`, joined by `studentEvaluationRows`),
+ * else its mode's default. The flag alone ever reaches the student, never the
+ * weight (ADR-074, amendment of 2026-10-13). The classroom's Grades tab takes
+ * the same flag from the gradebook's own `settingsOf` instead;
+ * `gradebook.db.test.ts` ("tells the student whether each column counts…")
+ * guards that the two agree.
+ */
+const countsOf = ({ row }: PastEntry): boolean =>
+  row.storedCounts ?? countsByDefault(evaluationColumnKind(row.evaluation.mode));
 
 /**
  * Where a finished evaluation stands for the student; see `GradeStatus`. A
@@ -90,7 +103,7 @@ function scoreOf({ row, counted, released, early }: PastEntry): EvaluationGradeR
   return null;
 }
 
-function gradeRow(entry: PastEntry): EvaluationGradeRow {
+function gradeRow(entry: PastEntry, counts: boolean): EvaluationGradeRow {
   const { row, card, counted } = entry;
   const { evaluation, attempt } = row;
   return {
@@ -112,6 +125,7 @@ function gradeRow(entry: PastEntry): EvaluationGradeRow {
     }),
     // `results` is the counted attempt's own (`resultsState`).
     feedbackAttemptId: card.results === "available" ? (counted?.id ?? null) : null,
+    counts,
     score: scoreOf(entry),
   };
 }

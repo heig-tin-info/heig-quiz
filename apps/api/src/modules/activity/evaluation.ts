@@ -14,7 +14,7 @@
  * empty cell (`notTakenCell`); a poll never has a column.
  */
 import type { EvaluationCard, EvaluationGradeRow, GradebookStudentCell } from "@quiz/contracts";
-import { ABSENT_GRADE, gradeFromPoints, isFinishedAttempt, notTakenCell } from "@quiz/domain";
+import { ABSENT_GRADE, evaluationColumnKind, gradeFromPoints, isFinishedAttempt, notTakenCell } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { gradebookEvaluations, listActivities, scaleOf, type EvaluationRecord } from "../evaluation/service.js";
@@ -34,7 +34,7 @@ const tagged = (cards: EvaluationCard[]): CardOf<"evaluation">[] =>
   cards.map((card) => ({ kind: "evaluation", ...card }));
 
 /** An exam or an exercise: the only modes with a column. */
-const columnMode = (ev: EvaluationRecord) => (ev.mode === "exam" ? "exam" : "exercise");
+const columnMode = (ev: EvaluationRecord) => evaluationColumnKind(ev.mode);
 
 function facts(ev: EvaluationRecord): GradebookEntryFacts {
   return {

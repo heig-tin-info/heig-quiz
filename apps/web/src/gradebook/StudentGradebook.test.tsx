@@ -34,20 +34,20 @@ const cell = (kind: string, grade: number | null = null, points: number | null =
 });
 
 function book(over: Record<string, unknown> = {}, weights = false): GradebookStudent {
-  const w = (weight: number, counts = true) => (weights ? { weight, counts } : {});
+  const w = (weight: number, counts = true) => ({ counts, ...(weights ? { weight } : {}) });
   return GradebookStudent.parse({
     classroomId: ROOM,
     columns: [
       column(0, "Test 1", "exam", w(50)),
       column(1, "Test 2", "exam", w(100)),
-      column(2, "Exercises", "exercise", w(100, false)),
+      column(2, "Series 1", "exercise", w(100, false)),
       column(3, "Test 3", "exam", w(50)),
       column(4, "Quick quiz", "exam", w(50)),
     ],
     cells: {
       [IDS[0]!]: cell("grade", 5.5),
       [IDS[1]!]: cell("absent", 1),
-      [IDS[2]!]: cell("empty"),
+      [IDS[2]!]: cell("grade", 3),
       [IDS[3]!]: cell("indicative", null, 12, 20),
       [IDS[4]!]: cell("withheld"),
     },
@@ -68,7 +68,6 @@ describe("the student's own cells", () => {
     expect(await within(await row("Test 1")).findByText("5.5")).toBeInTheDocument();
     const absent = within(await row("Test 2")).getByText("a1.0");
     expect(absent.className).toContain("text-info");
-    expect(within(await row("Exercises")).getByText("—")).toBeInTheDocument();
     const indicative = await row("Test 3");
     expect(within(indicative).getByText("12 / 20")).toBeInTheDocument();
     expect(within(indicative).getByText("indicative")).toBeInTheDocument();
@@ -80,13 +79,32 @@ describe("the student's own cells", () => {
     await row("Test 1");
     expect(screen.queryByText("Mean")).toBeNull();
     expect(screen.queryByText(/Weight/)).toBeNull();
-    expect(screen.queryByText(/Not counted/)).toBeNull();
+  });
+
+  it("draws what counts, then what does not, its grade indicative in the ink (#803)", async () => {
+    renderTab(book());
+    const counting = await screen.findByRole("region", { name: "Count toward your average" });
+    const aside = screen.getByRole("region", { name: "Indicative" });
+    expect(within(aside).getByText(/These grades are indicative/)).toBeInTheDocument();
+    expect(within(counting).queryByText("Series 1")).toBeNull();
+    const grade = within(aside).getByText("3.0");
+    expect(grade.className).not.toContain("text-danger");
+    // The group is the one word for it: no badge on the row.
+    expect(within(aside).queryByText("indicative")).toBeNull();
+  });
+
+  it("draws no indicative group when everything counts", async () => {
+    const all = book();
+    renderTab({ ...all, columns: all.columns.filter((c) => c.counts) });
+    expect(await screen.findByRole("region", { name: "Count toward your average" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Indicative" })).toBeNull();
   });
 
   it("draws the mean and the weights once the payload carries them", async () => {
     renderTab(book({ mean: 4.3 }, true));
     expect(await within(await row("Test 2")).findByText(/Weight 100 %/)).toBeInTheDocument();
-    expect(within(await row("Exercises")).getByText(/Not counted/)).toBeInTheDocument();
+    // A column that does not count carries no weight: it does not count.
+    expect(within(await row("Series 1")).queryByText(/Weight/)).toBeNull();
     const mean = await row("Mean");
     expect(within(mean).getByText("4.3")).toBeInTheDocument();
   });
