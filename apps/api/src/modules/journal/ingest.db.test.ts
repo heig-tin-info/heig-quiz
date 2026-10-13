@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { JOURNAL_ASSET_MAX_BYTES } from "@quiz/contracts";
+import { RENDERER_VERSION } from "@quiz/docrender";
 
 import { loadConfig, type AppConfig } from "../../config.js";
 import { classroomJournals, githubClassroomLinks, githubOrganizations, journalAssets, journalPages } from "../../db/schema.js";
@@ -22,7 +23,7 @@ import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { JOURNAL_INGEST_QUEUE, type JobQueue } from "../../jobs.js";
-import { ingestJournal, repositoryChanged } from "./ingest.js";
+import { ingestJournal, repositoryChanged, sweepRenderer } from "./ingest.js";
 import { registerJournalJobs } from "./jobs.js";
 import { blobSha, pushTo, repoRoute, type FakeFile, type FakeRepo } from "./testing.js";
 
@@ -362,5 +363,39 @@ describe("ingestJournal", () => {
       expect(await pagesOf(w.classroomId)).toEqual([]);
       expect((await rowOf(w.classroomId)).lastCommitSha).toBeNull();
     });
+  });
+});
+
+describe("the renderer sweep (#818)", () => {
+  it("renders again, from the stored sources and without GitHub, a journal an older renderer rendered", async () => {
+    const w = await world([
+      { path: "README.md", content: "# Plan\n\n- [x] a\n\n- [ ] b\n\n![big](big.png) ![p](p.png)\n" },
+      { path: "big.png", content: "x", size: JOURNAL_ASSET_MAX_BYTES + 1 },
+      { path: "p.png", content: "BYTES" },
+    ]);
+    await w.ingest();
+    const [fresh] = await pagesOf(w.classroomId);
+    const row = await rowOf(w.classroomId);
+    expect(row.renderedWith).toBe(RENDERER_VERSION);
+    expect(fresh!.htmlStaff).toContain('class="md-check md-check-done"');
+
+    // As an older renderer left it.
+    await server.app.db
+      .update(journalPages)
+      .set({ htmlStaff: "<ul><li>old</li></ul>", htmlStudent: "<ul><li>old</li></ul>" })
+      .where(eq(journalPages.classroomId, w.classroomId));
+    await server.app.db
+      .update(classroomJournals)
+      .set({ renderedWith: RENDERER_VERSION - 1 })
+      .where(eq(classroomJournals.classroomId, w.classroomId));
+
+    const calls = gh.calls.length;
+    expect(await sweepRenderer(server.app)).toContain(w.classroomId);
+    expect(gh.calls.length).toBe(calls);
+    // What the ingestion stored, the oversized asset still named as such; no source moved.
+    expect((await pagesOf(w.classroomId))[0]).toEqual(fresh);
+    expect(await rowOf(w.classroomId)).toMatchObject({ renderedWith: RENDERER_VERSION, version: row.version });
+    // Done once.
+    expect(await sweepRenderer(server.app)).not.toContain(w.classroomId);
   });
 });

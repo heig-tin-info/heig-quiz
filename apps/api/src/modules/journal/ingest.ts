@@ -36,7 +36,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, gt, isNotNull, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lt, lte, notInArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import {
@@ -46,7 +46,7 @@ import {
   safeJournalPath,
   type JournalSyncError,
 } from "@quiz/contracts";
-import { cleanSource, placePage } from "@quiz/docrender";
+import { cleanSource, placePage, RENDERER_VERSION } from "@quiz/docrender";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
@@ -71,7 +71,14 @@ import {
   type TreeEntry,
 } from "./repo.js";
 import { githubJournal, type GithubJournal } from "./mode.js";
-import { renderSources, renderStudentPages, storePages, type PageSource, type RenderedRow } from "./rendering.js";
+import {
+  renderSources,
+  renderStored,
+  renderStudentPages,
+  storePages,
+  type PageSource,
+  type RenderedRow,
+} from "./rendering.js";
 
 export type IngestOutcome =
   | { status: "ok"; commitSha: string | null; pages: number; assets: number }
@@ -366,6 +373,41 @@ export async function sweepVisibleFrom(app: FastifyInstance): Promise<string[]> 
         .for("update", { skipLocked: true });
       if (!row) return false;
       await renderStudentPages(tx, classroomId);
+      return true;
+    });
+    if (done) rendered.push(classroomId);
+  }
+  journalChanged(rendered);
+  return rendered;
+}
+
+/**
+ * The journals whose pages an older renderer rendered (`rendered_with` below
+ * `RENDERER_VERSION`) get them rendered again from the stored sources, in
+ * both modes and without calling GitHub, and their readers a `journal` hint
+ * (#818: a page rendered before a change of the renderer otherwise kept the
+ * old output until its journal was next written). Run by the ticker
+ * (`jobs.ts`); after a deployment that bumped the version, the first run
+ * catches every journal up. Locked `SKIP LOCKED` like {@link
+ * sweepVisibleFrom}: a journal being written is skipped, that write stamps
+ * it. No `version` bump: no source moved, and an ingestion in flight renders
+ * with the same renderer. Returns the classrooms re-rendered.
+ */
+export async function sweepRenderer(app: FastifyInstance): Promise<string[]> {
+  const due = await app.db
+    .select({ classroomId: classroomJournals.classroomId })
+    .from(classroomJournals)
+    .where(lt(classroomJournals.renderedWith, RENDERER_VERSION));
+  const rendered: string[] = [];
+  for (const { classroomId } of due) {
+    const done = await app.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ renderedWith: classroomJournals.renderedWith })
+        .from(classroomJournals)
+        .where(eq(classroomJournals.classroomId, classroomId))
+        .for("update", { skipLocked: true });
+      if (!row || row.renderedWith >= RENDERER_VERSION) return false;
+      await renderStored(tx, classroomId, app.clock.now());
       return true;
     });
     if (done) rendered.push(classroomId);

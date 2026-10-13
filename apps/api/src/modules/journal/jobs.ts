@@ -8,7 +8,9 @@
  *   holding the repository on the pushed branch, a `repository` event
  *   follows a rename and records a deletion;
  * - the J4 sweep, a clock-bound task of the ticker (spec 05 §5.11, D10): a
- *   page's visibility is a date, and must not wait on an admin setting.
+ *   page's visibility is a date, and must not wait on an admin setting;
+ * - the renderer sweep, on the same ticker: the journals an older renderer
+ *   rendered, caught up after a deployment (#818).
  */
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
@@ -19,7 +21,7 @@ import { classroomJournals } from "../../db/schema.js";
 import { JOURNAL_INGEST_QUEUE, type JobQueue } from "../../jobs.js";
 import type { TickTask } from "../../ticker.js";
 import { onEvent, type WebhookHandler } from "../github/service.js";
-import { ingestJournal, repositoryChanged, sweepVisibleFrom } from "./ingest.js";
+import { ingestJournal, repositoryChanged, sweepRenderer, sweepVisibleFrom } from "./ingest.js";
 import { requestIngest } from "./service.js";
 
 // ---------------------------------------------------------------- the queue
@@ -95,6 +97,13 @@ export const JOURNAL_TASKS: readonly TickTask[] = [
     everyMs: 60_000,
     run: async (app) => {
       await sweepVisibleFrom(app);
+    },
+  },
+  {
+    name: "journal.renderer",
+    everyMs: 60_000,
+    run: async (app) => {
+      await sweepRenderer(app);
     },
   },
 ];

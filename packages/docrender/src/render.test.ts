@@ -471,6 +471,21 @@ describe("task lists", () => {
   it("escapes the label like any text", () => {
     expect(renderPage("- [ ] <script>\n", ctx()).html).not.toContain("<script>");
   });
+
+  // #818: the single-level shapes a weekly page is written in.
+  it.each([
+    ["a tight list", "- [x] a\n- [ ] b\n"],
+    ["a loose list, its labels in paragraphs", "- [x] a\n\n- [ ] b\n"],
+    ["any bullet and an uppercase tick", "* [X] a\n\n+ [ ] b\n"],
+    ["an ordered list", "1. [x] a\n2. [ ] b\n"],
+    ["a list right under a paragraph", "Topics:\n- [x] a\n- [ ] b\n"],
+    ["an item running on under its label", "- [x] a\n\n  more\n- [ ] b\n"],
+  ])("draws %s as a plan", (_, source) => {
+    const { html } = renderPage(source, ctx());
+    expect(items(html)).toEqual(["done", "todo"]);
+    expect(html).not.toContain("md-check-count");
+    expect(html.match(/type="checkbox"/g)).toHaveLength(2);
+  });
 });
 
 describe("warnings (J5)", () => {

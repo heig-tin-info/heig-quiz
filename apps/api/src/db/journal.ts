@@ -83,6 +83,12 @@ export const classroomJournals = pgTable(
      */
     studentRenderedAt: timestamp("student_rendered_at", { withTimezone: true }),
     /**
+     * The `RENDERER_VERSION` of `@quiz/docrender` the pages were last
+     * rendered with (`storePages`): an older one is rendered again from the
+     * stored sources by the `journal.renderer` sweep. 0: never stamped.
+     */
+    renderedWith: integer("rendered_with").notNull().default(0),
+    /**
      * Bumped by every write of the row or of its copy (an ingestion, its
      * failure, a rename, a deletion): an ingestion reads GitHub with no lock
      * held, then writes only if the version it started from is still the
