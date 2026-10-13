@@ -563,7 +563,9 @@ live in `ui/state.ts`, each written once.
   by its publish mode and `locked` into `locked` / `graded` /
   `released`), never the stored state alone. A further pill tone follows
   ADR-104's rule (its 2026-10-13 amendment). Nothing blinks. No solid fill: the soft
-  green plus the `TimeLeft` timer (icon and "3 h", only in the two tables of
+  green plus the `TimeLeft` timer (icon and "1 h 40 min" — two units,
+  floored, the seconds and a second tick only in the last ten minutes,
+  ADR-104 amendment of 2026-10-13 — only in the two tables of
   a classroom's Activities tab; outside a badge, also on a published
   project's lifecycle rail) is what marks a live row, so the pill never
   competes with the row's one primary action. Both tables of that tab show

@@ -1315,9 +1315,12 @@ export const en = {
   "time.now": "just now",
   // The time left inside a state badge (ui/dates.tsx `TimeLeft`, ADR-104).
   "time.left.days": "{n} d",
+  "time.left.dayHour": "{d} d {h} h",
   "time.left.hours": "{n} h",
+  "time.left.hourMin": "{h} h {m} min",
   "time.left.minutes": "{n} min",
-  "time.left.underMinute": "<1 min",
+  "time.left.minSec": "{m} min {s} s",
+  "time.left.seconds": "{n} s",
   "time.closesIn": "closes in {time}",
 
   // --- Live primitives (ui/live.tsx) ---

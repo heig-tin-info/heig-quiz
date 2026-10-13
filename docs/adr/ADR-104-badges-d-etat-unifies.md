@@ -13,6 +13,10 @@ phases — blue for what is scheduled, a project's `scheduled` phase, and the
 rule for any further pill tone
 ([amendment](#amendment-2026-10-13-blue-for-what-is-scheduled-and-the-rule-for-a-new-pill-tone)).
 
+Amended 2026-10-13 (#794): §3's format — two units instead of the largest
+one, and the seconds in the last ten minutes
+([amendment](#amendment-2026-10-13-the-time-left-in-two-units)).
+
 Scope: the state badge of an evaluation and of a project on every staff
 surface of `apps/web` (the classroom's Activities tab, `/activities`, the
 evaluation's configuration, the live header, the project page) and the bars
@@ -217,3 +221,30 @@ scheduled still said "draft" exactly like one in preparation (#795).
    names it, with its tokens readable at 4.5:1 in both themes and its entry
    in the tone tables of item 1. A pill is never the accent: the brand red
    belongs to the screen's one primary action.
+
+## Amendment 2026-10-13: the time left in two units
+
+Decided by the product owner on 2026-10-13 (#794, asked by a teacher: a
+project said "1 h" with 1 h 40 min left). It replaces §3's format — "the
+largest non-zero unit, to the minute, never a second" — everywhere
+`TimeLeft` is used (the badges of §3, the project rail of the first
+amendment); where the timer rides and what it means stand.
+
+1. **Two units, floored.** From a day: days and hours ("2 d 5 h", fr
+   "2 j 5 h"). Under a day: hours and minutes ("1 h 40 min", fr "1 h 40",
+   the minutes on two digits as French writes a time). Under an hour:
+   minutes ("35 min"). Under ten minutes: minutes and seconds
+   ("9 min 32 s", "45 s"). A second unit that is zero is left out ("2 d",
+   "3 h", "5 min"). Still floored — a badge never promises more than what
+   is left — and still never negative: a deadline just passed (the +3 s
+   grace of invariant 5, a project's lock within the minute) reads "0 s"
+   until the state catches up; "<1 min" is gone, the seconds say it.
+2. **The second timer only in the last ten minutes.** `TimeLeft` ticks on
+   the shared minute timer of `useNow`, and on the shared second timer
+   only while under ten minutes and before the deadline, so a list of
+   rows does not re-render every second for deadlines days away. A timer
+   armed for the ten-minute mark switches it at that exact moment.
+3. **Not the other clocks.** The live header's countdown and the Super
+   Powers banner keep `formatRemaining` (`ui/live.tsx`), a by-the-second
+   countdown rounded up, which they need for a screen with one clock to
+   watch; this amendment is about a figure on a row.

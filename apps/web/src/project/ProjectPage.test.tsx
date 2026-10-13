@@ -1316,7 +1316,7 @@ describe("the dashboard (tiles, filter, rail, folded settings)", () => {
     expect(within(rail).getAllByTestId("rail-fill")).toHaveLength(1);
     const deadline = within(rail).getAllByRole("listitem")[1]!;
     expect(deadline.textContent).toMatch(/^Deadline/);
-    expect(within(deadline).getByText(/^closes in 1[34] d$/)).toBeInTheDocument();
+    expect(within(deadline).getByText(/^closes in 1[34] d( \d+ h)?$/)).toBeInTheDocument();
     // The Deadline tile leaves the distance to the rail: one clock on the page.
     expect(within(tiles()).queryByText(/^in \d+ (days|weeks)$/)).toBeNull();
   });
