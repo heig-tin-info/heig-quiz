@@ -1,70 +1,64 @@
 import { awardedRange, formatPoints } from "@quiz/domain";
 import { controlSize } from "@quiz/ui";
-import { useState, type InputHTMLAttributes } from "react";
+import { useId, useState, type InputHTMLAttributes } from "react";
 
+import type { Dict } from "../i18n";
 import { useT } from "../i18n";
+import { FieldError, fieldErrorProps } from "./controls";
 import { cx } from "./layers";
 import { useNumberDraft } from "./useNumberDraft";
 
-/**
- * What a points field bounds: `max` the maximum (negative for a penalty),
- * `bonus` the bonus maximum of a bonus criterion, which has no maximum of its
- * own, `min` a floor other than the kind's own (negative marking, ADR-026).
- */
+/** What a points field counts against: `max` (negative for a penalty), or the `bonus` maximum of a bonus criterion. */
 export interface PointsBounds {
   max: number;
   bonus?: number;
-  min?: number;
 }
 
-/**
- * The range a value may take: a normal maximum `[0, max]`, a penalty
- * (`max < 0`) `[max, 0]`, a bonus `[0, bonus]` (`awardedRange`, the rule the
- * server applies); a caller's `min` replaces the floor.
- */
-export function pointsRange({ max, bonus, min }: PointsBounds): [number, number] {
-  const [lo, hi] = awardedRange({ maxPoints: max, ...(bonus === undefined ? {} : { bonusPoints: bonus }) });
-  return [min ?? lo, hi];
+type PointsKind = "max" | "penalty" | "bonus";
+
+export function pointsKind({ max, bonus }: PointsBounds): PointsKind {
+  return bonus !== undefined ? "bonus" : max < 0 ? "penalty" : "max";
+}
+
+/** Per kind: the words of the range for a screen reader, the sign of the suffix, the magnitude it shows. */
+const KIND: Record<PointsKind, { key: keyof Dict; sign: string; n: (b: PointsBounds) => number }> = {
+  max: { key: "ui.points.max", sign: "", n: (b) => b.max },
+  penalty: { key: "ui.points.penalty", sign: "−", n: (b) => -b.max },
+  bonus: { key: "ui.points.bonus", sign: "+", n: (b) => b.bonus ?? 0 },
+};
+
+/** The range of a value: `[0, max]`, a penalty `[max, 0]`, a bonus `[0, bonus]` (`awardedRange`, the server's rule). */
+export function pointsRange({ max, bonus }: PointsBounds): [number, number] {
+  return awardedRange({ maxPoints: max, ...(bonus === undefined ? {} : { bonusPoints: bonus }) });
 }
 
 /** "/ 4", a penalty "/ −3" (a real minus sign), a bonus "/ +1". */
-export function pointsSuffix({ max, bonus }: PointsBounds): string {
-  if (bonus !== undefined) return `/ +${formatPoints(bonus)}`;
-  return max < 0 ? `/ −${formatPoints(-max)}` : `/ ${formatPoints(max)}`;
+export function pointsSuffix(bounds: PointsBounds): string {
+  const kind = KIND[pointsKind(bounds)];
+  return `/ ${kind.sign}${formatPoints(kind.n(bounds))}`;
 }
 
 /**
- * The pill of a points field: the input, bare, and the maximum after it, muted
- * ("3 / 4"). The pill is the field's chrome — its border, its hover, its focus
- * ring through `focus-within` (the input itself draws none) —, so the value
- * and what it counts against read as one control. The suffix is hidden from a
- * screen reader: the accessible name says it ("Tests, points out of 4").
- * Controlled like any input (a form that checks on submit wears it so);
- * `PointsInput` is the one that commits when the teacher leaves it.
+ * The pill of a points field: the input, bare, and the maximum after it,
+ * muted ("3 / 4"). The pill is the field's chrome (its focus ring through
+ * `focus-within`); the visible suffix is hidden from a screen reader, which
+ * hears the range as the input's description ("points out of 4"). Named by
+ * `label`, or by the caller's own `<label htmlFor>`. Controlled like any
+ * input; `PointsInput` is the one that commits when the teacher leaves it.
  */
 export function PointsPill({
-  max,
-  bonus,
-  min,
+  bounds,
   label,
   invalid = false,
-  disabled,
-  className,
   ...props
-}: Omit<InputHTMLAttributes<HTMLInputElement>, "max" | "min" | "size"> &
-  PointsBounds & {
-    /** What is graded (a criterion, "Points"): the start of the accessible name. */
-    label: string;
-    invalid?: boolean;
-  }) {
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "size" | "min" | "max"> & {
+  bounds: PointsBounds;
+  label?: string;
+  invalid?: boolean;
+}) {
   const t = useT();
-  const name =
-    bonus !== undefined
-      ? t("ui.points.bonus", { label, n: formatPoints(bonus) })
-      : max < 0
-        ? t("ui.points.penalty", { label, n: formatPoints(-max) })
-        : t("ui.points.label", { label, max: formatPoints(max) });
-  const [lo, hi] = pointsRange({ max, ...(bonus === undefined ? {} : { bonus }), ...(min === undefined ? {} : { min }) });
+  const rangeId = useId();
+  const kind = KIND[pointsKind(bounds)];
   return (
     <span
       className={cx(
@@ -73,8 +67,6 @@ export function PointsPill({
         invalid
           ? "border-danger focus-within:ring-3 focus-within:ring-danger/20"
           : "border-line-strong hover:border-fg-faint focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/20",
-        disabled && "pointer-events-none opacity-50",
-        className,
       )}
       // A click on the pill (on the suffix, in the padding) lands in the input.
       onMouseDown={(e) => {
@@ -91,15 +83,16 @@ export function PointsPill({
         step={0.5}
         placeholder="—"
         {...props}
-        min={lo}
-        max={hi}
-        disabled={disabled}
-        aria-label={name}
+        aria-label={label}
         aria-invalid={invalid || undefined}
+        aria-describedby={[rangeId, props["aria-describedby"]].filter(Boolean).join(" ")}
         className="min-w-0 flex-1 appearance-none bg-transparent p-0 text-right tabular-nums text-fg outline-none placeholder:text-fg-faint [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <span aria-hidden className="select-none whitespace-nowrap tabular-nums text-fg-muted">
-        {pointsSuffix({ max, ...(bonus === undefined ? {} : { bonus }) })}
+        {pointsSuffix(bounds)}
+      </span>
+      <span id={rangeId} hidden>
+        {t(kind.key, { n: formatPoints(kind.n(bounds)) })}
       </span>
     </span>
   );
@@ -107,38 +100,26 @@ export function PointsPill({
 
 /**
  * The points awarded, written when the teacher leaves the field (Enter leaves
- * it, `useNumberDraft`): a value outside the range is marked on the pill
- * (`aria-invalid`) and never sent; an empty field sends nothing — 0 is a
- * value, "no points" is not one a teacher writes. Key it on the stored value,
- * so a write from elsewhere replaces the text.
+ * it, `useNumberDraft`): a value outside the range is said under the pill and
+ * never sent; an empty field sends nothing — 0 is a value, "no points" is not
+ * one a teacher writes. Key it on the stored value, so a write from elsewhere
+ * replaces the text.
  */
 export function PointsInput({
+  bounds,
   value,
-  max,
-  bonus,
-  min,
   label,
-  disabled,
   onCommit,
-  onInvalid,
-  describedBy,
-}: PointsBounds & {
+}: {
+  bounds: PointsBounds;
   value: number | null;
   label: string;
-  disabled?: boolean;
   onCommit: (points: number) => void;
-  /** Told whether the value left is outside the range, so the caller can say why under the pill. */
-  onInvalid?: (invalid: boolean) => void;
-  /** The id of the error line under the pill, read with it. */
-  describedBy?: string;
 }) {
-  const bounds = { max, ...(bonus === undefined ? {} : { bonus }), ...(min === undefined ? {} : { min }) };
+  const t = useT();
+  const errorId = useId();
   const [lo, hi] = pointsRange(bounds);
-  const [invalid, setInvalidState] = useState(false);
-  const setInvalid = (next: boolean) => {
-    setInvalidState(next);
-    onInvalid?.(next);
-  };
+  const [invalid, setInvalid] = useState(false);
   const draft = useNumberDraft(value, (n) => {
     if (n === null) return;
     const outside = n < lo || n > hi;
@@ -146,18 +127,22 @@ export function PointsInput({
     if (!outside) onCommit(n);
   });
   return (
-    <PointsPill
-      {...bounds}
-      {...draft}
-      onBlur={() => {
-        // Back to the stored value (no commit) is valid again.
-        setInvalid(false);
-        draft.onBlur();
-      }}
-      label={label}
-      disabled={disabled}
-      invalid={invalid}
-      aria-describedby={describedBy}
-    />
+    <span className="inline-flex flex-col items-end gap-0.5">
+      <PointsPill
+        bounds={bounds}
+        label={label}
+        {...draft}
+        onBlur={() => {
+          // Back to the stored value (no commit) is valid again.
+          setInvalid(false);
+          draft.onBlur();
+        }}
+        invalid={invalid}
+        {...fieldErrorProps(errorId, invalid)}
+      />
+      <FieldError id={errorId} className="whitespace-nowrap text-xs">
+        {invalid ? t("ui.points.range", { min: formatPoints(lo), max: formatPoints(hi) }) : null}
+      </FieldError>
+    </span>
   );
 }

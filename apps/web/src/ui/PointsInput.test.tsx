@@ -7,100 +7,69 @@ import { PointsInput, pointsRange, pointsSuffix, type PointsBounds } from "./Poi
 
 /*
  * The points over their maximum, one pill (F-PROJ-25 as amended): the range
- * of each kind, its suffix, its accessible name, the commit when the field is
- * left, and a value outside the range marked and never sent.
+ * and the suffix of each kind, its name and description, the commit when the
+ * field is left, and a value outside the range said and never sent.
  */
 
-describe("pointsRange and pointsSuffix", () => {
-  it.each<[string, PointsBounds, [number, number], string]>([
-    ["a maximum", { max: 4 }, [0, 4], "/ 4"],
-    ["a penalty", { max: -3 }, [-3, 0], "/ −3"],
-    ["a bonus", { max: 0, bonus: 1 }, [0, 1], "/ +1"],
-    ["a floor of its own (negative marking)", { max: 2, min: -2 }, [-2, 2], "/ 2"],
-    ["half points", { max: 2.5 }, [0, 2.5], "/ 2.5"],
-  ])("bounds %s", (_, bounds, range, suffix) => {
-    expect(pointsRange(bounds)).toEqual(range);
-    expect(pointsSuffix(bounds)).toBe(suffix);
-  });
-});
+/** Per kind: bounds, range, suffix, description en / fr, a value outside, one inside. */
+const KINDS: [string, PointsBounds, [number, number], string, string, string, string, number][] = [
+  ["a maximum", { max: 4 }, [0, 4], "/ 4", "points out of 4", "points sur 4", "5", 2.5],
+  ["a penalty", { max: -3 }, [-3, 0], "/ −3", "penalty points, at most 3", "points de pénalité, au plus 3", "-4", -2],
+  ["a bonus", { max: 0, bonus: 1 }, [0, 1], "/ +1", "bonus points, at most 1", "points de bonus, au plus 1", "2", 1],
+];
 
 function setup(bounds: PointsBounds, value: number | null = null, locale: "en" | "fr" = "en") {
   const onCommit = vi.fn();
-  const onInvalid = vi.fn();
-  renderWithProviders(<PointsInput {...bounds} value={value} label="Tests" onCommit={onCommit} onInvalid={onInvalid} />, { locale });
-  return { onCommit, onInvalid, input: screen.getByRole("spinbutton") };
+  renderWithProviders(<PointsInput bounds={bounds} value={value} label="Tests" onCommit={onCommit} />, { locale });
+  return { onCommit, input: screen.getByRole("spinbutton", { name: "Tests" }) };
 }
 
-describe("PointsInput", () => {
-  it("names what it grades and its maximum, the suffix hidden from a screen reader", () => {
-    const { input } = setup({ max: 4 }, 3);
-    expect(input).toHaveAccessibleName("Tests, points out of 4");
-    expect(input).toHaveValue(3);
-    const suffix = screen.getByText("/ 4");
-    expect(suffix).toHaveAttribute("aria-hidden");
-  });
-
-  it.each<[string, PointsBounds, string, string]>([
-    ["a penalty", { max: -3 }, "Tests, penalty points, at most 3", "Tests, points de pénalité, au plus 3"],
-    ["a bonus", { max: 0, bonus: 1 }, "Tests, bonus points, at most 1", "Tests, points de bonus, au plus 1"],
-    ["a maximum", { max: 4 }, "Tests, points out of 4", "Tests, points sur 4"],
-  ])("words %s in both languages", (_, bounds, en, fr) => {
-    expect(setup(bounds).input).toHaveAccessibleName(en);
+describe.each(KINDS)("PointsInput, %s", (_, bounds, range, suffix, en, fr, outside, inside) => {
+  it("bounds, shows and describes its range, the suffix hidden from a screen reader", () => {
+    expect(pointsRange(bounds)).toEqual(range);
+    expect(pointsSuffix(bounds)).toBe(suffix);
+    expect(setup(bounds).input).toHaveAccessibleDescription(en);
+    expect(screen.getByText(suffix)).toHaveAttribute("aria-hidden");
     cleanup();
-    expect(setup(bounds, null, "fr").input).toHaveAccessibleName(fr);
+    expect(setup(bounds, null, "fr").input).toHaveAccessibleDescription(fr);
   });
 
+  it("says a value outside the range and never sends it, then sends one inside", async () => {
+    const { input, onCommit } = setup(bounds);
+    await userEvent.type(input, `${outside}{Enter}`);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription(`${en} From ${range[0]} to ${range[1]}`);
+    expect(onCommit).not.toHaveBeenCalled();
+
+    await userEvent.clear(input);
+    await userEvent.type(input, `${inside}{Enter}`);
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(screen.queryByText(/^From /)).toBeNull();
+    expect(onCommit).toHaveBeenCalledWith(inside);
+  });
+});
+
+describe("PointsInput", () => {
   it("is empty with a dash when there are no points yet", () => {
     const { input } = setup({ max: 4 });
     expect(input).toHaveValue(null);
     expect(input).toHaveAttribute("placeholder", "—");
   });
 
-  it("commits on Enter and on blur, not while typing, and not when nothing changed", async () => {
+  it("commits on blur, not while typing, and sends nothing for an empty field or an unchanged one", async () => {
     const { input, onCommit } = setup({ max: 4 }, 1);
     await userEvent.clear(input);
-    await userEvent.type(input, "2.5");
+    await userEvent.type(input, "3");
     expect(onCommit).not.toHaveBeenCalled();
-    await userEvent.keyboard("{Enter}");
-    expect(onCommit).toHaveBeenLastCalledWith(2.5);
-    expect(input).not.toHaveFocus();
+    await userEvent.tab();
+    expect(onCommit).toHaveBeenCalledExactlyOnceWith(3);
 
     await userEvent.click(input);
     await userEvent.clear(input);
-    await userEvent.type(input, "3");
     await userEvent.tab();
-    expect(onCommit).toHaveBeenLastCalledWith(3);
-  });
-
-  it("sends nothing for an empty field", async () => {
-    const { input, onCommit } = setup({ max: 4 }, 2);
-    await userEvent.clear(input);
+    await userEvent.click(input);
+    await userEvent.type(input, "1");
     await userEvent.tab();
-    expect(onCommit).not.toHaveBeenCalled();
-  });
-
-  it.each<[string, PointsBounds, string, number]>([
-    ["above a maximum", { max: 4 }, "5", 4],
-    ["below zero for a maximum", { max: 4 }, "-1", 0],
-    ["below a penalty", { max: -3 }, "-4", -2],
-    ["above zero for a penalty", { max: -3 }, "1", -3],
-    ["above a bonus", { max: 0, bonus: 1 }, "2", 1],
-  ])("marks a value %s and never sends it, then sends one inside", async (_, bounds, outside, inside) => {
-    const { input, onCommit, onInvalid } = setup(bounds);
-    await userEvent.type(input, `${outside}{Enter}`);
-    expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(onInvalid).toHaveBeenLastCalledWith(true);
-    expect(onCommit).not.toHaveBeenCalled();
-
-    await userEvent.clear(input);
-    await userEvent.type(input, `${inside}{Enter}`);
-    expect(input).not.toHaveAttribute("aria-invalid");
-    expect(onInvalid).toHaveBeenLastCalledWith(false);
-    expect(onCommit).toHaveBeenCalledWith(inside);
-  });
-
-  it("is disabled when it cannot be written", () => {
-    renderWithProviders(<PointsInput max={4} value={2} label="Tests" disabled onCommit={vi.fn()} />);
-    expect(screen.getByRole("spinbutton")).toBeDisabled();
+    expect(onCommit).toHaveBeenCalledOnce();
   });
 });

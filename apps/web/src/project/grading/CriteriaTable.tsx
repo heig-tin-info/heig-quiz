@@ -1,11 +1,11 @@
 import { AlertTriangle, Check, FlaskConical, Lock, Sparkles, UserRound } from "lucide-react";
-import { useId, useState } from "react";
+import { useState } from "react";
 
 import type { CriteriaTableRow, CriterionGradeWrite, CriterionReason } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { useT, type Dict } from "../../i18n";
-import { Badge, Button, cx, FieldError, PointsInput, pointsRange, T, TableHead, Textarea, Tip, type Column } from "../../ui";
+import { Badge, Button, cx, PointsInput, pointsSuffix, T, TableHead, Textarea, Tip, type Column } from "../../ui";
 import { RationaleFold, RationaleText } from "./RationaleFold";
 
 type Source = NonNullable<CriteriaTableRow["source"]>;
@@ -122,32 +122,19 @@ function CriterionRow({ row, writable, onGrade }: { row: CriteriaTableRow; writa
 }
 
 /**
- * The points awarded over the maximum, written when the teacher leaves the
- * pill; a value outside the criterion's range is said under it and never
- * sent. Before the row can be written, the same pill, disabled.
+ * The points awarded over the maximum: the pill, written when the teacher
+ * leaves it, or the same figures as text before the row can be written.
  */
 function AwardedPoints({ row, writable, onGrade }: { row: CriteriaTableRow; writable: boolean; onGrade: GradeWrite }) {
-  const t = useT();
-  const errorId = useId();
   const bounds = { max: row.max, ...(row.bonus === undefined ? {} : { bonus: row.bonus }) };
-  const [min, max] = pointsRange(bounds);
-  const [invalid, setInvalid] = useState(false);
-  return (
-    <span className="inline-flex flex-col items-end gap-0.5">
-      <PointsInput
-        {...bounds}
-        value={row.points}
-        label={row.description}
-        disabled={!writable}
-        describedBy={invalid ? `${errorId}-error` : undefined}
-        onInvalid={setInvalid}
-        onCommit={(points) => onGrade(row.criterionId, { points })}
-      />
-      <FieldError id={errorId} className="whitespace-nowrap text-xs">
-        {invalid ? t("project.grading.range", { min: formatPoints(min), max: formatPoints(max) }) : null}
-      </FieldError>
-    </span>
-  );
+  if (!writable) {
+    return (
+      <span className="whitespace-nowrap tabular-nums">
+        {row.points === null ? "—" : formatPoints(row.points)} <span className="text-fg-muted">{pointsSuffix(bounds)}</span>
+      </span>
+    );
+  }
+  return <PointsInput bounds={bounds} value={row.points} label={row.description} onCommit={(points) => onGrade(row.criterionId, { points })} />;
 }
 
 function SourceTag({ source }: { source: CriteriaTableRow["source"] }) {

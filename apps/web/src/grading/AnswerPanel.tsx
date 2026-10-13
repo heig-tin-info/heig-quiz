@@ -17,6 +17,8 @@ import { emptyAnswerOf, QuestionHost } from "../student/QuestionHost";
 import {
   Button,
   ErrorText,
+  FieldError,
+  fieldErrorProps,
   FieldLabel,
   FormError,
   IconButton,
@@ -424,6 +426,7 @@ function AdjustForm({
   const commentInvalid = comment.trim() === "";
   const range = { min: formatPoints(minPoints), max: formatPoints(maxPoints) };
   const pointsId = useId();
+  const showPointsError = touched && pointsInvalid;
 
   return (
     <form
@@ -448,18 +451,15 @@ function AdjustForm({
         </FieldLabel>
         <PointsPill
           id={pointsId}
-          label={t("grading.override.points")}
-          max={maxPoints}
-          min={minPoints}
+          bounds={{ max: maxPoints }}
           autoFocus
           value={points}
           onChange={(e) => setPoints(e.target.value)}
-          invalid={touched && pointsInvalid}
+          invalid={showPointsError}
+          {...fieldErrorProps(pointsId, showPointsError)}
         />
+        <FieldError id={pointsId}>{showPointsError ? t("grading.override.pointsInvalid", range) : null}</FieldError>
       </div>
-      {touched && pointsInvalid ? (
-        <ErrorText>{t("grading.override.pointsInvalid", range)}</ErrorText>
-      ) : null}
       <div className="space-y-1.5">
         <Textarea
           label={t("grading.override.comment")}
