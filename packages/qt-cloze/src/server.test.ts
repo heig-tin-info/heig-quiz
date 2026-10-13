@@ -110,12 +110,14 @@ describe("regex blanks RE2 refuses (ADR-099)", () => {
 
   it("cost one question a bounded build: refused together past the budget, before any build", () => {
     // Each acceptable alone; built together, half a second on every draft save.
+    // "Before any build" is counted, not timed: every build of the loop reads
+    // the build clock, and a 10 ms bound flaked under Coverage (18 ms).
     const costly = config(blanks(50, "\\p{Ll}".repeat(10)));
-    expect(
-      elapsed(() =>
-        expect(clozeServer.publicationIssues!(costly)).toEqual([{ path: ["text"], message: "regex.config_too_complex" }]),
-      ),
-    ).toBeLessThan(10);
+    let reads = 0;
+    buildClock.now = () => (reads++, 0);
+    expect(clozeServer.publicationIssues!(costly)).toEqual([{ path: ["text"], message: "regex.config_too_complex" }]);
+    buildClock.now = () => 0;
+    expect(reads).toBe(0);
   });
 
   it("publish a question under the budget", () => {
