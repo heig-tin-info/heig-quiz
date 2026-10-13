@@ -1183,7 +1183,8 @@ included, before its next run.
 
 **Pruning**, by hand from the workstation only (once a month is enough):
 `scripts/offsite-backup/prune.sh` keeps 7 daily, 4 weekly and 3 monthly
-archives (about three months, N-DATA-03), then compacts, and saves the list of archives it leaves
+archives (about three months of archives; each holds 30 days of dumps, so a
+deletion leaves the copy after about four months, N-DATA-03), then compacts, and saves the list of archives it leaves
 (`~/.config/borg-offsite/last-archives`). Before touching anything it
 refuses, pruning and compacting nothing:
 
