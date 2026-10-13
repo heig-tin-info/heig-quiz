@@ -647,8 +647,8 @@ span.md-body:not(.md-inline) { display: block; }
 /* A code block owns its size and its leading, on the <pre> itself (issue
    #831). Set on the inner <code> only, the 13 px reached the glyphs but not
    the block's lines: their height comes from the <pre>, which inherited its
-   host's — a student prompt is `text-lg leading-relaxed`, 18 px x 1.625, so
-   every line of code took 29 px instead of 21. Code is scanned, not read:
+   host's font size — a student prompt is `text-lg`, 18 px x the 1.6 of
+   `.md-body`, so every line of code took 29 px instead of 21. Code is scanned, not read:
    the leading stays 1.6 whatever the prose around it uses. */
 .md-body pre {
   background: var(--surface-2);

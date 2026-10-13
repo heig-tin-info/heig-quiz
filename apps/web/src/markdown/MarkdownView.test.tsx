@@ -429,13 +429,13 @@ describe("MarkdownView — content", () => {
 /*
  * jsdom loads no stylesheet, so the guard reads the rule itself. A code
  * block's lines take their height from the <pre>: unless the <pre> sets its
- * own size and leading, it inherits its host's, and a student prompt
- * (`text-lg leading-relaxed`) spread every line of code to 29 px (#831).
+ * own size and leading, it inherits its host's font size, and a student
+ * prompt (`text-lg`) spread every line of code to 29 px (#831).
  */
 describe("MarkdownView — a code block's own metrics", () => {
   it("sets the size and the leading on the <pre>, not only on its <code>", () => {
     const css = readFileSync(join(import.meta.dirname, "../style.css"), "utf8");
-    const rule = /\n\.md-body pre \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    const rule = /(?:^|\})\s*\.md-body pre\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "";
     expect(rule).toMatch(/font-size:\s*13px/);
     expect(rule).toMatch(/line-height:\s*1\.6\b/);
   });
