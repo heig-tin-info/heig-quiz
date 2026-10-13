@@ -310,7 +310,7 @@ export function ProjectRepos({
   const firstOpenable = sorted.findIndex((e) => e.repo !== null);
 
   return (
-    <section aria-labelledby="project-repos" className="space-y-3" data-coach="project.repos">
+    <section aria-labelledby="project-repos" className="space-y-3">
       {heading}
       {noneAccepted ? <p className="text-sm text-fg-muted">{t("project.repos.none")}</p> : null}
       {filter !== null ? (

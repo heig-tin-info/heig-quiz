@@ -349,13 +349,25 @@ const scenes = [
   // its one action; Publish refused over students in no group
   // (`?unassigned=1`); the locked project, every repository frozen, released
   // with one score changed since (Release said in the header), the scale's
-  // warning. `--width=390` gives the phone layout of each.
+  // warning. `--width=390` gives the phone layout of each. A published
+  // project's page is tabbed (F-PROJ-13 as amended 2026-10-13): `project` is
+  // its Summary, `project-repos` and `project-settings` its other tabs,
+  // `project-filter` a figure of the Summary opening Repositories filtered.
   { name: "project", role: "teacher", path: "/projects/pj-published?projects=1", settle: 2500 },
-  { name: "project-staff-repo", role: "teacher", path: "/projects/pj-published?projects=1&staffrepo=1", settle: 2500 },
+  { name: "project-repos", role: "teacher", path: "/projects/pj-published?projects=1&tab=repositories", settle: 2500 },
+  { name: "project-settings", role: "teacher", path: "/projects/pj-published?projects=1&tab=settings", settle: 2500 },
+  {
+    name: "project-filter",
+    role: "teacher",
+    path: "/projects/pj-published?projects=1",
+    settle: 2500,
+    act: (p) => p.getByTestId("project-tiles").getByRole("button", { name: /(no commit|sans commit)/i }).click(),
+  },
+  { name: "project-staff-repo", role: "teacher", path: "/projects/pj-published?projects=1&staffrepo=1&tab=repositories", settle: 2500 },
   {
     name: "project-sheet",
     role: "teacher",
-    path: "/projects/pj-published?projects=1",
+    path: "/projects/pj-published?projects=1&tab=repositories",
     fold: true,
     settle: 2500,
     // The first row with a score: a repository, not a student who has not accepted.
@@ -374,8 +386,12 @@ const scenes = [
     act: (p) => p.getByRole("button", { name: /^(Rationale|Justification)$/ }).nth(1).click(),
   },
   { name: "project-grading-empty", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c2/grading?projects=1&pjcriteria=1" },
-  // Its project page: Grade, the primary action while a repository is to validate.
+  // Its project page: Grade, the primary action while a repository is to
+  // validate; its Grading tab (the way to that screen) and its Settings tab
+  // (the criteria's rows).
   { name: "project-criteria", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1", settle: 2500, fold: true },
+  { name: "project-criteria-grading", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=grading", settle: 2500 },
+  { name: "project-criteria-settings", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c1?projects=1&pjcriteria=1&tab=settings", settle: 2500 },
   {
     name: "project-unassigned",
     role: "teacher",
@@ -394,7 +410,7 @@ const scenes = [
   // F-PROJ-13, the states nobody else can look at (`?pjstates=1`): archived (writes withheld), published and
   // nobody accepted, graded `none` (no Score, no checkpoints, no Release), a draft with no distribution.
   { name: "project-archived", role: "teacher", path: "/projects/pj-archived?projects=1&pjstates=1", settle: 2500 },
-  { name: "project-nobody", role: "teacher", path: "/projects/pj-nobody?projects=1&pjstates=1", settle: 2500 },
+  { name: "project-nobody", role: "teacher", path: "/projects/pj-nobody?projects=1&pjstates=1&tab=repositories", settle: 2500 },
   { name: "project-ungraded", role: "teacher", path: "/projects/pj-ungraded?projects=1&pjstates=1", settle: 2500 },
   { name: "project-draft-nodist", role: "teacher", path: "/projects/pj-nodist?projects=1&pjstates=1" },
   // ADR-047 (M6-06, `?codespace=1`): the workspace section — an online project
@@ -412,7 +428,7 @@ const scenes = [
   {
     name: "project-grades",
     role: "teacher",
-    path: "/projects/pj-locked?projects=1",
+    path: "/projects/pj-locked?projects=1&tab=repositories",
     fold: true,
     settle: 2500,
     act: (p) => p.locator("tbody tr").filter({ hasText: /(teacher|enseignant)/ }).first().click(),
@@ -568,7 +584,7 @@ const scenes = [
       await p.getByRole("dialog").waitFor();
     },
   },
-  { name: "project-group-rows", role: "teacher", path: `/projects/${PJ_GROUP_LIVE}?projects=1&groups=1` },
+  { name: "project-group-rows", role: "teacher", path: `/projects/${PJ_GROUP_LIVE}?projects=1&groups=1&tab=repositories` },
   { name: "project-group-drift", role: "teacher", path: `/projects/${PJ_GROUP_STOPPED}?projects=1&groups=1` },
   {
     name: "project-group-resync-confirm",

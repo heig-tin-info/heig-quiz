@@ -1,6 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-
 import { PROTECTED_FILE_SUGGESTIONS, type ProjectDetail, type ProjectSourceDetail } from "@quiz/contracts";
 
 import { PROJECT_GRADING_MODES } from "@quiz/domain";
@@ -8,7 +6,7 @@ import { PROJECT_GRADING_MODES } from "@quiz/domain";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { projectSourceKey } from "../queryKeys";
-import { Badge, Disclosure, SettingRow } from "../ui";
+import { Card, SettingRow } from "../ui";
 import { repoShortName, type WriteProject } from "./projectPage";
 import { CriteriaRows, CriteriaSwitchRow } from "./ProjectCriteria";
 import { DeadlineStrategyRow, GradingModeRow } from "./ProjectSettingRows";
@@ -79,15 +77,14 @@ export function ProtectedFilesRow({
 /**
  * The settings of a PUBLISHED project (F-PROJ-03) that it rarely changes:
  * what happens at the deadline, the protected files and where the students
- * work — in a folded card at the bottom of the page, with a count of the
- * protected files beside its title. They stay editable, each written as soon
- * as the teacher sets it, through the page's one `PATCH`; what `editable`
- * does not name is drawn disabled: the server decides, the screen follows
- * (`projectFieldRefusal`). The deadline itself is edited in its tile
- * (`ProjectOverview`), the name in the header. A draft has its own form
- * (`ProjectDraftForm`). Grading by criteria (ADR-106): its settings and
- * the snapshot of `criteria.yml` in that mode; before it, on a locked
- * project not yet released, the one switch to it.
+ * work — the page's Settings tab (F-PROJ-13 as amended 2026-10-13). They stay
+ * editable, each written as soon as the teacher sets it, through the page's
+ * one `PATCH`; what `editable` does not name is drawn disabled: the server
+ * decides, the screen follows (`projectFieldRefusal`). The deadline itself is
+ * edited in its tile (`ProjectOverview`), the name in the header. A draft has
+ * its own form (`ProjectDraftForm`). Grading by criteria (ADR-106): its
+ * settings and the snapshot of `criteria.yml` in that mode; before it, on a
+ * locked project not yet released, the one switch to it.
  */
 export function ProjectSettings({
   project,
@@ -99,27 +96,11 @@ export function ProjectSettings({
   pending: boolean;
   write: WriteProject;
 }) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
   const busy = pending || project.archivedAt !== null;
-  const offer = useProtectedSuggestions(project, open);
-  const protectedCount = project.protectedFiles.length;
+  const offer = useProtectedSuggestions(project, true);
 
   return (
-    <Disclosure
-      title={t("project.settings")}
-      desc={t("project.settings.desc")}
-      open={open}
-      onOpenChange={setOpen}
-      aside={
-        protectedCount > 0 ? (
-          <Badge tone="zinc">
-            <span aria-hidden>{protectedCount}</span>
-            <span className="sr-only">{protectedCount === 1 ? t("project.settings.count.one") : t("project.settings.count", { n: protectedCount })}</span>
-          </Badge>
-        ) : null
-      }
-    >
+    <Card className="divide-y divide-line px-5" data-testid="project-settings">
       <DeadlineStrategyRow
         value={project.deadlineStrategy}
         disabled={busy || !project.editable.includes("deadlineStrategy")}
@@ -143,6 +124,6 @@ export function ProjectSettings({
       ) : project.editable.includes("gradingMode") ? (
         <CriteriaSwitchRow disabled={busy} write={write} />
       ) : null}
-    </Disclosure>
+    </Card>
   );
 }

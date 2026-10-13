@@ -1987,13 +1987,20 @@ no table of repositories, no live workspace: nobody can accept a draft
 (ADR-077 §1). With no Source tile, **Sync** (the source is ahead) is a
 secondary button of the header, beside Publish.
 
-A **published project reads as a dashboard**, top to bottom: the header, four
-tiles, the lifecycle rail, the repositories, what is live of the workspace, and
-the folded Settings.
+A **published or locked project reads as a dashboard in tabs** (F-PROJ-13 as
+amended 2026-10-13), the header above them and the active tab in the URL
+(`?tab=`, the evaluation pages' grammar): *Summary* (the group set, four
+tiles, the lifecycle rail, what is live of the workspace), *Repositories*
+(the table and its filter line), *Grading* (in `criteria` mode only; for now a
+card on the way to the grading screen) and *Settings*. A `?tab=` the project
+has not (Grading out of `criteria` mode) is the Summary. The alerts a header
+action raises (a refused release) stay above the tabs: they answer the
+header, whatever the tab.
 
 - **Header**: title, state, the status sentence and the ONE primary button the
-  server names (Publish / Sync / Release). No counts line: the figures live in
-  the tiles. Nothing in a tile is `primary`.
+  server names (Publish / Sync / Release / Grade), the same on every tab — no
+  tab has a primary of its own. No counts line: the figures live in the
+  tiles. Nothing in a tile is `primary`.
 - **Four tiles** (`ProjectOverview`, the `Stat` tile variant; 4 columns from
   `lg`, 2×2 at `sm`, one column on a phone):
   *Accepted* — a 56 px ring beside "26 / 30", parts in fixed order: ready
@@ -2011,8 +2018,9 @@ the folded Settings.
 - **Sub-figures filter the table.** "n pending", "n not accepted" (Accepted)
   and "n no commit", "n CI failing", "n to verify", "n alerts" (Progress) are
   small `aria-pressed` buttons; a zero is muted and disabled unless it is the
-  filter in force. Pressing the active one clears it, and a line above the
-  table says "Showing: <filter> · Show all". The figure and the rows it opens
+  filter in force. Pressing one opens the Repositories tab narrowed to it;
+  pressing the active one clears it and stays on the Summary, and a line
+  above the table says "Showing: <filter> · Show all". The figure and the rows it opens
   come from one rule (`projectPage.ts`, `matches`). The staff's test
   repository is counted by no figure and listed under All only. Alerts are the
   one red figure of the page.
@@ -2045,10 +2053,9 @@ the folded Settings.
   alone (the sentence is there for a screen reader): the State column has no
   room for more. The score is bold points over the grade as text,
   with the source (CI, review, teacher) as faint text under it.
-- **Settings** stay editable after publication but are demoted: a folded
-  `Disclosure` at the bottom (strategy, protected files, work mode) with the
-  count of protected files beside its title. A draft has no such card: its
-  settings are the form above.
+- **Settings** stay editable after publication, in their own tab: one `Card`
+  of setting rows (strategy, protected files, work mode, the criteria in that
+  mode). A draft has no such tab: its settings are the form above.
 - Archived: every write disabled; the figures still count its repositories and
   still filter the table. Group mode: counts per group.
 - **Graded by criteria** (ADR-106 §8): **Grade** is the header's primary
