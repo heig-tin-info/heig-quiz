@@ -51,7 +51,7 @@ import {
   rand,
 } from "./runtime";
 import { courseConceptRefs, setCourseConceptIds } from "./concept";
-import { journalRemovalRefusal } from "./journal";
+import { journalRemovalRefusal, mockJournalSignal } from "./journal";
 import {
   me,
 } from "./session";
@@ -526,6 +526,7 @@ const courseSummary = (c: Course): CourseSummary => ({
       archivedAt: r.archivedAt,
       students: r.roster.filter((s) => !s.staff).length,
       claimed: r.roster.filter((s) => !s.staff && s.status === "claimed").length,
+      journal: mockJournalSignal(r.id),
     })),
 });
 

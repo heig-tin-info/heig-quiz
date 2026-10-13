@@ -29,6 +29,7 @@
  * route's encoded paths are exercised by the mock too.
  */
 import type {
+  ClassroomJournalSignal,
   Journal,
   JournalCreate,
   JournalDeletedPage,
@@ -335,6 +336,22 @@ PAGES.push(
 );
 
 const hidden = (p: Fixture) => p.draft || (p.visibleInDays !== null && p.visibleInDays > 0);
+
+/**
+ * The journal's line on a classroom row (#805), as `listCourses` answers it:
+ * the page last shown to students (an undated one counts as a month old),
+ * the next one a date will show. Null without a journal.
+ */
+export function mockJournalSignal(classroomId: string): ClassroomJournalSignal | null {
+  if (!journals.has(classroomId)) return null;
+  const shownIn = (p: Fixture) => p.visibleInDays ?? -30;
+  const last = PAGES.filter((p) => !hidden(p)).sort((a, b) => shownIn(b) - shownIn(a))[0];
+  const next = PAGES.filter((p) => !p.draft && hidden(p)).sort((a, b) => shownIn(a) - shownIn(b))[0];
+  return {
+    lastPage: last ? { title: last.title, at: iso(shownIn(last) * D) } : null,
+    nextPage: next ? { title: next.title, at: iso(next.visibleInDays! * D) } : null,
+  };
+}
 
 /**
  * The navigation of the pages `pages` (F-JRN-06), built by the renderer's own

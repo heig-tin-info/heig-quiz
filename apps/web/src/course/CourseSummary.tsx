@@ -7,7 +7,7 @@ import type { Route } from "../router";
 import { Actions, Card, cx, Dash, PeopleStack, SectionHeading, T } from "../ui";
 import { CourseIcon } from "./CourseIcon";
 import { CoursePools } from "./CoursePools";
-import { ArchivedClassrooms, ClassroomRow, HiddenBadge } from "./parts";
+import { ArchivedClassrooms, ClassroomRow, HiddenBadge, useClassroomSignals } from "./parts";
 import { useCourseActions } from "./useCourseActions";
 
 /**
@@ -42,6 +42,7 @@ export function CourseCard({
 }) {
   const t = useT();
   const { items, staffActions, dialogs } = useCourseActions(course);
+  const signalsOf = useClassroomSignals();
 
   return (
     <Card className="flex min-w-0 flex-col p-5">
@@ -68,7 +69,16 @@ export function CourseCard({
           <p className="text-sm text-fg-muted">{t("classrooms.empty")}</p>
         ) : (
           course.classrooms.map((room) => (
-            <ClassroomRow key={room.id} room={room} students={room.students} navigate={navigate} />
+            // The card stays compact (#805): the live badge only; the course
+            // page and /classrooms show the whole line.
+            <ClassroomRow
+              key={room.id}
+              room={room}
+              students={room.students}
+              signals={signalsOf(room)}
+              compact
+              navigate={navigate}
+            />
           ))
         )}
         <ArchivedClassrooms course={course} navigate={navigate} />

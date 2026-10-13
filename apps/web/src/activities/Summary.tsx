@@ -4,7 +4,7 @@ import { CalendarClock, FolderGit2, Radio, Send } from "lucide-react";
 import type { ActivityStats, ActivitySummary } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useI18n, useT } from "../i18n";
+import { useI18n, useT, type Locale, type TFunction } from "../i18n";
 import { activityStatsKey } from "../queryKeys";
 import { cx, relativeTime, Stat } from "../ui";
 import { summaryOf, type NextEvent } from "./model";
@@ -95,10 +95,12 @@ function Next({ event, now, empty }: { event: NextEvent | null; now: number; emp
   return (
     <>
       <span className="block truncate">{event.row.title}</span>
-      <span className="block">
-        {t(event.what === "opens" ? "activities.summary.opens" : "activities.summary.closes")}{" "}
-        {relativeTime(event.at, now, locale, t)}
-      </span>
+      <span className="block">{nextEventWhen(event, now, locale, t)}</span>
     </>
   );
+}
+
+/** What happens to the row and when: "opens in 3 days", "closes in 2 hours" — the tiles' and the classroom rows' words. */
+export function nextEventWhen(event: NextEvent, now: number, locale: Locale, t: TFunction): string {
+  return `${t(event.what === "opens" ? "activities.summary.opens" : "activities.summary.closes")} ${relativeTime(event.at, now, locale, t)}`;
 }

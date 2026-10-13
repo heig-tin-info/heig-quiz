@@ -25,7 +25,7 @@ import {
 import { CourseIcon } from "./CourseIcon";
 import { CourseSettings } from "./CourseSettings";
 import { LinkedPools, LinkPoolMenu } from "./CoursePools";
-import { ArchivedClassrooms, ClassroomRow, HiddenBadge, useCourseDetail, useCourses } from "./parts";
+import { ArchivedClassrooms, ClassroomRow, HiddenBadge, useClassroomSignals, useCourseDetail, useCourses } from "./parts";
 import { useCourseActions } from "./useCourseActions";
 
 /**
@@ -110,6 +110,7 @@ function Course({
   const [creatingTemplate, setCreatingTemplate] = useState(false);
   const templates = useCourseTemplates(course.id);
   const pools = useCourseDetail(course.id).data?.pools;
+  const signalsOf = useClassroomSignals();
   const open = (next: CourseTab) => navigate({ view: "course", id: course.id, tab: next });
 
   // The open tab's one primary action. New template is every member's
@@ -170,7 +171,13 @@ function Course({
               <p className="px-2.5 py-2 text-sm text-fg-muted">{t("classrooms.empty")}</p>
             ) : (
               course.classrooms.map((room) => (
-                <ClassroomRow key={room.id} room={room} students={room.students} navigate={navigate} />
+                <ClassroomRow
+                  key={room.id}
+                  room={room}
+                  students={room.students}
+                  signals={signalsOf(room)}
+                  navigate={navigate}
+                />
               ))
             )}
             <ArchivedClassrooms course={course} navigate={navigate} />
