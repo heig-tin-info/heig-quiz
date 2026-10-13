@@ -52,6 +52,7 @@ export const categorizeClient: CategorizeClient = {
   Editor: lazy(async () => ({ default: (await import("./Editor.js")).CategorizeEditor })),
   Player: lazy(async () => ({ default: (await import("./Player.js")).CategorizePlayer })),
   Review: lazy(async () => ({ default: (await import("./Review.js")).CategorizeReview })),
+  Key: lazy(async () => ({ default: (await import("./Key.js")).CategorizeKey })),
 
   emptyAnswer: () => ({ columns: {} }),
   isAnswered: isCategorizeAnswered,
@@ -62,6 +63,7 @@ export const categorizeClient: CategorizeClient = {
 export {
   categorizeEditorStrings,
   categorizeGradingStrings,
+  categorizeKeyStrings,
   categorizePlayerStrings,
   categorizeReviewStrings,
 } from "./strings.js";

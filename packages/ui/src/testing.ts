@@ -5,7 +5,12 @@
  *
  * The keys are found by PRESSING them, never by reading the handler tables,
  * so a binding added anywhere is caught.
+ *
+ * And the props a host lends a type's answer key (`keyHostProps`).
  */
+import { createElement, type ReactNode } from "react";
+import type { KeyBarProps, KeyStats } from "@quiz/core/client";
+
 const NAMED = ["Delete", "Backspace", "Escape", "Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Insert", "F1", "F2"];
 const PRINTABLE = [..."abcdefghijklmnopqrstuvwxyz0123456789 -=+[]/.,;"];
 
@@ -45,4 +50,32 @@ export function claimedKeys(
   const expand = (key: string): string[] =>
     key === "1–9" ? Array.from({ length: digits }, (_, i) => String(i + 1)) : [key];
   return [...lines.flatMap((line) => line.keys.flatMap(expand)), ...unlisted].sort();
+}
+
+/** A bar that speaks as the host's does: its labelled non-empty parts as an image's name, or mute. */
+function SpeakingBar({ parts }: KeyBarProps) {
+  const label = parts.every((p) => p.label)
+    ? parts
+        .filter((p) => p.value > 0)
+        .map((p) => `${p.label}: ${p.value}`)
+        .join(" · ")
+    : "";
+  return createElement("span", label ? { role: "img", "aria-label": label } : { "aria-hidden": true });
+}
+
+/**
+ * The props a host lends a type's answer key (`KeyProps`, ADR-109), for a
+ * package's own test of its `Key`: no statement frame, inline markdown as
+ * its source, a bar that speaks ("correct: 2 · wrong: 1"), no answer groups.
+ */
+export function keyHostProps(stats: Partial<KeyStats> = {}) {
+  return {
+    density: "page" as const,
+    stats: { outcomes: { correct: 0, partial: 0, wrong: 0, blank: 0 }, distribution: [], ...stats },
+    prompt: null as ReactNode,
+    rows: null as ReactNode,
+    statement: (body: ReactNode) => body,
+    Bar: SpeakingBar,
+    renderMarkdown: (source: string) => source,
+  };
 }

@@ -15,7 +15,9 @@ its addendum below: the mcq review letters its choices as the wall does, in
 the teacher's order wherever the key is known. Amended 2026-10-10 by
 [ADR-097](ADR-097-reponse-transmise-et-reponse-stockee.md): the addendum's §2
 "an answer being canonical" holds for the stored answer only; a student's
-reads it in the review's view.
+reads it in the review's view. Amended 2026-10-13 by
+[ADR-109](ADR-109-cle-de-correction-par-type.md): a question type draws its
+own key on the wall and the page (`QuestionTypeClient.Key`), staff only.
 
 ## Context
 

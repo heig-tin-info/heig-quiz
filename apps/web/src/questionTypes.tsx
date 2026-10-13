@@ -42,12 +42,14 @@ import {
 import {
   mcqEditorStrings,
   mcqGradingStrings,
+  mcqKeyStrings,
   mcqPlayerStrings,
   mcqReviewStrings,
 } from "@quiz/qt-mcq/client";
 import {
   shortEditorStrings,
   shortGradingStrings,
+  shortKeyStrings,
   shortPlayerStrings,
   shortReviewStrings,
 } from "@quiz/qt-short/client";
@@ -55,6 +57,7 @@ import {
   MATH_PROBLEM_KEYS,
   mathEditorStrings,
   mathGradingStrings,
+  mathKeyStrings,
   mathPlayerStrings,
   mathProblemStrings,
   mathReviewStrings,
@@ -68,6 +71,7 @@ import {
 import {
   categorizeEditorStrings,
   categorizeGradingStrings,
+  categorizeKeyStrings,
   categorizePlayerStrings,
   categorizeReviewStrings,
 } from "@quiz/qt-categorize/client";
@@ -94,6 +98,7 @@ import {
 import {
   clozeEditorStrings,
   clozeGradingStrings,
+  clozeKeyStrings,
   clozePlayerStrings,
   clozeReviewStrings,
   type ClozeTextRenderer,
@@ -370,6 +375,32 @@ export const reviewStrings = {
   math: (t: TFunction) => ({ ...translated(t, withoutProblems(mathReviewStrings), "qt.math.r"), ...mathProblemStringsT(t) }),
   blocks: (t: TFunction) => translated(t, blocksReviewStrings, "qt.blocks.r"),
 };
+
+/**
+ * The words the head of a question says for its outcomes
+ * (`correction.outcome.*`), which a cloze's key says too under each blank:
+ * worded once, mapped onto its dictionary as the MCQ policies are.
+ */
+const outcomeStrings = (t: TFunction) => ({
+  correct: t("correction.outcome.correct"),
+  wrong: t("correction.outcome.wrong"),
+});
+
+/** The keys of `clozeKeyStrings` the mapping above answers for. */
+export const KEY_HOST_MAPPED_KEYS = Object.keys(outcomeStrings(((k) => String(k)) as TFunction));
+
+/**
+ * The words of the debrief's answer keys (`QuestionTypeClient.Key`,
+ * ADR-109), for the types that draw one: staff words, read by the
+ * correction projection and the Results "Questions" tab only.
+ */
+export const keyStrings = {
+  mcq: (t: TFunction) => translated(t, mcqKeyStrings, "qt.mcq.k"),
+  cloze: (t: TFunction) => ({ ...translated(t, clozeKeyStrings, "qt.cloze.k"), ...outcomeStrings(t) }),
+  short: (t: TFunction) => translated(t, shortKeyStrings, "qt.short.k"),
+  math: (t: TFunction) => translated(t, mathKeyStrings, "qt.math.k"),
+  categorize: (t: TFunction) => translated(t, categorizeKeyStrings, "qt.categorize.k"),
+} satisfies Partial<Record<QuestionTypeId, (t: TFunction) => object>>;
 
 /**
  * The words of the grading table's columns (`QuestionTypeClient.grading`,

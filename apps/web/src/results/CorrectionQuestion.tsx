@@ -1,24 +1,19 @@
 import { Dices } from "lucide-react";
-import { Fragment, type ReactNode } from "react";
+import { Suspense, type ComponentType, type ReactNode } from "react";
 
 import type { AnswerDistributionEntry, ByQuestion } from "@quiz/contracts";
+import type { KeyProps } from "@quiz/core/client";
 import { displayedRate } from "@quiz/domain";
-import type { CategorizeSolution, CategorizeStudent } from "@quiz/qt-categorize/client";
-import type { ClozeSolution, ClozeStudent } from "@quiz/qt-cloze/client";
+import type { ClozeTextRenderer } from "@quiz/qt-cloze/client";
 import { referenceProgram, type ProgramStudent } from "@quiz/qt-code/client";
-import type { MathSolution } from "@quiz/qt-math/client";
 import type { RichSolution } from "@quiz/qt-rich/client";
-import type { ShortSolution } from "@quiz/qt-short/client";
+import { answeredCount, CORRECTION_SCALE, CorrectionCount, type Density } from "@quiz/ui";
 
 import { useT } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
-import {
-  choicesOf,
-  promptOf,
-  PROJECTION_ROW_CAP,
-} from "../poll/pollTally";
-import { typeLabel } from "../questionTypes";
+import { promptOf, PROJECTION_ROW_CAP } from "../poll/pollTally";
+import { keyStrings, questionType, typeLabel } from "../questionTypes";
 import { BAR_TONES, cx, NotePanel, SegmentedBar, type BarPart, type BarTone } from "../ui";
 
 /**
@@ -28,83 +23,49 @@ import { BAR_TONES, cx, NotePanel, SegmentedBar, type BarPart, type BarTone } fr
  *
  * Everything drawn here is the server's (`ByQuestion`): the outcomes and the
  * verdict of every answer group come from the validated gradings, and the
- * screen recomputes no grade. The two joins it does make are an mcq's
- * choices with their ticks (`choicesOf`, the poll projection's), and a cloze
- * text's blanks with the groups that answer each (`part`).
+ * screen recomputes no grade.
+ *
+ * The answer key is the type's own when it has one (`QuestionTypeClient.Key`,
+ * ADR-109): an mcq's choices, a cloze's blanks in its text, a short or math
+ * answer's expected answers, a categorize board. This host draws the rest —
+ * the head, the generic statement and answer groups it lends the key, the
+ * program of a `code` question, an essay's model answer.
  *
  * The sizes come from `SCALE`: `wall` is the projection's own `clamp()` scale
  * (DESIGN.md, "Correction projection"), `page` the same pieces at the scale
  * of the Results "Questions" tab, which draws them too.
  */
 
-/** Every size of the pieces below, per density: the one place they differ. */
+/**
+ * The sizes of the pieces this host draws, per density: the shared ones
+ * (`CORRECTION_SCALE`, `@quiz/ui`) and those only the host draws. A size
+ * only one type's key draws lives in that type's package.
+ */
 const SCALE = {
   wall: {
+    ...CORRECTION_SCALE.wall,
     prompt: "max-w-[64ch] text-balance text-[clamp(24px,2.7vw,40px)] font-bold leading-tight tracking-[-0.025em]",
-    choiceRow:
-      "grid-cols-[minmax(0,1fr)_minmax(180px,38%)_3rem] gap-x-[clamp(16px,2vw,28px)] py-[clamp(10px,1.4vh,16px)]",
-    choiceGap: "gap-3.5",
-    letter: "size-[clamp(30px,2.4vw,38px)] text-[clamp(14px,1.2vw,18px)]",
-    choice: "text-[clamp(18px,1.8vw,27px)]",
-    count: "font-mono text-base",
     answerRow: "grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_3rem] gap-[clamp(12px,2vw,24px)] py-2.5",
-    answer: "text-[clamp(17px,1.6vw,24px)]",
-    note: "text-[clamp(16px,1.4vw,21px)]",
-    caption: "text-[clamp(13px,1.2vw,17px)]",
-    cloze: "text-[clamp(20px,2vw,30px)]",
     program: "gap-6",
     code: "p-5 text-[clamp(14px,1.25vw,19px)]",
     caseRow: "grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 pb-3 pt-2.5",
     caseLabel: "text-[clamp(15px,1.3vw,19px)]",
   },
   page: {
+    ...CORRECTION_SCALE.page,
     prompt: "text-[15px] font-medium",
-    choiceRow: "grid-cols-[minmax(0,1fr)_minmax(120px,30%)_2.5rem] gap-x-4 py-2",
-    choiceGap: "gap-2.5",
-    letter: "size-6 text-xs",
-    choice: "text-sm",
-    count: "text-[13px]",
     answerRow: "grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_2.5rem] gap-4 py-2",
-    answer: "text-sm",
-    note: "text-sm",
-    caption: "text-xs",
-    cloze: "text-[15px]",
     program: "gap-4",
     code: "p-4 text-xs",
     caseRow: "grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1.5 py-2",
     caseLabel: "text-[13px]",
   },
-} as const;
-
-export type Density = keyof typeof SCALE;
+} as const satisfies Record<Density, Record<string, string>>;
 
 /** The `code` key, when the payload carries one and the policy let it out. */
 export function referenceSolution(solution: unknown): string | null {
   const value = (solution as { referenceSolution?: unknown } | null)?.referenceSolution;
   return typeof value === "string" && value.trim() !== "" ? value : null;
-}
-
-/**
- * The answers a written one is measured against, when the key names any: a
- * short answer's accepted texts, a math answer's formulas — set as math, and
- * with its credit when it earns less than full marks.
- */
-function expectedAnswers(q: ByQuestion): ReactNode[] {
-  if (q.item.type === "math") {
-    const answers = (q.solution as Partial<MathSolution> | null)?.answers;
-    return (Array.isArray(answers) ? answers : []).map((a, i) => (
-      <span key={i}>
-        <MarkdownView source={`$${a.value}$`} as="span" inline />
-        {a.points < 1 ? ` (${a.points})` : null}
-      </span>
-    ));
-  }
-  const expected = (q.solution as Partial<ShortSolution> | null)?.expected;
-  return (Array.isArray(expected) ? expected : []).map((text, i) => (
-    <span key={i} className="font-mono">
-      {text}
-    </span>
-  ));
 }
 
 /** An essay's model answer, when the teacher wrote one. */
@@ -118,10 +79,6 @@ function modelAnswer(q: ByQuestion): string | null {
 const verdictTone = (entry: Pick<AnswerDistributionEntry, "correct">): BarTone =>
   entry.correct === true ? "success" : entry.correct === false ? "danger" : "muted";
 
-/** The attempts every figure of the question is over. */
-const counted = (q: ByQuestion) =>
-  q.outcomes.correct + q.outcomes.partial + q.outcomes.wrong + q.outcomes.blank;
-
 /** The head of a question: its number, the class in one bar, the success rate. */
 function Head({ q, number }: { q: ByQuestion; number: number }) {
   const t = useT();
@@ -131,7 +88,7 @@ function Head({ q, number }: { q: ByQuestion; number: number }) {
     { tone: "danger", value: q.outcomes.wrong, label: t("correction.outcome.wrong") },
     { tone: "warning", value: q.outcomes.blank, label: t("correction.outcome.blank") },
   ];
-  const n = counted(q);
+  const n = answeredCount(q);
   return (
     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-[clamp(16px,2vw,28px)] max-md:grid-cols-[1fr_auto]">
       <p className="flex flex-col whitespace-nowrap text-[clamp(13px,1.1vw,16px)] font-semibold text-fg-muted">
@@ -179,81 +136,15 @@ function Head({ q, number }: { q: ByQuestion; number: number }) {
   );
 }
 
-
-/**
- * An mcq: every choice, its letter, and the share of the papers that ticked
- * it, the count beside. Revealed, a key's bar is green and a distractor's red,
- * and its name says which; hidden, every bar is muted and says "ticked" only —
- * how the class voted, which the ticks alone do not tell the key from.
- */
-function Choices({ q, revealed, density }: { q: ByQuestion; revealed: boolean; density: Density }) {
-  const t = useT();
-  const s = SCALE[density];
-  const ticks = new Map(q.distribution.map((d) => [d.key, d.count]));
-  const n = counted(q);
-  return (
-    <ul className="flex flex-col">
-      {choicesOf(q).map((choice) => {
-        const ticked = ticks.get(String(choice.id)) ?? 0;
-        const part: BarPart = !revealed
-          ? { tone: "muted", label: t("correction.choice.ticked"), value: ticked }
-          : choice.correct
-            ? { tone: "success", label: t("correction.choice.key"), value: ticked }
-            : { tone: "danger", label: t("correction.choice.distractor"), value: ticked };
-        return (
-          <li
-            key={choice.id}
-            className={cx(
-              "grid items-center border-b border-line px-1 max-md:grid-cols-[minmax(0,1fr)_3rem] max-md:gap-y-2",
-              s.choiceRow,
-            )}
-          >
-            <span className={cx("flex items-start max-md:col-span-2", s.choiceGap)}>
-              <span
-                className={cx(
-                  "grid shrink-0 place-items-center rounded-full font-bold",
-                  s.letter,
-                  !revealed
-                    ? "bg-surface-3 text-fg-muted"
-                    : choice.correct
-                      ? "bg-success text-on-fill"
-                      : "bg-danger-soft text-danger",
-                )}
-              >
-                {choice.letter}
-              </span>
-              <span
-                className={cx(
-                  "min-w-0 flex-1 pt-px font-medium leading-snug",
-                  s.choice,
-                  revealed && !choice.correct && "text-fg-muted [&_code]:text-inherit",
-                )}
-              >
-                <MarkdownView source={choice.text} inline />
-              </span>
-            </span>
-            <SegmentedBar parts={[part]} total={Math.max(1, n)} />
-            <Count density={density}>{ticked}</Count>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-/** The figure at the end of a row: a count of papers. */
-function Count({ density, children }: { density: Density; children: ReactNode }) {
-  return <span className={cx("text-right tabular-nums text-fg-muted", SCALE[density].count)}>{children}</span>;
-}
-
 /**
  * What the class wrote, grouped: a short answer's texts, a code image's
- * accuracy buckets — whatever answer groups the type counts — under the
- * expected answer when the key names one. One bar per group, all measured
- * against the largest, and the count beside it (the figure IS the row's
- * content here, not a reading of a bar).
+ * accuracy buckets — whatever answer groups the type counts. One bar per
+ * group, all measured against the largest, and the count beside it (the
+ * figure IS the row's content here, not a reading of a bar). Nothing when
+ * there is nothing to list; whether a row of blanks alone is worth listing is
+ * the caller's (with no key beside it, it is not).
  */
-function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean; density: Density }) {
+export function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean; density: Density }) {
   const t = useT();
   const s = SCALE[density];
   const blank = q.outcomes.blank;
@@ -264,35 +155,18 @@ function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean
   const listed = !q.parameterized && (rows.length > 0 || blank > 0);
   const overflow = q.distribution.length - rows.length;
   const top = Math.max(1, blank, ...rows.map((r) => r.count));
-  const expected = expectedAnswers(q);
-  const hasExpected = expected.length > 0;
-  // The blanks alone say nothing the head does not: a row of them needs
-  // groups or a key beside it.
-  if (rows.length === 0 && !hasExpected) return null;
+  if (!listed && overflow <= 0) return null;
   const row = (key: string, text: ReactNode, count: number, tone: BarTone, textTone: string) => (
     <li key={key} className={cx("grid items-center border-b border-line px-1 max-md:grid-cols-[1fr_3rem]", s.answerRow)}>
       <span className={cx("truncate font-medium", s.answer, textTone)}>{text}</span>
       <span className="max-md:col-span-2 max-md:row-start-2">
         <SegmentedBar parts={[{ tone: revealed ? tone : "muted", value: count }]} total={top} />
       </span>
-      <Count density={density}>{count}</Count>
+      <CorrectionCount density={density}>{count}</CorrectionCount>
     </li>
   );
   return (
     <div className="flex flex-col gap-3">
-      {revealed && hasExpected ? (
-        <p className={cx("text-fg-muted", s.note)}>
-          {t("correction.expected")}{" "}
-          <span className="font-semibold text-success">
-            {expected.map((answer, i) => (
-              <Fragment key={i}>
-                {i > 0 ? " · " : null}
-                {answer}
-              </Fragment>
-            ))}
-          </span>
-        </p>
-      ) : null}
       {listed ? (
         <ul className="flex flex-col">
           {rows.map((entry) =>
@@ -318,115 +192,6 @@ function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean
           {t(overflow === 1 ? "poll.moreAnswers.one" : "poll.moreAnswers", { n: overflow })}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-/** A cloze: its text, each blank holding the key and how the class filled it. */
-function ClozeText({ q, revealed, density }: { q: ByQuestion; revealed: boolean; density: Density }) {
-  const t = useT();
-  const template = (q.student as ClozeStudent | null)?.template ?? "";
-  const keys = new Map(
-    ((q.solution as ClozeSolution | null)?.blanks ?? []).map((b) => [b.index, b.expected]),
-  );
-  const n = counted(q);
-  const hole = (index: number) => {
-    const groups = q.distribution.filter((d) => d.part === index);
-    const sum = (keep: (d: AnswerDistributionEntry) => boolean) =>
-      groups.filter(keep).reduce((s, d) => s + d.count, 0);
-    // A blank left empty is an absence like a question left blank, and
-    // stays the track. The groups are never capped (ADR-033), so the filled
-    // ones are `n` less the empty. Hidden, the bar is that one muted length:
-    // how far the class got, since the right / wrong split IS the key.
-    const filled = n - sum((d) => d.label === "") - q.outcomes.blank;
-    const right = sum((d) => d.label !== "" && d.correct === true);
-    const parts: BarPart[] = revealed
-      ? [
-          { tone: "success", label: t("correction.outcome.correct"), value: right },
-          { tone: "danger", label: t("correction.outcome.wrong"), value: filled - right },
-        ]
-      : [{ tone: "muted", label: t("correction.blank.filled"), value: filled }];
-    return (
-      <span className="mx-1 inline-flex min-w-[8ch] flex-col gap-1 align-middle leading-tight">
-        <span
-          className={cx(
-            "border-b-2 px-2.5 text-center font-mono font-semibold",
-            revealed ? "border-success text-success" : "border-dashed border-line-strong text-transparent",
-          )}
-          aria-hidden={!revealed}
-        >
-          {keys.get(index) ?? "…"}
-        </span>
-        {/* A parameterized cloze groups nothing by what was written (ADR-056
-            §9): its blank holds the example's key, the head the verdicts. */}
-        {q.parameterized ? null : <SegmentedBar className="h-1.5" parts={parts} total={Math.max(1, n)} />}
-      </span>
-    );
-  };
-  return (
-    <div
-      className={cx(
-        "max-w-[62ch] font-medium [&_.md-cloze]:text-[1em]! [&_.md-cloze_li]:leading-[2.6]! [&_.md-cloze_p]:leading-[2.6]!",
-        SCALE[density].cloze,
-      )}
-    >
-      <ClozeMarkdownText template={template} renderBlank={hole} />
-    </div>
-  );
-}
-
-/**
- * A categorize board: its columns, and the cards to sort. Hidden, every card
- * waits above the empty columns, as the class found them; revealed, each card
- * sits in the column the key puts it in — in the key's order when the order
- * counts — and the distractors stay above, "in no column". No count: the
- * type groups no answers (its verdicts are the head's bar).
- */
-function CategorizeKey({ q, revealed, density }: { q: ByQuestion; revealed: boolean; density: Density }) {
-  const t = useT();
-  const s = SCALE[density];
-  const student = q.student as CategorizeStudent | null;
-  if (!student) return null;
-  const text = new Map(student.cards.map((card) => [card.id, card.text]));
-  const key = new Map(((q.solution as CategorizeSolution | null)?.columns ?? []).map((c) => [c.id, c.cards]));
-  const placed = new Set([...key.values()].flat());
-  const pool = student.cards.map((card) => card.id).filter((id) => !revealed || !placed.has(id));
-  const card = (id: string, rank: number | null, tone: string) => (
-    <li key={id} className={cx("flex min-w-0 items-baseline gap-2 rounded-field border px-3 py-1.5 font-medium", s.answer, tone)}>
-      {rank === null ? null : <span className="font-mono tabular-nums text-fg-muted">{rank}.</span>}
-      <span className="min-w-0 [overflow-wrap:anywhere]">
-        <MarkdownView source={text.get(id) ?? ""} inline />
-      </span>
-    </li>
-  );
-  return (
-    <div className="flex flex-col gap-4">
-      {pool.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <p className={cx("font-medium text-fg-muted", s.caption)}>
-            {t(revealed ? "correction.categorize.none" : "correction.categorize.cards")}
-          </p>
-          <ul className="flex flex-wrap gap-2">
-            {pool.map((id) =>
-              card(id, null, revealed ? "border-line text-fg-muted" : "border-line-strong bg-surface"),
-            )}
-          </ul>
-        </div>
-      ) : null}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3">
-        {student.columns.map((column) => (
-          <section key={column.id} className="flex min-w-0 flex-col rounded-card border border-line">
-            <h3 className={cx("border-b border-line px-3 py-2 font-semibold", s.answer)}>{column.label}</h3>
-            <ol aria-label={column.label} className="flex min-h-12 flex-col gap-2 p-3">
-              {revealed
-                ? (key.get(column.id) ?? []).map((id, index) =>
-                    card(id, student.ordered ? index + 1 : null, "border-success bg-success-soft"),
-                  )
-                : null}
-            </ol>
-          </section>
-        ))}
-      </div>
     </div>
   );
 }
@@ -462,7 +227,7 @@ export function CorrectionProgram({
   const label = t(
     revealed ? "results.byQuestion.reference" : shown === null ? "correction.code.hidden" : "correction.code.start",
   );
-  const n = counted(q);
+  const n = answeredCount(q);
   if (key === null && q.casePassRate.length === 0) return null;
   return (
     <div className={cx("grid items-start lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]", s.program)}>
@@ -502,9 +267,9 @@ export function CorrectionProgram({
               {/* `label`, never `name`: a hidden case reads as a student
                   reads it unless the policy shows hidden names (ADR-033). */}
               <span className={cx("font-semibold", s.caseLabel)}>{c.label}</span>
-              <Count density={density}>
+              <CorrectionCount density={density}>
                 {t("results.byQuestion.casePass", { passed: c.passed, total: c.total })}
-              </Count>
+              </CorrectionCount>
               <span className="col-span-2">
                 <SegmentedBar
                   parts={[
@@ -522,79 +287,108 @@ export function CorrectionProgram({
   );
 }
 
-/** One piece of a question the correction draws, at either density. */
-type Piece = (props: { q: ByQuestion; revealed: boolean; density: Density }) => ReactNode;
-
 /**
- * The types whose key the correction draws itself, and how: an mcq's
- * letters, a cloze's blanks IN its statement, a short or math answer's
- * expected answers over the answer groups, a categorize board. `statement`
- * replaces the prompt; `answers` replaces the answer groups, `null` for none.
- * The one place to add a type. The Results tab leaves any other type's
- * statement and key to the type's own review.
+ * Every prop a type's `Key` accepts: the contract's, and what a concrete key
+ * adds (its `strings`, a cloze's `renderText`), which the registry's erased
+ * type cannot show — the cast `QuestionReviewHost` makes for `Review`.
  */
-const DRAWN: Partial<Record<string, { statement?: Piece; answers?: Piece | null }>> = {
-  mcq: { answers: Choices },
-  cloze: { statement: ClozeText, answers: null },
-  short: {},
-  math: {},
-  categorize: { answers: CategorizeKey },
+type KeyHostProps = KeyProps<unknown, unknown> & {
+  strings?: unknown;
+  /** `cloze`: its text with the blanks in place (`ClozeMarkdownText`). */
+  renderText?: ClozeTextRenderer;
 };
-export const drawsKey = (type: string): boolean => DRAWN[type] !== undefined;
+
+/** The type's answer key, or `undefined` for a type that has none. */
+const keyOf = (type: string) => questionType(type)?.Key as ComponentType<KeyHostProps> | undefined;
+
+/** The type draws its own answer key (`QuestionTypeClient.Key`). */
+export const drawsKey = (type: string): boolean => keyOf(type) !== undefined;
+
+/** The app's sanitised markdown, inline: what a key's choice, card or formula is set in. */
+const renderInline = (source: string) => <MarkdownView source={source} inline />;
 
 /**
- * The statement: the prompt, or a cloze's text with its blanks in place. A
- * parameterized question's is the instance of its example values, and says
- * so above it: no student read these very numbers (ADR-056 §9).
+ * The statement and the key of a question: the type's `Key`, given the
+ * prompt and the answer groups to place, replace or omit — or, for a type
+ * without one, the prompt and the answer groups.
+ *
+ * A parameterized question's statement is the instance of its example
+ * values, and says so above it: no student read these very numbers (ADR-056
+ * §9). `after` follows the statement — on the wall, the explanation and the
+ * program.
  */
-export function CorrectionStatement({
+export function CorrectionKey({
   q,
   revealed,
-  density = "wall",
+  density,
+  after = null,
 }: {
   q: ByQuestion;
   revealed: boolean;
-  density?: Density;
+  density: Density;
+  after?: ReactNode;
 }) {
   const t = useT();
-  const prompt = promptOf(q);
-  const Statement = DRAWN[q.item.type]?.statement;
-  const statement = Statement ? (
-    <Statement q={q} revealed={revealed} density={density} />
-  ) : prompt ? (
-    <div className={SCALE[density].prompt}>
-      <MarkdownView source={prompt} inline />
-    </div>
-  ) : null;
-  if (!q.parameterized || statement === null) return statement;
-  return (
-    <div className="flex flex-col gap-2">
-      <p className={cx("flex items-center gap-1.5 font-medium text-fg-muted", SCALE[density].caption)}>
-        <Dices className="size-[1.1em] shrink-0" aria-hidden />
-        {t("correction.param.example")}
-      </p>
-      {statement}
-    </div>
+  const s = SCALE[density];
+  const Key = keyOf(q.item.type);
+  const strings = keyStrings[q.item.type as keyof typeof keyStrings];
+  const statement = (body: ReactNode) => (
+    <>
+      {body === null || !q.parameterized ? (
+        body
+      ) : (
+        <div className="flex flex-col gap-2">
+          <p className={cx("flex items-center gap-1.5 font-medium text-fg-muted", s.caption)}>
+            <Dices className="size-[1.1em] shrink-0" aria-hidden />
+            {t("correction.param.example")}
+          </p>
+          {body}
+        </div>
+      )}
+      {after}
+    </>
   );
-}
-
-/**
- * What the class answered, after the statement: an mcq's choices, a
- * categorize board, or the answer groups the type counts. Nothing for a
- * cloze (its blanks are IN the statement), nor for a type that counts none.
- */
-export function CorrectionAnswers({
-  q,
-  revealed,
-  density = "wall",
-}: {
-  q: ByQuestion;
-  revealed: boolean;
-  density?: Density;
-}) {
-  const drawn = DRAWN[q.item.type]?.answers;
-  const Answers = drawn === undefined ? AnswerRows : drawn;
-  return Answers ? <Answers q={q} revealed={revealed} density={density} /> : null;
+  const text = promptOf(q);
+  const prompt = statement(
+    text ? (
+      <div className={s.prompt}>
+        <MarkdownView source={text} inline />
+      </div>
+    ) : null,
+  );
+  const rows = <AnswerRows q={q} revealed={revealed} density={density} />;
+  if (Key === undefined) {
+    return (
+      <>
+        {prompt}
+        {/* The blanks alone say nothing the head does not: with no key beside
+            them, a row of them needs groups. */}
+        {q.distribution.length > 0 ? rows : null}
+      </>
+    );
+  }
+  return (
+    // The statement stands while the key's chunk arrives: what is above
+    // never moves, the key appears below it.
+    <Suspense fallback={prompt}>
+      <Key
+        student={q.student}
+        solution={q.solution}
+        revealed={revealed}
+        density={density}
+        // `ByQuestion` is a `KeyStats`: a change of the contract that a key
+        // would not survive fails to compile here.
+        stats={q}
+        prompt={prompt}
+        rows={rows}
+        statement={statement}
+        Bar={SegmentedBar}
+        renderMarkdown={renderInline}
+        strings={strings?.(t)}
+        renderText={ClozeMarkdownText}
+      />
+    </Suspense>
+  );
 }
 
 export function CorrectionQuestion({
@@ -615,14 +409,21 @@ export function CorrectionQuestion({
   return (
     <>
       <Head q={q} number={number} />
-      <CorrectionStatement q={q} revealed={revealed} />
-      {explained && q.explanation ? (
-        <NotePanel eyebrow={t("correction.explanation")}>
-          <MarkdownView source={q.explanation} className="text-[clamp(15px,1.3vw,19px)]" />
-        </NotePanel>
-      ) : null}
-      <CorrectionProgram q={q} revealed={revealed} />
-      <CorrectionAnswers q={q} revealed={revealed} />
+      <CorrectionKey
+        q={q}
+        revealed={revealed}
+        density="wall"
+        after={
+          <>
+            {explained && q.explanation ? (
+              <NotePanel eyebrow={t("correction.explanation")}>
+                <MarkdownView source={q.explanation} className="text-[clamp(15px,1.3vw,19px)]" />
+              </NotePanel>
+            ) : null}
+            <CorrectionProgram q={q} revealed={revealed} />
+          </>
+        }
+      />
       {/* An essay's model answer — never its grading criteria, which stay the
           teacher's (ADR-037). The Results tab has it from the type's review. */}
       {model ? (

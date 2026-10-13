@@ -94,6 +94,16 @@ export const categorizeReviewStrings = {
 
 export type CategorizeReviewStringKey = keyof typeof categorizeReviewStrings;
 
+/** The words of the debrief's answer key (`Key`, ADR-109): the caption above the cards outside the columns. */
+export const categorizeKeyStrings = {
+  /** Hidden: every card, above the empty columns, as the class found them. */
+  cards: "Cards to sort",
+  /** Revealed: the distractors, which the key puts in no column. */
+  none: "In no column",
+} as const;
+
+export type CategorizeKeyStringKey = keyof typeof categorizeKeyStrings;
+
 /**
  * The words of the grading table's columns (ADR-044). A column per card is
  * headed by the card itself; past {@link CATEGORIZE_GRADING_MAX_COLUMNS}

@@ -43,6 +43,7 @@ export const shortClient: ShortClient = {
   Editor: lazy(async () => ({ default: (await import("./Editor.js")).ShortEditor })),
   Player: lazy(async () => ({ default: (await import("./Player.js")).ShortPlayer })),
   Review: lazy(async () => ({ default: (await import("./Review.js")).ShortReview })),
+  Key: lazy(async () => ({ default: (await import("./Key.js")).ShortKey })),
 
   emptyAnswer: () => ({ text: "" }),
   isAnswered: isShortAnswered,
@@ -58,6 +59,7 @@ export const shortClient: ShortClient = {
 export {
   shortEditorStrings,
   shortGradingStrings,
+  shortKeyStrings,
   shortPlayerStrings,
   shortReviewStrings,
 } from "./strings.js";

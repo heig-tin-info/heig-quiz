@@ -136,6 +136,32 @@ export function choiceLetter(index: number): string {
   return String.fromCharCode(65 + (index % 26));
 }
 
+/** An mcq choice as the room saw it: its letter, its text, whether it is in the key. */
+export interface KeyedChoice {
+  /** The choice's id in the student view (ADR-097): what a tally or a debrief counts it by. */
+  id: number;
+  letter: string;
+  text: string;
+  correct: boolean;
+}
+
+/**
+ * The choices of an mcq in the SERVED order, lettered by position, joined
+ * with the key: what the poll projection and the debrief's key draw. Either
+ * half may be missing or malformed on the wire, and then reads as empty.
+ */
+export function letteredChoices(student: unknown, solution: unknown): KeyedChoice[] {
+  const choices = (student as Partial<McqStudent> | null)?.choices;
+  const correct = (solution as Partial<McqSolution> | null)?.correct;
+  const key = new Set(Array.isArray(correct) ? correct : []);
+  return (Array.isArray(choices) ? choices : []).map((choice, position) => ({
+    id: choice.id,
+    letter: choiceLetter(position),
+    text: choice.text,
+    correct: key.has(choice.id),
+  }));
+}
+
 /**
  * What `toStudent` may emit. The ARRAY ORDER is the shuffled display order and
  * `id` is the position in it (ADR-097, amending decision D3): the student

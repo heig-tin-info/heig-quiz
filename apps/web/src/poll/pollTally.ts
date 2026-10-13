@@ -19,7 +19,7 @@
 import { foldPollAnswer } from "@quiz/domain";
 // A, B, C… comes from the type that owns the letter, so a row on the wall is
 // lettered exactly as the same choice is in the editor and in the review.
-import { choiceLetter, type McqSolution, type McqStudent } from "@quiz/qt-mcq/client";
+import { letteredChoices, type McqSolution, type McqStudent } from "@quiz/qt-mcq/client";
 import type { ShortSolution, ShortStudent } from "@quiz/qt-short/client";
 
 import type { PollTally, PollTeacherView } from "@quiz/contracts";
@@ -60,32 +60,6 @@ export function percentOf(count: number, answered: number): number {
 /** What the rows are drawn from: the teacher's question, or a revealed phone's. */
 type QuestionLike = Pick<PollTeacherView["question"], "type" | "student" | "solution">;
 
-/** An mcq choice as the room saw it: its letter, its text, whether it is in the key. */
-export interface ChoiceLike {
-  /**
-   * The choice's id, which a tally is keyed by: a student view names a choice
-   * by its position (ADR-097), and a poll is never shuffled, so here the
-   * position IS the canonical index the tally counts.
-   */
-  id: number;
-  letter: string;
-  text: string;
-  correct: boolean;
-}
-
-/** The choices of an mcq in the SERVED order, joined with its key. */
-export function choicesOf(question: Pick<QuestionLike, "student" | "solution">): ChoiceLike[] {
-  const student = question.student as McqStudent | null;
-  const solution = question.solution as McqSolution | null;
-  const key = new Set(Array.isArray(solution?.correct) ? solution.correct : []);
-  return (Array.isArray(student?.choices) ? student.choices : []).map((choice, position) => ({
-    id: choice.id,
-    letter: choiceLetter(position),
-    text: choice.text,
-    correct: key.has(choice.id),
-  }));
-}
-
 /**
  * Whether the key names any answer at all. An opinion poll's names none
  * (ADR-014, addendum 2026-09-23): its reveal marks nothing right — and
@@ -115,7 +89,9 @@ export function promptOf<Q extends Pick<QuestionLike, "student">>(question: Q): 
 
 function mcqRows(question: QuestionLike, tally: PollTally): PollRow[] {
   const counts = new Map(tally.choices.map((c) => [c.index, c.count]));
-  return choicesOf(question).map((choice) => {
+  // The served order, lettered by position; a poll is never shuffled, so a
+  // choice's id IS the canonical index the tally counts (ADR-097).
+  return letteredChoices(question.student, question.solution).map((choice) => {
     const count = counts.get(choice.id) ?? 0;
     return {
       key: `c${choice.id}`,

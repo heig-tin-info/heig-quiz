@@ -87,6 +87,14 @@ export const mathReviewStrings = {
 
 export type MathReviewStringKey = keyof typeof mathReviewStrings;
 
+/** The words of the debrief's answer key (`Key`, ADR-109). */
+export const mathKeyStrings = {
+  /** Before the accepted formulas, above the class's answer groups. */
+  expected: "Expected answer",
+} as const;
+
+export type MathKeyStringKey = keyof typeof mathKeyStrings;
+
 /** The words of the grading table's one column (ADR-044). */
 export const mathGradingStrings = {
   answer: "Answer",

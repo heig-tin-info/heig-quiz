@@ -45,6 +45,20 @@ export const clozeReviewStrings = {
 
 export type ClozeReviewStringKey = keyof typeof clozeReviewStrings;
 
+/**
+ * The words of the debrief's answer key (`Key`, ADR-109): what the bar under
+ * a blank says in its bubble and its accessible name. `correct` and `wrong`
+ * are the head's own outcome words, which the host maps them onto.
+ */
+export const clozeKeyStrings = {
+  /** Hidden: the share of the papers that filled the blank in. */
+  filled: "filled in",
+  correct: "correct",
+  wrong: "wrong",
+} as const;
+
+export type ClozeKeyStringKey = keyof typeof clozeKeyStrings;
+
 /** The words of the grading table's columns (ADR-044), one column per blank. */
 export const clozeGradingStrings = {
   /** A column's header: "Blank 2", numbered from 1 in the order of the text. */

@@ -8,12 +8,7 @@ import { useI18n, useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { typeLabel, QuestionReviewHost } from "../questionTypes";
 import { Badge, Card, EmptyState, NotePanel, percent, SectionHeading } from "../ui";
-import {
-  CorrectionAnswers,
-  CorrectionProgram,
-  CorrectionStatement,
-  drawsKey,
-} from "./CorrectionQuestion";
+import { AnswerRows, CorrectionKey, CorrectionProgram, drawsKey } from "./CorrectionQuestion";
 import { questionAnchor, QuestionSummary } from "./QuestionSummary";
 
 /**
@@ -30,11 +25,11 @@ export const isNotOver = (error: unknown): boolean => refusedWith(error, "not_ov
  * class's distribution over all of them (`QuestionSummary`).
  *
  * The pieces are the correction projection's, at the page's density and
- * always revealed: this is the teacher's reading of the projection. An mcq,
- * a cloze, a short or math answer and a categorize board are drawn by them
- * whole (`drawsKey`); any other type keeps
- * its own `Review` for the statement and the key — with no answer and no
- * grading details, the question the way it was asked — and gets the
+ * always revealed: this is the teacher's reading of the projection. A type
+ * with an answer key of its own (`drawsKey`, ADR-109: an mcq, a cloze, a
+ * short or math answer, a categorize board) is drawn by it whole; any other
+ * type keeps its own `Review` for the statement and the key — with no answer
+ * and no grading details, the question the way it was asked — and gets the
  * projection's answer groups, program and test cases below it.
  */
 export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
@@ -78,24 +73,27 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
                 {t("results.byQuestion.key")}
               </p>
               {drawsKey(q.item.type) ? (
-                <CorrectionStatement q={q} revealed density="page" />
+                <CorrectionKey q={q} revealed density="page" />
               ) : (
-                // Drawn by the type itself. There is no answer here — this is
-                // the question in front of the class, not one student's copy —
-                // so the type's own "no answer" line is the truth, and the
-                // label says whose reading it is.
-                <QuestionReviewHost
-                  type={q.item.type}
-                  student={q.student}
-                  answer={null}
-                  solution={q.solution}
-                  details={null}
-                  points={null}
-                  maxPoints={q.item.points}
-                  audience="teacher"
-                />
+                <>
+                  {/* Drawn by the type's review. There is no answer here —
+                      this is the question in front of the class, not one
+                      student's copy — so the type's own "no answer" line is
+                      the truth, and the label says whose reading it is. */}
+                  <QuestionReviewHost
+                    type={q.item.type}
+                    student={q.student}
+                    answer={null}
+                    solution={q.solution}
+                    details={null}
+                    points={null}
+                    maxPoints={q.item.points}
+                    audience="teacher"
+                  />
+                  {/* Groups or nothing: blanks alone are the head's. */}
+                  {q.distribution.length > 0 ? <AnswerRows q={q} revealed density="page" /> : null}
+                </>
               )}
-              <CorrectionAnswers q={q} revealed density="page" />
             </div>
 
             {/* A `code` question keeps its key in `solution.referenceSolution`,
