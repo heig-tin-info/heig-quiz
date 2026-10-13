@@ -1284,7 +1284,7 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     expect(screen.getByRole("tabpanel")).toContainElement(screen.getByTestId("project-tiles"));
   });
 
-  it("opens the Grading tab of a criteria project on the way to the grading screen; a stray ?tab=grading is the Summary otherwise", async () => {
+  it("opens a criteria project's Grading tab, which links to the grading screen", async () => {
     routes(makeProject({ gradingMode: "criteria" }));
     const { navigate } = renderPage("en", "grading");
     expect(await screen.findByRole("tab", { name: "Grading" })).toHaveAttribute("aria-selected", "true");

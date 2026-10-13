@@ -5110,7 +5110,7 @@ export const fr: Record<keyof Dict, string> = {
   "coach.project.primary.title": "La prochaine étape est ici",
   "coach.project.primary.body": "Ce bouton est la seule chose que le projet attend : le publier, puis publier les notes une fois la correction terminée.",
   "coach.project.repos.title": "Un dépôt par étudiant",
-  "coach.project.repos.body": "Le dépôt de chaque étudiant apparaît ici dès qu'il accepte, avec son dernier commit et ses vérifications.",
+  "coach.project.repos.body": "Le dépôt de chaque étudiant apparaît sous cet onglet dès qu'il accepte, avec son dernier commit et ses vérifications.",
   "coach.project.repo.title": "Ouvrir un dépôt",
   "coach.project.repo.body": "Cliquez une ligne pour ouvrir sa fiche : les vérifications, les exécutions, le score et une échéance propre.",
   "coach.project.checkpoints.title": "Les jalons",

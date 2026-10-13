@@ -1,16 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  Archive,
-  ArchiveRestore,
-  ClipboardCheck,
-  FolderGit2,
-  LayoutDashboard,
-  Rocket,
-  Send,
-  Settings,
-  Trash2,
-} from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, ClipboardCheck, FolderGit2, LayoutDashboard, Rocket, Send, Settings, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -287,7 +276,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   const setPage = groupSetPageOf(project);
   const { sync } = project;
   const isDraft = project.state === "draft";
-  const tabs: { value: ProjectTab; label: string; icon: typeof Settings; coach?: string }[] = [
+  const tabs: Parameters<typeof Tabs<ProjectTab>>[0]["items"] = [
     { value: "summary", label: t("project.tab.summary"), icon: LayoutDashboard },
     { value: "repositories", label: t("project.repos"), icon: FolderGit2, coach: "project.repos" },
     ...(project.gradingMode === "criteria"

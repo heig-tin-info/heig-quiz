@@ -5115,7 +5115,7 @@ export const en = {
   "coach.project.primary.title": "The next step is here",
   "coach.project.primary.body": "This button is the one thing the project is waiting for: publish it, then release the scores once the grading is done.",
   "coach.project.repos.title": "One repository per student",
-  "coach.project.repos.body": "Each student's repository appears here once they accept, with its last commit and its checks.",
+  "coach.project.repos.body": "Each student's repository appears under this tab once they accept, with its last commit and its checks.",
   "coach.project.repo.title": "Open a repository",
   "coach.project.repo.body": "Click a row to open its sheet: the checks, the runs, the score and a deadline of its own.",
   "coach.project.checkpoints.title": "Checkpoints",
