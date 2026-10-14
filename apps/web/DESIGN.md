@@ -1778,6 +1778,18 @@ A phone has no hover and a finger is not a cursor. Two classes in
 Drag handles stay a pointer affordance: every drag has a menu or button
 twin (the group set's →, the category's "Move to…", the pool's bulk Move).
 
+A field a finger types in is written at **16 px at least** under a coarse
+pointer (#849): iOS Safari zooms the page in when a field under 16 px takes
+the focus, and leaves it zoomed after. One rule in `style.css` covers every
+text input, textarea, select and rich-text surface (`contenteditable`), the
+question types' included, whatever their desktop size (`max(16px, 1em)`: a
+field drawn at its parent's larger size, the inline rename of a title, keeps
+it); no screen sets it again. A field that should stay larger inherits its
+size from its wrapper rather than carrying it. The viewport never blocks
+pinch zoom (`maximum-scale`, `user-scalable=no`): that fails WCAG 1.4.4, and
+iOS ignores it anyway — the cure for an unwanted zoom is the 16 px, not a
+locked page.
+
 `screenshots.mjs --touch` renders a scene as a touch screen.
 
 ## The grading table (ADR-044)
@@ -2455,7 +2467,8 @@ and a tool dock there, so nothing more stacks on them:
   deliberate exception to the non-modal panel of ADR-080 (§7, amendment of
   2026-10-13): reading the page behind a 40 px chat is not an option, and
   the conversation itself survives the close. No click on the dimmed strip
-  closes it, as for a form sheet: the draft would go.
+  closes it, as for a form sheet: the draft would go. A phone held upright
+  gets the same sheet ("The help assistant", below).
 - The page's end spacer is the same as everywhere: `--bottom-nav-h`,
   `--fab-h` and `--tool-dock-h` together (`Shell.tsx`).
 
@@ -2786,10 +2799,21 @@ placement over an `offset` and `Z.tool`.
   wider than the screen less 32 px, at most 576 px tall and never taller
   than the window under the top bar. The page stays usable behind it;
   Escape or the cross closes it and focus returns to the button.
-- **Low screens**: under `lg` and at most 480 px tall, the panel opens as
-  a modal full-height bottom sheet instead (`ToolDock`'s `sheetWhenLow`) —
-  the deliberate exception to the non-modal panel ("Low screens", ADR-080
-  §7 amendment of 2026-10-13).
+- **On a phone** (`usePhoneScreen`): under `sm` wide (held upright, #849)
+  or a low screen (in landscape, #450), the panel opens as a modal
+  full-height bottom sheet instead (`ToolDock`'s `sheetOnPhone`) — the
+  deliberate exception to the non-modal panel ("Low screens", ADR-080 §7
+  amendments of 2026-10-13 and 2026-10-14). Upright, the floating panel
+  was the window less 32 px over a page nobody could read beside it.
+  The sheet covers the dock's button and the FAB; its cross, top right, is
+  the one way out (Escape on a keyboard), and focus returns to the button.
+  It fits the part of the window the person SEES (`visualViewport`): a soft
+  keyboard on iOS shrinks neither `100dvh` nor the layout, it covers the
+  bottom of the window, so a sheet sized to the window kept its composer
+  under the keys. Fitted, the composer and its send button sit right above
+  the keyboard and the header stays in view. While the page is pinch-zoomed
+  the sheet keeps the window's size. The composer's 16 px (Touch, above) is
+  what keeps iOS from zooming the page when it takes the focus.
 - **Inside**: a header (the 15 px bold title, a `zinc` badge when the
   development stub answers, then History, New and Close as small icon
   buttons); the conversation; the data notice, one 12 px `fg-faint` line

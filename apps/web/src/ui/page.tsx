@@ -316,14 +316,10 @@ export function EditableTitle({
      * header on a phone.
      */
     return (
-      <span className={cx("-mx-1.5 inline-grid max-w-full min-w-0 align-baseline", className)}>
-        <span
-          aria-hidden
-          className={cx(
-            "invisible col-start-1 row-start-1 min-w-24 overflow-hidden whitespace-pre px-1.5",
-            type,
-          )}
-        >
+      // The size sits on the wrapper and the input inherits it: on a touch
+      // screen the 16 px floor of fields (`style.css`) keeps `1em`, the title's.
+      <span className={cx("-mx-1.5 inline-grid max-w-full min-w-0 align-baseline", type, className)}>
+        <span aria-hidden className="invisible col-start-1 row-start-1 min-w-24 overflow-hidden whitespace-pre px-1.5">
           {draft}
         </span>
         <input
@@ -342,10 +338,7 @@ export function EditableTitle({
               finish(false);
             }
           }}
-          className={cx(
-            "col-start-1 row-start-1 w-full min-w-0 rounded-field border border-accent bg-surface px-1.5 text-fg outline-none ring-3 ring-accent/20",
-            type,
-          )}
+          className="col-start-1 row-start-1 w-full min-w-0 rounded-field border border-accent bg-surface px-1.5 text-fg outline-none ring-3 ring-accent/20"
         />
       </span>
     );

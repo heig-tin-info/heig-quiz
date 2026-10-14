@@ -112,7 +112,23 @@ export function useMinWidth(px: number): boolean {
  * top (DESIGN.md, "Low screens"). False where `matchMedia` does not exist.
  */
 export function useLowScreen(): boolean {
-  return useMediaQuery(`(max-width: ${LG_PX - 0.02}px) and (max-height: 480px)`);
+  return useMediaQuery(LOW_SCREEN);
+}
+
+const LOW_SCREEN = `(max-width: ${LG_PX - 0.02}px) and (max-height: 480px)`;
+
+/** Tailwind's `sm`: under it, a phone held upright. */
+const SM_PX = 640;
+
+/**
+ * A phone (#849): under `sm` wide (held upright), or a low screen (in
+ * landscape). A floating panel there is the width of the window less its
+ * margins, or a few lines tall, over a page nobody can read beside it, so
+ * the help assistant opens as a sheet instead (DESIGN.md, "The help
+ * assistant"). False where `matchMedia` does not exist.
+ */
+export function usePhoneScreen(): boolean {
+  return useMediaQuery(`(max-width: ${SM_PX - 0.02}px), ${LOW_SCREEN}`);
 }
 
 /**

@@ -1,24 +1,29 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Wrench } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { lowScreen } from "../test/viewport";
+import { lowScreen, phoneScreen } from "../test/viewport";
 import { ToolDock } from "./toolDock";
 
 /*
- * The tool dock's panel (ADR-069, ADR-080): non-modal, except on a low
- * screen for a dock that asks for it (`sheetWhenLow`, the help assistant,
- * #450), where it is a modal full-height sheet.
+ * The tool dock's panel (ADR-069, ADR-080): non-modal, except on a phone
+ * for a dock that asks for it (`sheetOnPhone`, the help assistant, #450,
+ * #849), where it is a modal full-height sheet.
  */
 const normal = window.matchMedia;
-afterEach(() => vi.stubGlobal("matchMedia", normal));
+const realViewport = window.visualViewport;
+afterEach(() => {
+  // Not `unstubAllGlobals`: it would also drop the setup's `ResizeObserver` and `matchMedia`.
+  vi.stubGlobal("matchMedia", normal);
+  vi.stubGlobal("visualViewport", realViewport);
+});
 
-function dock(sheetWhenLow: boolean) {
-  return render(tool(sheetWhenLow));
+function dock(sheetOnPhone: boolean) {
+  return render(tool(sheetOnPhone));
 }
 
-function tool(sheetWhenLow: boolean) {
+function tool(sheetOnPhone: boolean) {
   return (
     <ToolDock
       icon={Wrench}
@@ -26,7 +31,7 @@ function tool(sheetWhenLow: boolean) {
       closeLabel="Close tool"
       offset="0px"
       panelClassName="w-80"
-      sheetWhenLow={sheetWhenLow}
+      sheetOnPhone={sheetOnPhone}
     >
       {(close, titleId) => (
         <>
@@ -42,7 +47,7 @@ function tool(sheetWhenLow: boolean) {
 }
 
 describe("ToolDock", () => {
-  it("opens a non-modal panel by default, even on a low screen without sheetWhenLow", async () => {
+  it("opens a non-modal panel by default, even on a low screen without sheetOnPhone", async () => {
     lowScreen();
     dock(false);
     await userEvent.click(screen.getByRole("button", { name: "Open tool" }));
@@ -50,7 +55,7 @@ describe("ToolDock", () => {
     expect(document.body.style.overflow).toBe("");
   });
 
-  it("with sheetWhenLow, stays a floating panel on a screen that is not low", async () => {
+  it("with sheetOnPhone, stays a floating panel on a screen that is not a phone's", async () => {
     dock(true);
     await userEvent.click(screen.getByRole("button", { name: "Open tool" }));
     const panel = screen.getByRole("dialog", { name: "Tool" });
@@ -74,7 +79,37 @@ describe("ToolDock", () => {
     expect(trigger).toHaveFocus();
   });
 
-  it("keeps the sheet it opened as while the phone rotates to portrait, focus and all", async () => {
+  it("on a phone held upright, opens the same modal sheet (#849)", async () => {
+    phoneScreen();
+    dock(true);
+    await userEvent.click(screen.getByRole("button", { name: "Open tool" }));
+    const panel = screen.getByRole("dialog", { name: "Tool" });
+    expect(panel).toHaveAttribute("aria-modal", "true");
+    expect(panel.className).toContain("inset-x-0");
+    expect(panel.className).not.toContain("w-80");
+    expect(document.body.style.overflow).toBe("hidden");
+  });
+
+  it("fits the sheet into what a soft keyboard leaves of the window (#849)", async () => {
+    // iOS: the keyboard covers the bottom of the window and pans what is seen 40 px down.
+    const vv = Object.assign(new EventTarget(), { offsetTop: 40, height: 400, scale: 1 });
+    vi.stubGlobal("visualViewport", vv);
+    phoneScreen();
+    dock(true);
+    await userEvent.click(screen.getByRole("button", { name: "Open tool" }));
+    const panel = screen.getByRole("dialog", { name: "Tool" });
+    expect(panel.style.top).toBe("calc(40px + var(--banner-h) + 0.75rem)");
+    expect(panel.style.height).toBe("calc(400px - var(--banner-h) - 0.75rem)");
+    // The keyboard goes: the sheet takes the window again.
+    Object.assign(vv, { offsetTop: 0, height: 780 });
+    act(() => {
+      vv.dispatchEvent(new Event("resize"));
+    });
+    expect(panel.style.top).toBe("calc(0px + var(--banner-h) + 0.75rem)");
+    expect(panel.style.height).toBe("calc(780px - var(--banner-h) - 0.75rem)");
+  });
+
+  it("keeps the sheet it opened as while the window turns wide, focus and all", async () => {
     lowScreen();
     const { rerender } = dock(true);
     await userEvent.click(screen.getByRole("button", { name: "Open tool" }));

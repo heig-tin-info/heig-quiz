@@ -115,6 +115,12 @@ function themeFor(dark: boolean): Blockly.Theme {
  * What a theme cannot say: the flyout's group labels in the caption style of
  * the app, and the hairline between the flyout and the workspace. CSS
  * variables of the app, so they follow the scheme by themselves.
+ *
+ * Under a touch, the app writes every field at 16 px at least, Blockly's
+ * editor included (#849: iOS zooms the page in on a smaller one), so the
+ * editor's text no longer lies exactly over the field's own, smaller one:
+ * the field's text is hidden while it is being edited, and the editor alone
+ * shows what is typed.
  */
 Blockly.Css.register(`
 .quiz-blocks .blocklyFlyoutLabelText {
@@ -125,6 +131,9 @@ Blockly.Css.register(`
 }
 .quiz-blocks .blocklyFlyout { border-right: 1px solid var(--line); }
 .quiz-blocks .blocklyMainBackground { stroke: none !important; }
+@media (pointer: coarse) {
+  .quiz-blocks .blocklyEditing > .blocklyFieldText { visibility: hidden; }
+}
 `);
 
 // ---------------------------------------------------------------------------

@@ -1880,8 +1880,9 @@ const scenes = [
       await p.waitForTimeout(800);
     } },
   // A low screen (#450): take it at --width=844 --height=390, a phone in
-  // landscape, where the chat opens as a full-height sheet; at 390×844 it
-  // stays the floating panel. `fab-toast` at 844×390 shows the toasts at the top.
+  // landscape, where the chat opens as a full-height sheet — as it does at
+  // 390×844, a phone held upright (#849); from `sm` wide and taller than
+  // 480 px it is the floating panel. `fab-toast` at 844×390 shows the toasts at the top.
   { name: "assist-low-screen", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await skipCoach(p);
       await p.getByRole("button", { name: /^(ask the help assistant|demander à l'assistant d'aide)$/i }).click();

@@ -487,6 +487,29 @@ html.dark {
     margin-inline-start: 0.5rem;
   }
 }
+/* A field a finger types in is written at 16 px at least (#849): iOS Safari
+   zooms the page in when a field under 16 px takes the focus, and leaves it
+   zoomed once the field is gone. Every text field, textarea, select and
+   rich-text surface, here and in the question types, whatever its own size
+   on a desktop; `1em` keeps a field drawn at its parent's larger size (the
+   inline rename of a title) at that size. Important, in the base layer:
+   an important declaration of the first layer beats every later one, so
+   it wins over a field's own size — the `text-sm` of the shared field
+   classes, a `text-[13px]!`, the unlayered `.md-sm` of a choice's editor.
+   The viewport still lets a person pinch-zoom: blocking that fails
+   WCAG 1.4.4, and iOS ignores it anyway. */
+@layer base {
+  @media (pointer: coarse) {
+    :where(
+        input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
+        textarea,
+        select,
+        [contenteditable]:not([contenteditable="false"])
+      ) {
+      font-size: max(16px, 1em) !important;
+    }
+  }
+}
 /* What a hover reveals (row actions, a pencil, a sort arrow) is simply on
    where there is no hover to give: a control a finger cannot reveal is a
    control a finger does not have. Unlayered, so it beats `opacity-0` and
