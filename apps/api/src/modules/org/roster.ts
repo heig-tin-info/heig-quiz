@@ -229,23 +229,6 @@ export async function claimLines(db: Db, matches: ClaimMatch[], actorId: string)
 }
 
 /**
- * Automatic claim at login (AU-18, H3), and on every request of the
- * account's own portal session (the auth hook, `plugin.ts`): every `pending`
- * entry whose e-mail is one of the account's verified addresses (GH-11 —
- * the login address, or an institutional one asserted by edu-ID) is
- * attached to the user. Only the person's own action runs it, never a staff
- * write (ADR-053, addendum of 2026-10-11): attaching on a teacher's import
- * would show the staff the account of someone who never came, and let any
- * address on a list link it. Its first step is one query on
- * `enrollments_email_idx`, so the steady state of a request costs that.
- *
- * Nothing is attached on an ambiguous match. Three ways to be ambiguous:
- * the entry's address is also held by another account; several entries of
- * the SAME classroom match this account; the account already holds an entry
- * there. All three end the same way — `conflict_flag`, for a teacher to
- * resolve (AU-21) — because guessing would put a grade on the wrong person.
- */
-/**
  * A roster line waiting for its person (F-ORG-05): no account attached, its
  * address — lowercased, on `enrollments_email_idx` — matching `matches`. The
  * claim and login admission (ADR-111) read pending lines through it alone.
@@ -268,6 +251,23 @@ export async function hasPendingLine(db: Db, addresses: readonly string[]): Prom
   return line !== undefined;
 }
 
+/**
+ * Automatic claim at login (AU-18, H3), and on every request of the
+ * account's own portal session (the auth hook, `plugin.ts`): every `pending`
+ * entry whose e-mail is one of the account's verified addresses (GH-11 —
+ * the login address, or an institutional one asserted by edu-ID) is
+ * attached to the user. Only the person's own action runs it, never a staff
+ * write (ADR-053, addendum of 2026-10-11): attaching on a teacher's import
+ * would show the staff the account of someone who never came, and let any
+ * address on a list link it. Its first step is one query on
+ * `enrollments_email_idx`, so the steady state of a request costs that.
+ *
+ * Nothing is attached on an ambiguous match. Three ways to be ambiguous:
+ * the entry's address is also held by another account; several entries of
+ * the SAME classroom match this account; the account already holds an entry
+ * there. All three end the same way — `conflict_flag`, for a teacher to
+ * resolve (AU-21) — because guessing would put a grade on the wrong person.
+ */
 export async function claimEnrollments(db: Db, user: { id: string }) {
   // A flagged line is not skipped: once its duplicate is gone, it is claimed.
   const pending = await db

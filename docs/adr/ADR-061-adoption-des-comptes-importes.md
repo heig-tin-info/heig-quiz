@@ -13,7 +13,7 @@ by `signIn` (`auth/login.ts`), the audit actions `auth.account_adopted` and
 `docs/merge/02-data-and-migration.md`.
 
 Note (2026-10-14, [ADR-111](ADR-111-admission-a-la-connexion.md) §1): login
-admission asks `findAdoption`, read only, before any write; the person a
+admission asks `placeholderFor`, read only, before any write; the person a
 placeholder account waits for is admitted as an existing account is.
 
 ## Context
