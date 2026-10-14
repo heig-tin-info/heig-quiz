@@ -16,7 +16,9 @@
  *     (`ClassroomView`). The absence `a1.0` wears `info`
  *     (`AbsentSigil`), a real 1.0 `danger`, so the two never read alike.
  *   - Space: the matrix is the card; 16 above it for the switch and the
- *     legend. Under 640 px the matrix scrolls INSIDE its card, under a sticky
+ *     legend. The grades start a third of the way across (`studentWidth`),
+ *     closer to the names when the columns need the room; an empty column
+ *     between the last grade and the mean takes what is left. Under 640 px the matrix scrolls INSIDE its card, under a sticky
  *     student column; the page itself never scrolls sideways.
  *   - Finish: hairlines, no shadow; a column not released is a recessed
  *     `surface-2` strip with an eye-off over its weight, and stays out of the
@@ -39,7 +41,7 @@ import {
   TriangleAlert,
   UserX,
 } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import type { GradebookColumn, GradebookMarkPut, GradebookStaff, GradebookStaffCell, GradebookStaffRow } from "@quiz/contracts";
 
@@ -81,17 +83,33 @@ const MEAN_PIN = `${MEAN_STICK} @2xl:border-l @2xl:border-line`;
  * neighbour whose rectangle lies under it. The weight sits below, upright
  * (its foot), so the weights line up. The band is 190 px tall: a title of about
  * 200 px fits before it is cut, and leans 110 px to the right — the room the
- * mean column (`w-30`) leaves for the last one. Both widths are set: the
- * student column alone takes what the card has left.
+ * mean column (`w-30`) leaves for the last one. Both widths are set, and
+ * so is the student column's (`studentWidth`): a spacer before the mean takes
+ * what the card has left.
  */
 const HEAD_HEIGHT = "h-[246px]";
 const BAND = "absolute inset-x-0 top-0 bottom-14 origin-bottom-left -skew-x-30";
+/** A grade column's width (`w-14`) and the mean's (`w-30`), in px, for `studentWidth`. */
+const GRADE_PX = 56;
+const MEAN_PX = 120;
+
+/**
+ * The student column: a third of the card, so the grades do not start flush
+ * against the mean; less when the grade columns need the room, down to the
+ * width of the names (a cell is never narrower than its content).
+ */
+const studentWidth = (columns: number): string =>
+  `max(0px, min(33cqw, calc(100cqw - ${columns * GRADE_PX + MEAN_PX}px)))`;
+
 /** Centred on the band's axis: 18 px up the band (10 + half the line) is 10.4 px to the right at 60°. */
 const SLANT_LABEL =
-  "absolute bottom-[66px] left-[calc(50%+10.4px)] max-w-[200px] origin-left -rotate-60 truncate whitespace-nowrap text-[13px] leading-4";
+  "absolute bottom-[66px] left-[calc(50%+10.4px)] max-w-[200px] origin-left -rotate-60 overflow-hidden whitespace-nowrap text-[13px] leading-4";
 
 /** A grade cell: `T.td` with the side padding cut to 4 px, so a column is no wider than its grade; a hairline on its left. */
 const GRADE_TD = cx(T.td, "!px-1 border-l border-line text-center");
+
+/** The empty cell between the last grade and the mean: it takes what the card has left. */
+const SPACER_TD = "border-l border-line p-0";
 
 /** Where a column's unreleased state tints its cells. */
 const UNRELEASED_FILL = "bg-surface-2/50";
@@ -237,10 +255,14 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
 
       {/* `relative`: the sr-only spans of the cells are absolute, and would otherwise lay out past the scroller, on the page. */}
       <Card className={cx(T.container, "relative overflow-x-auto")}>
-        <table className={cx(T.table, "min-w-max")}>
+        <table className={cx(T.table, "w-full")}>
           <thead className={T.head}>
             <tr>
-              <th scope="col" className={cx(T.th, HEAD_HEIGHT, "sticky left-0 z-10 min-w-36 bg-surface align-bottom")}>
+              <th
+                scope="col"
+                className={cx(T.th, HEAD_HEIGHT, "sticky left-0 z-10 min-w-36 bg-surface align-bottom")}
+                style={{ width: studentWidth(columns.length) }}
+              >
                 {/* Its slanted edge covers the heads that scroll under it, tops included. */}
                 <span aria-hidden className={cx(BAND, "bg-surface")} />
                 {t("gbook.col.student")}
@@ -264,6 +286,11 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                   </th>
                 );
               })}
+              {/* The spacer closes the last band with its own, and its own foot. */}
+              <td aria-hidden className={cx("relative p-0", HEAD_HEIGHT)}>
+                <span className={cx(BAND, "border-l border-line")} />
+                <span className="absolute inset-x-0 bottom-0 h-14 border-l border-line" />
+              </td>
               {/*
                * No straight left border nor flat fill above the weights: either
                * would cut the last title where it leans over this column. Its
@@ -310,6 +337,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                     </td>
                   );
                 })}
+                <td aria-hidden className={SPACER_TD} />
                 <td
                   className={cx(T.td, "text-right font-semibold tabular-nums", MEAN_PIN, "@2xl:bg-surface @2xl:group-hover:bg-surface-2")}
                 >
@@ -330,6 +358,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                   <GradeOrDash value={column.classMean} />
                 </td>
               ))}
+              <td aria-hidden className={SPACER_TD} />
               <td className={cx(T.td, "text-right font-semibold tabular-nums", MEAN_PIN, "@2xl:bg-surface-2")}>
                 <GradeOrDash value={data.classMean} />
               </td>
@@ -369,7 +398,9 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
  * A column's head: its slanted title, the eye-off of a column not released,
  * its weight, and the menu of its settings.
  *
- * The title is cut on one line, up its band (`SLANT_LABEL`); the full title
+ * The title is one line up its band (`SLANT_LABEL`); one too long for it
+ * scrolls back and forth (`ScrollingTitle`), or is cut with an ellipsis
+ * when motion is reduced. The full title
  * and the column's kind are in the tooltip (and in the accessible name). The
  * upright foot under the band holds the eye-off — its slot is kept on every
  * column, so the weights stand on one line — then the weight, the one figure
@@ -383,9 +414,9 @@ function ColumnHead({ column, items, fill }: { column: GradebookColumn; items: M
   // panel of a trigger around it is open.
   const head = (
     <Tip label={`${column.title} · ${kind}`} className="flex items-center gap-0.5 text-[11px] font-normal text-fg-muted">
-      <span className={cx(SLANT_LABEL, column.released ? "font-semibold text-fg" : "font-medium italic text-fg-muted")}>
+      <ScrollingTitle key={column.title} className={cx(SLANT_LABEL, column.released ? "font-semibold text-fg" : "font-medium italic text-fg-muted")}>
         {column.title} <span className="sr-only">({kind})</span>
-      </span>
+      </ScrollingTitle>
       <span className="text-center leading-tight">
         {t(column.counts ? "gbook.weightShort" : "gbook.notCounted", { weight: String(column.weight) })}
       </span>
@@ -417,6 +448,42 @@ function ColumnHead({ column, items, fill }: { column: GradebookColumn; items: M
         head
       )}
     </div>
+  );
+}
+
+/** Scrolling speed of a title too long for its band, px per second. */
+const SCROLL_PX_PER_S = 30;
+
+/**
+ * A line too long for its box scrolls to its end and back, pausing at each
+ * end (`.title-scroll`), so it can be read whole; one that fits stands
+ * still. Measured again whenever the box changes size; a new text is a new
+ * `key`. Under
+ * `prefers-reduced-motion` it keeps its ellipsis.
+ */
+function ScrollingTitle({ className, children }: { className: string; children: ReactNode }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const [overflow, setOverflow] = useState(0);
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (!element || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const measure = () => setOverflow(Math.max(0, element.scrollWidth - element.clientWidth));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    void document.fonts?.ready.then(measure);
+    return () => observer.disconnect();
+  }, []);
+  const scrolling = overflow > 1;
+  const style = scrolling
+    ? ({ "--scroll-by": `${overflow}px`, "--scroll-time": `${2 + overflow / SCROLL_PX_PER_S}s` } as CSSProperties)
+    : undefined;
+  return (
+    <span ref={box} className={cx(className, !scrolling && "text-ellipsis")}>
+      <span className={scrolling ? "title-scroll inline-block" : undefined} style={style}>
+        {children}
+      </span>
+    </span>
   );
 }
 

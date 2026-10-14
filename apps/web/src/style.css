@@ -532,6 +532,18 @@ html.dark {
   animation: progress-slide 1.2s ease-in-out infinite;
 }
 
+/* A title too long for its box (`ScrollingTitle`, gradebook/StaffGradebook.tsx):
+   it scrolls to its end and back, still for a moment at each end. The
+   component sets the distance and the time, and never animates under
+   reduced motion. */
+@keyframes title-scroll {
+  0%, 15% { transform: translateX(0); }
+  85%, 100% { transform: translateX(calc(-1 * var(--scroll-by))); }
+}
+.title-scroll {
+  animation: title-scroll var(--scroll-time) ease-in-out infinite alternate;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toast-enter,
   .toast-leave,
