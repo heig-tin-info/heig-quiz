@@ -27,6 +27,8 @@ async function boot() {
 
   // ADR-110: a chunk the server no longer has marks this tab stale.
   build.start();
+  // A reload in place toward a newer build comes back where the reader was.
+  build.restoreScroll();
   applyTheme(getThemeChoice());
   // French is a chunk of its own: when it is the stored choice, the first
   // paint waits for it rather than flashing English. A failed load paints

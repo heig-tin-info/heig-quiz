@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { build } from "../build";
 import { AUTOSAVE_DELAY_MS, useAutosave } from "./autosave";
 
 /** A promise whose resolution the test controls, to hold a save in flight. */
@@ -15,6 +16,46 @@ function deferred<T = void>() {
 }
 
 describe("useAutosave", () => {
+  // ADR-110: an unsaved draft keeps a stale tab on its build; leaving sends it.
+  it("holds the tab until the draft is saved, and sends it on unmount", async () => {
+    vi.useFakeTimers();
+    const save = vi.fn(() => Promise.resolve());
+    const { rerender, unmount } = renderHook(({ v }) => useAutosave({ value: v, save }), {
+      initialProps: { v: "a" },
+    });
+    expect(build.isHeld()).toBe(false);
+    rerender({ v: "ab" });
+    expect(build.isHeld()).toBe(true);
+    await act(async () => unmount());
+    expect(save).toHaveBeenCalledWith("ab");
+    expect(build.isHeld()).toBe(false);
+  });
+
+  it("keeps its hold across the follow-up save, even once unmounted", async () => {
+    vi.useFakeTimers();
+    const first = deferred();
+    const second = deferred();
+    const save = vi
+      .fn<(v: string) => Promise<void>>()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise);
+    const { rerender, unmount } = renderHook(({ v }) => useAutosave({ value: v, save }), {
+      initialProps: { v: "a" },
+    });
+    rerender({ v: "ab" });
+    await act(async () => {
+      vi.advanceTimersByTime(AUTOSAVE_DELAY_MS);
+    });
+    rerender({ v: "abc" });
+    unmount();
+    // The first PUT lands; the second leaves without a gap in the hold.
+    await act(async () => first.resolve());
+    expect(save).toHaveBeenLastCalledWith("abc");
+    expect(build.isHeld()).toBe(true);
+    await act(async () => second.resolve());
+    expect(build.isHeld()).toBe(false);
+  });
+
   it("saves nothing until something changes", async () => {
     vi.useFakeTimers();
     const save = vi.fn(() => Promise.resolve());

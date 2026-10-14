@@ -46,14 +46,43 @@ crashes. `index.html` and the hashed assets had no explicit cache policy.
    an exam, an exercise, the drill, a poll, whatever the session type — and
    never in a `seb` or `kiosk` session: there the old client runs on, on
    the kept chunks. Elsewhere, only when nothing is pending, and pending
-   means held: a write on the wire, or a screen behind its leave guard,
-   which holds the tab until it unmounts. Unsaved work that no leave guard
-   declares is not seen (the question editor's debounced draft, until it
-   registers one). Where the client can know that nothing is held, it may
-   reload by itself; otherwise its next move to another screen (a link,
-   `navigate`, Back or Forward) is a full page load of that screen's
-   address. Past a leave guard the app never full-loads: the move stays in
-   the app, and a later one takes the new build.
+   means held: a write on the wire, or a screen that declares unsaved work
+   (below), which holds the tab while that work exists. Then:
+   - **the next screen.** The next move to another screen (a link,
+     `navigate`, Back or Forward) is a full page load of that screen's
+     address. Past a leave guard the app never full-loads: the move stays
+     in the app, and a later one takes the new build.
+   - **by itself, when nobody is looking.** The tab reloads its own address
+     when it is hidden or within 30 seconds after the update overlay closed
+     (ADR-065's `platform.updating`: the reader has just watched the
+     update), and in both cases only while no field that takes typing has
+     the focus (a tab switch leaves the focus on the field, and a field
+     saved on blur holds nothing until it is blurred). It asks again when
+     the tab turns stale, when a hold or the confinement changes, when the
+     tab is hidden and when a field loses the focus, each time after that
+     event's own handlers (a write they start takes its hold first); never
+     while the API is away, and only once per server build in a tab (a
+     per-tab marker), so a reload that comes back stale falls back on the
+     next-screen rule. The reload of the same address keeps the page's
+     vertical scroll, restored once the page is tall enough (best effort,
+     used once).
+
+   **Unsaved work.** A screen holds while it has work a reload would lose,
+   without prompting. Every open dialog form (`FormDialog`) and every
+   `Sheet` holds while it is open: both are modal and mounted only while
+   open, so a form in one is covered, and a reading sheet holds only until
+   it is closed (a `Pane` docked in the page does not hold). Screens
+   outside them hold their own: the question editor's draft from the first
+   change until the server acknowledged the whole chain of saves (a pending
+   draft is sent when the editor unmounts rather than dropped, and each
+   question has its own editor), a grading override typed in a docked pane,
+   a criterion's rationale, the assistant's composer, a poll being written
+   (not one reopened untouched), a new project's form, a pool's
+   description. The journal editor's leave guard holds as well, and
+   prompts. Other screens commit each control as it changes (the
+   evaluation configuration): they rely on the write hold, which a field
+   saved on blur takes before the reload is asked again. State kept in the
+   browser (the notepad) survives a reload.
 6. **A page whose chunk is missing.** Where 5 allows it, the tab loads the
    same address once, after the holds are released (a per-tab marker
    prevents a loop; past it, the crash screen). The rule reads the page
@@ -74,9 +103,11 @@ the next signed-in answer tells the tab it is stale.
   it only covers the tabs of later builds.
 - Frontend/backend compatibility across one deploy is still required: an
   old client keeps talking to the new API until it moves (ADR-065, *Limits*).
-- A spontaneous reload of a clean screen, and the registry of unsaved work
-  it needs on the teacher editors, are allowed by 5 but delivered
-  separately.
+- A tab left open in the background, or watched through an update, is on
+  the new build before its reader comes back to it, without a banner (one
+  primary action per screen: a "new version" prompt would compete with
+  it). A screen with unsaved work that declares none can still lose it to
+  that reload; a new editor declares its own.
 
 ## Alternatives considered
 

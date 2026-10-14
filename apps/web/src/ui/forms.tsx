@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 
+import { useHold } from "../build";
 import { useT } from "../i18n";
 import { Button, Field } from "./controls";
 import { Modal } from "./layers";
@@ -48,6 +49,8 @@ export function FormDialog({
   children: ReactNode;
 }) {
   const t = useT();
+  // ADR-110: an open form is work a reload would lose.
+  useHold(true);
   return (
     <Modal
       title={title}

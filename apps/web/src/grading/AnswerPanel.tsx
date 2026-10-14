@@ -8,6 +8,7 @@ import { aiOf, justificationOf, type AiDetails, type Grading, type GradingEntry 
 import { formatPoints, LLM_MODELS } from "@quiz/domain";
 
 import { api } from "../api";
+import { useHoldChanged } from "../build";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { formatLabel } from "../question/VariablesSection";
@@ -420,6 +421,9 @@ function AdjustForm({
     entry.grading?.source === "manual" ? (entry.grading.comment ?? "") : "",
   );
   const [touched, setTouched] = useState(false);
+  // ADR-110: a typed grade holds the tab on its build until it is saved
+  // (docked as a pane, it has no sheet to hold it).
+  useHoldChanged({ points, comment });
   const value = Number(points.replace(",", "."));
   const pointsInvalid =
     points.trim() === "" || !Number.isFinite(value) || value < minPoints || value > maxPoints;

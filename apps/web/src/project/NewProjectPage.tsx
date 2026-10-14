@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import type { ProjectCreate, ProjectSourceDetail, ProjectSourceRepo, ProjectSummary } from "@quiz/contracts";
 
 import { api } from "../api";
+import { useHoldChanged } from "../build";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import {
@@ -77,6 +78,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
   const qc = useQueryClient();
   const toast = useToast();
   const [draft, setDraft] = useState<ProjectDraft>(emptyDraft);
+  useHoldChanged({ draft });
   const [tried, setTried] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [reading, setReading] = useState(false);

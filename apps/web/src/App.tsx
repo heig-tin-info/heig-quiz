@@ -19,7 +19,7 @@ import { AssistDock } from "./assist/AssistDock";
 import { CoachLayer } from "./coach/CoachLayer";
 import { FestiveAmbient } from "./festive/festive";
 import { useWhatsNew } from "./changelog/useWhatsNew";
-import { ROUTES, useRoute, type Navigate, type Route, type RouteOf } from "./router";
+import { answeringAt, ROUTES, useRoute, type Navigate, type Route, type RouteOf } from "./router";
 import { ImpersonationBanner, Shell, StudentViewBanner } from "./Shell";
 import { SuperPowersBanner } from "./SuperPowers";
 import {
@@ -375,7 +375,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   pools: (_, c) => <PoolsPage navigate={c.navigate} />,
   pool: (r, c) => <PoolView id={r.id} navigate={c.navigate} />,
   poolCategories: (r, c) => <CategoriesPage id={r.id} navigate={c.navigate} />,
-  question: (r, c) => <QuestionEditor id={r.id} navigate={c.navigate} />,
+  // One editor per question: a draft still in its autosave delay is sent by
+  // the editor it was typed in, to its own question, never to the next one.
+  question: (r, c) => <QuestionEditor key={r.id} id={r.id} navigate={c.navigate} />,
   // The student preview of ONE question: the player, and therefore the whole
   // screen, for exactly the reason the attempt takes it — a preview framed by
   // the teacher's sidebar previews the wrong thing.
@@ -632,6 +634,13 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   // ADR-110: a confined session keeps the client it was opened with.
   const confined = session !== undefined && isTrustedClient(session.kind);
   useEffect(() => build.confine(confined), [confined]);
+  // ADR-110: a clean, stale tab reloads by itself where nobody loses context.
+  // Watched only once the session is known, so the confinement above is set.
+  const signedIn = me.data != null;
+  useEffect(
+    () => (signedIn ? build.watch(() => answeringAt(window.location.pathname)) : undefined),
+    [signedIn],
+  );
   useLiveUpdates(
     me.data != null && confinedTo === null && route.view !== "attempt",
     confinedTo !== null || QUIET.has(route.view),
