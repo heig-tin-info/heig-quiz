@@ -82,13 +82,13 @@ else
     /app/codespace/start/$aid /app/api/users/$uid/avatar \
     /app/auth/github/callback /app/auth/login /app/email/unsub /setup/github/installed \
     /settings /admin /admin/users /classrooms /unknown; do
-    check GET "$path" 302 "location=$legacy$path"
+    check GET "$path" 308 "location=$legacy$path"
   done
 
   # The query never reaches Quiz.
-  check GET "/app/auth/github/callback?code=c0de&state=s7" 302 "location=$legacy/app/auth/github/callback"
-  check GET "/app/email/unsub?t=t0ken" 302 "location=$legacy/app/email/unsub"
-  check GET "/classrooms/$cid?tab=journal" 302 "location=$legacy/classrooms/$cid"
+  check GET "/app/auth/github/callback?code=c0de&state=s7" 308 "location=$legacy/app/auth/github/callback"
+  check GET "/app/email/unsub?t=t0ken" 308 "location=$legacy/app/email/unsub"
+  check GET "/classrooms/$cid?tab=journal" 308 "location=$legacy/classrooms/$cid"
 fi
 
 if [[ $failures -gt 0 ]]; then
