@@ -9,16 +9,18 @@
  *
  * The four decisions:
  *   - Type: the student is the bold identity; a column's title is a 13 px
- *     semibold head on two lines at most, its weight under it; a grade is the one
+ *     semibold line slanted at 60°, its weight under it; a grade is the one
  *     number of its cell, in `Grade`'s band colour.
- *   - Color: no accent here at all — the page's one primary, Export CSV,
- *     lives in the header (`ClassroomView`). The absence `a1.0` wears `info`
+ *   - Color: no accent but the soft tint of a column whose head is pointed
+ *     at — the page's one primary, Export CSV, lives in the header
+ *     (`ClassroomView`). The absence `a1.0` wears `info`
  *     (`AbsentSigil`), a real 1.0 `danger`, so the two never read alike.
  *   - Space: the matrix is the card; 16 above it for the switch and the
  *     legend. Under 640 px the matrix scrolls INSIDE its card, under a sticky
  *     student column; the page itself never scrolls sideways.
  *   - Finish: hairlines, no shadow; a column not released is a recessed
- *     `surface-2` strip with its badge, and stays out of the mean.
+ *     `surface-2` strip with an eye-off over its weight, and stays out of the
+ *     mean. Pointing at a head lights its whole column.
  *
  * The secondary actions are menus: one per cell (absent, a score, clear) and
  * one per column (weight, counts in the mean). A mark over a real grade
@@ -46,7 +48,6 @@ import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import {
-  Badge,
   Card,
   cx,
   Dash,
@@ -69,13 +70,39 @@ import { AbsentSigil, fullName, GradeOrDash, MODE_LABEL } from "./cells";
  * room for it (`@2xl`, 42 rem); on a phone it scrolls with the rest, so the
  * columns keep the width.
  */
-const MEAN_PIN = "@2xl:sticky @2xl:right-0 @2xl:z-10 @2xl:border-l @2xl:border-line";
+const MEAN_STICK = "@2xl:sticky @2xl:right-0 @2xl:z-10";
+const MEAN_PIN = `${MEAN_STICK} @2xl:border-l @2xl:border-line`;
 
-/** One width for every grade column's head; the title wraps inside it. */
-const HEAD_WIDTH = "w-36";
+/**
+ * The slanted heads. A grade column is as narrow as its grade (56 px) and its
+ * title runs up a band leaning at 60° — the band, not the rectangle of the
+ * `th`, is the column's head, so the `th` lets the pointer through and the
+ * band takes it: pointing at the top of a band names its own column, not the
+ * neighbour whose rectangle lies under it. The weight sits below, upright
+ * (its foot), so the weights line up. The band is 190 px tall: a title of about
+ * 200 px fits before it is cut, and leans 110 px to the right — the room the
+ * mean column (`w-30`) leaves for the last one. Both widths are set: the
+ * student column alone takes what the card has left.
+ */
+const HEAD_HEIGHT = "h-[246px]";
+const BAND = "absolute inset-x-0 top-0 bottom-14 origin-bottom-left -skew-x-30";
+/** Centred on the band's axis: 18 px up the band (10 + half the line) is 10.4 px to the right at 60°. */
+const SLANT_LABEL =
+  "absolute bottom-[66px] left-[calc(50%+10.4px)] max-w-[200px] origin-left -rotate-60 truncate whitespace-nowrap text-[13px] leading-4";
+
+/** A grade cell: `T.td` with the side padding cut to 4 px, so a column is no wider than its grade; a hairline on its left. */
+const GRADE_TD = cx(T.td, "!px-1 border-l border-line text-center");
 
 /** Where a column's unreleased state tints its cells. */
 const UNRELEASED_FILL = "bg-surface-2/50";
+
+/**
+ * A grade column's fill: lit while its head is pointed at or focused, else
+ * recessed when not released — except on the class means' row (`recess`
+ * false), which keeps its own fill.
+ */
+const columnFill = (column: GradebookColumn, lit: string | null, recess = true) =>
+  lit === column.activityId ? "bg-accent-soft" : column.released || !recess ? "" : UNRELEASED_FILL;
 
 export function StaffGradebook({ classroomId }: { classroomId: string }) {
   const t = useT();
@@ -116,6 +143,8 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
    * counted.
    */
   const [showExercises, setShowExercises] = useState(false);
+  /** The column whose head the pointer is on: its cells light up under it. */
+  const [lit, setLit] = useState<string | null>(null);
   const optional = (column: GradebookColumn) => column.mode === "exercise" && !column.counts;
   const hasOptional = data.columns.some(optional);
   const columns = showExercises ? data.columns : data.columns.filter((column) => !optional(column));
@@ -211,20 +240,43 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
         <table className={cx(T.table, "min-w-max")}>
           <thead className={T.head}>
             <tr>
-              <th scope="col" className={cx(T.th, "sticky left-0 z-10 min-w-36 bg-surface align-bottom")}>
+              <th scope="col" className={cx(T.th, HEAD_HEIGHT, "sticky left-0 z-10 min-w-36 bg-surface align-bottom")}>
+                {/* Its slanted edge covers the heads that scroll under it, tops included. */}
+                <span aria-hidden className={cx(BAND, "bg-surface")} />
                 {t("gbook.col.student")}
               </th>
-              {columns.map((column) => (
-                <th
-                  key={column.activityId}
-                  scope="col"
-                  className={cx(T.th, "align-bottom", !column.released && UNRELEASED_FILL)}
-                >
-                  <ColumnHead column={column} items={readOnly ? null : columnItems(column)} />
-                </th>
-              ))}
-              <th scope="col" className={cx(T.th, "text-right align-bottom", MEAN_PIN, "@2xl:bg-surface")}>
-                <Tip label={t("gbook.mean.help")}>
+              {columns.map((column) => {
+                const fill = columnFill(column, lit);
+                const light = () => setLit(column.activityId);
+                const dim = () => setLit(null);
+                return (
+                  <th
+                    key={column.activityId}
+                    scope="col"
+                    className={cx("pointer-events-none relative w-14 min-w-14 p-0 align-bottom font-medium", HEAD_HEIGHT)}
+                    onMouseEnter={light}
+                    onMouseLeave={dim}
+                    onFocus={light}
+                    onBlur={dim}
+                  >
+                    <span aria-hidden className={cx(BAND, "pointer-events-auto border-l border-line", fill)} />
+                    <ColumnHead column={column} items={readOnly ? null : columnItems(column)} fill={fill} />
+                  </th>
+                );
+              })}
+              {/*
+               * No straight left border nor flat fill above the weights: either
+               * would cut the last title where it leans over this column. Its
+               * own band and a foot carry the fill once it is pinned; the
+               * cell clips the band, which would otherwise widen the scroller.
+               */}
+              <th
+                scope="col"
+                className={cx(T.th, HEAD_HEIGHT, "relative w-30 min-w-30 overflow-hidden text-right align-bottom", MEAN_STICK)}
+              >
+                <span aria-hidden className={cx(BAND, "border-l border-line @2xl:bg-surface")} />
+                <span aria-hidden className="absolute inset-x-0 bottom-0 h-14 border-l border-line @2xl:bg-surface" />
+                <Tip label={t("gbook.mean.help")} className="relative inline-flex">
                   <span>{t("gbook.col.mean")}</span>
                 </Tip>
               </th>
@@ -244,7 +296,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                 {columns.map((column) => {
                   const cell = row.cells[column.activityId];
                   return (
-                    <td key={column.activityId} className={cx(T.td, "text-center", !column.released && UNRELEASED_FILL)}>
+                    <td key={column.activityId} className={cx(GRADE_TD, columnFill(column, lit))}>
                       {cell ? (
                         <CellButton
                           cell={cell}
@@ -274,7 +326,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
                 </Tip>
               </th>
               {columns.map((column) => (
-                <td key={column.activityId} className={cx(T.td, "text-center font-semibold tabular-nums")}>
+                <td key={column.activityId} className={cx(GRADE_TD, "font-semibold tabular-nums", columnFill(column, lit, false))}>
                   <GradeOrDash value={column.classMean} />
                 </td>
               ))}
@@ -314,41 +366,40 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
 }
 
 /**
- * A column's head: its title, its weight, and the menu of its settings.
+ * A column's head: its slanted title, the eye-off of a column not released,
+ * its weight, and the menu of its settings.
  *
- * Every grade column has the same width (`HEAD_WIDTH`) and its title wraps
- * on two lines at most, clamped: a long exam title never spills over the
- * next column. The full title and the column's kind are in the tooltip (and
- * in the accessible name); the head keeps the weight alone, the one figure a
- * teacher compares across columns. The "not released" badge sits ABOVE the
- * title: the heads stand on the bottom of the row, so the weights line up.
+ * The title is cut on one line, up its band (`SLANT_LABEL`); the full title
+ * and the column's kind are in the tooltip (and in the accessible name). The
+ * upright foot under the band holds the eye-off — its slot is kept on every
+ * column, so the weights stand on one line — then the weight, the one figure
+ * a teacher compares across columns. The title is inside the menu's trigger:
+ * pointing at it or clicking it is the same as on the weight.
  */
-function ColumnHead({ column, items }: { column: GradebookColumn; items: MenuItem[] | null }) {
+function ColumnHead({ column, items, fill }: { column: GradebookColumn; items: MenuItem[] | null; fill: string }) {
   const t = useT();
   const kind = t(MODE_LABEL[column.mode]);
   // The tooltip is inside the menu's trigger: `Tip` stays shut while the
   // panel of a trigger around it is open.
   const head = (
-    <Tip label={`${column.title} · ${kind}`} className="flex min-w-0 flex-col items-start gap-0.5">
-      <span className="flex min-w-0 items-start gap-1 text-[13px] font-semibold text-fg">
-        <span className="line-clamp-2 min-w-0 [overflow-wrap:anywhere]">
-          {column.title}{" "}
-          <span className="sr-only">({kind})</span>
-        </span>
-        {items ? <ChevronDown aria-hidden className="mt-1 size-3 shrink-0 text-fg-faint" /> : null}
+    <Tip label={`${column.title} · ${kind}`} className="flex items-center gap-0.5 text-[11px] font-normal text-fg-muted">
+      <span className={cx(SLANT_LABEL, column.released ? "font-semibold text-fg" : "font-medium italic text-fg-muted")}>
+        {column.title} <span className="sr-only">({kind})</span>
       </span>
-      <span className="text-[11px] font-normal text-fg-muted">
+      <span className="text-center leading-tight">
         {t(column.counts ? "gbook.weightShort" : "gbook.notCounted", { weight: String(column.weight) })}
       </span>
+      {items ? <ChevronDown aria-hidden className="size-3 shrink-0 text-fg-faint" /> : null}
     </Tip>
   );
   return (
-    <div className={cx(HEAD_WIDTH, "flex flex-col items-start gap-1")}>
-      {column.released ? null : (
-        <Tip label={t("gbook.unreleased.help")}>
-          <Badge tone="zinc" icon={EyeOff}>
-            {t("gbook.unreleased")}
-          </Badge>
+    <div className={cx("pointer-events-auto flex h-14 flex-col items-center justify-end gap-0.5 border-l border-line px-0.5 pb-1.5", fill)}>
+      {column.released ? (
+        <span aria-hidden className="h-3.5" />
+      ) : (
+        <Tip label={t("gbook.unreleased.help")} className="inline-flex text-fg-muted">
+          <EyeOff aria-hidden className="size-3.5" />
+          <span className="sr-only">{t("gbook.unreleased")}</span>
         </Tip>
       )}
       {items ? (
@@ -357,10 +408,7 @@ function ColumnHead({ column, items }: { column: GradebookColumn; items: MenuIte
           label={t("gbook.column.menu", { column: column.title })}
           items={items}
           trigger={
-            <button
-              type="button"
-              className="-mx-1.5 flex min-w-0 max-w-full rounded-field px-1.5 py-0.5 text-left transition-colors hover:bg-surface-3"
-            >
+            <button type="button" className="flex rounded-field px-1 py-0.5 transition-colors hover:bg-surface-3">
               {head}
             </button>
           }
