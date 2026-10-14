@@ -1,7 +1,8 @@
 /**
  * The teacher's view of a classroom's drill (ADR-041 §8, §10 items 8 and 10,
  * #317 slice 4): each student's activity, the weekly progression, the
- * mastery per concept, and the confidence per question (ADR-085 §8). Reads
+ * hours of the week they practise at (amendment of 2026-10-14), the mastery
+ * per concept, and the confidence per question (ADR-085 §8). Reads
  * only; the routes load the classroom through `staffAccess` first
  * (invariant 6).
  *
@@ -27,6 +28,7 @@ import type {
   ConceptRef,
   DrillClassroomMastery,
   DrillConceptMastery,
+  DrillHours,
   DrillProgress,
   DrillQuestionConfidence,
   DrillStudentActivity,
@@ -43,6 +45,7 @@ import {
   drillMastery,
   drillWeekStarts,
   type MasteryLine,
+  offHoursWeekShare,
 } from "@quiz/domain";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
 
@@ -60,6 +63,8 @@ import { byLabel, courseConceptsOf, coverage, toConceptRef } from "../concept/se
 import { reviewedMasteryCards } from "./masteryCards.js";
 
 const DAY_MS = 86_400_000;
+/** The start of the rolling "last 30 days" every read of this view shares. */
+const last30 = (now: Date) => new Date(now.getTime() - 30 * DAY_MS);
 
 /** The students of the classroom: its non-staff seats. */
 const studentSeat = (classroomId: string) => and(eq(enrollments.classroomId, classroomId), eq(enrollments.staff, false));
@@ -131,7 +136,7 @@ const localDay = (v: Visible) => sql`(${v.reviewedAt} at time zone ${ZONE})::dat
 /** One row per student seat of the classroom: two queries, whatever its size. */
 export async function classroomActivity(db: Db, classroomId: string, now: Date): Promise<DrillStudentActivity[]> {
   const v = visibleReviews(db, classroomId);
-  const d30 = new Date(now.getTime() - 30 * DAY_MS);
+  const d30 = last30(now);
   const d60 = new Date(now.getTime() - 60 * DAY_MS);
   const [seats, stats] = await Promise.all([
     db
@@ -177,6 +182,54 @@ export async function classroomActivity(db: Db, classroomId: string, now: Date):
   });
 }
 
+/** Whether `enrollmentId` is a student seat of the classroom: the 404 of the reads of one student. */
+async function isStudentSeat(db: Db, classroomId: string, enrollmentId: string): Promise<boolean> {
+  const [seat] = await db
+    .select({ id: enrollments.id })
+    .from(enrollments)
+    .where(and(studentSeat(classroomId), eq(enrollments.id, enrollmentId)));
+  return seat !== undefined;
+}
+
+/**
+ * When the drill is practised (ADR-041 §8, amendment of 2026-10-14): the
+ * visible reviews of the last 30 days, grouped by Zurich weekday and hour.
+ * The classroom's grid counts distinct students per slot; one student's
+ * (`enrollmentId`), their reviews. Null when that seat is not a student seat
+ * of the classroom: the route's 404. One query; the weekday and the hour
+ * are built on the literal zone, as `localDay`, so GROUP BY matches SELECT.
+ */
+export async function classroomHours(
+  db: Db,
+  classroomId: string,
+  enrollmentId: string | null,
+  now: Date,
+): Promise<DrillHours | null> {
+  if (enrollmentId !== null && !(await isStudentSeat(db, classroomId, enrollmentId))) return null;
+  const v = visibleReviews(db, classroomId);
+  const from = last30(now);
+  const local = sql`(${v.reviewedAt} at time zone ${ZONE})`;
+  const weekday = sql<number>`(extract(isodow from ${local})::int - 1)`;
+  const hour = sql<number>`extract(hour from ${local})::int`;
+  const rows = await db
+    .select({
+      weekday,
+      hour,
+      n: enrollmentId === null ? sql<number>`count(distinct ${v.userId})::int` : sql<number>`count(*)::int`,
+    })
+    .from(v)
+    .where(and(since(v, from), enrollmentId === null ? undefined : eq(v.enrollmentId, enrollmentId)))
+    .groupBy(weekday, hour);
+  const days = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+  for (const r of rows) days[r.weekday]![r.hour] = r.n;
+  return {
+    since: localDate(from),
+    total: rows.reduce((sum, r) => sum + r.n, 0),
+    offHoursShare: offHoursWeekShare(days),
+    days,
+  };
+}
+
 /**
  * One student seat's weeks. Null when the seat is not a student seat of the
  * classroom: the route's 404.
@@ -187,17 +240,13 @@ export async function classroomProgress(
   enrollmentId: string,
   now: Date,
 ): Promise<DrillProgress | null> {
-  const [seat] = await db
-    .select({ id: enrollments.id })
-    .from(enrollments)
-    .where(and(studentSeat(classroom.id), eq(enrollments.id, enrollmentId)));
-  if (!seat) return null;
+  if (!(await isStudentSeat(db, classroom.id, enrollmentId))) return null;
   const v = visibleReviews(db, classroom.id);
   const week = sql<string>`to_char(date_trunc('week', ${localDay(v)}), 'YYYY-MM-DD')`;
   const rows = await db
     .select({ weekStart: week, reviews: sql<number>`count(*)::int`, recall: recallOf(v) })
     .from(v)
-    .where(eq(v.enrollmentId, seat.id))
+    .where(eq(v.enrollmentId, enrollmentId))
     .groupBy(week);
 
   const range = drillProgressRange({

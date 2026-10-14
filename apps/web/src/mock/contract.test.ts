@@ -52,6 +52,7 @@ import {
   DashboardView,
   DrillCalibrationLevel,
   DrillClassroom,
+  DrillHours,
   DrillProgress,
   DrillQuestionConfidence,
   DrillSession,
@@ -648,6 +649,8 @@ const CHECKED: Case[] = [
     `/app/api/classrooms/${classroomId}/drill/progress?student=${firstSeat}`,
     DrillProgress,
   ),
+  one("/app/api/classrooms/:id/drill/hours", `/app/api/classrooms/${classroomId}/drill/hours`, DrillHours),
+  one("/app/api/classrooms/:id/drill/hours", `/app/api/classrooms/${classroomId}/drill/hours?student=${firstSeat}`, DrillHours),
   one("/app/api/classrooms/:id/drill/mastery", `/app/api/classrooms/${classroomId}/drill/mastery`, DrillClassroomMastery),
   // Confidence (ADR-085 §8): the student's calibration, the teacher's 2×2 per question.
   each("/app/api/drill/calibration", "/app/api/drill/calibration", DrillCalibrationLevel),

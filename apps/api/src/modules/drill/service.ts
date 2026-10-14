@@ -54,5 +54,5 @@ export {
   studentCalibration,
   studentDrillClassrooms,
 } from "./review.js";
-export { classroomActivity, classroomConfidence, classroomMastery, classroomProgress } from "./teacher.js";
+export { classroomActivity, classroomConfidence, classroomHours, classroomMastery, classroomProgress } from "./teacher.js";
 export { studentConceptMastery } from "./studentMastery.js";

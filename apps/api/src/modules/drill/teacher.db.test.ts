@@ -4,8 +4,9 @@
  * (invariant 7), and each rule of the view — the classroom's cards only
  * (06, question 28 (j)), nothing counted after an opt-out while what came
  * before stays (28 (k)), the opt-out's date (§13, item 5), the recall rate
- * on repeated reviews (§10, item 8), the Zurich days, the weekly buckets and
- * the mastery per concept.
+ * on repeated reviews (§10, item 8), the Zurich days, the weekly buckets,
+ * the hours of the week (amendment of 2026-10-14) and the mastery per
+ * concept.
  *
  * The cards are created by the production hooks (an exercise handed in).
  * The REVIEWS are written as rows at chosen instants: the view reads
@@ -18,7 +19,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { DrillClassroomMastery, DrillProgress, DrillStudentActivity } from "@quiz/contracts";
+import { DrillClassroomMastery, DrillHours, DrillProgress, DrillStudentActivity } from "@quiz/contracts";
 import { drillRecallCounts, type DrillReviewFact } from "@quiz/domain";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
 import { registerForTests } from "@quiz/registry/server";
@@ -422,5 +423,73 @@ describe("the teacher's view of the drill: mastery per concept", () => {
     // The loops are covered, so no longer outside; q0's pointers still are.
     expect(body.outside!.concepts.map((c) => c.concept?.id)).not.toContain(loops.id);
     await db.delete(conceptRelations).where(eq(conceptRelations.targetId, parentId));
+  });
+});
+
+describe("the teacher's view of the drill: hours of the week", () => {
+  /** Monday first: 0 Monday … 6 Sunday, as the grid's rows. */
+  const [WED, THU, SAT] = [2, 3, 5];
+
+  async function seatOf(s: Seeded, userId: string) {
+    const [seat] = await server.app.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.classroomId, s.classroomId), eq(enrollments.userId, userId)));
+    return seat!.id;
+  }
+  async function hours(query = "", who: Session = teacher) {
+    const res = await get(`${base()}/hours${query}`, who);
+    expect(res.statusCode).toBe(200);
+    return DrillHours.parse(res.json());
+  }
+  /** The non-empty cells, as `weekday/hour: n`. */
+  const cells = (h: DrillHours) =>
+    Object.fromEntries(h.days.flatMap((row, d) => row.flatMap((n, hour) => (n > 0 ? [[`${d}/${hour}`, n]] : []))));
+
+  beforeAll(async () => {
+    // The window is NOW minus 30 days: from 2026-10-21T10:00Z. Alice already
+    // has Wed 18 Nov and Thu 19 Nov at 08:00Z (09:00 in Zurich, CET).
+    await review(seed, alice.id, 0, "2026-11-11T08:15:00Z", 3); // Wed 09:15: her second review of that slot
+    await review(seed, bob.id, 0, "2026-11-18T08:30:00Z", 3); // Wed 09:30: a second student in it
+    // Fri 23 Oct 22:30Z is Sat 00:30 in Zurich on summer time (+02:00), the
+    // last weekend of it; on winter time it would be Fri 23:30.
+    await review(seed, bob.id, 1, "2026-10-23T22:30:00Z", 3);
+    await review(seed, bob.id, 1, "2026-10-21T11:00:00Z", 3); // Wed 13:00, inside the window
+    await review(seed, bob.id, 1, "2026-10-21T09:00:00Z", 3); // an hour before it: out
+    // Carol opted out on 20 Oct: a review now is not counted (28 (k)).
+    await review(seed, carol.id, 1, "2026-11-18T08:45:00Z", 3);
+  });
+
+  it("is served to the classroom's staff only, one student through a seat of this classroom", async () => {
+    expect((await get(`${base()}/hours`, stranger)).statusCode).toBe(404);
+    const seat = await seatOf(seed, alice.id);
+    expect((await get(`${base()}/hours?student=${seat}`, stranger)).statusCode).toBe(404);
+    expect((await get(`${base()}/hours?student=${await seatOf(other, alice.id)}`, teacher)).statusCode).toBe(404);
+    expect((await get(`${base()}/hours?student=${randomUUID()}`, teacher)).statusCode).toBe(404);
+    expect((await get(`${base()}/hours?student=nope`, teacher)).statusCode).toBe(400);
+    expect((await get(`/app/api/classrooms/${randomUUID()}/drill/hours`, teacher)).statusCode).toBe(404);
+  });
+
+  it("counts the distinct students of each Zurich weekday and hour over the last 30 days", async () => {
+    const h = await hours();
+    expect(h.since).toBe("2026-10-21");
+    expect(cells(h)).toEqual({ [`${WED}/9`]: 2, [`${THU}/9`]: 1, [`${SAT}/0`]: 1, [`${WED}/13`]: 1 });
+    expect(h.total).toBe(5);
+    expect(h.offHoursShare).toBeCloseTo(1 / 5, 9);
+  });
+
+  it("counts one student's reviews, in the same unit for the share", async () => {
+    const a = await hours(`?student=${await seatOf(seed, alice.id)}`);
+    expect(cells(a)).toEqual({ [`${WED}/9`]: 2, [`${THU}/9`]: 1 });
+    expect(a).toMatchObject({ total: 3, offHoursShare: 0 });
+    const b = await hours(`?student=${await seatOf(seed, bob.id)}`);
+    expect(cells(b)).toEqual({ [`${WED}/9`]: 1, [`${SAT}/0`]: 1, [`${WED}/13`]: 1 });
+    expect(b.offHoursShare).toBeCloseTo(1 / 3, 9);
+  });
+
+  it("leaves out what came after an opt-out (28 (k)), and answers an empty grid with a null share", async () => {
+    const c = await hours(`?student=${await seatOf(seed, carol.id)}`);
+    expect(c).toMatchObject({ total: 0, offHoursShare: null });
+    expect(c.days.flat().every((n) => n === 0)).toBe(true);
   });
 });

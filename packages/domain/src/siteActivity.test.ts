@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { datesEndingOn, isClassHour, offHoursStudentShare } from "./siteActivity.js";
+import { datesEndingOn, isClassHour, isWeekdayClassHour, offHoursStudentShare, offHoursWeekShare } from "./siteActivity.js";
 import { localDate } from "./zone.js";
 
 const day = (date: string, cells: Record<number, number>) => ({
@@ -18,6 +18,37 @@ describe("the class-hours window (ADR-107)", () => {
     expect(isClassHour("2026-10-16", 10)).toBe(true);
     expect(isClassHour("2026-10-17", 10)).toBe(false);
     expect(isClassHour("2026-10-18", 10)).toBe(false);
+  });
+});
+
+describe("the class-hours window of a week's grid (ADR-041 §8)", () => {
+  it("is the rows Monday (0) to Friday (4), 08:00 included to 18:00 excluded", () => {
+    expect(isWeekdayClassHour(0, 8)).toBe(true);
+    expect(isWeekdayClassHour(4, 17)).toBe(true);
+    expect(isWeekdayClassHour(0, 7)).toBe(false);
+    expect(isWeekdayClassHour(2, 18)).toBe(false);
+    expect(isWeekdayClassHour(5, 10)).toBe(false);
+    expect(isWeekdayClassHour(6, 10)).toBe(false);
+  });
+
+  it("agrees with the dated window, day for day", () => {
+    // 2026-10-12 is a Monday: the seven dates from it are the rows 0..6.
+    for (let i = 0; i < 7; i++) {
+      const date = `2026-10-${12 + i}`;
+      for (let h = 0; h < 24; h++) expect(isWeekdayClassHour(i, h)).toBe(isClassHour(date, h));
+    }
+  });
+
+  it("shares the grid's figures outside class hours, null for an empty grid", () => {
+    const week = (cells: [number, number, number][]) => {
+      const days = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+      for (const [d, h, n] of cells) days[d]![h] = n;
+      return days;
+    };
+    expect(offHoursWeekShare(week([]))).toBeNull();
+    // Monday 10:00 (in), Monday 20:00 and Saturday 10:00 (out).
+    expect(offHoursWeekShare(week([[0, 10, 2], [0, 20, 1], [5, 10, 1]]))).toBe(0.5);
+    expect(offHoursWeekShare(week([[4, 17, 3]]))).toBe(0);
   });
 });
 

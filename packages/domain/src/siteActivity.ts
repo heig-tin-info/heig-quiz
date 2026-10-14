@@ -30,10 +30,17 @@ const DAY_MS = 86_400_000;
 /** The weekday of a calendar date `YYYY-MM-DD`: 0 on a Sunday … 6 on a Saturday. */
 const weekdayOf = (date: string): number => new Date(`${date}T00:00:00Z`).getUTCDay();
 
+/**
+ * Whether the local hour `hour` (0–23) of a weekday is a class hour; the
+ * weekday counts from Monday, 0, to Sunday, 6 — the rows of a week's grid.
+ */
+export function isWeekdayClassHour(weekday: number, hour: number): boolean {
+  return weekday >= 0 && weekday <= 4 && hour >= CLASS_HOURS.weekdayStart && hour < CLASS_HOURS.weekdayEnd;
+}
+
 /** Whether the local hour `hour` (0–23) of the calendar date `date` is a class hour. */
 export function isClassHour(date: string, hour: number): boolean {
-  const day = weekdayOf(date);
-  return day >= 1 && day <= 5 && hour >= CLASS_HOURS.weekdayStart && hour < CLASS_HOURS.weekdayEnd;
+  return isWeekdayClassHour((weekdayOf(date) + 6) % 7, hour);
 }
 
 /** The `ACTIVITY_DAYS` calendar dates that end on `today` (`YYYY-MM-DD`), oldest first. */
@@ -63,5 +70,22 @@ export function offHoursStudentShare(days: readonly StudentHours[]): number | nu
       if (!isClassHour(day.date, hour)) outside += cell.students;
     });
   }
+  return all === 0 ? null : outside / all;
+}
+
+/**
+ * The share (0–1) of a week's grid — seven rows, Monday first, of 24 hourly
+ * figures — that falls outside class hours; null when the grid is empty.
+ * The unit is the grid's own (the drill's students or reviews, ADR-041 §8).
+ */
+export function offHoursWeekShare(days: readonly (readonly number[])[]): number | null {
+  let all = 0;
+  let outside = 0;
+  days.forEach((hours, weekday) =>
+    hours.forEach((n, hour) => {
+      all += n;
+      if (!isWeekdayClassHour(weekday, hour)) outside += n;
+    }),
+  );
   return all === 0 ? null : outside / all;
 }

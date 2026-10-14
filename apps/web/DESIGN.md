@@ -2186,6 +2186,13 @@ written in its hint).
   same columns (`heat-4`, 40 px), so it aligns by construction.
 - **Narrow screens**: the table keeps a 46 rem minimum and scrolls inside
   its card; the page never scrolls sideways.
+- **One component** (`ui/heatmap.tsx`: `HourHeatmap`, `HeatLegend`) draws
+  it wherever it appears. The classroom's Drill tab uses it too (ADR-041 §8,
+  amendment of 2026-10-14): seven weekday rows, Monday first, none set apart,
+  the last 30 days folded on one week, no `tfoot`; under the table of
+  students, and in a student's sheet below the weekly charts. Its
+  off-hours share is one line above the grid, not a `Stat`; no review in 30
+  days is that one line instead of a grid.
 
 ## Correction projection (the graded evaluation on a beamer)
 

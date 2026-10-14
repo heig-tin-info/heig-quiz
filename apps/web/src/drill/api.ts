@@ -10,6 +10,8 @@ import {
   DrillAnswerBody,
   DrillClassroomBody,
   DrillOptOutBody,
+  type DrillHours,
+  type DrillHoursQuery,
   type DrillProgressQuery,
   DrillSessionQuery,
   DrillShownBody,
@@ -189,6 +191,22 @@ export function useDrillProgress(classroomId: string, student: string) {
     queryKey: classroomDrillKey(classroomId, `progress:${student}`),
     queryFn: () =>
       api<DrillProgress>(`/app/api/classrooms/${classroomId}/drill/progress?${new URLSearchParams(query)}`),
+  });
+}
+
+/**
+ * When the drill is practised, the last 30 days on one week (ADR-041 §8,
+ * amendment of 2026-10-14): the classroom's grid, or one student's (an
+ * enrollment id, typed like the progression's).
+ */
+export function useDrillHours(classroomId: string, student?: string) {
+  const path = `/app/api/classrooms/${classroomId}/drill/hours`;
+  return useQuery({
+    queryKey: classroomDrillKey(classroomId, student === undefined ? "hours" : `hours:${student}`),
+    queryFn: () =>
+      api<DrillHours>(
+        student === undefined ? path : `${path}?${new URLSearchParams({ student } satisfies DrillHoursQuery)}`,
+      ),
   });
 }
 
