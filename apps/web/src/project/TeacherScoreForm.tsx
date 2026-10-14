@@ -3,7 +3,6 @@ import { useState } from "react";
 
 import { ScoreOverride, type ProjectDetail, type ProjectRepoScores, type ProjectRepoView } from "@quiz/contracts";
 
-import { useHold } from "../build";
 import { useT } from "../i18n";
 import { FormError } from "../queryError";
 import { Badge, Button, Fact, Field, isoDateTime, Textarea } from "../ui";
@@ -49,8 +48,6 @@ function TeacherScoreForm({
   const [points, setPoints] = useState(teacher ? String(teacher.points) : "");
   const [max, setMax] = useState(teacher?.max != null ? String(teacher.max) : "");
   const [comment, setComment] = useState(teacher?.comment ?? "");
-  const [initial] = useState({ points, max, comment });
-  useHold(points !== initial.points || max !== initial.max || comment !== initial.comment);
   const body = scoreOverrideBody(points, max, comment, ownMax);
 
   return (

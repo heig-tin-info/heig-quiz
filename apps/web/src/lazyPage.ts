@@ -1,6 +1,6 @@
 import { lazy, type ComponentType } from "react";
 
-import { build } from "./build";
+import { build, once } from "./build";
 import { answeringAt } from "./router";
 
 /** The address this tab reloaded once for a page's missing chunk. */
@@ -21,12 +21,7 @@ export class OutdatedError extends Error {}
  * screen.
  */
 function reloadOnce(): boolean {
-  try {
-    if (sessionStorage.getItem(RELOADED) === window.location.href) return false;
-    sessionStorage.setItem(RELOADED, window.location.href);
-  } catch {
-    return false;
-  }
+  if (!once(RELOADED, window.location.href)) return false;
   build.load(window.location.href, true);
   return true;
 }

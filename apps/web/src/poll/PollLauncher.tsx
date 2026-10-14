@@ -204,7 +204,8 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const [type, setType] = useState<PollType>("mcq");
   // One working copy per type, so a switch back and forth loses nothing.
   const [drafts, setDrafts] = useState<Partial<Record<PollType, unknown>>>({});
-  useHold(Object.keys(drafts).length > 0);
+  // ADR-110: a poll being written holds the tab; one reopened untouched does not.
+  useHold(Object.entries(drafts).some(([kind, config]) => origin?.type !== kind || config !== origin.config));
   const config = drafts[type] ?? EMPTY[type]();
 
   const picks = useQuery<PollQuestionPick[]>({

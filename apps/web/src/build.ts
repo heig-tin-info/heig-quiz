@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { connection as liveConnection, type ConnectionMonitor } from "./realtime/connection";
 import { createSignal } from "./ui/state";
@@ -9,8 +9,6 @@ const RELOADED_TO = "quiz:build-reload-to";
 const SCROLL = "quiz:build-scroll";
 /** How long after the update overlay closed a reload still reads as part of the update. */
 const AFTER_UPDATE_MS = 30_000;
-/** A hidden tab's blur may start a write (a field saved on blur): it gets this long to go on the wire. */
-const HIDDEN_DELAY_MS = 1_000;
 /** How long the restored scroll waits for the page to grow tall enough. */
 const RESTORE_MS = 5_000;
 
@@ -67,8 +65,13 @@ export class BuildMonitor {
 
   /** A `seb` or `kiosk` session keeps its client to the end (ADR-027, ADR-051). */
   confine = (confined: boolean) => {
+    if (this.confined === confined) return;
     this.confined = confined;
+    this.signal.emit();
   };
+
+  /** Whether anything holds the tab on its build now. */
+  isHeld = () => this.holds > 0;
 
   /**
    * Something a full load would lose — a write on the wire, unsaved work on
@@ -146,24 +149,29 @@ export class BuildMonitor {
   /**
    * Reloads the address on view by itself when `mayLoad` holds and the reader
    * loses no context: the tab is hidden, or the update overlay closed less
-   * than `AFTER_UPDATE_MS` ago. Asked again whenever the tab turns stale, the
-   * last hold drops, the connection changes or the tab is hidden; never while
-   * the API is away. Once per server build: a tab that comes back stale stays
-   * on the next-screen rule. Returns the stop.
+   * than `AFTER_UPDATE_MS` ago — and, either way, no field that takes typing
+   * has the focus (a tab switch leaves it there, and a field saved on blur
+   * holds nothing until it is blurred). Asked again whenever the tab turns
+   * stale, a hold or the confinement changes, the connection changes, the tab
+   * is hidden or a field loses the focus; never while the API is away. Once
+   * per server build: a tab that comes back stale stays on the next-screen
+   * rule. Returns the stop.
    */
   watch = (answering: () => boolean, connection: Connection = liveConnection) => {
     let previous = connection.getSnapshot();
     let closedAt = -Infinity;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const consider = () => {
-      // A visible tab waits for the field being typed in: a field saved on
-      // blur holds nothing until then (`focusout` asks again).
-      const unnoticed =
-        document.visibilityState === "hidden" ||
-        (Date.now() - closedAt < AFTER_UPDATE_MS && !editing(document.activeElement));
-      if (!unnoticed || connection.getSnapshot() !== "connected") return;
-      if (!this.mayLoad(answering()) || !this.claim()) return;
+      const unnoticed = document.visibilityState === "hidden" || Date.now() - closedAt < AFTER_UPDATE_MS;
+      if (!unnoticed || editing(document.activeElement) || connection.getSnapshot() !== "connected") return;
+      if (!this.mayLoad(answering()) || !once(RELOADED_TO, this.server ?? "unknown")) return;
       this.load(window.location.href, true);
+    };
+    // After the event's own handlers: a write a blur starts takes its hold
+    // synchronously in `api`, within the microtasks this timer waits out.
+    const later = () => {
+      clearTimeout(timer);
+      timer = setTimeout(consider, 0);
     };
     const onConnection = () => {
       const state = connection.getSnapshot();
@@ -172,39 +180,19 @@ export class BuildMonitor {
       consider();
     };
     const onVisibility = () => {
-      clearTimeout(timer);
-      if (document.visibilityState === "hidden") timer = setTimeout(consider, HIDDEN_DELAY_MS);
-    };
-    // After the blur's own handlers: a write they start takes its hold first.
-    let blurTimer: ReturnType<typeof setTimeout> | undefined;
-    const onFocusOut = () => {
-      clearTimeout(blurTimer);
-      blurTimer = setTimeout(consider, 0);
+      if (document.visibilityState === "hidden") later();
     };
     const stops = [this.subscribe(consider), connection.subscribe(onConnection)];
     document.addEventListener("visibilitychange", onVisibility);
-    document.addEventListener("focusout", onFocusOut);
+    document.addEventListener("focusout", later);
     onVisibility();
     return () => {
       clearTimeout(timer);
-      clearTimeout(blurTimer);
       for (const stop of stops) stop();
       document.removeEventListener("visibilitychange", onVisibility);
-      document.removeEventListener("focusout", onFocusOut);
+      document.removeEventListener("focusout", later);
     };
   };
-
-  /** The one reload toward the server's build; false once done, or when the tab cannot remember it. */
-  private claim(): boolean {
-    const target = this.server ?? "unknown";
-    try {
-      if (sessionStorage.getItem(RELOADED_TO) === target) return false;
-      sessionStorage.setItem(RELOADED_TO, target);
-      return true;
-    } catch {
-      return false;
-    }
-  }
 
   /**
    * Vite's signal that a chunk or one of its preloads failed: a deleted file
@@ -226,4 +214,24 @@ export const build = new BuildMonitor(__COMMIT__?.sha ?? null);
  */
 export function useHold(active: boolean): void {
   useEffect(() => (active ? build.hold() : undefined), [active]);
+}
+
+/** Holds while any of `values` differs from what it was on mount (by identity): a form edited, not yet saved. */
+export function useHoldChanged(values: Readonly<Record<string, unknown>>): void {
+  const [initial] = useState(values);
+  useHold(Object.keys(values).some((key) => values[key] !== initial[key]));
+}
+
+/**
+ * True the first time this tab sets `key` to `value`, false after — and when
+ * the tab cannot remember it: a loop of reloads is worse than none.
+ */
+export function once(key: string, value: string): boolean {
+  try {
+    if (sessionStorage.getItem(key) === value) return false;
+    sessionStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
 }

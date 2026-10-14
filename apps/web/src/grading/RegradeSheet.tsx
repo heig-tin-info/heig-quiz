@@ -5,7 +5,6 @@ import { useId, useState } from "react";
 import type { GradingQueueItem, ItemVersions, VersionRow } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useHold } from "../build";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { gradingItemVersionsKey } from "../queryKeys";
@@ -58,7 +57,6 @@ export function RegradeSheet({
   /** The teacher's pick; `null` until they make one, and the default stands. */
   const [picked, setPicked] = useState<number | null>(null);
   const noteInvalid = note.trim() === "";
-  useHold(!noteInvalid);
 
   const versions = useQuery<ItemVersions>({
     queryKey: gradingItemVersionsKey(evaluationId, item.id),

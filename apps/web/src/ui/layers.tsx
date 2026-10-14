@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 import { cx, IconButton as IconButtonBase, iconButtonClass, useMediaQuery, type IconButtonSize } from "@quiz/ui";
 
+import { useHold } from "../build";
 import { useI18n, useT } from "../i18n";
 
 /*
@@ -901,6 +902,9 @@ export function Sheet({
   actions?: ReactNode;
 }) {
   const docked = aside != null;
+  // ADR-110: mounted only while open, and modal: what it holds (a form, the
+  // reading the teacher opened) is worth keeping the tab on its build.
+  useHold(true);
   return (
     <LayerShell
       title={title}

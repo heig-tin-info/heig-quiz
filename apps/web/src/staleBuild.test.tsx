@@ -7,6 +7,7 @@ import { CrashBoundary } from "./CrashBoundary";
 import { lazyPage } from "./lazyPage";
 import { useLeaveGuard, useRoute } from "./router";
 import { renderWithProviders } from "./test/render";
+import { FormDialog, Sheet } from "./ui";
 
 /*
  * ADR-110, as the router and the page loader apply it to a stale tab: the
@@ -131,5 +132,24 @@ describe("a page whose chunk is gone", () => {
     expect(await screen.findByText("Quiz has been updated")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
     expect(load).not.toHaveBeenCalled();
+  });
+});
+
+// The dialog primitives hold the tab while open: every form in one is covered.
+describe("an open dialog", () => {
+  it("holds the tab, a form dialog as a sheet, until it closes", () => {
+    for (const dialog of [
+      <FormDialog key="form" title="Rename" onClose={() => {}} onSubmit={() => {}} submitLabel="Save">
+        <input aria-label="Name" />
+      </FormDialog>,
+      <Sheet key="sheet" title="Import" onClose={() => {}}>
+        <textarea aria-label="Rows" />
+      </Sheet>,
+    ]) {
+      const shown = renderWithProviders(dialog);
+      expect(build.isHeld()).toBe(true);
+      shown.unmount();
+      expect(build.isHeld()).toBe(false);
+    }
   });
 });

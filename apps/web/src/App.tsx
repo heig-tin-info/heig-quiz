@@ -375,7 +375,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   pools: (_, c) => <PoolsPage navigate={c.navigate} />,
   pool: (r, c) => <PoolView id={r.id} navigate={c.navigate} />,
   poolCategories: (r, c) => <CategoriesPage id={r.id} navigate={c.navigate} />,
-  question: (r, c) => <QuestionEditor id={r.id} navigate={c.navigate} />,
+  // One editor per question: a draft still in its autosave delay is sent by
+  // the editor it was typed in, to its own question, never to the next one.
+  question: (r, c) => <QuestionEditor key={r.id} id={r.id} navigate={c.navigate} />,
   // The student preview of ONE question: the player, and therefore the whole
   // screen, for exactly the reason the attempt takes it — a preview framed by
   // the teacher's sidebar previews the wrong thing.

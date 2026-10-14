@@ -53,29 +53,36 @@ crashes. `index.html` and the hashed assets had no explicit cache policy.
      address. Past a leave guard the app never full-loads: the move stays
      in the app, and a later one takes the new build.
    - **by itself, when nobody is looking.** The tab reloads its own address
-     while it is hidden (after a second, for a write its blur started), or
-     within 30 seconds after the update overlay closed (ADR-065's
-     `platform.updating`: the reader has just watched the update) unless a
-     field that takes typing has the focus — leaving the tab already blurs
-     it. It asks again when the tab turns stale, when the last hold drops,
-     when the tab is hidden and when a field loses the focus (after its
-     blur's own write took its hold); never while the API is away, and only once per server
-     build in a tab (a per-tab marker), so a reload that comes back stale
-     falls back on the next-screen rule. The reload of the same address
-     keeps the page's vertical scroll, restored once the page is tall
-     enough (best effort, used once).
+     when it is hidden or within 30 seconds after the update overlay closed
+     (ADR-065's `platform.updating`: the reader has just watched the
+     update), and in both cases only while no field that takes typing has
+     the focus (a tab switch leaves the focus on the field, and a field
+     saved on blur holds nothing until it is blurred). It asks again when
+     the tab turns stale, when a hold or the confinement changes, when the
+     tab is hidden and when a field loses the focus, each time after that
+     event's own handlers (a write they start takes its hold first); never
+     while the API is away, and only once per server build in a tab (a
+     per-tab marker), so a reload that comes back stale falls back on the
+     next-screen rule. The reload of the same address keeps the page's
+     vertical scroll, restored once the page is tall enough (best effort,
+     used once).
 
    **Unsaved work.** A screen holds while it has work a reload would lose,
-   without prompting: the question editor's draft until the server
-   acknowledges it (its pending draft is now also sent when the editor
-   unmounts, rather than dropped), a grading override or a re-grade note,
-   a project's teacher score or a criterion's rationale, the assistant's
-   composer, a pasted roster, a poll being written, a new project's form, a
-   pool's description. The journal editor's leave guard holds as well, and
+   without prompting. Every open dialog form (`FormDialog`) and every
+   `Sheet` holds while it is open: both are modal and mounted only while
+   open, so a form in one is covered, and a reading sheet holds only until
+   it is closed (a `Pane` docked in the page does not hold). Screens
+   outside them hold their own: the question editor's draft from the first
+   change until the server acknowledged the whole chain of saves (a pending
+   draft is sent when the editor unmounts rather than dropped, and each
+   question has its own editor), a grading override typed in a docked pane,
+   a criterion's rationale, the assistant's composer, a poll being written
+   (not one reopened untouched), a new project's form, a pool's
+   description. The journal editor's leave guard holds as well, and
    prompts. Other screens commit each control as it changes (the
-   evaluation configuration) or hold only a short field in a dialog (a
-   rename): those rely on the write hold, which a field saved on blur takes
-   before the reload is asked again. State kept in the browser (the notepad) survives a reload.
+   evaluation configuration): they rely on the write hold, which a field
+   saved on blur takes before the reload is asked again. State kept in the
+   browser (the notepad) survives a reload.
 6. **A page whose chunk is missing.** Where 5 allows it, the tab loads the
    same address once, after the holds are released (a per-tab marker
    prevents a loop; past it, the crash screen). The rule reads the page

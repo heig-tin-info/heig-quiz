@@ -149,6 +149,17 @@ describe("the spontaneous reload", () => {
     field.remove();
   });
 
+  it("leaves a hidden tab alone while a field keeps the focus", () => {
+    const field = document.createElement("textarea");
+    document.body.append(field);
+    field.focus();
+    const { build, load } = watched();
+    build.observe("bbb");
+    hide();
+    expect(load).not.toHaveBeenCalled();
+    field.remove();
+  });
+
   it("never reloads an answering page, a confined session, or held work", () => {
     const answering = watched(true);
     answering.build.observe("bbb");

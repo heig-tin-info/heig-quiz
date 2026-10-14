@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useHold } from "../build";
+import { build, useHold } from "../build";
 import type { SyncState } from "../ui";
 
 /**
@@ -79,16 +79,29 @@ export function useAutosave<T>({
     for (const resolve of settled) resolve(saved);
   }, []);
 
+  /**
+   * ADR-110: the chain of saves holds the tab from its first PUT until
+   * nothing is pending or a save failed — across the follow-up PUT, which
+   * `api`'s own hold leaves uncovered for a moment, and past an unmount.
+   */
+  const chain = useRef<(() => void) | null>(null);
+  const endChain = useCallback(() => {
+    chain.current?.();
+    chain.current = null;
+  }, []);
+
   const run = useCallback(() => {
     if (!pending.current || inFlight.current) return;
     pending.current = false;
     inFlight.current = true;
+    chain.current ??= build.hold();
     setState("saving");
     void saveRef.current(latest.current).then(
       () => {
         inFlight.current = false;
         if (pending.current) run();
         else {
+          endChain();
           setDirty(false);
           setState("saved");
           settle(true);
@@ -99,11 +112,12 @@ export function useAutosave<T>({
         // Still dirty: the value was never acknowledged, so the next edit or
         // Ctrl+S sends it again rather than losing it.
         pending.current = true;
+        endChain();
         setState("offline");
         settle(false);
       },
     );
-  }, [settle]);
+  }, [settle, endChain]);
 
   // The last value the server handed over (`adopt`): matched by reference.
   const adopted = useRef<{ value: T } | null>(null);
@@ -140,7 +154,8 @@ export function useAutosave<T>({
   }, [value, delay, enabled, run]);
 
   // Leaving the editor sends what the delay still held, which unmounting
-  // used to drop; until it is acknowledged, the tab keeps its build (ADR-110).
+  // used to drop; the chain of saves holds the tab from there (ADR-110).
+  // While mounted, unsaved work holds it too: the delay, and a failed save.
   useEffect(
     () => () => {
       if (pending.current) run();
