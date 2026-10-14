@@ -55,7 +55,6 @@ const installedOrg = (githubOrgId: number, login: string, installationId: number
   installationId,
   selection: "all",
   plan: "team",
-  secret: true,
   exists: true,
   ...more,
 });
@@ -205,7 +204,7 @@ describe("the setup return", () => {
   });
 
   it("records a confirmed installation once, however often GitHub returns", async () => {
-    orgs = [installedOrg(601, "heig-setup", 81, { plan: "free", secret: false })];
+    orgs = [installedOrg(601, "heig-setup", 81, { plan: "free" })];
     for (let i = 0; i < 2; i += 1) {
       expect((await setup("installation_id=81&setup_action=install")).statusCode).toBe(303);
     }
@@ -334,7 +333,7 @@ describe("a classroom's link", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json<GithubClassroom>().link).toMatchObject({
       org: { id: installed.id, installed: true },
-      checks: { allRepositories: true, llmSecret: "present" },
+      checks: { allRepositories: true },
     });
     expect(await audits("github_org.link", room)).toHaveLength(1);
     // The same organization again writes nothing.
@@ -547,25 +546,25 @@ describe("the lazy healing", () => {
     const room = await classroom("heal");
     const imported = await orgRow({ login: "heig-imported" });
     await link(room, imported.id);
-    orgs = [installedOrg(901, "heig-imported", 111, { selection: "selected", secret: false })];
+    orgs = [installedOrg(901, "heig-imported", 111, { selection: "selected" })];
 
     const read = async () => (await call("GET", `/app/api/classrooms/${room}/github`, teacher)).json<GithubClassroom>();
     const first = await read();
     expect(first.link).toMatchObject({
       org: { id: imported.id, installed: true, status: "active", plan: "team" },
-      checks: { allRepositories: false, llmSecret: "missing" },
+      checks: { allRepositories: false },
     });
     expect(first.link!.org.avatarUrl).toBe(`/app/api/github/orgs/${imported.id}/avatar`);
     expect(await audits("github_org.installation_resolved", imported.id)).toHaveLength(1);
 
     // Within the minute: the stored row and the cached checks, no GitHub call.
     gh.calls.length = 0;
-    orgs[0]!.secret = true;
-    expect((await read()).link!.checks.llmSecret).toBe("missing");
+    orgs[0]!.selection = "all";
+    expect((await read()).link!.checks.allRepositories).toBe(false);
     expect(gh.calls).toEqual([]);
 
     server.clock.advance(HEAL_TTL_MS);
-    expect((await read()).link!.checks.llmSecret).toBe("present");
+    expect((await read()).link!.checks.allRepositories).toBe(true);
     expect(gh.calls.length).toBeGreaterThan(0);
   });
 
@@ -587,7 +586,7 @@ describe("the lazy healing", () => {
     const res = await call("GET", `/app/api/classrooms/${room}/github`, teacher);
     expect(res.json<GithubClassroom>().link).toMatchObject({
       org: { installed: false, status: "deleted" },
-      checks: { allRepositories: null, llmSecret: "unknown" },
+      checks: { allRepositories: null },
     });
     expect(await audits("github_org.installation_deleted", gone.id)).toHaveLength(1);
     expect(await audits("github_org.deleted", gone.id)).toHaveLength(1);
@@ -637,7 +636,7 @@ describe("the lazy healing", () => {
     const healed = await call("GET", `/app/api/classrooms/${room}/github`, teacher);
     expect(healed.json<GithubClassroom>().link).toMatchObject({
       org: { id: org.id, installed: false, status: "active" },
-      checks: { allRepositories: null, llmSecret: "unknown" },
+      checks: { allRepositories: null },
     });
     expect(await orgById(org.id)).toMatchObject({ installationId: 171, status: "active" });
     expect((await orgById(org.id)).suspendedAt).not.toBeNull();
@@ -671,7 +670,7 @@ describe("the lazy healing", () => {
     const res = await call("GET", `/app/api/classrooms/${room}/github`, teacher);
     expect(res.json<GithubClassroom>().link).toMatchObject({
       org: { id: ours.id, installed: false, status: "deleted" },
-      checks: { allRepositories: null, llmSecret: "unknown" },
+      checks: { allRepositories: null },
     });
     expect(await orgById(ours.id)).toMatchObject({ githubOrgId: 1101, installationId: null, status: "deleted" });
     // The classroom stays on its own organization, now deleted.

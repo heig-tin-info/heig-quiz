@@ -60,7 +60,6 @@ export interface FakeOrg {
   installationId: number | null;
   selection: "all" | "selected";
   plan: string;
-  secret: boolean;
   /** False: GitHub has no organization under that login any more. */
   exists: boolean;
   /** The installation is suspended (`suspended_at` set). */
@@ -79,7 +78,7 @@ export interface FakeOrg {
  * The REST routes the `github` module's adapters call, answered from a
  * world of organizations the test mutates: installation tokens, the App's
  * installations (listing and by id), an organization's installation, plan,
- * LLM secret, its members, and the accounts `users` names by id (`GET
+ * its members, and the accounts `users` names by id (`GET
  * /user/{id}`, how a linked account's login is read today).
  */
 export function orgsRoute(orgs: () => FakeOrg[], users: () => Map<number, string> = () => new Map()): Route {
@@ -133,9 +132,6 @@ export function orgsRoute(orgs: () => FakeOrg[], users: () => Map<number, string
     if ((m = /^\/user\/(\d+)$/.exec(path))) {
       const login = users().get(Number(m[1]));
       return login ? json({ id: Number(m[1]), login }) : undefined;
-    }
-    if ((m = /^\/orgs\/([^/]+)\/actions\/secrets\/ANTHROPIC_API_KEY$/.exec(path))) {
-      return byLogin(m[1]!)?.secret ? json({ name: "ANTHROPIC_API_KEY" }) : undefined;
     }
     if ((m = /^\/orgs\/([^/]+)$/.exec(path))) {
       const o = byLogin(m[1]!);

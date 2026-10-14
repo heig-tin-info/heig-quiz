@@ -184,7 +184,7 @@ Every call goes through one gateway on the platform's one key, stored encrypted 
 
 The proposals of an AI grading are shown to the teacher, who validates the grade; for an essay or a diagram the student reads only the comment the teacher writes or accepts; for a project graded by criteria the student reads the rationales, marked provisional until the release. No model is called while an evaluation runs, except for a brainstorm. The help assistant is never offered to a student, nor during a sitting in Safe Exam Browser or on a kiosk station. Its questions and answers are stored 30 days (above); an answer may quote a student's name or grade, which then stays in that teacher's conversation until the 30 days pass, even if the student left the class list.
 
-Separately, a project's **final review** may run in the student repository's own CI, on the organisation's key (`ANTHROPIC_API_KEY`), and then sends the student's code to Anthropic from GitHub, outside the platform (N-DATA-05, F-PROJ-11); the classroom's GitHub checks show whether that key is set.
+Separately, a project's **final review** may run in the student repository's own CI, on the organisation's key (`ANTHROPIC_API_KEY`), and then sends the student's code to Anthropic from GitHub, outside the platform (N-DATA-05, F-PROJ-11). That key is the organisation's own: Quiz neither holds nor checks it. A project graded by criteria dispatches no review to its repository: its review goes through the platform (above).
 
 Whether Anthropic keeps what it receives (a no-retention agreement), and whether a European or local model is required: **To be confirmed** (open question 43 of `docs/spec/06-questions-ouvertes.md`, deferred to a data-protection review by the product owner).
 

@@ -28,7 +28,7 @@ const link = (over: {
     ...over.org,
   },
   linkedAt: "2026-09-01T00:00:00.000Z",
-  checks: { allRepositories: true, llmSecret: "present", ...over.checks },
+  checks: { allRepositories: true, ...over.checks },
 });
 
 const states = (l: GithubClassroomLink) => githubChecks(l, INSTALL).map((c) => [c.id, c.level, c.text]);
@@ -38,20 +38,13 @@ describe("githubChecks", () => {
     expect(states(link({}))).toEqual([
       ["installation", "ok", "github.check.installed"],
       ["plan", "ok", "github.check.plan"],
-      ["llmSecret", "ok", "github.check.llmPresent"],
     ]);
     expect(githubChecks(link({}), INSTALL)[1]!.vars).toEqual({ plan: "team" });
   });
 
-  it("warns on the free plan and on a missing secret, and says what is unknown", () => {
-    expect(states(link({ org: { plan: "free" }, checks: { llmSecret: "missing" } })).slice(1)).toEqual([
-      ["plan", "warning", "github.check.planFree"],
-      ["llmSecret", "warning", "github.check.llmMissing"],
-    ]);
-    expect(states(link({ org: { plan: null }, checks: { llmSecret: "unknown" } })).slice(1)).toEqual([
-      ["plan", "unknown", "github.check.planUnknown"],
-      ["llmSecret", "unknown", "github.check.llmUnknown"],
-    ]);
+  it("warns on the free plan, and says when the plan is unknown", () => {
+    expect(states(link({ org: { plan: "free" } })).slice(1)).toEqual([["plan", "warning", "github.check.planFree"]]);
+    expect(states(link({ org: { plan: null } })).slice(1)).toEqual([["plan", "unknown", "github.check.planUnknown"]]);
   });
 
   it("links the free plan to GitHub Education, and no other plan", () => {

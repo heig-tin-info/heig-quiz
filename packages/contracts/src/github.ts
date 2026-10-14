@@ -54,13 +54,12 @@ export type GithubOrg = z.infer<typeof GithubOrg>;
  * What the organization alone does not say (F-GH-03), read from GitHub when
  * the classroom's Settings open:
  *   - `allRepositories` — the installation covers every repository; null
- *     when it could not be read (not installed, GitHub silent);
- *   - `llmSecret` — the `ANTHROPIC_API_KEY` organization secret for the LLM
- *     review of projects; `unknown` when the App cannot read secrets.
+ *     when it could not be read (not installed, GitHub silent).
+ * The organization's `ANTHROPIC_API_KEY` secret is no longer checked: the
+ * projects' review runs on Quiz's own LLM (M3-14f, product owner, 2026-10-14).
  */
 export const GithubChecks = z.object({
   allRepositories: z.boolean().nullable(),
-  llmSecret: z.enum(["present", "missing", "unknown"]),
 });
 export type GithubChecks = z.infer<typeof GithubChecks>;
 

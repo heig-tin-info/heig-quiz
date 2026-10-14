@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 
 import { loadConfig } from "../config.js";
 import {
-  fetchOrgLlmSecret,
   fetchOrgPlan,
   githubApp,
   installationClient,
@@ -171,16 +170,5 @@ describe("the App (Quiz's own, D23)", () => {
     expect(await fetchOrgPlan(config, 42, "heig-tin-info")).toBe("free");
     gh.routes = [token, on("GET", "/orgs/heig-tin-info", () => json({ login: "heig-tin-info" }))];
     expect(await fetchOrgPlan(config, 42, "heig-tin-info")).toBeNull();
-  });
-
-  it("probes the LLM secret: ok, missing, or indeterminate", async () => {
-    const config = configured();
-    const secret = "/orgs/heig-tin-info/actions/secrets/ANTHROPIC_API_KEY";
-    gh.routes = [token, on("GET", secret, () => json({ name: "ANTHROPIC_API_KEY" }))];
-    expect(await fetchOrgLlmSecret(config, 42, "heig-tin-info")).toBe("ok");
-    gh.routes = [token];
-    expect(await fetchOrgLlmSecret(config, 42, "heig-tin-info")).toBe("missing");
-    gh.routes = [token, on("GET", secret, () => json({ message: "Resource not accessible by integration" }, 403))];
-    expect(await fetchOrgLlmSecret(config, 42, "heig-tin-info")).toBeNull();
   });
 });

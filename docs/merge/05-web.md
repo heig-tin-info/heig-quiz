@@ -144,9 +144,9 @@ classroom without it is a plain Quiz classroom. The Settings tab's
    blocking except the first: the App installed with access to every
    repository; the organization's plan (`free` ⇒ no rulesets and no
    organization secrets for private repositories — what "an Education
-   organization" buys); the `ANTHROPIC_API_KEY` organization secret for
-   the LLM review of projects (present / missing / unknown when the App
-   cannot read secrets, I50);
+   organization" buys). *The third check, the `ANTHROPIC_API_KEY`
+   organization secret for the LLM review of projects (I50), was dropped
+   on 2026-10-14 (product owner, M3-14f): Quiz reviews with its own LLM.*
 3. optionally link their own GitHub account (the expert clone-and-push
    path and collaborator invitations need it; browser editing does not).
 

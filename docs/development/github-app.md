@@ -63,12 +63,22 @@ on GitHub (*Settings → Permissions & events*), never the other way round.
 | `workflows` | repository | write | pushing `.github/workflows/*` (the grading workflow) into the distribution, the students' repositories and the sync branches |
 | `members` | organization | read | the `member` and `organization` events (an invitation accepted, an organization renamed or deleted) |
 | `organization_plan` | organization | read | the Free-plan check (`plan` of `GET /orgs/{org}`): no organization secrets for private repositories, no rulesets |
-| `organization_secrets` | organization | read | the presence of the `ANTHROPIC_API_KEY` organization secret (the review tier's probe) |
 
 On GitHub's settings page the names read *Actions*, *Administration*,
 *Checks*, *Contents*, *Metadata*, *Pull requests*, *Workflows* (repository)
-and *Members*, *Plan*, *Secrets* (organization); *read* is "Read-only",
-*write* is "Read and write".
+and *Members*, *Plan* (organization); *read* is "Read-only", *write* is
+"Read and write".
+
+**Organization secrets are no longer read** (M3-14f, product owner,
+2026-10-14). Quiz used to check that an organization held an
+`ANTHROPIC_API_KEY` secret for the CI's LLM review; the projects' review
+now runs on Quiz's own LLM, and the key a repository's CI may still use is
+the organization's own business. No code reads an organization's secrets.
+An App created before that change still holds *Secrets: Read-only*: its
+owner removes it on GitHub (*Settings → Permissions & events →
+Organization permissions → Secrets → No access*, then *Save changes*), on
+the production App and on the staging one. Removing a permission asks no
+organization owner to approve anything again.
 
 The App subscribes to these events:
 

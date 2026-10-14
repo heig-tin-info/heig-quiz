@@ -37,7 +37,6 @@ export const APP_PERMISSIONS = {
   workflows: { access: "write", on: "repository" },
   members: { access: "read", on: "organization" },
   organization_plan: { access: "read", on: "organization" },
-  organization_secrets: { access: "read", on: "organization" },
 } as const satisfies Record<string, Permission>;
 
 /** The events the App subscribes to. */

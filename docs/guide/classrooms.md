@@ -119,7 +119,7 @@ GitHub is optional: a classroom that is never connected is a plain Quiz classroo
 
 - **Connect to GitHub** opens a panel listing the organizations where Quiz's App is installed, the organization of the course's other classrooms first and already chosen. Pick one and **Connect**.
 - An organization missing from the list needs the App: **Install the App on GitHub** opens GitHub in a new tab. You must be an owner of the organization, and give the App access to **all repositories**. Back in Quiz, the list updates by itself and the new organization is chosen.
-- Once connected, the section shows the organization and three checks: the App installed with access to every repository (the only one that blocks), the organization's plan (on the free plan, no rulesets and no organization secrets for private repositories), and the `ANTHROPIC_API_KEY` secret the LLM review of projects needs (present, missing, or unknown when the App cannot read secrets).
+- Once connected, the section shows the organization and two checks: the App installed with access to every repository (the only one that blocks), and the organization's plan (on the free plan, no rulesets and no organization secrets for private repositories).
 - **Disconnect** deletes nothing on GitHub. It is refused while the classroom has a journal: remove the journal first.
 
 Once connected, the classroom can hold [projects](projects.md) (**New**, then **Project**, on the Activities tab) and its **Groups** tab keeps the [group sets](groups.md) they follow. Installing the App, the checks and what students must do to link their account are in [Connecting GitHub](github.md).

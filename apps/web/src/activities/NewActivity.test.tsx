@@ -29,7 +29,7 @@ const connected: GithubClassroom = {
       plan: "team",
     },
     linkedAt: "2026-09-01T00:00:00.000Z",
-    checks: { allRepositories: true, llmSecret: "present" },
+    checks: { allRepositories: true },
   },
   suggestedOrgId: null,
   installUrl: INSTALL,

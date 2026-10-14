@@ -15,8 +15,8 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
 ## Now
 
 - **Phase**: the journal (M4) and the projects (M3) are merged, the
-  pilot's follow-ups M3-14a…n included except M3-14f and M3-14g, which wait
-  for the product owner; M4-10…13 are dropped. The gradebook (M5-03,
+  pilot's follow-ups M3-14a…n included except M3-14g, which waits for the
+  product owner (M3-14f, the secret's check dropped, 2026-10-14); M4-10…13 are dropped. The gradebook (M5-03,
   M5-04), M6-01…06, M6-10, M7, M8-01…03 and the cutover runbook (M8-05,
   [`10-cutover-runbook.md`](10-cutover-runbook.md)) are merged; M8-04 is
   dropped. The breadcrumb app-wide is merged (#576). The import runs from
@@ -130,7 +130,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M3-14c | Pilot: a staff seat accepts a project (the teacher's test repository) | done | M3-14, ADR-077 | `merge/M3-14c-staff-test-repo` | #562 | Finding 8, a staff seat accepts an individual project as the teacher's test repository (ADR-077), with follow-ups M3-14g and the M8-01 count: card M3-14. |
 | M3-14d | Pilot: the `project_published` notification asks a student without a GitHub link to link it | done | M3-14 | `merge/M3-14d-publish-notice` | #565 | Finding 4, the notification's text alone asks a student with no linked account to link it, no redirect nor banner: card M3-14. |
 | M3-14e | Pilot: New project in a sheet like New evaluation's dialog | dropped | — | | | Finding 5, won't do (product owner, 2026-10-06): New project stays a page. DESIGN.md keeps a centered dialog to three fields and a scrolling dialog to reading; the project fixes its source, branches and strategy at Create and builds for seconds; M3-11 decided one page (2026-10-02): card M3-14 |
-| M3-14f | Drop the `ANTHROPIC_API_KEY` organization-secret check | todo | the final review moved to Quiz's own LLM | | | Finding 3, NOT NOW (product owner, 2026-10-06): remove the check progressively once Quiz's LLM does the final review: card M3-14 |
+| M3-14f | Drop the `ANTHROPIC_API_KEY` organization-secret check | done | the final review moved to Quiz's own LLM | `drop-llm-secret-check` | PR_TBD | Finding 3; product owner, 2026-10-14: removed entirely, Quiz reviews with its own LLM access; the App's `organization_secrets` permission is to be removed on GitHub by its owner: card M3-14f, "As delivered". |
 | M3-14g | Leaving the course staff ends one's staff seats | todo | M3-14c | | | ADR-077 Q7 (product owner, 2026-10-06: keep as is for now, a follow-up): removing a member from a course's staff (ADR-068) leaves their staff seats in its classrooms, and with M3-14c their test repositories' grants. To decide: remove the seats (and revoke) with the staff seat, or keep them: card M3-14 |
 | M3-14h | Pilot: a project's two repositories as links on its row, no menu | done | M3-14a | `merge/M3-14h-pilot-cards` | #567 | Finding 9, the source and distribution repository links on every list of projects: card M3-14. |
 | M3-14i | Pilot: the student's project card says the state of their work | done | M3-14 | `merge/M3-14h-pilot-cards` | #567 | Finding 10, the student's card shows the short sha, date, commit count, CI status and indicative score (F-PROJ-04 amended, migration 0077): card M3-14. |

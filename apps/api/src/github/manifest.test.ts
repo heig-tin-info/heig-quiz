@@ -72,7 +72,8 @@ describe("the App's manifest", () => {
       public: false,
       redirect_url: "http://127.0.0.1:4000/created",
     });
-    expect(manifest.default_permissions).toMatchObject({ administration: "write", metadata: "read", organization_secrets: "read" });
+    expect(manifest.default_permissions).toMatchObject({ administration: "write", metadata: "read" });
+    expect(manifest.default_permissions).not.toHaveProperty("organization_secrets");
     expect(manifest.default_events).not.toContain("installation");
   });
 

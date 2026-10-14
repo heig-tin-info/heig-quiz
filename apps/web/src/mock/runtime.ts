@@ -33,8 +33,8 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `kiosk`: the open exam of the student's home is sat on a kiosk station (ADR-051).
  * `reviewed`: the student already did today's drill, the empty day (`mock/drill.ts`).
  * `unlinked`: the persona has no linked GitHub account (`mock/github.ts`).
- * `ghwarn`: PRG1-2026's organization is on GitHub's free plan, without the
- *   LLM secret — the warning lines of the checks (`mock/github.ts`).
+ * `ghwarn`: PRG1-2026's organization is on GitHub's free plan — the warning
+ *   line of the checks (`mock/github.ts`).
  * `ghmissing`: PRG1-2026's organization is gone from GitHub (`mock/github.ts`).
  * `ghnogrant`: no organization is open to the courses' classrooms (ADR-100):
  *   the connect sheet lists none (`mock/github.ts`).
