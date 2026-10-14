@@ -19,6 +19,14 @@ export const fr: Record<keyof Dict, string> = {
   "landing.devHint": "Développement uniquement : choisir un personnage, sans fournisseur d'identité.",
   "landing.footer": "HEIG-VD — Département TIN",
   "landing.discover": "Découvrir la plateforme",
+  "loginRefused.title": "Vous ne pouvez pas vous connecter à Quiz",
+  "loginRefused.restricted":
+    "Cet environnement est réservé aux personnes qui le testent, et votre compte edu-ID n'en fait pas partie.",
+  "loginRefused.not_invited":
+    "Quiz est réservé aux membres des institutions qu'il dessert et aux personnes qu'un enseignant a invitées. Si vous pensez devoir y avoir accès, contactez votre enseignant. Si vous avez plusieurs comptes edu-ID, déconnectez-vous d'edu-ID et connectez-vous avec celui qui est lié à votre école.",
+  "loginRefused.retry":
+    "Switch edu-ID n'a pas transmis tout ce dont Quiz a besoin pour vous reconnaître. Réessayez dans quelques minutes.",
+  "loginRefused.home": "Retour à l'accueil",
   "discover.docTitle": "Quiz — le LMS des cours scientifiques et techniques",
   "discover.nav.features": "Fonctionnalités",
   "discover.nav.code": "Programmation",

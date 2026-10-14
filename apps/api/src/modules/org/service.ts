@@ -79,7 +79,7 @@ export async function resolveStaffInvitee(
   return body.userId !== undefined ? byPick(db, body.userId) : byAddress(db, body.email!);
 }
 
-export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
+export { claimEnrollments, claimLines, hasPendingLine, type ClaimMatch } from "./roster.js";
 export {
   conditionOfCourse,
   conditionView,

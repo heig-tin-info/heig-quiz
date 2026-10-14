@@ -24,7 +24,7 @@ import { and, eq, inArray, isNull, like } from "drizzle-orm";
 
 import { decideMatch, type MatchKey } from "@quiz/domain";
 
-import type { Tx } from "../db/client.js";
+import type { Db, Tx } from "../db/client.js";
 import { userEmails, users } from "../db/schema.js";
 import { institutionalAddressesOf, verifiedAddressesOf } from "./claims.js";
 import type { OidcClaims } from "./oidc.js";
@@ -58,7 +58,15 @@ const holderOf = (row: { sub: string; anonymizedAt: Date | null }) =>
 export async function findAdoption(tx: Tx, claims: OidcClaims): Promise<Adoption> {
   const [known] = await tx.select({ id: users.id }).from(users).where(eq(users.oidcSub, claims.sub)).limit(1);
   if (known) return { kind: "none" };
+  return placeholderFor(tx, claims);
+}
 
+/**
+ * Reads only: the placeholder account(s) a login whose `sub` no row holds
+ * matches — `findAdoption` past its first statement, which login admission
+ * (ADR-111 §1) has already run.
+ */
+export async function placeholderFor(tx: Db | Tx, claims: OidcClaims): Promise<Adoption> {
   const columns = {
     id: users.id,
     sub: users.oidcSub,

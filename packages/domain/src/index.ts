@@ -8,6 +8,7 @@
  * the circuit's A*), not a rule the apps consume; it is reached by its subpath.
  */
 export * from "./activity.js";
+export * from "./admission.js";
 export * from "./batchable.js";
 export * from "./blocks.js";
 export * from "./brainstorm.js";

@@ -30,7 +30,7 @@ records the initial rationale; it is not a current product comparison.
 - Starting point: the `~/heig-classroom` repository by the same author, in production, provides the edu-ID auth, the design system, the deployment infrastructure and the container hardening. See [07-reutilisation-heig-classroom.md](07-reutilisation-heig-classroom.md).
 - Load: 20 to 30 students per quiz, 100 students simultaneously on the platform, code execution peaks of 30 runs in 10 seconds; a project deadline applied to 100 repositories in under 5 minutes (N-PERF-07).
 - Languages: interface in French and in English. Question content in the teacher's language.
-- Auth: edu-ID only for named accounts. A session code allows anonymous participation in polls. Linking a GitHub account (F-GH-05) is never a way to sign in: it attaches a GitHub identity to an edu-ID account.
+- Auth: edu-ID only for named accounts; which edu-ID accounts may have one created is configured (F-AUTH-06, open to all by default). A session code allows anonymous participation in polls. Linking a GitHub account (F-GH-05) is never a way to sign in: it attaches a GitHub identity to an edu-ID account.
 - GitHub: the platform acts on GitHub through its own GitHub App (D23 of `docs/merge/08-decisions.md`), installed by a teacher on an organization; production and staging have separate Apps, and staging never holds the production one (N-SEC-18).
 - Data: answers and grades are personal data. See [03-exigences-non-fonctionnelles.md](03-exigences-non-fonctionnelles.md), data section.
 - Browsers: current versions of Chrome, Firefox, Safari, Edge. Mobile and tablet for every type except code, diagram and blocks (ADR-103), which remain usable but are optimised for desktop.

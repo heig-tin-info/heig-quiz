@@ -204,6 +204,7 @@ describe("ROUTES", () => {
     teamsTab: { view: "teamsTab" },
     kiosk: { view: "kiosk" },
     sebQuit: { view: "sebQuit" },
+    loginRefused: { view: "loginRefused" },
     discover: { view: "discover" },
     pair: { view: "pair" },
     feedback: { view: "feedback", attemptId: "a-1" },
@@ -244,6 +245,7 @@ describe("ROUTES", () => {
       "home",
       "join",
       "kiosk",
+      "loginRefused",
       "oauthConsent",
       "pair",
       // F-PROJ-15 (M3-13): one address, the student's project for a student.
@@ -310,6 +312,7 @@ describe("ROUTES", () => {
         "join",
         "kiosk",
         "live",
+        "loginRefused",
         "oauthConsent",
         "pair",
         "projectNew",

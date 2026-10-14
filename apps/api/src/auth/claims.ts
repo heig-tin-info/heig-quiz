@@ -135,7 +135,7 @@ export function addressesOf(
 
 /**
  * The addresses a login may act on BEFORE anything is stored (the staging
- * allowlist). Everything after reads the stored set (`knownEmails`), whose
+ * allowlist, admission). Everything after reads the stored set (`knownEmails`), whose
  * `verified` flag follows the same `addressesOf`.
  */
 export function verifiedAddressesOf(
@@ -145,23 +145,6 @@ export function verifiedAddressesOf(
   return addressesOf(claims, loginVerified)
     .filter((a) => a.verified)
     .map((a) => a.email);
-}
-
-/**
- * The affiliation kinds (`student`, `staff`, …) asserted by one of `domains`:
- * `staff@hes-so.ch` yields `staff` when `hes-so.ch` is listed, nothing
- * otherwise. An UNSCOPED affiliation (`staff`) names no institution, so it
- * yields nothing either: any edu-ID home organization may assert it.
- */
-export function affiliationKindsIn(
-  affiliations: readonly string[],
-  domains: readonly string[],
-): string[] {
-  const kinds = affiliations.flatMap((a) => {
-    const at = a.indexOf("@");
-    return at > 0 && domains.includes(a.slice(at + 1)) ? [a.slice(0, at)] : [];
-  });
-  return [...new Set(kinds)];
 }
 
 /** Everything worth keeping from a login, the token plumbing removed. */

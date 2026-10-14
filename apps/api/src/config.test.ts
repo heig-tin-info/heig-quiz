@@ -183,14 +183,10 @@ describe("loginAllowed", () => {
     expect(loginAllowed(loadConfig({}), ["anyone@example.org"])).toBe(true);
   });
 
-  it("admits a listed address, a listed domain and the super administrator", () => {
-    const config = loadConfig({
-      LOGIN_ALLOWLIST: " Dev@Example.org, @heig-vd.ch ,",
-      SUPER_ADMIN_EMAIL: "boss@example.org",
-    });
+  it("admits a listed address and a listed domain", () => {
+    const config = loadConfig({ LOGIN_ALLOWLIST: " Dev@Example.org, @heig-vd.ch ," });
     expect(loginAllowed(config, ["dev@example.org"])).toBe(true);
     expect(loginAllowed(config, ["someone@heig-vd.ch"])).toBe(true);
-    expect(loginAllowed(config, ["boss@example.org"])).toBe(true);
     // Any address of the login counts, not only the first.
     expect(loginAllowed(config, ["private@gmail.com", "dev@example.org"])).toBe(true);
   });
@@ -200,6 +196,29 @@ describe("loginAllowed", () => {
     expect(loginAllowed(config, ["student@gmail.com"])).toBe(false);
     expect(loginAllowed(config, ["x@evil-heig-vd.ch"])).toBe(false);
     expect(loginAllowed(config, [])).toBe(false);
+  });
+});
+
+describe("LOGIN_DOMAINS (ADR-111)", () => {
+  it("is empty by default: admission is off", () => {
+    expect(loadConfig({}).LOGIN_DOMAINS).toEqual([]);
+  });
+
+  it("reads bare domains, trimmed and lowercased", () => {
+    expect(loadConfig({ LOGIN_DOMAINS: " HEIG-VD.ch, hes-so.ch ," }).LOGIN_DOMAINS).toEqual([
+      "heig-vd.ch",
+      "hes-so.ch",
+    ]);
+  });
+
+  it("refuses eduid.ch, which every edu-ID account is affiliated to", () => {
+    expect(() => loadConfig({ LOGIN_DOMAINS: "heig-vd.ch,eduid.ch" })).toThrow(/eduid\.ch/);
+  });
+
+  it("refuses an entry that is not a bare domain", () => {
+    for (const value of ["@heig-vd.ch", "https://heig-vd.ch", "x@heig-vd.ch", "heig-vd"]) {
+      expect(() => loadConfig({ LOGIN_DOMAINS: value }), value).toThrow(/bare domain/);
+    }
   });
 });
 

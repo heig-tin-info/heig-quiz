@@ -48,6 +48,7 @@ export const ASSIST_SCREEN_LABELS: { readonly [V in Route["view"]]: keyof Dict |
   kiosk: null,
   pair: null,
   sebQuit: null,
+  loginRefused: null,
   discover: null,
   feedback: null,
   drill: null,

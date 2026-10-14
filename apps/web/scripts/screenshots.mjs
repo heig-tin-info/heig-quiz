@@ -1620,6 +1620,8 @@ const scenes = [
       await p.getByRole("button", { name: /^(user menu|menu du compte)$/i }).first().click();
       await p.getByRole("menuitem", { name: /sign out|se déconnecter/i }).click();
     } },
+  // ADR-111 §6: a sign-in the door refused, drawn with no session.
+  { name: "login-refused", role: "student", path: "/sign-in/refused?reason=not_invited" },
 
   // What's new (ADR-087): the dialog after an update, and the history page.
   { name: "whats-new-dialog", role: "teacher", path: "/?whatsnew=1", fold: true },

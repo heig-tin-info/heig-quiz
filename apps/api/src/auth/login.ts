@@ -1,35 +1,77 @@
 /**
- * What an OIDC login writes, once the IdP has vouched for the claims. The
- * callback route (plugin.ts) wraps it with the session, the audit and the
- * redirect.
+ * An OIDC login once the IdP has vouched for the claims: the door it must
+ * pass before anything is written (`loginRefusal`), then what it writes
+ * (`signIn`). The callback route (plugin.ts) wraps them with the refusal
+ * page, the session, the audit and the redirect.
  */
 import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
 
+import type { LoginRefusal } from "@quiz/contracts";
+import { admissionRefusal } from "@quiz/domain";
+
 import { audit } from "../audit.js";
 import { loginAllowed, type AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
 import { users } from "../db/schema.js";
-import { claimEnrollments } from "../modules/org/service.js";
-import { syncRoleOfUser } from "../roles.js";
-import { applyAdoption, findAdoption, isPlaceholderSub } from "./adoption.js";
-import { recordIdpClaims, syncUserEmails, verifiedAddressesOf } from "./claims.js";
+import { claimEnrollments, hasPendingLine } from "../modules/org/service.js";
+import { hasTeacherGrant, syncRoleOfUser } from "../roles.js";
+import { applyAdoption, findAdoption, isPlaceholderSub, placeholderFor } from "./adoption.js";
+import { affiliationsOf, recordIdpClaims, syncUserEmails, verifiedAddressesOf } from "./claims.js";
 import type { OidcClaims } from "./oidc.js";
 import type { SessionUser } from "./plugin.js";
 
 /**
- * The staging allowlist (ADR-028), checked before any row is written, on
- * the verified addresses of the claims only. A subject shaped like an
- * imported placeholder (`classroom:…`, ADR-061) is refused whatever the
- * environment: it would land on that account through the upsert.
+ * The door of an OIDC login, judged before any row is written: why it is
+ * refused, or null. A subject shaped like an imported placeholder
+ * (`classroom:…`, ADR-061) is refused whatever the environment — it would
+ * land on that account through the upsert; the super administrator then
+ * passes; everyone else must pass the staging allowlist (ADR-028 §3) and
+ * admission (ADR-111), on the verified addresses of the claims only.
+ * Admission is asked of the claims first, then — only if they do not admit —
+ * again with what the database knows: no query while it is off.
  */
-export function loginAdmits(
+export async function loginRefusal(
+  db: Db,
   config: AppConfig,
-  claims: Pick<OidcClaims, "sub" | "raw" | "emailVerified">,
-): boolean {
-  if (isPlaceholderSub(claims.sub)) return false;
-  return loginAllowed(config, verifiedAddressesOf(claims.raw, claims.emailVerified));
+  claims: OidcClaims,
+): Promise<LoginRefusal | null> {
+  if (isPlaceholderSub(claims.sub)) return "restricted";
+  const addresses = verifiedAddressesOf(claims.raw, claims.emailVerified);
+  if (config.SUPER_ADMIN_EMAIL !== "" && addresses.includes(config.SUPER_ADMIN_EMAIL)) return null;
+  if (!loginAllowed(config, addresses)) return "restricted";
+  const asserted = {
+    addresses,
+    affiliations: affiliationsOf(claims.raw),
+    complete: claims.complete,
+    known: false,
+    invited: false,
+  };
+  if (admissionRefusal(config.LOGIN_DOMAINS, asserted) === null) return null;
+  return admissionRefusal(config.LOGIN_DOMAINS, { ...asserted, ...(await admissionFacts(db, claims, addresses)) });
+}
+
+/**
+ * What admission reads of the database (ADR-111 §1, §2): whether the login
+ * lands on an account — one that holds its subject and is not anonymized,
+ * or a placeholder of the import it matches (adopted, or flagged ambiguous
+ * by `signIn`) — and whether one of its verified addresses was invited, by
+ * a pending roster line or a teacher grant. A course staff seat is keyed on
+ * an account, so it invites nobody new.
+ */
+async function admissionFacts(
+  db: Db,
+  claims: OidcClaims,
+  addresses: readonly string[],
+): Promise<{ known: boolean; invited: boolean }> {
+  const [[account], line, grant] = await Promise.all([
+    db.select({ anonymizedAt: users.anonymizedAt }).from(users).where(eq(users.oidcSub, claims.sub)).limit(1),
+    hasPendingLine(db, addresses),
+    hasTeacherGrant(db, addresses),
+  ]);
+  const known = account ? account.anonymizedAt === null : (await placeholderFor(db, claims)).kind !== "none";
+  return { known, invited: line || grant };
 }
 
 /**
@@ -41,7 +83,7 @@ export function loginAdmits(
  * keeps its role until the recompute.
  */
 export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Promise<SessionUser> {
-  // `loginAdmits` refused it already; never write under a placeholder subject.
+  // `loginRefusal` refused it already; never write under a placeholder subject.
   if (isPlaceholderSub(claims.sub)) throw new Error("A placeholder subject cannot sign in");
   const profile = {
     email: claims.email,
