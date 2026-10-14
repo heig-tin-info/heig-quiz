@@ -109,87 +109,62 @@ contain the identifiers of that run's seed; the script discovers them over
 the API, so they change from one seed to the next.
 
 <!-- scenes:start -->
-Last full run: 2026-09-21, commit `828d8d8`. The `live-*` and `grading*`
-scenes were retaken on their own (`--only`) on 2026-09-28, the
-`student-home` and `player-done` scenes on 2026-09-29, the `poll-*` and
-`join-*` scenes later on 2026-09-29, and the four classroom scenes
-(`classroom-evaluations`, `classroom-roster`, `roster-import`,
-`help-drawer`) together on 2026-09-29 (#295), each time on a fresh seed,
-which is why their ids differ from the other rows. The `grading*` scenes
-describe the grading table (ADR-044); their images were retaken again on
-2026-09-29 with the columns of every question type, on a fresh seed and
-without a runner (so the code answers wait for it). Every scene showing
-"Test 0", and `teacher-home`, was retaken on 2026-09-30 (nine questions, `LLM_PROVIDER=stub`).
-The `student-home` scenes were retaken on 2026-09-30 once more, without the
-classroom code field (ADR-053). The `student-home`, `student-settings` and
-`feedback*` scenes were retaken on 2026-10-01, on a fresh seed, for the
-student sidebar that mirrors the bottom bar. Later on 2026-10-01 the
-`student-home` scenes were retaken without the Past section, and the
-`student-grades` scenes (the `/grades` page) added, on a fresh seed with no
-runner. The `student-home` scenes were retaken once more that day, on a
-fresh seed with no runner, for Coming up grouped by day. The
-`grading-essay` and `grading-ai-justification` scenes were retaken on
-2026-10-02, on a fresh seed with `LLM_PROVIDER=stub` and no runner, for the
-AI's wand, criteria and model (ADR-063). The `player-*` scenes but
-`player-run` were retaken on 2026-10-02, on a fresh seed with no runner,
-for the pinned rail and the wide code question (ADR-066); `player-run` and
-`try-code` need a code runner and were not. The `editor-blocks` and
-`try-blocks` scenes were added on 2026-10-11, on a fresh seed with no
-runner (a blocks question needs none).
+Last full run: 2026-10-14, commit `75d362c1`, 76 scenes.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
 | `sign-in` | none | `/` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `teacher-home` | teacher | `/` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `classroom-evaluations` | teacher | `/classrooms/95c36730-afe8-49c0-8275-ff5eff2b1aa3` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `classroom-roster` | teacher | `/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535?tab=roster` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `roster-import` | teacher | `/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535?tab=roster` | seeded | Clicked “Add students” on the roster tab. | 1440×900 |
-| `help-drawer` | teacher | `/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535` | seeded | Clicked the “Help” icon of the classroom page. | 1440×900 |
+| `classroom-evaluations` | teacher | `/classrooms/2902563f-bee7-4aec-b3e6-4c662b331dc3` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `classroom-roster` | teacher | `/classrooms/2902563f-bee7-4aec-b3e6-4c662b331dc3?tab=roster` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `roster-import` | teacher | `/classrooms/2902563f-bee7-4aec-b3e6-4c662b331dc3?tab=roster` | seeded | Clicked “Add students” on the roster tab. | 1440×900 |
+| `help-drawer` | teacher | `/classrooms/2902563f-bee7-4aec-b3e6-4c662b331dc3` | seeded | Clicked the “Help” icon of the classroom page. | 1440×900 |
 | `pools` | teacher | `/pools` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `pool` | teacher | `/pools/014cc676-210c-4231-8342-00a0009f060c` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `pool-filters` | teacher | `/pools/014cc676-210c-4231-8342-00a0009f060c` | seeded | Clicked “Filters” above the question table. | 1440×900 |
-| `pool-share` | teacher | `/pools/<pool>?tab=settings` | seeded | Opened the pool's Settings tab. | 1440×900 |
-| `editor-mcq` | teacher | `/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `editor-short` | teacher | `/questions/dcaaf3e6-7023-4f27-9dac-38d8212b4177` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `editor-cloze` | teacher | `/questions/557c0ffa-9fc0-46aa-b524-dc89ae4af138` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `editor-code` | teacher | `/questions/637aca79-7782-4acc-ab32-907876fedddb` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `editor-blocks` | teacher | `/questions/3fd94e5f-66df-4e9c-81dd-2099359d001b` | seeded | Nothing: the page as it loads. | 1440×900, full page |
-| `editor-preview` | teacher | `/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c` | seeded | Pressed Ctrl+Shift+M in the editor. | 1440×900, full page |
-| `editor-versions` | teacher | `/questions/637aca79-7782-4acc-ab32-907876fedddb?tab=versions` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `editor-publish` | teacher | `/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c` | seeded | Pressed Ctrl+Shift+P in the editor. | 1440×900 |
-| `try-mcq-graded` | teacher | `/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c?tab=try` | seeded | Chose the first answer, clicked “Grade my answer”. | 1440×900 |
-| `try-code` | teacher | `/questions/637aca79-7782-4acc-ab32-907876fedddb?tab=try` | seeded | Clicked “Run” on the visible cases, then “Grade my answer”, with the template as it is. | 1440×900, full page |
-| `try-blocks` | teacher | `/questions/3fd94e5f-66df-4e9c-81dd-2099359d001b?tab=try` | seeded | Opened the Try tab and clicked “Test on every warehouse”, with the starter as it is. | 1440×900, full page |
-| `eval-questions` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=questions` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `eval-timing` | teacher | `/evaluations/18756045-182f-4e4a-9541-a45243d41f15?step=timing` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `eval-launch` | teacher | `/evaluations/18756045-182f-4e4a-9541-a45243d41f15?step=launch` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `eval-scheduled` | teacher | `/evaluations/f259b01d-cdb0-4bc5-9484-4e74c186745a` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `live-lobby` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | lobby | Nothing: the page as it loads. | 1440×900 |
-| `live-running` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | running | Nothing: the page as it loads. | 1440×900 |
-| `live-inspect` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | running | Clicked the first student's cell of question 1. | 1440×900 |
-| `live-extend` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | running | Clicked “Extend”. | 1440×900 |
-| `live-closed` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/live` | graded | Nothing: the page as it loads. | 1440×900 |
-| `grading` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Nothing: the page as it loads. | 1440×900, full page |
-| `grading-short` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Moved to the next question (the short answer). | 1440×900, full page |
-| `grading-cloze` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Moved three questions forward (the cloze). | 1440×900, full page |
-| `grading-code` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Moved four questions forward (the code question). | 1440×900, full page |
-| `grading-categorize` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Moved five questions forward (the categorize question). | 1440×900, full page |
-| `grading-codeimage` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Moved six questions forward (the code-to-picture question). | 1440×900, full page |
-| `grading-circuit` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Moved seven questions forward (the circuit). | 1440×900, full page |
-| `grading-essay` | teacher | `/evaluations/c78511b3-f11c-4113-884a-34bd5b270a61/grading` | graded | Moved eight questions forward (the essay). | 1440×900, full page |
-| `grading-ai-justification` | teacher | `/evaluations/c78511b3-f11c-4113-884a-34bd5b270a61/grading` | graded | Moved to the essay and opened the first AI proposal. | 1440×900 |
-| `grading-override` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Opened the first answer and clicked “Adjust” in its panel. | 1440×900 |
-| `grading-batch` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | seeded | Moved to the essay and hovered the primary button, which offers to validate its four proposals. | 1440×900 |
-| `results` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results` | graded | Nothing: the page as it loads. | 1440×900, full page |
-| `results-questions` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results?tab=questions` | graded | Nothing: the page as it loads. | 1440×900, full page |
-| `results-release-confirm` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results` | graded | Clicked “Publish results”. | 1440×900 |
+| `pool` | teacher | `/pools/7a41c236-bf5b-424c-9823-f21eff8d66ae` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `pool-filters` | teacher | `/pools/7a41c236-bf5b-424c-9823-f21eff8d66ae` | seeded | Clicked “Filters” above the question table. | 1440×900 |
+| `pool-share` | teacher | `/pools/7a41c236-bf5b-424c-9823-f21eff8d66ae?tab=settings` | seeded | Opened the pool's Settings tab. | 1440×900 |
+| `editor-mcq` | teacher | `/questions/339336b0-d256-4030-ac44-d19355c49ab6` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `editor-short` | teacher | `/questions/eb5ecf94-5e63-4efa-8b3a-02fc66c8520b` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `editor-cloze` | teacher | `/questions/fba50495-791d-4d60-b6e5-9c80382ddd1d` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `editor-code` | teacher | `/questions/43f3ffaf-582d-47b3-b296-b860e077a1c3` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `editor-blocks` | teacher | `/questions/a38c1007-d3be-4ef6-8e84-6edbda1567d2` | seeded | Nothing: the page as it loads. | 1440×900, full page |
+| `editor-preview` | teacher | `/questions/339336b0-d256-4030-ac44-d19355c49ab6` | seeded | Pressed Ctrl+Shift+M in the editor. | 1440×900, full page |
+| `editor-versions` | teacher | `/questions/43f3ffaf-582d-47b3-b296-b860e077a1c3?tab=versions` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `editor-publish` | teacher | `/questions/339336b0-d256-4030-ac44-d19355c49ab6` | seeded | Pressed Ctrl+Shift+P in the editor. | 1440×900 |
+| `try-mcq-graded` | teacher | `/questions/339336b0-d256-4030-ac44-d19355c49ab6?tab=try` | seeded | Chose the first answer, clicked “Grade my answer”. | 1440×900 |
+| `try-code` | teacher | `/questions/43f3ffaf-582d-47b3-b296-b860e077a1c3?tab=try` | seeded | Clicked “Run the tests” on the visible cases, then “Run all the tests”, with the template as it is. | 1440×900, full page |
+| `try-blocks` | teacher | `/questions/a38c1007-d3be-4ef6-8e84-6edbda1567d2?tab=try` | seeded | Opened the Try tab and clicked “Test on every warehouse”, with the starter as it is. | 1440×900, full page |
+| `eval-questions` | teacher | `/evaluations/51337bd3-8f80-40f9-8388-850fd15c4161?step=questions` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `eval-timing` | teacher | `/evaluations/51337bd3-8f80-40f9-8388-850fd15c4161?step=timing` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `eval-launch` | teacher | `/evaluations/51337bd3-8f80-40f9-8388-850fd15c4161?step=launch` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `eval-rename` | teacher | `/evaluations/51337bd3-8f80-40f9-8388-850fd15c4161?step=questions` | seeded | Clicked the title, which turns the heading into a field. | 1440×900 |
+| `eval-scheduled` | teacher | `/evaluations/d55a1c2a-932c-4f78-912e-70283ba3452f` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `live-lobby` | teacher | `/evaluations/bd8b4237-e854-47af-968d-07265e72de08/live` | lobby | Nothing: the page as it loads. | 1440×900 |
+| `live-running` | teacher | `/evaluations/bd8b4237-e854-47af-968d-07265e72de08/live` | running | Nothing: the page as it loads. | 1440×900 |
+| `live-inspect` | teacher | `/evaluations/bd8b4237-e854-47af-968d-07265e72de08/live` | running | Clicked the first student's cell of question 1. | 1440×900 |
+| `live-extend` | teacher | `/evaluations/bd8b4237-e854-47af-968d-07265e72de08/live` | running | Clicked “Extend”. | 1440×900 |
+| `live-closed` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/live` | graded | Nothing: the page as it loads. | 1440×900 |
+| `grading` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | graded | Nothing: the page as it loads. | 1440×900, full page |
+| `grading-short` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | graded | Moved to the next question (the short answer). | 1440×900, full page |
+| `grading-cloze` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | graded | Moved three questions forward (the cloze). | 1440×900, full page |
+| `grading-code` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | graded | Moved four questions forward (the code question). | 1440×900, full page |
+| `grading-categorize` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | graded | Moved five questions forward (the categorize question). | 1440×900, full page |
+| `grading-codeimage` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | graded | Moved six questions forward (the code-to-picture question). | 1440×900, full page |
+| `grading-circuit` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | graded | Moved seven questions forward (the circuit). | 1440×900, full page |
+| `grading-essay` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | graded | Moved eight questions forward (the essay). | 1440×900, full page |
+| `grading-ai-justification` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | graded | Moved to the essay and opened the first AI proposal. | 1440×900 |
+| `grading-override` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | graded | Opened the first answer and clicked “Adjust” in its panel. | 1440×900 |
+| `grading-batch` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading` | seeded | Moved to the essay and hovered the primary button, which offers to validate its four proposals. | 1440×900 |
+| `results` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/results` | graded | Nothing: the page as it loads. | 1440×900, full page |
+| `results-questions` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/results?tab=questions` | graded | Nothing: the page as it loads. | 1440×900, full page |
+| `results-release-confirm` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/results` | graded | Clicked “Publish results”. | 1440×900 |
 | `poll-launcher` | teacher | `/polls` | running | Nothing: the page as it loads. | 1440×900 |
-| `poll-projection` | teacher | `/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll` | poll-open | Nothing: the page as it loads. | 1440×900 |
-| `join-mcq-phone` | guest | `/p/VSLAQA` | poll-open | Nothing: the page as it loads. | 390×844 |
-| `poll-revealed` | teacher | `/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll` | poll-revealed | Nothing: the page as it loads. | 1440×900 |
-| `join-revealed-phone` | guest | `/p/VSLAQA` | poll-revealed | Nothing: the page as it loads. | 390×844 |
-| `poll-ended` | teacher | `/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll` | poll-ended | Nothing: the page as it loads. | 1440×900 |
-| `notifications` | teacher | `/` | running | Clicked the bell in the header. | 1440×900 |
+| `poll-projection` | teacher | `/evaluations/27535a88-d4df-4512-80dd-9f40c9f158a6/poll` | poll-open | Nothing: the page as it loads. | 1440×900 |
+| `join-mcq-phone` | guest | `/p/JUWYPA` | poll-open | Nothing: the page as it loads. | 390×844 |
+| `poll-revealed` | teacher | `/evaluations/27535a88-d4df-4512-80dd-9f40c9f158a6/poll` | poll-revealed | Nothing: the page as it loads. | 1440×900 |
+| `join-revealed-phone` | guest | `/p/JUWYPA` | poll-revealed | Nothing: the page as it loads. | 390×844 |
+| `poll-ended` | teacher | `/evaluations/27535a88-d4df-4512-80dd-9f40c9f158a6/poll` | poll-ended | Nothing: the page as it loads. | 1440×900 |
+| `notifications` | teacher | `/` | running | Opened the account menu and clicked “Notifications”. | 1440×900 |
 | `palette` | teacher | `/` | seeded | Pressed Ctrl+K. | 1440×900 |
 | `palette-query` | teacher | `/` | seeded | Pressed Ctrl+K and typed “grad”. | 1440×900 |
 | `settings` | teacher | `/settings` | seeded | Nothing: the page as it loads. | 1440×900 |
@@ -198,19 +173,19 @@ runner (a blocks question needs none).
 | `admin` | admin | `/admin` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `student-home` | lea | `/` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `student-home-phone` | lea | `/` | seeded | Nothing: the page as it loads. | 390×844 |
-| `student-lobby` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | lobby | Nothing: the page as it loads. | 1440×900 |
-| `player-mcq` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Nothing: the page as it loads. | 1440×900 |
-| `player-mcq-phone` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Nothing: the page as it loads. | 390×844 |
-| `player-cloze` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Moved to question 3 through the progress strip. | 1440×900 |
-| `player-short` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Moved to question 4 through the progress strip. | 1440×900 |
-| `player-code` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Moved to question 5 through the progress strip. | 1440×900 |
-| `player-run` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Moved to question 5, clicked “Run”, waited for “Compiled”. | 1440×900, full page |
-| `player-submit` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Clicked “Hand in”. | 1440×900 |
-| `player-done` | lea | `/take/6188c969-2eb9-41f1-8111-2597c5e1602e` | graded | Nothing: the page as it loads. | 1440×900 |
-| `feedback-pending` | lea | `/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback` | graded | Nothing: the page as it loads. | 1440×900 |
-| `results-released` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results` | released | Nothing: the page as it loads. | 1440×900, full page |
-| `feedback` | lea | `/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback` | released | Nothing: the page as it loads. | 1440×900, full page |
-| `feedback-phone` | lea | `/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback` | released | Nothing: the page as it loads. | 390×844, full page |
+| `student-lobby` | lea | `/take/bd8b4237-e854-47af-968d-07265e72de08` | lobby | Nothing: the page as it loads. | 1440×900 |
+| `player-mcq` | lea | `/take/bd8b4237-e854-47af-968d-07265e72de08` | running | Nothing: the page as it loads. | 1440×900 |
+| `player-mcq-phone` | lea | `/take/bd8b4237-e854-47af-968d-07265e72de08` | running | Nothing: the page as it loads. | 390×844 |
+| `player-cloze` | lea | `/take/bd8b4237-e854-47af-968d-07265e72de08` | running | Moved to question 3 through the progress strip. | 1440×900 |
+| `player-short` | lea | `/take/bd8b4237-e854-47af-968d-07265e72de08` | running | Moved to question 4 through the progress strip. | 1440×900 |
+| `player-code` | lea | `/take/bd8b4237-e854-47af-968d-07265e72de08` | running | Moved to question 5 through the progress strip. | 1440×900 |
+| `player-run` | lea | `/take/bd8b4237-e854-47af-968d-07265e72de08` | running | Moved to question 5, clicked “Run the tests”, waited for “Compiled”. | 1440×900, full page |
+| `player-submit` | lea | `/take/bd8b4237-e854-47af-968d-07265e72de08` | running | Clicked “Hand in”. | 1440×900 |
+| `player-done` | lea | `/take/bb2b617a-f6a3-41c5-8583-6c36a5a847be` | graded | Nothing: the page as it loads. | 1440×900 |
+| `feedback-pending` | lea | `/attempts/bd851343-8bc4-4c4a-bb5b-e681bdc32fad/feedback` | graded | Nothing: the page as it loads. | 1440×900 |
+| `results-released` | teacher | `/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/results` | released | Nothing: the page as it loads. | 1440×900, full page |
+| `feedback` | lea | `/attempts/bd851343-8bc4-4c4a-bb5b-e681bdc32fad/feedback` | released | Nothing: the page as it loads. | 1440×900, full page |
+| `feedback-phone` | lea | `/attempts/bd851343-8bc4-4c4a-bb5b-e681bdc32fad/feedback` | released | Nothing: the page as it loads. | 390×844, full page |
 | `student-grades` | lea | `/grades` | released | Nothing: the page as it loads. | 1440×900 |
 | `student-grades-phone` | lea | `/grades` | released | Nothing: the page as it loads. | 390×844 |
 | `student-settings` | lea | `/settings` | seeded | Nothing: the page as it loads. | 1440×900 |
