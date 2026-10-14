@@ -25,8 +25,8 @@ import type { EvaluationTiming } from "./deadline.js";
 import type { LobbyName } from "./evaluationConfig.js";
 
 /** Scheduled: the platform opens and closes it. Live: the teacher does. */
-export type ClockMode = "scheduled" | "live";
-export const CLOCK_MODES: readonly ClockMode[] = ["scheduled", "live"];
+export const CLOCK_MODES = ["scheduled", "live"] as const;
+export type ClockMode = (typeof CLOCK_MODES)[number];
 
 export interface ClockChoice {
   mode: ClockMode;

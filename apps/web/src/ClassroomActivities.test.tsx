@@ -30,6 +30,7 @@ function evaluation(n: number, over: Partial<EvaluationSummary> = {}): Evaluatio
     attemptCount: 0,
     participantCount: 0,
     deletionRole: "assistant",
+    clock: "live",
     opensAt: null,
     closesAt: null,
     startedAt: null,

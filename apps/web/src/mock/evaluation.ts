@@ -18,6 +18,8 @@ import { countsAsCompleted,
   poolRoleAllows,
   round2,
   splitTemplate,
+  clockChoiceOf,
+  type ClockSettings,
   type ItemCounting,
 } from "@quiz/domain";
 import type { BlocksAnswer, BlocksConfig } from "@quiz/qt-blocks/client";
@@ -971,6 +973,9 @@ function inLinkedPool(item: MockItem, courseId: string): boolean {
   return poolId !== null && (coursePools[courseId] ?? []).includes(poolId);
 }
 
+/** Who drives its clock, read back from its settings as the server does (#857). */
+export const clockOf = (e: MockEvaluation) => clockChoiceOf(e.settings as Pick<ClockSettings, "timing" | "lobby">).mode;
+
 const evaluationSummary = (e: MockEvaluation) => ({
   id: e.id,
   classroomId: e.classroomId,
@@ -983,6 +988,7 @@ const evaluationSummary = (e: MockEvaluation) => ({
   // Like the server: the students who took it, never a staff seat (ADR-018).
   participantCount: e.rows.filter((r) => !r.staff && r.attemptId !== null).length,
   deletionRole: deletionRoleOf(e),
+  clock: clockOf(e),
   opensAt: e.opensAt,
   closesAt: e.closesAt,
   startedAt: e.startedAt,

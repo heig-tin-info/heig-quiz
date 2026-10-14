@@ -35,6 +35,7 @@ function row(over: Partial<EvaluationActivitySummary> = {}): EvaluationActivityS
     state: "draft",
     classroom: null,
     takeHome: false,
+    clock: "live",
     opensAt: null,
     closesAt: null,
     startedAt: null,

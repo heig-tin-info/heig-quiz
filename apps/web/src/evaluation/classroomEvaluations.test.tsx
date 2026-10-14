@@ -31,6 +31,7 @@ function summary(over: Partial<EvaluationSummary> = {}): EvaluationSummary {
     attemptCount: 0,
     participantCount: 0,
     deletionRole: "assistant",
+    clock: "live",
     opensAt: null,
     closesAt: null,
     startedAt: null,
@@ -94,6 +95,23 @@ describe("the evaluations of the Activities tab", () => {
     expect(draft.queryByText(/\d{2}:\d{2}/)).toBeNull();
     expect(screen.getByRole("columnheader", { name: /Start/ })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /End/ })).toBeInTheDocument();
+  });
+
+  it("keeps a dated Scheduled draft grey and says it is not scheduled (#857)", async () => {
+    const opensAt = "2026-12-03T15:15:00.000Z";
+    mockFetch(
+      list([
+        summary({ state: "draft", title: "Révision C17", clock: "scheduled", opensAt, closesAt: "2026-12-07T15:30:00.000Z" }),
+        // A Live draft's date is a calendar hint: a plain draft.
+        summary({ id: id("evaluation", 2), state: "draft", title: "Live hint", opensAt }),
+      ]),
+    );
+    renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
+    const row = async (title: string) => within((await screen.findByText(title)).closest("tr")!);
+    const dated = (await row("Révision C17")).getByText("draft · not scheduled");
+    expect(dated.className).toContain("text-fg-muted");
+    expect(dated.className).not.toContain("text-info");
+    expect((await row("Live hint")).getByText("draft")).toBeInTheDocument();
   });
 
   it("opens the dashboard for a live one and the configuration for a draft", async () => {

@@ -12,6 +12,7 @@ import { z } from "zod";
 import {
   CALCULATOR_MODES,
   CATEGORIZE_SCORE_POLICIES,
+  CLOCK_MODES,
   CONDITION_KINDS,
   DEFAULT_CATEGORIZE_SCORE_POLICY,
   DEFAULT_MCQ_SCORE_POLICY,
@@ -104,6 +105,14 @@ type LobbyMode = z.infer<typeof LobbyMode>;
  */
 export const Timing = z.enum(TIMINGS);
 export type Timing = z.infer<typeof Timing>;
+
+/**
+ * Who drives the clock (ADR-086), read back from `timing` and `lobby` by
+ * `clockChoiceOf` and never stored: what a list needs to tell a Scheduled
+ * draft that was never scheduled (#857) without the whole settings.
+ */
+export const ClockMode = z.enum(CLOCK_MODES);
+export type ClockMode = z.infer<typeof ClockMode>;
 
 /**
  * How a multiple-answer MCQ is scored (docs/04 §4.4). The five formulas live
@@ -459,6 +468,8 @@ export const EvaluationSummary = z.object({
    * reader whose role allows it; the server decides again when it deletes.
    */
   deletionRole: CourseRole,
+  /** Who drives its clock (`clockChoiceOf`): a Scheduled draft is still not scheduled (#857). */
+  clock: ClockMode,
   opensAt: z.iso.datetime().nullable(),
   closesAt: z.iso.datetime().nullable(),
   /** When it first ran: an evaluation opened by hand has no `opensAt`, only this. */

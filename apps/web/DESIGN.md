@@ -557,7 +557,8 @@ live in `ui/state.ts`, each written once.
   (`lobby`, `paused`, `grading`, a project `graded`); blue = scheduled,
   ready and opening on its own at a known time (an evaluation `scheduled`,
   a project `scheduled`; the `info` token, the gantt's scheduled bar);
-  zinc = at rest (`draft`, `closed`, `locked`); outline green =
+  zinc = at rest (`draft`, `closed`, `locked`; a dated draft too, see
+  ADR-104's amendment of 2026-10-14); outline green =
   `released`, an evaluation's or a project's. A project's badge reads the
   server's PHASE (`state`, with `draft` refined into `draft` / `scheduled`
   by its publish mode and `locked` into `locked` / `graded` /

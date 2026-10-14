@@ -35,6 +35,7 @@ import { me, setMe } from "./session";
 import {
   EVAL_ROOM,
   aliased,
+  clockOf,
   evaluations,
   findEvaluation,
   makeEvaluation,
@@ -1417,6 +1418,7 @@ function teacherActivities(): ActivitySummary[] {
           courseCode: course?.code ?? "",
         },
         takeHome: e.mode === "exercise" && e.settings.lobby === "skip",
+        clock: clockOf(e),
         opensAt: e.opensAt,
         closesAt: e.closesAt,
         startedAt: e.startedAt,
@@ -1440,6 +1442,7 @@ function teacherActivities(): ActivitySummary[] {
         state: poll.state === "ended" ? "closed" : "running",
         classroom: null,
         takeHome: false,
+        clock: "live",
         opensAt: null,
         closesAt: null,
         startedAt: tp.createdAt,
