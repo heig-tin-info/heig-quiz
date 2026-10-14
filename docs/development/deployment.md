@@ -10,8 +10,8 @@ Production is `https://quiz.chevallier.io` and staging is
 come from one repository
 ([ADR-016](../adr/ADR-016-runner-sur-vm-separee.md),
 [ADR-028](../adr/ADR-028-recette-sur-la-meme-vm.md)). The application stack
-runs on the VM that already hosts heig-classroom, behind that VM's native
-Caddy. The code runner runs on the codespace VM, `code.chevallier.io`, behind
+runs on the VM that hosted heig-classroom until its decommission (merge task
+M9-01, 2026-10-14), behind that VM's native Caddy. The code runner runs on the codespace VM, `code.chevallier.io`, behind
 that VM's native Caddy, and the API reaches it over HTTPS with a shared
 token. Both images are built on GitHub Actions and pulled from GHCR. Nothing
 of ours is ever built on either VM.
@@ -27,7 +27,7 @@ environment's GitHub App is [Quiz's GitHub App](github-app.md).
 | | `portal.heig.chevallier.io` (application VM) | `code.chevallier.io` (runner VM) |
 | --- | --- | --- |
 | Size | Hetzner CPX12, 1 vCPU, 2 GB + 2 GB swap, `128.140.71.35` | Hetzner, 2 CPU, 4 GB |
-| Already runs | heig-classroom on `:3000`, evaluation-tb on `:3001`, a native Caddy | heig-codespace, rootful Podman 5.7, a native Caddy |
+| Already runs | evaluation-tb on `:3001`, a native Caddy (heig-classroom ran on `:3000` until its decommission, 2026-10-14) | heig-codespace, rootful Podman 5.7, a native Caddy |
 | Gets | `/srv/quiz`: the compose stack `app`, `postgres`, `backup`, on the `srv` account's rootless Docker; and staging, `/home/srvstg/quiz-staging` on the `srvstg` account's own rootless Docker (§8) | `/opt/quiz-runner`: the runner as a Podman quadlet |
 | Listens on | `app` on `127.0.0.1:3002` (staging `127.0.0.1:3003`) | the runner on `127.0.0.1:3200` |
 | Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `code.chevallier.io:8443` |
@@ -152,13 +152,16 @@ the build before it are not covered.
 
 `compose.prod.yml` starts these three containers and only those. The runner
 is not in the file. Keycloak is a development identity provider and is not
-deployed; production authenticates against Switch edu-ID with the same
-private key and `kid` as heig-classroom, since the edu-ID client shares the
-classroom's public JWK.
+deployed; production authenticates against Switch edu-ID with the private
+key and `kid` inherited from heig-classroom (`hgc-eduid-2026`): the edu-ID
+client shares the public JWK classroom registered. Quiz holds its own copy,
+`/srv/quiz/secrets/eduid-private-key.pem` (and the vault's, ADR-010), so
+classroom's removal (M9-01) changed nothing for the login. **Never revoke
+that JWK**: Quiz's login depends on it.
 
-The `postgres` service carries the same low-memory tuning as the classroom's
+The `postgres` service carries the low-memory tuning the classroom's had
 (`shared_buffers=32MB`, `max_connections=40`, no parallel query): the VM has
-one vCPU and 2 GB, shared by three services and two PostgreSQL instances.
+one vCPU and 2 GB, shared with staging and evaluation-tb.
 
 The Caddy fragment does two things beyond proxying to `localhost:3002`: it
 sets the transport headers (HSTS, `nosniff`, referrer policy) and it proxies
@@ -185,8 +188,8 @@ the same way.
 
 Staging does NOT run as `srv`: it has an account of its own, `srvstg`, with
 its own rootless Docker (§8). `srv`'s directories that hold production data
-(`/srv/quiz`, `/srv/heig-classroom`, `/srv/evaluation-tb`) are
-`chmod o-rwx`, so `srvstg` reads none of them, the dumps in
+(`/srv/quiz`, `/srv/evaluation-tb`; `/srv/heig-classroom` too, until its
+removal at M9-01) are `chmod o-rwx`, so `srvstg` reads none of them, the dumps in
 `/srv/quiz/backups` included. Keep them that way when adding a service.
 
 ### Setting up the application VM
@@ -194,9 +197,10 @@ its own rootless Docker (§8). `srv`'s directories that hold production data
 ```bash
 cd /srv && git clone https://github.com/heig-tin-info/heig-quiz.git quiz && cd quiz
 mkdir -p secrets backups assets backup-status
-# edu-ID: the client shares the classroom's public JWK, so the same key and kid.
-# The classroom's copy belongs to its container's `node`: read it through a container.
-docker run --rm -v /srv/heig-classroom/secrets:/s:ro alpine cat /s/eduid-private-key.pem > secrets/eduid-private-key.pem
+# edu-ID: the key of the client's registered JWK (kid hgc-eduid-2026), from the
+# vault's copy of secrets/ (ADR-010). It was first read from heig-classroom's
+# /srv/heig-classroom/secrets, which is gone since M9-01 (2026-10-14).
+cp <the vault's secrets>/eduid-private-key.pem secrets/eduid-private-key.pem
 docker run --rm -v "$PWD":/w alpine sh -c 'chown -R 1000:1000 /w/secrets /w/backups /w/assets && chmod 600 /w/secrets/*.pem'
 # backup-status stays srv's (container root, which is who writes it), mode 755:
 # `app` reads the report read-only as `node`. Never chown it to 1000.
@@ -218,8 +222,8 @@ container from starting, on purpose. The super administrator is
 
 Notifications ([ADR-030](../adr/ADR-030-canaux-de-notification.md)):
 e-mails go out through Scaleway TEM once `SCW_SECRET_KEY` and
-`SCW_DEFAULT_PROJECT_ID` are set in `.env.prod` (the classroom's project and
-sender domain; without them every e-mail is only logged). The Microsoft Teams
+`SCW_DEFAULT_PROJECT_ID` are set in `.env.prod` (the Scaleway project and
+sender domain inherited from classroom; without them every e-mail is only logged). The Microsoft Teams
 channel stays off until its multi-tenant Entra application exists and
 `TEAMS_CLIENT_ID` and `TEAMS_CLIENT_SECRET` (plus `TEAMS_ALLOWED_TENANTS`,
 HEIG-VD's tenant) are set:
@@ -719,8 +723,9 @@ SSH command (the digest: *Deploying by digest* above); it arrives in
 The token is piped straight to `docker login` or `podman login` with
 `--password-stdin` and expires with the workflow run; no registry credential
 is stored on either VM. On the application VM the login goes to a throwaway
-`DOCKER_CONFIG`, removed on exit, because heig-classroom deploys on the same
-`srv` account and two concurrent logins in the shared
+`DOCKER_CONFIG`, removed on exit, so that no other deploy on the `srv`
+account can overwrite it: heig-classroom deployed on the same account until
+its decommission (2026-10-14), and two concurrent logins in the shared
 `~/.docker/config.json` overwrote each other ("denied", 2026-09-25). On the
 runner VM, root's Podman auth file lives under `/run`, so nothing survives a
 reboot.
@@ -846,6 +851,13 @@ shred -u ci_deploy
 The staging key and `STAGING_DEPLOY_USER` are set up in §8. The application VM carries the previous
 VM's SSH host keys, copied over, so `DEPLOY_HOST_KEY` did not change with the
 2026-09-25 move.
+
+`DEPLOY_HOST` stays `classroom.chevallier.io` after heig-classroom's
+decommission (M9-01): the name and its redirect fragment are kept for at
+least a year (the cutover runbook's §5 step 8), and it is still a CNAME to
+the application VM. Moving it to `portal.heig.chevallier.io` before the name
+goes means setting `DEPLOY_HOST` and re-scanning `DEPLOY_HOST_KEY` (the same
+host key).
 
 ## 5. Deploying, and rolling back
 
@@ -1076,11 +1088,11 @@ amendment of decision 3.
 | --- | --- |
 | Box | `u<id>@u<id>.your-storagebox.de`, SSH on port **23**, a restricted shell (no redirect, no pipe); borg 1.2 and 1.4 on the server side, the clients use `BORG_REMOTE_PATH=borg-1.4` |
 | Repository | `ssh://u<id>@u<id>.your-storagebox.de:23/./<repo>`; archives `<hostname>-<YYYY-MM-DDTHH:MM>` (the VM's time) |
-| Sources | `/srv/quiz/backups` (**required**: missing, the run fails); `/srv/quiz/assets`, `/srv/heig-classroom/backups`, `/srv/evaluation-tb/backups`, `/srv/evaluation-tb/assets`, `/srv/quiz-engine-backups` (skipped with a log line when missing). A file still being written (`*.tmp`, `.*.part`) is left out |
+| Sources | `/srv/quiz/backups` (**required**: missing, the run fails); `/srv/quiz/assets`, `/srv/evaluation-tb/backups`, `/srv/evaluation-tb/assets`, `/srv/quiz-engine-backups` (skipped with a log line when missing). A file still being written (`*.tmp`, `.*.part`) is left out. `/srv/heig-classroom/backups` was a source until heig-classroom's decommission (M9-01, 2026-10-14): the archives made before then hold its dumps until the prune drops them |
 | Not in it | the PostgreSQL data directories (the dumps suffice; the Hetzner VM backup holds the physical copy), the images (pulled or rebuilt), the secrets (the vault, ADR-010) |
 | On the VM | borgbackup 1.4 (apt); the key `~/.ssh/storagebox-borg`; the passphrase `~/.config/borg-offsite/passphrase` and the env file `~/.config/borg-offsite/env`, both mode 600 |
 | In the vault | the box's account and **password** (password SSH cannot be relied on being off), its full-access key, the passphrase and the exported repository key (`borg key export`, and `--paper`), beside `.env.prod` and `secrets/` |
-| The night (UTC) | heig-classroom dump ~19:54, quiz dump 21:01, evaluation-tb dump 03:17, engine pull 03:00–05:00, then the off-site copy |
+| The night (UTC) | quiz dump 21:01, evaluation-tb dump 03:17, engine pull 03:00–05:00, then the off-site copy |
 
 Both scripts read the repository and the credentials from
 `~/.config/borg-offsite/env` (mode 600, outside any checkout) and refuse to
@@ -1172,8 +1184,10 @@ borg extract --list ::<archive> srv/quiz/backups/quiz-<date>.dump srv/quiz/asset
 ```
 
 The dump then goes through the full restore above (a recreated database,
-`pg_restore`) and the images back into `/srv/quiz/assets/`; the dumps of
-heig-classroom and evaluation-tb follow their own runbooks, the codespace
+`pg_restore`) and the images back into `/srv/quiz/assets/`; evaluation-tb's
+dumps follow its own runbook, heig-classroom's (in the archives made before
+2026-10-14 only) can only be read, restored into a scratch database: its
+stack is gone, the codespace
 archive the restore of §3. A timed restore test: `staging-refresh.sh <file>`
 (§8) of the extracted dump.
 
@@ -1349,7 +1363,7 @@ enabled), checkout (`/home/srvstg/quiz-staging`), compose project
 container capped (`compose.staging.yml`). Staging executes every commit of
 `main` before anyone approves it, so it must not share the account that owns
 production's secrets, volumes and backups: `srvstg` can read nothing under
-`/srv/quiz`, `/srv/heig-classroom` or `/srv/evaluation-tb` (§2, *The `srv`
+`/srv/quiz` or `/srv/evaluation-tb` (§2, *The `srv`
 account*). Its Caddy fragment, `/etc/caddy/conf.d/quiz-staging.caddy`, is
 installed by `srv` (or an administrator), never by staging.
 
@@ -1380,7 +1394,7 @@ Docker daemon.
 sudo useradd --create-home --shell /bin/bash srvstg     # also allocates its /etc/subuid and /etc/subgid ranges
 grep -E '^(srv|srvstg):' /etc/subuid /etc/subgid        # two ranges, not overlapping
 sudo loginctl enable-linger srvstg                      # its containers restart at boot
-sudo chmod o-rwx /srv/quiz /srv/heig-classroom /srv/evaluation-tb
+sudo chmod o-rwx /srv/quiz /srv/evaluation-tb
 sudo install -d -o srv -g srvstg -m 2750 /srv/staging-inbox   # production writes, staging reads (below)
 
 # As srvstg (sudo machinectl shell srvstg@): its own rootless Docker.
@@ -1537,7 +1551,7 @@ configuration.
 | `AUTH_DEV_LOGIN` | unset | `1` is refused: the process does not start |
 | `PUBLIC_URL` | `https://quiz.chevallier.io`, set by compose | base of the OIDC redirect URI; `WEB_URL` is left empty because the monolith serves the SPA itself |
 | `OIDC_ISSUER`, `OIDC_CLIENT_ID` | `https://login.eduid.ch/` and the client id from the SWITCH Resource Registry | the dev defaults point at the local Keycloak |
-| `OIDC_PRIVATE_KEY_PATH`, `OIDC_PRIVATE_KEY_KID` | `secrets/eduid-private-key.pem`, `hgc-eduid-2026` | `private_key_jwt` client authentication: the classroom's key and `kid`, since the client shares its public JWK; `./secrets` is mounted read-only into the container |
+| `OIDC_PRIVATE_KEY_PATH`, `OIDC_PRIVATE_KEY_KID` | `secrets/eduid-private-key.pem`, `hgc-eduid-2026` | `private_key_jwt` client authentication: the key and `kid` inherited from heig-classroom, since the client shares the public JWK it registered (never revoke it); `./secrets` is mounted read-only into the container |
 | `OIDC_CLIENT_SECRET` | unset | with a private key configured the secret is never sent and is not checked; without one, `client_secret` authentication applies and the `not-for-production` placeholder is refused |
 | `SUPER_ADMIN_EMAIL` | one address | the only account managed through the environment; teachers are managed from the admin screen |
 | `LOGIN_ALLOWLIST` | unset (staging: the testers' addresses) | when set, only these addresses and the super administrator may sign in |
@@ -1552,7 +1566,7 @@ configuration.
 | `TRUSTED_PROXIES` | default `loopback,172.16.0.0/12` | the addresses the API accepts `X-Forwarded-For` from: native Caddy on loopback and the Docker bridge; `req.ip` feeds the room restriction and the attempt journal, so never list a range a student machine can sit on |
 | `OAUTH_CIMD_HOSTS` | default `claude.ai,claude.com,chatgpt.com` | the only hosts whose OAuth Client ID Metadata Documents the server fetches ([ADR-023](../adr/ADR-023-serveur-oauth-pour-mcp.md)); `PUBLIC_URL` is the OAuth issuer, so it must be the exact public origin |
 | `METRICS_TOKEN` | `openssl rand -hex 32`, a bearer token for Prometheus | empty leaves `/metrics` and the coarse words of `/healthz` to an admin session; the metrics are never public; under 32 characters, production refuses to start |
-| `SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID` | the classroom's Scaleway project | empty: e-mails are logged, never sent |
+| `SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID` | the Scaleway project inherited from heig-classroom | empty: e-mails are logged, never sent |
 | `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_ALLOWED_TENANTS` | see [Microsoft Teams setup](teams.md) | empty: the Teams channel is off |
 | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH`, `GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` | the production App's | empty: the GitHub features are off; with an App id, the refusals of [Quiz's GitHub App](github-app.md#the-environments-variables) apply |
 | `RUNNER_MODE`, `RUNNER_URL` | `http`, `https://code.chevallier.io:8443` | `http` without a URL is refused; `stub` disables the runner, see below |

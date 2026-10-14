@@ -24,21 +24,25 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
   import go live together (D26) at the cutover (D20).
 - **Next actions**: **the cutover is done** (M8-07, Sunday 2026-10-11
   07:07–07:50 UTC, rehearsed on staging the day before: M8-06): classroom
-  redirects to Quiz, its data is imported, its App no longer acts. Now the
-  observation period D (runbook §4, one to two weeks): the first deadline
-  Quiz freezes on imported projects (Prog-A's Labo-02, 2026-10-11 23:59),
-  the late `mid-review` checkpoint of Labo-Intersection, the 19 MI-2026
-  roster lines in conflict, the daily `reconcile.repos`, the `hgc-protect`
-  rulesets (empty bypass list). Then E / M9-01 (point of no return,
-  decommission) from T0 + 7 days if D is clean. M6-07's code is merged; proof B is done for evaluations (2026-10-10, Config Key
+  redirects to Quiz, its data is imported, its App no longer acts. The
+  observation period D (runbook §4) was clean: everything imported, the 19
+  MI-2026 roster lines in conflict resolved by hand. The product owner
+  passed the point of no return on 2026-10-14: E / M9-01 is in progress
+  (the redirect is a 308, the final copy of classroom's data is on the
+  owner's workstation), and the owner removes classroom's stack, its CI
+  credentials, its SWITCH redirect URI and its App (runbook §5, the M9-01
+  row below). M6-07's code is merged; proof B is done for evaluations (2026-10-10, Config Key
   enforced in production) and waits for the project flow (a real SEB, the owner, on staging); M6-08 and M6-09 are to do. Quiz's production App
   exists (registered by hand); staging's, `heig-quiz-staging`, exists
   since 2026-10-06 (M2-06). Teachers create their Quiz classrooms; the
   merge then writes the correspondence table (D22).
-- **Classroom sync point — closed 2026-10-11**: classroom's last commit
-  in production was `f572758` (`images.txt`, runbook §1.7), its CI is
-  disabled and its data was imported at C3 from the dump of 07:08 UTC;
-  nothing is forwarded any more. The last sync point was `a676c8c`
+- **Classroom sync point — closed 2026-10-11, final since 2026-10-14**:
+  classroom's last commit in production was `f572758` (`images.txt`,
+  runbook §1.7), its CI was disabled and its data was imported at C3 from
+  the dump of 07:08 UTC; nothing is forwarded any more, and since the
+  point of no return (M9-01, 2026-10-14) nothing will be: there is no way
+  back to classroom, whose repository is archived at the runbook's §5 step
+  10 and stays readable as evidence. The last sync point was `a676c8c`
   (classroom `origin/main`, 2026-10-06). A classroom commit after it
   touching a ported file had to be forwarded (see strategy §1.2,
   principle 6), checked with
@@ -210,7 +214,7 @@ In the critical path only if D09 finds online assignments in production.
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M9-01 | Point of no return, decommission, close #143 | todo | M8-07 + observation | | | |
+| M9-01 | Point of no return, decommission, close #143 | in progress | M8-07 + observation | `merge/M9-01-decommission` | | **Point of no return passed 2026-10-14** (product owner: D clean, everything imported, the 19 MI-2026 conflict lines resolved by hand). This PR: the resolver redirect is a `308` (`infra/caddy/classroom-redirect.caddy`; `legacyRule`'s own 302s stay) and `check-classroom-redirects.sh` expects it; `docs/development/deployment.md`, [`README.md`](README.md) and the runbook (§0, §5) describe classroom's stack as gone; `scripts/offsite-backup/push.sh` no longer lists `/srv/heig-classroom/backups`. Step 2 deviates (product owner): no age-encrypted dump in the vault; the final copy is classroom's last nightly dump, `/srv/heig-classroom/backups/hgc-2026-10-14.dump` (08:33 UTC, the app stopped since C1, so final), copied by scp to the owner's workstation, sha256 `fde6b3a3217f59d2f0ddf0c880ba9120f6d245b422eb98c5429ab79b5bcd7242` checked on both sides; the off-site borg archives keep classroom's dumps for their retention (~3 months). **Remains for the owner** (runbook §5 steps 1, 3–11): install the fragment as in C6 and run the check script (308 rows); drop `hgc_cutover` and delete `/srv/quiz/merge`, copied locally first if wanted (§5.1); `h down -v`, `rm -rf /srv/heig-classroom`, the `command="/srv/heig-classroom/deploy.sh"` line of `/home/srv/.ssh/authorized_keys`; the `DEPLOY_SSH_KEY` secret, the `DEPLOY_USER` variable and the GHCR package of `heig-tin-info/heig-classroom`; SWITCH: classroom's redirect URI; engine VM: `/root/classroom-codespace` and `/etc/codespace/github-app.pem`; `hgc-prod` uninstalled, then deleted; the repository archived; a comment on #143. `done` once the owner confirms the stack is removed. |
 
 ## L — After the merge
 
@@ -219,11 +223,11 @@ Project grading by criteria on the platform ([ADR-106](../adr/ADR-106-notation-d
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | L-02a | Criteria snapshot: parser, totals, `project_criteria`, opt-in `criteria` mode | done | ADR-106 | `project-criteria-mode` | #793 | Parser `packages/domain/src/criteriaParse.ts`, snapshot and mode switch (`modules/project/criteria.ts`, migration `0109`); the checkpoint-name check at creation and the `testsCriterion` pre-fill rule go to L-02d/L-02c. |
-| L-02b | Runner `project` action, `lab-c` image, `project.evidence` | in progress | L-02a | `project-evidence-run` | | Runner: #797. API: `modules/project/evidence.ts` (`runEvidence`, migration `0110`); the evidence job writes the `auto` rows through `writeCriterionGrades` (`criterionGrades.ts`), which L-02c's review job reuses for the llm rows (ADR-106 §4 amended); nothing enqueues the job yet, the milestone path is L-02d's. |
-| L-02c | Final pass, proposals, regrade | in progress | L-02a, L-02b | `project-llm-pass` | | Purpose `project` (exempt from the user share), `project.review` (`modules/project/reviewPass.ts`, masked by `projectMaskTerms`), the final pass claimed in `grade_dispatches` at the freeze (`jobs.ts`), Regrade and the staff's criteria table (`regrade.ts`), `criteriaTable` in `@quiz/domain`; no migration. Follow-up (the card's commit-authors check): the project setting `identityCriterion`, graded by the evidence job from the handed-out branch's commits read through the App (`project_evidence.commits`, migration `0114`; bots and the handed-out commit excluded) by `commitIdentityPoints`, never sent to the model, its rationale masking the e-mail; the settings' select on the web. |
-| L-02d | Milestone locks | in progress | L-02c, L-02e | `project-milestone-locks` | | `modules/project/milestone.ts`: the ticker claims a `criteria` checkpoint's pass in `grade_dispatches` and enqueues `project.evidence` (no `grade-milestone` dispatch), the pass grades the tagged criteria at the last push before the date, rows written with `locked_by_checkpoint_id`/`locked_at` (migration `0113`, FK deferred by hand); `heldCriteria` holds locked rows, a superseding row inherits the lock, a deadline moved later supersedes the unlocked machine rows and their validations (before the release); `checkpoint_untagged` at creation, a fired milestone undeletable (`checkpoint_dispatched`, the deferred FK behind it); `locked` in `criteriaTable`, lock icon on the grading screen. The Labo-Intersection CI checkpoint is an `auto` project: not converted. |
-| L-02e | Teacher grading screen, release gate | in progress | L-02c | `project-grading-screen` | | `modules/project/criteriaGrading.ts` (`GET …/grading`, a teacher's points as a `manual` row still proposed, Validate per repository and in bulk through `writeCriterionGrades`, `409 criteria_incomplete`), the release refused `409 not_validated` (`grades.ts`), the `criteria` final-score source (`resolveFinalScore`, `criteriaScore`, `repoValidation` in `@quiz/domain`), the primary action `grade`; web `/projects/:id/grading` (`project/grading/`), mock `?pjcriteria=1`; no migration. |
-| L-02f | Student criteria table | in progress | L-02c, L-02g | `student-criteria-table` | | `studentView.ts` (the one exit): `criteria` (`StudentCriteriaRow[]`: the `student` audience of `criteriaTable` over the seat's own repository; final once every row is validated), null off the `criteria` mode; N-SEC-20 search test extended (second student, superseded and milestone rationales, reason, source, pass and checkpoint ids, another mode); web `student/ProjectCriteria.tsx` under the score (row cards on a phone), one `RationaleFold` shared with the grading table, mock `?projects=1&pjcriteria=1`; no migration. Ahead of L-02g by the orchestrator's order. |
+| L-02b | Runner `project` action, `lab-c` image, `project.evidence` | done | L-02a | `project-evidence-run` | #797 (runner), #799 (API) | Runner: #797. API: `modules/project/evidence.ts` (`runEvidence`, migration `0110`); the evidence job writes the `auto` rows through `writeCriterionGrades` (`criterionGrades.ts`), which L-02c's review job reuses for the llm rows (ADR-106 §4 amended); nothing enqueues the job yet, the milestone path is L-02d's. |
+| L-02c | Final pass, proposals, regrade | done | L-02a, L-02b | `project-llm-pass` | #806, #820 (identity criterion) | Purpose `project` (exempt from the user share), `project.review` (`modules/project/reviewPass.ts`, masked by `projectMaskTerms`), the final pass claimed in `grade_dispatches` at the freeze (`jobs.ts`), Regrade and the staff's criteria table (`regrade.ts`), `criteriaTable` in `@quiz/domain`; no migration. Follow-up (the card's commit-authors check): the project setting `identityCriterion`, graded by the evidence job from the handed-out branch's commits read through the App (`project_evidence.commits`, migration `0114`; bots and the handed-out commit excluded) by `commitIdentityPoints`, never sent to the model, its rationale masking the e-mail; the settings' select on the web. |
+| L-02d | Milestone locks | done | L-02c, L-02e | `project-milestone-locks` | #814 | `modules/project/milestone.ts`: the ticker claims a `criteria` checkpoint's pass in `grade_dispatches` and enqueues `project.evidence` (no `grade-milestone` dispatch), the pass grades the tagged criteria at the last push before the date, rows written with `locked_by_checkpoint_id`/`locked_at` (migration `0113`, FK deferred by hand); `heldCriteria` holds locked rows, a superseding row inherits the lock, a deadline moved later supersedes the unlocked machine rows and their validations (before the release); `checkpoint_untagged` at creation, a fired milestone undeletable (`checkpoint_dispatched`, the deferred FK behind it); `locked` in `criteriaTable`, lock icon on the grading screen. The Labo-Intersection CI checkpoint is an `auto` project: not converted. |
+| L-02e | Teacher grading screen, release gate | done | L-02c | `project-grading-screen` | #811 | `modules/project/criteriaGrading.ts` (`GET …/grading`, a teacher's points as a `manual` row still proposed, Validate per repository and in bulk through `writeCriterionGrades`, `409 criteria_incomplete`), the release refused `409 not_validated` (`grades.ts`), the `criteria` final-score source (`resolveFinalScore`, `criteriaScore`, `repoValidation` in `@quiz/domain`), the primary action `grade`; web `/projects/:id/grading` (`project/grading/`), mock `?pjcriteria=1`; no migration. |
+| L-02f | Student criteria table | done | L-02c, L-02g | `student-criteria-table` | #815 | `studentView.ts` (the one exit): `criteria` (`StudentCriteriaRow[]`: the `student` audience of `criteriaTable` over the seat's own repository; final once every row is validated), null off the `criteria` mode; N-SEC-20 search test extended (second student, superseded and milestone rationales, reason, source, pass and checkpoint ids, another mode); web `student/ProjectCriteria.tsx` under the score (row cards on a phone), one `RationaleFold` shared with the grading table, mock `?projects=1&pjcriteria=1`; no migration. Ahead of L-02g by the orchestrator's order. |
 | L-02g | Labo 00 pilot | todo | L-02c, L-02e | | | |
 
 ## Rehearsal log

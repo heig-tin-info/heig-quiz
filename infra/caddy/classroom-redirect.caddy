@@ -8,8 +8,10 @@
 #
 # Caddy answers the machines; every row a human clicks (§6.6) is Quiz's
 # resolver's (`GET /legacy/classroom/*`, `legacyRule` in @quiz/domain),
-# never repeated here. Every redirect is a 302 until the point of no return
-# (phase D): browsers cache 301 and 308.
+# never repeated here. The redirect is a 308 since the point of no return
+# (M9-01, 2026-10-14; it was a 302 during the observation, D, because
+# browsers cache 301 and 308): 308 keeps the method, 301 may not.
+# `legacyRule`'s own redirects depend on the identity and stay 302.
 # CLASSROOM_SITE only exists to test the fragment on a local port; production
 # leaves it unset.
 {$CLASSROOM_SITE:classroom.chevallier.io} {
@@ -31,6 +33,6 @@
 	# `code`, an unsubscribe token: nothing of it may reach Quiz).
 	@any vars_regexp raw {uri} ^([^?]*)
 	handle @any {
-		redir https://quiz.chevallier.io/legacy/classroom{re.raw.1} 302
+		redir https://quiz.chevallier.io/legacy/classroom{re.raw.1} 308
 	}
 }

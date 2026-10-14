@@ -47,10 +47,15 @@ classroom `origin/main` (`ab98cc0`, the journal commit). Paths are written:
   Never edit `~/heig-classroom` from a merge task. Until the cutover
   classroom stayed in production and its fixes were cherry-picked forward
   (see "Classroom keeps living" in [`01-strategy.md`](01-strategy.md));
-  **since 2026-10-11 (M8-07) it no longer runs**: `classroom.chevallier.io`
-  redirects to Quiz, its CI is disabled, and the checkout is evidence only.
-  What remains of its stack until E is listed on the
-  [M9-01 card](09-tasks.md#m9-01-point-of-no-return-and-decommission).
+  **since 2026-10-11 (M8-07) it no longer runs**, and **since 2026-10-14
+  (M9-01) it is gone for good**: `classroom.chevallier.io` redirects to
+  Quiz permanently (308), its stack is removed from the application VM,
+  and its repository is archived (read-only on GitHub, still fetchable).
+  The checkout is evidence only: `C:` paths name what classroom did, never
+  something that still runs. What the decommission removes, and in which
+  order, is the runbook's
+  [§5](10-cutover-runbook.md#5-e-m9-01-point-of-no-return-and-decommission);
+  the M9-01 row of [`PROGRESS.md`](PROGRESS.md) says which steps are done.
 
 ## Rules for the agents working on the merge
 

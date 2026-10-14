@@ -1,5 +1,5 @@
 # Once a day at 05:30 UTC, give or take a quarter of an hour: after every
-# night's dump (quiz 21:01, heig-classroom ~19:54, evaluation-tb 03:17 UTC)
+# night's dump (quiz 21:01, evaluation-tb 03:17 UTC)
 # and the engine pull (03:00–05:00); a run missed while the VM was down is
 # caught up at boot (Persistent).
 [Unit]

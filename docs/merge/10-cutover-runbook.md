@@ -41,7 +41,7 @@ Open decisions for the owner (each blocks the step named):
 | O4 | **Staff-seat repositories.** ADR-077 asks the dry run to count the repositories classroom let its teachers accept. The import does not count them, so §1.3 gives the SQL. Import them (badged "Teacher") or leave them out? | the mapping (T-3) | import them: they are counted nowhere |
 | O5 | **Deadline window.** The `--final` pre-flight refuses a live assignment whose deadline (plus grace) falls within `--window-hours` of the run, 24 by default. The window only has to cover the freeze and the catch-up (C1→C8, ≤ 2 h by the M8-03b threshold) with a margin. When the next classroom deadline falls the same evening, 24 h would refuse a morning T0 for nothing: pass `--window-hours 12` at C3, and use `W=12` in §1.4. | T0 | 24 h; 12 h when the next deadline is the same evening, at least 12 h after T0 |
 | O6 | **The import's runtime.** The production image runs the import as `node dist/import-classroom.js` (#655, §1.6). | M8-06 | #655 merged and deployed |
-| O7 | **The point of no return.** D lasts one to two weeks. | E | T0 + 7 days if C8 and D's checks are clean |
+| O7 | **The point of no return.** D lasts one to two weeks. **Settled 2026-10-14** (product owner): D was clean, E started that day (§5). | E | T0 + 7 days if C8 and D's checks are clean |
 | O8 | **Roster options at C3.** The D08 addendum (2026-10-05) made `--missing-students report` and `--assistants skip` the defaults, with the rosters fixed by hand before the final import. The production dry run of 2026-10-10 lists, under the defaults, 47 students absent from the Quiz rosters (TSA 15, MI-2026 21, VisIndus 6, Prog-A 3, Prog-D 2, Prog-C 1), 4 assistants without a seat, and 12 members of the group projects of TSA and VisIndus not placed. With `--missing-students enroll --assistants staff` (the options M8-06 rehearsed) nothing is left to settle; the price is 19 MI-2026 lines whose account already holds another line of the classroom (another address): they are created unclaimed with a conflict flag the teacher resolves (AU-21). | C3 | the explicit options, `ROSTER` below; by hand only if the teachers fix the 51 lines before T-1 h |
 
 D20 and D22 are settled (08-decisions.md); only their date (O1) and their
@@ -56,6 +56,11 @@ criterion.
 **The sequence.** Each step has two dates: normal notice, then short
 notice in brackets. At short notice the rehearsal (M8-06) is the staging
 dry run, the day before T0.
+
+**As run**: P to C8 on 2026-10-10 and 2026-10-11 (M8-06, M8-07 in
+[`PROGRESS.md`](PROGRESS.md), with their times), D from 2026-10-11 to
+2026-10-14, E from 2026-10-14 (M9-01). The boxes below are the template,
+left unticked; PROGRESS.md is the record.
 
 - [ ] **P**: #655 (O6) deployed to production
 - [ ] **T-7 [T-2]**: T0 chosen (O1) and checked with §1.4; announcement 1 sent (appendix A)
@@ -73,7 +78,7 @@ dry run, the day before T0.
 - [ ] **C7**: `reconcile.repos`, `reconcile.grades`, `reconcile.deliveries` run by hand
 - [ ] **C8**: smoke list green; uptime monitors switched; Quiz deploys unfrozen; "done" message sent
 - [ ] **D**: one to two weeks of observation (§4)
-- [ ] **E / M9-01**: 302 changed to 308, final dump encrypted off the VM, every personal-data copy deleted, classroom removed, its App uninstalled last, repository archived
+- [ ] **E / M9-01**: 302 changed to 308, the final copy of classroom's data off the VM (as run: its last nightly dump on the owner's workstation, §5 step 2), every personal-data copy deleted, classroom removed, its App uninstalled last, repository archived
 
 **Shell helpers**, used everywhere below. On the application VM, as `srv`
 (`ssh srv@128.140.71.35`):
@@ -652,10 +657,13 @@ open, and D's checks have been clean for three consecutive days.
 
 ## 5. E / M9-01: point of no return and decommission
 
-In this order. Each step is the owner's unless it says otherwise.
+Started 2026-10-14 (the product owner's go, O7). In this order. Each step
+is the owner's unless it says otherwise. Which steps are done is the
+M9-01 row of [`PROGRESS.md`](PROGRESS.md).
 
 1. **Permanent redirects.** Change `302` to `308` in
-   `infra/caddy/classroom-redirect.caddy` (a PR, by an agent).
+   `infra/caddy/classroom-redirect.caddy` (a PR, by an agent; done in
+   M9-01's PR).
    `legacyRule`'s own 302s depend on identity and stay. Install the
    fragment as in C6 and run `check-classroom-redirects.sh`, updated in the
    same PR.
@@ -664,6 +672,17 @@ In this order. Each step is the owner's unless it says otherwise.
    `h exec -T postgres pg_dump -Fc -U hgc hgc | age -r <owner's age recipient> > /srv/quiz/merge/hgc-final-$(date +%F).dump.age`.
    The owner copies it to the vault's storage, then checks that it
    decrypts and that `pg_restore -l` reads it.
+
+   **As run on 2026-10-14, a deviation decided by the product owner**: no
+   new dump and no `age` copy in the vault. Classroom's app had been
+   stopped since C1, so its last nightly dump,
+   `/srv/heig-classroom/backups/hgc-2026-10-14.dump` (taken 2026-10-14
+   08:33 UTC), is final. The owner copied it by `scp` to their workstation
+   and checked its sha256 on both sides
+   (`fde6b3a3217f59d2f0ddf0c880ba9120f6d245b422eb98c5429ab79b5bcd7242`).
+   The off-site borg archives (`deployment.md` §6, *The off-site copy*)
+   also hold classroom's dumps until their retention (about three months)
+   prunes them; `push.sh` no longer copies `/srv/heig-classroom/backups`.
 3. **Personal-data copies of the cutover** (agent (srv), the same day as
    step 2): the deletions of §5.1, production rows.
 4. **Remove classroom's stack** (agent (srv) after go):
@@ -706,7 +725,7 @@ the account boundaries protect it.
 | staging cutover directory | `~srvstg/merge` | owner (srvstg) | same day | `rm -rf ~/merge` |
 | inbox copies | `/srv/staging-inbox/hgc.dump`, `mapping.json` | agent (srv) | same day | `rm -f /srv/staging-inbox/hgc.dump /srv/staging-inbox/mapping.json` |
 | production scratch database | `hgc_cutover` in Quiz's PostgreSQL | agent (srv) | E, step 3 | `q exec -T postgres psql -U quiz -d postgres -c 'DROP DATABASE IF EXISTS hgc_cutover WITH (FORCE)'` |
-| production cutover directory | `/srv/quiz/merge` (dumps, mapping, reports) | agent (srv) | E, step 3, once the encrypted final dump is verified (it keeps what must be kept) | `rm -rf /srv/quiz/merge` |
+| production cutover directory | `/srv/quiz/merge` (dumps, mapping, reports) | agent (srv) | E, step 3, once the final copy is verified (it keeps what must be kept; as run, the dump of step 2 on the owner's workstation), after the owner copies the directory locally if wanted | `rm -rf /srv/quiz/merge` |
 
 The staging import also wrote classroom's data into staging's own Quiz
 database, which the `--keep-identities` export left with production's real

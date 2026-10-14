@@ -23,11 +23,11 @@ ENV="$HOME/.config/borg-offsite/env"
 # quiz's own dumps must be there; the other services of this VM are skipped
 # when absent. Not here: the PostgreSQL data directories (the dumps suffice,
 # the Hetzner VM backup holds the physical copy), the images (rebuilt or
-# pulled) and the secrets (the vault, ADR-010).
+# pulled) and the secrets (the vault, ADR-010). /srv/heig-classroom/backups
+# left the list with heig-classroom's decommission (M9-01, 2026-10-14).
 REQUIRED=/srv/quiz/backups
 OPTIONAL=(
   /srv/quiz/assets
-  /srv/heig-classroom/backups
   /srv/evaluation-tb/backups
   /srv/evaluation-tb/assets
   /srv/quiz-engine-backups
