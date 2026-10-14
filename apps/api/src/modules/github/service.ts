@@ -44,7 +44,6 @@ import {
 } from "../../db/schema.js";
 import {
   fetchInstallation,
-  fetchOrgLlmSecret,
   fetchOrgPlan,
   githubStatus,
   HTTP_READ,
@@ -72,7 +71,7 @@ type OrgRow = typeof githubOrganizations.$inferSelect;
  */
 export const HEAL_TTL_MS = 60_000;
 
-const UNKNOWN_CHECKS: GithubChecks = { allRepositories: null, llmSecret: "unknown" };
+const UNKNOWN_CHECKS: GithubChecks = { allRepositories: null };
 
 interface Healed {
   org: OrgRow;
@@ -596,14 +595,7 @@ async function heal(db: Db, config: AppConfig, stored: OrgRow): Promise<Healed> 
     return { org, checks: UNKNOWN_CHECKS };
   }
   org = await refreshPlan(config, db, await recordInstallation(db, inst, "healing"));
-  const secret = await fetchOrgLlmSecret(config, inst.installationId, org.login, HTTP_READ);
-  return {
-    org,
-    checks: {
-      allRepositories: inst.allRepositories,
-      llmSecret: secret === "ok" ? "present" : (secret ?? "unknown"),
-    },
-  };
+  return { org, checks: { allRepositories: inst.allRepositories } };
 }
 
 // ---------------------------------------------------------------- a classroom's link

@@ -46,8 +46,8 @@ quand la plateforme en a une, et la fin de la classe.
 
 **Connecter à GitHub** choisit une organisation où l'app de Quiz est
 installée, ou l'installe sur une autre ; les vérifications disent ensuite
-si l'app voit tous les dépôts, l'offre de l'organisation et le secret du
-LLM. **Déconnecter** ne supprime rien sur GitHub.
+si l'app voit tous les dépôts, et l'offre de l'organisation.
+**Déconnecter** ne supprime rien sur GitHub.
 
 **Archiver** met de côté une classe terminée sans rien supprimer ;
 **Restaurer** la ramène. **Supprimer** est tout autre chose : la liste, les

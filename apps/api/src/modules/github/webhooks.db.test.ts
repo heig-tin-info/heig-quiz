@@ -111,7 +111,6 @@ const fakeOrg = (githubOrgId: number, login: string, installationId: number | nu
   installationId,
   selection: "all",
   plan: "team",
-  secret: true,
   exists: true,
   ...more,
 });

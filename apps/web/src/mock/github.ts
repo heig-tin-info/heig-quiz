@@ -17,7 +17,7 @@
  *
  * Scene flags: `?unlinked=1` (`flags.unlinked`), the persona has no linked
  * GitHub account (`GET /app/api/me/github`); `?ghwarn=1`, PRG1-2026's
- * organization is on the free plan and has no LLM secret; `?ghmissing=1`,
+ * organization is on the free plan; `?ghmissing=1`,
  * that organization no longer exists on GitHub; `?ghnogrant=1`, no
  * organization is open to the classrooms not connected (the sheet lists none).
  */
@@ -65,9 +65,7 @@ const LINKS: Record<string, GithubClassroomLink> = {
   r1: {
     org: linkedOrg(),
     linkedAt: iso(-20 * D),
-    checks: flags.ghmissing
-      ? { allRepositories: null, llmSecret: "unknown" }
-      : { allRepositories: true, llmSecret: flags.ghwarn ? "missing" : "present" },
+    checks: { allRepositories: flags.ghmissing ? null : true },
   },
 };
 
@@ -114,7 +112,7 @@ on("PUT", "/app/api/classrooms/:id/github", (m, body) => {
   LINKS[id] = {
     org,
     linkedAt: iso(0),
-    checks: { allRepositories: true, llmSecret: org.plan === "free" ? "unknown" : "present" },
+    checks: { allRepositories: true },
   };
   return classroomGithub(id);
 });

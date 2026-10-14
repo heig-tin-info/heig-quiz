@@ -15,8 +15,8 @@
  *   archived as its lock (H8; never un-archived for a review) nor one whose
  *   protected files are no longer restored (F-PROJ-08; the teacher's score
  *   settles it) — both audited `project_repo.review_skipped` by `jobs.ts`.
- *   Dispatched even when the organization's `ANTHROPIC_API_KEY` is missing
- *   (F-GH-03 warns only).
+ *   Dispatched whatever the organization's secrets: Quiz never checks its
+ *   key (M3-14f).
  * - **A review checkpoint**: at its date, while it lies before the
  *   project's deadline (a checkpoint left behind by a deadline moved
  *   earlier is void and never fires, `checkpointPass`), one

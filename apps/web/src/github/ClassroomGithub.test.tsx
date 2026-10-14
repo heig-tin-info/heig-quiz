@@ -35,7 +35,7 @@ const GONE = org({ id: "0190d3c4-0000-7000-8000-00000000a003", login: "old-org",
 
 const plain: GithubClassroom = { link: null, suggestedOrgId: EMB.id, installUrl: INSTALL };
 const connected: GithubClassroom = {
-  link: { org: TIN, linkedAt: "2026-09-01T00:00:00.000Z", checks: { allRepositories: true, llmSecret: "missing" } },
+  link: { org: TIN, linkedAt: "2026-09-01T00:00:00.000Z", checks: { allRepositories: true } },
   suggestedOrgId: null,
   installUrl: INSTALL,
 };
@@ -206,11 +206,9 @@ describe("the classroom's GitHub section", () => {
     expect(await screen.findByText("heig-tin-info")).toBeVisible();
     const checks = screen.getByRole("list", { name: "Checks" });
     const lines = within(checks).getAllByRole("listitem");
-    expect(lines.map((l) => l.getAttribute("data-level"))).toEqual(["ok", "ok", "warning"]);
+    expect(lines.map((l) => l.getAttribute("data-level"))).toEqual(["ok", "ok"]);
     expect(lines[0]).toHaveTextContent("App installed, with access to all repositories.");
     expect(lines[1]).toHaveTextContent("Plan: team.");
-    expect(lines[2]).toHaveTextContent("No ANTHROPIC_API_KEY organization secret");
-    expect(within(lines[2]!).getByRole("img", { name: "Warning" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect to GitHub" })).toBeNull();
   });
 

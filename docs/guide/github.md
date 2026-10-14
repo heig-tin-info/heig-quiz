@@ -24,18 +24,17 @@ A classroom is connected to **one** organization; two classrooms of the same cou
 
 ## Check the connection
 
-Once connected, the **GitHub** section shows the organization and three checks, each with what to do about it:
+Once connected, the **GitHub** section shows the organization and two checks, each with what to do about it:
 
 | Check | Meaning |
 | --- | --- |
 | **App installed, with access to all repositories** | The only **blocking** one. Without it no project can be created or accepted. |
 | **Plan** | On GitHub's *Free* plan an organization has no rulesets and no organization secrets for private repositories. Projects still work, but the deadline lock falls back to archiving the repository, and the LLM review cannot be configured. An Education organization has both. The line links to **GitHub Education**, where a verified teacher upgrades an academic organization (a teacher not yet verified is offered to apply there). |
-| **`ANTHROPIC_API_KEY` secret** | The organization secret the LLM review of projects reads. If it is missing, the review does not run; everything else does. It shows *unknown* when the App cannot read secrets. |
 
 <figure markdown="span">
-  ![The GitHub section with warnings on the plan and the missing secret](../assets/screenshots/mock-classroom-settings-github-checks-warn-light.png#only-light)
-  ![The GitHub section with warnings on the plan and the missing secret](../assets/screenshots/mock-classroom-settings-github-checks-warn-dark.png#only-dark)
-  <figcaption>The checks, with warnings. They are read again every time the Settings open. (Mock data.)</figcaption>
+  ![The GitHub section with a warning on the plan](../assets/screenshots/mock-classroom-settings-github-checks-warn-light.png#only-light)
+  ![The GitHub section with a warning on the plan](../assets/screenshots/mock-classroom-settings-github-checks-warn-dark.png#only-dark)
+  <figcaption>The checks, with a warning. They are read again every time the Settings open. (Mock data.)</figcaption>
 </figure>
 
 **Disconnect** removes the link and deletes **nothing** on GitHub. It is refused while the classroom has a journal kept in a repository: [remove that journal](journal.md#removing-the-journal) first.

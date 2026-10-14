@@ -2711,7 +2711,7 @@ release. The original card's notes stay here; each part has its card below.
 | --- | --- | --- | --- |
 | 1 | "Install the App on GitHub" opens a new tab; GitHub's setup return then loads a SECOND Quiz in it while the first still waits | M3-14b | The install is a same-tab round trip, like the account link: the setup return lands on `/classrooms/<state>/settings?connect=1&installed=<orgId>`, the sheet reopens with the new organization picked; the wait-for-refetch machinery goes. The App's settings: Setup URL `https://<host>/setup/github/installed`, "Redirect on update" ticked |
 | 2 | The Free-plan check should lead to where an organization becomes an Education one | M3-14b | A link to `https://education.github.com/globalcampus/teacher` (GitHub's Education FAQ: "Upgrade your academic organizations"; an unverified teacher is offered to apply there) |
-| 3 | The `ANTHROPIC_API_KEY` organization-secret check | M3-14f | NOT NOW (product owner): removed progressively once Quiz's own LLM does the final review |
+| 3 | The `ANTHROPIC_API_KEY` organization-secret check | M3-14f | NOT NOW (product owner): removed progressively once Quiz's own LLM does the final review. **Done 2026-10-14 (product owner): removed entirely**, card M3-14f |
 | 4 | A student should be led to link GitHub when a project is published or opened | M3-14d | **Decided (product owner, 2026-10-06): the `project_published` notification's text only**, for a recipient with no linked GitHub account; no redirect, no banner. Before the decision: F-GH-05 and `05-web.md` §5.3 say no banner, no nudge (product owner, 2026-10-01). Link GitHub is already the one primary action of an unlinked student's open project card and page (`projectActionKind`), with the return to the page; the pilot saw the READ-ONLY student view (finding 8), where no button shows. At most: a `project_published` notification worded for an unlinked recipient |
 | 5 | "New evaluation" is a dialog, "New project" a page: one scrollable modal for both? | M3-14e | **Won't do (product owner, 2026-10-06): New project stays a page.** The reasons: M3-11 decided one page (product owner and orchestrator, 2026-10-02); DESIGN.md keeps a centered dialog to three fields and a scrolling dialog to READING. The project needs everything before Create (the source, its branches and strategy are fixed; the build takes seconds). If an overlay is wanted, the conforming one is a `Sheet`, the route `projectNew` removed |
 | 6 | The Projects table should link the GitHub repositories, and say the time left | M3-14a | A row menu with the source and the students' (distribution) repository, staff only (F-PROJ-02); the deadline cell of a published project says the time left (no live countdown) |
@@ -2757,6 +2757,19 @@ commit included) where the student's card said "1 commit".
 | 18 | A negative CI score | M3-14n | **Decided**: `-2/6` counts 0/6 (F-PROJ-10 amended; it was `malformed`) and the staff see that it was clamped; a maximum of 0 or below stays malformed |
 | — | #567's defaults | M3-14i | Confirmed (product owner, 2026-10-06): commits counted, not pushes; no indicative score on the card after the release; the commit's own date; links instead of "…" in every list |
 | — | The load test | M3-14 | Later (product owner, 2026-10-06) |
+
+### M3-14f — Drop the `ANTHROPIC_API_KEY` organization-secret check
+- **Depends on**: the final review moved to Quiz's own LLM.
+- **Note** (pilot finding 3): NOT NOW (product owner, 2026-10-06): removed
+  progressively once Quiz's own LLM does the final review.
+- **Note** (2026-10-12, [ADR-106](../adr/ADR-106-notation-des-projets-par-criteres.md)
+  §10): Quiz's own LLM does it for a project in the `criteria` mode (cards
+  L-02a…g). The check, and the CI's `llm-review` tier, go course by course,
+  once that course's projects run in `criteria` mode; a project in `auto`
+  mode keeps both until then.
+- **As delivered** (PR #879, 2026-10-14): the check dropped outright on the
+  product owner's decision of 2026-10-14 (Quiz reviews with its own LLM). Pending:
+  the owner removes the App's `organization_secrets` permission on GitHub.
 
 ### M3-15 — Groups (API)
 Redesigned by [ADR-070](../../adr/ADR-070-repartitions-de-groupes.md)

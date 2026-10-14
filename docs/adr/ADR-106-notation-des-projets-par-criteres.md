@@ -6,7 +6,10 @@ Proposed (2026-10-12). The five product decisions and the masking, opt-in
 and runner rules are **decisions of the product owner** (2026-10-12); the
 target commit, overlay, commands, score model, report, milestone edge cases,
 LLM budget, tarball fetch and retention are the orchestrator's, after the
-spec challenge and the lean review of the same day.
+spec challenge and the lean review of the same day. Amended 2026-10-14
+(product owner, M3-14f): §10 only — the organization's `ANTHROPIC_API_KEY`
+check (F-GH-03) is dropped outright, not course by course; the CI's
+`llm-review` tier still retires course by course.
 
 Scope: how a project whose staff chose the `criteria` grading mode is graded —
 its criteria, the evidence the platform collects, the LLM pass, the
@@ -376,7 +379,10 @@ the freeze, searched for in every response and event of the first.
 - The in-flight Labo-Intersection checkpoint runs as dispatched.
 - The CI's `llm-review` tier and the organization's `ANTHROPIC_API_KEY`
   check (F-GH-03) are decommissioned **progressively**, course by course,
-  once their projects run in `criteria` mode (M3-14f).
+  once their projects run in `criteria` mode (M3-14f). *Amended 2026-10-14
+  (product owner, M3-14f): the check was dropped outright on that day, and
+  the App no longer reads organization secrets; the CI's `llm-review` tier
+  still retires course by course.*
 
 Invariants: `CLAUDE.md` invariant 12 carries the `project` action's archive
 rule, invariant 14 the target commit the server chooses from its push
@@ -399,8 +405,9 @@ Delivery: task cards L-02a to L-02g (`docs/merge/09-tasks.md`, `PROGRESS.md`).
   release. The teacher's validation is the gate of the final one.
 - A project whose tests need the network cannot use this mode until its
   dependencies are in the image.
-- Two systems coexist until M3-14f: CI review for `auto` projects, platform
-  pass for `criteria` ones.
+- Two systems coexist until the CI's `llm-review` tier retires: CI review
+  for `auto` projects, platform pass for `criteria` ones (the secret's
+  check already went, M3-14f, 2026-10-14).
 
 ## Alternatives considered
 

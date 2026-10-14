@@ -3,14 +3,13 @@
  * as data: one line per fact, its state, and the sentence that words it.
  * The API sends each fact once (M2-01): the installation line is derived
  * from the organization (`installed`, `status`) and `checks.allRepositories`,
- * the plan line from `org.plan` (`free` ⇒ the warning, null ⇒ unknown), the
- * LLM secret line from `checks.llmSecret`. No sentence comes from the server
- * (invariant 1).
+ * the plan line from `org.plan` (`free` ⇒ the warning, null ⇒ unknown). No
+ * sentence comes from the server (invariant 1).
  *
  * Only the installation line blocks: without the App on every repository,
- * nothing GitHub-backed works. A free plan and a missing secret are
- * warnings; a fact GitHub did not tell is `unknown`, never green. The levels
- * are the launch checklist's (`CheckLevel`, `ui`).
+ * nothing GitHub-backed works. A free plan is a warning; a fact GitHub did
+ * not tell is `unknown`, never green. The levels are the launch checklist's
+ * (`CheckLevel`, `ui`).
  */
 import type { GithubClassroomLink } from "@quiz/contracts";
 
@@ -18,7 +17,7 @@ import type { Dict } from "../i18n/en";
 import type { CheckLevel } from "../ui";
 
 export interface CheckLine {
-  id: "installation" | "plan" | "llmSecret";
+  id: "installation" | "plan";
   level: CheckLevel;
   text: keyof Dict;
   vars?: Record<string, string>;
@@ -55,13 +54,7 @@ function planLine({ org }: GithubClassroomLink): CheckLine {
   return { id, level: "ok", text: "github.check.plan", vars: { plan: org.plan } };
 }
 
-const LLM_SECRET: Record<GithubClassroomLink["checks"]["llmSecret"], CheckLine> = {
-  present: { id: "llmSecret", level: "ok", text: "github.check.llmPresent" },
-  missing: { id: "llmSecret", level: "warning", text: "github.check.llmMissing" },
-  unknown: { id: "llmSecret", level: "unknown", text: "github.check.llmUnknown" },
-};
-
-/** The three lines, in the order of the spec: installation, plan, LLM secret. */
+/** The two lines, in the order of the spec: installation, plan. */
 export function githubChecks(link: GithubClassroomLink, installUrl: string): CheckLine[] {
-  return [installationLine(link, installUrl), planLine(link), LLM_SECRET[link.checks.llmSecret]];
+  return [installationLine(link, installUrl), planLine(link)];
 }

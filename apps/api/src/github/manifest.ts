@@ -7,10 +7,9 @@
  * step by hand; `manifest.test.ts` fails when its tables and this module
  * differ, or when the events differ from those a module handles.
  *
- * The permissions are heig-classroom's App's plus the organization's
- * `Secrets: read` of the LLM secret probe (03 §3.4). A permission added
- * later makes every organization owner re-approve the installation: decide
- * it here, at registration.
+ * The permissions are heig-classroom's App's; organization secrets are not
+ * read (M3-14f). A permission added later makes every organization owner
+ * re-approve the installation: decide it here, at registration.
  */
 import { GITHUB_CALLBACK_PATH } from "../auth/paths.js";
 import type { AppConfig } from "../config.js";
@@ -37,7 +36,6 @@ export const APP_PERMISSIONS = {
   workflows: { access: "write", on: "repository" },
   members: { access: "read", on: "organization" },
   organization_plan: { access: "read", on: "organization" },
-  organization_secrets: { access: "read", on: "organization" },
 } as const satisfies Record<string, Permission>;
 
 /** The events the App subscribes to. */
