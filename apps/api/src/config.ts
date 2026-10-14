@@ -86,6 +86,12 @@ const EnvSchema = z.object({
 
   /** Directory of the built SPA (apps/web/dist); empty = API only (Vite dev). */
   STATIC_DIR: z.string().default(""),
+  /**
+   * Where the hashed files of earlier builds (`assets/`) are kept, so a tab
+   * still running one can load its lazy chunks after a deploy (ADR-110).
+   * Empty: only the current build is served.
+   */
+  STATIC_HISTORY_DIR: z.string().default(""),
 
   /**
    * Where uploaded question images live (F-QST-06). Files are named after

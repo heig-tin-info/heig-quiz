@@ -384,6 +384,8 @@ export const en = {
   "error.title": "Something went wrong",
   "crash.body": "The page stopped. What was already saved is kept: reload to continue.",
   "crash.reload": "Reload",
+  "crash.outdated.title": "Quiz has been updated",
+  "crash.outdated.body": "This page needs the new version. What was already saved is kept: reload to continue.",
   "toast.dismiss": "Dismiss notification",
   "aside.sidebar": "Courses and classrooms",
   "aside.questionMeta": "Question details",

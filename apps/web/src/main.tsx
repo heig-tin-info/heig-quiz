@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 
 import { ApiError } from "./api";
 import App from "./App";
+import { build } from "./realtime/build";
 import { ConnectionOverlay } from "./realtime/ConnectionOverlay";
 import { CrashBoundary } from "./CrashBoundary";
 import { ConfirmProvider } from "./confirm";
@@ -24,6 +25,8 @@ async function boot() {
   // browser. The flag is static, so production builds drop this branch.
   if (import.meta.env.VITE_MOCK === "1") await import("./mock");
 
+  // ADR-110: a chunk the server no longer has marks this tab stale.
+  build.start();
   applyTheme(getThemeChoice());
   // French is a chunk of its own: when it is the stored choice, the first
   // paint waits for it rather than flashing English. A failed load paints

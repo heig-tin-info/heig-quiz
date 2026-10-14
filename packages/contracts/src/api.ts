@@ -80,6 +80,13 @@ export const CSRF_HEADER = "x-csrf-token";
  */
 export const IDLE_HEADER = "x-quiz-idle";
 
+/**
+ * The commit the API runs, on its answers to an authenticated request
+ * (ADR-110): a tab of an older build learns it is stale. Never on `/healthz`
+ * nor on a signed-out answer (audit L21).
+ */
+export const BUILD_HEADER = "x-quiz-build";
+
 /** The quit link of every `.seb` Quiz builds, on Quiz's own host (ADR-027). */
 export const SEB_QUIT_PATH = "/seb/quit";
 

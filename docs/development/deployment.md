@@ -132,9 +132,23 @@ application VM's address only.
 | Piece | Where | Defined by |
 | --- | --- | --- |
 | Caddy | native package on the host, ports 80 and 443, shared with the neighbours | `Caddyfile`, copied to `/etc/caddy/conf.d/quiz.caddy` |
-| `app` | container, published on `127.0.0.1:3002` only | `Dockerfile`, image `ghcr.io/heig-tin-info/quiz` |
+| `app` | container, published on `127.0.0.1:3002` only; volume `static-history` | `Dockerfile`, image `ghcr.io/heig-tin-info/quiz` |
 | `postgres` | container, PostgreSQL 17, volume `pgdata` | `compose.prod.yml` |
 | `backup` | container running a daily `pg_dump -Fc` into `./backups/`, and its report into `./backup-status/last.json` | `compose.prod.yml` |
+
+The `static-history` volume (`STATIC_HISTORY_DIR=/app/static-history`)
+keeps the hashed files of `assets/` of the builds served in the last 30
+days, so a tab opened before a deploy still loads its lazy chunks
+([ADR-110](../adr/ADR-110-version-du-client-apres-un-deploiement.md)). Each
+boot copies its build's files in and deletes those no build has served for
+30 days; a failure there is logged and the boot goes on. It is a named
+volume, not a bind mount, because Docker creates it as a copy of the
+image's `/app/static-history`, owned by `node` (uid 1000): nothing to
+`chown` on the host. Staging has its own, in its own Docker. It is a cache:
+it is not backed up, and removing it (`docker volume rm quiz_static-history`
+with the stack down) only costs the old tabs their chunks at the next deploy.
+The first deploy that creates it holds only that build's files, so tabs of
+the build before it are not covered.
 
 `compose.prod.yml` starts these three containers and only those. The runner
 is not in the file. Keycloak is a development identity provider and is not

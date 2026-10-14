@@ -51,6 +51,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-055 — The system status: one registry of health checks, a narrow `/healthz`, a backup report](ADR-055-etat-du-systeme.md)
 - [ADR-107 — Platform activity for the administrator: hours of activity per person, read in aggregate only, kept eight days](ADR-107-activite-de-la-plateforme.md)
 - [ADR-065 — Connection recovery without reloading student work](ADR-065-reconnection-overlay.md)
+- [ADR-110 — The client's version after a deploy: old chunks kept, the new build taken at a safe moment](ADR-110-version-du-client-apres-un-deploiement.md)
 
 ### Identity, access and exam confinement
 

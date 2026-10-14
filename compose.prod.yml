@@ -30,6 +30,9 @@ services:
       # system status and /healthz. Only the report: the dumps themselves
       # are never mounted into this internet-facing container (N-DATA-03).
       BACKUP_STATUS_FILE: /app/backup-status/last.json
+      # The previous builds' chunks, kept 30 days for the tabs still running
+      # them (ADR-110); the volume below.
+      STATIC_HISTORY_DIR: /app/static-history
     ports:
       - "127.0.0.1:3002:3000" # native Caddy -> reverse_proxy localhost:3002
     volumes:
@@ -39,6 +42,9 @@ services:
       - ./assets:/app/assets
       # Written by `backup` (container root), read-only here (docs/development/deployment.md §6).
       - ./backup-status:/app/backup-status:ro
+      # A named volume, not a bind mount: it starts owned by `node`, as the
+      # image's directory is (Dockerfile). A cache, never backed up.
+      - static-history:/app/static-history
     depends_on:
       postgres:
         condition: service_healthy
@@ -130,3 +136,4 @@ services:
 
 volumes:
   pgdata:
+  static-history:
