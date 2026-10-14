@@ -2767,7 +2767,7 @@ commit included) where the student's card said "1 commit".
   L-02a…g). The check, and the CI's `llm-review` tier, go course by course,
   once that course's projects run in `criteria` mode; a project in `auto`
   mode keeps both until then.
-- **As delivered** (branch `drop-llm-secret-check`, 2026-10-14). Product
+- **As delivered** (branch `drop-llm-secret-check`, PR #879, 2026-10-14). Product
   owner, 2026-10-14: "Yes, we remove ANTHROPIC_API_KEY: it no longer
   depends on Quiz and we no longer check it. Quiz uses its own access." The
   check goes entirely, not course by course: `fetchOrgLlmSecret` and its
