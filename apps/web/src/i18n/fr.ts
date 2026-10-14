@@ -5755,7 +5755,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.rename": "Renommer le projet : {name}",
   "project.archiveConfirm.title": "Archiver « {name} » ?",
   "project.archiveConfirm.body":
-    "Le projet quitte les listes et ses dépôts ne sont plus suivis. Vous pourrez le restaurer plus tard.",
+    "Le projet quitte les listes et ses dépôts ne sont plus suivis. Ses notes disparaissent du carnet et de la moyenne, aussi pour les étudiants. Vous pourrez le restaurer plus tard.",
   "project.deleteConfirm.title": "Supprimer « {name} » ?",
   "project.deleteConfirm.body":
     "Ses dépôts, ses exécutions et ses scores sont supprimés de Quiz. Rien n'est supprimé sur GitHub : les dépôts des étudiants, le dépôt de distribution et la source restent où ils sont.",

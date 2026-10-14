@@ -11,7 +11,7 @@
  *   an archived project, nothing of another student; none at all to a
  *   confined session, whose exam leads nowhere else.
  * - `gradebookEntries`, `studentGradebookEntries` (M5-03a, F-GBOOK): the
- *   graded projects that are no draft. The staff read the LIVE final score
+ *   graded projects that are no draft and not archived. The staff read the LIVE final score
  *   of each seat's repository with its source (I42); a student reads the
  *   release's snapshot of their own seat alone, and no column of a project
  *   not released yet (F-GBOOK-05). A seat that never accepted has no score:
