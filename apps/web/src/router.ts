@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { SEB_QUIT_PATH, encodeJournalPath, safeJournalPath } from "@quiz/contracts";
+import { LOGIN_REFUSED_PATH, SEB_QUIT_PATH, encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 import { COURSE_TABS, type AdminTab, type ClassroomQueryTab, type CourseTab } from "@quiz/domain";
 
 import { build, useHold } from "./build";
@@ -173,6 +173,11 @@ export type Route =
   | { view: "kiosk" }
   /** The `.seb`'s quit link outside SEB, drawn with no session (ADR-027). */
   | { view: "sebQuit" }
+  /**
+   * A sign-in the OIDC callback refused (ADR-111 §6), `?reason=` read by the
+   * page itself: drawn with no session and without waiting on `/me`.
+   */
+  | { view: "loginRefused" }
   /**
    * The public discovery page: what Quiz is, for someone with no account.
    * Drawn with no session and without waiting on `/me` (App.tsx).
@@ -590,6 +595,12 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   sebQuit: {
     path: () => SEB_QUIT_PATH,
     match: (parts) => (parts.join("/") === SEB_QUIT_PATH.slice(1) ? { view: "sebQuit" } : null),
+    studentSafe: true,
+  },
+  // ADR-111 §6: where the OIDC callback sends a refused sign-in.
+  loginRefused: {
+    path: () => LOGIN_REFUSED_PATH,
+    match: (parts) => (parts.join("/") === LOGIN_REFUSED_PATH.slice(1) ? { view: "loginRefused" } : null),
     studentSafe: true,
   },
   pair: fixed("pair", { view: "pair" }, true),

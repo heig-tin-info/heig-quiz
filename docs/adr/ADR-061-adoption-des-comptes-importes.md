@@ -12,6 +12,10 @@ by `signIn` (`auth/login.ts`), the audit actions `auth.account_adopted` and
 `identityMatch.test.ts` and `auth/adoption.db.test.ts`. Completes ADR-035 (the merge) and §2.4 of
 `docs/merge/02-data-and-migration.md`.
 
+Note (2026-10-14, [ADR-111](ADR-111-admission-a-la-connexion.md) §1): login
+admission asks `findAdoption`, read only, before any write; the person a
+placeholder account waits for is admitted as an existing account is.
+
 ## Context
 
 The heig-classroom import brings the people of the mapped classrooms into
@@ -34,7 +38,7 @@ and GitHub link stay on the imported one, which nobody can ever sign in to.
 1. **A placeholder subject.** An account the import creates gets
    `oidc_sub = 'classroom:<heig-classroom sub>'` (`placeholderSub`). No IdP
    issues a subject of that form, and a login whose own `sub` has that
-   shape is refused (`loginAdmits`, then `signIn` itself throws): it would
+   shape is refused (`loginRefusal`, then `signIn` itself throws): it would
    otherwise land on the placeholder through the upsert. The prefix is what
    marks the row as waiting for its person. The import never creates one
    for a heig-classroom development account (`dev:`): it leaves them out.

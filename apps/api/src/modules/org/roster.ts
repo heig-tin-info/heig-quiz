@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, exists, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { parseRosterCsv, rosterFromRows, type Cell, type RosterParse } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
@@ -245,6 +245,29 @@ export async function claimLines(db: Db, matches: ClaimMatch[], actorId: string)
  * there. All three end the same way — `conflict_flag`, for a teacher to
  * resolve (AU-21) — because guessing would put a grade on the wrong person.
  */
+/**
+ * A roster line waiting for its person (F-ORG-05): no account attached, its
+ * address — lowercased, on `enrollments_email_idx` — matching `matches`. The
+ * claim and login admission (ADR-111) read pending lines through it alone.
+ */
+function pendingLine(matches: (address: SQL) => SQL) {
+  return and(matches(sql`lower(${enrollments.email})`), isNull(enrollments.userId));
+}
+
+/**
+ * Whether a pending roster line waits for one of `addresses` (normalized):
+ * an invitation, for login admission (ADR-111 §2). Never a claimed seat.
+ */
+export async function hasPendingLine(db: Db, addresses: readonly string[]): Promise<boolean> {
+  if (addresses.length === 0) return false;
+  const [line] = await db
+    .select({ id: enrollments.id })
+    .from(enrollments)
+    .where(pendingLine((address) => inArray(address, [...addresses])))
+    .limit(1);
+  return line !== undefined;
+}
+
 export async function claimEnrollments(db: Db, user: { id: string }) {
   // A flagged line is not skipped: once its duplicate is gone, it is claimed.
   const pending = await db
@@ -258,7 +281,7 @@ export async function claimEnrollments(db: Db, user: { id: string }) {
     .from(userEmails)
     .innerJoin(
       enrollments,
-      and(sql`lower(${enrollments.email}) = ${userEmails.email}`, isNull(enrollments.userId)),
+      pendingLine((address) => eq(address, userEmails.email)),
     )
     .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
     .where(and(eq(userEmails.userId, user.id), eq(userEmails.verified, true)));

@@ -15,12 +15,13 @@ import { auditLog, userEmails, users } from "../db/schema.js";
 import { testDb } from "../test/db.js";
 import { oidcClaims } from "../test/oidc.js";
 import { applyAdoption, findAdoption } from "./adoption.js";
-import { loginAdmits, signIn } from "./login.js";
+import { loginRefusal, signIn } from "./login.js";
 
 const config = {
   SUPER_ADMIN_EMAIL: "",
   STAFF_AFFILIATION_DOMAINS: ["heig-vd.ch"],
   LOGIN_ALLOWLIST: "",
+  LOGIN_DOMAINS: [],
 } as unknown as AppConfig;
 
 let db: Db;
@@ -153,7 +154,7 @@ describe("login adoption", () => {
   it("refuses a login whose own subject looks like a placeholder", async () => {
     const id = await account("classroom:cr-12", { swissEduId: "eid-12@eduid.ch" });
     const forged = login("classroom:cr-12", { swissEduId: "eid-12@eduid.ch" });
-    expect(loginAdmits(config, forged)).toBe(false);
+    expect(await loginRefusal(db, config, forged)).toBe("restricted");
     await expect(signIn(db, config, forged)).rejects.toThrow(/placeholder/);
     const [row] = await db.select({ name: users.givenName }).from(users).where(eq(users.id, id));
     expect(row?.name).toBe("Imported");

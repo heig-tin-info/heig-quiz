@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   addressesOf,
-  affiliationKindsIn,
   affiliationsOf,
   claimList,
   persistableClaims,
@@ -122,23 +121,6 @@ describe("verifiedAddressesOf", () => {
     ["keeps it once verified", true, ["boss@heig.test", "first.last@heig-vd.ch"]],
   ])("%s", (_, verified, addresses) => {
     expect(verifiedAddressesOf(claims, verified)).toEqual(addresses);
-  });
-});
-
-describe("affiliationKindsIn", () => {
-  const ours = ["heig-vd.ch", "hes-so.ch"];
-
-  it("reads the kinds scoped to a listed institution", () => {
-    expect(affiliationKindsIn(["student@heig-vd.ch", "staff@hes-so.ch"], ours)).toEqual([
-      "student",
-      "staff",
-    ]);
-  });
-
-  it("ignores another institution's scope and an unscoped kind", () => {
-    expect(affiliationKindsIn(["staff@unige.ch", "staff", "student", "affiliate@eduid.ch"], ours)).toEqual(
-      [],
-    );
   });
 });
 

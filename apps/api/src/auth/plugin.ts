@@ -15,6 +15,7 @@ import {
   CSRF_COOKIE,
   CSRF_HEADER,
   IDLE_HEADER,
+  LOGIN_REFUSED_PATH,
   cookieName,
   type PublicConfig,
   type SessionKind,
@@ -25,7 +26,7 @@ import { claimEnrollments } from "../modules/org/service.js";
 import { invalid } from "../modules/http.js";
 import { devLoginRoutes } from "./dev.js";
 import { impersonationRoutes } from "./impersonation.js";
-import { loginAdmits, signIn } from "./login.js";
+import { loginRefusal, signIn } from "./login.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
 import { OIDC_CALLBACK_PATH } from "./paths.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
@@ -414,7 +415,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     try {
       // The exchange with the identity provider is what the services' status
       // judges (ADR-055 §6); a missing login state above is the browser's
-      // doing, and the allowlist below a policy, so neither counts; nor does
+      // doing, and the door below a policy, so neither counts; nor does
       // `access_denied`, the person cancelling at the provider, which answered.
       claims = await tracked(
         "signin",
@@ -426,13 +427,16 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       return reply.code(401).send({ error: "oidc", message: "Authentication refused" });
     }
 
-    // The staging allowlist (ADR-028) is checked before any row is written:
-    // a refused login leaves no user behind.
-    if (!loginAdmits(config, claims)) {
-      req.log.warn({ sub: claims.sub }, "Login refused by LOGIN_ALLOWLIST or a placeholder subject");
-      return reply
-        .code(403)
-        .send({ error: "login_not_allowed", message: "This environment is restricted" });
+    // The door — the staging allowlist (ADR-028 §3), then admission
+    // (ADR-111) — is judged before any row is written: a refused login
+    // leaves no user and no claims behind. The callback is only ever reached
+    // by the browser's navigation back from the IdP, so the refusal is a
+    // page, not a JSON body. No audit entry: there is no member to name; the
+    // log carries the subject and the reason, never an address.
+    const refusal = await loginRefusal(app.db, config, claims);
+    if (refusal) {
+      req.log.warn({ sub: claims.sub, reason: refusal }, "Login refused at the door");
+      return reply.redirect(`${LOGIN_REFUSED_PATH}?reason=${refusal}`, 303);
     }
 
     const user = await signIn(app.db, config, claims);

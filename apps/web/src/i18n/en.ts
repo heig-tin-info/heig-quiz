@@ -18,6 +18,14 @@ export const en = {
   "landing.devHint": "Development only: pick a persona, no identity provider.",
   "landing.footer": "HEIG-VD — TIN Department",
   "landing.discover": "Discover the platform",
+  "loginRefused.title": "You cannot sign in to Quiz",
+  "loginRefused.restricted":
+    "This environment is reserved for the people who test it, and your edu-ID account is not one of them.",
+  "loginRefused.not_invited":
+    "Quiz is reserved for the members of the institutions it serves and for the people a teacher has invited. If you think you should have access, contact your teacher. If you have several edu-ID accounts, sign out of edu-ID and sign in with the one linked to your school.",
+  "loginRefused.retry":
+    "Switch edu-ID did not send everything Quiz needs to recognise you. Try again in a few minutes.",
+  "loginRefused.home": "Back to the home page",
   "discover.docTitle": "Quiz — the LMS for STEM courses",
   "discover.nav.features": "Features",
   "discover.nav.code": "Programming",

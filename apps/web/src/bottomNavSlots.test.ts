@@ -27,6 +27,7 @@ const TEACHER_HIDDEN: readonly Route["view"][] = [
   "teamsTab",
   "kiosk",
   "sebQuit",
+  "loginRefused",
   "discover",
   // Student pages a teacher's UI never shows as such, and the dev gallery.
   "drill",

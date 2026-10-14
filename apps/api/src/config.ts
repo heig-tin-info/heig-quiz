@@ -10,6 +10,13 @@ const flag = (fallback: "" | "1" = "") =>
     .default(fallback)
     .transform((v) => v === "1" || v === "true");
 
+/** A comma-separated list: trimmed, lowercased, empty entries dropped. */
+const csvList = (v: string): string[] =>
+  v
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e !== "");
+
 /** `RUNNER_RUNS_PER_EVALUATION` by default, and what a caller naming no cap gets (`live/runs.ts`). */
 export const RUNS_PER_EVALUATION = 4;
 
@@ -186,12 +193,7 @@ const EnvSchema = z.object({
   SEB_EXTRA_ALLOWED_HOSTS: z
     .string()
     .default("")
-    .transform((v) =>
-      v
-        .split(",")
-        .map((h) => h.trim().toLowerCase())
-        .filter((h) => h !== ""),
-    )
+    .transform(csvList)
     .refine((hosts) => hosts.every((h) => /^[a-z0-9*]([a-z0-9*.-]*[a-z0-9*])?(:\d{1,5})?$/.test(h)), {
       message: "host names only, comma-separated (no scheme, no path)",
     })
@@ -303,9 +305,24 @@ const EnvSchema = z.object({
    * `@domain` entries matching a whole domain. Empty — the default, and
    * production — admits everyone the IdP authenticates. The staging
    * environment sets it, so that a copy of the production data is reached by
-   * the developers only. The super administrator is always admitted.
+   * the developers only. The super administrator passes it all the same
+   * (`loginRefusal`, auth/login.ts).
    */
   LOGIN_ALLOWLIST: z.string().default(""),
+
+  /**
+   * Login admission (ADR-111): bare domains, comma-separated. Empty — the
+   * default — admits everyone; `eduid.ch` is refused.
+   */
+  LOGIN_DOMAINS: z
+    .string()
+    .default("")
+    .transform(csvList)
+    .refine((list) => !list.includes("eduid.ch"), "eduid.ch would admit every edu-ID account")
+    .refine(
+      (list) => list.every((d) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)),
+      "bare domain names only (heig-vd.ch), no @, no scheme",
+    ),
 
   /**
    * The institutions whose `staff` affiliation makes a teacher without an
@@ -317,12 +334,7 @@ const EnvSchema = z.object({
   STAFF_AFFILIATION_DOMAINS: z
     .string()
     .default("heig-vd.ch,hes-so.ch")
-    .transform((list) =>
-      list
-        .split(",")
-        .map((d) => d.trim().toLowerCase())
-        .filter((d) => d !== ""),
-    ),
+    .transform(csvList),
 
   // --- Notification channels (ADR-030) ---
 
@@ -359,12 +371,7 @@ const EnvSchema = z.object({
   TEAMS_ALLOWED_TENANTS: z
     .string()
     .default("")
-    .transform((list) =>
-      list
-        .split(",")
-        .map((t) => t.trim().toLowerCase())
-        .filter((t) => t !== ""),
-    ),
+    .transform(csvList),
 
   // --- GitHub (ADR-035, N-SEC-16) ---
 
@@ -575,10 +582,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     SCW_SECRET_KEY: parsed.data.SCW_SECRET_KEY.trim(),
     SCW_DEFAULT_PROJECT_ID: parsed.data.SCW_DEFAULT_PROJECT_ID.trim(),
     SUPER_ADMIN_EMAIL: parsed.data.SUPER_ADMIN_EMAIL.trim().toLowerCase(),
-    LOGIN_ALLOWLIST: parsed.data.LOGIN_ALLOWLIST.split(",")
-      .map((e) => e.trim().toLowerCase())
-      .filter((e) => e !== "")
-      .join(","),
+    LOGIN_ALLOWLIST: csvList(parsed.data.LOGIN_ALLOWLIST).join(","),
     // PEM path made absolute at load time: the process no longer depends on
     // its launch directory (ADR-010, secret in a file).
     OIDC_PRIVATE_KEY_PATH: parsed.data.OIDC_PRIVATE_KEY_PATH
@@ -616,14 +620,13 @@ export function teamsEnabled(config: Pick<AppConfig, "TEAMS_CLIENT_ID" | "TEAMS_
 
 
 /**
- * Whether a login revealing `emails` (normalized) may open a session. An
- * empty allowlist admits everyone; otherwise one address must be listed, or
- * belong to a listed `@domain`, or be the super administrator's.
+ * Whether a login revealing `emails` (normalized) passes the staging
+ * allowlist. An empty allowlist admits everyone; otherwise one address must
+ * be listed, or belong to a listed `@domain`.
  */
 export function loginAllowed(config: AppConfig, emails: readonly string[]): boolean {
   if (config.LOGIN_ALLOWLIST === "") return true;
   const entries = new Set(config.LOGIN_ALLOWLIST.split(","));
-  if (config.SUPER_ADMIN_EMAIL) entries.add(config.SUPER_ADMIN_EMAIL);
   return emails.some((email) => {
     const at = email.lastIndexOf("@");
     return entries.has(email) || (at > 0 && entries.has(email.slice(at)));

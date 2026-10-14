@@ -1555,6 +1555,7 @@ configuration.
 | `OIDC_CLIENT_SECRET` | unset | with a private key configured the secret is never sent and is not checked; without one, `client_secret` authentication applies and the `not-for-production` placeholder is refused |
 | `SUPER_ADMIN_EMAIL` | one address | the only account managed through the environment; teachers are managed from the admin screen |
 | `LOGIN_ALLOWLIST` | unset (staging: the testers' addresses) | when set, only these addresses and the super administrator may sign in |
+| `LOGIN_DOMAINS` | unset until the product owner chooses a value; never on staging | login admission, [ADR-111](../adr/ADR-111-admission-a-la-connexion.md): bare domains, comma-separated; empty admits everyone; `eduid.ch` is refused |
 | `STAGING_KEEP_EMAILS` | `.env.prod` only: the testers' addresses | read by `scripts/staging-export.sh`, never by the app: the accounts the staging copy keeps unpseudonymized (§8) |
 | `SEB_CONFIG_KEY_ENFORCE` | `1` in production and staging (proof B, 2026-10-10); unset (`0`) in development | the Config Key header on every request of a Safe Exam Browser session ([ADR-051](../adr/ADR-051-postes-kiosque-attestes.md) §3): off, a mismatch is only audited (`auth.seb_config_key_mismatch`); on (production), the request is anonymous. The launch refuses a bad header either way |
 | `SEB_EXTRA_ALLOWED_HOSTS` | unset (empty) | hosts every `.seb` lets SEB reach beside Quiz (and, for a project, the workspace portal): comma-separated host names, `*` wildcards, no scheme (D21, M6-07). Empty keeps an evaluation's file as ADR-027 pinned it |

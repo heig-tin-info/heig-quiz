@@ -90,6 +90,20 @@ export const BUILD_HEADER = "x-quiz-build";
 /** The quit link of every `.seb` Quiz builds, on Quiz's own host (ADR-027). */
 export const SEB_QUIT_PATH = "/seb/quit";
 
+/**
+ * Where the OIDC callback sends a sign-in it refused, before writing
+ * anything, with `?reason=` (ADR-111 §6): a public page drawn with no session.
+ */
+export const LOGIN_REFUSED_PATH = "/sign-in/refused";
+
+/**
+ * Why: `restricted`, the staging allowlist (ADR-028 §3) or a forged subject;
+ * `not_invited`, admission (ADR-111); `retry`, admission on a partial picture
+ * (edu-ID's userinfo did not answer).
+ */
+export const LOGIN_REFUSALS = ["restricted", "not_invited", "retry"] as const;
+export type LoginRefusal = (typeof LOGIN_REFUSALS)[number];
+
 export interface Me {
   id: string;
   email: string;

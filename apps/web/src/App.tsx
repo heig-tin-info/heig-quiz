@@ -7,6 +7,7 @@ import { isTrustedClient } from "@quiz/domain";
 
 import { api, useMe, usePublicConfig } from "./api";
 import { inSebBrowser, SebQuitButton, SebQuitKeys, SebQuitPage } from "./student/SebQuit";
+import { LoginRefusedPage } from "./LoginRefusedPage";
 import { toKiosk, useStationSessionWatch } from "./kiosk/navigation";
 import { lazyPage } from "./lazyPage";
 import { kioskStationKey } from "./queryKeys";
@@ -302,6 +303,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   teamsTab: () => null,
   kiosk: () => null,
   sebQuit: () => null,
+  loginRefused: () => null,
   discover: () => null,
   pair: (_, c) => <PairPage me={c.me} navigate={c.navigate} />,
   // Invariant 3: the gallery exists in development only. The
@@ -584,6 +586,8 @@ export default function App() {
   }
   // ADR-027: the `.seb`'s quit link, reached outside SEB (inside, SEB quits first).
   if (route.view === "sebQuit") return <SebQuitPage />;
+  // ADR-111 §6: a refused sign-in opened no session; nothing to wait for.
+  if (route.view === "loginRefused") return <LoginRefusedPage />;
   // ADR-051 §7: a kiosk station has no session to wait for; it attests
   // itself and shows its code.
   if (route.view === "kiosk") {

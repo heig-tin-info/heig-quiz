@@ -7,7 +7,10 @@ Hetzner). Amended 2026-09-28: staging runs as its own account (see *Update
 2026-09-28*). Amended 2026-10-11 (security audit M8, M9, L17): the copy is
 pseudonymized before it leaves production, which replaces the "not
 anonymized" decision of §3; the deploys pull the image by digest (see
-*Update 2026-10-11*).
+*Update 2026-10-11*). Amended 2026-10-14 by
+[ADR-111](ADR-111-admission-a-la-connexion.md): §3's allowlist is now one of
+two checks at the door, beside login admission (`LOGIN_DOMAINS`), and a
+refusal is a page rather than a JSON `403`.
 
 Note (2026-10-06, M2-06, [ADR-035](ADR-035-fusion-de-classroom.md)): the
 refresh of §3 also forgets every GitHub installation, archives every
@@ -100,6 +103,10 @@ the copy became pseudonymized: see *Update 2026-10-11*.) Staging is closed
 instead: `LOGIN_ALLOWLIST` (addresses and `@domain` entries) is checked in
 the OIDC callback before any row is written; the super administrator is
 always admitted; empty, the default, admits everyone, as production does.
+(Since 2026-10-14, [ADR-111](ADR-111-admission-a-la-connexion.md) §4: empty,
+it admits everyone that login admission admits — everyone while
+`LOGIN_DOMAINS` is empty too. Both are checked before any write; the super
+administrator passes both; a refusal lands on `/sign-in/refused?reason=restricted`.)
 The vhost sends `X-Robots-Tag: noindex`.
 
 ### 4. Staging is production, configured

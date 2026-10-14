@@ -14,8 +14,8 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import type { RoleReason } from "@quiz/contracts";
+import { affiliationKindsIn } from "@quiz/domain";
 
-import { affiliationKindsIn } from "./auth/claims.js";
 import type { AppConfig } from "./config.js";
 import type { Db } from "./db/client.js";
 import {
@@ -97,22 +97,31 @@ export async function roleForIdentity(
 ): Promise<RoleDecision> {
   const emails = normalizedSet(identity.emails);
   // Both lookups at once: this runs at every sign-in.
-  const [[grant], hasSeat] = await Promise.all([
-    emails.length > 0
-      ? db
-          .select({ id: teacherGrants.id })
-          .from(teacherGrants)
-          .where(inArray(teacherGrants.email, emails))
-          .limit(1)
-      : [],
+  const [hasGrant, hasSeat] = await Promise.all([
+    hasTeacherGrant(db, emails),
     identity.userId ? holdsCourseSeat(db, identity.userId) : false,
   ]);
   return decideRole(config, {
     emails,
     affiliations: identity.affiliations ?? [],
-    hasGrant: grant !== undefined,
+    hasGrant,
     hasSeat,
   });
+}
+
+/**
+ * Whether an admin's teacher grant names one of `emails` (normalized): the
+ * role's first branch after the super administrator, and an invitation for
+ * login admission (ADR-111 §2).
+ */
+export async function hasTeacherGrant(db: Db, emails: readonly string[]): Promise<boolean> {
+  if (emails.length === 0) return false;
+  const [grant] = await db
+    .select({ id: teacherGrants.id })
+    .from(teacherGrants)
+    .where(inArray(teacherGrants.email, [...emails]))
+    .limit(1);
+  return grant !== undefined;
 }
 
 /**
