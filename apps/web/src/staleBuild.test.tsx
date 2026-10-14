@@ -2,16 +2,17 @@ import { act, renderHook, screen } from "@testing-library/react";
 import { Suspense } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { build } from "./build";
 import { CrashBoundary } from "./CrashBoundary";
 import { lazyPage } from "./lazyPage";
-import { build } from "./realtime/build";
 import { useLeaveGuard, useRoute } from "./router";
 import { renderWithProviders } from "./test/render";
 
 /*
  * ADR-110, as the router and the page loader apply it to a stale tab: the
- * next screen comes from the new build, except from an attempt, in a
- * confined session, or past a screen's leave guard. This file's tabs are all
+ * next screen comes from the new build, except from a page where the student
+ * answers, in a confined session, or while something is held (a leave guard,
+ * a write on the wire). This file's tabs are all
  * stale (the monitor is a module singleton).
  */
 build.markStale();
@@ -73,6 +74,21 @@ describe("a stale tab's next screen", () => {
     });
     expect(load).toHaveBeenCalledWith("/settings", true);
   });
+
+  // A full load past the guard would make the browser ask a second time.
+  it("keeps Back in the app past a leave guard", async () => {
+    goTo("/classrooms/c1");
+    const ask = vi.fn().mockResolvedValue(true);
+    renderHook(() => useLeaveGuard(true, ask));
+    renderHook(() => useRoute());
+    act(() => {
+      goTo("/settings");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await vi.waitFor(() => expect(window.location.pathname).toBe("/settings"));
+    expect(ask).toHaveBeenCalledOnce();
+    expect(load).not.toHaveBeenCalled();
+  });
 });
 
 describe("a page whose chunk is gone", () => {
@@ -98,6 +114,15 @@ describe("a page whose chunk is gone", () => {
     show("/classrooms/c1");
     expect(await screen.findByText("Something went wrong")).toBeInTheDocument();
     expect(load).toHaveBeenCalledOnce();
+  });
+
+  it("waits for a write on the wire before reloading", async () => {
+    const release = build.hold();
+    show("/classrooms/c1");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(load).not.toHaveBeenCalled();
+    release();
+    await vi.waitFor(() => expect(load).toHaveBeenCalledWith(window.location.href, true));
   });
 
   it("leaves the reload to the student during an attempt", async () => {

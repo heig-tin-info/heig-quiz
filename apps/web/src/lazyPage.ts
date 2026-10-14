@@ -1,14 +1,14 @@
 import { lazy, type ComponentType } from "react";
 
-import { build } from "./realtime/build";
-import { attemptAt } from "./router";
+import { build } from "./build";
+import { answeringAt } from "./router";
 
 /** The address this tab reloaded once for a page's missing chunk. */
 const RELOADED = "quiz:build-reload";
 
 /**
- * A page whose chunk is gone while this screen may not reload by itself (an
- * attempt, a confined session, a write in flight): `CrashBoundary` offers the
+ * A page whose chunk is gone where the tab may not reload by itself (a page
+ * where the student answers, a confined session): `CrashBoundary` offers the
  * reload instead (ADR-110).
  */
 export class OutdatedError extends Error {}
@@ -30,9 +30,12 @@ function reloadOnce(): boolean {
 }
 
 /**
- * A route's page as its own chunk, like `lazy`. A chunk that fails to load
- * (most likely deleted by a deploy) marks the build stale and reloads the
- * address once where a full load costs nothing (ADR-110).
+ * A route's page as its own chunk, like `lazy`. A chunk whose import
+ * rejects (most likely deleted by a deploy) marks the build stale and
+ * reloads the address once where a full load costs nothing (ADR-110): never
+ * on a page where the student answers nor in a confined session, and only
+ * once nothing is held (a write on the wire) — the suspense fallback stays
+ * up meanwhile.
  */
 // `any`: the bound `lazy` itself puts on a component's props.
 export function lazyPage<T extends ComponentType<any>>(load: () => Promise<{ default: T }>) {
@@ -47,7 +50,10 @@ export function lazyPage<T extends ComponentType<any>>(load: () => Promise<{ def
       return page;
     } catch (error) {
       build.markStale();
-      if (!build.mayLoad(attemptAt(window.location.pathname))) throw new OutdatedError("outdated build");
+      // The page being opened, not the one left: the way into an answering
+      // page whose chunk is gone ends on the outdated screen.
+      if (answeringAt(window.location.pathname) || build.isConfined()) throw new OutdatedError("outdated build");
+      await build.settled();
       if (!reloadOnce()) throw error;
       // The page is going away; settling would only flash the crash screen.
       return new Promise<never>(() => {});

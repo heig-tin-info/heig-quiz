@@ -25,22 +25,37 @@ describe("the build monitor", () => {
     build.observe("bbb");
     expect(build.mayLoad(false)).toBe(true);
     expect(build.mayLoad(true)).toBe(false);
-    const done = build.write();
+    const release = build.hold();
     expect(build.mayLoad(false)).toBe(false);
-    done();
+    release();
     build.confine(true);
     expect(build.mayLoad(false)).toBe(false);
     build.confine(false);
     expect(build.mayLoad(false)).toBe(true);
   });
 
-  it("takes a failed chunk as a stale build, and keeps the failure from going unhandled", () => {
+  it("settles once the last hold is released, each release counting once", async () => {
+    const build = new BuildMonitor("aaa");
+    const first = build.hold();
+    const second = build.hold();
+    let settled = false;
+    void build.settled().then(() => (settled = true));
+    first();
+    first();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    second();
+    await Promise.resolve();
+    expect(settled).toBe(true);
+  });
+
+  it("takes a failed chunk as a stale build, and leaves the import to reject", () => {
     const build = new BuildMonitor("aaa");
     const stop = build.start();
     const event = new Event("vite:preloadError", { cancelable: true });
     window.dispatchEvent(event);
     stop();
-    expect(event.defaultPrevented).toBe(true);
     expect(build.isStale()).toBe(true);
+    expect(event.defaultPrevented).toBe(false);
   });
 });

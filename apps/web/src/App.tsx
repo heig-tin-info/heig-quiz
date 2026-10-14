@@ -1,4 +1,4 @@
-import { Suspense, useEffect, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, LogOut } from "lucide-react";
 
@@ -10,7 +10,7 @@ import { inSebBrowser, SebQuitButton, SebQuitKeys, SebQuitPage } from "./student
 import { toKiosk, useStationSessionWatch } from "./kiosk/navigation";
 import { lazyPage } from "./lazyPage";
 import { kioskStationKey } from "./queryKeys";
-import { build } from "./realtime/build";
+import { build } from "./build";
 import { Logo } from "./Header";
 import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
@@ -119,7 +119,8 @@ const CorrectionProjection = lazyPage(() =>
 );
 const SettingsPage = lazyPage(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const WhatsNewPage = lazyPage(() => import("./changelog/WhatsNew").then((m) => ({ default: m.WhatsNewPage })));
-const WhatsNewModal = lazyPage(() => import("./changelog/WhatsNew").then((m) => ({ default: m.WhatsNewModal })));
+// An overlay, not a page: no reload for its chunk (`lazyPage`, ADR-110).
+const WhatsNewModal = lazy(() => import("./changelog/WhatsNew").then((m) => ({ default: m.WhatsNewModal })));
 const AdminPage = lazyPage(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
 // Development only, and absent from the production bundle: behind the
 // `import.meta.env.DEV` constant the dynamic import is dead code, so Rollup

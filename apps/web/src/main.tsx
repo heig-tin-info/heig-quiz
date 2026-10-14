@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 
 import { ApiError } from "./api";
 import App from "./App";
-import { build } from "./realtime/build";
+import { build } from "./build";
 import { ConnectionOverlay } from "./realtime/ConnectionOverlay";
 import { CrashBoundary } from "./CrashBoundary";
 import { ConfirmProvider } from "./confirm";

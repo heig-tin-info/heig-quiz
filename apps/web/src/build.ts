@@ -1,3 +1,5 @@
+import { createSignal } from "./ui/state";
+
 /**
  * Whether this tab runs an older build than the API (ADR-110), and whether a
  * move to the next screen may load the new one. Stale is learnt from the
@@ -8,11 +10,15 @@
 export class BuildMonitor {
   private stale = false;
   private confined = false;
-  private writes = 0;
+  private holds = 0;
+  private signal = createSignal();
 
   constructor(private readonly client: string | null) {}
 
   isStale = () => this.stale;
+  isConfined = () => this.confined;
+  /** Told when the last hold is released. */
+  subscribe = this.signal.subscribe;
 
   /** The API's build header; null on an answer without one (signed out, development). */
   observe = (server: string | null) => {
@@ -29,17 +35,32 @@ export class BuildMonitor {
     this.confined = confined;
   };
 
-  /** A write in flight, until the returned callback: a full load would lose its answer. */
-  write = () => {
-    this.writes++;
+  /**
+   * Something a full load would lose — a write on the wire, a screen behind
+   * its leave guard — until the returned release (called once).
+   */
+  hold = () => {
+    this.holds++;
+    let held = true;
     return () => {
-      this.writes--;
+      if (!held) return;
+      held = false;
+      if (--this.holds === 0) this.signal.emit();
     };
   };
 
-  /** Stale, and nothing a full load would cost: no attempt on screen, no confinement, no write. */
-  mayLoad = (attemptOnScreen: boolean) =>
-    this.stale && !attemptOnScreen && !this.confined && this.writes === 0;
+  /** Resolves once nothing is held. */
+  settled = () =>
+    new Promise<void>((resolve) => {
+      if (this.holds === 0) return resolve();
+      const stop = this.subscribe(() => {
+        stop();
+        resolve();
+      });
+    });
+
+  /** Stale, and nothing a full load would cost: not answering, not confined, nothing held. */
+  mayLoad = (answering: boolean) => this.stale && !answering && !this.confined && this.holds === 0;
 
   /** The full load itself: `path` from the server, with whatever build it now serves. */
   load = (path: string, replace = false) => {
@@ -49,14 +70,11 @@ export class BuildMonitor {
 
   /**
    * Vite's signal that a chunk or one of its preloads failed: a deleted file
-   * of an older build, most likely. Prevented, so the failure reaches the
-   * page loader (`lazyPage`) rather than an unhandled rejection.
+   * of an older build, most likely. Not prevented: the import still rejects,
+   * for its caller (`lazyPage`, or any other) to handle.
    */
   start = () => {
-    const onPreloadError = (event: Event) => {
-      event.preventDefault();
-      this.markStale();
-    };
+    const onPreloadError = () => this.markStale();
     window.addEventListener("vite:preloadError", onPreloadError);
     return () => window.removeEventListener("vite:preloadError", onPreloadError);
   };

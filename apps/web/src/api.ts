@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BUILD_HEADER, CSRF_COOKIE, CSRF_HEADER, IDLE_HEADER, cookieName, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
 
 import { isIdle } from "./idle";
-import { build } from "./realtime/build";
+import { build } from "./build";
 import { connection } from "./realtime/connection";
 
 import type { Dict } from "./i18n/en";
@@ -92,7 +92,7 @@ export async function api<T>(
   }
   let res: Response;
   // ADR-110: a write in flight holds back a full load to a newer build.
-  const written = init.method && init.method !== "GET" ? build.write() : null;
+  const written = init.method && init.method !== "GET" ? build.hold() : null;
   try {
     res = await fetch(path, { ...init, headers, credentials: "same-origin" });
   } catch (error) {

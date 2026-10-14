@@ -45,15 +45,22 @@ crashes. `index.html` and the hashed assets had no explicit cache policy.
 5. **When a stale tab may load the new build.** Never during an attempt —
    an exam, an exercise, the drill, a poll, whatever the session type — and
    never in a `seb` or `kiosk` session: there the old client runs on, on
-   the kept chunks. Elsewhere, only when nothing is pending: no write in
-   flight and no screen holding unsaved work. Where the client can know
-   that, it may reload by itself; otherwise its next move to another
-   screen is a full page load of that screen's address, asked after the
-   screen's leave guard.
+   the kept chunks. Elsewhere, only when nothing is pending, and pending
+   means held: a write on the wire, or a screen behind its leave guard,
+   which holds the tab until it unmounts. Unsaved work that no leave guard
+   declares is not seen (the question editor's debounced draft, until it
+   registers one). Where the client can know that nothing is held, it may
+   reload by itself; otherwise its next move to another screen (a link,
+   `navigate`, Back or Forward) is a full page load of that screen's
+   address. Past a leave guard the app never full-loads: the move stays in
+   the app, and a later one takes the new build.
 6. **A page whose chunk is missing.** Where 5 allows it, the tab loads the
-   same address once (a per-tab marker prevents a loop; past it, the crash
-   screen). During an attempt or in a confined session, a translated message
-   offers the reload, which the reader triggers.
+   same address once, after the holds are released (a per-tab marker
+   prevents a loop; past it, the crash screen). The rule reads the page
+   being opened: on a page where the student answers, or in a confined
+   session, a translated message offers the reload, which the reader
+   triggers — so a missing chunk on the way into an attempt ends on that
+   message too.
 
 The reconnection overlay itself is unchanged: after `platform.updating`
 the next signed-in answer tells the tab it is stale.
