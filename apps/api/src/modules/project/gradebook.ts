@@ -14,7 +14,7 @@
  * A student who never accepted has no repository: no score here — the
  * teacher's own mark (`gradebook_marks`) fills the cell (spec 06 no. 48).
  */
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 
 import { scoreGrade, type FinalScoreSource } from "@quiz/domain";
 
@@ -25,12 +25,19 @@ import { scoreFacts } from "./scores.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
 import type { ProjectRow } from "./views.js";
 
-/** The projects of a classroom the gradebook has a column for: graded, and no draft. */
+/**
+ * The projects of a classroom the gradebook has a column for: graded, no
+ * draft, and not archived — an archived project's grades leave the table and
+ * the mean, for the staff and the students alike, until it is restored
+ * (product owner, 2026-10-14).
+ */
 export function gradebookProjects(db: Db, classroomId: string): Promise<ProjectRow[]> {
   return db
     .select()
     .from(projects)
-    .where(and(eq(projects.classroomId, classroomId), ne(projects.state, "draft"), ne(projects.gradingMode, "none")));
+    .where(
+      and(eq(projects.classroomId, classroomId), ne(projects.state, "draft"), ne(projects.gradingMode, "none"), isNull(projects.archivedAt)),
+    );
 }
 
 /** A seat's grade as the staff read it. */

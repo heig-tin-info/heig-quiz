@@ -333,6 +333,29 @@ describe("the staff's table (F-GBOOK-01)", () => {
     expect(cellOf(table, 0, "P1")).toMatchObject({ grade: 6, changedAfterRelease: true });
     await db().update(projectRepos).set({ teacherPoints: 9, teacherMax: 10 }).where(eq(projectRepos.id, repo!.id));
   });
+
+  it("drops an archived project's column for the staff and the students, refuses its marks, and brings it back once restored", async () => {
+    const titles = async () => ({
+      staff: (await staffTable()).columns.map((c) => c.title),
+      student: (await studentRead(students[0]!.headers)).parsed.columns.map((c) => c.title),
+    });
+    const mark = markUrl("project", "P1", seats[1]!);
+    expect((await call("PUT", mark, teacher.headers, { kind: "absent" })).statusCode).toBe(200);
+    await db().update(projects).set({ archivedAt: server.clock.now() }).where(eq(projects.id, col["P1"]!));
+    try {
+      const archived = await titles();
+      expect(archived.staff).not.toContain("P1");
+      expect(archived.student).not.toContain("P1");
+      expect((await call("PUT", mark, teacher.headers, { kind: "absent" })).statusCode).toBe(404);
+    } finally {
+      await db().update(projects).set({ archivedAt: null }).where(eq(projects.id, col["P1"]!));
+    }
+    const restored = await titles();
+    expect(restored.staff).toContain("P1");
+    expect(restored.student).toContain("P1");
+    expect(cellOf(await staffTable(), 1, "P1")).toMatchObject({ kind: "absent", source: "mark" });
+    await call("DELETE", mark, teacher.headers);
+  });
 });
 
 describe("the mean (F-GBOOK-02)", () => {

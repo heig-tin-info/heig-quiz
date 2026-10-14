@@ -29,6 +29,8 @@ Amended 2026-10-10 (security audit L1, following [ADR-068](ADR-068-roles-de-l-eq
 
 Amended 2026-10-13 (product owner, #803): §7's student exit only — a column's `counts` flag (the boolean alone) reaches the student before the mean is published; the weight still does not. See *Amendment of 2026-10-13* at the end of the Decision.
 
+Amended 2026-10-14 (product owner): an archived project has no column, for the staff and the students; see *Amendment of 2026-10-14* at the end of the Decision.
+
 ## Context
 
 D06 made the gradebook one table per classroom: a column per evaluation or
@@ -207,6 +209,24 @@ point 4 of the amendment of 2026-10-08). Everything else stands.
    what the teacher decided, which is the student's to know (it says how
    they are graded), while the weight — the share of each column in a mean
    the teacher has not chosen to show — stays the teacher's until then.
+
+### Amendment of 2026-10-14 (product owner, Yves Chevallier)
+
+Scope: which projects have a column (§6). Everything else stands.
+
+1. **An archived project has no column**, in the staff's table, the CSV,
+   the class means and the student's cells alike, released or not; a mark
+   on it is a 404 like any column the table does not name. One filter, in
+   `gradebookProjects`, which every reader goes through.
+2. **Nothing stored is touched**: its `gradebook_columns` row and its
+   marks stay, and come back unchanged when the project is restored.
+3. **Why.** A project archived minutes after its creation, never graded,
+   sat as an empty column beside the real one. Archiving already takes a
+   project out of every list (F-PROJ-16), and the gradebook is one. Hiding
+   only the empty ones was considered and declined: one rule, the list's.
+   The cost is that archiving a released project silently changes the
+   students' means, so the archive confirmation says so, as a dangerous
+   action (F-PROJ-16).
 
 ## Consequences
 

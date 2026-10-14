@@ -5769,7 +5769,7 @@ export const en = {
   "project.rename": "Rename project: {name}",
   "project.archiveConfirm.title": "Archive “{name}”?",
   "project.archiveConfirm.body":
-    "The project leaves the lists and its repositories are no longer followed. You can restore it later.",
+    "The project leaves the lists and its repositories are no longer followed. Its grades leave the gradebook and the mean, for the students too. You can restore it later.",
   "project.deleteConfirm.title": "Delete “{name}”?",
   "project.deleteConfirm.body":
     "Its repositories, runs and scores are deleted from Quiz. Nothing is deleted on GitHub: the students' repositories, the distribution repository and the source stay where they are.",

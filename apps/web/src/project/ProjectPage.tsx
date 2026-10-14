@@ -228,6 +228,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
         title: t("project.archiveConfirm.title", { name: project.name }),
         message: t("project.archiveConfirm.body"),
         confirmLabel: t("classrooms.archive"),
+        danger: true,
       })
     ) {
       archive.mutate(true);
