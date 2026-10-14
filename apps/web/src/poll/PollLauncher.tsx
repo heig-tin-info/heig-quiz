@@ -15,6 +15,7 @@ import { emptyShortDraft } from "@quiz/qt-short/client";
 import { emptyBrainstormDraft } from "@quiz/qt-brainstorm/client";
 
 import { api, ApiError } from "../api";
+import { useHold } from "../build";
 import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
 import { OutcomeBadge, OutcomeLegend } from "./OutcomeDonut";
@@ -203,6 +204,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const [type, setType] = useState<PollType>("mcq");
   // One working copy per type, so a switch back and forth loses nothing.
   const [drafts, setDrafts] = useState<Partial<Record<PollType, unknown>>>({});
+  useHold(Object.keys(drafts).length > 0);
   const config = drafts[type] ?? EMPTY[type]();
 
   const picks = useQuery<PollQuestionPick[]>({

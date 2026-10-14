@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { CriteriaTableRow, CriterionGradeWrite, CriterionReason } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
+import { useHold } from "../../build";
 import { useT, type Dict } from "../../i18n";
 import { Badge, Button, cx, PointsInput, pointsSuffix, T, TableHead, Textarea, Tip, type Column } from "../../ui";
 import { RationaleFold, RationaleText } from "./RationaleFold";
@@ -187,6 +188,7 @@ function Rationale({ row, writable, onGrade }: { row: CriteriaTableRow; writable
   const t = useT();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(row.rationale ?? "");
+  useHold(editing && text !== (row.rationale ?? ""));
   if (editing) {
     return (
       <>

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { GradingQueueItem, ItemVersions, VersionRow } from "@quiz/contracts";
 
+import { build } from "../build";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { RegradeSheet } from "./RegradeSheet";
 
@@ -87,6 +88,18 @@ describe("RegradeSheet", () => {
     expect(await screen.findByText("A note is required.")).toBeVisible();
     expect(noteField()).toHaveAttribute("aria-invalid", "true");
     expect(ctx.sent).toHaveLength(0);
+  });
+
+  // ADR-110: a stale tab never reloads by itself over a typed note.
+  it("holds the tab on its build while a note is typed", async () => {
+    build.markStale();
+    const ctx = setup();
+    await radio(/v3/);
+    expect(build.mayLoad(false)).toBe(true);
+    await userEvent.type(noteField(), "Key fixed");
+    expect(build.mayLoad(false)).toBe(false);
+    ctx.unmount();
+    expect(build.mayLoad(false)).toBe(true);
   });
 
   it("treats a note of nothing but spaces as no note at all", async () => {

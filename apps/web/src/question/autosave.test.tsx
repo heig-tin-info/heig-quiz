@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { build } from "../build";
 import { AUTOSAVE_DELAY_MS, useAutosave } from "./autosave";
 
 /** A promise whose resolution the test controls, to hold a save in flight. */
@@ -15,6 +16,22 @@ function deferred<T = void>() {
 }
 
 describe("useAutosave", () => {
+  // ADR-110: an unsaved draft keeps a stale tab on its build; leaving sends it.
+  it("holds the tab until the draft is saved, and sends it on unmount", async () => {
+    vi.useFakeTimers();
+    build.markStale();
+    const save = vi.fn(() => Promise.resolve());
+    const { rerender, unmount } = renderHook(({ v }) => useAutosave({ value: v, save }), {
+      initialProps: { v: "a" },
+    });
+    expect(build.mayLoad(false)).toBe(true);
+    rerender({ v: "ab" });
+    expect(build.mayLoad(false)).toBe(false);
+    await act(async () => unmount());
+    expect(save).toHaveBeenCalledWith("ab");
+    expect(build.mayLoad(false)).toBe(true);
+  });
+
   it("saves nothing until something changes", async () => {
     vi.useFakeTimers();
     const save = vi.fn(() => Promise.resolve());

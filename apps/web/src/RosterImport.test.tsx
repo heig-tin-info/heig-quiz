@@ -2,6 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { build } from "./build";
 import { RosterImport, spreadsheetRows } from "./RosterImport";
 import { fail, mockFetch, ok, renderWithProviders } from "./test/render";
 
@@ -30,6 +31,15 @@ const pasteAndImport = async () => {
   await userEvent.type(screen.getByLabelText("Pasted CSV"), "Dupont,Marie,marie@heig-vd.ch");
   await userEvent.click(screen.getByRole("button", { name: /Import CSV/ }));
 };
+
+// ADR-110: a pasted roster not yet imported keeps a stale tab on its build.
+it("holds the tab on its build while a roster is pasted", async () => {
+  build.markStale();
+  openSheet(ok({}));
+  expect(build.mayLoad(false)).toBe(true);
+  await userEvent.type(screen.getByLabelText("Pasted CSV"), "Dupont");
+  expect(build.mayLoad(false)).toBe(false);
+});
 
 describe("RosterImport rejected lines", () => {
   it("lists them under the drop zone and counts them in the footer", async () => {

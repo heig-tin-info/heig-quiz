@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useHold } from "../build";
 import type { SyncState } from "../ui";
 
 /**
@@ -137,6 +138,16 @@ export function useAutosave<T>({
       if (timer.current) clearTimeout(timer.current);
     };
   }, [value, delay, enabled, run]);
+
+  // Leaving the editor sends what the delay still held, which unmounting
+  // used to drop; until it is acknowledged, the tab keeps its build (ADR-110).
+  useEffect(
+    () => () => {
+      if (pending.current) run();
+    },
+    [run],
+  );
+  useHold(dirty);
 
   const flush = useCallback((): Promise<boolean> => {
     if (timer.current) {

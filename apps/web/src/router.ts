@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SEB_QUIT_PATH, encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 import { COURSE_TABS, type AdminTab, type ClassroomQueryTab, type CourseTab } from "@quiz/domain";
 
-import { build } from "./build";
+import { build, useHold } from "./build";
 
 const isCourseTab = (s: string | undefined): s is CourseTab =>
   (COURSE_TABS as readonly (string | undefined)[]).includes(s);
@@ -785,17 +785,16 @@ let leaveGuard: LeaveGuard | null = null;
 export function useLeaveGuard(dirty: boolean, ask: LeaveGuard): void {
   const askRef = useRef(ask);
   askRef.current = ask;
+  // ADR-110: unsaved work holds this tab on its build until the screen goes.
+  useHold(dirty);
   useEffect(() => {
     if (!dirty) return;
     const guard: LeaveGuard = () => askRef.current();
     leaveGuard = guard;
-    // ADR-110: unsaved work holds this tab on its build until the screen goes.
-    const release = build.hold();
     const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       if (leaveGuard === guard) leaveGuard = null;
-      release();
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
   }, [dirty]);

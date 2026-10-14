@@ -6,6 +6,7 @@ import { PoolDescriptionProposal, type Pool, type PoolPatch } from "@quiz/contra
 import { POOL_DESCRIPTION_MAX } from "@quiz/domain";
 
 import { api, refusedWith } from "../api";
+import { useHold } from "../build";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { poolKey, poolsKey } from "../queryKeys";
@@ -27,6 +28,7 @@ export function PoolDescription({ pool }: { pool: Pool }) {
   const [draft, setDraft] = useState(pool.description);
   const [proposal, setProposal] = useState<string | null>(null);
   useEffect(() => setDraft(pool.description), [pool.description]);
+  useHold(draft !== pool.description);
 
   const saved = async () => {
     await Promise.all([

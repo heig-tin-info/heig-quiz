@@ -47,6 +47,7 @@ import { ASSIST_MAX_MESSAGE_CHARS, type AssistRole } from "@quiz/domain";
 import { textareaClass } from "@quiz/ui";
 
 import { api, apiErrorMessage, refusedWith } from "../api";
+import { useHold } from "../build";
 import { useConfirm } from "../confirm";
 import { useI18n } from "../i18n";
 import { Markdown } from "../markdown";
@@ -189,6 +190,7 @@ function Chat({
   const { t, locale } = useI18n();
   const qc = useQueryClient();
   const [draft, setDraft] = useState("");
+  useHold(draft.trim() !== "");
   const input = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
   // What the UI actions of an answer did (ADR-080 P2b), by exchange, for this tab only (never stored).

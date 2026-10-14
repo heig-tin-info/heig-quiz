@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, FileSpreadsheet, Upload, UserPlus } from "
 import { useRef, useState } from "react";
 
 import { api, ApiError } from "./api";
+import { useHold } from "./build";
 import { HelpIcon } from "./help";
 import { useT } from "./i18n";
 import { Button, cx, ErrorText, Field, Sheet, Textarea } from "./ui";
@@ -55,6 +56,7 @@ export function RosterImport({ classroomId, onClose }: { classroomId: string; on
   const [dragging, setDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [manual, setManual] = useState({ nom: "", prenom: "", email: "", bonus: "" });
+  useHold(csv.trim() !== "" || Object.values(manual).some((v) => v.trim() !== ""));
   const fileInput = useRef<HTMLInputElement>(null);
 
   const importRoster = useMutation({

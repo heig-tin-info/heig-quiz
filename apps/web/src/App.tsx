@@ -19,7 +19,7 @@ import { AssistDock } from "./assist/AssistDock";
 import { CoachLayer } from "./coach/CoachLayer";
 import { FestiveAmbient } from "./festive/festive";
 import { useWhatsNew } from "./changelog/useWhatsNew";
-import { ROUTES, useRoute, type Navigate, type Route, type RouteOf } from "./router";
+import { answeringAt, ROUTES, useRoute, type Navigate, type Route, type RouteOf } from "./router";
 import { ImpersonationBanner, Shell, StudentViewBanner } from "./Shell";
 import { SuperPowersBanner } from "./SuperPowers";
 import {
@@ -632,6 +632,13 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   // ADR-110: a confined session keeps the client it was opened with.
   const confined = session !== undefined && isTrustedClient(session.kind);
   useEffect(() => build.confine(confined), [confined]);
+  // ADR-110: a clean, stale tab reloads by itself where nobody loses context.
+  // Watched only once the session is known, so the confinement above is set.
+  const signedIn = me.data != null;
+  useEffect(
+    () => (signedIn ? build.watch(() => answeringAt(window.location.pathname)) : undefined),
+    [signedIn],
+  );
   useLiveUpdates(
     me.data != null && confinedTo === null && route.view !== "attempt",
     confinedTo !== null || QUIET.has(route.view),
