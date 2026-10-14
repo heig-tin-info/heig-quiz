@@ -586,8 +586,9 @@ live in `ui/state.ts`, each written once.
   somewhere (the Activities summary). **The tile variant** takes `children`:
   what qualifies the figure sits under it (sub-figures, a legend line, a
   button of its own) and `visual` puts a small picture (a ring) beside the
-  figure. A tile holds focusable things, so it is never itself a button;
-  see "The project page (staff)".
+  figure. A tile that holds focusable things is never itself a button;
+  see "The project page (staff)". A tile with `onClick` is ONE button whose
+  body holds only pictures and words (see "The Activities summary").
 - Disclosure: a folded card (`src/ui/disclosure.tsx`), for the part of a
   settings page a teacher rarely touches (an evaluation's Conditions and
   Advanced options). The header row is ONE button the width of the card —
@@ -1961,6 +1962,45 @@ surfaces, so its rules are written here.
   accessible name); the launcher's `OutcomeBadge` and the project page's
   acceptance both use it. (`Ring` of `ui/live.tsx` is the single-value
   countdown ring, a different primitive.)
+
+## The Activities summary
+
+Four `Stat` tiles above the Activities tabs (`activities/Summary.tsx`), 4
+columns from `lg` (3 without projects), 2 on a phone. Each is ONE button that
+leads to the rows it counts, so nothing inside it is focusable; and each shows
+WHAT its figure counts, not only how many — a figure alone asks for a click to
+be understood.
+
+- **One semantic tone per tile, never the accent.** Green for what is live
+  (In progress), amber for what waits on the teacher (Results to release),
+  `info` for the calendar (Next 7 days), ink for elapsed time (Projects). Red
+  stays the page's primary action; four tones in one tile would read as a
+  chart legend, not a status.
+- **The figure is 32 px extra-bold with its unit beside it** ("7 open
+  activities"); a zero is `fg-faint` and says the calm in words ("all
+  released"), so an empty tile reads as good news, not as missing data.
+- **In progress**: a `success-soft` "live" chip whose dot pulses
+  (`motion-safe:animate-ping`, still under `prefers-reduced-motion`: the
+  word carries the meaning, the pulse only draws the eye), and a
+  `SegmentedBar` of one segment per open activity, as wide as its class (six at
+  most, the rest summed in one); no figure on it — the footer gives the
+  distinct total. Nothing open: the empty track.
+- **Results to release**: the amber "to do" chip and the titles (two, the
+  longest waiting first, its age in mono) name only what waits on the staff;
+  the figure keeps counting every unreleased run. A closed exercise asks
+  nothing, so it never turns the tile amber.
+- **Next 7 days**: calendar days of the browser's zone, today first, never a
+  rolling 168 h — a teacher plans by days. One bar per day as tall as its
+  openings and closings, `info` for the next event's day, `info-mid` for the
+  other busy days, a 3 px `surface-3` stub for an empty one; the weekday
+  initial under it in mono, today's in bold ink.
+- **Projects**: the running project whose deadline comes first, its date, and
+  an elapsed `SegmentedBar` in ink (`fg` tone) with "D−4" and "71 % elapsed" in mono under it. Under
+  48 hours the bar turns `warning`: the one place amber marks a deadline
+  rather than a task, because it is the last moment the teacher can still act
+  on it. No bar without both dates.
+- Hover is the interactive `Card`'s: `line-strong` and a `surface-2` wash, no
+  shadow and no lift — the tiles sit in the page flow.
 
 ## The project page (staff)
 

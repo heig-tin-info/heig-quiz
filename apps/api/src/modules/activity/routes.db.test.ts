@@ -204,9 +204,15 @@ describe("GET /app/api/activities", () => {
     await enroll(a1, "teacher@heig-vd.ch", true);
     await enroll(a2, "ben@heig-vd.ch");
     await enroll(a2, "cid@heig-vd.ch");
-    expect(await stats(alice)).toEqual({ studentsInProgress: 3 });
+    await enroll(a2, "dan@heig-vd.ch");
+    // Four distinct students in all; each activity counts its own class
+    // (its size, not who takes part); "alice poll" is open but anonymous, so
+    // it has no entry. No order is promised.
+    const alices = await stats(alice);
+    expect(alices.studentsInProgress).toBe(4);
+    expect([...alices.classSizes].sort()).toEqual([2, 3]);
     // Bob reaches none of those classrooms; his own open poll has no class.
-    expect(await stats(bob)).toEqual({ studentsInProgress: 0 });
+    expect(await stats(bob)).toEqual({ studentsInProgress: 0, classSizes: [] });
   });
 
   it("is a teacher route", async () => {

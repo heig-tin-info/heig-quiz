@@ -307,13 +307,36 @@ export function foldable(week: Week, now: number): boolean {
 
 // --- The summary -------------------------------------------------------------
 
-const WEEK_MS = 7 * 86_400_000;
-
 /** The next thing that happens to a row: it opens, or it closes, at `at`. */
 export interface NextEvent {
   row: ActivitySummary;
   at: string;
   what: "opens" | "closes";
+}
+
+/** How many calendar days the summary looks ahead: today and the six after it. */
+export const SUMMARY_DAYS = 7;
+
+/**
+ * Local midnight of the day `n` days after `t`'s, in the browser's zone. Built
+ * from the calendar date, never by adding 24 h, so a daylight-saving change
+ * (a 23 or 25 hour day) never moves a day's start.
+ */
+export function dayStart(t: number, n = 0): number {
+  const d = new Date(t);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime();
+}
+
+/** One calendar day of the week strip: its local midnight and what happens in it. */
+export interface SummaryDay {
+  start: number;
+  events: NextEvent[];
+}
+
+/** A row waiting for its results, and since when it waits (null when nothing dates its end). */
+export interface Waiting {
+  row: EvaluationActivitySummary;
+  since: string | null;
 }
 
 /**
@@ -322,15 +345,19 @@ export interface NextEvent {
  * - `open`: what runs now (the "open" age);
  * - `toRelease`: the evaluations closed or in grading, results not out — a
  *   poll stops at closed and is never released (ADR-014), so it is not one;
- * - `week`: the rows that open or close in the next seven days, and the
- *   first of those events;
+ *   `waiting`: those of them that wait on the staff ({@link awaitsStaff}),
+ *   the longest waiting first;
+ * - `week`: the openings and closings from now to the end of the seventh
+ *   calendar day ({@link inNextDays}), each counted (a row that opens and
+ *   closes in the week is two), filed by day, and the first of them;
  * - `projects`: the published projects and the nearest deadline; null where
  *   the teacher has no project at all, so the tile is not drawn.
  */
 export interface ActivitiesSummary {
   open: number;
   toRelease: number;
-  week: { count: number; next: NextEvent | null };
+  waiting: Waiting[];
+  week: { count: number; days: SummaryDay[]; next: NextEvent | null };
   projects: { count: number; next: NextEvent | null } | null;
 }
 
@@ -369,14 +396,46 @@ const first = (events: NextEvent[]): NextEvent | null =>
     null,
   );
 
+/** What happens to a row from now to the end of the summary's last day. */
+const soonOf = (a: ActivitySummary, now: number): NextEvent[] => {
+  const end = dayStart(now, SUMMARY_DAYS);
+  return eventsOf(a, now).filter((e) => new Date(e.at).getTime() < end);
+};
+
+/**
+ * The row opens or closes between now and the end of the seventh calendar
+ * day: what the "Next 7 days" tile counts, and what its filter keeps.
+ */
+export const inNextDays = (a: ActivitySummary, now: number): boolean => soonOf(a, now).length > 0;
+
+/** The events filed by calendar day, today first, {@link SUMMARY_DAYS} of them. */
+export function daysOf(events: readonly NextEvent[], now: number): SummaryDay[] {
+  return Array.from({ length: SUMMARY_DAYS }, (_, i) => {
+    const [start, end] = [dayStart(now, i), dayStart(now, i + 1)];
+    return {
+      start,
+      events: events.filter((e) => {
+        const at = new Date(e.at).getTime();
+        return at >= start && at < end;
+      }),
+    };
+  });
+}
+
 export function summaryOf(rows: readonly ActivitySummary[], now: number): ActivitiesSummary {
-  const soon = rows.flatMap((a) => eventsOf(a, now).filter((e) => new Date(e.at).getTime() < now + WEEK_MS));
+  const soon = rows.flatMap((a) => soonOf(a, now));
   const projects = rows.filter((a) => a.kind === "project");
   const running = projects.filter((a) => bucketOf(a.state) === "open");
+  // Since when a run waits: when it actually closed, else its closing time.
+  const waiting = rows
+    .filter((a): a is EvaluationActivitySummary => a.kind === "evaluation" && awaitsStaff(a))
+    .map((row) => ({ row, since: row.closedAt ?? row.closesAt }))
+    .sort((a, b) => (time(a.since) ?? Infinity) - (time(b.since) ?? Infinity) || a.row.title.localeCompare(b.row.title));
   return {
     open: rows.filter((a) => bucketOf(a.state) === "open").length,
     toRelease: rows.filter(awaitsRelease).length,
-    week: { count: new Set(soon.map((e) => e.row.id)).size, next: first(soon) },
+    waiting,
+    week: { count: soon.length, days: daysOf(soon, now), next: first(soon) },
     projects:
       projects.length === 0
         ? null
@@ -386,3 +445,39 @@ export function summaryOf(rows: readonly ActivitySummary[], now: number): Activi
           },
   };
 }
+
+/** Where a running project stands between its start and its deadline. */
+export interface ProjectProgress {
+  /** The share of its span already elapsed, 0 to 1. */
+  elapsed: number;
+  /** Calendar days to the deadline (0 on its day): "D−4". */
+  daysLeft: number;
+  /** Under 48 hours to go: the bar turns amber. */
+  soon: boolean;
+}
+
+/** Null when either date is missing: no span, no bar. */
+export function projectProgress(startAt: string | null, deadlineAt: string | null, now: number): ProjectProgress | null {
+  if (startAt === null || deadlineAt === null) return null;
+  const [s, d] = [new Date(startAt).getTime(), new Date(deadlineAt).getTime()];
+  return {
+    elapsed: d <= s ? 1 : Math.min(1, Math.max(0, (now - s) / (d - s))),
+    // Rounded: a daylight-saving change makes one day an hour short or long.
+    daysLeft: Math.max(0, Math.round((dayStart(d) - dayStart(now)) / DAY)),
+    soon: d - now < 2 * DAY,
+  };
+}
+
+/**
+ * The segments of the "In progress" bar: one per open activity, its width its
+ * class size; past {@link CLASS_SEGMENTS} the smallest are summed in one last
+ * segment. A class of nobody draws nothing. Largest first.
+ */
+export function classSegments(sizes: readonly number[]): number[] {
+  const sorted = sizes.filter((n) => n > 0).sort((a, b) => b - a);
+  if (sorted.length <= CLASS_SEGMENTS + 1) return sorted;
+  return [...sorted.slice(0, CLASS_SEGMENTS), sorted.slice(CLASS_SEGMENTS).reduce((sum, n) => sum + n, 0)];
+}
+
+/** The classes the "In progress" bar draws one by one; the rest share one segment. */
+export const CLASS_SEGMENTS = 6;

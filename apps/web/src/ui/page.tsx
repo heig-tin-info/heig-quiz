@@ -461,8 +461,11 @@ export function Fact({ label, children }: { label: ReactNode; children: ReactNod
  *
  * With `children` it is a tile (DESIGN.md › The project page): the figure,
  * then what qualifies it below — sub-figures, a legend line, a button of
- * their own. A tile holds focusable things, so it never takes `onClick`; its
- * `visual` (a ring) sits beside the figure.
+ * their own; its `visual` (a ring) sits beside the figure. A tile with
+ * `onClick` is one button leading to what it counts (the Activities
+ * summary): its body then holds nothing focusable — a picture, words — and
+ * stretches to the tile's height, so a line pushed down with `mt-auto` sits
+ * on the tile's bottom edge in a row of tiles.
  */
 export function Stat({
   label,
@@ -487,7 +490,7 @@ export function Stat({
   onClick?: () => void;
   /** A small picture beside the figure (a `RingChart`); tile variant. */
   visual?: ReactNode;
-  /** The tile's body under the figure; makes the stat a tile, which is never a button. */
+  /** The tile's body under the figure; with `onClick`, nothing in it may be focusable. */
   children?: ReactNode;
 }) {
   const body = (
@@ -505,7 +508,7 @@ export function Stat({
     </>
   );
   const box = "rounded-card border border-line bg-surface px-4 py-3";
-  if (children) {
+  if (children && !onClick) {
     return (
       <div className={cx(box, "flex min-w-0 flex-col")}>
         {body}
@@ -520,10 +523,11 @@ export function Stat({
       className={cx(
         box,
         // Top-aligned like the `div` form: a button centres its content.
-        "flex w-full flex-col items-stretch justify-start text-left transition-colors duration-150 hover:border-line-strong hover:bg-surface-2/40",
+        "flex w-full min-w-0 flex-col items-stretch justify-start text-left transition-colors duration-150 hover:border-line-strong hover:bg-surface-2/40",
       )}
     >
       {body}
+      {children ? <span className="mt-3 flex flex-1 flex-col gap-1.5 text-[13px] text-fg-muted">{children}</span> : null}
     </button>
   ) : (
     <div className={box}>{body}</div>

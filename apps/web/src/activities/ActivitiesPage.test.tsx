@@ -81,7 +81,7 @@ const LAB3: ProjectActivitySummary = { ...LAB, id: id("project", 2), title: "Lab
 const render = (rows: ActivitySummary[] = ALL, navigate = vi.fn()) => {
   const stub = mockFetch({
     "GET /app/api/activities": ok(rows),
-    "GET /app/api/activities/stats": ok({ studentsInProgress: 42 }),
+    "GET /app/api/activities/stats": ok({ studentsInProgress: 42, classSizes: [30, 12] }),
   });
   const { queryClient } = renderWithProviders(<ActivitiesPage navigate={navigate} />);
   return { navigate, queryClient, ...stub };
@@ -181,10 +181,13 @@ describe("ActivitiesPage", () => {
     const GRADING = activity(8, { title: "Test 1", state: "grading", closedAt: liveAt(-60 * MIN), closedBy: "server" });
     render([...ALL, GRADING, LAB]);
     const open = await screen.findByRole("button", { name: /^In progress/ });
-    expect(open).toHaveTextContent(/^In progress\s*4/);
-    expect(await within(open).findByText("42 students involved")).toBeInTheDocument();
+    expect(open).toHaveTextContent(/^In progress\s*live\s*4\s*open activities/);
+    await waitFor(() => expect(open).toHaveTextContent(/42 students involved$/));
+    // The tile holds a picture and words, never a focus stop of its own.
+    expect(open.querySelector("a, button, [tabindex]")).toBeNull();
+    // The run in grading waits on the staff: the amber "to do" and its title.
     const toRelease = screen.getByRole("button", { name: /^Results to release/ });
-    expect(toRelease).toHaveTextContent(/^Results to release\s*1/);
+    expect(toRelease).toHaveTextContent(/^Results to release\s*to do\s*1\s*waiting\s*Test 1/);
 
     await user.click(toRelease);
     expect(screen.getByRole("tab", { name: /Ended/, selected: true })).toBeInTheDocument();
@@ -198,6 +201,23 @@ describe("ActivitiesPage", () => {
     expect(screen.getByRole("button", { name: "Project", pressed: true })).toBeInTheDocument();
     expect(within(screen.getByRole("table")).getByText("Labo 2 — pointeurs")).toBeInTheDocument();
     expect(within(screen.getByRole("table")).queryByText("Quiz 3 — pointers")).not.toBeInTheDocument();
+  });
+
+  it("leads the week's tile to the rows that open or close in the next seven calendar days", async () => {
+    const user = userEvent.setup();
+    const FAR = activity(9, { title: "Série 9", mode: "exercise", takeHome: true, state: "scheduled", opensAt: liveAt(20 * 24 * 60 * MIN) });
+    render([EXAM, SERIES, FAR]);
+    const week = await screen.findByRole("button", { name: /^Next 7 days\s*2/ });
+    // Two events (EXAM and SERIES close), each counted; the first is named.
+    expect(week).toHaveTextContent(/^Next 7 days\s*2 events/);
+    expect(week).toHaveTextContent(/Next: Quiz 3 — pointers closes in 20 minutes$/);
+    await user.click(week);
+    expect(screen.getByRole("button", { name: "Next 7 days", pressed: true })).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Série 5 — UART")).toBeInTheDocument();
+    expect(within(table).queryByText("Série 9")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next 7 days", pressed: true }));
+    expect(within(screen.getByRole("table")).getByText("Série 9")).toBeInTheDocument();
   });
 
   it("narrows the current tab to what is scheduled, of either kind, the scheduled project included (#787)", async () => {

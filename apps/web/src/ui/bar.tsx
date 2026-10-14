@@ -5,7 +5,7 @@ import { cx, Tip } from "./layers";
 // Bars: a row of vertical bars, one count each (a distribution, a series).
 
 /** The meaning of a part, never a raw colour (DESIGN.md, "Correction projection"). */
-export type BarTone = "success" | "partial" | "danger" | "warning" | "muted" | "info";
+export type BarTone = "success" | "partial" | "danger" | "warning" | "muted" | "info" | "fg";
 
 export const BAR_TONES: Record<BarTone, string> = {
   success: "bg-success",
@@ -17,6 +17,8 @@ export const BAR_TONES: Record<BarTone, string> = {
   muted: "bg-fg-faint/50",
   // A share with no verdict: the choices picked on a question of the pool (ADR-043).
   info: "bg-info",
+  // Ink: a measure with no verdict, such as the time a project has used (the Activities summary).
+  fg: "bg-fg",
 };
 
 /** "wrong: 4 · no answer: 1": the non-empty labelled parts, spelled out. */

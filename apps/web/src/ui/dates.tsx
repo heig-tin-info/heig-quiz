@@ -97,11 +97,13 @@ export function relativeTime(
   now: number,
   locale: Locale,
   t: (key: "time.now") => string,
+  /** "short" for a tight column: "il y a 3 j", "5 hr. ago". */
+  style: Intl.RelativeTimeFormatStyle = "long",
 ): string {
   const diff = new Date(iso).getTime() - now;
   const abs = Math.abs(diff);
   if (abs < 45_000) return t("time.now");
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style });
   const units: [Intl.RelativeTimeFormatUnit, number][] = [
     ["year", 365 * 86_400_000],
     ["month", 30 * 86_400_000],
