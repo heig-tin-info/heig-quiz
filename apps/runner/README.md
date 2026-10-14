@@ -297,7 +297,7 @@ images/build.sh c python        # only the ones named
 | `quiz-runner-js` | alpine 3.20 | `nodejs` | ~170 MB |
 | `quiz-runner-rust` | alpine 3.20 | `rust` (rustc 1.78, gcc as its linker; no cargo registry) | ~820 MB |
 | `quiz-runner-spice` | alpine 3.20 | `ngspice` (42) | ~65 MB |
-| `quiz-runner-lab-c` | alpine 3.20 | `gcc`, `musl-dev`, `make`, `python3`, `py3-pytest`, GNU `tar` and `findutils`: a project run's image, not a language ([Project runs](#project-runs)) | ~200 MB |
+| `quiz-runner-lab-c` | alpine 3.20 | `gcc`, `g++`, `musl-dev`, `make`, `python3`, `py3-pytest`, GNU `tar` and `findutils`: a project run's image, not a language ([Project runs](#project-runs)) | ~200 MB |
 
 Alpine-based, one toolchain each — the Alpine six (`lab-c` included) share `images/Containerfile`
 and differ by the packages `images/build.sh` passes it; `js` has its own
@@ -411,9 +411,9 @@ order of `outputs`, then by path: a file over 256 KB, or past 2 MB in all,
 comes back empty and `truncated` with its size; a file with a NUL byte or not
 UTF-8 as its size only.
 
-**The image** `quiz-runner-lab-c` (`images/build.sh lab-c`): gcc, musl-dev,
-make, python3, py3-pytest, GNU tar and findutils. No pip, no git, no pandoc,
-and `--network none`: **a lab that needs `pip install` or `apt` at test time
+**The image** `quiz-runner-lab-c` (`images/build.sh lab-c`): gcc, g++ (a
+C++ lab builds there too), musl-dev, make, python3, py3-pytest, GNU tar and
+findutils. No pip, no git, no pandoc, and `--network none`: **a lab that needs `pip install` or `apt` at test time
 cannot run here, by construction**; ADR-106 has the API refuse the `criteria`
 mode for it, with the reason.
 

@@ -198,7 +198,7 @@ export const PROJECT_OUTPUTS_MAX = 16;
  */
 export const PROJECT_TIME_MAX_MS = 600_000;
 
-/** The images a project may run in: `quiz-runner-lab-c` (gcc, make, python3, pytest). */
+/** The images a project may run in: `quiz-runner-lab-c` (gcc, g++, make, python3, pytest). */
 export const ProjectImage = z.enum(["lab-c"]);
 export type ProjectImage = z.infer<typeof ProjectImage>;
 

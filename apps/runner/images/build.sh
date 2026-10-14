@@ -44,7 +44,7 @@ fi
 #           schematic (ADR-019). No X, no editor.
 #   lab-c   the image of a PROJECT run (POST /project, ADR-106 §3): a whole
 #           student repository built with `make` and tested with `pytest`.
-#           gcc + musl-dev + make for the build, python3 + py3-pytest for the
+#           gcc + g++ + musl-dev + make for the build (a C or a C++ lab), python3 + py3-pytest for the
 #           tests, GNU tar (the archive is unpacked inside the container) and
 #           GNU findutils (`find -printf` lists the output files). No pip, no
 #           git, no pandoc: a lab whose tests need `pip install` or `apt` at
@@ -57,7 +57,7 @@ packages() {
     python) echo "python3" ;;
     rust) echo "rust" ;;
     spice) echo "ngspice" ;;
-    lab-c) echo "gcc musl-dev make python3 py3-pytest tar findutils" ;;
+    lab-c) echo "gcc g++ musl-dev make python3 py3-pytest tar findutils" ;;
   esac
 }
 
