@@ -55,9 +55,11 @@ crashes. `index.html` and the hashed assets had no explicit cache policy.
    - **by itself, when nobody is looking.** The tab reloads its own address
      while it is hidden (after a second, for a write its blur started), or
      within 30 seconds after the update overlay closed (ADR-065's
-     `platform.updating`: the reader has just watched the update). It asks
-     again when the tab turns stale, when the last hold drops and when the
-     tab is hidden; never while the API is away, and only once per server
+     `platform.updating`: the reader has just watched the update) unless a
+     field that takes typing has the focus — leaving the tab already blurs
+     it. It asks again when the tab turns stale, when the last hold drops,
+     when the tab is hidden and when a field loses the focus (after its
+     blur's own write took its hold); never while the API is away, and only once per server
      build in a tab (a per-tab marker), so a reload that comes back stale
      falls back on the next-screen rule. The reload of the same address
      keeps the page's vertical scroll, restored once the page is tall
@@ -72,8 +74,8 @@ crashes. `index.html` and the hashed assets had no explicit cache policy.
    pool's description. The journal editor's leave guard holds as well, and
    prompts. Other screens commit each control as it changes (the
    evaluation configuration) or hold only a short field in a dialog (a
-   rename): those rely on the write hold, and a reload can cost the field
-   being typed. State kept in the browser (the notepad) survives a reload.
+   rename): those rely on the write hold, which a field saved on blur takes
+   before the reload is asked again. State kept in the browser (the notepad) survives a reload.
 6. **A page whose chunk is missing.** Where 5 allows it, the tab loads the
    same address once, after the holds are released (a per-tab marker
    prevents a loop; past it, the crash screen). The rule reads the page

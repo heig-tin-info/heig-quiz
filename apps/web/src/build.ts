@@ -16,6 +16,19 @@ const RESTORE_MS = 5_000;
 
 type Connection = Pick<ConnectionMonitor, "getSnapshot" | "subscribe">;
 
+/** Inputs that take no typing: a click on them leaves nothing half-written. */
+const UNTYPED_INPUTS = new Set(["button", "submit", "reset", "checkbox", "radio", "image", "file", "range", "color"]);
+
+/** Whether `element` is a field the reader may be typing in. */
+function editing(element: Element | null): boolean {
+  if (element instanceof HTMLInputElement) return !UNTYPED_INPUTS.has(element.type);
+  return (
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement ||
+    (element instanceof HTMLElement && element.isContentEditable)
+  );
+}
+
 /**
  * Whether this tab runs an older build than the API (ADR-110), and whether it
  * may load the new one. Stale is learnt from the build header of a signed-in
@@ -143,7 +156,11 @@ export class BuildMonitor {
     let closedAt = -Infinity;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const consider = () => {
-      const unnoticed = document.visibilityState === "hidden" || Date.now() - closedAt < AFTER_UPDATE_MS;
+      // A visible tab waits for the field being typed in: a field saved on
+      // blur holds nothing until then (`focusout` asks again).
+      const unnoticed =
+        document.visibilityState === "hidden" ||
+        (Date.now() - closedAt < AFTER_UPDATE_MS && !editing(document.activeElement));
       if (!unnoticed || connection.getSnapshot() !== "connected") return;
       if (!this.mayLoad(answering()) || !this.claim()) return;
       this.load(window.location.href, true);
@@ -158,13 +175,22 @@ export class BuildMonitor {
       clearTimeout(timer);
       if (document.visibilityState === "hidden") timer = setTimeout(consider, HIDDEN_DELAY_MS);
     };
+    // After the blur's own handlers: a write they start takes its hold first.
+    let blurTimer: ReturnType<typeof setTimeout> | undefined;
+    const onFocusOut = () => {
+      clearTimeout(blurTimer);
+      blurTimer = setTimeout(consider, 0);
+    };
     const stops = [this.subscribe(consider), connection.subscribe(onConnection)];
     document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener("focusout", onFocusOut);
     onVisibility();
     return () => {
       clearTimeout(timer);
+      clearTimeout(blurTimer);
       for (const stop of stops) stop();
       document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("focusout", onFocusOut);
     };
   };
 

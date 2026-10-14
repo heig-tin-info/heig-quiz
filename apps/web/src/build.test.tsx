@@ -134,6 +134,21 @@ describe("the spontaneous reload", () => {
     expect(late.load).not.toHaveBeenCalled();
   });
 
+  it("after an update, waits for a visible tab's field to lose focus", () => {
+    const field = document.createElement("input");
+    document.body.append(field);
+    field.focus();
+    const { build, load, connection } = watched();
+    connection.set("updating");
+    connection.set("connected");
+    build.observe("bbb");
+    expect(load).not.toHaveBeenCalled();
+    field.blur();
+    vi.advanceTimersByTime(0);
+    expect(load).toHaveBeenCalledOnce();
+    field.remove();
+  });
+
   it("never reloads an answering page, a confined session, or held work", () => {
     const answering = watched(true);
     answering.build.observe("bbb");
