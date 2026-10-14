@@ -7,7 +7,7 @@ An evaluation is an ordered list of questions taken from the pools of a course, 
 Open the classroom and its **Activities** tab (see [Classrooms](classrooms.md)), then click **New evaluation**. Give it a **Title** and pick a **Mode**:
 
 - **Exam**: graded, taken in one sitting, no feedback before you release the results.
-- **Exercise**: practice, with feedback as soon as a question is validated; it starts Live, open until you close it, and **Scheduled** gives it a deadline.
+- **Exercise**: practice, with feedback as soon as a question is validated; it starts Live, open until you close it, and **Automatic** gives it a deadline.
 
 The mode is not a lock. It picks the starting settings and decides which feedback timings are offered, and everything else stays yours to change. Click **Create evaluation**: the new evaluation opens in `draft` on its first step.
 
@@ -76,7 +76,7 @@ The bin at the end of a row takes the item out of this evaluation. The question 
 
 Two cards carry this step ([ADR-086](../adr/ADR-086-planifiee-ou-en-direct.md)). The card in force sums up what is set; the other says what it means.
 
-- **Scheduled**: the platform opens the evaluation at **Opens at** and closes it at **Closes at**, by itself. Both are picked on one calendar: click the first day, then the last, and set the time of each end; the dates are written when you close the calendar. Students enter and work without you; there is no waiting room. Without a time limit, everybody works until **Closes at**: an exercise series, homework.
+- **Automatic**: once you schedule it in **Launch**, the platform opens the evaluation at **Opens at** and closes it at **Closes at**, by itself. Both are picked on one calendar: click the first day, then the last, and set the time of each end; the dates are written when you close the calendar. Students enter and work without you; there is no waiting room. Without a time limit, everybody works until **Closes at**: an exercise series, homework.
 - **Live**: you open the waiting room and press **Start**; the evaluation ends when you close it from the dashboard. **Planned for** only places it in the calendar: nothing opens by itself at that time. **Closes at the latest** is an optional safety deadline at which the platform closes it whatever happens, with or without a time limit; an exam without a time limit must have one, since an exam must end by itself.
 
 ### Time limit per student
@@ -89,8 +89,8 @@ What the two answers store:
 
 | Choice | Stored timing | Waiting room | Fields |
 | --- | --- | --- | --- |
-| Scheduled, no limit | common end | none | **Opens at**, **Closes at** |
-| Scheduled, with a limit | per student | none | **Opens at**, **Closes at**, **Duration** |
+| Automatic, no limit | common end | none | **Opens at**, **Closes at** |
+| Automatic, with a limit | per student | none | **Opens at**, **Closes at**, **Duration** |
 | Live, no limit | closed by you | **You start** | **Planned for**, **Closes at the latest** |
 | Live, with a limit | per student | **You start** | **Planned for**, **Closes at the latest**, **Duration** |
 
@@ -193,7 +193,7 @@ On the dashboard, a student on a station is shown with the station's name beside
 The summary shows four figures: **Questions**, **Points**, **Time** and **Feedback**. Read them once; if one surprises you, the tab to fix it is one click away. Below, one primary action, which depends on who drives the clock:
 
 - **Live**: **Open the waiting room** moves the evaluation to `lobby` right now and takes you to the dashboard. Students see it on their home page and gather on the ring. With the waiting room set to **None**, the button is **Open** and they start as soon as they enter. A Live evaluation is never scheduled: its date is for the calendar.
-- **Scheduled**, while **Opens at** is still to come: **Schedule** moves it to `scheduled`. At that instant the server starts it by itself, without anyone logged in, and closes it at **Closes at** the same way. **Open now** beside it opens it at once instead. Once **Opens at** has passed, the one action is **Open**. **Back to draft** unschedules a scheduled evaluation.
+- **Automatic**, while **Opens at** is still to come: **Schedule** moves it to `scheduled`. Until then it is a draft, and its badge says `draft · not scheduled`: its dates alone open nothing. At that instant the server starts it by itself, without anyone logged in, and closes it at **Closes at** the same way. **Open now** beside it opens it at once instead. Once **Opens at** has passed, the one action is **Open**. **Back to draft** unschedules a scheduled evaluation.
 
 An evaluation with no question cannot be opened or scheduled.
 

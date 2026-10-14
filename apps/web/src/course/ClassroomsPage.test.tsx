@@ -65,6 +65,7 @@ describe("ClassroomsPage", () => {
     state: "grading",
     classroom: { id: "c1", name: "PRG1-A", courseCode: "PRG1" },
     takeHome: false,
+    clock: "live",
     opensAt: null,
     closesAt: null,
     startedAt: null,

@@ -13,12 +13,13 @@ import {
 import { useState } from "react";
 
 import type { Evaluation, EvaluationDetail } from "@quiz/contracts";
-import { clockChoiceOf, isEvaluationOpen, isEvaluationOver } from "@quiz/domain";
+import { isEvaluationOpen, isEvaluationOver } from "@quiz/domain";
 
 import { api, usePublicConfig } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { Alert, Button, Card, cx, isoDateTime, LEVEL_ICON, useNow, type IconType } from "../ui";
+import { awaitsScheduling, scheduleFactsOf } from "./common";
 import { launchChecks, lobbyKey, readiness, type LaunchCheck } from "./launchChecks";
 import { LobbyPreviewColumn, LobbyPreviewRow } from "./LobbyPreview";
 import { PullTemplateDialog } from "./templatePull";
@@ -122,11 +123,7 @@ function Checklist({
    * the secondary one. Live has no Schedule: its date is for the calendar
    * only, and the teacher opens the waiting room.
    */
-  const toSchedule =
-    clockChoiceOf(evaluation.settings).mode === "scheduled" &&
-    evaluation.state === "draft" &&
-    evaluation.opensAt !== null &&
-    Date.parse(evaluation.opensAt) > now;
+  const toSchedule = awaitsScheduling(scheduleFactsOf(evaluation), now);
   const invalidate = () => qc.invalidateQueries({ queryKey: evaluationKey(id) });
 
   /*

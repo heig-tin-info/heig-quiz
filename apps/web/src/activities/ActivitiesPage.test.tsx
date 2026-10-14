@@ -26,6 +26,7 @@ function activity(n: number, over: Partial<EvaluationActivitySummary> = {}): Eva
     state: "draft",
     classroom: ROOM,
     takeHome: false,
+    clock: "live",
     opensAt: null,
     closesAt: null,
     startedAt: null,

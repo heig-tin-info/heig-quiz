@@ -13,6 +13,7 @@ const evaluation = {
   state: "scheduled",
   classroom: { id: ID, name: "PRG1-2026", courseCode: "PRG1" },
   takeHome: false,
+  clock: "scheduled",
   opensAt: "2026-10-01T08:00:00.000Z",
   closesAt: null,
   startedAt: null,

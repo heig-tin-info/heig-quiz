@@ -18,7 +18,7 @@ import type {
 } from "@quiz/contracts";
 import { activityBucket, isLiveNow, type ActivityBucket } from "@quiz/domain";
 
-import { evaluationHome, evaluationStateLabel, evaluationTimerAt, stateStyle } from "../evaluation/common";
+import { evaluationBadgeLabel, evaluationHome, evaluationTimerAt, stateStyle } from "../evaluation/common";
 import type { TFunction } from "../i18n";
 import { projectPhaseLabel, projectPhaseStyle, projectTimerAt } from "../project/common";
 import type { Route } from "../router";
@@ -152,7 +152,7 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
     inRoom: (a) => bucketOf(a.state) === "open",
     span: evaluationSpan,
     home: evaluationHome,
-    stateLabel: (a, t) => evaluationStateLabel(a.state, t),
+    stateLabel: evaluationBadgeLabel,
     stateStyle: (a) => stateStyle(a.state),
     timerAt: evaluationTimerAt,
   },

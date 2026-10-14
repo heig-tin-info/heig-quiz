@@ -984,3 +984,16 @@ describe("the list's Participants (ADR-018, amended 2026-10-13)", () => {
     expect(row!.attemptCount).toBe(4);
   });
 });
+
+describe("the list's clock (#857)", () => {
+  it("says who drives each evaluation's clock, read back from its settings", async () => {
+    const teacher = await server.signIn("teacher");
+    const seed = await seedLive(db, { teacherId: teacher.id, students: 0 });
+    const clockOf = async () =>
+      (await service.listEvaluations(db, seed.classroomId)).find((e) => e.id === seed.evaluationId)!.clock;
+    await db.update(evaluations).set({ settings: { timing: "manual", lobby: "manual" } }).where(eq(evaluations.id, seed.evaluationId));
+    expect(await clockOf()).toBe("live");
+    await db.update(evaluations).set({ settings: { timing: "deadline", lobby: "skip" } }).where(eq(evaluations.id, seed.evaluationId));
+    expect(await clockOf()).toBe("scheduled");
+  });
+});

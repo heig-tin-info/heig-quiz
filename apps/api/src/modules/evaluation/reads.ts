@@ -33,6 +33,7 @@ import {
   drillAllowedOn,
   evaluationTotal,
   type MaskedPerson,
+  clockChoiceOf,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -723,6 +724,7 @@ export async function listEvaluations(
     attemptCount: tries.get(r.id)?.n ?? 0,
     participantCount: tries.get(r.id)?.participants ?? 0,
     deletionRole: deletionRoleOf(r, tries.get(r.id)?.students ?? 0),
+    clock: clockChoiceOf(settingsOf(r)).mode,
     opensAt: isoOrNull(r.opensAt),
     closesAt: isoOrNull(r.closesAt),
     startedAt: isoOrNull(r.startedAt),

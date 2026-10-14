@@ -20,7 +20,7 @@
 import { and, desc, eq, inArray, isNull, not, sql, type SQL } from "drizzle-orm";
 
 import type { EvaluationActivitySummary } from "@quiz/contracts";
-import { isTakeHome, OVER_STATES } from "@quiz/domain";
+import { clockChoiceOf, isTakeHome, OVER_STATES, type EvaluationTiming, type LobbyName } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -43,6 +43,7 @@ export async function listActivities(
       mode: evaluations.mode,
       state: evaluations.state,
       lobby: sql<string | null>`${evaluations.settings} ->> 'lobby'`,
+      timing: sql<string | null>`${evaluations.settings} ->> 'timing'`,
       opensAt: evaluations.opensAt,
       closesAt: evaluations.closesAt,
       startedAt: evaluations.startedAt,
@@ -69,6 +70,11 @@ export async function listActivities(
         ? null
         : { id: r.classroomId, name: r.classroomName!, courseCode: r.courseCode! },
     takeHome: isTakeHome(r),
+    // The settings' own defaults (`EvaluationSettings`) where a key is absent.
+    clock: clockChoiceOf({
+      timing: (r.timing ?? "duration") as EvaluationTiming,
+      lobby: (r.lobby ?? "manual") as LobbyName,
+    }).mode,
     opensAt: isoOrNull(r.opensAt),
     closesAt: isoOrNull(r.closesAt),
     startedAt: isoOrNull(r.startedAt),

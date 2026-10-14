@@ -175,6 +175,9 @@ describe("GET /app/api/activities", () => {
     expect(byTitle.get("alice poll")!.classroom).toBeNull();
     expect(byTitle.get("alice series")!.takeHome).toBe(true);
     expect(byTitle.get("alice exam")!.takeHome).toBe(false);
+    // Who drives the clock, read back from the settings (`clockChoiceOf`, #857).
+    expect(byTitle.get("alice series")!.clock).toBe("scheduled");
+    expect(byTitle.get("alice exam")!.clock).toBe("live");
     // When and by whom a run ended: the list marks a poll ended by hand.
     expect(byTitle.get("recent poll")).toMatchObject({
       closedAt: new Date(server.clock.now().getTime() - 119 * 86_400_000).toISOString(),

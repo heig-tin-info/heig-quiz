@@ -12,7 +12,7 @@
  */
 import { z } from "zod";
 
-import { EvaluationClosedBy, EvaluationMode, EvaluationState } from "./evaluation.js";
+import { ClockMode, EvaluationClosedBy, EvaluationMode, EvaluationState } from "./evaluation.js";
 import { ProjectActivitySummary } from "./project.js";
 
 /** The kinds of activity. */
@@ -41,6 +41,8 @@ export const EvaluationActivitySummary = z.object({
     .nullable(),
   /** An exercise without a waiting room (`isTakeHome`): never "live". */
   takeHome: z.boolean(),
+  /** Who drives its clock (`clockChoiceOf`): a Scheduled draft is still not scheduled (#857). */
+  clock: ClockMode,
   opensAt: z.iso.datetime().nullable(),
   closesAt: z.iso.datetime().nullable(),
   startedAt: z.iso.datetime().nullable(),

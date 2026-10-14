@@ -162,7 +162,7 @@ describe("TemplateEditor", () => {
     );
 
     await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
-    await userEvent.click(screen.getByRole("button", { name: /^Scheduled/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Automatic/ }));
     await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
     const body = calls.find((c) => c.method === "PATCH")!.body as Record<string, unknown>;
     expect(body).toHaveProperty("settings.lobby", "skip");

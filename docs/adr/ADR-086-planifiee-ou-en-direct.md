@@ -11,6 +11,10 @@ Amended 2026-10-09 (product owner): §1, the time limit per student is at
 most 8 hours (`EVALUATION_DURATION_MAX_MINUTES`, `@quiz/contracts`), down
 from the 24 hours the patch accepted.
 
+Amended 2026-10-14 (product owner, #857): the names of §1 — the Scheduled
+mode is labelled "Automatic" / « Automatique » on screen
+([amendment](#amendment-2026-10-14-the-scheduled-mode-is-labelled-automatic)).
+
 Scope: the time part of the configuration screen of an evaluation and of a
 template (step 2, "Format"), the action of the launch step, the
 stored `timing` × `lobby` × `opensAt` / `closesAt` / `durationS` they map
@@ -164,3 +168,24 @@ draft** still unschedules it.
   makes, and the ticker would keep it open for one student.
 - **Auto-open a Live waiting room at its date.** Deferred: the date stays a
   hint until a teacher asks for it.
+
+## Amendment 2026-10-14: the Scheduled mode is labelled "Automatic"
+
+Decided by the product owner on 2026-10-14, after #857: a teacher who chose
+« Planifiée » and set the dates read the exercise as planned, while it was
+a draft that opens only once **Schedule** moves it to `scheduled` (§4).
+One word named the mode, the state and the action.
+
+1. **The mode's label names who drives the clock**, not the act: "Automatic"
+   / « Automatique », beside "Live" / « En direct ». The state `scheduled`
+   ("scheduled" / « planifiée ») and the launch action **Schedule** /
+   « Planifier » keep their words.
+2. **Its description no longer states the opening as a fact**: "Opens and
+   closes by itself between its dates, once scheduled in Launch; students
+   work without you." / « S'ouvre et se ferme d'elle-même entre ses dates,
+   une fois planifiée dans Démarrage ; les étudiants travaillent sans
+   vous. »
+3. **Only the words change.** The internal value stays `scheduled`
+   (`ClockMode`, `clockChoiceOf`), as do the i18n keys, the contracts and
+   the stored settings; the identifiers and this record's prose keep
+   "Scheduled" for the mode.

@@ -12,7 +12,7 @@
 import { BarChart3, ClipboardCheck, ClipboardList, MonitorPlay, Presentation } from "lucide-react";
 
 import type { Evaluation, EvaluationMode, EvaluationState, EvaluationSummary } from "@quiz/contracts";
-import { isDebriefOpen, isEvaluationOpen, isEvaluationOver } from "@quiz/domain";
+import { clockChoiceOf, isDebriefOpen, isEvaluationOpen, isEvaluationOver } from "@quiz/domain";
 
 import { gradingLinks } from "../grading";
 import type { Dict, TFunction } from "../i18n";
@@ -57,6 +57,39 @@ export function evaluationTimerAt(e: Pick<EvaluationSummary, "state" | "closesAt
 
 export function evaluationStateLabel(state: EvaluationState, t: TFunction): string {
   return t(`eval.state.${state}` as keyof Dict);
+}
+
+/** What tells a dated draft from a scheduled evaluation: a list row's own fields. */
+export type ScheduleFacts = Pick<EvaluationSummary, "state" | "opensAt" | "clock">;
+
+/** An evaluation's {@link ScheduleFacts}: its clock read back from its settings. */
+export function scheduleFactsOf(e: Pick<Evaluation, "state" | "opensAt" | "settings">): ScheduleFacts {
+  return { state: e.state, opensAt: e.opensAt, clock: clockChoiceOf(e.settings).mode };
+}
+
+/**
+ * A draft on the Scheduled clock with its opening time set, that nobody
+ * scheduled (#857): its dates are written, yet it never opens by itself —
+ * the ticker opens a `scheduled` one only. Its badge keeps the zinc of a draft and
+ * says so ({@link evaluationBadgeLabel}), whether the date is still to come
+ * or already gone by. A Live draft's date is a calendar hint, nothing more.
+ */
+function unscheduledDraft(e: ScheduleFacts): boolean {
+  return e.state === "draft" && e.clock === "scheduled" && e.opensAt !== null;
+}
+
+/**
+ * An {@link unscheduledDraft} whose opening is still to come at `now`: one
+ * the Launch step can schedule, so scheduling it is that step's one primary
+ * action (ADR-086), and the configuration screen points to it.
+ */
+export function awaitsScheduling(e: ScheduleFacts, now: number): boolean {
+  return unscheduledDraft(e) && Date.parse(e.opensAt!) > now;
+}
+
+/** The word of an evaluation's badge: its state's, or "draft · not scheduled" for an {@link unscheduledDraft}. */
+export function evaluationBadgeLabel(e: ScheduleFacts, t: TFunction): string {
+  return unscheduledDraft(e) ? t("eval.state.draftUnscheduled") : evaluationStateLabel(e.state, t);
 }
 
 /**

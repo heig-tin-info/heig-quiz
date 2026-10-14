@@ -23,6 +23,7 @@ function evaluation(over: Partial<EvaluationActivitySummary> = {}): EvaluationAc
     state: "draft",
     classroom: classroom(),
     takeHome: false,
+    clock: "live",
     opensAt: null,
     closesAt: null,
     startedAt: null,

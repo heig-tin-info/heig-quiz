@@ -21,6 +21,10 @@ Amended 2026-10-13 (#794): §3's format — two units instead of the largest
 one, and the seconds in the last ten minutes
 ([amendment](#amendment-2026-10-13-the-time-left-in-two-units)).
 
+Amended 2026-10-14 (#857): the first 2026-10-13 amendment's item 1 — a
+dated draft is still zinc, and its word says it is not scheduled
+([amendment](#amendment-2026-10-14-a-dated-draft-is-not-scheduled)).
+
 Scope: the state badge of an evaluation and of a project on every staff
 surface of `apps/web` (the classroom's Activities tab, `/activities`, the
 evaluation's configuration, the live header, the project page) and the bars
@@ -267,3 +271,32 @@ two places of §3; where the timer rides and what it means stand.
 2. **No timer, the word.** A live row with no deadline (an evaluation
    running without `closesAt`) has no timer, and keeps its word: a pill is
    never empty. Every other state keeps its word as before.
+
+## Amendment 2026-10-14: a dated draft is not scheduled
+
+Recorded with #857: a teacher read an exercise whose Format step said
+"Scheduled", with its opening and closing dates set, as planned, and asked
+for it in blue like a scheduled project. It was a `draft`: an evaluation
+opens by itself only once it is `scheduled` (the ticker's
+`live.open_scheduled` opens nothing else), which the Launch
+step's Schedule does; a draft project whose publish mode is scheduled, by
+contrast, IS published by the ticker, hence its blue phase.
+
+1. **A draft is never blue**, dates or not: blue stays a promise that it
+   opens on its own. The zinc pill of a draft on the Scheduled clock
+   (ADR-086) with its `opensAt` set reads "draft · not scheduled" /
+   "brouillon · non planifiée" (`evaluationBadgeLabel` in
+   `evaluation/common.ts`, from the `clock` the lists carry), everywhere
+   the badge and the gantt's label are drawn; a Live draft's date is a
+   calendar hint and keeps "draft".
+2. **The configuration says where to schedule it.** While its opening is
+   to come, the steps before Launch show a neutral `Alert` with the date it
+   would open on, pointing to Launch in words; no button, so Launch's
+   Schedule stays the one primary action.
+3. **The mode's card no longer reads like the state.** The product owner
+   (2026-10-14) renamed the Format step's choice from "Scheduled" /
+   « Planifiée » to "Automatic" / « Automatique », and its description now
+   says it opens by itself once scheduled in Launch; the state and the
+   action keep their words. Recorded in
+   [ADR-086's amendment of 2026-10-14](ADR-086-planifiee-ou-en-direct.md#amendment-2026-10-14-the-scheduled-mode-is-labelled-automatic),
+   which owns the mode's names.

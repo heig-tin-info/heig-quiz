@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { EvaluationSummary, ProjectActivitySummary } from "@quiz/contracts";
 import { templatePullable } from "@quiz/domain";
 
-import { evaluationHome, evaluationStateLabel, evaluationTimerAt, stateStyle } from "../evaluation/common";
+import { evaluationBadgeLabel, evaluationHome, evaluationTimerAt, stateStyle } from "../evaluation/common";
 import type { EvaluationRowActions } from "../evaluation/rowActions";
 import { TemplateBehindBadge } from "../evaluation/templatePull";
 import { useT, type Dict, type TFunction } from "../i18n";
@@ -83,7 +83,7 @@ const EVALUATION: RowSpec<EvaluationSummary> = {
     return (
       <>
         <Badge {...stateStyle(row.state)}>
-          <StateText label={evaluationStateLabel(row.state, t)} at={evaluationTimerAt(row)} />
+          <StateText label={evaluationBadgeLabel(row, t)} at={evaluationTimerAt(row)} />
         </Badge>
         {/* Shown only where the pull would be accepted, as the pull's own door. */}
         {templatePullable(row) ? (

@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
+  CalendarClock,
   ClipboardCheck,
   Copy,
   Eye,
@@ -24,11 +25,13 @@ import type { Route } from "../router";
 import { routeToPath, useSearchParam } from "../router";
 import { Trail, useEvaluationCrumbs } from "../Trail";
 import {
+  Alert,
   Badge,
   Button,
   cx,
   EditableTitle,
   FormError,
+  isoDateTime,
   Menu,
   PageError,
   PageHeader,
@@ -36,8 +39,9 @@ import {
   pageBox,
   TabPanel,
   Tabs,
+  useNow,
 } from "../ui";
-import { evaluationStateLabel, stateStyle } from "./common";
+import { awaitsScheduling, evaluationBadgeLabel, scheduleFactsOf, stateStyle } from "./common";
 import { evaluationTarget } from "./editTarget";
 import { useItemPane } from "./ItemPreview";
 import { ItemsStep } from "./ItemsStep";
@@ -93,6 +97,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const [timingChecked, setTimingChecked] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const pane = useItemPane();
+  const now = useNow();
 
   const detail = useEvaluation(id);
   const patch = useConfigPatch(evaluationTarget(id));
@@ -162,6 +167,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const evaluation = data.evaluation;
   const links = gradingLinks(id);
   const self = data.self;
+  const scheduleFacts = scheduleFactsOf(evaluation);
 
   /*
    * The title, renamed from the heading itself. The same `PATCH` every other
@@ -218,7 +224,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
               editLabel={t("eval.rename.of", { title: evaluation.title })}
               inputLabel={t("eval.titleLabel")}
             />
-            <Badge {...stateStyle(evaluation.state)}>{evaluationStateLabel(evaluation.state, t)}</Badge>
+            <Badge {...stateStyle(evaluation.state)}>{evaluationBadgeLabel(scheduleFacts, t)}</Badge>
           </span>
         }
         help="evaluation"
@@ -342,6 +348,18 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
           { value: "launch", label: t("eval.step.launch") },
         ]}
       />
+
+      {/*
+       * A Scheduled draft with its dates set is still a draft (#857): it
+       * opens by itself only once scheduled. Said on the steps before
+       * Launch, without a button — the step frame's own "Go to Launch" is
+       * the way there, and Launch's Schedule stays its one primary action.
+       */}
+      {step !== "launch" && awaitsScheduling(scheduleFacts, now) ? (
+        <Alert icon={CalendarClock} title={t("eval.unscheduled.title")}>
+          {t("eval.unscheduled.body", { date: isoDateTime(evaluation.opensAt!) })}
+        </Alert>
+      ) : null}
 
       <FormError error={remove.error} title={t("eval.saveFailed")} />
 

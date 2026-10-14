@@ -19,7 +19,7 @@ import {
   renderWithProviders,
   type RouteHandler,
 } from "../test/render";
-import { toLocalInput } from "../ui";
+import { isoDateTime, toLocalInput } from "../ui";
 import { EvaluationConfig } from "./EvaluationConfig";
 
 /*
@@ -153,7 +153,7 @@ describe("EvaluationConfig", () => {
     it("picking Scheduled keeps the limit and drops the waiting room", async () => {
       const user = userEvent.setup();
       const body = await firstPatch(withClock({ timing: "duration", lobby: "manual" }), async () => {
-        await user.click(await screen.findByRole("button", { name: /^scheduled/i }));
+        await user.click(await screen.findByRole("button", { name: /^automatic/i }));
       });
       expect(body).toEqual({ settings: { timing: "duration", lobby: "skip" } });
     });
@@ -330,7 +330,7 @@ describe("EvaluationConfig", () => {
     expect(live).toHaveAttribute("aria-pressed", "true");
     expect(live).toHaveTextContent(/^Live30 minutes each, waiting room opened by you/);
     expect(live).not.toHaveTextContent(/45/);
-    expect(screen.getByRole("button", { name: /^scheduled/i })).toHaveTextContent(/opens and closes by itself/i);
+    expect(screen.getByRole("button", { name: /^automatic/i })).toHaveTextContent(/opens and closes by itself/i);
     expect(screen.getByRole("switch", { name: /time limit per student/i })).toBeChecked();
   });
 
@@ -665,7 +665,7 @@ describe("EvaluationConfig", () => {
       expect(screen.getByText(/use the live dashboard/i)).toBeInTheDocument();
       expect(screen.queryByText(/the structure is frozen/i)).toBeNull();
       expect(screen.getByRole("button", { name: /^live(?! dashboard)/i })).toBeDisabled();
-      expect(screen.getByRole("button", { name: /^scheduled/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /^automatic/i })).toBeDisabled();
       expect(screen.getByRole("switch", { name: /time limit per student/i })).toBeDisabled();
       expect(screen.getByLabelText(/^duration$/i)).toBeDisabled();
 
@@ -794,6 +794,46 @@ describe("EvaluationConfig", () => {
         route: "/evaluations/x?step=questions",
       });
       expect(await screen.findByRole("button", { name: RENAME })).toBeEnabled();
+    });
+  });
+
+  describe("a dated Scheduled draft (#857)", () => {
+    const opensAt = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    const dated = (settings: { timing: "deadline" | "manual"; lobby: "skip" | "manual" }) => {
+      const base = makeEvaluationDetail().evaluation;
+      return makeEvaluationDetail({
+        evaluation: { ...base, mode: "exercise", settings: { ...base.settings, ...settings }, opensAt },
+      });
+    };
+
+    it("keeps the draft badge, says it is not scheduled, and points to Launch without a button", async () => {
+      mockFetch(routes(dated({ timing: "deadline", lobby: "skip" })));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      expect(await screen.findByText("draft · not scheduled")).not.toHaveClass("text-info");
+      const hint = screen.getByText("Not scheduled yet").closest("[role=status]") as HTMLElement;
+      expect(hint).toHaveTextContent(isoDateTime(opensAt));
+      expect(hint).toHaveTextContent(/in Launch/);
+      expect(within(hint).queryByRole("button")).toBeNull();
+    });
+
+    it("leaves the hint to Launch itself, whose primary is Schedule", async () => {
+      mockFetch(routes(dated({ timing: "deadline", lobby: "skip" })));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=launch",
+      });
+      expect(await screen.findByRole("button", { name: /^schedule$/i })).toBeInTheDocument();
+      expect(screen.queryByText("Not scheduled yet")).toBeNull();
+    });
+
+    it("says nothing of the kind for a Live draft, whose date is a calendar hint", async () => {
+      mockFetch(routes(dated({ timing: "manual", lobby: "manual" })));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      expect(await screen.findByText("draft")).toBeInTheDocument();
+      expect(screen.queryByText("Not scheduled yet")).toBeNull();
     });
   });
 
