@@ -20,6 +20,7 @@ import type {
   DrillCalibrationLevel,
   DrillClassroom,
   DrillClassroomSettings,
+  DrillHours,
   DrillProgress,
   DrillQuestionConfidence,
   DrillRecall,
@@ -33,7 +34,7 @@ import type {
   StudentConceptMastery,
   EvaluationDrill,
 } from "@quiz/contracts";
-import { allowDrillWritable, DRILL_TYPES, drillWeekStarts, localDate } from "@quiz/domain";
+import { allowDrillWritable, DRILL_TYPES, drillWeekStarts, isWeekdayClassHour, localDate, offHoursShare } from "@quiz/domain";
 
 import { conceptRefs, seedConceptIds } from "./concept";
 import { evaluationOr404, evaluations, toEvaluation, type MockEvaluation } from "./evaluation";
@@ -363,6 +364,39 @@ on("GET", "/app/api/classrooms/:id/drill/progress", (m, _body, url): DrillProgre
   const found = seatsOf(m.groups!.id!).find((s) => s.seat.id === url.searchParams.get("student"));
   if (!found) throw new MockError(404, "Student not found");
   return { weeks: found.weeks.map((x) => x.week) };
+});
+
+/**
+ * One student's reviews in a slot of the week over the last 30 days: each
+ * has an hour they favour — in class, at lunch, in the evening, late at
+ * night — and some practise at the weekend too.
+ */
+function slotReviews(index: number, weekday: number, hour: number): number {
+  const level = [1, 0.7, 0.35, 0.9, 0.15, 0.6][index % 6]!;
+  const peak = [10, 20, 13, 21, 15, 23][index % 6]!;
+  const weekend = weekday >= 5 ? (index % 3 === 1 ? 1.2 : 0.3) : 1;
+  const x = Math.exp(-((hour - peak) ** 2) / 5) * weekend * level * 5 * noise(index * 7 + weekday, hour);
+  return x > 0.6 ? Math.round(x + 0.4) : 0;
+}
+
+/** The grid of the last 30 days: distinct students per slot, or one student's reviews (`?student=`). */
+on("GET", "/app/api/classrooms/:id/drill/hours", (m, _body, url): DrillHours => {
+  const seats = seatsOf(m.groups!.id!);
+  const student = url.searchParams.get("student");
+  const counted = student === null ? seats : seats.filter((s) => s.seat.id === student);
+  if (student !== null && counted.length === 0) throw new MockError(404, "Student not found");
+  const active = counted.filter((s) => reviews(s.weeks.slice(-4).map((x) => x.week)) > 0);
+  const days = Array.from({ length: 7 }, (_, d) =>
+    Array.from({ length: 24 }, (_, h) => {
+      const each = active.map((s) => slotReviews(s.index, d, h));
+      return student === null ? each.filter((n) => n > 0).length : each.reduce((a, n) => a + n, 0);
+    }),
+  );
+  return {
+    since: localDate(new Date(now - 30 * D)),
+    offHoursShare: offHoursShare(days, isWeekdayClassHour),
+    days,
+  };
 });
 
 /** The concepts of the C course, and the questions without one; weakest first. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { datesEndingOn, isClassHour, offHoursStudentShare } from "./siteActivity.js";
+import { datesEndingOn, isClassHour, isWeekdayClassHour, offHoursShare } from "./siteActivity.js";
 import { localDate } from "./zone.js";
 
 const day = (date: string, cells: Record<number, number>) => ({
@@ -18,6 +18,37 @@ describe("the class-hours window (ADR-107)", () => {
     expect(isClassHour("2026-10-16", 10)).toBe(true);
     expect(isClassHour("2026-10-17", 10)).toBe(false);
     expect(isClassHour("2026-10-18", 10)).toBe(false);
+  });
+});
+
+describe("the class-hours window of a week's grid (ADR-041 §8)", () => {
+  it("is the rows Monday (0) to Friday (4), 08:00 included to 18:00 excluded", () => {
+    expect(isWeekdayClassHour(0, 8)).toBe(true);
+    expect(isWeekdayClassHour(4, 17)).toBe(true);
+    expect(isWeekdayClassHour(0, 7)).toBe(false);
+    expect(isWeekdayClassHour(2, 18)).toBe(false);
+    expect(isWeekdayClassHour(5, 10)).toBe(false);
+    expect(isWeekdayClassHour(6, 10)).toBe(false);
+  });
+
+  it("agrees with the dated window, day for day", () => {
+    // 2026-10-12 is a Monday: the seven dates from it are the rows 0..6.
+    for (let i = 0; i < 7; i++) {
+      const date = `2026-10-${12 + i}`;
+      for (let h = 0; h < 24; h++) expect(isWeekdayClassHour(i, h)).toBe(isClassHour(date, h));
+    }
+  });
+
+  it("shares the grid's figures outside class hours, null for an empty grid", () => {
+    const week = (cells: [number, number, number][]) => {
+      const days = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+      for (const [d, h, n] of cells) days[d]![h] = n;
+      return days;
+    };
+    expect(offHoursShare(week([]), isWeekdayClassHour)).toBeNull();
+    // Monday 10:00 (in), Monday 20:00 and Saturday 10:00 (out).
+    expect(offHoursShare(week([[0, 10, 2], [0, 20, 1], [5, 10, 1]]), isWeekdayClassHour)).toBe(0.5);
+    expect(offHoursShare(week([[4, 17, 3]]), isWeekdayClassHour)).toBe(0);
   });
 });
 
@@ -46,19 +77,26 @@ describe("datesEndingOn", () => {
   });
 });
 
-describe("offHoursStudentShare", () => {
+describe("offHoursShare over dated days (ADR-107)", () => {
+  /** The students' counts of dated days, and the dated class-hours window. */
+  const share = (days: ReturnType<typeof day>[]) =>
+    offHoursShare(
+      days.map((d) => d.hours.map((c) => c.students)),
+      (r, h) => isClassHour(days[r]!.date, h),
+    );
+
   it("is null without a student person-hour", () => {
-    expect(offHoursStudentShare([])).toBeNull();
-    expect(offHoursStudentShare([day("2026-10-12", {})])).toBeNull();
+    expect(share([])).toBeNull();
+    expect(share([day("2026-10-12", {})])).toBeNull();
   });
 
   it("counts the evenings, the early mornings and the weekend outside class hours", () => {
-    const share = offHoursStudentShare([
+    const s = share([
       // Monday: 6 in class, 2 at 20:00, 1 at 07:00.
       day("2026-10-12", { 9: 6, 20: 2, 7: 1 }),
       // Saturday afternoon: outside, whatever the hour.
       day("2026-10-17", { 14: 1 }),
     ]);
-    expect(share).toBeCloseTo(4 / 10);
+    expect(s).toBeCloseTo(4 / 10);
   });
 });

@@ -30,10 +30,17 @@ const DAY_MS = 86_400_000;
 /** The weekday of a calendar date `YYYY-MM-DD`: 0 on a Sunday … 6 on a Saturday. */
 const weekdayOf = (date: string): number => new Date(`${date}T00:00:00Z`).getUTCDay();
 
+/**
+ * Whether the local hour `hour` (0–23) of a weekday is a class hour; the
+ * weekday counts from Monday, 0, to Sunday, 6 — the rows of a week's grid.
+ */
+export function isWeekdayClassHour(weekday: number, hour: number): boolean {
+  return weekday >= 0 && weekday <= 4 && hour >= CLASS_HOURS.weekdayStart && hour < CLASS_HOURS.weekdayEnd;
+}
+
 /** Whether the local hour `hour` (0–23) of the calendar date `date` is a class hour. */
 export function isClassHour(date: string, hour: number): boolean {
-  const day = weekdayOf(date);
-  return day >= 1 && day <= 5 && hour >= CLASS_HOURS.weekdayStart && hour < CLASS_HOURS.weekdayEnd;
+  return isWeekdayClassHour((weekdayOf(date) + 6) % 7, hour);
 }
 
 /** The `ACTIVITY_DAYS` calendar dates that end on `today` (`YYYY-MM-DD`), oldest first. */
@@ -44,24 +51,23 @@ export function datesEndingOn(today: string): string[] {
   );
 }
 
-/** One day of the grid, as far as the share needs it: 24 hours of student counts. */
-export interface StudentHours {
-  date: string;
-  hours: readonly { students: number }[];
-}
-
 /**
- * The share (0–1) of the students' person-hours of `days` that fall outside
- * class hours; null when there is none to share.
+ * The share (0–1) of a grid's figures — rows of 24 hourly counts — that fall
+ * outside class hours, as `isClassHour(row, hour)` decides for the grid's
+ * rows (dated days for the platform, ADR-107; weekdays for the drill,
+ * ADR-041 §8); null when the grid holds nothing. The unit is the grid's own.
  */
-export function offHoursStudentShare(days: readonly StudentHours[]): number | null {
+export function offHoursShare(
+  rows: readonly (readonly number[])[],
+  isClassHour: (row: number, hour: number) => boolean,
+): number | null {
   let all = 0;
   let outside = 0;
-  for (const day of days) {
-    day.hours.forEach((cell, hour) => {
-      all += cell.students;
-      if (!isClassHour(day.date, hour)) outside += cell.students;
-    });
-  }
+  rows.forEach((hours, row) =>
+    hours.forEach((n, hour) => {
+      all += n;
+      if (!isClassHour(row, hour)) outside += n;
+    }),
+  );
   return all === 0 ? null : outside / all;
 }

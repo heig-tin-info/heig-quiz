@@ -32,7 +32,7 @@ import {
   datesEndingOn,
   isClassHour,
   localDate,
-  offHoursStudentShare,
+  offHoursShare,
   SCHOOL_TIME_ZONE,
   semesterMonths,
   zoneOffset,
@@ -939,7 +939,10 @@ function mockActivity(): AdminActivity {
     activeNow: anything ? { students: 17, staff: 3 } : none,
     last24h: anything ? { students: 142, staff: 11 } : none,
     last7d: anything ? { students: 318, staff: 19 } : none,
-    offHoursStudentShare: offHoursStudentShare(days),
+    offHoursStudentShare: offHoursShare(
+      days.map((d) => d.hours.map((c) => c.students)),
+      (r, h) => isClassHour(days[r]!.date, h),
+    ),
     recordedSince: anything ? localDate(new Date(at.getTime() - 8 * D)) : null,
     days,
   };

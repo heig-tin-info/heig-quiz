@@ -4,8 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import type { ActivityCount, AdminActivity } from "@quiz/contracts";
 
-import { ActivitySection, heatStep } from "./AdminActivity";
+import { ActivitySection } from "./AdminActivity";
 import { fail, mockFetch, ok, renderWithProviders } from "./test/render";
+import { heatStep } from "./ui";
 
 const GET = "GET /app/api/admin/activity";
 const DATES = ["2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25", "2026-10-26"];

@@ -1,6 +1,7 @@
 /**
  * The Drill tab of a classroom (ADR-041 §6, §8, #317 slice 4): each
- * student's activity, the mastery per concept, and the confidence per question
+ * student's activity, the hours of the week they practise at, the mastery
+ * per concept, and the confidence per question
  * (ADR-085 §8, aggregated only). A read view, so the page
  * header carries no primary action on this tab.
  *
@@ -31,6 +32,7 @@ import {
 } from "../ui";
 import { useClassroomDrillActivity, useClassroomDrillMastery, useDrillProgress } from "./api";
 import { ConfidencePerQuestion } from "./Confidence";
+import { ClassroomDrillHours, StudentDrillHours } from "./DrillHours";
 import { DrillActivityTable, studentName, TrendMark } from "./DrillActivityTable";
 import { WeeklyProgress } from "./WeeklyProgress";
 
@@ -94,6 +96,7 @@ export function ClassroomDrill({
           <p className="px-1 text-xs text-fg-faint">{t("drill.recall.help")}</p>
           <p className="px-1 text-xs text-fg-faint">{t("drill.teacher.notice")}</p>
         </section>
+        <ClassroomDrillHours classroomId={room.id} />
         <MasteryPerConcept classroomId={room.id} />
         <ConfidencePerQuestion classroomId={room.id} />
       </>
@@ -185,7 +188,7 @@ function MasteryRow({ m }: { m: DrillConceptMastery }) {
   );
 }
 
-/** One student's drill: the figures, the opt-out, and the weekly progression. */
+/** One student's drill: the figures, the opt-out, the weekly progression and the hours of the week. */
 function DrillStudentSheet({
   classroomId,
   row,
@@ -228,6 +231,7 @@ function DrillStudentSheet({
         ) : (
           <WeeklyProgress weeks={progress.data.weeks} />
         )}
+        <StudentDrillHours classroomId={classroomId} enrollmentId={row.enrollmentId} />
         <p className="text-xs text-fg-faint">{t("drill.recall.help")}</p>
       </div>
     </Sheet>

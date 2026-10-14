@@ -38,6 +38,13 @@ where it sat first and where it is now); §11's "two inputs come from the browse
 reads "these inputs", since the section lists three (the third, the stated
 confidence, came with ADR-085).
 
+Amended 2026-10-14 (product owner): the course's staff — owners and
+assistants — also see WHEN the classroom's students practise, as a weekday ×
+hour heatmap of the last 30 days, for the class and for one student (§8, §15).
+The drill is a declared teaching activity whose reviews the student is told
+their teacher sees; platform presence (ADR-107) is not, and stays aggregated
+for the administrator only.
+
 ## Context
 
 The spec reserved a phase-2 drill in five lines: every question a student meets
@@ -227,8 +234,18 @@ default"):
 - **Mastery per tag, per classroom**, for the teacher. *(Second round, item 10.)*
   *Amended by ADR-081 (third addendum §8):* per concept, labelled in the
   reader's language.
+- **When students practise** *(amendment of 2026-10-14, product owner)*: the
+  course's staff (owners and assistants) see at what hours of the week the
+  classroom's students review, for the class (distinct students per slot) and
+  for one student (their reviews per slot). It reads the drill's own reviews —
+  a declared teaching activity, disclosed to the student by the notice below —
+  never the platform's presence hours (ADR-107), which stay an administrator's
+  aggregate that no staff screen reads. The same cuts apply as to every read
+  of this view: the classroom's cards, its current student seats, nothing
+  after an opt-out.
 - **The student is told** in the drill tab that their teacher sees this
-  activity; the data-protection page (N-DATA-07, #274) says so too.
+  activity, at what times of the week included; the data-protection page
+  (N-DATA-07, #274) says so too.
 
 ### 9. The invariants the drill keeps
 
@@ -350,6 +367,20 @@ of a missing card.
   period cut at today, or, without one, from the week the drill was enabled (or
   the first review, if earlier); empty weeks are included and at most 104 are
   drawn.
+- **The hours of the week** *(amendment of 2026-10-14)*:
+  `GET /classrooms/:id/drill/hours[?student=]`, one query over the same
+  visible reviews, the rolling 30 days of the activity's `last30`, grouped by
+  Europe/Zurich ISO weekday and hour in SQL (a literal zone, as the sessions'
+  days, so a summer-time review lands on its local hour). Seven rows, Monday
+  first, of 24 counts: distinct students per slot for the class, reviews for
+  one seat (a seat that is not a student seat of the classroom is the 404 of
+  the progression). The off-hours share — outside Monday to Friday 08:00–18:00,
+  ADR-107's window, `isWeekdayClassHour` — is in the grid's own unit, computed by
+  the same `offHoursShare` as the administrator's. The
+  screen draws it on the administrator's heatmap (`ui/heatmap.tsx`): under the
+  table of students in the Drill tab, and in a student's sheet below the
+  weekly charts, there in its compact form that fits the sheet; a grid with
+  no review in 30 days (a null share) is one line, not an empty grid.
 - **After an opt-out**, a review is not counted in any read (28 (k)); the
   opt-out's date is on the row (former §13 item 5). **Mastery** reads each
   card's current state, the retrievability now of FSRS: an opted-out student's

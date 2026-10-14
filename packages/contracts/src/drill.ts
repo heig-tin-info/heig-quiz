@@ -214,6 +214,29 @@ export const DrillProgress = z.object({ weeks: z.array(DrillWeek) });
 export type DrillProgress = z.infer<typeof DrillProgress>;
 
 /**
+ * `GET /classrooms/:id/drill/hours[?student=]`: the classroom's grid, or one
+ * student's by their enrollment id.
+ */
+export const DrillHoursQuery = z.object({ student: z.uuid().optional() });
+export type DrillHoursQuery = z.infer<typeof DrillHoursQuery>;
+
+/**
+ * WHEN the drill is practised (ADR-041 §8, amendment of 2026-10-14): the last
+ * 30 days folded on one week, Europe/Zurich time — seven rows, Monday first,
+ * of 24 hours. A cell of the classroom's grid counts the distinct students
+ * who reviewed in that slot; of one student's grid, their reviews.
+ * `offHoursShare` (outside Monday–Friday 08–18) is in the same unit, and
+ * null when the grid is empty: the one sign of an empty grid.
+ */
+export const DrillHours = z.object({
+  /** The first local day of the window, `YYYY-MM-DD`. */
+  since: z.iso.date(),
+  offHoursShare: z.number().min(0).max(1).nullable(),
+  days: z.array(z.array(z.number().int().nonnegative()).length(24)).length(7),
+});
+export type DrillHours = z.infer<typeof DrillHours>;
+
+/**
  * One line of the teacher's mastery: the reviewed cards counted toward a
  * concept, the students behind them, and their mean retrievability now
  * (ADR-041 §15). `retrievability` is null when no card counts: "no

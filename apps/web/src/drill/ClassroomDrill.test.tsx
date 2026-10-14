@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DrillProgress, DrillStudentActivity, DrillClassroomMastery } from "@quiz/contracts";
+import type { DrillHours, DrillProgress, DrillStudentActivity, DrillClassroomMastery } from "@quiz/contracts";
 
 import { makeClassroomDetail } from "../test/fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
@@ -13,7 +13,8 @@ import { ClassroomDrill } from "./ClassroomDrill";
  * the empty states (drill off; on with nothing yet), the table of students
  * — sortable, the opt-out as a badge with its date, the recall rate with
  * its trend — the per-student progression in a sheet, and the mastery per
- * concept.
+ * concept, and the hours of the week the drill is practised at, the
+ * classroom's and one student's.
  */
 
 afterEach(() => {
@@ -96,6 +97,18 @@ const FLAT: DrillClassroomMastery = {
 const NONE: DrillClassroomMastery = { declared: false, concepts: [], outside: null };
 
 const base = "/app/api/classrooms/r1/drill";
+
+/** A week's grid, Monday first, from `[weekday, hour, n]` cells. */
+const hoursOf = (cells: [number, number, number][]): DrillHours => {
+  const days = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+  for (const [d, h, n] of cells) days[d]![h] = n;
+  return { since: "2026-10-21", offHoursShare: cells.length === 0 ? null : 0.2, days };
+};
+/** Wednesday 09:00 (class hours) and Saturday 00:00 (outside). */
+const HOURS = hoursOf([
+  [2, 9, 4],
+  [5, 0, 1],
+]);
 
 describe("the classroom's Drill tab", () => {
   it("says the drill is off, and leads to the switch in Settings", async () => {
@@ -222,5 +235,53 @@ describe("the classroom's Drill tab", () => {
     expect(await within(sheet).findByText("No review over this period.")).toBeVisible();
     // No mastery yet: no section for it.
     expect(screen.queryByRole("heading", { name: "Mastery per concept" })).toBeNull();
+  });
+
+  describe("the hours of the week", () => {
+    const room = () => <ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />;
+
+    it("draws the classroom's grid under the table, distinct students per slot, outside class hours hatched", async () => {
+      mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(NONE), [`GET ${base}/hours`]: ok(HOURS) });
+      renderWithProviders(room());
+      expect(await screen.findByRole("heading", { name: "When students practise" })).toBeVisible();
+      const grid = await screen.findByRole("table", { name: "When students practise" });
+      const wednesday = within(grid).getByTitle("Wed, 09:00–10:00: 4 students");
+      expect(wednesday).toHaveTextContent("4");
+      expect(wednesday).not.toHaveAttribute("data-off");
+      expect(within(grid).getByTitle("Sat, 00:00–01:00: 1 student · outside class hours")).toHaveAttribute("data-off", "true");
+      expect(screen.getByText("20% of this practice falls outside class hours.")).toBeVisible();
+      expect(screen.getByText(/distinct students who reviewed in that hour of the week/)).toHaveTextContent(/since 2026-10-21/);
+      expect(screen.getByText(/Outside class hours: Mon–Fri 08:00–18:00/)).toBeVisible();
+    });
+
+    it("says no one reviewed in 30 days instead of an empty grid, and offers a retry when it cannot be read", async () => {
+      mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(NONE), [`GET ${base}/hours`]: ok(hoursOf([])) });
+      const first = renderWithProviders(room());
+      expect(await screen.findByText("No review in the last 30 days.")).toBeVisible();
+      expect(screen.queryByRole("table", { name: "When students practise" })).toBeNull();
+      first.unmount();
+
+      mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(NONE), [`GET ${base}/hours`]: fail(500) });
+      renderWithProviders(room());
+      expect(await screen.findByText("Could not load the hours of practice")).toBeVisible();
+    });
+
+    it("draws one student's reviews per slot in their sheet", async () => {
+      const user = userEvent.setup();
+      mockFetch({
+        [`GET ${base}/activity`]: ok(ROWS),
+        [`GET ${base}/mastery`]: ok(NONE),
+        [`GET ${base}/hours`]: ok(HOURS),
+        [`GET ${base}/progress?student=${SEAT.Bernard}`]: ok(WEEKS),
+        [`GET ${base}/hours?student=${SEAT.Bernard}`]: ok(hoursOf([[2, 9, 2]])),
+      });
+      renderWithProviders(room());
+      await user.click(await screen.findByRole("button", { name: "Progression of Ada Bernard" }));
+      const sheet = await screen.findByRole("dialog", { name: "Ada Bernard" });
+      expect(await within(sheet).findByText("Hours of practice", { selector: "figcaption" })).toBeVisible();
+      const grid = await within(sheet).findByRole("table", { name: "Hours of practice" });
+      expect(within(grid).getByTitle("Wed, 09:00–10:00: 2 reviews")).toHaveTextContent("2");
+      expect(within(sheet).getByText(/the reviews made in that hour of the week/)).toBeVisible();
+    });
   });
 });

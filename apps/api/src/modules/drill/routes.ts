@@ -9,8 +9,8 @@
  * Teacher: the drill switch of a classroom, "Allow drill" and "Remove these
  * questions from the drill" on an evaluation, each loaded through
  * `staffAccess` first; and the reads of the teacher's view — each
- * student's activity, the weekly progression, the mastery per concept, the
- * confidence per question (ADR-085 §8, aggregated only). The student also
+ * student's activity, the weekly progression, the hours practised, the
+ * mastery per concept, the confidence per question (ADR-085 §8, aggregated only). The student also
  * reads their own calibration and their own concept mastery (ADR-098).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -18,6 +18,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   DrillAnswerBody,
   DrillClassroomBody,
+  DrillHoursQuery,
   DrillOptOutBody,
   DrillProgressQuery,
   DrillSessionQuery,
@@ -220,6 +221,20 @@ export async function drillPlugin(app: FastifyInstance) {
       { params: IdParam, query: DrillProgressQuery, load: staffClassroom },
       async ({ reply, now, query, scope }) =>
         (await service.classroomProgress(app.db, scope.room, query.student, now)) ?? notFound(reply),
+    ),
+  );
+
+  /**
+   * When the drill is practised, the last 30 days on one week (ADR-041 §8,
+   * amendment of 2026-10-14): the classroom's, or one student's (`?student=`).
+   */
+  app.get(
+    "/app/api/classrooms/:id/drill/hours",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, query: DrillHoursQuery, load: staffClassroom },
+      async ({ reply, now, query, scope }) =>
+        (await service.classroomHours(app.db, scope.room.id, query.student ?? null, now)) ?? notFound(reply),
     ),
   );
 

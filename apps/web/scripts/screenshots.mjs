@@ -305,6 +305,8 @@ const scenes = [
   // drill on with nothing yet (r2) and the drill off (r3).
   { name: "classroom-drill", role: "teacher", path: "/classrooms/r1?tab=drill" },
   { name: "classroom-drill-student", role: "teacher", path: "/classrooms/r1?tab=drill", fold: true, act: async (p) => { await p.getByRole("button", { name: /^(Progression of|Progression de)/ }).first().click(); await p.getByText(/^(Reviews per week|Révisions par semaine)$/).first().waitFor(); } },
+  // ADR-041 §8 amendment of 2026-10-14: the student's hours of the week, below the weekly charts of the sheet.
+  { name: "classroom-drill-student-hours", role: "teacher", path: "/classrooms/r1?tab=drill", fold: true, act: async (p) => { await p.getByRole("button", { name: /^(Progression of|Progression de)/ }).first().click(); const h = p.getByText(/^(Hours of practice|Heures de révision)$/).first(); await h.waitFor(); const grid = p.getByRole("table", { name: /^(Hours of practice|Heures de révision)$/ }); await grid.waitFor(); await grid.evaluate((el) => el.scrollIntoView({ block: "center" })); } },
   { name: "classroom-drill-outside", role: "teacher", path: "/classrooms/r1?tab=drill", act: async (p) => { await p.getByRole("button", { name: /(Outside the course|Hors de la liste)/ }).click(); await p.getByText(/^(Without a concept|Sans notion)$/).first().waitFor(); } },
   { name: "classroom-drill-none", role: "teacher", path: "/classrooms/r2?tab=drill" },
   { name: "classroom-drill-off", role: "teacher", path: "/classrooms/r3?tab=drill" },
