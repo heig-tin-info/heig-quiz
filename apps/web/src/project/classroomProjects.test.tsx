@@ -84,12 +84,15 @@ describe("the classroom's Projects table", () => {
     const row = (title: string) => within(region).getByText(title).closest("tr")!;
     expect(within(row("Undated")).getAllByText("—")).toHaveLength(2);
     expect(within(row("Planned")).queryByText("—")).toBeNull();
-    // The time left rides inside the state badge, with its sentence for a
-    // screen reader; the deadline cell keeps the date alone (no "in 3 days").
+    // The time left takes the word's place in the state badge, the word and
+    // the sentence left for a screen reader; the deadline cell keeps the
+    // date alone (no "in 3 days").
     const running = within(row("Running"));
     expect(running.getByText("3 d")).toBeInTheDocument();
     expect(running.getByText("closes in 3 d")).toBeInTheDocument();
-    expect(running.getByText("published").closest("span")).toContainElement(running.getByText("3 d"));
+    const word = running.getByText("published");
+    expect(word.className).toContain("sr-only");
+    expect(word.parentElement).toContainElement(running.getByText("3 d"));
     expect(running.queryByText(/^in /)).toBeNull();
     expect(within(row("Planned")).queryByText(/closes in/)).toBeNull();
     expect(within(row("Done")).queryByText(/closes in|ago|^in /)).toBeNull();

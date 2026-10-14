@@ -19,13 +19,12 @@ import {
   pressable,
   T,
   TableHead,
-  TimeLeft,
   useSortableTable,
   type Column,
 } from "../ui";
 import { ActivityMenu } from "./actions";
 import { typeName, type ActivityType } from "./model";
-import { openerOf, StateBadge } from "./views";
+import { openerOf, StateBadge, StateText } from "./views";
 
 /*
  * The tables of a classroom's Activities tab (`ClassroomActivities`): one
@@ -82,8 +81,7 @@ const EVALUATION: RowSpec<EvaluationSummary> = {
     return (
       <>
         <Badge {...stateStyle(row.state)}>
-          {evaluationStateLabel(row.state, t)}
-          <TimeLeft iso={evaluationTimerAt(row)} />
+          <StateText label={evaluationStateLabel(row.state, t)} at={evaluationTimerAt(row)} />
         </Badge>
         {/* Shown only where the pull would be accepted, as the pull's own door. */}
         {templatePullable(row) ? (
