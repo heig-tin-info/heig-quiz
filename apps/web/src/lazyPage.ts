@@ -5,6 +5,8 @@ import { answeringAt } from "./router";
 
 /** The address this tab reloaded once for a page's missing chunk. */
 const RELOADED = "quiz:build-reload";
+/** How long a missing page waits for the writes on the wire before the crash screen. */
+const SETTLE_MS = 10_000;
 
 /**
  * A page whose chunk is gone where the tab may not reload by itself (a page
@@ -53,8 +55,12 @@ export function lazyPage<T extends ComponentType<any>>(load: () => Promise<{ def
       // The page being opened, not the one left: the way into an answering
       // page whose chunk is gone ends on the outdated screen.
       if (answeringAt(window.location.pathname) || build.isConfined()) throw new OutdatedError("outdated build");
-      await build.settled();
-      if (!reloadOnce()) throw error;
+      // A write that never settles must not hold the placeholder forever.
+      const settled = await Promise.race([
+        build.settled().then(() => true),
+        new Promise<false>((resolve) => setTimeout(resolve, SETTLE_MS, false)),
+      ]);
+      if (!settled || !reloadOnce()) throw error;
       // The page is going away; settling would only flash the crash screen.
       return new Promise<never>(() => {});
     }
