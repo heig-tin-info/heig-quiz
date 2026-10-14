@@ -8,6 +8,10 @@ Amended 2026-10-13 (#798): §3 for the project page only — the lifecycle
 rail carries the page's one clock
 ([amendment](#amendment-2026-10-13-the-project-rail-carries-its-own-clock)).
 
+Amended 2026-10-14: §3's "after the label" — a badge with a timer shows
+the timer alone, its word for a screen reader only
+([amendment](#amendment-2026-10-14-the-timer-replaces-the-word)).
+
 Amended 2026-10-13 (#786, #795): §1's zinc, §4's scheduled bar and §5's
 phases — blue for what is scheduled, a project's `scheduled` phase, and the
 rule for any further pill tone
@@ -248,3 +252,18 @@ amendment); where the timer rides and what it means stand.
    Powers banner keep `formatRemaining` (`ui/live.tsx`), a by-the-second
    countdown rounded up, which they need for a screen with one clock to
    watch; this amendment is about a figure on a row.
+
+## Amendment 2026-10-14: the timer replaces the word
+
+Decided by the product owner on 2026-10-14: "running ⏱ 2 d 4 h" and
+"published ⏱ 4 d 15 h" said the same thing twice. §3 rides the timer only
+in a live state (`running`, `published`), so the soft green and the clock
+already say "open, closes in". It replaces §3's "after the label" in the
+two places of §3; where the timer rides and what it means stand.
+
+1. **The timer alone in the pill.** `StateBadge` with `timer` shows the
+   glyph and the time left, and the state's word only as `sr-only` text,
+   so a screen reader hears "running, closes in 2 d 4 h".
+2. **No timer, the word.** A live row with no deadline (an evaluation
+   running without `closesAt`) has no timer, and keeps its word: a pill is
+   never empty. Every other state keeps its word as before.

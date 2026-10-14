@@ -46,7 +46,7 @@ const list = (rows: EvaluationSummary[]) => ({
 });
 
 describe("the evaluations of the Activities tab", () => {
-  it("shows one badge per state: the time left inside a running one, an outline for a released one (ADR-104)", async () => {
+  it("shows one badge per state: the time left in place of a running one's word, an outline for a released one (ADR-104)", async () => {
     mockFetch(
       list([
         summary({ state: "draft" }),
@@ -57,9 +57,11 @@ describe("the evaluations of the Activities tab", () => {
     );
     renderWithProviders(<ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />);
     expect(await screen.findByText("draft")).toBeInTheDocument();
-    // The timer is in the pill, named for a screen reader; a lobby's clock
-    // has not started, so it gets none.
-    const running = screen.getByText("running").closest("span")!;
+    // The timer replaces the word in the pill, which a screen reader still
+    // hears; a lobby's clock has not started, so it keeps its word, no timer.
+    const word = screen.getByText("running");
+    expect(word.className).toContain("sr-only");
+    const running = word.parentElement!;
     expect(within(running).getByText("3 h")).toBeInTheDocument();
     expect(within(running).getByText("closes in 3 h")).toBeInTheDocument();
     expect(within(screen.getByText("lobby").closest("span")!).queryByText(/closes in/)).toBeNull();

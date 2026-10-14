@@ -80,9 +80,25 @@ export function classroomLabel(row: ActivitySummary, t: TFunction): string {
 }
 
 /**
+ * What a state badge reads: its word, or, given the time left of a live row
+ * ({@link timerAt}), the timer alone — the green and the clock already say
+ * "open", so the word stays for a screen reader only (ADR-104, amendment of
+ * 2026-10-14). A null `at` keeps the word: a pill is never empty.
+ */
+export function StateText({ label, at }: { label: string; at: string | null }) {
+  if (at === null) return <>{label}</>;
+  return (
+    <>
+      <span className="sr-only">{label}</span>
+      <TimeLeft iso={at} />
+    </>
+  );
+}
+
+/**
  * The state of a row, either kind's: the Activities' views and the
- * classroom's Projects group. `timer` adds the time left inside the pill
- * ({@link timerAt}) — for the two tables of a classroom's Activities tab,
+ * classroom's Projects group. `timer` puts the time left in the pill
+ * ({@link StateText}) — for the two tables of a classroom's Activities tab,
  * where no other column counts down (ADR-104).
  */
 export function StateBadge({ row, timer = false }: { row: ActivitySummary; timer?: boolean }) {
@@ -90,8 +106,7 @@ export function StateBadge({ row, timer = false }: { row: ActivitySummary; timer
   const kind = kindOf(row);
   return (
     <Badge {...kind.stateStyle(row)}>
-      {kind.stateLabel(row, t)}
-      {timer ? <TimeLeft iso={timerAt(row)} /> : null}
+      <StateText label={kind.stateLabel(row, t)} at={timer ? timerAt(row) : null} />
     </Badge>
   );
 }
