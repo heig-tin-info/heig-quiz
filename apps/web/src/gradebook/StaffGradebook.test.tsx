@@ -144,6 +144,17 @@ describe("the matrix", () => {
     expect(within(head).queryByText(/Graded quiz ·/)).toBeNull();
   });
 
+  it("lights the column of the hovered head, and only it", async () => {
+    renderTab(makeTable());
+    const target = (await cell("Alice Dupont", "Test 1")).closest("td")!;
+    const other = (await cell("Alice Dupont", "Test 2")).closest("td")!;
+    await userEvent.hover(within(screen.getByRole("columnheader", { name: /Test 1/ })).getByText("Test 1"));
+    expect(target.className).toContain("bg-accent-soft");
+    expect(other.className).not.toContain("bg-accent-soft");
+    await userEvent.unhover(within(screen.getByRole("columnheader", { name: /Test 1/ })).getByText("Test 1"));
+    expect(target.className).not.toContain("bg-accent-soft");
+  });
+
   it("shows the full title and kind on hover, and keeps it shut while the column menu is open", async () => {
     renderTab(makeTable());
     const head = await screen.findByRole("button", { name: /^Test 1/ });
