@@ -107,43 +107,48 @@ export function HelpProvider({ children }: { children: ReactNode }) {
           the dialogs (z-50): help opened from a dialog must not slide UNDER
           its backdrop — and closing the help must not close the dialog. */}
       {topic ? <div className={`fixed inset-0 ${Z.helpBackdrop}`} onClick={() => setTopic(null)} /> : null}
-      <div
-        ref={panel}
-        className={`fixed inset-y-0 right-0 ${Z.help} w-85 max-w-full transform border-l border-line bg-surface transition-transform duration-200 ease-out-emphasized focus:outline-none ${
-          // The shadow only while open: parked off the right edge, its blur
-          // still reached into the window, a grey seam down every page.
-          source ? "translate-x-0 shadow-sheet" : "translate-x-full"
-        }`}
-        {...(source
-          ? { role: "dialog" as const, "aria-modal": true, "aria-labelledby": titleId }
-          : // Closed: the panel is still in the DOM for the slide animation, so
-            // it must be neither a dialog nor reachable.
-            { "aria-hidden": true })}
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {source ? (
-          <div className="flex h-full flex-col">
-            <div className="flex items-center gap-2 border-b border-line px-5 py-4">
-              <CircleHelp className="size-4 text-accent" />
-              <h2 id={titleId} className="text-[15px] font-bold tracking-tight">
-                {t("help.title")}
-              </h2>
-              <span className="flex-1" />
-              <button
-                type="button"
-                aria-label={t("menu.closeMenu")}
-                onClick={() => setTopic(null)}
-                className="rounded-full p-1.5 text-fg-faint transition-colors hover:bg-surface-2 hover:text-fg"
-              >
-                <X className="size-4" />
-              </button>
+      {/* The window, clipping: parked off the right edge, a `fixed` panel is
+          a page wider than the window to iOS Safari, which lets a finger pan
+          sideways onto it (#849). Clicks go through to the page. */}
+      <div className={`pointer-events-none fixed inset-0 overflow-hidden ${Z.help}`}>
+        <div
+          ref={panel}
+          className={`pointer-events-auto absolute inset-y-0 right-0 w-85 max-w-full transform border-l border-line bg-surface transition-transform duration-200 ease-out-emphasized focus:outline-none ${
+            // The shadow only while open: parked off the right edge, its blur
+            // still reached into the window, a grey seam down every page.
+            source ? "translate-x-0 shadow-sheet" : "translate-x-full"
+          }`}
+          {...(source
+            ? { role: "dialog" as const, "aria-modal": true, "aria-labelledby": titleId }
+            : // Closed: the panel is still in the DOM for the slide animation, so
+              // it must be neither a dialog nor reachable.
+              { "aria-hidden": true })}
+          tabIndex={-1}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {source ? (
+            <div className="flex h-full flex-col">
+              <div className="flex items-center gap-2 border-b border-line px-5 py-4">
+                <CircleHelp className="size-4 text-accent" />
+                <h2 id={titleId} className="text-[15px] font-bold tracking-tight">
+                  {t("help.title")}
+                </h2>
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  aria-label={t("menu.closeMenu")}
+                  onClick={() => setTopic(null)}
+                  className="rounded-full p-1.5 text-fg-faint transition-colors hover:bg-surface-2 hover:text-fg"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              <div className="space-y-3 overflow-y-auto px-5 py-4 text-sm leading-relaxed text-fg-muted">
+                <Markdown source={source} />
+              </div>
             </div>
-            <div className="space-y-3 overflow-y-auto px-5 py-4 text-sm leading-relaxed text-fg-muted">
-              <Markdown source={source} />
-            </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </HelpContext.Provider>
   );

@@ -24,3 +24,20 @@ describe("the assistant's button steps aside (style.css)", () => {
     expect(variant("max-sm")).toMatch(/:root:has\(\[data-action-bar\]\) \[data-assist-dock\] \{\s*display: none;/);
   });
 });
+
+describe("a field a finger types in is 16 px at least (style.css, #849)", () => {
+  // iOS zooms the page in when a field under 16 px takes the focus, and stays zoomed.
+  // Important in the base layer, so it beats the fields' own size, even a `!` utility.
+  const rule = /\n@layer base \{\s*@media \(pointer: coarse\) \{\s*:where\(([\s\S]*?)\)\s*\{\s*font-size: max\(16px, 1em\) !important;/.exec(css);
+
+  it("covers every kind of text field", () => {
+    expect(rule).not.toBeNull();
+    for (const kind of ["input:not(", "textarea", "select", "[contenteditable]"]) expect(rule![1]).toContain(kind);
+  });
+
+  it("and the person's own zoom stays (WCAG 1.4.4)", () => {
+    const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+    expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1.0" />');
+    expect(html).not.toMatch(/maximum-scale|user-scalable/);
+  });
+});

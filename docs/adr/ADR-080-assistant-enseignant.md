@@ -6,7 +6,7 @@ Accepted (2026-10-07, decisions of the product owner on issue #559, after a spec
 feature in three phases, P1 (§1–§7, requirement F-LLM-07), P2 (§8) and P3 (§9). Amended 2026-10-08 by
 the P2, P2b and P3 amendments, folded on 2026-10-09 into §8, §10 and §9 (their items keep their numbers;
 the notes they made in §1, §2, §3 and §5 stay there). Amended 2026-10-13 (§7, issue #450): on a low
-screen the panel is a modal sheet.
+screen the panel is a modal sheet; amended 2026-10-14 (§7, issue #849): on a phone held upright too.
 
 Scope: the in-app chat of the teacher UI, the `assist` purpose of the LLM
 gateway, the conversations it stores.
@@ -238,6 +238,13 @@ docks, so it opens instead as a full-height bottom sheet, modal (focus
 trapped, page scroll locked); the toasts move to the top there. The one
 deliberate exception to the non-modal panel (`apps/web/DESIGN.md`, "Low
 screens").*
+
+*Amended 2026-10-14 (issue #849, asked by the product owner): a phone held
+upright — under `sm` wide — gets the same modal sheet. The floating panel
+there was the window less 32 px over a page nobody could read beside it,
+and on iOS the soft keyboard hid its composer. The sheet fits the visible
+part of the window, so the composer sits above the keyboard
+(`apps/web/DESIGN.md`, "The help assistant").*
 
 ### 8. P2 — read tools
 
