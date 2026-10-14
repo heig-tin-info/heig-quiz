@@ -41,6 +41,8 @@ export interface RowContext {
   navigate: (r: Route) => void;
   evaluation: EvaluationRowActions;
   project: ProjectRowActions;
+  /** The rows are the archived projects (#864): no timer, nothing runs out. */
+  archived?: boolean;
 }
 
 /**
@@ -108,7 +110,7 @@ const PROJECT: RowSpec<ProjectActivitySummary> = {
   end: (row) => row.deadlineAt,
   questions: () => null,
   points: () => null,
-  Badges: ({ row }) => <StateBadge row={row} timer />,
+  Badges: ({ row, ctx }) => <StateBadge row={row} timer={!ctx.archived} />,
   open: openerOf,
   Actions: ({ row, ctx }) => <ActivityMenu row={row} navigate={ctx.navigate} onRename={ctx.project.rename} />,
 };

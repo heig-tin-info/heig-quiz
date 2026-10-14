@@ -1,4 +1,4 @@
-import { ClipboardList, FolderGit2, Plus } from "lucide-react";
+import { Archive, ClipboardList, FolderGit2, Plus } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ClassroomTable, startOf, typeOfRow, type ClassroomRow, type RowContext } from "./activities/ClassroomTable";
@@ -136,6 +136,36 @@ function AllTable({ rows, ctx }: { rows: readonly ClassroomRow[]; ctx: RowContex
 }
 
 /**
+ * The archived projects (#864), which every list leaves out: behind the
+ * archived classrooms' toggle (`ArchivedClassrooms`), shown only when there
+ * is one, each row opening the page where the project is restored.
+ */
+function ArchivedProjects({ classroomId, ctx }: { classroomId: string; ctx: RowContext }) {
+  const t = useT();
+  const [shown, setShown] = useState(false);
+  const rows = useClassroomProjects(classroomId, true).data ?? [];
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <ToggleChip
+          icon={Archive}
+          tone="neutral"
+          label={t("project.showArchived", { n: rows.length })}
+          pressed={shown}
+          onToggle={() => setShown((v) => !v)}
+        />
+      </div>
+      {shown ? (
+        <Section id="classroom-archived" icon={Archive} title={t("project.group.archived")} count={rows.length}>
+          <ClassroomTable layout="project" rows={rows} ctx={{ ...ctx, archived: true }} />
+        </Section>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * A classroom's Activities tab: its evaluations and its projects (M3-10),
  * as one table per kind — exams, exercises, projects, polls, a kind with no
  * row drawing none — or as one table of everything (Grouped / All). Above
@@ -229,6 +259,7 @@ export function ClassroomActivities({
         ) : null}
         {tables()}
         {projectsFailed ? <QueryError title={t("project.loadFailed")} query={projectList} /> : null}
+        {projectList.isSuccess ? <ArchivedProjects classroomId={classroomId} ctx={ctx} /> : null}
       </div>
       {ctx.evaluation.layers}
       {ctx.project.layers}

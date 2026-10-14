@@ -270,6 +270,12 @@ const scenes = [
       await gotIt(p);
       await p.getByRole("button", { name: /^(scheduled|planifiées)$/i }).click();
     } },
+  // #864: the archived projects, behind "Show archived" at the foot of the tab.
+  { name: "classroom-archived-projects", role: "teacher", path: "/classrooms/r1?projects=1&pjstates=1", act: async (p) => {
+      await skipCoach(p);
+      await gotIt(p);
+      await p.getByRole("button", { name: /^(show archived|afficher les archivés)/i }).click();
+    } },
   // #804: "Rename" from an evaluation row's menu, its one-field dialog.
   { name: "classroom-rename-evaluation", role: "teacher", path: "/classrooms/r1", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^(actions for|actions pour)/i }).first().click();

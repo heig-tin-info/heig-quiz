@@ -318,7 +318,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
             )}
             {/* The same word as the list's badge: the server's phase (ADR-104). */}
             <Badge {...projectPhaseStyle(project.phase)}>{projectPhaseLabel(project.phase, t)}</Badge>
-            {archived ? <Badge tone="zinc">{t("classrooms.archived")}</Badge> : null}
+            {archived ? <Badge tone="zinc">{t("project.archivedBadge")}</Badge> : null}
           </span>
         }
         help="project"
