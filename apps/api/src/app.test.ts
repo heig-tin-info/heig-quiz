@@ -1,4 +1,5 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -155,12 +156,22 @@ describe("config", () => {
  */
 describe("app (serving the built SPA)", () => {
   let dir: string;
+  let history: string;
   let app: Awaited<ReturnType<typeof buildApp>>;
 
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), "quiz-static-"));
     await writeFile(join(dir, "index.html"), "<!doctype html><title>SPA</title>");
     await writeFile(join(dir, "app.js"), "export const x = 1;\n");
+    await mkdir(join(dir, "assets"));
+    await writeFile(join(dir, "assets", "page-NEW.js"), "export const page = 2;\n");
+    // ADR-110: an earlier build's chunk, and one no build has served for 40 days.
+    history = join(dir, "history");
+    await mkdir(join(history, "assets"), { recursive: true });
+    await writeFile(join(history, "assets", "page-OLD.js"), "export const page = 1;\n");
+    await writeFile(join(history, "assets", "page-GONE.js"), "export const page = 0;\n");
+    const longAgo = new Date(Date.now() - 40 * 24 * 3_600_000);
+    await utimes(join(history, "assets", "page-GONE.js"), longAgo, longAgo);
     app = await buildApp({
       config: loadConfig({
         NODE_ENV: "test",
@@ -174,6 +185,8 @@ describe("app (serving the built SPA)", () => {
     // file is about is the REQUEST path surviving a dead database.
     WORKER_MODE: "web",
         STATIC_DIR: dir,
+        STATIC_HISTORY_DIR: history,
+        COMMIT_SHA: "c0ffee",
       }),
     });
   });
@@ -192,6 +205,42 @@ describe("app (serving the built SPA)", () => {
     const res = await app.inject({ method: "GET", url: "/classrooms/c1" });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("<title>SPA</title>");
+  });
+
+  // ADR-110: an old tab's lazy chunk must never be answered with HTML.
+  it("answers a missing chunk with a 404, never with the SPA", async () => {
+    const res = await app.inject({ method: "GET", url: "/assets/page-MISSING.js" });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).not.toContain("<title>SPA</title>");
+  });
+
+  it("caches the hashed assets for good and makes the page revalidate", async () => {
+    const chunk = await app.inject({ method: "GET", url: "/assets/page-NEW.js" });
+    expect(chunk.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+    for (const url of ["/", "/index.html", "/classrooms/c1"]) {
+      const page = await app.inject({ method: "GET", url });
+      expect(page.headers["cache-control"], url).toBe("no-cache");
+    }
+    const other = await app.inject({ method: "GET", url: "/app.js" });
+    expect(other.headers["cache-control"]).toBe("public, max-age=0");
+  });
+
+  it("keeps serving an earlier build's chunks, and prunes the long-gone ones", async () => {
+    const old = await app.inject({ method: "GET", url: "/assets/page-OLD.js" });
+    expect(old.statusCode).toBe(200);
+    expect(old.body).toContain("page = 1");
+    expect(old.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+    expect(existsSync(join(history, "assets", "page-NEW.js"))).toBe(true);
+    expect(existsSync(join(history, "assets", "page-GONE.js"))).toBe(false);
+    expect((await app.inject({ method: "GET", url: "/assets/page-GONE.js" })).statusCode).toBe(404);
+  });
+
+  // Audit L21: the commit is named to a signed-in caller only.
+  it("names the build to no signed-out caller", async () => {
+    for (const url of ["/healthz", "/app/api/me", "/"]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.headers["x-quiz-build"], url).toBeUndefined();
+    }
   });
 
   it("leaves the API surfaces their JSON 404", async () => {

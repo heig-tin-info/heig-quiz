@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 
 import Fastify, {
   type FastifyError,
@@ -12,12 +12,13 @@ import fastifyStatic from "@fastify/static";
 import { sql } from "drizzle-orm";
 import { collectDefaultMetrics, Gauge, Registry } from "prom-client";
 
-import { AvatarMime, type HealthProbe } from "@quiz/contracts";
+import { AvatarMime, BUILD_HEADER, type HealthProbe } from "@quiz/contracts";
 import type { Clock } from "./clock.js";
 import { githubLinkPlugin } from "./auth/githubLink.js";
 import { authPlugin } from "./auth/plugin.js";
 import { sameSecret } from "./auth/session.js";
 import { requestLog } from "./redact.js";
+import { retainAssets } from "./staticHistory.js";
 import { systemClock } from "./clock.js";
 import type { AppConfig } from "./config.js";
 import { registerSecurityHeaders } from "./csp.js";
@@ -216,6 +217,15 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     else if (req.url.startsWith("/app/api/courses")) publish("mutation", [`teacher:${req.user.id}`]);
   });
 
+  // ADR-110: the build the API runs, so a tab of an older one knows it is
+  // stale. A signed-in caller only: `/healthz` and a signed-out answer never
+  // name the commit (audit L21).
+  if (config.COMMIT_SHA) {
+    app.addHook("onSend", async (req, reply) => {
+      if (req.user && /^\/(app\/)?api\//.test(req.url)) reply.header(BUILD_HEADER, config.COMMIT_SHA);
+    });
+  }
+
   await app.register(fastifyCookie, { secret: config.COOKIE_SECRET });
   await app.register(authPlugin, { config });
   await app.register(realtimePlugin);
@@ -319,11 +329,33 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
 
   // Built SPA served by the monolith (ADR-009: single image, frontend included).
   if (config.STATIC_DIR && existsSync(config.STATIC_DIR)) {
-    await app.register(fastifyStatic, { root: resolve(config.STATIC_DIR) });
+    const build = resolve(config.STATIC_DIR);
+    const roots = [build];
+    // ADR-110: the chunks of earlier builds, served after the current one's.
+    // A history that cannot be kept costs old tabs their chunks, never the boot.
+    if (config.STATIC_HISTORY_DIR) {
+      const history = resolve(config.STATIC_HISTORY_DIR);
+      await step("static history", async () => {
+        await retainAssets(build, history);
+        roots.push(history);
+      });
+    }
+    await app.register(fastifyStatic, {
+      root: roots,
+      // ADR-110: Vite names every file of `assets/` after its content, so it
+      // never changes; `index.html` names the build, and is asked again each time.
+      setHeaders: (reply, path) => {
+        if (path.endsWith("index.html")) reply.header("cache-control", "no-cache");
+        else if (basename(dirname(path)) === "assets") {
+          reply.header("cache-control", "public, max-age=31536000, immutable");
+        }
+      },
+    });
     app.setNotFoundHandler((req, reply) => {
-      // SPA fallback for navigation; API surfaces keep their JSON 404.
-      const isApi = ["/app/", "/api/"].some((p) => req.url.startsWith(p));
-      if (req.method === "GET" && !isApi) return reply.sendFile("index.html");
+      // SPA fallback for navigation; API surfaces keep their JSON 404, and so
+      // does a missing chunk: HTML in its place crashes the tab that asked.
+      const notPage = ["/app/", "/api/", "/assets/"].some((p) => req.url.startsWith(p));
+      if (req.method === "GET" && !notPage) return reply.sendFile("index.html", build);
       return reply.code(404).send({ error: "not_found" });
     });
   }

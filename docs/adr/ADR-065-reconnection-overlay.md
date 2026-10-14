@@ -3,6 +3,9 @@
 ## Status
 
 Accepted (2026-10-02, product owner request). Completes N-RES-02 and N-RES-03.
+Amended 2026-10-14 by [ADR-110](ADR-110-version-du-client-apres-un-deploiement.md),
+scope *Limits*: old chunks are kept, and a stale tab may load the new build
+outside any attempt and confined session, when nothing is pending.
 
 ## Decision
 
@@ -40,3 +43,6 @@ This smooths an interruption, it does not make deployment zero-downtime.
 Frontend/backend compatibility and backward-compatible migrations remain
 necessary. An old lazy frontend chunk removed by a deploy is a separate asset
 retention concern; no automatic reload is introduced as a workaround.
+*Amended 2026-10-14 (ADR-110): the chunks of earlier builds are now kept,
+and a stale tab loads the new build at a moment ADR-110 allows — never
+during an attempt nor in a `seb` or `kiosk` session.*

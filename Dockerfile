@@ -46,6 +46,9 @@ RUN apt-get update \
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out /app
+# STATIC_HISTORY_DIR of the compose files (ADR-110): a named volume mounted
+# here starts as a copy of this directory, owner included, so `node` can write it.
+RUN install -d -o node -g node /app/static-history
 USER node
 ENV STATIC_DIR=/app/web MIGRATE_ON_START=1 PORT=3000
 # The same commit for the API, which names it on the admin's system status

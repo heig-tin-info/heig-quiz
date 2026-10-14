@@ -3,11 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, LogOut } from "lucide-react";
 
 import type { KioskStation, Me } from "@quiz/contracts";
+import { isTrustedClient } from "@quiz/domain";
 
 import { api, useMe, usePublicConfig } from "./api";
 import { inSebBrowser, SebQuitButton, SebQuitKeys, SebQuitPage } from "./student/SebQuit";
 import { toKiosk, useStationSessionWatch } from "./kiosk/navigation";
+import { lazyPage } from "./lazyPage";
 import { kioskStationKey } from "./queryKeys";
+import { build } from "./build";
 import { Logo } from "./Header";
 import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
@@ -29,75 +32,75 @@ import {
 import { Button, Card, EmptyState, ErrorText, LinkButton, setDateFormat, Spinner } from "./ui";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
-const TeacherHome = lazy(() => import("./TeacherHome").then((m) => ({ default: m.TeacherHome })));
+const TeacherHome = lazyPage(() => import("./TeacherHome").then((m) => ({ default: m.TeacherHome })));
 // WP9: student player
-const StudentHome = lazy(() =>
+const StudentHome = lazyPage(() =>
   import("./student/StudentHome").then((m) => ({ default: m.StudentHome })),
 );
-const AttemptPage = lazy(() =>
+const AttemptPage = lazyPage(() =>
   import("./student/Attempt").then((m) => ({ default: m.AttemptPage })),
 );
-const Feedback = lazy(() => import("./student/Feedback").then((m) => ({ default: m.Feedback })));
+const Feedback = lazyPage(() => import("./student/Feedback").then((m) => ({ default: m.Feedback })));
 // F-ORG-14, F-ORG-15 (M5-02): the student's Courses and classroom page.
-const StudentCourses = lazy(() =>
+const StudentCourses = lazyPage(() =>
   import("./student/StudentCourses").then((m) => ({ default: m.StudentCourses })),
 );
 // F-ORG-14, F-RES-04: the student's Grades.
-const StudentGrades = lazy(() =>
+const StudentGrades = lazyPage(() =>
   import("./student/StudentGrades").then((m) => ({ default: m.StudentGrades })),
 );
-const StudentClassroom = lazy(() =>
+const StudentClassroom = lazyPage(() =>
   import("./student/StudentClassroom").then((m) => ({ default: m.StudentClassroom })),
 );
 // ADR-041 (#317): the student's drill, its own chunk like every page.
-const DrillPage = lazy(() => import("./drill/DrillPage").then((m) => ({ default: m.DrillPage })));
-const CoursePage = lazy(() =>
+const DrillPage = lazyPage(() => import("./drill/DrillPage").then((m) => ({ default: m.DrillPage })));
+const CoursePage = lazyPage(() =>
   import("./course/CoursePage").then((m) => ({ default: m.CoursePage })),
 );
-const TemplateEditor = lazy(() =>
+const TemplateEditor = lazyPage(() =>
   import("./evaluation/TemplateEditor").then((m) => ({ default: m.TemplateEditor })),
 );
-const ClassroomView = lazy(() =>
+const ClassroomView = lazyPage(() =>
   import("./ClassroomView").then((m) => ({ default: m.ClassroomView })),
 );
-const ClassroomsPage = lazy(() =>
+const ClassroomsPage = lazyPage(() =>
   import("./course/ClassroomsPage").then((m) => ({ default: m.ClassroomsPage })),
 );
 // F-PROJ-01 (M3-11): the new project; F-PROJ-13 (M3-12): the project page.
-const NewProjectPage = lazy(() =>
+const NewProjectPage = lazyPage(() =>
   import("./project/NewProjectPage").then((m) => ({ default: m.NewProjectPage })),
 );
-const ProjectPage = lazy(() => import("./project/ProjectPage").then((m) => ({ default: m.ProjectPage })));
-const ProjectGradingPage = lazy(() =>
+const ProjectPage = lazyPage(() => import("./project/ProjectPage").then((m) => ({ default: m.ProjectPage })));
+const ProjectGradingPage = lazyPage(() =>
   import("./project/grading/ProjectGradingPage").then((m) => ({ default: m.ProjectGradingPage })),
 );
-const GroupSetPage = lazy(() => import("./group/GroupSetPage").then((m) => ({ default: m.GroupSetPage })));
-const StudentProjectPage = lazy(() =>
+const GroupSetPage = lazyPage(() => import("./group/GroupSetPage").then((m) => ({ default: m.GroupSetPage })));
+const StudentProjectPage = lazyPage(() =>
   import("./student/StudentProjectPage").then((m) => ({ default: m.StudentProjectPage })),
 );
 // The pool screens (WP7): the teacher's authoring surface, one chunk each,
 // so a student — or a teacher who only runs quizzes — never downloads them.
-const PoolsPage = lazy(() => import("./pool/PoolsPage").then((m) => ({ default: m.PoolsPage })));
-const PoolView = lazy(() => import("./pool/PoolView").then((m) => ({ default: m.PoolView })));
-const CategoriesPage = lazy(() =>
+const PoolsPage = lazyPage(() => import("./pool/PoolsPage").then((m) => ({ default: m.PoolsPage })));
+const PoolView = lazyPage(() => import("./pool/PoolView").then((m) => ({ default: m.PoolView })));
+const CategoriesPage = lazyPage(() =>
   import("./pool/CategoriesPage").then((m) => ({ default: m.CategoriesPage })),
 );
-const QuestionEditor = lazy(() =>
+const QuestionEditor = lazyPage(() =>
   import("./question/QuestionEditor").then((m) => ({ default: m.QuestionEditor })),
 );
 // "See what the student sees" for one question (docs/spec/08 §8.2). Its own
 // chunk and its own full-screen page, like the attempt: it IS the player.
-const EvaluationPreviewPage = lazy(() =>
+const EvaluationPreviewPage = lazyPage(() =>
   import("./preview/EvaluationPreviewPage").then((m) => ({ default: m.EvaluationPreviewPage })),
 );
-const StudentPreviewPage = lazy(() =>
+const StudentPreviewPage = lazyPage(() =>
   import("./question/StudentPreviewPage").then((m) => ({ default: m.StudentPreviewPage })),
 );
 // WP8: evaluation + dashboard
-const EvaluationConfig = lazy(() =>
+const EvaluationConfig = lazyPage(() =>
   import("./evaluation/EvaluationConfig").then((m) => ({ default: m.EvaluationConfig })),
 );
-const LiveDashboard = lazy(() =>
+const LiveDashboard = lazyPage(() =>
   import("./live/LiveDashboard").then((m) => ({ default: m.LiveDashboard })),
 );
 // WP10: grading + results. Two more page chunks, for the same reason as the
@@ -105,25 +108,26 @@ const LiveDashboard = lazy(() =>
 // only runs quizzes never downloads the results view. (`Feedback` is already
 // lazy above: it is the student's page and a teacher only reaches it through
 // the student view.)
-const GradingPanel = lazy(() =>
+const GradingPanel = lazyPage(() =>
   import("./grading/GradingPanel").then((m) => ({ default: m.GradingPanel })),
 );
-const ResultsView = lazy(() =>
+const ResultsView = lazyPage(() =>
   import("./results/ResultsView").then((m) => ({ default: m.ResultsView })),
 );
-const CorrectionProjection = lazy(() =>
+const CorrectionProjection = lazyPage(() =>
   import("./results/CorrectionProjection").then((m) => ({ default: m.CorrectionProjection })),
 );
-const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
-const WhatsNewPage = lazy(() => import("./changelog/WhatsNew").then((m) => ({ default: m.WhatsNewPage })));
+const SettingsPage = lazyPage(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const WhatsNewPage = lazyPage(() => import("./changelog/WhatsNew").then((m) => ({ default: m.WhatsNewPage })));
+// An overlay, not a page: no reload for its chunk (`lazyPage`, ADR-110).
 const WhatsNewModal = lazy(() => import("./changelog/WhatsNew").then((m) => ({ default: m.WhatsNewModal })));
-const AdminPage = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
+const AdminPage = lazyPage(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
 // Development only, and absent from the production bundle: behind the
 // `import.meta.env.DEV` constant the dynamic import is dead code, so Rollup
 // emits no DevGallery chunk at all. `parsePath` still returns the view; its
 // entry in `PAGES` renders the teacher home in its place (no redirect).
 const DevGallery = import.meta.env.DEV
-  ? lazy(() => import("./DevGallery").then((m) => ({ default: m.DevGallery })))
+  ? lazyPage(() => import("./DevGallery").then((m) => ({ default: m.DevGallery })))
   : () => null;
 
 /*
@@ -214,30 +218,30 @@ function Landing() {
 
 // The poll screens. The participant page is the ONE route that renders with
 // no session at all: a guest who scanned a QR has nothing to log into.
-const PollModeration = lazy(() =>
+const PollModeration = lazyPage(() =>
   import("./poll/PollModeration").then((m) => ({ default: m.PollModeration })),
 );
-const PollProjection = lazy(() =>
+const PollProjection = lazyPage(() =>
   import("./poll/PollProjection").then((m) => ({ default: m.PollProjection })),
 );
-const PollJoin = lazy(() => import("./poll/PollJoin").then((m) => ({ default: m.PollJoin })));
-const OAuthConsent = lazy(() => import("./oauth/OAuthConsent").then((m) => ({ default: m.OAuthConsent })));
-const TeamsLinkPage = lazy(() =>
+const PollJoin = lazyPage(() => import("./poll/PollJoin").then((m) => ({ default: m.PollJoin })));
+const OAuthConsent = lazyPage(() => import("./oauth/OAuthConsent").then((m) => ({ default: m.OAuthConsent })));
+const TeamsLinkPage = lazyPage(() =>
   import("./notifications/TeamsLinkPage").then((m) => ({ default: m.TeamsLinkPage })),
 );
-const TeamsTabPage = lazy(() =>
+const TeamsTabPage = lazyPage(() =>
   import("./notifications/TeamsTabPage").then((m) => ({ default: m.TeamsTabPage })),
 );
 // ADR-051 §7: the station's screen (drawn with no session) and the phone's pairing page.
-const DiscoverPage = lazy(() =>
+const DiscoverPage = lazyPage(() =>
   import("./discover/DiscoverPage").then((m) => ({ default: m.DiscoverPage })),
 );
-const KioskPage = lazy(() => import("./kiosk/KioskPage").then((m) => ({ default: m.KioskPage })));
-const PairPage = lazy(() => import("./pair/PairPage").then((m) => ({ default: m.PairPage })));
-const ActivitiesPage = lazy(() =>
+const KioskPage = lazyPage(() => import("./kiosk/KioskPage").then((m) => ({ default: m.KioskPage })));
+const PairPage = lazyPage(() => import("./pair/PairPage").then((m) => ({ default: m.PairPage })));
+const ActivitiesPage = lazyPage(() =>
   import("./activities/ActivitiesPage").then((m) => ({ default: m.ActivitiesPage })),
 );
-const PollLauncher = lazy(() =>
+const PollLauncher = lazyPage(() =>
   import("./poll/PollLauncher").then((m) => ({ default: m.PollLauncher })),
 );
 
@@ -625,6 +629,9 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   // closed). Its stream dropping is how the page learns it.
   const onStation = me.data?.session?.kind === "kiosk";
   useStationSessionWatch(onStation);
+  // ADR-110: a confined session keeps the client it was opened with.
+  const confined = session !== undefined && isTrustedClient(session.kind);
+  useEffect(() => build.confine(confined), [confined]);
   useLiveUpdates(
     me.data != null && confinedTo === null && route.view !== "attempt",
     confinedTo !== null || QUIET.has(route.view),

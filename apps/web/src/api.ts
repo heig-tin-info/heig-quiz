@@ -1,9 +1,10 @@
 /** Portal API client: session cookies + double-submit CSRF header. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { CSRF_COOKIE, CSRF_HEADER, IDLE_HEADER, cookieName, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
+import { BUILD_HEADER, CSRF_COOKIE, CSRF_HEADER, IDLE_HEADER, cookieName, type Me, type MePatch, type PublicConfig } from "@quiz/contracts";
 
 import { isIdle } from "./idle";
+import { build } from "./build";
 import { connection } from "./realtime/connection";
 
 import type { Dict } from "./i18n/en";
@@ -90,13 +91,18 @@ export async function api<T>(
     init.body = init.csv;
   }
   let res: Response;
+  // ADR-110: a write in flight holds back a full load to a newer build.
+  const written = init.method && init.method !== "GET" ? build.hold() : null;
   try {
     res = await fetch(path, { ...init, headers, credentials: "same-origin" });
   } catch (error) {
     if (!init.signal?.aborted) connection.suspect();
     throw error;
+  } finally {
+    written?.();
   }
   if ([502, 503, 504].includes(res.status)) connection.suspect();
+  build.observe(res.headers.get(BUILD_HEADER));
   if (!res.ok) {
     const error = new ApiError(res.status, await res.json().catch(() => null));
     // ADR-051 §6: whichever write learnt it, the station's page is told once.

@@ -32,6 +32,8 @@ services:
       PUBLIC_URL: https://quiz.dev.chevallier.io
       NODE_ENV: production
       ASSETS_DIR: /app/assets
+      # Staging's own history of chunks (ADR-110, compose.prod.yml says why).
+      STATIC_HISTORY_DIR: /app/static-history
       # The image sets no heap size (production runs uncapped). Pinned here
       # rather than left to V8's own sizing: 192 MB keeps the heap under the
       # 256 MB cap below with room for the rest of the process, so V8
@@ -42,6 +44,7 @@ services:
     volumes:
       - ./secrets:/app/secrets:ro
       - ./assets:/app/assets
+      - static-history:/app/static-history
     mem_limit: 256m
     memswap_limit: 256m
     cpus: 0.5
@@ -97,3 +100,4 @@ services:
 
 volumes:
   pgdata:
+  static-history:

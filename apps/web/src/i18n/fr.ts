@@ -381,6 +381,8 @@ export const fr: Record<keyof Dict, string> = {
   "error.title": "Une erreur est survenue",
   "crash.body": "La page s'est arrêtée. Ce qui était déjà enregistré est conservé : rechargez pour continuer.",
   "crash.reload": "Recharger",
+  "crash.outdated.title": "Quiz a été mis à jour",
+  "crash.outdated.body": "Cette page a besoin de la nouvelle version. Ce qui était déjà enregistré est conservé : rechargez pour continuer.",
   "toast.dismiss": "Masquer la notification",
   "aside.sidebar": "Cours et classes",
   "aside.questionMeta": "Détails de la question",

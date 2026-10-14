@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SEB_QUIT_PATH, encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 import { COURSE_TABS, type AdminTab, type ClassroomQueryTab, type CourseTab } from "@quiz/domain";
 
+import { build } from "./build";
+
 const isCourseTab = (s: string | undefined): s is CourseTab =>
   (COURSE_TABS as readonly (string | undefined)[]).includes(s);
 
@@ -260,6 +262,12 @@ export interface RouteSpec<V extends Route["view"]> {
    * interrupted, and a new view stays out until it says so.
    */
   whatsNew?: true;
+  /**
+   * The student answers here, and the page holds what the server has not yet
+   * acknowledged: an attempt (lobby, player, end), the drill, a poll. A newer
+   * build never replaces it by a full load (ADR-110).
+   */
+  answering?: true;
 }
 
 /** A view whose path is one fixed segment (`/settings`, `/polls`, …), whatever follows it. */
@@ -539,6 +547,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     match: ([head, evaluationId]) =>
       head === "take" && evaluationId ? { view: "attempt", evaluationId } : null,
     studentSafe: true,
+    answering: true,
   },
   // A poll's session code, as printed under the QR. Upper-cased so a code
   // typed by hand on a phone survives the keyboard's habits.
@@ -547,6 +556,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     match: ([head, code]) =>
       head === "p" && code ? { view: "join", code: code.toUpperCase() } : null,
     studentSafe: true,
+    answering: true,
   },
   // ADR-023: reached from `/app/oauth/authorize`, signed in or not; a student
   // lands on it too and is told it is a teacher's page.
@@ -602,6 +612,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   drill: {
     ...fixed("drill", { view: "drill" }, true),
     bottomSlot: { student: "drill" },
+    answering: true,
   },
   // WP8 + WP10: ONE place decides what follows an evaluation id, so a new
   // tail is an entry here and nowhere else.
@@ -681,6 +692,11 @@ export function sectionOf(route: Route): NavSection | null {
  */
 export function evaluationInView(route: Route): string | null {
   return specOf(route.view).evaluationId?.(route) ?? null;
+}
+
+/** Whether the page at `path` (its query aside) is one where the student answers (`RouteSpec.answering`). */
+export function answeringAt(path: string): boolean {
+  return specOf(parsePath(path.split("?")[0] ?? "").view).answering === true;
 }
 
 /** One segment of an address, decoded; a malformed escape is kept as written (the reader then finds no such page). */
@@ -773,10 +789,13 @@ export function useLeaveGuard(dirty: boolean, ask: LeaveGuard): void {
     if (!dirty) return;
     const guard: LeaveGuard = () => askRef.current();
     leaveGuard = guard;
+    // ADR-110: unsaved work holds this tab on its build until the screen goes.
+    const release = build.hold();
     const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       if (leaveGuard === guard) leaveGuard = null;
+      release();
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
   }, [dirty]);
@@ -802,6 +821,13 @@ export function useRoute(): [Route, Navigate] {
     const onPop = () => {
       const guard = leaveGuard;
       if (guard === null) {
+        // ADR-110: a stale tab takes the new build on its way to the next
+        // screen; the browser has moved already, so a reload lands there. An
+        // anchor of the same page (`#…`) is no new screen.
+        if (here() !== shown.current && build.mayLoad(answeringAt(shown.current))) {
+          build.load(here(), true);
+          return;
+        }
         shown.current = here();
         setRoute(parsePath(window.location.pathname));
         return;
@@ -820,6 +846,13 @@ export function useRoute(): [Route, Navigate] {
   const navigate = useCallback<Navigate>((r, options) => {
     const path = withQuery(routeToPath(r), options?.query);
     const go = () => {
+      // ADR-110: a stale tab loads the new build with the next screen, never
+      // from a page where the student answers nor past a leave guard (its
+      // screen holds the build until it unmounts).
+      if (path !== here() && build.mayLoad(answeringAt(here()))) {
+        build.load(path, options?.replace);
+        return;
+      }
       // The whole address, query included: a click on the page on view
       // drops its `?tab=` too, and lands where the route says.
       if (path !== here()) {
