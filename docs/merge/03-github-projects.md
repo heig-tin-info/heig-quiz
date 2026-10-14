@@ -30,7 +30,7 @@ layers:
   `null` = indeterminate), `fetchOrgPlan` (free plan ⇒ no org secrets for
   private repos, no rulesets), `fetchOrgLlmSecret` (**needs org
   Secrets:read, not in the documented permission table — verify the live
-  App**, M0-02), `resolveOrgInstallation`.
+  App**, M0-02; dropped, M3-14f), `resolveOrgInstallation`.
 - Env: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH`, `GITHUB_APP_SLUG`
   (bot login `<slug>[bot]`), `GITHUB_WEBHOOK_SECRET`,
   `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`.
@@ -47,7 +47,7 @@ layers:
 - **Lazy healing on every classroom open**: resolve a missing installation,
   re-check the org while uninstalled (`active|degraded`), refresh a null or
   free plan, resolve `githubOrgId` (install wizard `target_id`), probe the
-  LLM secret, return `appSlug`. **Quiz (M2-02)**: at most once a minute
+  LLM secret (dropped, M3-14f), return `appSlug`. **Quiz (M2-02)**: at most once a minute
   per organization (`HEAL_TTL_MS`, 60 s, in memory; the setup return
   drops it), since the Settings are re-read on every SSE hint; a login
   that now resolves to another `github_org_id` is not ours (I66).
@@ -271,8 +271,8 @@ layers:
 
 - `github.ts`: `GithubOrg` (`installed`, `status` active / deleted,
   `plan`, `avatarUrl` pinned to the API's avatar route), `GithubClassroom`
-  (the link, its `GithubChecks` `allRepositories` / `llmSecret`,
-  `suggestedOrgId`, `installUrl`), `GithubAccountState` (M2-01);
+  (the link, its `GithubChecks` `allRepositories` / `llmSecret` (dropped,
+  M3-14f), `suggestedOrgId`, `installUrl`), `GithubAccountState` (M2-01);
   `GithubConnectBody` (M2-02), `GithubLinkOutcome` (M2-03).
 - `project.ts`: `ProjectCreate/Patch` (classroom's zod rules),
   `ProjectSummary`, `ProjectDetail` (`liveStale`), `GradeRunView`,
@@ -364,9 +364,9 @@ The first plan reused classroom's App at the cutover; D23 replaced it.
   both (a journal read by classroom and by Quiz) is harmless: both mirror
   it, neither writes unless a teacher saves.
 - **Permissions** are those of classroom's App (§3.1), plus organization
-  `Secrets: read` for the LLM secret probe (I50) — decided at registration,
-  since changing a permission later makes every organization owner
-  re-approve.
+  `Secrets: read` for the LLM secret probe (I50; dropped, M3-14f) — decided
+  at registration, since changing a permission later makes every
+  organization owner re-approve.
 - **At the cutover** the organizations still used by classroom install
   Quiz's App ("All repositories"); the import resolves their installation
   ids. Account links survive (`github_user_id` is the person's): the import carries them (spec 06 no. 45).

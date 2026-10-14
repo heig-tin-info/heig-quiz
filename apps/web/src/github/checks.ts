@@ -3,13 +3,13 @@
  * as data: one line per fact, its state, and the sentence that words it.
  * The API sends each fact once (M2-01): the installation line is derived
  * from the organization (`installed`, `status`) and `checks.allRepositories`,
- * the plan line from `org.plan` (`free` ⇒ the warning, null ⇒ unknown). The
- * organization's `ANTHROPIC_API_KEY` secret is no longer checked (M3-14f).
- * No sentence comes from the server (invariant 1).
+ * the plan line from `org.plan` (`free` ⇒ the warning, null ⇒ unknown). No
+ * sentence comes from the server (invariant 1).
  *
  * Only the installation line blocks: without the App on every repository,
- * nothing GitHub-backed works. A free plan is a warning; a fact GitHub did not tell is `unknown`, never green. The levels
- * are the launch checklist's (`CheckLevel`, `ui`).
+ * nothing GitHub-backed works. A free plan is a warning; a fact GitHub did
+ * not tell is `unknown`, never green. The levels are the launch checklist's
+ * (`CheckLevel`, `ui`).
  */
 import type { GithubClassroomLink } from "@quiz/contracts";
 

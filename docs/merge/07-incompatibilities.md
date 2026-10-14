@@ -64,7 +64,7 @@ PR.
 | I47 | Engine VM: no backups, 2 sessions of capacity, runner and codespace compete | resize, cgroup slices, off-VM backups | M6-05 |
 | I48 | Seccomp profiles diverged | port the runner's tightenings to codespace, keep `ptrace` | M6-05 |
 | I49 | ADR-027 rejected self-contained signed tokens | cross-VM HS256 kept as a recorded exception (the portal enforces single use) | M0-03, M6-01 |
-| I50 | App permission `Secrets:read` used but undocumented | granted to Quiz's App at registration (D23); the probe reports "unknown" on an installation that has not approved it | M2-06 |
+| I50 | App permission `Secrets:read` used but undocumented | granted to Quiz's App at registration (D23); the probe reports "unknown" on an installation that has not approved it. **Dropped 2026-10-14, M3-14f**: no probe, no permission | M2-06 |
 | I51 | Rate limits: 5 000 req/h per installation; anonymous org checks share the VM's 60/h | keep `noRateLimitWait`, SWR cache, backoff, hint coalescing; Quiz's 1-s live streams never trigger a GitHub fetch | M3-08 |
 | I52 | `node:24-slim` has no git | add `git` + `ca-certificates` | M1-02 |
 | I53 | App VM memory (1 vCPU / 2 GB) grows before classroom goes away | watch it through M3–M8; net gain after cutover | M8-05 |

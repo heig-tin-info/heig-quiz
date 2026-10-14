@@ -16,8 +16,9 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
 
 - **Phase**: the journal (M4) and the projects (M3) are merged, the
   pilot's follow-ups M3-14a…n included except M3-14g, which waits for the
-  product owner (M3-14f, the secret's check dropped, 2026-10-14); M4-10…13 are dropped. The gradebook (M5-03,
-  M5-04), M6-01…06, M6-10, M7, M8-01…03 and the cutover runbook (M8-05,
+  product owner; M3-14f dropped the secret's check (2026-10-14). M4-10…13
+  are dropped. The gradebook (M5-03, M5-04), M6-01…06, M6-10, M7,
+  M8-01…03 and the cutover runbook (M8-05,
   [`10-cutover-runbook.md`](10-cutover-runbook.md)) are merged; M8-04 is
   dropped. The breadcrumb app-wide is merged (#576). The import runs from
   the production image (#655, the runbook's O6). The projects and the

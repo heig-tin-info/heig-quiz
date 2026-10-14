@@ -624,7 +624,7 @@ const scenes = [
   // F-ORG-13 (D24, M2-07): the Settings tab. A classroom that is not
   // connected (r2, its course's organization suggested): "Connect to GitHub"
   // is the one accent, and the connect sheet it opens; PRG1-2026 connected,
-  // every check green, then with the warnings (free plan, no LLM secret) and
+  // every check green, then with the warning (free plan) and
   // with its organization gone from GitHub; the rename dialog.
   { name: "classroom-settings", role: "teacher", path: "/classrooms/r2/settings" },
   { name: "classroom-settings-github-connect", role: "teacher", path: "/classrooms/r2/settings?connect=1", fold: true },

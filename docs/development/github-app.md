@@ -76,9 +76,12 @@ now runs on Quiz's own LLM, and the key a repository's CI may still use is
 the organization's own business. No code reads an organization's secrets.
 An App created before that change still holds *Secrets: Read-only*: its
 owner removes it on GitHub (*Settings → Permissions & events →
-Organization permissions → Secrets → No access*, then *Save changes*), on
-the production App and on the staging one. Removing a permission asks no
-organization owner to approve anything again.
+Organization permissions → Secrets → No access*, then *Save changes*).
+Removing a permission is expected to need no organization owner's approval,
+unlike adding one; this is not verified yet. Do it on the staging App
+`heig-quiz-staging` first and check an installation's page on its
+organization (no pending request, the App still acting), then on the
+production App.
 
 The App subscribes to these events:
 

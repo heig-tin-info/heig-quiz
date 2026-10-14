@@ -209,7 +209,6 @@ describe("the classroom's GitHub section", () => {
     expect(lines.map((l) => l.getAttribute("data-level"))).toEqual(["ok", "ok"]);
     expect(lines[0]).toHaveTextContent("App installed, with access to all repositories.");
     expect(lines[1]).toHaveTextContent("Plan: team.");
-    expect(checks).not.toHaveTextContent("ANTHROPIC_API_KEY");
     expect(screen.queryByRole("button", { name: "Connect to GitHub" })).toBeNull();
   });
 

@@ -42,7 +42,7 @@ the classroom's end.
 
 **Connect to GitHub** picks an organization where Quiz's App is installed,
 or installs it on another one; the checks then say whether the App sees
-every repository, the organization's plan, and the LLM secret.
+every repository, and the organization's plan.
 **Disconnect** deletes nothing on GitHub.
 
 **Archive** puts a finished classroom aside without deleting anything;

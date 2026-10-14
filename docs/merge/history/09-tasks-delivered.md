@@ -2767,19 +2767,9 @@ commit included) where the student's card said "1 commit".
   L-02a…g). The check, and the CI's `llm-review` tier, go course by course,
   once that course's projects run in `criteria` mode; a project in `auto`
   mode keeps both until then.
-- **As delivered** (branch `drop-llm-secret-check`, PR #879, 2026-10-14). Product
-  owner, 2026-10-14: "Yes, we remove ANTHROPIC_API_KEY: it no longer
-  depends on Quiz and we no longer check it. Quiz uses its own access." The
-  check goes entirely, not course by course: `fetchOrgLlmSecret` and its
-  fake route are gone, `GithubChecks` keeps `allRepositories` only, the
-  classroom's GitHub section shows two lines (installation, plan) and the
-  three `github.check.llm*` strings are removed. The manifest no longer asks
-  for `organization_secrets`, and no code reads an organization's secrets;
-  an App created before keeps the permission until its owner removes it on
-  GitHub (`docs/development/github-app.md`, *Permissions and events*).
-  F-GH-03, F-PROJ-11 and N-DATA-05 amended. Untouched: the `auto` mode's
-  dispatched CI review (F-PROJ-11, ADR-106 §10) still runs on the
-  organization's own key, now outside Quiz's checks.
+- **As delivered** (PR #879, 2026-10-14): the check dropped outright on the
+  product owner's decision of 2026-10-14 (Quiz reviews with its own LLM). Pending:
+  the owner removes the App's `organization_secrets` permission on GitHub.
 
 ### M3-15 — Groups (API)
 Redesigned by [ADR-070](../../adr/ADR-070-repartitions-de-groupes.md)

@@ -55,8 +55,6 @@ export type GithubOrg = z.infer<typeof GithubOrg>;
  * the classroom's Settings open:
  *   - `allRepositories` — the installation covers every repository; null
  *     when it could not be read (not installed, GitHub silent).
- * The organization's `ANTHROPIC_API_KEY` secret is no longer checked: the
- * projects' review runs on Quiz's own LLM (M3-14f, product owner, 2026-10-14).
  */
 export const GithubChecks = z.object({
   allRepositories: z.boolean().nullable(),

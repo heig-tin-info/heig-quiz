@@ -11,7 +11,9 @@ staging checks pending). Amended 2026-10-11 (security audit M11 and L25): the po
 tokens are single use and bound to their request, and every token's lifetime is capped
 ([amendment](#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use)). Amended
 2026-10-11 again (#743): the portal's requests to Quiz (§2) are single use on Quiz's side
-([amendment](#amendment-2026-10-11-743-the-relays-requests-are-single-use)).
+([amendment](#amendment-2026-10-11-743-the-relays-requests-are-single-use)). Amended
+2026-10-14 (M3-14f): the Context's list of the App's permissions — it no longer reads
+organization secrets.
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -55,8 +57,8 @@ code in containers (hardened, but a container escape is the threat model of
 `apps/runner` and `apps/codespace` alike) and serves code-server to the
 internet. Quiz's App is installed with "All repositories" on its
 organizations (F-GH-03) and holds `administration`, `contents`,
-`workflows` and `pull_requests` in write, and reads organization members,
-plan and secrets ([its permissions](../development/github-app.md)). Its key is today on the app VM only
+`workflows` and `pull_requests` in write, and reads organization members
+and plan, no longer secrets (M3-14f) ([its permissions](../development/github-app.md)). Its key is today on the app VM only
 (`GITHUB_APP_PRIVATE_KEY_PATH`, ADR-010), and root invariant 15 says it
 stays out of the repository and the database, with installation tokens in
 memory only.
