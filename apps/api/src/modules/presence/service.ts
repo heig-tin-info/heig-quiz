@@ -18,8 +18,9 @@ import {
   ACTIVE_NOW_MINUTES,
   PRESENCE_RETENTION_DAYS,
   datesEndingOn,
+  isClassHour,
   localDate,
-  offHoursStudentShare,
+  offHoursShare,
   SCHOOL_TIME_ZONE,
 } from "@quiz/domain";
 
@@ -210,7 +211,10 @@ export async function activityOverview(db: Db, now: Date): Promise<AdminActivity
     activeNow: current ?? none,
     last24h: day ?? none,
     last7d: week ?? none,
-    offHoursStudentShare: offHoursStudentShare(days),
+    offHoursStudentShare: offHoursShare(
+      days.map((d) => d.hours.map((c) => c.students)),
+      (r, h) => isClassHour(days[r]!.date, h),
+    ),
     recordedSince: oldest?.hour ? localDate(new Date(oldest.hour)) : null,
     days,
   };

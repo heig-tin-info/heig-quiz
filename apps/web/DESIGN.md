@@ -2193,6 +2193,12 @@ written in its hint).
   students, and in a student's sheet below the weekly charts. Its
   off-hours share is one line above the grid, not a `Stat`; no review in 30
   days is that one line instead of a grid.
+- **Compact** (`compact`), for a sheet: the 24 hours fit the box instead of
+  scrolling — no minimum width, 20 px rows, a 40 px day column, an hour
+  label every three hours, 10 px figures printed only when the grid's own
+  box is at least 32 rem (`@container`, `@lg:`); below that the cells are
+  colour and hatch only, and their title and screen-reader text keep the
+  figure. The student's sheet uses it; the admin and roster grids do not.
 
 ## Correction projection (the graded evaluation on a beamer)
 

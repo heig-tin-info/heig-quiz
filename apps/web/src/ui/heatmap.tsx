@@ -56,6 +56,11 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
  * Rows of 24 hours: a real table, so a screen reader reads each figure under
  * its row and its hour; a cell's `title` says it in a sentence. With
  * `footer`, the sum per hour closes it as a row of bars on the same columns.
+ *
+ * `compact` fits the 24 hours in a narrow box (a sheet) instead of scrolling:
+ * no minimum width, short rows, an hour label every three hours, and the
+ * figures printed only where the box is wide enough to hold them (a
+ * container query); the title and the screen reader keep every figure.
  */
 export function HourHeatmap({
   caption,
@@ -64,6 +69,7 @@ export function HourHeatmap({
   isClassHour,
   cellTitle,
   footer,
+  compact = false,
 }: {
   caption: string;
   /** The (screen-reader) header of the rows' column. */
@@ -72,6 +78,7 @@ export function HourHeatmap({
   isClassHour: (row: number, hour: number) => boolean;
   cellTitle: (row: HeatRow, hour: number, n: number, off: boolean) => string;
   footer?: { label: string; title: (hour: number, n: number) => string };
+  compact?: boolean;
 }) {
   const top = Math.max(0, ...rows.flatMap((r) => r.hours));
   const sums = HOURS.map((h) => rows.reduce((s, r) => s + (r.hours[h] ?? 0), 0));
@@ -80,11 +87,16 @@ export function HourHeatmap({
     // The grid scrolls inside its card on a phone; the page never does.
     // `relative`: the cells' `sr-only` words are positioned against this
     // box, so they scroll with it instead of widening the page.
-    <div className="relative -mx-4 overflow-x-auto px-4">
-      <table className="w-full min-w-[46rem] table-fixed border-separate border-spacing-0.5 text-[11px] tabular-nums">
+    <div className={compact ? "@container relative overflow-x-auto" : "relative -mx-4 overflow-x-auto px-4"}>
+      <table
+        className={cx(
+          "w-full table-fixed border-separate border-spacing-0.5 tabular-nums",
+          compact ? "text-[10px]" : "min-w-[46rem] text-[11px]",
+        )}
+      >
         <caption className="sr-only">{caption}</caption>
         <colgroup>
-          <col className="w-24" />
+          <col className={compact ? "w-10" : "w-24"} />
           {HOURS.map((h) => (
             <col key={h} />
           ))}
@@ -96,7 +108,7 @@ export function HourHeatmap({
             </th>
             {HOURS.map((h) => (
               <th key={h} scope="col" className="pb-1 text-center font-normal text-fg-faint">
-                <span aria-hidden>{h}</span>
+                {compact && h % 3 !== 0 ? null : <span aria-hidden>{h}</span>}
                 <span className="sr-only">{`${padHour(h)}:00`}</span>
               </th>
             ))}
@@ -123,12 +135,19 @@ export function HourHeatmap({
                     title={cellTitle(row, h, value, off)}
                     data-off={off || undefined}
                     className={cx(
-                      "h-7 rounded-[3px] p-0 text-center align-middle",
+                      "rounded-[3px] p-0 text-center align-middle",
+                      compact ? "h-5" : "h-7",
                       step === 0 ? "bg-surface-2 text-fg-faint" : STEPS[step - 1],
                       off && OFF_HOURS,
                     )}
                   >
-                    {value > 0 ? value : <span className="sr-only">0</span>}
+                    {value === 0 ? (
+                      <span className="sr-only">0</span>
+                    ) : compact ? (
+                      <span className="sr-only @lg:not-sr-only">{value}</span>
+                    ) : (
+                      value
+                    )}
                   </td>
                 );
               })}

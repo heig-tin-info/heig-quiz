@@ -224,14 +224,13 @@ export type DrillHoursQuery = z.infer<typeof DrillHoursQuery>;
  * WHEN the drill is practised (ADR-041 §8, amendment of 2026-10-14): the last
  * 30 days folded on one week, Europe/Zurich time — seven rows, Monday first,
  * of 24 hours. A cell of the classroom's grid counts the distinct students
- * who reviewed in that slot; of one student's grid, their reviews. `total`
- * and `offHoursShare` (outside Monday–Friday 08–18) are in the same unit,
- * the share null when the grid is empty.
+ * who reviewed in that slot; of one student's grid, their reviews.
+ * `offHoursShare` (outside Monday–Friday 08–18) is in the same unit, and
+ * null when the grid is empty: the one sign of an empty grid.
  */
 export const DrillHours = z.object({
   /** The first local day of the window, `YYYY-MM-DD`. */
   since: z.iso.date(),
-  total: z.number().int().nonnegative(),
   offHoursShare: z.number().min(0).max(1).nullable(),
   days: z.array(z.array(z.number().int().nonnegative()).length(24)).length(7),
 });

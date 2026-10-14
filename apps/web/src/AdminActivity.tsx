@@ -22,8 +22,6 @@ import {
   useClassHoursWindow,
 } from "./ui";
 
-export { heatStep } from "./ui";
-
 /** Whose activity the grid shows. */
 export type ActivityWho = "all" | "students" | "staff";
 

@@ -45,7 +45,8 @@ import {
   drillMastery,
   drillWeekStarts,
   type MasteryLine,
-  offHoursWeekShare,
+  isWeekdayClassHour,
+  offHoursShare,
 } from "@quiz/domain";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
 
@@ -205,29 +206,21 @@ export async function classroomHours(
   enrollmentId: string | null,
   now: Date,
 ): Promise<DrillHours | null> {
-  if (enrollmentId !== null && !(await isStudentSeat(db, classroomId, enrollmentId))) return null;
+  const one = enrollmentId !== null;
+  if (one && !(await isStudentSeat(db, classroomId, enrollmentId))) return null;
   const v = visibleReviews(db, classroomId);
   const from = last30(now);
   const local = sql`(${v.reviewedAt} at time zone ${ZONE})`;
   const weekday = sql<number>`(extract(isodow from ${local})::int - 1)`;
   const hour = sql<number>`extract(hour from ${local})::int`;
   const rows = await db
-    .select({
-      weekday,
-      hour,
-      n: enrollmentId === null ? sql<number>`count(distinct ${v.userId})::int` : sql<number>`count(*)::int`,
-    })
+    .select({ weekday, hour, n: one ? sql<number>`count(*)::int` : sql<number>`count(distinct ${v.userId})::int` })
     .from(v)
-    .where(and(since(v, from), enrollmentId === null ? undefined : eq(v.enrollmentId, enrollmentId)))
+    .where(and(since(v, from), one ? eq(v.enrollmentId, enrollmentId) : undefined))
     .groupBy(weekday, hour);
   const days = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
   for (const r of rows) days[r.weekday]![r.hour] = r.n;
-  return {
-    since: localDate(from),
-    total: rows.reduce((sum, r) => sum + r.n, 0),
-    offHoursShare: offHoursWeekShare(days),
-    days,
-  };
+  return { since: localDate(from), offHoursShare: offHoursShare(days, isWeekdayClassHour), days };
 }
 
 /**

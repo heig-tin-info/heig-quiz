@@ -51,40 +51,22 @@ export function datesEndingOn(today: string): string[] {
   );
 }
 
-/** One day of the grid, as far as the share needs it: 24 hours of student counts. */
-export interface StudentHours {
-  date: string;
-  hours: readonly { students: number }[];
-}
-
 /**
- * The share (0–1) of the students' person-hours of `days` that fall outside
- * class hours; null when there is none to share.
+ * The share (0–1) of a grid's figures — rows of 24 hourly counts — that fall
+ * outside class hours, as `isClassHour(row, hour)` decides for the grid's
+ * rows (dated days for the platform, ADR-107; weekdays for the drill,
+ * ADR-041 §8); null when the grid holds nothing. The unit is the grid's own.
  */
-export function offHoursStudentShare(days: readonly StudentHours[]): number | null {
+export function offHoursShare(
+  rows: readonly (readonly number[])[],
+  isClassHour: (row: number, hour: number) => boolean,
+): number | null {
   let all = 0;
   let outside = 0;
-  for (const day of days) {
-    day.hours.forEach((cell, hour) => {
-      all += cell.students;
-      if (!isClassHour(day.date, hour)) outside += cell.students;
-    });
-  }
-  return all === 0 ? null : outside / all;
-}
-
-/**
- * The share (0–1) of a week's grid — seven rows, Monday first, of 24 hourly
- * figures — that falls outside class hours; null when the grid is empty.
- * The unit is the grid's own (the drill's students or reviews, ADR-041 §8).
- */
-export function offHoursWeekShare(days: readonly (readonly number[])[]): number | null {
-  let all = 0;
-  let outside = 0;
-  days.forEach((hours, weekday) =>
+  rows.forEach((hours, row) =>
     hours.forEach((n, hour) => {
       all += n;
-      if (!isWeekdayClassHour(weekday, hour)) outside += n;
+      if (!isClassHour(row, hour)) outside += n;
     }),
   );
   return all === 0 ? null : outside / all;

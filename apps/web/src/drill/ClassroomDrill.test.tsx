@@ -102,8 +102,7 @@ const base = "/app/api/classrooms/r1/drill";
 const hoursOf = (cells: [number, number, number][]): DrillHours => {
   const days = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
   for (const [d, h, n] of cells) days[d]![h] = n;
-  const total = cells.reduce((a, [, , n]) => a + n, 0);
-  return { since: "2026-10-21", total, offHoursShare: total === 0 ? null : 0.2, days };
+  return { since: "2026-10-21", offHoursShare: cells.length === 0 ? null : 0.2, days };
 };
 /** Wednesday 09:00 (class hours) and Saturday 00:00 (outside). */
 const HOURS = hoursOf([

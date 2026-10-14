@@ -375,11 +375,12 @@ of a missing card.
   first, of 24 counts: distinct students per slot for the class, reviews for
   one seat (a seat that is not a student seat of the classroom is the 404 of
   the progression). The off-hours share — outside Monday to Friday 08:00–18:00,
-  ADR-107's window, `isWeekdayClassHour` — is in the grid's own unit. The
+  ADR-107's window, `isWeekdayClassHour` — is in the grid's own unit, computed by
+  the same `offHoursShare` as the administrator's. The
   screen draws it on the administrator's heatmap (`ui/heatmap.tsx`): under the
   table of students in the Drill tab, and in a student's sheet below the
-  weekly charts; a grid with no review in 30 days is one line, not an empty
-  grid.
+  weekly charts, there in its compact form that fits the sheet; a grid with
+  no review in 30 days (a null share) is one line, not an empty grid.
 - **After an opt-out**, a review is not counted in any read (28 (k)); the
   opt-out's date is on the row (former §13 item 5). **Mastery** reads each
   card's current state, the retrievability now of FSRS: an opted-out student's

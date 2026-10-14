@@ -24,7 +24,7 @@ import { drillRecallCounts, type DrillReviewFact } from "@quiz/domain";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
 import { registerForTests } from "@quiz/registry/server";
 
-import { classrooms, conceptRelations, concepts, drillCards, drillReviews, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
+import { classrooms, conceptRelations, concepts, courseStaff, drillCards, drillReviews, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
@@ -470,18 +470,24 @@ describe("the teacher's view of the drill: hours of the week", () => {
     expect((await get(`/app/api/classrooms/${randomUUID()}/drill/hours`, teacher)).statusCode).toBe(404);
   });
 
+  it("is served to an assistant of the course, for the class and for one student", async () => {
+    const assistant = await server.signIn("teacher");
+    await server.app.db.insert(courseStaff).values({ courseId: seed.courseId, userId: assistant.id, role: "assistant" });
+    expect((await get(`${base()}/hours`, assistant)).statusCode).toBe(200);
+    expect((await get(`${base()}/hours?student=${await seatOf(seed, bob.id)}`, assistant)).statusCode).toBe(200);
+  });
+
   it("counts the distinct students of each Zurich weekday and hour over the last 30 days", async () => {
     const h = await hours();
     expect(h.since).toBe("2026-10-21");
     expect(cells(h)).toEqual({ [`${WED}/9`]: 2, [`${THU}/9`]: 1, [`${SAT}/0`]: 1, [`${WED}/13`]: 1 });
-    expect(h.total).toBe(5);
     expect(h.offHoursShare).toBeCloseTo(1 / 5, 9);
   });
 
   it("counts one student's reviews, in the same unit for the share", async () => {
     const a = await hours(`?student=${await seatOf(seed, alice.id)}`);
     expect(cells(a)).toEqual({ [`${WED}/9`]: 2, [`${THU}/9`]: 1 });
-    expect(a).toMatchObject({ total: 3, offHoursShare: 0 });
+    expect(a.offHoursShare).toBe(0);
     const b = await hours(`?student=${await seatOf(seed, bob.id)}`);
     expect(cells(b)).toEqual({ [`${WED}/9`]: 1, [`${SAT}/0`]: 1, [`${WED}/13`]: 1 });
     expect(b.offHoursShare).toBeCloseTo(1 / 3, 9);
@@ -489,7 +495,7 @@ describe("the teacher's view of the drill: hours of the week", () => {
 
   it("leaves out what came after an opt-out (28 (k)), and answers an empty grid with a null share", async () => {
     const c = await hours(`?student=${await seatOf(seed, carol.id)}`);
-    expect(c).toMatchObject({ total: 0, offHoursShare: null });
+    expect(c.offHoursShare).toBeNull();
     expect(c.days.flat().every((n) => n === 0)).toBe(true);
   });
 });

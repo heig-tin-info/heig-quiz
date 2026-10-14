@@ -34,7 +34,7 @@ import type {
   StudentConceptMastery,
   EvaluationDrill,
 } from "@quiz/contracts";
-import { allowDrillWritable, DRILL_TYPES, drillWeekStarts, localDate, offHoursWeekShare } from "@quiz/domain";
+import { allowDrillWritable, DRILL_TYPES, drillWeekStarts, isWeekdayClassHour, localDate, offHoursShare } from "@quiz/domain";
 
 import { conceptRefs, seedConceptIds } from "./concept";
 import { evaluationOr404, evaluations, toEvaluation, type MockEvaluation } from "./evaluation";
@@ -394,8 +394,7 @@ on("GET", "/app/api/classrooms/:id/drill/hours", (m, _body, url): DrillHours => 
   );
   return {
     since: localDate(new Date(now - 30 * D)),
-    total: days.flat().reduce((a, n) => a + n, 0),
-    offHoursShare: offHoursWeekShare(days),
+    offHoursShare: offHoursShare(days, isWeekdayClassHour),
     days,
   };
 });
