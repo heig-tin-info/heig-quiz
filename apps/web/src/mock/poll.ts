@@ -1388,17 +1388,15 @@ const LIVE_STATES = new Set(["lobby", "running", "paused"]);
 
 on("GET", "/app/api/activities", (): ActivitySummary[] => teacherActivities());
 
-/** The server's rule: the class members of the classrooms holding an open activity, each once. */
+/** The server's rule: the class members of the classrooms holding an open activity, each once; and each one's class size. */
 on("GET", "/app/api/activities/stats", (): ActivityStats => {
-  const open = new Set(
-    teacherActivities()
-      .filter((a) => activityBucket(a.state) === "open" && a.classroom !== null)
-      .map((a) => a.classroom!.id),
-  );
-  const emails = rooms
-    .filter((r) => open.has(r.id))
-    .flatMap((r) => r.roster.filter((s) => !s.staff).map((s) => s.email));
-  return { studentsInProgress: new Set(emails).size };
+  const open = teacherActivities().filter((a) => activityBucket(a.state) === "open" && a.classroom !== null);
+  const students = (id: string) =>
+    (rooms.find((r) => r.id === id)?.roster ?? []).filter((s) => !s.staff).map((s) => s.email);
+  return {
+    studentsInProgress: new Set(open.flatMap((a) => students(a.classroom!.id))).size,
+    classSizes: open.map((a) => new Set(students(a.classroom!.id)).size),
+  };
 });
 
 function teacherActivities(): ActivitySummary[] {

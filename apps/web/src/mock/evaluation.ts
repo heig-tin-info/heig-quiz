@@ -765,8 +765,9 @@ if (!flags.empty) seedEvaluations();
 
 /**
  * A semester of weekly take-home series in EMB-2026 (#190): what the
- * Activities section is for — the four behind (two published, two waiting
- * for their grading), this week's open, and the five ahead scheduled. Each
+ * Activities section is for — the four behind (three published, last week's
+ * closed and its results not out: with the closed exam of PRG1, the summary's
+ * two to release), this week's open, and the five ahead scheduled. Each
  * opens on a Monday at 08:00 and closes the Sunday after at 23:59.
  */
 function seedSeries() {
@@ -779,7 +780,7 @@ function seedSeries() {
     const closes = new Date(opens);
     closes.setDate(closes.getDate() + 6);
     closes.setHours(23, 59, 0, 0);
-    const state = week < -2 ? "released" : week < 0 ? "closed" : week === 0 ? "running" : "scheduled";
+    const state = week < -1 ? "released" : week < 0 ? "closed" : week === 0 ? "running" : "scheduled";
     const e = makeEvaluation("r3", `Série ${week + 5} — ${SERIES[week + 4]}`, state, 0, {
       mode: "exercise",
       durationS: null,
@@ -788,7 +789,7 @@ function seedSeries() {
       closesAt: closes.toISOString(),
       startedAt: week <= 0 ? opens.toISOString() : null,
       closedAt: week < 0 ? closes.toISOString() : null,
-      releasedAt: week < -2 ? closes.toISOString() : null,
+      releasedAt: week < -1 ? closes.toISOString() : null,
       createdAt: iso(-40 * D),
     });
     evaluations.push(e);

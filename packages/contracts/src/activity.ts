@@ -75,8 +75,16 @@ export type ActivityList = z.infer<typeof ActivityList>;
  * count from the rows. `studentsInProgress` is the class members (staff
  * seats excluded) of the classrooms holding an open activity, each counted
  * once across classrooms — an anonymous poll has none.
+ *
+ * `classSizes` is one number per open activity that has a classroom (an
+ * anonymous poll has none, so it is absent), in no particular order: the size
+ * of that classroom by the same rule (enrollments, not staff, one per email).
+ * It is the class an activity is open to, NOT how many are taking part; two
+ * activities of one classroom both count its whole class. The Activities
+ * summary draws one segment per entry.
  */
 export const ActivityStats = z.object({
   studentsInProgress: z.number().int().nonnegative(),
+  classSizes: z.array(z.number().int().nonnegative()),
 });
 export type ActivityStats = z.infer<typeof ActivityStats>;

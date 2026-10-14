@@ -42,20 +42,30 @@ export async function listForTeacher(db: Db, caller: Caller, now: Date): Promise
  * access predicates and nothing new (invariant 6); "open" is
  * `activityBucket`, the page's own rule. A student is an enrollment that is
  * not a staff seat, known by its email (claimed or not), so one enrolled in
- * two of those classrooms counts once.
+ * two of those classrooms counts once. `classSizes` is each open
+ * activity's class size by the same rule, from one GROUP BY over the same
+ * classrooms.
  */
 export async function statsForTeacher(db: Db, caller: Caller, now: Date): Promise<ActivityStats> {
-  const open = new Set(
-    (await listForTeacher(db, caller, now))
-      .filter((a) => activityBucket(a.state) === "open" && a.classroom !== null)
-      .map((a) => a.classroom!.id),
+  const open = (await listForTeacher(db, caller, now)).filter(
+    (a) => activityBucket(a.state) === "open" && a.classroom !== null,
   );
-  if (open.size === 0) return { studentsInProgress: 0 };
-  const [row] = await db
-    .select({ n: countDistinct(enrollments.email) })
-    .from(enrollments)
-    .where(and(inArray(enrollments.classroomId, [...open]), eq(enrollments.staff, false)));
-  return { studentsInProgress: row?.n ?? 0 };
+  if (open.length === 0) return { studentsInProgress: 0, classSizes: [] };
+  const classroomIds = [...new Set(open.map((a) => a.classroom!.id))];
+  const students = and(inArray(enrollments.classroomId, classroomIds), eq(enrollments.staff, false));
+  const [[total], perClassroom] = await Promise.all([
+    db.select({ n: countDistinct(enrollments.email) }).from(enrollments).where(students),
+    db
+      .select({ classroomId: enrollments.classroomId, n: countDistinct(enrollments.email) })
+      .from(enrollments)
+      .where(students)
+      .groupBy(enrollments.classroomId),
+  ]);
+  const size = new Map(perClassroom.map((r) => [r.classroomId, r.n]));
+  return {
+    studentsInProgress: total?.n ?? 0,
+    classSizes: open.map((a) => size.get(a.classroom!.id) ?? 0),
+  };
 }
 
 /** What every kind adds to the student's Activities: its cards, and the running polls. */

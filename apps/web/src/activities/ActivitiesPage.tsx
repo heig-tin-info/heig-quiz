@@ -31,6 +31,7 @@ import { endable, useEndPoll } from "./actions";
 import {
   activityOrder,
   awaitsRelease,
+  inNextDays,
   isLive,
   isScheduled,
   matchesType,
@@ -105,6 +106,8 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const [unreleased, setUnreleased] = useState(false);
   // The current tab narrowed to what is in the pipe (#787): scheduled, of either kind.
   const [scheduled, setScheduled] = useState(false);
+  // The current tab narrowed to what opens or closes in the next seven days (the summary's tile).
+  const [nextDays, setNextDays] = useState(false);
   const { end, pending } = useEndPoll();
   const wide = useMinWidth(640);
 
@@ -112,28 +115,30 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const live = ordered.filter((row): row is EvaluationActivitySummary => isLive(row, now));
   const typed = ordered.filter((row) => matchesType(row, types));
   const inTab = (t: Tab) => typed.filter((row) => tabOf(row) === t);
-  // The one narrowing chip of the open tab, if pressed: what it keeps.
-  // As the chip shows: only where it can find something, so the last
+  // The narrowing chips of the open tab, if pressed: what they keep.
+  // As a chip shows: only where it can find something, so the last
   // scheduled row opening drops the filter instead of emptying the tab.
-  const narrow =
-    unreleased && tab === "ended"
-      ? awaitsRelease
-      : scheduled && tab === "current" && ordered.some(isScheduled)
-        ? isScheduled
-        : null;
-  const narrowing = narrow !== null;
-  const shown = inTab(tab).filter((row) => narrow === null || narrow(row));
+  const soon = (row: ActivitySummary) => inNextDays(row, now);
+  const narrows = [
+    unreleased && tab === "ended" ? awaitsRelease : null,
+    scheduled && tab === "current" && ordered.some(isScheduled) ? isScheduled : null,
+    nextDays && tab === "current" && ordered.some(soon) ? soon : null,
+  ].filter((keep) => keep !== null);
+  const narrowing = narrows.length > 0;
+  const shown = inTab(tab).filter((row) => narrows.every((keep) => keep(row)));
   const tabTotal = ordered.filter((row) => tabOf(row) === tab).length;
   const filtering = types.size > 0 || narrowing;
   const clearFilters = () => {
     setTypes(new Set());
     setUnreleased(false);
     setScheduled(false);
+    setNextDays(false);
   };
   const pick = (target: SummaryTarget) => {
     clearFilters();
     setTab(target === "toRelease" ? "ended" : "current");
     if (target === "toRelease") setUnreleased(true);
+    if (target === "week") setNextDays(true);
     if (target === "projects") setTypes(new Set(["project"]));
   };
   // A type chip only where there is a row of that type to find: a chip that
@@ -251,6 +256,16 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
                 label={t("activities.filter.scheduled")}
                 pressed={scheduled}
                 onToggle={() => setScheduled((v) => !v)}
+              />
+            </>
+          ) : null}
+          {tab === "current" && ordered.some(soon) ? (
+            <>
+              <span aria-hidden className="mx-1 hidden h-5 w-px bg-line sm:block" />
+              <ToggleChip
+                label={t("activities.summary.week")}
+                pressed={nextDays}
+                onToggle={() => setNextDays((v) => !v)}
               />
             </>
           ) : null}
