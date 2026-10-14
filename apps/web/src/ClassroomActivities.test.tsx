@@ -57,13 +57,19 @@ function project(n: number, over: Partial<ProjectActivitySummary> = {}): Project
   };
 }
 
-function render(evaluations: EvaluationSummary[], projects: ProjectActivitySummary[]) {
+function render(
+  evaluations: EvaluationSummary[],
+  projects: ProjectActivitySummary[],
+  archived: ProjectActivitySummary[] = [],
+  navigate = vi.fn(),
+) {
   mockFetch({
     [`GET /app/api/classrooms/${CLASSROOM}/evaluations`]: ok(evaluations),
     [`GET /app/api/classrooms/${CLASSROOM}/projects`]: ok(projects),
+    [`GET /app/api/classrooms/${CLASSROOM}/projects?archived=1`]: ok(archived),
   });
   return renderWithProviders(
-    <ClassroomActivities classroomId={CLASSROOM} navigate={vi.fn()} doors={{ onNew: vi.fn() }} />,
+    <ClassroomActivities classroomId={CLASSROOM} navigate={navigate} doors={{ onNew: vi.fn() }} />,
   ).queryClient;
 }
 
@@ -226,5 +232,37 @@ describe("ClassroomActivities", () => {
     render([], [project(1, { title: "Only a lab" })]);
     expect(await screen.findByText("Only a lab")).toBeInTheDocument();
     expect(screen.queryByText(/no evaluation yet/i)).toBeNull();
+  });
+
+  it("finds an archived project again behind “Show archived”, opening its page (#864)", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    render([evaluation(1)], [project(1, { title: "Running lab" })], [project(2, { title: "Old lab" })], navigate);
+    const toggle = await screen.findByRole("button", { name: /Show archived \(1\)/, pressed: false });
+    expect(screen.queryByText("Old lab")).toBeNull();
+
+    await user.click(toggle);
+    const archived = within(section("Archived projects")!);
+    const row = archived.getByText("Old lab").closest("tr")!;
+    // No timer on an archived row: its word, not the time left.
+    expect(within(row).getByText("published")).toBeInTheDocument();
+    expect(within(section("Projects")!).queryByText("Old lab")).toBeNull();
+    await user.click(row);
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ view: "project", id: id("project", 2) }));
+
+    await user.click(screen.getByRole("button", { name: /Show archived \(1\)/, pressed: true }));
+    expect(section("Archived projects")).toBeNull();
+  });
+
+  it("offers the toggle under the empty state when every project is archived", async () => {
+    render([], [], [project(2, { title: "Old lab" })]);
+    expect(await screen.findByRole("button", { name: /Show archived \(1\)/ })).toBeInTheDocument();
+    expect(screen.getByText(/no evaluation yet/i)).toBeInTheDocument();
+  });
+
+  it("offers no toggle when nothing is archived", async () => {
+    render([evaluation(1)], [project(1)]);
+    expect(await screen.findByText("Labo 1")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Show archived/ })).toBeNull();
   });
 });

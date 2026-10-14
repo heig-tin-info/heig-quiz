@@ -602,6 +602,8 @@ describe("the lists, archive and unarchive (F-PROJ-16)", () => {
     expect((await list()).map((p) => p.id)).toEqual([kept.id]);
     expect((await list()).at(0)).toMatchObject({ kind: "project", title: "Lab 1", state: "draft", classroom: { id: room.id } });
     expect((await list("?archived=1")).map((p) => p.id)).toEqual([archived.id]);
+    // The colleague on the staff reads the archive too.
+    expect((await call("GET", `${base(room.id)}?archived=1`, colleague.headers)).json().map((p: { id: string }) => p.id)).toEqual([archived.id]);
 
     const activities = ActivitySummary.array().parse((await call("GET", "/app/api/activities", teacher.headers)).json());
     const mine = activities.filter((a) => a.kind === "project").map((a) => a.id);
@@ -875,7 +877,8 @@ describe("who reaches a project (invariant 6)", () => {
       ["a teacher's impersonation", await sessionOf(teacher.id, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null })],
     ];
     const seb = await sessionOf(teacher.id, { kind: "seb", actorUserId: null, projectId: null, evaluationId: seeded.evaluationId });
-    for (const url of [`/app/api/projects/${project.id}`, base(room.id), `${base(room.id)}/sources`]) {
+    // The archive (`?archived=1`, #864's "Show archived") is behind the same 404.
+    for (const url of [`/app/api/projects/${project.id}`, base(room.id), `${base(room.id)}?archived=1`, `${base(room.id)}/sources`]) {
       for (const [who, headers] of callers) {
         const res = await call("GET", url, headers);
         expect([res.statusCode, res.json().error], `${who} GET ${url}`).toEqual([404, "not_found"]);

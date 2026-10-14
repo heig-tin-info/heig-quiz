@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
-import { ProjectPatch, type ProjectActivitySummary } from "@quiz/contracts";
+import { ProjectPatch, type ProjectActivitySummary, type ProjectListQuery } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
@@ -16,11 +16,16 @@ type Renamed = Pick<ProjectActivitySummary, "id" | "title">;
  * `GET /classrooms/:id/projects` (M3-02), archived ones excepted: the
  * projects of a classroom's Activities tab (`ClassroomActivities`, M3-10).
  * A platform without the App answers 404, which the tab reads as none.
+ * `archived` reads the archive instead (`?archived=1`, #864), under the
+ * active list's key: whatever refreshes one — an archive, a restore —
+ * refreshes both.
  */
-export function useClassroomProjects(classroomId: string) {
+export function useClassroomProjects(classroomId: string, archived = false) {
+  const path = `/app/api/classrooms/${classroomId}/projects`;
   return useQuery<ProjectActivitySummary[]>({
-    queryKey: classroomProjectsKey(classroomId),
-    queryFn: () => api(`/app/api/classrooms/${classroomId}/projects`),
+    queryKey: archived ? [...classroomProjectsKey(classroomId), "archived"] : classroomProjectsKey(classroomId),
+    queryFn: () =>
+      api(archived ? `${path}?${new URLSearchParams({ archived: "1" } satisfies ProjectListQuery)}` : path),
   });
 }
 
