@@ -96,12 +96,12 @@ The assistant is absent from the student view, from a session acting as a studen
 
 ## Notifications
 
-The bell beside the account row collects what happened to you while you were elsewhere: a colleague shared a pool with you, naming the role they gave you; the ownership of a pool was transferred to you; students joined one of your classrooms; roster entries need your decision. Events of one classroom are counted in one entry ("3 students joined PRG1-2026") until you read it. An unread count sits on the bell, **Mark all as read** clears it, and a notification is a link to the pool or the roster it talks about.
+**Notifications**, in the account menu (your name, at the bottom of the sidebar), collects what happened to you while you were elsewhere: a colleague shared a pool with you, naming the role they gave you; the ownership of a pool was transferred to you; students joined one of your classrooms; roster entries need your decision. Events of one classroom are counted in one entry ("3 students joined PRG1-2026") until you read it. An unread count sits on your avatar and on the menu entry, **Mark all as read** clears it, and a notification is a link to the pool or the roster it talks about.
 
 <figure markdown="span">
   ![The notifications panel](../assets/screenshots/notifications-light.png#only-light)
   ![The notifications panel](../assets/screenshots/notifications-dark.png#only-dark)
-  <figcaption>The notifications panel, here with nothing new.</figcaption>
+  <figcaption>The notifications panel: a grading pass that finished and students who joined a classroom, both unread.</figcaption>
 </figure>
 
 A notification that arrives while the platform is open also shows as a brief toast in the corner, except on a full-screen page (an exam, a projection) and on the live dashboard, which may be on a beamer. The bell still counts it.

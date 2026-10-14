@@ -331,13 +331,13 @@ const scenes = [
     settle: 5000,
     fullPage: true,
     act: async (p) => {
-      await p.getByRole("button", { name: /^run$/i }).first().click();
+      await p.getByRole("button", { name: /^run the tests$/i }).first().click();
       await p.getByText(/^Compiled$/).first().waitFor({ timeout: 90000 });
-      await p.getByRole("button", { name: /^grade my answer$/i }).first().click();
+      await p.getByRole("button", { name: /^run all the tests$/i }).first().click();
       await p.getByRole("button", { name: /^try again$/i }).waitFor({ timeout: 90000 });
       await p.waitForTimeout(500);
     },
-    action: "Clicked “Run” on the visible cases, then “Grade my answer”, with the template as it is.",
+    action: "Clicked “Run the tests” on the visible cases, then “Run all the tests”, with the template as it is.",
     state: "As seeded; a real code runner compiled and ran the program.",
   },
   {
@@ -566,7 +566,8 @@ const scenes = [
     path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
     act: async (p) => {
       await p.locator("tbody tr").nth(1).click();
-      await p.getByRole("dialog").getByRole("button", { name: /^adjust$/i }).click();
+      // A side pane at this width, a dialog on a narrow one.
+      await p.locator("aside, [role=dialog]").getByRole("button", { name: /^adjust$/i }).first().click();
     },
     action: "Opened the first answer and clicked “Adjust” in its panel.",
     state: TEST0_GRADED,
@@ -676,15 +677,18 @@ const scenes = [
     state: "The same poll after the teacher ended it.",
   },
 
-  // Chrome: bell, palette, settings, admin
+  // Chrome: notifications, palette, settings, admin
   {
     name: "notifications",
-    caption: "The notifications bell, here with nothing new: a pool shared with you shows up in it.",
+    caption: "The notifications, opened from the account menu: a grading pass that finished, students who joined a classroom.",
     persona: "teacher",
     path: "/",
     phase: "running",
-    act: (p) => p.getByRole("button", { name: /^notifications/i }).first().click(),
-    action: "Clicked the bell in the header.",
+    act: async (p) => {
+      await p.getByRole("button", { name: /^user menu/i }).first().click();
+      await p.getByRole("menuitem", { name: /^notifications/i }).first().click();
+    },
+    action: "Opened the account menu and clicked “Notifications”.",
     state: "After the exercise started and Noah handed in.",
   },
   {
@@ -840,11 +844,11 @@ const scenes = [
     act: async (p) => {
       await openQuestion(p, 5);
       await p.waitForTimeout(3000);
-      await p.getByRole("button", { name: /^run$/i }).first().click();
+      await p.getByRole("button", { name: /^run the tests$/i }).first().click();
       await p.getByText(/^Compiled$/).first().waitFor({ timeout: 90000 });
       await p.waitForTimeout(800);
     },
-    action: "Moved to question 5, clicked “Run”, waited for “Compiled”.",
+    action: "Moved to question 5, clicked “Run the tests”, waited for “Compiled”.",
     state: "“Quiz d'entraînement” running; Léa's region holds a solution.",
   },
   {
@@ -1107,7 +1111,10 @@ const revision = () => Math.floor((Date.now() - Date.UTC(2026, 0, 1)) / 1000);
 
 /** Enters the evaluation as a student and returns the attempt view (or null in the lobby). */
 async function enter(api, evaluationId) {
-  const r = await api.post(`/app/api/evaluations/${evaluationId}/attempt`, {});
+  let r = await api.post(`/app/api/evaluations/${evaluationId}/attempt`, {});
+  // Entering a running evaluation is not starting it: a student with no
+  // attempt yet gets the ready screen, and Start is its own click.
+  if (r.kind === "ready") r = await api.post(`/app/api/evaluations/${evaluationId}/attempt/start`, {});
   return r.kind === "attempt" ? r.view : null;
 }
 
@@ -1120,6 +1127,8 @@ async function answer(api, view, itemIndex, variant) {
     payload: answerFor(item, variant),
     revision: revision(),
     clientTs: new Date().toISOString(),
+    // ADR-097: the choices are named by the positions the view shows.
+    coordinates: "position",
   });
 }
 
@@ -1161,7 +1170,8 @@ const prepare = {
     await tolerant("the code answers of “Test 0” are graded by the runner", async () => {
       const progress = await teacher.get(`/app/api/evaluations/${closed.id}/grading/progress`);
       if (progress.pending.runner === 0) return;
-      const health = await teacher.get("/healthz");
+      // The checks of /healthz are an administrator's to read (audit L21).
+      const health = await world.api.admin.get("/healthz");
       if (health.checks?.runner !== "up") throw new Error(`runner is ${health.checks?.runner}`);
       await teacher.post(`/app/api/evaluations/${closed.id}/grading/run`, {});
       for (let i = 0; i < 120; i += 1) {
@@ -1320,6 +1330,9 @@ async function capture(world, scene, theme, phone) {
         try {
           localStorage.setItem("quiz-locale", "en");
           localStorage.setItem("quiz-theme", t);
+          // No festive costume on the logo (ADR-093): a screenshot must not
+          // depend on the day it was taken.
+          localStorage.setItem("quiz-festive", "off");
           for (const [k, v] of Object.entries(storage)) localStorage.setItem(k, v);
           // An exam ignores the browser's Answers and Results (#796): a
           // dashboard scene carries them over as this tab's choice. The ids
@@ -1412,8 +1425,12 @@ const commit = (() => {
 const takenAt = new Date().toISOString();
 
 const world = { api: {}, held: [], browser: await chromium.launch() };
-for (const persona of ["teacher", "lea", "noah", "emma", "louis"]) {
+for (const persona of ["teacher", "lea", "noah", "emma", "louis", "admin"]) {
   world.api[persona] = await Api.open(persona);
+  // On a fresh seed every entry of changes/ is unread, and "What's new"
+  // (ADR-087) covers the home and the lists until it is closed. Closing it
+  // is remembered by the server, so each persona reads it once, here.
+  await tolerant(`${persona} has read “What's new”`, () => world.api[persona].post("/app/api/me/changelog", {}));
 }
 await discover(world);
 console.log(`world: course ${world.course.code}, classroom ${world.classroom.name}, pool “${world.pool.name}”, ${Object.keys(world.evals).length} evaluations`);

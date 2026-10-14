@@ -83,16 +83,16 @@ A categorize question is scored on the spot, card by card, and its gradings arri
 A blocks question arrives validated, warehouse by warehouse. Opened, it shows the student's program on a read-only workspace, the table of warehouses with each verdict (**Dock reached**, **Collision**, **Battery empty**, **Endless loop** or **Stopped short**), the selected warehouse drawn with the path the robot took, hidden ones included, and the **Reference solution** underneath. A student sees a hidden warehouse in full only when the expected answer is shown. Sort the table by the program column to bring identical programs together.
 
 <figure markdown="span">
-  ![Grading a code-to-picture question while the runner is away](../assets/screenshots/grading-codeimage-light.png#only-light)
-  ![Grading a code-to-picture question while the runner is away](../assets/screenshots/grading-codeimage-dark.png#only-dark)
-  <figcaption>A code-to-picture question: the program, and the picture it drew once the runner has run it; here the runner was away, so `runner…` stands in for it.</figcaption>
+  ![Grading a code-to-picture question](../assets/screenshots/grading-codeimage-light.png#only-light)
+  ![Grading a code-to-picture question](../assets/screenshots/grading-codeimage-dark.png#only-dark)
+  <figcaption>A code-to-picture question: the program, and the picture it drew once the runner has run it.</figcaption>
 </figure>
 
-A code-to-picture question draws the picture the program printed beside its source, the target picture on the expected row. Until the runner has run the program, the picture is `runner…` and the row is a **?**: that is what the screenshot shows, taken without a runner.
+A code-to-picture question draws the picture the program printed beside its source, the target picture on the expected row. Until the runner has run the program, the picture is `runner…` and the row is a **?**.
 
 <figure markdown="span">
-  ![Grading a circuit while the simulator is away](../assets/screenshots/grading-circuit-light.png#only-light)
-  ![Grading a circuit while the simulator is away](../assets/screenshots/grading-circuit-dark.png#only-dark)
+  ![Grading a circuit](../assets/screenshots/grading-circuit-light.png#only-light)
+  ![Grading a circuit](../assets/screenshots/grading-circuit-dark.png#only-dark)
   <figcaption>A circuit: what each schematic holds; the chip counts the stimuli passed once the simulator has run, `simulator…` until then.</figcaption>
 </figure>
 

@@ -1,6 +1,6 @@
 {
   "generatedBy": "apps/web/scripts/docs-screenshots.mjs",
-  "base": "http://localhost:3100",
+  "base": "http://localhost:3105",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -41,9 +41,9 @@
         "light": "sign-in-light.png",
         "dark": "sign-in-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "teacher-home",
@@ -64,15 +64,15 @@
         "light": "teacher-home-light.png",
         "dark": "teacher-home-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "classroom-evaluations",
       "caption": "A classroom, on its Activities tab.",
       "persona": "teacher",
-      "path": "/classrooms/2575e389-5142-40a3-be21-02108d28c242",
+      "path": "/classrooms/2902563f-bee7-4aec-b3e6-4c662b331dc3",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -87,15 +87,15 @@
         "light": "classroom-evaluations-light.png",
         "dark": "classroom-evaluations-dark.png"
       },
-      "takenAt": "2026-10-10T02:42:44.428Z",
-      "commit": "adffc1d3",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "classroom-roster",
       "caption": "The same classroom, on its roster tab.",
       "persona": "teacher",
-      "path": "/classrooms/0df3b5ef-4264-42ea-8f93-3dbbe9ead93e?tab=roster",
+      "path": "/classrooms/2902563f-bee7-4aec-b3e6-4c662b331dc3?tab=roster",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -110,15 +110,15 @@
         "light": "classroom-roster-light.png",
         "dark": "classroom-roster-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "roster-import",
       "caption": "Adding students: paste a list or a CSV export.",
       "persona": "teacher",
-      "path": "/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535?tab=roster",
+      "path": "/classrooms/2902563f-bee7-4aec-b3e6-4c662b331dc3?tab=roster",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -133,15 +133,15 @@
         "light": "roster-import-light.png",
         "dark": "roster-import-dark.png"
       },
-      "takenAt": "2026-09-29T13:30:51.372Z",
-      "commit": "a6a2f17",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "help-drawer",
       "caption": "Every screen has a help drawer, opened from the question mark.",
       "persona": "teacher",
-      "path": "/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535",
+      "path": "/classrooms/2902563f-bee7-4aec-b3e6-4c662b331dc3",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -156,9 +156,9 @@
         "light": "help-drawer-light.png",
         "dark": "help-drawer-dark.png"
       },
-      "takenAt": "2026-09-29T13:30:51.372Z",
-      "commit": "a6a2f17",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "pools",
@@ -179,15 +179,15 @@
         "light": "pools-light.png",
         "dark": "pools-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "pool",
       "caption": "A pool: its categories in the sidebar, its questions in the table.",
       "persona": "teacher",
-      "path": "/pools/991bb8ed-6c6e-4beb-8988-405e5a750e2d",
+      "path": "/pools/7a41c236-bf5b-424c-9823-f21eff8d66ae",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -202,15 +202,15 @@
         "light": "pool-light.png",
         "dark": "pool-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "pool-filters",
-      "caption": "The filters of a pool: type, difficulty, tags, state.",
+      "caption": "The filters of a pool: type, difficulty, concepts, state.",
       "persona": "teacher",
-      "path": "/pools/991bb8ed-6c6e-4beb-8988-405e5a750e2d",
+      "path": "/pools/7a41c236-bf5b-424c-9823-f21eff8d66ae",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -225,15 +225,15 @@
         "light": "pool-filters-light.png",
         "dark": "pool-filters-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "pool-share",
-      "caption": "Sharing a pool with another teacher.",
+      "caption": "The Settings tab of a pool: its name, its icon and its sharing.",
       "persona": "teacher",
-      "path": "/pools",
+      "path": "/pools/7a41c236-bf5b-424c-9823-f21eff8d66ae?tab=settings",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -241,22 +241,22 @@
         "light",
         "dark"
       ],
-      "action": "Opened the row menu of the first pool and picked “Share…”.",
+      "action": "Opened the pool's Settings tab.",
       "state": "As seeded.",
       "phase": "seeded",
       "files": {
         "light": "pool-share-light.png",
         "dark": "pool-share-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "editor-mcq",
       "caption": "The editor of a multiple-choice question.",
       "persona": "teacher",
-      "path": "/questions/bb4360eb-be58-45e5-8dab-9544e0e13be7",
+      "path": "/questions/339336b0-d256-4030-ac44-d19355c49ab6",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -271,15 +271,15 @@
         "light": "editor-mcq-light.png",
         "dark": "editor-mcq-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "editor-short",
       "caption": "The editor of a short-answer question, with its matchers.",
       "persona": "teacher",
-      "path": "/questions/897e0687-f25b-4e7b-a80b-2d8f76228ebd",
+      "path": "/questions/eb5ecf94-5e63-4efa-8b3a-02fc66c8520b",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -294,15 +294,15 @@
         "light": "editor-short-light.png",
         "dark": "editor-short-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "editor-cloze",
       "caption": "The editor of a fill-in-the-blanks question.",
       "persona": "teacher",
-      "path": "/questions/bed7bd1a-e3c6-4c91-a082-7461f528b737",
+      "path": "/questions/fba50495-791d-4d60-b6e5-9c80382ddd1d",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -317,15 +317,15 @@
         "light": "editor-cloze-light.png",
         "dark": "editor-cloze-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "editor-code",
       "caption": "The editor of a code question: template, editable regions, test cases.",
       "persona": "teacher",
-      "path": "/questions/b73b2f13-d73b-4f2f-a81e-2e066d5b3851",
+      "path": "/questions/43f3ffaf-582d-47b3-b296-b860e077a1c3",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -340,15 +340,15 @@
         "light": "editor-code-light.png",
         "dark": "editor-code-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "editor-blocks",
       "caption": "The editor of a blocks question: the toolbox, the starter and reference programs, the warehouses.",
       "persona": "teacher",
-      "path": "/questions/3fd94e5f-66df-4e9c-81dd-2099359d001b",
+      "path": "/questions/a38c1007-d3be-4ef6-8e84-6edbda1567d2",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -363,15 +363,15 @@
         "light": "editor-blocks-light.png",
         "dark": "editor-blocks-dark.png"
       },
-      "takenAt": "2026-10-11T17:06:43.701Z",
-      "commit": "c6a52de2",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "editor-preview",
       "caption": "The student preview of a question, exactly what a student will see.",
       "persona": "teacher",
-      "path": "/questions/bb4360eb-be58-45e5-8dab-9544e0e13be7",
+      "path": "/questions/339336b0-d256-4030-ac44-d19355c49ab6",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -386,15 +386,15 @@
         "light": "editor-preview-light.png",
         "dark": "editor-preview-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "editor-versions",
       "caption": "The versions of a question: every publication, with its note.",
       "persona": "teacher",
-      "path": "/questions/b73b2f13-d73b-4f2f-a81e-2e066d5b3851?tab=versions",
+      "path": "/questions/43f3ffaf-582d-47b3-b296-b860e077a1c3?tab=versions",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -409,15 +409,15 @@
         "light": "editor-versions-light.png",
         "dark": "editor-versions-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "editor-publish",
       "caption": "Publishing a question: a version number and a change note.",
       "persona": "teacher",
-      "path": "/questions/bb4360eb-be58-45e5-8dab-9544e0e13be7",
+      "path": "/questions/339336b0-d256-4030-ac44-d19355c49ab6",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -432,15 +432,15 @@
         "light": "editor-publish-light.png",
         "dark": "editor-publish-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "try-mcq-graded",
       "caption": "Trying a question as a student, and grading the answer on the spot.",
       "persona": "teacher",
-      "path": "/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c?tab=try",
+      "path": "/questions/339336b0-d256-4030-ac44-d19355c49ab6?tab=try",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -455,15 +455,15 @@
         "light": "try-mcq-graded-light.png",
         "dark": "try-mcq-graded-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "try-code",
       "caption": "Trying a code question: the program is compiled and run by the code runner.",
       "persona": "teacher",
-      "path": "/questions/637aca79-7782-4acc-ab32-907876fedddb?tab=try",
+      "path": "/questions/43f3ffaf-582d-47b3-b296-b860e077a1c3?tab=try",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -471,22 +471,22 @@
         "light",
         "dark"
       ],
-      "action": "Clicked “Run” on the visible cases, then “Grade my answer”, with the template as it is.",
+      "action": "Clicked “Run the tests” on the visible cases, then “Run all the tests”, with the template as it is.",
       "state": "As seeded; a real code runner compiled and ran the program.",
       "phase": "seeded",
       "files": {
         "light": "try-code-light.png",
         "dark": "try-code-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "try-blocks",
       "caption": "A blocks question as the student gets it: the workspace with the starter, then the warehouses tested.",
       "persona": "teacher",
-      "path": "/questions/3fd94e5f-66df-4e9c-81dd-2099359d001b?tab=try",
+      "path": "/questions/a38c1007-d3be-4ef6-8e84-6edbda1567d2?tab=try",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -501,15 +501,15 @@
         "light": "try-blocks-light.png",
         "dark": "try-blocks-dark.png"
       },
-      "takenAt": "2026-10-11T17:06:43.701Z",
-      "commit": "c6a52de2",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "eval-questions",
       "caption": "Configuring an evaluation, step 1: the questions.",
       "persona": "teacher",
-      "path": "/evaluations/dbfb181f-1d28-4474-9bcd-1730cf6c37c2?step=questions",
+      "path": "/evaluations/51337bd3-8f80-40f9-8388-850fd15c4161?step=questions",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -524,15 +524,15 @@
         "light": "eval-questions-light.png",
         "dark": "eval-questions-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "eval-timing",
       "caption": "Step 2: time and mode.",
       "persona": "teacher",
-      "path": "/evaluations/18756045-182f-4e4a-9541-a45243d41f15?step=timing",
+      "path": "/evaluations/51337bd3-8f80-40f9-8388-850fd15c4161?step=timing",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -547,15 +547,15 @@
         "light": "eval-timing-light.png",
         "dark": "eval-timing-dark.png"
       },
-      "takenAt": "2026-10-08T10:06:56.227Z",
-      "commit": "a0f23218",
-      "base": "http://localhost:3155"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "eval-launch",
       "caption": "Step 3: launch.",
       "persona": "teacher",
-      "path": "/evaluations/18756045-182f-4e4a-9541-a45243d41f15?step=launch",
+      "path": "/evaluations/51337bd3-8f80-40f9-8388-850fd15c4161?step=launch",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -570,15 +570,15 @@
         "light": "eval-launch-light.png",
         "dark": "eval-launch-dark.png"
       },
-      "takenAt": "2026-10-08T10:06:56.227Z",
-      "commit": "a0f23218",
-      "base": "http://localhost:3155"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "eval-rename",
       "caption": "The title of an evaluation, renamed from the heading itself.",
       "persona": "teacher",
-      "path": "/evaluations/dbfb181f-1d28-4474-9bcd-1730cf6c37c2?step=questions",
+      "path": "/evaluations/51337bd3-8f80-40f9-8388-850fd15c4161?step=questions",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -593,15 +593,15 @@
         "light": "eval-rename-light.png",
         "dark": "eval-rename-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "eval-scheduled",
       "caption": "A scheduled evaluation: it opens by itself at the announced time.",
       "persona": "teacher",
-      "path": "/evaluations/e9132281-48d6-4aa8-8f44-d7a5702b3c47",
+      "path": "/evaluations/d55a1c2a-932c-4f78-912e-70283ba3452f",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -616,15 +616,15 @@
         "light": "eval-scheduled-light.png",
         "dark": "eval-scheduled-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "live-lobby",
       "caption": "The dashboard of an evaluation in its lobby: the class is gathering.",
       "persona": "teacher",
-      "path": "/evaluations/a0c6f239-0c92-4e7b-8001-a518c3d8a826/live",
+      "path": "/evaluations/bd8b4237-e854-47af-968d-07265e72de08/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -639,15 +639,15 @@
         "light": "live-lobby-light.png",
         "dark": "live-lobby-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "live-running",
       "caption": "The dashboard during the evaluation: one row per student, one cell per question.",
       "persona": "teacher",
-      "path": "/evaluations/a0c6f239-0c92-4e7b-8001-a518c3d8a826/live",
+      "path": "/evaluations/bd8b4237-e854-47af-968d-07265e72de08/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -662,15 +662,15 @@
         "light": "live-running-light.png",
         "dark": "live-running-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "live-inspect",
       "caption": "A cell opened: what the student wrote, live.",
       "persona": "teacher",
-      "path": "/evaluations/a0c6f239-0c92-4e7b-8001-a518c3d8a826/live",
+      "path": "/evaluations/bd8b4237-e854-47af-968d-07265e72de08/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -685,15 +685,15 @@
         "light": "live-inspect-light.png",
         "dark": "live-inspect-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "live-extend",
       "caption": "Giving more time: to the whole class or to one student.",
       "persona": "teacher",
-      "path": "/evaluations/a0c6f239-0c92-4e7b-8001-a518c3d8a826/live",
+      "path": "/evaluations/bd8b4237-e854-47af-968d-07265e72de08/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -708,15 +708,15 @@
         "light": "live-extend-light.png",
         "dark": "live-extend-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "live-closed",
       "caption": "The dashboard of a closed evaluation: verdicts and scores.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/live",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -731,15 +731,15 @@
         "light": "live-closed-light.png",
         "dark": "live-closed-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "grading",
       "caption": "The grading table, one question at a time: the automatic gradings, validated or waiting for the teacher.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -754,15 +754,15 @@
         "light": "grading-light.png",
         "dark": "grading-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "grading-short",
       "caption": "Grading a short-answer question.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -777,15 +777,15 @@
         "light": "grading-short-light.png",
         "dark": "grading-short-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "grading-cloze",
       "caption": "Grading a fill-in-the-blanks question.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -800,15 +800,15 @@
         "light": "grading-cloze-light.png",
         "dark": "grading-cloze-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "grading-code",
       "caption": "Grading a code question: each program in one wide column, folded after five lines, beside the tests it passed.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -823,15 +823,15 @@
         "light": "grading-code-light.png",
         "dark": "grading-code-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "grading-categorize",
       "caption": "Grading a categorize question: one column per card, naming the column the student chose.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -846,15 +846,15 @@
         "light": "grading-categorize-light.png",
         "dark": "grading-categorize-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "grading-codeimage",
       "caption": "Grading a code-to-picture question: the program, and the picture once the runner has drawn it.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -869,15 +869,15 @@
         "light": "grading-codeimage-light.png",
         "dark": "grading-codeimage-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "grading-circuit",
       "caption": "Grading a circuit: what each schematic holds, and the stimuli it passed once simulated.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -892,15 +892,15 @@
         "light": "grading-circuit-light.png",
         "dark": "grading-circuit-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "grading-essay",
       "caption": "Grading an essay: the first lines of each answer, and the AI's proposal with its confidence.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -915,15 +915,15 @@
         "light": "grading-essay-light.png",
         "dark": "grading-essay-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "grading-ai-justification",
       "caption": "An AI proposal opened: the model's justification, for the teacher only.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -938,15 +938,38 @@
         "light": "grading-ai-justification-light.png",
         "dark": "grading-ai-justification-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
+    },
+    {
+      "name": "grading-override",
+      "caption": "Adjusting a grading by hand: points and a comment the student will read.",
+      "persona": "teacher",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Opened the first answer and clicked “Adjust” in its panel.",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-override-light.png",
+        "dark": "grading-override-dark.png"
+      },
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "grading-batch",
       "caption": "Validating the AI's proposals of an essay in one click: the primary button counts them.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/grading",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -961,15 +984,15 @@
         "light": "grading-batch-light.png",
         "dark": "grading-batch-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "results",
       "caption": "The results of an evaluation, by student, before they are published.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/results",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/results",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -984,15 +1007,15 @@
         "light": "results-light.png",
         "dark": "results-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "results-questions",
       "caption": "The results by question: success rate and discrimination.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/results?tab=questions",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/results?tab=questions",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -1007,15 +1030,15 @@
         "light": "results-questions-light.png",
         "dark": "results-questions-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "results-release-confirm",
       "caption": "Publishing the results: the students see their feedback from then on.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/results",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/results",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1030,13 +1053,13 @@
         "light": "results-release-confirm-light.png",
         "dark": "results-release-confirm-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "poll-launcher",
-      "caption": "The poll launcher: pick a question, or write one, and start.",
+      "caption": "The poll launcher: choose who answers, write a question or pick one, and start.",
       "persona": "teacher",
       "path": "/polls",
       "width": 1440,
@@ -1053,15 +1076,15 @@
         "light": "poll-launcher-light.png",
         "dark": "poll-launcher-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "poll-projection",
       "caption": "The projection of a running poll: the question, its choices with the votes hidden, the join code and its QR.",
       "persona": "teacher",
-      "path": "/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll",
+      "path": "/evaluations/27535a88-d4df-4512-80dd-9f40c9f158a6/poll",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1076,15 +1099,15 @@
         "light": "poll-projection-light.png",
         "dark": "poll-projection-dark.png"
       },
-      "takenAt": "2026-09-29T15:22:08.549Z",
-      "commit": "4aa03bd",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "join-mcq-phone",
       "caption": "A phone joining the poll through the code.",
       "persona": "guest",
-      "path": "/p/VSLAQA",
+      "path": "/p/JUWYPA",
       "width": 390,
       "height": 844,
       "fullPage": false,
@@ -1099,15 +1122,15 @@
         "light": "join-mcq-phone-light.png",
         "dark": "join-mcq-phone-dark.png"
       },
-      "takenAt": "2026-09-29T15:22:08.549Z",
-      "commit": "4aa03bd",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "poll-revealed",
       "caption": "The answer revealed: the tally, with the correct choice marked.",
       "persona": "teacher",
-      "path": "/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll",
+      "path": "/evaluations/27535a88-d4df-4512-80dd-9f40c9f158a6/poll",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1122,15 +1145,15 @@
         "light": "poll-revealed-light.png",
         "dark": "poll-revealed-dark.png"
       },
-      "takenAt": "2026-09-29T15:22:08.549Z",
-      "commit": "4aa03bd",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "join-revealed-phone",
       "caption": "The phone after the reveal.",
       "persona": "guest",
-      "path": "/p/VSLAQA",
+      "path": "/p/JUWYPA",
       "width": 390,
       "height": 844,
       "fullPage": false,
@@ -1145,15 +1168,15 @@
         "light": "join-revealed-phone-light.png",
         "dark": "join-revealed-phone-dark.png"
       },
-      "takenAt": "2026-09-29T15:22:08.549Z",
-      "commit": "4aa03bd",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "poll-ended",
       "caption": "The poll ended.",
       "persona": "teacher",
-      "path": "/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll",
+      "path": "/evaluations/27535a88-d4df-4512-80dd-9f40c9f158a6/poll",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1168,13 +1191,13 @@
         "light": "poll-ended-light.png",
         "dark": "poll-ended-dark.png"
       },
-      "takenAt": "2026-09-29T15:22:08.549Z",
-      "commit": "4aa03bd",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "notifications",
-      "caption": "The notifications bell, here with nothing new: a pool shared with you shows up in it.",
+      "caption": "The notifications, opened from the account menu: a grading pass that finished, students who joined a classroom.",
       "persona": "teacher",
       "path": "/",
       "width": 1440,
@@ -1184,16 +1207,16 @@
         "light",
         "dark"
       ],
-      "action": "Clicked the bell in the header.",
+      "action": "Opened the account menu and clicked “Notifications”.",
       "state": "After the exercise started and Noah handed in.",
       "phase": "running",
       "files": {
         "light": "notifications-light.png",
         "dark": "notifications-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "palette",
@@ -1214,9 +1237,9 @@
         "light": "palette-light.png",
         "dark": "palette-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "palette-query",
@@ -1237,9 +1260,9 @@
         "light": "palette-query-light.png",
         "dark": "palette-query-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "settings",
@@ -1260,9 +1283,9 @@
         "light": "settings-light.png",
         "dark": "settings-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "settings-token-created",
@@ -1283,9 +1306,9 @@
         "light": "settings-token-created-light.png",
         "dark": "settings-token-created-dark.png"
       },
-      "takenAt": "2026-09-23T20:42:52.199Z",
-      "commit": "92e8af5",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "oauth-consent",
@@ -1306,9 +1329,9 @@
         "light": "oauth-consent-light.png",
         "dark": "oauth-consent-dark.png"
       },
-      "takenAt": "2026-09-23T21:37:18.311Z",
-      "commit": "3cf4b0a",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "admin",
@@ -1329,9 +1352,9 @@
         "light": "admin-light.png",
         "dark": "admin-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "student-home",
@@ -1352,9 +1375,9 @@
         "light": "student-home-light.png",
         "dark": "student-home-dark.png"
       },
-      "takenAt": "2026-10-01T09:20:54.630Z",
-      "commit": "8859454d",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "student-home-phone",
@@ -1375,15 +1398,15 @@
         "light": "student-home-phone-light.png",
         "dark": "student-home-phone-dark.png"
       },
-      "takenAt": "2026-10-01T09:20:54.630Z",
-      "commit": "8859454d",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "student-lobby",
       "caption": "The lobby: the student waits for the teacher to start.",
       "persona": "lea",
-      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "path": "/take/bd8b4237-e854-47af-968d-07265e72de08",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1398,15 +1421,15 @@
         "light": "student-lobby-light.png",
         "dark": "student-lobby-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "player-mcq",
       "caption": "The player on a multiple-choice question.",
       "persona": "lea",
-      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
+      "path": "/take/bd8b4237-e854-47af-968d-07265e72de08",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1421,15 +1444,15 @@
         "light": "player-mcq-light.png",
         "dark": "player-mcq-dark.png"
       },
-      "takenAt": "2026-10-02T14:14:37.245Z",
-      "commit": "c2a3aa7c",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "player-mcq-phone",
       "caption": "The player on a multiple-choice question.",
       "persona": "lea",
-      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
+      "path": "/take/bd8b4237-e854-47af-968d-07265e72de08",
       "width": 390,
       "height": 844,
       "fullPage": false,
@@ -1444,15 +1467,15 @@
         "light": "player-mcq-phone-light.png",
         "dark": "player-mcq-phone-dark.png"
       },
-      "takenAt": "2026-10-02T14:14:37.245Z",
-      "commit": "c2a3aa7c",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "player-cloze",
       "caption": "The player on a fill-in-the-blanks question.",
       "persona": "lea",
-      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
+      "path": "/take/bd8b4237-e854-47af-968d-07265e72de08",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1467,15 +1490,15 @@
         "light": "player-cloze-light.png",
         "dark": "player-cloze-dark.png"
       },
-      "takenAt": "2026-10-02T14:14:37.245Z",
-      "commit": "c2a3aa7c",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "player-short",
       "caption": "The player on a short-answer question.",
       "persona": "lea",
-      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
+      "path": "/take/bd8b4237-e854-47af-968d-07265e72de08",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1490,15 +1513,15 @@
         "light": "player-short-light.png",
         "dark": "player-short-dark.png"
       },
-      "takenAt": "2026-10-02T14:14:37.245Z",
-      "commit": "c2a3aa7c",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "player-code",
       "caption": "The player on a code question: the editable regions of the template.",
       "persona": "lea",
-      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
+      "path": "/take/bd8b4237-e854-47af-968d-07265e72de08",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1513,15 +1536,15 @@
         "light": "player-code-light.png",
         "dark": "player-code-dark.png"
       },
-      "takenAt": "2026-10-02T14:14:37.245Z",
-      "commit": "c2a3aa7c",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "player-run",
       "caption": "Running the program against the visible cases before handing in.",
       "persona": "lea",
-      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "path": "/take/bd8b4237-e854-47af-968d-07265e72de08",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -1529,22 +1552,22 @@
         "light",
         "dark"
       ],
-      "action": "Moved to question 5, clicked “Run”, waited for “Compiled”.",
+      "action": "Moved to question 5, clicked “Run the tests”, waited for “Compiled”.",
       "state": "“Quiz d'entraînement” running; Léa's region holds a solution.",
       "phase": "running",
       "files": {
         "light": "player-run-light.png",
         "dark": "player-run-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "player-submit",
       "caption": "Handing in: the confirmation names what is still unanswered.",
       "persona": "lea",
-      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
+      "path": "/take/bd8b4237-e854-47af-968d-07265e72de08",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1559,15 +1582,15 @@
         "light": "player-submit-light.png",
         "dark": "player-submit-dark.png"
       },
-      "takenAt": "2026-10-02T14:14:37.245Z",
-      "commit": "c2a3aa7c",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "player-done",
       "caption": "After handing in.",
       "persona": "lea",
-      "path": "/take/6188c969-2eb9-41f1-8111-2597c5e1602e",
+      "path": "/take/bb2b617a-f6a3-41c5-8583-6c36a5a847be",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1582,15 +1605,15 @@
         "light": "player-done-light.png",
         "dark": "player-done-dark.png"
       },
-      "takenAt": "2026-10-02T14:14:37.245Z",
-      "commit": "c2a3aa7c",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "feedback-pending",
       "caption": "The student's results page while the teacher has not published yet.",
       "persona": "lea",
-      "path": "/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback",
+      "path": "/attempts/bd851343-8bc4-4c4a-bb5b-e681bdc32fad/feedback",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1605,15 +1628,15 @@
         "light": "feedback-pending-light.png",
         "dark": "feedback-pending-dark.png"
       },
-      "takenAt": "2026-10-01T06:44:50.987Z",
-      "commit": "ac2f6212",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "results-released",
       "caption": "The results after publication.",
       "persona": "teacher",
-      "path": "/evaluations/d216efff-5449-4de3-acea-00eb3587dcff/results",
+      "path": "/evaluations/bb2b617a-f6a3-41c5-8583-6c36a5a847be/results",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -1628,15 +1651,15 @@
         "light": "results-released-light.png",
         "dark": "results-released-dark.png"
       },
-      "takenAt": "2026-10-06T19:49:27.864Z",
-      "commit": "12081e6f",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "feedback",
       "caption": "The student's feedback: points, verdicts, explanations and the teacher's comments.",
       "persona": "lea",
-      "path": "/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback",
+      "path": "/attempts/bd851343-8bc4-4c4a-bb5b-e681bdc32fad/feedback",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -1651,15 +1674,15 @@
         "light": "feedback-light.png",
         "dark": "feedback-dark.png"
       },
-      "takenAt": "2026-10-01T06:44:50.987Z",
-      "commit": "ac2f6212",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "feedback-phone",
       "caption": "The student's feedback: points, verdicts, explanations and the teacher's comments.",
       "persona": "lea",
-      "path": "/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback",
+      "path": "/attempts/bd851343-8bc4-4c4a-bb5b-e681bdc32fad/feedback",
       "width": 390,
       "height": 844,
       "fullPage": true,
@@ -1674,9 +1697,9 @@
         "light": "feedback-phone-light.png",
         "dark": "feedback-phone-dark.png"
       },
-      "takenAt": "2026-10-01T06:44:50.987Z",
-      "commit": "ac2f6212",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     },
     {
       "name": "student-grades",
@@ -1697,8 +1720,8 @@
         "light": "student-grades-light.png",
         "dark": "student-grades-dark.png"
       },
-      "takenAt": "2026-10-01T07:36:37.823Z",
-      "commit": "4c3e9f94",
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
       "base": "http://localhost:3105"
     },
     {
@@ -1720,8 +1743,8 @@
         "light": "student-grades-phone-light.png",
         "dark": "student-grades-phone-dark.png"
       },
-      "takenAt": "2026-10-01T07:36:37.823Z",
-      "commit": "4c3e9f94",
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
       "base": "http://localhost:3105"
     },
     {
@@ -1743,9 +1766,9 @@
         "light": "student-settings-light.png",
         "dark": "student-settings-dark.png"
       },
-      "takenAt": "2026-10-01T06:44:50.987Z",
-      "commit": "ac2f6212",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-14T20:20:16.864Z",
+      "commit": "75d362c1",
+      "base": "http://localhost:3105"
     }
   ]
 }
