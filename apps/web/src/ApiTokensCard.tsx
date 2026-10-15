@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   API_TOKEN_TTL_DAYS,
   TOKEN_SCOPES,
+  tokenMustExpire,
   type ApiToken,
   type ApiTokenCreate,
   type ApiTokenCreated,
@@ -114,12 +115,12 @@ function NewTokenDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [scope, setScope] = useState<TokenScope>("quiz");
   const [ttl, setTtl] = useState<string>("90");
-  // Audit L6: an administrator's token always expires; ADR-113: so does a full API token.
-  const admin = useMe().data?.role === "admin";
-  const mustExpire = admin || scope === "api";
+  const role = useMe().data?.role ?? "teacher";
+  const admin = role === "admin";
+  const mustExpire = tokenMustExpire(role, scope);
   const pickScope = (next: TokenScope) => {
     setScope(next);
-    if (next === "api" && ttl === "never") setTtl("90");
+    if (tokenMustExpire(role, next) && ttl === "never") setTtl("90");
   };
   const create = useMutation({
     mutationFn: (body: ApiTokenCreate) =>

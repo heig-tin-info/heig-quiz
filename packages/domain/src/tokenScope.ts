@@ -6,16 +6,18 @@
  */
 
 /**
- * The closed set, ordered `quiz:read` ⊂ `quiz` ⊂ `api`: the MCP endpoint and
- * its reading tools, the MCP endpoint and every tool, the whole `/app/api`.
+ * The closed set, in the order the settings offer it (the default first):
+ * the MCP endpoint and every tool, the MCP endpoint and its reading tools,
+ * the whole `/app/api`. Their inclusion is {@link RANK}'s.
  */
 export const TOKEN_SCOPES = ["quiz", "quiz:read", "api"] as const;
-export type TokenScopeName = (typeof TOKEN_SCOPES)[number];
+export type TokenScope = (typeof TOKEN_SCOPES)[number];
 
-const RANK: Record<TokenScopeName, number> = { "quiz:read": 0, quiz: 1, api: 2 };
+/** `quiz:read` ⊂ `quiz` ⊂ `api`. */
+const RANK: Record<TokenScope, number> = { "quiz:read": 0, quiz: 1, api: 2 };
 
 /** `api` covers `quiz`, which covers `quiz:read`. */
-export function scopeCovers(granted: TokenScopeName, needed: TokenScopeName): boolean {
+export function scopeCovers(granted: TokenScope, needed: TokenScope): boolean {
   return RANK[granted] >= RANK[needed];
 }
 
@@ -36,9 +38,9 @@ export const SAFE_METHODS: readonly string[] = ["GET", "HEAD", "OPTIONS"];
  * writes of the tools' own calls.
  */
 export function scopeAdmits(
-  scope: TokenScopeName,
+  scope: TokenScope,
   request: { target: ScopeTarget; method: string },
-): TokenScopeName | null {
+): TokenScope | null {
   if (scope === "api" || request.target === "mcp") return null;
   if (request.target === "elsewhere") return "api";
   if (scope === "quiz" || SAFE_METHODS.includes(request.method.toUpperCase())) return null;
@@ -51,6 +53,6 @@ export function scopeAdmits(
  * neither MCP scope yields `quiz:read`, the narrowest (none exists today: the
  * consent always grants `quiz`).
  */
-export function scopeOfGrant(grantScope: string): TokenScopeName {
+export function scopeOfGrant(grantScope: string): TokenScope {
   return grantScope.split(/\s+/).includes("quiz") ? "quiz" : "quiz:read";
 }

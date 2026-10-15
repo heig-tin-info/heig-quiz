@@ -22,7 +22,7 @@ import {
   type SessionKind,
   type TokenScope,
 } from "@quiz/contracts";
-import { SAFE_METHODS, scopeAdmits } from "@quiz/domain";
+import { SAFE_METHODS, scopeAdmits, type ScopeTarget } from "@quiz/domain";
 
 import { claimEnrollments } from "../modules/org/service.js";
 import { invalid } from "../modules/http.js";
@@ -229,17 +229,19 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       // the tool calls made on its behalf — nowhere else. The help
       // assistant's token (ADR-080 §8) has no public resource at all: only
       // its own tools' in-process calls, never the MCP endpoint.
-      const path = req.url.split("?")[0];
+      // Where the request goes, classified once: the MCP endpoint, a tool's
+      // in-process call, or any other route.
+      const target: ScopeTarget =
+        req.url.split("?")[0] === MCP_PATH ? "mcp" : isInternalCall(req) ? "internal" : "elsewhere";
       if (found.audience !== null) {
         const assistant = found.audience === ASSIST_AUDIENCE;
-        if (path === MCP_PATH ? assistant : !isInternalCall(req)) return;
+        if (target === "mcp" ? assistant : target !== "internal") return;
       }
       // Then its scope (ADR-113 §2), before any handler, so before anything
       // is loaded: a known caller asking for more than its token reaches is
       // a 403, unlike an OAuth token off its audience above (anonymous, so a
       // 401). The help assistant's token has no scope: its audience is all.
       if (found.scope !== null) {
-        const target = path === MCP_PATH ? "mcp" : isInternalCall(req) ? "internal" : "elsewhere";
         const needed = scopeAdmits(found.scope, { target, method: req.method });
         if (needed !== null) {
           return reply

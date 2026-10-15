@@ -20,7 +20,7 @@ It works **as you**, with your rights and nothing more: it reaches the courses y
 | Launch a live poll, when you ask for one | |
 | Read your questions' statistics, as the pool shows them (anonymous figures over ten answers or more) | |
 
-This holds for an assistant connected through the MCP address: an assistant you allowed from claude.ai or ChatGPT, or one holding an API token with **Assistant** access. A token with **Full API** access is not limited to this table: whoever holds it can call every route of the API with all your rights, grades and deletions included (see [API tokens](#api-tokens-for-scripts-and-other-clients)).
+This holds for an assistant connected through the MCP address: an assistant you allowed from claude.ai or ChatGPT, or one holding an API token with an **AI assistant (MCP)** access. A token with **Full API** access is not limited to this table: whoever holds it can call every route of the API with all your rights, grades and deletions included (see [API tokens](#api-tokens-for-scripts-and-other-clients)).
 
 An evaluation made by an assistant is always a draft: you check it, set its schedule, and open it yourself. Everything an assistant writes is recorded in the audit log as done through an API token or a connected assistant.
 
@@ -70,11 +70,11 @@ Some clients cannot sign in by themselves: a script of your own, Claude Desktop 
 
 | Access | What the token reaches | Lifetime |
 | --- | --- | --- |
-| **Assistant, read and write** (the default) | The MCP address only: every tool of the table above, nothing else | 30, 90 or 365 days, or never |
-| **Assistant, read only** | The MCP address only, and its reading tools: it reads your courses, pools, questions and evaluations, and writes nothing | 30, 90 or 365 days, or never |
+| **AI assistant (MCP), read and write** (the default) | The MCP address only: every tool of the table above, nothing else | 30, 90 or 365 days, or never |
+| **AI assistant (MCP), read only** | The MCP address only, and its reading tools: it reads your courses, pools, questions and evaluations, and writes nothing | 30, 90 or 365 days, or never |
 | **Full API** | Every route of the API, with all your rights: students' answers, grades, the roster and deletions included. For a script of your own | 30, 90 or 365 days, never "never" |
 
-Choose the narrowest access that does the job: an assistant needs an **Assistant** access, never **Full API**. A token's access is chosen once; to change it, create another token and revoke the first. A token created before accesses existed (October 2026) is listed as **Full API** and keeps that reach until it expires or you revoke it. An administrator's token always expires, whatever its access.
+Choose the narrowest access that does the job: an assistant needs an **AI assistant (MCP)** access, never **Full API**. A token's access is chosen once; to change it, create another token and revoke the first. A token created before accesses existed (October 2026) is listed as **Full API** and keeps that reach until it expires or you revoke it. An administrator's token always expires, whatever its access.
 
 A call outside the token's access is refused with `403 insufficient_scope`.
 

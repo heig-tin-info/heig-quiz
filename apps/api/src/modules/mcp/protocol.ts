@@ -12,7 +12,7 @@ import { z } from "zod";
 import { MCP_PROTOCOL_VERSIONS, McpMessage, McpToolCall, type JsonRpcId, type TokenScope } from "@quiz/contracts";
 import { scopeCovers } from "@quiz/domain";
 
-import { runTool, toolByName, toolDescriptors, type Api } from "./tools.js";
+import { runTool, toolByName, toolDescriptors, toolScope, type Api } from "./tools.js";
 
 /** JSON-RPC 2.0 error codes. */
 export const RPC = {
@@ -70,9 +70,10 @@ async function callTool(api: Api, scope: TokenScope, params: unknown, log: (err:
   if (!tool) return { error: `Unknown tool: ${call.data.name}` };
   // Said early, for the model (ADR-113 §4); were it missing, the auth hook
   // would still refuse the tool's first write.
-  if (!scopeCovers(scope, tool.scope)) {
-    const message = `This token's scope is ${scope}; ${tool.name} needs ${tool.scope}. Ask the teacher for a token with that access.`;
-    return { result: toolResult({ error: "insufficient_scope", needed: tool.scope, message }, true) };
+  const needed = toolScope(tool);
+  if (!scopeCovers(scope, needed)) {
+    const message = `This token's scope is ${scope}; ${tool.name} needs ${needed}. Ask the teacher for a token with that access.`;
+    return { result: toolResult({ error: "insufficient_scope", needed, message }, true) };
   }
   const outcome = await runTool(api, tool, call.data.arguments);
   if (outcome.ok) return { result: toolResult(outcome.value) };

@@ -2,8 +2,8 @@
  * The scope of a personal token over the REAL application (ADR-113, N-SEC-22):
  * enforced where the token is resolved, before any load; `quiz` and
  * `quiz:read` confined to the MCP endpoint and its tools' calls, `quiz:read`
- * to the reading tools; `api` the whole API. And the catalogue's own
- * declaration: a tool's scope says the same as its `readOnlyHint`.
+ * to the reading tools (a tool's `readOnlyHint`, `toolScope`); `api` the
+ * whole API.
  */
 import { randomUUID } from "node:crypto";
 
@@ -14,7 +14,9 @@ import type { ApiTokenCreated, TokenScope } from "@quiz/contracts";
 import { testServer, type TestServer } from "../../test/http.js";
 
 import { ApiError, injectedApi } from "./service.js";
-import { TOOLS } from "./tools.js";
+import { TOOLS, toolScope } from "./tools.js";
+
+const READING = TOOLS.filter((t) => toolScope(t) === "quiz:read").map((t) => t.name);
 
 let server: TestServer;
 let teacher: { id: string; headers: Record<string, string> };
@@ -56,13 +58,6 @@ async function call(token: string, name: string, args: Record<string, unknown> =
   const { result } = await rpc(token, "tools/call", { name, arguments: args });
   return { isError: result.isError as boolean, data: JSON.parse(result.content[0].text) };
 }
-
-describe("the catalogue declares each tool's scope", () => {
-  it("quiz:read exactly for the tools annotated read-only", () => {
-    for (const t of TOOLS) expect(t.annotations.readOnlyHint, t.name).toBe(t.scope === "quiz:read");
-    expect(TOOLS.filter((t) => t.scope === "quiz:read")).toHaveLength(16);
-  });
-});
 
 describe("enforced where the token is resolved (ADR-113 §2)", () => {
   it("keeps an MCP token off every other route with 403 insufficient_scope, before anything is loaded", async () => {
@@ -115,7 +110,7 @@ describe("a quiz:read token over MCP (ADR-113 §4)", () => {
   it("lists the reading tools only", async () => {
     const { result } = await rpc(tokens["quiz:read"], "tools/list");
     const names = result.tools.map((t: { name: string }) => t.name).sort();
-    expect(names).toEqual(TOOLS.filter((t) => t.scope === "quiz:read").map((t) => t.name).sort());
+    expect(names).toEqual([...READING].sort());
     expect((await rpc(tokens.quiz, "tools/list")).result.tools).toHaveLength(TOOLS.length);
   });
 
@@ -149,9 +144,8 @@ describe("a quiz:read token over MCP (ADR-113 §4)", () => {
       list_projects: { classroomId: room.id },
       list_project_sources: { classroomId: room.id },
     };
-    const reading = TOOLS.filter((t) => t.scope === "quiz:read").map((t) => t.name);
-    expect(Object.keys(args).sort()).toEqual([...reading].sort());
-    for (const name of reading) {
+    expect(Object.keys(args).sort()).toEqual([...READING].sort());
+    for (const name of READING) {
       const { data } = await call(tokens["quiz:read"], name, args[name]);
       // A 404 or a refusal of the tool itself is fine here (a missing question,
       // no GitHub App in this server); a scope refusal is not.

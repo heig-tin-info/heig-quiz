@@ -4,8 +4,8 @@
 
 Accepted (2026-10-15, issue #871: the scope set, the default and the fate
 of existing tokens decided by the product owner on 2026-10-15; the
-enforcement point, the error and the tool declaration are the spec
-challenge's defaults, adopted).
+enforcement point and the error are the spec challenge's defaults, adopted;
+a tool's scope read from its `readOnlyHint` is the code review's).
 
 Scope: what a bearer token may reach on `/app/api/*` — the personal token
 (`quiz_pat_`) chiefly; the OAuth access token (`quiz_oat_`) through the
@@ -59,8 +59,8 @@ declare what they need.
 
 | Scope | Reaches | Lifetime | Shown as |
 | --- | --- | --- | --- |
-| `quiz` (the default) | the MCP endpoint and every tool of its catalogue | 30, 90, 365 days, or never (a teacher's) | MCP, read and write |
-| `quiz:read` | the MCP endpoint and its reading tools only | the same | MCP, read only |
+| `quiz` (the default) | the MCP endpoint and every tool of its catalogue | 30, 90, 365 days, or never (a teacher's) | AI assistant (MCP), read and write |
+| `quiz:read` | the MCP endpoint and its reading tools only | the same | AI assistant (MCP), read only |
 | `api` | the whole `/app/api` with the owner's rights, the MCP endpoint included — for scripts and the planned `cli` | 30, 90 or 365 days, **never "never"** | Full API |
 
 The scopes are ordered, `quiz:read` ⊂ `quiz` ⊂ `api`, and the set is closed:
@@ -125,16 +125,16 @@ and the tools' `securitySchemes` still say `quiz`. Offering `quiz:read` at
 consent is left for later; it would be one more value of the grant and no
 new check.
 
-### 4. Each tool declares its scope
+### 4. A tool's scope is its `readOnlyHint`
 
-`Tool` (`modules/mcp/tools.ts`) gains a required field
-`scope: "quiz" | "quiz:read"`; a tool without it is a compile error,
-the help assistant's own reader (`get_classroom_results`) included. A test
-asserts, for every tool, `annotations.readOnlyHint === (scope === "quiz:read")`,
-and that a `quiz:read` token runs every reading tool without one scope
-refusal — the reading tools issue `GET`s only.
+A tool's scope is its `readOnlyHint`, declared server-side
+(`modules/mcp/tools.ts`): `quiz:read` for a tool annotated read-only,
+`quiz` for any other (`toolScope`). There is no second field to keep in
+step with the annotation. A test asserts that a `quiz:read` token runs
+every reading tool without one scope refusal — the reading tools issue
+`GET`s only.
 
-The declaration serves the client, not the security: `tools/list` lists only
+The scope serves the client, not the security: `tools/list` lists only
 the tools the caller's scope covers, and `tools/call` of a tool above it
 answers a tool error naming `insufficient_scope` without running it. Were
 either wrong, the hook of §2 would still refuse the tool's first write.

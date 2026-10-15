@@ -219,7 +219,7 @@ export const apiTokens = pgTable(
   (t) => [
     index("api_tokens_user_idx").on(t.userId),
     index("api_tokens_grant_idx").on(t.grantId),
-    check("api_tokens_scope_ck", sql`${t.scope} in ('quiz', 'quiz:read', 'api')`),
+    check("api_tokens_scope_ck", sql`${t.scope} in (${sql.raw(TOKEN_SCOPES.map((s) => `'${s}'`).join(", "))})`),
     check("api_tokens_scope_personal_ck", sql`(${t.audience} is null) = (${t.scope} is not null)`),
   ],
 );

@@ -205,7 +205,7 @@ describe("results and the export (§4.6)", () => {
     expect(await reads()).toHaveLength(before + 1);
 
     // The same teacher through a personal token, inside the window: another channel, another entry.
-    const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null });
+    const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null, scope: "api" });
     expect((await get(url, { authorization: `Bearer ${token}` })).statusCode).toBe(200);
     expect(await reads()).toHaveLength(before + 2);
     expect((await reads()).filter((row) => row.actorType === "api_key")).toEqual([

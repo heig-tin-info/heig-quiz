@@ -45,8 +45,8 @@ describe("ApiTokensCard", () => {
       ]),
     });
     renderWithProviders(<ApiTokensCard />);
-    expect(await screen.findByText("Assistant, read and write")).toBeInTheDocument();
-    expect(screen.getByText("Assistant, read only")).toBeInTheDocument();
+    expect(await screen.findByText("AI assistant (MCP), read and write")).toBeInTheDocument();
+    expect(screen.getByText("AI assistant (MCP), read only")).toBeInTheDocument();
     expect(screen.getByText("Full API")).toBeInTheDocument();
   });
 
