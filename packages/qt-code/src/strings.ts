@@ -41,7 +41,7 @@ export const EDITOR_STRINGS = {
   tryRegionsMismatch:
     "The reference solution does not fit the editable regions of the starting code. Edit it once in the editor above to realign it.",
   tryInvalidDraft: "The question has errors, flagged on this page. Fix them, then try again.",
-  tryFailed: "The reference solution could not be tried. Check the draft is saved, then try again.",
+  tryFailed: "The reference solution could not be tried. Try again.",
   tryResult: "{passed} of {total} cases pass.",
   tryDiverged:
     "The browser and the server disagree on {n} cases — students' trials may mislead them. Consider \"Same as grading\".",
@@ -107,7 +107,7 @@ export type CodeEditorStrings = typeof EDITOR_STRINGS;
  * reference does not build; `regions`, it does not match the template;
  * `draft`, the STORED draft does not validate, so nothing was run — the
  * issues are on the page; `error`, the try never came back (the draft could
- * not be saved, the request failed). Four different mistakes, fixed in four
+ * not be saved, the request or a runner failed). Four different mistakes, fixed in four
  * different places, so they never share a sentence — and none of them is
  * reported as the compiler's verdict when the compiler never ran.
  */

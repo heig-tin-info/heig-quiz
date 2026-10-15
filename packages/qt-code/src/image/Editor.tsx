@@ -82,8 +82,7 @@ export interface CodeImageEditorProps extends EditorProps<CodeImageConfig> {
 
 /** `spec` is the size and palette the image was read with: a later change makes it stale. */
 type TryDone = { pixels: Int16Array; spec: ImageSpec };
-type TryReason = TryFailure;
-type TryState = UiTryState<TryDone, TryReason>;
+type TryState = UiTryState<TryDone, TryFailure>;
 
 const sameSpec = (a: ImageSpec, b: ImageSpec): boolean =>
   a.width === b.width && a.height === b.height && a.palette === b.palette;
@@ -137,7 +136,7 @@ export function CodeImageEditor({
 }: CodeImageEditorProps) {
   const s = resolveStrings(CODEIMAGE_EDITOR_DEFAULTS, strings);
   const ids = useId();
-  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryReason>("error");
+  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryFailure>("error");
 
   const patch = (next: Partial<CodeImageConfig>) => onChange({ ...config, ...next });
   const patchImage = (next: Partial<ImageSpec>) => patch({ image: { ...config.image, ...next } });

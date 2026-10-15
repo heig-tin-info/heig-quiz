@@ -269,9 +269,7 @@ describe("CodeEditor", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Try the reference solution" }));
     expect(
-      await screen.findByText(
-        "The reference solution could not be tried. Check the draft is saved, then try again.",
-      ),
+      await screen.findByText("The reference solution could not be tried. Try again."),
     ).toBeInTheDocument();
     expect(screen.queryByText("The reference solution does not compile.")).toBeNull();
   });

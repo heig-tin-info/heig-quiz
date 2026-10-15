@@ -2497,8 +2497,7 @@ export const fr: Record<keyof Dict, string> = {
     "La solution de référence ne correspond pas aux régions modifiables du code de départ. Modifiez-la une fois dans l'éditeur ci-dessus pour la réaligner.",
   "qt.code.e.tryInvalidDraft":
     "La question contient des erreurs, signalées sur cette page. Corrigez-les, puis réessayez.",
-  "qt.code.e.tryFailed":
-    "La solution de référence n'a pas pu être essayée. Vérifiez que le brouillon est enregistré, puis réessayez.",
+  "qt.code.e.tryFailed": "La solution de référence n'a pas pu être essayée. Réessayez.",
   "qt.code.e.tryResult": "{passed} cas sur {total} passent.",
   "qt.code.e.tryDiverged":
     "Le navigateur et le serveur ne sont pas d'accord sur {n} cas — les essais des étudiants risquent de les induire en erreur. Envisagez « Identique à la correction ».",

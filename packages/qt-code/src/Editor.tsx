@@ -106,8 +106,7 @@ export type CodeTryOutcome =
 
 /** `diverged`: cases on which the browser runner disagreed with the server. */
 type TryDone = { passed: number; total: number; diverged?: number };
-type TryReason = TryFailure;
-type TryState = UiTryState<TryDone, TryReason>;
+type TryState = UiTryState<TryDone, TryFailure>;
 
 const NEW_CASE: CodeCase = {
   name: "",
@@ -200,7 +199,7 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const s = resolveStrings(EDITOR_STRINGS, strings);
   const ids = useId();
-  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryReason>("error");
+  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryFailure>("error");
 
   const patch = (next: Partial<CodeConfig>) => onChange({ ...config, ...next });
   const patchTests = (next: Partial<CodeConfig["tests"]>) =>
