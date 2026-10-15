@@ -1,0 +1,15 @@
+# The rotation of /var/log/auth-trail.log on BOTH VMs (#872), installed by
+# hand as /etc/logrotate.d/auth-trail. 26 weekly files: the period and why,
+# docs/development/deployment.md §7, Host logs. The postrotate is the one
+# Ubuntu's /etc/logrotate.d/rsyslog runs.
+/var/log/auth-trail.log {
+	weekly
+	rotate 26
+	missingok
+	notifempty
+	compress
+	delaycompress
+	postrotate
+		/usr/lib/rsyslog/rsyslog-rotate
+	endscript
+}

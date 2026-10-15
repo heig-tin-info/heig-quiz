@@ -305,7 +305,7 @@ gh variable delete CODESPACE_FORCE_SHA --repo heig-tin-info/heig-quiz
 ### Where to look
 
 ```bash
-journalctl --namespace=+quiz -u quiz-codespace-prod -n 50 --no-pager
+journalctl -u quiz-codespace-prod -n 50 --no-pager
 tail -n 20 /var/log/caddy/quiz-codespace-prod.log
 journalctl -u quiz-codespace-shadow@prod -n 5 --no-pager
 podman ps --filter label=heig-codespace.instance=prod

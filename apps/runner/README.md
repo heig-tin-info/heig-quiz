@@ -569,7 +569,7 @@ install -D -m 0644 apps/runner/deploy/gvisor/quiz-runner.container.d-gvisor.conf
 #   PODMAN_SOCKET=/run/quiz-runner-podman/podman.sock
 #   RUNNER_RUNTIME=runsc
 systemctl daemon-reload && systemctl restart quiz-runner
-journalctl --namespace=+quiz -u quiz-runner -n 20  # "podman engine ready" with runtime runsc, or the fatal line
+journalctl -u quiz-runner -n 20             # "podman engine ready" with runtime runsc, or the fatal line
 ```
 
 The drop-in mounts the gVisor socket and orders the runner after it; the

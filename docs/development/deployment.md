@@ -58,9 +58,9 @@ only. Nobody signs in as root or as a service account: root reaches a
 shell through `sudo` or the Hetzner console, production through
 `sudo machinectl shell srv@` (the login session carries the rootless
 Docker socket; a plain `sudo -iu srv` does not) and staging through
-`sudo machinectl shell srvstg@`. The `sudo` journal then says who did
-what, which a shared root session never does; the system journal keeps
-it 180 days (§7, *Host logs and their retention*). A drop-in in
+`sudo machinectl shell srvstg@`. The `sudo` lines then say who did
+what, which a shared root session never does; with SSH's, they are kept
+in `/var/log/auth-trail.log` at most about 180 days (§7, *Host logs*). A drop-in in
 `/etc/ssh/sshd_config.d/`, loaded before `sshd_config` (OpenSSH keeps
 the first value it reads), pins the policy on each VM:
 
@@ -253,7 +253,6 @@ precondition of the 4 h RTO ([ADR-010](../adr/ADR-010-stockage-secrets.md)).
 | the host input policy | `table inet host`, `/etc/quiz-engine/host.nft` included by `/etc/nftables.conf` | `infra/engine/host.nft`, applied by hand with `infra/engine/nft-apply.sh` (below) |
 | the codespace backup export | `/usr/local/lib/quiz-codespace/backup-export.sh`, root's forced command for the backup key | `apps/codespace/deploy/backup-export.sh` (below) |
 | the frozen staging dispatcher | `/usr/local/libexec/quiz-engine/staging-dispatch.sh`, root's forced command for the staging-portal key | `infra/engine/staging-dispatch.sh`, installed by hand (§4, *The frozen staging dispatcher*) |
-| the logs' retention | the journal namespace `quiz` (`/etc/systemd/journald@quiz.conf`, a `log-namespace.conf` drop-in per quadlet) and `/etc/systemd/journald.conf.d/retention.conf` | `infra/journald/`, installed by hand (§7, *Host logs and their retention*) |
 
 `quiz-runner.container` is a Podman quadlet: `systemd` generates
 `quiz-runner.service` from it at `daemon-reload`, and `deploy.sh` installs it
@@ -870,7 +869,7 @@ calls. Then:
 ```bash
 curl -s -H "Authorization: Bearer $METRICS_TOKEN" https://quiz.chevallier.io/healthz | jq .   # database, jobs, runner: "up"
 ssh srv@portal.heig.chevallier.io 'cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image logs --tail 50 app'
-ssh root@code.chevallier.io 'journalctl --namespace=+quiz -u quiz-runner -n 30'   # "podman engine ready", "quiz-runner started"
+ssh root@code.chevallier.io 'journalctl -u quiz-runner -n 30'   # "podman engine ready", "quiz-runner started"
 ```
 
 `/healthz` reports the runner `down` when it is unreachable or refuses the
@@ -1367,112 +1366,56 @@ No user, IP or query string in any label. It is never public: a request with
 other request must carry an admin session.
 
 Logs are `docker compose logs -f app` on one VM and
-`journalctl --namespace=+quiz -u quiz-runner -f` on the other (credentials
-masked); how long each is kept is the next section.
+`journalctl -u quiz-runner -f` on the other (credentials masked); how long
+they are kept is the next section.
 
-### Host logs and their retention (#872)
+### Host logs (#872)
 
-What names a person's address is kept about **30 days**: the services' own
-output and the web server's access logs. The system journal is kept
-**180 days**, longer on purpose: it holds the `sudo` trail of who did what
-(*Human access*) and the SSH attempts fail2ban reads. Each period is written
-in one file of the repository:
+What names a person's address is kept **at most about 30 days**, the
+`sudo` and SSH trail **at most about 180 days**, longer on purpose (*Human
+access*). This table is the one place that states the periods; the files
+it names hold the values.
 
-| Log | What it holds | Kept | Set by |
-| --- | --- | --- | --- |
-| `app`'s output, application VM (Docker json-file) | a line per request with its IP address (`apps/api/src/redact.ts`) | until the next deploy recreates the container; at most 6 × 50 MB (staging 3 × 20 MB) | `logging:` in `compose.prod.yml`, `compose.staging.yml` |
-| `postgres`'s and `backup`'s output (Docker json-file) | checkpoints and errors (an error may quote a row's values) | 3 × 2 MB and 2 × 1 MB | the same |
-| The portals' access logs, `/var/log/caddy/quiz-codespace-<i>.log`, engine VM | every request with its IP address, the launch token masked | a rolled file 30 days, and at most 5 rolled files of 10 MiB | `roll_keep_for 720h`, `apps/codespace/deploy/Caddyfile` (installed by every prod deploy) |
-| The runner and both portals, engine VM | the portals' request log with its IP address (`apps/codespace/src/logging.ts`), the runner's | 30 days, in the journal namespace `quiz` | `infra/journald/journald@quiz.conf`, `infra/journald/log-namespace.conf` |
-| The system journal, both VMs | `sudo`, `sshd`, Caddy's own messages, every unit not above | 180 days | `infra/journald/retention.conf` |
+| Log | Kept | Set by |
+| --- | --- | --- |
+| The containers' output, application VM (`app`'s holds every request's IP address) | about 30 days as a size cap, not a date: fewer days under more traffic, more under less; `app`'s also ends at each deploy | `logging:` in `compose.prod.yml`, `compose.staging.yml` |
+| The portals' access logs, `/var/log/caddy/quiz-codespace-<i>.log`, engine VM | a rolled file at most 30 days, at most five of them | `apps/codespace/deploy/Caddyfile` |
+| The system journal, both VMs: the runner, the portals, Podman, Caddy's own errors (with the client's address) | at most about 30 days, or less if the journal reaches its size cap | `infra/logs/journald.conf` |
+| `sudo` and SSH (`auth`, `authpriv`), both VMs, `/var/log/auth-trail.log` | at most about 180 days (26 weekly files) | `infra/logs/auth-trail.*` |
 
-Quiz's own Caddy sites (`Caddyfile`, `Caddyfile.staging`,
-`apps/runner/deploy/Caddyfile`) write no access log.
+- Caddy rolls its current file at 10 MiB only: on a quiet site its oldest
+  lines can outlive 30 days until it fills.
+- Each VM's `/etc/caddy/Caddyfile` is outside the repository, shared with
+  evaluation-tb and heig-codespace. A `log` there that writes a file needs
+  `roll_keep_for 720h`; one with no `output` goes to the journal. Quiz's
+  own sites write no access log.
+- Hetzner's backup of a VM (§6) holds its disk 7 days: there, each period
+  is up to 7 days longer.
 
-- **Docker's bound is a size, not a date.** The json-file driver rotates by
-  size only, and its journald driver would not help: Docker cannot write
-  into a journal namespace. The sizes are an estimate (about 10 MB a day
-  for `app`, the external probe's minute alone ~2 MB; ~160 kB of
-  checkpoint lines a day for `postgres`), so 30 days is approximate:
-  measure when a semester runs and resize (below). A deploy recreates
-  `app`, which deletes its log; `postgres` and `backup` are never
-  recreated by a deploy, hence their caps.
-- **Caddy rolls by size too.** `roll_keep_for` deletes a rolled file 30
-  days after it rolled; the current file rolls at 10 MiB, so on a quiet
-  site (staging's portal) its oldest lines can be older than 30 days until
-  it fills.
-- **The host's own Caddy configuration is not in the repository**:
-  `/etc/caddy/Caddyfile` on each VM, shared with evaluation-tb and
-  heig-codespace, may log sites of its own. Every `log` there that writes a
-  file needs `roll_keep_for 720h`; one with no `output` writes to Caddy's
-  standard error, hence into the system journal for 180 days, and should
-  get an `output file` with `roll_keep_for 720h`. Caddy's own error lines
-  (a failed TLS handshake, a proxy error) name the client's address and
-  stay in the system journal.
-- **The VM backup.** Hetzner's backup of a VM (7 daily slots, §6) holds its
-  disk, logs included: there, each period above is up to 7 days longer.
-- **The first deploy after this change recreates `postgres` and `backup`**
-  (a changed `logging:` recreates the container): a few seconds without the
-  database, as a PostgreSQL restart, under the live-evaluation guard of
-  any deploy (§5). Staging likewise.
-
-**Applying it.** No deploy installs these files; an administrator does,
-once per VM, and again only when one of them changes. On the application
-VM, from a session with `sudo`:
+**Applying it**, by hand, once per VM and again when a file changes (no
+deploy installs them), as an administrator; `R` is the checkout,
+`/srv/quiz` or `/opt/quiz-runner`. rsyslog may be missing (Ubuntu 24.04
+has no `/var/log/auth.log`, *Human access*); `apt install` changes nothing
+when it is there:
 
 ```bash
-sudo install -D -m 0644 /srv/quiz/infra/journald/retention.conf /etc/systemd/journald.conf.d/retention.conf
-sudo systemctl restart systemd-journald
-systemd-analyze cat-config systemd/journald.conf | grep -E '^Max(Retention|File)Sec'   # 180day, 1week
-sudo grep -rn -A6 -E '^\s*log(\s|$)' /etc/caddy/Caddyfile /etc/caddy/conf.d/            # see the Caddy point above
-# after the next production deploy, as srv: json-file map[max-file:… max-size:…] on each of the three
-cd /srv/quiz && C="docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image"
-docker inspect -f '{{.Name}} {{.HostConfig.LogConfig}}' $($C ps -q)
+R=/srv/quiz
+sudo apt install rsyslog
+sudo install -D -m 0644 $R/infra/logs/journald.conf /etc/systemd/journald.conf.d/retention.conf
+sudo install -m 0644 $R/infra/logs/auth-trail.rsyslog.conf /etc/rsyslog.d/40-auth-trail.conf
+sudo install -m 0644 $R/infra/logs/auth-trail.logrotate /etc/logrotate.d/auth-trail
+sudo systemctl restart systemd-journald rsyslog
+sudo grep -rn -A6 -E '^\s*log(\s|$)' /etc/caddy/Caddyfile /etc/caddy/conf.d/   # the Caddy point above
 ```
 
-On the engine VM, as root, in the production checkout (a commit that has
-`infra/journald/`). The staging portal first; the prod portal and the
-runner outside an exam, since their restart drops every open editor for a
-few seconds (*The live-session guard*, RUNBOOK.md):
+**Checking it**, one line per log:
 
 ```bash
-cd /opt/quiz-runner && git log -1 --oneline
-install -D -m 0644 infra/journald/retention.conf /etc/systemd/journald.conf.d/retention.conf
-install -m 0644 infra/journald/journald@quiz.conf /etc/systemd/journald@quiz.conf
-systemctl restart systemd-journald
-q=/etc/containers/systemd
-install -D -m 0644 infra/journald/log-namespace.conf $q/quiz-codespace-staging.container.d/log-namespace.conf
-systemctl daemon-reload && systemctl restart quiz-codespace-staging
-systemctl show -p LogNamespace quiz-codespace-staging                 # LogNamespace=quiz
-journalctl --namespace=quiz -u quiz-codespace-staging -n 20 --no-pager  # its startup lines, here and not in `journalctl -u`
-node apps/codespace/deploy/smoke.mjs staging --port 3120 --launch       # a real session starts
-# all green: the prod portal and the runner
-install -D -m 0644 infra/journald/log-namespace.conf $q/quiz-codespace-prod.container.d/log-namespace.conf
-install -D -m 0644 infra/journald/log-namespace.conf $q/quiz-runner.container.d/log-namespace.conf
-systemctl daemon-reload && systemctl restart quiz-codespace-prod quiz-runner
-node apps/codespace/deploy/smoke.mjs prod --port 3110
-# then the runner's smoke test from the application VM (§3, Checking the runner end to end)
-```
-
-The namespace has a cost the system journal does not: systemd puts such a
-unit in a mount namespace of its own (`LogNamespace=` in systemd.exec(5)),
-so the mounts its `podman run` makes are invisible from the host. The
-containers run inside it unaffected, which is what the smoke tests prove;
-never give the drop-in to a Podman API service. **Undoing it** for one
-unit: delete its `log-namespace.conf`, `systemctl daemon-reload`, restart
-the unit; its log returns to the system journal.
-
-**Checking it**, any day after (each oldest line within a day or a week of
-its period once the VM has run that long), and measuring Docker's volume
-to resize a cap:
-
-```bash
-sudo journalctl --namespace=quiz -o short-iso --no-pager | head -n 2   # engine VM: at most ~31 days old
-sudo journalctl -o short-iso --no-pager | head -n 2                    # both VMs: at most ~187 days old
-sudo journalctl --namespace=quiz --disk-usage; sudo journalctl --disk-usage
-ls -l /var/log/caddy/                                                  # engine VM: no rolled file older than 30 days
-# application VM, as srv in /srv/quiz ($C above): app's log size since its start, against max-size × max-file
-id=$($C ps -q app); docker inspect -f '{{.State.StartedAt}} {{.LogPath}}' "$id"; ls -l "$(docker inspect -f '{{.LogPath}}' "$id")"
+sudo -k; sudo true; sudo tail -n 2 /var/log/auth-trail.log         # this very sudo
+sudo logrotate -d /etc/logrotate.d/auth-trail 2>&1 | grep -i error  # nothing
+sudo journalctl -o short-iso --no-pager | head -n 2                 # the oldest entry, at most ~31 days old
+ls -l /var/log/caddy/                                               # engine VM: no rolled file over 30 days
+cd /srv/quiz && docker inspect -f '{{.Name}} {{.HostConfig.LogConfig}}' $(docker compose -f compose.prod.yml --env-file .env.prod ps -q)   # as srv: each cap
 ```
 
 ## 8. Staging (`quiz.dev.chevallier.io`, ADR-028)

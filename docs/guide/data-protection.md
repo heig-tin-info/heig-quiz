@@ -92,20 +92,7 @@ The platform receives data from three sources: Switch edu-ID at sign-in, the cla
 | The help assistant's conversations: a teacher's questions and the answers | `assist_conversations`, `assist_exchanges` (`db/assist.ts`, ADR-080) | teacher, AI model | 30 days, or sooner if the teacher deletes them |
 | Audit log: actor, action, subject, a JSON payload | `audit_log` (`db/auth.ts`, `apps/api/src/audit.ts`) | server | Never deleted, and protected against change |
 | heig-classroom's audit log, imported as it was | `legacy_classroom_audit_log` (`db/importClassroom.ts`) | the heig-classroom migration | Kept indefinitely; read by no route |
-| Technical log of each request: method, address with secrets masked, host, IP address | the containers' output (`apps/api/src/redact.ts`); on the code machine, the online workspace's own log and its web server's access log | request | About 30 days (see [Technical logs](#technical-logs)) |
-
-#### Technical logs
-
-The machines' logs are kept for a set period, configured in the repository and applied by the administrator (`docs/development/deployment.md` §7, *Host logs and their retention*, issue #872):
-
-| Log | Kept |
-| --- | --- |
-| The application's output, with the IP address of each request (application machine) | Until the next update of the platform recreates its container, and at most a size meant to hold about 30 days (`compose.prod.yml`); the bound is a size, so the period is approximate |
-| The database's and the backup service's output | A size meant to hold about 30 days |
-| The online workspace's log and its web server's access log, with the IP address of each request (code machine) | 30 days (`infra/journald/journald@quiz.conf`, `apps/codespace/deploy/Caddyfile`); the web server's current file is deleted only once full, so on a quiet month its oldest lines can be older |
-| The system journal of each machine: who used administrator rights (`sudo`), SSH sign-in attempts, the web server's own error messages (which name the client's IP address) | 180 days (`infra/journald/retention.conf`) |
-
-Hetzner's backup of a machine, where it is enabled, holds its disk, logs included, for 7 days: there, each period above is up to 7 days longer. The platform's own web server sites write no access log; the machines' shared web server configuration is outside the repository, and the runbook asks the administrator to check that it keeps no access log longer than 30 days.
+| Technical log of each request: method, address with secrets masked, host, IP address | the containers' output (`apps/api/src/redact.ts`) | request | See [Technical logs](#technical-logs) |
 
 The IP address is not stored in the database, with one exception: a refused Safe Exam Browser access writes it to the audit log (`apps/api/src/auth/seb.ts`). The platform records neither the browser in use (only the drill's device class), nor keystrokes, nor the content of a paste, nor any audience measurement beyond the hours of activity, which the administrator reads only as counts.
 
@@ -158,7 +145,7 @@ To help a student with a problem they report, the administrator, with Super Powe
 
 ### The system administrators
 
-Whoever administers the machines reaches the database, the backups and the logs, hence all the data, through system tools (SSH, `psql`) that the platform does not trace. The deployment runbook describes the policy: one personal account per person, sign-in by key only, no root sign-in on the application machine and, on the code machine, root only for the deployment's forced commands, and `sudo` writing who did what to the system journal, kept 180 days (`docs/development/deployment.md`, *Human access*). Which persons hold these accounts on the production machines, today: **To be confirmed**.
+Whoever administers the machines reaches the database, the backups and the logs, hence all the data, through system tools (SSH, `psql`) that the platform does not trace. The deployment runbook describes the policy: one personal account per person, sign-in by key only, no root sign-in on the application machine and, on the code machine, root only for the deployment's forced commands, and `sudo` writing who did what to a log kept for a limited period (`docs/development/deployment.md`, *Human access*; [Technical logs](#technical-logs)). Which persons hold these accounts on the production machines, today: **To be confirmed**.
 
 ### What is traced
 
@@ -258,6 +245,19 @@ A deleted piece of data stays in the backups until they rotate (`docs/developmen
 
 Through the monthly off-site archives, a deleted piece of data can therefore survive about four months after its deletion (each archive holds the last 30 days of dumps, and archives are kept about three months), up to five months when the copy is pruned once a month; the specification states about four months (N-DATA-03). That retention holds only when someone runs the pruning by hand (`scripts/offsite-backup/prune.sh`, "once a month is enough" in the runbook): the application machine cannot remove an archive, so without pruning the archives accumulate and nothing leaves the off-site copy. The staging copy keeps it until its next refresh.
 
+### Technical logs
+
+The machines keep their logs for a limited period, set in the platform's configuration and applied by the administrator. Each period is an upper bound, never a promise that a line is still there:
+
+| Log | Kept |
+| --- | --- |
+| The application's technical log, with each request's IP address (application machine), and the database's | About 30 days: the limit is a size meant to hold a month of usual traffic, not a date, so a quiet month keeps lines longer and a busy one shorter; each update of the platform also starts the application's afresh |
+| The online workspace's web server access log, with each request's IP address (code machine) | At most 30 days per closed file; the file being written is closed only once full, so on a quiet site its oldest lines can be older |
+| Each machine's system journal: the code runner, the online workspace's own log with each request's IP address, the web server's error messages (which name the client's IP address) | At most about 30 days, or less if the journal reaches its size limit |
+| Who used administrator rights (`sudo`) and the SSH sign-ins, on each machine | At most about 180 days: longer on purpose, it is the trace of the administrators' actions |
+
+Hetzner's backup of a machine, where it is enabled, holds its disk, logs included, for 7 days: there, each period is up to 7 days longer. The platform's own web server sites write no access log; the web server configuration the machines share with other services is not the platform's, and the administrator checks that it keeps no access log longer.
+
 ## Statistics
 
 No statistic is stored: every one is computed, when displayed, from the nominative data.
@@ -290,9 +290,7 @@ Network and storage:
 - SSH by key only, no root sign-in except the code machine's forced deployment commands, `fail2ban` and a provider firewall (`docs/development/deployment.md`, *Human access*);
 - students' code runs in containers with no network, no secret and no access to the machine's files (`apps/runner/README.md`).
 
-The technical logs on the machines are kept about 30 days, the system journal 180 days ([Technical logs](#technical-logs)).
-
-Not established from the repository: the encryption of the machines' disks and of Hetzner's backups (**To be confirmed**).
+The technical logs on the machines are kept for a limited period ([Technical logs](#technical-logs)). Not established from the repository: the encryption of the machines' disks and of Hetzner's backups (**To be confirmed**).
 
 ## Students' rights and whom to contact
 

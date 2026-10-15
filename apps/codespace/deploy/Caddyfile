@@ -29,9 +29,9 @@
 	# done here with the fragment; the portal's own log masks it too,
 	# src/logging.ts.)
 	#
-	# It holds every student's address: a rolled file goes after 30 days
-	# (`roll_keep_for`, Caddy's default is 90), or sooner past five files
-	# (#872, docs/development/deployment.md §7, Host logs).
+	# It holds every student's address: `roll_keep_for` bounds the age of a
+	# rolled file (Caddy's default is 90 days), `roll_keep` their number; the
+	# period, docs/development/deployment.md §7, Host logs (#872).
 	log {
 		output file /var/log/caddy/quiz-codespace-@INSTANCE@.log {
 			roll_size 10MiB

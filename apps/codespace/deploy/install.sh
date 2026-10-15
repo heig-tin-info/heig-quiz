@@ -71,7 +71,7 @@ for i in $(seq 1 60); do
 	fi
 	if [ "$i" = 60 ]; then
 		echo "deploy: $CS_UNIT does not answer /healthz after 60 s" >&2
-		journalctl --namespace=+quiz -u "$CS_UNIT.service" -n 40 --no-pager >&2 || true
+		journalctl -u "$CS_UNIT.service" -n 40 --no-pager >&2 || true
 		exit 1
 	fi
 	sleep 1

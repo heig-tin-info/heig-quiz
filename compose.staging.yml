@@ -19,6 +19,13 @@
 # disposable by definition.
 name: quiz-staging
 
+# Host logs (#872): the caps and their sizing are compose.prod.yml's.
+x-small-log: &small-log
+  driver: json-file
+  options:
+    max-size: "2m"
+    max-file: "3"
+
 services:
   app:
     # The sha, and the digest the CI pushed (`<sha>@sha256:…`), are written
@@ -52,8 +59,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Host logs (#872): rotated by size, about 30 days at staging's traffic
-    # (compose.prod.yml, docs/development/deployment.md §7, Host logs).
+    # Production's request log at a few testers' traffic.
     logging:
       driver: json-file
       options:
@@ -104,11 +110,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-    logging:
-      driver: json-file
-      options:
-        max-size: "2m"
-        max-file: "3"
+    logging: *small-log
 
 volumes:
   pgdata:
