@@ -626,7 +626,11 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
      broader concepts, and an **Unplaced** filter lists the concepts with no
      broader and no narrower concept, whatever their status; the rule is
      `unplaced` of `@quiz/domain`, applied client-side to the loaded
-     vocabulary's `broader` lists.
+     vocabulary's `broader` lists. The queue has a tree reading (2026-10-15,
+     #897): a view switch on All, To validate and Validated draws the same
+     rows indented under the broader concept their path follows, each concept
+     once with its other broader concepts named, the ancestors of a shown
+     concept as path-only rows (`conceptTree`, client-side).
    - **Not here.** A concept selected anywhere covering its narrower ones
      (§4 of the Decision) is 7d (§10).
 6. **Suggest concepts (8a, built).** It sends the draft's statement and

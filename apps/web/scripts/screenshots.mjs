@@ -1754,6 +1754,12 @@ const scenes = [
   // #897 step B: the Unplaced filter, and the path at the top of the sheet of a concept with two broader ones.
   { name: "admin-concepts-unplaced", role: "admin", path: "/admin?tab=concepts", act: (p) => p.getByRole("radio", { name: /^unplaced/i }).check({ force: true }) },
   { name: "admin-concepts-sheet-path", role: "admin", path: "/admin?tab=concepts", fold: true, act: (p) => p.getByRole("button", { name: /^edit fuite mémoire/i }).click() },
+  // #897: the queue read as a tree, then searched (the match's ancestors drawn as its path).
+  { name: "admin-concepts-tree", role: "admin", path: "/admin?tab=concepts", act: (p) => p.getByRole("radio", { name: /^tree$/i }).check({ force: true }) },
+  { name: "admin-concepts-tree-search", role: "admin", path: "/admin?tab=concepts", act: async (p) => {
+      await p.getByRole("radio", { name: /^tree$/i }).check({ force: true });
+      await p.getByRole("searchbox", { name: /search a concept/i }).fill("fuite");
+    } },
   // The merge dialog over the sheet of a used concept, a target picked (what the merge does is said before the confirmation).
   { name: "admin-concepts-merge", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^edit two's complement/i }).click();

@@ -39,19 +39,28 @@ export const usesLabel = (t: TFunction, n: number): string =>
  * The path above a concept for the picker (ADR-081 §5): its broader concepts
  * from the root down, `Programming › Pointer`. A concept with several broader
  * ones follows the first by name (the picker is compact; the sheet lists them
- * all). The server forbids cycles, so the walk ends. Empty when it has none.
+ * all). The server forbids cycles; should one be stored, the walk still
+ * ends where it would come back. Empty when it has none.
  */
 export function broaderTrail(concept: Concept, byId: ReadonlyMap<string, Concept>, locale: Locale): string[] {
   const trail: string[] = [];
-  for (let at: Concept | undefined = concept; at; ) {
-    const parent: Concept | undefined = at.broader
-      .map((id) => byId.get(id))
-      .filter((c): c is Concept => c !== undefined)
-      .sort((a, b) => conceptName(a, locale).localeCompare(conceptName(b, locale)))[0];
-    if (parent) trail.unshift(conceptName(parent, locale));
-    at = parent;
+  const seen = new Set([concept.id]);
+  for (let at = broaderOf(concept, byId, locale)[0]; at && !seen.has(at.id); at = broaderOf(at, byId, locale)[0]) {
+    seen.add(at.id);
+    trail.unshift(conceptName(at, locale));
   }
   return trail;
+}
+
+/** Two concepts in the order of their names in the reader's language. */
+export const byConceptName =
+  (locale: Locale) =>
+  (a: Concept, b: Concept): number =>
+    conceptName(a, locale).localeCompare(conceptName(b, locale), locale);
+
+/** A concept's broader concepts that `byId` holds, by name: the first is the one its path follows. */
+export function broaderOf<C extends Concept>(concept: Concept, byId: ReadonlyMap<string, C>, locale: Locale): C[] {
+  return concept.broader.flatMap((id) => byId.get(id) ?? []).sort(byConceptName(locale));
 }
 
 /** A language of a concept as the sheet names it: "French", "English". */

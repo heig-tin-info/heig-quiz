@@ -577,6 +577,67 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       const sheet = await screen.findByRole("dialog");
       expect(within(sheet).getByText("Programming › C")).toHaveTextContent(/^Within Programming › C \+1 other broader concept$/);
     });
+
+    describe("the tree reading", () => {
+      const asTree = async () => userEvent.click(await screen.findByRole("radio", { name: "Tree" }));
+
+      it("is offered on All, To validate and Validated, never on Unplaced, Duplicates or Relations", async () => {
+        mockFetch({ [LIST]: ok(page(tree)), "GET /app/api/admin/concepts/relations/candidates": ok({ candidates: [] }) });
+        renderWithProviders(<ConceptQueue />);
+        expect(await screen.findByRole("radiogroup", { name: "Show the concepts as" })).toBeInTheDocument();
+        for (const filter of [/^to validate$/i, /^validated$/i]) {
+          await userEvent.click(screen.getByRole("radio", { name: filter }));
+          expect(screen.getByRole("radio", { name: "Tree" })).toBeInTheDocument();
+        }
+        for (const filter of [/^unplaced/i, /^duplicates/i, /^relations$/i]) {
+          await userEvent.click(screen.getByRole("radio", { name: filter }));
+          expect(screen.queryByRole("radio", { name: "Tree" })).toBeNull();
+        }
+      });
+
+      it("draws each concept once under the first broader by name, indented, the others said", async () => {
+        mockFetch({ [LIST]: ok(page(tree)) });
+        renderWithProviders(<ConceptQueue />);
+        await asTree();
+        const items = screen.getAllByRole("listitem");
+        expect(items.map((li) => [li.getAttribute("aria-level"), within(li).getAllByText(/./)[0]!.textContent])).toEqual([
+          ["1", "Heap"],
+          ["1", "Lone"],
+          ["1", "Programming"],
+          ["2", "C"],
+          ["3", "Pointers"],
+        ]);
+        expect(within(rowOf("Pointers")).getByText("Also under Heap")).toBeInTheDocument();
+        // The indentation shows the path: it is said to a screen reader only.
+        expect(within(rowOf("Pointers")).getByText("Programming › C")).toHaveClass("sr-only");
+      });
+
+      it("keeps a match's ancestors as its path, dimmed and without actions", async () => {
+        mockFetch({ [LIST]: ok(page(tree)) });
+        renderWithProviders(<ConceptQueue />);
+        await asTree();
+        await userEvent.type(screen.getByRole("searchbox", { name: /search a concept/i }), "pointers");
+        await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(3));
+        const [programmingRow, cRow, pointersRow] = screen.getAllByRole("listitem");
+        for (const path of [programmingRow!, cRow!]) {
+          expect(path).toHaveTextContent(/path only$/);
+          expect(within(path).queryByRole("button")).toBeNull();
+        }
+        expect(within(pointersRow!).getByRole("button", { name: /edit pointers/i })).toBeInTheDocument();
+      });
+
+      it("validates from a tree row, a validated ancestor drawn as the path on To validate", async () => {
+        const draft = named(25, "Null pointer", { status: "proposed", broader: [pointers.id] });
+        const { calls } = mockFetch({ [LIST]: ok(page([...tree, draft])), [validateOf(draft)]: ok({ ...draft, status: "validated" }) });
+        renderWithProviders(<ConceptQueue />);
+        await asTree();
+        await userEvent.click(screen.getByRole("radio", { name: /^to validate/i }));
+        expect(screen.getAllByRole("listitem").map((li) => li.getAttribute("aria-level"))).toEqual(["1", "2", "3", "4"]);
+        expect(rowOf("Programming")).toHaveTextContent(/path only$/);
+        await userEvent.click(screen.getByRole("button", { name: /validate null pointer/i }));
+        await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/validate"))).toBe(true));
+      });
+    });
   });
 
   it("has a done state", async () => {
