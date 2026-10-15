@@ -4,6 +4,7 @@
  * the registry (`service.ts`) and the links (`links.ts`).
  */
 import { and, asc, eq, inArray, ne, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { CONCEPT_LANGS, type Concept, type ConceptExists, type ConceptLang, type ConceptRef } from "@quiz/contracts";
 import { conceptKey, conceptLabelIn, qualifiedConceptKey, relationsOf, type RelationEdges, type ResolvableConcept } from "@quiz/domain";
@@ -167,6 +168,29 @@ export function toResolvable(row: ConceptRow, aliases: ReadonlyMap<string, reado
 /** A concept as a question shows it, in the reader's language or the other one (`conceptLabelIn`). */
 export function toConceptRef(row: ConceptRow, lang: ConceptLang): ConceptRef {
   return { id: row.id, status: row.status, ...conceptLabelIn(perLang((l) => sideOf(row, l)), lang) };
+}
+
+/**
+ * The concept each of `ids` stands for today, labelled in `lang`: itself, or
+ * the final concept a merge folded it into (`merged_into`: one hop, since a
+ * merge rewrites the chains onto its winner, `merge.ts`). An id that names
+ * no concept is absent. A staff read: the caller decides what of it a
+ * student may see.
+ */
+export async function finalConceptRefs(db: Db | Tx, ids: readonly string[], lang: ConceptLang): Promise<Map<string, ConceptRef>> {
+  if (ids.length === 0) return new Map();
+  const winner = alias(concepts, "winner");
+  const rows = await db
+    .select({ concept: concepts, winner })
+    .from(concepts)
+    .leftJoin(winner, eq(winner.id, concepts.mergedInto))
+    .where(inArray(concepts.id, [...new Set(ids)]));
+  return new Map(
+    rows.flatMap(({ concept, winner }) => {
+      const final = winner ?? concept;
+      return final.status === "merged" ? [] : [[concept.id, toConceptRef(final, lang)] as const];
+    }),
+  );
 }
 
 /**

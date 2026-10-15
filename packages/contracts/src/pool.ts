@@ -311,14 +311,41 @@ export type CategoryOrder = z.infer<typeof CategoryOrder>;
 /**
  * One concept the live questions of a pool use, and how many of them
  * (ADR-081 third addendum §6): `PoolDetail.concepts`, which feeds both the
- * filter's completion and the read-only "Concepts" tab. A validated
- * concept's description is the admin's (addendum §6).
+ * filter's completion and the read-only "Concepts" tab. `count` is the
+ * COVERED count (ADR-116 §8): the live questions linked to the concept or
+ * to any narrower one, once each, which is what a click on it opens. A
+ * validated concept's description is the admin's (addendum §6).
  */
 export const PoolConcept = z.object({
   concept: ConceptRef,
   count: z.number().int().nonnegative(),
 });
 export type PoolConcept = z.infer<typeof PoolConcept>;
+
+/**
+ * One concept of a pool's concept map (ADR-116 §1): a concept linked to a
+ * live question of the pool, or broader than one, near or far. `covered`
+ * counts the live questions linked to it or to a narrower concept, once
+ * each (what its click opens); `own` those linked to it and to none of its
+ * narrower concepts (0 for a concept only reached from below).
+ */
+export const PoolConceptNode = z.object({
+  concept: ConceptRef,
+  covered: z.number().int().min(1),
+  own: z.number().int().nonnegative(),
+});
+export type PoolConceptNode = z.infer<typeof PoolConceptNode>;
+
+/**
+ * `GET /pools/:id/concept-map` (ADR-116 §7): the concepts the pool reaches,
+ * by label then id, and the `broader` edges among them (`concept` has
+ * `target` as a broader concept), read by the pool's readers only.
+ */
+export const PoolConceptMap = z.object({
+  nodes: z.array(PoolConceptNode),
+  broader: z.array(z.object({ concept: z.uuid(), target: z.uuid() })),
+});
+export type PoolConceptMap = z.infer<typeof PoolConceptMap>;
 
 
 export const QuestionMeta = z.object({
@@ -774,7 +801,7 @@ export const PoolDetail = z.object({
   /** The caller's effective role: what the screen may offer. */
   role: PoolRole,
   categories: z.array(CategoryNode),
-  /** The concepts the pool's live questions use, with their counts, by label. */
+  /** The concepts the pool's live questions use, by label, each with its covered count (ADR-116 §8). */
   concepts: z.array(PoolConcept),
   questionCount: z.number().int(),
   /**

@@ -1,7 +1,7 @@
 /** The pools themselves: list, create, read, rename, delete. */
 import type { FastifyInstance } from "fastify";
 
-import { CatalogueQuery, IdParam, PoolCreate, PoolPatch, type PoolInUse } from "@quiz/contracts";
+import { CatalogueQuery, IdParam, PoolCreate, PoolPatch, type PoolConceptMap, type PoolInUse } from "@quiz/contracts";
 
 import {
   accessWhere,
@@ -16,6 +16,7 @@ import { DomainError, invalid, rateLimited, readerLang } from "../http.js";
 import { publish } from "../../events.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
 import * as service from "./service.js";
+import { poolConceptMap } from "../concept/service.js";
 import { LLM_CALLS_PER_MINUTE } from "../llm/service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 
@@ -73,6 +74,20 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, scope: pool }) =>
       service.poolDetail(app.db, pool, await poolRoleOf(app.db, pool, callerOf(req)), readerLang(req), callerOf(req)),
+    ),
+  );
+
+  /**
+   * The pool's concept map (ADR-116 §7): the concepts its live questions
+   * reach, counted with their narrower ones, and the broader edges among
+   * them. Read by whoever reads the pool (the same loader as `GET /pools/:id`);
+   * loaded only when the map opens. Nothing audited.
+   */
+  app.get(
+    "/app/api/pools/:id/concept-map",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: inPool() }, async ({ req, scope: pool }) =>
+      (await poolConceptMap(app.db, pool.id, readerLang(req))) satisfies PoolConceptMap,
     ),
   );
 

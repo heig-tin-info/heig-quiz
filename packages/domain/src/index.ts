@@ -45,6 +45,7 @@ export {
 export * from "./clockMode.js";
 export * from "./cloze.js";
 export * from "./conceptRelationCandidates.js";
+export * from "./conceptMap.js";
 export * from "./conceptRelations.js";
 export * from "./concepts.js";
 export * from "./conceptWrites.js";

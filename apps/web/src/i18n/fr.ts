@@ -1833,6 +1833,7 @@ export const fr: Record<keyof Dict, string> = {
   "pool.concepts.noMatch.title": "Aucune notion ne correspond",
   "pool.concepts.noMatch.body": "Aucune notion de cette banque ne contient « {q} ».",
   "pool.concepts.clearFilter": "Effacer le filtre",
+  "pool.concepts.table.caption": "Une notion compte ses questions et celles de ses notions plus étroites.",
   "pool.concepts.heat.caption": "L'aire de chaque notion est proportionnelle à son nombre de questions.",
   "pool.tab.settings": "Réglages",
   "review.title": "Revue LLM",

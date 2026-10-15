@@ -130,6 +130,7 @@ import {
   ProjectSummary,
   TeacherCandidates,
   PoolCategories,
+  PoolConceptMap,
   PoolDetail,
   PoolMembers,
   PoolSubscribers,
@@ -380,6 +381,7 @@ const CHECKED: Case[] = [
   ...pools.flatMap((p) => [
     one("/app/api/pools/:id", `/app/api/pools/${p.id}`, PoolDetail),
     one("/app/api/pools/:id/categories", `/app/api/pools/${p.id}/categories`, PoolCategories),
+    one("/app/api/pools/:id/concept-map", `/app/api/pools/${p.id}/concept-map`, PoolConceptMap),
     one("/app/api/pools/:id/members", `/app/api/pools/${p.id}/members`, PoolMembers),
     one("/app/api/pools/:id/subscribers", `/app/api/pools/${p.id}/subscribers`, PoolSubscribers),
     one("/app/api/pools/:id/unpublish-impact", `/app/api/pools/${p.id}/unpublish-impact`, PoolUnpublishImpact),

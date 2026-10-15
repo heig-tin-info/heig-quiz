@@ -15,7 +15,7 @@
  */
 import { and, eq, inArray } from "drizzle-orm";
 
-import { narrowerDescendantsOf } from "@quiz/domain";
+import { coverageOf } from "@quiz/domain";
 
 import type { ConceptLang, ConceptRef } from "@quiz/contracts";
 
@@ -38,18 +38,18 @@ export async function courseConceptsOf(db: Db | Tx, courseId: string, lang: Conc
 /**
  * COVERAGE, in one place: for each of the given concepts, the concepts it
  * covers, itself first and then every narrower one, near or far (ADR-081 §4:
- * a selected concept covers its narrower ones; sixth addendum, step 7d). Only
- * `broader` edges widen it: a `related` concept is never covered, a merged
- * concept has no edges left. One read of the broader edges, whatever the
- * number of ids. Every reader of coverage (the pool and MCP concept filters,
- * a course's filter, the picker's ranking, the teacher's mastery per course
- * concept, the student's later) goes through it.
+ * a selected concept covers its narrower ones; sixth addendum, step 7d). The
+ * rule is `coverageOf` of `@quiz/domain`, which the pool's concept map
+ * applies too (`poolMap.ts`, ADR-116); this is its loader. Only `broader`
+ * edges widen it: a `related` concept is never covered, a merged concept has
+ * no edges left. One read of the broader edges, whatever the number of ids.
+ * Every reader of coverage (the pool and MCP concept filters, a course's
+ * filter, the picker's ranking, the teacher's mastery per course concept,
+ * the student's) goes through it.
  */
 export async function coverage(db: Db | Tx, conceptIds: readonly string[]): Promise<Map<string, string[]>> {
-  const ids = [...new Set(conceptIds)];
-  if (ids.length === 0) return new Map();
-  const narrower = narrowerDescendantsOf((await loadEdges(db)).broader, ids);
-  return new Map(ids.map((id) => [id, [id, ...narrower.get(id)!]]));
+  if (conceptIds.length === 0) return new Map();
+  return coverageOf((await loadEdges(db)).broader, conceptIds);
 }
 
 /** The union of {@link coverage}: every concept id the given ones cover together. */

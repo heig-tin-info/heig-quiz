@@ -371,7 +371,7 @@ export async function deletePool(db: Db, poolId: string): Promise<boolean> {
 }
 /**
  * `GET /pools/:id`: the pool, its category tree, the concepts in use with
- * their counts (labelled in `lang`, the pool's "Concepts" tab) — and the caller's effective role, which is what the
+ * their covered counts (labelled in `lang`, the pool's "Concepts" tab, ADR-116 §8) — and the caller's effective role, which is what the
  * screen reads to decide whether it offers an editor or a reading view.
  */
 export async function poolDetail(
