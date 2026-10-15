@@ -12,6 +12,7 @@ import {
   Button,
   cx,
   EmptyState,
+  isoDateTime,
   menuPosition,
   usePanelClamp,
   panelStyle,
@@ -131,6 +132,12 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
       return t(`notif.systemAlert.${payload.state}`, {
         checks: payload.checks.map((key) => t(checkName(key))).join(", "),
       });
+    // The role of who acted, never who (ADR-034 §6).
+    case "impersonation_ended":
+      return t(`notif.impersonationEnded.${payload.actorRole}`, {
+        openedAt: isoDateTime(payload.openedAt),
+        closedAt: isoDateTime(payload.closedAt),
+      });
     // The project kinds (F-NOTIF-13): the project's name, counts, never a score.
     case "project_published":
       return t(payload.githubLinked === false ? "notif.projectPublished.unlinked" : "notif.projectPublished", {
@@ -164,8 +171,9 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
  * of the classroom, the grading panel of the evaluation, the student home
  * (exercises scheduled) or the attempt of an exercise that opened or of an
  * evaluation about to close, the project a project kind is about (the
- * staff's page, or the student's view of it) and the Settings of a
- * classroom whose organization was lost. The e-mail and the Teams message
+ * staff's page, or the student's view of it), the Settings of a
+ * classroom whose organization was lost, and the "Data and privacy" page
+ * after a session opened in the student's name. The e-mail and the Teams message
  * link to the same page (`templates.ts` on the server).
  */
 function notificationRoute(payload: NotificationPayload): Route {
@@ -193,6 +201,8 @@ function notificationRoute(payload: NotificationPayload): Route {
       return { view: "attempt", evaluationId: payload.evaluationId };
     case "system_alert":
       return { view: "admin", tab: "system" };
+    case "impersonation_ended":
+      return { view: "privacy" };
     case "project_published":
     case "project_deadline_reminder":
     case "project_repo_invited":

@@ -32,7 +32,7 @@ import { teamsLinkOf } from "./service.js";
 import { createTeamsClient, TeamsError, type TeamsClient } from "./teams.js";
 import { isTeamsPayload, teamsActivity } from "./teamsApp.js";
 import { tenantAllowed, type AllowedTenants } from "./teamsLink.js";
-import { mailLocale, renderNotification } from "./templates.js";
+import { isOutboundPayload, mailLocale, renderNotification } from "./templates.js";
 
 export interface DeliveryDeps {
   db: Db;
@@ -66,6 +66,9 @@ export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<voi
   const payload = parsed.data;
   // An admin kind reaches admins only: a role lost since the send is not told.
   if (NOTIFICATION_AUDIENCE[payload.kind] === "admin" && user.role !== "admin") return;
+  // A kind kept in the app (`KIND_CHANNELS`) has no words here: `notifyMany`
+  // never enqueues one, and a stray job is dropped.
+  if (!isOutboundPayload(payload)) return;
   const message = renderNotification(payload, mailLocale(user.locale), deps.webUrl);
 
   if (job.channel === "email") {

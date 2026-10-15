@@ -229,7 +229,7 @@ export function teamsAppPackage(opts: AppOptions): Buffer {
  * it into a route of the router and writes the path back from that route,
  * under its own origin (`TeamsTabPage`).
  */
-export function teamsTabDeepLink(appId: string, payload: NotificationPayload): string {
+export function teamsTabDeepLink(appId: string, payload: TeamsPayload): string {
   const context = JSON.stringify({ subEntityId: notificationPath(payload) });
   return `https://teams.microsoft.com/l/entity/${encodeURIComponent(appId)}/${TEAMS_TAB_ENTITY}?context=${encodeURIComponent(context)}`;
 }

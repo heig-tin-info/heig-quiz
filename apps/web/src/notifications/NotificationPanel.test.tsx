@@ -7,6 +7,7 @@ import type { Notification } from "@quiz/contracts";
 import { UserMenu } from "../Header";
 import { makeMe } from "../test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { isoDateTime } from "../ui";
 import { NOTIFICATION_LIMIT } from "./NotificationPanel";
 
 /*
@@ -362,6 +363,35 @@ describe("the inbox in the account menu", () => {
     await openInbox();
     await userEvent.click(screen.getByText("Health checks failing: Disk space, Code runner."));
     expect(navigate).toHaveBeenCalledWith({ view: "admin", tab: "system" });
+  });
+
+  it.each([
+    ["en", "An administrator opened a session in your name on {o}. It closed on {c}."],
+    ["fr", "Un administrateur a ouvert une session à votre nom le {o}. Elle s'est fermée le {c}."],
+  ] as const)("tells a student, in %s, that an administrator opened a session in their name, and opens the privacy page", async (locale, sentence) => {
+    const notice: Notification = {
+      id: "n11",
+      payload: {
+        kind: "impersonation_ended",
+        actorRole: "admin",
+        openedAt: "2026-10-15T08:00:00.000Z",
+        closedAt: "2026-10-15T08:20:00.000Z",
+      },
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [notice], unread: 1 }),
+      "POST /app/api/notifications/n11/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<UserMenu me={makeMe()} onOpenSettings={vi.fn()} notifications={{ navigate }} />, { locale });
+    await openInbox(locale === "fr" ? /Menu du compte/ : /User menu/);
+    const text = sentence
+      .replace("{o}", isoDateTime("2026-10-15T08:00:00.000Z"))
+      .replace("{c}", isoDateTime("2026-10-15T08:20:00.000Z"));
+    await userEvent.click(screen.getByText(text));
+    expect(navigate).toHaveBeenCalledWith({ view: "privacy" });
   });
 
   it("marks the whole inbox read from the panel", async () => {

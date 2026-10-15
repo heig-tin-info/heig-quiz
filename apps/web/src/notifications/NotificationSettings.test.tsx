@@ -56,6 +56,7 @@ function settings(
       project_deadline_applied: { bell: true, email: false, teams: false },
       project_provision_failed: ALL_ON,
       github_org_lost: ALL_ON,
+      impersonation_ended: { bell: true, email: false, teams: false },
     },
     kinds,
     email: "lea@heig.test",
@@ -77,6 +78,9 @@ describe("the notification settings", () => {
     expect(within(grid).getByText("Exercise open")).toBeVisible();
     expect(within(grid).getByText("Deadline approaching")).toBeVisible();
     expect(within(grid).getByText("Results updated")).toBeVisible();
+    // A session opened in their name (ADR-034 §6): the app only, switchable there.
+    expect(within(grid).getByRole("switch", { name: "Session opened in your name: App" })).toHaveAttribute("aria-checked", "true");
+    expect(within(grid).queryByRole("switch", { name: "Session opened in your name: Email" })).toBeNull();
     expect(within(grid).queryByText("Grading to validate")).toBeNull();
     expect(within(grid).queryByRole("columnheader", { name: "Teams" })).toBeNull();
     expect(screen.getByText("Sent to lea@heig.test. Nothing to set up.")).toBeVisible();

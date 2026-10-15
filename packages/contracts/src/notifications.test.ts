@@ -73,6 +73,26 @@ describe("system_alert — the payload", () => {
   });
 });
 
+describe("impersonation_ended — a session opened in the student's name (ADR-034 §6)", () => {
+  it("stays in the app, on by default, and switchable like any other kind", () => {
+    expect(kindChannels("impersonation_ended")).toEqual(["bell"]);
+    expect(DEFAULT_CHANNEL_ENABLED.impersonation_ended).toEqual({ bell: true, email: false, teams: false });
+  });
+
+  it("carries the role and two times, never who acted", () => {
+    const payload = {
+      kind: "impersonation_ended",
+      actorRole: "admin",
+      openedAt: "2026-10-15T08:00:00.000Z",
+      closedAt: "2026-10-15T08:20:00.000Z",
+    };
+    expect(NotificationPayload.parse(payload)).toEqual(payload);
+    // A stray actor id is dropped, never carried.
+    expect(NotificationPayload.parse({ ...payload, actorUserId: "11111111-1111-4111-8111-111111111111" })).toEqual(payload);
+    expect(NotificationPayload.safeParse({ ...payload, actorRole: "student" }).success).toBe(false);
+  });
+});
+
 describe("notificationKindsFor — the rows of the settings grid (#277)", () => {
   const SEAT_KINDS = [
     "results_released",
@@ -84,6 +104,7 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
     "project_deadline_reminder",
     "project_repo_invited",
     "project_grade_final",
+    "impersonation_ended",
   ];
   const COURSE_KINDS = [
     "student_joined",

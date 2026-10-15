@@ -9,6 +9,7 @@ import {
   notificationPath,
   renderNotification,
   renderTestMail,
+  type OutboundPayload,
 } from "./templates.js";
 
 const POOL = "11111111-1111-4111-8111-111111111111";
@@ -218,7 +219,7 @@ describe("the counted kinds of #198", () => {
       one: "Un exercice planifié dans PRG1-2026",
     },
   ] as const)("sends $payload.kind to its page, counted", ({ payload, path, several: [count, subject], one }) => {
-    const of = (n: number) => ({ ...payload, count: n }) as NotificationPayload;
+    const of = (n: number) => ({ ...payload, count: n }) as OutboundPayload;
     expect(notificationPath(of(count))).toBe(path);
     expect(renderNotification(of(count), "en", "https://quiz.test").subject).toBe(subject);
     expect(renderNotification(of(1), "fr", "https://quiz.test").subject).toBe(one);
