@@ -6,7 +6,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
-import { avatars, users } from "../db/schema.js";
+import { users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { errorClass, tracked } from "../serviceHealth.js";
 import {
@@ -17,13 +17,14 @@ import {
   IDLE_HEADER,
   LOGIN_REFUSED_PATH,
   cookieName,
+  type Me,
   type PublicConfig,
   type SessionKind,
 } from "@quiz/contracts";
 
-import { shownAvatar } from "../modules/avatar.js";
 import { claimEnrollments } from "../modules/org/service.js";
 import { invalid } from "../modules/http.js";
+import { accountOf } from "./account.js";
 import { devLoginRoutes } from "./dev.js";
 import { impersonationRoutes } from "./impersonation.js";
 import { loginRefusal, signIn } from "./login.js";
@@ -481,29 +482,10 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     "/app/api/me",
     // Every confined session reads who it is, whatever its activity (D21).
     { preHandler: (req, reply) => app.requireSession(req, reply), config: { ...SITTING, activities: ["evaluation", "project"] } },
-    async (req) => {
+    async (req): Promise<Me> => {
       const u = req.user!;
-      // Uploaded avatar takes priority over the IdP claim; ?v= busts the cache.
-      const [uploaded] = await app.db
-        .select({ updatedAt: avatars.updatedAt })
-        .from(avatars)
-        .where(eq(avatars.userId, u.id))
-        .limit(1);
-      const picture = shownAvatar(u.id, uploaded?.updatedAt, u.pictureUrl);
       return {
-        id: u.id,
-        email: u.email,
-        givenName: u.givenName,
-        familyName: u.familyName,
-        role: u.role,
-        lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
-        avatarUrl: picture,
-        hasUploadedAvatar: Boolean(uploaded),
-        locale: u.locale,
-        dateFormat: u.dateFormat,
-        mcqPolicy: u.mcqPolicy,
-        coach: { enabled: u.coachEnabled, seen: u.coachSeen },
-        rpnCalculator: u.rpnCalculator,
+        ...(await accountOf(app.db, u)),
         session: {
           kind: req.auth?.kind ?? "portal",
           evaluationId: req.auth?.evaluationId ?? null,

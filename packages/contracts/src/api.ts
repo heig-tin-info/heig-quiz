@@ -6,11 +6,11 @@
 
 import { z } from "zod";
 
-import { LOCALES, TRUSTED_CLIENTS, type Locale } from "@quiz/domain";
+import { LOCALES, TRUSTED_CLIENTS } from "@quiz/domain";
 
 import { McqPolicy } from "./evaluation.js";
 import type { TeacherCodespaceGrant } from "./codespace.js";
-import type { UserRole } from "./admin.js";
+import { USER_ROLES } from "./admin.js";
 import type { CourseRole } from "./common.js";
 import type { PoolColor } from "./pool.js";
 
@@ -104,32 +104,41 @@ export const LOGIN_REFUSED_PATH = "/sign-in/refused";
 export const LOGIN_REFUSALS = ["restricted", "not_invited", "retry"] as const;
 export type LoginRefusal = (typeof LOGIN_REFUSALS)[number];
 
-export interface Me {
-  id: string;
-  email: string;
-  givenName: string;
-  familyName: string;
-  role: UserRole;
-  lastLoginAt: string | null;
-  avatarUrl: string | null;
-  hasUploadedAvatar: boolean;
-  locale: Locale | null;
-  dateFormat: DateFormat | null;
+/**
+ * The account as its owner reads it: `GET /app/api/me` without its
+ * `session`, and the identity of the personal data export (ADR-112). One
+ * schema, so both answers carry the same fields.
+ */
+export const Account = z.object({
+  id: z.uuid(),
+  email: z.string(),
+  givenName: z.string(),
+  familyName: z.string(),
+  role: z.enum(USER_ROLES),
+  lastLoginAt: z.iso.datetime().nullable(),
+  avatarUrl: z.string().nullable(),
+  hasUploadedAvatar: z.boolean(),
+  locale: z.enum(LOCALES).nullable(),
+  dateFormat: z.enum(DATE_FORMATS).nullable(),
   /**
    * Default MCQ scoring policy for the evaluations this user creates; null
    * means `all_or_nothing`. Only the creation of an evaluation reads it —
    * changing it never moves an evaluation that already exists.
    */
-  mcqPolicy: McqPolicy | null;
+  mcqPolicy: McqPolicy.nullable(),
   /**
    * The coach marks: whether they are shown (null means yes) and the ids of
    * those already read or dismissed. Kept on the account, not in the
    * browser, so a teacher who met a screen on their laptop is not taught it
    * again on the classroom's PC.
    */
-  coach: { enabled: boolean | null; seen: string[] };
+  coach: z.object({ enabled: z.boolean().nullable(), seen: z.array(z.string()) }),
   /** The on-screen calculator works in RPN (ADR-069); null means no, the infix one. */
-  rpnCalculator: boolean | null;
+  rpnCalculator: z.boolean().nullable(),
+});
+export type Account = z.infer<typeof Account>;
+
+export interface Me extends Account {
   /**
    * The session this request rode on; `evaluationId` is set on a confined
    * one only (`seb` or `kiosk`, the evaluation it is confined to), or

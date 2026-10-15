@@ -765,8 +765,14 @@ const studentCard = (r: StudentClassroomFacts, teachers: Map<string, string[]>):
  * The Courses list (F-ORG-14) and the student home's classroom cards: the
  * classrooms whose roster entry the student claimed, archived ones excepted
  * (F-ORG-03), and nothing else — no course listing, no roster of their peers.
+ * `includeArchived`: keep the archived ones too — the personal data export
+ * (ADR-112 §5) enumerates every claimed seat with this same query.
  */
-export async function studentClassrooms(db: Db, userId: string): Promise<StudentClassroom[]> {
+export async function studentClassrooms(
+  db: Db,
+  userId: string,
+  { includeArchived = false }: { includeArchived?: boolean } = {},
+): Promise<StudentClassroom[]> {
   const rows = await db
     .select({
       room: { id: classrooms.id, name: classrooms.name, period: classrooms.period },
@@ -776,7 +782,7 @@ export async function studentClassrooms(db: Db, userId: string): Promise<Student
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(enrollments.userId, userId), isNull(classrooms.archivedAt)))
+    .where(and(eq(enrollments.userId, userId), includeArchived ? undefined : isNull(classrooms.archivedAt)))
     .orderBy(courses.code, classrooms.name);
   const teachers = await teachersOf(db, [...new Set(rows.map((r) => r.course.id))]);
   return rows.map((r) => studentCard(r, teachers));

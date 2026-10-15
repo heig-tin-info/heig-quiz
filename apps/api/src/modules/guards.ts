@@ -1267,15 +1267,24 @@ export const reachableEvaluation = routeLoader((app, req, evaluationId: string) 
  * student route: they have `/evaluations/:id/attempts/:attemptId` instead,
  * which is read-only and audited once per opening (`attempt.read`, #875).
  */
-export const ownAttempt = routeLoader(async (app, req, attemptId: string) => {
-  const [row] = await app.db
+export const ownAttempt = routeLoader((app, req, attemptId: string) =>
+  findOwnAttempt(app.db, req.user!.id, attemptId),
+);
+
+/**
+ * The attempt and its evaluation if the attempt is `userId`'s own; null
+ * otherwise. The query of {@link ownAttempt}, which the personal data export
+ * (ADR-112) asks too.
+ */
+export async function findOwnAttempt(db: Db, userId: string, attemptId: string) {
+  const [row] = await db
     .select({ attempt: attempts, evaluation: evaluations })
     .from(attempts)
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
-    .where(and(eq(attempts.id, attemptId), eq(attempts.userId, req.user!.id)))
+    .where(and(eq(attempts.id, attemptId), eq(attempts.userId, userId)))
     .limit(1);
   return row ?? null;
-});
+}
 
 /** Any attempt of an evaluation the caller is staff of (dashboard, controls). */
 export const staffAttempt = routeLoader(async (app, req, p: { evaluationId: string; attemptId: string }) => {

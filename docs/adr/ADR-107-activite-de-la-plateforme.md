@@ -5,6 +5,9 @@
 Accepted (2026-10-12, the product owner's request and decisions of that day; the
 defaults marked as such below were set by the orchestrator's spec challenge).
 Delivery progress lives in `changes/`.
+Amended 2026-10-15 by [ADR-112](ADR-112-export-des-donnees-personnelles.md),
+scope §7: the export exists; it holds the person's `presence_hours` rows and
+last activity, read through the `presence` module's service.
 
 Scope: what the platform records of when people use it, what the administrator
 reads of it, and how long it is kept. Not the presence of a student in a live
@@ -83,7 +86,8 @@ minimisation), and the data must be explainable on the privacy page (N-DATA-07).
    account (deleted with it).
 7. **The student's own data** (N-DATA-04): the platform has no data export yet;
    when it is built, it includes the student's `presence_hours` rows and their
-   last activity while they exist.
+   last activity while they exist. *(2026-10-15: decided by
+   [ADR-112](ADR-112-export-des-donnees-personnelles.md) §2.)*
 
 ## Consequences
 

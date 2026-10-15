@@ -102,8 +102,9 @@ Quiz loads no script, font or image from another company: everything comes from 
 ## Your rights and questions
 
 - **See your data**: your profile in **Settings**; your results and feedback once published.
+- **Download a copy**: in **Settings** › **Your data**, *Download my data* gives you one JSON file of everything the platform shows you, with your verified e-mail addresses and your hours of activity. What only your teachers see is not in it.
 - **Correct it**: your name and address come from edu-ID and are updated at each sign-in. A mistake in a class list is corrected by your teacher.
 - **Remove it yourself**: your profile picture, your GitHub link and your Teams link, in **Settings**.
 - **Stop the drill** of a classroom, from your drill.
 
-For any other request (a copy of your data, a correction, a deletion), turn first to the teacher of your course.
+For any other request (a fuller copy of your data, a correction, a deletion), turn first to the teacher of your course.

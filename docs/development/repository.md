@@ -183,6 +183,11 @@ A module never imports another module's `routes.ts`; it calls its
 the demo world through the services, so every row it writes is one the
 application would have written.
 
+A module may own no table at all: `privacy` composes the student views of
+the other modules into the personal data export
+([ADR-112](../adr/ADR-112-export-des-donnees-personnelles.md)), through
+their `service.ts` only.
+
 Beside the module directories sit a few shared files that are not modules:
 `src/modules/guards.ts`, the access predicates every route loads an entity
 through; `src/modules/http.ts`, the common replies and the guarded-route

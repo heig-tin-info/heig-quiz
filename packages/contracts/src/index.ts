@@ -36,3 +36,4 @@ export * from "./legacy.js";
 export * from "./concept.js";
 export * from "./changelog.js";
 export * from "./training.js";
+export * from "./privacy.js";
