@@ -7,6 +7,10 @@ feature in three phases, P1 (§1–§7, requirement F-LLM-07), P2 (§8) and P3 (
 the P2, P2b and P3 amendments, folded on 2026-10-09 into §8, §10 and §9 (their items keep their numbers;
 the notes they made in §1, §2, §3 and §5 stay there). Amended 2026-10-13 (§7, issue #450): on a low
 screen the panel is a modal sheet; amended 2026-10-14 (§7, issue #849): on a phone held upright too.
+Amended 2026-10-15 (§6, and the P2 amendment's items 4 and 9, what students are told, issue #868):
+the "Data and privacy" page of N-DATA-07 (`/privacy`, its body in
+`apps/web/src/privacy/privacy.md` and `privacy.fr.md`) says that the assistant may send a classroom's names and final results to Anthropic, and that
+such a name may remain 30 days in the teacher's stored conversation, even after the student leaves the class.
 
 Scope: the in-app chat of the teacher UI, the `assist` purpose of the LLM
 gateway, the conversations it stores.

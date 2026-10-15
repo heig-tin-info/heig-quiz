@@ -207,6 +207,21 @@ describe("the quit link outside SEB (ADR-027)", () => {
   });
 });
 
+describe("the Data and privacy page (N-DATA-07)", () => {
+  it("is drawn at /privacy with no session asked for", async () => {
+    const { calls } = mockFetch({});
+    renderWithProviders(<App />, { route: "/privacy" });
+    expect(await screen.findByRole("heading", { level: 1, name: "Data and privacy" })).toBeVisible();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("is linked from the signed-out landing page", async () => {
+    mockFetch({ "GET /app/api/me": fail(401, { error: "unauthorized" }) });
+    renderWithProviders(<App />, { route: "/" });
+    expect(await screen.findByRole("link", { name: "Data and privacy" })).toHaveAttribute("href", "/privacy");
+  });
+});
+
 describe("an impersonation session (ADR-034)", () => {
   it("says whom the admin acts as, on every page, and ends by signing out", async () => {
     vi.stubGlobal("EventSource", FakeStream);

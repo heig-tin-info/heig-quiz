@@ -276,6 +276,18 @@ describe("buildCommands: help", () => {
     expect(screenCommandsContext().map((c) => c.id)).toEqual(["screen:try"]);
   });
 
+  it("opens the Data and privacy page from the Help group, for every viewer (N-DATA-07)", () => {
+    const navigate = vi.fn();
+    const privacy = need(buildCommands(makeContext({ navigate })), "help:privacy");
+    expect(privacy.group).toBe("help");
+    expect(privacy.label).toBe("Data and privacy");
+    privacy.run();
+    expect(navigate).toHaveBeenCalledWith({ view: "privacy" });
+    expect(need(buildCommands(makeContext({ teacherUi: false, locale: "fr" })), "help:privacy").label).toBe(
+      "Données et confidentialité",
+    );
+  });
+
   it("turns each topic into a command that opens it", () => {
     const openHelp = vi.fn();
     const commands = buildCommands(

@@ -129,7 +129,7 @@ A teacher reaches the data of a course only through a seat on that course's staf
 
 Within a staff, every member reaches every classroom of the course, past years included. Each holds a role (ADR-068): only an **owner** adds or removes a colleague, changes a role, or publishes or withdraws results; an **assistant** works in the classrooms.
 
-When a classroom has the drill, its staff see each student's drill activity: the questions practised, the sessions, the recall rate and its progress (`apps/api/src/modules/drill/teacher.ts`). Students are told so in their drill tab. A student may leave the drill of a classroom; what was recorded before stays visible, and the teacher sees that the student left (ADR-041 §8).
+When a classroom has the drill, its staff see each student's drill activity: the questions practised, the sessions, the recall rate and its progress (`apps/api/src/modules/drill/teacher.ts`). Students are told so in their drill tab and on the **Data and privacy** page. A student may leave the drill of a classroom; what was recorded before stays visible, and the teacher sees that the student left (ADR-041 §8).
 
 A teacher who can read a question pool, a pool shared with them or a public one included, sees the aggregated statistics of its questions over every exam that used them, other teachers' classes included (see [Statistics](#statistics)).
 
@@ -141,7 +141,7 @@ A teacher who connects an external AI assistant to the platform (see [AI assista
 
 One account, named in the server configuration, holds the administrator role (`SUPER_ADMIN_EMAIL`, `apps/api/src/roles.ts`). By default it reaches no more than a teacher: the courses whose staff it is on. It reaches every course and classroom only while it has switched on **Super Powers** in its own browser session: one hour, not extendable, never for an API token or a connected assistant, and the switching on, off and the end are written to the audit log (ADR-054). Without them, it sees the list of all accounts, with their pictures and each account's last activity, and, in the **Activity** tab, the number of people active per hour over the last seven days, as counts only (ADR-107).
 
-To help a student with a problem they report, the administrator, with Super Powers on, may open a view of that student's account (ADR-034): a one-time link, valid five minutes, opens at most one hour as the student. In production that view is read only: it cannot answer or submit anything (`apps/api/src/auth/plugin.ts`). Its start and end are written to the audit log under the administrator's name. The student is not notified; the student help says, in general terms, that this can happen (`apps/web/src/help/student-home.md`).
+To help a student with a problem they report, the administrator, with Super Powers on, may open a view of that student's account (ADR-034): a one-time link, valid five minutes, opens at most one hour as the student. In production that view is read only: it cannot answer or submit anything (`apps/api/src/auth/plugin.ts`). Its start and end are written to the audit log under the administrator's name. The student is not notified; the student help and the **Data and privacy** page say, in general terms, that this can happen (`apps/web/src/help/student-home.md`, `apps/web/src/privacy/privacy.md`).
 
 ### The system administrators
 
@@ -281,6 +281,8 @@ Not established from the repository: the encryption of the machines' disks and o
 
 ## Students' rights and whom to contact
 
+The platform's **Data and privacy** page (`/privacy`, N-DATA-07) tells students, in French and in English, what this chapter describes, in their words: what is recorded, why, for how long, who sees it, the AI model and the other services, and whom to ask. It is public, the same signed in or not, and linked from the account menu, the signed-out landing page and the command palette's Help group. Its text lives in `apps/web/src/privacy/privacy.md` and `privacy.fr.md`; a change described in this chapter that a student would notice belongs there too.
+
 What the platform lets a student do today:
 
 | Need | In the application |
@@ -326,7 +328,8 @@ Access and traceability:
 
 Informing the student:
 
-- the application has no "Data and privacy" page yet (N-DATA-07) and no data export (N-DATA-04); the drill's notice lives in the drill tab only.
+- there is no data export (N-DATA-04): the **Data and privacy** page sends every request (a copy, a correction, a deletion) to the course's teacher, and names no institutional contact;
+- the **Data and privacy** page is written by hand from this chapter: nothing checks that the two agree, nor that its durations follow the constants in the code.
 
 AI model:
 

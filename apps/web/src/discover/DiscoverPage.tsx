@@ -620,7 +620,13 @@ function Footer() {
   const { t } = useI18n();
   return (
     <footer className="mx-auto flex max-w-280 flex-col items-center justify-between gap-3 px-4 pb-10 text-xs text-fg-faint sm:flex-row sm:px-8">
-      <span>{t("landing.footer")}</span>
+      <span>
+        {t("landing.footer")}
+        {" · "}
+        <a href="/privacy" className="underline underline-offset-2 transition-colors hover:text-fg">
+          {t("privacy.title")}
+        </a>
+      </span>
       <span>{t("discover.footer.made")}</span>
     </footer>
   );

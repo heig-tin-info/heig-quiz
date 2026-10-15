@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Languages,
   Library,
+  LockKeyhole,
   LogOut,
   Monitor,
   Moon,
@@ -384,6 +385,15 @@ export function buildCommands(ctx: CommandContext): Command[] {
       icon: Code2,
       group: "help",
       run: () => openExternal(SOURCES_URL),
+    },
+    {
+      // N-DATA-07, spec 08 §8.4: "data and privacy" in the Help group.
+      id: "help:privacy",
+      label: t("privacy.title"),
+      icon: LockKeyhole,
+      group: "help",
+      keywords: "privacy data protection gdpr confidentialité données protection",
+      run: () => ctx.navigate({ view: "privacy" }),
     },
   );
 

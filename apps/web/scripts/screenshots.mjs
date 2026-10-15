@@ -1617,11 +1617,14 @@ const scenes = [
   // the account menu is how a browser gets there, and it is the same path a
   // teacher takes.
   { name: "landing", role: "teacher", path: "/", act: async (p) => {
-      await p.getByRole("button", { name: /^(user menu|menu du compte)$/i }).first().click();
+      await p.getByRole("button", { name: /^(user menu|menu du compte)/i }).first().click();
       await p.getByRole("menuitem", { name: /sign out|se déconnecter/i }).click();
     } },
   // ADR-111 §6: a sign-in the door refused, drawn with no session.
   { name: "login-refused", role: "student", path: "/sign-in/refused?reason=not_invited" },
+  // N-DATA-07: the "Data and privacy" page, static and public, in both languages.
+  { name: "privacy", role: "student", path: "/privacy" },
+  { name: "privacy-fr", role: "student", path: "/privacy", ls: { "quiz-locale": "fr" } },
 
   // What's new (ADR-087): the dialog after an update, and the history page.
   { name: "whats-new-dialog", role: "teacher", path: "/?whatsnew=1", fold: true },

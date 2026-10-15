@@ -7,6 +7,7 @@ import {
   Compass,
   GitCommitHorizontal,
   GraduationCap,
+  LockKeyhole,
   LogOut,
   Moon,
   School,
@@ -28,7 +29,7 @@ import {
   UnreadBadge,
   useUnreadNotifications,
 } from "./notifications/NotificationPanel";
-import type { Route } from "./router";
+import { routeToPath, type Route } from "./router";
 import { setThemeChoice, useResolvedTheme } from "./theme";
 import { Avatar, cx, IconButton, isoDateTime, Menu, Segmented, type MenuItem, type TipSide } from "./ui";
 import { meKey } from "./queryKeys";
@@ -282,6 +283,14 @@ export function UserMenu({
       : []),
     { label: t("header.docs"), icon: BookOpen, href: DOCS_URL, separator: !notifications },
     { label: t("header.sources"), icon: Code2, href: SOURCES_URL },
+    {
+      // N-DATA-07: a page of the app, routed without a reload where the
+      // menu can navigate; a plain link otherwise.
+      label: t("privacy.title"),
+      icon: LockKeyhole,
+      href: routeToPath({ view: "privacy" }),
+      ...(notifications ? { onSelect: () => notifications.navigate({ view: "privacy" }) } : {}),
+    },
     ...(__COMMIT__
       ? [
           {

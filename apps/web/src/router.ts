@@ -184,6 +184,11 @@ export type Route =
    */
   | { view: "discover" }
   /**
+   * The "Data and privacy" page (N-DATA-07): static, the same for everyone.
+   * Drawn with no session and without waiting on `/me` (App.tsx).
+   */
+  | { view: "privacy" }
+  /**
    * The phone's half of the pairing (ADR-051 §7): the code of the station in
    * front of the student, from the QR (`?code=`, which the page reads itself)
    * or typed; then the exam to open there.
@@ -607,6 +612,12 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   discover: {
     path: () => "/discover",
     match: (parts) => (parts.length === 1 && parts[0] === "discover" ? { view: "discover" } : null),
+    studentSafe: true,
+  },
+  // N-DATA-07: what the platform records, for a student, signed in or not.
+  privacy: {
+    path: () => "/privacy",
+    match: (parts) => (parts.length === 1 && parts[0] === "privacy" ? { view: "privacy" } : null),
     studentSafe: true,
   },
   // WP10: the student's feedback on one attempt — the ONE student results page.
