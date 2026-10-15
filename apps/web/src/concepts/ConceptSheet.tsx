@@ -178,12 +178,15 @@ function Aliases({ concept }: { concept: AdminConcept }) {
 export function ConceptSheet({
   concept,
   concepts,
+  byId,
   locale,
   onClose,
 }: {
   concept: AdminConcept;
-  /** The whole queue: the validated ones are the targets of a merge; the path above the concept is read in it. */
+  /** The whole queue: the validated ones are the targets of a merge. */
   concepts: readonly AdminConcept[];
+  /** The same queue by id, built once by the queue: the path above the concept and its relations are read in it. */
+  byId: ReadonlyMap<string, AdminConcept>;
   locale: Locale;
   onClose: () => void;
 }) {
@@ -276,7 +279,7 @@ export function ConceptSheet({
       }
     >
       <div className="space-y-8">
-        <BroaderPath concept={concept} byId={new Map(concepts.map((c) => [c.id, c]))} locale={locale} others />
+        <BroaderPath concept={concept} byId={byId} locale={locale} others />
         <FillWithAi conceptId={concept.id} sides={sides} onFill={(proposal) => setSides((s) => fillEmpty(s, proposal))} />
         {CONCEPT_LANGS.map((lang) => (
           <fieldset key={lang} className="space-y-4">
@@ -309,7 +312,7 @@ export function ConceptSheet({
           </fieldset>
         ))}
         <Aliases concept={concept} />
-        <ConceptRelations concept={concept} concepts={concepts} />
+        <ConceptRelations concept={concept} concepts={concepts} byId={byId} />
         {!concept.deletable && dirty ? (
           <p id="concept-merge-why" className="text-[13px] text-fg-muted">
             {t("admin.concepts.merge.unsaved")}

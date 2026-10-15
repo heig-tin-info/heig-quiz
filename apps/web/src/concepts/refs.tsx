@@ -17,24 +17,27 @@ import { resolvable } from "./ranking";
  * rule, ADR-081 sixth addendum §5), quiet and read-only; nothing for a
  * concept with no broader one. With `others`, `+n` counts the broader
  * concepts the path does not follow (the sheet's Relations list them all).
+ * `className` replaces the muted ink (the picker's active option has its own).
  */
 export function BroaderPath({
   concept,
   byId,
   locale,
   others = false,
+  className = "text-fg-muted",
 }: {
   concept: Concept;
   byId: ReadonlyMap<string, Concept>;
   locale: Locale;
   others?: boolean;
+  className?: string;
 }) {
   const t = useT();
   const trail = broaderTrail(concept, byId, locale);
   if (trail.length === 0) return null;
   const more = others ? concept.broader.filter((id) => byId.has(id)).length - 1 : 0;
   return (
-    <p className="text-xs text-fg-muted">
+    <p className={cx("text-xs", className)}>
       <span className="sr-only">{t("concepts.picker.within")} </span>
       {trail.join(" › ")}
       {more > 0 ? (

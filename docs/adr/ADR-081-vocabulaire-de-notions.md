@@ -621,8 +621,9 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
      step B): the curation queue shows the same path under each row's name,
      the sheet shows it read-only at its top with a "+n" count of the other
      broader concepts, and an **Unplaced** filter lists the concepts with no
-     broader and no narrower concept, whatever their status, computed in the
-     page from the `broader` lists.
+     broader and no narrower concept, whatever their status; the rule is
+     `unplaced` of `@quiz/domain`, applied client-side to the loaded
+     vocabulary's `broader` lists.
    - **Not here.** A concept selected anywhere covering its narrower ones
      (§4 of the Decision) is 7d (§10).
 6. **Suggest concepts (8a, built).** It sends the draft's statement and

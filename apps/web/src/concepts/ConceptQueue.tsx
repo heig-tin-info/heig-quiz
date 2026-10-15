@@ -3,6 +3,7 @@ import { BookMarked, Check, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { CONCEPT_LANGS, ConceptDuplicatesAi, type AdminConcept, type AdminConceptList, type ConceptLang } from "@quiz/contracts";
+import { unplaced } from "@quiz/domain";
 
 import { api, refusalCodeOf } from "../api";
 import { useI18n, useT } from "../i18n";
@@ -23,7 +24,7 @@ import {
 import { aiPairsOf, ConceptDuplicates, duplicatePairs } from "./ConceptDuplicates";
 import { ConceptSheet } from "./ConceptSheet";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
-import { conceptName, unplaced, usesLabel } from "./names";
+import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 import { BroaderPath } from "./refs";
 
@@ -136,7 +137,7 @@ export function ConceptQueue() {
         />
       </div>
 
-      {filter === "unplaced" && list.isSuccess ? (
+      {filter === "unplaced" && loose.length > 0 ? (
         <p className="text-[13px] text-fg-muted">{t("admin.concepts.unplaced.hint")}</p>
       ) : null}
 
@@ -186,7 +187,9 @@ export function ConceptQueue() {
         </Card>
       )}
 
-      {edited ? <ConceptSheet concept={edited} concepts={all ?? []} locale={locale} onClose={() => setEditing(null)} /> : null}
+      {edited ? (
+        <ConceptSheet concept={edited} concepts={all ?? []} byId={byId} locale={locale} onClose={() => setEditing(null)} />
+      ) : null}
     </section>
   );
 }
@@ -226,7 +229,7 @@ function ConceptRow({
           ))}
         </div>
         <BroaderPath concept={c} byId={byId} locale={locale} />
-        {description ?<p className="line-clamp-2 text-xs text-fg-muted">{description}</p> : null}
+        {description ? <p className="line-clamp-2 text-xs text-fg-muted">{description}</p> : null}
         <p className="flex flex-wrap gap-x-2 text-xs text-fg-muted">
           <span className="tabular-nums">
             {usesLabel(t, c.questionCount)}

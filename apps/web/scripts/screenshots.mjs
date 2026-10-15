@@ -1752,8 +1752,8 @@ const scenes = [
   { name: "admin-concepts-sheet", role: "admin", path: "/admin?tab=concepts", fold: true, act: (p) => p.getByRole("button", { name: /^edit récursivité/i }).click() },
   { name: "admin-concepts-sheet-used", role: "admin", path: "/admin?tab=concepts", fold: true, act: (p) => p.getByRole("button", { name: /^edit two's complement/i }).click() },
   // #897 step B: the Unplaced filter, and the path at the top of the sheet of a concept with two broader ones.
-  { name: "admin-concepts-unplaced", role: "admin", path: "/admin?tab=concepts", act: (p) => p.getByRole("radio", { name: /^(unplaced|non placées)/i }).check({ force: true }) },
-  { name: "admin-concepts-sheet-path", role: "admin", path: "/admin?tab=concepts", fold: true, act: (p) => p.getByRole("button", { name: /^(edit|modifier) fuite mémoire/i }).click() },
+  { name: "admin-concepts-unplaced", role: "admin", path: "/admin?tab=concepts", act: (p) => p.getByRole("radio", { name: /^unplaced/i }).check({ force: true }) },
+  { name: "admin-concepts-sheet-path", role: "admin", path: "/admin?tab=concepts", fold: true, act: (p) => p.getByRole("button", { name: /^edit fuite mémoire/i }).click() },
   // The merge dialog over the sheet of a used concept, a target picked (what the merge does is said before the confirmation).
   { name: "admin-concepts-merge", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^edit two's complement/i }).click();
