@@ -1198,6 +1198,12 @@ tables, then delete the container and the extracted file. Never into
 staging: since ADR-028 §3's reversal (#750) staging holds only
 pseudonymized copies, and a raw production dump would undo that.
 
+| Drill | Archive | Dump | Extracted | Restored, checked | Total |
+| --- | --- | --- | --- | --- | --- |
+| 2026-10-15, operator's workstation (borg 1.4.4, `postgres:17`) | `heig-portal-2026-10-15T05:44` | `quiz-2026-10-14.dump`, 14 MB | 7 s | 143 users, 99 tables in `public` | 13 s |
+
+The next drill is due before the spring semester (2027-02); add its row.
+
 **Recovering from a deletion through the append-only key.** A `delete` or
 a `prune` sent with the VM's key is recorded, not applied: until a compact
 runs with the full-access key, the transaction log can be rolled back
