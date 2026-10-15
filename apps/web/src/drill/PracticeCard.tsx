@@ -14,7 +14,7 @@
  * The confidence is the caller's to send or to keep in the browser.
  */
 import { useMutation, useQuery, type QueryKey } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, CircleDot, Eye, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDot, Eye, PartyPopper, XCircle } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import type { DrillCorrectness, DrillServed } from "@quiz/contracts";
@@ -112,7 +112,6 @@ function useShownReports(
 }
 
 export function PracticeCard<R extends PracticeResult>({
-  type,
   serveKey,
   serve,
   answer: send,
@@ -122,8 +121,6 @@ export function PracticeCard<R extends PracticeResult>({
   onNext,
   onSkip,
 }: {
-  /** The card's question type, which says whether an answer was written. */
-  type: string;
   serveKey: QueryKey;
   serve: () => Promise<DrillServed>;
   /** The answer (null when nothing was written) and the confidence stated, for the caller to send or keep. */
@@ -164,7 +161,7 @@ export function PracticeCard<R extends PracticeResult>({
   });
   useShownReports(report, served.isSuccess && result === null, settled);
 
-  const answered = isAnswered(type, answer);
+  const answered = served.data ? isAnswered(served.data.type, answer) : false;
   const submit = useMutation({
     mutationFn: () => send(answered ? answer : null, confidence),
     onSuccess: (r) => {
@@ -260,6 +257,33 @@ export function PracticeCard<R extends PracticeResult>({
     <div ref={top} className="scroll-mt-28">
       {body()}
     </div>
+  );
+}
+
+/** The end of a run, either mode's: a title, one line, what the run came to, and its actions (the primary last). */
+export function PracticeSummary({
+  title,
+  body,
+  children,
+  actions,
+}: {
+  title: string;
+  body: string;
+  children?: ReactNode;
+  actions: ReactNode;
+}) {
+  return (
+    <Card className="space-y-5 p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <PartyPopper aria-hidden className="mt-0.5 size-5 shrink-0 text-fg-faint" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[17px] font-bold leading-snug tracking-tight">{title}</p>
+          <p className="mt-0.5 text-sm text-fg-muted">{body}</p>
+        </div>
+      </div>
+      {children}
+      <div className="flex flex-wrap justify-end gap-2">{actions}</div>
+    </Card>
   );
 }
 

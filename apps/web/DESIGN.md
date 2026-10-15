@@ -2583,8 +2583,10 @@ day's empty state never links to it.
   until one is picked, and under it two 13 px notes (practice only; the
   teacher sees the rounds). The round: **Check**, then **Next** or
   **Finish**. Its end: **Another round**, with **Back to the drill** as
-  the secondary. A concept with no card, or revision closed: an
-  `EmptyState` with the reason and **Back to the drill**.
+  the secondary. A concept with no card: an `EmptyState` that says so.
+  Revision closed (the server's `available`, or nothing on offer): one
+  neutral sentence, no reason guessed by the page. Both with **Back to the
+  drill**.
 - **The card is the daily session's** (`PracticeCard`): same progress line
   (the concept on the right instead of the course code), same player,
   confidence scale and key. Only the result line differs:

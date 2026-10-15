@@ -29,17 +29,16 @@
  *   - Space: 16 inside the card, 24 between the card and the action.
  *   - Finish: one card on the canvas, hairlines, no shadow.
  */
-import { PartyPopper } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import type { DrillCorrectness, DrillDeviceClass, DrillReviewResult, DrillSessionCard } from "@quiz/contracts";
 
 import { useI18n, useT } from "../i18n";
 import { drillServeKey } from "../queryKeys";
-import { Button, Card, SegmentedBar, useNow } from "../ui";
+import { Button, SegmentedBar, useNow } from "../ui";
 import { answerCard, reportShown, serveCard } from "./api";
 import { dueIn } from "./format";
-import { CORRECTNESS, PracticeCard, PracticeProgress } from "./PracticeCard";
+import { CORRECTNESS, PracticeCard, PracticeProgress, PracticeSummary } from "./PracticeCard";
 
 /** The FSRS rating, 1 Again to 4 Easy, in the student's words. */
 const RATING = ["drill.rating.1", "drill.rating.2", "drill.rating.3", "drill.rating.4"] as const;
@@ -86,7 +85,6 @@ export function DrillRun({
       />
       <PracticeCard<DrillReviewResult>
         key={card.id}
-        type={card.type}
         serveKey={drillServeKey(card.id)}
         serve={() => serveCard(card.id)}
         answer={(answer, confidence) => answerCard(card.id, answer, device, confidence)}
@@ -111,16 +109,11 @@ export function DrillSummary({ outcomes, onHome }: { outcomes: DrillOutcome[]; o
   const reviews = outcomes.filter((o) => o !== "skipped");
   const count = (c: DrillCorrectness) => reviews.filter((r) => r.correctness === c).length;
   return (
-    <Card className="space-y-5 p-5 sm:p-6">
-      <div className="flex items-start gap-3">
-        <PartyPopper aria-hidden className="mt-0.5 size-5 shrink-0 text-fg-faint" />
-        <div className="min-w-0 flex-1">
-          <p className="text-[17px] font-bold leading-snug tracking-tight">{t("drill.done.title")}</p>
-          <p className="mt-0.5 text-sm text-fg-muted">
-            {reviews.length === 1 ? t("drill.done.body.one") : t("drill.done.body", { n: reviews.length })}
-          </p>
-        </div>
-      </div>
+    <PracticeSummary
+      title={t("drill.done.title")}
+      body={reviews.length === 1 ? t("drill.done.body.one") : t("drill.done.body", { n: reviews.length })}
+      actions={<Button onClick={onHome}>{t("drill.done.home")}</Button>}
+    >
       {reviews.length > 0 ? (
         <div className="space-y-2">
           <SegmentedBar
@@ -135,9 +128,6 @@ export function DrillSummary({ outcomes, onHome }: { outcomes: DrillOutcome[]; o
           </p>
         </div>
       ) : null}
-      <div className="flex justify-end">
-        <Button onClick={onHome}>{t("drill.done.home")}</Button>
-      </div>
-    </Card>
+    </PracticeSummary>
   );
 }

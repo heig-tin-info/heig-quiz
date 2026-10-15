@@ -34,7 +34,8 @@ const LEVEL = {
 export function ConceptMastery({ room, navigate }: { room: DrillClassroom; navigate: (r: Route) => void }) {
   const t = useT();
   const mastery = useStudentConceptMastery(room.classroomId);
-  const revision = useRevisionConcepts(room.classroomId);
+  // Asked only for a section that is drawn: a course with declared concepts.
+  const revision = useRevisionConcepts(room.classroomId, !!mastery.data?.declared);
   if (!mastery.data?.declared || mastery.data.concepts.length === 0) return null;
   return (
     <section className="space-y-3" aria-label={`${t("drill.concepts.title")} — ${room.classroomName}`}>

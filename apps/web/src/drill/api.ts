@@ -145,10 +145,11 @@ export function useStudentConceptMastery(classroomId: string) {
 // --- Targeted revision (ADR-115) -------------------------------------------
 
 /** The concepts the student may revise in a classroom; `available` false when revision is closed to them. */
-export function useRevisionConcepts(classroomId: string) {
+export function useRevisionConcepts(classroomId: string, enabled = true) {
   return useQuery({
     queryKey: revisionConceptsKey(classroomId),
     queryFn: () => api<StudentRevisionConcepts>(`/app/api/student/classrooms/${classroomId}/revision/concepts`),
+    enabled,
   });
 }
 

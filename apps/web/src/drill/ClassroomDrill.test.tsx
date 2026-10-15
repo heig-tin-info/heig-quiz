@@ -295,6 +295,24 @@ describe("the classroom's Drill tab", () => {
       expect(await screen.findByText("No targeted revision yet.")).toBeVisible();
     });
 
+    it("draws no column and no sheet block when the rounds cannot be read, and says so once", async () => {
+      const user = userEvent.setup();
+      mockFetch({
+        [`GET ${base}/activity`]: ok(ROWS),
+        [`GET ${base}/mastery`]: ok(NONE),
+        [`GET ${base}/revision`]: fail(500),
+        [`GET ${base}/progress?student=${SEAT.Bernard}`]: ok(WEEKS),
+      });
+      renderWithProviders(room());
+      const table = await screen.findByRole("table");
+      expect(within(table).queryByRole("button", { name: "Targeted" })).toBeNull();
+      expect(await screen.findByText("Could not load the targeted revisions")).toBeVisible();
+      await user.click(screen.getByRole("button", { name: "Progression of Ada Bernard" }));
+      const sheet = await screen.findByRole("dialog", { name: "Ada Bernard" });
+      expect(within(sheet).queryByText("Targeted revision")).toBeNull();
+      expect(within(sheet).queryByText("No targeted revision yet.")).toBeNull();
+    });
+
     it("shows a student's rounds in their sheet: how many, the score, the last day and the concepts", async () => {
       const user = userEvent.setup();
       mockFetch({

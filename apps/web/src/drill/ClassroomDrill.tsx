@@ -47,8 +47,8 @@ import { DrillActivityTable, studentName, TrendMark, type StudentRevision } from
 import { WeeklyProgress } from "./WeeklyProgress";
 
 /** Anything to show: a review, an opt-out, or a round of targeted revision. */
-const hasActivity = (rows: DrillStudentActivity[], revision: ReadonlyMap<string, StudentRevision>) =>
-  revision.size > 0 || rows.some((r) => r.reviews.all > 0 || r.optedOutAt !== null);
+const hasActivity = (rows: DrillStudentActivity[], revision: ReadonlyMap<string, StudentRevision> | null) =>
+  (revision?.size ?? 0) > 0 || rows.some((r) => r.reviews.all > 0 || r.optedOutAt !== null);
 
 export function ClassroomDrill({
   room,
@@ -60,10 +60,11 @@ export function ClassroomDrill({
 }) {
   const t = useT();
   const activity = useClassroomDrillActivity(room.id);
-  // A failed read of the rounds leaves the activity standing: its own section says so.
+  // A failed read of the rounds leaves the activity standing: its own section
+  // says so, and the column and the sheet's block, null here, are not drawn.
   const revision = useClassroomDrillRevision(room.id);
   const rounds = useMemo(
-    () => new Map((revision.data?.students ?? []).map((s) => [s.enrollmentId, s] as const)),
+    () => (revision.data ? new Map(revision.data.students.map((s) => [s.enrollmentId, s] as const)) : null),
     [revision.data],
   );
   const [open, setOpen] = useState<DrillStudentActivity | null>(null);
@@ -129,7 +130,7 @@ export function ClassroomDrill({
         <DrillStudentSheet
           classroomId={room.id}
           row={open}
-          revision={rounds.get(open.enrollmentId)}
+          rounds={rounds}
           onClose={() => setOpen(null)}
         />
       ) : null}
@@ -191,7 +192,7 @@ function StudentRevisionBlock({ revision }: { revision: StudentRevision | undefi
         <>
           <p className="text-sm text-fg-muted">
             {plural(t, "rounds", revision.rounds)} ·{" "}
-            {t("revise.recent.row", { right: revision.cardsCorrect, total: revision.cardsServed })} ·{" "}
+            {t("drill.revision.score", { right: revision.cardsCorrect, total: revision.cardsServed })} ·{" "}
             {t("drill.revision.last", { date: isoDateParts(revision.lastAt).date })}
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -290,12 +291,13 @@ function MasteryRow({ m }: { m: DrillConceptMastery }) {
 function DrillStudentSheet({
   classroomId,
   row,
-  revision,
+  rounds,
   onClose,
 }: {
   classroomId: string;
   row: DrillStudentActivity;
-  revision: StudentRevision | undefined;
+  /** Every student's rounds; null when they could not be read. */
+  rounds: ReadonlyMap<string, StudentRevision> | null;
   onClose: () => void;
 }) {
   const t = useT();
@@ -332,7 +334,7 @@ function DrillStudentSheet({
           <WeeklyProgress weeks={progress.data.weeks} />
         )}
         <StudentDrillHours classroomId={classroomId} enrollmentId={row.enrollmentId} />
-        <StudentRevisionBlock revision={revision} />
+        {rounds ? <StudentRevisionBlock revision={rounds.get(row.enrollmentId)} /> : null}
         <p className="text-xs text-fg-faint">{t("drill.recall.help")}</p>
       </div>
     </Sheet>

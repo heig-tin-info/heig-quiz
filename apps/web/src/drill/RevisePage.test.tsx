@@ -202,21 +202,10 @@ describe("targeted revision", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "drill" });
   });
 
-  it("gives the reason when revision is closed: the drill left, off, or no concept", async () => {
-    const closed = ok({ available: false, concepts: [] });
-    stub({ "GET /app/api/drill/classrooms": ok([{ ...ROOM, optedOutAt: "2026-10-01T08:00:00.000Z" }]), [`GET ${base}/concepts`]: closed });
-    const first = page();
-    expect(await screen.findByText(/^You left the drill of this classroom/)).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
-    first.unmount();
-
-    stub({ "GET /app/api/drill/classrooms": ok([]), [`GET ${base}/concepts`]: closed });
-    const second = page();
-    expect(await screen.findByText("The drill is off for this classroom.")).toBeVisible();
-    second.unmount();
-
-    stub({ [`GET ${base}/concepts`]: ok({ available: true, concepts: [] }) });
+  it("says revision is not open when the server says so, with no Start", async () => {
+    stub({ [`GET ${base}/concepts`]: ok({ available: false, concepts: [] }) });
     page();
-    expect(await screen.findByText("This course lists no concept to revise yet.")).toBeVisible();
+    expect(await screen.findByText("Targeted revision is not open to you in this classroom")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
   });
 });

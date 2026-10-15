@@ -66,8 +66,8 @@ export function DrillActivityTable({
   onOpen,
 }: {
   rows: DrillStudentActivity[];
-  /** The rounds per enrollment id; a student without one has none. */
-  revision: ReadonlyMap<string, StudentRevision>;
+  /** The rounds per enrollment id, a student without one has none; null when unread: no column. */
+  revision: ReadonlyMap<string, StudentRevision> | null;
   onOpen: (row: DrillStudentActivity) => void;
 }) {
   const t = useT();
@@ -84,7 +84,7 @@ export function DrillActivityTable({
         case "reviews30":
           return r.reviews.last30;
         case "rounds":
-          return revision.get(r.enrollmentId)?.rounds ?? 0;
+          return revision?.get(r.enrollmentId)?.rounds ?? 0;
         case "lastReviewAt":
           return r.lastReviewAt ?? "";
         default:
@@ -100,7 +100,7 @@ export function DrillActivityTable({
     { key: "sessions", label: t("drill.col.sessions"), right: true, className: T.colHigh },
     { key: "questionsSeen", label: t("drill.col.questions"), right: true, className: T.colMid },
     { key: "reviews30", label: t("drill.col.reviews30"), right: true, className: T.colLow },
-    { key: "rounds", label: t("drill.revision.col"), right: true, className: T.colMid },
+    ...(revision ? [{ key: "rounds" as const, label: t("drill.revision.col"), right: true, className: T.colMid }] : []),
     { key: "lastReviewAt", label: t("drill.col.last"), className: T.colHigh },
   ];
 
@@ -140,9 +140,11 @@ export function DrillActivityTable({
                 <td className={cx(T.td, "text-right tabular-nums", T.colHigh)}>{r.sessions || "—"}</td>
                 <td className={cx(T.td, "text-right tabular-nums", T.colMid)}>{r.questionsSeen || "—"}</td>
                 <td className={cx(T.td, "text-right tabular-nums", T.colLow)}>{r.reviews.last30 || "—"}</td>
-                <td className={cx(T.td, "text-right tabular-nums", T.colMid)}>
-                  {revision.get(r.enrollmentId)?.rounds || "—"}
-                </td>
+                {revision ? (
+                  <td className={cx(T.td, "text-right tabular-nums", T.colMid)}>
+                    {revision.get(r.enrollmentId)?.rounds || "—"}
+                  </td>
+                ) : null}
                 <td className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colHigh)}>
                   {r.lastReviewAt ? <RelativeTime iso={r.lastReviewAt} /> : "—"}
                 </td>

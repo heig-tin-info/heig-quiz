@@ -23,7 +23,7 @@
  *   - Finish: cards on the warm canvas, hairlines, no shadow.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, History, PartyPopper, SearchX, Target } from "lucide-react";
+import { AlertTriangle, History, SearchX, Target } from "lucide-react";
 import { useState } from "react";
 
 import type { DrillCorrectness, RevisionAnswerResult, RevisionRound } from "@quiz/contracts";
@@ -44,7 +44,7 @@ import {
   useRevisionConcepts,
   useRevisionRounds,
 } from "./api";
-import { PracticeCard, PracticeProgress } from "./PracticeCard";
+import { PracticeCard, PracticeProgress, PracticeSummary } from "./PracticeCard";
 
 /** Where the screen is: the pick, a round running, its end, or a concept with no card. */
 type Step =
@@ -146,8 +146,8 @@ function RevisionHeader({ classroomId, navigate }: { classroomId: string; naviga
 /**
  * The pick: the concepts on offer as radio rows, Start, and the two things
  * the student must know before a round (practice only; the teacher sees
- * it). Unavailable, the reason, from the student's drill classrooms: off
- * (or not theirs), left, or no concept declared.
+ * it). Closed (the server's `available`, or nothing on offer): one neutral
+ * sentence — the server decides, the page does not guess why.
  */
 function RevisePick({
   classroomId,
@@ -162,33 +162,24 @@ function RevisePick({
 }) {
   const t = useT();
   const concepts = useRevisionConcepts(classroomId);
-  const rooms = useDrillClassrooms();
   const [picked, setPicked] = useState<string | null>(null);
 
-  if (concepts.isLoading || rooms.isLoading) return <Skeleton className="h-64 w-full" />;
+  if (concepts.isLoading) return <Skeleton className="h-64 w-full" />;
   if (concepts.isError || !concepts.data) return <QueryError title={t("revise.loadFailed")} query={concepts} />;
 
   const offered = concepts.data.concepts;
   if (!concepts.data.available || offered.length === 0) {
-    const room = rooms.data?.find((r) => r.classroomId === classroomId);
-    const reason = !concepts.data.available
-      ? room?.optedOutAt
-        ? "revise.unavailable.optedOut"
-        : "revise.unavailable.off"
-      : "revise.unavailable.noConcept";
     return (
       <Card>
         <EmptyState
           icon={Target}
-          title={t("revise.unavailable.title")}
+          title={t("revise.unavailable")}
           action={
             <Button variant="secondary" onClick={onBack}>
               {t("revise.back")}
             </Button>
           }
-        >
-          {t(reason)}
-        </EmptyState>
+        />
       </Card>
     );
   }
@@ -221,7 +212,7 @@ function RevisePick({
   );
 }
 
-/** The student's last rounds here, as their teacher sees them: the concept, the day, the first-pass score. */
+/** The student's last rounds here: the concept, the day, the first-pass score. */
 function RecentRounds({ classroomId }: { classroomId: string }) {
   const t = useT();
   const rounds = useRevisionRounds(classroomId);
@@ -301,13 +292,12 @@ function RevisionRun({
       />
       <PracticeCard<RevisionAnswerResult>
         key={entryKey(entry)}
-        type={card.type}
         serveKey={revisionServeKey(round.id, card.id, entry.pass)}
         serve={() => serveRoundCard(round.id, card.id)}
         // The confidence stays here: the body is strict (ADR-115 §6).
         answer={(answer) => answerRoundCard(round.id, card.id, answer)}
         line={(result) =>
-          result.requeued ? `${t("revise.result")} · ${t("revise.requeued")}` : t("revise.result")
+          t(result.requeued ? "revise.result.requeued" : "revise.result")
         }
         finishes={(result) => queueOf(pass(result.correctness)).length === 0}
         onNext={(result) => advance(result.correctness)}
@@ -334,24 +324,19 @@ function RevisionSummary({
   const first = answers.filter((a) => a.pass === 1);
   const right = first.filter((a) => a.correctness === "right").length;
   return (
-    <Card className="space-y-5 p-5 sm:p-6">
-      <div className="flex items-start gap-3">
-        <PartyPopper aria-hidden className="mt-0.5 size-5 shrink-0 text-fg-faint" />
-        <div className="min-w-0 flex-1">
-          <p className="text-[17px] font-bold leading-snug tracking-tight">{t("revise.done.title")}</p>
-          <p className="mt-0.5 text-sm text-fg-muted">
-            {t("revise.done.body", { right, total: first.length })}
-          </p>
-        </div>
-      </div>
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="secondary" onClick={onBack}>
-          {t("revise.back")}
-        </Button>
-        <Button loading={again} onClick={onAgain}>
-          {t("revise.again")}
-        </Button>
-      </div>
-    </Card>
+    <PracticeSummary
+      title={t("revise.done.title")}
+      body={t("revise.done.body", { right, total: first.length })}
+      actions={
+        <>
+          <Button variant="secondary" onClick={onBack}>
+            {t("revise.back")}
+          </Button>
+          <Button loading={again} onClick={onAgain}>
+            {t("revise.again")}
+          </Button>
+        </>
+      }
+    />
   );
 }

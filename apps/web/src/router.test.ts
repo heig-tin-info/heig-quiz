@@ -212,7 +212,7 @@ describe("ROUTES", () => {
     feedback: { view: "feedback", attemptId: "a-1" },
     drill: { view: "drill" },
     revise: { view: "revise", classroomId: "c-1" },
-    live:{ view: "live", id: "e-1" },
+    live: { view: "live", id: "e-1" },
     evaluationPreview: { view: "evaluationPreview", id: "e-1" },
     poll: { view: "poll", id: "e-1" },
     pollModerate: { view: "pollModerate", id: "e-1" },
