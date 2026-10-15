@@ -203,7 +203,8 @@ The **Data and privacy** page (`/privacy`, N-DATA-07,
 modifier: the journal's 48 rem column and its sheet (`surface`, hairline,
 card radius) on the canvas, under a page title and its one-line lead, with
 nothing beside it. Drawn outside the frame like `/discover`, its bar holds
-the wordmark (a link home) and the FR | EN switch, and nothing else: a
+the wordmark (a link home) and the language switch (`LocaleSwitch` of
+`src/publicPage.tsx`, shared with `/discover`), and nothing else: a
 reading page has no primary action, so it has no accent but its links.
 
 - **Measure capped at 72 characters** (`max-width: 72ch`), not the 1120 px

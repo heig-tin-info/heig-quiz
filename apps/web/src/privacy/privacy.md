@@ -1,16 +1,16 @@
 ## In short
 
 - You sign in with Switch edu-ID. Quiz has no password of its own.
-- The teaching staff of your course see your work in that course. Other students never see your grades, nor your answers under your name.
-- What you do is kept until your teacher deletes the evaluation, classroom or course it belongs to. A few kinds of data are deleted sooner, automatically (see *How long it is kept*).
-- Some of your answers and some of your code are sent, without your name, to an AI model (Anthropic) to help your teacher grade. Your teacher decides the grade.
-- No advertising, no audience measurement, no tracking script. Nothing is sold.
+- The teaching staff of your course see your work in that course. Other students never see your grades (except your teammates, for a group project's shared score), nor your answers under your name.
+- What you do is kept until your teacher deletes the evaluation, classroom or course it belongs to. A few kinds of data are deleted sooner, automatically; others, your account first, are never deleted automatically (see *How long it is kept*).
+- Some of your answers and some of your code are sent to an AI model (Anthropic), usually with names masked, to help your teacher grade; your teacher decides the grade. Your teacher's help assistant may send your name and final results (see *Artificial intelligence*).
+- No advertising, no audience measurement beyond the hours of activity, no tracking script. Nothing is sold.
 
 ## What is recorded
 
 ### Your account
 
-At each sign-in, Switch edu-ID sends your name, your e-mail addresses, your edu-ID identifier and the address of your picture. Quiz also keeps your preferences (language, theme, notifications) and, if you link one, your GitHub account.
+At each sign-in, Switch edu-ID sends your name, your e-mail addresses, your edu-ID identifier and the address of your picture. Quiz also keeps everything edu-ID released at your last sign-in, your affiliations included, to diagnose sign-in problems; it is shown nowhere. It keeps your preferences (language, theme, notifications) and, if you link one, your GitHub account.
 
 ### Your place in a class
 
@@ -36,6 +36,8 @@ Your teacher sees your drill activity in their classroom: the questions you prac
 
 When a course uses GitHub projects: the repository you accepted, the GitHub account you linked, the time of each push, the results of the automatic tests, your score and your teacher's comment. For a project graded by criteria, also what each graded commit produced (test results, outputs, files) and the points and explanations given for each criterion.
 
+If you open a project in the online workspace, each launch is recorded, and the workspace keeps your name, your e-mail address and your files.
+
 ### Polls
 
 Your answers to a poll. If you join a poll without an account, a pseudonym you choose and a cookie of your browser.
@@ -52,6 +54,8 @@ To give you access to your classrooms, to run the evaluations (the clock, extra 
 
 By default, what you do in a course is kept until your teacher deletes the evaluation, the project, the classroom or the course it belongs to. Nothing is deleted automatically when you finish your studies. If you are removed from a class list, your answers, grades and drill activity in that classroom stay until the classroom is deleted.
 
+Some data is never deleted automatically: your account, with your e-mail addresses and what edu-ID sent; the audit log, which records actions such as sign-ins, class list changes and gradings, with names; the log of calls to the AI model, which names the person each call was made for (never its content); your notifications; which kiosk station you used for which exam; a poll pseudonym without an account; and your files in the online workspace.
+
 Some data is deleted automatically:
 
 | What | Deleted |
@@ -63,12 +67,12 @@ Some data is deleted automatically:
 | The content of GitHub's messages about your repositories | 30 days after they arrive |
 | A teacher's conversations with the help assistant, which may quote your name or grade | 30 days after each exchange |
 
-Deleted data remains for some time in the encrypted backups of the platform, until they are renewed.
+Deleted data stays in the platform's backups for about four more months. That period holds only while the oldest backups are removed as planned, which is done by hand. The daily copies of the database kept on the server itself are not encrypted; the copy kept in Finland is.
 
 ## Who sees what
 
 - **You**: your classrooms, your answers, and your results and feedback once your teacher publishes them.
-- **Other students**: never your grades or your picture, and never your answers under your name. When a teacher shows the correction of an exercise or a poll in class, answers may appear, without names.
+- **Other students**: never your grades or your picture, and never your answers under your name. In a group project, your teammates share the repository and see its score. When a teacher shows the correction of an exercise, a poll's votes or the results in class, answers appear without names; in a very small class, or from an answer quoted as typed, others may still guess whose it is.
 - **The teaching staff of your course** (its teachers and assistants): everything you do in that course, past years included: your answers, grades, attempt journal, drill activity and project repositories, and your progress live during an evaluation.
 - **Teachers who can read a question** you answered in an exam: only statistics over all the students who answered it, never with fewer than ten answers, never your name.
 - **The administrator of the platform**: the list of accounts with their picture and last activity, and the hours of use as counts. To reach a course, the administrator turns on special rights that last one hour and are recorded. To help you with a problem, an administrator may open a session in your name: it lasts at most an hour, cannot answer or submit anything for you, and is recorded under the administrator's name.
@@ -80,7 +84,7 @@ Quiz sends some content to an AI model of Anthropic, a company of the United Sta
 
 - **Essay and diagram questions**: after the evaluation closes, your answer is sent, without your name, so that the model proposes a grade. Your teacher reviews it and decides. You read only the comment your teacher writes or accepts.
 - **Projects graded by criteria**: the files the criteria name, the test results and the build outputs of your repository are sent, with names, e-mail addresses and GitHub logins masked. Your teacher validates the points of each criterion; you read the explanations, marked provisional until the results are published.
-- **The final review of a project**: some projects run a final review in your repository's own automatic checks on GitHub. It sends your code to an AI model from GitHub, on the organization's account, outside Quiz.
+- **The final review of a project**: some projects run a final review that sends your code to an AI model (Anthropic), from your repository's checks on GitHub, on the organization's account, outside Quiz.
 - **Brainstorms with AI assistance**: the model reads the ideas live, the names of the class masked. If you join without an account, your idea is sent as you typed it; the page tells you before you send it.
 - **Your teacher's help assistant**: when your teacher asks it about their classroom, your name and your final results may be sent, not masked. Such a name may remain up to 30 days in your teacher's saved conversation, even if you leave the class.
 
@@ -89,7 +93,7 @@ Masking replaces the names Quiz knows. A name written differently, or someone el
 ## Other services
 
 - **Switch edu-ID** (Switzerland): signing in.
-- **Hetzner** (Germany and Finland): the servers. The application, the database and its backups are in Nuremberg, Germany. The code you run for a question is executed in Helsinki, Finland, without your name; the encrypted copy of the backups is there too.
+- **Hetzner** (Germany and Finland): the servers. The application, the database and its backups are in Nuremberg, Germany. The code you run for a question is executed in Helsinki, Finland, without your name. The online project workspace runs there too, with your name, your e-mail address and your files, and so does the encrypted copy of the backups.
 - **GitHub** (United States, Microsoft): for courses with GitHub projects, the repositories created for you and the invitations of your linked account. Deleting a project in Quiz does not delete its repositories on GitHub; they belong to the course's organization.
 - **E-mail and Microsoft Teams**, if you receive notifications there: titles and names of classrooms, never a grade or the content of a question. E-mails go through Scaleway, in France.
 

@@ -46,9 +46,9 @@ their teacher sees; platform presence (ADR-107) is not, and stays aggregated
 for the administrator only.
 
 Amended 2026-10-15 (§8's "The student is told" only, issue #868): the
-data-protection page it names is the "Data and privacy" page of N-DATA-07 (`/privacy`, its body in
-`apps/web/src/privacy/privacy.md` and `privacy.fr.md`); it says that the teacher sees the
-drill activity, at what times of the week included.
+data-protection page it names is the "Data and privacy" page of N-DATA-07
+(`/privacy`); it says that the teacher sees the drill activity, at what times
+of the week included.
 
 ## Context
 

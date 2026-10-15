@@ -1,9 +1,8 @@
-import { useEffect } from "react";
-
 import { Logo } from "../Header";
 import { type Locale, useI18n } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
-import { PageHeader, Segmented } from "../ui";
+import { LocaleSwitch, useDocumentTitle } from "../publicPage";
+import { PageHeader } from "../ui";
 import en from "./privacy.md?raw";
 import fr from "./privacy.fr.md?raw";
 
@@ -27,13 +26,8 @@ import fr from "./privacy.fr.md?raw";
 export const PRIVACY_SOURCES: Record<Locale, string> = { en, fr };
 
 export function PrivacyPage() {
-  const { t, locale, setLocale } = useI18n();
-  useEffect(() => {
-    document.title = `${t("privacy.title")} · Quiz`;
-    return () => {
-      document.title = "Quiz";
-    };
-  }, [t]);
+  const { t, locale } = useI18n();
+  useDocumentTitle(`${t("privacy.title")} · Quiz`);
   return (
     <div className="min-h-dvh bg-canvas text-fg">
       <header className="mx-auto flex h-16 max-w-3xl items-center gap-4 px-4 sm:px-8">
@@ -41,17 +35,7 @@ export function PrivacyPage() {
           <Logo className="w-24" />
         </a>
         <div className="ml-auto">
-          <Segmented<Locale>
-            name="privacy-locale"
-            size="sm"
-            label={t("discover.language")}
-            value={locale}
-            options={[
-              { value: "fr", label: "FR" },
-              { value: "en", label: "EN" },
-            ]}
-            onChange={(l) => setLocale(l, false)}
-          />
+          <LocaleSwitch name="privacy-locale" />
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 pt-6 pb-12 sm:px-8">

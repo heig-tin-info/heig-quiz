@@ -10,9 +10,9 @@ roster row's "Copy link as this student"). Closes open question 24
 left unbuilt.
 
 Amended 2026-10-15 (§6 only, issue #868): §6's sentence now also lives on
-the "Data and privacy" page of N-DATA-07 (`/privacy`, its body in
-`apps/web/src/privacy/privacy.md` and `privacy.fr.md`), worded without saying whether the student is notified; the student
-help ("My classrooms") keeps its own.
+the "Data and privacy" page of N-DATA-07 (`/privacy`), worded without saying
+whether the student is notified; the student help ("My classrooms") keeps its
+own.
 
 ## Context
 

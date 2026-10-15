@@ -20,11 +20,11 @@ leaving the page and pasting from outside it); relies on
 [ADR-034](ADR-034-agir-en-tant-qu-etudiant.md) (delegated sessions) and
 [ADR-051](ADR-051-postes-kiosque-attestes.md) (confined sessions).
 
-Amended 2026-10-15 (§6 and §8, what the student is told, issue #868): the "Data and privacy" page of N-DATA-07 (`/privacy`, its body in
-`apps/web/src/privacy/privacy.md` and `privacy.fr.md`)
-says, beside the condition line and the toast, that leaving the page and
-pasting from outside are recorded (the length, never the content), that the
-teacher sees it, and when it is deleted.
+Amended 2026-10-15 (§6 and §8, what the student is told, issue #868): the
+"Data and privacy" page of N-DATA-07 (`/privacy`) says, beside the condition
+line and the toast, that leaving the page and pasting from outside are
+recorded (the length, never the content), that the teacher sees it, and when
+it is deleted.
 
 ## Context
 

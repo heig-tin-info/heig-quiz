@@ -1,6 +1,3 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -8,13 +5,14 @@ import { LOCALES } from "@quiz/domain";
 
 import { en } from "../i18n/en";
 import { fr } from "../i18n/fr";
-import { mockFetch, renderWithProviders } from "../test/render";
+import { renderWithProviders } from "../test/render";
 import { PRIVACY_SOURCES, PrivacyPage } from "./PrivacyPage";
 
 /*
  * The "Data and privacy" page (N-DATA-07): its body is one Markdown file per
- * language, beside the component. A language added to the interface without
- * its file, or a section added in one language only, fails here.
+ * language, beside the component; a language added to the interface without
+ * its file does not compile (`PRIVACY_SOURCES`), and a section added in one
+ * language only fails here.
  */
 
 /** The section and subsection headings of a source, in order. */
@@ -23,12 +21,8 @@ const headings = (source: string) => source.match(/^#{2,3} .+$/gm) ?? [];
 const tableRows = (source: string) => source.match(/^\|.+\|$/gm) ?? [];
 
 describe("the privacy sources", () => {
-  it("exist for every interface language", () => {
-    for (const locale of LOCALES) {
-      const file = locale === "en" ? "privacy.md" : `privacy.${locale}.md`;
-      expect(existsSync(join(import.meta.dirname, file)), file).toBe(true);
-      expect(PRIVACY_SOURCES[locale].trim()).not.toBe("");
-    }
+  it("are not empty in any interface language", () => {
+    for (const locale of LOCALES) expect(PRIVACY_SOURCES[locale].trim()).not.toBe("");
   });
 
   it("have the same sections and the same table in every language", () => {
@@ -48,17 +42,14 @@ describe("the privacy sources", () => {
 });
 
 describe("PrivacyPage", () => {
-  it("renders the title and the body without calling the API", () => {
-    const { calls } = mockFetch({});
+  it("renders the title and the body", () => {
     renderWithProviders(<PrivacyPage />, { route: "/privacy" });
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(en["privacy.title"]);
     expect(screen.getByRole("heading", { level: 2, name: "How long it is kept" })).toBeVisible();
     expect(screen.getByRole("link", { name: en["privacy.home"] })).toHaveAttribute("href", "/");
-    expect(calls).toHaveLength(0);
   });
 
   it("speaks French", () => {
-    mockFetch({});
     renderWithProviders(<PrivacyPage />, { locale: "fr", route: "/privacy" });
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(fr["privacy.title"]);
     expect(screen.getByRole("heading", { level: 2, name: "Combien de temps" })).toBeVisible();

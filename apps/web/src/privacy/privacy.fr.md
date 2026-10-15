@@ -1,16 +1,16 @@
 ## En bref
 
 - Vous vous connectez avec Switch edu-ID. Quiz n'a pas de mot de passe à lui.
-- L'équipe enseignante de votre cours voit votre travail dans ce cours. Les autres étudiants ne voient jamais vos notes, ni vos réponses sous votre nom.
-- Ce que vous faites est conservé jusqu'à ce que votre enseignant supprime l'évaluation, la classe ou le cours auquel cela appartient. Quelques types de données sont supprimés plus tôt, automatiquement (voir *Combien de temps*).
-- Certaines de vos réponses et une partie de votre code sont envoyées, sans votre nom, à un modèle d'IA (Anthropic) pour aider votre enseignant à corriger. C'est votre enseignant qui décide de la note.
-- Pas de publicité, pas de mesure d'audience, pas de script de suivi. Rien n'est vendu.
+- L'équipe enseignante de votre cours voit votre travail dans ce cours. Les autres étudiants ne voient jamais vos notes (sauf vos coéquipiers, pour le score commun d'un projet de groupe), ni vos réponses sous votre nom.
+- Ce que vous faites est conservé jusqu'à ce que votre enseignant supprime l'évaluation, la classe ou le cours auquel cela appartient. Quelques types de données sont supprimés plus tôt, automatiquement ; d'autres, à commencer par votre compte, ne le sont jamais automatiquement (voir *Combien de temps*).
+- Certaines de vos réponses et une partie de votre code sont envoyées à un modèle d'IA (Anthropic), le plus souvent noms masqués, pour aider votre enseignant à corriger ; c'est votre enseignant qui décide de la note. L'assistant d'aide de votre enseignant peut envoyer votre nom et vos résultats finaux (voir *Intelligence artificielle*).
+- Pas de publicité, pas de mesure d'audience au-delà des heures d'activité, pas de script de suivi. Rien n'est vendu.
 
 ## Ce qui est enregistré
 
 ### Votre compte
 
-À chaque connexion, Switch edu-ID transmet votre nom, vos adresses e-mail, votre identifiant edu-ID et l'adresse de votre photo. Quiz conserve aussi vos préférences (langue, thème, notifications) et, si vous en liez un, votre compte GitHub.
+À chaque connexion, Switch edu-ID transmet votre nom, vos adresses e-mail, votre identifiant edu-ID et l'adresse de votre photo. Quiz conserve aussi tout ce qu'edu-ID a transmis à votre dernière connexion, vos affiliations comprises, pour diagnostiquer les problèmes de connexion ; ce n'est affiché nulle part. Il conserve vos préférences (langue, thème, notifications) et, si vous en liez un, votre compte GitHub.
 
 ### Votre place dans une classe
 
@@ -36,6 +36,8 @@ Votre enseignant voit votre activité de révision dans sa classe : les question
 
 Quand un cours utilise des projets GitHub : le dépôt que vous avez accepté, le compte GitHub que vous avez lié, l'heure de chaque push, les résultats des tests automatiques, votre score et le commentaire de votre enseignant. Pour un projet noté par critères, aussi ce que chaque commit noté a produit (résultats des tests, sorties, fichiers) et les points et explications donnés pour chaque critère.
 
+Si vous ouvrez un projet dans l'espace de travail en ligne, chaque lancement est enregistré, et l'espace de travail conserve votre nom, votre adresse e-mail et vos fichiers.
+
 ### Les sondages
 
 Vos réponses à un sondage. Si vous rejoignez un sondage sans compte, un pseudonyme que vous choisissez et un cookie de votre navigateur.
@@ -52,6 +54,8 @@ Pour vous donner accès à vos classes, pour faire passer les évaluations (l'ho
 
 Par défaut, ce que vous faites dans un cours est conservé jusqu'à ce que votre enseignant supprime l'évaluation, le projet, la classe ou le cours auquel cela appartient. Rien n'est supprimé automatiquement à la fin de vos études. Si vous êtes retiré d'une liste de classe, vos réponses, vos notes et votre activité de révision dans cette classe restent jusqu'à la suppression de la classe.
 
+Certaines données ne sont jamais supprimées automatiquement : votre compte, avec vos adresses e-mail et ce qu'edu-ID a transmis ; le journal d'audit, qui enregistre des actions comme les connexions, les modifications des listes de classe et les corrections, avec les noms ; le journal des appels au modèle d'IA, qui nomme la personne pour qui chaque appel a été fait (jamais son contenu) ; vos notifications ; quel poste kiosque vous avez utilisé pour quel examen ; un pseudonyme de sondage sans compte ; et vos fichiers dans l'espace de travail en ligne.
+
 Certaines données sont supprimées automatiquement :
 
 | Quoi | Supprimé |
@@ -63,12 +67,12 @@ Certaines données sont supprimées automatiquement :
 | Le contenu des messages de GitHub sur vos dépôts | 30 jours après leur arrivée |
 | Les conversations d'un enseignant avec l'assistant d'aide, qui peuvent citer votre nom ou votre note | 30 jours après chaque échange |
 
-Les données supprimées restent encore un temps dans les sauvegardes chiffrées de la plateforme, jusqu'à leur renouvellement.
+Les données supprimées restent environ quatre mois de plus dans les sauvegardes de la plateforme. Ce délai ne tient que si les plus anciennes sauvegardes sont retirées comme prévu, ce qui se fait à la main. Les copies quotidiennes de la base de données gardées sur le serveur lui-même ne sont pas chiffrées ; la copie conservée en Finlande l'est.
 
 ## Qui voit quoi
 
 - **Vous** : vos classes, vos réponses, et vos résultats et retours une fois que votre enseignant les publie.
-- **Les autres étudiants** : jamais vos notes ni votre photo, et jamais vos réponses sous votre nom. Quand un enseignant montre en classe la correction d'un exercice ou un sondage, des réponses peuvent apparaître, sans nom.
+- **Les autres étudiants** : jamais vos notes ni votre photo, et jamais vos réponses sous votre nom. Dans un projet de groupe, vos coéquipiers partagent le dépôt et voient son score. Quand un enseignant montre en classe la correction d'un exercice, les votes d'un sondage ou les résultats, les réponses apparaissent sans nom ; dans une très petite classe, ou d'après une réponse citée telle qu'écrite, d'autres peuvent tout de même deviner de qui elle vient.
 - **L'équipe enseignante de votre cours** (ses enseignants et assistants) : tout ce que vous faites dans ce cours, années passées comprises : vos réponses, notes, journal de tentative, activité de révision et dépôts de projet, et votre progression en direct pendant une évaluation.
 - **Les enseignants qui peuvent lire une question** à laquelle vous avez répondu dans un examen : seulement des statistiques sur l'ensemble des étudiants qui y ont répondu, jamais avec moins de dix réponses, jamais votre nom.
 - **L'administrateur de la plateforme** : la liste des comptes avec leur photo et leur dernière activité, et les heures d'utilisation sous forme de nombres. Pour accéder à un cours, l'administrateur active des droits spéciaux qui durent une heure et sont enregistrés. Pour vous aider à résoudre un problème, un administrateur peut ouvrir une session à votre nom : elle dure au plus une heure, ne peut rien répondre ni rendre à votre place, et elle est enregistrée au nom de l'administrateur.
@@ -80,7 +84,7 @@ Quiz envoie certains contenus à un modèle d'IA d'Anthropic, une entreprise des
 
 - **Questions de rédaction et de diagramme** : après la clôture de l'évaluation, votre réponse est envoyée, sans votre nom, pour que le modèle propose une note. Votre enseignant la relit et décide. Vous ne lisez que le commentaire que votre enseignant écrit ou accepte.
 - **Projets notés par critères** : les fichiers que les critères désignent, les résultats des tests et les sorties de compilation de votre dépôt sont envoyés, noms, adresses e-mail et identifiants GitHub masqués. Votre enseignant valide les points de chaque critère ; vous lisez les explications, marquées provisoires jusqu'à la publication des résultats.
-- **La revue finale d'un projet** : certains projets lancent une revue finale dans les vérifications automatiques de votre propre dépôt sur GitHub. Elle envoie votre code à un modèle d'IA depuis GitHub, sur le compte de l'organisation, en dehors de Quiz.
+- **La revue finale d'un projet** : certains projets lancent une revue finale qui envoie votre code à un modèle d'IA (Anthropic), depuis les vérifications de votre dépôt sur GitHub, sur le compte de l'organisation, en dehors de Quiz.
 - **Brainstorms avec assistance IA** : le modèle lit les idées en direct, les noms de la classe masqués. Si vous participez sans compte, votre idée part telle que vous l'avez écrite ; la page vous le dit avant l'envoi.
 - **L'assistant d'aide de votre enseignant** : quand votre enseignant l'interroge sur sa classe, votre nom et vos résultats finaux peuvent être envoyés, sans masquage. Un tel nom peut rester jusqu'à 30 jours dans la conversation enregistrée de votre enseignant, même si vous quittez la classe.
 
@@ -89,7 +93,7 @@ Le masquage remplace les noms que Quiz connaît. Un nom écrit autrement, ou le 
 ## Autres services
 
 - **Switch edu-ID** (Suisse) : la connexion.
-- **Hetzner** (Allemagne et Finlande) : les serveurs. L'application, la base de données et ses sauvegardes sont à Nuremberg, en Allemagne. Le code que vous exécutez pour une question tourne à Helsinki, en Finlande, sans votre nom ; la copie chiffrée des sauvegardes s'y trouve aussi.
+- **Hetzner** (Allemagne et Finlande) : les serveurs. L'application, la base de données et ses sauvegardes sont à Nuremberg, en Allemagne. Le code que vous exécutez pour une question tourne à Helsinki, en Finlande, sans votre nom. L'espace de travail en ligne des projets s'y trouve aussi, avec votre nom, votre adresse e-mail et vos fichiers, de même que la copie chiffrée des sauvegardes.
 - **GitHub** (États-Unis, Microsoft) : pour les cours avec des projets GitHub, les dépôts créés pour vous et les invitations de votre compte lié. Supprimer un projet dans Quiz ne supprime pas ses dépôts sur GitHub ; ils appartiennent à l'organisation du cours.
 - **E-mail et Microsoft Teams**, si vous y recevez des notifications : des titres et des noms de classes, jamais une note ni le contenu d'une question. Les e-mails passent par Scaleway, en France.
 

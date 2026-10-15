@@ -15,6 +15,7 @@ import { build } from "./build";
 import { Logo } from "./Header";
 import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
+import { FooterCredit } from "./publicPage";
 import { useGithubLinkReturn } from "./github/linkReturn";
 import { AssistDock } from "./assist/AssistDock";
 import { CoachLayer } from "./coach/CoachLayer";
@@ -212,13 +213,7 @@ function Landing() {
         {t("landing.discover")}
         <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
       </a>
-      <p className="mt-12 text-xs text-fg-faint">
-        {t("landing.footer")}
-        {" · "}
-        <a href="/privacy" className="underline underline-offset-2 transition-colors hover:text-fg">
-          {t("privacy.title")}
-        </a>
-      </p>
+      <FooterCredit className="mt-12 text-xs text-fg-faint" />
     </main>
   );
 }
