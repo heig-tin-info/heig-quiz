@@ -112,6 +112,8 @@ A poll you forget to end ends on its own: once twelve hours have gone by without
 
 The code keeps working for two hours after the end. A phone that reloads the page still gets the question and the revealed answer, so the room keeps the result in hand while you comment on it. After two hours the code is free again.
 
+Thirty days after the end, the participants who answered without an account are deleted, with their answers. You keep the results: the tally, a brainstorm's ideas and the answer counts stay exactly as they were, frozen, and no longer change, even for the participants who were signed in. A brainstorm can no longer be moderated from then on: its board says so and its controls are disabled.
+
 !!! warning
     A poll never puts a grade in the students' results. Ending it closes it and nothing more: the answers are not released, no card appears on a student's home, and nothing about a guest reaches any grade table. The result of a poll is the tally on the beamer.
 

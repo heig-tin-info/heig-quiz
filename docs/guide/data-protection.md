@@ -70,7 +70,7 @@ The platform receives data from three sources: Switch edu-ID at sign-in, the cla
 | Released grades, a snapshot per student | `evaluations.released_grades` (`db/evaluation.ts`) | release of the results | A teacher deletes |
 | Gradebook marks (absent, a mark entered by hand) | `gradebook_marks` (`db/gradebook.ts`) | teacher | The student leaves the list, or a teacher deletes |
 | Drill: per question practised, the scheduler's state; per review, the rating, right or wrong, active time, the answer given, the device class (touch or mouse) | `drill_cards`, `drill_reviews` (`db/drill.ts`, ADR-041) | the student | Five years, or sooner if a teacher deletes |
-| Poll participants without an account (a hash of a cookie, a chosen pseudonym) and their answers | `guest_participants` (`db/live.ts`) | the browser | Never deleted while the poll exists |
+| Poll participants without an account (a hash of a cookie, a chosen pseudonym) and their answers | `guest_participants` (`db/live.ts`) | the browser | 30 days after the poll closed; the poll's results stay, frozen (below) |
 | Kiosk pairing: which student sat which exam on which school Chromebook, who approved it | `kiosk_pairings` (`db/kiosk.ts`, ADR-051) | the student's phone, the supervisor | Never deleted automatically |
 
 ### Projects, GitHub and the journal
@@ -225,6 +225,9 @@ Automatic deletions:
 | Hours of activity | After eight days | `apps/api/src/modules/presence/jobs.ts`, ADR-107 |
 | Content of GitHub's notifications | 30 days after processing | `apps/api/src/modules/github/deliveries.ts` |
 | Evidence files, commits and build and test output of a project graded by criteria (the test cases and statuses stay) | Six months after its release | `apps/api/src/modules/project/evidence.ts`, ADR-106 |
+| A poll's participants without an account, with their attempts, answers and gradings (the accounts' answers stay) | 30 days after the poll closed | `apps/api/src/modules/poll/service.ts` (`poll.purge_guests`), ADR-014 |
+
+Before a poll's participants without an account are deleted, the poll's results are copied, frozen, so that the teacher keeps the tally, the ideas of a brainstorm and the counts they saw (`poll_frozen_results`, `db/poll.ts`; product owner, 2026-10-15, issue [#873](https://github.com/heig-tin-info/heig-quiz/issues/873)). The copy links no answer to a person, but **what participants typed stays in it**: the short answers, the brainstorm ideas, and the teacher's marks and the AI's corrections keyed by those ideas (`poll_idea_marks`). A participant who typed their own name, or something that identifies them, is still identifiable there. The copy goes with its poll, and an anonymous poll belongs to no classroom: no screen deletes it. After the purge, a brainstorm can no longer be moderated.
 
 Deletions by a teacher:
 
@@ -236,7 +239,7 @@ Deletions by a teacher:
 | Removing a student from the class list | Their seat, gradebook marks, group memberships and repository-access rows go (their GitHub access is revoked first); their attempts, answers, grades and drill data stay |
 | Archiving a classroom | Nothing is deleted: the classroom is only hidden |
 
-What is never deleted automatically: the accounts, the e-mail addresses and edu-ID information kept, the notifications, the AI call log, the poll participants without an account, the kiosk pairings, the audit log (which keeps, among others, the name and address of a student removed from a class list), the imported heig-classroom audit log, and the online workspace's users (name, e-mail address) and working directories (no deletion of them is in the repository).
+What is never deleted automatically: the accounts, the e-mail addresses and edu-ID information kept, the notifications, the AI call log, the kiosk pairings, the audit log (which keeps, among others, the name and address of a student removed from a class list), the imported heig-classroom audit log, and the online workspace's users (name, e-mail address) and working directories (no deletion of them is in the repository).
 
 ### Backups
 
@@ -330,7 +333,8 @@ Retention and deletion:
 - no deletion or pseudonymisation of accounts; the edu-ID information and every e-mail address seen are kept with no time limit;
 - removing a student from a class list leaves their attempts, answers, grades, drill data and released-grade snapshot in the database;
 - the audit log is never purged and contains names and addresses; its protection against change also prevents removing them;
-- the AI call log, the notifications, the poll participants without an account, the kiosk pairings and the online workspace's working directories have no retention period;
+- the AI call log, the notifications, the kiosk pairings and the online workspace's working directories have no retention period;
+- the frozen results of a poll keep what its participants without an account typed, with no time limit: an anonymous poll belongs to no classroom, and no screen deletes it;
 - the off-site copy's four to five months hold only if it is pruned by hand; otherwise its archives keep everything.
 
 Statistics:

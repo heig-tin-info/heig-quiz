@@ -139,6 +139,8 @@ export function PollModeration({ id }: { id: string }) {
   }
 
   const view = poll.data;
+  // Its guests purged, 30 days after the end (#873): the ideas are frozen, nothing here moves them.
+  const frozen = view.frozenAt !== null;
   const toggle = (key: string) =>
     setSelected((now) => (now.includes(key) ? now.filter((k) => k !== key) : [...now, key]));
   const merge = () => {
@@ -162,18 +164,18 @@ export function PollModeration({ id }: { id: string }) {
               <BoardSwitch
                 label={t("poll.ai")}
                 checked={data.ai.on}
-                disabled={display.isPending}
+                disabled={frozen || display.isPending}
                 onChange={(ai) => display.mutate({ ai })}
               />
             ) : null}
             <BoardSwitch
               label={t("poll.moderation")}
               checked={data.moderation}
-              disabled={display.isPending}
+              disabled={frozen || display.isPending}
               onChange={(moderation) => display.mutate({ moderation })}
             />
             <Button
-              disabled={pendingKeys.length === 0}
+              disabled={frozen || pendingKeys.length === 0}
               loading={act.isPending && act.variables?.action === "approve"}
               onClick={() => act.mutate({ action: "approve", keys: pendingKeys })}
             >
@@ -183,7 +185,9 @@ export function PollModeration({ id }: { id: string }) {
         }
       />
 
-      {data.ai.on && data.ai.error !== null ? (
+      {frozen ? (
+        <Alert title={t("poll.ideas.frozen")}>{t("poll.ideas.frozen.body")}</Alert>
+      ) : data.ai.on && data.ai.error !== null ? (
         // Fail closed (ADR-072): nothing the model did not judge reaches the wall by itself.
         <Alert tone="warning" title={t("poll.ai.failed")}>
           {t(data.ai.error === "run_cap" ? "poll.ai.failed.cap" : "poll.ai.failed.body")}
@@ -214,120 +218,123 @@ export function PollModeration({ id }: { id: string }) {
         ) : null}
       </div>
 
-      {clusters.length === 0 ? (
-        <EmptyState
-          icon={Lightbulb}
-          title={t(filter === "pending" ? "poll.ideas.emptyPending" : "poll.ideas.empty")}
-        />
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {clusters.map((cluster) => {
-            const picked = selected.includes(cluster.key);
-            return (
-              <li key={cluster.key}>
-                <Card className={cx("flex flex-col gap-2.5 px-4 py-3", picked && "border-accent")}>
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      label={<span className="sr-only">{t("poll.ideas.select", { label: cluster.label })}</span>}
-                      checked={picked}
-                      onChange={() => toggle(cluster.key)}
-                    />
-                    <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-fg">
-                      {cluster.label}
-                    </span>
-                    <span className="shrink-0 font-mono text-[13px] tabular-nums text-fg-muted">
-                      {t("poll.ideas.shown", {
-                        n: cluster.count,
-                        total: cluster.total,
-                      })}
-                    </span>
-                    <Actions
-                      label={t("poll.ideas.actions")}
-                      menu
-                      items={[
-                        {
-                          label: t("poll.ideas.rename"),
-                          icon: Pencil,
-                          onSelect: () => setRenaming({ key: cluster.key, label: cluster.renamed ? cluster.label : "" }),
-                        },
-                        ...(cluster.variants.length > 1
-                          ? [
-                              {
-                                label: t("poll.ideas.split"),
-                                icon: Split,
-                                onSelect: () =>
-                                  act.mutate({
-                                    action: "detach",
-                                    keys: cluster.variants.map((v) => v.key).filter((k) => k !== cluster.key),
-                                  }),
-                              },
-                            ]
-                          : []),
-                        {
-                          label: t("poll.ideas.hideAll"),
-                          icon: EyeOff,
-                          danger: true,
-                          onSelect: () => act.mutate({ action: "hide", keys: cluster.variants.map((v) => v.key) }),
-                        },
-                      ]}
-                    />
-                  </div>
-                  <ul className="flex flex-wrap gap-1.5 pl-7">
-                    {cluster.variants.map((v) => (
-                      <li
-                        key={v.key}
-                        className={cx(
-                          "touch-group inline-flex items-center gap-1.5 rounded-full border border-line py-0.5 pr-0.5 pl-2.5 text-[13px]",
-                          v.status === "hidden" ? "bg-surface-2 text-fg-faint line-through" : "bg-surface text-fg",
-                        )}
-                      >
-                        <span className="break-all">{v.text}</span>
-                        {/* What the room reads in its place: the model's corrected form. */}
-                        {v.correction !== null && v.correction !== v.text ? (
-                          <span className="break-all text-fg-muted">→ {v.correction}</span>
-                        ) : null}
-                        {v.ai ? (
-                          <span className="text-fg-faint" title={t("poll.ai.decided")}>
-                            <Sparkles className="size-3.5" aria-label={t("poll.ai.decided")} />
-                          </span>
-                        ) : null}
-                        {v.count > 1 ? (
-                          <span className="font-mono text-[12px] tabular-nums text-fg-muted">×{v.count}</span>
-                        ) : null}
-                        {v.status === "pending" ? (
-                          <Badge tone="amber">{t("poll.ideas.status.pending")}</Badge>
-                        ) : null}
-                        {v.status === "approved" && data.moderation ? (
-                          <Badge tone="green">{t("poll.ideas.status.approved")}</Badge>
-                        ) : null}
-                        {v.status === "approved" ? null : (
-                          <IconButton
-                            size="sm"
-                            label={t("poll.ideas.approve", { text: v.text })}
-                            onClick={() => act.mutate({ action: "approve", keys: [v.key] })}
-                          >
-                            <Check />
-                          </IconButton>
-                        )}
-                        {v.status === "hidden" ? null : (
-                          <IconButton
-                            size="sm"
-                            danger
-                            label={t("poll.ideas.hide", { text: v.text })}
-                            onClick={() => act.mutate({ action: "hide", keys: [v.key] })}
-                          >
-                            <EyeOff />
-                          </IconButton>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {/* One switch for every control of the list: a purged poll's ideas no longer move. */}
+      <fieldset disabled={frozen} className="min-w-0">
+        {clusters.length === 0 ? (
+          <EmptyState
+            icon={Lightbulb}
+            title={t(filter === "pending" ? "poll.ideas.emptyPending" : "poll.ideas.empty")}
+          />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {clusters.map((cluster) => {
+              const picked = selected.includes(cluster.key);
+              return (
+                <li key={cluster.key}>
+                  <Card className={cx("flex flex-col gap-2.5 px-4 py-3", picked && "border-accent")}>
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        label={<span className="sr-only">{t("poll.ideas.select", { label: cluster.label })}</span>}
+                        checked={picked}
+                        onChange={() => toggle(cluster.key)}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-fg">
+                        {cluster.label}
+                      </span>
+                      <span className="shrink-0 font-mono text-[13px] tabular-nums text-fg-muted">
+                        {t("poll.ideas.shown", {
+                          n: cluster.count,
+                          total: cluster.total,
+                        })}
+                      </span>
+                      <Actions
+                        label={t("poll.ideas.actions")}
+                        menu
+                        items={[
+                          {
+                            label: t("poll.ideas.rename"),
+                            icon: Pencil,
+                            onSelect: () => setRenaming({ key: cluster.key, label: cluster.renamed ? cluster.label : "" }),
+                          },
+                          ...(cluster.variants.length > 1
+                            ? [
+                                {
+                                  label: t("poll.ideas.split"),
+                                  icon: Split,
+                                  onSelect: () =>
+                                    act.mutate({
+                                      action: "detach",
+                                      keys: cluster.variants.map((v) => v.key).filter((k) => k !== cluster.key),
+                                    }),
+                                },
+                              ]
+                            : []),
+                          {
+                            label: t("poll.ideas.hideAll"),
+                            icon: EyeOff,
+                            danger: true,
+                            onSelect: () => act.mutate({ action: "hide", keys: cluster.variants.map((v) => v.key) }),
+                          },
+                        ]}
+                      />
+                    </div>
+                    <ul className="flex flex-wrap gap-1.5 pl-7">
+                      {cluster.variants.map((v) => (
+                        <li
+                          key={v.key}
+                          className={cx(
+                            "touch-group inline-flex items-center gap-1.5 rounded-full border border-line py-0.5 pr-0.5 pl-2.5 text-[13px]",
+                            v.status === "hidden" ? "bg-surface-2 text-fg-faint line-through" : "bg-surface text-fg",
+                          )}
+                        >
+                          <span className="break-all">{v.text}</span>
+                          {/* What the room reads in its place: the model's corrected form. */}
+                          {v.correction !== null && v.correction !== v.text ? (
+                            <span className="break-all text-fg-muted">→ {v.correction}</span>
+                          ) : null}
+                          {v.ai ? (
+                            <span className="text-fg-faint" title={t("poll.ai.decided")}>
+                              <Sparkles className="size-3.5" aria-label={t("poll.ai.decided")} />
+                            </span>
+                          ) : null}
+                          {v.count > 1 ? (
+                            <span className="font-mono text-[12px] tabular-nums text-fg-muted">×{v.count}</span>
+                          ) : null}
+                          {v.status === "pending" ? (
+                            <Badge tone="amber">{t("poll.ideas.status.pending")}</Badge>
+                          ) : null}
+                          {v.status === "approved" && data.moderation ? (
+                            <Badge tone="green">{t("poll.ideas.status.approved")}</Badge>
+                          ) : null}
+                          {v.status === "approved" ? null : (
+                            <IconButton
+                              size="sm"
+                              label={t("poll.ideas.approve", { text: v.text })}
+                              onClick={() => act.mutate({ action: "approve", keys: [v.key] })}
+                            >
+                              <Check />
+                            </IconButton>
+                          )}
+                          {v.status === "hidden" ? null : (
+                            <IconButton
+                              size="sm"
+                              danger
+                              label={t("poll.ideas.hide", { text: v.text })}
+                              onClick={() => act.mutate({ action: "hide", keys: [v.key] })}
+                            >
+                              <EyeOff />
+                            </IconButton>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </fieldset>
 
       {renaming ? (
         <FormDialog

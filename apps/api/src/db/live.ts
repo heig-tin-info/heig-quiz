@@ -50,6 +50,10 @@ import { enrollments } from "./org.js";
  * `quiz_guest` cookie of that browser, scoped to `/app/api/p`. A guest is a
  * row of THIS table and never an `enrollments` seat: a poll has no roster,
  * and nothing about a guest reaches the grade table.
+ *
+ * A guest is deleted 30 days after its poll closed, with its attempts,
+ * answers and gradings by cascade (`deleteGuests`, called by the `poll`
+ * module's `poll.purge_guests` once it froze the results; #873).
  */
 export const guestParticipants = pgTable(
   "guest_participants",

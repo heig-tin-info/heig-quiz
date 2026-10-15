@@ -820,6 +820,13 @@
       "when": 1792049878710,
       "tag": "0116_api_token_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1792053963353,
+      "tag": "0117_poll_frozen_results",
+      "breakpoints": true
     }
   ]
 }

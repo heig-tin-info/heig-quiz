@@ -6,7 +6,9 @@
  *
  * A module contributes its tasks as a list, so the order stays readable and
  * neither the ticker nor this module knows any domain: `POLL_TASKS` ends the
- * polls left without an answer for 12 hours, `NOTIFICATION_TASKS` reminds
+ * polls left without an answer for 12 hours and deletes a poll's anonymous
+ * participants 30 days after it closed, its results frozen first (#873,
+ * N-DATA-03), `NOTIFICATION_TASKS` reminds
  * the students of an evaluation closing within 24 hours (ADR-030 §d),
  * `DRILL_TASKS` purges the drill data past its five-year retention
  * (N-DATA-03). `health.checks` is this module's own: the health registry,

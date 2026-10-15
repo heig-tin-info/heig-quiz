@@ -16,6 +16,9 @@ and N-DATA-07 (docs/spec) and [ADR-058](ADR-058-passerelle-llm.md) §1 (the
 `poll` purpose); records a decision under open question 43; depends on
 F-LIVE-13, F-LIVE-14 and F-AUTH-05. [ADR-063](ADR-063-correction-llm.md)
 is unchanged: no grading pass calls a model while an evaluation runs.
+Amended 2026-10-15 by [ADR-014](ADR-014-sondages-en-direct.md#retention-of-the-guests)
+(#873): once a poll's guests are purged, 30 days after it closed, its ideas
+are frozen and its moderation is read-only.
 
 ## Context
 

@@ -17,6 +17,11 @@ opens the launcher's editor prefilled
 ([Several answers and reopening a recent poll](#several-answers-and-reopening-a-recent-poll));
 this narrows "Recent polls can retrieve and relaunch" of
 [Questions and retrieval](#questions-and-retrieval) to an unchanged question.
+Amended 2026-10-15 (product owner, #873): a poll's guests are deleted 30 days
+after it closed, and its results are read from a frozen copy from then on
+([Retention of the guests](#retention-of-the-guests)); this scopes "There is
+no tally cache" of [Tally, history and visibility](#tally-history-and-visibility)
+to a poll whose guests are still there.
 
 ## Context
 
@@ -184,6 +189,32 @@ card. Anonymous polls appear in the owner's poll history, not a classroom list.
 Ownership/classroom topics carry appropriate refresh hints. Poll creation, display,
 keep and end are audited; guest votes have no invented named actor.
 
+### Retention of the guests
+
+*Amendment of 2026-10-15 (product owner, #873; N-DATA-03).* Thirty days after a
+poll closed, by the server's clock, the scheduled task `poll.purge_guests`
+(daily) deletes its `guest_participants`; their attempts, answers, attempt
+journal and gradings go by the foreign keys' cascade. The delete is the `live`
+module's (`deleteGuests`), which owns those tables. The accounts' answers stay;
+a running poll is never touched.
+
+The teacher keeps the results. Before the delete, in the same transaction, the
+`poll` module writes a frozen copy of what the results are computed from
+(`poll_frozen_results`): the answers' payloads, how many joined, and how many
+the grading pass gave full marks. From then on the tally, the teacher's and the
+phones' views, the brainstorm board, the history's answer count and the
+launcher's outcome read that copy instead of the stored answers. For a poll
+answered by guests and accounts, the copy is the whole poll's results at the
+purge, so no result moves after it. This is the one tally cache: a frozen
+result, never a cache of a live poll. The copy links to no person, but the
+typed texts stay in it: short answers, brainstorm ideas and the marks keyed by
+them (`poll_idea_marks`).
+
+A purged brainstorm's moderation is read-only: an idea action, or the
+moderation or AI switch, is refused with `409 poll_frozen`, and the board and
+the projection disable those controls (`PollTeacherView.frozenAt`). The display
+switches still move.
+
 ## Consequences and alternatives
 
 Nullable question pools, evaluation classrooms and attempt users are constrained
@@ -201,6 +232,9 @@ rejected. Nothing about a poll justifies releasing grades to absent roster membe
   `questions/:id`, `pool-questions`, `inline`) and `/app/api/evaluations/:id/poll` (`GET`, `reveal`,
   `end`, `again`, `keep`); public routes
   `GET /app/api/p/:code`, `POST …/join`, `POST …/answer`.
+- `apps/api/src/modules/poll/service.ts` (`purgePollGuests`) and
+  `apps/api/src/modules/live/attempt.ts` (`deleteGuests`): the guests' retention
+  and the frozen results.
 - `packages/contracts/src/poll.ts`, `packages/domain/src/pollTally.ts` and
   `packages/domain/src/pollOutcome.ts`: contracts and pure rules.
 - `apps/api/src/modules/guards.ts`, pool/evaluation services and the poll database

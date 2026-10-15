@@ -520,6 +520,20 @@ export async function ensureGuest(
   return row;
 }
 
+/**
+ * Deletes the guests of one poll (#873): their attempts, answers, attempt
+ * journal and gradings go with them, by the foreign keys' cascade. The
+ * accounts' attempts are not touched. The `poll` module calls it, in the
+ * transaction that first freezes the poll's results. How many guests went.
+ */
+export async function deleteGuests(db: DbOrTx, evaluationId: string): Promise<number> {
+  const deleted = await db
+    .delete(guestParticipants)
+    .where(eq(guestParticipants.evaluationId, evaluationId))
+    .returning({ id: guestParticipants.id });
+  return deleted.length;
+}
+
 // --- Attempts -------------------------------------------------------------
 
 export async function attemptById(db: Db, id: string): Promise<AttemptRecord | null> {

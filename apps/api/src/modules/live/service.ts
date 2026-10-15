@@ -46,6 +46,7 @@ export {
   enrolledCount,
   guestByToken,
   ensureGuest,
+  deleteGuests,
   attemptById,
   attemptOf,
   ensureAttempt,

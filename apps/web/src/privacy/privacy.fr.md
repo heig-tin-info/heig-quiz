@@ -54,7 +54,7 @@ Pour vous donner accès à vos classes, pour faire passer les évaluations (l'ho
 
 Par défaut, ce que vous faites dans un cours est conservé jusqu'à ce que votre enseignant supprime l'évaluation, le projet, la classe ou le cours auquel cela appartient. Rien n'est supprimé automatiquement à la fin de vos études. Si vous êtes retiré d'une liste de classe, vos réponses, vos notes et votre activité de révision dans cette classe restent jusqu'à la suppression de la classe.
 
-Certaines données ne sont jamais supprimées automatiquement : votre compte, avec vos adresses e-mail et ce qu'edu-ID a transmis ; le journal d'audit, qui enregistre des actions comme les connexions, les modifications des listes de classe et les corrections, avec les noms ; le journal des appels au modèle d'IA, qui nomme la personne pour qui chaque appel a été fait (jamais son contenu) ; vos notifications ; quel poste kiosque vous avez utilisé pour quel examen ; un pseudonyme de sondage sans compte ; et vos nom, adresse e-mail et fichiers dans l'espace de travail en ligne.
+Certaines données ne sont jamais supprimées automatiquement : votre compte, avec vos adresses e-mail et ce qu'edu-ID a transmis ; le journal d'audit, qui enregistre des actions comme les connexions, les modifications des listes de classe et les corrections, avec les noms ; le journal des appels au modèle d'IA, qui nomme la personne pour qui chaque appel a été fait (jamais son contenu) ; vos notifications ; quel poste kiosque vous avez utilisé pour quel examen ; et vos nom, adresse e-mail et fichiers dans l'espace de travail en ligne.
 
 Certaines données sont supprimées automatiquement :
 
@@ -66,6 +66,7 @@ Certaines données sont supprimées automatiquement :
 | Les fichiers, commits et sorties de tests gardés pour noter un projet par critères | Six mois après la publication des résultats du projet (la liste des tests et leurs résultats restent) |
 | Le contenu des messages de GitHub sur vos dépôts | 30 jours après leur arrivée |
 | Les conversations d'un enseignant avec l'assistant d'aide, qui peuvent citer votre nom ou votre note | 30 jours après chaque échange |
+| Un sondage auquel vous avez répondu sans compte : votre pseudonyme, la trace du cookie et vos réponses | 30 jours après la fin du sondage. Les résultats du sondage restent pour l'enseignant, liés à personne, mais avec ce que vous y avez écrit |
 
 Les données supprimées restent environ quatre mois de plus dans les sauvegardes de la plateforme. Ce délai ne tient que si les plus anciennes sauvegardes sont retirées comme prévu, ce qui se fait à la main. Les copies quotidiennes de la base de données gardées sur le serveur lui-même ne sont pas chiffrées ; la copie conservée en Finlande l'est.
 
