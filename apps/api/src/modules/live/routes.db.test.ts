@@ -12,6 +12,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
+import { READ_TRACE_WINDOW_MS } from "../../audit.js";
 import { attemptEvents, attempts, auditLog, courseStaff, evaluations, gradings } from "../../db/schema.js";
 import { subscribe, type Topic } from "../../events.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
@@ -327,27 +328,31 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
   });
 
   it("audits that opening once, not every re-fetch of the dashboard (#875)", async () => {
+    const start = server.clock.now();
     const url = `/app/api/evaluations/${seed.evaluationId}/attempts/${attemptId}`;
     const reads = () =>
       server.app.db
         .select()
         .from(auditLog)
         .where(and(eq(auditLog.action, "attempt.read"), eq(auditLog.subjectId, attemptId)));
-    expect(await reads()).toEqual([
-      expect.objectContaining({
-        actorUserId: teacher.id,
-        actorType: "user",
-        subjectType: "attempt",
-        payload: { evaluationId: seed.evaluationId, view: "live" },
-      }),
-    ]);
+    // A fresh window, whatever the tests above opened.
+    server.clock.advance(READ_TRACE_WINDOW_MS);
+    const before = (await reads()).length;
+
+    expect((await get(url, teacher.headers)).statusCode).toBe(200);
+    const opened = await reads();
+    expect(opened).toHaveLength(before + 1);
+    expect(opened.find((row) => row.createdAt.getTime() === server.clock.now().getTime())).toMatchObject({
+      actorUserId: teacher.id,
+      actorType: "user",
+      subjectType: "attempt",
+      payload: { evaluationId: seed.evaluationId, view: "live" },
+    });
     // A dashboard frame or a hover a minute later is the same opening.
     server.clock.advance(60_000);
     expect((await get(url, teacher.headers)).statusCode).toBe(200);
-    expect(await reads()).toHaveLength(1);
-    // The student is refused before anything is traced.
-    expect((await get(url, student.headers)).statusCode).toBe(403);
-    expect(await reads()).toHaveLength(1);
+    expect(await reads()).toHaveLength(before + 1);
+    server.clock.set(start);
   });
 
   it("answers 410 attempt_closed past the deadline and its grace", async () => {

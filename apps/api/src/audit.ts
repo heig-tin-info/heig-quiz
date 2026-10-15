@@ -48,7 +48,8 @@ export type AuditAction =
    * (`payload.view`: `live`, F-DASH-05, its grid's hover tooltip included)
    * or from a row of the grade table (`copy`). Subject the attempt;
    * `payload.evaluationId`. One entry per opening, not per request: the same
-   * actor's reads of the same attempt are traced at most once every
+   * actor's reads of the same attempt through the same channel (a session,
+   * a token: the actor type) are traced at most once every
    * {@link READ_TRACE_WINDOW_MS} ({@link readTracer}), whichever the view.
    * The whole-class reads (one question's answers for the class, the grading
    * table, the CSV, the per-question view) are not traced.
@@ -771,6 +772,7 @@ export class RecentReads {
     this.traced.delete(key);
   }
 
+  /** How many keys are held: the only way to observe that expired ones are dropped, not just ignored. */
   get size(): number {
     return this.traced.size;
   }
@@ -785,16 +787,18 @@ export function registerReadTrace(app: FastifyInstance): void {
 
 /**
  * {@link tracer} for an audited READ: the same entry and the same actor (the
- * person acting, a token's owner as `api_key`), but at most one per actor,
- * action and subject every {@link READ_TRACE_WINDOW_MS} on the server's clock.
- * A call site traces once its loader and its service have succeeded.
+ * person acting, a token's owner as `api_key`), but at most one per actor
+ * (user AND actor type: a token's read is not hidden by a session's), action
+ * and subject every {@link READ_TRACE_WINDOW_MS} on the server's clock. A
+ * call site traces once its loader and its service have succeeded.
  */
 export function readTracer(app: FastifyInstance): Trace {
   const trace = tracer(app);
   return async (req, action, subjectType, subjectId, payload) => {
     const reads = recentReads.get(app);
     if (!reads) throw new Error("readTracer: registerReadTrace(app) was not called");
-    const key = `${actorOf(req).actorUserId}|${action}|${subjectType}|${subjectId}`;
+    const { actorUserId, actorType } = actorOf(req);
+    const key = `${actorUserId}|${actorType}|${action}|${subjectType}|${subjectId}`;
     // Claimed before the write, so two requests in flight write one entry.
     if (!reads.claim(key, app.clock.now().getTime())) return;
     try {

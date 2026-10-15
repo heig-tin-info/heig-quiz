@@ -13,6 +13,7 @@ import { StaffCopy, StudentGrades } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { READ_TRACE_WINDOW_MS } from "../../audit.js";
+import { createApiToken } from "../../auth/tokens.js";
 import { auditLog, evaluations } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
@@ -173,7 +174,7 @@ describe("results and the export (§4.6)", () => {
     ).toBe(404);
   });
 
-  it("audits the opening of a copy once per actor and window, never a refused read (#875)", async () => {
+  it("audits the opening of a copy once per actor, channel and window, never a refused read (#875)", async () => {
     const start = server.clock.now();
     const url = `/app/api/evaluations/${built.evaluationId}/results/attempts/${built.attemptId}`;
     const reads = () =>
@@ -195,25 +196,32 @@ describe("results and the export (§4.6)", () => {
       payload: { evaluationId: built.evaluationId, view: "copy" },
     });
 
-    // The same opening: re-read until the last millisecond of the window.
-    expect((await get(url, teacher.headers)).statusCode).toBe(200);
-    server.clock.advance(READ_TRACE_WINDOW_MS - 1);
+    // The same opening (the window's edges are `RecentReads`'s, audit.test.ts).
+    server.clock.advance(60_000);
     expect((await get(url, teacher.headers)).statusCode).toBe(200);
     expect(await reads()).toHaveLength(before + 1);
     // Refused by the loader: nothing traced.
     expect((await get(url, other.headers)).statusCode).toBe(404);
     expect(await reads()).toHaveLength(before + 1);
 
-    // Past the window, a new opening.
-    server.clock.advance(1);
-    expect((await get(url, teacher.headers)).statusCode).toBe(200);
+    // The same teacher through a personal token, inside the window: another channel, another entry.
+    const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null });
+    expect((await get(url, { authorization: `Bearer ${token}` })).statusCode).toBe(200);
     expect(await reads()).toHaveLength(before + 2);
+    expect((await reads()).filter((row) => row.actorType === "api_key")).toEqual([
+      expect.objectContaining({ actorUserId: teacher.id }),
+    ]);
+
+    // Past the window, a new opening.
+    server.clock.advance(READ_TRACE_WINDOW_MS);
+    expect((await get(url, teacher.headers)).statusCode).toBe(200);
+    expect(await reads()).toHaveLength(before + 3);
 
     // Another actor is another opening: an administrator through Super Powers, named as themself.
     const admin = await server.signInWithSuperPowers();
     expect((await get(url, admin.headers)).statusCode).toBe(200);
     const all = await reads();
-    expect(all).toHaveLength(before + 3);
+    expect(all).toHaveLength(before + 4);
     expect(all.filter((row) => row.actorUserId === admin.id)).toEqual([
       expect.objectContaining({ actorType: "user", payload: { evaluationId: built.evaluationId, view: "copy" } }),
     ]);
