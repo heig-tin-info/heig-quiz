@@ -22,13 +22,14 @@ import {
   Skeleton,
 } from "../ui";
 import { aiPairsOf, ConceptDuplicates, duplicatePairs } from "./ConceptDuplicates";
+import { ConceptRelationReview } from "./ConceptRelationReview";
 import { ConceptSheet } from "./ConceptSheet";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 import { BroaderPath } from "./refs";
 
-type Filter = "all" | "proposed" | "validated" | "unplaced" | "duplicates";
+type Filter = "all" | "proposed" | "validated" | "unplaced" | "duplicates" | "relations";
 
 /** The languages a concept has no label in: what stops its validation. */
 const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((lang) => c.labels[lang] === null);
@@ -50,6 +51,8 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  * The hierarchy shows on each row as the path above the concept
  * (`broaderTrail`, the picker's rule), and **Unplaced** lists the concepts
  * with no broader and no narrower concept (`unplaced`), whatever their status.
+ * **Relations** lists the relations proposed without a model (ADR-114), to
+ * tick and accept: its own primary action, so Validate is not there.
  */
 export function ConceptQueue() {
   const t = useT();
@@ -69,7 +72,7 @@ export function ConceptQueue() {
   const loose = useMemo(() => unplaced(all ?? []), [all]);
   const q = typed.trim();
   const rows = useMemo(() => {
-    if (filter === "duplicates") return [];
+    if (filter === "duplicates" || filter === "relations") return [];
     const byStatus =
       filter === "unplaced" ? loose : (all ?? []).filter((c) => filter === "all" || c.status === filter);
     if (q === "") return byStatus;
@@ -109,6 +112,7 @@ export function ConceptQueue() {
           name="concept-filter"
           label={t("admin.concepts.filter")}
           size="sm"
+          wrap
           value={filter}
           onChange={setFilter}
           options={[
@@ -126,6 +130,7 @@ export function ConceptQueue() {
               value: "duplicates",
               label: found.length > 0 ? t("admin.concepts.filter.duplicatesCount", { n: found.length }) : t("admin.concepts.filter.duplicates"),
             },
+            { value: "relations", label: t("admin.concepts.filter.relations") },
           ]}
         />
         <SearchInput
@@ -153,6 +158,8 @@ export function ConceptQueue() {
           concepts={all ?? []}
           onEdit={setEditing}
         />
+      ) : filter === "relations" ? (
+        <ConceptRelationReview concepts={all ?? []} narrowed={narrowed} onEdit={setEditing} />
       ) : rows.length === 0 ? (
         <Card>
           {q !== "" ? (

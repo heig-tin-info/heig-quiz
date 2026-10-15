@@ -1779,6 +1779,27 @@ const scenes = [
       await p.getByRole("button", { name: /^merge dynamic alocation into/i }).click();
       await p.getByRole("dialog").waitFor();
     } },
+  // ADR-114 (#897 step A1): the Relations view's candidates, two of them ticked with the bar, then accepted ("Added").
+  { name: "admin-concepts-relation-review", role: "admin", path: "/admin?tab=concepts", act: async (p) => {
+      await p.getByRole("radio", { name: /^relations$/i }).check({ force: true });
+      await skipCoach(p);
+      await p.getByRole("checkbox", { name: /under pointer$/i }).waitFor({ state: "attached" });
+    } },
+  { name: "admin-concepts-relation-review-selected", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
+      await p.getByRole("radio", { name: /^relations$/i }).check({ force: true });
+      await skipCoach(p);
+      await p.getByRole("checkbox", { name: /under pointer$/i }).check({ force: true });
+      await p.getByRole("checkbox", { name: /related to stack$/i }).check({ force: true });
+    } },
+  { name: "admin-concepts-relation-review-accepted", role: "admin", path: "/admin?tab=concepts", act: async (p) => {
+      await p.getByRole("radio", { name: /^relations$/i }).check({ force: true });
+      await skipCoach(p);
+      await p.getByRole("checkbox", { name: /under pointer$/i }).check({ force: true });
+      await p.getByRole("checkbox", { name: /related to stack$/i }).check({ force: true });
+      await p.getByRole("button", { name: /^accept the 2 selected$/i }).click();
+      await p.getByText(/^added: 2/i).waitFor();
+      await p.getByText(/^added$/i).first().waitFor();
+    } },
   // ADR-081 amendment of 2026-10-13 (#817): Fill with AI puts the proposal in the empty fields; a taken label is a "did you mean".
   { name: "admin-concepts-fill", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^edit récursivité/i }).click();

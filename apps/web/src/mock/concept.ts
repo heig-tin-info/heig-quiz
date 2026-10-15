@@ -8,6 +8,7 @@
  * admin dropped (`c01`, dropped as a chapter label, is one from the start).
  */
 import {
+  CONCEPT_CANDIDATE_LIMITS,
   CONCEPT_FILL_CLOSE_MAX,
   ConceptAliasAdd,
   ConceptCreate,
@@ -23,6 +24,7 @@ import {
   type Concept,
   type ConceptExists,
   type ConceptRef,
+  type ConceptRelationCandidates,
   type TagDropReason,
 } from "@quiz/contracts";
 import {
@@ -36,6 +38,7 @@ import {
   mergedAliases,
   edgesOf,
   mergedRelations,
+  relationCandidatesOf,
   relationsOf,
   qualifiedConceptKey,
   resolveConceptLabel,
@@ -81,6 +84,9 @@ const concepts: Concept[] = [
   concept("proposed", ["Alocation dynamique"], ["Dynamic alocation"]),
   concept("proposed", ["Hash table", "", "Anglicisme saisi par un enseignant."], [null]),
   concept("proposed", ["Tas"], ["Heap"]),
+  // Under Pointeur by its label, and used with Récursivité: the Relations view's candidates (#897 step A1).
+  concept("validated", ["Arithmétique des pointeurs"], ["Pointer arithmetic"]),
+  concept("validated", ["Pile"], ["Stack"]),
 ];
 
 concepts[0]!.aliases = ["Référence mémoire", "Pointer variable"];
@@ -407,6 +413,29 @@ on("DELETE", "/app/api/admin/concepts/:id/relations/:kind/:target", (m): Concept
   }
   setEdges(edges);
   return c;
+});
+
+/**
+ * The pairs of concepts the mock's questions share (French labels, shared
+ * questions, the less-used one's questions): what the server counts in SQL.
+ * Pointeur and Tableau are in one chain already, so the rule drops them.
+ */
+const TOGETHER: [a: string, b: string, shared: number, smaller: number][] = [
+  ["Pointeur", "Tableau", 3, 5],
+  ["Récursivité", "Pile", 3, 4],
+  ["Hash table", "Tableau", 3, 5],
+];
+
+/** The relations proposed without a model (ADR-114): the server's rules on the mock's vocabulary. */
+on("GET", "/app/api/admin/concepts/relations/candidates", (): ConceptRelationCandidates => {
+  if (flags.empty) return { contained: [], together: [] };
+  const live = concepts.filter((c) => c.status !== "merged");
+  const id = (fr: string) => live.find((c) => c.labels.fr === fr && c.qualifiers.fr === "")?.id;
+  const pairs = TOGETHER.flatMap(([a, b, shared, smaller]) => {
+    const [x, y] = [id(a), id(b)];
+    return x && y ? [{ a: x, b: y, shared, smaller }] : [];
+  });
+  return relationCandidatesOf(resolvables(), edgesOf(live), pairs, CONCEPT_CANDIDATE_LIMITS);
 });
 
 on("DELETE", "/app/api/admin/concepts/:id", (m) => {

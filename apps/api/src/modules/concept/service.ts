@@ -42,6 +42,7 @@ import { columnsOf, conflictOr, loadAliases, loadConcept, loadRelations, perLang
 
 export { addAlias, removeAlias } from "./aliases.js";
 export { addRelation, removeRelation } from "./relations.js";
+export { relationCandidates } from "./relationCandidates.js";
 import { lockRelations } from "./relations.js";
 export { listAdminConcepts } from "./admin.js";
 export { aiDuplicates } from "./duplicatesAi.js";

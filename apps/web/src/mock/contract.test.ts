@@ -90,6 +90,7 @@ import {
   ConceptSuggestions,
   ConceptDuplicatesAi,
   ConceptFill,
+  ConceptRelationCandidates,
   ConceptWriteRefusal,
   KioskStation,
   PairPreview,
@@ -501,6 +502,7 @@ const CHECKED: Case[] = [
   each("/app/api/admin/tasks", "/app/api/admin/tasks", AdminScheduledTask),
   one("/app/api/concepts", "/app/api/concepts", ConceptList),
   one("/app/api/admin/concepts", "/app/api/admin/concepts", AdminConceptList),
+  one("/app/api/admin/concepts/relations/candidates", "/app/api/admin/concepts/relations/candidates", ConceptRelationCandidates),
   each("/app/api/admin/kiosk-devices", "/app/api/admin/kiosk-devices", KioskDevice),
   one("/app/api/kiosk/station", "/app/api/kiosk/station", KioskStation),
   one("/app/api/pair/:code", "/app/api/pair/BCDF-GHJK", PairPreview),
@@ -1179,6 +1181,20 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     expect(pairs.length).toBeGreaterThan(0);
     const ids = new Set(before.concepts.map((c) => c.id));
     for (const p of pairs) expect([ids.has(p.a), ids.has(p.b), p.a !== p.b]).toEqual([true, true, true]);
+    expect(await queue()).toEqual(before);
+  });
+
+  it("proposes relations between live concepts of the queue, writing nothing (ADR-114)", async () => {
+    const before = await queue();
+    const res = await call("GET", "/app/api/admin/concepts/relations/candidates");
+    expect(issuesOf(ConceptRelationCandidates, res.body)).toEqual([]);
+    const { contained, together } = res.body as unknown as ConceptRelationCandidates;
+    const fr = new Map(before.concepts.map((c) => [c.id, c.labels.fr]));
+    expect(contained.map((e) => [fr.get(e.concept), fr.get(e.target)])).toContainEqual(["Arithmétique des pointeurs", "Pointeur"]);
+    expect(together.length).toBeGreaterThan(0);
+    for (const p of together) expect([fr.has(p.a), fr.has(p.b), p.a < p.b]).toEqual([true, true, true]);
+    // Tableau is under Pointeur already: never proposed as related to it.
+    expect(together.map((p) => [fr.get(p.a), fr.get(p.b)].sort())).not.toContainEqual(["Pointeur", "Tableau"]);
     expect(await queue()).toEqual(before);
   });
 

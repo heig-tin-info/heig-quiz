@@ -17,7 +17,9 @@ the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
 [sixth addendum](#sixth-addendum-2026-10-10-the-concepts-of-a-course-steps-7-9)
 (the concepts of a course, steps 7a to 7d and 9a implemented) and the
 [amendment of 2026-10-13](#amendment-2026-10-13-fill-with-ai-on-the-admins-sheet)
-(the model's fill of §7 on the admin's concept sheet, implemented). The work is tracked by #599, under a parent issue that groups #557
+(the model's fill of §7 on the admin's concept sheet, implemented).
+[ADR-114](ADR-114-relations-proposees-entre-notions.md) proposes relations to
+the admin (#897 step A) and defers §7's suggested broader concept. The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,

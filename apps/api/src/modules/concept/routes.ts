@@ -20,6 +20,10 @@
  *
  * - `GET /app/api/admin/concepts`: the curation queue, with the instance-wide count of questions using each concept (a number;
  *   Super Powers are not needed, ADR-054 amended).
+ * - `GET /app/api/admin/concepts/relations/candidates`: the relations proposed
+ *   without a model (#897 step A1, ADR-114): broader candidates by label
+ *   containment, related ones by co-occurrence on live questions (counts
+ *   only, the same exception as the queue's); nothing stored, no budget.
  * - `POST /app/api/admin/concepts/duplicates/ai` (no body): the model's probable
  *   duplicate pairs, from labels and qualifiers alone (fifth addendum §4,
  *   purpose `concepts`); nothing stored. 409 `llm_not_configured`, 429
@@ -66,6 +70,7 @@ import {
   type ConceptList,
   ConceptPatch,
   ConceptRelationAdd,
+  ConceptRelationCandidates,
   ConceptRelationParams,
   ConceptResolveQuery,
   type ConceptResolveResponse,
@@ -125,6 +130,10 @@ export async function conceptPlugin(app: FastifyInstance) {
 
   app.get("/app/api/admin/concepts", { preHandler: requireAdmin }, async () => {
     return { concepts: await service.listAdminConcepts(app.db) } satisfies AdminConceptList;
+  });
+
+  app.get("/app/api/admin/concepts/relations/candidates", { preHandler: requireAdmin }, async () => {
+    return ConceptRelationCandidates.parse(await service.relationCandidates(app.db));
   });
 
   const asks = new Budget();
