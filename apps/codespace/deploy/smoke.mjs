@@ -127,7 +127,7 @@ if (launch) {
   const res = await fetch(`${base}/launch?token=${token}`, { redirect: "manual" });
   const where = res.headers.get("location") ?? "";
   if (res.status !== 303 || !/^\/s\/[^/]+\/$/.test(where)) {
-    fail(`launch answered ${res.status} ${where} (journalctl -u quiz-codespace-${instance})`);
+    fail(`launch answered ${res.status} ${where} (journalctl --namespace=+quiz -u quiz-codespace-${instance})`);
   }
   ok(`launch: 303 ${where}, a student container is running`);
 }

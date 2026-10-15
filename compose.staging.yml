@@ -52,6 +52,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Host logs (#872): rotated by size, about 30 days at staging's traffic
+    # (compose.prod.yml, docs/development/deployment.md §7, Host logs).
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   postgres:
     image: postgres:17
@@ -97,6 +104,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "3"
 
 volumes:
   pgdata:

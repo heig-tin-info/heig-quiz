@@ -48,6 +48,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Host logs (#872): each container's output is a json-file log, rotated
+    # by SIZE, never by date; the size is chosen so that about 30 days fit
+    # (docs/development/deployment.md §7, Host logs). This one carries the
+    # IP address of every request (apps/api/src/redact.ts): 6 x 50 MB, about
+    # a month at ~10 MB a day. A deploy recreates `app`, and its log with it.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "6"
 
   postgres:
     image: postgres:17
@@ -93,6 +103,13 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    # Mostly the checkpoint lines (~160 kB a day): 3 x 2 MB is about a month.
+    # Never recreated by a deploy, so without a cap it grows for good.
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "3"
 
   # Daily pg_dump to ./backups; 30-day retention. The off-VM copy is a host
   # timer (borg to a Storage Box): docs/development/deployment.md §6.
@@ -133,6 +150,12 @@ services:
           ls -1t /backups/quiz-*.dump 2>/dev/null | tail -n +31 | xargs -r rm --
           sleep 86400
         done
+    # A failed dump's message, at most a line or two a day.
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
 
 volumes:
   pgdata:
