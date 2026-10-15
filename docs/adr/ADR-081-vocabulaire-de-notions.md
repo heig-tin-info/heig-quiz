@@ -19,7 +19,10 @@ the [fourth addendum](#fourth-addendum-2026-10-10-the-tag-sorting-is-retired)
 [amendment of 2026-10-13](#amendment-2026-10-13-fill-with-ai-on-the-admins-sheet)
 (the model's fill of §7 on the admin's concept sheet, implemented).
 [ADR-114](ADR-114-relations-proposees-entre-notions.md) proposes relations to
-the admin (#897 step A) and defers §7's suggested broader concept. The work is tracked by #599, under a parent issue that groups #557
+the admin (#897 step A) and defers §7's suggested broader concept.
+[ADR-115](ADR-115-revision-ciblee-par-notion.md) amends the sixth addendum §7
+(2026-10-15): a student may revise a course concept on purpose, outside FSRS
+and the level. The work is tracked by #599, under a parent issue that groups #557
 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
 the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
@@ -687,6 +690,9 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
    only; a level only from five reviewed cards, otherwise "no data yet"; no
    class comparison or ranking and no "Practise this concept" button (ADR-041
    §6 and §11 stand); FSRS fading is accepted. Reserved for its own ADR.
+   *Amended by ADR-115 (2026-10-15): practice by concept exists as targeted
+   revision — the course's validated concepts, the student's own cards
+   covering them through `coverage`, outside FSRS and the level.*
 8. **The pool's course filter (7b, as built).** `GET /pools/:id/questions`
    takes `course=<courseId>` (`QuestionSearch.course`): the questions that
    exercise any concept the course covers. The expansion is the one function

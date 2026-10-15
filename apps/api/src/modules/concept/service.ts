@@ -12,7 +12,8 @@
  * database's (addendum §3): a write that hits a key's unique index is
  * answered with the concept that holds it.
  */
-import { asc, eq, ne, sql } from "drizzle-orm";
+import { asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import {
   CONCEPT_LANGS,
@@ -20,6 +21,7 @@ import {
   type ConceptCreate,
   type ConceptLang,
   type ConceptPatch,
+  type ConceptRef,
   type ConceptResolution,
   type TagDropReason,
 } from "@quiz/contracts";
@@ -81,6 +83,29 @@ export async function listConcepts(db: Db): Promise<Concept[]> {
   const aliases = await loadAliases(db);
   const relations = await loadRelations(db);
   return rows.map((r) => toConcept(r, aliases.get(r.id), relations.get(r.id)));
+}
+
+/**
+ * The concept each of `ids` stands for today, labelled in `lang`: itself, or
+ * the final concept a merge folded it into (`merged_into`: one hop, since a
+ * merge rewrites the chains onto its winner, `merge.ts`). An id that names
+ * no concept is absent. A staff read: the caller decides what of it a
+ * student may see.
+ */
+export async function finalConceptRefs(db: Db | Tx, ids: readonly string[], lang: ConceptLang): Promise<Map<string, ConceptRef>> {
+  if (ids.length === 0) return new Map();
+  const winner = alias(concepts, "winner");
+  const rows = await db
+    .select({ concept: concepts, winner })
+    .from(concepts)
+    .leftJoin(winner, eq(winner.id, concepts.mergedInto))
+    .where(inArray(concepts.id, [...new Set(ids)]));
+  return new Map(
+    rows.flatMap(({ concept, winner }) => {
+      const final = winner ?? concept;
+      return final.status === "merged" ? [] : [[concept.id, toConceptRef(final, lang)] as const];
+    }),
+  );
 }
 
 /**

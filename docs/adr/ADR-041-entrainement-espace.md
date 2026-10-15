@@ -50,6 +50,13 @@ data-protection page it names is the "Data and privacy" page of N-DATA-07
 (`/privacy`); it says that the teacher sees the drill activity, at what times
 of the week included.
 
+Amended 2026-10-15 by [ADR-115](ADR-115-revision-ciblee-par-notion.md)
+(product owner, #897 step E): extra practice exists as **targeted revision by
+concept**, on its own routes and tables, outside FSRS, the level and every read
+of the daily reviews; a card served in one of its rounds today leaves today's
+session (§2, §5, §6, §7, §8, §11, §12, §14, Consequences: settled question
+28 (b)).
+
 ## Context
 
 The spec reserved a phase-2 drill in five lines: every question a student meets
@@ -112,7 +119,10 @@ round; their numbers are not reused, and the
   copied into and from templates (F-EVAL-18).
 - A drill review always shows the key (`studentSolutionView`). **The "Allow
   drill" setting says so next to its switch**: students will see the key of
-  these questions after each review. *(Second round, 28 (h).)*
+  these questions after each review. *(Second round, 28 (h).)* *Amended by
+  ADR-115 §5, §13: a round of targeted revision shows the key after each answer
+  too, and the note also says that students may revise these questions by
+  concept.*
 
 ### 3. The types of v1
 
@@ -164,7 +174,10 @@ library (MIT, no dependency, ESM), wrapped so that no type of it leaves
 `packages/domain`. `ts-fsrs` 5 implements FSRS-6; it is given FSRS-5's 19
 weights plus the two values that make FSRS-6 compute FSRS-5 exactly. Only the
 long-term scheduler is used — no learning steps, since a drill reviews a card at
-most once a day — and no fuzz, so a review is deterministic.
+most once a day — and no fuzz, so a review is deterministic. *Amended by
+ADR-115 §1, §6: a round of targeted revision is not a review and never reaches
+the scheduler; its relearning step (a wrong answer back once in the round) is
+its own, not FSRS's.*
 
 The web app imports `@quiz/domain`; a web build with the scheduler in the
 package's index carried part of the library, so the scheduler is reached by its
@@ -186,6 +199,10 @@ The web build then contains none of it.
   on both device classes. *(Second round, item 9 and 28 (c).)*
 - No extra practice and no whole-pool drill in v1. An empty day says "nothing
   to review today" and gives the next due date. *(Second round, 28 (b), (f).)*
+  *Amended by ADR-115 (2026-10-15): extra practice is targeted revision by
+  concept, on the student's own cards, outside FSRS and the level; the empty
+  day is unchanged, and there is still no whole-pool drill. A card served in a
+  round today is not in today's session (ADR-115 §7).*
 - A card leaves the session when its classroom is archived; its data is kept
   for the retention period. *(Second round, 28 (g).)*
 - An opt-out hides the activity **from then on**: what was recorded before stays
@@ -210,7 +227,8 @@ The web build then contains none of it.
   exam is practised, key included, by the students who met it. "Allow drill" is
   what controls that risk. **The note next to the "Allow drill" switch says so**
   (slice 3): students see the key after each review, and the latest version of
-  the question is served. *(Third round.)*
+  the question is served. *(Third round.)* *Amended by ADR-115 §5: a round of
+  targeted revision serves the latest version too.*
 
 ### 8. Data
 
@@ -251,6 +269,11 @@ default"):
 - **The student is told** in the drill tab that their teacher sees this
   activity, at what times of the week included; the data-protection page
   (N-DATA-07, #274) says so too.
+- **Targeted revision** *(ADR-115 §8, §9, 2026-10-15)*: each round is recorded in
+  its own tables, never in `drill_reviews`, kept five years from its start and
+  deleted with its classroom; the staff see who revised which concept, as
+  counts, under the same cuts (current student seats, nothing after an
+  opt-out), and the student is told so.
 
 ### 9. The invariants the drill keeps
 
@@ -286,12 +309,20 @@ a student cannot re-answer a card at once to forge a rating or the recall rate,
 and there is no extra practice (06, question 28 (b)). Anything else is the 404
 of a missing card.
 
+*Amended by ADR-115 §1, §7 (2026-10-15):* the extra practice of targeted
+revision runs on routes of its own that never write a review nor a card, so
+the serving rule above still closes every path to a rating; and a card served
+in a round today is not servable here today (`servableToday` refuses it), so
+a key seen in a round cannot forge a daily rating. Its next daily review, from
+the next day, may follow that key: an accepted bias.
+
 ### 12. Implementation choices of slice 2
 
 - **The drill day is the Europe/Zurich calendar day** (`drillDayBounds`). A card
   is due today when it is due before the day ends: FSRS counts whole days from
   the last review, and a card due at 14:00 belongs to the morning's session. The
-  cap of new cards resets at local midnight.
+  cap of new cards resets at local midnight. *Amended by ADR-115 §5, §7: the
+  same day bounds a round of targeted revision, and "practised today".*
 - **A new card held back by the cap is announced for tomorrow**: an empty day
   gives the start of the next day as its next due date.
 - **Interleaving** groups the session by course and the question's first tag in
@@ -315,7 +346,10 @@ of a missing card.
 
 - **The session starts on a button.** The drill page shows today's count and
   budget with one primary, Start; a card is served — its clock opened — only
-  then, never on opening the page. The list is taken as it was at Start and
+  then, never on opening the page. *Amended by ADR-115 §13: targeted revision
+  is a secondary "Revise a concept" in a classroom's Concepts section, opening
+  its own screen whose one primary is its own Start; the drill page's primary
+  and the empty day are unchanged.* The list is taken as it was at Start and
   walked on the client: the session re-read after each answer would drop the
   card just answered, so it is read again only at the end.
 - **One card at a time, through the type's own player** (`QuestionHost`, the
@@ -415,8 +449,9 @@ of a missing card.
   Cards and reviews are student history, never disposable scheduler state.
 - The teacher's view is individual; the tab's notice and the data page are part
   of the feature.
-- Nothing of question 28 is left open. A per-classroom cap on new cards, a
-  configurable budget (F-ADMIN-03) and strategy C remain later work.
+- Nothing of question 28 is left open; 28 (b) is amended by ADR-115 (extra
+  practice as targeted revision, 2026-10-15). A per-classroom cap on new cards,
+  a configurable budget (F-ADMIN-03) and strategy C remain later work.
 
 ## Alternatives considered
 

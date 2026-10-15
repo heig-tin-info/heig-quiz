@@ -64,6 +64,7 @@ export * from "./drillLevel.js";
 export * from "./drillMastery.js";
 export * from "./drillProgress.js";
 export * from "./drillRating.js";
+export * from "./drillRevision.js";
 export * from "./drillSession.js";
 export * from "./evaluationConditions.js";
 export * from "./evaluationConfig.js";

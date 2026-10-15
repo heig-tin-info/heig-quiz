@@ -11,12 +11,13 @@ import { join } from "node:path";
 import type { FastifyInstance, InjectOptions } from "fastify";
 
 import { CSRF_COOKIE } from "@quiz/contracts";
-import type { UserRole } from "@quiz/contracts";
+import type { SessionKind, UserRole } from "@quiz/contracts";
 
 import { buildApp } from "../app.js";
 import { TestClock } from "../clock.js";
 import { SESSION_COOKIE, createSession } from "../auth/session.js";
 import { loadConfig } from "../config.js";
+import type { Db } from "../db/client.js";
 import { users } from "../db/schema.js";
 import { migratedPglite } from "./template.js";
 
@@ -116,6 +117,27 @@ export async function testServer(
     },
   };
   return server;
+}
+
+/**
+ * The headers of a session of `kind` for `userId` — an impersonation (its
+ * `actorUserId`), a `seb` or `kiosk` one (its evaluation, its station) —
+ * created as the auth layer creates them, for the tests of who reaches a
+ * route. The cookie names are the non-production ones.
+ */
+export async function sessionOf(
+  db: Db,
+  userId: string,
+  auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; deviceId?: string },
+): Promise<Record<string, string>> {
+  const session = await createSession(db, userId, 8, {
+    kind: auth.kind,
+    actorUserId: auth.actorUserId ?? null,
+    evaluationId: auth.evaluationId ?? null,
+    deviceId: auth.deviceId ?? null,
+    projectId: null,
+  });
+  return { cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`, "x-csrf-token": session.csrf };
 }
 
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";

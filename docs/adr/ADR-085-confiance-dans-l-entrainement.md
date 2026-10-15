@@ -12,7 +12,10 @@ owner, issue #453): a confident error comes back tomorrow at the latest
 (§4); the rating and the FSRS state stay untouched.* *Amended 2026-10-08
 (issue #453, part 2): the calibration and the 2×2, their thresholds and
 where they are shown (§8) — the 2×2 in the classroom's Drill tab rather
-than the pool's statistics panel.*
+than the pool's statistics panel.* *Amended 2026-10-15 by
+[ADR-115](ADR-115-revision-ciblee-par-notion.md) (§1, §4, §8): a round of
+targeted revision sends and stores no confidence; it moves no due date and
+enters neither the calibration nor the 2×2.*
 
 Scope: the column `drill_reviews.confidence`, the body of
 `POST /app/api/drill/cards/:id/answer` (`DrillAnswerBody`), the pure rule
@@ -50,7 +53,9 @@ drill only, on every card**, under the answer and before the correction;
 **optional**, with **nothing selected** (a default would skew the data). An
 `exam`, a graded `exercise` and a poll never ask it: in an assessment,
 confidence becomes strategy and stress. Ungraded exercises may come later
-(issue #453).
+(issue #453). *Amended by ADR-115 §6: "the drill" is the daily session; a
+round of targeted revision sends no confidence (its answer's contract refuses
+one), and a screen that asks it keeps it in the browser.*
 
 ### 2. Beside the rating, never in it
 
@@ -119,6 +124,10 @@ migration: the confidence was already stored.
 The result screen's line ("To see again soon · next review tomorrow") reads
 the due date the review returns, so it stays truthful.
 
+*Amended by ADR-115 §6:* a round of targeted revision has no confidence and
+writes no due date: a confident error made there is not brought back by this
+section.
+
 ### 5. Right with no idea
 
 A right answer stated "No idea" keeps the rating the time gives it (ADR-041
@@ -146,7 +155,8 @@ could see.
 ### 8. What the statements add up to (part 2)
 
 *Amendment 2026-10-08 (issue #453, part 2).* Two reads of
-`drill_reviews.confidence`, without a migration; the pure rules are
+`drill_reviews.confidence`, without a migration — never of a round of
+targeted revision, which stores none (*amended by ADR-115 §6*); the pure rules are
 `drillCalibration`, `drillCalibrationRate`, `drillConfidenceSplit`,
 `drillConfidentErrorShare` and `drillConfidenceShown` in `@quiz/domain`
 (`drillCalibration.ts`).

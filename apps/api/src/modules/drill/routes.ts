@@ -2,15 +2,16 @@
  * HTTP surface of the `drill` module (ADR-041, #317).
  *
  * Student: today's session, a card served, its time on screen, the review,
- * and the opt-out per classroom. A card is reached by its owner only, and
- * only while it is active; anything else is the 404 of a missing card
- * (invariant 6).
+ * the opt-out per classroom, and targeted revision by concept (ADR-115). A
+ * card or a round is reached by its owner only, and only while it is
+ * active; anything else is the 404 of a missing card (invariant 6).
  *
  * Teacher: the drill switch of a classroom, "Allow drill" and "Remove these
  * questions from the drill" on an evaluation, each loaded through
  * `staffAccess` first; and the reads of the teacher's view — each
  * student's activity, the weekly progression, the hours practised, the
- * mastery per concept, the confidence per question (ADR-085 §8, aggregated only). The student also
+ * mastery per concept, the confidence per question (ADR-085 §8, aggregated only), who revised
+ * which concept (ADR-115). The student also
  * reads their own calibration and their own concept mastery (ADR-098).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -25,6 +26,9 @@ import {
   DrillShownBody,
   EvaluationDrillBody,
   IdParam,
+  RevisionAnswerBody,
+  RevisionCardParam,
+  RevisionRoundBody,
   type DrillCalibrationLevel,
   type DrillCardsRemoved,
   type DrillClassroom,
@@ -50,6 +54,9 @@ export async function drillPlugin(app: FastifyInstance) {
   // The loaders of invariant 6. A student's scope is themselves: every card
   // query is filtered by its owner, and a card that is not theirs is a miss.
   const me = async (req: FastifyRequest) => ({ userId: req.user!.id });
+  /** A classroom the caller reads as a student: `readableClassroom` with the student payload forced. */
+  const studentClassroom = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    readableClassroom(app, req, reply, p, { studentView: true });
   const staffClassroom = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     accessibleClassroom(app, req, reply, p);
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
@@ -109,10 +116,70 @@ export async function drillPlugin(app: FastifyInstance) {
     "/app/api/student/classrooms/:id/drill/mastery",
     { preHandler: requireSession },
     student(
-      { params: IdParam, load: (req, reply, p) => readableClassroom(app, req, reply, p, { studentView: true }) },
+      { params: IdParam, load: studentClassroom },
       ({ req, now, scope }) =>
         service.studentConceptMastery(app.db, scope.room, callerOf(req).id, now, readerLang(req)),
     ),
+  );
+
+  // Targeted revision (ADR-115): rounds of extra practice on one concept of
+  // the course, outside FSRS and the level, on routes of their own. The
+  // classroom's are loaded like the mastery's (`studentClassroom`); a
+  // round's, like a card's, by its owner only.
+
+  /** The concepts the caller may revise here: the course's validated ones, when revision is open to them. */
+  app.get(
+    "/app/api/student/classrooms/:id/revision/concepts",
+    { preHandler: requireSession },
+    student({ params: IdParam, load: studentClassroom }, ({ req, scope }) =>
+      service.studentRevisionConcepts(app.db, scope.room, callerOf(req).id, readerLang(req)),
+    ),
+  );
+
+  /** The caller's own rounds in this classroom: the rounds their teacher counts (ADR-115 §9). */
+  app.get(
+    "/app/api/student/classrooms/:id/revision/rounds",
+    { preHandler: requireSession },
+    student({ params: IdParam, load: studentClassroom }, ({ req, scope }) =>
+      service.studentRevisionRounds(app.db, scope.room, callerOf(req).id, readerLang(req)),
+    ),
+  );
+
+  /** Starts a round on one concept on offer; `{ round: null }` when no card of the caller covers it. */
+  app.post(
+    "/app/api/student/classrooms/:id/revision/rounds",
+    { preHandler: requireSession },
+    student({ params: IdParam, body: RevisionRoundBody, load: studentClassroom }, ({ req, now, body, scope }) =>
+      service.startRound(app.db, scope.room, callerOf(req).id, body.conceptId, readerLang(req), now),
+    ),
+  );
+
+  /** A round's card at its next pass, through `studentView` (invariant 4). */
+  app.post(
+    "/app/api/student/revision/rounds/:id/serve/:cardId",
+    { preHandler: requireSession },
+    student({ params: RevisionCardParam, load: me }, ({ now, params, scope }) =>
+      service.serveRound(app.db, scope.userId, params.id, params.cardId, now),
+    ),
+  );
+
+  /** The answer to a round's served card: graded, the key shown; no review, no confidence. */
+  app.post(
+    "/app/api/student/revision/rounds/:id/cards/:cardId/answer",
+    { preHandler: requireSession },
+    student({ params: RevisionCardParam, body: RevisionAnswerBody, load: me }, ({ now, params, body, scope }) =>
+      service.answerRound(app.db, scope.userId, params.id, params.cardId, body, now),
+    ),
+  );
+
+  /** The student leaves the round. */
+  app.post(
+    "/app/api/student/revision/rounds/:id/end",
+    { preHandler: requireSession },
+    student({ params: IdParam, load: me }, async ({ reply, now, params, scope }) => {
+      await service.endRound(app.db, scope.userId, params.id, now);
+      return reply.code(204).send();
+    }),
   );
 
   /** The question of a card, through `studentView` (invariant 4), with a new seed. */
@@ -244,6 +311,19 @@ export async function drillPlugin(app: FastifyInstance) {
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffClassroom }, ({ req, now, scope }) =>
       service.classroomMastery(app.db, scope.room, now, readerLang(req)),
+    ),
+  );
+
+  /**
+   * ADR-115 §9: who revised which concept — per student the rounds, the last
+   * one's date, the concepts, the cards served and the cards right; never a
+   * card, a question or an answer.
+   */
+  app.get(
+    "/app/api/classrooms/:id/drill/revision",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffClassroom }, ({ req, scope }) =>
+      service.classroomRevision(app.db, scope.room, readerLang(req)),
     ),
   );
 

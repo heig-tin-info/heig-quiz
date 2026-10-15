@@ -32,7 +32,7 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import type { users } from "../../db/schema.js";
 import { knownEmails } from "../../identity.js";
-import { studentCalibration, studentConceptMastery, studentDrillClassrooms } from "../drill/service.js";
+import { studentCalibration, studentConceptMastery, studentDrillClassrooms, studentRevisionRounds } from "../drill/service.js";
 import { studentGradebook } from "../gradebook/service.js";
 import { studentGroupSets } from "../group/service.js";
 import { findOwnAttempt, findReadableClassroom, findStudentProjectView, type Caller } from "../guards.js";
@@ -81,13 +81,14 @@ export async function personalDataExport(
   for (const card of await studentClassrooms(db, userId, { includeArchived: true })) {
     const scope = await findReadableClassroom(db, caller, PORTAL, card.id, { studentView: true });
     if (scope === null) continue;
-    const [classroom, gradebook, groupSets, mastery] = await Promise.all([
+    const [classroom, gradebook, groupSets, mastery, revisionRounds] = await Promise.all([
       studentClassroomHeader(db, scope),
       studentGradebook(db, scope, userId, now),
       studentGroupSets(db, scope.room.id, { seatId: scope.seat?.id ?? null, writer: false }, now),
       studentConceptMastery(db, scope.room, userId, now, lang),
+      studentRevisionRounds(db, scope.room, userId, lang),
     ]);
-    classrooms.push({ classroom, gradebook, groupSets: ownGroupOnly(groupSets), mastery });
+    classrooms.push({ classroom, gradebook, groupSets: ownGroupOnly(groupSets), mastery, revisionRounds });
   }
 
   // ADR-112 §4: an attempt only through the feedback view, the one its
