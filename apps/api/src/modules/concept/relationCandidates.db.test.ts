@@ -43,6 +43,8 @@ const read = async () => {
   expect(res.statusCode, res.body).toBe(200);
   return ConceptRelationCandidates.parse(res.json());
 };
+/** A related candidate's two ids, in canonical order. */
+const pair = (x: string, y: string) => (x < y ? { concept: x, target: y } : { concept: y, target: x });
 const broader = (concept: string, target: string) =>
   db().insert(conceptRelations).values({ conceptId: concept, targetId: target, kind: "broader", createdBy: admin.id });
 
@@ -81,7 +83,7 @@ describe("GET /admin/concepts/relations/candidates", () => {
     await concept(["Arithmétique"], ["Arithmetic"], "merged", pointer);
     await broader(binary, tree);
     await broader(stack, callStack);
-    expect((await read()).contained).toEqual([{ concept: arith, target: pointer }]);
+    expect((await read()).candidates).toEqual([{ kind: "broader", concept: arith, target: pointer, questions: null }]);
   });
 
   it("counts live questions only, under both thresholds, most shared first", async () => {
@@ -98,10 +100,9 @@ describe("GET /admin/concepts/relations/candidates", () => {
     // b + c on two live questions and two deleted ones: under the minimum.
     for (const n of [1, 2]) await question(`bc${n}`, [b!, c!]);
     for (const n of [3, 4]) await question(`bc${n}`, [b!, c!], true);
-    const pair = (x: string, y: string) => (x < y ? { a: x, b: y } : { a: y, b: x });
-    expect((await read()).together).toEqual([
-      { ...pair(c!, d!), questions: 4 },
-      { ...pair(a!, b!), questions: 3 },
+    expect((await read()).candidates).toEqual([
+      { kind: "related", ...pair(c!, d!), questions: 4 },
+      { kind: "related", ...pair(a!, b!), questions: 3 },
     ]);
   });
 
@@ -120,7 +121,7 @@ describe("GET /admin/concepts/relations/candidates", () => {
     };
     const res = await get(admin);
     expect(res.statusCode).toBe(200);
-    expect(res.json().together).toEqual([{ ...(x < y ? { a: x, b: y } : { a: y, b: x }), questions: 3 }]);
+    expect(res.json().candidates).toEqual([{ kind: "related", ...pair(x, y), questions: 3 }]);
     for (const secret of [...ids, "Secret question", "Secret exam pool", poolId, teacher.id]) expect(res.body).not.toContain(secret);
     expect(await db().select().from(concepts)).toEqual(before.concepts);
     expect(await db().select().from(conceptRelations)).toEqual(before.relations);

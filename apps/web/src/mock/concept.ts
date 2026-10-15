@@ -8,7 +8,6 @@
  * admin dropped (`c01`, dropped as a chapter label, is one from the start).
  */
 import {
-  CONCEPT_CANDIDATE_LIMITS,
   CONCEPT_FILL_CLOSE_MAX,
   ConceptAliasAdd,
   ConceptCreate,
@@ -428,14 +427,14 @@ const TOGETHER: [a: string, b: string, shared: number, smaller: number][] = [
 
 /** The relations proposed without a model (ADR-114): the server's rules on the mock's vocabulary. */
 on("GET", "/app/api/admin/concepts/relations/candidates", (): ConceptRelationCandidates => {
-  if (flags.empty) return { contained: [], together: [] };
+  if (flags.empty) return { candidates: [] };
   const live = concepts.filter((c) => c.status !== "merged");
   const id = (fr: string) => live.find((c) => c.labels.fr === fr && c.qualifiers.fr === "")?.id;
   const pairs = TOGETHER.flatMap(([a, b, shared, smaller]) => {
     const [x, y] = [id(a), id(b)];
     return x && y ? [{ a: x, b: y, shared, smaller }] : [];
   });
-  return relationCandidatesOf(resolvables(), edgesOf(live), pairs, CONCEPT_CANDIDATE_LIMITS);
+  return { candidates: relationCandidatesOf(resolvables(), edgesOf(live), pairs) };
 });
 
 on("DELETE", "/app/api/admin/concepts/:id", (m) => {

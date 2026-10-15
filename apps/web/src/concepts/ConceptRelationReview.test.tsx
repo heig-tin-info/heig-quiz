@@ -35,8 +35,10 @@ const stack = concept(4, "Stack");
 const all = [pointer, arithmetic, recursion, stack];
 
 const candidates: ConceptRelationCandidates = {
-  contained: [{ concept: arithmetic.id, target: pointer.id }],
-  together: [{ a: recursion.id, b: stack.id, questions: 3 }],
+  candidates: [
+    { kind: "broader", concept: arithmetic.id, target: pointer.id, questions: null },
+    { kind: "related", concept: recursion.id, target: stack.id, questions: 3 },
+  ],
 };
 
 const BROADER = /pointer arithmetic under pointer/i;
@@ -66,7 +68,7 @@ describe("the Relations view of the curation queue (ADR-114)", () => {
     expect(count(calls, CANDIDATES)).toBe(1);
   });
 
-  it("accepts the ticked rows broader first, shows a refusal on its row, and refreshes once", async () => {
+  it("accepts the ticked rows broader first, shows a refusal on its row, and refreshes the vocabulary once", async () => {
     const cycle = {
       error: "concept_cycle",
       message: "This would make a concept broader than itself",
@@ -93,8 +95,9 @@ describe("the Relations view of the curation queue (ADR-114)", () => {
     ]);
     const row = screen.getByRole("checkbox", { name: BROADER }).closest("li")!;
     expect(within(row).getByText(/pointer arithmetic › pointer › pointer arithmetic/i)).toBeInTheDocument();
-    await waitFor(() => expect(count(calls, CANDIDATES)).toBe(2));
-    expect(count(calls, LIST)).toBe(2);
+    await waitFor(() => expect(count(calls, LIST)).toBe(2));
+    // The candidates are not asked again: the rows read their state from the refreshed vocabulary.
+    expect(count(calls, CANDIDATES)).toBe(1);
     expect(screen.queryByRole("region", { name: /selected/i })).toBeNull();
   });
 

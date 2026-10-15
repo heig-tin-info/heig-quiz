@@ -3,10 +3,11 @@
 ## Status
 
 Accepted (2026-10-15) by the product owner (decisions of 2026-10-15 on
-[#897](https://github.com/yves-chevallier/heig-quiz/issues/897), step A,
-and the spec challenge of the same day). Part A1 (§1, §4–§7) is
-implemented; A2, the model's pass (§2), and A3, the sheet's suggestion (§3),
-are to come.
+[#897](https://github.com/yves-chevallier/heig-quiz/issues/897), step A:
+acceptance by selection, the pre-pass shown apart, top concepts proposed by
+the model). Taken by assumption by the spec challenge of 2026-10-15, the
+product owner may change them: reading pair counts instance-wide without
+Super Powers (§1), and deferring ADR-081 §7's suggested broader concept (§3).
 
 Scope: how relations between concepts (`broader`, `related`) are proposed to
 the administrator on the curation screen, and how they are accepted.
@@ -16,7 +17,8 @@ Relations: amends [ADR-081 §7](ADR-081-vocabulaire-de-notions.md#decision)
 and its [amendment of 2026-10-13](ADR-081-vocabulaire-de-notions.md#amendment-2026-10-13-fill-with-ai-on-the-admins-sheet)
 (Fill with AI is unchanged, §3); uses the relation rules and routes of
 [ADR-081, sixth addendum §5](ADR-081-vocabulaire-de-notions.md#sixth-addendum-2026-10-10-the-concepts-of-a-course-steps-7-9)
-and the counting exception of [ADR-054](ADR-054-super-powers-admin.md) (amended).
+and amends ADR-054's second exception (from a count per concept to a count
+per pair, [ADR-054](ADR-054-super-powers-admin.md) Status).
 
 ## Context
 
@@ -53,26 +55,28 @@ consolidates).
      together, which is at least half of the less-used one's live questions.
      At most 50, the most shared first; the SQL scan reads the 500 most
      shared pairs.
-   - A candidate the graph already holds (near or far) or that the relation
+   - A broader candidate the chain already holds, near or far, is dropped;
+     then the list, broader first, keeps only what can all be accepted
+     together (`admissible`: each candidate meets the relation rules against
+     the edges plus the candidates kept before it), which also drops what the
      rules refuse (exists, cycle, related already, one in the other's chain)
-     is dropped; a pair proposed as broader is not proposed as related; and
-     the whole list is filtered so that every candidate can be accepted with
-     every other (`admissible`, broader first, the first kept of two that
-     clash). The rules are `@quiz/domain`'s (`containedBroader`,
-     `coOccurringRelated`, `admissible`, `relationCandidatesOf`).
+     and a pair already proposed as broader. The answer is one list of edges,
+     each `{ kind, concept, target, questions }` (`questions` for a related
+     one only). The rules and limits are `@quiz/domain`'s (`containedBroader`,
+     `admissible`, `relationCandidatesOf`, `RELATION_CANDIDATE_LIMITS`).
    - **Counts only.** The answer names concepts by id and pairs by a number of
      questions: no question id, statement, pool or person. An administrator
-     reads it without Super Powers, the exception ADR-054 (amended) grants
-     the queue's `questionCount`, because placing a concept is a decision
-     about all of its questions.
+     reads it without Super Powers, widening the exception ADR-054 (amended)
+     grants the queue's `questionCount` from a count per concept to a count
+     per pair, because placing a concept is a decision about all of its
+     questions.
 2. **The model's pass (A2), on demand, nothing stored.** A secondary action
    of the same view asks the model, through the gateway (ADR-058, purpose
    `concepts`, the daily cap and the per-minute budget of the probable
    duplicates), for broader candidates, related pairs and missing top
    concepts. It sends the labels and qualifiers of the live concepts, a
    marker on the lines to place, and nothing else: no description, alias,
-   relation, question, pool, course or person (open question 43 records the
-   sentence when A2 ships). It asks a place for the **Unplaced** concepts,
+   relation, question, pool, course or person. It asks a place for the **Unplaced** concepts,
    at most 40 per call, and says how many remain. Caps: about 80 broader, 30
    related and 10 top concepts per answer. A top concept is written in the
    administrator's language, resolved against the vocabulary first (an
@@ -93,8 +97,7 @@ consolidates).
    edges first (one may make a related pair redundant), so each edge meets
    the existing rules, lock and audit (`concept.relation_add`); a refusal is
    shown on its row (a cycle names its path) and never stops the others. No
-   batch route, hence no new audit action and no migration. While ticking, a
-   row that would clash with a ticked one is disabled with the reason.
+   batch route, hence no new audit action and no migration.
 5. **Rejections are not remembered.** "Dismiss" hides a row until the page is
    reloaded; nothing is stored. A remembered rejection would need a table and
    its own decision, later.

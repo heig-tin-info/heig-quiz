@@ -70,7 +70,7 @@ import {
   type ConceptList,
   ConceptPatch,
   ConceptRelationAdd,
-  ConceptRelationCandidates,
+  type ConceptRelationCandidates,
   ConceptRelationParams,
   ConceptResolveQuery,
   type ConceptResolveResponse,
@@ -133,7 +133,7 @@ export async function conceptPlugin(app: FastifyInstance) {
   });
 
   app.get("/app/api/admin/concepts/relations/candidates", { preHandler: requireAdmin }, async () => {
-    return ConceptRelationCandidates.parse(await service.relationCandidates(app.db));
+    return (await service.relationCandidates(app.db)) satisfies ConceptRelationCandidates;
   });
 
   const asks = new Budget();

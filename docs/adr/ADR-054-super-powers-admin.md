@@ -20,8 +20,9 @@ Powers, the instance-wide number of live questions using each concept, a
 number and nothing else, because curating the vocabulary is a decision about
 all of them; pool names and statements still need Super Powers ([ADR-081,
 fifth addendum §1](ADR-081-vocabulaire-de-notions.md#fifth-addendum-2026-10-10-the-curation-of-the-vocabulary));
-the relation candidates of [ADR-114 §1](ADR-114-relations-proposees-entre-notions.md#decision)
-rest on it too, as numbers of shared questions.
+[ADR-114 §1](ADR-114-relations-proposees-entre-notions.md#decision) amends
+this second exception, from a count per concept to a count per pair (the
+live questions two concepts share).
 
 ## Context
 

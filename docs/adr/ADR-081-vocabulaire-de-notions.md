@@ -120,7 +120,8 @@ a model, which teachers cannot change, and the free text of today.
    - A teacher picks existing concepts. When nothing matches, they create a
      concept in the `proposed` status and use it at once: they are never
      blocked. The model, through the gateway (ADR-058), fills the other
-     language's label, the descriptions and a suggested broader concept; the
+     language's label, the descriptions and a suggested broader concept
+     (deferred, [ADR-114 §3](ADR-114-relations-proposees-entre-notions.md#decision)); the
      teacher sees and may edit them.
    - From a question, a **Suggest concepts** action (#557) proposes existing
      concepts first, a new one only when none fits; nothing is written

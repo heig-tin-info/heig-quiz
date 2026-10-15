@@ -13,8 +13,8 @@
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { CONCEPT_CANDIDATE_LIMITS, type ConceptRelationCandidates } from "@quiz/contracts";
-import { relationCandidatesOf } from "@quiz/domain";
+import type { ConceptRelationCandidates } from "@quiz/contracts";
+import { RELATION_CANDIDATE_LIMITS, relationCandidatesOf } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { concepts, questionConcepts, questions } from "../../db/schema.js";
@@ -36,7 +36,7 @@ export async function relationCandidates(db: Db): Promise<ConceptRelationCandida
       .innerJoin(qc2, and(eq(qc2.questionId, questionConcepts.questionId), lt(questionConcepts.conceptId, qc2.conceptId)))
       .innerJoin(questions, liveQuestion)
       .groupBy(questionConcepts.conceptId, qc2.conceptId)
-      .having(gte(count(), CONCEPT_CANDIDATE_LIMITS.min))
+      .having(gte(count(), RELATION_CANDIDATE_LIMITS.min))
       .orderBy(desc(count()), asc(questionConcepts.conceptId), asc(qc2.conceptId))
       .limit(PAIR_SCAN)
   ).filter((p) => live.has(p.a) && live.has(p.b));
@@ -51,10 +51,10 @@ export async function relationCandidates(db: Db): Promise<ConceptRelationCandida
       .groupBy(questionConcepts.conceptId);
     for (const c of counts) used.set(c.id, c.n);
   }
-  return relationCandidatesOf(
+  const candidates = relationCandidatesOf(
     rows.map((r) => toResolvable(r, new Map())),
     await loadEdges(db),
     pairs.map((p) => ({ ...p, smaller: Math.min(used.get(p.a)!, used.get(p.b)!) })),
-    CONCEPT_CANDIDATE_LIMITS,
   );
+  return { candidates };
 }

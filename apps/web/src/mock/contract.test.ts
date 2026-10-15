@@ -1188,13 +1188,17 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     const before = await queue();
     const res = await call("GET", "/app/api/admin/concepts/relations/candidates");
     expect(issuesOf(ConceptRelationCandidates, res.body)).toEqual([]);
-    const { contained, together } = res.body as unknown as ConceptRelationCandidates;
+    const { candidates } = res.body as unknown as ConceptRelationCandidates;
     const fr = new Map(before.concepts.map((c) => [c.id, c.labels.fr]));
-    expect(contained.map((e) => [fr.get(e.concept), fr.get(e.target)])).toContainEqual(["Arithmétique des pointeurs", "Pointeur"]);
-    expect(together.length).toBeGreaterThan(0);
-    for (const p of together) expect([fr.has(p.a), fr.has(p.b), p.a < p.b]).toEqual([true, true, true]);
+    const named = (kind: string) =>
+      candidates.filter((c) => c.kind === kind).map((c) => [fr.get(c.concept), fr.get(c.target)]);
+    expect(named("broader")).toContainEqual(["Arithmétique des pointeurs", "Pointeur"]);
+    const related = candidates.filter((c) => c.kind === "related");
+    expect(related.length).toBeGreaterThan(0);
+    for (const c of candidates) expect([fr.has(c.concept), fr.has(c.target)]).toEqual([true, true]);
+    for (const c of related) expect(c.concept < c.target).toBe(true);
     // Tableau is under Pointeur already: never proposed as related to it.
-    expect(together.map((p) => [fr.get(p.a), fr.get(p.b)].sort())).not.toContainEqual(["Pointeur", "Tableau"]);
+    expect(named("related").map((p) => [...p].sort())).not.toContainEqual(["Pointeur", "Tableau"]);
     expect(await queue()).toEqual(before);
   });
 
