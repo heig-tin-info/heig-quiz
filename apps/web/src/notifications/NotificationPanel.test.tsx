@@ -365,33 +365,46 @@ describe("the inbox in the account menu", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "admin", tab: "system" });
   });
 
-  it.each([
-    ["en", "An administrator opened a session in your name on {o}. It closed on {c}."],
-    ["fr", "Un administrateur a ouvert une session à votre nom le {o}. Elle s'est fermée le {c}."],
-  ] as const)("tells a student, in %s, that an administrator opened a session in their name, and opens the privacy page", async (locale, sentence) => {
+  describe("a session an administrator opened in the student's name (ADR-034 §6)", () => {
+    const OPENED = "2026-10-15T08:00:00.000Z";
+    const CLOSED = "2026-10-15T08:20:00.000Z";
     const notice: Notification = {
       id: "n11",
-      payload: {
-        kind: "impersonation_ended",
-        actorRole: "admin",
-        openedAt: "2026-10-15T08:00:00.000Z",
-        closedAt: "2026-10-15T08:20:00.000Z",
-      },
+      payload: { kind: "impersonation_ended", actorRole: "admin", openedAt: OPENED, closedAt: CLOSED },
       createdAt: new Date(Date.now() - 60_000).toISOString(),
       readAt: null,
     };
-    mockFetch({
-      [`GET ${LIST}`]: ok({ items: [notice], unread: 1 }),
-      "POST /app/api/notifications/n11/read": { status: 204 },
+    const inbox = () =>
+      mockFetch({
+        [`GET ${LIST}`]: ok({ items: [notice], unread: 1 }),
+        "POST /app/api/notifications/n11/read": { status: 204 },
+      });
+
+    it("names the role and both times, and opens the privacy page", async () => {
+      inbox();
+      const navigate = vi.fn();
+      renderMenu(navigate);
+      await openInbox();
+      await userEvent.click(
+        screen.getByText(
+          `An administrator opened a session in your name on ${isoDateTime(OPENED)}. It closed on ${isoDateTime(CLOSED)}.`,
+        ),
+      );
+      expect(navigate).toHaveBeenCalledWith({ view: "privacy" });
     });
-    const navigate = vi.fn();
-    renderWithProviders(<UserMenu me={makeMe()} onOpenSettings={vi.fn()} notifications={{ navigate }} />, { locale });
-    await openInbox(locale === "fr" ? /Menu du compte/ : /User menu/);
-    const text = sentence
-      .replace("{o}", isoDateTime("2026-10-15T08:00:00.000Z"))
-      .replace("{c}", isoDateTime("2026-10-15T08:20:00.000Z"));
-    await userEvent.click(screen.getByText(text));
-    expect(navigate).toHaveBeenCalledWith({ view: "privacy" });
+
+    it("says the same in French", async () => {
+      inbox();
+      renderWithProviders(<UserMenu me={makeMe()} onOpenSettings={vi.fn()} notifications={{ navigate: vi.fn() }} />, {
+        locale: "fr",
+      });
+      await openInbox(/Menu du compte/);
+      expect(
+        screen.getByText(
+          `Un administrateur a ouvert une session à votre nom le ${isoDateTime(OPENED)}. Elle s'est fermée le ${isoDateTime(CLOSED)}.`,
+        ),
+      ).toBeVisible();
+    });
   });
 
   it("marks the whole inbox read from the panel", async () => {

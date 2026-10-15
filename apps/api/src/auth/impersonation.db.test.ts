@@ -305,10 +305,15 @@ describe("the notice to the student, whatever ends the session (ADR-034 §6, ame
     // The server's clock on the wall's, as a session's start is (`createSession`),
     // and an admin whose Super Powers run from there.
     w.server.clock.set(new Date());
-    w.admin = await w.server.signInWithSuperPowers();
-    // A name that cannot be mistaken for the role the notice carries.
-    await db().update(users).set({ givenName: "Hortense", familyName: "Vigilante" }).where(eq(users.id, w.admin.id));
+    w.admin = await admin("Hortense", "Vigilante");
   });
+
+  /** An admin with Super Powers, named so that no name can be mistaken for the role the notice carries. */
+  async function admin(givenName: string, familyName: string): Promise<Who> {
+    const who = await w.server.signInWithSuperPowers();
+    await db().update(users).set({ givenName, familyName }).where(eq(users.id, who.id));
+    return who;
+  }
   afterAll(() => w.server.close());
   beforeEach(async () => {
     // Removed by hand, so no notice: each case starts from an empty bell.
@@ -339,8 +344,8 @@ describe("the notice to the student, whatever ends the session (ADR-034 §6, ame
   /** The notices of `userId`'s bell, as stored. */
   const notices = (userId = w.student.id) => db().select().from(notifications).where(eq(notifications.userId, userId));
 
-  /** Exactly one notice, saying `openedAt` and `closedAt`, and nothing anywhere of who acted. */
-  async function expectOneNotice(openedAt: Date, closedAt: Date) {
+  /** Exactly one notice, saying `openedAt` and `closedAt`, and nothing anywhere of `actor`, who acted. */
+  async function expectOneNotice(openedAt: Date, closedAt: Date, actor: Who = w.admin) {
     const rows = await notices();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.payload).toEqual({
@@ -351,9 +356,9 @@ describe("the notice to the student, whatever ends the session (ADR-034 §6, ame
     });
     const bell = await call(w.server, "GET", "/app/api/notifications", w.student.headers);
     expect(bell.json().items).toHaveLength(1);
-    const [admin] = await db().select().from(users).where(eq(users.id, w.admin.id));
+    const [who] = await db().select().from(users).where(eq(users.id, actor.id));
     const serialized = JSON.stringify(rows) + bell.body;
-    for (const trace of [admin!.id, admin!.email, admin!.givenName, admin!.familyName]) {
+    for (const trace of [who!.id, who!.email, who!.givenName, who!.familyName]) {
       expect(serialized).not.toContain(trace);
     }
   }
@@ -374,7 +379,7 @@ describe("the notice to the student, whatever ends the session (ADR-034 §6, ame
   });
 
   it("after the actor loses the admin role: closed at the revocation, still told as an administrator", async () => {
-    const other = await w.server.signInWithSuperPowers();
+    const other = await admin("Basile", "Sentinelle");
     const { as, row } = await impersonate(other);
     await db().update(users).set({ role: "teacher" }).where(eq(users.id, other.id));
     const before = Date.now();
@@ -383,8 +388,7 @@ describe("the notice to the student, whatever ends the session (ADR-034 §6, ame
     const closedAt = new Date((notice!.payload as { closedAt: string }).closedAt).getTime();
     expect(closedAt).toBeGreaterThanOrEqual(before);
     expect(closedAt).toBeLessThanOrEqual(Date.now());
-    await expectOneNotice(row.createdAt, new Date(closedAt));
-    expect(JSON.stringify(await notices())).not.toContain(other.id);
+    await expectOneNotice(row.createdAt, new Date(closedAt), other);
   });
 
   it("after the purge of expired sessions: closed at the end of its hour", async () => {

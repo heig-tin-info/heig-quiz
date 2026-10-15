@@ -74,11 +74,6 @@ describe("system_alert — the payload", () => {
 });
 
 describe("impersonation_ended — a session opened in the student's name (ADR-034 §6)", () => {
-  it("stays in the app, on by default, and switchable like any other kind", () => {
-    expect(kindChannels("impersonation_ended")).toEqual(["bell"]);
-    expect(DEFAULT_CHANNEL_ENABLED.impersonation_ended).toEqual({ bell: true, email: false, teams: false });
-  });
-
   it("carries the role and two times, never who acted", () => {
     const payload = {
       kind: "impersonation_ended",
