@@ -6,6 +6,7 @@ import {
   RELATION_CANDIDATE_LIMITS,
   relationCandidatesOf,
   type RelationProposal,
+  withProposals,
 } from "./conceptRelationCandidates.js";
 import type { RelationEdge, RelationEdges } from "./conceptRelations.js";
 import type { ResolvableConcept } from "./concepts.js";
@@ -109,6 +110,25 @@ describe("admissible", () => {
     expect(admissible(edges, [p("broader", "a", "b"), p("related", "a", "c"), p("related", "e", "d")])).toEqual([
       p("broader", "a", "b"),
     ]);
+  });
+
+  it("caps the broader proposals per concept, existing ones and related ones aside", () => {
+    const edges = { broader: [e("a", "z")], related: [] };
+    const proposals = [p("broader", "a", "b"), p("broader", "a", "c"), p("related", "a", "d"), p("broader", "d", "c")];
+    expect(admissible(edges, proposals, { broaderPerConcept: 1 })).toEqual([
+      p("broader", "a", "b"),
+      p("related", "a", "d"),
+      p("broader", "d", "c"),
+    ]);
+  });
+
+  it("adds proposals to a copy of the graph, a related one in canonical order (withProposals)", () => {
+    const edges = { broader: [e("a", "z")], related: [] };
+    expect(withProposals(edges, [p("broader", "a", "b"), p("related", "d", "c")])).toEqual({
+      broader: [e("a", "z"), e("a", "b")],
+      related: [e("c", "d")],
+    });
+    expect(edges).toEqual({ broader: [e("a", "z")], related: [] });
   });
 
   it("does not change the edges it is given", () => {

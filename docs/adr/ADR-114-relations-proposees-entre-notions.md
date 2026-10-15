@@ -74,11 +74,18 @@ consolidates).
    of the same view asks the model, through the gateway (ADR-058, purpose
    `concepts`, the daily cap and the per-minute budget of the probable
    duplicates), for broader candidates, related pairs and missing top
-   concepts. It sends the labels and qualifiers of the live concepts, a
+   concepts. It sends the labels and qualifiers of the live concepts, at
+   most 1000 (past that the oldest of those neither to place nor holding a
+   narrower concept are left out, and the answer says `truncated`), a
    marker on the lines to place, and nothing else: no description, alias,
-   relation, question, pool, course or person. It asks a place for the **Unplaced** concepts,
-   at most 40 per call, and says how many remain. Caps: about 80 broader, 30
-   related and 10 top concepts per answer. A top concept is written in the
+   relation, question, pool, course or person; the order of the lines
+   reflects which concepts are to place and which have narrower ones, and
+   nothing else. It asks a place for the **Unplaced** concepts, the oldest
+   first, at most 40 per call, and says which it asked about and how many
+   remain; Ask again excludes those the page asked about already. Caps:
+   about 80 broader, 30 related and 10 top concepts per answer, and at most
+   two proposed broader concepts per concept, a top concept's rows included.
+   A top concept is written in the
    administrator's language, resolved against the vocabulary first (an
    existing concept is proposed instead), and created `proposed` only when
    the administrator accepts a row that carries it, never validated by the
@@ -92,8 +99,11 @@ consolidates).
    deferred: relations are the administrator's.
 4. **Acceptance by selection only.** Each candidate is a checkbox, nothing
    checked; the view's one primary action is **Accept the n selected**; there
-   is no "accept all". The browser writes the ticked edges one at a time
-   through the existing `POST /app/api/admin/concepts/:id/relations`, broader
+   is no "accept all". The browser first creates each top concept a ticked
+   row carries, once, through the existing `POST /app/api/concepts` (audited
+   `concept.propose`; a `409 concept_exists` takes the concept it names, any
+   other refusal fails that top's rows), then writes the ticked edges one at
+   a time through the existing `POST /app/api/admin/concepts/:id/relations`, broader
    edges first (one may make a related pair redundant), so each edge meets
    the existing rules, lock and audit (`concept.relation_add`); a refusal is
    shown on its row (a cycle names its path) and never stops the others. No
@@ -115,6 +125,9 @@ consolidates).
   pre-checks only disable rows, the server decides.
 - Accepting n edges is n requests and n audit entries; acceptable for the
   tens an administrator ticks at a time.
+- A top concept created for ticked rows whose edges are all refused stays a
+  `proposed` concept that nothing uses; the administrator deletes it from the
+  queue like any unused concept.
 - A dismissed candidate comes back on the next visit until a rejection list
   exists.
 - Co-occurrence reveals, as counts only, how concepts are used together

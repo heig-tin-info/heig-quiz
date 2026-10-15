@@ -115,20 +115,42 @@ export interface ConceptPairCount {
   smaller: number;
 }
 
+/** Adds one proposal to a working graph, a related one in canonical order. */
+function addProposal(work: { broader: RelationEdge[]; related: RelationEdge[] }, p: RelationProposal): void {
+  if (p.kind === "broader") work.broader.push({ concept: p.concept, target: p.target });
+  else work.related.push(canonicalRelated(p.concept, p.target));
+}
+
+/** The edges with the proposals added, as accepting them all would leave the graph; `edges` is not changed. */
+export function withProposals(edges: RelationEdges, proposals: readonly RelationProposal[]): RelationEdges {
+  const work = { broader: [...edges.broader], related: [...edges.related] };
+  for (const p of proposals) addProposal(work, p);
+  return work;
+}
+
 /**
  * The proposals that can all be accepted together, in order: each is checked
  * by the relation rules against the edges plus the proposals kept before it,
  * so of `A > B` and `B > A` the first stays, and of a pair proposed both
- * broader and related the first stays.
+ * broader and related the first stays. `broaderPerConcept` caps the broader
+ * proposals kept for one concept (its existing broader concepts are not
+ * counted): the model's pass keeps two (ADR-114 §2).
  */
-export function admissible<P extends RelationProposal>(edges: RelationEdges, proposals: readonly P[]): P[] {
+export function admissible<P extends RelationProposal>(
+  edges: RelationEdges,
+  proposals: readonly P[],
+  opts: { broaderPerConcept?: number } = {},
+): P[] {
   const work = { broader: [...edges.broader], related: [...edges.related] };
+  const added = new Map<string, number>();
   return proposals.filter((p) => {
+    const n = added.get(p.concept) ?? 0;
+    if (p.kind === "broader" && n >= (opts.broaderPerConcept ?? Infinity)) return false;
     const refused =
       p.kind === "broader" ? checkBroaderEdge(work, p.concept, p.target) : checkRelatedEdge(work, p.concept, p.target);
     if (refused) return false;
-    if (p.kind === "broader") work.broader.push({ concept: p.concept, target: p.target });
-    else work.related.push(canonicalRelated(p.concept, p.target));
+    addProposal(work, p);
+    if (p.kind === "broader") added.set(p.concept, n + 1);
     return true;
   });
 }

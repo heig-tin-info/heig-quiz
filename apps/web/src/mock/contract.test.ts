@@ -91,6 +91,7 @@ import {
   ConceptDuplicatesAi,
   ConceptFill,
   ConceptRelationCandidates,
+  ConceptRelationProposals,
   ConceptWriteRefusal,
   KioskStation,
   PairPreview,
@@ -1199,6 +1200,25 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     for (const c of related) expect(c.concept < c.target).toBe(true);
     // Tableau is under Pointeur already: never proposed as related to it.
     expect(named("related").map((p) => [...p].sort())).not.toContainEqual(["Pointeur", "Tableau"]);
+    expect(await queue()).toEqual(before);
+  });
+
+  it("answers the model's relations on live concepts of the queue, writing nothing (ADR-114 §2)", async () => {
+    const before = await queue();
+    const res = await call("POST", "/app/api/admin/concepts/relations/ai", { exclude: [] });
+    expect(res.status).toBe(200);
+    expect(issuesOf(ConceptRelationProposals, res.body)).toEqual([]);
+    const proposals = res.body as unknown as ConceptRelationProposals;
+    const ids = new Set(before.concepts.map((c) => c.id));
+    const named = [
+      ...proposals.asked,
+      ...proposals.broader.flatMap((e) => [e.concept, e.target]),
+      ...proposals.related.flatMap((p) => [p.a, p.b]),
+      ...proposals.tops.flatMap((t) => t.narrower),
+    ];
+    for (const id of named) expect(ids.has(id)).toBe(true);
+    expect(proposals).toMatchObject({ remaining: 3, related: [{ reason: expect.any(String) }] });
+    expect(proposals.tops).toHaveLength(1);
     expect(await queue()).toEqual(before);
   });
 

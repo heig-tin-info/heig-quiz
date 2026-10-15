@@ -24,6 +24,7 @@ import {
   type ConceptExists,
   type ConceptRef,
   type ConceptRelationCandidates,
+  type ConceptRelationProposals,
   type TagDropReason,
 } from "@quiz/contracts";
 import {
@@ -435,6 +436,37 @@ on("GET", "/app/api/admin/concepts/relations/candidates", (): ConceptRelationCan
     return x && y ? [{ a: x, b: y, shared, smaller }] : [];
   });
   return { candidates: relationCandidatesOf(resolvables(), edgesOf(live), pairs) };
+});
+
+/**
+ * The model's relations (ADR-114 §2): fixed rows on the live concepts — one
+ * the pre-pass lists too, one that conflicts with a pre-pass pair once both
+ * are ticked, a related pair and a missing top concept in the reader's
+ * language; the `nollm` scene refuses as a platform without a key does.
+ */
+on("POST", "/app/api/admin/concepts/relations/ai", (): ConceptRelationProposals => {
+  if (flags.nollm) throw refuse(409, "llm_not_configured", "No AI key is configured", { reason: "not_configured" });
+  const id = (fr: string) => concepts.find((c) => c.status !== "merged" && c.labels.fr === fr && c.qualifiers.fr === "")?.id ?? "";
+  const french = document.documentElement.lang === "fr";
+  return {
+    lang: french ? "fr" : "en",
+    asked: [id("Pile"), id("Hash table"), id("Tas")],
+    broader: [
+      { concept: id("Arithmétique des pointeurs"), target: id("Pointeur") },
+      { concept: id("Hash table"), target: id("Tableau") },
+    ],
+    related: [{ a: id("Tas"), b: id("Pile"), reason: french ? "Deux zones de la mémoire d'un programme." : "Two regions of a program's memory." }],
+    tops: [
+      {
+        label: french ? "Structure de données" : "Data structure",
+        qualifier: "",
+        reason: french ? "Deux façons d'organiser des données." : "Two ways to organise data.",
+        narrower: [id("Pile"), id("Hash table")],
+      },
+    ],
+    remaining: 3,
+    truncated: false,
+  };
 });
 
 on("DELETE", "/app/api/admin/concepts/:id", (m) => {

@@ -23,12 +23,13 @@ import {
   type ConceptFillRequest,
   type ConceptLang,
 } from "@quiz/contracts";
-import { CONCEPT_DESCRIPTION_MAX, CONCEPT_LABEL_MAX, CONCEPT_QUALIFIER_MAX, conceptToCreate, resolveConceptLabel } from "@quiz/domain";
+import { CONCEPT_DESCRIPTION_MAX, CONCEPT_LABEL_MAX, CONCEPT_QUALIFIER_MAX } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { concepts } from "../../db/schema.js";
 import { DomainError, notFoundError } from "../http.js";
 import { oneLine, type LlmGateway } from "../llm/service.js";
+import { LANG_NAME, resolveFresh } from "./aiVocabulary.js";
 import { loadAliases, perLang, toConceptRef, toResolvable } from "./row.js";
 
 /** Two descriptions of about 120 tokens, two labels. */
@@ -36,7 +37,6 @@ const MAX_TOKENS = 700;
 
 /** What is asked for: a qualifier comes only with the label it qualifies. */
 type Field = "label" | "description";
-const LANG_NAME = { fr: "French", en: "English" } as const satisfies Record<ConceptLang, string>;
 
 const SYSTEM = [
   "You complete one concept of the vocabulary that classifies the quiz questions of the HEIG-VD, a Swiss school of engineering.",
@@ -119,13 +119,10 @@ export async function fillConcept(
     const reply = value[lang];
     if (asked[lang].includes("description")) out.description = oneLine(reply.description, CONCEPT_DESCRIPTION_MAX) || null;
     if (!asked[lang].includes("label")) return out;
-    const label = oneLine(reply.label, CONCEPT_LABEL_MAX);
-    const qualifier = oneLine(reply.qualifier, CONCEPT_QUALIFIER_MAX);
-    // A label typed as « Adresse (mémoire) » is split here, then resolved as split.
-    const fresh = conceptToCreate(qualifier === "" ? label : `${label} (${qualifier})`);
-    if (!fresh) return out;
+    const proposed = resolveFresh(reply.label, reply.qualifier, vocab);
+    if (!proposed) return out;
+    const { fresh, outcome } = proposed;
     out.label = { label: fresh.label, qualifier: fresh.qualifier };
-    const outcome = resolveConceptLabel(fresh.qualifier === "" ? fresh.label : `${fresh.label} (${fresh.qualifier})`, vocab);
     if (outcome.kind === "resolved") out.taken = ref(outcome.id, lang);
     else if (outcome.kind === "ambiguous") out.taken = ref(outcome.candidates[0]!, lang);
     else out.close = outcome.candidates.slice(0, CONCEPT_FILL_CLOSE_MAX).flatMap((id) => ref(id, lang) ?? []);

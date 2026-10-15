@@ -2,7 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookMarked, Check, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { CONCEPT_LANGS, ConceptDuplicatesAi, type AdminConcept, type AdminConceptList, type ConceptLang } from "@quiz/contracts";
+import {
+  CONCEPT_LANGS,
+  CONCEPT_PROPOSE_EXCLUDE_MAX,
+  ConceptDuplicatesAi,
+  ConceptRelationProposals,
+  type AdminConcept,
+  type AdminConceptList,
+  type ConceptLang,
+  type ConceptRelationsAiRequest,
+} from "@quiz/contracts";
 import { unplaced } from "@quiz/domain";
 
 import { api, refusalCodeOf } from "../api";
@@ -51,7 +60,8 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  * The hierarchy shows on each row as the path above the concept
  * (`broaderTrail`, the picker's rule), and **Unplaced** lists the concepts
  * with no broader and no narrower concept (`unplaced`), whatever their status.
- * **Relations** lists the relations proposed without a model (ADR-114), to
+ * **Relations** lists the relations proposed without a model (ADR-114), and
+ * the model's on demand (`POST /admin/concepts/relations/ai`, kept here), to
  * tick and accept: its own primary action, so Validate is not there.
  */
 export function ConceptQueue() {
@@ -93,6 +103,22 @@ export function ConceptQueue() {
     mutationFn: async () => ConceptDuplicatesAi.parse(await api("/app/api/admin/concepts/duplicates/ai", { method: "POST" })),
   });
   const aiPairs = useMemo(() => aiPairsOf(asked.data, all ?? [], found).filter(narrowed), [asked.data, all, found, narrowed]);
+  // The model's relations (ADR-114 §2), kept here like its pairs so that they survive a filter switch;
+  // `seen` accumulates what the page asked about, which Ask again excludes, the latest kept past the cap.
+  const proposals = useMutation({
+    mutationFn: async (exclude: string[]) => {
+      const reply = ConceptRelationProposals.parse(
+        await api("/app/api/admin/concepts/relations/ai", { method: "POST", body: JSON.stringify({ exclude } satisfies ConceptRelationsAiRequest) }),
+      );
+      return { reply, seen: [...exclude, ...reply.asked].slice(-CONCEPT_PROPOSE_EXCLUDE_MAX) };
+    },
+  });
+  const ai = {
+    data: proposals.data?.reply,
+    isPending: proposals.isPending,
+    error: proposals.error,
+    ask: () => proposals.mutate(proposals.data?.seen ?? []),
+  };
   const edited = all?.find((c) => c.id === editing);
 
   const validate = useMutation({
@@ -159,7 +185,7 @@ export function ConceptQueue() {
           onEdit={setEditing}
         />
       ) : filter === "relations" ? (
-        <ConceptRelationReview concepts={all ?? []} narrowed={narrowed} onEdit={setEditing} />
+        <ConceptRelationReview concepts={all ?? []} ai={ai} narrowed={narrowed} onEdit={setEditing} />
       ) : rows.length === 0 ? (
         <Card>
           {q !== "" ? (
