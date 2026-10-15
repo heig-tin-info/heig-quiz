@@ -665,7 +665,7 @@ export const fr: Record<keyof Dict, string> = {
   "admin.concepts.path.more": "+{n} autres notions plus larges",
   "admin.concepts.view": "Afficher les notions en",
   "admin.concepts.tree.alsoUnder": "Aussi sous {names}",
-  "admin.concepts.tree.path": "sur le chemin d'un résultat",
+  "admin.concepts.tree.path": "chemin seulement",
   "admin.concepts.dup.empty.title": "Aucun doublon probable",
   "admin.concepts.dup.empty.body": "Aucune paire de notions n'a des libellés proches, traduits l'un de l'autre ou en collision.",
   "admin.concepts.dup.hint": "Des paires de notions qui se ressemblent, trouvées à partir des seuls libellés, qualificatifs et alias. Rien ne change tant que vous ne fusionnez ni ne modifiez.",

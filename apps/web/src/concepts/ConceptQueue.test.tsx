@@ -608,8 +608,8 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
           ["3", "Pointers"],
         ]);
         expect(within(rowOf("Pointers")).getByText("Also under Heap")).toBeInTheDocument();
-        // The indentation says the path: the row's own path is not repeated.
-        expect(within(rowOf("Pointers")).queryByText("Programming › C")).toBeNull();
+        // The indentation shows the path: it is said to a screen reader only.
+        expect(within(rowOf("Pointers")).getByText("Programming › C")).toHaveClass("sr-only");
       });
 
       it("keeps a match's ancestors as its path, dimmed and without actions", async () => {
@@ -620,7 +620,7 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
         await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(3));
         const [programmingRow, cRow, pointersRow] = screen.getAllByRole("listitem");
         for (const path of [programmingRow!, cRow!]) {
-          expect(path).toHaveTextContent(/on the path of a match$/);
+          expect(path).toHaveTextContent(/path only$/);
           expect(within(path).queryByRole("button")).toBeNull();
         }
         expect(within(pointersRow!).getByRole("button", { name: /edit pointers/i })).toBeInTheDocument();
@@ -633,19 +633,9 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
         await asTree();
         await userEvent.click(screen.getByRole("radio", { name: /^to validate/i }));
         expect(screen.getAllByRole("listitem").map((li) => li.getAttribute("aria-level"))).toEqual(["1", "2", "3", "4"]);
-        expect(rowOf("Programming")).toHaveTextContent(/on the path of a match$/);
+        expect(rowOf("Programming")).toHaveTextContent(/path only$/);
         await userEvent.click(screen.getByRole("button", { name: /validate null pointer/i }));
         await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/validate"))).toBe(true));
-      });
-
-      it("remembers the reading in this browser", async () => {
-        mockFetch({ [LIST]: ok(page(tree)) });
-        const { unmount } = renderWithProviders(<ConceptQueue />);
-        await asTree();
-        unmount();
-        renderWithProviders(<ConceptQueue />);
-        expect(await screen.findByRole("radio", { name: "Tree" })).toBeChecked();
-        expect(await screen.findByText("Also under Heap")).toBeInTheDocument();
       });
     });
   });

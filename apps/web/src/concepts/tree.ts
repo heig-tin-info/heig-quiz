@@ -17,31 +17,35 @@ export interface TreeRow<C extends Concept> {
 }
 
 /**
- * The `shown` concepts of `all`, each under the broader concept its path
- * follows (the first by name, `broaderTrail`'s rule), roots first, siblings
- * by name: every concept once, a poly-hierarchy's other broader concepts in
- * `alsoUnder`. A shown concept brings its ancestors along that path, as
+ * The `shown` concepts, each under the broader concept its path follows (the
+ * first by name, `broaderTrail`'s rule), roots first, siblings by name: every
+ * concept once, a poly-hierarchy's other broader concepts in `alsoUnder`. A
+ * shown concept brings its ancestors along that path, from `byId`, as
  * `pathOnly` rows when they are not shown themselves. The server refuses
  * cycles; should one be stored, the walk still ends, its concepts drawn from
  * the first by name.
  */
-export function conceptTree<C extends Concept>(all: readonly C[], shown: readonly C[], locale: Locale): TreeRow<C>[] {
-  const byId = new Map(all.map((c) => [c.id, c]));
-  const parentOf = new Map<string, C | undefined>();
-  const kept = new Map<string, C>();
+export function conceptTree<C extends Concept>(
+  byId: ReadonlyMap<string, C>,
+  shown: readonly C[],
+  locale: Locale,
+): TreeRow<C>[] {
+  const broaderById = new Map<string, C[]>();
+  const kept: C[] = [];
   for (const start of shown) {
-    for (let at: C | undefined = start; at && !kept.has(at.id); ) {
-      kept.set(at.id, at);
+    for (let at: C | undefined = start; at && !broaderById.has(at.id); ) {
       const broader: C[] = broaderOf(at, byId, locale);
-      parentOf.set(at.id, broader[0]);
+      broaderById.set(at.id, broader);
+      kept.push(at);
       at = broader[0];
     }
   }
-  const byName = byConceptName(locale);
+  const sorted = kept.sort(byConceptName(locale));
   const children = new Map<string | undefined, C[]>();
-  for (const c of [...kept.values()].sort(byName)) {
-    const parent = parentOf.get(c.id)?.id;
-    children.set(parent, [...(children.get(parent) ?? []), c]);
+  for (const c of sorted) {
+    const parent = broaderById.get(c.id)![0]?.id;
+    const siblings = children.get(parent) ?? children.set(parent, []).get(parent)!;
+    siblings.push(c);
   }
   const shownIds = new Set(shown.map((c) => c.id));
   const rows: TreeRow<C>[] = [];
@@ -49,13 +53,11 @@ export function conceptTree<C extends Concept>(all: readonly C[], shown: readonl
   const draw = (c: C, depth: number) => {
     if (drawn.has(c.id)) return;
     drawn.add(c.id);
-    const parent = parentOf.get(c.id);
-    const alsoUnder = broaderOf(c, byId, locale).filter((b) => b !== parent);
-    rows.push({ concept: c, depth, alsoUnder, pathOnly: !shownIds.has(c.id) });
+    rows.push({ concept: c, depth, alsoUnder: broaderById.get(c.id)!.slice(1), pathOnly: !shownIds.has(c.id) });
     for (const child of children.get(c.id) ?? []) draw(child, depth + 1);
   };
   for (const root of children.get(undefined) ?? []) draw(root, 0);
   // A cycle has no root: its concepts are drawn from the first by name.
-  for (const c of [...kept.values()].sort(byName)) draw(c, 0);
+  for (const c of sorted) draw(c, 0);
   return rows;
 }

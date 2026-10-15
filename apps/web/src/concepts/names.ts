@@ -39,11 +39,14 @@ export const usesLabel = (t: TFunction, n: number): string =>
  * The path above a concept for the picker (ADR-081 §5): its broader concepts
  * from the root down, `Programming › Pointer`. A concept with several broader
  * ones follows the first by name (the picker is compact; the sheet lists them
- * all). The server forbids cycles, so the walk ends. Empty when it has none.
+ * all). The server forbids cycles; should one be stored, the walk still
+ * ends where it would come back. Empty when it has none.
  */
 export function broaderTrail(concept: Concept, byId: ReadonlyMap<string, Concept>, locale: Locale): string[] {
   const trail: string[] = [];
-  for (let at = broaderOf(concept, byId, locale)[0]; at; at = broaderOf(at, byId, locale)[0]) {
+  const seen = new Set([concept.id]);
+  for (let at = broaderOf(concept, byId, locale)[0]; at && !seen.has(at.id); at = broaderOf(at, byId, locale)[0]) {
+    seen.add(at.id);
     trail.unshift(conceptName(at, locale));
   }
   return trail;

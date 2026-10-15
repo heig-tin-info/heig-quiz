@@ -19,9 +19,11 @@ const node = (label: string, broader: Concept[] = []): Concept => ({
   createdAt: "2026-10-01T08:00:00.000Z",
 });
 
+const byId = (concepts: Concept[]) => new Map(concepts.map((c) => [c.id, c]));
+
 /** The rows as `"  Name"`, two spaces a level, `(path)` and `+ Other` marking the rest. */
 const drawn = (all: Concept[], shown: Concept[] = all) =>
-  conceptTree(all, shown, "en").map(
+  conceptTree(byId(all), shown, "en").map(
     (r) =>
       "  ".repeat(r.depth) +
       r.concept.labels.en +
@@ -51,7 +53,7 @@ describe("conceptTree (#897)", () => {
   });
 
   it("draws a concept with two broader concepts once, under the first by name, the other as also under", () => {
-    const rows = conceptTree(all, all, "en").filter((r) => r.concept === leak);
+    const rows = conceptTree(byId(all), all, "en").filter((r) => r.concept === leak);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.alsoUnder).toEqual([heap]);
     expect(rows[0]!.depth).toBe(2);

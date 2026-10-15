@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookMarked, Check, Pencil } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import {
   CONCEPT_LANGS,
@@ -40,7 +40,7 @@ import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 import { BroaderPath } from "./refs";
-import { conceptTree, type TreeRow } from "./tree";
+import { conceptTree } from "./tree";
 
 type Filter = "all" | "proposed" | "validated" | "unplaced" | "duplicates" | "relations";
 /** The filters a tree means something on: Unplaced concepts have no edge, their tree is their list. */
@@ -75,7 +75,7 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  *
  * On All, To validate and Validated, the rows can also be read as a tree
  * (`conceptTree`), a habit remembered per browser: the same rows, indented
- * under the broader concept their path follows, a match's ancestors drawn
+ * under the broader concept their path follows, the ancestors of a shown row drawn
  * as its path only.
  */
 export function ConceptQueue() {
@@ -107,8 +107,8 @@ export function ConceptQueue() {
     return rankConcepts(q, byStatus, locale, proposedIds);
   }, [all, loose, filter, q, locale]);
   const tree = useMemo(
-    () => (treeable && view === "tree" ? conceptTree(all ?? [], rows, locale) : null),
-    [treeable, view, all, rows, locale],
+    () => (treeable && view === "tree" ? conceptTree(byId, rows, locale) : null),
+    [treeable, view, byId, rows, locale],
   );
 
   const found = useMemo(() => duplicatePairs(all ?? []), [all]);
@@ -230,21 +230,32 @@ export function ConceptQueue() {
       ) : (
         <Card>
           <ul className="divide-y divide-line">
-            {(tree?.map((place) => ({ c: place.concept, place })) ?? rows.map((c) => ({ c, place: undefined }))).map(({ c, place }) =>
-              place?.pathOnly ? (
-                <PathRow key={c.id} place={place} />
-              ) : (
-                <ConceptRow
-                  key={c.id}
-                  concept={c}
-                  place={place}
-                  byId={byId}
-                  validating={validate.isPending && validate.variables === c.id}
-                  failed={validate.isError && validate.variables === c.id ? validate.error : null}
-                  onValidate={() => validate.mutate(c.id)}
-                  onEdit={() => setEditing(c.id)}
-                />
-              ),
+            {(tree ?? rows.map((concept) => ({ concept, depth: null, alsoUnder: [], pathOnly: false }))).map(
+              ({ concept: c, depth, alsoUnder, pathOnly }) =>
+                pathOnly && depth !== null ? (
+                  <PathRow key={c.id} concept={c} depth={depth} />
+                ) : (
+                  <ConceptRow
+                    key={c.id}
+                    concept={c}
+                    indent={depth === null ? undefined : indentOf(depth)}
+                    path={
+                      // In the tree the indentation shows the path; a screen reader still hears it.
+                      <>
+                        <BroaderPath concept={c} byId={byId} locale={locale} className={depth === null ? undefined : "sr-only"} />
+                        {alsoUnder.length > 0 ? (
+                          <p className="text-xs text-fg-muted">
+                            {t("admin.concepts.tree.alsoUnder", { names: alsoUnder.map((b) => conceptName(b, locale)).join(", ") })}
+                          </p>
+                        ) : null}
+                      </>
+                    }
+                    validating={validate.isPending && validate.variables === c.id}
+                    failed={validate.isError && validate.variables === c.id ? validate.error : null}
+                    onValidate={() => validate.mutate(c.id)}
+                    onEdit={() => setEditing(c.id)}
+                  />
+                ),
             )}
           </ul>
         </Card>
@@ -258,26 +269,26 @@ export function ConceptQueue() {
 }
 
 /**
- * A row's place in the tree: 16 px a level, a hairline at its left. The
- * indent stops growing past six levels, so a deep row keeps its actions on
- * a phone (they wrap under the name); `aria-level` says the depth.
+ * A row's place in the tree: 16 px a level, the indent no longer growing past
+ * six levels, so a deep row keeps its actions on a phone (they wrap under the
+ * name); `aria-level` says the depth. A nested row has a hairline at its left
+ * ({@link hairline}).
  */
-function indentOf({ depth }: { depth: number }) {
-  return {
-    "aria-level": depth + 1,
-    className: depth > 0 ? "border-l border-line" : undefined,
-    style: { marginInlineStart: `${Math.min(depth, 6)}rem` },
-  };
-}
+type Indent = { "aria-level": number; style: { marginInlineStart: string } };
+const indentOf = (depth: number): Indent => ({
+  "aria-level": depth + 1,
+  style: { marginInlineStart: `${Math.min(depth, 6)}rem` },
+});
+const hairline = (indent: Indent | undefined) => indent !== undefined && indent["aria-level"] > 1 && "border-l border-line";
 
-/** An ancestor of a match that does not match itself: its name only, dimmed, no action. */
-function PathRow({ place }: { place: TreeRow<AdminConcept> }) {
+/** An ancestor of a shown concept that is not shown itself: its name only, dimmed, no action. */
+function PathRow({ concept, depth }: { concept: AdminConcept; depth: number }) {
   const t = useT();
   const { locale } = useI18n();
-  const indent = indentOf(place);
+  const indent = indentOf(depth);
   return (
-    <li {...indent} className={cx("px-4 py-2 text-sm text-fg-muted", indent.className)}>
-      {conceptName(place.concept, locale)}
+    <li {...indent} className={cx("px-4 py-2 text-sm text-fg-muted", hairline(indent))}>
+      {conceptName(concept, locale)}
       <span className="sr-only">, {t("admin.concepts.tree.path")}</span>
     </li>
   );
@@ -285,17 +296,18 @@ function PathRow({ place }: { place: TreeRow<AdminConcept> }) {
 
 function ConceptRow({
   concept: c,
-  place,
-  byId,
+  indent,
+  path,
   validating,
   failed,
   onValidate,
   onEdit,
 }: {
   concept: AdminConcept;
-  /** Its place in the tree reading: indented, its other broader concepts said instead of the path. */
-  place?: TreeRow<AdminConcept>;
-  byId: ReadonlyMap<string, AdminConcept>;
+  /** Its place in the tree reading. */
+  indent?: Indent;
+  /** Under the name: the path above it in the list, its other broader concepts in the tree. */
+  path: ReactNode;
   validating: boolean;
   failed: unknown;
   onValidate: () => void;
@@ -308,10 +320,8 @@ function ConceptRow({
   const reasonId = `concept-${c.id}-why`;
   const description = c.descriptions[locale] || c.descriptions[locale === "fr" ? "en" : "fr"];
 
-  const indent = place ? indentOf(place) : undefined;
-
   return (
-    <li {...indent} className={cx("flex flex-wrap items-start gap-x-4 gap-y-3 p-4", indent?.className)}>
+    <li {...indent} className={cx("flex flex-wrap items-start gap-x-4 gap-y-3 p-4", hairline(indent))}>
       <div className="min-w-0 flex-1 basis-60 space-y-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-semibold">{name}</span>
@@ -322,13 +332,7 @@ function ConceptRow({
             </Badge>
           ))}
         </div>
-        {!place ? (
-          <BroaderPath concept={c} byId={byId} locale={locale} />
-        ) : place.alsoUnder.length > 0 ? (
-          <p className="text-xs text-fg-muted">
-            {t("admin.concepts.tree.alsoUnder", { names: place.alsoUnder.map((b) => conceptName(b, locale)).join(", ") })}
-          </p>
-        ) : null}
+        {path}
         {description ? <p className="line-clamp-2 text-xs text-fg-muted">{description}</p> : null}
         <p className="flex flex-wrap gap-x-2 text-xs text-fg-muted">
           <span className="tabular-nums">

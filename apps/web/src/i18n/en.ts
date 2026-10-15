@@ -668,7 +668,7 @@ export const en = {
   "admin.concepts.path.more": "+{n} other broader concepts",
   "admin.concepts.view": "Show the concepts as",
   "admin.concepts.tree.alsoUnder": "Also under {names}",
-  "admin.concepts.tree.path": "on the path of a match",
+  "admin.concepts.tree.path": "path only",
   "admin.concepts.dup.empty.title": "No probable duplicates",
   "admin.concepts.dup.empty.body": "No two concepts have close, translated or colliding labels.",
   "admin.concepts.dup.hint": "Pairs of concepts that look alike, found from their labels, qualifiers and aliases alone. Nothing is changed until you merge or edit.",
