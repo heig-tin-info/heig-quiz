@@ -1,7 +1,7 @@
 /** The pools themselves: list, create, read, rename, delete. */
 import type { FastifyInstance } from "fastify";
 
-import { CatalogueQuery, IdParam, PoolCreate, PoolPatch, type PoolInUse } from "@quiz/contracts";
+import { CatalogueQuery, IdParam, PoolCreate, PoolPatch, type PoolConceptMap, type PoolInUse } from "@quiz/contracts";
 
 import {
   accessWhere,
@@ -73,6 +73,20 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, scope: pool }) =>
       service.poolDetail(app.db, pool, await poolRoleOf(app.db, pool, callerOf(req)), readerLang(req), callerOf(req)),
+    ),
+  );
+
+  /**
+   * The pool's concept map (ADR-116 §7): the concepts its live questions
+   * reach, counted with their narrower ones, and the broader edges among
+   * them. Read by whoever reads the pool (the same loader as `GET /pools/:id`);
+   * loaded only when the map opens. Nothing audited.
+   */
+  app.get(
+    "/app/api/pools/:id/concept-map",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: inPool() }, async ({ req, scope: pool }) =>
+      (await service.poolConceptMap(app.db, pool.id, readerLang(req))) satisfies PoolConceptMap,
     ),
   );
 

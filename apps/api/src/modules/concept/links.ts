@@ -10,20 +10,19 @@
  *   this file loads the vocabulary and the stop list, and writes.
  * - `setQuestionConcepts`: replaces a question's set; `copyQuestionConcepts`
  *   gives a copy its original's.
- * - `conceptsOf`: a question's concepts as a reader sees them;
- *   `poolConcepts`: the concepts a pool's live questions use, counted
- *   (`PoolDetail.concepts`, read once the pool is loaded through its access).
+ * - `conceptsOf`: a question's concepts as a reader sees them (a pool's,
+ *   counted, are `./poolMap.ts`'s).
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 
-import type { Concept, ConceptInputError, ConceptLang, ConceptRef, PoolConcept, TagDropReason } from "@quiz/contracts";
+import type { Concept, ConceptInputError, ConceptLang, ConceptRef, TagDropReason } from "@quiz/contracts";
 import { conceptKey, planConceptWrite, type ConceptToCreate, type ConceptWriteError } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
-import { concepts, conceptTagSortings, questionConcepts, questions } from "../../db/schema.js";
+import { concepts, conceptTagSortings, questionConcepts } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 import { columnsOf, conflictOr, loadAliases, perLang, refuseAliasHolder, side, toConcept, toConceptRef, toResolvable, type ConceptRow } from "./row.js";
 
@@ -279,22 +278,4 @@ export async function copyQuestionConcepts(tx: Db | Tx, fromId: string, toId: st
     JOIN ${concepts} c ON c.id = qc.concept_id
     WHERE qc.question_id = ${fromId}
     ON CONFLICT DO NOTHING`);
-}
-
-/**
- * The concepts the live questions of a pool use, each with how many of them
- * (ADR-081 third addendum §6), by label in `lang`. The caller has loaded the
- * pool through its access predicate.
- */
-export async function poolConcepts(db: Db | Tx, poolId: string, lang: ConceptLang): Promise<PoolConcept[]> {
-  const rows = await db
-    .select({ concept: concepts, count: sql<number>`count(*)::int` })
-    .from(questionConcepts)
-    .innerJoin(questions, eq(questions.id, questionConcepts.questionId))
-    .innerJoin(concepts, eq(concepts.id, questionConcepts.conceptId))
-    .where(and(eq(questions.poolId, poolId), isNull(questions.deletedAt)))
-    .groupBy(concepts.id);
-  return rows
-    .map((r) => ({ concept: toConceptRef(r.concept, lang), count: r.count }))
-    .sort((a, b) => byLabel(a.concept, b.concept));
 }

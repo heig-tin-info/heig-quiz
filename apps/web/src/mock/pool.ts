@@ -6,11 +6,13 @@ import {
   type QuestionReview,
   type QuestionStats,
   type ConceptSuggestions,
+  type PoolConceptMap,
   type ReviewList,
   type ZodIssueLite,
 } from "@quiz/contracts";
 import {
   clozeStudentTemplate,
+  conceptMap,
   describeBlank,
   displayName,
   isVariableName,
@@ -58,7 +60,7 @@ import {
   type TeamsLinkPreview,
   type TeamsTabState,
 } from "@quiz/contracts";
-import { conceptRefs, courseConceptRefs, coveredByCourse, coveredConceptIds, seedConceptIds, unknownConceptIds } from "./concept";
+import { broaderEdges, conceptRefs, courseConceptRefs, coveredByCourse, coveredConceptIds, seedConceptIds, unknownConceptIds } from "./concept";
 import {
   D,
   H,
@@ -1636,16 +1638,29 @@ const categoryTree = (poolId: string): TreeNode[] => {
 };
 
 /**
- * `PoolDetail.concepts`: the concepts the pool's live questions use, with
- * how many of them (ADR-081 third addendum §6), most used first.
+ * The pool's concepts counted with their narrower ones (ADR-116 §1): the
+ * server's `conceptMap` over the live questions' links (a merged concept
+ * followed, as the server's merge rewrites them) and the vocabulary's
+ * broader edges, each node with its concept as the reader sees it.
  */
-const poolConcepts = (poolId: string) => {
-  const live = liveQuestions(poolId).filter((q) => !q.deletedAt);
-  const ids = [...new Set(live.flatMap((q) => q.concepts))];
-  return conceptRefs(ids)
-    .map((concept) => ({ concept, count: live.filter((q) => q.concepts.includes(concept.id)).length }))
-    .sort((a, b) => b.count - a.count || a.concept.label.localeCompare(b.concept.label));
+const poolConceptNodes = (poolId: string) => {
+  const links = liveQuestions(poolId)
+    .filter((q) => !q.deletedAt)
+    .flatMap((q) => conceptRefs(q.concepts).map((c) => ({ question: q.id, concept: c.id })));
+  const map = conceptMap(links, broaderEdges());
+  const refs = new Map(conceptRefs(map.nodes.map((n) => n.id)).map((c) => [c.id, c]));
+  return { nodes: map.nodes.map((n) => ({ ...n, concept: refs.get(n.id)! })), broader: map.broader };
 };
+
+/**
+ * `PoolDetail.concepts`: the concepts the pool's live questions use, each
+ * with its covered count (ADR-116 §8), most used first.
+ */
+const poolConcepts = (poolId: string) =>
+  poolConceptNodes(poolId)
+    .nodes.filter((n) => n.linked)
+    .map((n) => ({ concept: n.concept, count: n.covered }))
+    .sort((a, b) => b.count - a.count || a.concept.label.localeCompare(b.concept.label));
 
 // --- The LLM review (ADR-060): two remarks on ptr-null-check, ptr-arith-01
 // clean; the pool `p1` asked for the night's review. `?empty=1`: none.
@@ -2461,6 +2476,16 @@ on("GET", "/app/api/pools/:id", (m) => {
     filterCourses: filterCourses(pool),
     courseConceptIds: [...new Set(filterCourses(pool).flatMap((c) => coveredByCourse(c.id)))],
     subscribers: pool.isPublic && holdsSeatOnPublic(poolSummary(pool).subscription) ? poolSummary(pool).subscriberCount : null,
+  };
+});
+/** `GET /pools/:id/concept-map` (ADR-116 §7): every concept the pool reaches, by label, and the broader edges among them. */
+on("GET", "/app/api/pools/:id/concept-map", (m): PoolConceptMap => {
+  const { nodes, broader } = poolConceptNodes(poolOr404(m.groups!.id!).id);
+  return {
+    nodes: nodes
+      .map(({ concept, covered, own }) => ({ concept, covered, own }))
+      .sort((a, b) => a.concept.label.localeCompare(b.concept.label) || a.concept.id.localeCompare(b.concept.id)),
+    broader,
   };
 });
 on("GET", "/app/api/pools/:id/unpublish-impact", (m) => {

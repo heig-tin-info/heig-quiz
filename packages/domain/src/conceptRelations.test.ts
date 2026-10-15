@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  broaderAncestorsOf,
   broaderPath,
   canonicalRelated,
   checkBroaderEdge,
   checkRelatedEdge,
+  coverageOf,
   edgesOf,
   mergedRelations,
   narrowerDescendants,
@@ -29,6 +31,17 @@ describe("broader closure", () => {
     expect(narrowerDescendants(diamond.broader, "a")).toEqual(["b", "c", "d", "e"]);
     expect(narrowerDescendants(diamond.broader, "e")).toEqual([]);
     expect(narrowerDescendantsOf(diamond.broader, ["d", "e"])).toEqual(new Map([["d", ["e"]], ["e", []]]));
+  });
+  it("reaches every ancestor, the mirror of the descendants", () => {
+    expect(broaderAncestorsOf(diamond.broader, ["e", "a"])).toEqual(new Map([["e", ["a", "b", "c", "d"]], ["a", []]]));
+    const ids = ["a", "b", "c", "d", "e"];
+    const up = broaderAncestorsOf(diamond.broader, ids);
+    const down = narrowerDescendantsOf(diamond.broader, ids);
+    for (const x of ids) for (const y of ids) expect(up.get(x)!.includes(y)).toBe(down.get(y)!.includes(x));
+  });
+  it("covers a concept and its narrower ones, itself first", () => {
+    expect(coverageOf(diamond.broader, ["b", "e", "b"])).toEqual(new Map([["b", ["b", "d", "e"]], ["e", ["e"]]]));
+    expect(coverageOf(diamond.broader, [])).toEqual(new Map());
   });
   it("finds the shortest path up, or null", () => {
     const path = broaderPath(diamond.broader, "e", "a")!;

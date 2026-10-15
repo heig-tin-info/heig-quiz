@@ -84,6 +84,7 @@ export async function proposeDescription(
 ): Promise<string> {
   const [concepts, excerpts] = await Promise.all([poolConcepts(db, pool.id, lang), excerptsOf(db, pool.id)]);
   if (concepts.length === 0 && excerpts.length === 0) throw new DomainError("pool_empty", 409, "The pool has no question to describe");
+  // The most covered first: a broader concept counts its narrower ones' questions (ADR-116 §8).
   const labels = concepts
     .sort((a, b) => b.count - a.count)
     .slice(0, MAX_CONCEPTS)

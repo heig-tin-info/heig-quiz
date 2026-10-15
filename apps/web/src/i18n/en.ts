@@ -1838,6 +1838,7 @@ export const en = {
   "pool.concepts.noMatch.title": "No concept matches",
   "pool.concepts.noMatch.body": "No concept of this pool contains “{q}”.",
   "pool.concepts.clearFilter": "Clear the filter",
+  "pool.concepts.table.caption": "A concept counts its questions and those of its narrower concepts.",
   "pool.concepts.heat.caption": "Each concept's area is proportional to its number of questions.",
   "pool.tab.settings": "Settings",
   "review.title": "LLM review",

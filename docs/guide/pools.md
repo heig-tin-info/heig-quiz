@@ -88,7 +88,7 @@ Tick several rows and a bar appears at the bottom: **Star**, **Add a concept**, 
 
 ### The Concepts tab
 
-Beside **Questions**, the **Concepts** tab (*Notions* in the French interface) lists the concepts the pool's questions exercise, each with the number of questions classified under it. It is read-only: a click on a concept opens the questions under it, filtered as with `#`. A concept's label and description belong to the platform's shared vocabulary, which the administrator maintains; to change what a question exercises, edit the question or use **Add a concept** in the bulk bar.
+Beside **Questions**, the **Concepts** tab (*Notions* in the French interface) lists the concepts the pool's questions exercise, each with its number of questions: those classified under it and under its narrower concepts, counted once, which are exactly the questions its click shows. It is read-only: a click on a concept opens the questions under it, filtered as with `#`. A concept's label and description belong to the platform's shared vocabulary, which the administrator maintains; to change what a question exercises, edit the question or use **Add a concept** in the bulk bar.
 
 <!-- screenshot: refresh after cut-over -->
 

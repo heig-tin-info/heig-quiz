@@ -54,12 +54,12 @@ export { suggestConcepts, SUGGEST_DRAFT_MAX } from "./suggest.js";
 export { mergeConcept } from "./merge.js";
 export { conceptsCoveredByCourse, coverage, coveredConcepts, courseConceptsOf, setCourseConcepts } from "./courseConcepts.js";
 export { conceptReferenced } from "./referenced.js";
+export { poolConceptMap, poolConcepts } from "./poolMap.js";
 export { toConcept, toConceptRef } from "./row.js";
 export {
   byLabel,
   conceptsOf,
   copyQuestionConcepts,
-  poolConcepts,
   resolveForWrite,
   setQuestionConcepts,
   type ConceptWrite,

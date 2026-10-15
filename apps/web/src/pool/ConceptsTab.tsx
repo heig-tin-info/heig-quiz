@@ -24,8 +24,10 @@ import { squarify } from "./treemap";
 
 /**
  * The pool's "Concepts" tab (ADR-081 third addendum §6): the concepts the
- * pool's live questions use, each with how many of them — the pool detail's
- * own `concepts` (`PoolConcept`), so the tab has no request of its own.
+ * pool's live questions use, each with its covered count — its questions and
+ * those of its narrower concepts, what its click opens (ADR-116 §8) — the
+ * pool detail's own `concepts` (`PoolConcept`), so the tab has no request of
+ * its own.
  *
  * The ONE thing it is for: find a concept and go to its questions. A row's
  * name (or a cell of the heat) opens the Questions tab filtered on that
@@ -37,7 +39,8 @@ import { squarify } from "./treemap";
  * question list's (`usePersistentChoice`): the table, and the "heat" — a
  * squarified treemap where a cell's area is the concept's share of the
  * summed question counts. No colour: neutral surface and hairline, the area
- * is the message.
+ * is the message. The heat is transitional: ADR-116 replaces it with the
+ * concept map, one level of the hierarchy per view.
  */
 type ConceptsView = "list" | "heat";
 const VIEW_KEY = "quiz-pool-concepts-view";
@@ -145,33 +148,36 @@ function ConceptTable({ rows, onOpen }: { rows: PoolConcept[]; onOpen: (id: stri
     { key: "count", label: t("pool.concepts.col.questions"), right: true, className: "w-28" },
   ];
   return (
-    <Card className={cx(T.container, "overflow-x-auto")}>
-      <table className={T.table}>
-        <TableHead columns={columns} sort={sort} onToggle={toggle} />
-        <tbody>
-          {sorted.map(({ concept, count }) => (
-            <tr key={concept.id} className={cx(T.row, T.rowHover)}>
-              <td className={T.td}>
-                <span className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    title={t("pool.concepts.open", { name: refName(concept) })}
-                    className="max-w-full truncate text-left font-semibold text-fg underline-offset-2 hover:underline"
-                    onClick={() => onOpen(concept.id)}
-                  >
-                    <ConceptLabel concept={concept} />
-                  </button>
-                  {concept.status === "proposed" ? (
-                    <Badge tone="zinc">{t("concepts.picker.proposed")}</Badge>
-                  ) : null}
-                </span>
-              </td>
-              <td className={cx(T.td, "text-right tabular-nums")}>{count}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
+    <div className="space-y-2">
+      <Card className={cx(T.container, "overflow-x-auto")}>
+        <table className={T.table}>
+          <TableHead columns={columns} sort={sort} onToggle={toggle} />
+          <tbody>
+            {sorted.map(({ concept, count }) => (
+              <tr key={concept.id} className={cx(T.row, T.rowHover)}>
+                <td className={T.td}>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      title={t("pool.concepts.open", { name: refName(concept) })}
+                      className="max-w-full truncate text-left font-semibold text-fg underline-offset-2 hover:underline"
+                      onClick={() => onOpen(concept.id)}
+                    >
+                      <ConceptLabel concept={concept} />
+                    </button>
+                    {concept.status === "proposed" ? (
+                      <Badge tone="zinc">{t("concepts.picker.proposed")}</Badge>
+                    ) : null}
+                  </span>
+                </td>
+                <td className={cx(T.td, "text-right tabular-nums")}>{count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+      <p className="text-xs text-fg-faint">{t("pool.concepts.table.caption")}</p>
+    </div>
   );
 }
 

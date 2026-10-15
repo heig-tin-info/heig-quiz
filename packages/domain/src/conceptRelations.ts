@@ -115,10 +115,30 @@ export function narrowerDescendants(broader: readonly RelationEdge[], id: string
   return narrowerDescendantsOf(broader, [id]).get(id)!;
 }
 
+/** Every concept reached from each of `ids` upwards or downwards, near or far, itself excluded, sorted; the adjacency built once. */
+function closureOf(broader: readonly RelationEdge[], ids: readonly string[], up: boolean): Map<string, string[]> {
+  const next = adjacency(broader, up);
+  return new Map(ids.map((id) => [id, [...reach(next, id).keys()].filter((c) => c !== id).sort()]));
+}
+
 /** {@link narrowerDescendants} of several concepts, the downward adjacency built once. */
 export function narrowerDescendantsOf(broader: readonly RelationEdge[], ids: readonly string[]): Map<string, string[]> {
-  const down = adjacency(broader, false);
-  return new Map(ids.map((id) => [id, [...reach(down, id).keys()].filter((c) => c !== id).sort()]));
+  return closureOf(broader, ids, false);
+}
+
+/** Every broader concept of each of `ids`, near or far, sorted: the mirror of {@link narrowerDescendantsOf}. */
+export function broaderAncestorsOf(broader: readonly RelationEdge[], ids: readonly string[]): Map<string, string[]> {
+  return closureOf(broader, ids, true);
+}
+
+/**
+ * COVERAGE (ADR-081 §4, sixth addendum §10): for each of `ids`, the concepts
+ * it covers, itself first and then every narrower one, near or far. Only
+ * `broader` edges widen it; a `related` concept is never covered.
+ */
+export function coverageOf(broader: readonly RelationEdge[], ids: readonly string[]): Map<string, string[]> {
+  const narrower = narrowerDescendantsOf(broader, ids);
+  return new Map(ids.map((id) => [id, [id, ...narrower.get(id)!]]));
 }
 
 /**
