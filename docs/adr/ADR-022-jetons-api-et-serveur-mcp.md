@@ -50,6 +50,16 @@ and the writing tool `create_project` join the closed list, so an assistant
 creates a GitHub project as a draft; three project routes now take a
 personal or OAuth token — see the addendum at the end of §C.
 
+**Amended 2026-10-15 by [ADR-113](ADR-113-portee-des-jetons-personnels.md)
+(issue #871, product owner's decisions of 2026-10-15), scope: §A's "There
+is no scope", the L6 amendment's parenthesis, and the rejected alternative
+"Scoped tokens".** A personal token carries one of three scopes chosen at
+its creation: `quiz` (the default, the MCP endpoint and its tools), `quiz:read`
+(its reading tools) or `api` (the whole API, always expiring); the tokens
+issued before are `api`. The L6 parenthesis "the MCP tools depend on them"
+is stale: no tool calls an administration route; the rule it introduces
+stands.
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,
@@ -82,7 +92,8 @@ UI does, the API does" (docs/08 §8.1, principle 4).
 - A token resolves to its owner's `users` row on every request, so the role,
   the staff seats and the pool memberships it acts under are the owner's
   current ones. There is no scope: a token can do what its owner can do
-  through the API.
+  through the API. *Amended 2026-10-15 by ADR-113: a personal token's
+  reach is the scope chosen at its creation, the MCP endpoint by default.*
 - A token-authenticated request is exempt from the double-submit CSRF check:
   a browser never attaches a bearer header on its own, which is the attack
   CSRF defends against.
@@ -325,3 +336,5 @@ it had to fall back on the web form.
   carries without asking.
 - **Scoped tokens (read-only, pools-only).** No consumer asked for it yet; a
   scope column can be added without breaking a token already issued.
+  *Taken up on 2026-10-15 by ADR-113, with scopes cut along the MCP
+  catalogue rather than by content.*
