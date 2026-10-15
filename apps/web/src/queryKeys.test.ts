@@ -78,6 +78,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["poolKey", keys.poolKey("p1"), ["pool", "p1"]],
     ["poolKey (not loaded)", keys.poolKey(undefined), ["pool", undefined]],
     ["poolCategoriesKey", keys.poolCategoriesKey("p1"), ["pool", "p1", "categories"]],
+    ["poolConceptMapKey", keys.poolConceptMapKey("p1"), ["pool", "p1", "concept-map"]],
     ["poolMembersKey", keys.poolMembersKey("p1"), ["pool-members", "p1"]],
     ["poolCandidatesKey", keys.poolCandidatesKey("p1"), ["pool-candidates", "p1"]],
     ["poolQuestionStatsKey", keys.poolQuestionStatsKey("p1"), ["pool", "p1", "question-stats"]],
@@ -220,6 +221,7 @@ describe("queryKeys — the prefixes invalidations rely on", () => {
     ["anyPoolKey ⊂ poolKey", keys.anyPoolKey, keys.poolKey("p1")],
     ["poolKey ⊂ poolQuestionsKey", keys.poolKey("p1"), keys.poolQuestionsKey("p1", "?limit=25")],
     ["poolKey ⊂ poolCategoriesKey", keys.poolKey("p1"), keys.poolCategoriesKey("p1")],
+    ["poolKey ⊂ poolConceptMapKey", keys.poolKey("p1"), keys.poolConceptMapKey("p1")],
     ["poolKey ⊂ poolQuestionStatsKey", keys.poolKey("p1"), keys.poolQuestionStatsKey("p1")],
     [
       "poolQuestionListsKey ⊂ poolQuestionsKey",
