@@ -1800,6 +1800,20 @@ const scenes = [
       await p.getByText(/^added: 2/i).waitFor();
       await p.getByText(/^added$/i).first().waitFor();
     } },
+  // ADR-114 §2 (#897 step A2): the model's proposals under the pre-pass, a top concept's group, three rows ticked, then accepted.
+  ...[["admin-concepts-relation-review-ai", false], ["admin-concepts-relation-review-ai-accepted", true]].map(([name, accept]) => ({
+    name, role: "admin", path: "/admin?tab=concepts", act: async (p) => {
+      await p.getByRole("radio", { name: /^relations$/i }).check({ force: true });
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^propose relations with ai$/i }).click();
+      await p.getByText(/^new concept: data structure$/i).waitFor();
+      for (const row of [/^stack under data structure$/i, /^heap related to stack$/i, /^hash table under array$/i]) {
+        await p.getByRole("checkbox", { name: row }).check({ force: true });
+      }
+      if (!accept) return;
+      await p.getByRole("button", { name: /^accept the 3 selected$/i }).click();
+      await p.getByText(/^added: 3/i).waitFor();
+    } })),
   // ADR-081 amendment of 2026-10-13 (#817): Fill with AI puts the proposal in the empty fields; a taken label is a "did you mean".
   { name: "admin-concepts-fill", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^edit récursivité/i }).click();

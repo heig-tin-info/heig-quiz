@@ -2,7 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookMarked, Check, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { CONCEPT_LANGS, ConceptDuplicatesAi, type AdminConcept, type AdminConceptList, type ConceptLang } from "@quiz/contracts";
+import {
+  CONCEPT_LANGS,
+  ConceptDuplicatesAi,
+  ConceptRelationProposals,
+  type AdminConcept,
+  type AdminConceptList,
+  type ConceptLang,
+  type ConceptRelationsAiRequest,
+} from "@quiz/contracts";
 import { unplaced } from "@quiz/domain";
 
 import { api, refusalCodeOf } from "../api";
@@ -51,7 +59,8 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  * The hierarchy shows on each row as the path above the concept
  * (`broaderTrail`, the picker's rule), and **Unplaced** lists the concepts
  * with no broader and no narrower concept (`unplaced`), whatever their status.
- * **Relations** lists the relations proposed without a model (ADR-114), to
+ * **Relations** lists the relations proposed without a model (ADR-114), and
+ * the model's on demand (`POST /admin/concepts/relations/ai`, kept here), to
  * tick and accept: its own primary action, so Validate is not there.
  */
 export function ConceptQueue() {
@@ -86,13 +95,20 @@ export function ConceptQueue() {
   const narrowed = useMemo(() => {
     if (q === "") return () => true;
     const matched = new Set(rankConcepts(q, all ?? [], locale).map((c) => c.id));
-    return (p: { a: AdminConcept; b: AdminConcept }) => matched.has(p.a.id) || matched.has(p.b.id);
+    return (p: { a: AdminConcept; b: AdminConcept | null }) => matched.has(p.a.id) || (p.b !== null && matched.has(p.b.id));
   }, [all, q, locale]);
   const pairs = useMemo(() => found.filter(narrowed), [found, narrowed]);
   const asked = useMutation({
     mutationFn: async () => ConceptDuplicatesAi.parse(await api("/app/api/admin/concepts/duplicates/ai", { method: "POST" })),
   });
   const aiPairs = useMemo(() => aiPairsOf(asked.data, all ?? [], found).filter(narrowed), [asked.data, all, found, narrowed]);
+  // The model's relations (ADR-114 §2), kept here like its pairs so that they survive a filter switch.
+  const proposals = useMutation({
+    mutationFn: async () =>
+      ConceptRelationProposals.parse(
+        await api("/app/api/admin/concepts/relations/ai", { method: "POST", body: JSON.stringify({} satisfies ConceptRelationsAiRequest) }),
+      ),
+  });
   const edited = all?.find((c) => c.id === editing);
 
   const validate = useMutation({
@@ -159,7 +175,7 @@ export function ConceptQueue() {
           onEdit={setEditing}
         />
       ) : filter === "relations" ? (
-        <ConceptRelationReview concepts={all ?? []} narrowed={narrowed} onEdit={setEditing} />
+        <ConceptRelationReview concepts={all ?? []} ai={proposals} narrowed={narrowed} onEdit={setEditing} />
       ) : rows.length === 0 ? (
         <Card>
           {q !== "" ? (

@@ -1,39 +1,54 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
+import { Check, Sparkles } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
 
-import { type AdminConcept, type ConceptRelationAdd, ConceptRelationCandidates } from "@quiz/contracts";
+import {
+  type AdminConcept,
+  type Concept,
+  type ConceptCreate,
+  type ConceptRelationAdd,
+  ConceptRelationCandidates,
+  type ConceptRelationProposals,
+} from "@quiz/contracts";
 import { edgesOf, type RelationEdges } from "@quiz/domain";
 
-import { api } from "../api";
+import { api, apiErrorMessage } from "../api";
 import { useI18n, useT } from "../i18n";
+import { useLlmAvailability } from "../llmAvailability";
 import { adminConceptCandidatesKey, adminConceptsKey, conceptsKey } from "../queryKeys";
-import { Badge, Button, Card, Checkbox, EmptyState, FormError, QueryError, SelectionBar, Skeleton } from "../ui";
+import { Alert, Badge, Button, Card, Checkbox, EmptyState, FormError, QueryError, SelectionBar, Skeleton } from "../ui";
 import { relationError } from "./ConceptRelations";
-import { conceptName } from "./names";
-import { rowsOf, rowState, runAccept, type Outcome, type RelationRow } from "./relationReview";
+import { ConceptStatusBadge } from "./ConceptStatusBadge";
+import { conceptName, refName } from "./names";
+import { aiRowsOf, conflicting, rowsOf, rowState, runAccept, type Outcome, type RelationRow } from "./relationReview";
 
 /**
- * The Relations view of the curation queue (#897 step A1, ADR-114): the
- * relations found without a model, a broader concept whose label another
- * contains and two concepts used together on many questions. Nothing is
- * checked; the one primary action, "Accept the n selected", writes the
- * ticked rows through the relation route one at a time, the broader edges
- * first, and shows each row's outcome. "Dismiss" hides a row until reload;
- * nothing is stored.
+ * The Relations view of the curation queue (#897 step A, ADR-114): the
+ * relations found without a model (a broader concept whose label another
+ * contains, two concepts used together on many questions) and, below, the
+ * model's proposals on demand (`ai`, kept by the queue): broader rows,
+ * related pairs with a reason and missing top concepts. Nothing is checked;
+ * the one primary action, "Accept the n selected", creates the ticked rows'
+ * top concepts, then writes their edges through the relation route one at a
+ * time, the broader ones first, and shows each row's outcome. A row that
+ * conflicts with the ticked ones is disabled. "Dismiss" hides a row until
+ * reload; nothing is stored.
  */
 export function ConceptRelationReview({
   concepts,
+  ai,
   narrowed,
   onEdit,
 }: {
   concepts: readonly AdminConcept[];
+  ai: UseMutationResult<ConceptRelationProposals, Error, void>;
   /** The queue's search, as for the duplicates: a row stays when one of its concepts matches. */
-  narrowed: (row: { a: AdminConcept; b: AdminConcept }) => boolean;
+  narrowed: (row: { a: AdminConcept; b: AdminConcept | null }) => boolean;
   onEdit: (id: string) => void;
 }) {
   const t = useT();
   const qc = useQueryClient();
+  const llm = useLlmAvailability();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
 
@@ -43,20 +58,32 @@ export function ConceptRelationReview({
   });
   const edges = useMemo(() => edgesOf(concepts), [concepts]);
   const byId = useMemo(() => new Map(concepts.map((c) => [c.id, c])), [concepts]);
-  const rows = useMemo(
-    () => rowsOf(candidates.data?.candidates ?? [], concepts).filter((r) => !dismissed.has(r.key) && narrowed(r)),
-    [candidates.data, concepts, dismissed, narrowed],
-  );
-  const ticked = rows.filter((r) => selected.has(r.key) && rowState(r, edges).state === "open");
+  const prepass = useMemo(() => rowsOf(candidates.data?.candidates ?? [], concepts), [candidates.data, concepts]);
+  const proposed = useMemo(() => aiRowsOf(ai.data, concepts, prepass), [ai.data, concepts, prepass]);
+  const [rows, aiRows] = useMemo(() => {
+    const shown = (r: RelationRow) => !dismissed.has(r.key) && narrowed(r);
+    return [prepass.filter(shown), proposed.filter(shown)];
+  }, [prepass, proposed, dismissed, narrowed]);
+  const { ticked, conflicts } = useMemo(() => {
+    const all = [...rows, ...aiRows];
+    const open = all.filter((r) => selected.has(r.key) && rowState(r, edges).state === "open");
+    return { ticked: open, conflicts: conflicting(all, open, edges) };
+  }, [rows, aiRows, selected, edges]);
 
   const accept = useMutation({
     mutationFn: (chosen: RelationRow[]) =>
-      runAccept(chosen, (row) =>
-        api(`/app/api/admin/concepts/${row.concept}/relations`, {
-          method: "POST",
-          body: JSON.stringify({ kind: row.kind, target: row.target } satisfies ConceptRelationAdd),
-        }),
-      ),
+      runAccept(chosen, {
+        create: (top) =>
+          api<Concept>("/app/api/concepts", {
+            method: "POST",
+            body: JSON.stringify({ lang: top.lang, label: top.label, qualifier: top.qualifier } satisfies ConceptCreate),
+          }),
+        relate: (row, target) =>
+          api(`/app/api/admin/concepts/${row.concept}/relations`, {
+            method: "POST",
+            body: JSON.stringify({ kind: row.kind, target } satisfies ConceptRelationAdd),
+          }),
+      }),
     onSuccess: () => {
       setSelected(new Set());
       void qc.invalidateQueries({ queryKey: adminConceptsKey });
@@ -75,10 +102,30 @@ export function ConceptRelationReview({
     });
   const outcomes = accept.data;
   const failed = outcomes ? [...outcomes.values()].filter((o) => "error" in o).length : 0;
+  const render = (row: RelationRow) => (
+    <ReviewRow
+      key={row.key}
+      row={row}
+      edges={edges}
+      byId={byId}
+      checked={selected.has(row.key)}
+      conflict={conflicts.has(row.key)}
+      outcome={outcomes?.get(row.key)}
+      onToggle={() => toggle(row.key)}
+      onDismiss={() => setDismissed((was) => new Set(was).add(row.key))}
+      onEdit={onEdit}
+    />
+  );
   const sections = [
     { kind: "broader", title: t("admin.concepts.rel.contained"), desc: t("admin.concepts.rel.contained.desc") },
     { kind: "related", title: t("admin.concepts.rel.together"), desc: t("admin.concepts.rel.together.desc") },
   ] as const;
+  const aiSections = [
+    { kind: "broader", title: t("admin.concepts.rel.ai.broader"), desc: t("admin.concepts.rel.ai.broader.desc") },
+    { kind: "related", title: t("admin.concepts.rel.ai.related"), desc: t("admin.concepts.rel.ai.related.desc") },
+  ] as const;
+  const tops = new Map<string, RelationRow[]>();
+  for (const r of aiRows) if (r.top) tops.set(r.top.key, [...(tops.get(r.top.key) ?? []), r]);
 
   return (
     <div className="space-y-4">
@@ -95,35 +142,61 @@ export function ConceptRelationReview({
           </EmptyState>
         </Card>
       ) : (
-        sections.map((section) => {
-          const list = rows.filter((r) => r.kind === section.kind);
-          return list.length === 0 ? null : (
-            <section key={section.kind} aria-label={section.title} className="space-y-2">
-              <div>
-                <h3 className="text-sm font-semibold">{section.title}</h3>
-                <p className="text-xs text-fg-muted">{section.desc}</p>
-              </div>
-              <Card>
-                <ul className="divide-y divide-line">
-                  {list.map((row) => (
-                    <ReviewRow
-                      key={row.key}
-                      row={row}
-                      edges={edges}
-                      byId={byId}
-                      checked={selected.has(row.key)}
-                      outcome={outcomes?.get(row.key)}
-                      onToggle={() => toggle(row.key)}
-                      onDismiss={() => setDismissed((was) => new Set(was).add(row.key))}
-                      onEdit={onEdit}
-                    />
-                  ))}
-                </ul>
-              </Card>
-            </section>
-          );
-        })
+        sections.map((s) => (
+          <Section key={s.kind} title={s.title} desc={s.desc}>
+            {rows.filter((r) => r.kind === s.kind).map(render)}
+          </Section>
+        ))
       )}
+
+      {llm.data?.available === true ? (
+        <section aria-label={t("admin.concepts.rel.ai.title")} className="space-y-4 pt-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Button variant="secondary" size="sm" loading={ai.isPending} onClick={() => ai.mutate()}>
+              <Sparkles /> {t(ai.data && ai.data.remaining > 0 ? "admin.concepts.rel.ai.askAgain" : "admin.concepts.rel.ai.ask")}
+            </Button>
+            <p className="min-w-0 flex-1 basis-64 text-xs text-fg-muted">
+              {t("admin.concepts.rel.ai.hint")}
+              {ai.data && ai.data.remaining > 0 ? ` ${t("admin.concepts.rel.ai.remaining", { n: ai.data.remaining })}` : ""}
+              {ai.data?.truncated ? ` ${t("admin.concepts.rel.ai.truncated")}` : ""}
+            </p>
+          </div>
+          {ai.isError ? (
+            <Alert tone="danger" title={t("admin.concepts.rel.ai.failed")}>
+              {apiErrorMessage(ai.error, t("error.llmFailed"))}
+            </Alert>
+          ) : null}
+          {ai.data && !ai.isPending && aiRows.length === 0 ? (
+            <p className="text-sm text-fg-muted">{t("admin.concepts.rel.ai.none")}</p>
+          ) : null}
+          {aiSections.map((s) => (
+            <Section key={s.kind} title={s.title} desc={s.desc}>
+              {aiRows.filter((r) => r.kind === s.kind && !r.top).map(render)}
+            </Section>
+          ))}
+          {tops.size > 0 ? (
+            <section aria-label={t("admin.concepts.rel.top.title")} className="space-y-2">
+              <SectionTitle title={t("admin.concepts.rel.top.title")} desc={t("admin.concepts.rel.top.desc")} />
+              {[...tops.values()].map((group) => {
+                const top = group[0]!.top!;
+                return (
+                  <Card key={top.key}>
+                    <div className="space-y-1 border-b border-line p-4">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="text-sm font-semibold">{t("admin.concepts.rel.top.new", { name: refName(top) })}</span>
+                        <ConceptStatusBadge status="proposed" />
+                      </div>
+                      <p className="text-xs text-fg-muted">{top.reason}</p>
+                    </div>
+                    <ul className="divide-y divide-line">{group.map(render)}</ul>
+                  </Card>
+                );
+              })}
+            </section>
+          ) : null}
+        </section>
+      ) : null}
+
       {ticked.length > 0 ? (
         <SelectionBar
           // "{n} sélectionnées": a relation is feminine, as the pool's questions are.
@@ -141,11 +214,33 @@ export function ConceptRelationReview({
   );
 }
 
+function SectionTitle({ title, desc }: { title: string; desc: string }) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <p className="text-xs text-fg-muted">{desc}</p>
+    </div>
+  );
+}
+
+/** A titled list of rows; nothing when it has none. */
+function Section({ title, desc, children }: { title: string; desc: string; children: ReactNode[] }) {
+  return children.length === 0 ? null : (
+    <section aria-label={title} className="space-y-2">
+      <SectionTitle title={title} desc={desc} />
+      <Card>
+        <ul className="divide-y divide-line">{children}</ul>
+      </Card>
+    </section>
+  );
+}
+
 function ReviewRow({
   row,
   edges,
   byId,
   checked,
+  conflict,
   outcome,
   onToggle,
   onDismiss,
@@ -155,6 +250,8 @@ function ReviewRow({
   edges: RelationEdges;
   byId: ReadonlyMap<string, AdminConcept>;
   checked: boolean;
+  /** It would be refused once the ticked rows are written. */
+  conflict: boolean;
   outcome: Outcome | undefined;
   onToggle: () => void;
   onDismiss: () => void;
@@ -162,7 +259,7 @@ function ReviewRow({
 }) {
   const t = useT();
   const { locale } = useI18n();
-  const [a, b] = [conceptName(row.a, locale), conceptName(row.b, locale)];
+  const [a, b] = [conceptName(row.a, locale), row.b ? conceptName(row.b, locale) : refName(row.top!)];
   const named =
     row.kind === "broader"
       ? t("admin.concepts.rel.broaderNamed", { name: a, target: b })
@@ -170,14 +267,18 @@ function ReviewRow({
   const state = rowState(row, edges);
   const refused = outcome && "error" in outcome ? outcome.error : null;
   // The server's refusal says it already; the rule's reason is for a row the vocabulary has moved past.
-  const reason =
-    state.state !== "blocked" || refused
-      ? null
-      : state.refusal.kind === "cycle"
+  const reason = refused
+    ? null
+    : state.state === "blocked"
+      ? state.refusal.kind === "cycle"
         ? t("admin.concepts.relations.error.cycle", {
             path: state.refusal.path.map((id) => (byId.has(id) ? conceptName(byId.get(id)!, locale) : "?")).join(" › "),
           })
-        : t("admin.concepts.relations.error.redundant");
+        : t("admin.concepts.relations.error.redundant")
+      : conflict
+        ? t("admin.concepts.rel.ai.conflict")
+        : null;
+  const open = state.state === "open" && !conflict;
   const reasonId = `rel-${row.key}-why`;
   const name = (id: string, label: string) => (
     <Button size="sm" variant="ghost" aria-label={t("admin.concepts.editNamed", { name: label })} onClick={() => onEdit(id)}>
@@ -190,8 +291,8 @@ function ReviewRow({
       <Checkbox
         className="mt-1.5"
         label={<span className="sr-only">{named}</span>}
-        checked={checked && state.state === "open"}
-        disabled={state.state !== "open"}
+        checked={checked && open}
+        disabled={!open}
         aria-describedby={reason ? reasonId : undefined}
         onChange={onToggle}
       />
@@ -201,16 +302,17 @@ function ReviewRow({
           <span className="text-xs text-fg-muted">
             {row.kind === "broader" ? t("admin.concepts.rel.under") : t("admin.concepts.rel.and")}
           </span>
-          {name(row.b.id, b)}
+          {row.b ? name(row.b.id, b) : <span className="px-3 text-sm font-semibold">{b}</span>}
           {state.state === "added" ? (
             <Badge tone="green" icon={Check}>
               {t("admin.concepts.rel.added")}
             </Badge>
           ) : null}
         </div>
-        {row.kind === "related" ? (
+        {row.questions !== null ? (
           <p className="text-xs tabular-nums text-fg-muted">{t("admin.concepts.rel.questions", { n: row.questions })}</p>
         ) : null}
+        {row.reason !== null ? <p className="text-xs text-fg-muted">{row.reason}</p> : null}
         {reason ? (
           <p id={reasonId} className="text-xs text-fg-muted">
             {reason}

@@ -92,8 +92,11 @@ consolidates).
    deferred: relations are the administrator's.
 4. **Acceptance by selection only.** Each candidate is a checkbox, nothing
    checked; the view's one primary action is **Accept the n selected**; there
-   is no "accept all". The browser writes the ticked edges one at a time
-   through the existing `POST /app/api/admin/concepts/:id/relations`, broader
+   is no "accept all". The browser first creates each top concept a ticked
+   row carries, once, through the existing `POST /app/api/concepts` (audited
+   `concept.propose`; a `409 concept_exists` takes the concept it names, any
+   other refusal fails that top's rows), then writes the ticked edges one at
+   a time through the existing `POST /app/api/admin/concepts/:id/relations`, broader
    edges first (one may make a related pair redundant), so each edge meets
    the existing rules, lock and audit (`concept.relation_add`); a refusal is
    shown on its row (a cycle names its path) and never stops the others. No
@@ -115,6 +118,9 @@ consolidates).
   pre-checks only disable rows, the server decides.
 - Accepting n edges is n requests and n audit entries; acceptable for the
   tens an administrator ticks at a time.
+- A top concept created for ticked rows whose edges are all refused stays a
+  `proposed` concept that nothing uses; the administrator deletes it from the
+  queue like any unused concept.
 - A dismissed candidate comes back on the next visit until a rejection list
   exists.
 - Co-occurrence reveals, as counts only, how concepts are used together

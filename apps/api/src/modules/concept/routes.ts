@@ -24,6 +24,13 @@
  *   without a model (#897 step A1, ADR-114): broader candidates by label
  *   containment, related ones by co-occurrence on live questions (counts
  *   only, the same exception as the queue's); nothing stored, no budget.
+ * - `POST /app/api/admin/concepts/relations/ai` `{ concepts? }`: the model's
+ *   broader rows, related pairs and missing top concepts to place the given
+ *   concepts, or the Unplaced ones (at most 40 a call, `remaining` the
+ *   others), from the labels and qualifiers of the live concepts alone
+ *   (ADR-114 §2, purpose `concepts`, the duplicates' per-minute budget);
+ *   validated against the graph, nothing stored. The gateway's refusals as
+ *   for the duplicates below.
  * - `POST /app/api/admin/concepts/duplicates/ai` (no body): the model's probable
  *   duplicate pairs, from labels and qualifiers alone (fifth addendum §4,
  *   purpose `concepts`); nothing stored. 409 `llm_not_configured`, 429
@@ -72,6 +79,8 @@ import {
   ConceptRelationAdd,
   type ConceptRelationCandidates,
   ConceptRelationParams,
+  type ConceptRelationProposals,
+  ConceptRelationsAiRequest,
   ConceptResolveQuery,
   type ConceptResolveResponse,
   IdParam,
@@ -137,6 +146,22 @@ export async function conceptPlugin(app: FastifyInstance) {
   });
 
   const asks = new Budget();
+  app.post("/app/api/admin/concepts/relations/ai", { preHandler: requireAdmin }, async (req, reply) => {
+    const now = app.clock.now();
+    const body = ConceptRelationsAiRequest.safeParse(req.body ?? {});
+    if (!body.success) return invalid(reply, body.error);
+    if (!asks.spend(`concepts:${req.user!.id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);
+    try {
+      return (await service.aiRelations(app.db, app.llmGateway, {
+        userId: req.user!.id,
+        lang: readerLang(req),
+        ...body.data,
+      })) satisfies ConceptRelationProposals;
+    } catch (error) {
+      return sendFailure(reply, error, now, llmArms);
+    }
+  });
+
   app.post("/app/api/admin/concepts/duplicates/ai", { preHandler: requireAdmin }, async (req, reply) => {
     const now = app.clock.now();
     if (!asks.spend(`concepts:${req.user!.id}`, LLM_CALLS_PER_MINUTE, now)) return rateLimited(reply, BUDGET_RETRY_AFTER_S);

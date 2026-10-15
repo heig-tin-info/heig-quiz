@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { AdminConcept, ConceptRelationCandidates } from "@quiz/contracts";
+import type { AdminConcept, ConceptRelationCandidates, ConceptRelationProposals } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { ConceptQueue } from "./ConceptQueue";
@@ -120,5 +120,131 @@ describe("the Relations view of the curation queue (ADR-114)", () => {
     expect(screen.queryByRole("checkbox", { name: RELATED })).toBeNull();
     expect(screen.getByText("No relation to propose")).toBeInTheDocument();
     expect(calls.filter((c) => c.method !== "GET")).toEqual([]);
+  });
+});
+
+describe("the AI proposals of the Relations view (ADR-114 §2)", () => {
+  const AVAILABILITY = "GET /app/api/generate/availability";
+  const AI = "POST /app/api/admin/concepts/relations/ai";
+  const array = concept(5, "Array");
+  const queue = concept(6, "Queue");
+  const vocabulary = [...all, array, queue];
+  const proposals: ConceptRelationProposals = {
+    lang: "en",
+    broader: [
+      // The pre-pass lists it already.
+      { concept: arithmetic.id, target: pointer.id },
+      // Refused once the pre-pass's related pair is ticked.
+      { concept: stack.id, target: recursion.id },
+      { concept: array.id, target: pointer.id },
+    ],
+    related: [{ a: queue.id, b: stack.id, reason: "Both hold elements in order." }],
+    tops: [{ label: "Data structure", qualifier: "", reason: "They organise data.", narrower: [stack.id, queue.id] }],
+    remaining: 3,
+    truncated: false,
+  };
+  const ARRAY = /array under pointer/i;
+  const QUEUE = /queue related to stack/i;
+  const STACK_TOP = /stack under data structure/i;
+  const created = concept(7, "Data structure", { status: "proposed" });
+
+  async function askAi(routes: Parameters<typeof mockFetch>[0] = {}) {
+    const mocked = mockFetch({
+      [LIST]: ok({ concepts: vocabulary }),
+      [CANDIDATES]: ok(candidates),
+      [AVAILABILITY]: ok({ available: true, types: [] }),
+      [AI]: ok(proposals),
+      ...routes,
+    });
+    await openRelations();
+    await userEvent.click(await screen.findByRole("button", { name: "Propose relations with AI" }));
+    await screen.findByRole("checkbox", { name: ARRAY });
+    return mocked;
+  }
+
+  it("is offered only when the platform has a model", async () => {
+    mockFetch({ [LIST]: ok({ concepts: vocabulary }), [CANDIDATES]: ok(candidates), [AVAILABILITY]: ok({ available: false, types: [] }) });
+    await openRelations();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /propose relations with ai/i })).toBeNull());
+  });
+
+  it("lists the model's rows apart, once each, with the missing top concepts, and asks again while some remain", async () => {
+    const { calls } = await askAi();
+    expect(calls.find((c) => `${c.method} ${c.url}` === AI)?.body).toEqual({});
+    const broader = screen.getByRole("region", { name: "Broader concepts proposed by the AI" });
+    expect(within(broader).getByRole("checkbox", { name: ARRAY })).not.toBeChecked();
+    expect(screen.getAllByRole("checkbox", { name: BROADER })).toHaveLength(1);
+    const related = screen.getByRole("region", { name: "Related concepts proposed by the AI" });
+    expect(within(related).getByText("Both hold elements in order.")).toBeInTheDocument();
+    const tops = screen.getByRole("region", { name: "Missing top concepts" });
+    expect(within(tops).getByText("New concept: Data structure")).toBeInTheDocument();
+    expect(within(tops).getByText("Proposed")).toBeInTheDocument();
+    expect(within(tops).getByText("They organise data.")).toBeInTheDocument();
+    expect(within(tops).getAllByRole("checkbox")).toHaveLength(2);
+    expect(screen.getByText(/3 unplaced concepts were not asked about this time/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Ask again" }));
+    await waitFor(() => expect(count(calls, AI)).toBe(2));
+  });
+
+  it("creates the top concept first, then writes the edges broader first, a refusal on its row only", async () => {
+    const cycle = {
+      error: "concept_cycle",
+      path: [array, pointer, array].map((c) => ({ id: c.id, label: c.labels.en, qualifier: "", status: c.status })),
+    };
+    const { calls } = await askAi({
+      "POST /app/api/concepts": ok(created),
+      [`POST /app/api/admin/concepts/${array.id}/relations`]: fail(409, cycle),
+      [`POST /app/api/admin/concepts/${stack.id}/relations`]: ok(stack),
+      [`POST /app/api/admin/concepts/${queue.id}/relations`]: ok(queue),
+    });
+    await userEvent.click(screen.getByRole("checkbox", { name: QUEUE }));
+    await userEvent.click(screen.getByRole("checkbox", { name: STACK_TOP }));
+    await userEvent.click(screen.getByRole("checkbox", { name: ARRAY }));
+    await userEvent.click(screen.getByRole("button", { name: "Accept the 3 selected" }));
+
+    await waitFor(() => expect(screen.getByText("Added: 2. Refused: 1.")).toBeInTheDocument());
+    expect(calls.filter((c) => c.method === "POST" && !c.url.endsWith("/ai")).map((c) => [c.url, c.body])).toEqual([
+      ["/app/api/concepts", { lang: "en", label: "Data structure", qualifier: "" }],
+      [`/app/api/admin/concepts/${array.id}/relations`, { kind: "broader", target: pointer.id }],
+      [`/app/api/admin/concepts/${stack.id}/relations`, { kind: "broader", target: created.id }],
+      [`/app/api/admin/concepts/${queue.id}/relations`, { kind: "related", target: stack.id }],
+    ]);
+    const row = screen.getByRole("checkbox", { name: ARRAY }).closest("li")!;
+    expect(within(row).getByText(/array › pointer › array/i)).toBeInTheDocument();
+  });
+
+  it("puts the rows under the concept a 409 concept_exists names", async () => {
+    const { calls } = await askAi({
+      "POST /app/api/concepts": fail(409, { error: "concept_exists", concept: created }),
+      [`POST /app/api/admin/concepts/${stack.id}/relations`]: ok(stack),
+    });
+    await userEvent.click(screen.getByRole("checkbox", { name: STACK_TOP }));
+    await userEvent.click(screen.getByRole("button", { name: "Accept the selected relation" }));
+    await waitFor(() => expect(screen.getByText("Added: 1. Refused: 0.")).toBeInTheDocument());
+    expect(calls.find((c) => c.url.endsWith(`${stack.id}/relations`))?.body).toEqual({ kind: "broader", target: created.id });
+  });
+
+  it("disables a row that conflicts with a ticked one, across the two lists", async () => {
+    await askAi();
+    const ai = screen.getByRole("checkbox", { name: /stack under recursion/i });
+    expect(ai).toBeEnabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: RELATED }));
+    expect(ai).toBeDisabled();
+    expect(ai).toHaveAccessibleDescription("Conflicts with a selected relation.");
+    await userEvent.click(screen.getByRole("checkbox", { name: RELATED }));
+    expect(ai).toBeEnabled();
+  });
+
+  it("says why the AI could not answer", async () => {
+    mockFetch({
+      [LIST]: ok({ concepts: vocabulary }),
+      [CANDIDATES]: ok(candidates),
+      [AVAILABILITY]: ok({ available: true, types: [] }),
+      [AI]: fail(429, { error: "llm_budget_exhausted", message: "The AI budget is spent." }),
+    });
+    await openRelations();
+    await userEvent.click(await screen.findByRole("button", { name: "Propose relations with AI" }));
+    expect(await screen.findByText("The AI could not propose relations")).toBeInTheDocument();
   });
 });

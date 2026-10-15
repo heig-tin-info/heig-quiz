@@ -111,6 +111,16 @@ describe("admissible", () => {
     ]);
   });
 
+  it("caps the broader proposals per concept, existing ones and related ones aside", () => {
+    const edges = { broader: [e("a", "z")], related: [] };
+    const proposals = [p("broader", "a", "b"), p("broader", "a", "c"), p("related", "a", "d"), p("broader", "d", "c")];
+    expect(admissible(edges, proposals, { broaderPerConcept: 1 })).toEqual([
+      p("broader", "a", "b"),
+      p("related", "a", "d"),
+      p("broader", "d", "c"),
+    ]);
+  });
+
   it("does not change the edges it is given", () => {
     const edges = { broader: [], related: [] };
     admissible(edges, [p("broader", "a", "b")]);

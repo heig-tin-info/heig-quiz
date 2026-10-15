@@ -8,6 +8,8 @@ import { z } from "zod";
 
 import { RELATION_CANDIDATE_LIMITS } from "@quiz/domain";
 
+import { CONCEPT_AI_REASON_MAX, ConceptLang, NewConceptName } from "./concept.js";
+
 /**
  * One candidate edge: `broader` reads "`concept` would get `target` as a
  * broader concept" (found by label containment); `related` pairs
@@ -31,3 +33,50 @@ export const ConceptRelationCandidates = z.object({
     .max(RELATION_CANDIDATE_LIMITS.contained + RELATION_CANDIDATE_LIMITS.together),
 });
 export type ConceptRelationCandidates = z.infer<typeof ConceptRelationCandidates>;
+
+/**
+ * The model's pass (ADR-114 §2): at most `PLACE` concepts to place per call,
+ * and the caps of its answer — broader edges, related pairs, missing top
+ * concepts and the concepts each top gathers.
+ */
+export const CONCEPT_PROPOSE_PLACE_MAX = 40;
+export const CONCEPT_PROPOSE_BROADER_MAX = 80;
+export const CONCEPT_PROPOSE_RELATED_MAX = 30;
+export const CONCEPT_PROPOSE_TOPS_MAX = 10;
+export const CONCEPT_PROPOSE_TOP_NARROWER_MAX = 15;
+
+/**
+ * `POST /admin/concepts/relations/ai`: the concepts to place; without them,
+ * the Unplaced ones. Either way at most {@link CONCEPT_PROPOSE_PLACE_MAX},
+ * the oldest first, are asked about per call.
+ */
+export const ConceptRelationsAiRequest = z.object({ concepts: z.array(z.uuid()).min(1).max(1000).optional() }).strict();
+export type ConceptRelationsAiRequest = z.infer<typeof ConceptRelationsAiRequest>;
+
+/**
+ * The model's proposals, validated by the server against the graph, nothing
+ * stored. `broader` reads "`concept` would get `target` as a broader
+ * concept"; a `related` pair carries the model's reason; a top is a concept
+ * the vocabulary lacks, named in `lang` (the admin's), that would gather
+ * `narrower`, created `proposed` only when the admin accepts a row of it.
+ * `remaining`: the concepts to place that were not asked about this time;
+ * `truncated`: the vocabulary was longer than a call takes.
+ */
+export const ConceptRelationProposals = z.object({
+  lang: ConceptLang,
+  broader: z.array(z.object({ concept: z.uuid(), target: z.uuid() })).max(CONCEPT_PROPOSE_BROADER_MAX),
+  related: z
+    .array(z.object({ a: z.uuid(), b: z.uuid(), reason: z.string().min(1).max(CONCEPT_AI_REASON_MAX) }))
+    .max(CONCEPT_PROPOSE_RELATED_MAX),
+  tops: z
+    .array(
+      NewConceptName.extend({
+        reason: z.string().min(1).max(CONCEPT_AI_REASON_MAX),
+        narrower: z.array(z.uuid()).min(2).max(CONCEPT_PROPOSE_TOP_NARROWER_MAX),
+      }),
+    )
+    .max(CONCEPT_PROPOSE_TOPS_MAX),
+  remaining: z.number().int().min(0),
+  truncated: z.boolean(),
+});
+export type ConceptRelationProposals = z.infer<typeof ConceptRelationProposals>;

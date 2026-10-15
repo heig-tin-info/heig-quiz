@@ -24,9 +24,11 @@ import {
   type ConceptExists,
   type ConceptRef,
   type ConceptRelationCandidates,
+  type ConceptRelationProposals,
   type TagDropReason,
 } from "@quiz/contracts";
 import {
+  admissible,
   canonicalRelated,
   narrowerDescendants,
   checkAlias,
@@ -435,6 +437,49 @@ on("GET", "/app/api/admin/concepts/relations/candidates", (): ConceptRelationCan
     return x && y ? [{ a: x, b: y, shared, smaller }] : [];
   });
   return { candidates: relationCandidatesOf(resolvables(), edgesOf(live), pairs) };
+});
+
+/**
+ * The model's relations (ADR-114 §2): fixed rows on the live concepts, kept
+ * by the server's rule (`admissible`) — one the pre-pass lists too, one that
+ * conflicts with a pre-pass pair once both are ticked, a related pair and
+ * two missing top concepts in the reader's language; the `nollm` scene
+ * refuses as a platform without a key does.
+ */
+on("POST", "/app/api/admin/concepts/relations/ai", (): ConceptRelationProposals => {
+  if (flags.nollm) throw refuse(409, "llm_not_configured", "No AI key is configured", { reason: "not_configured" });
+  const live = concepts.filter((c) => c.status !== "merged");
+  const id = (fr: string) => live.find((c) => c.labels.fr === fr && c.qualifiers.fr === "")?.id;
+  const lang = document.documentElement.lang === "fr" ? "fr" : "en";
+  const said = (fr: string, en: string) => (lang === "fr" ? fr : en);
+  const rows = (
+    [
+      ["broader", "Arithmétique des pointeurs", "Pointeur", ""],
+      ["broader", "Hash table", "Tableau", ""],
+      ["related", "Tas", "Pile", said("Deux zones de la mémoire d'un programme.", "Two regions of a program's memory.")],
+    ] as const
+  ).flatMap(([kind, a, b, reason]) => {
+    const [concept, target] = [id(a), id(b)];
+    return concept && target ? [{ kind, concept, target, reason }] : [];
+  });
+  const kept = admissible(edgesOf(live), rows, { broaderPerConcept: 2 });
+  const top = (label: [string, string], qualifier: [string, string], reason: [string, string], narrower: string[]) => ({
+    label: said(...label),
+    qualifier: said(...qualifier),
+    reason: said(...reason),
+    narrower: narrower.flatMap((fr) => id(fr) ?? []),
+  });
+  return {
+    lang,
+    broader: kept.filter((r) => r.kind === "broader").map(({ concept, target }) => ({ concept, target })),
+    related: kept.filter((r) => r.kind === "related").map(({ concept, target, reason }) => ({ a: concept, b: target, reason })),
+    tops: [
+      top(["Programmation", "Programming"], ["langage C", "C language"], ["Les notions de base d'un cours de C.", "The basics of a C course."], ["Pointeur", "Tableau"]),
+      top(["Structure de données", "Data structure"], ["", ""], ["Deux façons d'organiser des données.", "Two ways to organise data."], ["Pile", "Hash table"]),
+    ].filter((t) => t.narrower.length >= 2),
+    remaining: 3,
+    truncated: false,
+  };
 });
 
 on("DELETE", "/app/api/admin/concepts/:id", (m) => {
