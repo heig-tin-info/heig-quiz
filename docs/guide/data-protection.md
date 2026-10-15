@@ -249,7 +249,9 @@ Through the monthly off-site archives, a deleted piece of data can therefore sur
 
 No statistic is stored: every one is computed, when displayed, from the nominative data.
 
-**Per evaluation.** Mean, grade distribution, success rate of each question, distribution of the answers (`apps/api/src/modules/results/service.ts`), for the course's staff only. The CSV export of the results is nominative. No minimum group size is applied: in a small classroom, a distribution may let someone recognise a student. While an exercise runs, the teacher may publish its correction (ADR-050): the class view then shows the same aggregates, with no names, and may be projected; for a short-answer question it lists the answers as typed.
+**Per evaluation.** Mean, grade distribution, success rate of each question, distribution of the answers (`apps/api/src/modules/results/service.ts`), for the course's staff only, assistants included, who read the nominative data anyway: the grade table, each copy, the nominative CSV export and the live grid (ADR-068 §2). No student route returns a class aggregate of an evaluation: a student reads their own feedback, their own grades with no average, and their own cells of the gradebook, with their own mean once the teacher publishes it. No minimum group size is therefore applied (product owner, 2026-10-15, issue [#874](https://github.com/heig-tin-info/heig-quiz/issues/874)), as already settled for the drill's aggregates within a classroom (settled question 28 (l)). One exception is a deliberate switch: a poll's tally reaches every phone once the teacher turns on **Show votes** (ADR-014, addendum of 2026-09-29). While an exercise runs, the teacher may publish its correction (ADR-050): the class view then shows the same aggregates, with no names, and may be projected; for a short-answer question it lists the answers as typed.
+
+**In a small class, a projected aggregate names its students.** The aggregates reach the room only when a teacher projects them: the class debrief (F-RES-03, ADR-033), the live dashboard with names hidden, whose per-question totals and answer columns stay readable under pseudonyms (F-DASH-02, F-DASH-04, F-DASH-07), and an exercise's published correction, which counts the papers handed in so far, so two loads one paper apart show that paper's answers. With two or three students, a distribution or a success rate tells the room who answered what; a short answer shown as typed can identify its author in a class of any size. In a very small class, prefer not to project the debrief or the dashboard, and read a short-answer question's answers before projecting them.
 
 **Per question, in a pool** (ADR-038, ADR-039, ADR-042, ADR-043). Success rate, time spent, discrimination, and the share of each option of a multiple-choice question, over every exam that used the question, all years and classrooms, never an exercise nor a staff member's test (`apps/api/src/modules/stats/`). They are aggregated (N-DATA-06): below ten answers the server sends nothing (`QUESTION_STATS_MIN_N`, `packages/domain/src/stats.ts`); no minimum, maximum or standard deviation is shown; option shares are whole percentages. Anyone who can read the pool sees them. One residual risk is accepted (ADR-038): comparing a question's figures before and after one more answer reveals that answer's points, not whose it is.
 
@@ -311,7 +313,7 @@ Retention and deletion:
 
 Statistics:
 
-- the per-evaluation statistics apply no minimum group size: small classrooms are re-identifiable;
+- the per-evaluation statistics apply no minimum group size, by decision (product owner, 2026-10-15, #874): they are staff-only, and the residual risk is what a teacher projects in a small class (see [Statistics](#statistics));
 - the pool statistics have a threshold of ten answers, but comparing them before and after one new answer reveals that answer's points.
 
 Access and traceability:
