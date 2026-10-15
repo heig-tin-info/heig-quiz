@@ -2,12 +2,11 @@
 
 ## Status
 
-Accepted (2026-10-15) by the product owner (answers of 2026-10-15, evening, on
-[#897](https://github.com/heig-tin-info/heig-quiz/issues/897), step E, items 3 to 8).
-Three points were taken by assumption and may be changed by the product owner: "Another
-round" puts the cards practised today last (§3); a proposed narrower concept under a
-validated declared one still counts (§3); `time_ms` does not feed the drill's rating
-reference times (§6).
+Accepted (2026-10-15) by the product owner ([#897](https://github.com/heig-tin-info/heig-quiz/issues/897),
+answers of 2026-10-15 evening, step E, items 3 to 8). Assumed, for the product owner to
+change: "Another round" puts today's practised cards last (§3); a proposed narrower concept
+under a validated declared one counts (§3); `time_ms` never feeds the rating reference times
+(§6). Deferred: decision 7, `time_ms` feeding the question's mean answer time (§6, question 60).
 
 Scope: a student's targeted revision of one concept of their course — what a round holds,
 how it is served and answered, what it records, what it feeds, and who sees it.
@@ -127,7 +126,9 @@ could forge.
   ADR-039 §3) — a wall-clock interval, since a round has no visibility reports. No route
   returns it (ADR-039 §8). The product owner wants it to feed the question's mean answer
   time; that statistic counts exam answers only today (ADR-039 §6), so adding rounds to it
-  is a later change, under its own amendment. *Assumed:* it never feeds the drill's rating
+  is a later change, under its own amendment: the product owner chooses between merging
+  the rounds' times into the exam series and a separate series (open question 60); until
+  then they are stored and fed to nothing. *Assumed:* it never feeds the drill's rating
   reference times — an answer given right after seeing the key would skew every student's
   ratings.
 - **No confidence and no device class** are sent or stored: the answer's contract is
@@ -171,10 +172,13 @@ purged by `drill.purge` with its answers; deleting the classroom deletes its rou
 - **The teacher** — the course's staff, through `staffAccess` on the classroom
   (`GET /classrooms/:id/drill/revision`) — sees who revised before the test: the rounds
   with a card answered of the classroom's current student seats, none started after an
-  opt-out (the cut of ADR-041 §8); per student the number of rounds, the last one and the
-  distinct concepts; per concept the students, the rounds and the last one. Labels are the
-  staff's (a proposed concept named, a merged one under its winner, a deleted one as
-  `null`). Never a card, a question, an answer or a time.
+  opt-out (the cut of ADR-041 §8); **per student the number of rounds, the date of the
+  last one, the distinct concepts, and the cards served and the cards right** (the totals
+  of the rounds' two counters, the "cards served, cards correct" of the product owner's
+  answer 6); per concept the students, the rounds and the last one. Labels are the staff's
+  (a proposed concept named, a merged one under its winner); a round whose concept was
+  deleted counts for its student under no concept. **Never a card, a question, an answer
+  or a time.**
 - **The student is told**: the drill tab says that the teacher sees the rounds, and the
   "Data and privacy" page has the row (N-DATA-07).
 - **No audit action**: a round is a student's own practice, like the daily reviews.
@@ -182,7 +186,7 @@ purged by `drill.purge` with its answers; deleting the classroom deletes its rou
 ### 10. Routes and access
 
 Student, `requireSession`, portal and impersonation sessions; a `seb` or `kiosk` session
-is refused (401) by the session layer's default; an impersonation session reads and
+is refused (401) by the session layer's default; an impersonation session reads, and
 writes nothing outside development (ADR-034 §4):
 
 - `GET /app/api/student/classrooms/:id/revision/concepts` and `GET …/revision/rounds`,

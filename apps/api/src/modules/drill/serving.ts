@@ -58,7 +58,7 @@ const REFUSALS = {
 export class DrillError extends refusalClass("DrillError", REFUSALS) {}
 
 /** The cards the drill may reach, with what a session or a round needs to know of them. */
-export function activeCards(db: DbOrTx, where: SQL | undefined) {
+function activeCards(db: DbOrTx, where: SQL | undefined) {
   return db
     .select({
       card: drillCards,
@@ -167,7 +167,7 @@ export async function keyOpen(db: DbOrTx, cards: readonly KeyedCard[]): Promise<
  * whatever their number: the question versions as they stand now, and the
  * evaluations and keys ({@link loadKeys}).
  */
-export async function loadContext(db: DbOrTx, rows: readonly ActiveRow[]) {
+async function loadContext(db: DbOrTx, rows: readonly ActiveRow[]) {
   const [versions, keys] = await Promise.all([
     rows.length === 0 ? new Map() : currentVersions(db, [...new Set(rows.map((r) => r.card.questionId))]),
     loadKeys(db, rows.map((r) => r.card)),
@@ -183,7 +183,7 @@ type Context = Awaited<ReturnType<typeof loadContext>>;
  * was decided when the card was created (ADR-041 §3). Null when the
  * question has no published version or the evaluation is gone.
  */
-export function questionOf(row: ActiveRow, context: Context) {
+function questionOf(row: ActiveRow, context: Context) {
   const version = context.versions.get(row.card.questionId);
   const evaluation = context.evaluations.get(row.card.evaluationId);
   if (!version || !evaluation) return null;
@@ -194,6 +194,16 @@ export function questionOf(row: ActiveRow, context: Context) {
   };
 }
 export type ServedQuestion = NonNullable<ReturnType<typeof questionOf>>;
+
+/**
+ * The active cards `where` selects whose key may reach their student now:
+ * what a session or a round may hand out. A bounded number of queries.
+ */
+export async function openCards(db: DbOrTx, where: SQL | undefined): Promise<ActiveRow[]> {
+  const active = await activeCards(db, where);
+  const context = await loadContext(db, active);
+  return active.filter((row) => questionOf(row, context)?.open === true);
+}
 
 /**
  * The card's question, when its key may reach the student; the 404 of a
@@ -311,6 +321,14 @@ export async function practisedToday(db: DbOrTx, userId: string, day: Day): Prom
     .selectDistinct({ cardId: drillRevisionAnswers.cardId })
     .from(drillRevisionAnswers)
     .innerJoin(drillRevisionRounds, eq(drillRevisionRounds.id, drillRevisionAnswers.roundId))
-    .where(and(eq(drillRevisionRounds.userId, userId), gte(drillRevisionAnswers.servedAt, day.start)));
+    .where(
+      and(
+        // A round is served only on the day it started: its start bounds the
+        // search, and the (user, started_at) index serves it.
+        eq(drillRevisionRounds.userId, userId),
+        gte(drillRevisionRounds.startedAt, day.start),
+        gte(drillRevisionAnswers.servedAt, day.start),
+      ),
+    );
   return new Set(rows.map((r) => r.cardId));
 }

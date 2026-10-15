@@ -32,6 +32,8 @@ Pour chaque question révisée : votre appréciation, si vous aviez juste, le te
 
 Votre enseignant voit votre activité de révision dans sa classe : les questions travaillées, vos séances, à quels moments de la semaine vous révisez, et votre progression. Vous pouvez quitter les révisions d'une classe à tout moment. Plus rien n'est compté ensuite ; ce qui a été enregistré avant reste visible pour votre enseignant, qui voit aussi que vous les avez quittées.
 
+Quand vous révisez une notion à dessein (« Réviser une notion »), chaque série est enregistrée : la notion, quand elle a commencé et fini, et pour chaque question si vous aviez juste et le temps mis — jamais votre réponse, ni le degré de certitude que vous avez indiqué. Une série ne change ni le calendrier de vos révisions ni votre niveau. Votre enseignant voit, pour chaque étudiant, combien de séries il a faites et quand a eu lieu la dernière, les notions révisées, et combien de questions ont été répondues et réussies ; jamais une question ni une réponse. Vous voyez aussi vos propres séries.
+
 ### Les projets et GitHub
 
 Quand un cours utilise des projets GitHub : le dépôt que vous avez accepté, le compte GitHub que vous avez lié, l'heure de chaque push, les résultats des tests automatiques, votre score et le commentaire de votre enseignant. Pour un projet noté par critères, aussi ce que chaque commit noté a produit (résultats des tests, sorties, fichiers) et les points et explications donnés pour chaque critère.
@@ -62,6 +64,7 @@ Certaines données sont supprimées automatiquement :
 | --- | --- |
 | Quitter la page et coller pendant une évaluation | À la publication des notes ; six mois après la clôture de l'évaluation si elles ne le sont jamais |
 | Votre activité de révision | Cinq ans après chaque révision |
+| Vos séries de révision par notion | Cinq ans après chaque série |
 | Les heures pendant lesquelles vous avez utilisé Quiz | Après huit jours |
 | Les fichiers, commits et sorties de tests gardés pour noter un projet par critères | Six mois après la publication des résultats du projet (la liste des tests et leurs résultats restent) |
 | Le contenu des messages de GitHub sur vos dépôts | 30 jours après leur arrivée |

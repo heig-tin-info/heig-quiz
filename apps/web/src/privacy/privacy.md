@@ -32,6 +32,8 @@ For each question you practise: how you rated it, whether you were right, the ti
 
 Your teacher sees your drill activity in their classroom: the questions you practise, your sessions, at what times of the week you practise, and your progress. You can leave the drill of a classroom at any time. Nothing new is counted after that; what was recorded before stays visible to your teacher, who also sees that you left.
 
+When you revise a concept on purpose ("Revise a concept"), each round is recorded: the concept, when it started and ended, and for each question whether you were right and the time it took — never your answer, nor how sure you said you were. A round does not change your drill schedule nor your level. Your teacher sees, for each student, how many rounds they did and when the last one was, the concepts revised, and how many questions were answered and answered right; never a question or an answer. You see your own rounds too.
+
 ### Projects and GitHub
 
 When a course uses GitHub projects: the repository you accepted, the GitHub account you linked, the time of each push, the results of the automatic tests, your score and your teacher's comment. For a project graded by criteria, also what each graded commit produced (test results, outputs, files) and the points and explanations given for each criterion.
@@ -62,6 +64,7 @@ Some data is deleted automatically:
 | --- | --- |
 | Leaving the page and pasting during an evaluation | When the grades are published; six months after the evaluation closed if they never are |
 | Your drill activity | Five years after each review |
+| Your rounds of revision by concept | Five years after each round |
 | The hours in which you used Quiz | After eight days |
 | The files, commits and test outputs kept to grade a project by criteria | Six months after the project's results are published (the list of tests and their results stays) |
 | The content of GitHub's messages about your repositories | 30 days after they arrive |

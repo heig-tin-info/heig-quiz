@@ -37,7 +37,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { DRILL_CORRECTNESSES, DRILL_DEVICE_CLASSES, DWELL_IDLE_CAP_MS } from "@quiz/domain";
+import { DRILL_CORRECTNESSES, DRILL_DEVICE_CLASSES, DRILL_REVISION_ROUND_SIZE, DWELL_IDLE_CAP_MS } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import type { StoredInstance } from "./columns.js";
@@ -146,8 +146,8 @@ export const drillReviews = pgTable(
  * A round of targeted revision (ADR-115): one student revising one concept
  * of a classroom's course, on at most ten of their own cards, outside FSRS
  * and the level. What the teacher sees of it (`classroomRevision`) is the
- * round itself: who, which concept, when, and the two counters, which the
- * answers keep up to date. The user is NO ACTION like the cards'; the
+ * round itself: who, which concept, when, and per student the totals of the
+ * two counters, which the answers keep up to date. The user is NO ACTION like the cards'; the
  * classroom cascades (N-DATA-03); a concept deleted later leaves the round
  * unnamed. Purged five years after its start by `drill.purge`.
  */
@@ -166,7 +166,7 @@ export const drillRevisionRounds = pgTable(
     cardIds: uuid("card_ids").array().notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
-    /** Distinct cards answered at their first pass (`revisionSummary`). */
+    /** Distinct cards answered at their first pass: one more at each first-pass answer. */
     cardsServed: integer("cards_served").notNull().default(0),
     /** Of them, those answered right at their first pass. */
     cardsCorrect: integer("cards_correct").notNull().default(0),
@@ -175,7 +175,7 @@ export const drillRevisionRounds = pgTable(
     index("drill_revision_rounds_classroom_idx").on(t.classroomId, t.startedAt),
     index("drill_revision_rounds_user_idx").on(t.userId, t.startedAt),
     index("drill_revision_rounds_concept_idx").on(t.conceptId),
-    check("drill_revision_rounds_cards_ck", sql`cardinality(${t.cardIds}) between 1 and 10`),
+    check("drill_revision_rounds_cards_ck", sql`cardinality(${t.cardIds}) between 1 and ${sql.raw(String(DRILL_REVISION_ROUND_SIZE))}`),
     check(
       "drill_revision_rounds_counts_ck",
       sql`${t.cardsCorrect} >= 0 and ${t.cardsCorrect} <= ${t.cardsServed} and ${t.cardsServed} <= cardinality(${t.cardIds})`,

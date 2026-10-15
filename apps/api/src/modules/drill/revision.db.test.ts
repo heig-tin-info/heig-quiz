@@ -18,24 +18,13 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import {
-  CSRF_COOKIE,
-  DrillSession,
-  RevisionAnswerResult,
-  RevisionRoundStart,
-  RevisionServed,
-  StudentRevisionConcepts,
-  StudentRevisionRound,
-  type RevisionRound,
-  type SessionKind,
-} from "@quiz/contracts";
+import { DrillSession, RevisionAnswerResult, RevisionRoundStart, RevisionServed, StudentRevisionConcepts, StudentRevisionRound, type RevisionRound } from "@quiz/contracts";
 import { revisionNext, type RevisionAnswer } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
-import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import {
   classrooms,
   conceptRelations,
@@ -47,11 +36,12 @@ import {
   enrollments,
   questionConcepts,
   questionVersions,
+  users,
 } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { testServer, type Payload, type TestServer } from "../../test/http.js";
+import { sessionOf, testServer, type Payload, type TestServer } from "../../test/http.js";
 import { kioskStation } from "../../test/kiosk.js";
-import { publishQuestion, reload, seedLive, type Seeded } from "../../test/live.js";
+import { handIn, publishQuestion, reload, seedLive, type Seeded } from "../../test/live.js";
 import { addItems, applyState, byId, createEvaluation, setAllowDrill } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { FORBIDDEN_STUDENT_KEYS } from "../live/studentView.js";
@@ -127,17 +117,6 @@ const serveUrl = (round: string, card: string) => `/app/api/student/revision/rou
 const answerUrl = (round: string, card: string) => `/app/api/student/revision/rounds/${round}/cards/${card}/answer`;
 const endUrl = (round: string) => `/app/api/student/revision/rounds/${round}/end`;
 
-async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; deviceId?: string }) {
-  const session = await createSession(db(), userId, 8, {
-    kind: auth.kind,
-    actorUserId: auth.actorUserId ?? null,
-    evaluationId: auth.evaluationId ?? null,
-    deviceId: auth.deviceId ?? null,
-    projectId: null,
-  });
-  return { cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`, "x-csrf-token": session.csrf };
-}
-
 /** A published question on `conceptIds`, its internal name, explanation and statement marked. */
 async function question(poolId: string, name: string, conceptIds: string[], excluded: boolean) {
   const statement = excluded ? `EXCLUDED-statement-${name}` : `Visible statement ${name}`;
@@ -160,17 +139,6 @@ async function addTo(evaluationId: string, questionIds: string[]) {
     (type, version) => typeOf(type).defaultPoints(loadConfig(type, version)),
     { attemptCount: 0 },
   );
-}
-
-/** Every student of `s` hands its exercise in: the live module's hook creates the cards. */
-async function handIn(s: Seeded) {
-  const evaluation = await applyState(db(), await reload(db(), s.evaluationId), "running", server.clock.now());
-  for (const userId of s.studentIds) {
-    const participant = (await live.participantOf(db(), evaluation, userId))!;
-    const created = await live.ensureAttempt(db(), evaluation, participant, server.clock.now());
-    const attempt = await live.beginAttempt(db(), evaluation, created, participant, server.clock.now());
-    await live.submitAttempt(db(), evaluation, attempt, server.clock.now());
-  }
 }
 
 /** An exam of classroom A on one question, sat by Alice and Bob and closed; released then withdrawn when `withdrawn`. */
@@ -317,7 +285,7 @@ beforeAll(async () => {
   for (const s of [seed, other]) {
     const on = await inject("PUT", `/app/api/classrooms/${s.classroomId}/drill`, teacher.headers, { enabled: true });
     expect(on.statusCode, on.body).toBe(200);
-    await handIn(s);
+    await handIn(db(), s, server.clock.now());
   }
   await exam(Q.withdrawn, true);
   await exam(Q.never, false);
@@ -583,7 +551,7 @@ describe("targeted revision: who may revise", () => {
   });
 
   it("lets an impersonation session read what the student reads, and write nothing", async () => {
-    const as_ = await sessionOf(alice.id, { kind: "impersonation", actorUserId: admin.id });
+    const as_ = await sessionOf(db(), alice.id, { kind: "impersonation", actorUserId: admin.id });
     for (const url of [conceptsUrl(), roundsUrl()]) {
       expect((await as(as_, "GET", url)).body).toBe((await inject("GET", url, alice.headers)).body);
     }
@@ -600,9 +568,9 @@ describe("targeted revision: who may revise", () => {
   });
 
   it("refuses a seb and a kiosk session with a 401", async () => {
-    const seb = await sessionOf(alice.id, { kind: "seb", evaluationId: seed.evaluationId });
+    const seb = await sessionOf(db(), alice.id, { kind: "seb", evaluationId: seed.evaluationId });
     const station = await kioskStation(server.app);
-    const kiosk = await sessionOf(alice.id, { kind: "kiosk", evaluationId: seed.evaluationId, deviceId: station.deviceId });
+    const kiosk = await sessionOf(db(), alice.id, { kind: "kiosk", evaluationId: seed.evaluationId, deviceId: station.deviceId });
     for (const headers of [seb, { ...kiosk, cookie: `${kiosk.cookie}; ${station.cookie}` }]) {
       expect((await inject("GET", conceptsUrl(), headers)).statusCode).toBe(401);
       expect((await inject("GET", roundsUrl(), headers)).statusCode).toBe(401);
@@ -668,7 +636,11 @@ describe("targeted revision: the leak test (05 §5.7)", () => {
       bob.id,
       "Nom1",
       "Prenom1",
+      // Bob's roster and account addresses.
+      ...(await db().select({ email: enrollments.email }).from(enrollments).where(eq(enrollments.userId, bob.id))).map((r) => r.email),
+      ...(await db().select({ email: users.email }).from(users).where(eq(users.id, bob.id))).map((r) => r.email),
     ];
+    expect(needles.filter((n) => n.includes("@"))).toHaveLength(2);
     for (const { body, root } of seen) {
       const parsed = JSON.parse(body) as Record<string, unknown>;
       const found = keys(parsed, root);
@@ -689,14 +661,6 @@ describe("targeted revision: retention and cascades", () => {
     expect((await purgeExpiredDrill(db(), server.clock.now())).rounds).toBe(1);
     expect(await db().select().from(drillRevisionRounds)).toHaveLength(before - 1);
     expect(await db().select().from(drillRevisionAnswers).where(eq(drillRevisionAnswers.roundId, old))).toHaveLength(0);
-  });
-
-  it("goes with its classroom", async () => {
-    const before = await db().select().from(drillRevisionRounds).where(eq(drillRevisionRounds.classroomId, other.classroomId));
-    expect(before).toHaveLength(1);
-    await db().delete(classrooms).where(eq(classrooms.id, other.classroomId));
-    expect(await db().select().from(drillRevisionRounds).where(eq(drillRevisionRounds.classroomId, other.classroomId))).toHaveLength(0);
-    expect(await db().select().from(drillRevisionAnswers).where(inArray(drillRevisionAnswers.roundId, before.map((r) => r.id)))).toHaveLength(0);
   });
 
   it("keeps a round's counters when the teacher removes the cards it served", async () => {

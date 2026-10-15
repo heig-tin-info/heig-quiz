@@ -130,7 +130,7 @@ A teacher reaches the data of a course only through a seat on that course's staf
 
 Within a staff, every member reaches every classroom of the course, past years included. Each holds a role (ADR-068): only an **owner** adds or removes a colleague, changes a role, or publishes or withdraws results; an **assistant** works in the classrooms.
 
-When a classroom has the drill, its staff see each student's drill activity: the questions practised, the sessions, the recall rate and its progress, and which concepts they revised in rounds of targeted revision, how often and when (`apps/api/src/modules/drill/teacher.ts`; never a card, a question or an answer of a round, ADR-115). Students are told so in their drill tab and on the **Data and privacy** page. A student may leave the drill of a classroom; what was recorded before stays visible, and the teacher sees that the student left (ADR-041 §8).
+When a classroom has the drill, its staff see each student's drill activity: the questions practised, the sessions, the recall rate and its progress, and, for each student, their rounds of targeted revision: how many, the date of the last one, the concepts revised, the cards answered and the cards answered right (`apps/api/src/modules/drill/teacher.ts`; never a card, a question or an answer of a round, ADR-115). Students are told so in their drill tab and on the **Data and privacy** page. A student may leave the drill of a classroom; what was recorded before stays visible, and the teacher sees that the student left (ADR-041 §8).
 
 A teacher who can read a question pool, a pool shared with them or a public one included, sees the aggregated statistics of its questions over every exam that used them, other teachers' classes included (see [Statistics](#statistics)).
 
@@ -315,7 +315,7 @@ What the platform lets a student do today:
 | See their profile | Yes: name, e-mail address, role, last sign-in (**Settings**) |
 | See their results and gradings | Yes, once released, as far as the evaluation allows |
 | See their attempt journal | No: only the teacher sees it; the student is told, by the evaluation's conditions and a message, that leaving the page and pasting are recorded (ADR-088) |
-| See their drill activity as the teacher sees it | No: the student sees their own sessions; their rounds of targeted revision, yes, as the teacher sees them |
+| See their drill activity as the teacher sees it | No: the student sees their own sessions; their rounds of targeted revision, yes, each with its concept, dates and counts, from which the teacher's totals are made |
 | Stop the drill | Yes, per classroom: nothing more is counted; what was recorded stays visible to the teacher and is kept five years |
 | Export their data | Partly: **Download my data** (**Settings**) gives, in one JSON file, everything the platform shows them, plus their verified e-mail addresses, hours of activity and last activity (ADR-112). Not what only the teacher sees (the attempt journal, a note on the class list, the edu-ID claims, the audit log) |
 | Correct their name or address | Not in the platform: they come from edu-ID and are updated at every sign-in; a mistake in the class list is corrected by the teacher |

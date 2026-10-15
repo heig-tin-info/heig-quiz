@@ -315,13 +315,15 @@ export async function classroomMastery(
 }
 
 /**
- * Who revised what (ADR-115): the classroom's rounds of targeted revision
+ * Who revised what (ADR-115 §9): the classroom's rounds of targeted revision
  * with a card answered, of its current student seats, none started after an
  * opt-out (the cut of {@link visibleReviews}). Per student: the rounds, the
- * last one and the distinct concepts; per concept: the students, the rounds
- * and the last one. Labels are the staff's — a proposed concept included, a
- * merged one under its winner, a deleted one `null`. One query over the
- * rounds, one over their concepts; never a card, a question or an answer.
+ * last one's date, the distinct concepts, and the cards served and the cards
+ * right over those rounds; per concept: the students, the rounds and the
+ * last one. Labels are the staff's — a proposed concept included, a merged
+ * one under its winner; a round whose concept was deleted counts for its
+ * student only. One query over the rounds, one over their concepts; never a
+ * card, a question or an answer.
  */
 export async function classroomRevision(
   db: Db,
@@ -334,6 +336,8 @@ export async function classroomRevision(
       userId: drillRevisionRounds.userId,
       conceptId: drillRevisionRounds.conceptId,
       startedAt: drillRevisionRounds.startedAt,
+      cardsServed: drillRevisionRounds.cardsServed,
+      cardsCorrect: drillRevisionRounds.cardsCorrect,
     })
     .from(drillRevisionRounds)
     .innerJoin(
@@ -355,20 +359,22 @@ export async function classroomRevision(
     rounds: (tally?.rounds ?? 0) + 1,
     lastAt: tally && tally.lastAt > at ? tally.lastAt : at,
   });
-  const students = new Map<string, Tally & { concepts: Map<string, ConceptRef> }>();
-  const byConcept = new Map<string | null, Tally & { concept: ConceptRef | null; users: Set<string> }>();
+  const students = new Map<string, Tally & { concepts: Map<string, ConceptRef>; cardsServed: number; cardsCorrect: number }>();
+  const byConcept = new Map<string, Tally & { concept: ConceptRef; users: Set<string> }>();
   for (const r of rounds) {
-    const concept = (r.conceptId === null ? undefined : refs.get(r.conceptId)) ?? null;
+    const concept = r.conceptId === null ? undefined : refs.get(r.conceptId);
     const student = students.get(r.enrollmentId);
     const concepts = student?.concepts ?? new Map<string, ConceptRef>();
     if (concept) concepts.set(concept.id, concept);
-    students.set(r.enrollmentId, { ...count(student, r.startedAt), concepts });
-    const line = byConcept.get(concept?.id ?? null);
-    byConcept.set(concept?.id ?? null, {
-      ...count(line, r.startedAt),
-      concept,
-      users: (line?.users ?? new Set<string>()).add(r.userId),
+    students.set(r.enrollmentId, {
+      ...count(student, r.startedAt),
+      concepts,
+      cardsServed: (student?.cardsServed ?? 0) + r.cardsServed,
+      cardsCorrect: (student?.cardsCorrect ?? 0) + r.cardsCorrect,
     });
+    if (!concept) continue;
+    const line = byConcept.get(concept.id);
+    byConcept.set(concept.id, { ...count(line, r.startedAt), concept, users: (line?.users ?? new Set<string>()).add(r.userId) });
   }
   return {
     students: [...students]
@@ -377,10 +383,12 @@ export async function classroomRevision(
         rounds: s.rounds,
         lastAt: iso(s.lastAt),
         concepts: [...s.concepts.values()].sort(byLabel),
+        cardsServed: s.cardsServed,
+        cardsCorrect: s.cardsCorrect,
       }))
       .sort((a, b) => b.lastAt.localeCompare(a.lastAt) || a.enrollmentId.localeCompare(b.enrollmentId)),
     concepts: [...byConcept.values()]
-      .sort((a, b) => (a.concept === null ? 1 : b.concept === null ? -1 : byLabel(a.concept, b.concept)))
+      .sort((a, b) => byLabel(a.concept, b.concept))
       .map((l) => ({ concept: l.concept, students: l.users.size, rounds: l.rounds, lastAt: iso(l.lastAt) })),
   };
 }

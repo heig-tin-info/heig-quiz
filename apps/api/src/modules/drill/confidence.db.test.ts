@@ -22,9 +22,7 @@ import { registerForTests } from "@quiz/registry/server";
 import { drillCards, drillReviews } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
-import { reload, seedLive, type Seeded } from "../../test/live.js";
-import { applyState } from "../evaluation/service.js";
-import * as live from "../live/service.js";
+import { handIn, seedLive, type Seeded } from "../../test/live.js";
 import { setDrillOptOut } from "../org/service.js";
 
 type Session = Awaited<ReturnType<TestServer["signIn"]>>;
@@ -43,17 +41,6 @@ const T0 = "2026-10-05T07:00:00.000Z";
 
 const get = (url: string, who: Session) => server.app.inject({ method: "GET", url, headers: who.headers });
 const confidenceUrl = (s: Seeded) => `/app/api/classrooms/${s.classroomId}/drill/confidence`;
-
-async function handIn(s: Seeded) {
-  const db = server.app.db;
-  const evaluation = await applyState(db, await reload(db, s.evaluationId), "running", server.clock.now());
-  for (const userId of s.studentIds) {
-    const participant = (await live.participantOf(db, evaluation, userId))!;
-    const created = await live.ensureAttempt(db, evaluation, participant, server.clock.now());
-    const attempt = await live.beginAttempt(db, evaluation, created, participant, server.clock.now());
-    await live.submitAttempt(db, evaluation, attempt, server.clock.now());
-  }
-}
 
 let minute = 0;
 async function review(s: Seeded, who: Session, question: number, correctness: Correctness, confidence: number | null) {
@@ -115,7 +102,7 @@ beforeAll(async () => {
       payload: { enabled: true },
     });
     expect(on.statusCode).toBe(200);
-    await handIn(s);
+    await handIn(server.app.db, s, server.clock.now());
   }
 
   // q0, ten students stating: six right and Certain, two wrong and Sure, one

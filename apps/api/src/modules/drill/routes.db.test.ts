@@ -28,7 +28,7 @@ import { registerForTests } from "@quiz/registry/server";
 import { auditLog, drillCards, drillReviews } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
-import { reload, seedLive, type Seeded } from "../../test/live.js";
+import { handIn, reload, seedLive, type Seeded } from "../../test/live.js";
 import { applyState, setAllowDrill } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { setClassroomDrill } from "../org/service.js";
@@ -70,18 +70,6 @@ afterAll(async () => {
   restore();
 });
 
-/** Both students hand the exercise in: their cards are created by the live module's hook. */
-async function handIn() {
-  const db = server.app.db;
-  const evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", server.clock.now());
-  for (const userId of seed.studentIds) {
-    const participant = (await live.participantOf(db, evaluation, userId))!;
-    const created = await live.ensureAttempt(db, evaluation, participant, server.clock.now());
-    const attempt = await live.beginAttempt(db, evaluation, created, participant, server.clock.now());
-    await live.submitAttempt(db, evaluation, attempt, server.clock.now());
-  }
-}
-
 const audited = async (action: string) =>
   server.app.db.select().from(auditLog).where(eq(auditLog.action, action));
 
@@ -98,7 +86,7 @@ describe("the drill over HTTP", () => {
     expect(on.json()).toEqual({ enabled: true, enabledAt: server.clock.now().toISOString(), cardsCreated: 0 });
     expect((await call("GET", `/app/api/classrooms/${seed.classroomId}`, teacher)).json().drillEnabled).toBe(true);
     expect(await audited("drill.enable")).toHaveLength(1);
-    await handIn();
+    await handIn(server.app.db, seed, server.clock.now());
   });
 
   it("serves the student their session, and the classrooms of the tab", async () => {

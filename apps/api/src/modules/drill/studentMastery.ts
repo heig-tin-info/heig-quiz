@@ -35,7 +35,7 @@ export async function studentConceptMastery(
   const none: StudentConceptMastery = { declared: false, concepts: [] };
   if (classroom.drillEnabledAt === null || classroom.archivedAt !== null) return none;
   // A proposed concept is raw teacher text: never shown, even if the course lists it.
-  const listed = await revisableConcepts(db, classroom, lang);
+  const listed = await revisableConcepts(db, classroom.courseId, lang);
   if (listed.length === 0) return none;
 
   const ids = listed.map((c) => c.id);

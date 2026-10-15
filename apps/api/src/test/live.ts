@@ -26,7 +26,15 @@ import {
   questions,
   users,
 } from "../db/schema.js";
-import { answerToStudent, attemptItemView, enterEvaluation } from "../modules/live/service.js";
+import {
+  answerToStudent,
+  attemptItemView,
+  beginAttempt,
+  ensureAttempt,
+  enterEvaluation,
+  participantOf,
+  submitAttempt,
+} from "../modules/live/service.js";
 import * as evaluationService from "../modules/evaluation/service.js";
 import { loadConfig, typeOf } from "../modules/pool/config.js";
 import * as poolService from "../modules/pool/service.js";
@@ -179,6 +187,19 @@ export async function seedLive(db: Db, options: SeedOptions = {}): Promise<Seede
 /** Reloads the evaluation row; every service call takes the fresh one. */
 export async function reload(db: Db, evaluationId: string) {
   return (await evaluationService.byId(db, evaluationId))!;
+}
+
+/**
+ * Every student of `s` hands its exercise in at `now`, through the live
+ * module's attempt path: its `onAttemptsEnded` hook creates the drill cards.
+ */
+export async function handIn(db: Db, s: Seeded, now: Date): Promise<void> {
+  const evaluation = await evaluationService.applyState(db, await reload(db, s.evaluationId), "running", now);
+  for (const userId of s.studentIds) {
+    const participant = (await participantOf(db, evaluation, userId))!;
+    const attempt = await beginAttempt(db, evaluation, await ensureAttempt(db, evaluation, participant, now), participant, now);
+    await submitAttempt(db, evaluation, attempt, now);
+  }
 }
 
 /**

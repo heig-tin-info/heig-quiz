@@ -6,7 +6,6 @@ import {
   DRILL_REVISION_ROUND_SIZE,
   revisionNext,
   revisionQueue,
-  revisionSummary,
   revisionTimeMs,
   type RevisionAnswer,
   type RevisionCandidate,
@@ -28,7 +27,6 @@ describe("composeRevisionRound", () => {
     expect(DRILL_REVISION_ROUND_SIZE).toBe(10);
     const many = Array.from({ length: 14 }, (_, i) => card(`c${String(i).padStart(2, "0")}`));
     expect(composeRevisionRound(many)).toHaveLength(10);
-    expect(composeRevisionRound(many, 3)).toEqual(["c00", "c01", "c02"]);
     expect(composeRevisionRound([])).toEqual([]);
   });
 
@@ -117,13 +115,5 @@ describe("revisionTimeMs", () => {
     expect(revisionTimeMs(t, new Date(t.getTime() + 12_345))).toBe(12_345);
     expect(revisionTimeMs(t, new Date(t.getTime() - 5))).toBe(0);
     expect(revisionTimeMs(t, new Date(t.getTime() + 3_600_000))).toBe(DWELL_IDLE_CAP_MS);
-  });
-});
-
-describe("revisionSummary", () => {
-  it("counts the distinct cards answered at their first pass, and those right", () => {
-    expect(revisionSummary([])).toEqual({ cardsServed: 0, cardsCorrect: 0 });
-    const answers = [answer("a", "wrong"), answer("b", "right"), answer("c", "partial"), answer("a", "right", 2)];
-    expect(revisionSummary(answers)).toEqual({ cardsServed: 3, cardsCorrect: 1 });
   });
 });

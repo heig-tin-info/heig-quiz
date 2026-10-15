@@ -11,16 +11,15 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { CSRF_COOKIE, StudentConceptMastery, type SessionKind } from "@quiz/contracts";
+import { StudentConceptMastery } from "@quiz/contracts";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
 import { registerForTests } from "@quiz/registry/server";
 
-import { SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { classrooms, conceptRelations, concepts, drillCards, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { sessionOf, testServer, type TestServer } from "../../test/http.js";
 import { kioskStation } from "../../test/kiosk.js";
-import { publishQuestion, reload, seedLive, type Seeded } from "../../test/live.js";
+import { handIn, publishQuestion, reload, seedLive, type Seeded } from "../../test/live.js";
 import { addItems, applyState, byId, createEvaluation, setAllowDrill } from "../evaluation/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import { releaseResults, unreleaseResults } from "../results/service.js";
@@ -54,17 +53,6 @@ const LABELS = {
 const exam = { questionIds: [] as string[], cardIds: [] as string[] };
 /** The raw numbers the answer must not contain. */
 const raw: number[] = [];
-
-async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; deviceId?: string }) {
-  const session = await createSession(server.app.db, userId, 8, {
-    kind: auth.kind,
-    actorUserId: auth.actorUserId ?? null,
-    evaluationId: auth.evaluationId ?? null,
-    deviceId: auth.deviceId ?? null,
-    projectId: null,
-  });
-  return { cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`, "x-csrf-token": session.csrf };
-}
 
 async function cardOf(userId: string, question: number) {
   const [card] = await server.app.db
@@ -122,13 +110,7 @@ beforeAll(async () => {
     payload: { enabled: true },
   });
   expect(on.statusCode).toBe(200);
-  const evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", server.clock.now());
-  for (const userId of seed.studentIds) {
-    const participant = (await live.participantOf(db, evaluation, userId))!;
-    const created = await live.ensureAttempt(db, evaluation, participant, server.clock.now());
-    const attempt = await live.beginAttempt(db, evaluation, created, participant, server.clock.now());
-    await live.submitAttempt(db, evaluation, attempt, server.clock.now());
-  }
+  await handIn(db, seed, server.clock.now());
 
   const at = new Date(NOW);
   const concept = (id: string, status: "validated" | "proposed", en: string, fr: string | null) => ({
@@ -326,7 +308,7 @@ describe("the student's concept mastery: the leak test (05 §5.7)", () => {
   const callers: [string, () => Promise<Headers>][] = [
     ["a claimed student", async () => alice.headers],
     ["a teacher in the student view", async () => teacher.headers],
-    ["an impersonation session", () => sessionOf(alice.id, { kind: "impersonation", actorUserId: admin.id })],
+    ["an impersonation session", () => sessionOf(server.app.db, alice.id, { kind: "impersonation", actorUserId: admin.id })],
   ];
 
   it.each(callers)("%s reads nothing but the course's validated concepts, a band and a count", async (_name, headers) => {
@@ -388,7 +370,7 @@ describe("the student's concept mastery: the leak test (05 §5.7)", () => {
     await db.insert(questionConcepts).values({ questionId: seed.questionIds[5]!, conceptId: narrow });
     await db.insert(conceptRelations).values({ conceptId: narrow, targetId: ids.few, kind: "broader" });
     try {
-      for (const headers of [alice.headers, await sessionOf(alice.id, { kind: "impersonation", actorUserId: admin.id })]) {
+      for (const headers of [alice.headers, await sessionOf(server.app.db, alice.id, { kind: "impersonation", actorUserId: admin.id })]) {
         const { body, text } = await read(headers);
         expect(levelOf(body, ids.few)).toMatchObject({ cards: 5, level: "solid" });
         expect(body.concepts.map((c) => c.concept.id)).not.toContain(narrow);
@@ -416,16 +398,16 @@ describe("the student's concept mastery: access", () => {
   });
 
   it("refuses a seb and a kiosk session with a 401 (portal sessions only)", async () => {
-    const seb = await sessionOf(alice.id, { kind: "seb", evaluationId: seed.evaluationId });
+    const seb = await sessionOf(server.app.db, alice.id, { kind: "seb", evaluationId: seed.evaluationId });
     expect((await get(url(), seb)).statusCode).toBe(401);
     // A kiosk session counts for nothing without its station's cookie beside it, and nothing with it.
     const station = await kioskStation(server.app);
-    const kiosk = await sessionOf(alice.id, { kind: "kiosk", evaluationId: seed.evaluationId, deviceId: station.deviceId });
+    const kiosk = await sessionOf(server.app.db, alice.id, { kind: "kiosk", evaluationId: seed.evaluationId, deviceId: station.deviceId });
     expect((await get(url(), { ...kiosk, cookie: `${kiosk.cookie}; ${station.cookie}` })).statusCode).toBe(401);
   });
 
   it("is a 404 to an impersonation of a student with no seat in the classroom", async () => {
-    const as = await sessionOf(outsider.id, { kind: "impersonation", actorUserId: admin.id });
+    const as = await sessionOf(server.app.db, outsider.id, { kind: "impersonation", actorUserId: admin.id });
     expect((await get(url(), as)).statusCode).toBe(404);
   });
 });

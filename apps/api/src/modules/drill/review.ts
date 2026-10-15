@@ -9,7 +9,7 @@
  *   - every instant is the server's (invariant 5): the serve, each report of
  *     the tab's visibility, the answer. The active time is summed here from
  *     those instants, each interval capped by `DWELL_IDLE_CAP_MS` (ADR-039);
- *   - a card is reached only while it is ACTIVE (`activeCards`, `serving.ts`),
+ *   - a card is reached only while it is ACTIVE (`openCards`, `serving.ts`),
  *     and it is served or answered only when TODAY's session would hand it
  *     out ({@link servableToday}) and its evaluation lets the key reach the
  *     student (`keyOpen`). Anything else is the 404 of a missing card
@@ -58,14 +58,12 @@ import { drawSeed } from "../live/service.js";
 import { instanceOf } from "../pool/service.js";
 import { keyHashOf } from "./lifecycle.js";
 import {
-  activeCards,
   DrillError,
   gradeServed,
-  loadContext,
+  openCards,
   openQuestionOf,
   ownActiveCard,
   practisedToday,
-  questionOf,
   reviewInstance,
   servedView,
   type Day,
@@ -208,9 +206,7 @@ export async function drillSession(
   now: Date,
 ): Promise<DrillSession> {
   const day = drillDayBounds(now);
-  const active = await activeCards(db, eq(drillCards.userId, userId));
-  const context = await loadContext(db, active);
-  const rows = active.filter((row) => questionOf(row, context)?.open === true);
+  const rows = await openCards(db, eq(drillCards.userId, userId));
   const questionIds = [...new Set(rows.map((r) => r.card.questionId))];
   const { introduced, practised } = await todayOf(db, userId, day);
   const firsts =

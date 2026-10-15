@@ -26,7 +26,8 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import type {
   AnswerCoordinates,
@@ -42,7 +43,6 @@ import {
   composeRevisionRound,
   drillDayBounds,
   revisionQueue,
-  revisionSummary,
   revisionTimeMs,
   type RevisionAnswer,
 } from "@quiz/domain";
@@ -51,20 +51,18 @@ import { drillRetrievability } from "@quiz/domain/drillSchedule";
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { drillCards, drillRevisionAnswers, drillRevisionRounds, questionConcepts } from "../../db/schema.js";
-import { courseConceptsOf, coverage, finalConceptRefs } from "../concept/service.js";
+import { courseConceptsOf, coveredConcepts, finalConceptRefs } from "../concept/service.js";
 import type { DbOrTx } from "../evaluation/service.js";
 import { drawSeed } from "../live/service.js";
 import { instanceOf } from "../pool/service.js";
 import { studentDrillClassrooms } from "./review.js";
 import {
-  activeCards,
   DrillError,
   gradeServed,
-  loadContext,
+  openCards,
   openQuestionOf,
   ownActiveCard,
   practisedToday,
-  questionOf,
   reviewInstance,
   servedView,
 } from "./serving.js";
@@ -78,8 +76,8 @@ type RoundRow = typeof drillRevisionRounds.$inferSelect;
  * labelled in their language, by label; nothing of a concept's status,
  * aliases or relations. The student's mastery and targeted revision share it.
  */
-export async function revisableConcepts(db: DbOrTx, classroom: Classroom, lang: ConceptLang): Promise<StudentConceptRef[]> {
-  return (await courseConceptsOf(db, classroom.courseId, lang))
+export async function revisableConcepts(db: DbOrTx, courseId: string, lang: ConceptLang): Promise<StudentConceptRef[]> {
+  return (await courseConceptsOf(db, courseId, lang))
     .filter((c) => c.status === "validated")
     .map(({ id, label, qualifier }) => ({ id, label, qualifier }));
 }
@@ -98,7 +96,7 @@ export async function studentRevisionConcepts(
   lang: ConceptLang,
 ): Promise<StudentRevisionConcepts> {
   if (!(await revisionOpen(db, classroom.id, userId))) return { available: false, concepts: [] };
-  return { available: true, concepts: await revisableConcepts(db, classroom, lang) };
+  return { available: true, concepts: await revisableConcepts(db, classroom.courseId, lang) };
 }
 
 /**
@@ -118,13 +116,11 @@ export async function startRound(
   now: Date,
 ): Promise<RevisionRoundStart> {
   if (!(await revisionOpen(db, classroom.id, userId))) throw new DrillError("not_found");
-  const concept = (await revisableConcepts(db, classroom, lang)).find((c) => c.id === conceptId);
+  const concept = (await revisableConcepts(db, classroom.courseId, lang)).find((c) => c.id === conceptId);
   if (!concept) throw new DrillError("not_found");
 
-  const active = await activeCards(db, and(eq(drillCards.userId, userId), eq(drillCards.classroomId, classroom.id)));
-  const context = await loadContext(db, active);
-  const open = active.filter((row) => questionOf(row, context)?.open === true);
-  const covered = (await coverage(db, [conceptId])).get(conceptId)!;
+  const open = await openCards(db, and(eq(drillCards.userId, userId), eq(drillCards.classroomId, classroom.id)));
+  const covered = await coveredConcepts(db, [conceptId]);
   const questionIds = [...new Set(open.map((r) => r.card.questionId))];
   const onConcept =
     questionIds.length === 0
@@ -209,31 +205,31 @@ export async function serveRound(db: Db, userId: string, roundId: string, cardId
 
   // A pass already served (a reload) draws nothing; two tabs serving at once
   // insert one row, and both read it back.
-  let served = pass === 1 ? first : second;
-  let fresh = null;
-  if (!served) {
+  if (!(pass === 1 ? first : second)) {
     const seed = drawSeed();
-    fresh = instanceOf(row.type, question.version, { seed, itemId: row.card.id });
+    const fresh = instanceOf(row.type, question.version, { seed, itemId: row.card.id });
     await db
       .insert(drillRevisionAnswers)
       .values({ id: randomUUID(), roundId, cardId, pass, servedAt: now, serveSeed: seed, serveValues: fresh.stored })
       .onConflictDoNothing();
-    [served] = await passesOf(db, roundId, cardId, eq(drillRevisionAnswers.pass, pass));
-    if (served!.serveSeed !== seed) fresh = null;
   }
-  const { serveSeed, serveValues } = served!;
-  const instance = fresh ?? reviewInstance(row, question.version, serveSeed, serveValues);
+  const [{ serveSeed, serveValues }] = (await passesOf(db, roundId, cardId, eq(drillRevisionAnswers.pass, pass))) as [
+    typeof drillRevisionAnswers.$inferSelect,
+  ];
+  const instance = reviewInstance(row, question.version, serveSeed, serveValues);
   return { ...servedView(row, question, instance, serveSeed), pass };
 }
 
 /**
  * The answer to the card's served pass, in one transaction under the round's
- * lock and the pass's: graded as the daily review is (`gradeServed`), its
- * time the server's interval from the serve, capped; no answer and no
- * confidence stored, no review written, the card untouched. A first pass
- * adds to the round's counters; the round ends when nothing is left to
- * answer (`revisionQueue`). A grading that is not final writes nothing (the
- * 404 of `gradeServed`). The key comes back through `studentSolutionViewOf`.
+ * lock (which serializes every answer of the round): graded as the daily
+ * review is (`gradeServed`), its time the server's interval from the serve,
+ * capped; no answer and no confidence stored, no review written, the card
+ * untouched. A first pass adds one to `cards_served`, and to `cards_correct`
+ * when right; a wrong first pass comes back once (`requeued`); the round
+ * ends when nothing is left to answer (`revisionQueue`). A grading that is
+ * not final writes nothing (the 404 of `gradeServed`). The key comes back
+ * through `studentSolutionViewOf`.
  */
 export async function answerRound(
   db: Db,
@@ -245,34 +241,33 @@ export async function answerRound(
 ): Promise<RevisionAnswerResult> {
   return db.transaction(async (tx) => {
     const round = await openRound(tx, userId, roundId, cardId, now, true);
-    const [served] = await passesOf(tx, roundId, cardId, isNull(drillRevisionAnswers.answeredAt)).limit(1).for("update");
+    const [served] = await passesOf(tx, roundId, cardId, isNull(drillRevisionAnswers.answeredAt));
     const row = await ownActiveCard(tx, userId, cardId);
     const question = await openQuestionOf(tx, row);
     if (!served) throw new DrillError("drill_not_served");
     const graded = await gradeServed(row, question, { seed: served.serveSeed, values: served.serveValues }, input, now);
-    const pass = served.pass as 1 | 2;
-    const answer: RevisionAnswer = { cardId, pass, correctness: graded.correctness };
+    const first = served.pass === 1;
     await tx
       .update(drillRevisionAnswers)
       .set({ answeredAt: now, correctness: graded.correctness, timeMs: revisionTimeMs(served.servedAt, now) })
       .where(eq(drillRevisionAnswers.id, served.id));
 
-    // The counters grow by this answer alone, so a card the teacher removes
-    // later (its passes cascade) leaves them as they were.
-    const delta = revisionSummary([answer]);
     const answered = await tx
       .select({ cardId: drillRevisionAnswers.cardId, pass: drillRevisionAnswers.pass, correctness: drillRevisionAnswers.correctness })
       .from(drillRevisionAnswers)
       .where(and(eq(drillRevisionAnswers.roundId, roundId), isNotNull(drillRevisionAnswers.answeredAt)))
       .orderBy(asc(drillRevisionAnswers.answeredAt), asc(drillRevisionAnswers.pass));
     const answers = answered.map((a): RevisionAnswer => ({ cardId: a.cardId, pass: a.pass as 1 | 2, correctness: a.correctness! }));
-    const left = revisionQueue({ order: round.cardIds, answers });
+    const done = revisionQueue({ order: round.cardIds, answers }).length === 0;
+    // The counters grow by this answer alone, so a card the teacher removes
+    // later (its passes cascade) leaves them as they were.
+    const plus = (column: AnyPgColumn, add: boolean) => sql`${column} + ${add ? 1 : 0}`;
     await tx
       .update(drillRevisionRounds)
       .set({
-        cardsServed: round.cardsServed + delta.cardsServed,
-        cardsCorrect: round.cardsCorrect + delta.cardsCorrect,
-        ...(left.length === 0 ? { endedAt: now } : {}),
+        cardsServed: plus(drillRevisionRounds.cardsServed, first),
+        cardsCorrect: plus(drillRevisionRounds.cardsCorrect, first && graded.correctness === "right"),
+        ...(done ? { endedAt: now } : {}),
       })
       .where(eq(drillRevisionRounds.id, roundId));
     return {
@@ -280,25 +275,26 @@ export async function answerRound(
       points: graded.points,
       maxPoints: graded.maxPoints,
       solution: graded.solution,
-      requeued: pass === 1 && left.some((e) => e.cardId === cardId && e.pass === 2),
+      requeued: first && graded.correctness === "wrong",
     };
   });
 }
 
 /** Ends the caller's round (the student leaves it); ending it again changes nothing. A round not theirs: the 404. */
 export async function endRound(db: Db, userId: string, roundId: string, now: Date): Promise<void> {
-  const mine = and(eq(drillRevisionRounds.id, roundId), eq(drillRevisionRounds.userId, userId));
-  await db
+  const [round] = await db
     .update(drillRevisionRounds)
-    .set({ endedAt: now })
-    .where(and(mine, isNull(drillRevisionRounds.endedAt)));
-  const [round] = await db.select({ id: drillRevisionRounds.id }).from(drillRevisionRounds).where(mine);
+    .set({ endedAt: sql`coalesce(${drillRevisionRounds.endedAt}, ${now.toISOString()}::timestamptz)` })
+    .where(and(eq(drillRevisionRounds.id, roundId), eq(drillRevisionRounds.userId, userId)))
+    .returning({ id: drillRevisionRounds.id });
   if (!round) throw new DrillError("not_found");
 }
 
 /**
  * `GET …/revision/rounds`: the caller's own rounds of the classroom with a
- * card answered, newest first — what their teacher sees of them (ADR-115).
+ * card answered, newest first — the rounds their teacher counts (ADR-115
+ * §9: per student, the rounds, their dates, the concepts, the cards served
+ * and the cards right; never a card, a question or an answer).
  * A round names its concept only while it is, after a merge is followed,
  * still one of {@link revisableConcepts}; null otherwise.
  */
@@ -321,7 +317,7 @@ export async function studentRevisionRounds(
     .orderBy(desc(drillRevisionRounds.startedAt), desc(drillRevisionRounds.id));
   if (rounds.length === 0) return [];
   const conceptIds = [...new Set(rounds.flatMap((r) => (r.conceptId === null ? [] : [r.conceptId])))];
-  const [offered, finals] = await Promise.all([revisableConcepts(db, classroom, lang), finalConceptRefs(db, conceptIds, lang)]);
+  const [offered, finals] = await Promise.all([revisableConcepts(db, classroom.courseId, lang), finalConceptRefs(db, conceptIds, lang)]);
   const offeredById = new Map(offered.map((c) => [c.id, c]));
   const nameOf = (id: string | null) => {
     const final = id === null ? undefined : finals.get(id);

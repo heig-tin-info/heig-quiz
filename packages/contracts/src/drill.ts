@@ -437,9 +437,11 @@ export type RevisionAnswerResult = z.infer<typeof RevisionAnswerResult>;
 
 /**
  * `GET /student/classrooms/:id/revision/rounds`: the caller's own rounds of
- * the classroom with at least one card answered, newest first — what their
- * teacher sees of them. `concept` is null once the concept is no longer a
- * validated concept of the course (a merge is followed to its winner).
+ * the classroom with at least one card answered, newest first — the rounds
+ * their teacher counts ({@link DrillClassroomRevision}: per student, the
+ * rounds, the last one's date, the concepts and the totals of the two
+ * counters). `concept` is null once the concept is no longer a validated
+ * concept of the course (a merge is followed to its winner).
  */
 export const StudentRevisionRound = z.object({
   id: z.uuid(),
@@ -454,11 +456,12 @@ export type StudentRevisionRound = z.infer<typeof StudentRevisionRound>;
 /**
  * `GET /classrooms/:id/drill/revision`: who revised what, for the staff. The
  * rounds of the classroom's current student seats with a card answered,
- * none after an opt-out. Per student: the rounds, the last one, the
- * distinct concepts; per concept: the students, the rounds, the last one
- * (`concept` null gathers the rounds whose concept was deleted). Labels in
- * the reader's language, a merged concept under its winner. Never a card,
- * a question or an answer.
+ * none after an opt-out. Per student: the rounds, the last one's date, the
+ * distinct concepts, and the cards served and the cards right (at their
+ * first pass) over those rounds; per concept: the students, the rounds, the
+ * last one (a round whose concept was deleted counts for its student only).
+ * Labels in the reader's language, a merged concept under its winner. Never
+ * a card, a question or an answer.
  */
 export const DrillClassroomRevision = z.object({
   students: z.array(
@@ -467,11 +470,13 @@ export const DrillClassroomRevision = z.object({
       rounds: z.number().int(),
       lastAt: z.iso.datetime(),
       concepts: z.array(ConceptRef),
+      cardsServed: z.number().int(),
+      cardsCorrect: z.number().int(),
     }),
   ),
   concepts: z.array(
     z.object({
-      concept: ConceptRef.nullable(),
+      concept: ConceptRef,
       students: z.number().int(),
       rounds: z.number().int(),
       lastAt: z.iso.datetime(),

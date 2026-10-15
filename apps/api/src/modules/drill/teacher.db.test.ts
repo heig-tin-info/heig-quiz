@@ -27,9 +27,7 @@ import { registerForTests } from "@quiz/registry/server";
 import { classrooms, conceptRelations, concepts, courseStaff, drillCards, drillReviews, drillRevisionRounds, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
-import { reload, seedLive, type Seeded } from "../../test/live.js";
-import { applyState } from "../evaluation/service.js";
-import * as live from "../live/service.js";
+import { handIn, seedLive, type Seeded } from "../../test/live.js";
 import { setDrillOptOut } from "../org/service.js";
 
 type Session = Awaited<ReturnType<TestServer["signIn"]>>;
@@ -51,18 +49,6 @@ const NOW = "2026-11-20T10:00:00.000Z";
 
 const get = (url: string, who: Session) => server.app.inject({ method: "GET", url, headers: who.headers });
 const base = () => `/app/api/classrooms/${seed.classroomId}/drill`;
-
-/** Every student of `s` hands its exercise in: the live module's hook creates the cards. */
-async function handIn(s: Seeded) {
-  const db = server.app.db;
-  const evaluation = await applyState(db, await reload(db, s.evaluationId), "running", server.clock.now());
-  for (const userId of s.studentIds) {
-    const participant = (await live.participantOf(db, evaluation, userId))!;
-    const created = await live.ensureAttempt(db, evaluation, participant, server.clock.now());
-    const attempt = await live.beginAttempt(db, evaluation, created, participant, server.clock.now());
-    await live.submitAttempt(db, evaluation, attempt, server.clock.now());
-  }
-}
 
 async function cardOf(s: Seeded, userId: string, question: number) {
   const [card] = await server.app.db
@@ -127,7 +113,7 @@ beforeAll(async () => {
       payload: { enabled: true },
     });
     expect(on.statusCode).toBe(200);
-    await handIn(s);
+    await handIn(server.app.db, s, server.clock.now());
   }
 
   // Alice: q0 on 6 Oct (first), 12 Oct (Again), 18 Nov; q1 on 7 Oct (first, Again), 19 Nov.
@@ -557,23 +543,31 @@ describe("the teacher's view of the drill: who revised (ADR-115)", () => {
     await round(seed, carol.id, ARRAYS, "2026-11-01T08:00:00Z");
   });
 
-  it("counts each student's rounds with a card answered and names their concepts, a merge followed, nothing after an opt-out", async () => {
+  it("counts each student's rounds with a card answered, their two totals and their concepts, a merge followed, nothing after an opt-out", async () => {
     const res = await get(`${base()}/revision`, teacher);
     expect(res.statusCode).toBe(200);
     const view = DrillClassroomRevision.parse(res.json());
     const arrays = { id: ARRAYS, label: "Arrays revised", qualifier: "", status: "validated" };
     const proposed = { id: PROPOSED, label: "Proposed revised", qualifier: "", status: "proposed" };
+    const student = async (userId: string, rounds: number, lastAt: string, concepts: unknown[], cardsServed: number, cardsCorrect: number) => ({
+      enrollmentId: await seat(seed, userId),
+      rounds,
+      lastAt,
+      concepts,
+      cardsServed,
+      cardsCorrect,
+    });
     expect(view.students).toEqual([
-      { enrollmentId: await seat(seed, bob.id), rounds: 2, lastAt: "2026-11-16T08:00:00.000Z", concepts: [proposed] },
-      { enrollmentId: await seat(seed, alice.id), rounds: 3, lastAt: "2026-11-12T08:00:00.000Z", concepts: [arrays] },
-      { enrollmentId: await seat(seed, carol.id), rounds: 1, lastAt: "2026-10-15T08:00:00.000Z", concepts: [arrays] },
+      // Bob's round on a deleted concept counts for him, under no concept.
+      await student(bob.id, 2, "2026-11-16T08:00:00.000Z", [proposed], 2, 2),
+      await student(alice.id, 3, "2026-11-12T08:00:00.000Z", [arrays], 5, 3),
+      await student(carol.id, 1, "2026-10-15T08:00:00.000Z", [arrays], 1, 1),
     ]);
     expect(view.concepts).toEqual([
       { concept: arrays, students: 2, rounds: 4, lastAt: "2026-11-12T08:00:00.000Z" },
       { concept: proposed, students: 1, rounds: 1, lastAt: "2026-11-15T08:00:00.000Z" },
-      { concept: null, students: 1, rounds: 1, lastAt: "2026-11-16T08:00:00.000Z" },
     ]);
-    expect(res.body).not.toMatch(/cardIds|cardsServed|cardsCorrect|questionId/);
+    expect(res.body).not.toMatch(/cardIds|questionId|cardId|timeMs|answer/);
   });
 
   it("is served to the classroom's staff only", async () => {

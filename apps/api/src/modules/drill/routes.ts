@@ -54,6 +54,9 @@ export async function drillPlugin(app: FastifyInstance) {
   // The loaders of invariant 6. A student's scope is themselves: every card
   // query is filtered by its owner, and a card that is not theirs is a miss.
   const me = async (req: FastifyRequest) => ({ userId: req.user!.id });
+  /** A classroom the caller reads as a student: `readableClassroom` with the student payload forced. */
+  const studentClassroom = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    readableClassroom(app, req, reply, p, { studentView: true });
   const staffClassroom = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     accessibleClassroom(app, req, reply, p);
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
@@ -113,7 +116,7 @@ export async function drillPlugin(app: FastifyInstance) {
     "/app/api/student/classrooms/:id/drill/mastery",
     { preHandler: requireSession },
     student(
-      { params: IdParam, load: (req, reply, p) => readableClassroom(app, req, reply, p, { studentView: true }) },
+      { params: IdParam, load: studentClassroom },
       ({ req, now, scope }) =>
         service.studentConceptMastery(app.db, scope.room, callerOf(req).id, now, readerLang(req)),
     ),
@@ -121,10 +124,8 @@ export async function drillPlugin(app: FastifyInstance) {
 
   // Targeted revision (ADR-115): rounds of extra practice on one concept of
   // the course, outside FSRS and the level, on routes of their own. The
-  // classroom's are loaded like the mastery's (`readableClassroom`, the
-  // student payload forced); a round's, like a card's, by its owner only.
-  const studentClassroom = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
-    readableClassroom(app, req, reply, p, { studentView: true });
+  // classroom's are loaded like the mastery's (`studentClassroom`); a
+  // round's, like a card's, by its owner only.
 
   /** The concepts the caller may revise here: the course's validated ones, when revision is open to them. */
   app.get(
@@ -135,7 +136,7 @@ export async function drillPlugin(app: FastifyInstance) {
     ),
   );
 
-  /** The caller's own rounds in this classroom, as their teacher sees them. */
+  /** The caller's own rounds in this classroom: the rounds their teacher counts (ADR-115 §9). */
   app.get(
     "/app/api/student/classrooms/:id/revision/rounds",
     { preHandler: requireSession },
@@ -313,7 +314,11 @@ export async function drillPlugin(app: FastifyInstance) {
     ),
   );
 
-  /** ADR-115: who revised which concept, in rounds of targeted revision; counts, never a card. */
+  /**
+   * ADR-115 §9: who revised which concept — per student the rounds, the last
+   * one's date, the concepts, the cards served and the cards right; never a
+   * card, a question or an answer.
+   */
   app.get(
     "/app/api/classrooms/:id/drill/revision",
     { preHandler: requireTeacher },
