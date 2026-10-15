@@ -1,22 +1,32 @@
 /**
  * The Drill tab of a classroom (ADR-041 §6, §8, #317 slice 4): each
- * student's activity, the hours of the week they practise at, the mastery
- * per concept, and the confidence per question
- * (ADR-085 §8, aggregated only). A read view, so the page
+ * student's activity, the hours of the week they practise at, who revised
+ * which concept on purpose (ADR-115 §9: counts and dates, never a card or a
+ * question), the mastery per concept, and the confidence per question
+ * (ADR-085 §8, aggregated only). The rounds are read once, here, for the
+ * table, the section and the sheet: a second observer mounting under a
+ * failed read would fetch it again and blank the tab. A read view, so the page
  * header carries no primary action on this tab.
  *
  * The switch is a row of the classroom's Settings (D24): with the drill off,
  * the tab is an empty state whose one action opens them.
  */
-import type { ClassroomDetail, DrillStudentActivity, DrillConceptMastery } from "@quiz/contracts";
+import type { UseQueryResult } from "@tanstack/react-query";
+import type {
+  ClassroomDetail,
+  DrillClassroomRevision,
+  DrillConceptMastery,
+  DrillStudentActivity,
+} from "@quiz/contracts";
 
 import { refName } from "../concepts/names";
 import { drillRecallRate, drillRecallTrend } from "@quiz/domain";
-import { Dumbbell, Tag } from "lucide-react";
-import { useState } from "react";
+import { Dumbbell, Tag, Target } from "lucide-react";
+import { useMemo, useState } from "react";
 
-import { useI18n, useT } from "../i18n";
+import { useI18n, useT, type TFunction } from "../i18n";
 import {
+  Badge,
   Button,
   Card,
   Disclosure,
@@ -30,13 +40,15 @@ import {
   Skeleton,
   Stat,
 } from "../ui";
-import { useClassroomDrillActivity, useClassroomDrillMastery, useDrillProgress } from "./api";
+import { useClassroomDrillActivity, useClassroomDrillMastery, useClassroomDrillRevision, useDrillProgress } from "./api";
 import { ConfidencePerQuestion } from "./Confidence";
 import { ClassroomDrillHours, StudentDrillHours } from "./DrillHours";
-import { DrillActivityTable, studentName, TrendMark } from "./DrillActivityTable";
+import { DrillActivityTable, studentName, TrendMark, type StudentRevision } from "./DrillActivityTable";
 import { WeeklyProgress } from "./WeeklyProgress";
 
-const hasActivity = (rows: DrillStudentActivity[]) => rows.some((r) => r.reviews.all > 0 || r.optedOutAt !== null);
+/** Anything to show: a review, an opt-out, or a round of targeted revision. */
+const hasActivity = (rows: DrillStudentActivity[], revision: ReadonlyMap<string, StudentRevision>) =>
+  revision.size > 0 || rows.some((r) => r.reviews.all > 0 || r.optedOutAt !== null);
 
 export function ClassroomDrill({
   room,
@@ -48,10 +60,16 @@ export function ClassroomDrill({
 }) {
   const t = useT();
   const activity = useClassroomDrillActivity(room.id);
+  // A failed read of the rounds leaves the activity standing: its own section says so.
+  const revision = useClassroomDrillRevision(room.id);
+  const rounds = useMemo(
+    () => new Map((revision.data?.students ?? []).map((s) => [s.enrollmentId, s] as const)),
+    [revision.data],
+  );
   const [open, setOpen] = useState<DrillStudentActivity | null>(null);
 
   let body;
-  if (activity.isLoading) {
+  if (activity.isLoading || revision.isLoading) {
     body = (
       <Card className="space-y-3 p-4">
         <Skeleton className="h-4 w-1/3" />
@@ -62,7 +80,7 @@ export function ClassroomDrill({
     body = (
       <QueryError title={t("drill.teacher.loadFailed")} query={activity} />
     );
-  } else if (!hasActivity(activity.data)) {
+  } else if (!hasActivity(activity.data, rounds)) {
     // Off with no history, or on with nothing yet: one sentence, and, when
     // off, the way to the switch is the one thing to do.
     body = (
@@ -91,12 +109,13 @@ export function ClassroomDrill({
       <>
         <section className="space-y-2">
           <Card>
-            <DrillActivityTable rows={activity.data} onOpen={setOpen} />
+            <DrillActivityTable rows={activity.data} revision={rounds} onOpen={setOpen} />
           </Card>
           <p className="px-1 text-xs text-fg-faint">{t("drill.recall.help")}</p>
           <p className="px-1 text-xs text-fg-faint">{t("drill.teacher.notice")}</p>
         </section>
         <ClassroomDrillHours classroomId={room.id} />
+        <RevisionPerConcept revision={revision} />
         <MasteryPerConcept classroomId={room.id} />
         <ConfidencePerQuestion classroomId={room.id} />
       </>
@@ -106,8 +125,87 @@ export function ClassroomDrill({
   return (
     <div className="space-y-8">
       {body}
-      {open ? <DrillStudentSheet classroomId={room.id} row={open} onClose={() => setOpen(null)} /> : null}
+      {open ? (
+        <DrillStudentSheet
+          classroomId={room.id}
+          row={open}
+          revision={rounds.get(open.enrollmentId)}
+          onClose={() => setOpen(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * Who revised which concept before the test (ADR-115 §9): per concept, the
+ * students, the rounds and the last one, as the server counts them. A read
+ * of counts: never a card, a question or an answer.
+ */
+function RevisionPerConcept({ revision }: { revision: UseQueryResult<DrillClassroomRevision> }) {
+  const t = useT();
+  if (revision.isError || !revision.data) {
+    return <QueryError title={t("drill.revision.loadFailed")} query={revision} />;
+  }
+  const { concepts } = revision.data;
+  return (
+    <section className="space-y-3">
+      <SectionHeading icon={Target} title={t("drill.revision.title")} description={t("drill.revision.desc")} />
+      {concepts.length === 0 ? (
+        <p className="px-1 text-sm text-fg-muted">{t("drill.revision.none")}</p>
+      ) : (
+        <Card className="divide-y divide-line">
+          {concepts.map((c) => (
+            <div key={c.concept.id} className="flex items-center justify-between gap-x-4 gap-y-1 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{refName(c.concept)}</p>
+                <p className="text-xs text-fg-faint">
+                  {plural(t, "students", c.students)} · {plural(t, "rounds", c.rounds)}
+                </p>
+              </div>
+              <p className="shrink-0 text-xs text-fg-muted">
+                {t("drill.revision.last", { date: isoDateParts(c.lastAt).date })}
+              </p>
+            </div>
+          ))}
+        </Card>
+      )}
+    </section>
+  );
+}
+
+/** "1 round", "3 rounds": a key and its `.one`, written whole so the unused-key check sees both. */
+const PLURAL = {
+  rounds: ["drill.revision.rounds.one", "drill.revision.rounds"],
+  students: ["drill.revision.students.one", "drill.revision.students"],
+} as const;
+const plural = (t: TFunction, what: keyof typeof PLURAL, n: number) => t(PLURAL[what][n === 1 ? 0 : 1], { n });
+
+/** One student's rounds in their sheet: how many, the score of their first passes, the last day, the concepts. */
+function StudentRevisionBlock({ revision }: { revision: StudentRevision | undefined }) {
+  const t = useT();
+  return (
+    <section className="space-y-2">
+      <p className="text-sm font-semibold">{t("drill.revision.title")}</p>
+      {revision ? (
+        <>
+          <p className="text-sm text-fg-muted">
+            {plural(t, "rounds", revision.rounds)} ·{" "}
+            {t("revise.recent.row", { right: revision.cardsCorrect, total: revision.cardsServed })} ·{" "}
+            {t("drill.revision.last", { date: isoDateParts(revision.lastAt).date })}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {revision.concepts.map((c) => (
+              <Badge key={c.id} tone="zinc">
+                {refName(c)}
+              </Badge>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="text-sm text-fg-muted">{t("drill.revision.none")}</p>
+      )}
+    </section>
   );
 }
 
@@ -188,14 +286,16 @@ function MasteryRow({ m }: { m: DrillConceptMastery }) {
   );
 }
 
-/** One student's drill: the figures, the opt-out, the weekly progression and the hours of the week. */
+/** One student's drill: the figures, the opt-out, the weekly progression, the hours of the week and the targeted revision. */
 function DrillStudentSheet({
   classroomId,
   row,
+  revision,
   onClose,
 }: {
   classroomId: string;
   row: DrillStudentActivity;
+  revision: StudentRevision | undefined;
   onClose: () => void;
 }) {
   const t = useT();
@@ -232,6 +332,7 @@ function DrillStudentSheet({
           <WeeklyProgress weeks={progress.data.weeks} />
         )}
         <StudentDrillHours classroomId={classroomId} enrollmentId={row.enrollmentId} />
+        <StudentRevisionBlock revision={revision} />
         <p className="text-xs text-fg-faint">{t("drill.recall.help")}</p>
       </div>
     </Sheet>

@@ -115,7 +115,7 @@ export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
       {day()}
       {hasRooms ? <DrillClassrooms rooms={rooms.data!} /> : null}
       {/* Secondary reads, after the switches, so the page does not jump as they arrive. ADR-098: the levels on the course's concepts, one section per classroom, none for a course without. */}
-      {hasRooms ? rooms.data!.map((room) => <ConceptMastery key={room.classroomId} room={room} />) : null}
+      {hasRooms ? rooms.data!.map((room) => <ConceptMastery key={room.classroomId} room={room} navigate={navigate} />) : null}
       {/* Secondary, after the switches: what the statements on the cards add up to (ADR-085 §8). */}
       {hasRooms ? <DrillCalibration /> : null}
     </div>

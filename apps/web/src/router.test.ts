@@ -30,6 +30,7 @@ describe("routeToPath / parsePath", () => {
     // WP10 replaced WP9's `/results/:id` with the one feedback route.
     { view: "feedback", attemptId: "a-1" },
     { view: "drill" },
+    { view: "revise", classroomId: "c-1" },
     { view: "devUi" },
   ];
 
@@ -210,7 +211,8 @@ describe("ROUTES", () => {
     pair: { view: "pair" },
     feedback: { view: "feedback", attemptId: "a-1" },
     drill: { view: "drill" },
-    live: { view: "live", id: "e-1" },
+    revise: { view: "revise", classroomId: "c-1" },
+    live:{ view: "live", id: "e-1" },
     evaluationPreview: { view: "evaluationPreview", id: "e-1" },
     poll: { view: "poll", id: "e-1" },
     pollModerate: { view: "pollModerate", id: "e-1" },
@@ -253,6 +255,8 @@ describe("ROUTES", () => {
       "privacy",
       // F-PROJ-15 (M3-13): one address, the student's project for a student.
       "project",
+      // ADR-115: targeted revision, from the drill.
+      "revise",
       "sebQuit",
       "settings",
       // F-ORG-14: the student's Courses (M5-02) and Grades.
@@ -322,6 +326,7 @@ describe("ROUTES", () => {
         "projectNew",
         "questionPreview",
         "results",
+        "revise",
         "sebQuit",
         "settings",
         "studentCourses",

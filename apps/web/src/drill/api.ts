@@ -29,12 +29,28 @@ import {
   type DrillStudentActivity,
   type StudentConceptMastery,
   type DrillClassroomMastery,
+  type DrillClassroomRevision,
   type EvaluationDrill,
+  RevisionAnswerBody,
+  type RevisionAnswerResult,
+  RevisionRoundBody,
+  type RevisionRoundStart,
+  type RevisionServed,
+  type StudentRevisionConcepts,
+  type StudentRevisionRound,
   ANSWER_COORDINATES,
 } from "@quiz/contracts";
 
 import { api } from "../api";
-import { classroomDrillKey, drillCalibrationKey, drillClassroomsKey, drillMasteryKey, drillSessionKey } from "../queryKeys";
+import {
+  classroomDrillKey,
+  drillCalibrationKey,
+  drillClassroomsKey,
+  drillMasteryKey,
+  drillSessionKey,
+  revisionConceptsKey,
+  revisionRoundsKey,
+} from "../queryKeys";
 import { useCoarsePointer } from "../ui";
 
 /** A write's body, parsed by its contract before it leaves. */
@@ -126,6 +142,44 @@ export function useStudentConceptMastery(classroomId: string) {
   });
 }
 
+// --- Targeted revision (ADR-115) -------------------------------------------
+
+/** The concepts the student may revise in a classroom; `available` false when revision is closed to them. */
+export function useRevisionConcepts(classroomId: string) {
+  return useQuery({
+    queryKey: revisionConceptsKey(classroomId),
+    queryFn: () => api<StudentRevisionConcepts>(`/app/api/student/classrooms/${classroomId}/revision/concepts`),
+  });
+}
+
+/** The student's own rounds in a classroom, newest first: what their teacher sees of them. */
+export function useRevisionRounds(classroomId: string) {
+  return useQuery({
+    queryKey: revisionRoundsKey(classroomId),
+    queryFn: () => api<StudentRevisionRound[]>(`/app/api/student/classrooms/${classroomId}/revision/rounds`),
+  });
+}
+
+export const startRound = (classroomId: string, conceptId: string) =>
+  api<RevisionRoundStart>(
+    `/app/api/student/classrooms/${classroomId}/revision/rounds`,
+    send("POST", RevisionRoundBody, { conceptId }),
+  );
+
+const roundPath = (roundId: string) => `/app/api/student/revision/rounds/${roundId}`;
+
+export const serveRoundCard = (roundId: string, cardId: string) =>
+  api<RevisionServed>(`${roundPath(roundId)}/serve/${cardId}`, { method: "POST" });
+
+/** The body is strict: no confidence and no device class leave the browser (ADR-115 §6). */
+export const answerRoundCard = (roundId: string, cardId: string, answer: unknown) =>
+  api<RevisionAnswerResult>(
+    `${roundPath(roundId)}/cards/${cardId}/answer`,
+    send("POST", RevisionAnswerBody, { answer, coordinates: ANSWER_COORDINATES }),
+  );
+
+export const endRound = (roundId: string) => api<void>(`${roundPath(roundId)}/end`, { method: "POST" });
+
 /**
  * What the navigation needs (DESIGN.md, "The student's bottom bar"): whether
  * the student has any classroom with the drill on — the Drill slot and the
@@ -215,6 +269,14 @@ export function useClassroomDrillMastery(classroomId: string) {
   return useQuery({
     queryKey: classroomDrillKey(classroomId, "mastery"),
     queryFn: () => api<DrillClassroomMastery>(`/app/api/classrooms/${classroomId}/drill/mastery`),
+  });
+}
+
+/** Who revised which concept, in rounds of targeted revision (ADR-115 §9): counts, never a card. */
+export function useClassroomDrillRevision(classroomId: string) {
+  return useQuery({
+    queryKey: classroomDrillKey(classroomId, "revision"),
+    queryFn: () => api<DrillClassroomRevision>(`/app/api/classrooms/${classroomId}/drill/revision`),
   });
 }
 

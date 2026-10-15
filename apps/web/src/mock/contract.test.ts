@@ -59,6 +59,9 @@ import {
   DrillStudentActivity,
   StudentConceptMastery,
   DrillClassroomMastery,
+  DrillClassroomRevision,
+  StudentRevisionConcepts,
+  StudentRevisionRound,
   EvaluationDetail,
   EvaluationDrill,
   EvaluationSummary,
@@ -668,6 +671,18 @@ const CHECKED: Case[] = [
     `/app/api/classrooms/${classroomId}/drill/confidence`,
     DrillQuestionConfidence,
   ),
+  // ADR-115: targeted revision, the student's concepts and rounds, and who revised what for the staff.
+  one(
+    "/app/api/student/classrooms/:id/revision/concepts",
+    `/app/api/student/classrooms/${classroomId}/revision/concepts`,
+    StudentRevisionConcepts,
+  ),
+  each(
+    "/app/api/student/classrooms/:id/revision/rounds",
+    `/app/api/student/classrooms/${classroomId}/revision/rounds`,
+    StudentRevisionRound,
+  ),
+  one("/app/api/classrooms/:id/drill/revision", `/app/api/classrooms/${classroomId}/drill/revision`, DrillClassroomRevision),
   // F-EVAL-15: the score-only feedback between two attempts of an exercise.
   one(
     `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,

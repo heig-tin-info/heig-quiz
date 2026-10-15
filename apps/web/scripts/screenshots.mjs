@@ -74,6 +74,8 @@ const TAKE = "/take/11111111-1111-4111-8111-111111111111";
  */
 const ATTEMPT_OPEN = "22222222-2222-4222-8222-222222222222";
 const ATTEMPT_PAST = "22222222-2222-4222-8222-222222222223";
+/** Targeted revision in the student persona's first classroom (ADR-115). */
+const REVISE = "/drill/classrooms/r1/revise";
 /** The mock's draft made from a template that has moved since (F-EVAL-26). */
 const TEMPLATE_INSTANCE = "eeeeeeee-0000-4000-8000-000000000026";
 /** The mock's Scheduled draft exercise, its window to come (ADR-086). */
@@ -314,6 +316,9 @@ const scenes = [
   // ADR-041 §8 amendment of 2026-10-14: the student's hours of the week, below the weekly charts of the sheet.
   { name: "classroom-drill-student-hours", role: "teacher", path: "/classrooms/r1?tab=drill", fold: true, act: async (p) => { await p.getByRole("button", { name: /^(Progression of|Progression de)/ }).first().click(); const h = p.getByText(/^(Hours of practice|Heures de révision)$/).first(); await h.waitFor(); const grid = p.getByRole("table", { name: /^(Hours of practice|Heures de révision)$/ }); await grid.waitFor(); await grid.evaluate((el) => el.scrollIntoView({ block: "center" })); } },
   { name: "classroom-drill-outside", role: "teacher", path: "/classrooms/r1?tab=drill", act: async (p) => { await p.getByRole("button", { name: /(Outside the course|Hors de la liste)/ }).click(); await p.getByText(/^(Without a concept|Sans notion)$/).first().waitFor(); } },
+  // ADR-115: who revised which concept, and one student's rounds in their sheet.
+  { name: "classroom-drill-revision", role: "teacher", path: "/classrooms/r1?tab=drill", fold: true, act: (p) => p.getByRole("heading", { name: /^(Targeted revision|Révision ciblée)$/ }).scrollIntoViewIfNeeded() },
+  { name: "classroom-drill-student-revision", role: "teacher", path: "/classrooms/r1?tab=drill", fold: true, act: async (p) => { const most = p.getByRole("button", { name: /^(Targeted|Ciblée)$/ }); await most.click(); await most.click(); await p.getByRole("button", { name: /^(Progression of|Progression de)/ }).first().click(); const block = p.getByRole("dialog").getByText(/^(Targeted revision|Révision ciblée)$/); await block.waitFor(); await block.scrollIntoViewIfNeeded(); await p.waitForTimeout(400); } },
   { name: "classroom-drill-none", role: "teacher", path: "/classrooms/r2?tab=drill" },
   { name: "classroom-drill-off", role: "teacher", path: "/classrooms/r3?tab=drill" },
   // ADR-085 §8: the 2×2 per question is on `classroom-drill`; here no question has ten students yet.
@@ -853,6 +858,14 @@ const scenes = [
   { name: "drill-off", role: "student", path: "/drill?empty=1" },
   { name: "drill-error", role: "student", path: "/drill?fail=1", settle: 2500 },
   { name: "drill-optout", role: "student", path: "/drill", fold: true, act: (p) => p.getByRole("switch", { name: /PRG1-2026/ }).click() },
+  // ADR-115: targeted revision of one concept, reached from the Concepts section (`drill-concepts`).
+  // Take the student's scenes at --width=390 too: the round is answered on a phone first.
+  { name: "drill-revise-pick", role: "student", path: REVISE },
+  { name: "drill-revise-card", role: "student", path: REVISE, act: reviseStart },
+  { name: "drill-revise-requeued", role: "student", path: REVISE, act: reviseWrong },
+  { name: "drill-revise-done", role: "student", path: REVISE, act: reviseWalk },
+  { name: "drill-revise-empty", role: "student", path: `${REVISE}?reviseempty=1`, act: reviseStart },
+  { name: "drill-revise-off", role: "student", path: `${REVISE}?reviseoff=1` },
   { name: "drill-classroom", role: "teacher", path: "/classrooms/r1?tab=evaluations" },
   // Turned on where it was off: the backfill says how many cards it made.
   { name: "drill-classroom-on", role: "teacher", path: "/classrooms/r3/settings", act: (p) => p.getByRole("switch", { name: /^(drill|entraînement)$/i }).click() },
@@ -2265,9 +2278,35 @@ async function drillConfidentError(page) {
   await page.waitForTimeout(800);
 }
 
+/** Targeted revision's pick: the first concept, then Start. */
+async function reviseStart(page) {
+  await page.getByRole("radio").first().check();
+  await page.getByRole("button", { name: /^(start|commencer)$/i }).click();
+  await page.waitForTimeout(800);
+}
+
+/** The round's first card answered wrong: it comes back later in the round. */
+async function reviseWrong(page) {
+  await reviseStart(page);
+  await page.getByText(/^L.adresse de la fonction englobante/).click();
+  await page.getByRole("button", { name: /^(check|vérifier)$/i }).click();
+  await page.waitForTimeout(800);
+}
+
+/** Every card of the round revealed in turn (each comes back once), to its end. */
+async function reviseWalk(page) {
+  await reviseStart(page);
+  await walkCards(page);
+}
+
 /** Every card of the session revealed in turn, to its summary. */
 async function drillWalk(page) {
   await drillStart(page);
+  await walkCards(page);
+}
+
+/** Reveals the card on screen, then Next, until Finish. */
+async function walkCards(page) {
   for (;;) {
     await page.getByRole("button", { name: /^(show the answer|voir la réponse|check|vérifier)$/i }).click();
     await page.waitForTimeout(500);

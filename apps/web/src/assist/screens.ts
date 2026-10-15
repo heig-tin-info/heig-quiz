@@ -53,6 +53,7 @@ export const ASSIST_SCREEN_LABELS: { readonly [V in Route["view"]]: keyof Dict |
   privacy: null,
   feedback: null,
   drill: null,
+  revise: null,
   live: "live.title",
   evaluationPreview: null,
   poll: null,
