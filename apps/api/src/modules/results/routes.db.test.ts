@@ -6,13 +6,14 @@
  * contract: paths, status codes, the CSV headers, and the 404-not-403 rule
  * for anyone the evaluation does not belong to (invariant 6).
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { StaffCopy, StudentGrades } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { evaluations } from "../../db/schema.js";
+import { READ_TRACE_WINDOW_MS } from "../../audit.js";
+import { auditLog, evaluations } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
@@ -170,6 +171,53 @@ describe("results and the export (§4.6)", () => {
       (await get(`/app/api/evaluations/${elsewhere.evaluationId}/results/attempts/${built.attemptId}`, teacher.headers))
         .statusCode,
     ).toBe(404);
+  });
+
+  it("audits the opening of a copy once per actor and window, never a refused read (#875)", async () => {
+    const start = server.clock.now();
+    const url = `/app/api/evaluations/${built.evaluationId}/results/attempts/${built.attemptId}`;
+    const reads = () =>
+      server.app.db
+        .select()
+        .from(auditLog)
+        .where(and(eq(auditLog.action, "attempt.read"), eq(auditLog.subjectId, built.attemptId)));
+    // A fresh window: the test above opened this copy already.
+    server.clock.advance(READ_TRACE_WINDOW_MS);
+    const before = (await reads()).length;
+
+    expect((await get(url, teacher.headers)).statusCode).toBe(200);
+    const first = await reads();
+    expect(first).toHaveLength(before + 1);
+    expect(first.find((row) => row.createdAt.getTime() === server.clock.now().getTime())).toMatchObject({
+      actorUserId: teacher.id,
+      actorType: "user",
+      subjectType: "attempt",
+      payload: { evaluationId: built.evaluationId, view: "copy" },
+    });
+
+    // The same opening: re-read until the last millisecond of the window.
+    expect((await get(url, teacher.headers)).statusCode).toBe(200);
+    server.clock.advance(READ_TRACE_WINDOW_MS - 1);
+    expect((await get(url, teacher.headers)).statusCode).toBe(200);
+    expect(await reads()).toHaveLength(before + 1);
+    // Refused by the loader: nothing traced.
+    expect((await get(url, other.headers)).statusCode).toBe(404);
+    expect(await reads()).toHaveLength(before + 1);
+
+    // Past the window, a new opening.
+    server.clock.advance(1);
+    expect((await get(url, teacher.headers)).statusCode).toBe(200);
+    expect(await reads()).toHaveLength(before + 2);
+
+    // Another actor is another opening: an administrator through Super Powers, named as themself.
+    const admin = await server.signInWithSuperPowers();
+    expect((await get(url, admin.headers)).statusCode).toBe(200);
+    const all = await reads();
+    expect(all).toHaveLength(before + 3);
+    expect(all.filter((row) => row.actorUserId === admin.id)).toEqual([
+      expect.objectContaining({ actorType: "user", payload: { evaluationId: built.evaluationId, view: "copy" } }),
+    ]);
+    server.clock.set(start);
   });
 
   it("gates the student's feedback on the release", async () => {

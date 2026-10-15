@@ -14,6 +14,7 @@ import { collectDefaultMetrics, Gauge, Registry } from "prom-client";
 
 import { AvatarMime, BUILD_HEADER, type HealthProbe } from "@quiz/contracts";
 import type { Clock } from "./clock.js";
+import { registerReadTrace } from "./audit.js";
 import { githubLinkPlugin } from "./auth/githubLink.js";
 import { authPlugin } from "./auth/plugin.js";
 import { sameSecret } from "./auth/session.js";
@@ -149,6 +150,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // before every route (N-OPS-02, `httpMetrics.ts`).
   const registry = new Registry();
   registerHttpMetrics(app, registry);
+  // Issue #875: the window of the audited reads, one for every plugin.
+  registerReadTrace(app);
 
   // Roster import: the CSV arrives as-is in req.body.
   app.addContentTypeParser(["text/csv", "text/plain"], { parseAs: "string" }, (_req, body, done) =>

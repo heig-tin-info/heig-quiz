@@ -13,7 +13,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { AttemptParam, IdParam, PublishCorrectionBody, ReleaseBody } from "@quiz/contracts";
 
-import { tracer } from "../../audit.js";
+import { readTracer, tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
 import { loadEvaluation, loadEvaluationAttempt, ownAttempt, teacherGuard, withCourseRole } from "../guards.js";
 import { sendCsv, studentRoute, teacherRoute } from "../http.js";
@@ -34,6 +34,7 @@ export async function resultsPlugin(app: FastifyInstance) {
   const student = studentRoute(app);
 
   const trace = tracer(app);
+  const traceRead = readTracer(app);
 
   // The loaders of invariant 6, each answering its own 404.
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
@@ -63,13 +64,18 @@ export async function resultsPlugin(app: FastifyInstance) {
     ),
   );
 
-  /** One student's copy, opened from a row of the grade table. */
+  /** One student's copy, opened from a row of the grade table; audited once per opening (#875). */
   app.get(
     "/app/api/evaluations/:id/results/attempts/:attemptId",
     { preHandler: requireTeacher },
-    teacher({ params: AttemptParam, load: staffEvaluationAttempt }, ({ scope }) =>
-      service.staffCopy(app.db, scope.evaluation, scope.attempt),
-    ),
+    teacher({ params: AttemptParam, load: staffEvaluationAttempt }, async ({ req, scope }) => {
+      const copy = await service.staffCopy(app.db, scope.evaluation, scope.attempt);
+      await traceRead(req, "attempt.read", "attempt", scope.attempt.id, {
+        evaluationId: scope.evaluation.id,
+        view: "copy",
+      });
+      return copy;
+    }),
   );
 
   /** F-RES-02. UTF-8 with a BOM and `;`, because Excel is the reader. */

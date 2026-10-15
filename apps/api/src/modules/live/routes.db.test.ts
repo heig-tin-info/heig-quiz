@@ -326,6 +326,30 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect(inspect.json().events.map((e: { kind: string }) => e.kind)).toContain("visibility");
   });
 
+  it("audits that opening once, not every re-fetch of the dashboard (#875)", async () => {
+    const url = `/app/api/evaluations/${seed.evaluationId}/attempts/${attemptId}`;
+    const reads = () =>
+      server.app.db
+        .select()
+        .from(auditLog)
+        .where(and(eq(auditLog.action, "attempt.read"), eq(auditLog.subjectId, attemptId)));
+    expect(await reads()).toEqual([
+      expect.objectContaining({
+        actorUserId: teacher.id,
+        actorType: "user",
+        subjectType: "attempt",
+        payload: { evaluationId: seed.evaluationId, view: "live" },
+      }),
+    ]);
+    // A dashboard frame or a hover a minute later is the same opening.
+    server.clock.advance(60_000);
+    expect((await get(url, teacher.headers)).statusCode).toBe(200);
+    expect(await reads()).toHaveLength(1);
+    // The student is refused before anything is traced.
+    expect((await get(url, student.headers)).statusCode).toBe(403);
+    expect(await reads()).toHaveLength(1);
+  });
+
   it("answers 410 attempt_closed past the deadline and its grace", async () => {
     const view = await get(`/app/api/attempts/${attemptId}`, student.headers);
     const deadline = new Date(view.json().view.attempt.deadlineAt as string);
