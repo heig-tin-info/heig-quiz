@@ -29,6 +29,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["adminLlmUsageKey", keys.adminLlmUsageKey, ["admin-teachers", "llm-usage"]],
     ["conceptsKey", keys.conceptsKey, ["concepts"]],
     ["adminConceptsKey", keys.adminConceptsKey, ["admin-teachers", "concepts"]],
+    ["adminConceptCandidatesKey", keys.adminConceptCandidatesKey, ["admin-concept-candidates"]],
     ["adminKioskKey", keys.adminKioskKey, ["admin-kiosk-devices"]],
     ["kioskStationKey", keys.kioskStationKey, ["kiosk-station"]],
     ["pairPreviewKey", keys.pairPreviewKey("BCDF-GHJK"), ["pair-preview", "BCDF-GHJK"]],

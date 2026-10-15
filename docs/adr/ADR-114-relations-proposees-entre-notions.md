@@ -3,11 +3,11 @@
 ## Status
 
 Accepted (2026-10-15) by the product owner (decisions of 2026-10-15 on
-[#897](https://github.com/yves-chevallier/heig-quiz/issues/897), step A:
-acceptance by selection, the pre-pass shown apart, top concepts proposed by
-the model). Taken by assumption by the spec challenge of 2026-10-15, the
-product owner may change them: reading pair counts instance-wide without
-Super Powers (§1), and deferring ADR-081 §7's suggested broader concept (§3).
+[#897](https://github.com/heig-tin-info/heig-quiz/issues/897), step A:
+acceptance by selection, the pre-pass shown apart, top concepts). Assumed by
+the spec challenge of the same day, which the product owner may change: pair
+counts read instance-wide without Super Powers (§1), ADR-081 §7's suggested
+broader concept deferred (§3).
 
 Scope: how relations between concepts (`broader`, `related`) are proposed to
 the administrator on the curation screen, and how they are accepted.

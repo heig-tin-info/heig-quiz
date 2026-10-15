@@ -3,8 +3,8 @@
  * ADR-114): broader candidates by label containment and related candidates by
  * co-occurrence on live questions. The rules are `@quiz/domain`'s
  * (`relationCandidatesOf`); this file loads the vocabulary, the edges and the
- * pair counts. Nothing is stored and
- * nothing is written: the admin accepts each edge through the relation routes.
+ * pair counts. Nothing is stored and nothing is written: the admin accepts
+ * each edge through the relation routes.
  *
  * The co-occurrence counts are instance-wide and numbers only: no question id,
  * statement, pool or person leaves, the exception ADR-054 (amended) grants
