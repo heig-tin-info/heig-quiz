@@ -20,7 +20,9 @@ import {
   type Me,
   type PublicConfig,
   type SessionKind,
+  type TokenScope,
 } from "@quiz/contracts";
+import { SAFE_METHODS, scopeAdmits, type ScopeTarget } from "@quiz/domain";
 
 import { claimEnrollments } from "../modules/org/service.js";
 import { invalid } from "../modules/http.js";
@@ -80,6 +82,12 @@ declare module "fastify" {
      */
     endlessToken: boolean;
     /**
+     * The bearer token's effective scope (ADR-113), already enforced by the
+     * hook: what the MCP server lists and lets a tool run. Null for a
+     * session, the help assistant's token, or when anonymous.
+     */
+    tokenScope: TokenScope | null;
+    /**
      * The assistant's tool a write of `authVia: "assistant"` runs
      * (`ASSIST_TOOL_HEADER`), for its audit entry; null otherwise.
      */
@@ -131,9 +139,6 @@ const BEARER = /^Bearer\s+(\S+)$/i;
 export function bearerOf(header: string | undefined): string | null {
   return BEARER.exec(header ?? "")?.[1] ?? null;
 }
-
-/** The methods that change nothing: CSRF lets them through, and so does a read-only session. */
-const SAFE_METHODS: readonly string[] = ["GET", "HEAD", "OPTIONS"];
 
 /**
  * Carried by the in-process calls of the MCP tools (`app.inject`), with a
@@ -198,6 +203,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   app.decorateRequest("user", null);
   app.decorateRequest("authVia", null);
   app.decorateRequest("endlessToken", false);
+  app.decorateRequest("tokenScope", null);
   app.decorateRequest("assistTool", null);
   app.decorateRequest("auth", null);
   app.decorateRequest("caller", null);
@@ -223,12 +229,29 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       // the tool calls made on its behalf — nowhere else. The help
       // assistant's token (ADR-080 §8) has no public resource at all: only
       // its own tools' in-process calls, never the MCP endpoint.
+      // Where the request goes, classified once: the MCP endpoint, a tool's
+      // in-process call, or any other route.
+      const target: ScopeTarget =
+        req.url.split("?")[0] === MCP_PATH ? "mcp" : isInternalCall(req) ? "internal" : "elsewhere";
       if (found.audience !== null) {
-        const path = req.url.split("?")[0];
         const assistant = found.audience === ASSIST_AUDIENCE;
-        if (path === MCP_PATH ? assistant : !isInternalCall(req)) return;
+        if (target === "mcp" ? assistant : target !== "internal") return;
+      }
+      // Then its scope (ADR-113 §2), before any handler, so before anything
+      // is loaded: a known caller asking for more than its token reaches is
+      // a 403, unlike an OAuth token off its audience above (anonymous, so a
+      // 401). The help assistant's token has no scope: its audience is all.
+      if (found.scope !== null) {
+        const needed = scopeAdmits(found.scope, { target, method: req.method });
+        if (needed !== null) {
+          return reply
+            .code(403)
+            .header("www-authenticate", `Bearer error="insufficient_scope", scope="${needed}"`)
+            .send({ error: "insufficient_scope", message: `This token's scope is ${found.scope}; this call needs ${needed}` });
+        }
       }
       req.user = found.user;
+      req.tokenScope = found.scope;
       req.endlessToken = found.expiresAt === null;
       if (found.audience === ASSIST_AUDIENCE) {
         req.authVia = "assistant";

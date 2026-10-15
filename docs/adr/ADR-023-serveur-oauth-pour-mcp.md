@@ -23,6 +23,13 @@ anybody signs in: `AUTHORIZATIONS_PER_HOUR` per address
 per address, so a campus behind one NAT address shares it: a matter of
 availability only.
 
+**Amended 2026-10-15 by [ADR-113](ADR-113-portee-des-jetons-personnels.md)
+(issue #871), scope: §C and the consequence "No scopes beyond `quiz`".** An
+access token resolves to its grant's scope, `quiz`, through the check that
+scopes personal tokens; the audience rule of §C runs first and keeps its
+`401`. The consent still grants `quiz` only; `quiz:read` there is left for
+later.
+
 ## Context
 
 claude.ai (web, desktop, mobile) and ChatGPT connect to a remote MCP server
@@ -146,6 +153,8 @@ stay, for scripts and for clients that cannot do OAuth.
 - CORS is not served: the hosts above call from their servers. A browser-based
   inspector would need it.
 - No scopes beyond `quiz`: the consent is all or nothing, like the token.
+  *Amended 2026-10-15 by ADR-113: personal tokens now carry `quiz`,
+  `quiz:read` or `api`; the consent still grants `quiz`, all or nothing.*
 
 ## Rejected alternatives
 

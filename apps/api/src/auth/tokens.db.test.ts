@@ -3,6 +3,8 @@
  * session, used as a bearer, refused once revoked or expired, and never able
  * to manage tokens themselves.
  */
+import { randomUUID } from "node:crypto";
+
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -54,12 +56,51 @@ describe("minting and listing", () => {
   it("validates the body with the contract", async () => {
     expect((await mint(teacher.headers, { name: "" })).status).toBe(400);
     expect((await mint(teacher.headers, { name: "x", expiresInDays: 7 })).status).toBe(400);
+    expect((await mint(teacher.headers, { name: "x", scope: "admin" })).status).toBe(400);
+  });
+
+  it("is scoped to MCP by default, lists its scope and audits it (ADR-113)", async () => {
+    const { body } = await mint(teacher.headers);
+    expect(body.scope).toBe("quiz");
+    const read = await mint(teacher.headers, { name: "reader", scope: "quiz:read" });
+    expect(read.status).toBe(201);
+    const list = (await server.app.inject({ method: "GET", url: "/app/api/me/tokens", headers: teacher.headers })).json() as ApiToken[];
+    expect(list.find((t) => t.id === read.body.id)?.scope).toBe("quiz:read");
+    const [entry] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "api_token.create"), eq(auditLog.subjectId, read.body.id)));
+    expect(entry!.payload).toMatchObject({ scope: "quiz:read" });
+  });
+
+  it("refuses a full API token that never expires (ADR-113 §1)", async () => {
+    const endless = await mint(teacher.headers, { name: "cli", scope: "api", expiresInDays: null });
+    expect(endless.status).toBe(422);
+    expect(endless.body).toMatchObject({ error: "token_expiry_required" });
+    expect((await mint(teacher.headers, { name: "cli", scope: "api", expiresInDays: 365 })).status).toBe(201);
+    expect((await mint(teacher.headers, { name: "mcp", scope: "quiz", expiresInDays: null })).status).toBe(201);
+  });
+
+  it("holds a scope on every personal row, and none on an audience-bound one (the CHECKs)", async () => {
+    const row = (over: Partial<typeof apiTokens.$inferInsert>) =>
+      server.app.db.insert(apiTokens).values({
+        id: randomUUID(),
+        userId: teacher.id,
+        name: "raw",
+        tokenHash: randomUUID().replaceAll("-", "").padEnd(64, "0"),
+        prefix: "quiz_pat_raw",
+        ...over,
+      });
+    await expect(row({})).rejects.toThrow();
+    await expect(row({ audience: "urn:quiz:assist", scope: "quiz" })).rejects.toThrow();
+    await expect(row({ scope: "everything" as never })).rejects.toThrow();
+    await expect(row({ scope: "quiz:read" })).resolves.toBeDefined();
   });
 });
 
 describe("using a token", () => {
   it("authenticates a read and a write, without CSRF, audited as api_key", async () => {
-    const { body } = await mint(teacher.headers);
+    const { body } = await mint(teacher.headers, { name: "script", scope: "api" });
     const list = await server.app.inject({ method: "GET", url: "/app/api/courses", headers: bearer(body.token) });
     expect(list.statusCode).toBe(200);
 
@@ -116,7 +157,7 @@ describe("using a token", () => {
   });
 
   it("is refused once expired", async () => {
-    const { body } = await mint(teacher.headers, { name: "short", expiresInDays: 30 });
+    const { body } = await mint(teacher.headers, { name: "short", expiresInDays: 30, scope: "api" });
     const ok = await server.app.inject({ method: "GET", url: "/app/api/courses", headers: bearer(body.token) });
     expect(ok.statusCode).toBe(200);
     server.clock.advance(31 * 86_400_000);
@@ -134,7 +175,7 @@ describe("using a token", () => {
     expect(endless.status).toBe(422);
     expect(endless.body).toMatchObject({ error: "token_expiry_required" });
     // …and one made before the rule is refused there, while the rest of the API still takes it.
-    const old = await createApiToken(server.app.db, admin.id, { name: "old", expiresInDays: null }, server.clock.now());
+    const old = await createApiToken(server.app.db, admin.id, { name: "old", expiresInDays: null, scope: "api" }, server.clock.now());
     const refused = await usersOf(old.token);
     expect(refused.statusCode).toBe(403);
     expect(refused.json()).toMatchObject({ error: "token_expiry_required" });
@@ -142,14 +183,16 @@ describe("using a token", () => {
     expect(courses.statusCode).toBe(200);
 
     // A token that expires reaches it.
-    const { status, body } = await mint(admin.headers, { name: "monthly", expiresInDays: 30 });
+    const { status, body } = await mint(admin.headers, { name: "monthly", expiresInDays: 30, scope: "api" });
     expect(status).toBe(201);
     expect((await usersOf(body.token)).statusCode).toBe(200);
 
-    // A teacher's endless token is theirs to keep; the administration answers it the role's 403.
+    // A teacher's endless token is theirs to keep — an MCP one (ADR-113) —
+    // and one made before the scopes meets the role's 403 there.
     const own = await mint(teacher.headers, { name: "forever", expiresInDays: null });
     expect(own.status).toBe(201);
-    expect((await usersOf(own.body.token)).json()).toEqual({ error: "forbidden" });
+    const legacy = await createApiToken(server.app.db, teacher.id, { name: "old", expiresInDays: null, scope: "api" });
+    expect((await usersOf(legacy.token)).json()).toEqual({ error: "forbidden" });
   });
 
   it("cannot be revoked by someone else: 404, like a token that never existed", async () => {

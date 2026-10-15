@@ -348,7 +348,7 @@ describe("staff only (invariant 6)", () => {
     const [repo] = p.repos;
     const student = p.students[0]!;
     const stranger = await server.signIn("teacher");
-    const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null });
+    const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null, scope: "api" });
     const s = await createSession(server.app.db, teacher.id, 8, {
       kind: "impersonation",
       actorUserId: (await server.signIn("admin")).id,

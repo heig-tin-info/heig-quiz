@@ -505,7 +505,8 @@ describe("who may ask (ADR-112 §7)", () => {
     const station = await kioskStation(server.app);
     const kiosk = await sessionOf(alice.id, { kind: "kiosk", evaluationId: ids["shown"]!, deviceId: station.deviceId });
     expect([401, 403]).toContain((await exportOf({ ...kiosk, cookie: `${kiosk.cookie}; ${station.cookie}` })).statusCode);
-    const { token } = await createApiToken(db(), alice.id, { name: "t", expiresInDays: null }, server.clock.now());
+    // Even a full-API token: the export is for a portal session only.
+    const { token } = await createApiToken(db(), alice.id, { name: "t", expiresInDays: 30, scope: "api" }, server.clock.now());
     expect([401, 403]).toContain((await exportOf({ authorization: `Bearer ${token}` })).statusCode);
   });
 

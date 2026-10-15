@@ -813,6 +813,13 @@
       "when": 1791873051971,
       "tag": "0115_journal_rendered_with",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1792049878710,
+      "tag": "0116_api_token_scope",
+      "breakpoints": true
     }
   ]
 }

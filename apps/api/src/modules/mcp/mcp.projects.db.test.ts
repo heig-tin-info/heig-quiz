@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ApiTokenCreated } from "@quiz/contracts";
+import type { ApiTokenCreated, TokenScope } from "@quiz/contracts";
 
 import { mintAssistToken } from "../../auth/tokens.js";
 import { auditLog, githubClassroomLinks, githubOrganizations, projects } from "../../db/schema.js";
@@ -44,8 +44,8 @@ let outsider: { id: string; headers: Record<string, string>; token: string };
 let nextOrg = 9100;
 let rpcId = 0;
 
-async function tokenFor(headers: Record<string, string>) {
-  const res = await server.app.inject({ method: "POST", url: "/app/api/me/tokens", headers, payload: { name: "mcp test" } });
+async function tokenFor(headers: Record<string, string>, scope: TokenScope = "quiz") {
+  const res = await server.app.inject({ method: "POST", url: "/app/api/me/tokens", headers, payload: { name: "mcp test", scope } });
   return (res.json() as ApiTokenCreated).token;
 }
 
@@ -158,7 +158,8 @@ describe("what a token reaches of projects (invariant 6)", () => {
   it("every other project route stays portal-only: a personal token gets the 404 of a missing project", async () => {
     const classroomId = await connectedClassroom(teacher.id);
     const { data: project } = await call("create_project", { classroomId, name: "Lab 2", sourceRepo: "lab", deadlineAt: IN_A_WEEK });
-    const bearer = { authorization: `Bearer ${teacher.token}` };
+    // A full API token, the only personal token that reaches these routes at all (ADR-113).
+    const bearer = { authorization: `Bearer ${await tokenFor(teacher.headers, "api")}` };
     for (const [method, url, payload] of [
       ["GET", `/app/api/projects/${project.id}`, undefined],
       ["PATCH", `/app/api/projects/${project.id}`, { name: "x" }],

@@ -60,6 +60,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-018 — The real student view and stateless preview](ADR-018-vue-etudiant-reelle.md)
 - [ADR-022 — Personal API tokens, and an MCP server that is one more client of the API](ADR-022-jetons-api-et-serveur-mcp.md)
 - [ADR-023 — The portal is its own OAuth 2.1 server, so claude.ai and ChatGPT can sign in](ADR-023-serveur-oauth-pour-mcp.md)
+- [ADR-113 — Scopes of personal API tokens: MCP by default, the whole API only when asked for and always expiring](ADR-113-portee-des-jetons-personnels.md)
 - [ADR-027 — Launch tickets and typed sessions (Safe Exam Browser first)](ADR-027-tickets-de-lancement-et-sessions-typees.md)
 - [ADR-034 — Acting as a student: a one-time link, an `impersonation` session, read-only in production](ADR-034-agir-en-tant-qu-etudiant.md)
 - [ADR-051 — Attested kiosk stations, paired from the student's phone, beside Safe Exam Browser](ADR-051-postes-kiosque-attestes.md)

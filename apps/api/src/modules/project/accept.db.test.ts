@@ -451,7 +451,7 @@ describe("what Accept refuses", () => {
       const s = await createSession(server.app.db, student.id, 8, auth);
       return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
     };
-    const { token } = await createApiToken(server.app.db, student.id, { name: "t", expiresInDays: null });
+    const { token } = await createApiToken(server.app.db, student.id, { name: "t", expiresInDays: null, scope: "api" });
     const callers: [string, string, { headers: Headers }][] = [
       ["a draft", draft.project.id, student],
       ["a student of another classroom", project.id, stranger],

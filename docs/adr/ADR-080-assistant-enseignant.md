@@ -11,6 +11,10 @@ Amended 2026-10-15 (§6, and the P2 amendment's items 4 and 9, what students are
 the "Data and privacy" page of N-DATA-07 (`/privacy`) says that the assistant may send a classroom's
 names and final results to Anthropic, and that such a name may remain 30 days in the teacher's stored
 conversation, even after the student leaves the class.
+Amended 2026-10-15 by [ADR-113](ADR-113-portee-des-jetons-personnels.md) (§8, P2 item 1): the promise
+that personal tokens "never gain" the results reader held for the MCP catalogue only, since a token
+could read the gradebook route directly; it now holds for `quiz` and `quiz:read` tokens, not for `api`
+tokens (every token issued before 2026-10-15). The assistant's own token is unchanged.
 
 Scope: the in-app chat of the teacher UI, the `assist` purpose of the LLM
 gateway, the conversations it stores.

@@ -142,6 +142,7 @@ export * from "./short.js";
 export * from "./studentIgnore.js";
 export * from "./stats.js";
 export * from "./templatePull.js";
+export * from "./tokenScope.js";
 export * from "./zone.js";
 export * from "./hs256.js";
 export * from "./legacyClassroom.js";

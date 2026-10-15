@@ -44,7 +44,9 @@ export async function mcpPlugin(app: FastifyInstance, opts: { config: AppConfig 
   }
 
   app.post(MCP_PATH, { config: { readOnly: true } }, async (req, reply) => {
-    if (!req.user || req.authVia !== "token") return unauthenticated(req, reply);
+    // A personal or OAuth token always has a scope here (ADR-113 §3).
+    const scope = req.tokenScope;
+    if (!req.user || req.authVia !== "token" || scope === null) return unauthenticated(req, reply);
     if (req.user.role !== "teacher" && req.user.role !== "admin") {
       return reply.code(403).send({ error: "forbidden" });
     }
@@ -57,12 +59,12 @@ export async function mcpPlugin(app: FastifyInstance, opts: { config: AppConfig 
     if (Array.isArray(body)) {
       const out = [];
       for (const message of body) {
-        const answer = await handleMessage(message, api, log);
+        const answer = await handleMessage(message, api, scope, log);
         if (answer) out.push(answer);
       }
       return out.length === 0 ? reply.code(202).send() : reply.send(out);
     }
-    const answer = await handleMessage(body, api, log);
+    const answer = await handleMessage(body, api, scope, log);
     return answer ? reply.send(answer) : reply.code(202).send();
   });
 

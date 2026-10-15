@@ -163,7 +163,7 @@ describe("recording the activity (ADR-107)", () => {
     expect((await request({ cookie })).statusCode).toBe(200);
 
     // ADR-022: a personal API token of the student's own.
-    const token = await createApiToken(server.app.db, who.id, { name: "t", expiresInDays: 30 }, server.clock.now());
+    const token = await createApiToken(server.app.db, who.id, { name: "t", expiresInDays: 30, scope: "api" }, server.clock.now());
     expect((await request({ authorization: `Bearer ${token.token}` })).statusCode).toBe(200);
 
     // A request the SPA made while its person was idle (a poll).

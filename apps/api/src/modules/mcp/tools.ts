@@ -40,8 +40,9 @@ import {
   TemplateInstantiate,
   type ConceptResolution,
   type ConceptResolveResponse,
+  type TokenScope,
 } from "@quiz/contracts";
-import { filterIds, type LabelResolution } from "@quiz/domain";
+import { filterIds, scopeCovers, type LabelResolution } from "@quiz/domain";
 
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
 
@@ -91,6 +92,14 @@ export interface Tool<S extends z.ZodObject = z.ZodObject> {
   annotations: ToolAnnotations;
   run(api: Api, args: z.output<S>): Promise<unknown>;
 }
+
+/**
+ * The token scope a tool needs (ADR-113 §4): its `readOnlyHint`, declared
+ * server-side, read as `quiz:read`; any other tool needs `quiz`. What
+ * `tools/list` filters on and `tools/call` refuses early; the guarantee is
+ * the auth hook's, which refuses a `quiz:read` token's writes whatever the tool.
+ */
+export const toolScope = (t: Tool): TokenScope => (t.annotations.readOnlyHint ? "quiz:read" : "quiz");
 
 const tool = <S extends z.ZodObject>(t: Tool<S>): Tool => t as unknown as Tool;
 
@@ -887,9 +896,12 @@ export async function runTool(api: Api, tool: Tool, raw: unknown): Promise<ToolO
  * `tools/list`: the catalogue with each input as JSON Schema. Every tool
  * declares the OAuth scheme it needs: ChatGPT reads `securitySchemes` per
  * tool to decide when to run its sign-in (ADR-023); other hosts ignore it.
+ * It stays `quiz` whatever the tool's own scope: the consent grants nothing
+ * else yet (ADR-113 §3). Only the tools the caller's token scope covers are
+ * listed (§4).
  */
-export function toolDescriptors() {
-  return TOOLS.map((t) => {
+export function toolDescriptors(scope: TokenScope) {
+  return TOOLS.filter((t) => scopeCovers(scope, toolScope(t))).map((t) => {
     const inputSchema = inputJsonSchema(t.input);
     return {
       name: t.name,
