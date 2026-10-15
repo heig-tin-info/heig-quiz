@@ -74,7 +74,6 @@ export {
   filterCoursesOf,
 } from "./courseFilter.js";
 export { proposeDescription } from "./description.js";
-export { poolConceptMap } from "../concept/service.js";
 export { catalogue } from "./catalogue.js";
 export { refreshDomainInBackground } from "./domain.js";
 export {

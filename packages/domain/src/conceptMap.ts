@@ -55,7 +55,8 @@ export function conceptMap(links: readonly ConceptLink[], broader: readonly Rela
     questionsOf.get(l.concept)!.add(l.question);
   }
   const linked = [...questionsOf.keys()];
-  const reach = [...new Set([...linked, ...[...broaderAncestorsOf(broader, linked).values()].flat()])].sort();
+  const ancestors = [...broaderAncestorsOf(broader, linked).values()].flat();
+  const reach = [...new Set([...linked, ...ancestors])].sort();
   const cover = coverageOf(broader, reach);
   const union = (ids: readonly string[]) => new Set(ids.flatMap((c) => [...(questionsOf.get(c) ?? [])]));
   const nodes = reach.map((id): ConceptMapNode => {
@@ -68,7 +69,6 @@ export function conceptMap(links: readonly ConceptLink[], broader: readonly Rela
   const inReach = new Set(reach);
   const edges = broader
     .filter((e) => inReach.has(e.concept) && inReach.has(e.target))
-    .map((e) => ({ concept: e.concept, target: e.target }))
     .sort((a, b) => compare(a.concept, b.concept) || compare(a.target, b.target));
   return { nodes, broader: edges };
 }

@@ -1637,6 +1637,10 @@ const categoryTree = (poolId: string): TreeNode[] => {
   return roots;
 };
 
+/** A reader's order of concepts, the server's `byLabel`: by label, then id. */
+const byRefLabel = (a: { label: string; id: string }, b: { label: string; id: string }) =>
+  a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
+
 /**
  * The pool's concepts counted with their narrower ones (ADR-116 §1): the
  * server's `conceptMap` over the live questions' links (a merged concept
@@ -1654,13 +1658,13 @@ const poolConceptNodes = (poolId: string) => {
 
 /**
  * `PoolDetail.concepts`: the concepts the pool's live questions use, each
- * with its covered count (ADR-116 §8), most used first.
+ * with its covered count (ADR-116 §8), by label then id as the server.
  */
 const poolConcepts = (poolId: string) =>
   poolConceptNodes(poolId)
     .nodes.filter((n) => n.linked)
     .map((n) => ({ concept: n.concept, count: n.covered }))
-    .sort((a, b) => b.count - a.count || a.concept.label.localeCompare(b.concept.label));
+    .sort((a, b) => byRefLabel(a.concept, b.concept));
 
 // --- The LLM review (ADR-060): two remarks on ptr-null-check, ptr-arith-01
 // clean; the pool `p1` asked for the night's review. `?empty=1`: none.
@@ -2482,9 +2486,7 @@ on("GET", "/app/api/pools/:id", (m) => {
 on("GET", "/app/api/pools/:id/concept-map", (m): PoolConceptMap => {
   const { nodes, broader } = poolConceptNodes(poolOr404(m.groups!.id!).id);
   return {
-    nodes: nodes
-      .map(({ concept, covered, own }) => ({ concept, covered, own }))
-      .sort((a, b) => a.concept.label.localeCompare(b.concept.label) || a.concept.id.localeCompare(b.concept.id)),
+    nodes: nodes.map(({ concept, covered, own }) => ({ concept, covered, own })).sort((a, b) => byRefLabel(a.concept, b.concept)),
     broader,
   };
 });

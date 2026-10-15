@@ -39,8 +39,10 @@ import { squarify } from "./treemap";
  * question list's (`usePersistentChoice`): the table, and the "heat" — a
  * squarified treemap where a cell's area is the concept's share of the
  * summed question counts. No colour: neutral surface and hairline, the area
- * is the message. The heat is transitional: ADR-116 replaces it with the
- * concept map, one level of the hierarchy per view.
+ * is the message. The heat is transitional: since the counts are covered
+ * counts (ADR-116 §8), a question under a broader concept and its narrower
+ * ones counts in each cell, so the areas double-count until the concept
+ * map (one level of the hierarchy per view) replaces it.
  */
 type ConceptsView = "list" | "heat";
 const VIEW_KEY = "quiz-pool-concepts-view";

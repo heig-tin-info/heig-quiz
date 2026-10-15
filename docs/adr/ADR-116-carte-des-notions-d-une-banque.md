@@ -94,12 +94,12 @@ covered counts without lying.
    map opens, cached under the pool's query key so a change of the pool refreshes it.
 
 8. **The table counts the same.** `PoolDetail.concepts` keeps its shape and lists L, but
-   its `count` is covered(c), from the same computation as the map (one SQL read of the
-   pool's links, one read of the edges). Side effects: the AI's pool description
+   its `count` is covered(c), from the same computation as the map (one read of the links,
+   one of the edges, one of the labels). Side effects: the AI's pool description
    (ADR-013) now ranks the concept labels it is given by covered count, so a broader
    concept may come first; the MCP `get_pool`, which returns the pool's detail, reports
-   covered counts. The heat stays as it is until the map replaces it; a caption under the
-   table says a concept counts its narrower concepts' questions.
+   covered counts. A caption under the table says a concept counts its narrower concepts'
+   questions; the map is the tab's picture of the hierarchy.
 
 9. **Left out, and why.**
    - *A mastery map* (an area by cards): it would hide the concepts without evidence that

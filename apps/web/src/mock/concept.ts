@@ -30,7 +30,7 @@ import {
 } from "@quiz/contracts";
 import {
   canonicalRelated,
-  narrowerDescendants,
+  coverageOf,
   checkAlias,
   checkBroaderEdge,
   checkRelatedEdge,
@@ -576,8 +576,7 @@ export const broaderEdges = () => edgesOf(concepts).broader;
 
 /** The concepts the given ones cover together, themselves and every narrower one (the server's `coveredConcepts`, ADR-081 §4). */
 export function coveredConceptIds(ids: readonly string[]): string[] {
-  const broader = broaderEdges();
-  return [...new Set(ids.flatMap((id) => [id, ...narrowerDescendants(broader, id)]))];
+  return [...new Set([...coverageOf(broaderEdges(), ids).values()].flat())];
 }
 
 /** The concept ids a course covers (the server's `conceptsCoveredByCourse`): the ones it lists and their narrower ones. */

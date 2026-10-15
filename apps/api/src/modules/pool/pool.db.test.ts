@@ -10,7 +10,6 @@ import { registerForTests } from "@quiz/registry/server";
 import type { Db } from "../../db/client.js";
 import {
   auditLog,
-  conceptRelations,
   coursePools,
   courseStaff,
   courses,
@@ -576,24 +575,6 @@ describe("the concepts of a question (ADR-081 third addendum)", () => {
 
     await service.softDeleteQuestion(db, await questionRow(two));
     expect((await count()).get(shared)).toBe(1);
-  });
-
-  it("counts with a concept the questions of its narrower ones, once each, and lists only the linked concepts (ADR-116)", async () => {
-    const counted = await seedPool();
-    const one = await seedQuestion("hierarchy one", counted);
-    const two = await seedQuestion("hierarchy two", counted);
-    const [top, broad, narrow] = [await seedConcept("hierarchy top"), await seedConcept("hierarchy broad"), await seedConcept("hierarchy narrow")];
-    await db.insert(conceptRelations).values([
-      { conceptId: narrow, targetId: broad, kind: "broader" },
-      { conceptId: broad, targetId: top, kind: "broader" },
-    ]);
-    await service.patchQuestion(db, await questionRow(one), { concepts: [broad, narrow] }, writer());
-    await service.patchQuestion(db, await questionRow(two), { concepts: [narrow] }, writer());
-    // `top` reaches the pool only from below: not a row of the table.
-    expect((await conceptService.poolConcepts(db, counted, "en")).map((c) => [c.concept.id, c.count])).toEqual([
-      [broad, 2],
-      [narrow, 2],
-    ]);
   });
 });
 

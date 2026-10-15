@@ -25,8 +25,9 @@ the admin (#897 step A) and defers §7's suggested broader concept.
 and the level. [ADR-116](ADR-116-carte-des-notions-d-une-banque.md) amends the
 third addendum §6 and the sixth addendum §9 and §10 (2026-10-15): the pool's
 Concepts tab counts a concept's covered questions and draws the hierarchy.
-The work is tracked by #599, under a parent issue that groups #557 and #578. Steps (a) and (b) of the transition (addendum §1) are implemented;
-the **cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
+The work is tracked by #599, under a parent issue that groups #557 and #578.
+Steps (a) and (b) of the transition (addendum §1) are implemented; the
+**cut-over, step (c), is implemented** by the cut-over PR of #599 (#648):
 questions, the pool's filter and Notions tab, the bulk bar, move and copy,
 polls, the drill, the MCP tools, the teacher assistant and the seed read and
 write concepts. Step (d), dropping `question_tags` and `pool_tags`, is
@@ -733,7 +734,9 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
      `concept/courseConcepts.ts`, applies it to the stored edges.
      `conceptsCoveredByCourse` and the mastery use the loader, 9b follows,
      and the pool's concept map applies the rule to the edges it reads
-     (ADR-116 §1).
+     (ADR-116 §1). *Amended 2026-10-15 by
+     [ADR-116](ADR-116-carte-des-notions-d-une-banque.md): the rule moved to
+     `@quiz/domain` as `coverageOf`; `coverage` became its loader.*
    - **Counting** is the pure `drillMastery` of `@quiz/domain`, callable for
      one student by 9b: a card counts toward **every** listed concept that
      covers one of its question's concepts; a listed concept nothing counts
@@ -772,7 +775,10 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
       and the question editor's picker (it chooses a link, which stays exact).
     - **Web:** the mock applies the same domain function; the course filter
       hint says narrower concepts are included (the pool's Concepts tab counts
-      covered questions and draws the hierarchy, ADR-116).
+      covered questions and draws the hierarchy, ADR-116). *Amended 2026-10-15
+      by [ADR-116](ADR-116-carte-des-notions-d-une-banque.md): this point said
+      "No other screen changes.", which no longer holds for the pool's
+      Concepts tab.*
 
 ## Amendment 2026-10-13: Fill with AI on the admin's sheet
 
