@@ -32,6 +32,9 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `impersonating`: the session is an admin acting as this persona, read-only (ADR-034).
  * `kiosk`: the open exam of the student's home is sat on a kiosk station (ADR-051).
  * `reviewed`: the student already did today's drill, the empty day (`mock/drill.ts`).
+ * `reviseempty`: no card of the student covers the concept a round is
+ *   started on, `{ round: null }` (ADR-115, `mock/drill.ts`); `reviseoff`:
+ *   targeted revision is closed in every classroom (`available: false`).
  * `unlinked`: the persona has no linked GitHub account (`mock/github.ts`).
  * `ghwarn`: PRG1-2026's organization is on GitHub's free plan — the warning
  *   line of the checks (`mock/github.ts`).
@@ -87,6 +90,8 @@ export const FLAG_NAMES = [
   "seb",
   "kiosk",
   "reviewed",
+  "reviseempty",
+  "reviseoff",
   "unlinked",
   "ghwarn",
   "ghmissing",

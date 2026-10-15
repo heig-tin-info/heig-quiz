@@ -56,6 +56,8 @@ const StudentClassroom = lazyPage(() =>
 );
 // ADR-041 (#317): the student's drill, its own chunk like every page.
 const DrillPage = lazyPage(() => import("./drill/DrillPage").then((m) => ({ default: m.DrillPage })));
+// ADR-115: targeted revision, its own screen.
+const RevisePage = lazyPage(() => import("./drill/RevisePage").then((m) => ({ default: m.RevisePage })));
 const CoursePage = lazyPage(() =>
   import("./course/CoursePage").then((m) => ({ default: m.CoursePage })),
 );
@@ -299,6 +301,12 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // ADR-041 (#317): a student page; the teacher UI has no drill of its own.
   drill: (_, c) =>
     c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <DrillPage navigate={c.navigate} />,
+  revise: (r, c) =>
+    c.teacherUi ? (
+      <TeacherHome navigate={c.navigate} />
+    ) : (
+      <RevisePage classroomId={r.classroomId} navigate={c.navigate} />
+    ),
   // WP9: student player — the attempt takes the whole screen (`FULL_SCREEN`).
   attempt: (r, c) => <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} />,
   join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,

@@ -368,6 +368,16 @@ export const drillMasteryKey = (classroomId: string) => [...drillRootKey, "maste
  * answered.
  */
 export const drillServeKey = (cardId: string) => ["drill-serve", cardId] as const;
+/** The concepts the student may revise in one classroom (ADR-115): an opt-out closes them. */
+export const revisionConceptsKey = (classroomId: string) => [...drillRootKey, "revision", classroomId, "concepts"] as const;
+/** The student's own rounds of targeted revision in one classroom (ADR-115): a round ended adds one. */
+export const revisionRoundsKey = (classroomId: string) => [...drillRootKey, "revision", classroomId, "rounds"] as const;
+/**
+ * One card of a round served at one pass (`POST /student/revision/rounds/:id/serve/:cardId`).
+ * Outside the `student` root, like `drillServeKey`: a hint must not re-serve it.
+ */
+export const revisionServeKey = (roundId: string, cardId: string, pass: number) =>
+  ["revision-serve", roundId, cardId, pass] as const;
 export const attemptKey = (attemptId: string) => ["attempt", attemptId] as const;
 export const attemptFeedbackKey = (attemptId: string) =>
   ["attempt", attemptId, "feedback"] as const;

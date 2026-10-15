@@ -2,7 +2,13 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DrillHours, DrillProgress, DrillStudentActivity, DrillClassroomMastery } from "@quiz/contracts";
+import type {
+  DrillClassroomMastery,
+  DrillClassroomRevision,
+  DrillHours,
+  DrillProgress,
+  DrillStudentActivity,
+} from "@quiz/contracts";
 
 import { makeClassroomDetail } from "../test/fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
@@ -235,6 +241,100 @@ describe("the classroom's Drill tab", () => {
     expect(await within(sheet).findByText("No review over this period.")).toBeVisible();
     // No mastery yet: no section for it.
     expect(screen.queryByRole("heading", { name: "Mastery per concept" })).toBeNull();
+  });
+
+  describe("targeted revision (ADR-115)", () => {
+    const REVISION: DrillClassroomRevision = {
+      students: [
+        {
+          enrollmentId: SEAT.Bernard!,
+          rounds: 3,
+          lastAt: "2026-10-14T08:00:00.000Z",
+          cardsServed: 12,
+          cardsCorrect: 9,
+          concepts: [ADDRESS, LOOP],
+        },
+      ],
+      concepts: [
+        { concept: ADDRESS, students: 2, rounds: 4, lastAt: "2026-10-14T08:00:00.000Z" },
+        { concept: LOOP, students: 1, rounds: 1, lastAt: "2026-10-12T08:00:00.000Z" },
+      ],
+    };
+    const room = () => <ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />;
+
+    it("counts each student's rounds in a Targeted column, and lists who revised which concept", async () => {
+      mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(NONE), [`GET ${base}/revision`]: ok(REVISION) });
+      renderWithProviders(room());
+      const table = await screen.findByRole("table");
+      expect(within(table).getByRole("button", { name: "Targeted" })).toBeInTheDocument();
+      const rowOf = (name: string) => within(table).getByRole("button", { name: `Progression of Ada ${name}` }).closest("tr")!;
+      expect(within(rowOf("Bernard")).getByText("3")).toBeInTheDocument();
+
+      expect(await screen.findByRole("heading", { name: "Targeted revision" })).toBeVisible();
+      const address = screen.getByText("Adresse (mémoire)").closest("div")!.parentElement!;
+      expect(within(address).getByText("2 students · 4 rounds")).toBeVisible();
+      expect(within(address).getByText("last on 2026-10-14")).toBeVisible();
+      expect(screen.getByText("1 student · 1 round")).toBeVisible();
+    });
+
+    it("counts a student who only revised as activity, and says when no one revised", async () => {
+      const quiet = [row({ nom: "Cattaneo" })];
+      const only: DrillClassroomRevision = { ...REVISION, students: [{ ...REVISION.students[0]!, enrollmentId: SEAT.Cattaneo! }] };
+      mockFetch({ [`GET ${base}/activity`]: ok(quiet), [`GET ${base}/mastery`]: ok(NONE), [`GET ${base}/revision`]: ok(only) });
+      const first = renderWithProviders(room());
+      expect(await screen.findByRole("table")).toBeVisible();
+      expect(screen.queryByText("No drill activity yet")).toBeNull();
+      first.unmount();
+
+      mockFetch({
+        [`GET ${base}/activity`]: ok(ROWS),
+        [`GET ${base}/mastery`]: ok(NONE),
+        [`GET ${base}/revision`]: ok({ students: [], concepts: [] }),
+      });
+      renderWithProviders(room());
+      expect(await screen.findByText("No targeted revision yet.")).toBeVisible();
+    });
+
+    it("draws no column and no sheet block when the rounds cannot be read, and says so once", async () => {
+      const user = userEvent.setup();
+      mockFetch({
+        [`GET ${base}/activity`]: ok(ROWS),
+        [`GET ${base}/mastery`]: ok(NONE),
+        [`GET ${base}/revision`]: fail(500),
+        [`GET ${base}/progress?student=${SEAT.Bernard}`]: ok(WEEKS),
+      });
+      renderWithProviders(room());
+      const table = await screen.findByRole("table");
+      expect(within(table).queryByRole("button", { name: "Targeted" })).toBeNull();
+      expect(await screen.findByText("Could not load the targeted revisions")).toBeVisible();
+      await user.click(screen.getByRole("button", { name: "Progression of Ada Bernard" }));
+      const sheet = await screen.findByRole("dialog", { name: "Ada Bernard" });
+      expect(within(sheet).queryByText("Targeted revision")).toBeNull();
+      expect(within(sheet).queryByText("No targeted revision yet.")).toBeNull();
+    });
+
+    it("shows a student's rounds in their sheet: how many, the score, the last day and the concepts", async () => {
+      const user = userEvent.setup();
+      mockFetch({
+        [`GET ${base}/activity`]: ok(ROWS),
+        [`GET ${base}/mastery`]: ok(NONE),
+        [`GET ${base}/revision`]: ok(REVISION),
+        [`GET ${base}/progress?student=${SEAT.Bernard}`]: ok(WEEKS),
+        [`GET ${base}/progress?student=${SEAT.Cattaneo}`]: ok(WEEKS),
+      });
+      renderWithProviders(room());
+      await user.click(await screen.findByRole("button", { name: "Progression of Ada Bernard" }));
+      const sheet = await screen.findByRole("dialog", { name: "Ada Bernard" });
+      expect(within(sheet).getByText("Targeted revision")).toBeVisible();
+      expect(within(sheet).getByText("3 rounds · 9 of 12 right · last on 2026-10-14")).toBeVisible();
+      expect(within(sheet).getByText("Adresse (mémoire)")).toBeVisible();
+      expect(within(sheet).getByText("Boucle")).toBeVisible();
+      await user.keyboard("{Escape}");
+
+      await user.click(screen.getByRole("button", { name: "Progression of Ada Cattaneo" }));
+      const other = await screen.findByRole("dialog", { name: "Ada Cattaneo" });
+      expect(within(other).getByText("No targeted revision yet.")).toBeVisible();
+    });
   });
 
   describe("the hours of the week", () => {

@@ -2,7 +2,8 @@
  * 7. The drill (ADR-041, #317): the student's session, cards served and
  * reviewed, the opt-out per classroom, and the teacher's switches — the
  * classroom's drill and an evaluation's "Allow drill" with its cards — and
- * the teacher's view of a classroom's drill (the end of this file).
+ * the teacher's view of a classroom's drill, and targeted revision by
+ * concept (ADR-115, the end of this file).
  *
  * The cards are questions of section 2, served through their type's own
  * `toStudent` (`studentView`) and graded by the same `tryAnswer` the preview
@@ -18,6 +19,7 @@
  */
 import type {
   DrillCalibrationLevel,
+  DrillCorrectness,
   DrillClassroom,
   DrillClassroomSettings,
   DrillHours,
@@ -33,8 +35,26 @@ import type {
   ConceptRef,
   StudentConceptMastery,
   EvaluationDrill,
+  DrillClassroomRevision,
+  RevisionAnswerResult,
+  RevisionRoundStart,
+  RevisionServed,
+  StudentConceptRef,
+  StudentRevisionConcepts,
+  StudentRevisionRound,
 } from "@quiz/contracts";
-import { allowDrillWritable, DRILL_TYPES, drillWeekStarts, isWeekdayClassHour, localDate, offHoursShare } from "@quiz/domain";
+import { RevisionAnswerBody, RevisionRoundBody } from "@quiz/contracts";
+import {
+  allowDrillWritable,
+  DRILL_REVISION_ROUND_SIZE,
+  DRILL_TYPES,
+  drillWeekStarts,
+  isWeekdayClassHour,
+  localDate,
+  offHoursShare,
+  revisionNext,
+  type RevisionAnswer,
+} from "@quiz/domain";
 
 import { conceptRefs, seedConceptIds } from "./concept";
 import { evaluationOr404, evaluations, toEvaluation, type MockEvaluation } from "./evaluation";
@@ -142,14 +162,27 @@ on("PUT", "/app/api/drill/classrooms/:id/opt-out", (m, body): DrillClassroom => 
   return drillClassroom(id);
 });
 
-on("POST", "/app/api/drill/cards/:id/serve", (m): DrillServed => {
-  const card = cardOr404(m.groups!.id!);
-  return {
-    cardId: card.id,
-    type: card.question.type,
-    student: studentView(card.question, frozenConfig(card.question)),
-  };
+/** A card served, through its type's `toStudent`: the daily session's and a round's. */
+const servedOf = (card: MockCard): DrillServed => ({
+  cardId: card.id,
+  type: card.question.type,
+  student: studentView(card.question, frozenConfig(card.question)),
 });
+
+/** An answer graded as the preview grades it, its correctness, and the key through the student's view. */
+const grade = (q: MockQuestion, answer: unknown) => {
+  const graded = tryAnswer(q, frozenConfig(q), answer ?? null) as { points: number; maxPoints: number; solution: unknown };
+  const correctness: DrillCorrectness =
+    graded.points >= graded.maxPoints ? "right" : graded.points > 0 ? "partial" : "wrong";
+  return {
+    correctness,
+    points: graded.points,
+    maxPoints: graded.maxPoints,
+    solution: studentSolutionOf(q, graded.solution),
+  };
+};
+
+on("POST", "/app/api/drill/cards/:id/serve", (m): DrillServed => servedOf(cardOr404(m.groups!.id!)));
 
 on("POST", "/app/api/drill/cards/:id/shown", (m) => {
   cardOr404(m.groups!.id!);
@@ -161,27 +194,18 @@ const INTERVAL_DAYS: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 9 };
 
 on("POST", "/app/api/drill/cards/:id/answer", (m, body): DrillReviewResult => {
   const card = cardOr404(m.groups!.id!);
-  const q = card.question;
-  const graded = tryAnswer(q, frozenConfig(q), body.answer ?? null) as {
-    points: number;
-    maxPoints: number;
-    solution: unknown;
-  };
-  const correctness =
-    graded.points >= graded.maxPoints ? "right" : graded.points > 0 ? "partial" : "wrong";
+  const graded = grade(card.question, body.answer);
+  const { correctness } = graded;
   // No reference time on a card this young: a right answer is Good, and a
   // short answer typed right is the one Easy, so the screen shows both.
-  const rating = correctness === "wrong" ? 1 : correctness === "partial" ? 2 : q.type === "short" ? 4 : 3;
+  const rating = correctness === "wrong" ? 1 : correctness === "partial" ? 2 : card.question.type === "short" ? 4 : 3;
   reviewedToday.add(card.id);
   return {
-    correctness,
+    ...graded,
     rating,
-    points: graded.points,
-    maxPoints: graded.maxPoints,
     activeMs: 24_000,
     referenceMs: card.isNew ? null : 30_000,
     dueAt: new Date(now + INTERVAL_DAYS[rating]! * D).toISOString(),
-    solution: studentSolutionOf(q, graded.solution),
   };
 });
 
@@ -447,3 +471,195 @@ on("GET", "/app/api/classrooms/:id/drill/confidence", (m): DrillQuestionConfiden
     ? CONFIDENCE_SPLITS.map((row, i) => ({ ...row, questionId: picked[i]!.id, name: picked[i]!.internalName }))
     : [],
 );
+
+// --- Targeted revision (ADR-115) -------------------------------------------
+//
+// The student revises one concept of the course in rounds of their own
+// cards. The mock's cards carry no concept: a round on any concept holds the
+// classroom's cards, in the session's order. The rules of the round — a
+// wrong first pass back three cards later, the counters — are `@quiz/domain`'s.
+// `?reviseempty=1`: no card covers the concept; `?reviseoff=1`: revision is
+// closed everywhere.
+
+interface MockRound {
+  id: string;
+  classroomId: string;
+  conceptId: string | null;
+  cardIds: string[];
+  startedAt: string;
+  endedAt: string | null;
+  answers: RevisionAnswer[];
+}
+
+/** The concepts on offer: the course's validated ones, by label — the mastery's list. */
+const offered = (): StudentConceptRef[] =>
+  conceptRefs(MASTERY_IDS)
+    .map(({ id, label, qualifier }) => ({ id, label, qualifier }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+const revisionOpen = (id: string) =>
+  studentRoomIds().includes(id) && roomOn(id) && !optedOut.has(id) && !flags.reviseoff;
+
+let roundSeq = 0;
+const roundId = () => `eeeeeeee-0000-4000-9000-${String((roundSeq += 1)).padStart(12, "0")}`;
+
+/** A round already behind the student in their first classroom. */
+const pastRound = (conceptAt: number, daysAgo: number, results: RevisionAnswer["correctness"][]): MockRound => {
+  const cardIds = cards.slice(0, results.length).map((c) => c.id);
+  return {
+    id: roundId(),
+    classroomId: studentRoomIds()[0] ?? "r1",
+    conceptId: MASTERY_IDS[conceptAt] ?? null,
+    cardIds,
+    startedAt: iso(-daysAgo * D),
+    endedAt: iso(-daysAgo * D + 9 * 60_000),
+    answers: cardIds.map((cardId, i) => ({ cardId, pass: 1 as const, correctness: results[i]! })),
+  };
+};
+const revisionRounds: MockRound[] = [
+  pastRound(0, 1, ["right", "wrong", "right", "right", "partial"]),
+  pastRound(2, 6, ["right", "right", "wrong"]),
+];
+
+const openRoundOr404 = (id: string) => {
+  const round = revisionRounds.find((r) => r.id === id && r.endedAt === null);
+  if (!round) throw new MockError(404, "Round not found");
+  return round;
+};
+
+/** The card's next pass in the round: 2 once its first is answered. */
+const nextPass = (round: MockRound, cardId: string): 1 | 2 =>
+  round.answers.some((a) => a.cardId === cardId && a.pass === 1) ? 2 : 1;
+
+const mockCard = (id: string) => cards.find((c) => c.id === id)!;
+
+on("GET", "/app/api/student/classrooms/:id/revision/concepts", (m): StudentRevisionConcepts =>
+  revisionOpen(m.groups!.id!) ? { available: true, concepts: offered() } : { available: false, concepts: [] },
+);
+
+on("GET", "/app/api/student/classrooms/:id/revision/rounds", (m): StudentRevisionRound[] =>
+  revisionRounds
+    .filter((r) => r.classroomId === m.groups!.id! && r.answers.length > 0)
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    .map((r) => ({
+      id: r.id,
+      concept: offered().find((c) => c.id === r.conceptId) ?? null,
+      startedAt: r.startedAt,
+      endedAt: r.endedAt,
+      // The two counters: the cards answered at their first pass, and those right.
+      cardsServed: r.answers.filter((a) => a.pass === 1).length,
+      cardsCorrect: r.answers.filter((a) => a.pass === 1 && a.correctness === "right").length,
+    })),
+);
+
+on("POST", "/app/api/student/classrooms/:id/revision/rounds", (m, body): RevisionRoundStart => {
+  // Strict, as the API's.
+  const parsed = RevisionRoundBody.safeParse(body);
+  if (!parsed.success) throw new MockError(400, parsed.error.message);
+  const id = m.groups!.id!;
+  const concept = offered().find((c) => c.id === parsed.data.conceptId);
+  if (!revisionOpen(id) || !concept) throw new MockError(404, "Concept not found");
+  const own = active()
+    .filter((c) => c.classroomId === id)
+    .slice(0, DRILL_REVISION_ROUND_SIZE);
+  if (flags.reviseempty || own.length === 0) return { round: null };
+  const round: MockRound = {
+    id: roundId(),
+    classroomId: id,
+    conceptId: concept.id,
+    cardIds: own.map((c) => c.id),
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    answers: [],
+  };
+  revisionRounds.push(round);
+  const course = courses.find((c) => c.id === roomOr404(id).courseId);
+  return {
+    round: {
+      id: round.id,
+      concept,
+      startedAt: round.startedAt,
+      cards: own.map((c) => ({
+        id: c.id,
+        type: c.question.type,
+        courseCode: course?.code ?? "",
+        courseName: course?.name ?? "",
+        isNew: c.isNew,
+      })),
+    },
+  };
+});
+
+on("POST", "/app/api/student/revision/rounds/:id/serve/:cardId", (m): RevisionServed => {
+  const round = openRoundOr404(m.groups!.id!);
+  const card = mockCard(m.groups!.cardId!);
+  // ADR-115 §7: a card served in a round today leaves today's session.
+  reviewedToday.add(card.id);
+  return { ...servedOf(card), pass: nextPass(round, card.id) };
+});
+
+on("POST", "/app/api/student/revision/rounds/:id/cards/:cardId/answer", (m, body): RevisionAnswerResult => {
+  // Strict, as the API's: a confidence or a device class is a 400.
+  const parsed = RevisionAnswerBody.safeParse(body);
+  if (!parsed.success) throw new MockError(400, parsed.error.message);
+  const round = openRoundOr404(m.groups!.id!);
+  const cardId = m.groups!.cardId!;
+  const pass = nextPass(round, cardId);
+  const graded = grade(mockCard(cardId).question, parsed.data.answer);
+  round.answers.push({ cardId, pass, correctness: graded.correctness });
+  if (revisionNext({ order: round.cardIds, answers: round.answers }) === null) round.endedAt = new Date().toISOString();
+  return { ...graded, requeued: pass === 1 && graded.correctness === "wrong" };
+});
+
+/**
+ * Who revised what in `r1`, for the staff: five students before the test,
+ * the pointer most of all. Roster index -> [concept indexes of
+ * `MASTERY_IDS`, rounds, days since the last, cards served, right].
+ */
+const REVISED: Record<number, [number[], number, number, number, number]> = {
+  0: [[0, 1], 4, 1, 32, 25],
+  1: [[0], 2, 2, 14, 9],
+  2: [[0, 3], 3, 1, 21, 12],
+  4: [[2], 1, 5, 6, 5],
+  5: [[0, 1, 2], 5, 0, 41, 30],
+};
+/** The same rounds per concept: [concept index, students, rounds, days since the last]. */
+const REVISED_CONCEPTS: [number, number, number, number][] = [
+  [0, 4, 9, 0],
+  [1, 2, 4, 0],
+  [2, 2, 3, 0],
+  [3, 1, 1, 1],
+];
+
+on("GET", "/app/api/classrooms/:id/drill/revision", (m): DrillClassroomRevision => {
+  const roomId = roomOr404(m.groups!.id!).id;
+  if (!hasHistory(roomId)) return { students: [], concepts: [] };
+  const refs = conceptRefs(MASTERY_IDS);
+  const students = seatsOf(roomId).flatMap(({ seat, index }) => {
+    const r = REVISED[index];
+    if (!r || seat.userId === null) return [];
+    const [at, rounds, daysAgo, cardsServed, cardsCorrect] = r;
+    return [{
+      enrollmentId: seat.id,
+      rounds,
+      lastAt: iso(-daysAgo * D - 3 * H),
+      cardsServed,
+      cardsCorrect,
+      concepts: at.map((i) => refs[i]!),
+    }];
+  });
+  const concepts = REVISED_CONCEPTS.map(([at, students, rounds, daysAgo]) => ({
+    concept: refs[at]!,
+    students,
+    rounds,
+    lastAt: iso(-daysAgo * D - 3 * H),
+  }));
+  return { students, concepts };
+});
+
+on("POST", "/app/api/student/revision/rounds/:id/end", (m) => {
+  const round = revisionRounds.find((r) => r.id === m.groups!.id!);
+  if (!round) throw new MockError(404, "Round not found");
+  round.endedAt ??= new Date().toISOString();
+  return undefined;
+});

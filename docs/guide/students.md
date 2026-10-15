@@ -58,7 +58,13 @@ On the **Drill** page, a **Concepts** section appears for each classroom whose c
 - **To work on**, **Getting there** or **Solid**: how well you are likely to remember that concept today, from the drill cards you reviewed on it.
 - **No data yet**: you have reviewed fewer than 5 cards on that concept, so no level is shown.
 
-The levels are as of today and fade when a concept is not reviewed for a while, so a level can drop without any new mistake. Only questions whose answer you may already read count. Only you see these levels: there is no ranking and no comparison with your class, and the section has no button of its own; the day's session is how you practise.
+The levels are as of today and fade when a concept is not reviewed for a while, so a level can drop without any new mistake. Only questions whose answer you may already read count. Only you see these levels: there is no ranking and no comparison with your class.
+
+## Revising a concept before a test
+
+The day's session is how you practise every day. Before a test, you can also revise one concept on purpose: **Revise a concept**, beside the **Concepts** heading of a classroom, opens a page that lists the concepts of the course. Pick one and press **Start**: a round of up to ten questions follows, taken among the questions you already met in that classroom's exercises and quizzes and whose answer you may already read. A question you answer wrong comes back once, a few questions later in the same round. At the end, **Another round** starts a new one on the same concept, with the questions you have not practised today first.
+
+A round is practice only: it changes neither your daily schedule nor your levels, and a question you revised today leaves today's session. You may say how sure you are, as in the daily session; that stays in your browser. If none of your questions covers the concept yet, the page says so. Your teacher sees how many rounds you did and when the last one was, the concepts you revised, and how many questions you answered and got right; never a question nor your answers. The page also lists your own recent rounds: the concept, the date and how many you got right at the first try.
 
 ## The waiting room
 

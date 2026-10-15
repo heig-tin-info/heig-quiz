@@ -32,6 +32,7 @@ const TEACHER_HIDDEN: readonly Route["view"][] = [
   "privacy",
   // Student pages a teacher's UI never shows as such, and the dev gallery.
   "drill",
+  "revise",
   "feedback",
   "devUi",
 ];
@@ -73,6 +74,8 @@ describe("the lit slot (#191)", () => {
   it("lights Drill on the drill page (#317)", () => {
     expect(bottomSlotOf(parsePath("/drill"), false)).toBe("drill");
     expect(bottomNavShown(parsePath("/drill"), false)).toBe(true);
+    // ADR-115: targeted revision is reached from the drill, and stays under it.
+    expect(bottomSlotOf(parsePath("/drill/classrooms/r1/revise"), false)).toBe("drill");
   });
 });
 

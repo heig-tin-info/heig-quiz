@@ -4,9 +4,11 @@
  * days, last activity) and who progresses (the recall rate on repeated
  * reviews over 30 days, with its trend against the 30 days before). An
  * opt-out is a badge with its date on the name (§13, item 5), visible at
- * every width. A row opens the student's weekly progression.
+ * every width. A row opens the student's weekly progression. "Targeted"
+ * counts their rounds of targeted revision (ADR-115 §9), apart from the
+ * reviews: a round is not a review.
  */
-import type { DrillStudentActivity } from "@quiz/contracts";
+import type { DrillClassroomRevision, DrillStudentActivity } from "@quiz/contracts";
 import { drillRecallRate, drillRecallTrend, type DrillTrend } from "@quiz/domain";
 import { MoveRight, TrendingDown, TrendingUp } from "lucide-react";
 
@@ -26,9 +28,12 @@ import {
   useSortableTable,
 } from "../ui";
 
-type SortKey = "name" | "recall" | "sessions" | "questionsSeen" | "reviews30" | "lastReviewAt";
+type SortKey = "name" | "recall" | "sessions" | "questionsSeen" | "reviews30" | "rounds" | "lastReviewAt";
 
 export const studentName = (row: DrillStudentActivity) => `${row.prenom} ${row.nom}`;
+
+/** One student's rounds of targeted revision (ADR-115 §9). */
+export type StudentRevision = DrillClassroomRevision["students"][number];
 
 const TREND_ICON = { up: TrendingUp, down: TrendingDown, flat: MoveRight } as const;
 const TREND_TONE = { up: "text-success", down: "text-warning", flat: "text-fg-faint" } as const;
@@ -57,9 +62,12 @@ function OptedOutBadge({ at }: { at: string }) {
 
 export function DrillActivityTable({
   rows,
+  revision,
   onOpen,
 }: {
   rows: DrillStudentActivity[];
+  /** The rounds per enrollment id, a student without one has none; null when unread: no column. */
+  revision: ReadonlyMap<string, StudentRevision> | null;
   onOpen: (row: DrillStudentActivity) => void;
 }) {
   const t = useT();
@@ -75,6 +83,8 @@ export function DrillActivityTable({
           return drillRecallRate(r.recall.last30) ?? -1;
         case "reviews30":
           return r.reviews.last30;
+        case "rounds":
+          return revision?.get(r.enrollmentId)?.rounds ?? 0;
         case "lastReviewAt":
           return r.lastReviewAt ?? "";
         default:
@@ -90,6 +100,7 @@ export function DrillActivityTable({
     { key: "sessions", label: t("drill.col.sessions"), right: true, className: T.colHigh },
     { key: "questionsSeen", label: t("drill.col.questions"), right: true, className: T.colMid },
     { key: "reviews30", label: t("drill.col.reviews30"), right: true, className: T.colLow },
+    ...(revision ? [{ key: "rounds" as const, label: t("drill.revision.col"), right: true, className: T.colMid }] : []),
     { key: "lastReviewAt", label: t("drill.col.last"), className: T.colHigh },
   ];
 
@@ -129,6 +140,11 @@ export function DrillActivityTable({
                 <td className={cx(T.td, "text-right tabular-nums", T.colHigh)}>{r.sessions || "—"}</td>
                 <td className={cx(T.td, "text-right tabular-nums", T.colMid)}>{r.questionsSeen || "—"}</td>
                 <td className={cx(T.td, "text-right tabular-nums", T.colLow)}>{r.reviews.last30 || "—"}</td>
+                {revision ? (
+                  <td className={cx(T.td, "text-right tabular-nums", T.colMid)}>
+                    {revision.get(r.enrollmentId)?.rounds || "—"}
+                  </td>
+                ) : null}
                 <td className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colHigh)}>
                   {r.lastReviewAt ? <RelativeTime iso={r.lastReviewAt} /> : "—"}
                 </td>

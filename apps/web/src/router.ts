@@ -208,6 +208,8 @@ export type Route =
   | { view: "feedback"; attemptId: string }
   /** The student's drill (ADR-041, #317): today's session and the classrooms it draws from. */
   | { view: "drill" }
+  /** Targeted revision of one concept of a classroom's course (ADR-115): its own screen, from the drill. */
+  | { view: "revise"; classroomId: string }
   /** Development only: the gallery of the shared primitives (App.tsx gates it). */
   | { view: "devUi" };
 
@@ -629,6 +631,18 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
         : null,
     studentSafe: true,
     bottomSlot: { student: "grades" },
+  },
+  // ADR-115: targeted revision, under the drill's slot. Before `drill`, which
+  // takes whatever follows `/drill`.
+  revise: {
+    path: (r) => `/drill/classrooms/${r.classroomId}/revise`,
+    match: ([head, sub, classroomId, tail]) =>
+      head === "drill" && sub === "classrooms" && classroomId && tail === "revise"
+        ? { view: "revise", classroomId }
+        : null,
+    studentSafe: true,
+    bottomSlot: { student: "drill" },
+    answering: true,
   },
   // ADR-041 (#317): the student's drill, the centre slot of the bottom bar.
   drill: {

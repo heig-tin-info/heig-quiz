@@ -1,7 +1,9 @@
 /**
  * The student's level on the concepts of a course (ADR-098, #599 step 9b):
- * one "Concepts" section per classroom on the drill page, a read with no
- * action — never a "Practise this concept" button (ADR-041 §6, §11).
+ * one "Concepts" section per classroom on the drill page, a read — never a
+ * "Practise this concept" button on a row (ADR-041 §6, §11). The one action
+ * is the section's secondary "Revise a concept" (ADR-115 §13), drawn only
+ * while revision is open to the student there; it opens its own screen.
  *
  * A row is a concept, its band and the cards the band rests on, in the
  * course's order, so the list is not a ranking. The band is a word before it
@@ -19,8 +21,9 @@ import { Tag } from "lucide-react";
 
 import { refName } from "../concepts/names";
 import { useT } from "../i18n";
-import { Badge, Card, SectionHeading } from "../ui";
-import { useStudentConceptMastery } from "./api";
+import type { Route } from "../router";
+import { Badge, Button, Card, SectionHeading } from "../ui";
+import { useRevisionConcepts, useStudentConceptMastery } from "./api";
 
 const LEVEL = {
   work: { label: "drill.concepts.level.work", tone: "amber" },
@@ -28,9 +31,11 @@ const LEVEL = {
   solid: { label: "drill.concepts.level.solid", tone: "green" },
 } as const satisfies Record<DrillLevel, { label: string; tone: "amber" | "zinc" | "green" }>;
 
-export function ConceptMastery({ room }: { room: DrillClassroom }) {
+export function ConceptMastery({ room, navigate }: { room: DrillClassroom; navigate: (r: Route) => void }) {
   const t = useT();
   const mastery = useStudentConceptMastery(room.classroomId);
+  // Asked only for a section that is drawn: a course with declared concepts.
+  const revision = useRevisionConcepts(room.classroomId, !!mastery.data?.declared);
   if (!mastery.data?.declared || mastery.data.concepts.length === 0) return null;
   return (
     <section className="space-y-3" aria-label={`${t("drill.concepts.title")} — ${room.classroomName}`}>
@@ -38,6 +43,17 @@ export function ConceptMastery({ room }: { room: DrillClassroom }) {
         icon={Tag}
         title={t("drill.concepts.title")}
         description={`${room.classroomName} · ${room.courseCode} — ${room.courseName}`}
+        actions={
+          revision.data?.available ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate({ view: "revise", classroomId: room.classroomId })}
+            >
+              {t("drill.concepts.revise")}
+            </Button>
+          ) : null
+        }
       />
       <Card className="divide-y divide-line">
         {mastery.data.concepts.map((row) => (

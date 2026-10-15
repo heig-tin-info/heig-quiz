@@ -84,6 +84,7 @@ export function EvaluationDrillSetting({ evaluation }: { evaluation: Evaluation 
           <ul className="space-y-1">
             <li>{t("eval.drill.note.key")}</li>
             <li>{t("eval.drill.note.version")}</li>
+            <li>{t("eval.drill.note.revision")}</li>
           </ul>
         </Alert>
       </div>

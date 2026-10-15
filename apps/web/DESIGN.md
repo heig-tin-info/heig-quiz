@@ -2571,6 +2571,37 @@ until final, a `Lock` for a milestone's row); the caption says
 rows become the divided list of small cards a student's table becomes
 (Tables), the points over the maximum on the right, the marks under them.
 
+## The drill's targeted revision (ADR-115)
+
+`/drill/classrooms/:id/revise`, under the Drill slot of the bottom bar.
+Reached only from the secondary **Revise a concept** of a classroom's
+Concepts section on the drill page, drawn while revision is open there; the
+day's empty state never links to it.
+
+- **One primary per step.** The pick: the concepts as `RadioRow`s in one
+  bordered fieldset whose 17 px legend is the question, **Start** disabled
+  until one is picked, and under it two 13 px notes (practice only; the
+  teacher sees the rounds). The round: **Check**, then **Next** or
+  **Finish**. Its end: **Another round**, with **Back to the drill** as
+  the secondary. A concept with no card: an `EmptyState` that says so.
+  Revision closed (the server's `available`, or nothing on offer): one
+  neutral sentence, no reason guessed by the page. Both with **Back to the
+  drill**.
+- **The card is the daily session's** (`PracticeCard`): same progress line
+  (the concept on the right instead of the course code), same player,
+  confidence scale and key. Only the result line differs:
+  "Practice · not counted in your schedule", plus "comes back later in this
+  round" when a wrong first pass is requeued; the count "Question i of n"
+  grows by one each time. No timer, no rating, no next review.
+- **The recent rounds** sit under the pick as a plain list: the concept (a
+  removed one in italics), the date, "n of m right" right-aligned; the last
+  ten only.
+- **The teacher's side** is a read: a **Targeted** column in the activity
+  table (rounds, `—` for none), a **Targeted revision** section between the
+  hours and the mastery (per concept: students · rounds, the last date), and
+  a block in the student's sheet (rounds · score · last date, the concepts as
+  neutral badges). Never a card, a question or an answer.
+
 ## The participant's poll page (`/p/:CODE`)
 
 One question on a phone in a lecture hall, reached by a QR code and often by
