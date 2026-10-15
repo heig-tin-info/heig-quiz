@@ -34,7 +34,7 @@ Kiosk station
 - Data is kept until a teacher deletes it (N-DATA-03). A few kinds of data have a shorter, automatic retention (the integrity journal, the drill, the help assistant, the hours of activity, GitHub's notifications, a project's evidence files). Nothing is deleted when a student finishes their studies, and there is no account deletion.
 - Content, including some student answers and student code with the names masked, is sent to an AI model (Anthropic) through one gateway that logs every call.
 - The servers are rented from Hetzner: the application machine in Nuremberg (Germany), the code machine and the off-site encrypted copy of the backups in Helsinki (Finland). Nothing is hosted in Switzerland.
-- Reads of personal data are, with one exception, not traced.
+- Reads of personal data are mostly not traced: only the opening of one student's paper by the staff and an administrator's reading of help-assistant conversations are.
 
 ## Personal data
 
@@ -149,7 +149,12 @@ Whoever administers the machines reaches the database, the backups and the logs,
 
 ### What is traced
 
-The audit log (`apps/api/src/audit.ts`) records the actions that change something: sign-ins, class list imports and edits, gradings, releases, Super Powers, a view opened as a student, grants. A database trigger refuses any change or deletion of its rows (migration `0096_audit_log_immutable`, ADR-003 §5). It does not trace reads: who looked at which paper or class list is recorded nowhere. The one exception is an administrator reading a teacher's help-assistant conversations (`assist.read`).
+The audit log (`apps/api/src/audit.ts`) records the actions that change something: sign-ins, class list imports and edits, gradings, releases, Super Powers, a view opened as a student, grants. A database trigger refuses any change or deletion of its rows (migration `0096_audit_log_immutable`, ADR-003 §5). It traces two kinds of read only:
+
+- a member of a course's staff, or the administrator with Super Powers, opening one student's paper, from the live dashboard (the whole paper or one of its answers, the grid's hover preview included) or from a row of the grade table (`attempt.read`). It is one entry per opening, not per request: the same person's reads of the same paper are recorded at most once every 15 minutes, a window kept in the server's memory, so a restart may record one more;
+- an administrator reading a teacher's help-assistant conversations (`assist.read`).
+
+The reads of a whole class are not traced, by decision (product owner, 2026-10-15, issue #875): one question's answers across the class, the grading table, the grade table, the per-question view and the CSV export. Nor are the grading history of one answer and the class lists. Who looked at those is recorded nowhere.
 
 ## Third parties
 
@@ -331,7 +336,7 @@ Statistics:
 
 Access and traceability:
 
-- reads are not traced, neither the teachers' nor the administrator's, except the administrator's reading of help-assistant conversations;
+- most reads are not traced, neither the teachers' nor the administrator's: only the opening of one student's paper (at most once per person and paper every 15 minutes) and the administrator's reading of help-assistant conversations are; the reads of a whole class (one question's answers across the class, the grading table, the grade table, the per-question view, the CSV export), the grading history of one answer and the class lists are not, by decision (product owner, 2026-10-15, issue #875);
 - direct access to the machines and the database is not traced by the platform;
 - the audit log's protection is a database trigger; the application connects as the database's owner role, which could drop it, and emptying the whole table (TRUNCATE) is not covered;
 - the student is not notified when an administrator opens a view of their account;

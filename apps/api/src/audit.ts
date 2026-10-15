@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Db, Tx } from "./db/client.js";
 import type { AuditActorType } from "./db/auth.js";
 import { auditLog } from "./db/schema.js";
+import { perApp } from "./perApp.js";
 
 /**
  * Closed catalogue of audit actions: a typo in a trigger site is a compile
@@ -41,6 +42,19 @@ export type AuditAction =
   | "avatar.delete"
   | "avatar.update"
   | "attempt.close"
+  /**
+   * Issue #875: a member of the course's staff (or an administrator with
+   * Super Powers) opened ONE student's paper — from the live dashboard
+   * (`payload.view`: `live`, F-DASH-05, its grid's hover tooltip included)
+   * or from a row of the grade table (`copy`). Subject the attempt;
+   * `payload.evaluationId`. One entry per opening, not per request: the same
+   * actor's reads of the same attempt through the same channel (a session,
+   * a token: the actor type) are traced at most once every
+   * {@link READ_TRACE_WINDOW_MS} ({@link readTracer}), whichever the view.
+   * The whole-class reads (one question's answers for the class, the grading
+   * table, the CSV, the per-question view) are not traced.
+   */
+  | "attempt.read"
   | "attempt.reopen"
   | "attempt.retake"
   | "attempt.staff_reset"
@@ -716,5 +730,82 @@ export function tracer(app: FastifyInstance): Trace {
       // The server's clock (invariant 5): a rule may read the entry back by time.
       at: app.clock.now(),
     });
+  };
+}
+
+/**
+ * Issue #875: how long one person's reads of one subject count as ONE
+ * opening. The live dashboard re-fetches an open paper on every frame and its
+ * grid fetches one on hover: an entry per request would bury the log.
+ */
+export const READ_TRACE_WINDOW_MS = 15 * 60_000;
+
+/**
+ * The keys traced in the last window, in the process's memory (the API is
+ * one process; a restart forgets them, and at worst one more entry is
+ * written). The audit log itself is never read on this path. A key is
+ * forgotten once its window has passed, so the map holds at most the keys
+ * traced during one window.
+ */
+export class RecentReads {
+  private readonly traced = new Map<string, number>();
+
+  constructor(private readonly windowMs: number) {}
+
+  /** True when `key` was not traced in the window ending at `nowMs`; it then counts as traced now. */
+  claim(key: string, nowMs: number): boolean {
+    // A key is (re)inserted at the end when traced, so the map runs from the
+    // oldest entry and the expired ones are a prefix of it.
+    for (const [k, at] of this.traced) {
+      if (nowMs - at < this.windowMs) break;
+      this.traced.delete(k);
+    }
+    const at = this.traced.get(key);
+    if (at !== undefined && nowMs - at < this.windowMs) return false;
+    this.traced.delete(key);
+    this.traced.set(key, nowMs);
+    return true;
+  }
+
+  /** Gives `key` back when its entry could not be written, so the next read traces it. */
+  release(key: string): void {
+    this.traced.delete(key);
+  }
+
+  /** How many keys are held: the only way to observe that expired ones are dropped, not just ignored. */
+  get size(): number {
+    return this.traced.size;
+  }
+}
+
+const recentReads = perApp<RecentReads>();
+
+/** Called once from `buildApp`: one {@link RecentReads} for every plugin of the application. */
+export function registerReadTrace(app: FastifyInstance): void {
+  recentReads.set(app, new RecentReads(READ_TRACE_WINDOW_MS));
+}
+
+/**
+ * {@link tracer} for an audited READ: the same entry and the same actor (the
+ * person acting, a token's owner as `api_key`), but at most one per actor
+ * (user AND actor type: a token's read is not hidden by a session's), action
+ * and subject every {@link READ_TRACE_WINDOW_MS} on the server's clock. A
+ * call site traces once its loader and its service have succeeded.
+ */
+export function readTracer(app: FastifyInstance): Trace {
+  const trace = tracer(app);
+  return async (req, action, subjectType, subjectId, payload) => {
+    const reads = recentReads.get(app);
+    if (!reads) throw new Error("readTracer: registerReadTrace(app) was not called");
+    const { actorUserId, actorType } = actorOf(req);
+    const key = `${actorUserId}|${actorType}|${action}|${subjectType}|${subjectId}`;
+    // Claimed before the write, so two requests in flight write one entry.
+    if (!reads.claim(key, app.clock.now().getTime())) return;
+    try {
+      await trace(req, action, subjectType, subjectId, payload);
+    } catch (err) {
+      reads.release(key);
+      throw err;
+    }
   };
 }

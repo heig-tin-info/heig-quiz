@@ -1265,7 +1265,7 @@ export const reachableEvaluation = routeLoader((app, req, evaluationId: string) 
 /**
  * `/attempts/:id` — the student's own attempt. A teacher does NOT reach a
  * student route: they have `/evaluations/:id/attempts/:attemptId` instead,
- * which is read-only and audited.
+ * which is read-only and audited once per opening (`attempt.read`, #875).
  */
 export const ownAttempt = routeLoader(async (app, req, attemptId: string) => {
   const [row] = await app.db

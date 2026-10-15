@@ -41,7 +41,7 @@ import {
 } from "@quiz/contracts";
 import type { InteractiveOutcome } from "@quiz/core/server";
 
-import { tracer, type AuditAction } from "../../audit.js";
+import { readTracer, tracer, type AuditAction } from "../../audit.js";
 import { SITTING, confined, delegated } from "../../auth/session.js";
 import { iso } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
@@ -74,6 +74,7 @@ export async function livePlugin(
   const requireTeacher = teacherGuard(app);
 
   const trace = tracer(app);
+  const traceRead = readTracer(app);
   const student = studentRoute(app, service.liveFailureArms);
   const teacher = teacherRoute(app, service.liveFailureArms);
 
@@ -555,13 +556,21 @@ export async function livePlugin(
     ),
   );
 
-  /** F-DASH-05. */
+  /**
+   * F-DASH-05: one student's paper, opened from the dashboard or fetched by
+   * its grid's hover; audited once per opening (#875, `attempt.read`).
+   */
   app.get(
     "/app/api/evaluations/:id/attempts/:attemptId",
     { preHandler: requireTeacher },
-    teacher({ params: AttemptParam, load: staffEvaluationAttempt }, ({ now, scope }) =>
-      service.attemptInspect(app.db, scope.evaluation, scope.attempt, now),
-    ),
+    teacher({ params: AttemptParam, load: staffEvaluationAttempt }, async ({ req, now, scope }) => {
+      const view = await service.attemptInspect(app.db, scope.evaluation, scope.attempt, now);
+      await traceRead(req, "attempt.read", "attempt", scope.attempt.id, {
+        evaluationId: scope.evaluation.id,
+        view: "live",
+      });
+      return view;
+    }),
   );
 
   /** ADR-088 §7: every attempt's integrity incidents, in time order. */
