@@ -12,6 +12,18 @@
 # The code runner is NOT in this file: it runs on the code VM, behind its own
 # Caddy, and the API reaches it over HTTPS with the shared RUNNER_TOKEN of
 # .env.prod (apps/runner/deploy/, docs/development/deployment.md §3).
+# Host logs (#872, docs/development/deployment.md §7): each container's
+# json-file log is capped by SIZE, never by date. A cap is sized to hold
+# about 30 days at the volume estimated beside it; less traffic keeps lines
+# longer, more keeps them shorter. The small cap: mostly PostgreSQL's
+# checkpoint lines, ~160 kB a day, so 3 x 2 MB. Containers a deploy never
+# recreates (postgres, backup) would otherwise grow for good.
+x-small-log: &small-log
+  driver: json-file
+  options:
+    max-size: "2m"
+    max-file: "3"
+
 services:
   app:
     # Built in CI, pulled from GHCR, never built here; deploy.sh writes IMAGE_TAG=<sha>@sha256:<digest> to .env.image.
@@ -48,6 +60,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # A line per request with its IP address (apps/api/src/redact.ts): ~10 MB
+    # a day estimated, the external probe's minute alone ~2 MB, so 6 x 50 MB
+    # holds at most about a month. A deploy recreates `app` and its log.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "6"
 
   postgres:
     image: postgres:17
@@ -93,6 +113,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    logging: *small-log
 
   # Daily pg_dump to ./backups; 30-day retention. The off-VM copy is a host
   # timer (borg to a Storage Box): docs/development/deployment.md §6.
@@ -133,6 +154,7 @@ services:
           ls -1t /backups/quiz-*.dump 2>/dev/null | tail -n +31 | xargs -r rm --
           sleep 86400
         done
+    logging: *small-log
 
 volumes:
   pgdata:

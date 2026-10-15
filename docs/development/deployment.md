@@ -58,8 +58,9 @@ only. Nobody signs in as root or as a service account: root reaches a
 shell through `sudo` or the Hetzner console, production through
 `sudo machinectl shell srv@` (the login session carries the rootless
 Docker socket; a plain `sudo -iu srv` does not) and staging through
-`sudo machinectl shell srvstg@`. The `sudo` journal then says who did
-what, which a shared root session never does. A drop-in in
+`sudo machinectl shell srvstg@`. The `sudo` lines then say who did
+what, which a shared root session never does; with SSH's, they are kept
+in `/var/log/auth-trail.log` at most about 180 days (§7, *Host logs*). A drop-in in
 `/etc/ssh/sshd_config.d/`, loaded before `sshd_config` (OpenSSH keeps
 the first value it reads), pins the policy on each VM:
 
@@ -1365,7 +1366,60 @@ No user, IP or query string in any label. It is never public: a request with
 other request must carry an admin session.
 
 Logs are `docker compose logs -f app` on one VM and
-`journalctl -u quiz-runner -f` on the other (credentials masked).
+`journalctl -u quiz-runner -f` on the other (credentials masked); how long
+they are kept is the next section.
+
+### Host logs (#872)
+
+What names a person's address is kept **at most about 30 days**, the
+`sudo` and SSH trail **at most about 180 days**, longer on purpose (*Human
+access*). This table is the one place that states the periods; the files
+it names hold the values.
+
+| Log | Kept | Set by |
+| --- | --- | --- |
+| The containers' output, application VM (`app`'s holds every request's IP address) | about 30 days as a size cap, not a date: fewer days under more traffic, more under less; `app`'s also ends at each deploy | `logging:` in `compose.prod.yml`, `compose.staging.yml` |
+| The portals' access logs, `/var/log/caddy/quiz-codespace-<i>.log`, engine VM | a rolled file at most 30 days | `apps/codespace/deploy/Caddyfile` |
+| The system journal, both VMs: the runner, the portals, Podman, Caddy's own errors (with the client's address) | at most about 30 days, or less if the journal reaches its size cap | `infra/logs/journald.conf` |
+| `sudo` and SSH (`auth`, `authpriv`), both VMs, `/var/log/auth-trail.log` | at most about 180 days | `infra/logs/auth-trail.*` |
+
+- Caddy rolls its current file by size only: on a quiet site its oldest
+  lines can outlive 30 days until it fills.
+- rsyslog writes the auth trail and nothing else, host-wide: the
+  co-tenants (evaluation-tb, heig-codespace) read the journal, never
+  `/var/log/syslog`.
+- Each VM's `/etc/caddy/Caddyfile` is outside the repository, shared with
+  evaluation-tb and heig-codespace. A `log` there that writes a file needs
+  `roll_keep_for 720h`; one with no `output` goes to the journal. Quiz's
+  own sites write no access log.
+- Hetzner's backup of a VM (§6) holds its disk 7 days: there, each period
+  is up to 7 days longer.
+
+**Applying it**, by hand, once per VM and again when a file changes (no
+deploy installs them), as an administrator; `R` is the checkout,
+`/srv/quiz` or `/opt/quiz-runner`. rsyslog may be missing (Ubuntu 24.04
+has no `/var/log/auth.log`, *Human access*); `apt install` changes nothing
+when it is there:
+
+```bash
+R=/srv/quiz
+sudo apt install rsyslog
+sudo install -D -m 0644 $R/infra/logs/journald.conf /etc/systemd/journald.conf.d/retention.conf
+sudo install -m 0644 $R/infra/logs/auth-trail.rsyslog.conf /etc/rsyslog.d/40-auth-trail.conf
+sudo install -m 0644 $R/infra/logs/auth-trail.logrotate /etc/logrotate.d/auth-trail
+sudo systemctl restart systemd-journald rsyslog
+sudo grep -rn -A6 -E '^\s*log(\s|$)' /etc/caddy/Caddyfile /etc/caddy/conf.d/   # the Caddy point above
+```
+
+**Checking it**, one line per log:
+
+```bash
+sudo -k; sudo true; sudo tail -n 2 /var/log/auth-trail.log         # this very sudo
+sudo logrotate -d /etc/logrotate.d/auth-trail 2>&1 | grep -i error  # nothing
+sudo journalctl -o short-iso --no-pager | head -n 2                 # the oldest entry, at most ~31 days old
+ls -l /var/log/caddy/                                               # engine VM: no rolled file over 30 days
+cd /srv/quiz && docker inspect -f '{{.Name}} {{.HostConfig.LogConfig}}' $(docker compose -f compose.prod.yml --env-file .env.prod ps -q)   # as srv: each cap
+```
 
 ## 8. Staging (`quiz.dev.chevallier.io`, ADR-028)
 

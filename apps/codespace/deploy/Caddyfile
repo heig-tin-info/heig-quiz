@@ -28,10 +28,15 @@
 	# `log_credentials` is set, which this VM never does. (M6-05's item,
 	# done here with the fragment; the portal's own log masks it too,
 	# src/logging.ts.)
+	#
+	# It holds every student's address: `roll_keep_for` bounds the age of a
+	# rolled file (Caddy's default is 90 days), `roll_keep` their number; the
+	# period, docs/development/deployment.md §7, Host logs (#872).
 	log {
 		output file /var/log/caddy/quiz-codespace-@INSTANCE@.log {
 			roll_size 10MiB
 			roll_keep 5
+			roll_keep_for 720h
 		}
 		format filter {
 			wrap json
