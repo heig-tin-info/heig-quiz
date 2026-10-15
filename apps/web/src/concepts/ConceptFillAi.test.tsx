@@ -33,7 +33,7 @@ const proposal: ConceptFill = {
   en: { ...none, label: { label: "Inheritance", qualifier: "" }, description: "Proposed for English." },
 };
 
-const open = () => renderWithProviders(<ConceptSheet concept={heritage} concepts={[heritage]} locale="en" onClose={() => undefined} />);
+const open = () => renderWithProviders(<ConceptSheet concept={heritage} concepts={[heritage]} byId={new Map([[heritage.id, heritage]])} locale="en" onClose={() => undefined} />);
 const side = (name: "French" | "English") => within(screen.getByRole("dialog")).getByRole("group", { name });
 
 describe("Fill with AI on the concept sheet (ADR-081 §7, amendment of 2026-10-13)", () => {

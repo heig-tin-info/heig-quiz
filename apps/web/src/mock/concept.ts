@@ -95,11 +95,13 @@ function setEdges(edges: RelationEdges): void {
   }
 }
 
-// A small hierarchy for the curation screens (sixth addendum, 7c).
+// A small hierarchy for the curation screens (sixth addendum, 7c): a chain of
+// three, and Fuite mémoire under two broader concepts (the sheet's "+1").
 const named = (fr: string, qualifier = "") => concepts.find((c) => c.labels.fr === fr && c.qualifiers.fr === qualifier)!;
 setEdges({
   broader: [
     { concept: named("Fuite mémoire").id, target: named("Allocation dynamique").id },
+    { concept: named("Fuite mémoire").id, target: named("Tas").id },
     { concept: named("Allocation dynamique").id, target: named("Pointeur").id },
     { concept: named("Tableau").id, target: named("Pointeur").id },
   ],

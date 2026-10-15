@@ -10,6 +10,7 @@ import {
   narrowerDescendants,
   narrowerDescendantsOf,
   relationsOf,
+  unplaced,
   type RelationEdge,
   type RelationEdges,
 } from "./conceptRelations.js";
@@ -176,5 +177,15 @@ describe("edgesOf and relationsOf", () => {
     expect(out.get("b")).toEqual({ broader: [], related: ["a"] });
     expect(out.get("p")).toBeUndefined();
     expect(relationsOf({ broader: [b("c", "z"), b("c", "y")], related: [] }).get("c")?.broader).toEqual(["y", "z"]);
+  });
+});
+
+describe("unplaced", () => {
+  it("keeps the concepts with no broader and no narrower concept, a related one included", () => {
+    const root = { id: "root", broader: [], related: [] };
+    const child = { id: "child", broader: ["root"], related: [] };
+    const lone = { id: "lone", broader: [], related: [] };
+    const relatedOnly = { id: "rel", broader: [], related: ["lone"] };
+    expect(unplaced([root, child, lone, relatedOnly])).toEqual([lone, relatedOnly]);
   });
 });

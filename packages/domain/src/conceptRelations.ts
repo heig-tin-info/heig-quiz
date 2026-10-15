@@ -45,6 +45,22 @@ export function edgesOf(concepts: readonly RelatedConcept[]): RelationEdges {
   };
 }
 
+/**
+ * The concepts placed nowhere in the hierarchy (#897): no broader concept and
+ * no narrower one (no concept lists them in its `broader`); `related` does
+ * not place a concept. A root with children is placed. One pass over the
+ * `broader` lists, in the order given.
+ */
+export function unplaced<C extends Pick<RelatedConcept, "id" | "broader">>(concepts: readonly C[]): C[] {
+  const placed = new Set<string>();
+  for (const c of concepts) {
+    if (c.broader.length === 0) continue;
+    placed.add(c.id);
+    for (const id of c.broader) placed.add(id);
+  }
+  return concepts.filter((c) => !placed.has(c.id));
+}
+
 /** The direct relations of every concept named by `edges`, sorted (a related pair on both sides); the inverse of {@link edgesOf}. */
 export function relationsOf(edges: RelationEdges): Map<string, { broader: string[]; related: string[] }> {
   const out = new Map<string, { broader: string[]; related: string[] }>();

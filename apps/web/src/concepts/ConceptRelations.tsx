@@ -63,17 +63,18 @@ function Group({
   kind,
   concept,
   concepts,
+  byId,
 }: {
   kind: ConceptRelationKind;
   concept: AdminConcept;
   concepts: readonly AdminConcept[];
+  byId: ReadonlyMap<string, AdminConcept>;
 }) {
   const t = useT();
   const { locale } = useI18n();
   const qc = useQueryClient();
   const [typed, setTyped] = useState("");
   const current = kind === "broader" ? concept.broader : concept.related;
-  const byId = useMemo(() => new Map(concepts.map((c) => [c.id, c])), [concepts]);
 
   const offered = useMemo(() => {
     if (typed.trim() === "") return [];
@@ -146,14 +147,22 @@ function Group({
  * its broader concepts and its related ones. Each change is saved at once and
  * audited alone, like the aliases.
  */
-export function ConceptRelations({ concept, concepts }: { concept: AdminConcept; concepts: readonly AdminConcept[] }) {
+export function ConceptRelations({
+  concept,
+  concepts,
+  byId,
+}: {
+  concept: AdminConcept;
+  concepts: readonly AdminConcept[];
+  byId: ReadonlyMap<string, AdminConcept>;
+}) {
   const t = useT();
   return (
     <fieldset className="space-y-4">
       <legend className="mb-1 text-base font-bold tracking-tight">{t("admin.concepts.relations")}</legend>
       <p className="text-xs text-fg-muted">{t("admin.concepts.relations.desc")}</p>
-      <Group kind="broader" concept={concept} concepts={concepts} />
-      <Group kind="related" concept={concept} concepts={concepts} />
+      <Group kind="broader" concept={concept} concepts={concepts} byId={byId} />
+      <Group kind="related" concept={concept} concepts={concepts} byId={byId} />
     </fieldset>
   );
 }

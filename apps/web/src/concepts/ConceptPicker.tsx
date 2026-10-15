@@ -10,7 +10,8 @@ import { useI18n, useT, type Locale } from "../i18n";
 import { conceptsKey } from "../queryKeys";
 import { Button, ComboboxList, ComboboxOption, cx, ErrorText, Field, Tip, useCombobox } from "../ui";
 import { namesAConcept, rankConcepts } from "./ranking";
-import { broaderTrail, conceptSide } from "./names";
+import { conceptSide } from "./names";
+import { BroaderPath } from "./refs";
 import { useConcepts } from "./useConcepts";
 
 /**
@@ -335,7 +336,6 @@ export function ConceptPicker({
             {suggestions.map((c, index) => {
               const isActive = index === active;
               const description = conceptSide(c, locale).description;
-              const trail = broaderTrail(c, byId, locale);
               const marks = [
                 first.has(c.id) ? t("concepts.picker.inPool") : null,
                 c.status === "proposed" ? t("concepts.picker.proposed") : null,
@@ -353,12 +353,12 @@ export function ConceptPicker({
                         </span>
                       ) : null}
                     </div>
-                    {trail.length > 0 ? (
-                      <p className={cx("truncate text-xs font-normal", !isActive && "text-fg-faint")}>
-                        <span className="sr-only">{t("concepts.picker.within")} </span>
-                        {trail.join(" › ")}
-                      </p>
-                    ) : null}
+                    <BroaderPath
+                      concept={c}
+                      byId={byId}
+                      locale={locale}
+                      className={cx("truncate font-normal", !isActive && "text-fg-faint")}
+                    />
                     {description ? (
                       <p className={cx("line-clamp-2 text-xs font-normal", !isActive && "text-fg-faint")}>
                         {description}

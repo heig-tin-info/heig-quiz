@@ -617,7 +617,13 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
      under a concept that has broader concepts, its path from the root down
      (`Memory › Heap`), following the first broader concept by name; homonyms
      keep their qualifier. In the Duplicates view a model's `related` pair
-     gains a secondary "Add as related" action.
+     gains a secondary "Add as related" action. As built (2026-10-15, #897
+     step B): the curation queue shows the same path under each row's name,
+     the sheet shows it read-only at its top with a "+n" count of the other
+     broader concepts, and an **Unplaced** filter lists the concepts with no
+     broader and no narrower concept, whatever their status; the rule is
+     `unplaced` of `@quiz/domain`, applied client-side to the loaded
+     vocabulary's `broader` lists.
    - **Not here.** A concept selected anywhere covering its narrower ones
      (§4 of the Decision) is 7d (§10).
 6. **Suggest concepts (8a, built).** It sends the draft's statement and
