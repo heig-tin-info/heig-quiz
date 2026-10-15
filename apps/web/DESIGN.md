@@ -859,7 +859,7 @@ live in `ui/state.ts`, each written once.
   lets the chips fall on a second row, and the track then takes the card
   radius, since a pill two rows tall is a lens. One component, in
   `@quiz/ui`, for the app and the question editors alike.
-- ViewSwitch: the icon-only `Segmented` between pictures of one list (cards, list, schedule, heat), at the list's top right.
+- ViewSwitch: the icon-only `Segmented` between pictures of one list (cards, list, schedule, heat, tree), at the list's top right.
 - Switch: `success` when on (a state, not an action, so not the accent),
   `line-strong` when off.
 - Tabs: text tabs with a 2 px ink (`fg`) underline, counts in `fg-faint`; red

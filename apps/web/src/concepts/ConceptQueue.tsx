@@ -21,6 +21,7 @@ import {
   Badge,
   Button,
   Card,
+  cx,
   EmptyState,
   ErrorText,
   QueryError,
@@ -29,6 +30,8 @@ import {
   SectionHeading,
   Segmented,
   Skeleton,
+  usePersistentChoice,
+  ViewSwitch,
 } from "../ui";
 import { aiPairsOf, ConceptDuplicates, duplicatePairs } from "./ConceptDuplicates";
 import { ConceptRelationReview } from "./ConceptRelationReview";
@@ -37,8 +40,14 @@ import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
 import { BroaderPath } from "./refs";
+import { conceptTree, type TreeRow } from "./tree";
 
 type Filter = "all" | "proposed" | "validated" | "unplaced" | "duplicates" | "relations";
+/** The filters a tree means something on: Unplaced concepts have no edge, their tree is their list. */
+const TREEABLE: readonly Filter[] = ["all", "proposed", "validated"];
+type QueueView = "list" | "tree";
+const VIEW_KEY = "quiz-admin-concepts-view";
+const VIEWS: readonly QueueView[] = ["list", "tree"];
 
 /** The languages a concept has no label in: what stops its validation. */
 const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((lang) => c.labels[lang] === null);
@@ -63,6 +72,11 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  * **Relations** lists the relations proposed without a model (ADR-114), and
  * the model's on demand (`POST /admin/concepts/relations/ai`, kept here), to
  * tick and accept: its own primary action, so Validate is not there.
+ *
+ * On All, To validate and Validated, the rows can also be read as a tree
+ * (`conceptTree`), a habit remembered per browser: the same rows, indented
+ * under the broader concept their path follows, a match's ancestors drawn
+ * as its path only.
  */
 export function ConceptQueue() {
   const t = useT();
@@ -71,6 +85,8 @@ export function ConceptQueue() {
   const [filter, setFilter] = useState<Filter>("all");
   const [typed, setTyped] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
+  const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "list");
+  const treeable = TREEABLE.includes(filter);
 
   const list = useQuery<AdminConceptList>({
     queryKey: adminConceptsKey,
@@ -90,6 +106,10 @@ export function ConceptQueue() {
     const proposedIds = new Set(byStatus.filter((c) => c.status === "proposed").map((c) => c.id));
     return rankConcepts(q, byStatus, locale, proposedIds);
   }, [all, loose, filter, q, locale]);
+  const tree = useMemo(
+    () => (treeable && view === "tree" ? conceptTree(all ?? [], rows, locale) : null),
+    [treeable, view, all, rows, locale],
+  );
 
   const found = useMemo(() => duplicatePairs(all ?? []), [all]);
   // Under a search, the pairs of which a concept matches.
@@ -166,6 +186,11 @@ export function ConceptQueue() {
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
         />
+        {treeable ? (
+          <div className="ml-auto">
+            <ViewSwitch name="concept-view" size="sm" label={t("admin.concepts.view")} views={VIEWS} value={view} onChange={setView} />
+          </div>
+        ) : null}
       </div>
 
       {filter === "unplaced" && loose.length > 0 ? (
@@ -205,17 +230,22 @@ export function ConceptQueue() {
       ) : (
         <Card>
           <ul className="divide-y divide-line">
-            {rows.map((c) => (
-              <ConceptRow
-                key={c.id}
-                concept={c}
-                byId={byId}
-                validating={validate.isPending && validate.variables === c.id}
-                failed={validate.isError && validate.variables === c.id ? validate.error : null}
-                onValidate={() => validate.mutate(c.id)}
-                onEdit={() => setEditing(c.id)}
-              />
-            ))}
+            {(tree?.map((place) => ({ c: place.concept, place })) ?? rows.map((c) => ({ c, place: undefined }))).map(({ c, place }) =>
+              place?.pathOnly ? (
+                <PathRow key={c.id} place={place} />
+              ) : (
+                <ConceptRow
+                  key={c.id}
+                  concept={c}
+                  place={place}
+                  byId={byId}
+                  validating={validate.isPending && validate.variables === c.id}
+                  failed={validate.isError && validate.variables === c.id ? validate.error : null}
+                  onValidate={() => validate.mutate(c.id)}
+                  onEdit={() => setEditing(c.id)}
+                />
+              ),
+            )}
           </ul>
         </Card>
       )}
@@ -227,8 +257,35 @@ export function ConceptQueue() {
   );
 }
 
+/**
+ * A row's place in the tree: 16 px a level, a hairline at its left. The
+ * indent stops growing past six levels, so a deep row keeps its actions on
+ * a phone (they wrap under the name); `aria-level` says the depth.
+ */
+function indentOf({ depth }: { depth: number }) {
+  return {
+    "aria-level": depth + 1,
+    className: depth > 0 ? "border-l border-line" : undefined,
+    style: { marginInlineStart: `${Math.min(depth, 6)}rem` },
+  };
+}
+
+/** An ancestor of a match that does not match itself: its name only, dimmed, no action. */
+function PathRow({ place }: { place: TreeRow<AdminConcept> }) {
+  const t = useT();
+  const { locale } = useI18n();
+  const indent = indentOf(place);
+  return (
+    <li {...indent} className={cx("px-4 py-2 text-sm text-fg-muted", indent.className)}>
+      {conceptName(place.concept, locale)}
+      <span className="sr-only">, {t("admin.concepts.tree.path")}</span>
+    </li>
+  );
+}
+
 function ConceptRow({
   concept: c,
+  place,
   byId,
   validating,
   failed,
@@ -236,6 +293,8 @@ function ConceptRow({
   onEdit,
 }: {
   concept: AdminConcept;
+  /** Its place in the tree reading: indented, its other broader concepts said instead of the path. */
+  place?: TreeRow<AdminConcept>;
   byId: ReadonlyMap<string, AdminConcept>;
   validating: boolean;
   failed: unknown;
@@ -249,8 +308,10 @@ function ConceptRow({
   const reasonId = `concept-${c.id}-why`;
   const description = c.descriptions[locale] || c.descriptions[locale === "fr" ? "en" : "fr"];
 
+  const indent = place ? indentOf(place) : undefined;
+
   return (
-    <li className="flex flex-wrap items-start gap-x-4 gap-y-3 p-4">
+    <li {...indent} className={cx("flex flex-wrap items-start gap-x-4 gap-y-3 p-4", indent?.className)}>
       <div className="min-w-0 flex-1 basis-60 space-y-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-semibold">{name}</span>
@@ -261,7 +322,13 @@ function ConceptRow({
             </Badge>
           ))}
         </div>
-        <BroaderPath concept={c} byId={byId} locale={locale} />
+        {!place ? (
+          <BroaderPath concept={c} byId={byId} locale={locale} />
+        ) : place.alsoUnder.length > 0 ? (
+          <p className="text-xs text-fg-muted">
+            {t("admin.concepts.tree.alsoUnder", { names: place.alsoUnder.map((b) => conceptName(b, locale)).join(", ") })}
+          </p>
+        ) : null}
         {description ? <p className="line-clamp-2 text-xs text-fg-muted">{description}</p> : null}
         <p className="flex flex-wrap gap-x-2 text-xs text-fg-muted">
           <span className="tabular-nums">

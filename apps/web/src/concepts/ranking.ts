@@ -8,7 +8,7 @@ import { closeConcepts, resolveConceptLabel, type ResolvableConcept } from "@qui
 
 import { fuzzyScore } from "../fuzzy";
 import type { Locale } from "../i18n";
-import { conceptName } from "./names";
+import { byConceptName } from "./names";
 
 /** What a concept answers to: its labels, then its curated aliases (ADR-081 §6). */
 const namesOf = (c: Concept) => [...[c.labels.fr, c.labels.en].filter((l): l is string => l !== null), ...c.aliases];
@@ -62,7 +62,7 @@ export function rankConcepts<C extends Concept>(
     .sort(
       (a, b) =>
         Number(a.status !== "validated") - Number(b.status !== "validated") ||
-        conceptName(a, locale).localeCompare(conceptName(b, locale), locale),
+        byConceptName(locale)(a, b),
     );
   const hits = [...new Set([...direct, ...matches])].flatMap((id) => byId.get(id) ?? []);
   const tier = (c: C) => (direct.has(c.id) ? 0 : 2) + (first.has(c.id) ? 0 : 1);

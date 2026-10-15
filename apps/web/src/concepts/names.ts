@@ -43,15 +43,21 @@ export const usesLabel = (t: TFunction, n: number): string =>
  */
 export function broaderTrail(concept: Concept, byId: ReadonlyMap<string, Concept>, locale: Locale): string[] {
   const trail: string[] = [];
-  for (let at: Concept | undefined = concept; at; ) {
-    const parent: Concept | undefined = at.broader
-      .map((id) => byId.get(id))
-      .filter((c): c is Concept => c !== undefined)
-      .sort((a, b) => conceptName(a, locale).localeCompare(conceptName(b, locale)))[0];
-    if (parent) trail.unshift(conceptName(parent, locale));
-    at = parent;
+  for (let at = broaderOf(concept, byId, locale)[0]; at; at = broaderOf(at, byId, locale)[0]) {
+    trail.unshift(conceptName(at, locale));
   }
   return trail;
+}
+
+/** Two concepts in the order of their names in the reader's language. */
+export const byConceptName =
+  (locale: Locale) =>
+  (a: Concept, b: Concept): number =>
+    conceptName(a, locale).localeCompare(conceptName(b, locale), locale);
+
+/** A concept's broader concepts that `byId` holds, by name: the first is the one its path follows. */
+export function broaderOf<C extends Concept>(concept: Concept, byId: ReadonlyMap<string, C>, locale: Locale): C[] {
+  return concept.broader.flatMap((id) => byId.get(id) ?? []).sort(byConceptName(locale));
 }
 
 /** A language of a concept as the sheet names it: "French", "English". */

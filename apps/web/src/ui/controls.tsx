@@ -1,4 +1,4 @@
-import { CalendarRange, Check, CircleAlert, LayoutDashboard, LayoutGrid, List, Loader2, Minus, Search, X } from "lucide-react";
+import { CalendarRange, Check, CircleAlert, LayoutDashboard, LayoutGrid, List, ListTree, Loader2, Minus, Search, X } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
@@ -559,17 +559,18 @@ function iconOption<T extends string>(value: T, icon: ReactNode, label: string) 
 }
 
 /** The pictures a list can be drawn as, each with its icon. */
-export type ViewName = "cards" | "list" | "schedule" | "heat";
+export type ViewName = "cards" | "list" | "schedule" | "heat" | "tree";
 const VIEW_ICONS: Record<ViewName, IconType> = {
   cards: LayoutGrid,
   list: List,
   schedule: CalendarRange,
   heat: LayoutDashboard,
+  tree: ListTree,
 };
 
 /**
  * The switch between pictures of the same list (cards, a table, a schedule,
- * a heat map), in the order given: icons only (`iconOption`), at the list's
+ * a heat map, a tree), in the order given: icons only (`iconOption`), at the list's
  * top right. `label` names the group when no caption does.
  */
 export function ViewSwitch<V extends ViewName>({
@@ -594,6 +595,7 @@ export function ViewSwitch<V extends ViewName>({
     list: t("view.list"),
     schedule: t("view.schedule"),
     heat: t("view.heat"),
+    tree: t("view.tree"),
   };
   return (
     <Segmented
