@@ -31,8 +31,8 @@ import { conceptToCreate, droppedReason, resolveConceptLabel } from "@quiz/domai
 
 import type { Db } from "../../db/client.js";
 import { concepts, questionConcepts } from "../../db/schema.js";
-import { oneLine, type LlmGateway } from "../llm/service.js";
-import { lineIndex, VOCABULARY_FORMAT, vocabularyLines } from "./aiVocabulary.js";
+import type { LlmGateway } from "../llm/service.js";
+import { aiReason, LANG_NAME, lineIndex, VOCABULARY_FORMAT, vocabularyLines } from "./aiVocabulary.js";
 import { droppedKeys } from "./links.js";
 import { loadAliases, toConceptRef, toResolvable } from "./row.js";
 
@@ -97,7 +97,7 @@ export async function suggestConcepts(
   const { value } = await gateway.complete({
     purpose: "suggest",
     userId: input.userId,
-    system: `${SYSTEM} Write each reason, and each new label, in ${input.lang === "fr" ? "French" : "English"}.`,
+    system: `${SYSTEM} Write each reason, and each new label, in ${LANG_NAME[input.lang]}.`,
     prompt: `The question's draft:\n"""\n${input.draft.replaceAll('"""', "'''")}\n"""\n\nThe vocabulary:\n${lines.join("\n") || "(empty)"}`,
     schema: Reply,
     maxTokens: MAX_TOKENS,
@@ -118,18 +118,17 @@ export async function suggestConcepts(
     taken.add(live.id);
     existing.push({ concept: toConceptRef(live, input.lang), reason, ...(asked === undefined ? {} : { asked }) });
   };
-  const reasonOf = (text: string) => oneLine(text, CONCEPT_AI_REASON_MAX);
 
   for (const e of value.existing) {
     const at = lineIndex(e.index, offered.length);
-    const reason = reasonOf(e.reason);
+    const reason = aiReason(e.reason);
     if (at !== null && reason !== "") offer(offered[at]!.id, reason);
   }
 
   const created: ConceptSuggestions["created"] = [];
   const keys = new Set<string>();
   for (const c of value.created) {
-    const reason = reasonOf(c.reason);
+    const reason = aiReason(c.reason);
     const fresh = conceptToCreate(c.label);
     if (reason === "" || !fresh) continue;
     const outcome = resolveConceptLabel(c.label, vocab);

@@ -115,6 +115,19 @@ export interface ConceptPairCount {
   smaller: number;
 }
 
+/** Adds one proposal to a working graph, a related one in canonical order. */
+function addProposal(work: { broader: RelationEdge[]; related: RelationEdge[] }, p: RelationProposal): void {
+  if (p.kind === "broader") work.broader.push({ concept: p.concept, target: p.target });
+  else work.related.push(canonicalRelated(p.concept, p.target));
+}
+
+/** The edges with the proposals added, as accepting them all would leave the graph; `edges` is not changed. */
+export function withProposals(edges: RelationEdges, proposals: readonly RelationProposal[]): RelationEdges {
+  const work = { broader: [...edges.broader], related: [...edges.related] };
+  for (const p of proposals) addProposal(work, p);
+  return work;
+}
+
 /**
  * The proposals that can all be accepted together, in order: each is checked
  * by the relation rules against the edges plus the proposals kept before it,
@@ -136,11 +149,8 @@ export function admissible<P extends RelationProposal>(
     const refused =
       p.kind === "broader" ? checkBroaderEdge(work, p.concept, p.target) : checkRelatedEdge(work, p.concept, p.target);
     if (refused) return false;
-    if (p.kind === "related") work.related.push(canonicalRelated(p.concept, p.target));
-    else {
-      work.broader.push({ concept: p.concept, target: p.target });
-      added.set(p.concept, n + 1);
-    }
+    addProposal(work, p);
+    if (p.kind === "broader") added.set(p.concept, n + 1);
     return true;
   });
 }

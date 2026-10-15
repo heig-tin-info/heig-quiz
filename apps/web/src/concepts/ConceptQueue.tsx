@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import {
   CONCEPT_LANGS,
+  CONCEPT_PROPOSE_EXCLUDE_MAX,
   ConceptDuplicatesAi,
   ConceptRelationProposals,
   type AdminConcept,
@@ -95,20 +96,29 @@ export function ConceptQueue() {
   const narrowed = useMemo(() => {
     if (q === "") return () => true;
     const matched = new Set(rankConcepts(q, all ?? [], locale).map((c) => c.id));
-    return (p: { a: AdminConcept; b: AdminConcept | null }) => matched.has(p.a.id) || (p.b !== null && matched.has(p.b.id));
+    return (p: { a: AdminConcept; b: AdminConcept }) => matched.has(p.a.id) || matched.has(p.b.id);
   }, [all, q, locale]);
   const pairs = useMemo(() => found.filter(narrowed), [found, narrowed]);
   const asked = useMutation({
     mutationFn: async () => ConceptDuplicatesAi.parse(await api("/app/api/admin/concepts/duplicates/ai", { method: "POST" })),
   });
   const aiPairs = useMemo(() => aiPairsOf(asked.data, all ?? [], found).filter(narrowed), [asked.data, all, found, narrowed]);
-  // The model's relations (ADR-114 §2), kept here like its pairs so that they survive a filter switch.
+  // The model's relations (ADR-114 §2), kept here like its pairs so that they survive a filter switch;
+  // `seen` accumulates what the page asked about, which Ask again excludes, the latest kept past the cap.
   const proposals = useMutation({
-    mutationFn: async () =>
-      ConceptRelationProposals.parse(
-        await api("/app/api/admin/concepts/relations/ai", { method: "POST", body: JSON.stringify({} satisfies ConceptRelationsAiRequest) }),
-      ),
+    mutationFn: async (exclude: string[]) => {
+      const reply = ConceptRelationProposals.parse(
+        await api("/app/api/admin/concepts/relations/ai", { method: "POST", body: JSON.stringify({ exclude } satisfies ConceptRelationsAiRequest) }),
+      );
+      return { reply, seen: [...exclude, ...reply.asked].slice(-CONCEPT_PROPOSE_EXCLUDE_MAX) };
+    },
   });
+  const ai = {
+    data: proposals.data?.reply,
+    isPending: proposals.isPending,
+    error: proposals.error,
+    ask: () => proposals.mutate(proposals.data?.seen ?? []),
+  };
   const edited = all?.find((c) => c.id === editing);
 
   const validate = useMutation({
@@ -175,7 +185,7 @@ export function ConceptQueue() {
           onEdit={setEditing}
         />
       ) : filter === "relations" ? (
-        <ConceptRelationReview concepts={all ?? []} ai={proposals} narrowed={narrowed} onEdit={setEditing} />
+        <ConceptRelationReview concepts={all ?? []} ai={ai} narrowed={narrowed} onEdit={setEditing} />
       ) : rows.length === 0 ? (
         <Card>
           {q !== "" ? (

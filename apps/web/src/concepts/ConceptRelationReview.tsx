@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Sparkles } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
@@ -20,7 +20,17 @@ import { Alert, Badge, Button, Card, Checkbox, EmptyState, FormError, QueryError
 import { relationError } from "./ConceptRelations";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, refName } from "./names";
-import { aiRowsOf, conflicting, rowsOf, rowState, runAccept, type Outcome, type RelationRow } from "./relationReview";
+import {
+  aiRowsOf,
+  conflicting,
+  isConcept,
+  rowsOf,
+  rowState,
+  runAccept,
+  type Outcome,
+  type RelationRow,
+  type TopConcept,
+} from "./relationReview";
 
 /**
  * The Relations view of the curation queue (#897 step A, ADR-114): the
@@ -41,9 +51,10 @@ export function ConceptRelationReview({
   onEdit,
 }: {
   concepts: readonly AdminConcept[];
-  ai: UseMutationResult<ConceptRelationProposals, Error, void>;
+  /** The model's pass, kept by the queue so that it survives a filter switch; `ask` runs it, again past what it asked. */
+  ai: { data: ConceptRelationProposals | undefined; isPending: boolean; error: Error | null; ask: () => void };
   /** The queue's search, as for the duplicates: a row stays when one of its concepts matches. */
-  narrowed: (row: { a: AdminConcept; b: AdminConcept | null }) => boolean;
+  narrowed: (row: { a: AdminConcept; b: AdminConcept }) => boolean;
   onEdit: (id: string) => void;
 }) {
   const t = useT();
@@ -61,7 +72,7 @@ export function ConceptRelationReview({
   const prepass = useMemo(() => rowsOf(candidates.data?.candidates ?? [], concepts), [candidates.data, concepts]);
   const proposed = useMemo(() => aiRowsOf(ai.data, concepts, prepass), [ai.data, concepts, prepass]);
   const [rows, aiRows] = useMemo(() => {
-    const shown = (r: RelationRow) => !dismissed.has(r.key) && narrowed(r);
+    const shown = (r: RelationRow) => !dismissed.has(r.key) && narrowed({ a: r.a, b: isConcept(r.b) ? r.b : r.a });
     return [prepass.filter(shown), proposed.filter(shown)];
   }, [prepass, proposed, dismissed, narrowed]);
   const { ticked, conflicts } = useMemo(() => {
@@ -124,8 +135,8 @@ export function ConceptRelationReview({
     { kind: "broader", title: t("admin.concepts.rel.ai.broader"), desc: t("admin.concepts.rel.ai.broader.desc") },
     { kind: "related", title: t("admin.concepts.rel.ai.related"), desc: t("admin.concepts.rel.ai.related.desc") },
   ] as const;
-  const tops = new Map<string, RelationRow[]>();
-  for (const r of aiRows) if (r.top) tops.set(r.top.key, [...(tops.get(r.top.key) ?? []), r]);
+  const tops = new Map<string, { top: TopConcept; rows: RelationRow[] }>();
+  for (const r of aiRows) if (r.top) tops.set(r.top.key, { top: r.top, rows: [...(tops.get(r.top.key)?.rows ?? []), r] });
 
   return (
     <div className="space-y-4">
@@ -152,7 +163,7 @@ export function ConceptRelationReview({
       {llm.data?.available === true ? (
         <section aria-label={t("admin.concepts.rel.ai.title")} className="space-y-4 pt-2">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <Button variant="secondary" size="sm" loading={ai.isPending} onClick={() => ai.mutate()}>
+            <Button variant="secondary" size="sm" loading={ai.isPending} onClick={ai.ask}>
               <Sparkles /> {t(ai.data && ai.data.remaining > 0 ? "admin.concepts.rel.ai.askAgain" : "admin.concepts.rel.ai.ask")}
             </Button>
             <p className="min-w-0 flex-1 basis-64 text-xs text-fg-muted">
@@ -161,12 +172,12 @@ export function ConceptRelationReview({
               {ai.data?.truncated ? ` ${t("admin.concepts.rel.ai.truncated")}` : ""}
             </p>
           </div>
-          {ai.isError ? (
+          {ai.error ? (
             <Alert tone="danger" title={t("admin.concepts.rel.ai.failed")}>
               {apiErrorMessage(ai.error, t("error.llmFailed"))}
             </Alert>
           ) : null}
-          {ai.data && !ai.isPending && aiRows.length === 0 ? (
+          {ai.data && !ai.isPending && proposed.length === 0 ? (
             <p className="text-sm text-fg-muted">{t("admin.concepts.rel.ai.none")}</p>
           ) : null}
           {aiSections.map((s) => (
@@ -177,21 +188,18 @@ export function ConceptRelationReview({
           {tops.size > 0 ? (
             <section aria-label={t("admin.concepts.rel.top.title")} className="space-y-2">
               <SectionTitle title={t("admin.concepts.rel.top.title")} desc={t("admin.concepts.rel.top.desc")} />
-              {[...tops.values()].map((group) => {
-                const top = group[0]!.top!;
-                return (
-                  <Card key={top.key}>
-                    <div className="space-y-1 border-b border-line p-4">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="text-sm font-semibold">{t("admin.concepts.rel.top.new", { name: refName(top) })}</span>
-                        <ConceptStatusBadge status="proposed" />
-                      </div>
-                      <p className="text-xs text-fg-muted">{top.reason}</p>
+              {[...tops.values()].map(({ top, rows: group }) => (
+                <Card key={top.key}>
+                  <div className="space-y-1 border-b border-line p-4">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-sm font-semibold">{t("admin.concepts.rel.top.new", { name: refName(top) })}</span>
+                      <ConceptStatusBadge status="proposed" />
                     </div>
-                    <ul className="divide-y divide-line">{group.map(render)}</ul>
-                  </Card>
-                );
-              })}
+                    <p className="text-xs text-fg-muted">{top.reason}</p>
+                  </div>
+                  <ul className="divide-y divide-line">{group.map(render)}</ul>
+                </Card>
+              ))}
             </section>
           ) : null}
         </section>
@@ -259,7 +267,7 @@ function ReviewRow({
 }) {
   const t = useT();
   const { locale } = useI18n();
-  const [a, b] = [conceptName(row.a, locale), row.b ? conceptName(row.b, locale) : refName(row.top!)];
+  const [a, b] = [conceptName(row.a, locale), isConcept(row.b) ? conceptName(row.b, locale) : refName(row.b)];
   const named =
     row.kind === "broader"
       ? t("admin.concepts.rel.broaderNamed", { name: a, target: b })
@@ -302,7 +310,7 @@ function ReviewRow({
           <span className="text-xs text-fg-muted">
             {row.kind === "broader" ? t("admin.concepts.rel.under") : t("admin.concepts.rel.and")}
           </span>
-          {row.b ? name(row.b.id, b) : <span className="px-3 text-sm font-semibold">{b}</span>}
+          {isConcept(row.b) ? name(row.b.id, b) : <span className="px-3 text-sm font-semibold">{b}</span>}
           {state.state === "added" ? (
             <Badge tone="green" icon={Check}>
               {t("admin.concepts.rel.added")}

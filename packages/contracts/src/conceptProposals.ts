@@ -44,13 +44,17 @@ export const CONCEPT_PROPOSE_BROADER_MAX = 80;
 export const CONCEPT_PROPOSE_RELATED_MAX = 30;
 export const CONCEPT_PROPOSE_TOPS_MAX = 10;
 export const CONCEPT_PROPOSE_TOP_NARROWER_MAX = 15;
+export const CONCEPT_PROPOSE_EXCLUDE_MAX = 400;
 
 /**
- * `POST /admin/concepts/relations/ai`: the concepts to place; without them,
- * the Unplaced ones. Either way at most {@link CONCEPT_PROPOSE_PLACE_MAX},
- * the oldest first, are asked about per call.
+ * `POST /admin/concepts/relations/ai`: the one concept to place (the sheet's
+ * Suggest a broader concept); without it, the oldest
+ * {@link CONCEPT_PROPOSE_PLACE_MAX} Unplaced concepts not in `exclude` — the
+ * ones the page asked about already, so that Ask again moves on.
  */
-export const ConceptRelationsAiRequest = z.object({ concepts: z.array(z.uuid()).min(1).max(1000).optional() }).strict();
+export const ConceptRelationsAiRequest = z
+  .object({ concept: z.uuid().optional(), exclude: z.array(z.uuid()).max(CONCEPT_PROPOSE_EXCLUDE_MAX).optional() })
+  .strict();
 export type ConceptRelationsAiRequest = z.infer<typeof ConceptRelationsAiRequest>;
 
 /**
@@ -59,11 +63,13 @@ export type ConceptRelationsAiRequest = z.infer<typeof ConceptRelationsAiRequest
  * concept"; a `related` pair carries the model's reason; a top is a concept
  * the vocabulary lacks, named in `lang` (the admin's), that would gather
  * `narrower`, created `proposed` only when the admin accepts a row of it.
- * `remaining`: the concepts to place that were not asked about this time;
- * `truncated`: the vocabulary was longer than a call takes.
+ * `asked`: the concepts this call asked a place for; `remaining`: the
+ * Unplaced concepts neither asked about nor excluded; `truncated`: the
+ * vocabulary was longer than a call takes.
  */
 export const ConceptRelationProposals = z.object({
   lang: ConceptLang,
+  asked: z.array(z.uuid()).max(CONCEPT_PROPOSE_PLACE_MAX),
   broader: z.array(z.object({ concept: z.uuid(), target: z.uuid() })).max(CONCEPT_PROPOSE_BROADER_MAX),
   related: z
     .array(z.object({ a: z.uuid(), b: z.uuid(), reason: z.string().min(1).max(CONCEPT_AI_REASON_MAX) }))

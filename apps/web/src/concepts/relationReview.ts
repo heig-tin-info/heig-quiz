@@ -19,6 +19,7 @@ import {
   checkBroaderEdge,
   checkRelatedEdge,
   qualifiedConceptKey,
+  withProposals,
   type RelationEdges,
   type RelationRefusal,
 } from "@quiz/domain";
@@ -36,9 +37,9 @@ export interface TopConcept {
 }
 
 /**
- * One proposed edge with its two concepts: `a` is `concept`, `b` is `target`
- * — null for a row under a top concept not created yet, whose `target` is
- * then a placeholder (`top:<key>`) that no rule finds in the graph.
+ * One proposed edge: `a` is `concept`; `b` is `target`, or the top concept
+ * not created yet — the row's `target` is then a placeholder (`top:<key>`)
+ * that no rule finds in the graph.
  */
 export interface RelationRow {
   key: string;
@@ -46,22 +47,20 @@ export interface RelationRow {
   concept: string;
   target: string;
   a: AdminConcept;
-  b: AdminConcept | null;
+  b: AdminConcept | TopConcept;
   /** The pre-pass's live questions together (a related candidate). */
   questions: number | null;
   /** The model's reason (a related pair). */
   reason: string | null;
-  /** The missing top concept the row puts `a` under. */
+  /** The missing top concept the row puts `a` under, created or not: what groups the row. */
   top: TopConcept | null;
 }
 
-const row = (r: Omit<RelationRow, "key" | "questions" | "reason" | "top"> & Partial<RelationRow>): RelationRow => ({
-  key: `${r.kind}:${r.concept}:${r.target}`,
-  questions: null,
-  reason: null,
-  top: null,
-  ...r,
-});
+/** Whether a row's `b` is a concept of the vocabulary (else a top concept to create). */
+export const isConcept = (b: AdminConcept | TopConcept): b is AdminConcept => "id" in b;
+
+type RowFields = Pick<RelationRow, "kind" | "concept" | "target" | "a" | "b"> & Partial<RelationRow>;
+const row = (r: RowFields): RelationRow => ({ key: `${r.kind}:${r.concept}:${r.target}`, questions: null, reason: null, top: null, ...r });
 
 /** The candidates as rows, in their order; a row naming a concept that is gone (merged, deleted) is dropped. */
 export function rowsOf(candidates: readonly ConceptRelationCandidate[], concepts: readonly AdminConcept[]): RelationRow[] {
@@ -93,18 +92,20 @@ export function aiRowsOf(
   const byId = new Map(concepts.map((c) => [c.id, c]));
   const listed = new Set(prepass.map(pairOf));
   const out: RelationRow[] = [];
-  const add = (r: Omit<RelationRow, "key" | "questions" | "reason" | "top" | "a" | "b"> & Partial<RelationRow>) => {
+  const add = (r: Omit<RowFields, "a" | "b">, b: AdminConcept | TopConcept | undefined) => {
     const a = byId.get(r.concept);
-    const b = r.top && !byId.has(r.target) ? null : byId.get(r.target);
-    if (a && b !== undefined && !listed.has(pairOf(r))) out.push(row({ ...r, a, b }));
+    if (a && b && !listed.has(pairOf(r))) out.push(row({ ...r, a, b }));
   };
-  for (const e of result.broader) add({ kind: "broader", ...e });
-  for (const p of result.related) add({ kind: "related", concept: p.a, target: p.b, reason: p.reason });
+  for (const e of result.broader) add({ kind: "broader", ...e }, byId.get(e.target));
+  for (const p of result.related) add({ kind: "related", concept: p.a, target: p.b, reason: p.reason }, byId.get(p.b));
   for (const t of result.tops) {
     const top = { key: qualifiedConceptKey(t.label, t.qualifier), lang: result.lang, label: t.label, qualifier: t.qualifier, reason: t.reason };
-    const held = concepts.find((c) => c.labels[top.lang] !== null && qualifiedConceptKey(c.labels[top.lang]!, c.qualifiers[top.lang]) === top.key);
+    const held = concepts.find((c) => {
+      const label = c.labels[top.lang];
+      return label !== null && qualifiedConceptKey(label, c.qualifiers[top.lang]) === top.key;
+    });
     const target = held?.id ?? `top:${top.key}`;
-    for (const n of t.narrower) add({ kind: "broader", concept: n, target, top, key: `top:${top.key}:${n}` });
+    for (const n of t.narrower) add({ kind: "broader", concept: n, target, top, key: `top:${top.key}:${n}` }, held ?? top);
   }
   return out;
 }
@@ -124,16 +125,12 @@ const broaderFirst = <R extends Pick<RelationRow, "kind">>(rows: readonly R[]): 
 
 /**
  * The rows a ticked set rules out: open against the vocabulary, but refused
- * once the ticked edges are added (`admissible`) — the pre-pass's and the
- * model's lists were each consistent alone, not together.
+ * once the ticked edges are added (`admissible`, `withProposals`) — the
+ * pre-pass's and the model's lists were each consistent alone, not together.
  */
 export function conflicting(rows: readonly RelationRow[], ticked: readonly RelationRow[], edges: RelationEdges): Set<string> {
   if (ticked.length === 0) return new Set();
-  const kept = admissible(edges, broaderFirst(ticked));
-  const work: RelationEdges = {
-    broader: [...edges.broader, ...kept.filter((r) => r.kind === "broader")],
-    related: [...edges.related, ...kept.filter((r) => r.kind === "related").map((r) => canonicalRelated(r.concept, r.target))],
-  };
+  const work = withProposals(edges, admissible(edges, broaderFirst(ticked)));
   const chosen = new Set(ticked.map((r) => r.key));
   return new Set(
     rows
@@ -165,17 +162,17 @@ export async function runAccept(
   },
 ): Promise<Map<string, Outcome>> {
   const created = new Map<string, string | { error: unknown }>();
-  for (const { top, b } of rows) {
-    if (!top || b || created.has(top.key)) continue;
+  for (const { b } of rows) {
+    if (isConcept(b) || created.has(b.key)) continue;
     try {
-      created.set(top.key, (await write.create(top)).id);
+      created.set(b.key, (await write.create(b)).id);
     } catch (error) {
-      created.set(top.key, existing(error) ?? { error });
+      created.set(b.key, existing(error) ?? { error });
     }
   }
   const out = new Map<string, Outcome>();
   for (const r of broaderFirst(rows)) {
-    const target = r.top && !r.b ? created.get(r.top.key)! : r.target;
+    const target = isConcept(r.b) ? r.b.id : (created.get(r.b.key) ?? { error: null });
     if (typeof target !== "string") {
       out.set(r.key, target);
       continue;

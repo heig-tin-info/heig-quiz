@@ -4,7 +4,7 @@ import type { AdminConcept, ConceptRelationProposals } from "@quiz/contracts";
 import { edgesOf } from "@quiz/domain";
 
 import { ApiError } from "../api";
-import { aiRowsOf, conflicting, rowsOf, rowState, runAccept, type RelationRow, type TopConcept } from "./relationReview";
+import { aiRowsOf, conflicting, isConcept, rowsOf, rowState, runAccept, type RelationRow, type TopConcept } from "./relationReview";
 
 const concept = (n: number, over: Partial<AdminConcept> = {}): AdminConcept => ({
   id: `c0c0c0c0-0000-4000-8000-${String(n).padStart(12, "0")}`,
@@ -29,6 +29,7 @@ const all = [c1, c2, c3, c4];
 
 const proposals = (over: Partial<ConceptRelationProposals> = {}): ConceptRelationProposals => ({
   lang: "fr",
+  asked: [],
   broader: [],
   related: [],
   tops: [],
@@ -48,7 +49,7 @@ describe("rowsOf", () => {
       ],
       all,
     );
-    expect(rows.map((r) => [r.kind, r.a.id, r.b?.id, r.questions])).toEqual([
+    expect(rows.map((r) => [r.kind, r.a.id, isConcept(r.b) && r.b.id, r.questions])).toEqual([
       ["broader", c1.id, c2.id, null],
       ["related", c2.id, c4.id, 4],
     ]);
@@ -90,15 +91,15 @@ describe("aiRowsOf", () => {
 
   it("puts a top's concepts under it, as a placeholder until the vocabulary holds it", () => {
     const [before] = [aiRowsOf(proposals({ tops: [structure] }), all, [])];
-    expect(before.map((r) => [r.concept, r.target, r.b, r.top?.label])).toEqual([
-      [c3.id, "top:structure", null, "Structure"],
-      [c4.id, "top:structure", null, "Structure"],
+    expect(before.map((r) => [r.concept, r.target, isConcept(r.b), r.top?.label])).toEqual([
+      [c3.id, "top:structure", false, "Structure"],
+      [c4.id, "top:structure", false, "Structure"],
     ]);
     expect(rowState(before[0]!, edgesOf(all))).toEqual({ state: "open" });
 
     const created = concept(5, { labels: { fr: "Structure", en: null }, status: "proposed" });
     const after = aiRowsOf(proposals({ tops: [structure] }), [...all, created], []);
-    expect(after.map((r) => [r.target, r.b?.id, r.top?.key])).toEqual([
+    expect(after.map((r) => [r.target, isConcept(r.b) && r.b.id, r.top?.key])).toEqual([
       [created.id, created.id, "structure"],
       [created.id, created.id, "structure"],
     ]);
@@ -147,7 +148,7 @@ describe("runAccept", () => {
     concept: a.id,
     target: `top:${t.key}`,
     a,
-    b: null,
+    b: t,
     questions: null,
     reason: null,
     top: t,

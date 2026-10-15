@@ -28,7 +28,6 @@ import {
   type TagDropReason,
 } from "@quiz/contracts";
 import {
-  admissible,
   canonicalRelated,
   narrowerDescendants,
   checkAlias,
@@ -440,43 +439,31 @@ on("GET", "/app/api/admin/concepts/relations/candidates", (): ConceptRelationCan
 });
 
 /**
- * The model's relations (ADR-114 §2): fixed rows on the live concepts, kept
- * by the server's rule (`admissible`) — one the pre-pass lists too, one that
- * conflicts with a pre-pass pair once both are ticked, a related pair and
- * two missing top concepts in the reader's language; the `nollm` scene
- * refuses as a platform without a key does.
+ * The model's relations (ADR-114 §2): fixed rows on the live concepts — one
+ * the pre-pass lists too, one that conflicts with a pre-pass pair once both
+ * are ticked, a related pair and a missing top concept in the reader's
+ * language; the `nollm` scene refuses as a platform without a key does.
  */
 on("POST", "/app/api/admin/concepts/relations/ai", (): ConceptRelationProposals => {
   if (flags.nollm) throw refuse(409, "llm_not_configured", "No AI key is configured", { reason: "not_configured" });
-  const live = concepts.filter((c) => c.status !== "merged");
-  const id = (fr: string) => live.find((c) => c.labels.fr === fr && c.qualifiers.fr === "")?.id;
-  const lang = document.documentElement.lang === "fr" ? "fr" : "en";
-  const said = (fr: string, en: string) => (lang === "fr" ? fr : en);
-  const rows = (
-    [
-      ["broader", "Arithmétique des pointeurs", "Pointeur", ""],
-      ["broader", "Hash table", "Tableau", ""],
-      ["related", "Tas", "Pile", said("Deux zones de la mémoire d'un programme.", "Two regions of a program's memory.")],
-    ] as const
-  ).flatMap(([kind, a, b, reason]) => {
-    const [concept, target] = [id(a), id(b)];
-    return concept && target ? [{ kind, concept, target, reason }] : [];
-  });
-  const kept = admissible(edgesOf(live), rows, { broaderPerConcept: 2 });
-  const top = (label: [string, string], qualifier: [string, string], reason: [string, string], narrower: string[]) => ({
-    label: said(...label),
-    qualifier: said(...qualifier),
-    reason: said(...reason),
-    narrower: narrower.flatMap((fr) => id(fr) ?? []),
-  });
+  const id = (fr: string) => concepts.find((c) => c.status !== "merged" && c.labels.fr === fr && c.qualifiers.fr === "")?.id ?? "";
+  const french = document.documentElement.lang === "fr";
   return {
-    lang,
-    broader: kept.filter((r) => r.kind === "broader").map(({ concept, target }) => ({ concept, target })),
-    related: kept.filter((r) => r.kind === "related").map(({ concept, target, reason }) => ({ a: concept, b: target, reason })),
+    lang: french ? "fr" : "en",
+    asked: [id("Pile"), id("Hash table"), id("Tas")],
+    broader: [
+      { concept: id("Arithmétique des pointeurs"), target: id("Pointeur") },
+      { concept: id("Hash table"), target: id("Tableau") },
+    ],
+    related: [{ a: id("Tas"), b: id("Pile"), reason: french ? "Deux zones de la mémoire d'un programme." : "Two regions of a program's memory." }],
     tops: [
-      top(["Programmation", "Programming"], ["langage C", "C language"], ["Les notions de base d'un cours de C.", "The basics of a C course."], ["Pointeur", "Tableau"]),
-      top(["Structure de données", "Data structure"], ["", ""], ["Deux façons d'organiser des données.", "Two ways to organise data."], ["Pile", "Hash table"]),
-    ].filter((t) => t.narrower.length >= 2),
+      {
+        label: french ? "Structure de données" : "Data structure",
+        qualifier: "",
+        reason: french ? "Deux façons d'organiser des données." : "Two ways to organise data.",
+        narrower: [id("Pile"), id("Hash table")],
+      },
+    ],
     remaining: 3,
     truncated: false,
   };

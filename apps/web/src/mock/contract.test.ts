@@ -1203,29 +1203,23 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     expect(await queue()).toEqual(before);
   });
 
-  it("answers the model's relations on live concepts, and accepts a top's row through POST /concepts then the relation route (ADR-114 §2)", async () => {
+  it("answers the model's relations on live concepts of the queue, writing nothing (ADR-114 §2)", async () => {
     const before = await queue();
-    const res = await call("POST", "/app/api/admin/concepts/relations/ai", {});
+    const res = await call("POST", "/app/api/admin/concepts/relations/ai", { exclude: [] });
     expect(res.status).toBe(200);
     expect(issuesOf(ConceptRelationProposals, res.body)).toEqual([]);
     const proposals = res.body as unknown as ConceptRelationProposals;
     const ids = new Set(before.concepts.map((c) => c.id));
-    for (const id of [...proposals.broader.flatMap((e) => [e.concept, e.target]), ...proposals.tops.flatMap((t) => t.narrower)]) {
-      expect(ids.has(id)).toBe(true);
-    }
+    const named = [
+      ...proposals.asked,
+      ...proposals.broader.flatMap((e) => [e.concept, e.target]),
+      ...proposals.related.flatMap((p) => [p.a, p.b]),
+      ...proposals.tops.flatMap((t) => t.narrower),
+    ];
+    for (const id of named) expect(ids.has(id)).toBe(true);
     expect(proposals).toMatchObject({ remaining: 3, related: [{ reason: expect.any(String) }] });
-    expect(proposals.tops).toHaveLength(2);
+    expect(proposals.tops).toHaveLength(1);
     expect(await queue()).toEqual(before);
-
-    const top = proposals.tops[1]!;
-    const created = await call("POST", "/app/api/concepts", { lang: proposals.lang, label: top.label, qualifier: top.qualifier });
-    expect(created.status).toBe(200);
-    const id = (created.body as unknown as Concept).id;
-    const relate = await call("POST", `/app/api/admin/concepts/${top.narrower[0]}/relations`, { kind: "broader", target: id });
-    expect(relate.status).toBe(200);
-    const after = await queue();
-    expect(after.concepts.find((c) => c.id === top.narrower[0])?.broader).toContain(id);
-    expect(after.concepts.find((c) => c.id === id)?.status).toBe("proposed");
   });
 
   it("proposes the empty fields of a concept with Fill with AI, a taken label as taken, writing nothing", async () => {

@@ -19,8 +19,8 @@ import { AI_DUPLICATE_KINDS, type AiDuplicateKind, type Locale } from "@quiz/dom
 
 import type { Db } from "../../db/client.js";
 import { concepts } from "../../db/schema.js";
-import { oneLine, type LlmGateway } from "../llm/service.js";
-import { lineIndex, VOCABULARY_FORMAT, vocabularyLines } from "./aiVocabulary.js";
+import type { LlmGateway } from "../llm/service.js";
+import { aiReason, LANG_NAME, lineIndex, VOCABULARY_FORMAT, vocabularyLines } from "./aiVocabulary.js";
 
 /** Concepts sent: the vocabulary is hundreds; past this the oldest validated ones are left out of the call. */
 const MAX_CONCEPTS = 1000;
@@ -59,7 +59,7 @@ function validPairs(value: z.infer<typeof Reply>, ids: readonly string[]): Conce
     if (pair[0] === null || pair[1] === null) continue;
     const [i, j] = pair.sort((x, y) => x! - y!) as [number, number];
     const kind = p.kind.trim().toLowerCase();
-    const reason = oneLine(p.reason, CONCEPT_AI_REASON_MAX);
+    const reason = aiReason(p.reason);
     if (i === j || reason === "" || !kinds.includes(kind) || seen.has(`${i}:${j}`)) continue;
     seen.add(`${i}:${j}`);
     out.push({ a: ids[i]!, b: ids[j]!, kind: kind as ConceptDuplicatesAi["pairs"][number]["kind"], reason });
@@ -94,7 +94,7 @@ export async function aiDuplicates(db: Db, gateway: LlmGateway, userId: string, 
   const { value } = await gateway.complete({
     purpose: "concepts",
     userId,
-    system: `${SYSTEM} Write each reason in ${lang === "fr" ? "French" : "English"}.`,
+    system: `${SYSTEM} Write each reason in ${LANG_NAME[lang]}.`,
     prompt: vocabularyLines(rows).join("\n"),
     schema: Reply,
     maxTokens: MAX_TOKENS,

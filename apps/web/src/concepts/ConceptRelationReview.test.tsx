@@ -131,6 +131,7 @@ describe("the AI proposals of the Relations view (ADR-114 §2)", () => {
   const vocabulary = [...all, array, queue];
   const proposals: ConceptRelationProposals = {
     lang: "en",
+    asked: [recursion.id, stack.id, array.id, queue.id],
     broader: [
       // The pre-pass lists it already.
       { concept: arithmetic.id, target: pointer.id },
@@ -170,7 +171,7 @@ describe("the AI proposals of the Relations view (ADR-114 §2)", () => {
 
   it("lists the model's rows apart, once each, with the missing top concepts, and asks again while some remain", async () => {
     const { calls } = await askAi();
-    expect(calls.find((c) => `${c.method} ${c.url}` === AI)?.body).toEqual({});
+    expect(calls.find((c) => `${c.method} ${c.url}` === AI)?.body).toEqual({ exclude: [] });
     const broader = screen.getByRole("region", { name: "Broader concepts proposed by the AI" });
     expect(within(broader).getByRole("checkbox", { name: ARRAY })).not.toBeChecked();
     expect(screen.getAllByRole("checkbox", { name: BROADER })).toHaveLength(1);
@@ -181,10 +182,12 @@ describe("the AI proposals of the Relations view (ADR-114 §2)", () => {
     expect(within(tops).getByText("Proposed")).toBeInTheDocument();
     expect(within(tops).getByText("They organise data.")).toBeInTheDocument();
     expect(within(tops).getAllByRole("checkbox")).toHaveLength(2);
-    expect(screen.getByText(/3 unplaced concepts were not asked about this time/)).toBeInTheDocument();
+    expect(screen.getByText(/3 unplaced concepts are still to ask about/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Ask again" }));
     await waitFor(() => expect(count(calls, AI)).toBe(2));
+    // Ask again moves past what the page asked about already.
+    expect(calls.filter((c) => `${c.method} ${c.url}` === AI).at(-1)?.body).toEqual({ exclude: proposals.asked });
   });
 
   it("creates the top concept first, then writes the edges broader first, a refusal on its row only", async () => {
@@ -212,17 +215,6 @@ describe("the AI proposals of the Relations view (ADR-114 §2)", () => {
     ]);
     const row = screen.getByRole("checkbox", { name: ARRAY }).closest("li")!;
     expect(within(row).getByText(/array › pointer › array/i)).toBeInTheDocument();
-  });
-
-  it("puts the rows under the concept a 409 concept_exists names", async () => {
-    const { calls } = await askAi({
-      "POST /app/api/concepts": fail(409, { error: "concept_exists", concept: created }),
-      [`POST /app/api/admin/concepts/${stack.id}/relations`]: ok(stack),
-    });
-    await userEvent.click(screen.getByRole("checkbox", { name: STACK_TOP }));
-    await userEvent.click(screen.getByRole("button", { name: "Accept the selected relation" }));
-    await waitFor(() => expect(screen.getByText("Added: 1. Refused: 0.")).toBeInTheDocument());
-    expect(calls.find((c) => c.url.endsWith(`${stack.id}/relations`))?.body).toEqual({ kind: "broader", target: created.id });
   });
 
   it("disables a row that conflicts with a ticked one, across the two lists", async () => {

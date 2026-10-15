@@ -24,10 +24,10 @@
  *   without a model (#897 step A1, ADR-114): broader candidates by label
  *   containment, related ones by co-occurrence on live questions (counts
  *   only, the same exception as the queue's); nothing stored, no budget.
- * - `POST /app/api/admin/concepts/relations/ai` `{ concepts? }`: the model's
- *   broader rows, related pairs and missing top concepts to place the given
- *   concepts, or the Unplaced ones (at most 40 a call, `remaining` the
- *   others), from the labels and qualifiers of the live concepts alone
+ * - `POST /app/api/admin/concepts/relations/ai` `{ concept?, exclude? }`: the
+ *   model's broader rows, related pairs and missing top concepts to place one
+ *   concept, or the oldest Unplaced ones not excluded (at most 40 a call,
+ *   `asked` them, `remaining` the others), from the labels and qualifiers of the live concepts alone
  *   (ADR-114 §2, purpose `concepts`, the duplicates' per-minute budget);
  *   validated against the graph, nothing stored. The gateway's refusals as
  *   for the duplicates below.
@@ -155,7 +155,7 @@ export async function conceptPlugin(app: FastifyInstance) {
       return (await service.aiRelations(app.db, app.llmGateway, {
         userId: req.user!.id,
         lang: readerLang(req),
-        ...body.data,
+        request: body.data,
       })) satisfies ConceptRelationProposals;
     } catch (error) {
       return sendFailure(reply, error, now, llmArms);
