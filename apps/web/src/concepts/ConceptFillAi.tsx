@@ -1,12 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
 
 import { CONCEPT_LANGS, ConceptFill, ConceptFillRequest, type ConceptLang } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
 import { useLlmAvailability } from "../llmAvailability";
-import { Alert, Button } from "../ui";
+import { Alert } from "../ui";
+import { AiAsk } from "./AiAsk";
 import type { Sides } from "./ConceptSheet";
 import { langName, refName } from "./names";
 
@@ -68,23 +68,15 @@ export function FillWithAi({ conceptId, sides, onFill }: { conceptId: string; si
 
   return (
     <section aria-label={t("admin.concepts.fill")} className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          loading={fill.isPending}
-          disabled={!fillable}
-          onClick={() => form.success && fill.mutate(form.data)}
-        >
-          {fill.isPending ? null : <Sparkles />} {t("admin.concepts.fill")}
-        </Button>
-        <p className="min-w-0 flex-1 basis-64 text-xs text-fg-muted">{t("admin.concepts.fill.hint")}</p>
-      </div>
-      {fill.isError ? (
-        <Alert tone="danger" title={t("admin.concepts.fill.failed")}>
-          {apiErrorMessage(fill.error, t("error.llmFailed"))}
-        </Alert>
-      ) : null}
+      <AiAsk
+        label={t("admin.concepts.fill")}
+        hint={t("admin.concepts.fill.hint")}
+        pending={fill.isPending}
+        error={fill.error}
+        failedTitle={t("admin.concepts.fill.failed")}
+        disabled={!fillable}
+        onAsk={() => form.success && fill.mutate(form.data)}
+      />
       {fill.data && !fill.isPending ? (
         <div className="space-y-2 text-sm">
           <p className="text-fg-muted">{t(brings(fill.data) ? "admin.concepts.fill.done" : "admin.concepts.fill.none")}</p>

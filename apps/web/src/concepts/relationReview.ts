@@ -8,7 +8,10 @@
  */
 import {
   type AdminConcept,
+  type Concept,
+  type ConceptCreate,
   ConceptExists,
+  type ConceptRelationAdd,
   type ConceptLang,
   type ConceptRelationCandidate,
   type ConceptRelationProposals,
@@ -24,7 +27,7 @@ import {
   type RelationRefusal,
 } from "@quiz/domain";
 
-import { ApiError } from "../api";
+import { api, ApiError } from "../api";
 
 /** A top concept the vocabulary lacks, as the model named it: created `proposed`, in `lang`, when a ticked row carries it. */
 export interface TopConcept {
@@ -110,6 +113,17 @@ export function aiRowsOf(
   return out;
 }
 
+/**
+ * The model's broader rows for ONE concept (the sheet's Suggest a broader
+ * concept, ADR-114 §3): its rows towards an existing concept and towards a
+ * missing top concept; every other row of the reply is left out.
+ */
+export const broaderRowsFor = (
+  result: ConceptRelationProposals | undefined,
+  concepts: readonly AdminConcept[],
+  conceptId: string,
+): RelationRow[] => aiRowsOf(result, concepts, []).filter((r) => r.kind === "broader" && r.concept === conceptId);
+
 /** Where a row stands against the edges as loaded: still to accept, there already, or refused by the rule (a cycle, a hierarchy). */
 export type RowState = { state: "open" } | { state: "added" } | { state: "blocked"; refusal: RelationRefusal };
 
@@ -147,6 +161,20 @@ const existing = (error: unknown): string | null => {
   const parsed = error instanceof ApiError ? ConceptExists.safeParse(error.body) : null;
   return parsed?.success ? parsed.data.concept.id : null;
 };
+
+/** Creates a missing top concept, `proposed`, in its language: the concept creation route (audited `concept.propose`). */
+export const createTop = (top: TopConcept): Promise<Concept> =>
+  api<Concept>("/app/api/concepts", {
+    method: "POST",
+    body: JSON.stringify({ lang: top.lang, label: top.label, qualifier: top.qualifier } satisfies ConceptCreate),
+  });
+
+/** Writes one row's edge towards `target` through the relation route (audited `concept.relation_add`). */
+export const relateRow = (row: Pick<RelationRow, "kind" | "concept">, target: string): Promise<Concept> =>
+  api<Concept>(`/app/api/admin/concepts/${row.concept}/relations`, {
+    method: "POST",
+    body: JSON.stringify({ kind: row.kind, target } satisfies ConceptRelationAdd),
+  });
 
 /**
  * Writes the ticked rows: each missing top concept they carry is created

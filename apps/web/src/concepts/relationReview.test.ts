@@ -4,7 +4,17 @@ import type { AdminConcept, ConceptRelationProposals } from "@quiz/contracts";
 import { edgesOf } from "@quiz/domain";
 
 import { ApiError } from "../api";
-import { aiRowsOf, conflicting, isConcept, rowsOf, rowState, runAccept, type RelationRow, type TopConcept } from "./relationReview";
+import {
+  aiRowsOf,
+  broaderRowsFor,
+  conflicting,
+  isConcept,
+  rowsOf,
+  rowState,
+  runAccept,
+  type RelationRow,
+  type TopConcept,
+} from "./relationReview";
 
 const concept = (n: number, over: Partial<AdminConcept> = {}): AdminConcept => ({
   id: `c0c0c0c0-0000-4000-8000-${String(n).padStart(12, "0")}`,
@@ -103,6 +113,28 @@ describe("aiRowsOf", () => {
       [created.id, created.id, "structure"],
       [created.id, created.id, "structure"],
     ]);
+  });
+});
+
+describe("broaderRowsFor", () => {
+  it("keeps one concept's broader rows and the top gathering it, nothing else", () => {
+    const rows = broaderRowsFor(
+      proposals({
+        broader: [
+          { concept: c3.id, target: c1.id },
+          { concept: c2.id, target: c1.id },
+        ],
+        related: [{ a: c3.id, b: c2.id, reason: "Connected." }],
+        tops: [structure],
+      }),
+      all,
+      c3.id,
+    );
+    expect(rows.map((r) => [r.kind, r.concept, isConcept(r.b) ? r.b.id : r.b.label])).toEqual([
+      ["broader", c3.id, c1.id],
+      ["broader", c3.id, "Structure"],
+    ]);
+    expect(broaderRowsFor(undefined, all, c3.id)).toEqual([]);
   });
 });
 

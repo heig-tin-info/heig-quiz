@@ -16,6 +16,7 @@ import {
   ConceptPatch,
   ConceptRelationAdd,
   ConceptRelationKind,
+  ConceptRelationsAiRequest,
   type AdminConcept,
   type AdminConceptList,
   type ConceptDuplicatesAi,
@@ -442,13 +443,17 @@ on("GET", "/app/api/admin/concepts/relations/candidates", (): ConceptRelationCan
  * The model's relations (ADR-114 §2): fixed rows on the live concepts — one
  * the pre-pass lists too, one that conflicts with a pre-pass pair once both
  * are ticked, a related pair and a missing top concept in the reader's
- * language; the `nollm` scene refuses as a platform without a key does.
+ * language. For one `concept` (the sheet's Suggest a broader concept), the
+ * same reply cut to that concept: its broader rows and the tops gathering
+ * it. The `nollm` scene refuses as a platform without a key does.
  */
-on("POST", "/app/api/admin/concepts/relations/ai", (): ConceptRelationProposals => {
+on("POST", "/app/api/admin/concepts/relations/ai", (_m, raw): ConceptRelationProposals => {
   if (flags.nollm) throw refuse(409, "llm_not_configured", "No AI key is configured", { reason: "not_configured" });
+  const body = ConceptRelationsAiRequest.safeParse(raw ?? {});
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
   const id = (fr: string) => concepts.find((c) => c.status !== "merged" && c.labels.fr === fr && c.qualifiers.fr === "")?.id ?? "";
   const french = document.documentElement.lang === "fr";
-  return {
+  const reply: ConceptRelationProposals = {
     lang: french ? "fr" : "en",
     asked: [id("Pile"), id("Hash table"), id("Tas")],
     broader: [
@@ -466,6 +471,15 @@ on("POST", "/app/api/admin/concepts/relations/ai", (): ConceptRelationProposals 
     ],
     remaining: 3,
     truncated: false,
+  };
+  const one = body.data.concept;
+  if (one === undefined) return reply;
+  return {
+    ...reply,
+    asked: [one],
+    broader: reply.broader.filter((e) => e.concept === one),
+    related: [],
+    tops: reply.tops.filter((top) => top.narrower.includes(one)),
   };
 });
 
