@@ -176,8 +176,9 @@ describe("the relay never forces (ADR-078 §6)", () => {
 
   it("a declaration Quiz refuses pushes nothing and waits on the slow backoff, never failed", async () => {
     const s = await scenario();
-    await recordPush({ store: s.store }, SESSION, [{ ref: "refs/heads/main", oldSha: null, sha: s.src.sha }]);
     const clock = new Date("2026-10-14T22:31:00Z");
+    // Received on the worker's clock: a real `now` would land after it and never be due.
+    await recordPush({ store: s.store, now: () => clock }, SESSION, [{ ref: "refs/heads/main", oldSha: null, sha: s.src.sha }]);
     const forge: Forge = {
       ...fakeForge(s.forgeRepo),
       async declareHeads() {
