@@ -23,10 +23,11 @@ import {
 import { aiPairsOf, ConceptDuplicates, duplicatePairs } from "./ConceptDuplicates";
 import { ConceptSheet } from "./ConceptSheet";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
-import { conceptName, usesLabel } from "./names";
+import { conceptName, unplaced, usesLabel } from "./names";
 import { rankConcepts } from "./ranking";
+import { BroaderPath } from "./refs";
 
-type Filter = "all" | "proposed" | "validated" | "duplicates";
+type Filter = "all" | "proposed" | "validated" | "unplaced" | "duplicates";
 
 /** The languages a concept has no label in: what stops its validation. */
 const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((lang) => c.labels[lang] === null);
@@ -44,6 +45,10 @@ const missingLangs = (c: AdminConcept): ConceptLang[] => CONCEPT_LANGS.filter((l
  * that same list (quadratic, fine for hundreds of concepts): no route, nothing
  * stored. "Ask the AI" there (`POST /admin/concepts/duplicates/ai`) adds the
  * model's pairs below, kept in this component's state only.
+ *
+ * The hierarchy shows on each row as the path above the concept
+ * (`broaderTrail`, the picker's rule), and **Unplaced** lists the concepts
+ * with no broader and no narrower concept (`unplaced`), whatever their status.
  */
 export function ConceptQueue() {
   const t = useT();
@@ -59,15 +64,18 @@ export function ConceptQueue() {
   });
   const all = list.data?.concepts;
   const proposed = all?.filter((c) => c.status === "proposed").length ?? 0;
+  const byId = useMemo(() => new Map((all ?? []).map((c) => [c.id, c])), [all]);
+  const loose = useMemo(() => unplaced(all ?? []), [all]);
   const q = typed.trim();
   const rows = useMemo(() => {
     if (filter === "duplicates") return [];
-    const byStatus = (all ?? []).filter((c) => filter === "all" || c.status === filter);
+    const byStatus =
+      filter === "unplaced" ? loose : (all ?? []).filter((c) => filter === "all" || c.status === filter);
     if (q === "") return byStatus;
     // The proposed ones stay ahead of the validated ones, as without a search (the picker's `first`).
     const proposedIds = new Set(byStatus.filter((c) => c.status === "proposed").map((c) => c.id));
     return rankConcepts(q, byStatus, locale, proposedIds);
-  }, [all, filter, q, locale]);
+  }, [all, loose, filter, q, locale]);
 
   const found = useMemo(() => duplicatePairs(all ?? []), [all]);
   // Under a search, the pairs of which a concept matches.
@@ -110,6 +118,10 @@ export function ConceptQueue() {
             },
             { value: "validated", label: t("admin.concepts.filter.validated") },
             {
+              value: "unplaced",
+              label: loose.length > 0 ? t("admin.concepts.filter.unplacedCount", { n: loose.length }) : t("admin.concepts.filter.unplaced"),
+            },
+            {
               value: "duplicates",
               label: found.length > 0 ? t("admin.concepts.filter.duplicatesCount", { n: found.length }) : t("admin.concepts.filter.duplicates"),
             },
@@ -123,6 +135,10 @@ export function ConceptQueue() {
           onChange={(e) => setTyped(e.target.value)}
         />
       </div>
+
+      {filter === "unplaced" && list.isSuccess ? (
+        <p className="text-[13px] text-fg-muted">{t("admin.concepts.unplaced.hint")}</p>
+      ) : null}
 
       {list.isLoading ? (
         <Skeleton className="h-64 w-full" />
@@ -140,6 +156,8 @@ export function ConceptQueue() {
         <Card>
           {q !== "" ? (
             <EmptyState icon={BookMarked} title={t("admin.concepts.noMatch")} />
+          ) : filter === "unplaced" ? (
+            <EmptyState icon={Check} title={t("admin.concepts.unplaced.empty")} />
           ) : filter === "proposed" ? (
             <EmptyState icon={Check} title={t("admin.concepts.done.title")}>
               {t("admin.concepts.done.body")}
@@ -157,6 +175,7 @@ export function ConceptQueue() {
               <ConceptRow
                 key={c.id}
                 concept={c}
+                byId={byId}
                 validating={validate.isPending && validate.variables === c.id}
                 failed={validate.isError && validate.variables === c.id ? validate.error : null}
                 onValidate={() => validate.mutate(c.id)}
@@ -174,12 +193,14 @@ export function ConceptQueue() {
 
 function ConceptRow({
   concept: c,
+  byId,
   validating,
   failed,
   onValidate,
   onEdit,
 }: {
   concept: AdminConcept;
+  byId: ReadonlyMap<string, AdminConcept>;
   validating: boolean;
   failed: unknown;
   onValidate: () => void;
@@ -204,7 +225,8 @@ function ConceptRow({
             </Badge>
           ))}
         </div>
-        {description ? <p className="line-clamp-2 text-xs text-fg-muted">{description}</p> : null}
+        <BroaderPath concept={c} byId={byId} locale={locale} />
+        {description ?<p className="line-clamp-2 text-xs text-fg-muted">{description}</p> : null}
         <p className="flex flex-wrap gap-x-2 text-xs text-fg-muted">
           <span className="tabular-nums">
             {usesLabel(t, c.questionCount)}

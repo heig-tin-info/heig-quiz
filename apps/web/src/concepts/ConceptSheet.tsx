@@ -22,6 +22,7 @@ import { FillWithAi, fillEmpty } from "./ConceptFillAi";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
 import { ConceptRelations } from "./ConceptRelations";
 import { conceptName, langName, refName } from "./names";
+import { BroaderPath } from "./refs";
 
 type Side = { label: string; qualifier: string; description: string };
 export type Sides = Record<ConceptLang, Side>;
@@ -181,7 +182,7 @@ export function ConceptSheet({
   onClose,
 }: {
   concept: AdminConcept;
-  /** The whole queue: the validated ones are the targets of a merge. */
+  /** The whole queue: the validated ones are the targets of a merge; the path above the concept is read in it. */
   concepts: readonly AdminConcept[];
   locale: Locale;
   onClose: () => void;
@@ -275,6 +276,7 @@ export function ConceptSheet({
       }
     >
       <div className="space-y-8">
+        <BroaderPath concept={concept} byId={new Map(concepts.map((c) => [c.id, c]))} locale={locale} others />
         <FillWithAi conceptId={concept.id} sides={sides} onFill={(proposal) => setSides((s) => fillEmpty(s, proposal))} />
         {CONCEPT_LANGS.map((lang) => (
           <fieldset key={lang} className="space-y-4">

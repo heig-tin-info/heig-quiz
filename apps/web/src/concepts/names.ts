@@ -54,6 +54,22 @@ export function broaderTrail(concept: Concept, byId: ReadonlyMap<string, Concept
   return trail;
 }
 
+/**
+ * The concepts placed nowhere in the hierarchy (#897): no broader concept and
+ * no narrower one (no concept lists them in its `broader`). A root with
+ * children is placed. One pass over the `broader` lists, no walk, so a bad
+ * row cannot make it loop.
+ */
+export function unplaced<C extends Concept>(concepts: readonly C[]): C[] {
+  const placed = new Set<string>();
+  for (const c of concepts) {
+    if (c.broader.length === 0) continue;
+    placed.add(c.id);
+    for (const id of c.broader) placed.add(id);
+  }
+  return concepts.filter((c) => !placed.has(c.id));
+}
+
 /** A language of a concept as the sheet names it: "French", "English". */
 export const langName = (t: TFunction, lang: ConceptLang): string =>
   lang === "fr" ? t("admin.concepts.lang.fr") : t("admin.concepts.lang.en");

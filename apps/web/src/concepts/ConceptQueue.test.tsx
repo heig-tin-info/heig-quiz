@@ -528,6 +528,57 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
     });
   });
 
+  describe("the hierarchy (#897)", () => {
+    const named = (n: number, label: string, extra: Partial<AdminConcept> = {}) =>
+      concept(n, { status: "validated", labels: { fr: label, en: label }, ...extra });
+    const programming = named(20, "Programming");
+    const heap = named(21, "Heap");
+    const c = named(22, "C", { broader: [programming.id] });
+    const pointers = named(23, "Pointers", { broader: [c.id, heap.id] });
+    const lone = named(24, "Lone");
+    const tree = [programming, heap, c, pointers, lone];
+    const rowOf = (name: string) => screen.getAllByRole("listitem").find((li) => within(li).queryByText(name) !== null)!;
+
+    it("shows the path above a concept on its row, from the root down, the first broader by name", async () => {
+      mockFetch({ [LIST]: ok(page(tree)) });
+      renderWithProviders(<ConceptQueue />);
+      await screen.findByText("Pointers");
+      expect(within(rowOf("Pointers")).getByText("Programming › C")).toHaveTextContent(/^Within Programming › C$/);
+      expect(within(rowOf("C")).getByText("Programming")).toHaveTextContent(/^Within Programming$/);
+      expect(within(rowOf("Programming")).queryByText("Within")).toBeNull();
+      // The path is text: nothing on the row becomes a link.
+      expect(within(rowOf("Pointers")).queryByRole("link")).toBeNull();
+    });
+
+    it("lists as unplaced only the concepts with no broader and no narrower concept, and searches within them", async () => {
+      mockFetch({ [LIST]: ok(page(tree)) });
+      renderWithProviders(<ConceptQueue />);
+      // A root with a child (Programming, Heap) and a child (C, Pointers) are placed.
+      await userEvent.click(await screen.findByRole("radio", { name: /^unplaced \(1\)$/i }));
+      expect(screen.getByText(/no broader and no narrower concept/i)).toBeInTheDocument();
+      expect(screen.getAllByRole("listitem")).toHaveLength(1);
+      expect(screen.getByText("Lone")).toBeInTheDocument();
+
+      await userEvent.type(screen.getByRole("searchbox", { name: /search a concept/i }), "pointers");
+      expect(await screen.findByText("No concept matches")).toBeInTheDocument();
+    });
+
+    it("says so when every concept has a place", async () => {
+      mockFetch({ [LIST]: ok(page([programming, c])) });
+      renderWithProviders(<ConceptQueue />);
+      await userEvent.click(await screen.findByRole("radio", { name: /^unplaced$/i }));
+      expect(await screen.findByText("Every concept has a place")).toBeInTheDocument();
+    });
+
+    it("shows the path at the top of the sheet, with the count of the other broader concepts", async () => {
+      mockFetch({ [LIST]: ok(page(tree)) });
+      renderWithProviders(<ConceptQueue />);
+      await userEvent.click(await screen.findByRole("button", { name: /edit pointers/i }));
+      const sheet = await screen.findByRole("dialog");
+      expect(within(sheet).getByText("Programming › C")).toHaveTextContent(/^Within Programming › C \+1 other broader concept$/);
+    });
+  });
+
   it("has a done state", async () => {
     mockFetch({
       [LIST]: ok(page([validated])),
