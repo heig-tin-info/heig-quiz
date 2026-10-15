@@ -135,8 +135,10 @@ this record is about the self-service file.
 12. **Where.** A new module `apps/api/src/modules/privacy/` (`routes.ts`,
     `service.ts`), which calls other modules' `service.ts` (and the extracted
     `auth/` and `guards.ts` finders) only. In the web app, a secondary
-    action "Download my data" on a Settings card, a plain download link like
-    the results CSV, shown on a portal session that is not read-only.
+    action "Download my data" on a Settings card, shown on a portal session
+    that is not read-only. It fetches the file and saves it, so a refusal
+    (the hourly limit, a server error) is a toast, never an error body saved
+    as the file.
 
 ## Consequences
 

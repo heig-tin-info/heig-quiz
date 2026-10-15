@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { SettingsPage } from "./SettingsPage";
 import { makeMe } from "./test/fixtures";
-import { mockFetch, ok, renderWithProviders } from "./test/render";
+import { fail, mockFetch, ok, renderWithProviders } from "./test/render";
 
 /*
  * The preferences that are stored on the ACCOUNT, so they follow the teacher
@@ -130,14 +130,45 @@ describe("SettingsPage — the phone's rows", () => {
  * own portal session, never on an impersonation nor a confined session.
  */
 describe("SettingsPage — the data export", () => {
-  const link = () => screen.queryByRole("link", { name: /download my data/i });
+  const button = () => screen.queryByRole("button", { name: /download my data/i });
   const session = { evaluationId: null, projectId: null, superPowersUntil: null, superPowersAvailable: false };
 
-  it("links the file for the account's own session", () => {
-    mockFetch({});
-    renderWithProviders(<SettingsPage me={makeMe({ role: "student" })} />);
-    expect(link()).toHaveAttribute("href", "/app/api/me/export");
-    expect(link()).toHaveAttribute("download");
+  it("fetches the file for the account's own session and saves it under its date", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({ "GET /app/api/me/export": ok({ version: 1, generatedAt: "2026-10-15T09:00:00.000Z" }) });
+    const createObjectURL = vi.fn(() => "blob:export");
+    const revokeObjectURL = vi.fn();
+    // jsdom has no object URLs: the two functions are stood in for, then put back.
+    const original = { createObjectURL: URL.createObjectURL, revokeObjectURL: URL.revokeObjectURL };
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+    const saved: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      saved.push(this.download);
+    });
+    try {
+      renderWithProviders(<SettingsPage me={makeMe({ role: "student" })} />);
+      await user.click(button()!);
+      await waitFor(() => expect(saved).toEqual(["quiz-data-2026-10-15.json"]));
+      expect(calls.some((c) => c.method === "GET" && c.url.endsWith("/app/api/me/export"))).toBe(true);
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:export");
+    } finally {
+      click.mockRestore();
+      Object.assign(URL, original);
+    }
+  });
+
+  it("says so in a toast when the hourly limit refuses it, and saves nothing", async () => {
+    const user = userEvent.setup();
+    mockFetch({ "GET /app/api/me/export": fail(429, { error: "rate_limited" }) });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click");
+    try {
+      renderWithProviders(<SettingsPage me={makeMe({ role: "student" })} />);
+      await user.click(button()!);
+      expect(await screen.findByText(/several times this hour/i)).toBeInTheDocument();
+      expect(click).not.toHaveBeenCalled();
+    } finally {
+      click.mockRestore();
+    }
   });
 
   it("is absent on an impersonation and on a confined session", () => {
@@ -145,10 +176,10 @@ describe("SettingsPage — the data export", () => {
     renderWithProviders(
       <SettingsPage me={makeMe({ role: "student", session: { ...session, kind: "impersonation", readOnly: true } })} />,
     );
-    expect(link()).not.toBeInTheDocument();
+    expect(button()).not.toBeInTheDocument();
     cleanup();
     mockFetch({});
     renderWithProviders(<SettingsPage me={makeMe({ role: "student", session: { ...session, kind: "seb", readOnly: false } })} />);
-    expect(link()).not.toBeInTheDocument();
+    expect(button()).not.toBeInTheDocument();
   });
 });

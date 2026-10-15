@@ -102,8 +102,9 @@ Quiz ne charge aucun script, police ou image d'une autre entreprise : tout vient
 ## Vos droits et vos questions
 
 - **Voir vos données** : votre profil dans les **Réglages** ; vos résultats et retours une fois publiés.
+- **En télécharger une copie** : dans les **Réglages** › **Vos données**, *Télécharger mes données* vous donne un fichier JSON de tout ce que la plateforme vous montre, avec vos adresses e-mail vérifiées et vos heures d'activité. Ce que seuls vos enseignants voient n'y figure pas.
 - **Les corriger** : votre nom et votre adresse viennent d'edu-ID et sont mis à jour à chaque connexion. Une erreur dans une liste de classe est corrigée par votre enseignant.
 - **Les supprimer vous-même** : votre photo de profil, votre lien GitHub et votre lien Teams, dans les **Réglages**.
 - **Arrêter les révisions** d'une classe, depuis vos révisions.
 
-Pour toute autre demande (une copie de vos données, une correction, une suppression), adressez-vous d'abord à l'enseignant de votre cours.
+Pour toute autre demande (une copie plus complète de vos données, une correction, une suppression), adressez-vous d'abord à l'enseignant de votre cours.

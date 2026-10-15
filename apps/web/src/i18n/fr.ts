@@ -1023,6 +1023,8 @@ export const fr: Record<keyof Dict, string> = {
   "settings.dataExportHint":
     "Tout ce que la plateforme vous montre, dans un fichier JSON, avec vos adresses e-mail vérifiées et vos heures d'activité. Ce que seuls vos enseignants voient n'y figure pas.",
   "settings.dataExportDownload": "Télécharger mes données",
+  "settings.dataExportLimited": "Vous avez déjà téléchargé vos données plusieurs fois cette heure. Réessayez plus tard.",
+  "settings.dataExportFailed": "Vos données n'ont pas pu être téléchargées. Réessayez.",
   "settings.preferences": "Préférences",
   "settings.language": "Langue",
   "settings.languageHint": "Langue de l'interface, enregistrée sur votre compte.",

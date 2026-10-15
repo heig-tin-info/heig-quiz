@@ -17,7 +17,7 @@ import { StudentProject } from "./project.js";
 import { StudentFeedback, StudentGrades } from "./results.js";
 import { StudentClassroomPage } from "./student.js";
 
-/** The route: a plain download, the browser follows it with the session cookie. */
+/** The route: a download built in the request, fetched with the session cookie by the Settings card. */
 export const PERSONAL_DATA_EXPORT_PATH = "/app/api/me/export";
 
 /** Bumped whenever the shape of the record changes (ADR-112 §9). */
