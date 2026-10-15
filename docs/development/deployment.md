@@ -1379,12 +1379,15 @@ it names hold the values.
 | Log | Kept | Set by |
 | --- | --- | --- |
 | The containers' output, application VM (`app`'s holds every request's IP address) | about 30 days as a size cap, not a date: fewer days under more traffic, more under less; `app`'s also ends at each deploy | `logging:` in `compose.prod.yml`, `compose.staging.yml` |
-| The portals' access logs, `/var/log/caddy/quiz-codespace-<i>.log`, engine VM | a rolled file at most 30 days, at most five of them | `apps/codespace/deploy/Caddyfile` |
+| The portals' access logs, `/var/log/caddy/quiz-codespace-<i>.log`, engine VM | a rolled file at most 30 days | `apps/codespace/deploy/Caddyfile` |
 | The system journal, both VMs: the runner, the portals, Podman, Caddy's own errors (with the client's address) | at most about 30 days, or less if the journal reaches its size cap | `infra/logs/journald.conf` |
-| `sudo` and SSH (`auth`, `authpriv`), both VMs, `/var/log/auth-trail.log` | at most about 180 days (26 weekly files) | `infra/logs/auth-trail.*` |
+| `sudo` and SSH (`auth`, `authpriv`), both VMs, `/var/log/auth-trail.log` | at most about 180 days | `infra/logs/auth-trail.*` |
 
-- Caddy rolls its current file at 10 MiB only: on a quiet site its oldest
+- Caddy rolls its current file by size only: on a quiet site its oldest
   lines can outlive 30 days until it fills.
+- rsyslog writes the auth trail and nothing else, host-wide: the
+  co-tenants (evaluation-tb, heig-codespace) read the journal, never
+  `/var/log/syslog`.
 - Each VM's `/etc/caddy/Caddyfile` is outside the repository, shared with
   evaluation-tb and heig-codespace. A `log` there that writes a file needs
   `roll_keep_for 720h`; one with no `output` goes to the journal. Quiz's
