@@ -355,3 +355,127 @@ export const DrillQuestionConfidence = z.object({
   split: DrillConfidenceSplit,
 });
 export type DrillQuestionConfidence = z.infer<typeof DrillQuestionConfidence>;
+
+// --- Targeted revision (ADR-115, #897 step E) -------------------------------
+
+/**
+ * `GET /student/classrooms/:id/revision/concepts`: the concepts the caller
+ * may revise in this classroom — the VALIDATED concepts its course
+ * declares, labelled in their language, by label (the same list as the
+ * student's concept mastery, ADR-098). `available` is false, and the list
+ * empty, unless the classroom's drill is on, it is not archived, the caller
+ * holds a student seat there and has not opted out. No count: whether a
+ * concept has cards is learnt by starting a round.
+ */
+export const StudentRevisionConcepts = z.object({
+  available: z.boolean(),
+  concepts: z.array(StudentConceptRef),
+});
+export type StudentRevisionConcepts = z.infer<typeof StudentRevisionConcepts>;
+
+/** `POST /student/classrooms/:id/revision/rounds`: one concept of {@link StudentRevisionConcepts}. */
+export const RevisionRoundBody = z.object({ conceptId: z.uuid() }).strict();
+export type RevisionRoundBody = z.infer<typeof RevisionRoundBody>;
+
+/**
+ * A round started: at most ten of the caller's own cards on the concept, in
+ * the order to answer them. A card answered wrong at its first pass comes
+ * back once later in the round (`revisionNext` of `@quiz/domain`, which
+ * the client replays). No question content: that is `serve`'s.
+ */
+export const RevisionRound = z.object({
+  id: z.uuid(),
+  concept: StudentConceptRef,
+  startedAt: z.iso.datetime(),
+  cards: z.array(DrillSessionCard),
+});
+export type RevisionRound = z.infer<typeof RevisionRound>;
+
+/** The start of a round: null, and nothing written, when no card of the caller covers the concept. */
+export const RevisionRoundStart = z.object({ round: RevisionRound.nullable() });
+export type RevisionRoundStart = z.infer<typeof RevisionRoundStart>;
+
+/** `/student/revision/rounds/:id/serve/:cardId` and `…/cards/:cardId/answer`. */
+export const RevisionCardParam = z.object({ id: z.uuid(), cardId: z.uuid() });
+export type RevisionCardParam = z.infer<typeof RevisionCardParam>;
+
+/**
+ * `POST /student/revision/rounds/:id/serve/:cardId`: the question through the
+ * one student exit, at the card's next pass (2 only after a wrong first
+ * one). Serving again before the answer returns the same view.
+ */
+export const RevisionServed = DrillServed.extend({ pass: z.union([z.literal(1), z.literal(2)]) });
+export type RevisionServed = z.infer<typeof RevisionServed>;
+
+/**
+ * `POST /student/revision/rounds/:id/cards/:cardId/answer`. Strict: no
+ * confidence and no device class — a round stores neither (ADR-115).
+ */
+export const RevisionAnswerBody = z
+  .object({
+    answer: z.unknown(),
+    /** ADR-097: the choices of `answer` are displayed positions (`AnswerCoordinates`). */
+    coordinates: AnswerCoordinates.optional(),
+  })
+  .strict();
+export type RevisionAnswerBody = z.infer<typeof RevisionAnswerBody>;
+
+/**
+ * The answer's correction: no rating, no due date and no time — a round
+ * feeds neither FSRS nor the level, and shows no timer. `requeued` says the
+ * card comes back later in the round.
+ */
+export const RevisionAnswerResult = z.object({
+  correctness: DrillCorrectness,
+  points: z.number(),
+  maxPoints: z.number(),
+  /** The key, through `studentSolutionView`. */
+  solution: z.unknown(),
+  requeued: z.boolean(),
+});
+export type RevisionAnswerResult = z.infer<typeof RevisionAnswerResult>;
+
+/**
+ * `GET /student/classrooms/:id/revision/rounds`: the caller's own rounds of
+ * the classroom with at least one card answered, newest first — what their
+ * teacher sees of them. `concept` is null once the concept is no longer a
+ * validated concept of the course (a merge is followed to its winner).
+ */
+export const StudentRevisionRound = z.object({
+  id: z.uuid(),
+  concept: StudentConceptRef.nullable(),
+  startedAt: z.iso.datetime(),
+  endedAt: z.iso.datetime().nullable(),
+  cardsServed: z.number().int(),
+  cardsCorrect: z.number().int(),
+});
+export type StudentRevisionRound = z.infer<typeof StudentRevisionRound>;
+
+/**
+ * `GET /classrooms/:id/drill/revision`: who revised what, for the staff. The
+ * rounds of the classroom's current student seats with a card answered,
+ * none after an opt-out. Per student: the rounds, the last one, the
+ * distinct concepts; per concept: the students, the rounds, the last one
+ * (`concept` null gathers the rounds whose concept was deleted). Labels in
+ * the reader's language, a merged concept under its winner. Never a card,
+ * a question or an answer.
+ */
+export const DrillClassroomRevision = z.object({
+  students: z.array(
+    z.object({
+      enrollmentId: z.uuid(),
+      rounds: z.number().int(),
+      lastAt: z.iso.datetime(),
+      concepts: z.array(ConceptRef),
+    }),
+  ),
+  concepts: z.array(
+    z.object({
+      concept: ConceptRef.nullable(),
+      students: z.number().int(),
+      rounds: z.number().int(),
+      lastAt: z.iso.datetime(),
+    }),
+  ),
+});
+export type DrillClassroomRevision = z.infer<typeof DrillClassroomRevision>;

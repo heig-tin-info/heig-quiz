@@ -27,6 +27,7 @@ import {
   classrooms,
   drillCards,
   drillReviews,
+  drillRevisionRounds,
   enrollments,
   evaluations,
   questionVersions,
@@ -310,9 +311,10 @@ export async function removeEvaluationCards(db: Db, evaluationId: string): Promi
 /**
  * The retention of N-DATA-03 (ADR-041 §10): a review goes five years after
  * it was made, a card five years after its last review, or its creation if
- * it was never reviewed. The `drill.purge` ticker task.
+ * it was never reviewed, a round of targeted revision five years after it
+ * started, its answers with it (ADR-115). The `drill.purge` ticker task.
  */
-export async function purgeExpiredDrill(db: Db, now: Date): Promise<{ reviews: number; cards: number }> {
+export async function purgeExpiredDrill(db: Db, now: Date): Promise<{ reviews: number; cards: number; rounds: number }> {
   const cutoff = sql`${now.toISOString()}::timestamptz - interval '${sql.raw(DRILL_RETENTION)}'`;
   const reviews = await db
     .delete(drillReviews)
@@ -322,5 +324,9 @@ export async function purgeExpiredDrill(db: Db, now: Date): Promise<{ reviews: n
     .delete(drillCards)
     .where(sql`coalesce(${drillCards.lastReviewAt}, ${drillCards.createdAt}) < ${cutoff}`)
     .returning({ id: drillCards.id });
-  return { reviews: reviews.length, cards: cards.length };
+  const rounds = await db
+    .delete(drillRevisionRounds)
+    .where(sql`${drillRevisionRounds.startedAt} < ${cutoff}`)
+    .returning({ id: drillRevisionRounds.id });
+  return { reviews: reviews.length, cards: cards.length, rounds: rounds.length };
 }

@@ -70,6 +70,7 @@ The platform receives data from three sources: Switch edu-ID at sign-in, the cla
 | Released grades, a snapshot per student | `evaluations.released_grades` (`db/evaluation.ts`) | release of the results | A teacher deletes |
 | Gradebook marks (absent, a mark entered by hand) | `gradebook_marks` (`db/gradebook.ts`) | teacher | The student leaves the list, or a teacher deletes |
 | Drill: per question practised, the scheduler's state; per review, the rating, right or wrong, active time, the answer given, the device class (touch or mouse) | `drill_cards`, `drill_reviews` (`db/drill.ts`, ADR-041) | the student | Five years, or sooner if a teacher deletes |
+| Targeted revision: per round, the concept, start and end, the cards answered and answered right; per answer, right or wrong and the time it took (never the answer itself, nor a confidence) | `drill_revision_rounds`, `drill_revision_answers` (`db/drill.ts`, ADR-115) | the student | Five years from the round's start, or sooner if a teacher deletes |
 | Poll participants without an account (a hash of a cookie, a chosen pseudonym) and their answers | `guest_participants` (`db/live.ts`) | the browser | 30 days after the poll closed; the poll's results stay, frozen (below) |
 | Kiosk pairing: which student sat which exam on which school Chromebook, who approved it | `kiosk_pairings` (`db/kiosk.ts`, ADR-051) | the student's phone, the supervisor | Never deleted automatically |
 
@@ -129,7 +130,7 @@ A teacher reaches the data of a course only through a seat on that course's staf
 
 Within a staff, every member reaches every classroom of the course, past years included. Each holds a role (ADR-068): only an **owner** adds or removes a colleague, changes a role, or publishes or withdraws results; an **assistant** works in the classrooms.
 
-When a classroom has the drill, its staff see each student's drill activity: the questions practised, the sessions, the recall rate and its progress (`apps/api/src/modules/drill/teacher.ts`). Students are told so in their drill tab and on the **Data and privacy** page. A student may leave the drill of a classroom; what was recorded before stays visible, and the teacher sees that the student left (ADR-041 §8).
+When a classroom has the drill, its staff see each student's drill activity: the questions practised, the sessions, the recall rate and its progress, and which concepts they revised in rounds of targeted revision, how often and when (`apps/api/src/modules/drill/teacher.ts`; never a card, a question or an answer of a round, ADR-115). Students are told so in their drill tab and on the **Data and privacy** page. A student may leave the drill of a classroom; what was recorded before stays visible, and the teacher sees that the student left (ADR-041 §8).
 
 A teacher who can read a question pool, a pool shared with them or a public one included, sees the aggregated statistics of its questions over every exam that used them, other teachers' classes included (see [Statistics](#statistics)).
 
@@ -221,6 +222,7 @@ Automatic deletions:
 | Expired AI-assistant authorisations | Every hour | `apps/api/src/auth/oauth/service.ts` |
 | Leaving the page and pastes (integrity journal) | At the release of the grades; six months after the close if never released | `apps/api/src/modules/live/integrity.ts`, ADR-088 |
 | Drill reviews and cards | Five years after the review, or after the card's last review | `apps/api/src/modules/drill/jobs.ts`, ADR-041 |
+| Rounds of targeted revision, with their answers | Five years after the round started | `apps/api/src/modules/drill/jobs.ts`, ADR-115 |
 | Help-assistant conversations | 30 days after each exchange | `apps/api/src/modules/assist/jobs.ts`, ADR-080 |
 | Hours of activity | After eight days | `apps/api/src/modules/presence/jobs.ts`, ADR-107 |
 | Content of GitHub's notifications | 30 days after processing | `apps/api/src/modules/github/deliveries.ts` |
@@ -233,8 +235,8 @@ Deletions by a teacher:
 
 | Action | Effect |
 | --- | --- |
-| Deleting an evaluation | Its attempts, answers, attempt journals, gradings, notifications, and the drill cards it gave rise to are deleted |
-| Deleting a classroom or a course | The same for all its evaluations and projects, plus the class list and the classroom's drill data |
+| Deleting an evaluation | Its attempts, answers, attempt journals, gradings, notifications, and the drill cards it gave rise to are deleted, with the answers of revision rounds on those cards (the rounds and their counts stay) |
+| Deleting a classroom or a course | The same for all its evaluations and projects, plus the class list and the classroom's drill data, its revision rounds included |
 | Deleting a project | Its rows on the platform; nothing on GitHub |
 | Removing a student from the class list | Their seat, gradebook marks, group memberships and repository-access rows go (their GitHub access is revoked first); their attempts, answers, grades and drill data stay |
 | Archiving a classroom | Nothing is deleted: the classroom is only hidden |
@@ -313,7 +315,7 @@ What the platform lets a student do today:
 | See their profile | Yes: name, e-mail address, role, last sign-in (**Settings**) |
 | See their results and gradings | Yes, once released, as far as the evaluation allows |
 | See their attempt journal | No: only the teacher sees it; the student is told, by the evaluation's conditions and a message, that leaving the page and pasting are recorded (ADR-088) |
-| See their drill activity as the teacher sees it | No: the student sees their own sessions |
+| See their drill activity as the teacher sees it | No: the student sees their own sessions; their rounds of targeted revision, yes, as the teacher sees them |
 | Stop the drill | Yes, per classroom: nothing more is counted; what was recorded stays visible to the teacher and is kept five years |
 | Export their data | Partly: **Download my data** (**Settings**) gives, in one JSON file, everything the platform shows them, plus their verified e-mail addresses, hours of activity and last activity (ADR-112). Not what only the teacher sees (the attempt journal, a note on the class list, the edu-ID claims, the audit log) |
 | Correct their name or address | Not in the platform: they come from edu-ID and are updated at every sign-in; a mistake in the class list is corrected by the teacher |

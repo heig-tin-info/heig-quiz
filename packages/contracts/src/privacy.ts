@@ -9,7 +9,7 @@
 import { z } from "zod";
 
 import { Account } from "./api.js";
-import { DrillCalibrationLevel, DrillClassroom, StudentConceptMastery } from "./drill.js";
+import { DrillCalibrationLevel, DrillClassroom, StudentConceptMastery, StudentRevisionRound } from "./drill.js";
 import { GithubAccount } from "./github.js";
 import { GradebookStudent } from "./gradebook.js";
 import { StudentGroupSets } from "./group.js";
@@ -23,20 +23,24 @@ export const PERSONAL_DATA_EXPORT_PATH = "/app/api/me/export";
 /** The file's name, by the date of its `generatedAt`: the server's attachment and the card's saved file alike. */
 export const personalDataExportFileName = (generatedAt: string): string => `quiz-data-${generatedAt.slice(0, 10)}.json`;
 
-/** Bumped whenever the shape of the record changes (ADR-112 §9). */
-export const PERSONAL_DATA_EXPORT_VERSION = 1;
+/**
+ * Bumped whenever the shape of the record changes (ADR-112 §9): 2 added each
+ * classroom's `revisionRounds` (ADR-115).
+ */
+export const PERSONAL_DATA_EXPORT_VERSION = 2;
 
 /**
  * One classroom of a claimed seat, archived ones included: its header as the
  * classroom page draws it, the caller's gradebook cells, the group sets
  * narrowed to the caller's own group (no other group, no `unplaced`,
- * ADR-112 §6), and their concept mastery.
+ * ADR-112 §6), their concept mastery and their rounds of targeted revision.
  */
 export const PersonalDataClassroom = z.object({
   classroom: StudentClassroomPage.shape.classroom,
   gradebook: GradebookStudent,
   groupSets: StudentGroupSets,
   mastery: StudentConceptMastery,
+  revisionRounds: z.array(StudentRevisionRound),
 });
 export type PersonalDataClassroom = z.infer<typeof PersonalDataClassroom>;
 

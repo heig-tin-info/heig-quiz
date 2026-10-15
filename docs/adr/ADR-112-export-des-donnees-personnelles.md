@@ -4,7 +4,9 @@
 
 Accepted (2026-10-15, the product owner's decisions on issue #869; the points
 marked *default* were set by the orchestrator's spec challenge and adopted).
-Delivery progress lives in `changes/`.
+Delivery progress lives in `changes/`. Amended 2026-10-15 by
+[ADR-115](ADR-115-revision-ciblee-par-notion.md) §12: each classroom carries
+the student's rounds of targeted revision, and the file is version 2 (§3, §9).
 
 Scope: what `GET /app/api/me/export` returns, to whom, and what it leaves out.
 
@@ -61,7 +63,7 @@ this record is about the self-service file.
    | Gradebook | `studentGradebook` (`modules/gradebook/table.ts`), per classroom |
    | Groups | `studentGroupSets` (`modules/group/service.ts`), per classroom, narrowed to the student's own group (point 6) |
    | Projects | `studentProjectCards`, then `studentProject` for each (`modules/project/studentView.ts`) |
-   | Practice | `studentDrillClassrooms`, `studentCalibration` (`modules/drill/review.ts`) and, per classroom, `studentConceptMastery` (`modules/drill/studentMastery.ts`) in the reader's language (`declared: false` where the drill is off) |
+   | Practice | `studentDrillClassrooms`, `studentCalibration` (`modules/drill/review.ts`) and, per classroom, `studentConceptMastery` (`modules/drill/studentMastery.ts`) in the reader's language (`declared: false` where the drill is off) and `studentRevisionRounds` (`modules/drill/revision.ts`, the student's own rounds of targeted revision, ADR-115; since version 2) |
    | Account rows | Point 2 |
 
 4. **Attempts come from the feedback view only.** An attempt's content is
@@ -117,6 +119,8 @@ this record is about the self-service file.
    the `Me` interface becomes the extension with `session`. The route sends
    the record parsed through that schema, so a field a service returns
    beyond its contract never travels. A change of shape bumps `version`.
+   *Version 2 (ADR-115, 2026-10-15): each classroom gains `revisionRounds`
+   (`StudentRevisionRound`); the audit's six counts are unchanged.*
 
 10. **Audit.** One action, `privacy.export`, subject the user, actor the user,
     payload six counts only (`classrooms`, `gradeRows`, `feedback`,

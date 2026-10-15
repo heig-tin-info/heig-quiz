@@ -17,7 +17,7 @@ import { drillRetrievability } from "@quiz/domain/drillSchedule";
 
 import type { Db } from "../../db/client.js";
 import { drillCards, enrollments, questionConcepts } from "../../db/schema.js";
-import { keyOpen } from "./review.js";
+import { keyOpen } from "./serving.js";
 
 export async function reviewedMasteryCards(
   db: Db,

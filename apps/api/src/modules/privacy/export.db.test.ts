@@ -31,6 +31,7 @@ import {
   attempts,
   auditLog,
   classrooms,
+  drillRevisionRounds,
   enrollments,
   evaluationItems,
   evaluations,
@@ -87,6 +88,7 @@ const NEVER = {
   bobGroup: "BOB-GROUP-MARKER-5f30",
   bobRepo: "bob-repo-marker-c0d9",
   carolName: "CAROL-NAME-MARKER-e44b",
+  bobRound: randomUUID(),
 } as const;
 /** Alice's own, published: in her file. */
 const OWN = {
@@ -338,6 +340,24 @@ beforeAll(async () => {
   const drill = await server.app.inject({ method: "PUT", url: `/app/api/classrooms/${seed.classroomId}/drill`, headers: teacher.headers, payload: { enabled: true } });
   expect(drill.statusCode, drill.body).toBe(200);
 
+  // Rounds of targeted revision (ADR-115): Alice's in A, one with nothing answered, hers in the archived B, and Bob's.
+  for (const key of ["round", "emptyRound", "archivedRound"]) ids[key] = randomUUID();
+  const round = (id: string, userId: string, classroomId: string, startedAt: string, cardsServed: number) => ({
+    id,
+    userId,
+    classroomId,
+    conceptId: null,
+    cardIds: [randomUUID()],
+    startedAt: new Date(startedAt),
+    cardsServed,
+  });
+  await db().insert(drillRevisionRounds).values([
+    round(ids["round"]!, alice.id, seed.classroomId, "2026-10-14T08:00:00Z", 1),
+    round(ids["emptyRound"]!, alice.id, seed.classroomId, "2026-10-14T09:00:00Z", 0),
+    round(ids["archivedRound"]!, alice.id, archived.classroomId, "2026-10-01T08:00:00Z", 1),
+    round(NEVER.bobRound, bob.id, seed.classroomId, "2026-10-14T08:30:00Z", 1),
+  ]);
+
   // The three account rows (ADR-112 §2), and Bob's, which never appear in Alice's file.
   await db().insert(userEmails).values([
     { userId: alice.id, email: OWN.verified, source: "swissEduIDLinkedAffiliationMail", verified: true },
@@ -383,7 +403,7 @@ describe("GET /app/api/me/export — what the file holds (ADR-112 §3)", () => {
     expect(res.headers["content-type"]).toMatch(/^application\/json/);
     expect(res.headers["content-disposition"]).toBe('attachment; filename="quiz-data-2026-10-15.json"');
     expect(res.headers["cache-control"]).toBe("no-store");
-    expect(file.version).toBe(1);
+    expect(file.version).toBe(2);
     expect(file.generatedAt).toBe(aliceAt);
   });
 
@@ -445,6 +465,15 @@ describe("GET /app/api/me/export — what the file holds (ADR-112 §3)", () => {
     const { file } = aliceFile;
     expect(file.drill.classrooms.map((c) => c.classroomId)).toEqual([seed.classroomId]);
     expect(file.drill.calibration).toHaveLength(5);
+  });
+
+  it("holds her own rounds of targeted revision, the archived classroom's included, never another's (ADR-115)", () => {
+    const { file, body } = aliceFile;
+    const rounds = Object.fromEntries(file.classrooms.map((c) => [c.classroom.id, c.revisionRounds.map((r) => r.id)]));
+    expect(rounds[seed.classroomId]).toEqual([ids["round"]]);
+    expect(rounds[archived.classroomId]).toEqual([ids["archivedRound"]]);
+    expect(body).not.toContain(ids["emptyRound"]);
+    expect(body).not.toContain(NEVER.bobRound);
   });
 
   it("writes one audit row with counts only", async () => {

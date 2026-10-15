@@ -10,7 +10,8 @@
  *     only when their key may already reach the student;
  *   - that loader returns concept ids only, so no foreign or proposed
  *     concept row is ever loaded here: only the course's validated ones are
- *     read, and labelled;
+ *     read, and labelled, through `revisableConcepts` — the one list of
+ *     concepts a student reads, which targeted revision offers too (ADR-115);
  *   - the answer holds the course's concept ref, a band and a count: no
  *     retrievability, question, card, date or confidence.
  * The caller loads the classroom through `readableClassroom` with the
@@ -20,8 +21,9 @@ import type { ConceptLang, StudentConceptMastery } from "@quiz/contracts";
 import { studentConceptLevels } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { courseConceptsOf, coverage } from "../concept/service.js";
+import { coverage } from "../concept/service.js";
 import { reviewedMasteryCards } from "./masteryCards.js";
+import { revisableConcepts } from "./revision.js";
 
 export async function studentConceptMastery(
   db: Db,
@@ -33,7 +35,7 @@ export async function studentConceptMastery(
   const none: StudentConceptMastery = { declared: false, concepts: [] };
   if (classroom.drillEnabledAt === null || classroom.archivedAt !== null) return none;
   // A proposed concept is raw teacher text: never shown, even if the course lists it.
-  const listed = (await courseConceptsOf(db, classroom.courseId, lang)).filter((c) => c.status === "validated");
+  const listed = await revisableConcepts(db, classroom, lang);
   if (listed.length === 0) return none;
 
   const ids = listed.map((c) => c.id);
@@ -45,9 +47,6 @@ export async function studentConceptMastery(
   const refs = new Map(listed.map((c) => [c.id, c]));
   return {
     declared: true,
-    concepts: levels.map((l) => {
-      const { id, label, qualifier } = refs.get(l.conceptId)!;
-      return { concept: { id, label, qualifier }, level: l.level, cards: l.cards };
-    }),
+    concepts: levels.map((l) => ({ concept: refs.get(l.conceptId)!, level: l.level, cards: l.cards })),
   };
 }

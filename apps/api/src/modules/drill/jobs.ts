@@ -11,8 +11,8 @@ export const DRILL_TASKS: ScheduledTask[] = [
     key: "drill.purge",
     defaultIntervalMinutes: 6 * 60,
     run: async (app) => {
-      const { reviews, cards } = await purgeExpiredDrill(app.db, app.clock.now());
-      return `${cards} cards and ${reviews} reviews deleted`;
+      const { reviews, cards, rounds } = await purgeExpiredDrill(app.db, app.clock.now());
+      return `${cards} cards, ${reviews} reviews and ${rounds} revision rounds deleted`;
     },
   },
 ];

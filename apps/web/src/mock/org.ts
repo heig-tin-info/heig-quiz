@@ -1019,7 +1019,7 @@ const tasks: AdminScheduledTask[] = [
     enabled: false,
     intervalMinutes: 1440,
     lastRunAt: iso(-2 * D),
-    lastMessage: "0 cards and 0 reviews deleted",
+    lastMessage: "0 cards, 0 reviews and 0 revision rounds deleted",
     lastDurationMs: 95,
   }),
   task("health.checks", 5, { lastMessage: "10 ok, 2 warn, 1 unknown", lastDurationMs: 64 }),

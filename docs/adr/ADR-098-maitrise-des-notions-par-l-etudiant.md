@@ -3,7 +3,10 @@
 ## Status
 
 Accepted (2026-10-10, product owner, issue #599, comment of the same day on steps 7 to 9).
-Delivery progress is in `docs/merge/PROGRESS.md` and `changes/`.
+Delivery progress is in `docs/merge/PROGRESS.md` and `changes/`. Amended 2026-10-15 by
+[ADR-115](ADR-115-revision-ciblee-par-notion.md) (§4, §6, §10 and the rejected #578
+alternative): a concept can be revised on purpose, outside FSRS and the level, and this
+exit also names the concepts offered for that revision.
 
 Scope: what a student reads of their own drill mastery per concept, and the one exit that serves it.
 
@@ -45,14 +48,18 @@ design (ADR-041 §6, §11). And FSRS retrievability decays between reviews.
 4. **Fading is accepted and said.** Retrievability decays by design, so a level can drop without any
    new mistake. The wording is forward-looking: the bands read "To work on", "Getting there",
    "Solid"; the section says the levels are **as of today** and **fade when a concept is not
-   reviewed for a while**; no row says "failed" or "lost".
+   reviewed for a while**; no row says "failed" or "lost". *Amended by ADR-115 §6: a round of
+   targeted revision does not move a level either — it writes no FSRS state — and its
+   screen says so.*
 5. **No comparison.** No class average, rank, percentile or "better than", no other student's
    number, and no count of how many students have data. Rows follow the course's order of concepts
    (label order), not the level, so the list is not a ranking either.
 6. **No practice button.** The page offers no "Practise this concept": a card is served only when
    today's session would hand it out (ADR-041 §6, §11), and a concept shortcut would be an extra
    practice and a lever to inflate the level. The one action of the drill page stays the day's
-   session.
+   session. *Amended by ADR-115 (2026-10-15): a secondary "Revise a concept" in the Concepts
+   section opens targeted revision, extra practice that feeds neither FSRS nor the level, on
+   its own routes; the page's one primary action stays the day's session.*
 7. **Only cards the student may already see.** A card counts only when its key may already reach
    this student, the rule that serves it (`keyReleased` in `drill/review.ts`, ADR-041 §13): an
    exam's once its results are released, an exercise's once its own feedback policy shows the key.
@@ -81,7 +88,9 @@ design (ADR-041 §6, §11). And FSRS retrievability decays between reviews.
     shows nothing, not "no data". A row: the label, the level or "No data yet", and "Based on N
     cards". Above the rows, the sentence of §4. No retrievability number, date, list of questions,
     per-card detail, comparison, or button other than the page's session. An opted-out student still
-    reads their own levels (their cards keep their state, ADR-041 §15).
+    reads their own levels (their cards keep their state, ADR-041 §15). *Amended by ADR-115 §13:
+    the section also holds the secondary "Revise a concept", offered while revision is open to
+    the student (not to an opted-out one).*
 11. **Invariant 4 gets a pointer** with the implementation PR (step 9b), not in this one. In
     `CLAUDE.md`, after the sentence "One point of exit, in the `studentView` service of the `live`
     module: …" is complete, add: "**A student's concept mastery has one exit too**: the student
@@ -105,7 +114,9 @@ design (ADR-041 §6, §11). And FSRS retrievability decays between reviews.
 ## Alternatives considered
 
 - **The #578 heatmap with a "Practise this concept" button.** Rejected: an extra practice breaks
-  ADR-041 §6 and §11 and invites farming the level.
+  ADR-041 §6 and §11 and invites farming the level. *Amended by ADR-115: practice by concept
+  came back as targeted revision, which cannot farm the level because it writes no FSRS state
+  and no review; the heatmap stays rejected.*
 - **Showing the raw concepts of the questions.** Rejected: unbounded, includes `proposed` labels
   (raw teacher text) and concepts the course never taught.
 - **Class average, comparison or ranking.** Rejected: discouraging, and it re-identifies students in

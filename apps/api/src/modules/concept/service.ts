@@ -12,7 +12,7 @@
  * database's (addendum §3): a write that hits a key's unique index is
  * answered with the concept that holds it.
  */
-import { asc, eq, ne, sql } from "drizzle-orm";
+import { asc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import {
   CONCEPT_LANGS,
@@ -20,6 +20,7 @@ import {
   type ConceptCreate,
   type ConceptLang,
   type ConceptPatch,
+  type ConceptRef,
   type ConceptResolution,
   type TagDropReason,
 } from "@quiz/contracts";
@@ -81,6 +82,30 @@ export async function listConcepts(db: Db): Promise<Concept[]> {
   const aliases = await loadAliases(db);
   const relations = await loadRelations(db);
   return rows.map((r) => toConcept(r, aliases.get(r.id), relations.get(r.id)));
+}
+
+/**
+ * The concept each of `ids` stands for today, labelled in `lang`: itself, or
+ * the final concept a merge folded it into (`merged_into`, followed until a
+ * concept that is not merged). An id that names no concept is absent. A
+ * staff read: the caller decides what of it a student may see.
+ */
+export async function finalConceptRefs(db: Db | Tx, ids: readonly string[], lang: ConceptLang): Promise<Map<string, ConceptRef>> {
+  const byId = new Map<string, typeof concepts.$inferSelect>();
+  const asked = new Set(ids);
+  // A merge rewrites the chains onto its winner, so one hop is the rule.
+  for (let wanted = [...asked]; wanted.length > 0; ) {
+    for (const row of await db.select().from(concepts).where(inArray(concepts.id, wanted))) byId.set(row.id, row);
+    wanted = [...byId.values()].flatMap((r) => (r.mergedInto !== null && !asked.has(r.mergedInto) ? [r.mergedInto] : []));
+    for (const id of wanted) asked.add(id);
+  }
+  const out = new Map<string, ConceptRef>();
+  for (const id of new Set(ids)) {
+    let row = byId.get(id);
+    for (let hops = 0; row?.mergedInto && hops < byId.size; hops++) row = byId.get(row.mergedInto);
+    if (row && row.status !== "merged") out.set(id, toConceptRef(row, lang));
+  }
+  return out;
 }
 
 /**

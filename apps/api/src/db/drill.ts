@@ -18,6 +18,9 @@
  *     The user is NO ACTION, like `attempts.user_id`: an account leaves by
  *     anonymisation, never by a DELETE;
  *   - `drill_cards_serve_ck`: no time on screen without a served question.
+ *
+ * Targeted revision (ADR-115) keeps its own two tables below: a round and
+ * its answers, never a `drill_reviews` row nor a write to a card.
  */
 import { sql } from "drizzle-orm";
 import {
@@ -34,10 +37,11 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { DRILL_CORRECTNESSES, DRILL_DEVICE_CLASSES } from "@quiz/domain";
+import { DRILL_CORRECTNESSES, DRILL_DEVICE_CLASSES, DWELL_IDLE_CAP_MS } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import type { StoredInstance } from "./columns.js";
+import { concepts } from "./concept.js";
 import { evaluations } from "./evaluation.js";
 import { classrooms } from "./org.js";
 import { questions } from "./pool.js";
@@ -135,5 +139,86 @@ export const drillReviews = pgTable(
     index("drill_reviews_reviewed_idx").on(t.reviewedAt),
     check("drill_reviews_rating_ck", sql`${t.rating} between 1 and 4`),
     check("drill_reviews_confidence_ck", sql`${t.confidence} between 0 and 4`),
+  ],
+);
+
+/**
+ * A round of targeted revision (ADR-115): one student revising one concept
+ * of a classroom's course, on at most ten of their own cards, outside FSRS
+ * and the level. What the teacher sees of it (`classroomRevision`) is the
+ * round itself: who, which concept, when, and the two counters, which the
+ * answers keep up to date. The user is NO ACTION like the cards'; the
+ * classroom cascades (N-DATA-03); a concept deleted later leaves the round
+ * unnamed. Purged five years after its start by `drill.purge`.
+ */
+export const drillRevisionRounds = pgTable(
+  "drill_revision_rounds",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    classroomId: uuid("classroom_id")
+      .notNull()
+      .references(() => classrooms.id, { onDelete: "cascade" }),
+    conceptId: uuid("concept_id").references(() => concepts.id, { onDelete: "set null" }),
+    /** The round's cards in their order (`composeRevisionRound`), fixed at the start. */
+    cardIds: uuid("card_ids").array().notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    /** Distinct cards answered at their first pass (`revisionSummary`). */
+    cardsServed: integer("cards_served").notNull().default(0),
+    /** Of them, those answered right at their first pass. */
+    cardsCorrect: integer("cards_correct").notNull().default(0),
+  },
+  (t) => [
+    index("drill_revision_rounds_classroom_idx").on(t.classroomId, t.startedAt),
+    index("drill_revision_rounds_user_idx").on(t.userId, t.startedAt),
+    index("drill_revision_rounds_concept_idx").on(t.conceptId),
+    check("drill_revision_rounds_cards_ck", sql`cardinality(${t.cardIds}) between 1 and 10`),
+    check(
+      "drill_revision_rounds_counts_ck",
+      sql`${t.cardsCorrect} >= 0 and ${t.cardsCorrect} <= ${t.cardsServed} and ${t.cardsServed} <= cardinality(${t.cardIds})`,
+    ),
+    check("drill_revision_rounds_ended_ck", sql`${t.endedAt} is null or ${t.endedAt} >= ${t.startedAt}`),
+  ],
+);
+
+/**
+ * One pass of one card in a round: served (a seed and its values, kept on a
+ * reload), then answered (the correctness and the time it took, on the
+ * server's instants, capped at the idle cap). A card has a second pass only
+ * after a wrong first one. Neither the answer given nor a confidence is
+ * stored. A card removed by the teacher takes its passes with it; the
+ * round keeps its counters.
+ */
+export const drillRevisionAnswers = pgTable(
+  "drill_revision_answers",
+  {
+    id: uuid("id").primaryKey(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => drillRevisionRounds.id, { onDelete: "cascade" }),
+    cardId: uuid("card_id")
+      .notNull()
+      .references(() => drillCards.id, { onDelete: "cascade" }),
+    pass: smallint("pass").notNull(),
+    servedAt: timestamp("served_at", { withTimezone: true }).notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    correctness: text("correctness", { enum: DRILL_CORRECTNESSES }),
+    timeMs: integer("time_ms"),
+    serveSeed: integer("serve_seed").notNull(),
+    /** The values of a parameterized question it was served with (ADR-056 §5); null when static. */
+    serveValues: jsonb("serve_values").$type<StoredInstance>(),
+  },
+  (t) => [
+    uniqueIndex("drill_revision_answers_pass_uq").on(t.roundId, t.cardId, t.pass),
+    index("drill_revision_answers_card_idx").on(t.cardId),
+    check("drill_revision_answers_pass_ck", sql`${t.pass} in (1, 2)`),
+    check("drill_revision_answers_time_ck", sql`${t.timeMs} between 0 and ${sql.raw(String(DWELL_IDLE_CAP_MS))}`),
+    check(
+      "drill_revision_answers_answered_ck",
+      sql`(${t.answeredAt} is null) = (${t.correctness} is null) and (${t.answeredAt} is null) = (${t.timeMs} is null)`,
+    ),
   ],
 );

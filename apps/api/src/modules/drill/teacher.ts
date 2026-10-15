@@ -2,7 +2,8 @@
  * The teacher's view of a classroom's drill (ADR-041 §8, §10 items 8 and 10,
  * #317 slice 4): each student's activity, the weekly progression, the
  * hours of the week they practise at (amendment of 2026-10-14), the mastery
- * per concept, and the confidence per question (ADR-085 §8). Reads
+ * per concept, the confidence per question (ADR-085 §8), and who revised
+ * which concept in a round of targeted revision (ADR-115). Reads
  * only; the routes load the classroom through `staffAccess` first
  * (invariant 6).
  *
@@ -21,12 +22,13 @@
  *     their reviews with it (the cascade of 28 (a));
  *   - each read is a bounded number of queries, whatever the class size.
  */
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type {
   ConceptLang,
   ConceptRef,
   DrillClassroomMastery,
+  DrillClassroomRevision,
   DrillConceptMastery,
   DrillHours,
   DrillProgress,
@@ -56,11 +58,12 @@ import {
   concepts,
   drillCards,
   drillReviews,
+  drillRevisionRounds,
   enrollments,
   questionConcepts,
   questions,
 } from "../../db/schema.js";
-import { byLabel, courseConceptsOf, coverage, toConceptRef } from "../concept/service.js";
+import { byLabel, courseConceptsOf, coverage, finalConceptRefs, toConceptRef } from "../concept/service.js";
 import { reviewedMasteryCards } from "./masteryCards.js";
 
 const DAY_MS = 86_400_000;
@@ -308,6 +311,77 @@ export async function classroomMastery(
       retrievability: rollup.outside.retrievability,
       concepts: rollup.outside.lines.map(labelled),
     },
+  };
+}
+
+/**
+ * Who revised what (ADR-115): the classroom's rounds of targeted revision
+ * with a card answered, of its current student seats, none started after an
+ * opt-out (the cut of {@link visibleReviews}). Per student: the rounds, the
+ * last one and the distinct concepts; per concept: the students, the rounds
+ * and the last one. Labels are the staff's — a proposed concept included, a
+ * merged one under its winner, a deleted one `null`. One query over the
+ * rounds, one over their concepts; never a card, a question or an answer.
+ */
+export async function classroomRevision(
+  db: Db,
+  classroom: { id: string },
+  lang: ConceptLang,
+): Promise<DrillClassroomRevision> {
+  const rounds = await db
+    .select({
+      enrollmentId: enrollments.id,
+      userId: drillRevisionRounds.userId,
+      conceptId: drillRevisionRounds.conceptId,
+      startedAt: drillRevisionRounds.startedAt,
+    })
+    .from(drillRevisionRounds)
+    .innerJoin(
+      enrollments,
+      and(
+        studentSeat(classroom.id),
+        eq(enrollments.userId, drillRevisionRounds.userId),
+        or(isNull(enrollments.drillOptedOutAt), sql`${drillRevisionRounds.startedAt} < ${enrollments.drillOptedOutAt}`),
+      ),
+    )
+    .where(and(eq(drillRevisionRounds.classroomId, classroom.id), gt(drillRevisionRounds.cardsServed, 0)));
+  const refs = await finalConceptRefs(
+    db,
+    [...new Set(rounds.flatMap((r) => (r.conceptId === null ? [] : [r.conceptId])))],
+    lang,
+  );
+  type Tally = { rounds: number; lastAt: Date };
+  const count = (tally: Tally | undefined, at: Date): Tally => ({
+    rounds: (tally?.rounds ?? 0) + 1,
+    lastAt: tally && tally.lastAt > at ? tally.lastAt : at,
+  });
+  const students = new Map<string, Tally & { concepts: Map<string, ConceptRef> }>();
+  const byConcept = new Map<string | null, Tally & { concept: ConceptRef | null; users: Set<string> }>();
+  for (const r of rounds) {
+    const concept = (r.conceptId === null ? undefined : refs.get(r.conceptId)) ?? null;
+    const student = students.get(r.enrollmentId);
+    const concepts = student?.concepts ?? new Map<string, ConceptRef>();
+    if (concept) concepts.set(concept.id, concept);
+    students.set(r.enrollmentId, { ...count(student, r.startedAt), concepts });
+    const line = byConcept.get(concept?.id ?? null);
+    byConcept.set(concept?.id ?? null, {
+      ...count(line, r.startedAt),
+      concept,
+      users: (line?.users ?? new Set<string>()).add(r.userId),
+    });
+  }
+  return {
+    students: [...students]
+      .map(([enrollmentId, s]) => ({
+        enrollmentId,
+        rounds: s.rounds,
+        lastAt: iso(s.lastAt),
+        concepts: [...s.concepts.values()].sort(byLabel),
+      }))
+      .sort((a, b) => b.lastAt.localeCompare(a.lastAt) || a.enrollmentId.localeCompare(b.enrollmentId)),
+    concepts: [...byConcept.values()]
+      .sort((a, b) => (a.concept === null ? 1 : b.concept === null ? -1 : byLabel(a.concept, b.concept)))
+      .map((l) => ({ concept: l.concept, students: l.users.size, rounds: l.rounds, lastAt: iso(l.lastAt) })),
   };
 }
 

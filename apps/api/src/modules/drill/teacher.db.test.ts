@@ -19,12 +19,12 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { DrillClassroomMastery, DrillHours, DrillProgress, DrillStudentActivity } from "@quiz/contracts";
+import { DrillClassroomMastery, DrillClassroomRevision, DrillHours, DrillProgress, DrillStudentActivity } from "@quiz/contracts";
 import { drillRecallCounts, type DrillReviewFact } from "@quiz/domain";
 import { drillRetrievability } from "@quiz/domain/drillSchedule";
 import { registerForTests } from "@quiz/registry/server";
 
-import { classrooms, conceptRelations, concepts, courseStaff, drillCards, drillReviews, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
+import { classrooms, conceptRelations, concepts, courseStaff, drillCards, drillReviews, drillRevisionRounds, enrollments, evaluations, questionConcepts } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
@@ -497,5 +497,88 @@ describe("the teacher's view of the drill: hours of the week", () => {
     const c = await hours(`?student=${await seatOf(seed, carol.id)}`);
     expect(c.offHoursShare).toBeNull();
     expect(c.days.flat().every((n) => n === 0)).toBe(true);
+  });
+});
+
+describe("the teacher's view of the drill: who revised (ADR-115)", () => {
+  const ARRAYS = randomUUID();
+  const PROPOSED = randomUUID();
+  const MERGED = randomUUID();
+
+  async function seat(s: Seeded, userId: string) {
+    const [row] = await server.app.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.classroomId, s.classroomId), eq(enrollments.userId, userId)));
+    return row!.id;
+  }
+  /** A round as the student's answers leave it: the view reads nothing else. */
+  async function round(s: Seeded, userId: string, conceptId: string | null, at: string, cardsServed = 1) {
+    await server.app.db.insert(drillRevisionRounds).values({
+      id: randomUUID(),
+      userId,
+      classroomId: s.classroomId,
+      conceptId,
+      cardIds: [randomUUID(), randomUUID(), randomUUID()],
+      startedAt: new Date(at),
+      cardsServed,
+      cardsCorrect: Math.min(1, cardsServed),
+    });
+  }
+
+  beforeAll(async () => {
+    const at = new Date(T0);
+    const concept = (id: string, status: "validated" | "proposed", label: string) => ({
+      id,
+      status,
+      labelEn: label,
+      keyEn: label.toLowerCase(),
+      createdAt: at,
+      updatedAt: at,
+    });
+    await server.app.db.insert(concepts).values([
+      concept(ARRAYS, "validated", "Arrays revised"),
+      concept(PROPOSED, "proposed", "Proposed revised"),
+      concept(MERGED, "validated", "Merged revised"),
+    ]);
+    // Alice: two rounds on Arrays, one on a concept merged into it since.
+    await round(seed, alice.id, ARRAYS, "2026-11-10T08:00:00Z", 3);
+    await round(seed, alice.id, ARRAYS, "2026-11-12T08:00:00Z");
+    await round(seed, alice.id, MERGED, "2026-11-11T08:00:00Z");
+    await server.app.db.update(concepts).set({ status: "merged", mergedInto: ARRAYS }).where(eq(concepts.id, MERGED));
+    // Her round in the other classroom: never in this one's view.
+    await round(other, alice.id, ARRAYS, "2026-11-19T08:00:00Z");
+    // Bob: a proposed concept, a deleted one, and a round started with nothing answered.
+    await round(seed, bob.id, PROPOSED, "2026-11-15T08:00:00Z");
+    await round(seed, bob.id, null, "2026-11-16T08:00:00Z");
+    await round(seed, bob.id, ARRAYS, "2026-11-18T08:00:00Z", 0);
+    // Carol: one round before her opt-out of 20 Oct, one after it.
+    await round(seed, carol.id, ARRAYS, "2026-10-15T08:00:00Z");
+    await round(seed, carol.id, ARRAYS, "2026-11-01T08:00:00Z");
+  });
+
+  it("counts each student's rounds with a card answered and names their concepts, a merge followed, nothing after an opt-out", async () => {
+    const res = await get(`${base()}/revision`, teacher);
+    expect(res.statusCode).toBe(200);
+    const view = DrillClassroomRevision.parse(res.json());
+    const arrays = { id: ARRAYS, label: "Arrays revised", qualifier: "", status: "validated" };
+    const proposed = { id: PROPOSED, label: "Proposed revised", qualifier: "", status: "proposed" };
+    expect(view.students).toEqual([
+      { enrollmentId: await seat(seed, bob.id), rounds: 2, lastAt: "2026-11-16T08:00:00.000Z", concepts: [proposed] },
+      { enrollmentId: await seat(seed, alice.id), rounds: 3, lastAt: "2026-11-12T08:00:00.000Z", concepts: [arrays] },
+      { enrollmentId: await seat(seed, carol.id), rounds: 1, lastAt: "2026-10-15T08:00:00.000Z", concepts: [arrays] },
+    ]);
+    expect(view.concepts).toEqual([
+      { concept: arrays, students: 2, rounds: 4, lastAt: "2026-11-12T08:00:00.000Z" },
+      { concept: proposed, students: 1, rounds: 1, lastAt: "2026-11-15T08:00:00.000Z" },
+      { concept: null, students: 1, rounds: 1, lastAt: "2026-11-16T08:00:00.000Z" },
+    ]);
+    expect(res.body).not.toMatch(/cardIds|cardsServed|cardsCorrect|questionId/);
+  });
+
+  it("is served to the classroom's staff only", async () => {
+    expect((await get(`${base()}/revision`, stranger)).statusCode).toBe(404);
+    expect((await get(`${base()}/revision`, alice)).statusCode).toBe(403);
+    expect((await get(`/app/api/classrooms/${randomUUID()}/drill/revision`, teacher)).statusCode).toBe(404);
   });
 });

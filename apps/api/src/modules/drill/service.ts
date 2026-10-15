@@ -7,13 +7,20 @@
  *   - `lifecycle.ts`: the cards created at a release or a hand-in, removed by
  *     the teacher, purged after five years; the key fingerprint and the
  *     eligibility of a question;
+ *   - `serving.ts`: what serving a card takes, shared by the session and
+ *     targeted revision — the active cards, their key, the student view and
+ *     the grading of an answer;
  *   - `review.ts`: the student's session, the served card, its time on
  *     screen and the review;
+ *   - `revision.ts`: targeted revision by concept (ADR-115), rounds of extra
+ *     practice outside FSRS and the level;
+ *   - `studentMastery.ts`: the student's own level per course concept (ADR-098);
  *   - `teacher.ts`: the teacher's reads of a classroom — each student's
  *     activity, the weekly progression, the mastery per concept, the confidence
- *     per question (aggregated only).
+ *     per question (aggregated only), who revised which concept.
  *
- * The module owns `drill_cards` and `drill_reviews`. The switches it reads
+ * The module owns `drill_cards`, `drill_reviews`, `drill_revision_rounds` and
+ * `drill_revision_answers`. The switches it reads
  * belong to their modules and are written through their services:
  * `classrooms.drill_enabled_at` and `enrollments.drill_opted_out_at`
  * (`org`), `settings.allowDrill` (`evaluation`). It depends on `live` (the
@@ -47,12 +54,27 @@ export {
 } from "./lifecycle.js";
 export {
   answerCard,
-  DrillError,
   drillSession,
   reportShown,
   serveCard,
   studentCalibration,
   studentDrillClassrooms,
 } from "./review.js";
-export { classroomActivity, classroomConfidence, classroomHours, classroomMastery, classroomProgress } from "./teacher.js";
+export {
+  answerRound,
+  endRound,
+  serveRound,
+  startRound,
+  studentRevisionConcepts,
+  studentRevisionRounds,
+} from "./revision.js";
+export { DrillError } from "./serving.js";
+export {
+  classroomActivity,
+  classroomConfidence,
+  classroomHours,
+  classroomMastery,
+  classroomProgress,
+  classroomRevision,
+} from "./teacher.js";
 export { studentConceptMastery } from "./studentMastery.js";
