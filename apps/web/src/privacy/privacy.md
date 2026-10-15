@@ -1,7 +1,7 @@
 ## In short
 
 - You sign in with Switch edu-ID. Quiz has no password of its own.
-- The teaching staff of your course see your work in that course. Other students never see your grades (except your teammates, for a group project's shared score), nor your answers under your name.
+- The teaching staff of your course see your work in that course. Other students never see your grades (except your teammates, for a group project's shared score); what a teacher shows in class is without names unless the teacher chooses to show them.
 - What you do is kept until your teacher deletes the evaluation, classroom or course it belongs to. A few kinds of data are deleted sooner, automatically; others, your account first, are never deleted automatically (see *How long it is kept*).
 - Some of your answers and some of your code are sent to an AI model (Anthropic), usually with names masked, to help your teacher grade; your teacher decides the grade. Your teacher's help assistant may send your name and final results (see *Artificial intelligence*).
 - No advertising, no audience measurement beyond the hours of activity, no tracking script. Nothing is sold.
@@ -10,7 +10,7 @@
 
 ### Your account
 
-At each sign-in, Switch edu-ID sends your name, your e-mail addresses, your edu-ID identifier and the address of your picture. Quiz also keeps everything edu-ID released at your last sign-in, your affiliations included, to diagnose sign-in problems; it is shown nowhere. It keeps your preferences (language, theme, notifications) and, if you link one, your GitHub account.
+At each sign-in, Switch edu-ID sends your name, your e-mail addresses, your edu-ID identifier and the address of your picture. Quiz also keeps everything edu-ID released at your last sign-in, your affiliations included: they decide whether your account is a teacher's, and they help diagnose sign-in problems; they are shown nowhere. It keeps your preferences (language, theme, notifications) and, if you link one, your GitHub account.
 
 ### Your place in a class
 
@@ -54,7 +54,7 @@ To give you access to your classrooms, to run the evaluations (the clock, extra 
 
 By default, what you do in a course is kept until your teacher deletes the evaluation, the project, the classroom or the course it belongs to. Nothing is deleted automatically when you finish your studies. If you are removed from a class list, your answers, grades and drill activity in that classroom stay until the classroom is deleted.
 
-Some data is never deleted automatically: your account, with your e-mail addresses and what edu-ID sent; the audit log, which records actions such as sign-ins, class list changes and gradings, with names; the log of calls to the AI model, which names the person each call was made for (never its content); your notifications; which kiosk station you used for which exam; a poll pseudonym without an account; and your files in the online workspace.
+Some data is never deleted automatically: your account, with your e-mail addresses and what edu-ID sent; the audit log, which records actions such as sign-ins, class list changes and gradings, with names; the log of calls to the AI model, which names the person each call was made for (never its content); your notifications; which kiosk station you used for which exam; a poll pseudonym without an account; and your name, e-mail address and files in the online workspace.
 
 Some data is deleted automatically:
 
@@ -72,7 +72,7 @@ Deleted data stays in the platform's backups for about four more months. That pe
 ## Who sees what
 
 - **You**: your classrooms, your answers, and your results and feedback once your teacher publishes them.
-- **Other students**: never your grades or your picture, and never your answers under your name. In a group project, your teammates share the repository and see its score. When a teacher shows the correction of an exercise, a poll's votes or the results in class, answers appear without names; in a very small class, or from an answer quoted as typed, others may still guess whose it is.
+- **Other students**: never your grades or your picture. In a group project, your teammates share the repository and see its score. When a teacher shows the correction of an exercise, a poll's votes or the results in class, answers and results appear without names by default, unless the teacher chooses to display names; even without them, in a very small class, or from an answer quoted as typed, others may still guess whose it is.
 - **The teaching staff of your course** (its teachers and assistants): everything you do in that course, past years included: your answers, grades, attempt journal, drill activity and project repositories, and your progress live during an evaluation.
 - **Teachers who can read a question** you answered in an exam: only statistics over all the students who answered it, never with fewer than ten answers, never your name.
 - **The administrator of the platform**: the list of accounts with their picture and last activity, and the hours of use as counts. To reach a course, the administrator turns on special rights that last one hour and are recorded. To help you with a problem, an administrator may open a session in your name: it lasts at most an hour, cannot answer or submit anything for you, and is recorded under the administrator's name.

@@ -230,7 +230,7 @@ Deletions by a teacher:
 | Removing a student from the class list | Their seat, gradebook marks, group memberships and repository-access rows go (their GitHub access is revoked first); their attempts, answers, grades and drill data stay |
 | Archiving a classroom | Nothing is deleted: the classroom is only hidden |
 
-What is never deleted automatically: the accounts, the e-mail addresses and edu-ID information kept, the notifications, the AI call log, the poll participants without an account, the kiosk pairings, the audit log (which keeps, among others, the name and address of a student removed from a class list), the imported heig-classroom audit log, and the online workspace's working directories (no deletion of them is in the repository).
+What is never deleted automatically: the accounts, the e-mail addresses and edu-ID information kept, the notifications, the AI call log, the poll participants without an account, the kiosk pairings, the audit log (which keeps, among others, the name and address of a student removed from a class list), the imported heig-classroom audit log, and the online workspace's users (name, e-mail address) and working directories (no deletion of them is in the repository).
 
 ### Backups
 

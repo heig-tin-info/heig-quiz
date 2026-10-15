@@ -1,7 +1,7 @@
 ## En bref
 
 - Vous vous connectez avec Switch edu-ID. Quiz n'a pas de mot de passe à lui.
-- L'équipe enseignante de votre cours voit votre travail dans ce cours. Les autres étudiants ne voient jamais vos notes (sauf vos coéquipiers, pour le score commun d'un projet de groupe), ni vos réponses sous votre nom.
+- L'équipe enseignante de votre cours voit votre travail dans ce cours. Les autres étudiants ne voient jamais vos notes (sauf vos coéquipiers, pour le score commun d'un projet de groupe) ; ce qu'un enseignant montre en classe est sans nom, sauf s'il choisit de les afficher.
 - Ce que vous faites est conservé jusqu'à ce que votre enseignant supprime l'évaluation, la classe ou le cours auquel cela appartient. Quelques types de données sont supprimés plus tôt, automatiquement ; d'autres, à commencer par votre compte, ne le sont jamais automatiquement (voir *Combien de temps*).
 - Certaines de vos réponses et une partie de votre code sont envoyées à un modèle d'IA (Anthropic), le plus souvent noms masqués, pour aider votre enseignant à corriger ; c'est votre enseignant qui décide de la note. L'assistant d'aide de votre enseignant peut envoyer votre nom et vos résultats finaux (voir *Intelligence artificielle*).
 - Pas de publicité, pas de mesure d'audience au-delà des heures d'activité, pas de script de suivi. Rien n'est vendu.
@@ -10,7 +10,7 @@
 
 ### Votre compte
 
-À chaque connexion, Switch edu-ID transmet votre nom, vos adresses e-mail, votre identifiant edu-ID et l'adresse de votre photo. Quiz conserve aussi tout ce qu'edu-ID a transmis à votre dernière connexion, vos affiliations comprises, pour diagnostiquer les problèmes de connexion ; ce n'est affiché nulle part. Il conserve vos préférences (langue, thème, notifications) et, si vous en liez un, votre compte GitHub.
+À chaque connexion, Switch edu-ID transmet votre nom, vos adresses e-mail, votre identifiant edu-ID et l'adresse de votre photo. Quiz conserve aussi tout ce qu'edu-ID a transmis à votre dernière connexion, vos affiliations comprises : elles décident si votre compte est celui d'un enseignant, et aident à diagnostiquer les problèmes de connexion ; elles ne sont affichées nulle part. Il conserve vos préférences (langue, thème, notifications) et, si vous en liez un, votre compte GitHub.
 
 ### Votre place dans une classe
 
@@ -54,7 +54,7 @@ Pour vous donner accès à vos classes, pour faire passer les évaluations (l'ho
 
 Par défaut, ce que vous faites dans un cours est conservé jusqu'à ce que votre enseignant supprime l'évaluation, le projet, la classe ou le cours auquel cela appartient. Rien n'est supprimé automatiquement à la fin de vos études. Si vous êtes retiré d'une liste de classe, vos réponses, vos notes et votre activité de révision dans cette classe restent jusqu'à la suppression de la classe.
 
-Certaines données ne sont jamais supprimées automatiquement : votre compte, avec vos adresses e-mail et ce qu'edu-ID a transmis ; le journal d'audit, qui enregistre des actions comme les connexions, les modifications des listes de classe et les corrections, avec les noms ; le journal des appels au modèle d'IA, qui nomme la personne pour qui chaque appel a été fait (jamais son contenu) ; vos notifications ; quel poste kiosque vous avez utilisé pour quel examen ; un pseudonyme de sondage sans compte ; et vos fichiers dans l'espace de travail en ligne.
+Certaines données ne sont jamais supprimées automatiquement : votre compte, avec vos adresses e-mail et ce qu'edu-ID a transmis ; le journal d'audit, qui enregistre des actions comme les connexions, les modifications des listes de classe et les corrections, avec les noms ; le journal des appels au modèle d'IA, qui nomme la personne pour qui chaque appel a été fait (jamais son contenu) ; vos notifications ; quel poste kiosque vous avez utilisé pour quel examen ; un pseudonyme de sondage sans compte ; et vos nom, adresse e-mail et fichiers dans l'espace de travail en ligne.
 
 Certaines données sont supprimées automatiquement :
 
@@ -72,7 +72,7 @@ Les données supprimées restent environ quatre mois de plus dans les sauvegarde
 ## Qui voit quoi
 
 - **Vous** : vos classes, vos réponses, et vos résultats et retours une fois que votre enseignant les publie.
-- **Les autres étudiants** : jamais vos notes ni votre photo, et jamais vos réponses sous votre nom. Dans un projet de groupe, vos coéquipiers partagent le dépôt et voient son score. Quand un enseignant montre en classe la correction d'un exercice, les votes d'un sondage ou les résultats, les réponses apparaissent sans nom ; dans une très petite classe, ou d'après une réponse citée telle qu'écrite, d'autres peuvent tout de même deviner de qui elle vient.
+- **Les autres étudiants** : jamais vos notes ni votre photo. Dans un projet de groupe, vos coéquipiers partagent le dépôt et voient son score. Quand un enseignant montre en classe la correction d'un exercice, les votes d'un sondage ou les résultats, les réponses et les résultats apparaissent sans nom par défaut, sauf si l'enseignant choisit d'afficher les noms ; même sans eux, dans une très petite classe, ou d'après une réponse citée telle qu'écrite, d'autres peuvent tout de même deviner de qui elle vient.
 - **L'équipe enseignante de votre cours** (ses enseignants et assistants) : tout ce que vous faites dans ce cours, années passées comprises : vos réponses, notes, journal de tentative, activité de révision et dépôts de projet, et votre progression en direct pendant une évaluation.
 - **Les enseignants qui peuvent lire une question** à laquelle vous avez répondu dans un examen : seulement des statistiques sur l'ensemble des étudiants qui y ont répondu, jamais avec moins de dix réponses, jamais votre nom.
 - **L'administrateur de la plateforme** : la liste des comptes avec leur photo et leur dernière activité, et les heures d'utilisation sous forme de nombres. Pour accéder à un cours, l'administrateur active des droits spéciaux qui durent une heure et sont enregistrés. Pour vous aider à résoudre un problème, un administrateur peut ouvrir une session à votre nom : elle dure au plus une heure, ne peut rien répondre ni rendre à votre place, et elle est enregistrée au nom de l'administrateur.
