@@ -607,11 +607,13 @@ export async function answerPoll(
  * What a poll's results are computed from: how many joined, and every
  * answer's payload. Read from the stored answers until the guests are purged,
  * from the frozen copy after (#873, ADR-014 amendment 2026-10-15) — so every
- * reader computes the same results before and after the purge.
+ * reader computes the same results before and after the purge. `frozenAt` is
+ * the purge's instant, null while the results still move.
  */
 interface ResultsSource {
   joined: number;
   payloads: unknown[];
+  frozenAt: Date | null;
 }
 
 /** The stored answers, as they stand: what the purge freezes. */
@@ -625,38 +627,35 @@ async function storedResults(db: DbOrTx, scope: PollScope): Promise<ResultsSourc
     .from(answers)
     .innerJoin(attempts, eq(answers.attemptId, attempts.id))
     .where(and(eq(attempts.evaluationId, scope.evaluation.id), eq(answers.itemId, scope.item.item.id)));
-  return { joined: joined?.n ?? 0, payloads: rows.map((r) => r.payload) };
+  return { joined: joined?.n ?? 0, payloads: rows.map((r) => r.payload), frozenAt: null };
 }
 
 async function resultsOf(db: Db, scope: PollScope): Promise<ResultsSource> {
   const [frozen] = await db
-    .select({ joined: pollFrozenResults.joined, payloads: pollFrozenResults.payloads })
+    .select({
+      joined: pollFrozenResults.joined,
+      payloads: pollFrozenResults.payloads,
+      frozenAt: pollFrozenResults.frozenAt,
+    })
     .from(pollFrozenResults)
     .where(eq(pollFrozenResults.evaluationId, scope.evaluation.id));
   return frozen ?? storedResults(db, scope);
 }
 
-/** When the poll's results were frozen by the guests' purge, or null while they still move. */
-export async function frozenAtOf(db: Db, evaluationId: string): Promise<Date | null> {
-  const [row] = await db
+/** A purged poll's ideas are read-only: no mark, no moderation or AI switch moves them. */
+async function assertNotFrozen(db: Db, evaluationId: string): Promise<void> {
+  const [frozen] = await db
     .select({ at: pollFrozenResults.frozenAt })
     .from(pollFrozenResults)
     .where(eq(pollFrozenResults.evaluationId, evaluationId));
-  return row?.at ?? null;
+  if (frozen) throw new PollError("poll_frozen");
 }
 
-/** A purged poll's ideas are read-only: no mark, no moderation or AI switch moves them. */
-async function assertNotFrozen(db: Db, evaluationId: string): Promise<void> {
-  if ((await frozenAtOf(db, evaluationId)) !== null) throw new PollError("poll_frozen");
-}
-
-/** The counts the projection draws, computed the same way for both exits. */
-export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<PollTally> {
-  const scope = await scopeOf(db, evaluation);
-  if (!scope) return { joined: 0, answered: 0, choices: [], answers: [], ideas: [], pending: 0 };
-  const [{ joined, payloads }, marks] = await Promise.all([
+/** The tally of a loaded poll, and when its results were frozen (null while they move). */
+async function tallyOfScope(db: Db, scope: PollScope): Promise<{ tally: PollTally; frozenAt: Date | null }> {
+  const [{ joined, payloads, frozenAt }, marks] = await Promise.all([
     resultsOf(db, scope),
-    isBrainstorm(scope.item) ? marksOf(db, evaluation.id) : [],
+    isBrainstorm(scope.item) ? marksOf(db, scope.evaluation.id) : [],
   ]);
   const type = scope.item.question.type as PollType;
   let choiceCount = 0;
@@ -664,7 +663,7 @@ export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<Pol
     const config = loadConfig(type, scope.item.version) as { choices?: unknown[] };
     choiceCount = Array.isArray(config.choices) ? config.choices.length : 0;
   }
-  return pollTally({
+  const tally = pollTally({
     type,
     choiceCount,
     joined,
@@ -673,6 +672,14 @@ export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<Pol
     marks,
     moderation: pollSettingsOf(scope).moderation,
   });
+  return { tally, frozenAt };
+}
+
+/** The counts the projection draws, computed the same way for both exits. */
+export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<PollTally> {
+  const scope = await scopeOf(db, evaluation);
+  if (!scope) return { joined: 0, answered: 0, choices: [], answers: [], ideas: [], pending: 0 };
+  return (await tallyOfScope(db, scope)).tally;
 }
 
 /** Every answer to the poll's one item: stored, or frozen once the guests were purged. */
@@ -862,10 +869,9 @@ export async function teacherView(
   pool: { id: string; name: string } | null = null,
 ): Promise<PollTeacherView> {
   const { evaluation, item } = scope;
-  const [home, tally, frozenAt] = await Promise.all([
+  const [home, { tally, frozenAt }] = await Promise.all([
     homeOf(db, evaluation.classroomId),
-    tallyOf(db, evaluation),
-    frozenAtOf(db, evaluation.id),
+    tallyOfScope(db, scope),
   ]);
   return {
     evaluation: {
@@ -946,28 +952,36 @@ export async function publicView(
 
 // --- The guests' retention (#873) -----------------------------------------
 
-/**
- * Per poll, its answers: counted from the stored ones, or from the frozen copy
- * of a purged poll (#873), which replaces them.
- */
-async function answeredCounts(db: Db, evaluationIds: readonly string[]): Promise<Map<string, number>> {
-  const ids = [...evaluationIds];
-  const [stored, frozen] = await Promise.all([
-    db
-      .select({ evaluationId: attempts.evaluationId, n: count() })
-      .from(answers)
-      .innerJoin(attempts, eq(answers.attemptId, attempts.id))
-      .where(inArray(attempts.evaluationId, ids))
-      .groupBy(attempts.evaluationId),
-    db
-      .select({
-        evaluationId: pollFrozenResults.evaluationId,
-        n: sql<number>`jsonb_array_length(${pollFrozenResults.payloads})::int`,
-      })
-      .from(pollFrozenResults)
-      .where(inArray(pollFrozenResults.evaluationId, ids)),
-  ]);
-  return new Map([...stored, ...frozen].map((r) => [r.evaluationId, r.n]));
+/** Per purged poll among `evaluationIds`, its frozen counts (#873): they replace the stored ones. */
+type FrozenCounts = Map<string, { answered: number; correct: number | null }>;
+
+async function frozenCountsOf(db: Db, evaluationIds: readonly string[]): Promise<FrozenCounts> {
+  const rows = await db
+    .select({
+      evaluationId: pollFrozenResults.evaluationId,
+      answered: sql<number>`jsonb_array_length(${pollFrozenResults.payloads})::int`,
+      correct: pollFrozenResults.correct,
+    })
+    .from(pollFrozenResults)
+    .where(inArray(pollFrozenResults.evaluationId, [...evaluationIds]));
+  return new Map(rows.map(({ evaluationId, ...counts }) => [evaluationId, counts]));
+}
+
+/** Per poll, its answers: the stored ones counted, or the frozen count of a purged poll. */
+async function answeredCounts(
+  db: Db,
+  evaluationIds: readonly string[],
+  frozen: FrozenCounts,
+): Promise<Map<string, number>> {
+  const stored = await db
+    .select({ evaluationId: attempts.evaluationId, n: count() })
+    .from(answers)
+    .innerJoin(attempts, eq(answers.attemptId, attempts.id))
+    .where(inArray(attempts.evaluationId, [...evaluationIds]))
+    .groupBy(attempts.evaluationId);
+  const counts = new Map(stored.map((r) => [r.evaluationId, r.n]));
+  for (const [evaluationId, { answered }] of frozen) counts.set(evaluationId, answered);
+  return counts;
 }
 
 /**
@@ -993,17 +1007,14 @@ function storedCorrect(db: DbOrTx, evaluationIds: readonly string[]) {
     .groupBy(attempts.evaluationId);
 }
 
-/** {@link storedCorrect}, the frozen count replacing it for a purged poll (#873). */
-async function correctCounts(db: Db, evaluationIds: readonly string[]): Promise<Map<string, number>> {
-  const [stored, frozen] = await Promise.all([
-    storedCorrect(db, evaluationIds),
-    db
-      .select({ evaluationId: pollFrozenResults.evaluationId, correct: pollFrozenResults.correct })
-      .from(pollFrozenResults)
-      .where(inArray(pollFrozenResults.evaluationId, [...evaluationIds])),
-  ]);
-  const counts = new Map(stored.map((r) => [r.evaluationId, r.correct]));
-  for (const { evaluationId, correct } of frozen) {
+/** {@link storedCorrect}, the frozen count replacing it for a purged poll. */
+async function correctCounts(
+  db: Db,
+  evaluationIds: readonly string[],
+  frozen: FrozenCounts,
+): Promise<Map<string, number>> {
+  const counts = new Map((await storedCorrect(db, evaluationIds)).map((r) => [r.evaluationId, r.correct]));
+  for (const [evaluationId, { correct }] of frozen) {
     if (correct === null) counts.delete(evaluationId);
     else counts.set(evaluationId, correct);
   }
@@ -1036,6 +1047,7 @@ export async function purgePollGuests(db: Db, now: Date): Promise<number> {
     .where(
       and(
         eq(evaluations.mode, "poll"),
+        // Defensive: a running poll has no `closed_at`, and is never purged.
         ne(evaluations.state, "running"),
         lt(evaluations.closedAt, before),
         exists(
@@ -1187,12 +1199,13 @@ export async function questionPicks(
       finished.flatMap((r) => (r.evaluation.classroomId === null ? [] : [r.evaluation.classroomId])),
     ),
   ];
+  const frozen: FrozenCounts = finishedIds.length === 0 ? new Map() : await frozenCountsOf(db, finishedIds);
   const [answeredOf, correctOf, rosterRows] =
     finishedIds.length === 0
       ? [new Map<string, number>(), new Map<string, number>(), []]
       : await Promise.all([
-          answeredCounts(db, finishedIds),
-          correctCounts(db, finishedIds),
+          answeredCounts(db, finishedIds, frozen),
+          correctCounts(db, finishedIds, frozen),
           db
             .select({ classroomId: enrollments.classroomId, n: count() })
             .from(enrollments)
@@ -1323,10 +1336,8 @@ export async function listPolls(db: Db, userId: string, limit = 50): Promise<Pol
     .limit(limit);
   if (rows.length === 0) return [];
 
-  const answered = await answeredCounts(
-    db,
-    rows.map((r) => r.evaluation.id),
-  );
+  const ids = rows.map((r) => r.evaluation.id);
+  const answered = await answeredCounts(db, ids, await frozenCountsOf(db, ids));
 
   return rows.map((row) => ({
     id: row.evaluation.id,
