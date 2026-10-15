@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import type { AdminConcept, Concept, ConceptCycle, ConceptRelationAdd, ConceptRelationKind } from "@quiz/contracts";
-import { checkBroaderEdge, checkRelatedEdge, edgesOf } from "@quiz/domain";
+import { checkBroaderEdge, checkRelatedEdge, edgesOf, type RelationRefusal } from "@quiz/domain";
 
 import { api, ApiError, refusalCodeOf } from "../api";
-import { useI18n, useT, type TFunction } from "../i18n";
+import { useI18n, useT, type Locale, type TFunction } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
 import { Button, Chip, FormError, SearchInput } from "../ui";
 import { conceptName, refName } from "./names";
@@ -34,6 +34,13 @@ export function relationError(t: TFunction, error: unknown): string {
     default:
       return t("admin.concepts.relations.error.save");
   }
+}
+
+/** Why the rule refuses an edge the vocabulary has moved past since it was proposed: a cycle names its path. */
+export function ruleRefusal(t: TFunction, refusal: RelationRefusal, byId: ReadonlyMap<string, AdminConcept>, locale: Locale): string {
+  if (refusal.kind !== "cycle") return t("admin.concepts.relations.error.redundant");
+  const path = refusal.path.map((id) => (byId.has(id) ? conceptName(byId.get(id)!, locale) : "?")).join(" › ");
+  return t("admin.concepts.relations.error.cycle", { path });
 }
 
 /**
@@ -144,17 +151,21 @@ function Group({
 
 /**
  * The relations of a concept (ADR-081 §4, sixth addendum 7c), the admin's:
- * its broader concepts and its related ones. Each change is saved at once and
- * audited alone, like the aliases.
+ * its broader concepts, with the model's suggestions for them on demand, and
+ * its related ones. Each change is saved at once and audited alone, like the
+ * aliases.
  */
 export function ConceptRelations({
   concept,
   concepts,
   byId,
+  children,
 }: {
   concept: AdminConcept;
   concepts: readonly AdminConcept[];
   byId: ReadonlyMap<string, AdminConcept>;
+  /** Under the broader concepts: the sheet's Suggest a broader concept. */
+  children?: ReactNode;
 }) {
   const t = useT();
   return (
@@ -162,6 +173,7 @@ export function ConceptRelations({
       <legend className="mb-1 text-base font-bold tracking-tight">{t("admin.concepts.relations")}</legend>
       <p className="text-xs text-fg-muted">{t("admin.concepts.relations.desc")}</p>
       <Group kind="broader" concept={concept} concepts={concepts} byId={byId} />
+      {children}
       <Group kind="related" concept={concept} concepts={concepts} byId={byId} />
     </fieldset>
   );

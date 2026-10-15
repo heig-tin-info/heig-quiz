@@ -18,6 +18,7 @@ import { useConfirm } from "../confirm";
 import { useT, type Locale } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
 import { Button, Chip, Field, FormError, Sheet, Textarea } from "../ui";
+import { ConceptBroaderSuggestion } from "./ConceptBroaderSuggestion";
 import { FillWithAi, fillEmpty } from "./ConceptFillAi";
 import { ConceptMergeDialog } from "./ConceptMergeDialog";
 import { ConceptRelations } from "./ConceptRelations";
@@ -173,7 +174,9 @@ function Aliases({ concept }: { concept: AdminConcept }) {
  * opens the dialog that folds it into a validated concept (a concept in use
  * is merged, never deleted: ADR-081 third addendum §7). A merge waits for the
  * edits to be saved, so it never drops them silently. "Fill with AI" puts a
- * model's proposal in the empty fields; Save stays the only write.
+ * model's proposal in the empty fields; Save stays the only write of the
+ * form. "Suggest a broader concept", under the Relations, proposes where the
+ * concept belongs; each suggestion is added on its own, as a relation is.
  */
 export function ConceptSheet({
   concept,
@@ -312,7 +315,9 @@ export function ConceptSheet({
           </fieldset>
         ))}
         <Aliases concept={concept} />
-        <ConceptRelations concept={concept} concepts={concepts} byId={byId} />
+        <ConceptRelations concept={concept} concepts={concepts} byId={byId}>
+          <ConceptBroaderSuggestion key={concept.id} concept={concept} concepts={concepts} byId={byId} />
+        </ConceptRelations>
         {!concept.deletable && dirty ? (
           <p id="concept-merge-why" className="text-[13px] text-fg-muted">
             {t("admin.concepts.merge.unsaved")}

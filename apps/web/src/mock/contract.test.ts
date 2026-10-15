@@ -1222,6 +1222,26 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     expect(await queue()).toEqual(before);
   });
 
+  it("answers the sheet's Suggest a broader concept with that concept's rows only (ADR-114 §3)", async () => {
+    const before = await queue();
+    const fr = new Map(before.concepts.map((c) => [c.id, c.labels.fr]));
+    const heap = before.concepts.find((c) => c.labels.fr === "Tas")!;
+    const res = await call("POST", "/app/api/admin/concepts/relations/ai", { concept: heap.id });
+    expect(res.status).toBe(200);
+    expect(issuesOf(ConceptRelationProposals, res.body)).toEqual([]);
+    const proposals = res.body as unknown as ConceptRelationProposals;
+    expect(proposals.asked).toEqual([heap.id]);
+    expect(proposals.broader.map((e) => [fr.get(e.concept), fr.get(e.target)])).toEqual([["Tas", "Allocation dynamique"]]);
+    expect(proposals.related).toEqual([]);
+    expect(proposals.tops).toHaveLength(1);
+    expect(proposals.tops[0]!.narrower).toContain(heap.id);
+    // A concept with nothing to suggest gets nothing.
+    const recursion = before.concepts.find((c) => c.labels.fr === "Récursivité")!;
+    const none = (await call("POST", "/app/api/admin/concepts/relations/ai", { concept: recursion.id })).body as unknown as ConceptRelationProposals;
+    expect([none.broader, none.tops]).toEqual([[], []]);
+    expect(await queue()).toEqual(before);
+  });
+
   it("proposes the empty fields of a concept with Fill with AI, a taken label as taken, writing nothing", async () => {
     const before = await queue();
     const twos = before.concepts.find((c) => c.labels.fr === "Complément à 2")!;

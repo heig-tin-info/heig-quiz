@@ -4,8 +4,6 @@ import { useMemo, useState, type ReactNode } from "react";
 
 import {
   type AdminConcept,
-  type Concept,
-  type ConceptCreate,
   type ConceptRelationAdd,
   ConceptRelationCandidates,
   type ConceptRelationProposals,
@@ -17,12 +15,13 @@ import { useI18n, useT } from "../i18n";
 import { useLlmAvailability } from "../llmAvailability";
 import { adminConceptCandidatesKey, adminConceptsKey, conceptsKey } from "../queryKeys";
 import { Alert, Badge, Button, Card, Checkbox, EmptyState, FormError, QueryError, SelectionBar, Skeleton } from "../ui";
-import { relationError } from "./ConceptRelations";
+import { relationError, ruleRefusal } from "./ConceptRelations";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
 import { conceptName, refName } from "./names";
 import {
   aiRowsOf,
   conflicting,
+  createTop,
   isConcept,
   rowsOf,
   rowState,
@@ -84,11 +83,7 @@ export function ConceptRelationReview({
   const accept = useMutation({
     mutationFn: (chosen: RelationRow[]) =>
       runAccept(chosen, {
-        create: (top) =>
-          api<Concept>("/app/api/concepts", {
-            method: "POST",
-            body: JSON.stringify({ lang: top.lang, label: top.label, qualifier: top.qualifier } satisfies ConceptCreate),
-          }),
+        create: createTop,
         relate: (row, target) =>
           api(`/app/api/admin/concepts/${row.concept}/relations`, {
             method: "POST",
@@ -278,11 +273,7 @@ function ReviewRow({
   const reason = refused
     ? null
     : state.state === "blocked"
-      ? state.refusal.kind === "cycle"
-        ? t("admin.concepts.relations.error.cycle", {
-            path: state.refusal.path.map((id) => (byId.has(id) ? conceptName(byId.get(id)!, locale) : "?")).join(" › "),
-          })
-        : t("admin.concepts.relations.error.redundant")
+      ? ruleRefusal(t, state.refusal, byId, locale)
       : conflict
         ? t("admin.concepts.rel.ai.conflict")
         : null;
