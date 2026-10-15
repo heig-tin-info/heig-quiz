@@ -713,6 +713,12 @@ M9-01 row of [`PROGRESS.md`](PROGRESS.md).
     early, on 2026-10-05, as "not planned". Comment on it with the
     decommission's PR, then mark M9-01 done in `PROGRESS.md`.
 
+**As run, 2026-10-14/15**: every step done by the owner, the agent's
+production steps being refused to it by its permission rules; step 5
+partly — the repository was archived first, so its secret and variable
+stay, inert; step 6 as the deletion of the separate resource « HEIG
+Classroom ». The detail is the M9-01 row of [`PROGRESS.md`](PROGRESS.md).
+
 ### 5.1 Personal-data copies
 
 Every copy the cutover makes holds students' names, addresses and grades.
