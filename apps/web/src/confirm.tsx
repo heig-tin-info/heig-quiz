@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
+import { confirmsName } from "@quiz/domain";
+
 import { useT } from "./i18n";
 import { Button, Field, Modal } from "./ui";
 
@@ -24,8 +26,8 @@ export interface ConfirmOptions {
   /**
    * The name the user must type before the confirm button wakes up: for a
    * deletion that destroys the only copy of something (a classroom, a
-   * Quiz-mode journal and its pages, F-JRN-04). Compared trimmed, as the API
-   * compares the `?confirm=` it is then sent.
+   * Quiz-mode journal and its pages, F-JRN-04). Compared by `confirmsName`,
+   * as the API compares the `?confirm=` it is then sent.
    */
   typeToConfirm?: string;
 }
@@ -61,7 +63,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     setPending(null);
   };
   const mustType = pending?.options.typeToConfirm;
-  const blocked = mustType !== undefined && typed.trim() !== mustType.trim();
+  const blocked = mustType !== undefined && !confirmsName(typed, mustType);
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}

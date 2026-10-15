@@ -17,6 +17,7 @@ import type { FastifyInstance } from "fastify";
 
 import type { ClassroomJournalSignal, JournalPageStaff, JournalRepository, JournalStaff } from "@quiz/contracts";
 import { buildNav, homePage, journalRepoName } from "@quiz/docrender";
+import { confirmsName } from "@quiz/domain";
 
 import { isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
@@ -210,7 +211,7 @@ export async function journalRemovalRefused(
     .where(eq(classroomJournals.classroomId, room.id))
     .groupBy(classroomJournals.mode);
   const pages = row?.pages ?? 0;
-  if (row?.mode === "quiz" && pages > 0 && confirm?.trim() !== room.name.trim()) {
+  if (row?.mode === "quiz" && pages > 0 && !confirmsName(confirm ?? "", room.name)) {
     throw new JournalError("confirm_required");
   }
   return pages;
