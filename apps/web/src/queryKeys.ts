@@ -50,6 +50,12 @@ export const adminLlmUsageKey = [...adminTeachersKey, "llm-usage"] as const;
 export const conceptsKey = ["concepts"] as const;
 /** The admin's curation queue (ADR-081 fifth addendum): every filter and page below it, refreshed by the `admin` hint. */
 export const adminConceptsKey = [...adminTeachersKey, "concepts"] as const;
+/**
+ * The relations proposed to the admin (ADR-114), apart from the queue's key: a
+ * relation written does not refetch them, the rows read their state from the
+ * refreshed vocabulary instead.
+ */
+export const adminConceptCandidatesKey = ["admin-concept-candidates"] as const;
 /** The kiosk station registry (ADR-051 §5). */
 export const adminKioskKey = ["admin-kiosk-devices"] as const;
 /** Whether this browser is a kiosk station: its `quiz_kiosk` cookie, read by the server. */

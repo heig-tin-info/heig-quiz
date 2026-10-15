@@ -151,7 +151,7 @@ async function holdersOf(db: Db | Tx, keys: Record<ConceptLang, readonly string[
     .where(and(ne(concepts.status, "merged"), or(...held)));
 }
 
-/** A concept as the resolver of `@quiz/domain` sees it: its id, its merge, its labels with their qualifiers and its aliases. */
+/** A concept as the resolver of `@quiz/domain` sees it: its id, its merge, its labels with their qualifiers and languages, and its aliases. */
 export function toResolvable(row: ConceptRow, aliases: ReadonlyMap<string, readonly string[]>): ResolvableConcept {
   return {
     id: row.id,
@@ -159,7 +159,7 @@ export function toResolvable(row: ConceptRow, aliases: ReadonlyMap<string, reado
     aliases: aliases.get(row.id) ?? [],
     labels: CONCEPT_LANGS.flatMap((lang) => {
       const { label, qualifier } = sideOf(row, lang);
-      return label === null ? [] : [{ label, qualifier }];
+      return label === null ? [] : [{ label, qualifier, lang }];
     }),
   };
 }

@@ -36,7 +36,7 @@ export function SelectionBar({
   onClear: () => void;
   notices?: ReactNode;
   end?: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   const t = useT();
   return (

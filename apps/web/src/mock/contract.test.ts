@@ -90,6 +90,7 @@ import {
   ConceptSuggestions,
   ConceptDuplicatesAi,
   ConceptFill,
+  ConceptRelationCandidates,
   ConceptWriteRefusal,
   KioskStation,
   PairPreview,
@@ -501,6 +502,7 @@ const CHECKED: Case[] = [
   each("/app/api/admin/tasks", "/app/api/admin/tasks", AdminScheduledTask),
   one("/app/api/concepts", "/app/api/concepts", ConceptList),
   one("/app/api/admin/concepts", "/app/api/admin/concepts", AdminConceptList),
+  one("/app/api/admin/concepts/relations/candidates", "/app/api/admin/concepts/relations/candidates", ConceptRelationCandidates),
   each("/app/api/admin/kiosk-devices", "/app/api/admin/kiosk-devices", KioskDevice),
   one("/app/api/kiosk/station", "/app/api/kiosk/station", KioskStation),
   one("/app/api/pair/:code", "/app/api/pair/BCDF-GHJK", PairPreview),
@@ -1179,6 +1181,24 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
     expect(pairs.length).toBeGreaterThan(0);
     const ids = new Set(before.concepts.map((c) => c.id));
     for (const p of pairs) expect([ids.has(p.a), ids.has(p.b), p.a !== p.b]).toEqual([true, true, true]);
+    expect(await queue()).toEqual(before);
+  });
+
+  it("proposes relations between live concepts of the queue, writing nothing (ADR-114)", async () => {
+    const before = await queue();
+    const res = await call("GET", "/app/api/admin/concepts/relations/candidates");
+    expect(issuesOf(ConceptRelationCandidates, res.body)).toEqual([]);
+    const { candidates } = res.body as unknown as ConceptRelationCandidates;
+    const fr = new Map(before.concepts.map((c) => [c.id, c.labels.fr]));
+    const named = (kind: string) =>
+      candidates.filter((c) => c.kind === kind).map((c) => [fr.get(c.concept), fr.get(c.target)]);
+    expect(named("broader")).toContainEqual(["Arithmétique des pointeurs", "Pointeur"]);
+    const related = candidates.filter((c) => c.kind === "related");
+    expect(related.length).toBeGreaterThan(0);
+    for (const c of candidates) expect([fr.has(c.concept), fr.has(c.target)]).toEqual([true, true]);
+    for (const c of related) expect(c.concept < c.target).toBe(true);
+    // Tableau is under Pointeur already: never proposed as related to it.
+    expect(named("related").map((p) => [...p].sort())).not.toContainEqual(["Pointeur", "Tableau"]);
     expect(await queue()).toEqual(before);
   });
 
