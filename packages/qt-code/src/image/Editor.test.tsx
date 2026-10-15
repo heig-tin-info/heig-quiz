@@ -131,6 +131,15 @@ describe("CodeImageEditor", () => {
     expect(await screen.findByText("The reference solution does not compile.")).toBeInTheDocument();
   });
 
+  it("reports a draft the server refuses as its issues, never as a compile failure", async () => {
+    setup(draft(), async () => "invalid");
+    fireEvent.click(screen.getByRole("button", { name: "Try the reference solution" }));
+    expect(
+      await screen.findByText("The question has errors, flagged on this page. Fix them, then try again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("The reference solution does not compile.")).toBeNull();
+  });
+
   it("refuses a side out of range without drawing it", () => {
     setup({ ...imageConfig(), image: { width: 1, height: 3, palette: "bw" } }, async () => "unavailable");
     expect(screen.queryByRole("img", { name: "Target" })).toBeNull();

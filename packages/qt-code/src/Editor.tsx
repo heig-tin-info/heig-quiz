@@ -26,7 +26,7 @@ import {
 import { ArgsInput } from "./ArgsInput.js";
 import { referenceRegions } from "./reference.js";
 import { DEFAULT_LIMITS, totalCasePoints, type CodeCase, type CodeConfig } from "./schema.js";
-import { EDITOR_STRINGS, type CodeEditorStrings } from "./strings.js";
+import { EDITOR_STRINGS, TRY_FAILURE_STRINGS, type CodeEditorStrings, type TryFailure } from "./strings.js";
 import { caseVerdict } from "./verdict.js";
 import {
   AdvancedDisclosure,
@@ -88,6 +88,8 @@ export interface CodeEditorProps extends EditorProps<CodeConfig> {
 export type CodeTryOutcome =
   | RunnerOutcome
   | "unavailable"
+  /** The STORED draft does not validate: nothing ran, the issues are on the page. */
+  | "invalid"
   | {
       graded: {
         compileOk: boolean;
@@ -102,15 +104,9 @@ export type CodeTryOutcome =
       };
     };
 
-/**
- * `compile`: the reference solution does not build. `regions`: it does not
- * MATCH the template — the two are different mistakes and the teacher fixes
- * them in different places, so they never share a sentence. `diverged`:
- * cases on which the browser runner disagreed with the server.
- */
+/** `diverged`: cases on which the browser runner disagreed with the server. */
 type TryDone = { passed: number; total: number; diverged?: number };
-type TryReason = "compile" | "regions";
-type TryState = UiTryState<TryDone, TryReason>;
+type TryState = UiTryState<TryDone, TryFailure>;
 
 const NEW_CASE: CodeCase = {
   name: "",
@@ -162,6 +158,7 @@ async function tryReference(
 ): Promise<TryState> {
   const outcome = await onTry(config);
   if (outcome === "unavailable") return { status: "unavailable" };
+  if (outcome === "invalid") return { status: "failed", reason: "draft" };
   if ("graded" in outcome) {
     // The server judged the cases: its verdict is the answer, and
     // re-deciding it here from an output we do not have would be a guess.
@@ -202,7 +199,7 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const s = resolveStrings(EDITOR_STRINGS, strings);
   const ids = useId();
-  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryReason>("compile");
+  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryFailure>("error");
 
   const patch = (next: Partial<CodeConfig>) => onChange({ ...config, ...next });
   const patchTests = (next: Partial<CodeConfig["tests"]>) =>
@@ -265,7 +262,7 @@ export function CodeEditor({
             onTry={runReference}
             status={tryStatusOf(tryState, {
               unavailable: s.tryUnavailable,
-              failed: (reason) => (reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed),
+              failed: (reason) => s[TRY_FAILURE_STRINGS[reason]],
               done: ({ passed, total }) => fmt(s.tryResult, { passed, total }),
             })}
           />

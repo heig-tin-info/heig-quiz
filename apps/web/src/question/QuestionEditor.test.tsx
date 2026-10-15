@@ -590,6 +590,29 @@ describe("QuestionEditor — code", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it("reads a 422 on the stored draft as the draft's issues, not as a compile failure", async () => {
+    // An empty statement makes the stored draft fail its schema: the try
+    // route refuses it before any program runs. The editor used to turn
+    // that refusal — any thrown error — into "does not compile".
+    const user = userEvent.setup();
+    mockFetch(
+      routes(codeDetail(), {
+        "POST /app/api/questions/q2/try": fail(422, {
+          error: "config_invalid",
+          message: "This version cannot be rendered",
+          details: [{ path: ["prompt"], code: "too_small", message: "String must contain at least 1 character(s)" }],
+        }),
+      }),
+    );
+    renderWithProviders(<QuestionEditor id="q2" navigate={vi.fn()} />);
+    await screen.findByLabelText("Starting code");
+    await user.click(screen.getByRole("button", { name: "Try the reference solution" }));
+    expect(
+      await screen.findByText("The question has errors, flagged on this page. Fix them, then try again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("The reference solution does not compile.")).toBeNull();
+  });
 });
 
 describe("QuestionEditor — keyboard", () => {

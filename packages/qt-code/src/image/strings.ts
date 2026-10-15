@@ -103,6 +103,8 @@ export type CodeImageEditorStrings = ProgramEditorStrings &
     | "tryUnavailable"
     | "tryCompileFailed"
     | "tryRegionsMismatch"
+    | "tryInvalidDraft"
+    | "tryFailed"
     | "advanced"
   > &
   ImageEditorStrings;

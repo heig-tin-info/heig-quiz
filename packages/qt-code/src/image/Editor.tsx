@@ -58,15 +58,21 @@ import {
   targetFits,
   targetPixels,
 } from "./schema.js";
+import { TRY_FAILURE_STRINGS, type TryFailure } from "../strings.js";
 import { CODEIMAGE_EDITOR_DEFAULTS, type CodeImageEditorStrings } from "./strings.js";
 
 /**
  * What the reference run came back with. A raw {@link RunnerOutcome} when the
  * browser ran it, the server's grading `details` when `POST /questions/:id/try`
  * did — its `image` is the picture, already parsed by the grader's own rule —
- * and `"unavailable"` when no runner could.
+ * `"unavailable"` when no runner could, and `"invalid"` when the STORED draft
+ * does not validate: nothing ran, the issues are on the page.
  */
-export type CodeImageTryOutcome = RunnerOutcome | { details: CodeImageDetails } | "unavailable";
+export type CodeImageTryOutcome =
+  | RunnerOutcome
+  | { details: CodeImageDetails }
+  | "unavailable"
+  | "invalid";
 
 export interface CodeImageEditorProps extends EditorProps<CodeImageConfig> {
   onTry?: ((config: CodeImageConfig) => Promise<CodeImageTryOutcome>) | undefined;
@@ -76,8 +82,7 @@ export interface CodeImageEditorProps extends EditorProps<CodeImageConfig> {
 
 /** `spec` is the size and palette the image was read with: a later change makes it stale. */
 type TryDone = { pixels: Int16Array; spec: ImageSpec };
-type TryReason = "compile" | "regions";
-type TryState = UiTryState<TryDone, TryReason>;
+type TryState = UiTryState<TryDone, TryFailure>;
 
 const sameSpec = (a: ImageSpec, b: ImageSpec): boolean =>
   a.width === b.width && a.height === b.height && a.palette === b.palette;
@@ -93,6 +98,7 @@ async function tryReference(
   const spec = { ...config.image };
   const outcome = await onTry(config);
   if (outcome === "unavailable") return { status: "unavailable" };
+  if (outcome === "invalid") return { status: "failed", reason: "draft" };
   if ("details" in outcome) {
     const details = outcome.details;
     if (details.runner !== "ok") return { status: "unavailable" };
@@ -130,7 +136,7 @@ export function CodeImageEditor({
 }: CodeImageEditorProps) {
   const s = resolveStrings(CODEIMAGE_EDITOR_DEFAULTS, strings);
   const ids = useId();
-  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryReason>("compile");
+  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryFailure>("error");
 
   const patch = (next: Partial<CodeImageConfig>) => onChange({ ...config, ...next });
   const patchImage = (next: Partial<ImageSpec>) => patch({ image: { ...config.image, ...next } });
@@ -245,8 +251,7 @@ export function CodeImageEditor({
               onTry={runReference}
               status={tryStatusOf(tryState, {
                 unavailable: s.tryUnavailable,
-                failed: (reason) =>
-                  reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed,
+                failed: (reason) => s[TRY_FAILURE_STRINGS[reason]],
                 done: () => s.tryDrawn,
               })}
             />

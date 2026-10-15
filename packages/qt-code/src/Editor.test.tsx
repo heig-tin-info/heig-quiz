@@ -248,6 +248,32 @@ describe("CodeEditor", () => {
     ).toBeInTheDocument();
   });
 
+  it("reports a draft the server refuses as its issues, never as a compile failure", async () => {
+    // The stored draft does not validate (an empty statement, say): nothing
+    // was compiled, so "does not compile" would send the teacher to the
+    // wrong place — the issues are already flagged on the page.
+    setup({ config: withSplitReference(), onTry: async () => "invalid" });
+    fireEvent.click(screen.getByRole("button", { name: "Try the reference solution" }));
+    expect(
+      await screen.findByText("The question has errors, flagged on this page. Fix them, then try again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("The reference solution does not compile.")).toBeNull();
+  });
+
+  it("reports a try that never came back as such, never as a compile failure", async () => {
+    setup({
+      config: withSplitReference(),
+      onTry: async () => {
+        throw new Error("the draft could not be saved");
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Try the reference solution" }));
+    expect(
+      await screen.findByText("The reference solution could not be tried. Try again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("The reference solution does not compile.")).toBeNull();
+  });
+
   it("takes its strings from the host, which owns the translations", () => {
     setup({ strings: { prompt: "Énoncé" } });
     expect(screen.getByLabelText("Énoncé")).toBeInTheDocument();
