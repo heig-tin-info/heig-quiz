@@ -188,7 +188,7 @@ Two pairs stay below their target, on purpose:
 - Focus: 2 px accent ring at 2 px offset, on every interactive element. It is
   declared once in `style.css` on `:focus-visible`; no component restyles it,
   except the mode banner (below), whose dark fill would swallow a red ring,
-  and the cells of the pool's concept heat (below), whose box would clip it.
+  and the cells of the pool's concept map (below), whose box would clip it.
 
 ## Long-form reading (the journal)
 
@@ -692,7 +692,9 @@ live in `ui/state.ts`, each written once.
   (a phone) a full trail is unreadable, so the SAME `nav` shows only the way
   back, `‹ Parent`, one link to the immediate parent (`ChevronLeft`, its real
   `href`, named "Back to <parent>"); the list is hidden there, the page's own
-  heading being right below. The rule:
+  heading being right below. `current="location"` makes it a path inside a
+  page (the pool's concept map): the last item is `aria-current="location"`
+  and stays beside `‹ Parent` on a phone, as no heading names it. The rule:
   1. A page below a top-level section wears a trail; a top-level page (a
      sidebar destination: Activities, Courses, Question pools, Poll,
      Administration; the student's Courses, Grades, Drill) wears none.
@@ -859,7 +861,7 @@ live in `ui/state.ts`, each written once.
   lets the chips fall on a second row, and the track then takes the card
   radius, since a pill two rows tall is a lens. One component, in
   `@quiz/ui`, for the app and the question editors alike.
-- ViewSwitch: the icon-only `Segmented` between pictures of one list (cards, list, schedule, heat, tree), at the list's top right.
+- ViewSwitch: the icon-only `Segmented` between pictures of one list (cards, list, schedule, map, tree), at the list's top right.
 - Switch: `success` when on (a state, not an action, so not the accent),
   `line-strong` when off.
 - Tabs: text tabs with a 2 px ink (`fg`) underline, counts in `fg-faint`; red
@@ -2161,27 +2163,58 @@ header, whatever the tab.
   not frozen yet is `fg-faint` with no tint; no points is `Dash`. A row is
   `pressable` and opens the grading screen on it (`?repo=`).
 
-## The pool's concept heat (Concepts tab, "Heat")
+## The pool's concept map (Concepts tab, "Map")
 
-A squarified treemap of the pool's concepts (`pool/ConceptsTab.tsx`, layout
-in `pool/treemap.ts`): one cell per concept a question carries, its AREA the
-concept's share of the summed question counts. The area is the whole message, so the
-chart has no colour yet: every cell is `surface` (`surface-2` on hover) and
-the hairlines between them are the box's `line` fill showing through a 1 px
-gap — the hairline language of a table, not a border per cell, which would
-draw them 2 px where two cells meet.
+A drill-down treemap of the pool's concepts (`pool/ConceptMap.tsx`, view
+model in `pool/conceptMap.ts`, layout in `pool/treemap.ts`, ADR-116): ONE
+level of the vocabulary's hierarchy per view, each cell's AREA its covered
+count — its questions and those of its narrower concepts, what its click
+opens. A question on two siblings counts in both, so a level's areas are
+never nested in the parent's. The area is the whole message, so the chart has
+no colour: every cell is `surface` (`surface-2` on hover) and the hairlines
+between them are the box's `line` fill showing through a 1 px gap — the
+hairline language of a table, not a border per cell, which would draw them
+2 px where two cells meet.
 
+- **The levels**: the root draws the top concepts (a broader concept no
+  question carries included, as a grouping), never an "itself" cell. A
+  concept's level draws its narrower concepts and, when some of its questions
+  are on none of them, an **"itself"** cell ("Itself" in `fg-muted`, then that
+  count). A concept with several broader ones is drawn under each, never twice
+  in one level. The path is in the address (`?at=`, the ids from the top).
+- **The trail** above the box, at its left: the map's trail is the
+  `Breadcrumb` with `current="location"` ("Path in the concept map"), "All
+  concepts" then the path NAVIGATED (not a structural trail: it lives in the
+  tab, never in the page's eyebrow). Each level is a real link, the address
+  with `?at=` cut there; the current one is `aria-current="location"`. Below
+  `sm` it is "‹ Parent" and the current name: no heading sits below it to
+  name the level.
+- **The link**: at a concept level, one secondary button at the trail's
+  right, "Show its n questions", opens the concept's questions; the root has
+  none. The row wraps, so on a phone it goes under the trail.
 - **The box**: the page's width, 288 px tall on a phone and 416 px from
   `sm`, `rounded-card` with a `line` border. It is measured, so the layout
-  runs on its real aspect and a square cell stays square.
-- **A cell is a button**: the concept's name at 13 px / 600 over the count in `fg-muted`
-  at 12 px, both truncated; under 44 × 40 px only the count is drawn. Its
-  accessible name and `title` carry the concept and its count in words. The
-  box clips, so the focus ring is drawn INSIDE the cell (`-2px` offset)
-  instead of the usual 2 px outside, which an edge cell would lose.
-- **A concept no question carries has no area**: it is in the table, never
-  in the heat; the caption under the box says the area is proportional to the
-  number of questions.
+  runs on its real aspect and a square cell stays square. A level of one cell
+  fills it. While the map loads, a `Skeleton` of the box's size holds its
+  place; a failure is a `QueryError` with its retry.
+- **A cell is a button**, in reading order (top to bottom, then left to
+  right; the first is the largest, top left): the concept's name at 13 px /
+  600, a `ChevronRight` in `fg-faint` after it when the cell zooms (decoration,
+  `aria-hidden`), the count in `fg-muted` at 12 px, and for a proposed concept
+  the word at 11 px in `fg-faint` — a status said by text, never by a hue.
+  Under 44 × 40 px only the count is drawn. Its accessible name and `title`
+  start with the visible words and say what the click does ("Zoom in", "Show
+  its questions").
+  A cell with narrower concepts zooms; a leaf and the "itself" cell open the
+  Questions tab filtered on the concept. The box clips, so the focus ring is
+  drawn INSIDE the cell (`-2px` offset) instead of the usual 2 px outside,
+  which an edge cell would lose.
+- **Focus**: after a zoom in, the first cell of the new level, inside the
+  box's `role="group"` named by the level; after a step back up the trail,
+  the cell of the concept just left.
+- **The caption** under the box says an area is proportional to its number of
+  questions, narrower concepts included, and that a question with two
+  concepts counts in both.
 
 ## The activity heatmap (Administration, Activity tab)
 

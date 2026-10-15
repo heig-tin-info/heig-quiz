@@ -48,6 +48,27 @@ describe("Breadcrumb", () => {
     expect(onNavigate).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a location's current item beside the way back on a phone", () => {
+    render(
+      <Breadcrumb
+        label="Path"
+        backLabel={(parent) => `Back to ${parent}`}
+        current="location"
+        items={[
+          { label: "All concepts", href: "/pools/p1", onNavigate: vi.fn() },
+          { label: "Pointer", href: "/pools/p1?at=a", onNavigate: vi.fn() },
+          { label: "Allocation" },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Allocation")).toHaveAttribute("aria-current", "location");
+    expect(screen.getByRole("link", { name: "Back to Pointer" })).toHaveClass("sm:hidden");
+    expect(screen.getByRole("list")).not.toHaveClass("max-sm:hidden");
+    // The ancestors and the separators give way on a phone; the current item stays.
+    expect(screen.getByRole("link", { name: "Pointer" }).closest("li")).toHaveClass("max-sm:hidden");
+    expect(screen.getByText("Allocation").closest("li")).not.toHaveClass("max-sm:hidden");
+  });
+
   it("routes a plain click in the app and leaves a modified click to the browser", () => {
     const onNavigate = vi.fn();
     render(trail(onNavigate));

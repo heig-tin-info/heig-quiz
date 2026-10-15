@@ -267,7 +267,9 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     // The search box now carries the old tag as `#word`.
     setTagParam("");
   };
-  const { vocabulary, waiting } = useFilterVocabulary(filters.q);
+  // A ticked concept is named from the vocabulary when the pool's questions
+  // do not carry it (a grouping concept opened from the concept map).
+  const { vocabulary, waiting } = useFilterVocabulary(filters.q, filters.concepts.length > 0);
   const [categoryParam, setCategory] = useSearchParam("category", "");
   // The "LLM review" tab (ADR-060), offered while the platform has a model.
   const [tabParam, setTab] = useSearchParam("tab", "questions");
@@ -517,7 +519,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         </TabPanel>
       ) : tab === "concepts" ? (
         <TabPanel idPrefix="pool" value="concepts">
-          <ConceptsTab concepts={detail.concepts} onOpenConcept={openConcept} />
+          <ConceptsTab poolId={id} concepts={detail.concepts} onOpenConcept={openConcept} />
         </TabPanel>
       ) : (
       /* Escape closes the pane from anywhere in the list or the pane. */

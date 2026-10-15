@@ -5,10 +5,10 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-import type { PoolDetail, PoolSummary } from "@quiz/contracts";
+import { PoolConceptMap, type PoolDetail, type PoolSummary } from "@quiz/contracts";
 
 import { api, type ReadOptions } from "../api";
-import { poolKey, poolsKey } from "../queryKeys";
+import { poolConceptMapKey, poolKey, poolsKey } from "../queryKeys";
 
 /** Every pool the caller reaches, owned or shared with them. */
 export function usePools(options: ReadOptions = {}) {
@@ -26,5 +26,18 @@ export function usePool(id: string | null, options: ReadOptions = {}) {
     queryFn: () => api(`/app/api/pools/${id}`),
     ...options,
     enabled: id !== null && (options.enabled ?? true),
+  });
+}
+
+/**
+ * `GET /pools/:id/concept-map` (ADR-116 §7), asked for only while the map is
+ * the Concepts tab's view; under the pool's key, so a change of the pool
+ * refreshes it.
+ */
+export function usePoolConceptMap(poolId: string, enabled: boolean) {
+  return useQuery<PoolConceptMap>({
+    queryKey: poolConceptMapKey(poolId),
+    queryFn: async () => PoolConceptMap.parse(await api(`/app/api/pools/${poolId}/concept-map`)),
+    enabled,
   });
 }

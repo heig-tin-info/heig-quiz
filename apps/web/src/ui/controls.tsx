@@ -542,7 +542,7 @@ export { Segmented };
 
 /**
  * One option of a `Segmented` that switches between pictures of the same
- * list (table, cards, heat…): the icon alone, its name for the pointer
+ * list (table, cards, map…): the icon alone, its name for the pointer
  * (`title`) and the reader (`sr-only`). A pair of words beside the icons
  * would weigh more than the switch.
  */
@@ -559,18 +559,18 @@ function iconOption<T extends string>(value: T, icon: ReactNode, label: string) 
 }
 
 /** The pictures a list can be drawn as, each with its icon. */
-export type ViewName = "cards" | "list" | "schedule" | "heat" | "tree";
+export type ViewName = "cards" | "list" | "schedule" | "map" | "tree";
 const VIEW_ICONS: Record<ViewName, IconType> = {
   cards: LayoutGrid,
   list: List,
   schedule: CalendarRange,
-  heat: LayoutDashboard,
+  map: LayoutDashboard,
   tree: ListTree,
 };
 
 /**
  * The switch between pictures of the same list (cards, a table, a schedule,
- * a heat map, a tree), in the order given: icons only (`iconOption`), at the list's
+ * a map, a tree), in the order given: icons only (`iconOption`), at the list's
  * top right. `label` names the group when no caption does.
  */
 export function ViewSwitch<V extends ViewName>({
@@ -594,7 +594,7 @@ export function ViewSwitch<V extends ViewName>({
     cards: t("view.cards"),
     list: t("view.list"),
     schedule: t("view.schedule"),
-    heat: t("view.heat"),
+    map: t("view.map"),
     tree: t("view.tree"),
   };
   return (

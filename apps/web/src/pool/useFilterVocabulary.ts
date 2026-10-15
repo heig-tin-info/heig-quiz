@@ -11,10 +11,12 @@ const NONE: Vocabulary = [];
  * it could not be read (the words then filter nothing rather than the list
  * never loading); `waiting` says a typed word has no answer yet, so the
  * screen holds its question query rather than flash the unfiltered list.
+ * `naming`: fetch it too, without holding anything, to name a ticked concept
+ * the screen's own list lacks.
  */
-export function useFilterVocabulary(q: string): { vocabulary: Vocabulary; waiting: boolean } {
+export function useFilterVocabulary(q: string, naming = false): { vocabulary: Vocabulary; waiting: boolean } {
   const wanted = parseSearch(q).conceptWords.length > 0;
-  const concepts = useConcepts(wanted);
+  const concepts = useConcepts(wanted || naming);
   const vocabulary = concepts.isError ? NONE : concepts.data?.concepts;
   return { vocabulary, waiting: wanted && vocabulary === undefined };
 }

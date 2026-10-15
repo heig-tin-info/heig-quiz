@@ -1007,7 +1007,7 @@ export const questions: MockQuestion[] = [
     categoryId: "k3",
     difficulty: 3,
     randomizable: false,
-    concepts: seedConceptIds(["Allocation dynamique", "Pointeur"]),
+    concepts: seedConceptIds(["Allocation dynamique", "Pointeur", "Fuite mémoire"]),
     /*
      * The question the rich cloze editor was built for: a dropdown inside a
      * TABLE cell. The `|` of the hole is exactly the character a markdown row

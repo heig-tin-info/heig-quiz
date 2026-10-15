@@ -234,6 +234,8 @@ export const poolReviewsKey = (poolId: string) => ["pool", poolId, "reviews"] as
 export const poolStarredKey = (poolId: string) => ["pool", poolId, "starred"] as const;
 /** `GET /pools/:id/categories`, the tree with its counts: under the pool. */
 export const poolCategoriesKey = (poolId: string) => ["pool", poolId, "categories"] as const;
+/** `GET /pools/:id/concept-map` (ADR-116 §7): under the pool, so a change of the pool refreshes the map. */
+export const poolConceptMapKey = (poolId: string) => ["pool", poolId, "concept-map"] as const;
 export const poolMembersKey = (poolId: string) => ["pool-members", poolId] as const;
 /** `GET /pools/:id/subscribers` (ADR-095): under the pool, so a pool hint refreshes it. */
 export const poolSubscribersKey = (poolId: string) => ["pool", poolId, "subscribers"] as const;

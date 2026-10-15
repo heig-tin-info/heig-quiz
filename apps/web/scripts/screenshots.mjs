@@ -1230,10 +1230,19 @@ const scenes = [
   // The LLM review (ADR-060): the pool's tab, and its empty state.
   { name: "pool-review", role: "teacher", path: "/pools/p1?tab=review&empty=0" },
   { name: "pool-review-empty", role: "teacher", path: "/pools/p2?tab=review&empty=0" },
-  // ADR-081 third addendum §6: the read-only Concepts tab, its heat, and a
-  // pool whose questions have no concept (the personal pool's poll questions).
+  // ADR-081 third addendum §6: the read-only Concepts tab, and a pool whose
+  // questions have no concept (the personal pool's poll questions). ADR-116:
+  // its concept map — the top concepts, Pointeur's level, Allocation
+  // dynamique's (Itself and a proposed leaf), a search keeping one branch.
+  // Take `-map` and `-map-deep` at --width=390 too.
   { name: "pool-concepts", role: "teacher", path: "/pools/p1?tab=concepts" },
-  { name: "pool-concepts-heat", role: "teacher", path: "/pools/p1?tab=concepts", ls: { "quiz-pool-concepts-view": "heat" } },
+  { name: "pool-concepts-map", role: "teacher", path: "/pools/p1?tab=concepts", ls: { "quiz-pool-concepts-view": "map" } },
+  { name: "pool-concepts-map-level", role: "teacher", path: "/pools/p1?tab=concepts", ls: { "quiz-pool-concepts-view": "map" }, act: (p) => p.getByRole("button", { name: /^(pointeur|pointer)[:,]/i }).click() },
+  { name: "pool-concepts-map-deep", role: "teacher", path: "/pools/p1?tab=concepts", ls: { "quiz-pool-concepts-view": "map" }, act: async (p) => {
+      await p.getByRole("button", { name: /^(pointeur|pointer)[:,]/i }).click();
+      await p.getByRole("button", { name: /^(allocation dynamique|dynamic allocation)[:,]/i }).click();
+    } },
+  { name: "pool-concepts-map-search", role: "teacher", path: "/pools/p1?tab=concepts", ls: { "quiz-pool-concepts-view": "map" }, act: (p) => p.getByRole("searchbox").last().fill("fuite") },
   { name: "pool-concepts-empty", role: "teacher", path: "/pools/p0?tab=concepts" },
   // §7: a typed `#word` filters on every concept it may name; one naming none says so and filters nothing.
   { name: "pool-search-concept", role: "teacher", path: "/pools/p1?q=%23pointer", fold: true, act: skipCoach },
