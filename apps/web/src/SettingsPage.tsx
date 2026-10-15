@@ -6,6 +6,7 @@ import { LOCALES } from "@quiz/domain";
 
 import { ApiTokensCard, ConnectionsCard } from "./ApiTokensCard";
 import { AvatarEditor } from "./AvatarEditor";
+import { DataExportCard } from "./DataExportCard";
 import { api, useMePatch } from "./api";
 import { GithubAccountCard } from "./github/AccountCard";
 import { ViewModeToggle } from "./Header";
@@ -331,6 +332,8 @@ export function SettingsPage({
       <NotificationSettingsSection />
       {/* F-GH-05: only when relevant, the card decides. */}
       <GithubAccountCard />
+      {/* ADR-112: the personal data export, on the account's own portal session. */}
+      <DataExportCard me={me} />
       {me.role === "student" ? null : (
         <>
           <ConnectionsCard />

@@ -365,6 +365,13 @@ export type AuditAction =
   | "pool.unshare"
   | "pool.update"
   /**
+   * A person downloaded their own data (N-DATA-04, ADR-112 §10), subject the
+   * user, actor the user. `payload`: counts only — `classrooms`,
+   * `gradeRows`, `feedback`, `projects`, `drillClassrooms`, `hours` —
+   * never a title, a grade or an address. A read, traced like `assist.read`.
+   */
+  | "privacy.export"
+  /**
    * A project's lifecycle (F-PROJ-01, F-PROJ-03, F-PROJ-16; merge task
    * M3-02), subject the project. `create`: `payload.slug`, `source`,
    * `distribution` (full names); `update`: the fields sent; `publish`:

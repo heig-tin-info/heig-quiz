@@ -1638,6 +1638,8 @@ const scenes = [
   { name: "settings-github-linked", role: "teacher", path: "/settings", fold: true, act: (p) => p.getByRole("heading", { name: "GitHub" }).scrollIntoViewIfNeeded() },
   { name: "settings-github-unlinked", role: "teacher", path: "/settings?unlinked=1", fold: true, act: (p) => p.getByRole("heading", { name: "GitHub" }).scrollIntoViewIfNeeded() },
   { name: "settings-github-student", role: "student", path: "/settings?unlinked=1", fold: true, act: (p) => p.getByRole("heading", { name: "GitHub" }).scrollIntoViewIfNeeded() },
+  // ADR-112: the personal data export, one secondary link.
+  { name: "settings-data-export", role: "student", path: "/settings", fold: true, act: (p) => p.getByRole("heading", { name: /^(your data|vos données)$/i }).scrollIntoViewIfNeeded() },
   // ADR-054: an admin's Super Powers, off and on, and the red banner above
   // everything — its minutes, its last-five-minutes countdown, and stacked
   // over the student view's banner.

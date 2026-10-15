@@ -124,3 +124,31 @@ describe("SettingsPage — the phone's rows", () => {
     expect(screen.queryByText("View as")).toBeNull();
   });
 });
+
+/*
+ * ADR-112: the personal data export, a plain download link on the account's
+ * own portal session, never on an impersonation nor a confined session.
+ */
+describe("SettingsPage — the data export", () => {
+  const link = () => screen.queryByRole("link", { name: /download my data/i });
+  const session = { evaluationId: null, projectId: null, superPowersUntil: null, superPowersAvailable: false };
+
+  it("links the file for the account's own session", () => {
+    mockFetch({});
+    renderWithProviders(<SettingsPage me={makeMe({ role: "student" })} />);
+    expect(link()).toHaveAttribute("href", "/app/api/me/export");
+    expect(link()).toHaveAttribute("download");
+  });
+
+  it("is absent on an impersonation and on a confined session", () => {
+    mockFetch({});
+    renderWithProviders(
+      <SettingsPage me={makeMe({ role: "student", session: { ...session, kind: "impersonation", readOnly: true } })} />,
+    );
+    expect(link()).not.toBeInTheDocument();
+    cleanup();
+    mockFetch({});
+    renderWithProviders(<SettingsPage me={makeMe({ role: "student", session: { ...session, kind: "seb", readOnly: false } })} />);
+    expect(link()).not.toBeInTheDocument();
+  });
+});

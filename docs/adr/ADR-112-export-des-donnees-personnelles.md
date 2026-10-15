@@ -61,7 +61,7 @@ this record is about the self-service file.
    | Gradebook | `studentGradebook` (`modules/gradebook/table.ts`), per classroom |
    | Groups | `studentGroupSets` (`modules/group/service.ts`), per classroom, narrowed to the student's own group (point 6) |
    | Projects | `studentProjectCards`, then `studentProject` for each (`modules/project/studentView.ts`) |
-   | Practice | `studentDrillClassrooms`, `studentCalibration` (`modules/drill/review.ts`) and, per drill classroom, `studentConceptMastery` (`modules/drill/studentMastery.ts`) in the reader's language |
+   | Practice | `studentDrillClassrooms`, `studentCalibration` (`modules/drill/review.ts`) and, per classroom, `studentConceptMastery` (`modules/drill/studentMastery.ts`) in the reader's language (`declared: false` where the drill is off) |
    | Account rows | Point 2 |
 
 4. **Attempts come from the feedback view only.** An attempt's content is

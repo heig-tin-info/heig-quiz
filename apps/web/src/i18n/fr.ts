@@ -1018,6 +1018,11 @@ export const fr: Record<keyof Dict, string> = {
   "settings.role.student": "Étudiant",
   "settings.role.teacher": "Enseignant",
   "settings.role.admin": "Administrateur",
+  "settings.data": "Vos données",
+  "settings.dataExport": "Une copie de vos données",
+  "settings.dataExportHint":
+    "Tout ce que la plateforme vous montre, dans un fichier JSON, avec vos adresses e-mail vérifiées et vos heures d'activité. Ce que seuls vos enseignants voient n'y figure pas.",
+  "settings.dataExportDownload": "Télécharger mes données",
   "settings.preferences": "Préférences",
   "settings.language": "Langue",
   "settings.languageHint": "Langue de l'interface, enregistrée sur votre compte.",

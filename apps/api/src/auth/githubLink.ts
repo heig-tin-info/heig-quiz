@@ -38,7 +38,7 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify
 import type { App } from "octokit";
 import { z } from "zod";
 
-import type { GithubAccountState, GithubLinkOutcome } from "@quiz/contracts";
+import type { GithubAccount, GithubAccountState, GithubLinkOutcome } from "@quiz/contracts";
 
 import { audit } from "../audit.js";
 import { iso } from "../clock.js";
@@ -223,6 +223,19 @@ export async function importAccountLink(
 }
 
 /**
+ * The user's linked GitHub account, or null: the `account` of
+ * `GET /app/api/me/github`, and the GitHub section of the personal data
+ * export (ADR-112), which is read whether or not the App is configured.
+ */
+export async function githubAccountOf(db: Db, userId: string): Promise<GithubAccount | null> {
+  const [linked] = await db
+    .select({ login: githubAccounts.login, linkedAt: githubAccounts.linkedAt })
+    .from(githubAccounts)
+    .where(eq(githubAccounts.userId, userId));
+  return linked ? { login: linked.login, linkedAt: iso(linked.linkedAt) } : null;
+}
+
+/**
  * Whether the user Settings card shows (F-GH-05, 05-web §5.3): the user is
  * on the staff of a classroom connected to GitHub, holds a claimed seat in
  * one, or has or had a project repository — their own, or one of a group
@@ -353,12 +366,8 @@ export async function githubLinkPlugin(app: FastifyInstance, opts: { config: App
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req): Promise<GithubAccountState> => {
       const userId = req.user!.id;
-      const [linked] = await app.db
-        .select({ login: githubAccounts.login, linkedAt: githubAccounts.linkedAt })
-        .from(githubAccounts)
-        .where(eq(githubAccounts.userId, userId));
       return {
-        account: linked ? { login: linked.login, linkedAt: iso(linked.linkedAt) } : null,
+        account: await githubAccountOf(app.db, userId),
         relevant: await linkRelevant(app.db, userId),
       };
     },

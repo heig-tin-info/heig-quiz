@@ -1020,6 +1020,11 @@ export const en = {
   "settings.role.student": "Student",
   "settings.role.teacher": "Teacher",
   "settings.role.admin": "Administrator",
+  "settings.data": "Your data",
+  "settings.dataExport": "A copy of your data",
+  "settings.dataExportHint":
+    "Everything the platform shows you, in one JSON file, with your verified e-mail addresses and your hours of activity. What only your teachers see is not in it.",
+  "settings.dataExportDownload": "Download my data",
   "settings.preferences": "Preferences",
   "settings.language": "Language",
   "settings.languageHint": "Interface language, saved on your account.",

@@ -146,6 +146,24 @@ export async function purgePresence(db: Db, now: Date): Promise<number> {
   return gone.length;
 }
 
+/**
+ * One person's own rows (ADR-107 §7, ADR-112 §2): the hours still kept,
+ * oldest first, and their last activity. For their personal data export
+ * only; nobody else reads a person's hours.
+ */
+export async function ownActivity(db: Db, userId: string): Promise<{ hours: string[]; lastActiveAt: string | null }> {
+  const hours = await db
+    .select({ hour: presenceHours.hour })
+    .from(presenceHours)
+    .where(eq(presenceHours.userId, userId))
+    .orderBy(presenceHours.hour);
+  const [last] = await db
+    .select({ at: presenceLastSeen.at })
+    .from(presenceLastSeen)
+    .where(eq(presenceLastSeen.userId, userId));
+  return { hours: hours.map((h) => h.hour.toISOString()), lastActiveAt: last ? last.at.toISOString() : null };
+}
+
 /** Students by the stored role `student`; staff the teachers and admins — as everywhere. */
 const STUDENTS = sql<number>`count(DISTINCT ${users.id}) FILTER (WHERE ${users.role} = 'student')::int`;
 const STAFF = sql<number>`count(DISTINCT ${users.id}) FILTER (WHERE ${users.role} <> 'student')::int`;

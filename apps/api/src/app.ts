@@ -63,6 +63,7 @@ import { registerNotificationJobs } from "./modules/notifications/jobs.js";
 import { notificationsPlugin } from "./modules/notifications/routes.js";
 import { orgPlugin } from "./modules/org/routes.js";
 import { pollPlugin } from "./modules/poll/routes.js";
+import { privacyPlugin } from "./modules/privacy/routes.js";
 import { registerProjectJobs } from "./modules/project/jobs.js";
 import { registerPollJobs } from "./modules/poll/ai.js";
 import { projectPlugin } from "./modules/project/routes.js";
@@ -267,6 +268,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(drillPlugin);
   // The training course of a new teacher (ADR-105): provisioned on request, its progress derived.
   await app.register(trainingPlugin);
+  // The personal data export (ADR-112): a composition of the student views above.
+  await app.register(privacyPlugin, { config });
   // The drill listens to the release and to the end of an attempt (ADR-041
   // §1): wired here, once, never by an import's side effect.
   registerDrillHooks();
