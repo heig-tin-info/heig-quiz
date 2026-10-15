@@ -15,6 +15,7 @@ import { build } from "./build";
 import { Logo } from "./Header";
 import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
+import { FooterCredit } from "./publicPage";
 import { useGithubLinkReturn } from "./github/linkReturn";
 import { AssistDock } from "./assist/AssistDock";
 import { CoachLayer } from "./coach/CoachLayer";
@@ -212,7 +213,7 @@ function Landing() {
         {t("landing.discover")}
         <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
       </a>
-      <p className="mt-12 text-xs text-fg-faint">{t("landing.footer")}</p>
+      <FooterCredit className="mt-12 text-xs text-fg-faint" />
     </main>
   );
 }
@@ -236,6 +237,9 @@ const TeamsTabPage = lazyPage(() =>
 // ADR-051 §7: the station's screen (drawn with no session) and the phone's pairing page.
 const DiscoverPage = lazyPage(() =>
   import("./discover/DiscoverPage").then((m) => ({ default: m.DiscoverPage })),
+);
+const PrivacyPage = lazyPage(() =>
+  import("./privacy/PrivacyPage").then((m) => ({ default: m.PrivacyPage })),
 );
 const KioskPage = lazyPage(() => import("./kiosk/KioskPage").then((m) => ({ default: m.KioskPage })));
 const PairPage = lazyPage(() => import("./pair/PairPage").then((m) => ({ default: m.PairPage })));
@@ -305,6 +309,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   sebQuit: () => null,
   loginRefused: () => null,
   discover: () => null,
+  privacy: () => null,
   pair: (_, c) => <PairPage me={c.me} navigate={c.navigate} />,
   // Invariant 3: the gallery exists in development only. The
   // route parses in every build; this is what refuses to render it.
@@ -602,6 +607,14 @@ export default function App() {
     return (
       <Suspense fallback={null}>
         <DiscoverPage />
+      </Suspense>
+    );
+  }
+  // N-DATA-07: the "Data and privacy" page, static and the same for everyone.
+  if (route.view === "privacy") {
+    return (
+      <Suspense fallback={null}>
+        <PrivacyPage />
       </Suspense>
     );
   }

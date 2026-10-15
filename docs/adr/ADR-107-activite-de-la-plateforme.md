@@ -17,6 +17,11 @@ and [ADR-051](ADR-051-postes-kiosque-attestes.md), the impersonation of
 [ADR-022](ADR-022-jetons-api-et-serveur-mcp.md) and
 [ADR-023](ADR-023-serveur-oauth-pour-mcp.md), and the scheduled tasks (F-ADMIN-06).
 
+Amended 2026-10-15 (the privacy-page consequence only, issue #868): the
+"Data and privacy" page of N-DATA-07 (`/privacy`) says that the hours of
+activity are kept eight days and read as counts, and the last activity per
+account.
+
 ## Context
 
 The owner wants to see, from the administration, how many people use the platform,

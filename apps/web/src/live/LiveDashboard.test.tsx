@@ -687,6 +687,7 @@ describe("LiveDashboard — command palette", () => {
       "action:signout",
       "help:docs",
       "help:sources",
+      "help:privacy",
     ]);
   });
 
@@ -709,6 +710,7 @@ describe("LiveDashboard — command palette", () => {
       "action:signout",
       "help:docs",
       "help:sources",
+      "help:privacy",
     ]);
   });
 

@@ -9,6 +9,11 @@ roster row's "Copy link as this student"). Closes open question 24
 (`docs/spec/06-questions-ouvertes.md`) and builds what ADR-027 §5 shaped and
 left unbuilt.
 
+Amended 2026-10-15 (§6 only, issue #868): §6's sentence now also lives on
+the "Data and privacy" page of N-DATA-07 (`/privacy`), worded without saying
+whether the student is notified; the student help ("My classrooms") keeps its
+own.
+
 ## Context
 
 ADR-018's student view keeps the teacher as themself: it hides the teacher UI

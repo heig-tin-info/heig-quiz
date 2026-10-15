@@ -30,6 +30,9 @@ provisional after the repository's definitive freeze, final (validated)
 after the release. An essay's or a diagram's justification and `details.ai`
 stay the teacher's.
 
+Amended 2026-10-15 (§8 only, issue #868): the page of §8 is the "Data and
+privacy" page of N-DATA-07 (`/privacy`); it says what §8 asks.
+
 ## Context
 
 ADR-045 built the call path: an essay with a rubric or a model answer

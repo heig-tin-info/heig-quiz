@@ -206,6 +206,7 @@ describe("ROUTES", () => {
     sebQuit: { view: "sebQuit" },
     loginRefused: { view: "loginRefused" },
     discover: { view: "discover" },
+    privacy: { view: "privacy" },
     pair: { view: "pair" },
     feedback: { view: "feedback", attemptId: "a-1" },
     drill: { view: "drill" },
@@ -248,6 +249,8 @@ describe("ROUTES", () => {
       "loginRefused",
       "oauthConsent",
       "pair",
+      // N-DATA-07: the "Data and privacy" page, public.
+      "privacy",
       // F-PROJ-15 (M3-13): one address, the student's project for a student.
       "project",
       "sebQuit",
@@ -315,6 +318,7 @@ describe("ROUTES", () => {
         "loginRefused",
         "oauthConsent",
         "pair",
+        "privacy",
         "projectNew",
         "questionPreview",
         "results",

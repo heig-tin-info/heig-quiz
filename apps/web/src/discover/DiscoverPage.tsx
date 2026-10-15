@@ -19,9 +19,10 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { prefersReducedMotion } from "@quiz/ui";
 
 import { Logo } from "../Header";
-import { type Dict, type Locale, useI18n } from "../i18n";
+import { type Dict, useI18n } from "../i18n";
+import { FooterCredit, LocaleSwitch, useDocumentTitle } from "../publicPage";
 import { setThemeChoice, useResolvedTheme } from "../theme";
-import { cx, GithubIcon, IconButton, IconLink, LinkButton, Segmented } from "../ui";
+import { cx, GithubIcon, IconButton, IconLink, LinkButton } from "../ui";
 import "./discover.css";
 import { useInView, useReveal } from "./motion";
 import {
@@ -67,12 +68,7 @@ type Key = keyof Dict;
 
 export function DiscoverPage() {
   const { t } = useI18n();
-  useEffect(() => {
-    document.title = t("discover.docTitle");
-    return () => {
-      document.title = "Quiz";
-    };
-  }, [t]);
+  useDocumentTitle(t("discover.docTitle"));
   return (
     <div className="discover min-h-dvh overflow-x-clip bg-canvas text-fg">
       <TopBar />
@@ -120,7 +116,7 @@ export function DiscoverPage() {
 // --- Top bar ---------------------------------------------------------------
 
 function TopBar() {
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
   const theme = useResolvedTheme();
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
@@ -147,17 +143,7 @@ function TopBar() {
           <a href="#security" className="transition-colors hover:text-fg">{t("discover.nav.security")}</a>
         </nav>
         <div className="ml-auto flex items-center gap-2">
-          <Segmented<Locale>
-            name="discover-locale"
-            size="sm"
-            label={t("discover.language")}
-            value={locale}
-            options={[
-              { value: "fr", label: "FR" },
-              { value: "en", label: "EN" },
-            ]}
-            onChange={(l) => setLocale(l, false)}
-          />
+          <LocaleSwitch name="discover-locale" />
           <IconButton
             label={theme === "dark" ? t("discover.themeLight") : t("discover.themeDark")}
             onClick={() => setThemeChoice(theme === "dark" ? "light" : "dark")}
@@ -620,7 +606,7 @@ function Footer() {
   const { t } = useI18n();
   return (
     <footer className="mx-auto flex max-w-280 flex-col items-center justify-between gap-3 px-4 pb-10 text-xs text-fg-faint sm:flex-row sm:px-8">
-      <span>{t("landing.footer")}</span>
+      <FooterCredit />
       <span>{t("discover.footer.made")}</span>
     </footer>
   );

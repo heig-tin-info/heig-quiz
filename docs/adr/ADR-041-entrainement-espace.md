@@ -45,6 +45,11 @@ The drill is a declared teaching activity whose reviews the student is told
 their teacher sees; platform presence (ADR-107) is not, and stays aggregated
 for the administrator only.
 
+Amended 2026-10-15 (§8's "The student is told" only, issue #868): the
+data-protection page it names is the "Data and privacy" page of N-DATA-07
+(`/privacy`); it says that the teacher sees the drill activity, at what times
+of the week included.
+
 ## Context
 
 The spec reserved a phase-2 drill in five lines: every question a student meets

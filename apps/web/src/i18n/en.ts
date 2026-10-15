@@ -18,6 +18,9 @@ export const en = {
   "landing.devHint": "Development only: pick a persona, no identity provider.",
   "landing.footer": "HEIG-VD — TIN Department",
   "landing.discover": "Discover the platform",
+  "privacy.title": "Data and privacy",
+  "privacy.lead": "What Quiz records about you, why, for how long, and who sees it.",
+  "privacy.home": "Quiz home",
   "loginRefused.title": "You cannot sign in to Quiz",
   "loginRefused.restricted":
     "This environment is reserved for the people who test it, and your edu-ID account is not one of them.",

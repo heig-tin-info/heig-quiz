@@ -198,6 +198,15 @@ rest of the app does not. They live in one modifier, `.md-body.md-doc`, on
 top of the `.md-body` every rendered markdown wears (`style.css`); a
 question's prose never carries it, so the question scenes do not move.
 
+The **Data and privacy** page (`/privacy`, N-DATA-07,
+`src/privacy/PrivacyPage.tsx`) is the second document and wears the same
+modifier: the journal's 48 rem column and its sheet (`surface`, hairline,
+card radius) on the canvas, under a page title and its one-line lead, with
+nothing beside it. Drawn outside the frame like `/discover`, its bar holds
+the wordmark (a link home) and the language switch (`LocaleSwitch` of
+`src/publicPage.tsx`, shared with `/discover`), and nothing else: a
+reading page has no primary action, so it has no accent but its links.
+
 - **Measure capped at 72 characters** (`max-width: 72ch`), not the 1120 px
   content column. That column is right for a table and too wide for prose:
   past roughly 75 characters the eye loses the line it is returning to.

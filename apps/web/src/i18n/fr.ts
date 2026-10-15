@@ -19,6 +19,9 @@ export const fr: Record<keyof Dict, string> = {
   "landing.devHint": "Développement uniquement : choisir un personnage, sans fournisseur d'identité.",
   "landing.footer": "HEIG-VD — Département TIN",
   "landing.discover": "Découvrir la plateforme",
+  "privacy.title": "Données et confidentialité",
+  "privacy.lead": "Ce que Quiz enregistre sur vous, pourquoi, combien de temps, et qui le voit.",
+  "privacy.home": "Accueil de Quiz",
   "loginRefused.title": "Vous ne pouvez pas vous connecter à Quiz",
   "loginRefused.restricted":
     "Cet environnement est réservé aux personnes qui le testent, et votre compte edu-ID n'en fait pas partie.",

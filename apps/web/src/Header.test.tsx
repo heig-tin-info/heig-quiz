@@ -84,6 +84,16 @@ describe("UserMenu", () => {
     expect(item).toHaveAttribute("title", commit.sha);
     expect(item).toHaveAttribute("href", `${SOURCES_URL}/commit/${commit.sha}`);
   });
+
+  it("links the Data and privacy page, routed in the app when it can navigate (N-DATA-07)", async () => {
+    const navigate = vi.fn();
+    renderWithProviders(<UserMenu me={makeMe()} onOpenSettings={vi.fn()} notifications={{ navigate }} />);
+    await userEvent.click(screen.getByRole("button", { name: "User menu" }));
+    const item = within(screen.getByRole("menu")).getByRole("menuitem", { name: "Data and privacy" });
+    expect(item).toHaveAttribute("href", "/privacy");
+    await userEvent.click(item);
+    expect(navigate).toHaveBeenCalledWith({ view: "privacy" });
+  });
 });
 
 /**
