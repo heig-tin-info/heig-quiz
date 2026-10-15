@@ -2,17 +2,17 @@
  * The user Settings' data card (N-DATA-04, ADR-112): one secondary action,
  * the personal data export. Fetched rather than followed as a link, so a
  * refusal (the hourly limit, a server error) is a toast, never an error
- * body saved as the file; the file is saved under the server's own name,
- * `quiz-data-<date of generatedAt>.json`.
+ * body saved as the file; the file is saved under the server's own name
+ * (`personalDataExportFileName`).
  *
- * Shown on the account's own portal session only — the server refuses any
- * other (`ownSessionGuard`): an impersonation (`readOnly` in production, and
- * refused in development too), a `seb` or `kiosk` session.
+ * Shown on a `portal` session only, which is what the server admits
+ * (`ownSessionGuard`): an impersonation, a `seb` or a `kiosk` session is
+ * another kind, and never sees the card.
  */
 import { useMutation } from "@tanstack/react-query";
 import { Download, FileJson } from "lucide-react";
 
-import { PERSONAL_DATA_EXPORT_PATH, type Me, type PersonalDataExport } from "@quiz/contracts";
+import { PERSONAL_DATA_EXPORT_PATH, personalDataExportFileName, type Me, type PersonalDataExport } from "@quiz/contracts";
 
 import { api, apiErrorMessage, refusalCodeOf } from "./api";
 import { useT } from "./i18n";
@@ -20,15 +20,14 @@ import { useToast } from "./notify";
 import { Button, Card, SectionHeading, SettingRow } from "./ui";
 
 /** The account's own portal session: what the export route admits. */
-export const mayExport = (me: Me): boolean =>
-  (me.session?.kind ?? "portal") === "portal" && !me.session?.readOnly;
+const mayExport = (me: Me): boolean => (me.session?.kind ?? "portal") === "portal";
 
-/** Hands the file to the browser's downloads, as the server would have named it. */
+/** Hands the file to the browser's downloads, as the server names it. */
 function save(file: PersonalDataExport) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = `quiz-data-${file.generatedAt.slice(0, 10)}.json`;
+  link.download = personalDataExportFileName(file.generatedAt);
   link.click();
   URL.revokeObjectURL(url);
 }

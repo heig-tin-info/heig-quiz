@@ -126,8 +126,9 @@ describe("SettingsPage — the phone's rows", () => {
 });
 
 /*
- * ADR-112: the personal data export, a plain download link on the account's
- * own portal session, never on an impersonation nor a confined session.
+ * ADR-112: the personal data export, a button that fetches the file and
+ * saves it as a blob, on the account's own portal session — never on an
+ * impersonation nor a confined session; a refusal is a toast, not a file.
  */
 describe("SettingsPage — the data export", () => {
   const button = () => screen.queryByRole("button", { name: /download my data/i });

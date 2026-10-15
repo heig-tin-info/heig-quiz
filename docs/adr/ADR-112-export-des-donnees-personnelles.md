@@ -119,9 +119,10 @@ this record is about the self-service file.
    beyond its contract never travels. A change of shape bumps `version`.
 
 10. **Audit.** One action, `privacy.export`, subject the user, actor the user,
-    payload counts only (classrooms, evaluations, feedback pages, projects):
-    never a title, a grade or an address. It is the second read the audit
-    log traces, after `assist.read`.
+    payload six counts only (`classrooms`, `gradeRows`, `feedback`,
+    `projects`, `drillClassrooms`, `hours`): never a title, a grade or an
+    address. It is the third read the audit log traces, after `attempt.read`
+    (#875) and `assist.read`.
 
 11. **Out of version 1** (*default*): the drill's review history, the
     notifications, the classroom journal, a poll's ideas beyond what

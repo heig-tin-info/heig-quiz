@@ -20,6 +20,9 @@ import { StudentClassroomPage } from "./student.js";
 /** The route: a download built in the request, fetched with the session cookie by the Settings card. */
 export const PERSONAL_DATA_EXPORT_PATH = "/app/api/me/export";
 
+/** The file's name, by the date of its `generatedAt`: the server's attachment and the card's saved file alike. */
+export const personalDataExportFileName = (generatedAt: string): string => `quiz-data-${generatedAt.slice(0, 10)}.json`;
+
 /** Bumped whenever the shape of the record changes (ADR-112 §9). */
 export const PERSONAL_DATA_EXPORT_VERSION = 1;
 

@@ -5,7 +5,7 @@
  */
 import type { FastifyInstance } from "fastify";
 
-import { PERSONAL_DATA_EXPORT_PATH } from "@quiz/contracts";
+import { PERSONAL_DATA_EXPORT_PATH, personalDataExportFileName } from "@quiz/contracts";
 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -41,7 +41,7 @@ export async function privacyPlugin(app: FastifyInstance, opts: { config: AppCon
     await trace(req, "privacy.export", "user", caller.id, exportCounts(file));
     return reply
       .type("application/json; charset=utf-8")
-      .header("content-disposition", `attachment; filename="quiz-data-${file.generatedAt.slice(0, 10)}.json"`)
+      .header("content-disposition", `attachment; filename="${personalDataExportFileName(file.generatedAt)}"`)
       .header("cache-control", "no-store")
       .send(JSON.stringify(file));
   });

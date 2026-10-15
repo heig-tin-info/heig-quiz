@@ -42,7 +42,11 @@ import { ownActivity } from "../presence/service.js";
 import { studentProject, studentProjectCards } from "../project/service.js";
 import { studentFeedback } from "../results/service.js";
 
-/** Who asks: the request's caller and their account row. */
+/**
+ * Who asks — one person, seen twice: `caller` (their id and reach, for the
+ * finders) and `user` (their account row, for the identity section). Both
+ * come from the same request; the export never reads anyone else.
+ */
 export interface ExportCaller {
   caller: Caller;
   user: typeof users.$inferSelect;
@@ -53,7 +57,7 @@ export interface ExportCaller {
  * members and the students in no group are classmates' data, not theirs.
  * A narrowing of the view, never an addition to it.
  */
-export function ownGroupOnly(view: StudentGroupSets): StudentGroupSets {
+function ownGroupOnly(view: StudentGroupSets): StudentGroupSets {
   return {
     serverNow: view.serverNow,
     sets: view.sets.map(({ unplaced: _unplaced, ...set }) => ({
@@ -74,7 +78,7 @@ export async function personalDataExport(
   // Every claimed seat, archived classrooms included (ADR-112 §5), each
   // loaded through the student branch with the student payload forced.
   const classrooms: PersonalDataClassroom[] = [];
-  for (const card of await studentClassrooms(db, userId, { archived: true })) {
+  for (const card of await studentClassrooms(db, userId, { includeArchived: true })) {
     const scope = await findReadableClassroom(db, caller, PORTAL, card.id, { studentView: true });
     if (scope === null) continue;
     const [classroom, gradebook, groupSets, mastery] = await Promise.all([

@@ -61,7 +61,6 @@ import { FORBIDDEN_STUDENT_KEYS } from "../live/studentView.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as results from "../results/service.js";
 import { EXPORTS_PER_HOUR } from "./routes.js";
-import { ownGroupOnly } from "./service.js";
 
 type Headers = Record<string, string>;
 type Signed = { id: string; headers: Headers };
@@ -518,34 +517,5 @@ describe("who may ask (ADR-112 §7)", () => {
     expect(Number(refused.headers["retry-after"])).toBeGreaterThan(0);
     server.clock.advance(3_600_000);
     expect((await exportOf(someone.headers)).statusCode).toBe(200);
-  });
-});
-
-describe("ownGroupOnly", () => {
-  it("keeps the reader's group of each set and drops the others and the unplaced", () => {
-    const member = { nom: "N", prenom: "P" };
-    const narrowed = ownGroupOnly({
-      serverNow: "2026-10-15T09:00:00.000Z",
-      sets: [
-        {
-          set: { id: randomUUID(), name: "S", maxSize: null, openUntil: null, open: true },
-          writable: false,
-          myGroupId: "g1",
-          groups: [
-            { id: "g1", name: "mine", size: 1, members: [member] },
-            { id: "g2", name: "theirs", size: 1, members: [member] },
-          ],
-          unplaced: [member],
-        },
-        {
-          set: { id: randomUUID(), name: "T", maxSize: null, openUntil: null, open: false },
-          writable: false,
-          myGroupId: null,
-          groups: [{ id: "g3", name: "other", size: 1, members: [member] }],
-        },
-      ],
-    });
-    expect(narrowed.sets.map((s) => s.groups.map((g) => g.name))).toEqual([["mine"], []]);
-    expect(narrowed.sets[0]).not.toHaveProperty("unplaced");
   });
 });
