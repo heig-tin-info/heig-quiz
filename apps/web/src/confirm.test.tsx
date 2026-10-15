@@ -157,6 +157,19 @@ describe("useConfirm", () => {
     expect(within(dialog).getByRole("button", { name: "Delete" })).toBeDisabled();
   });
 
+  it("wakes for the name as shown, whatever spaces or dashes it is stored with (#886)", async () => {
+    renderWithProviders(
+      <ConfirmHarness
+        options={{ title: "Delete?", confirmLabel: "Delete", typeToConfirm: "Labo22  keyence tracking‑notused" }}
+        label="Ask"
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByRole("textbox"), "Labo22 keyence tracking-notused");
+    expect(within(dialog).getByRole("button", { name: "Delete" })).toBeEnabled();
+  });
+
   it("names its two buttons in the reader's language when the caller does not", async () => {
     renderWithProviders(<ConfirmHarness options={{ title: "Archiver ?" }} label="Ask" />, {
       locale: "fr",
