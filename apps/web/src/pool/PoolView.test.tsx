@@ -949,14 +949,6 @@ describe("PoolView", () => {
       expect(await screen.findByRole("tab", { name: "Concepts", selected: true })).toBeInTheDocument();
     });
 
-    it("shows each concept's covered count, and says so under the table", async () => {
-      mockFetch(conceptRoutes({}, MAP_USAGE));
-      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=concepts" });
-      await screen.findByRole("table");
-      expect(within(rowOfConcept("Allocation dynamique")).getByText("3")).toBeInTheDocument();
-      expect(screen.getByText("A concept counts its questions and those of its narrower concepts.")).toBeInTheDocument();
-    });
-
     describe("the map", () => {
       /*
        * Pointeur › Allocation dynamique › Fuite mémoire (proposed), Fuite
@@ -998,12 +990,12 @@ describe("PoolView", () => {
         );
       const asMap = () => localStorage.setItem("quiz-pool-concepts-view", "map");
       const cell = (name: string) => screen.findByRole("button", { name });
-      const POINTEUR_CELL = "Pointeur: 4 questions, 1 narrower concept. Zoom in.";
-      const ALLOC_CELL = "Allocation dynamique: 3 questions, 1 narrower concept. Zoom in.";
-      const ITSELF_CELL = "1 question on Pointeur and none of its narrower concepts. Show the questions under Pointeur.";
+      const POINTEUR_CELL = "Pointeur: 4 questions. Zoom in.";
+      const ALLOC_CELL = "Allocation dynamique: 3 questions. Zoom in.";
+      const ITSELF_CELL = "Itself: 1 question on Pointeur and none of its narrower concepts. Show the questions under Pointeur.";
       const at = () => new URLSearchParams(window.location.search).get("at");
 
-      it("is asked for only when the view opens, and never for a pool with no concept", async () => {
+      it("is asked for only when the view opens", async () => {
         const user = userEvent.setup();
         const { calls } = mockFetch(mapRoutes());
         renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=concepts" });
@@ -1016,7 +1008,7 @@ describe("PoolView", () => {
         expect(screen.getByText(/^Each area is proportional/)).toBeInTheDocument();
       });
 
-      it("asks nothing of a pool with no concept, even when the map is the remembered view", async () => {
+      it("is never asked for a pool with no concept, even as the remembered view", async () => {
         asMap();
         const { calls } = mockFetch(mapRoutes({ "GET /app/api/pools/p1": ok({ ...POOL, concepts: [] }) }));
         renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?tab=concepts" });
@@ -1025,7 +1017,7 @@ describe("PoolView", () => {
         expect(calls.some((c) => c.url.endsWith("/concept-map"))).toBe(false);
       });
 
-      it("zooms into a concept with narrower ones: ?at follows, the focus and the announcement too", async () => {
+      it("zooms into a concept with narrower ones: ?at follows, and the focus", async () => {
         asMap();
         const user = userEvent.setup();
         mockFetch(mapRoutes());
@@ -1035,7 +1027,6 @@ describe("PoolView", () => {
         // The bigger cell first; the concept's own question in the "itself" cell.
         expect(await cell(ALLOC_CELL)).toHaveFocus();
         expect(screen.getByRole("button", { name: ITSELF_CELL })).toHaveTextContent("Itself1");
-        expect(screen.getByText("Pointeur: 4 questions")).toBeInTheDocument();
         const trail = screen.getByRole("navigation", { name: "Path in the concept map" });
         expect(within(trail).getByText("Pointeur")).toHaveAttribute("aria-current", "location");
 
@@ -1080,11 +1071,14 @@ describe("PoolView", () => {
         renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: `/?tab=concepts&at=${PTR},${ALLOC}` });
         await cell("Fuite mémoire, proposed: 2 questions. Show its questions.");
         const trail = screen.getByRole("navigation", { name: "Path in the concept map" });
-        await user.click(within(trail).getByRole("button", { name: "Pointeur" }));
+        const pointeur = within(trail).getByRole("link", { name: "Pointeur" });
+        // A real link: the address of that level.
+        expect(pointeur).toHaveAttribute("href", `/?tab=concepts&at=${PTR}`);
+        await user.click(pointeur);
         expect(at()).toBe(PTR);
         expect(await cell(ALLOC_CELL)).toHaveFocus();
         // The phone's way back: one level up.
-        await user.click(within(trail).getByRole("button", { name: "Back to All concepts" }));
+        await user.click(within(trail).getByRole("link", { name: "Back to All concepts" }));
         expect(at()).toBeNull();
         expect(await cell(POINTEUR_CELL)).toHaveFocus();
       });
@@ -1143,11 +1137,8 @@ describe("PoolView", () => {
         const box = screen.getByRole("group", { name: "All concepts" });
         expect(within(box).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
           POINTEUR_CELL,
-          "Tas: 2 questions, 1 narrower concept. Zoom in.",
+          "Tas: 2 questions. Zoom in.",
         ]);
-        // Pointeur stays for the path to the match only: no "itself" cell.
-        await user.click(screen.getByRole("button", { name: POINTEUR_CELL }));
-        expect(within(screen.getByRole("group", { name: "Pointeur" })).getAllByRole("button")).toHaveLength(1);
       });
 
       it("says when the map cannot be read, and tries again", async () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PoolConceptMap } from "@quiz/contracts";
 
-import { branches, keptRows, levelCells, mapIndex, shownPath, validPath, type MapCell } from "./conceptMap";
+import { branches, levelCells, mapIndex, shownPath, validPath, type MapCell } from "./conceptMap";
 
 /*
  * Memory (a grouping, no question of its own) › Pointer › Allocation › Leak,
@@ -33,7 +33,7 @@ const MAP: PoolConceptMap = {
 const index = mapIndex(MAP);
 /** A level as `kind:id=value`, the zoomable cells marked `›`. */
 const draw = (cells: MapCell[]) =>
-  cells.map((c) => `${c.kind === "itself" ? "itself" : c.node.concept.id}=${c.value}${c.kind === "concept" && c.narrower > 0 ? "›" : ""}`);
+  cells.map((c) => `${c.kind === "itself" ? "itself" : c.node.concept.id}=${c.value}${c.kind === "concept" && c.zooms ? "›" : ""}`);
 
 describe("the concept map's view model", () => {
   it("lists the top concepts at the root, an ancestor-only grouping included, and no itself cell", () => {
@@ -81,14 +81,11 @@ describe("the concept map's view model", () => {
     expect(shownPath(["Heap", "Leak"], kept)).toEqual([]);
   });
 
-  it("cuts the drawn path where a search stops, and counts the table's rows it keeps", () => {
+  it("cuts the drawn path where a search stops", () => {
     const kept = branches(index, "leak")!;
     expect(shownPath(["Memory", "Pointer"], kept)).toEqual(["Memory", "Pointer"]);
     expect(shownPath(["Memory", "Pointer"], branches(index, "array"))).toEqual([]);
     expect(shownPath(["Memory"], null)).toEqual(["Memory"]);
-    const rows = MAP.nodes.filter((n) => n.own > 0).map((n) => ({ concept: n.concept, count: n.covered }));
-    expect(keptRows(rows, kept).map((r) => r.concept.id)).toEqual(["Allocation", "Leak", "Pointer"]);
-    expect(keptRows(rows, null)).toHaveLength(4);
   });
 
   it("keeps nothing when nothing matches", () => {

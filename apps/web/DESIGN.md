@@ -692,7 +692,9 @@ live in `ui/state.ts`, each written once.
   (a phone) a full trail is unreadable, so the SAME `nav` shows only the way
   back, `‹ Parent`, one link to the immediate parent (`ChevronLeft`, its real
   `href`, named "Back to <parent>"); the list is hidden there, the page's own
-  heading being right below. The rule:
+  heading being right below. `current="location"` makes it a path inside a
+  page (the pool's concept map): the last item is `aria-current="location"`
+  and stays beside `‹ Parent` on a phone, as no heading names it. The rule:
   1. A page below a top-level section wears a trail; a top-level page (a
      sidebar destination: Activities, Courses, Question pools, Poll,
      Administration; the student's Courses, Grades, Drill) wears none.
@@ -2180,12 +2182,13 @@ hairline language of a table, not a border per cell, which would draw them
   are on none of them, an **"itself"** cell ("Itself" in `fg-muted`, then that
   count). A concept with several broader ones is drawn under each, never twice
   in one level. The path is in the address (`?at=`, the ids from the top).
-- **The trail** above the box, at its left: a `nav` ("Path in the concept
-  map") of buttons, "All concepts" then the path, the current level plain
-  text in `fg` 600, `aria-current="location"`. It is the path NAVIGATED, not
-  the page's `Breadcrumb` (which stays in the eyebrow, structural, and holds
-  links): it only borrows its phone rule — below `sm` the trail is "‹ Parent"
-  (named "Back to Parent") and the current name.
+- **The trail** above the box, at its left: the map's trail is the
+  `Breadcrumb` with `current="location"` ("Path in the concept map"), "All
+  concepts" then the path NAVIGATED (not a structural trail: it lives in the
+  tab, never in the page's eyebrow). Each level is a real link, the address
+  with `?at=` cut there; the current one is `aria-current="location"`. Below
+  `sm` it is "‹ Parent" and the current name: no heading sits below it to
+  name the level.
 - **The link**: at a concept level, one secondary button at the trail's
   right, "Show its n questions", opens the concept's questions; the root has
   none. The row wraps, so on a phone it goes under the trail.
@@ -2194,19 +2197,21 @@ hairline language of a table, not a border per cell, which would draw them
   runs on its real aspect and a square cell stays square. A level of one cell
   fills it. While the map loads, a `Skeleton` of the box's size holds its
   place; a failure is a `QueryError` with its retry.
-- **A cell is a button**, in decreasing area: the concept's name at 13 px /
+- **A cell is a button**, in reading order (top to bottom, then left to
+  right; the first is the largest, top left): the concept's name at 13 px /
   600, a `ChevronRight` in `fg-faint` after it when the cell zooms (decoration,
   `aria-hidden`), the count in `fg-muted` at 12 px, and for a proposed concept
   the word at 11 px in `fg-faint` — a status said by text, never by a hue.
   Under 44 × 40 px only the count is drawn. Its accessible name and `title`
-  say everything and what the click does ("zoom in", "show its questions").
+  start with the visible words and say what the click does ("Zoom in", "Show
+  its questions").
   A cell with narrower concepts zooms; a leaf and the "itself" cell open the
   Questions tab filtered on the concept. The box clips, so the focus ring is
   drawn INSIDE the cell (`-2px` offset) instead of the usual 2 px outside,
   which an edge cell would lose.
-- **Focus**: after a zoom in, the first cell of the new level, and a polite
-  live region says the level's name and count; after a step back up the
-  trail, the cell of the concept just left.
+- **Focus**: after a zoom in, the first cell of the new level, inside the
+  box's `role="group"` named by the level; after a step back up the trail,
+  the cell of the concept just left.
 - **The caption** under the box says an area is proportional to its number of
   questions, narrower concepts included, and that a question with two
   concepts counts in both.

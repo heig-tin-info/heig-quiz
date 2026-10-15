@@ -7,7 +7,7 @@
  * The hierarchy is unfolded: a concept with several broader concepts is a
  * child of each, so it appears in several levels, never twice in one.
  */
-import type { PoolConcept, PoolConceptMap, PoolConceptNode } from "@quiz/contracts";
+import type { ConceptRef, PoolConceptMap, PoolConceptNode } from "@quiz/contracts";
 import { broaderAncestorsOf, narrowerDescendantsOf } from "@quiz/domain";
 
 import { refName } from "../concepts/names";
@@ -53,8 +53,8 @@ export interface Branches {
 }
 
 export type MapCell =
-  /** `narrower`: how many of its narrower concepts the level below draws; a cell with none does not zoom. */
-  | { kind: "concept"; node: PoolConceptNode; value: number; narrower: number }
+  /** `zooms`: the level below draws some of its narrower concepts. */
+  | { kind: "concept"; node: PoolConceptNode; value: number; zooms: boolean }
   | { kind: "itself"; node: PoolConceptNode; value: number };
 
 /**
@@ -67,7 +67,7 @@ export function levelCells(index: MapIndex, at: string | null, kept: Branches | 
   const ids = at === null ? index.roots : index.children(at);
   const cells: MapCell[] = ids.filter(keep).map((id) => {
     const node = index.byId.get(id)!;
-    return { kind: "concept", node, value: node.covered, narrower: index.children(id).filter(keep).length };
+    return { kind: "concept", node, value: node.covered, zooms: index.children(id).some(keep) };
   });
   const node = at === null ? undefined : index.byId.get(at);
   if (node && node.own > 0 && (kept === null || kept.itself.has(node.concept.id))) {
@@ -92,7 +92,7 @@ export function validPath(index: MapIndex, ids: readonly string[]): string[] {
 }
 
 /** Whether a concept's name holds the search, as the table's filter reads it. */
-export const nameHolds = (concept: PoolConcept["concept"], needle: string) =>
+export const nameHolds = (concept: ConceptRef, needle: string) =>
   refName(concept).toLowerCase().includes(needle.trim().toLowerCase());
 
 /** What a search keeps of the map, or `null` when nothing is typed. */
@@ -110,7 +110,3 @@ export function shownPath(path: readonly string[], kept: Branches | null): strin
   const end = kept === null ? -1 : path.findIndex((id) => !kept.concepts.has(id));
   return end === -1 ? [...path] : path.slice(0, end);
 }
-
-/** The table's rows a search keeps in the map (the counter of the map view). */
-export const keptRows = (rows: readonly PoolConcept[], kept: Branches | null) =>
-  kept === null ? [...rows] : rows.filter((r) => kept.concepts.has(r.concept.id));

@@ -267,6 +267,9 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     // The search box now carries the old tag as `#word`.
     setTagParam("");
   };
+  // A ticked concept is named from the vocabulary when the pool's questions
+  // do not carry it (a grouping concept opened from the concept map).
+  const { vocabulary, waiting } = useFilterVocabulary(filters.q, filters.concepts.length > 0);
   const [categoryParam, setCategory] = useSearchParam("category", "");
   // The "LLM review" tab (ADR-060), offered while the platform has a model.
   const [tabParam, setTab] = useSearchParam("tab", "questions");
@@ -289,10 +292,6 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const [group, setGroup] = usePersistentChoice<GroupBy>(GROUP_KEY, isGroupBy, "none");
 
   const pool = usePool(id);
-  // A ticked concept the pool's questions do not carry (a grouping concept
-  // opened from the concept map) is named from the vocabulary.
-  const unnamed = pool.data !== undefined && filters.concepts.some((c) => !pool.data.concepts.some((p) => p.concept.id === c));
-  const { vocabulary, waiting } = useFilterVocabulary(filters.q, unnamed);
   const subscription = usePoolSubscription(id);
   const mayWrite = pool.data === undefined || poolRoleAllows(pool.data.role, "contributor");
   const poolConceptIds = useMemo(() => (pool.data ? pickerConceptIds(pool.data) : []), [pool.data]);

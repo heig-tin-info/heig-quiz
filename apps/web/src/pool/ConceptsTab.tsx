@@ -22,8 +22,9 @@ import {
   useSortableTable,
   ViewSwitch,
 } from "../ui";
-import { ConceptMap, usePoolConceptMap } from "./ConceptMap";
-import { branches, keptRows, mapIndex, nameHolds } from "./conceptMap";
+import { usePoolConceptMap } from "./api";
+import { ConceptMap } from "./ConceptMap";
+import { branches, mapIndex, nameHolds } from "./conceptMap";
 
 /**
  * The pool's "Concepts" tab (ADR-081 third addendum §6): the concepts the
@@ -70,8 +71,9 @@ export function ConceptsTab({
   const kept = useMemo(() => (index ? branches(index, q) : null), [index, q]);
 
   const shown = useMemo(() => [...concepts].sort(byUse).filter((row) => nameHolds(row.concept, q)), [concepts, q]);
-  // The map counts the table's rows its branches keep; the list's rule until it is there.
-  const matched = view === "map" && index ? keptRows(concepts, kept).length : shown.length;
+  // The map counts the table's rows its branches keep, once it is there.
+  const matched =
+    view === "list" ? shown.length : index && concepts.filter((r) => !kept || kept.concepts.has(r.concept.id)).length;
 
   let body: ReactNode;
   if (concepts.length === 0) {
@@ -125,7 +127,9 @@ export function ConceptsTab({
           <span aria-live="polite" className="text-xs tabular-nums text-fg-faint">
             {q.trim() === ""
               ? t(total === 1 ? "pool.concepts.count.one" : "pool.concepts.count", { n: total })
-              : t("pool.concepts.countOf", { n: matched, total })}
+              : matched === null
+                ? null
+                : t("pool.concepts.countOf", { n: matched, total })}
           </span>
           <ViewSwitch
             name="pool-concepts-view"
