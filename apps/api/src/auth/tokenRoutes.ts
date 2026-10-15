@@ -40,11 +40,12 @@ export async function apiTokenRoutes(app: FastifyInstance) {
   app.post("/app/api/me/tokens", { preHandler: sessionOnly }, async (req, reply) => {
     const body = ApiTokenCreate.safeParse(req.body ?? {});
     if (!body.success) return invalid(reply, body.error);
-    // Audit L6: an administrator's token always expires.
-    if (body.data.expiresInDays === null && req.user!.role === "admin") {
+    // Audit L6: an administrator's token always expires; ADR-113 §1: so
+    // does a token that reaches the whole API.
+    if (body.data.expiresInDays === null && (req.user!.role === "admin" || body.data.scope === "api")) {
       return reply.code(422).send({
         error: "token_expiry_required",
-        message: "An administrator's token must expire",
+        message: req.user!.role === "admin" ? "An administrator's token must expire" : "A full API token must expire",
       });
     }
     const created = await createApiToken(app.db, req.user!.id, body.data, app.clock.now());
@@ -54,7 +55,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       action: "api_token.create",
       subjectType: "api_token",
       subjectId: created.id,
-      payload: { name: created.name, expiresAt: created.expiresAt },
+      payload: { name: created.name, expiresAt: created.expiresAt, scope: created.scope },
     });
     return reply.code(201).send(created);
   });

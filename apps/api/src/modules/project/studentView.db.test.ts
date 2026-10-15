@@ -577,7 +577,7 @@ describe("who reads the view (invariant 6, ADR-018, ADR-034)", () => {
     const draft = await project(room, "Draft 7", { publish: false });
     const old = await project(room, "Old 7");
     expect((await call("POST", `/app/api/projects/${old.id}/archive`, teacher.headers)).statusCode).toBe(200);
-    const { token } = await createApiToken(server.app.db, student.id, { name: "t", expiresInDays: null });
+    const { token } = await createApiToken(server.app.db, student.id, { name: "t", expiresInDays: null, scope: "api" });
     const seb = await sessionOf(student.id, { kind: "seb", evaluationId: room.evaluationId });
 
     for (const [who, headers, id, expected] of [
@@ -712,7 +712,7 @@ describe("the leak test (N-SEC-20, spec 05 §5.7)", () => {
 
       const admin = await server.signIn("admin");
       const impersonation = await sessionOf(first.id, { kind: "impersonation", actorUserId: admin.id });
-      const { token } = await createApiToken(server.app.db, first.id, { name: "leak", expiresInDays: null });
+      const { token } = await createApiToken(server.app.db, first.id, { name: "leak", expiresInDays: null, scope: "api" });
       const callers: Headers[] = [first.headers, teacher.headers, impersonation, { authorization: `Bearer ${token}` }];
       const read = async () => {
         for (const headers of callers) {
@@ -915,7 +915,7 @@ describe("the criteria table (ADR-106 §9, N-SEC-20, L-02f)", () => {
 
       const admin = await server.signIn("admin");
       const impersonation = await sessionOf(first.id, { kind: "impersonation", actorUserId: admin.id });
-      const { token } = await createApiToken(server.app.db, first.id, { name: "criteria", expiresInDays: null });
+      const { token } = await createApiToken(server.app.db, first.id, { name: "criteria", expiresInDays: null, scope: "api" });
       const seb = await sessionOf(first.id, { kind: "seb", evaluationId: room.evaluationId });
       const callers: Headers[] = [first.headers, impersonation, { authorization: `Bearer ${token}` }];
       const read = async (): Promise<StudentProject> => {

@@ -213,7 +213,7 @@ describe("who may hold them", () => {
     const { token } = await createApiToken(
       server.app.db,
       admin.id,
-      { name: "MCP", expiresInDays: 7 },
+      { name: "MCP", expiresInDays: 7, scope: "api" },
       server.clock.now(),
     );
     const bearer = { authorization: `Bearer ${token}` };

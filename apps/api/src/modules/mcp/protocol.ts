@@ -9,7 +9,8 @@
  */
 import { z } from "zod";
 
-import { MCP_PROTOCOL_VERSIONS, McpMessage, McpToolCall, type JsonRpcId } from "@quiz/contracts";
+import { MCP_PROTOCOL_VERSIONS, McpMessage, McpToolCall, type JsonRpcId, type TokenScope } from "@quiz/contracts";
+import { scopeCovers } from "@quiz/domain";
 
 import { runTool, toolByName, toolDescriptors, type Api } from "./tools.js";
 
@@ -62,11 +63,17 @@ function toolResult(value: unknown, isError = false) {
   return { content: [{ type: "text", text }], isError };
 }
 
-async function callTool(api: Api, params: unknown, log: (err: unknown) => void) {
+async function callTool(api: Api, scope: TokenScope, params: unknown, log: (err: unknown) => void) {
   const call = McpToolCall.safeParse(params ?? {});
   if (!call.success) return { error: "Invalid tools/call params" };
   const tool = toolByName.get(call.data.name);
   if (!tool) return { error: `Unknown tool: ${call.data.name}` };
+  // Said early, for the model (ADR-113 §4); were it missing, the auth hook
+  // would still refuse the tool's first write.
+  if (!scopeCovers(scope, tool.scope)) {
+    const message = `This token's scope is ${scope}; ${tool.name} needs ${tool.scope}. Ask the teacher for a token with that access.`;
+    return { result: toolResult({ error: "insufficient_scope", needed: tool.scope, message }, true) };
+  }
   const outcome = await runTool(api, tool, call.data.arguments);
   if (outcome.ok) return { result: toolResult(outcome.value) };
   const failure = outcome.error;
@@ -93,6 +100,7 @@ async function callTool(api: Api, params: unknown, log: (err: unknown) => void) 
 export async function handleMessage(
   raw: unknown,
   api: Api,
+  scope: TokenScope,
   log: (err: unknown) => void,
 ): Promise<RpcResponse | null> {
   const parsed = McpMessage.safeParse(raw);
@@ -122,9 +130,9 @@ export async function handleMessage(
     case "ping":
       return ok(id, {});
     case "tools/list":
-      return ok(id, { tools: toolDescriptors() });
+      return ok(id, { tools: toolDescriptors(scope) });
     case "tools/call": {
-      const outcome = await callTool(api, params, log);
+      const outcome = await callTool(api, scope, params, log);
       if ("error" in outcome) return fail(id, RPC.invalidParams, outcome.error!);
       return ok(id, outcome.result);
     }

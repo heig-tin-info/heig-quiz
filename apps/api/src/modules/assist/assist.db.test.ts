@@ -103,7 +103,7 @@ describe("who may ask (ADR-080 §3)", () => {
   it("refuses a student, a personal API token and a session acting as somebody", async () => {
     const student = await server.signIn("student");
     expect((await askAs(student, "Comment partager ?")).statusCode).toBe(403);
-    const { token } = await createApiToken(server.app.db, teacher.id, { name: "mcp", expiresInDays: null });
+    const { token } = await createApiToken(server.app.db, teacher.id, { name: "mcp", expiresInDays: null, scope: "api" });
     const bearer = { headers: { authorization: `Bearer ${token}` } };
     expect((await call(bearer, "GET", "/app/api/assist/availability")).statusCode).toBe(403);
     expect((await askAs(bearer, "Comment partager ?")).statusCode).toBe(403);

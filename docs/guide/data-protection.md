@@ -285,6 +285,7 @@ Sign-in and sessions:
 - requests that change something are protected against cross-site request forgery (`apps/api/src/auth/plugin.ts`);
 - the development sign-in, which lets anyone pick a fictitious identity, stops the server from starting in production, as does a test database (`apps/api/src/config.ts`);
 - API tokens and AI-assistant authorisations are stored as hashes only (ADR-022, ADR-023);
+- a personal API token reaches what its owner chose at its creation: by default the MCP server's tools only, which never return students' answers or grades; the whole API only for a token made for a script, which always expires (ADR-113);
 - the content security policy admits only the site's own scripts and images; the one exception is the Microsoft Teams tab, which may fetch Microsoft's list of Teams hosts from `res.cdn.office.net` (`apps/api/src/csp.ts`).
 
 Network and storage:
@@ -343,7 +344,7 @@ Access and traceability:
 - direct access to the machines and the database is not traced by the platform;
 - the audit log's protection is a database trigger; the application connects as the database's owner role, which could drop it, and emptying the whole table (TRUNCATE) is not covered;
 - the student is not notified when an administrator opens a view of their account;
-- a personal API token carries all its owner's rights and may be created without expiry (an administrator's always expires).
+- a personal API token with full API access carries all its owner's rights, students' grades included; every token created before 2026-10-15 has that access, and one made then without expiry keeps it until its owner revokes it (ADR-113).
 
 Informing the student:
 

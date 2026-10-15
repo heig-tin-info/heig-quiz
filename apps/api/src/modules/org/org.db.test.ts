@@ -543,7 +543,7 @@ describe("the roster_conflict notification", () => {
         projectId: null,
         deviceId: station.deviceId,
       });
-      const { token } = await createApiToken(server.app.db, grace.id, { name: "cli", expiresInDays: 1 });
+      const { token } = await createApiToken(server.app.db, grace.id, { name: "cli", expiresInDays: 1, scope: "api" });
 
       // A line that waits for her, written after all of them were opened.
       const later = await room("L4-who");

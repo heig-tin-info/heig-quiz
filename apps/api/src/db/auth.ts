@@ -22,7 +22,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { DATE_FORMATS, DEFAULT_MAX_ACTIVE_SESSIONS, SESSION_KINDS, USER_ROLES } from "@quiz/contracts";
-import { LOCALES, MCQ_SCORE_POLICIES } from "@quiz/domain";
+import { LOCALES, MCQ_SCORE_POLICIES, TOKEN_SCOPES } from "@quiz/domain";
 
 import { bytea } from "./columns.js";
 import { evaluations } from "./evaluation.js";
@@ -203,11 +203,25 @@ export const apiTokens = pgTable(
     /**
      * The resource an OAuth access token was issued for (RFC 8707): the MCP
      * endpoint. Such a token is refused everywhere else. Null on a personal
-     * token, which is valid on the whole API.
+     * token, whose reach is its `scope`.
      */
     audience: text("audience"),
+    /**
+     * What a PERSONAL token reaches (ADR-113): `quiz`, `quiz:read` or `api`,
+     * chosen at its creation, never edited. Null exactly on the
+     * audience-bound tokens (OAuth, the help assistant), whose reach is
+     * their audience's and, for OAuth, their grant's scope. No default:
+     * every insert of a personal token names it, so none means "full" by
+     * omission.
+     */
+    scope: text("scope", { enum: TOKEN_SCOPES }),
   },
-  (t) => [index("api_tokens_user_idx").on(t.userId), index("api_tokens_grant_idx").on(t.grantId)],
+  (t) => [
+    index("api_tokens_user_idx").on(t.userId),
+    index("api_tokens_grant_idx").on(t.grantId),
+    check("api_tokens_scope_ck", sql`${t.scope} in ('quiz', 'quiz:read', 'api')`),
+    check("api_tokens_scope_personal_ck", sql`(${t.audience} is null) = (${t.scope} is not null)`),
+  ],
 );
 
 /**

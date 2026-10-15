@@ -177,8 +177,20 @@ const tokens: ApiToken[] = flags.empty
         lastUsedAt: iso(-2 * H),
         expiresAt: iso(78 * D),
         revokedAt: null,
+        scope: "quiz",
       },
       {
+        id: "t-reader",
+        name: "ChatGPT reader",
+        prefix: "quiz_pat_Rd4mQ1",
+        createdAt: iso(-5 * D),
+        lastUsedAt: iso(-1 * D),
+        expiresAt: null,
+        revokedAt: null,
+        scope: "quiz:read",
+      },
+      {
+        // Issued before the scopes (ADR-113 §6): the whole API.
         id: "t-script",
         name: "Import script",
         prefix: "quiz_pat_b7TzR2",
@@ -186,6 +198,7 @@ const tokens: ApiToken[] = flags.empty
         lastUsedAt: null,
         expiresAt: iso(-30 * D),
         revokedAt: null,
+        scope: "api",
       },
     ];
 
@@ -201,6 +214,7 @@ on("POST", "/app/api/me/tokens", (_m, body): ApiTokenCreated => {
     lastUsedAt: null,
     expiresAt: days === null ? null : iso(days * D),
     revokedAt: null,
+    scope: (body.scope as ApiToken["scope"] | undefined) ?? "quiz",
   };
   tokens.unshift(token);
   return { ...token, token: secret };

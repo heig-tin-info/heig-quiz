@@ -732,7 +732,7 @@ describe("the reopen (F-PROJ-09)", () => {
   it("answers a Bearer token and an impersonation as nobody (invariant 6)", async () => {
     const p = await project();
     const repo = p.repos[0]!;
-    const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null });
+    const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null, scope: "api" });
     const s = await createSession(server.app.db, teacher.id, 8, { kind: "impersonation", actorUserId: (await server.signIn("admin")).id, projectId: null, evaluationId: null });
     const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
     const routes = [

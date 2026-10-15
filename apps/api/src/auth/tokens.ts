@@ -12,10 +12,11 @@ import { randomUUID } from "node:crypto";
 
 import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 
-import { API_TOKEN_PREFIX, type ApiToken, type ApiTokenCreated } from "@quiz/contracts";
+import { API_TOKEN_PREFIX, type ApiToken, type ApiTokenCreated, type TokenScope } from "@quiz/contracts";
+import { scopeOfGrant } from "@quiz/domain";
 
 import type { Db } from "../db/client.js";
-import { apiTokens, users } from "../db/schema.js";
+import { apiTokens, oauthGrants, users } from "../db/schema.js";
 import { hashToken, newToken } from "./session.js";
 
 /** Characters of the plaintext kept for display: the prefix and a few more. */
@@ -35,6 +36,9 @@ function toApiToken(row: TokenRow): ApiToken {
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     expiresAt: row.expiresAt?.toISOString() ?? null,
     revokedAt: row.revokedAt?.toISOString() ?? null,
+    // A personal row always holds one (`api_tokens_scope_personal_ck`); only
+    // personal rows are ever turned into an `ApiToken`.
+    scope: row.scope!,
   };
 }
 
@@ -67,7 +71,7 @@ export function isApiToken(value: string): boolean {
 export async function createApiToken(
   db: Db,
   userId: string,
-  input: { name: string; expiresInDays: number | null },
+  input: { name: string; expiresInDays: number | null; scope: TokenScope },
   now: Date = new Date(),
 ): Promise<ApiTokenCreated> {
   const token = `${API_TOKEN_PREFIX}${newToken()}`;
@@ -82,6 +86,7 @@ export async function createApiToken(
       createdAt: now,
       expiresAt:
         input.expiresInDays === null ? null : new Date(now.getTime() + input.expiresInDays * 86_400_000),
+      scope: input.scope,
     })
     .returning();
   return { ...toApiToken(row!), token };
@@ -171,8 +176,12 @@ export async function purgeAssistTokens(db: Db, now: Date): Promise<number> {
  * The account a bearer token acts for, or null when the token is unknown,
  * revoked, expired, or belongs to an anonymised account. `audience` is the
  * one resource an OAuth access token may be used on; null for a personal
- * token, valid on the whole API. `expiresAt` null: a personal token that
- * never expires, which the administration routes refuse (audit L6).
+ * token. `expiresAt` null: a personal token that never expires, which the
+ * administration routes refuse (audit L6).
+ *
+ * `scope` is the token's effective scope (ADR-113 §3): a personal token's
+ * own; an OAuth access token's grant's, as a token scope (`quiz` today);
+ * null for the help assistant's, which its audience alone confines.
  */
 export async function findTokenUser(db: Db, token: string, now: Date = new Date()) {
   const [row] = await db
@@ -182,9 +191,12 @@ export async function findTokenUser(db: Db, token: string, now: Date = new Date(
       expiresAt: apiTokens.expiresAt,
       revokedAt: apiTokens.revokedAt,
       audience: apiTokens.audience,
+      ownScope: apiTokens.scope,
+      grantScope: oauthGrants.scope,
     })
     .from(apiTokens)
     .innerJoin(users, eq(apiTokens.userId, users.id))
+    .leftJoin(oauthGrants, eq(apiTokens.grantId, oauthGrants.id))
     .where(eq(apiTokens.tokenHash, hashToken(token)))
     .limit(1);
   if (!row || row.revokedAt !== null || row.user.anonymizedAt !== null) return null;
@@ -201,5 +213,6 @@ export async function findTokenUser(db: Db, token: string, now: Date = new Date(
         ),
       ),
     );
-  return { user: row.user, tokenId: row.tokenId, audience: row.audience, expiresAt: row.expiresAt };
+  const scope: TokenScope | null = row.ownScope ?? (row.grantScope === null ? null : scopeOfGrant(row.grantScope));
+  return { user: row.user, tokenId: row.tokenId, audience: row.audience, expiresAt: row.expiresAt, scope };
 }

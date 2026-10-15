@@ -259,7 +259,7 @@ describe("who reaches a target (invariant 6)", () => {
     const s = await createSession(server.app.db, teacher.id, 8, { kind: "impersonation", actorUserId: admin.id, projectId: null, evaluationId: null });
     const impersonation = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
     expect((await get(`${L}/classrooms/${old.classroom}`, impersonation)).statusCode).toBe(404);
-    const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null });
+    const { token } = await createApiToken(server.app.db, teacher.id, { name: "t", expiresInDays: null, scope: "api" });
     const res = await get(`${L}/classrooms/${old.classroom}`, { authorization: `Bearer ${token}` });
     expect(location(res)).toContain("/app/auth/login?next=");
   });

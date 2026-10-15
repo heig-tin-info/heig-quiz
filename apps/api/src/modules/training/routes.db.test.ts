@@ -172,7 +172,8 @@ describe("provisioning over HTTP and the four missions (§1, §4)", () => {
 
   it("a student, a personal token, an OAuth token, an impersonation, a seb and a kiosk session are refused (§1)", async () => {
     const other = await server.signIn("teacher");
-    const token = (await post("/app/api/me/tokens", other.headers, { name: "t" })).json() as { token: string };
+    // A full API token: an MCP one never reaches these routes at all (ADR-113).
+    const token = (await post("/app/api/me/tokens", other.headers, { name: "t", scope: "api" })).json() as { token: string };
     const oauth = await oauthBearer(other.headers);
     const welcome = await evaluationTitled("Le quiz d'accueil");
     const station = await kioskStation(server.app);

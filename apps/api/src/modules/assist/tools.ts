@@ -70,6 +70,9 @@ const resultsReader: Tool = {
     "Never a running or unreleased evaluation's scores: those are not final. Needs a staff seat on the course.",
   input: z.object({ classroomId: z.uuid() }),
   annotations: { readOnlyHint: true, openWorldHint: false },
+  // Never in the MCP catalogue (ADR-080 §8 item 1): the assistant's own
+  // token, which has no scope, is its only caller.
+  scope: "quiz:read",
   run: async (api, args) =>
     assistResults((await api.get(`/classrooms/${(args as { classroomId: string }).classroomId}/gradebook`)) as ResultsSource),
 };

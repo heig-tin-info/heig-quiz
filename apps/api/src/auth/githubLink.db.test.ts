@@ -398,7 +398,7 @@ describe("/app/api/me/github", () => {
   it("refuses a Bearer token: 403, the link kept", async () => {
     const student = await server.signIn("student");
     await server.app.db.insert(githubAccounts).values({ userId: student.id, githubUserId: 9_000_400, login: "kept" });
-    const { token } = await createApiToken(server.app.db, student.id, { name: "t", expiresInDays: null });
+    const { token } = await createApiToken(server.app.db, student.id, { name: "t", expiresInDays: null, scope: "api" });
     const res = await server.app.inject({
       method: "DELETE",
       url: "/app/api/me/github",

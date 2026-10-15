@@ -1705,6 +1705,30 @@ const scenes = [
       await p.getByRole("dialog", { name: /token created/i }).waitFor();
     },
   },
+  // ADR-113: a full API token — no "Never", and a command line at the reveal.
+  {
+    name: "settings-token-new-api",
+    role: "teacher",
+    path: "/settings",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /new token/i }).first().click();
+      await p.getByRole("dialog").getByRole("radio", { name: /full api|api complète/i }).check();
+    },
+  },
+  {
+    name: "settings-token-created-api",
+    role: "teacher",
+    path: "/settings",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /new token/i }).first().click();
+      await p.getByRole("dialog").getByRole("textbox").fill("Import script");
+      await p.getByRole("dialog").getByRole("radio", { name: /full api|api complète/i }).check();
+      await p.getByRole("button", { name: /create token/i }).click();
+      await p.getByRole("dialog", { name: /token created/i }).waitFor();
+    },
+  },
   { name: "admin", role: "admin", path: "/admin" },
   // ADR-047 §4 (M6-06): the workspace grant beside each teacher grant.
   { name: "admin-workspace-grants", role: "admin", path: "/admin?codespace=1" },

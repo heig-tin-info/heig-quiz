@@ -4,10 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   API_TOKEN_TTL_DAYS,
+  TOKEN_SCOPES,
   type ApiToken,
   type ApiTokenCreate,
   type ApiTokenCreated,
   type OAuthConnection,
+  type TokenScope,
 } from "@quiz/contracts";
 
 import { api, useMe } from "./api";
@@ -27,6 +29,7 @@ import {
   isoDateTime,
   Modal,
   QueryError,
+  RadioRow,
   SectionHeading,
   Select,
   Skeleton,
@@ -80,14 +83,44 @@ function statusOf(token: ApiToken): "active" | "expired" | "revoked" {
 
 const STATUS_TONE = { active: "green", expired: "amber", revoked: "zinc" } as const;
 
-/** Name and lifetime; on success the dialog turns into the one-time reveal. */
+/**
+ * What a scope is called in the list and in the access choice, and the line
+ * that says what it reaches (ADR-113). The `i18n` keys cannot hold a colon.
+ */
+const SCOPE_KEY = { quiz: "quiz", "quiz:read": "quizRead", api: "api" } as const satisfies Record<TokenScope, string>;
+
+/** The access choice of a new token: three rows, MCP read and write first (the default). */
+function ScopeChoice({ value, onPick }: { value: TokenScope; onPick: (scope: TokenScope) => void }) {
+  const { t } = useI18n();
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="text-[13px] font-medium text-fg">{t("tokens.access")}</legend>
+      <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+        {TOKEN_SCOPES.map((scope) => (
+          <RadioRow key={scope} name="token-scope" value={scope} checked={value === scope} onPick={onPick}>
+            <span className="block font-semibold text-fg">{t(`tokens.scope.${SCOPE_KEY[scope]}`)}</span>
+            <span className="block text-[13px] text-fg-muted">{t(`tokens.scope.${SCOPE_KEY[scope]}.hint`)}</span>
+          </RadioRow>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+/** Name, access and lifetime; on success the dialog turns into the one-time reveal. */
 function NewTokenDialog({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   const qc = useQueryClient();
   const [name, setName] = useState("");
+  const [scope, setScope] = useState<TokenScope>("quiz");
   const [ttl, setTtl] = useState<string>("90");
-  // Audit L6: an administrator's token always expires.
+  // Audit L6: an administrator's token always expires; ADR-113: so does a full API token.
   const admin = useMe().data?.role === "admin";
+  const mustExpire = admin || scope === "api";
+  const pickScope = (next: TokenScope) => {
+    setScope(next);
+    if (next === "api" && ttl === "never") setTtl("90");
+  };
   const create = useMutation({
     mutationFn: (body: ApiTokenCreate) =>
       api<ApiTokenCreated>("/app/api/me/tokens", { method: "POST", body: JSON.stringify(body) }),
@@ -107,12 +140,24 @@ function NewTokenDialog({ onClose }: { onClose: () => void }) {
             {t("tokens.createdOnce")}
           </Alert>
           <CopyField label={t("tokens.token")} value={token} />
-          <CopyField label={t("tokens.mcpUrl")} value={mcpUrl()} />
-          <CopyField
-            label={t("tokens.claudeCode")}
-            value={`claude mcp add --transport http quiz ${mcpUrl()} --header "Authorization: Bearer ${token}"`}
-          />
-          <p className="text-sm text-fg-muted">{t("tokens.otherClients")}</p>
+          {create.data.scope === "api" ? (
+            <>
+              <CopyField
+                label={t("tokens.curl")}
+                value={`curl -H "Authorization: Bearer ${token}" ${window.location.origin}/app/api/courses`}
+              />
+              <p className="text-sm text-fg-muted">{t("tokens.apiClients")}</p>
+            </>
+          ) : (
+            <>
+              <CopyField label={t("tokens.mcpUrl")} value={mcpUrl()} />
+              <CopyField
+                label={t("tokens.claudeCode")}
+                value={`claude mcp add --transport http quiz ${mcpUrl()} --header "Authorization: Bearer ${token}"`}
+              />
+              <p className="text-sm text-fg-muted">{t("tokens.otherClients")}</p>
+            </>
+          )}
         </div>
       </Modal>
     );
@@ -125,6 +170,7 @@ function NewTokenDialog({ onClose }: { onClose: () => void }) {
       onSubmit={() =>
         create.mutate({
           name: name.trim(),
+          scope,
           expiresInDays: ttl === "never" ? null : (Number(ttl) as ApiTokenCreate["expiresInDays"]),
         })
       }
@@ -142,15 +188,20 @@ function NewTokenDialog({ onClose }: { onClose: () => void }) {
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
+      <ScopeChoice value={scope} onPick={pickScope} />
       <Select label={t("tokens.expires")} value={ttl} onChange={(e) => setTtl(e.target.value)}>
         {API_TOKEN_TTL_DAYS.map((days) => (
           <option key={days} value={String(days)}>
             {t("tokens.days", { n: days })}
           </option>
         ))}
-        {admin ? null : <option value="never">{t("tokens.never")}</option>}
+        {mustExpire ? null : <option value="never">{t("tokens.never")}</option>}
       </Select>
-      {admin ? <p className="text-sm text-fg-muted">{t("tokens.adminExpires")}</p> : null}
+      {admin ? (
+        <p className="text-sm text-fg-muted">{t("tokens.adminExpires")}</p>
+      ) : scope === "api" ? (
+        <p className="text-sm text-fg-muted">{t("tokens.apiExpires")}</p>
+      ) : null}
     </FormDialog>
   );
 }
@@ -308,6 +359,7 @@ export function ApiTokensCard() {
           <TableHead
             columns={[
               { key: "name", label: t("tokens.name") },
+              { key: "access", label: t("tokens.access") },
               { key: "lastUsed", label: t("tokens.lastUsed"), className: T.colHigh },
               { key: "expires", label: t("tokens.expires"), className: T.colMid },
               { key: "status", label: t("tokens.status") },
@@ -323,6 +375,7 @@ export function ApiTokensCard() {
                     <p className="font-semibold">{token.name}</p>
                     <p className="font-mono text-xs text-fg-faint">{token.prefix}…</p>
                   </td>
+                  <td className={cx(T.td, "text-fg-muted")}>{t(`tokens.scope.${SCOPE_KEY[token.scope]}`)}</td>
                   <td className={cx(T.td, T.colHigh, "tabular-nums text-fg-muted")}>
                     {token.lastUsedAt ? isoDateTime(token.lastUsedAt) : "—"}
                   </td>

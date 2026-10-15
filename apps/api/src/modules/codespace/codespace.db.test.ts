@@ -545,7 +545,7 @@ describe("POST /app/api/projects/:id/workspace/start", () => {
     const impersonation = await start(lab.id, await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id }));
     // A session acting as a student writes nothing (ADR-034): refused before the route.
     expect([impersonation.statusCode, impersonation.json().error]).toEqual([403, "impersonation_read_only"]);
-    const { token } = await createApiToken(server.app.db, student.id, { name: "t", expiresInDays: null });
+    const { token } = await createApiToken(server.app.db, student.id, { name: "t", expiresInDays: null, scope: "api" });
     expect((await start(lab.id, { authorization: `Bearer ${token}` })).statusCode).toBe(404);
     expect((await start(lab.id, stranger.headers)).statusCode).toBe(404);
     expect((await start(lab.id, outsider.headers)).statusCode).toBe(404);

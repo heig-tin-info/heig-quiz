@@ -15,9 +15,9 @@ Relations: amends [ADR-022 §A](ADR-022-jetons-api-et-serveur-mcp.md#a-personal-
 ("There is no scope"), the parenthesis of its L6 amendment and its
 rejected alternative "Scoped tokens"; amends
 [ADR-023 §C](ADR-023-serveur-oauth-pour-mcp.md#c-audience-binding) and its
-consequence "No scopes beyond `quiz`"; leaves the help assistant's token of
-[ADR-080 §8](ADR-080-assistant-enseignant.md#8-p2-read-tools) under its own
-audience rule; adds N-SEC-22 to
+consequence "No scopes beyond `quiz`"; amends the promise of
+[ADR-080 §8](ADR-080-assistant-enseignant.md#8-p2-read-tools) (P2 item 1) and
+leaves its help assistant's token under its own audience rule; adds N-SEC-22 to
 [03 §3.3](../spec/03-exigences-non-fonctionnelles.md).
 
 ## Context
@@ -114,9 +114,10 @@ reads:
 
 - a personal token: its row's `scope`;
 - an OAuth access token: its grant's `scope` (`oauth_grants.scope`, read
-  with the token), mapped to the narrowest token scope it names — `quiz` in
-  this version, since the consent grants `quiz` (with `offline_access`)
-  and nothing else. OAuth never yields `api`;
+  with the token), mapped to `quiz` when it names `quiz` and to
+  `quiz:read` otherwise (`scopeOfGrant`, `@quiz/domain`) — `quiz` in this
+  version, since the consent grants `quiz` (with `offline_access`) and
+  nothing else. OAuth never yields `api`;
 - the help assistant's token: none (its audience rule alone).
 
 The OAuth flow is unchanged in this version: consent, `scopes_supported`
@@ -130,8 +131,8 @@ new check.
 `scope: "quiz" | "quiz:read"`; a tool without it is a compile error,
 the help assistant's own reader (`get_classroom_results`) included. A test
 asserts, for every tool, `annotations.readOnlyHint === (scope === "quiz:read")`,
-and that a `quiz:read` token runs every reading tool without one refusal —
-the reading tools issue `GET`s only.
+and that a `quiz:read` token runs every reading tool without one scope
+refusal — the reading tools issue `GET`s only.
 
 The declaration serves the client, not the security: `tools/list` lists only
 the tools the caller's scope covers, and `tools/call` of a tool above it
@@ -180,8 +181,8 @@ The settings list it as "Full API", like any `api` token.
   nothing else: the guide's "cannot" column and ADR-080 §8's promise become
   true of `quiz` and `quiz:read` tokens. They stay false of `api` tokens —
   every token issued before this record, and the new ones made for a
-  script — and the documents must say so (`docs/guide/assistants.md`,
-  `docs/guide/data-protection.md`, phase 2 of #871).
+  script — which `docs/guide/assistants.md` and
+  `docs/guide/data-protection.md` say.
 - A script using a token created after this record must ask for `api`, and
   renew it at least every year. Existing scripts keep working.
 - **Rollback window.** An image older than this record ignores the column:

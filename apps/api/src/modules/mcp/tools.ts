@@ -40,8 +40,10 @@ import {
   TemplateInstantiate,
   type ConceptResolution,
   type ConceptResolveResponse,
+  type McpScope,
+  type TokenScope,
 } from "@quiz/contracts";
-import { filterIds, type LabelResolution } from "@quiz/domain";
+import { filterIds, scopeCovers, type LabelResolution } from "@quiz/domain";
 
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
 
@@ -89,6 +91,13 @@ export interface Tool<S extends z.ZodObject = z.ZodObject> {
   description: string;
   input: S;
   annotations: ToolAnnotations;
+  /**
+   * The token scope the tool needs (ADR-113 §4): `quiz:read` exactly when
+   * it only reads (`readOnlyHint`, asserted by a test). What `tools/list`
+   * filters on and `tools/call` refuses early; the guarantee is the auth
+   * hook's, which refuses a `quiz:read` token's writes whatever the tool.
+   */
+  scope: McpScope;
   run(api: Api, args: z.output<S>): Promise<unknown>;
 }
 
@@ -256,6 +265,7 @@ export const TOOLS: Tool[] = [
       "each: an `owner` runs the course (classrooms, linked pools, staff), an `assistant` does the rest.",
     input: z.object({}),
     annotations: READ,
+    scope: "quiz:read",
     run: (api) => api.get("/courses"),
   }),
 
@@ -265,6 +275,7 @@ export const TOOLS: Tool[] = [
     description: "One course with its staff, its classrooms (ids needed to create an evaluation), its linked pools and the concepts it declares (what the course teaches).",
     input: z.object({ courseId: Id }),
     annotations: READ,
+    scope: "quiz:read",
     run: (api, a) => api.get(`/courses/${a.courseId}`),
   }),
 
@@ -276,6 +287,7 @@ export const TOOLS: Tool[] = [
       "A public pool they have none of those ties to is not listed, but get_pool, list_questions and find_similar_questions still read it.",
     input: z.object({}),
     annotations: READ,
+    scope: "quiz:read",
     run: (api) => api.get("/pools"),
   }),
 
@@ -285,6 +297,7 @@ export const TOOLS: Tool[] = [
     description: "One pool: its detail, the caller's role in it, and its category tree with counts.",
     input: z.object({ poolId: Id }),
     annotations: READ,
+    scope: "quiz:read",
     run: async (api, a) => ({
       pool: await api.get(`/pools/${a.poolId}`),
       categories: await api.get(`/pools/${a.poolId}/categories`),
@@ -311,6 +324,7 @@ export const TOOLS: Tool[] = [
       "no student, no individual grade.",
     input: z.object({ poolId: Id }),
     annotations: READ,
+    scope: "quiz:read",
     run: (api, a) => api.get(`/pools/${a.poolId}/question-stats`),
   }),
 
@@ -343,6 +357,7 @@ export const TOOLS: Tool[] = [
       cursor: z.string().max(200).optional(),
     }),
     annotations: READ,
+    scope: "quiz:read",
     run: async (api, a) =>
       api.get(`/pools/${a.poolId}/questions`, {
         course: a.courseId,
@@ -374,6 +389,7 @@ export const TOOLS: Tool[] = [
       limit: SimilarQuestionSearch.shape.limit,
     }),
     annotations: READ,
+    scope: "quiz:read",
     run: (api, { courseId, ...query }) => api.get(`/courses/${courseId}/similar-questions`, query),
   }),
 
@@ -383,6 +399,7 @@ export const TOOLS: Tool[] = [
     description: "One question: its metadata, its current draft (config and explanation) and its published versions.",
     input: z.object({ questionId: Id }),
     annotations: READ,
+    scope: "quiz:read",
     run: (api, a) => api.get(`/questions/${a.questionId}`),
   }),
 
@@ -394,6 +411,7 @@ export const TOOLS: Tool[] = [
       "Call it with a `type` BEFORE creating a question of that type. Without `type`, lists the types.",
     input: z.object({ type: QuestionCreate.shape.type.optional() }),
     annotations: READ,
+    scope: "quiz:read",
     run: async (_api, a) => (a.type ? describeQuestionType(a.type) : questionTypeSummaries()),
   }),
 
@@ -403,6 +421,7 @@ export const TOOLS: Tool[] = [
     description: "The evaluations (exams, exercises, polls) of one classroom, with their state.",
     input: z.object({ classroomId: Id }),
     annotations: READ,
+    scope: "quiz:read",
     run: (api, a) => api.get(`/classrooms/${a.classroomId}/evaluations`),
   }),
 
@@ -414,6 +433,7 @@ export const TOOLS: Tool[] = [
       "`neutralized`, left out of the total and of every student's points (ADR-108).",
     input: z.object({ evaluationId: Id }),
     annotations: READ,
+    scope: "quiz:read",
     run: (api, a) => api.get(`/evaluations/${a.evaluationId}`),
   }),
 
@@ -427,6 +447,7 @@ export const TOOLS: Tool[] = [
       "`files`, every page and asset with `updatedAt`, the last time its content changed. Read a page with get_journal_page.",
     input: z.object({ classroomId: Id }),
     annotations: READ,
+    scope: "quiz:read",
     run: async (api, a) => ({
       ...(await api.get(`/classrooms/${a.classroomId}/journal`)),
       url: api.link(`/classrooms/${a.classroomId}/journal`),
@@ -445,6 +466,7 @@ export const TOOLS: Tool[] = [
       path: JournalPagePath.describe("The page's path in the journal, as get_journal's `files` lists it (`010-intro/README.md`)"),
     }),
     annotations: READ,
+    scope: "quiz:read",
     run: async (api, a) => {
       const path = encodeJournalPath(a.path);
       // The rendered HTML says what the markdown says, at many times its size.
@@ -463,6 +485,7 @@ export const TOOLS: Tool[] = [
       "(`FRA1`), unique on the platform. Check `list_courses` first: do not create a duplicate.",
     input: CourseCreate,
     annotations: WRITE,
+    scope: "quiz",
     run: (api, a) => api.post("/courses", a),
   }),
 
@@ -487,6 +510,7 @@ export const TOOLS: Tool[] = [
       ),
     }).superRefine(checkPeriodMonths),
     annotations: WRITE,
+    scope: "quiz",
     run: async (api, { courseId, ...body }) => {
       const room = await api.post(`/courses/${courseId}/classrooms`, body);
       return { ...room, url: api.link(`/classrooms/${room.id}`) };
@@ -501,6 +525,7 @@ export const TOOLS: Tool[] = [
       "`link_pool_to_course` before using its questions in that course's evaluations.",
     input: PoolCreate,
     annotations: WRITE,
+    scope: "quiz",
     run: async (api, a) => {
       const pool = await api.post("/pools", a);
       return { ...pool, url: api.link(`/pools/${pool.id}`) };
@@ -519,6 +544,7 @@ export const TOOLS: Tool[] = [
       "Only an owner of the course may link (`myRole` of list_courses); an assistant is refused with 403 `owner_required`.",
     input: z.object({ courseId: Id, poolId: Id, mode: CoursePoolMode.default("edit") }),
     annotations: { ...WRITE, idempotentHint: true },
+    scope: "quiz",
     run: async (api, a) => {
       const course = await api.get(`/courses/${a.courseId}`);
       const links = new Map<string, string>(course.pools.map((p: { id: string; mode: string }) => [p.id, p.mode]));
@@ -535,6 +561,7 @@ export const TOOLS: Tool[] = [
     description: "Creates a category (a folder) in a pool, optionally under a parent category.",
     input: z.object({ poolId: Id, name: z.string().trim().min(1).max(200), parentId: Id.nullable().optional() }),
     annotations: WRITE,
+    scope: "quiz",
     run: (api, { poolId, ...body }) => api.post(`/pools/${poolId}/categories`, body),
   }),
 
@@ -563,6 +590,7 @@ export const TOOLS: Tool[] = [
     // A client still holding the tool of before the cut-over (its `tags`) is refused, not ignored.
     .strict(),
     annotations: WRITE,
+    scope: "quiz",
     run: async (api, a) => {
       if (a.publish) {
         const issues = checkConfig(a.type, a.config, { explanation: a.explanation, variables: a.variables });
@@ -609,6 +637,7 @@ export const TOOLS: Tool[] = [
     // As `create_question`: a stale client's `tags` are refused, not ignored.
     .strict(),
     annotations: WRITE,
+    scope: "quiz",
     run: async (api, a) => {
       const current = await api.get(`/questions/${a.questionId}`);
       const meta = metaOf(a);
@@ -646,6 +675,7 @@ export const TOOLS: Tool[] = [
       "(`link_pool_to_course`). Nothing is opened to students: the teacher schedules or starts it from the web app.",
     input: z.object({ classroomId: Id, ...QuizFields }),
     annotations: WRITE,
+    scope: "quiz",
     run: (api, { classroomId, ...a }) => createQuiz(api, `/classrooms/${classroomId}/evaluations`, "evaluations", a),
   }),
 
@@ -658,6 +688,7 @@ export const TOOLS: Tool[] = [
       "the evaluation's course.",
     input: z.object({ evaluationId: Id, questionIds: z.array(Id).min(1).max(200) }),
     annotations: WRITE,
+    scope: "quiz",
     run: (api, a) => api.post(`/evaluations/${a.evaluationId}/items`, { questionIds: a.questionIds }),
   }),
 
@@ -674,6 +705,7 @@ export const TOOLS: Tool[] = [
         "is never patched: it follows the poll's reveal.",
     input: z.object({ evaluationId: Id, ...EvaluationPatch.shape }),
     annotations: { ...WRITE, idempotentHint: true },
+    scope: "quiz",
     run: (api, { evaluationId, ...body }) => api.patch(`/evaluations/${evaluationId}`, body),
   }),
 
@@ -688,6 +720,7 @@ export const TOOLS: Tool[] = [
       "created twice.",
     input: z.object({ courseId: Id }),
     annotations: READ,
+    scope: "quiz:read",
     run: async (api, a) =>
       (await api.get(`/courses/${a.courseId}/templates`)).map((t: { id: string }) => ({
         ...t,
@@ -709,6 +742,7 @@ export const TOOLS: Tool[] = [
       "Call `instantiate_template` when the teacher also wants it in a classroom.",
     input: z.object({ courseId: Id, ...QuizFields }),
     annotations: WRITE,
+    scope: "quiz",
     run: (api, { courseId, ...a }) => createQuiz(api, `/courses/${courseId}/templates`, "templates", a),
   }),
 
@@ -720,6 +754,7 @@ export const TOOLS: Tool[] = [
       "course. Its instances are not changed: they take the new revision only when the teacher pulls it.",
     input: z.object({ templateId: Id, questionIds: z.array(Id).min(1).max(200) }),
     annotations: WRITE,
+    scope: "quiz",
     run: async (api, a) => ({
       ...(await api.post(`/templates/${a.templateId}/items`, { questionIds: a.questionIds })),
       url: api.link(`/templates/${a.templateId}`),
@@ -737,6 +772,7 @@ export const TOOLS: Tool[] = [
       "opened to students.",
     input: z.object({ templateId: Id, ...TemplateInstantiate.shape }),
     annotations: WRITE,
+    scope: "quiz",
     run: async (api, { templateId, ...body }) => {
       const made = await api.post(`/templates/${templateId}/instances`, body);
       return { ...made, url: api.link(`/evaluations/${made.evaluation.id}`) };
@@ -764,6 +800,7 @@ export const TOOLS: Tool[] = [
       config: z.record(z.string(), z.unknown()).optional(),
     }),
     annotations: { ...WRITE, openWorldHint: true },
+    scope: "quiz",
     run: async (api, a) => {
       const audience = a.classroomId
         ? { kind: "classroom", classroomId: a.classroomId }
@@ -797,6 +834,7 @@ export const TOOLS: Tool[] = [
       "Needs a seat on the course's staff: 404 otherwise.",
     input: z.object({ classroomId: Id }),
     annotations: READ,
+    scope: "quiz:read",
     run: async (api, a) => {
       requireGithub(api);
       return (await api.get(`/classrooms/${a.classroomId}/projects`)).map((p: { id: string }) => ({
@@ -815,6 +853,7 @@ export const TOOLS: Tool[] = [
       "connected to an organization is refused.",
     input: z.object({ classroomId: Id }),
     annotations: READ,
+    scope: "quiz:read",
     run: async (api, a) => {
       requireGithub(api);
       return api.get(`/classrooms/${a.classroomId}/projects/sources`);
@@ -835,6 +874,7 @@ export const TOOLS: Tool[] = [
     // The contract's cross-field rules (a deadline or a duration, the group set) are the route's: its 400 comes back.
     input: z.object({ classroomId: Id, ...ProjectDraftFields }).strict(),
     annotations: WRITE,
+    scope: "quiz",
     run: async (api, { classroomId, ...body }) => {
       requireGithub(api);
       const project = await api.post(`/classrooms/${classroomId}/projects`, { ...body, publishMode: "manual" });
@@ -887,9 +927,12 @@ export async function runTool(api: Api, tool: Tool, raw: unknown): Promise<ToolO
  * `tools/list`: the catalogue with each input as JSON Schema. Every tool
  * declares the OAuth scheme it needs: ChatGPT reads `securitySchemes` per
  * tool to decide when to run its sign-in (ADR-023); other hosts ignore it.
+ * It stays `quiz` whatever the tool's own scope: the consent grants nothing
+ * else yet (ADR-113 §3). Only the tools the caller's token scope covers are
+ * listed (§4).
  */
-export function toolDescriptors() {
-  return TOOLS.map((t) => {
+export function toolDescriptors(scope: TokenScope) {
+  return TOOLS.filter((t) => scopeCovers(scope, t.scope)).map((t) => {
     const inputSchema = inputJsonSchema(t.input);
     return {
       name: t.name,
