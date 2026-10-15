@@ -1225,16 +1225,16 @@ describe("the mock's curation queue (ADR-081, fifth addendum)", () => {
   it("answers the sheet's Suggest a broader concept with that concept's rows only (ADR-114 §3)", async () => {
     const before = await queue();
     const fr = new Map(before.concepts.map((c) => [c.id, c.labels.fr]));
-    const heap = before.concepts.find((c) => c.labels.fr === "Tas")!;
-    const res = await call("POST", "/app/api/admin/concepts/relations/ai", { concept: heap.id });
+    const hash = before.concepts.find((c) => c.labels.fr === "Hash table")!;
+    const res = await call("POST", "/app/api/admin/concepts/relations/ai", { concept: hash.id });
     expect(res.status).toBe(200);
     expect(issuesOf(ConceptRelationProposals, res.body)).toEqual([]);
     const proposals = res.body as unknown as ConceptRelationProposals;
-    expect(proposals.asked).toEqual([heap.id]);
-    expect(proposals.broader.map((e) => [fr.get(e.concept), fr.get(e.target)])).toEqual([["Tas", "Allocation dynamique"]]);
+    expect(proposals.asked).toEqual([hash.id]);
+    expect(proposals.broader.map((e) => [fr.get(e.concept), fr.get(e.target)])).toEqual([["Hash table", "Tableau"]]);
     expect(proposals.related).toEqual([]);
     expect(proposals.tops).toHaveLength(1);
-    expect(proposals.tops[0]!.narrower).toContain(heap.id);
+    expect(proposals.tops[0]!.narrower).toContain(hash.id);
     // A concept with nothing to suggest gets nothing.
     const recursion = before.concepts.find((c) => c.labels.fr === "Récursivité")!;
     const none = (await call("POST", "/app/api/admin/concepts/relations/ai", { concept: recursion.id })).body as unknown as ConceptRelationProposals;

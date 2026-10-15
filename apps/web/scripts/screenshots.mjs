@@ -1840,9 +1840,9 @@ const scenes = [
       await p.getByRole("searchbox", { name: /^search a broader concept$/i }).fill("fuite");
       await p.getByRole("group", { name: /^relations$/i }).scrollIntoViewIfNeeded();
     } },
-  // ADR-114 §3 (#897 step A3): the sheet's Suggest a broader concept, the heap's suggestions shown (one existing concept, one top to create).
+  // ADR-114 §3 (#897 step A3): the sheet's Suggest a broader concept, Hash table's suggestions shown (one existing concept, one top to create).
   { name: "admin-concepts-sheet-broader-suggestion", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
-      await p.getByRole("button", { name: /^edit heap$/i }).click();
+      await p.getByRole("listitem").filter({ hasText: /anglicisme/i }).getByRole("button", { name: /^edit hash table$/i }).click();
       await p.getByRole("button", { name: /^suggest a broader concept$/i }).click();
       await p.getByRole("list", { name: /^suggested broader concepts$/i }).scrollIntoViewIfNeeded();
     } },

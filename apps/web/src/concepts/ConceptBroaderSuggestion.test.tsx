@@ -51,9 +51,9 @@ const reply: ConceptRelationProposals = {
   truncated: false,
 };
 
-const open = () =>
+const open = (concepts = all) =>
   renderWithProviders(
-    <ConceptSheet concept={heap} concepts={all} byId={new Map(all.map((c) => [c.id, c]))} locale="en" onClose={() => undefined} />,
+    <ConceptSheet concept={heap} concepts={concepts} byId={new Map(concepts.map((c) => [c.id, c]))} locale="en" onClose={() => undefined} />,
   );
 const ask = async () => {
   await userEvent.click(await screen.findByRole("button", { name: /^suggest a broader concept$/i }));
@@ -83,12 +83,16 @@ describe("Suggest a broader concept on the concept sheet (ADR-114 §3)", () => {
     expect(calls.filter((c) => c.method !== "GET").map((c) => c.url)).toEqual(["/app/api/admin/concepts/relations/ai"]);
   });
 
-  it("adds a suggested broader concept through the relation route", async () => {
+  it("adds a suggested broader concept through the relation route, then reads Added", async () => {
     const { calls } = mockFetch({ ...available, [AI]: ok(reply), [RELATE]: ok({ ...heap, broader: [allocation.id] }) });
     open();
-    await ask();
+    const list = await ask();
     await userEvent.click(screen.getByRole("button", { name: "Add Dynamic allocation as a broader concept" }));
     await waitFor(() => expect(calls.find((c) => c.url.endsWith("/relations") && c.method === "POST")?.body).toEqual({ kind: "broader", target: allocation.id }));
+    // Written: the row says so at once, and offers no second write.
+    const row = within(list).getAllByRole("listitem")[0]!;
+    expect(await within(row).findByText("Added")).toBeInTheDocument();
+    expect(within(row).queryByRole("button")).toBeNull();
     expect(calls.some((c) => c.method === "PATCH")).toBe(false);
   });
 
@@ -110,17 +114,14 @@ describe("Suggest a broader concept on the concept sheet (ADR-114 §3)", () => {
     ]);
   });
 
-  it("names the path of a cycle the server refuses", async () => {
-    const ref = (c: AdminConcept) => ({ id: c.id, label: c.labels.en, qualifier: "", status: c.status });
-    mockFetch({
-      ...available,
-      [AI]: ok(reply),
-      [RELATE]: fail(409, { error: "concept_cycle", path: [ref(heap), ref(allocation), ref(heap)] }),
-    });
-    open();
+  it("disables a suggestion the vocabulary has moved past, naming the cycle it would close", async () => {
+    // Dynamic allocation went under Heap since the reply: Heap under it would be a cycle.
+    const under = { ...allocation, broader: [heap.id] };
+    mockFetch({ ...available, [AI]: ok(reply) });
+    open([pointer, under, heap, stack, arithmetic]);
     await ask();
-    await userEvent.click(screen.getByRole("button", { name: "Add Dynamic allocation as a broader concept" }));
-    expect(await screen.findByText(/Heap › Dynamic allocation › Heap/)).toBeInTheDocument();
+    expect(screen.getByText(/Heap › Dynamic allocation › Heap/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add Dynamic allocation as a broader concept" })).toBeDisabled();
   });
 
   it("says so when the reply holds nothing for this concept", async () => {

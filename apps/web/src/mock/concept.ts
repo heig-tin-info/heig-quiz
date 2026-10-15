@@ -439,45 +439,13 @@ on("GET", "/app/api/admin/concepts/relations/candidates", (): ConceptRelationCan
   return { candidates: relationCandidatesOf(resolvables(), edgesOf(live), pairs) };
 });
 
-/** The broader concepts the sheet's Suggest a broader concept proposes (ADR-114 §3), by French label. */
-const SUGGESTED: Record<string, string[]> = {
-  Tas: ["Allocation dynamique"],
-  "Arithmétique des pointeurs": ["Pointeur"],
-  "Hash table": ["Tableau"],
-};
-
-/**
- * The model's answer for ONE concept (the sheet's Suggest a broader
- * concept): its broader rows the graph still accepts and, for Tas, a missing
- * top concept gathering it with Pile — broader rows towards that concept once
- * the vocabulary holds it, as the server's resolver does. Another concept's
- * rows never come back; a concept that is gone gets nothing.
- */
-function suggestedFor(conceptId: string, id: (fr: string) => string, french: boolean): ConceptRelationProposals {
-  const lang = french ? "fr" : "en";
-  const c = concepts.find((x) => x.id === conceptId && x.status !== "merged");
-  const edges = edgesOf(concepts);
-  const open = (target: string | undefined) => (target && c && checkBroaderEdge(edges, c.id, target) === null ? [{ concept: c.id, target }] : []);
-  const broader = (SUGGESTED[c?.labels.fr ?? ""] ?? []).flatMap((fr) => open(id(fr)));
-  const tops: ConceptRelationProposals["tops"] = [];
-  if (c?.labels.fr === "Tas") {
-    const label = french ? "Gestion de la mémoire" : "Memory management";
-    const held = concepts.find((x) => x.status !== "merged" && conceptKey(x.labels[lang] ?? "") === conceptKey(label));
-    if (held) broader.push(...open(held.id));
-    else {
-      const reason = french ? "Le tas et la pile sont les deux zones de la mémoire d'un programme." : "The heap and the stack are the two regions of a program's memory.";
-      tops.push({ label, qualifier: "", reason, narrower: [c.id, id("Pile")] });
-    }
-  }
-  return { lang, asked: c ? [c.id] : [], broader, related: [], tops, remaining: 3, truncated: false };
-}
-
 /**
  * The model's relations (ADR-114 §2): fixed rows on the live concepts — one
  * the pre-pass lists too, one that conflicts with a pre-pass pair once both
  * are ticked, a related pair and a missing top concept in the reader's
- * language; for one `concept`, that concept's rows only (`suggestedFor`).
- * The `nollm` scene refuses as a platform without a key does.
+ * language. For one `concept` (the sheet's Suggest a broader concept), the
+ * same reply cut to that concept: its broader rows and the tops gathering
+ * it. The `nollm` scene refuses as a platform without a key does.
  */
 on("POST", "/app/api/admin/concepts/relations/ai", (_m, raw): ConceptRelationProposals => {
   if (flags.nollm) throw refuse(409, "llm_not_configured", "No AI key is configured", { reason: "not_configured" });
@@ -485,8 +453,7 @@ on("POST", "/app/api/admin/concepts/relations/ai", (_m, raw): ConceptRelationPro
   if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
   const id = (fr: string) => concepts.find((c) => c.status !== "merged" && c.labels.fr === fr && c.qualifiers.fr === "")?.id ?? "";
   const french = document.documentElement.lang === "fr";
-  if (body.data.concept !== undefined) return suggestedFor(body.data.concept, id, french);
-  return {
+  const reply: ConceptRelationProposals = {
     lang: french ? "fr" : "en",
     asked: [id("Pile"), id("Hash table"), id("Tas")],
     broader: [
@@ -504,6 +471,15 @@ on("POST", "/app/api/admin/concepts/relations/ai", (_m, raw): ConceptRelationPro
     ],
     remaining: 3,
     truncated: false,
+  };
+  const one = body.data.concept;
+  if (one === undefined) return reply;
+  return {
+    ...reply,
+    asked: [one],
+    broader: reply.broader.filter((e) => e.concept === one),
+    related: [],
+    tops: reply.tops.filter((top) => top.narrower.includes(one)),
   };
 });
 

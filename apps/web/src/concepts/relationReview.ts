@@ -11,6 +11,7 @@ import {
   type Concept,
   type ConceptCreate,
   ConceptExists,
+  type ConceptRelationAdd,
   type ConceptLang,
   type ConceptRelationCandidate,
   type ConceptRelationProposals,
@@ -166,6 +167,13 @@ export const createTop = (top: TopConcept): Promise<Concept> =>
   api<Concept>("/app/api/concepts", {
     method: "POST",
     body: JSON.stringify({ lang: top.lang, label: top.label, qualifier: top.qualifier } satisfies ConceptCreate),
+  });
+
+/** Writes one row's edge towards `target` through the relation route (audited `concept.relation_add`). */
+export const relateRow = (row: Pick<RelationRow, "kind" | "concept">, target: string): Promise<Concept> =>
+  api<Concept>(`/app/api/admin/concepts/${row.concept}/relations`, {
+    method: "POST",
+    body: JSON.stringify({ kind: row.kind, target } satisfies ConceptRelationAdd),
   });
 
 /**

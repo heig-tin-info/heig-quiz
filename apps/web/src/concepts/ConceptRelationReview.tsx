@@ -1,28 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Sparkles } from "lucide-react";
+import { Check } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import {
   type AdminConcept,
-  type ConceptRelationAdd,
   ConceptRelationCandidates,
   type ConceptRelationProposals,
 } from "@quiz/contracts";
 import { edgesOf, type RelationEdges } from "@quiz/domain";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useI18n, useT } from "../i18n";
 import { useLlmAvailability } from "../llmAvailability";
 import { adminConceptCandidatesKey, adminConceptsKey, conceptsKey } from "../queryKeys";
-import { Alert, Badge, Button, Card, Checkbox, EmptyState, FormError, QueryError, SelectionBar, Skeleton } from "../ui";
-import { relationError, ruleRefusal } from "./ConceptRelations";
-import { ConceptStatusBadge } from "./ConceptStatusBadge";
+import { Badge, Button, Card, Checkbox, EmptyState, QueryError, SelectionBar, Skeleton } from "../ui";
+import { AiAsk } from "./AiAsk";
+import { RowRefusal, TopHeading } from "./ConceptRelations";
 import { conceptName, refName } from "./names";
 import {
   aiRowsOf,
   conflicting,
   createTop,
   isConcept,
+  relateRow,
   rowsOf,
   rowState,
   runAccept,
@@ -84,11 +84,7 @@ export function ConceptRelationReview({
     mutationFn: (chosen: RelationRow[]) =>
       runAccept(chosen, {
         create: createTop,
-        relate: (row, target) =>
-          api(`/app/api/admin/concepts/${row.concept}/relations`, {
-            method: "POST",
-            body: JSON.stringify({ kind: row.kind, target } satisfies ConceptRelationAdd),
-          }),
+        relate: relateRow,
       }),
     onSuccess: () => {
       setSelected(new Set());
@@ -157,21 +153,20 @@ export function ConceptRelationReview({
 
       {llm.data?.available === true ? (
         <section aria-label={t("admin.concepts.rel.ai.title")} className="space-y-4 pt-2">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <Button variant="secondary" size="sm" loading={ai.isPending} onClick={ai.ask}>
-              <Sparkles /> {t(ai.data && ai.data.remaining > 0 ? "admin.concepts.rel.ai.askAgain" : "admin.concepts.rel.ai.ask")}
-            </Button>
-            <p className="min-w-0 flex-1 basis-64 text-xs text-fg-muted">
-              {t("admin.concepts.rel.ai.hint")}
-              {ai.data && ai.data.remaining > 0 ? ` ${t("admin.concepts.rel.ai.remaining", { n: ai.data.remaining })}` : ""}
-              {ai.data?.truncated ? ` ${t("admin.concepts.rel.ai.truncated")}` : ""}
-            </p>
-          </div>
-          {ai.error ? (
-            <Alert tone="danger" title={t("admin.concepts.rel.ai.failed")}>
-              {apiErrorMessage(ai.error, t("error.llmFailed"))}
-            </Alert>
-          ) : null}
+          <AiAsk
+            label={t(ai.data && ai.data.remaining > 0 ? "admin.concepts.rel.ai.askAgain" : "admin.concepts.rel.ai.ask")}
+            hint={
+              <>
+                {t("admin.concepts.rel.ai.hint")}
+                {ai.data && ai.data.remaining > 0 ? ` ${t("admin.concepts.rel.ai.remaining", { n: ai.data.remaining })}` : ""}
+                {ai.data?.truncated ? ` ${t("admin.concepts.rel.ai.truncated")}` : ""}
+              </>
+            }
+            pending={ai.isPending}
+            error={ai.error}
+            failedTitle={t("admin.concepts.rel.ai.failed")}
+            onAsk={ai.ask}
+          />
           {ai.data && !ai.isPending && proposed.length === 0 ? (
             <p className="text-sm text-fg-muted">{t("admin.concepts.rel.ai.none")}</p>
           ) : null}
@@ -186,10 +181,7 @@ export function ConceptRelationReview({
               {[...tops.values()].map(({ top, rows: group }) => (
                 <Card key={top.key}>
                   <div className="space-y-1 border-b border-line p-4">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="text-sm font-semibold">{t("admin.concepts.rel.top.new", { name: refName(top) })}</span>
-                      <ConceptStatusBadge status="proposed" />
-                    </div>
+                    <TopHeading top={top} />
                     <p className="text-xs text-fg-muted">{top.reason}</p>
                   </div>
                   <ul className="divide-y divide-line">{group.map(render)}</ul>
@@ -270,13 +262,7 @@ function ReviewRow({
   const state = rowState(row, edges);
   const refused = outcome && "error" in outcome ? outcome.error : null;
   // The server's refusal says it already; the rule's reason is for a row the vocabulary has moved past.
-  const reason = refused
-    ? null
-    : state.state === "blocked"
-      ? ruleRefusal(t, state.refusal, byId, locale)
-      : conflict
-        ? t("admin.concepts.rel.ai.conflict")
-        : null;
+  const reason = !refused && (state.state === "blocked" || conflict);
   const open = state.state === "open" && !conflict;
   const reasonId = `rel-${row.key}-why`;
   const name = (id: string, label: string) => (
@@ -312,12 +298,7 @@ function ReviewRow({
           <p className="text-xs tabular-nums text-fg-muted">{t("admin.concepts.rel.questions", { n: row.questions })}</p>
         ) : null}
         {row.reason !== null ? <p className="text-xs text-fg-muted">{row.reason}</p> : null}
-        {reason ? (
-          <p id={reasonId} className="text-xs text-fg-muted">
-            {reason}
-          </p>
-        ) : null}
-        {refused ? <FormError error={refused} describe={(error) => relationError(t, error)} /> : null}
+        <RowRefusal id={reasonId} state={state} refused={refused} byId={byId} conflict={conflict} />
       </div>
       {state.state === "added" ? null : (
         <Button
