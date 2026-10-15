@@ -305,6 +305,13 @@ export const PollTeacherView = z.object({
     pool: z.object({ id: z.uuid(), name: z.string() }).nullable(),
   }),
   tally: PollTally,
+  /**
+   * When the poll's anonymous participants were deleted, 30 days after it
+   * closed (#873); null until then. From that instant its results are a
+   * frozen copy: the tally never moves again and a brainstorm's moderation is
+   * read-only (`409 poll_frozen`).
+   */
+  frozenAt: z.iso.datetime().nullable(),
 });
 export type PollTeacherView = z.infer<typeof PollTeacherView>;
 

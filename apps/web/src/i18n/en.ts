@@ -855,6 +855,9 @@ export const en = {
   "admin.task.oauth.purge.desc": "Clears spent OAuth requests and tokens, dead grants and unused clients.",
   "admin.task.poll.end_idle": "Idle polls",
   "admin.task.poll.end_idle.desc": "Ends the polls left open with no answer for 12 hours.",
+  "admin.task.poll.purge_guests": "Anonymous poll participants",
+  "admin.task.poll.purge_guests.desc":
+    "Deletes the participants without an account, and their answers, 30 days after a poll closed. The poll's results are kept, frozen. Runs daily.",
   "admin.task.notifications.deadline_reminders": "Deadline reminders",
   "admin.task.notifications.deadline_reminders.desc":
     "Reminds students of an evaluation closing within 24 hours.",
@@ -5045,6 +5048,9 @@ export const en = {
   "poll.moderate": "Moderate",
   "poll.ideas.failed": "Could not update the ideas.",
   "poll.ideas.notFound": "This brainstorm could not be loaded.",
+  "poll.ideas.frozen": "This brainstorm is read-only",
+  "poll.ideas.frozen.body":
+    "Its participants without an account were deleted 30 days after it ended. Its ideas stay as they were, and can no longer be moderated.",
   "poll.ideas.eyebrow": "Moderation · {code}",
   "poll.ideas.participants": "{n} participants",
   "poll.ideas.participants.one": "{n} participant",

@@ -85,14 +85,16 @@ function DisplaySwitch({
   label,
   checked,
   onChange,
+  disabled = false,
 }: {
   label: string;
   checked: boolean;
   onChange: (on: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <span className="inline-flex items-center gap-2 text-[13px] font-medium text-fg-muted">
-      <Switch label={label} checked={checked} onChange={onChange} />
+      <Switch label={label} checked={checked} disabled={disabled} onChange={onChange} />
       <span aria-hidden>{label}</span>
     </span>
   );
@@ -205,6 +207,8 @@ export function ProjectionHeader({
               <DisplaySwitch
                 label={t("poll.moderation")}
                 checked={view.settings.moderation}
+                // A poll whose guests were purged keeps its ideas as they were (#873).
+                disabled={view.frozenAt !== null}
                 onChange={(moderation) => onDisplay({ moderation })}
               />
               {/* The board lives in another tab: the wall never shows an

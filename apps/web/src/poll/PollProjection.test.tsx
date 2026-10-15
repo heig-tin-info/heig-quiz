@@ -64,6 +64,7 @@ function view(patch: Partial<PollTeacherView> = {}): PollTeacherView {
       pending: 0,
       ...(patch.tally ?? {}),
     },
+    frozenAt: patch.frozenAt ?? null,
   };
 }
 

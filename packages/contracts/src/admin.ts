@@ -85,6 +85,7 @@ export const SCHEDULED_TASK_KEYS = [
   "integrity.purge",
   "training.install",
   "presence.purge",
+  "poll.purge_guests",
 ] as const;
 export type ScheduledTaskKey = (typeof SCHEDULED_TASK_KEYS)[number];
 

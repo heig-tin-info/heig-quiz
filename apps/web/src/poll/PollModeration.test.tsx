@@ -32,6 +32,7 @@ const view = {
     pool: null,
   },
   tally: { joined: 3, answered: 2, choices: [], answers: [], ideas: [], pending: 1 },
+  frozenAt: null,
 } satisfies PollTeacherView;
 
 const board = (patch: Partial<PollIdeaBoard> = {}): PollIdeaBoard => ({
@@ -96,5 +97,20 @@ describe("PollModeration", () => {
     renderWithProviders(<PollModeration id={ID} />);
     expect(await screen.findByRole("switch", { name: "Moderation" })).toBeVisible();
     expect(screen.queryByRole("switch", { name: "AI assistance" })).toBeNull();
+  });
+
+  it("is read-only once the guests were purged: it says so and every control is disabled", async () => {
+    mockFetch({
+      [`GET ${POLL}`]: ok({ ...view, frozenAt: "2026-10-15T03:00:00.000Z" }),
+      [`GET ${POLL}/ideas`]: ok(board()),
+    });
+    renderWithProviders(<PollModeration id={ID} />);
+    expect(await screen.findByText("This brainstorm is read-only")).toBeVisible();
+    expect(screen.getByRole("switch", { name: "Moderation" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "AI assistance" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Approve all/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Show “grandit”" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Hide “grandit”" })).toBeDisabled();
+    for (const box of screen.getAllByRole("checkbox")) expect(box).toBeDisabled();
   });
 });

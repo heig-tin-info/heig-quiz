@@ -26,7 +26,7 @@
  */
 import { randomBytes, randomInt } from "node:crypto";
 
-import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, notExists, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, or, sql, type SQL } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import {
@@ -60,7 +60,7 @@ import {
 } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
-import { iso } from "../../clock.js";
+import { iso, isoOrNull } from "../../clock.js";
 import { isUniqueViolation, type Db } from "../../db/client.js";
 import {
   answers,
@@ -71,8 +71,10 @@ import {
   evaluationItems,
   evaluations,
   gradings,
+  guestParticipants,
   isOwnedPoll,
   pollAiRuns,
+  pollFrozenResults,
   pollIdeaMarks,
   pools,
   questionVersions,
@@ -85,6 +87,7 @@ import {
   joinedItems,
   setPollSettings,
   settingsOf,
+  type DbOrTx,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -110,6 +113,8 @@ const REFUSALS = {
   poll_keyless: [422, "this poll's question has no key to reveal"],
   // AI assistance asked for while no model can be called (no key, no master key).
   llm_unavailable: [422, "no language model is configured"],
+  // #873: the guests were purged and the results frozen; the ideas no longer move.
+  poll_frozen: [409, "this poll's anonymous participants were deleted: its results are frozen"],
   code_exhausted: [503, "could not draw a free session code"],
   not_found: [404],
   internal_error: [500],
@@ -410,7 +415,11 @@ export async function setDisplay(
 ): Promise<EvaluationRecord> {
   const { evaluation, item } = scope;
   if (change.revealed === true && !isKeyed(item)) throw new PollError("poll_keyless");
-  if ((change.moderation !== undefined || change.ai !== undefined) && !isBrainstorm(item)) throw notBrainstorm();
+  if (change.moderation !== undefined || change.ai !== undefined) {
+    if (!isBrainstorm(item)) throw notBrainstorm();
+    // Both decide what the frozen ideas would show: a purged poll's stay as they were.
+    await assertNotFrozen(db, evaluation.id);
+  }
   const current = pollSettingsOf(scope);
   const revealed = change.revealed ?? current.revealed;
   const votes = change.votes ?? current.votes;
@@ -594,16 +603,59 @@ export async function answerPoll(
 
 // --- The aggregate --------------------------------------------------------
 
+/**
+ * What a poll's results are computed from: how many joined, and every
+ * answer's payload. Read from the stored answers until the guests are purged,
+ * from the frozen copy after (#873, ADR-014 amendment 2026-10-15) — so every
+ * reader computes the same results before and after the purge.
+ */
+interface ResultsSource {
+  joined: number;
+  payloads: unknown[];
+}
+
+/** The stored answers, as they stand: what the purge freezes. */
+async function storedResults(db: DbOrTx, scope: PollScope): Promise<ResultsSource> {
+  const [joined] = await db
+    .select({ n: count() })
+    .from(attempts)
+    .where(eq(attempts.evaluationId, scope.evaluation.id));
+  const rows = await db
+    .select({ payload: answers.payload })
+    .from(answers)
+    .innerJoin(attempts, eq(answers.attemptId, attempts.id))
+    .where(and(eq(attempts.evaluationId, scope.evaluation.id), eq(answers.itemId, scope.item.item.id)));
+  return { joined: joined?.n ?? 0, payloads: rows.map((r) => r.payload) };
+}
+
+async function resultsOf(db: Db, scope: PollScope): Promise<ResultsSource> {
+  const [frozen] = await db
+    .select({ joined: pollFrozenResults.joined, payloads: pollFrozenResults.payloads })
+    .from(pollFrozenResults)
+    .where(eq(pollFrozenResults.evaluationId, scope.evaluation.id));
+  return frozen ?? storedResults(db, scope);
+}
+
+/** When the poll's results were frozen by the guests' purge, or null while they still move. */
+export async function frozenAtOf(db: Db, evaluationId: string): Promise<Date | null> {
+  const [row] = await db
+    .select({ at: pollFrozenResults.frozenAt })
+    .from(pollFrozenResults)
+    .where(eq(pollFrozenResults.evaluationId, evaluationId));
+  return row?.at ?? null;
+}
+
+/** A purged poll's ideas are read-only: no mark, no moderation or AI switch moves them. */
+async function assertNotFrozen(db: Db, evaluationId: string): Promise<void> {
+  if ((await frozenAtOf(db, evaluationId)) !== null) throw new PollError("poll_frozen");
+}
+
 /** The counts the projection draws, computed the same way for both exits. */
 export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<PollTally> {
   const scope = await scopeOf(db, evaluation);
   if (!scope) return { joined: 0, answered: 0, choices: [], answers: [], ideas: [], pending: 0 };
-  const [[joined], payloads, marks] = await Promise.all([
-    db
-      .select({ n: count() })
-      .from(attempts)
-      .where(eq(attempts.evaluationId, evaluation.id)),
-    payloadsOf(db, scope),
+  const [{ joined, payloads }, marks] = await Promise.all([
+    resultsOf(db, scope),
     isBrainstorm(scope.item) ? marksOf(db, evaluation.id) : [],
   ]);
   const type = scope.item.question.type as PollType;
@@ -615,7 +667,7 @@ export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<Pol
   return pollTally({
     type,
     choiceCount,
-    joined: joined?.n ?? 0,
+    joined,
     payloads,
     shortCap: POLL_SHORT_CAP,
     marks,
@@ -623,14 +675,9 @@ export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<Pol
   });
 }
 
-/** Every stored answer to the poll's one item. */
+/** Every answer to the poll's one item: stored, or frozen once the guests were purged. */
 export async function payloadsOf(db: Db, scope: PollScope): Promise<unknown[]> {
-  const rows = await db
-    .select({ payload: answers.payload })
-    .from(answers)
-    .innerJoin(attempts, eq(answers.attemptId, attempts.id))
-    .where(and(eq(attempts.evaluationId, scope.evaluation.id), eq(answers.itemId, scope.item.item.id)));
-  return rows.map((r) => r.payload);
+  return (await resultsOf(db, scope)).payloads;
 }
 
 // --- The brainstorm board (ADR-071) ---------------------------------------
@@ -710,7 +757,8 @@ export async function ideaBoard(db: Db, scope: PollScope, aiAvailable: boolean):
 /**
  * The teacher's word on ideas: the marks `applyIdeaAction` computes, upserted
  * in one statement, then the wall redrawn. Allowed after the end too: a
- * teacher may still tidy the cloud the room is looking at.
+ * teacher may still tidy the cloud the room is looking at — until the guests
+ * are purged, which freezes the ideas as they stand (#873).
  */
 export async function actOnIdeas(
   db: Db,
@@ -720,6 +768,7 @@ export async function actOnIdeas(
   aiAvailable: boolean,
 ): Promise<PollIdeaBoard> {
   if (!isBrainstorm(scope.item)) throw notBrainstorm();
+  await assertNotFrozen(db, scope.evaluation.id);
   const changed = applyIdeaAction(await marksOf(db, scope.evaluation.id), action);
   if (changed.length > 0) {
     await writeMarks(db, scope.evaluation.id, changed, now);
@@ -813,9 +862,10 @@ export async function teacherView(
   pool: { id: string; name: string } | null = null,
 ): Promise<PollTeacherView> {
   const { evaluation, item } = scope;
-  const [home, tally] = await Promise.all([
+  const [home, tally, frozenAt] = await Promise.all([
     homeOf(db, evaluation.classroomId),
     tallyOf(db, evaluation),
+    frozenAtOf(db, evaluation.id),
   ]);
   return {
     evaluation: {
@@ -841,6 +891,7 @@ export async function teacherView(
       pool,
     },
     tally,
+    frozenAt: isoOrNull(frozenAt),
   };
 }
 
@@ -891,6 +942,126 @@ export async function publicView(
       answer,
     },
   };
+}
+
+// --- The guests' retention (#873) -----------------------------------------
+
+/**
+ * Per poll, its answers: counted from the stored ones, or from the frozen copy
+ * of a purged poll (#873), which replaces them.
+ */
+async function answeredCounts(db: Db, evaluationIds: readonly string[]): Promise<Map<string, number>> {
+  const ids = [...evaluationIds];
+  const [stored, frozen] = await Promise.all([
+    db
+      .select({ evaluationId: attempts.evaluationId, n: count() })
+      .from(answers)
+      .innerJoin(attempts, eq(answers.attemptId, attempts.id))
+      .where(inArray(attempts.evaluationId, ids))
+      .groupBy(attempts.evaluationId),
+    db
+      .select({
+        evaluationId: pollFrozenResults.evaluationId,
+        n: sql<number>`jsonb_array_length(${pollFrozenResults.payloads})::int`,
+      })
+      .from(pollFrozenResults)
+      .where(inArray(pollFrozenResults.evaluationId, ids)),
+  ]);
+  return new Map([...stored, ...frozen].map((r) => [r.evaluationId, r.n]));
+}
+
+/**
+ * Per poll, the answers the grading pass gave full marks — validated gradings
+ * only —, absent for a poll it graded nothing of: what the launcher's outcome
+ * reads, and what the purge freezes.
+ */
+function storedCorrect(db: DbOrTx, evaluationIds: readonly string[]) {
+  return db
+    .select({
+      evaluationId: attempts.evaluationId,
+      correct: sql<number>`(count(*) filter (where ${gradings.maxPoints} > 0 and ${gradings.points} >= ${gradings.maxPoints}))::int`,
+    })
+    .from(gradings)
+    .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
+    .where(
+      and(
+        inArray(attempts.evaluationId, [...evaluationIds]),
+        eq(gradings.state, "validated"),
+        isNotNull(gradings.answerId),
+      ),
+    )
+    .groupBy(attempts.evaluationId);
+}
+
+/** {@link storedCorrect}, the frozen count replacing it for a purged poll (#873). */
+async function correctCounts(db: Db, evaluationIds: readonly string[]): Promise<Map<string, number>> {
+  const [stored, frozen] = await Promise.all([
+    storedCorrect(db, evaluationIds),
+    db
+      .select({ evaluationId: pollFrozenResults.evaluationId, correct: pollFrozenResults.correct })
+      .from(pollFrozenResults)
+      .where(inArray(pollFrozenResults.evaluationId, [...evaluationIds])),
+  ]);
+  const counts = new Map(stored.map((r) => [r.evaluationId, r.correct]));
+  for (const { evaluationId, correct } of frozen) {
+    if (correct === null) counts.delete(evaluationId);
+    else counts.set(evaluationId, correct);
+  }
+  return counts;
+}
+
+/** How long after its close a poll keeps its anonymous participants (#873, N-DATA-03). */
+export const POLL_GUEST_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * The retention of a poll's guests (#873, ADR-014 amendment 2026-10-15):
+ * {@link POLL_GUEST_RETENTION_MS} after a poll closed — the server's clock —
+ * its anonymous participants are deleted, and their attempts, answers and
+ * gradings with them (`live.deleteGuests`, by cascade). The accounts'
+ * answers stay; a running poll is never touched.
+ *
+ * The teacher keeps the results: in the same transaction, BEFORE the delete,
+ * the poll's results are frozen (`poll_frozen_results`) as they stand — the
+ * whole poll's, accounts included — and every reader reads that copy from
+ * then on, so nothing the teacher sees moves. A condition re-read at every
+ * pass: a purged poll holds no guest and is not selected again, and a second
+ * process that raced this one finds the copy written and keeps it. Returns
+ * how many guests went.
+ */
+export async function purgePollGuests(db: Db, now: Date): Promise<number> {
+  const before = new Date(now.getTime() - POLL_GUEST_RETENTION_MS);
+  const due = await db
+    .select()
+    .from(evaluations)
+    .where(
+      and(
+        eq(evaluations.mode, "poll"),
+        ne(evaluations.state, "running"),
+        lt(evaluations.closedAt, before),
+        exists(
+          db
+            .select({ id: guestParticipants.id })
+            .from(guestParticipants)
+            .where(eq(guestParticipants.evaluationId, evaluations.id)),
+        ),
+      ),
+    );
+  let deleted = 0;
+  for (const evaluation of due) {
+    const scope = await scopeOf(db, evaluation);
+    deleted += await db.transaction(async (tx) => {
+      if (scope) {
+        const { joined, payloads } = await storedResults(tx, scope);
+        const [graded] = await storedCorrect(tx, [evaluation.id]);
+        await tx
+          .insert(pollFrozenResults)
+          .values({ evaluationId: evaluation.id, joined, payloads, correct: graded?.correct ?? null, frozenAt: now })
+          .onConflictDoNothing();
+      }
+      return live.deleteGuests(tx, evaluation.id);
+    });
+  }
+  return deleted;
 }
 
 // --- The launcher ---------------------------------------------------------
@@ -1016,40 +1187,18 @@ export async function questionPicks(
       finished.flatMap((r) => (r.evaluation.classroomId === null ? [] : [r.evaluation.classroomId])),
     ),
   ];
-  const [answeredRows, gradedRows, rosterRows] =
+  const [answeredOf, correctOf, rosterRows] =
     finishedIds.length === 0
-      ? [[], [], []]
+      ? [new Map<string, number>(), new Map<string, number>(), []]
       : await Promise.all([
-          db
-            .select({ evaluationId: attempts.evaluationId, n: count() })
-            .from(answers)
-            .innerJoin(attempts, eq(answers.attemptId, attempts.id))
-            .where(inArray(attempts.evaluationId, finishedIds))
-            .groupBy(attempts.evaluationId),
-          db
-            .select({
-              evaluationId: attempts.evaluationId,
-              graded: count(),
-              correct: sql<number>`(count(*) filter (where ${gradings.maxPoints} > 0 and ${gradings.points} >= ${gradings.maxPoints}))::int`,
-            })
-            .from(gradings)
-            .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
-            .where(
-              and(
-                inArray(attempts.evaluationId, finishedIds),
-                eq(gradings.state, "validated"),
-                isNotNull(gradings.answerId),
-              ),
-            )
-            .groupBy(attempts.evaluationId),
+          answeredCounts(db, finishedIds),
+          correctCounts(db, finishedIds),
           db
             .select({ classroomId: enrollments.classroomId, n: count() })
             .from(enrollments)
             .where(and(inArray(enrollments.classroomId, classroomIds), eq(enrollments.staff, false)))
             .groupBy(enrollments.classroomId),
         ]);
-  const answeredOf = new Map(answeredRows.map((r) => [r.evaluationId, r.n]));
-  const gradedOf = new Map(gradedRows.map((r) => [r.evaluationId, r]));
   const rosters = new Map(rosterRows.map((r) => [r.classroomId, r.n]));
 
   const usage = new Map<string, { lastUsedAt: Date; useCount: number; counts: PollRunCounts[] }>();
@@ -1065,13 +1214,12 @@ export async function questionPicks(
     const type = typeById.get(run.questionId)!;
     const keyed = keyedOf(type, run);
     const answered = answeredOf.get(run.evaluation.id) ?? 0;
-    const graded = gradedOf.get(run.evaluation.id);
     entry.counts.push({
       keyed,
       answered,
       // Nobody answered: nothing to grade, and zero is the truth. Otherwise
       // a run the grading pass has not reached is no result yet.
-      correct: answered === 0 ? 0 : graded ? graded.correct : null,
+      correct: answered === 0 ? 0 : (correctOf.get(run.evaluation.id) ?? null),
       roster: rosterOfRun(
         isOwnedPoll(run.evaluation),
         run.evaluation.classroomId,
@@ -1175,18 +1323,10 @@ export async function listPolls(db: Db, userId: string, limit = 50): Promise<Pol
     .limit(limit);
   if (rows.length === 0) return [];
 
-  const counts = await db
-    .select({ evaluationId: attempts.evaluationId, n: count() })
-    .from(answers)
-    .innerJoin(attempts, eq(answers.attemptId, attempts.id))
-    .where(
-      inArray(
-        attempts.evaluationId,
-        rows.map((r) => r.evaluation.id),
-      ),
-    )
-    .groupBy(attempts.evaluationId);
-  const answered = new Map(counts.map((c) => [c.evaluationId, c.n]));
+  const answered = await answeredCounts(
+    db,
+    rows.map((r) => r.evaluation.id),
+  );
 
   return rows.map((row) => ({
     id: row.evaluation.id,

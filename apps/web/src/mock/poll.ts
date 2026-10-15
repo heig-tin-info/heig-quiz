@@ -753,6 +753,7 @@ function pollTeacherView(tp: MockTeacherPoll) {
       ...savedIn(tp),
     },
     tally: tallyOf(tp, poll),
+    frozenAt: null,
   };
 }
 

@@ -853,6 +853,9 @@ export const fr: Record<keyof Dict, string> = {
     "Efface les requêtes et jetons OAuth usagés, les autorisations mortes et les clients inutilisés.",
   "admin.task.poll.end_idle": "Sondages inactifs",
   "admin.task.poll.end_idle.desc": "Termine les sondages restés ouverts sans réponse depuis 12 heures.",
+  "admin.task.poll.purge_guests": "Participants anonymes des sondages",
+  "admin.task.poll.purge_guests.desc":
+    "Supprime les participants sans compte, et leurs réponses, 30 jours après la fin d'un sondage. Les résultats du sondage sont conservés, figés. S'exécute chaque jour.",
   "admin.task.notifications.deadline_reminders": "Rappels d'échéance",
   "admin.task.notifications.deadline_reminders.desc":
     "Rappelle aux étudiants une évaluation qui se ferme dans les 24 heures.",
@@ -5040,6 +5043,9 @@ export const fr: Record<keyof Dict, string> = {
   "poll.moderate": "Modérer",
   "poll.ideas.failed": "Impossible de mettre à jour les idées.",
   "poll.ideas.notFound": "Ce brainstorming n'a pas pu être chargé.",
+  "poll.ideas.frozen": "Ce brainstorming est en lecture seule",
+  "poll.ideas.frozen.body":
+    "Ses participants sans compte ont été supprimés 30 jours après sa fin. Ses idées restent telles qu'elles étaient et ne peuvent plus être modérées.",
   "poll.ideas.eyebrow": "Modération · {code}",
   "poll.ideas.participants": "{n} participants",
   "poll.ideas.participants.one": "{n} participant",

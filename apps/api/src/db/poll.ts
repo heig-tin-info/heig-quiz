@@ -8,7 +8,7 @@
  * the same idea share it. A poll run "again" is a new evaluation and starts
  * with no mark.
  */
-import { check, integer, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 import type { PollAiError } from "@quiz/contracts";
@@ -57,4 +57,30 @@ export const pollAiRuns = pgTable("poll_ai_runs", {
   calls: integer("calls").notNull().default(0),
   error: text("error").$type<PollAiError>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * The frozen results of a poll whose anonymous participants were purged
+ * (#873, ADR-014 amendment 2026-10-15): written by `poll.purge_guests`, in
+ * the transaction that deletes the guests, 30 days after the poll closed.
+ * From then on every reader of the poll's results reads THIS row instead of
+ * the stored answers, so the teacher's tally, board, history and launcher
+ * outcome are what they were at the purge and never move again — the
+ * accounts' answers of a mixed poll included.
+ *
+ * What it holds is what the results are computed from, with no link to a
+ * person: the answers' payloads (the typed texts stay, ADR-071), how many
+ * joined, and how many the grading pass gave full marks (null when it had
+ * graded nothing, as the launcher reads it). Its presence is also what makes
+ * the brainstorm's moderation read-only.
+ */
+export const pollFrozenResults = pgTable("poll_frozen_results", {
+  evaluationId: uuid("evaluation_id")
+    .primaryKey()
+    .references(() => evaluations.id, { onDelete: "cascade" }),
+  joined: integer("joined").notNull(),
+  /** Every answer's payload to the poll's one item, as the live readers read them. */
+  payloads: jsonb("payloads").$type<unknown[]>().notNull(),
+  correct: integer("correct"),
+  frozenAt: timestamp("frozen_at", { withTimezone: true }).notNull(),
 });

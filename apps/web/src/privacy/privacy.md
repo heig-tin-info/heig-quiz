@@ -54,7 +54,7 @@ To give you access to your classrooms, to run the evaluations (the clock, extra 
 
 By default, what you do in a course is kept until your teacher deletes the evaluation, the project, the classroom or the course it belongs to. Nothing is deleted automatically when you finish your studies. If you are removed from a class list, your answers, grades and drill activity in that classroom stay until the classroom is deleted.
 
-Some data is never deleted automatically: your account, with your e-mail addresses and what edu-ID sent; the audit log, which records actions such as sign-ins, class list changes and gradings, with names; the log of calls to the AI model, which names the person each call was made for (never its content); your notifications; which kiosk station you used for which exam; a poll pseudonym without an account; and your name, e-mail address and files in the online workspace.
+Some data is never deleted automatically: your account, with your e-mail addresses and what edu-ID sent; the audit log, which records actions such as sign-ins, class list changes and gradings, with names; the log of calls to the AI model, which names the person each call was made for (never its content); your notifications; which kiosk station you used for which exam; and your name, e-mail address and files in the online workspace.
 
 Some data is deleted automatically:
 
@@ -66,6 +66,7 @@ Some data is deleted automatically:
 | The files, commits and test outputs kept to grade a project by criteria | Six months after the project's results are published (the list of tests and their results stays) |
 | The content of GitHub's messages about your repositories | 30 days after they arrive |
 | A teacher's conversations with the help assistant, which may quote your name or grade | 30 days after each exchange |
+| A poll you answered without an account: your pseudonym, the cookie's trace and your answers | 30 days after the poll ended. The poll's results stay for the teacher, linked to no one, but with what you typed in them |
 
 Deleted data stays in the platform's backups for about four more months. That period holds only while the oldest backups are removed as planned, which is done by hand. The daily copies of the database kept on the server itself are not encrypted; the copy kept in Finland is.
 

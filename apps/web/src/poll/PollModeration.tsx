@@ -139,6 +139,8 @@ export function PollModeration({ id }: { id: string }) {
   }
 
   const view = poll.data;
+  // Its guests purged, 30 days after the end (#873): the ideas are frozen, nothing here moves them.
+  const frozen = view.frozenAt !== null;
   const toggle = (key: string) =>
     setSelected((now) => (now.includes(key) ? now.filter((k) => k !== key) : [...now, key]));
   const merge = () => {
@@ -162,18 +164,18 @@ export function PollModeration({ id }: { id: string }) {
               <BoardSwitch
                 label={t("poll.ai")}
                 checked={data.ai.on}
-                disabled={display.isPending}
+                disabled={frozen || display.isPending}
                 onChange={(ai) => display.mutate({ ai })}
               />
             ) : null}
             <BoardSwitch
               label={t("poll.moderation")}
               checked={data.moderation}
-              disabled={display.isPending}
+              disabled={frozen || display.isPending}
               onChange={(moderation) => display.mutate({ moderation })}
             />
             <Button
-              disabled={pendingKeys.length === 0}
+              disabled={frozen || pendingKeys.length === 0}
               loading={act.isPending && act.variables?.action === "approve"}
               onClick={() => act.mutate({ action: "approve", keys: pendingKeys })}
             >
@@ -183,7 +185,9 @@ export function PollModeration({ id }: { id: string }) {
         }
       />
 
-      {data.ai.on && data.ai.error !== null ? (
+      {frozen ? (
+        <Alert title={t("poll.ideas.frozen")}>{t("poll.ideas.frozen.body")}</Alert>
+      ) : data.ai.on && data.ai.error !== null ? (
         // Fail closed (ADR-072): nothing the model did not judge reaches the wall by itself.
         <Alert tone="warning" title={t("poll.ai.failed")}>
           {t(data.ai.error === "run_cap" ? "poll.ai.failed.cap" : "poll.ai.failed.body")}
@@ -230,6 +234,7 @@ export function PollModeration({ id }: { id: string }) {
                     <Checkbox
                       label={<span className="sr-only">{t("poll.ideas.select", { label: cluster.label })}</span>}
                       checked={picked}
+                      disabled={frozen}
                       onChange={() => toggle(cluster.key)}
                     />
                     <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-fg">
@@ -248,6 +253,7 @@ export function PollModeration({ id }: { id: string }) {
                         {
                           label: t("poll.ideas.rename"),
                           icon: Pencil,
+                          disabled: frozen,
                           onSelect: () => setRenaming({ key: cluster.key, label: cluster.renamed ? cluster.label : "" }),
                         },
                         ...(cluster.variants.length > 1
@@ -255,6 +261,7 @@ export function PollModeration({ id }: { id: string }) {
                               {
                                 label: t("poll.ideas.split"),
                                 icon: Split,
+                                disabled: frozen,
                                 onSelect: () =>
                                   act.mutate({
                                     action: "detach",
@@ -267,6 +274,7 @@ export function PollModeration({ id }: { id: string }) {
                           label: t("poll.ideas.hideAll"),
                           icon: EyeOff,
                           danger: true,
+                          disabled: frozen,
                           onSelect: () => act.mutate({ action: "hide", keys: cluster.variants.map((v) => v.key) }),
                         },
                       ]}
@@ -303,6 +311,7 @@ export function PollModeration({ id }: { id: string }) {
                         {v.status === "approved" ? null : (
                           <IconButton
                             size="sm"
+                            disabled={frozen}
                             label={t("poll.ideas.approve", { text: v.text })}
                             onClick={() => act.mutate({ action: "approve", keys: [v.key] })}
                           >
@@ -313,6 +322,7 @@ export function PollModeration({ id }: { id: string }) {
                           <IconButton
                             size="sm"
                             danger
+                            disabled={frozen}
                             label={t("poll.ideas.hide", { text: v.text })}
                             onClick={() => act.mutate({ action: "hide", keys: [v.key] })}
                           >
