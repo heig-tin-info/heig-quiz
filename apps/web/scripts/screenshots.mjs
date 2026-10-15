@@ -1822,6 +1822,8 @@ const scenes = [
   { name: "admin-system-loading", role: "admin", path: "/admin?tab=system&slow=1", settle: 300 },
   // ADR-055 §5: the administrators' health alert, in the bell and in the settings.
   { name: "notifications-admin", role: "admin", path: "/", fold: true, act: async (p) => { await p.getByRole("button", { name: /^user menu/i }).first().click(); await p.getByRole("menuitem", { name: /^notifications/i }).click(); } },
+  // ADR-034 §6: a session an administrator opened in the student's name, told afterwards.
+  { name: "notifications-student", role: "student", path: "/", fold: true, act: async (p) => { await p.getByRole("button", { name: /^user menu/i }).first().click(); await p.getByRole("menuitem", { name: /^notifications/i }).click(); } },
   { name: "settings-admin", role: "admin", path: "/settings" },
   // F-JRN-07 (M4-04): the journal reader. `?journal=1` gives PRG1-2026 (r1)
   // its journal; without it a teacher is sent to the classroom (no Journal tab, M4-05). The student

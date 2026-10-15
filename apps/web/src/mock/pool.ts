@@ -294,6 +294,23 @@ const notifications: Notification[] = [
         } satisfies Notification,
       ]
     : []),
+  // A session an administrator opened in the student's name (ADR-034 §6),
+  // for the student persona only, and already read for the same reason.
+  ...(me?.role === "student"
+    ? [
+        {
+          id: "n7",
+          payload: {
+            kind: "impersonation_ended",
+            actorRole: "admin",
+            openedAt: iso(-26 * H),
+            closedAt: iso(-25.5 * H),
+          },
+          createdAt: iso(-25.5 * H),
+          readAt: iso(-20 * H),
+        } satisfies Notification,
+      ]
+    : []),
   {
     id: "n4",
     payload: { kind: "roster_conflict", classroomId: "r1", classroomName: "PRG1-2026", count: 1 },

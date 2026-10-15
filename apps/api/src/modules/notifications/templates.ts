@@ -18,9 +18,25 @@
  * A `system_alert` (ADR-055 §5) carries check keys only; their causes and
  * measures are on the System status page it links to.
  */
-import type { NotificationKind, NotificationPayload, TeamsNotificationKind } from "@quiz/contracts";
+import {
+  kindChannels,
+  type NotificationKind,
+  type NotificationPayload,
+  type OutboundNotificationKind,
+  type TeamsNotificationKind,
+} from "@quiz/contracts";
 import type { Locale } from "@quiz/domain";
 import { escapeHtml } from "@quiz/docrender/highlight";
+
+/**
+ * A payload of a kind that may leave the app (`KIND_CHANNELS`): only those
+ * are worded here. A kind kept in the bell (`impersonation_ended`) is
+ * worded by the web app alone.
+ */
+export type OutboundPayload = Extract<NotificationPayload, { kind: OutboundNotificationKind }>;
+export function isOutboundPayload(payload: NotificationPayload): payload is OutboundPayload {
+  return kindChannels(payload.kind).some((channel) => channel !== "bell");
+}
 
 const en = {
   "results_released.subject": "Results available: {evaluationTitle}",
@@ -413,7 +429,7 @@ function oneLine(s: string): string {
 }
 
 /** The values a kind's sentences read, and the page its link opens. */
-function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<string, string> {
+function varsOf(payload: OutboundPayload, t: Record<Key, string>): Record<string, string> {
   switch (payload.kind) {
     case "results_released":
       return { evaluationTitle: payload.evaluationTitle };
@@ -472,7 +488,7 @@ const UNCOUNTED_KINDS: ReadonlySet<NotificationKind> = new Set(["results_updated
  * sentence of its own (`.one`), since "1 students" is not a sentence in
  * either language.
  */
-function sentenceKey(payload: NotificationPayload, part: "subject" | "body"): Key {
+function sentenceKey(payload: OutboundPayload, part: "subject" | "body"): Key {
   // A kind with a state (`system_alert`) has one sentence per state.
   // A payload that says the recipient has no linked GitHub account has another body (M3-14d).
   const state = "state" in payload ? `.${payload.state}` : part === "body" && "githubLinked" in payload ? ".unlinked" : "";
@@ -485,7 +501,7 @@ function sentenceKey(payload: NotificationPayload, part: "subject" | "body"): Ke
  * Where a notification takes its reader in the app, the same page the bell
  * opens (`notificationRoute` in the web app).
  */
-export function notificationPath(payload: NotificationPayload): string {
+export function notificationPath(payload: OutboundPayload): string {
   switch (payload.kind) {
     case "results_released":
     case "results_updated":
@@ -566,12 +582,12 @@ export function mailLocale(locale: string | null | undefined): Locale {
  * trailing slash, once for every caller).
  */
 export function renderNotification(
-  payload: NotificationPayload,
+  payload: OutboundPayload,
   locale: Locale,
   webUrl: string,
 ): RenderedNotification {
   const t = DICTS[locale];
-  const kind: NotificationKind = payload.kind;
+  const kind: OutboundNotificationKind = payload.kind;
   const vars: Record<string, string> = { ...varsOf(payload, t), host: hostOf(webUrl) };
   const mail = composeMail(t, {
     subject: sentenceKey(payload, "subject"),

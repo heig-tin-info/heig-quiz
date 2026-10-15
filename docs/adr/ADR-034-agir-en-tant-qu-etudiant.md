@@ -14,6 +14,9 @@ the "Data and privacy" page of N-DATA-07 (`/privacy`), worded without saying
 whether the student is notified; the student help ("My classrooms") keeps its
 own.
 
+Amended 2026-10-15 (§6 only, issue #870, product owner's decisions): the
+student IS told, afterwards — see §6's amendment. §1–§5 are unchanged.
+
 ## Context
 
 ADR-018's student view keeps the teacher as themself: it hides the teacher UI
@@ -170,6 +173,40 @@ can open a read-only view of their account to help with a problem they
 report, for an hour at most, recorded under the administrator's name. The
 "Data and privacy" page of N-DATA-07 does not exist yet; the sentence moves
 there when it does.
+
+*Amended 2026-10-15 (issue #870, product owner): the student is notified.*
+Once a delegated session ends, the student receives a notification of a new
+kind, `impersonation_ended`: "An administrator opened a session in your
+name", with when it was opened and when it closed.
+
+- **Whatever ends it.** Sign-out, expiry found on use, the actor's lost
+  role, the purge of expired sessions: all go through `endSessions`
+  (`auth/session.ts`), which tells the student after the session's row is
+  deleted and its stream closed, so the session that ended never reads its
+  own notice. `supersede`, the one other way a row goes, removes confined
+  sessions only, never a delegated one.
+- **The role, never the person.** The payload names the actor's role
+  (`actorRole`, `admin` — the only role that may act as a student, §2; the
+  session dies the moment its actor stops being one, so it is the role the
+  session was opened with, never the actor's role at its end) and two
+  times; no name, no id. The audit log keeps who (§5).
+- **Opened and closed, not used.** `openedAt` is the session's creation;
+  `closedAt` is its end, or the end of its hour if that came first. A
+  session records no last use, so nothing claims how long it was actually
+  used.
+- **No exception.** An exam incident is told like any other session.
+- **In the app only, and switchable.** The bell (and its toast; muted
+  during an attempt like every toast), never e-mail or Teams
+  (`KIND_CHANNELS`: `["bell"]`; audience `seat`). It is on by default, and
+  the student may switch it off in the notification settings like any other
+  kind (F-NOTIF-01/02 unchanged). The entry opens the "Data and privacy"
+  page, which says, like the student help, that the student is told
+  afterwards.
+- **Residual.** Two impersonation sessions open at the same time on the
+  same student can each read the notice the other's end wrote; read-only in
+  production, they cannot mark it read (`POST …/read` and `…/read-all`
+  answer `403 impersonation_read_only`), so the administrator cannot dismiss
+  it in the student's place.
 
 ## Consequences
 

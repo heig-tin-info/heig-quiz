@@ -25,4 +25,6 @@ automatically to every timed evaluation of that classroom.
 To help you with a problem you report, an administrator of the platform can
 open a view of your account as you see it. It lasts at most an hour, it
 cannot answer or submit anything in your place, and each one is recorded in
-the audit log under the administrator's name.
+the audit log under the administrator's name. Once it is closed, a
+notification tells you when it was opened and when it was closed; you can
+switch that notification off in **Settings**.

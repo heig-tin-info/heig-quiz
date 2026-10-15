@@ -7,12 +7,13 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { and, eq, inArray, isNotNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
 
-import type { SessionKind } from "@quiz/contracts";
+import type { NotificationPayload, SessionKind } from "@quiz/contracts";
 import { TRUSTED_CLIENTS, isTrustedClient, type TrustedClient } from "@quiz/domain";
 
 import { audit } from "../audit.js";
 import type { Db, Tx } from "../db/client.js";
 import { kioskDevices, sessions, users } from "../db/schema.js";
+import { notifyUsers } from "../modules/notifications/service.js";
 import * as bus from "../modules/realtime/bus.js";
 
 export const SESSION_COOKIE = "quiz_session";
@@ -425,6 +426,8 @@ async function dropSessions(
     projectId: sessions.projectId,
     deviceId: sessions.deviceId,
     superPowersUntil: sessions.superPowersUntil,
+    createdAt: sessions.createdAt,
+    expiresAt: sessions.expiresAt,
   });
   for (const session of gone) {
     if (session.superPowersUntil !== null) {
@@ -449,8 +452,15 @@ async function dropSessions(
 }
 
 /**
- * {@link dropSessions} outside a transaction, and the streams of what it
- * removed closed. Returns how many went.
+ * {@link dropSessions} outside a transaction, the streams of what it removed
+ * closed, and the student of each delegated one told ({@link
+ * impersonationNotice}). Returns how many went.
+ *
+ * The notice is here, not in `dropSessions`: a notification follows the
+ * write it announces, never inside its transaction (`notifyMany`), and the
+ * ended session's stream is closed first, so that session never reads it.
+ * The one transactional caller, `supersede`, removes confined sessions only,
+ * never a delegated one.
  */
 async function endSessions(
   db: Db,
@@ -460,7 +470,28 @@ async function endSessions(
 ): Promise<number> {
   const gone = await dropSessions(db, where, reason, now);
   bus.sessionsEnded(gone.map((s) => s.sidHash));
+  for (const session of gone) {
+    if (delegated(session)) await notifyUsers(db, [session.userId], impersonationNotice(session, now));
+  }
   return gone.length;
+}
+
+/**
+ * What the student is told once a session in their name ended (ADR-034 §6,
+ * amended 2026-10-15), whatever ended it: the role of who acted — an admin,
+ * the only one who may (§2; the session dies the moment its actor stops
+ * being one, so the role it was opened with is the one to tell, not the
+ * actor's role now) — never their name nor their id; when it was opened;
+ * and when it closed, the end of its hour if that came first. A session
+ * records no last use, so nothing claims how long it was used.
+ */
+function impersonationNotice(session: Pick<Dropped, "createdAt" | "expiresAt">, now: Date): NotificationPayload {
+  return {
+    kind: "impersonation_ended",
+    actorRole: "admin",
+    openedAt: session.createdAt.toISOString(),
+    closedAt: new Date(Math.min(now.getTime(), session.expiresAt.getTime())).toISOString(),
+  };
 }
 
 /**

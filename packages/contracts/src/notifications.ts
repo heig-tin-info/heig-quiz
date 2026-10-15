@@ -262,6 +262,21 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     state: z.enum(SYSTEM_ALERT_STATES),
     checks: z.array(z.enum(SYSTEM_CHECK_KEYS)).min(1),
   }),
+  z.object({
+    /**
+     * A session opened in the recipient's name ended (ADR-034 §6, amended
+     * 2026-10-15): told afterwards, in the app only. The ROLE of who acted,
+     * never their name nor their id — the audit log keeps those. When it was
+     * opened, and when it closed (the sign-out, or its expiry if that came
+     * first): no session records its last use, so nothing here claims how
+     * long it was actually used. Opens the "Data and privacy" page.
+     */
+    kind: z.literal("impersonation_ended"),
+    /** Only an admin acts as a student today (ADR-034 §2): a new role is a new value and a new sentence. */
+    actorRole: z.enum(["admin"]),
+    openedAt: z.iso.datetime(),
+    closedAt: z.iso.datetime(),
+  }),
 ]);
 export type NotificationPayload = z.infer<typeof NotificationPayload>;
 
@@ -299,6 +314,7 @@ export const NOTIFICATION_KINDS = [
   "project_deadline_reminder",
   "project_repo_invited",
   "project_grade_final",
+  "impersonation_ended",
   "student_joined",
   "roster_conflict",
   "grading_ready",
@@ -356,6 +372,9 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   project_deadline_reminder: { bell: true, email: true, teams: true },
   project_repo_invited: { bell: true, email: true, teams: true },
   project_grade_final: { bell: true, email: true, teams: true },
+  // In the app only, on by default, and the student may switch it off
+  // (ADR-034 §6, amended 2026-10-15); `KIND_CHANNELS` keeps it there.
+  impersonation_ended: { bell: true, email: false, teams: false },
   student_joined: { bell: true, email: false, teams: false },
   roster_conflict: { bell: true, email: true, teams: true },
   grading_ready: { bell: true, email: true, teams: true },
@@ -382,9 +401,11 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
  * there. `system_alert` has no Teams activity type: declaring one would bump
  * the Teams app for every user, for a notice a handful of administrators
  * receive by e-mail anyway (ADR-030, addendum of 2026-09-30).
+ * `impersonation_ended` stays in the app (ADR-034 §6, amended 2026-10-15).
  */
 export const KIND_CHANNELS = {
   system_alert: ["bell", "email"],
+  impersonation_ended: ["bell"],
 } as const satisfies Partial<Record<NotificationKind, readonly NotificationChannel[]>>;
 
 /** The channels `kind` may use (`KIND_CHANNELS`, every channel otherwise). */
@@ -400,6 +421,14 @@ type NoTeamsKind = {
 
 /** The kinds Teams may carry: the Teams app declares an activity type for each. */
 export type TeamsNotificationKind = Exclude<NotificationKind, NoTeamsKind>;
+
+/** The kinds `KIND_CHANNELS` keeps in the app: the bell, and nothing else. */
+type AppOnlyKind = {
+  [K in keyof typeof KIND_CHANNELS]: (typeof KIND_CHANNELS)[K][number] extends "bell" ? K : never;
+}[keyof typeof KIND_CHANNELS];
+
+/** The kinds an e-mail or a Teams message may carry: the server words each of them. */
+export type OutboundNotificationKind = Exclude<NotificationKind, AppOnlyKind>;
 
 /**
  * Who a kind is sent to. `seat`: the claimed STUDENT seats of a classroom
@@ -423,6 +452,7 @@ export const NOTIFICATION_AUDIENCE: Readonly<
   project_deadline_reminder: "seat",
   project_repo_invited: "seat",
   project_grade_final: "seat",
+  impersonation_ended: "seat",
   student_joined: "course",
   roster_conflict: "course",
   grading_ready: "course",

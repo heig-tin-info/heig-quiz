@@ -9,7 +9,8 @@ D18, delivered by merge task M3-09b) are folded into rules 5, 7, 10, 12, 15, 19,
 
 Relations: extended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md) (no
 classroom join codes), [ADR-055](ADR-055-etat-du-systeme.md) (admin system
-alerts) and [ADR-035](ADR-035-fusion-de-classroom.md) (project kinds for the
+alerts), [ADR-034](ADR-034-agir-en-tant-qu-etudiant.md) §6 (2026-10-15: the
+in-app-only `impersonation_ended` kind, a row of rule 12's table) and [ADR-035](ADR-035-fusion-de-classroom.md) (project kinds for the
 merge). The [historical record](history/ADR-030-canaux-de-notification.md) keeps
 the rejected Teams transports, the migration sequence, the implementation steps
 and the original section numbers; where this record is silent on a detail (an
@@ -140,6 +141,7 @@ ported independently, and its `grade.final` mail on the final review is dropped
 | `pool_question_added` | Every publication, first or later version; pool owner and contributor/owner shares, not readers or author; folded per pool | Off |
 | `pool_shared`, `pool_ownership` | Existing sharing/ownership events for the affected account | On |
 | `system_alert` | Admin health failure, continued failure after a day, or recovery; not folded; ADR-055 | E-mail on; Teams forbidden |
+| `impersonation_ended` (2026-10-15, ADR-034 §6) | A session opened in the student's name ended, whatever ended it; the student; the role and two times, never who; not folded | E-mail and Teams forbidden |
 | `project_published` (2026-10-04, M3-09b) | `publishProject` committed, by hand or by the ticker (once: a draft publishes once); the classroom's claimed student seats; not folded | Off |
 | `project_deadline_reminder` (2026-10-04, M3-09b) | 24 h before the student's EFFECTIVE deadline, claimed and sent in one tick (rule 19); claimed student seats | On |
 | `project_repo_invited` (2026-10-04, M3-09b) | Accept provisioned the repository in THIS request and GitHub left the invitation pending; the student; never on an idempotent repeat nor a resend | On |
@@ -325,7 +327,7 @@ authorization headers are redacted.
 
 **30.** Graph credentials are obtained for the recipient's tenant and cached to
 just before expiry. The manifest declares each Teams-supported activity type,
-excluding `system_alert`; catalogue tests enforce completeness. That list alone
+excluding `system_alert` and `impersonation_ended`; catalogue tests enforce completeness. That list alone
 may run ahead of the catalogue, so one manifest bump can declare the types of
 kinds still to be emitted. Bundle newly added kinds into one manifest update,
 since users may need to reinstall (the seven project activity types, 2026-10-04, M3-09b, were

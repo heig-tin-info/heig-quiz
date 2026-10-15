@@ -7,12 +7,22 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { and, eq } from "drizzle-orm";
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, auditLog, courseStaff, enrollments, launchTickets, sessions, users } from "../db/schema.js";
+import {
+  attempts,
+  auditLog,
+  courseStaff,
+  enrollments,
+  launchTickets,
+  notificationPreferences,
+  notifications,
+  sessions,
+  users,
+} from "../db/schema.js";
 import { presence } from "../modules/realtime/presence.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
@@ -283,6 +293,127 @@ describe("in production (no development login)", () => {
       }
       expect(expired.at(-1)!.payload).toEqual({ reason: "expired", actorUserId: w.admin.id });
     });
+  });
+});
+
+describe("the notice to the student, whatever ends the session (ADR-034 §6, amended 2026-10-15)", () => {
+  let w: World;
+  const db = () => w.server.app.db;
+
+  beforeAll(async () => {
+    w = await world();
+    // The server's clock on the wall's, as a session's start is (`createSession`),
+    // and an admin whose Super Powers run from there.
+    w.server.clock.set(new Date());
+    w.admin = await admin("Hortense", "Vigilante");
+  });
+
+  /** An admin with Super Powers, named so that no name can be mistaken for the role the notice carries. */
+  async function admin(givenName: string, familyName: string): Promise<Who> {
+    const who = await w.server.signInWithSuperPowers();
+    await db().update(users).set({ givenName, familyName }).where(eq(users.id, who.id));
+    return who;
+  }
+  afterAll(() => w.server.close());
+  beforeEach(async () => {
+    // Removed by hand, so no notice: each case starts from an empty bell.
+    await db().delete(sessions).where(eq(sessions.kind, "impersonation"));
+    await db().delete(notifications);
+    await db().delete(notificationPreferences);
+    w.server.clock.set(new Date());
+  });
+
+  /** A session in the student's name, opened by `who`: its headers and its row. */
+  async function impersonate(who: Who = w.admin) {
+    const as = (await open(w, (await issue(w, who)) as string))!;
+    const [row] = await db()
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.userId, w.student.id), eq(sessions.kind, "impersonation")));
+    return { as, row: row! };
+  }
+
+  /** Moves a session's whole hour into the past: opened two hours ago, expired one hour ago. */
+  async function backdate(sidHash: string) {
+    const createdAt = new Date(Date.now() - 2 * 3_600_000);
+    const expiresAt = new Date(Date.now() - 3_600_000);
+    await db().update(sessions).set({ createdAt, expiresAt }).where(eq(sessions.sidHash, sidHash));
+    return { createdAt, expiresAt };
+  }
+
+  /** The notices of `userId`'s bell, as stored. */
+  const notices = (userId = w.student.id) => db().select().from(notifications).where(eq(notifications.userId, userId));
+
+  /** Exactly one notice, saying `openedAt` and `closedAt`, and nothing anywhere of `actor`, who acted. */
+  async function expectOneNotice(openedAt: Date, closedAt: Date, actor: Who = w.admin) {
+    const rows = await notices();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.payload).toEqual({
+      kind: "impersonation_ended",
+      actorRole: "admin",
+      openedAt: openedAt.toISOString(),
+      closedAt: closedAt.toISOString(),
+    });
+    const bell = await call(w.server, "GET", "/app/api/notifications", w.student.headers);
+    expect(bell.json().items).toHaveLength(1);
+    const [who] = await db().select().from(users).where(eq(users.id, actor.id));
+    const serialized = JSON.stringify(rows) + bell.body;
+    for (const trace of [who!.id, who!.email, who!.givenName, who!.familyName]) {
+      expect(serialized).not.toContain(trace);
+    }
+  }
+
+  it("after the admin signs out: opened at the session's start, closed at the sign-out", async () => {
+    const { as, row } = await impersonate();
+    const out = new Date(row.createdAt.getTime() + 10 * 60_000);
+    w.server.clock.set(out);
+    expect((await call(w.server, "POST", "/app/auth/logout", as)).statusCode).toBe(204);
+    await expectOneNotice(row.createdAt, out);
+  });
+
+  it("after the session is found expired on use: closed at the end of its hour", async () => {
+    const { as, row } = await impersonate();
+    const { createdAt, expiresAt } = await backdate(row.sidHash);
+    expect((await call(w.server, "GET", "/app/api/me", as)).statusCode).toBe(401);
+    await expectOneNotice(createdAt, expiresAt);
+  });
+
+  it("after the actor loses the admin role: closed at the revocation, still told as an administrator", async () => {
+    const other = await admin("Basile", "Sentinelle");
+    const { as, row } = await impersonate(other);
+    await db().update(users).set({ role: "teacher" }).where(eq(users.id, other.id));
+    const before = Date.now();
+    expect((await call(w.server, "GET", "/app/api/me", as)).statusCode).toBe(401);
+    const [notice] = await notices();
+    const closedAt = new Date((notice!.payload as { closedAt: string }).closedAt).getTime();
+    expect(closedAt).toBeGreaterThanOrEqual(before);
+    expect(closedAt).toBeLessThanOrEqual(Date.now());
+    await expectOneNotice(row.createdAt, new Date(closedAt), other);
+  });
+
+  it("after the purge of expired sessions: closed at the end of its hour", async () => {
+    const { row } = await impersonate();
+    const { createdAt, expiresAt } = await backdate(row.sidHash);
+    await purgeExpiredSessions(db(), new Date());
+    await expectOneNotice(createdAt, expiresAt);
+  });
+
+  it("is never sent when a session of the student's own ends", async () => {
+    const student = await w.server.signIn("student");
+    expect((await call(w.server, "POST", "/app/auth/logout", student.headers)).statusCode).toBe(204);
+    expect(await notices(student.id)).toHaveLength(0);
+  });
+
+  it("is not written once the student switched it off in the app", async () => {
+    const off = await call(w.server, "PUT", "/app/api/notifications/preferences", w.student.headers, {
+      kind: "impersonation_ended",
+      channel: "bell",
+      enabled: false,
+    });
+    expect(off.statusCode, off.body).toBe(200);
+    const { as } = await impersonate();
+    expect((await call(w.server, "POST", "/app/auth/logout", as)).statusCode).toBe(204);
+    expect(await notices()).toHaveLength(0);
   });
 });
 
