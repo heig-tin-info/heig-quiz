@@ -152,7 +152,8 @@ Whoever administers the machines reaches the database, the backups and the logs,
 The audit log (`apps/api/src/audit.ts`) records the actions that change something: sign-ins, class list imports and edits, gradings, releases, Super Powers, a view opened as a student, grants. A database trigger refuses any change or deletion of its rows (migration `0096_audit_log_immutable`, ADR-003 §5). It traces two kinds of read only:
 
 - a member of a course's staff, or the administrator with Super Powers, opening one student's paper, from the live dashboard (the whole paper or one of its answers, the grid's hover preview included) or from a row of the grade table (`attempt.read`). It is one entry per opening, not per request: the same person's reads of the same paper are recorded at most once every 15 minutes, a window kept in the server's memory, so a restart may record one more;
-- an administrator reading a teacher's help-assistant conversations (`assist.read`).
+- an administrator reading a teacher's help-assistant conversations (`assist.read`);
+- a person downloading their own data (`privacy.export`, counts only, ADR-112).
 
 The reads of a whole class are not traced, by decision (product owner, 2026-10-15, issue #875): one question's answers across the class, the grading table, the grade table, the per-question view and the CSV export. Nor are the grading history of one answer and the class lists. Who looked at those is recorded nowhere.
 
@@ -310,11 +311,11 @@ What the platform lets a student do today:
 | See their attempt journal | No: only the teacher sees it; the student is told, by the evaluation's conditions and a message, that leaving the page and pasting are recorded (ADR-088) |
 | See their drill activity as the teacher sees it | No: the student sees their own sessions |
 | Stop the drill | Yes, per classroom: nothing more is counted; what was recorded stays visible to the teacher and is kept five years |
-| Export their data | No |
+| Export their data | Partly: **Download my data** (**Settings**) gives, in one JSON file, everything the platform shows them, plus their verified e-mail addresses, hours of activity and last activity (ADR-112). Not what only the teacher sees (the attempt journal, a note on the class list, the edu-ID claims, the audit log) |
 | Correct their name or address | Not in the platform: they come from edu-ID and are updated at every sign-in; a mistake in the class list is corrected by the teacher |
 | Delete their data | Only their profile picture, their Teams link and their GitHub link |
 
-For any request (access, copy, correction or deletion), the student turns first to the course's teacher, who can correct a class list or delete an evaluation. Extracting all the data of a student, or deleting their account, is possible through no feature of the application: only direct access to the database allows it.
+For any request (access, copy, correction or deletion), the student turns first to the course's teacher, who can correct a class list or delete an evaluation. The student's own file (above) holds what they can see; extracting everything the platform holds about a student, or deleting their account, is possible through no feature of the application: only direct access to the database allows it, so a full access request goes through the teacher or the institution's data-protection officer.
 
 The institutional contact for these requests, and the supervisory authority to name: **To be confirmed**.
 
@@ -346,7 +347,7 @@ Access and traceability:
 
 Informing the student:
 
-- there is no data export (N-DATA-04): the **Data and privacy** page sends every request (a copy, a correction, a deletion) to the course's teacher, and names no institutional contact;
+- the data export (N-DATA-04, ADR-112) holds what the student can see, not everything the platform holds about them: under a feedback policy that hides answers it holds no answer of theirs for that evaluation, and the attempt journal, the teacher's notes and the edu-ID claims stay out; the **Data and privacy** page sends every other request (a correction, a deletion, a full copy) to the course's teacher, and names no institutional contact;
 - the **Data and privacy** page is written by hand from this chapter: nothing checks that the two agree, nor that its durations follow the constants in the code.
 
 AI model:
