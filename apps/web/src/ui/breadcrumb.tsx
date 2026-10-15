@@ -14,7 +14,7 @@
  */
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Fragment } from "react";
-import { cx } from "@quiz/ui";
+import { cx } from "./layers";
 import { isPlainClick } from "./controls";
 
 export interface BreadcrumbItem {
