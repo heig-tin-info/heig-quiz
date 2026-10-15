@@ -1061,8 +1061,8 @@ $C start app
 
 - **VM lost**: new VM → §2 → secrets from the vault → the dumps and the
   images from the off-site copy (below) → restore the dump → re-point the
-  DNS. Timed restore test every semester; a staging refresh (§8) of a dump
-  extracted from the off-site copy doubles as one.
+  DNS. Timed restore test every semester, from the off-site copy on a
+  workstation (below, *Restoring from the box*).
 
 In development the equivalent of the database is the directory
 `apps/api/.data/pglite`, which is only ever copied to keep a state, never
@@ -1188,8 +1188,15 @@ The dump then goes through the full restore above (a recreated database,
 dumps follow its own runbook, heig-classroom's (in the archives made before
 2026-10-14 only) can only be read, restored into a scratch database: its
 stack is gone, the codespace
-archive the restore of §3. A timed restore test: `staging-refresh.sh <file>`
-(§8) of the extracted dump.
+archive the restore of §3.
+
+**The timed restore test** runs from the operator's workstation, which
+proves the copy without the VM: extract the latest `quiz-*.dump` and
+restore it into a disposable `postgres:17` container (`pg_restore
+--no-owner --no-privileges --role=quiz --exit-on-error`), count a few
+tables, then delete the container and the extracted file. Never into
+staging: since ADR-028 §3's reversal (#750) staging holds only
+pseudonymized copies, and a raw production dump would undo that.
 
 **Recovering from a deletion through the append-only key.** A `delete` or
 a `prune` sent with the VM's key is recorded, not applied: until a compact

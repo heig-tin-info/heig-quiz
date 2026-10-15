@@ -28,10 +28,10 @@ cited below is in [`09-tasks.md`](09-tasks.md) while its task is open, and in
   redirects to Quiz, its data is imported, its App no longer acts. The
   observation period D (runbook §4) was clean: everything imported, the 19
   MI-2026 roster lines in conflict resolved by hand. The product owner
-  passed the point of no return on 2026-10-14: E / M9-01 is in progress
-  (the redirect is a 308, the final copy of classroom's data is on the
-  owner's workstation), and the owner removes classroom's stack, its CI
-  credentials, its SWITCH redirect URI and its App (runbook §5, the M9-01
+  passed the point of no return on 2026-10-14, and E / M9-01 is done
+  (2026-10-15): the redirect is a 308, the final copy of classroom's data
+  is on the owner's workstation, and classroom's stack, CI credentials,
+  GHCR package, SWITCH resource and App are gone (runbook §5, the M9-01
   row below). M6-07's code is merged; proof B is done for evaluations (2026-10-10, Config Key
   enforced in production) and waits for the project flow (a real SEB, the owner, on staging); M6-08 and M6-09 are to do. Quiz's production App
   exists (registered by hand); staging's, `heig-quiz-staging`, exists
@@ -215,7 +215,7 @@ In the critical path only if D09 finds online assignments in production.
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M9-01 | Point of no return, decommission, close #143 | in progress | M8-07 + observation | `merge/M9-01-decommission` | #876 | **Point of no return passed 2026-10-14** (product owner: D clean, everything imported, the 19 MI-2026 conflict lines resolved by hand). This PR: the resolver redirect is a `308` (`infra/caddy/classroom-redirect.caddy`; `legacyRule`'s own 302s stay) and `check-classroom-redirects.sh` expects it; `docs/development/deployment.md`, [`README.md`](README.md) and the runbook (§0, §5) describe classroom's stack as gone; `scripts/offsite-backup/push.sh` no longer lists `/srv/heig-classroom/backups`. Step 2 deviates (product owner): no age-encrypted dump in the vault; the final copy is classroom's last nightly dump, `/srv/heig-classroom/backups/hgc-2026-10-14.dump` (08:33 UTC, the app stopped since C1, so final), copied by scp to the owner's workstation, sha256 `fde6b3a3217f59d2f0ddf0c880ba9120f6d245b422eb98c5429ab79b5bcd7242` checked on both sides; the off-site borg archives keep classroom's dumps for their retention (~3 months). **Remains for the owner** (runbook §5 steps 1, 3–11): install the fragment as in C6 and run the check script (308 rows); drop `hgc_cutover` and delete `/srv/quiz/merge`, copied locally first if wanted (§5.1); `h down -v`, `rm -rf /srv/heig-classroom`, the `command="/srv/heig-classroom/deploy.sh"` line of `/home/srv/.ssh/authorized_keys`; the `DEPLOY_SSH_KEY` secret, the `DEPLOY_USER` variable and the GHCR package of `heig-tin-info/heig-classroom`; SWITCH: classroom's redirect URI; engine VM: `/root/classroom-codespace` and `/etc/codespace/github-app.pem`; `hgc-prod` uninstalled, then deleted; the repository archived; a comment on #143. `done` once the owner confirms the stack is removed. |
+| M9-01 | Point of no return, decommission, close #143 | done | M8-07 + observation | `merge/M9-01-decommission`, `merge/M9-01-done` | #876 | **Done 2026-10-15** (point of no return 2026-10-14, product owner: D clean, everything imported, the 19 MI-2026 conflict lines resolved by hand). #876: the resolver redirect is a `308` (`legacyRule`'s own 302s stay), the docs describe classroom's stack as gone, `push.sh` no longer lists `/srv/heig-classroom/backups`. Step 2 deviated (product owner): the final copy is classroom's last nightly dump `hgc-2026-10-14.dump` (08:33 UTC, the app stopped since C1), copied by scp to the owner's workstation, sha256 `fde6b3a3217f59d2f0ddf0c880ba9120f6d245b422eb98c5429ab79b5bcd7242`; the off-site borg archives keep classroom's dumps for their retention (~3 months). As run by the owner (runbook §5): 2026-10-15 the fragment installed and `check-classroom-redirects.sh` green (308 rows); `hgc_cutover` dropped and `/srv/quiz/merge` deleted after a local copy; `h down -v`, `/srv/heig-classroom` removed, its `deploy.sh` key line removed from `srv`'s `authorized_keys`, its image removed; the GHCR package deleted; the repository was already archived, so its `DEPLOY_SSH_KEY` secret and `DEPLOY_USER` variable stay, inert (no workflow runs, the key opens nothing); SWITCH: deletion of the separate resource « HEIG Classroom » (`hes-so_oidc_client_95037`) requested, Quiz's two resources and the shared JWK kept; engine VM: `/root/classroom-codespace` deleted, no `/etc/codespace/github-app.pem` left; `hgc-prod` deleted. #143 commented. |
 
 ## L — After the merge
 
