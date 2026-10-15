@@ -496,6 +496,29 @@ async function saved(flush: TryContext["flush"]): Promise<void> {
   if (!(await flush())) throw new Error("the draft could not be saved");
 }
 
+/**
+ * The stored draft, graded with `answer` by `POST /questions/:id/try` once
+ * the local one is saved. `"invalid"` when the stored draft does not
+ * validate (an empty statement, an unnamed case): nothing ran, the issues
+ * are already on the page, and the teacher must read this as their draft —
+ * never as the compiler's or the simulator's verdict.
+ */
+async function tryStoredDraft(
+  { id, flush }: TryContext,
+  answer: unknown,
+): Promise<TryResult | "invalid"> {
+  await saved(flush);
+  try {
+    return await api<TryResult>(`/app/api/questions/${id}/try`, {
+      method: "POST",
+      body: JSON.stringify({ source: "draft", answer }),
+    });
+  } catch (error) {
+    if (refusedWith(error, "config_invalid")) return "invalid";
+    throw error;
+  }
+}
+
 type TryAdapter = (config: unknown) => Promise<TryOutcome>;
 
 /**
@@ -519,17 +542,14 @@ type TryAdapter = (config: unknown) => Promise<TryOutcome>;
  *    `RunnerOutcome` the editor judges itself — the engine the students'
  *    trials will meet, which is better than nothing.
  */
-function tryReference({ id, flush }: TryContext): TryAdapter {
+function tryReference(context: TryContext): TryAdapter {
   return async (raw) => {
     const config = raw as CodeConfig;
     const regions = referenceRegions(config);
     if (regions === null) throw new Error("reference solution does not fit the template");
 
-    await saved(flush);
-    const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
-      method: "POST",
-      body: JSON.stringify({ source: "draft", answer: { regions } }),
-    });
+    const result = await tryStoredDraft(context, { regions });
+    if (result === "invalid") return "invalid";
     const details = result.status === "graded" ? (result.details as CodeDetails) : null;
     if (details === null || details.runner !== "ok") {
       if (config.runtime !== "runno") return "unavailable";
@@ -583,22 +603,11 @@ export async function tryReferenceInBrowser(
  * `runner_unavailable` is the default deployment (decision D14), not a
  * failure: the editor says so in one line and publication is unaffected.
  */
-function trySimulateReference({ id, flush }: TryContext): TryAdapter {
+function trySimulateReference(context: TryContext): TryAdapter {
   return async (raw) => {
     const config = raw as CircuitConfig;
-    await saved(flush);
-    let result: TryResult;
-    try {
-      result = await api<TryResult>(`/app/api/questions/${id}/try`, {
-        method: "POST",
-        body: JSON.stringify({ source: "draft", answer: { schematic: config.reference } }),
-      });
-    } catch (error) {
-      // The stored draft does not validate: the issues are on the page, and
-      // the teacher must read this as their draft, not as the simulator.
-      if (refusedWith(error, "config_invalid")) return "invalid";
-      throw error;
-    }
+    const result = await tryStoredDraft(context, { schematic: config.reference });
+    if (result === "invalid") return "invalid";
     if (result.status !== "graded") return "unavailable";
     return { details: result.details as CircuitDetails };
   };
@@ -616,7 +625,7 @@ function trySimulateReference({ id, flush }: TryContext): TryAdapter {
  *    the grading's `details.image` IS the picture, already parsed on the
  *    server — the same field a student's review reads.
  */
-function tryDrawReference({ id, flush }: TryContext): TryAdapter {
+function tryDrawReference(context: TryContext): TryAdapter {
   return async (raw) => {
     const config = raw as CodeImageConfig;
     const regions = referenceRegions(config);
@@ -631,11 +640,8 @@ function tryDrawReference({ id, flush }: TryContext): TryAdapter {
       }
     }
 
-    await saved(flush);
-    const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
-      method: "POST",
-      body: JSON.stringify({ source: "draft", answer: { regions } }),
-    });
+    const result = await tryStoredDraft(context, { regions });
+    if (result === "invalid") return "invalid";
     if (result.status !== "graded") return "unavailable";
     return { details: result.details as CodeImageDetails };
   };

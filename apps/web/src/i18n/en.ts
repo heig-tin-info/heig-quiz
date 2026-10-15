@@ -2508,6 +2508,10 @@ export const en = {
   "qt.code.e.tryCompileFailed": "The reference solution does not compile.",
   "qt.code.e.tryRegionsMismatch":
     "The reference solution does not fit the editable regions of the starting code. Edit it once in the editor above to realign it.",
+  "qt.code.e.tryInvalidDraft":
+    "The question has errors, flagged on this page. Fix them, then try again.",
+  "qt.code.e.tryFailed":
+    "The reference solution could not be tried. Check the draft is saved, then try again.",
   "qt.code.e.tryResult": "{passed} of {total} cases pass.",
   "qt.code.e.tryDiverged":
     "The browser and the server disagree on {n} cases — students' trials may mislead them. Consider \"Same as grading\".",
