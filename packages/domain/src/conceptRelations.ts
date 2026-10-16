@@ -61,6 +61,15 @@ export function unplaced<C extends Pick<RelatedConcept, "id" | "broader">>(conce
   return concepts.filter((c) => !placed.has(c.id));
 }
 
+/**
+ * The concepts directly under `id` (#897): those that list it in their
+ * `broader`, in the order given; not the narrower ones further down
+ * ({@link narrowerDescendants}). The edge belongs to the child.
+ */
+export function directNarrowerOf<C extends Pick<RelatedConcept, "id" | "broader">>(concepts: readonly C[], id: string): C[] {
+  return concepts.filter((c) => c.broader.includes(id));
+}
+
 /** The direct relations of every concept named by `edges`, sorted (a related pair on both sides); the inverse of {@link edgesOf}. */
 export function relationsOf(edges: RelationEdges): Map<string, { broader: string[]; related: string[] }> {
   const out = new Map<string, { broader: string[]; related: string[] }>();

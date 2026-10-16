@@ -3,6 +3,7 @@
  * other one, with its qualifier when it has one.
  */
 import type { Concept, ConceptLang } from "@quiz/contracts";
+import { directNarrowerOf } from "@quiz/domain";
 
 import type { Locale, TFunction } from "../i18n";
 
@@ -62,6 +63,10 @@ export const byConceptName =
 export function broaderOf<C extends Concept>(concept: Concept, byId: ReadonlyMap<string, C>, locale: Locale): C[] {
   return concept.broader.flatMap((id) => byId.get(id) ?? []).sort(byConceptName(locale));
 }
+
+/** The concepts directly under `id` (`directNarrowerOf`), by name: the sheet's Narrower list, a broader candidate's "Currently holds". */
+export const narrowerOf = <C extends Concept>(concepts: readonly C[], id: string, locale: Locale): C[] =>
+  directNarrowerOf(concepts, id).sort(byConceptName(locale));
 
 /** A language of a concept as the sheet names it: "French", "English". */
 export const langName = (t: TFunction, lang: ConceptLang): string =>

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 
 import type { AdminConcept, Concept, ConceptCycle, ConceptRelationAdd, ConceptRelationKind } from "@quiz/contracts";
 import { checkBroaderEdge, checkRelatedEdge, edgesOf, type RelationRefusal } from "@quiz/domain";
@@ -9,11 +9,14 @@ import { useI18n, useT, type Locale, type TFunction } from "../i18n";
 import { adminConceptsKey, conceptsKey } from "../queryKeys";
 import { Button, Chip, FormError, SearchInput } from "../ui";
 import { ConceptStatusBadge } from "./ConceptStatusBadge";
-import { conceptName, refName } from "./names";
+import { conceptName, conceptSide, narrowerOf, refName } from "./names";
 import { rankConcepts } from "./ranking";
+import { BroaderPath, ConceptLabel } from "./refs";
 import type { RowState, TopConcept } from "./relationReview";
 
 const SHOWN = 5;
+/** How many of a broader candidate's narrower concepts "Currently holds" names before "+n". */
+const HELD = 5;
 
 /** `A › B › A`: the closed path a cycle refusal names. */
 export const pathLabel = (error: unknown): string | null =>
@@ -105,10 +108,29 @@ export function useAddRelation(conceptId: string, onAdded?: () => void) {
 }
 
 /**
+ * "Currently holds: A, B (+n more)": the narrower concepts a broader candidate
+ * already has, its would-be siblings; nothing when none. `id` lets the
+ * candidate's button be described by it.
+ */
+function Holds({ held, id }: { held: readonly AdminConcept[]; id: string }) {
+  const t = useT();
+  const { locale } = useI18n();
+  if (held.length === 0) return null;
+  const names = held.slice(0, HELD).map((c) => conceptName(c, locale)).join(", ");
+  return (
+    <p id={id} className="text-xs text-fg-muted">
+      {t("admin.concepts.relations.holds", { names })}
+      {held.length > HELD ? <span className="text-fg-faint"> {t("admin.concepts.relations.holds.more", { n: held.length - HELD })}</span> : null}
+    </p>
+  );
+}
+
+/**
  * One kind of relation of a concept: its chips, each removable, and a search
  * that offers the concepts the rule of `@quiz/domain` accepts (the server's
- * own check, run on the edges once); a click adds one. The server still
- * decides: a cycle comes back as a 409 naming the path.
+ * own check, run on the edges once), each with its path, and for a broader
+ * candidate the narrower concepts it holds already; a click adds one. The
+ * server still decides: a cycle comes back as a 409 naming the path.
  */
 function Group({
   kind,
@@ -125,6 +147,7 @@ function Group({
   const { locale } = useI18n();
   const qc = useQueryClient();
   const [typed, setTyped] = useState("");
+  const holdsId = useId();
   const current = kind === "broader" ? concept.broader : concept.related;
 
   const offered = useMemo(() => {
@@ -178,14 +201,26 @@ function Group({
       {typed.trim() !== "" && offered.length === 0 ? (
         <p className="text-sm text-fg-muted">{t("admin.concepts.relations.none")}</p>
       ) : (
-        <ul className="flex flex-wrap gap-1.5">
-          {offered.map((c) => (
-            <li key={c.id}>
-              <Button variant="secondary" size="sm" loading={add.isPending && add.variables?.target === c.id} onClick={() => add.mutate({ kind, target: c.id })}>
-                {conceptName(c, locale)}
-              </Button>
-            </li>
-          ))}
+        <ul className="space-y-2">
+          {offered.map((c) => {
+            const held = kind === "broader" ? narrowerOf(concepts, c.id, locale) : [];
+            const described = `${holdsId}-${c.id}`;
+            return (
+              <li key={c.id} className="flex flex-col items-start gap-0.5">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  aria-describedby={held.length > 0 ? described : undefined}
+                  loading={add.isPending && add.variables?.target === c.id}
+                  onClick={() => add.mutate({ kind, target: c.id })}
+                >
+                  {conceptName(c, locale)}
+                </Button>
+                <BroaderPath concept={c} byId={byId} locale={locale} />
+                <Holds held={held} id={described} />
+              </li>
+            );
+          })}
         </ul>
       )}
       <FormError error={add.error ?? remove.error} describe={(error) => relationError(t, error)} />
@@ -194,10 +229,39 @@ function Group({
 }
 
 /**
+ * The concepts directly under this one (#897), read-only, by name, a proposed
+ * one marked: the edge belongs to the child, so a narrower concept is placed
+ * from its own sheet. A name opens nothing, as the path: switching sheets
+ * would drop unsaved edits.
+ */
+function Narrower({ concept, concepts }: { concept: AdminConcept; concepts: readonly AdminConcept[] }) {
+  const t = useT();
+  const { locale } = useI18n();
+  const narrower = useMemo(() => narrowerOf(concepts, concept.id, locale), [concepts, concept.id, locale]);
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold">{t("admin.concepts.relations.narrower")}</h4>
+      {narrower.length === 0 ? (
+        <p className="text-sm text-fg-muted">{t("admin.concepts.relations.narrower.none")}</p>
+      ) : (
+        <ul aria-label={t("admin.concepts.relations.narrower")} className="space-y-1 text-sm">
+          {narrower.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <ConceptLabel concept={conceptSide(c, locale)} />
+              {c.status === "proposed" ? <ConceptStatusBadge status="proposed" /> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
  * The relations of a concept (ADR-081 §4, sixth addendum 7c), the admin's:
- * its broader concepts and its related ones, with what the caller puts
- * between them. Each change is saved at once and audited alone, like the
- * aliases.
+ * its broader concepts, what the caller puts under them, its narrower ones
+ * (read-only) and its related ones. Each change is saved at once and audited
+ * alone, like the aliases.
  */
 export function ConceptRelations({
   concept,
@@ -208,7 +272,7 @@ export function ConceptRelations({
   concept: AdminConcept;
   concepts: readonly AdminConcept[];
   byId: ReadonlyMap<string, AdminConcept>;
-  /** Rendered under the broader concepts, before the related ones. */
+  /** Rendered under the broader concepts, before the narrower ones. */
   children?: ReactNode;
 }) {
   const t = useT();
@@ -218,6 +282,7 @@ export function ConceptRelations({
       <p className="text-xs text-fg-muted">{t("admin.concepts.relations.desc")}</p>
       <Group kind="broader" concept={concept} concepts={concepts} byId={byId} />
       {children}
+      <Narrower concept={concept} concepts={concepts} />
       <Group kind="related" concept={concept} concepts={concepts} byId={byId} />
     </fieldset>
   );
