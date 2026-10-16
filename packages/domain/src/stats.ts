@@ -2,8 +2,9 @@
  * Descriptive statistics for the results screens (PLAN-MVP §7.6), and the
  * item analysis of a question in its pool (ADR-038): the mean success rate
  * over the answers counted, reported with their number and shown only from
- * `QUESTION_STATS_MIN_N` answers on — the time spent on it (ADR-039) and
- * its discrimination index (ADR-042).
+ * `QUESTION_STATS_MIN_N` answers on — the time spent on it (ADR-039), the
+ * separate time in targeted revision (ADR-039 §6b) and its discrimination
+ * index (ADR-042).
  */
 import { MAX_GRADE, MIN_GRADE } from "./grade.js";
 import { clamp, round2 } from "./round.js";
@@ -128,6 +129,18 @@ export function spread(values: Iterable<number>): Spread {
 /** The time as it may be shown: `null` below `QUESTION_TIME_MIN_N` timed answers. */
 export function shownTimeSpread(stats: Spread): Spread | null {
   return stats.n >= QUESTION_TIME_MIN_N ? stats : null;
+}
+
+/**
+ * Below this many distinct students, a question's time in targeted revision
+ * is not shown (ADR-039 §6b): one value per student, so `n` counts students,
+ * and the ten of every statistic about students (N-DATA-06).
+ */
+export const REVISION_TIME_MIN_STUDENTS = QUESTION_STATS_MIN_N;
+
+/** The time in targeted revision as it may be shown: `null` below `REVISION_TIME_MIN_STUDENTS` students. */
+export function shownRevisionSpread(stats: Spread): Spread | null {
+  return stats.n >= REVISION_TIME_MIN_STUDENTS ? stats : null;
 }
 
 /**

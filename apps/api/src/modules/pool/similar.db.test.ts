@@ -18,6 +18,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
 import { attempts, questions } from "../../db/schema.js";
+import { seedDrillCard, seedRevisionRound } from "../../test/drill.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { publishQuestion, seedLive, type Seeded } from "../../test/live.js";
@@ -183,6 +184,15 @@ describe("GET /courses/:id/similar-questions", () => {
     const whole = await poolQuestionStats(db, seed.poolId);
     const narrowed = await poolQuestionStats(db, seed.poolId, [ids.linkedStrong]);
     expect(narrowed.items).toEqual(whole.items.filter((i) => i.questionId === ids.linkedStrong));
+  });
+
+  it("gives no statistics for a question listed by its time in targeted revision alone (ADR-039 §6b)", async () => {
+    for (const userId of seed.studentIds) {
+      const cardId = await seedDrillCard(db, seed, userId, ids.linkedWeak);
+      await seedRevisionRound(db, seed, userId, cardId, [{ servedAt: STARTED, timeMs: 30_000 }]);
+    }
+    const byId = new Map((await hits({ text: TEXT })).map((h) => [h.questionId, h]));
+    expect(byId.get(ids.linkedWeak)!.stats).toBeNull();
   });
 
   it("filters by type, cuts at limit, and finds nothing in stop words", async () => {

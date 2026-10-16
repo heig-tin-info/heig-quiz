@@ -539,6 +539,11 @@ describe("an authoring session", () => {
     expect(create.description).toContain("find_similar_questions");
   });
 
+  it("tells the model the time in targeted revision is never an exam time (ADR-039 §6b)", () => {
+    const stats = TOOLS.find((t) => t.name === "get_pool_question_stats")!;
+    expect(stats.description).toContain("`revisionTime` is not an exam time; never add it to a test's duration");
+  });
+
   it("launches an inline opinion poll and returns its join code", async () => {
     const course = await ok("create_course", { name: "Sondages", code: "POLL-MCP" });
     const room = await ok("create_classroom", { courseId: course.id, name: "Sondages 2026" });

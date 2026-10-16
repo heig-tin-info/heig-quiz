@@ -97,7 +97,7 @@ The platform receives data from three sources: Switch edu-ID at sign-in, the cla
 
 The IP address is not stored in the database, with one exception: a refused Safe Exam Browser access writes it to the audit log (`apps/api/src/auth/seb.ts`). The platform records neither the browser in use (only the drill's device class), nor keystrokes, nor the content of a paste, nor any audience measurement beyond the hours of activity, which the administrator reads only as counts.
 
-The time on each question never leaves the server: no screen shows it, to the student or to the teacher; only the pool statistics use it, as an aggregate (see [Statistics](#statistics)).
+The time on each question never leaves the server: no screen shows it, to the student or to the teacher; only the pool statistics use it, as an aggregate (see [Statistics](#statistics)). The same holds for the time of each answer in a round of targeted revision: only a student's first try at a question enters that question's statistics, as an aggregate of at least ten students (ADR-039 §6b).
 
 ### How a student enters a classroom
 
@@ -132,7 +132,7 @@ Within a staff, every member reaches every classroom of the course, past years i
 
 When a classroom has the drill, its staff see each student's drill activity: the questions practised, the sessions, the recall rate and its progress, and, for each student, their rounds of targeted revision: how many, the date of the last one, the concepts revised, the cards answered and the cards answered right (`apps/api/src/modules/drill/teacher.ts`; never a card, a question or an answer of a round, ADR-115). Students are told so in their drill tab and on the **Data and privacy** page. A student may leave the drill of a classroom; what was recorded before stays visible, and the teacher sees that the student left (ADR-041 §8).
 
-A teacher who can read a question pool, a pool shared with them or a public one included, sees the aggregated statistics of its questions over every exam that used them, other teachers' classes included (see [Statistics](#statistics)).
+A teacher who can read a question pool, a pool shared with them or a public one included, sees the aggregated statistics of its questions over every exam that used them, other teachers' classes included, and apart from them the time students take on them in targeted revision (see [Statistics](#statistics)).
 
 Profile pictures are served only to someone who already sees that person: a colleague on a course staff, the staff of a course where the person sits a classroom, anyone who can read a pool the person owns (a public pool included), the person themselves and the administrator (`seesUser` in `apps/api/src/modules/guards.ts`). A student never receives another student's picture.
 
@@ -279,6 +279,8 @@ No statistic is stored: every one is computed, when displayed, from the nominati
 
 **Per question, in a pool** (ADR-038, ADR-039, ADR-042, ADR-043). Success rate, time spent, discrimination, and the share of each option of a multiple-choice question, over every exam that used the question, all years and classrooms, never an exercise nor a staff member's test (`apps/api/src/modules/stats/`). They are aggregated (N-DATA-06): below ten answers the server sends nothing (`QUESTION_STATS_MIN_N`, `packages/domain/src/stats.ts`); no minimum, maximum or standard deviation is shown; option shares are whole percentages. Anyone who can read the pool sees them. One residual risk is accepted (ADR-038): comparing a question's figures before and after one more answer reveals that answer's points, not whose it is.
 
+**Time in targeted revision, per question in a pool** (ADR-039 §6b). Apart from the exam figures and never added to them: the time of each student's first try at the question in a round of targeted revision (ADR-115), one value per student, over every classroom and year (`apps/api/src/modules/stats/service.ts`, `firstRevisionPassesOf`). Below ten distinct students the server sends nothing (`REVISION_TIME_MIN_STUDENTS`); the median and the middle half only, with no mean. The same readers see it. Its residual risk differs from the exam figures': a classroom's staff see when each of their students last revised and are often readers of the pool, so comparing the figure before and after one student's round lets them tie a change of the median to that student. Without a mean, the exact recovery that always worked is gone, but the median, and sometimes a quartile, can still equal that student's first-try time or bound it between two published values: the staff may sometimes read or bound it. Accepting this risk is an assumption the product owner may change (ADR-039 §6b). A classroom's drill rows and its per-classroom drill views stay with that classroom's staff (settled question 28 (j)); only this anonymous aggregate reaches the pool. The students are told on the **Data and privacy** page.
+
 The drill's view for the teacher is per student, by the product owner's choice (ADR-041 §8). During an evaluation the teacher's dashboard may show a pseudonym (an adjective and an animal) instead of the name, for instance when projected (`packages/domain/src/pseudonym.ts`); it is a display choice, the data stays nominative.
 
 ## Security measures
@@ -342,7 +344,7 @@ Retention and deletion:
 Statistics:
 
 - the per-evaluation statistics apply no minimum group size, by decision (product owner, 2026-10-15, #874): they are staff-only, and the residual risk is what a teacher projects in a small class (see [Statistics](#statistics));
-- the pool statistics have a threshold of ten answers, but comparing them before and after one new answer reveals that answer's points.
+- the pool statistics have a threshold of ten answers, but comparing them before and after one new answer reveals that answer's points; the time in targeted revision (ten students, no mean) has no exact recovery that always works, but a classroom's staff, who see when each student revised, may sometimes read or bound that student's first-try time from the change of the median.
 
 Access and traceability:
 

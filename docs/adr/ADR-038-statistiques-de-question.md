@@ -18,6 +18,8 @@ Amended 2026-09-30, decided by the product owner: the success rate and its
 exercise (ADR-025) no longer enters the statistics.
 
 Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
+Amended 2026-10-16 by ADR-039 §6b (#897 E3): the readers of §5 also see the separate
+time in targeted revision, and a question may be listed for that series alone.
 
 ## Context
 
@@ -106,7 +108,8 @@ maximum: they bring an individual grade back from an aggregate (N-DATA-06).
 Below `QUESTION_STATS_MIN_N` answers (ten), a question has no statistics:
 it is absent from the pool list, the one route that serves them. The
 threshold is applied in the `stats` module, so a smaller `n` never travels
-to a browser, not even hidden.
+to a browser, not even hidden. *(2026-10-16, ADR-039 §6b: a question whose
+time in targeted revision qualifies is listed for it, with `n` and `p` null.)*
 
 ### 5. Who sees them
 
@@ -116,6 +119,10 @@ aggregate over the classes of other teachers too — acceptable, because it is
 an aggregate of ten answers or more, about a question they may use. A
 question moved to another pool (ADR-017) keeps its id, so its history
 follows it; a copy starts empty.
+
+*(2026-10-16, ADR-039 §6b: the same readers also see the question's time in
+targeted revision, a separate anonymous series from ten distinct students,
+on the same route.)*
 
 ### 6. The reset
 

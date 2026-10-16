@@ -8,11 +8,12 @@ import { QuestionStatsSheet } from "./QuestionStatsSheet";
 /*
  * The statistics panel of one question (ADR-038): the two numbers, a signed
  * rate, since when, and the reset — confirmed, and only for whoever may write
- * the pool. And the time spent (ADR-039), or why it is not there yet.
+ * the pool. And the time spent (ADR-039), or why it is not there yet; and
+ * the separate time in targeted revision (ADR-039 §6b).
  */
 
 const ROW = { id: "q1", internalName: "ptr-arith-01" };
-const STATS = { n: 24, p: 0.73, since: null, time: null, discrimination: null };
+const STATS = { n: 24, p: 0.73, since: null, time: null, discrimination: null, revisionTime: null };
 const TIME = { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 };
 
 describe("QuestionStatsSheet", () => {
@@ -67,6 +68,46 @@ describe("QuestionStatsSheet", () => {
     renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={STATS} canReset onClose={vi.fn()} />);
     expect(screen.getByText("The time shows from 10 timed exam answers.")).toBeInTheDocument();
     expect(screen.queryByText("Median time")).not.toBeInTheDocument();
+  });
+
+  it("shows the time in targeted revision apart, over students, with no mean, and says it is not an exam time", () => {
+    mockFetch({});
+    const revisionTime = { n: 14, medianS: 45, p25S: 30, p75S: 61 };
+    renderWithProviders(
+      <QuestionStatsSheet poolId="p1" row={ROW} stats={{ ...STATS, time: TIME, revisionTime }} canReset onClose={vi.fn()} />,
+    );
+    const block = screen.getByRole("heading", { name: "Time in targeted revision" }).closest("section")!;
+    expect(within(block).getByText("45 s")).toBeInTheDocument();
+    expect(within(block).getByText("Middle half: 30 s to 1 min 01 s")).toBeInTheDocument();
+    expect(within(block).queryByText("Mean time")).not.toBeInTheDocument();
+    expect(within(block).getByText("Students")).toBeInTheDocument();
+    expect(within(block).getByText("14")).toBeInTheDocument();
+    expect(
+      within(block).getByText(
+        "First try per student, on a question they had already met and whose key they could see. Not an exam time, not comparable to it.",
+      ),
+    ).toBeInTheDocument();
+    // The exam's time stays its own block.
+    expect(screen.getByText("1 min 20 s")).toBeInTheDocument();
+  });
+
+  it("says when there are not enough students in targeted revision", () => {
+    mockFetch({});
+    renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={STATS} canReset onClose={vi.fn()} />);
+    expect(screen.getByText("Not enough students yet: it shows from 10 students.")).toBeInTheDocument();
+    expect(screen.queryByText("Students")).not.toBeInTheDocument();
+  });
+
+  it("says there are no exam statistics yet when only the time in revision qualifies", () => {
+    mockFetch({});
+    const revisionOnly = { ...STATS, n: null, p: null, revisionTime: { n: 10, medianS: 45, p25S: 30, p75S: 61 } };
+    renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={revisionOnly} canReset onClose={vi.fn()} />);
+    expect(screen.getByText("No exam statistics yet: they show from 10 exam answers.")).toBeInTheDocument();
+    expect(screen.queryByText("Success rate")).not.toBeInTheDocument();
+    expect(screen.queryByText("Time spent")).not.toBeInTheDocument();
+    expect(screen.queryByText("Discrimination")).not.toBeInTheDocument();
+    expect(screen.getByText("Time in targeted revision")).toBeInTheDocument();
+    expect(screen.getByText("45 s")).toBeInTheDocument();
   });
 
   it("shows the discrimination to two decimals, its reading and what it rests on", () => {

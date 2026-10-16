@@ -1671,6 +1671,12 @@ export const fr: Record<keyof Dict, string> = {
   "pool.stats.timeScope":
     "Examens uniquement. Temps où la question est à l'écran, mesuré par le serveur ; une période sans activité compte au plus {cap} minutes.",
   "pool.stats.timeNone": "Le temps s'affiche dès {min} réponses d'examen chronométrées.",
+  "pool.stats.examNone": "Pas encore de statistiques d'examen : elles s'affichent dès {min} réponses d'examen.",
+  "pool.stats.revisionTime": "Temps en révision ciblée",
+  "pool.stats.revisionStudents": "Étudiants",
+  "pool.stats.revisionScope":
+    "Premier essai de chaque étudiant, sur une question qu'il avait déjà rencontrée et dont il pouvait voir le corrigé. Pas un temps d'examen, ni comparable à celui-ci.",
+  "pool.stats.revisionNone": "Pas encore assez d'étudiants : ce temps s'affiche dès {min} étudiants.",
   "pool.stats.discrimination": "Discrimination",
   "pool.stats.discriminationIndex": "Indice de discrimination",
   "pool.stats.discriminationBand.good": "Bon",
@@ -1694,7 +1700,7 @@ export const fr: Record<keyof Dict, string> = {
   "pool.stats.reset": "Réinitialiser les statistiques",
   "pool.stats.resetTitle": "Réinitialiser les statistiques de {name} ?",
   "pool.stats.resetBody":
-    "Seules les réponses des tentatives commencées après maintenant compteront. Rien n'est supprimé : notes et résultats restent inchangés.",
+    "Seules les réponses des tentatives d'examen commencées après maintenant, et les premiers essais en révision ciblée proposés après maintenant, compteront. Rien n'est supprimé : notes, résultats et séries de révision restent inchangés.",
   "pool.stats.resetConfirm": "Réinitialiser",
   "pool.stats.resetDone": "Statistiques réinitialisées.",
   "pool.stats.resetFailed": "La réinitialisation a échoué.",

@@ -21,6 +21,14 @@
  * question that already qualifies on `n`, never alone. A grading is not
  * needed — the time was spent whatever the points.
  *
+ * The TIME IN TARGETED REVISION (ADR-039 §6b) is a separate series, never
+ * merged into the exam's: per student, the time of their first try at the
+ * question in a round of targeted revision (ADR-115), shown from
+ * `REVISION_TIME_MIN_STUDENTS` distinct students, median and middle half
+ * only: no mean. A question qualifies on
+ * either series: with too few exam answers its entry carries null `n` and
+ * `p`, and no exam figure.
+ *
  * The DISCRIMINATION index (ADR-042) reads the same counted answers and
  * keeps an attempt only when every OTHER item of the exam has a validated
  * grading too: the rest of the test must be a grade, not a proposal. Per
@@ -34,13 +42,14 @@
  *
  * Reads only: `questions` and `question_versions` (the `pool` module's),
  * `evaluation_items` and `evaluations` (the `evaluation` module's),
- * `attempts` and `answers` (the `live` module's) and `gradings` (the
- * `grading` module's), all by join. The reset, a write to `questions`,
+ * `attempts` and `answers` (the `live` module's), `gradings` (the
+ * `grading` module's) and `drill_cards` and `drill_revision_answers` (the
+ * `drill` module's), all by join. The reset, a write to `questions`,
  * lives in the `pool` module.
  */
 import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 
-import type { DistractorStats, PoolQuestionStats, TimeStats } from "@quiz/contracts";
+import type { DistractorStats, PoolQuestionStats, RevisionTimeStats, TimeStats } from "@quiz/contracts";
 import {
   discrimination,
   evaluationDiscrimination,
@@ -49,6 +58,7 @@ import {
   optionShares,
   sameAsLatest,
   shownItemStats,
+  shownRevisionSpread,
   shownTimeSpread,
   spread,
   type DiscriminationAttempt,
@@ -63,6 +73,8 @@ import type { Db } from "../../db/client.js";
 import {
   answers,
   attempts,
+  drillCards,
+  drillRevisionAnswers,
   evaluationItems,
   evaluations,
   gradings,
@@ -94,13 +106,15 @@ function countedAttempt(): SQL {
 }
 
 /**
- * Every question of the pool that has enough answers, with the instant its
- * statistics start from and its time; the others are absent.
+ * Every question of the pool that has enough exam answers or enough
+ * students in targeted revision, with the instant its statistics start from
+ * and its times; the others are absent.
  *
- * One query for the counted answers, one for the time, two for the
- * discrimination, one for the versions of the multiple-choice questions
- * (their answers come with the counted ones). Every answer travels to the
- * process; should a pool's history grow too large for that, the same
+ * One query for the counted answers, one for the time in revision, one for
+ * the time, two for the discrimination, one for the versions of the
+ * multiple-choice questions (their answers come with the counted ones).
+ * Every answer travels to the process; should a pool's history grow too
+ * large for that, the same
  * filters pre-aggregate in SQL (`count`, `avg(points / max_points)` by
  * question).
  *
@@ -161,22 +175,34 @@ export async function poolQuestionStats(
     sinceOf.set(row.questionId, row.since);
   }
 
+  const revisionTimes = new Map<string, number[]>();
+  for (const row of await firstRevisionPassesOf(db, ofPool)) {
+    sinceOf.set(row.questionId, row.since);
+    // A positive time: a zero is no measurement (the series' one filter after the pick).
+    if (row.timeMs !== null && row.timeMs > 0) push(revisionTimes, row.questionId, row.timeMs);
+  }
+
   const dwells = await dwellsOf(db, ofPool);
   const discriminations = await discriminationsOf(db, rows);
   const distractors = await distractorsOf(db, rows.filter((row) => row.type === DISTRACTOR_TYPE));
   const items: PoolQuestionStats["items"] = [];
-  for (const [questionId, list] of scored) {
-    const shown = shownItemStats(itemStats(list));
-    if (!shown) continue;
-    const time = shownTimeSpread(spread(dwells.get(questionId) ?? []));
+  for (const questionId of new Set([...scored.keys(), ...revisionTimes.keys()])) {
+    // Two series, each with its own threshold: the entry exists when either qualifies.
+    const shown = shownItemStats(itemStats(scored.get(questionId) ?? []));
+    const revision = shownRevisionSpread(spread(revisionTimes.get(questionId) ?? []));
+    if (!shown && !revision) continue;
+    // The exam's other figures show beside its success rate, never alone.
+    const time = shown && shownTimeSpread(spread(dwells.get(questionId) ?? []));
     items.push({
       questionId,
       since: isoOrNull(sinceOf.get(questionId) ?? null),
-      ...shown,
-      time: time && inSeconds(time),
-      discrimination: discrimination(discriminations.get(questionId) ?? []),
+      n: shown?.n ?? null,
+      p: shown?.p ?? null,
+      time: time ? inSeconds(time) : null,
+      discrimination: shown ? discrimination(discriminations.get(questionId) ?? []) : null,
       // Absent for a type without the analysis; null below its threshold.
-      ...(distractors.has(questionId) ? { distractors: distractors.get(questionId)! } : {}),
+      ...(shown && distractors.has(questionId) ? { distractors: distractors.get(questionId)! } : {}),
+      revisionTime: revision && withoutMean(inSeconds(revision)),
     });
   }
   return { items };
@@ -186,6 +212,14 @@ export async function poolQuestionStats(
 function inSeconds(ms: Spread): TimeStats {
   const s = (v: number) => Math.round(v / 1000);
   return { n: ms.n, meanS: s(ms.mean), medianS: s(ms.median), p25S: s(ms.p25), p75S: s(ms.p75) };
+}
+
+/**
+ * The time in targeted revision as the contract carries it: no mean, which
+ * beside `n` would give back the value one more student adds (ADR-039 §6b).
+ */
+function withoutMean({ meanS: _mean, ...middle }: TimeStats): RevisionTimeStats {
+  return middle;
 }
 
 /** The questions of the pool, or those of `ids` in it. */
@@ -216,6 +250,42 @@ async function dwellsOf(db: Db, ofPool: SQL): Promise<Map<string, number[]>> {
   const byQuestion = new Map<string, number[]>();
   for (const row of rows) push(byQuestion, row.questionId, row.dwellMs);
   return byQuestion;
+}
+
+/**
+ * The first try of each student at the questions `ofPool` selects in
+ * targeted revision (ADR-039 §6b): per card — one per student and question
+ * (`drill_cards_user_question_uq`) — its earliest ANSWERED first pass, any
+ * correctness, among the passes served at or after the question's
+ * `stats_since`. A second pass, or the first pass of a later round, adds
+ * nothing: it follows a key already shown in a round, and one value per
+ * student keeps `n` a count of students. Read only, by join: the tables are
+ * the `drill` module's. No population filter: a round exists only on a
+ * student seat, and the rounds before an opt-out or in an archived
+ * classroom count (an anonymous aggregate, unlike the drill's classroom
+ * reads).
+ */
+async function firstRevisionPassesOf(db: Db, ofPool: SQL) {
+  return db
+    .selectDistinctOn([drillRevisionAnswers.cardId], {
+      questionId: questions.id,
+      since: questions.statsSince,
+      timeMs: drillRevisionAnswers.timeMs,
+    })
+    .from(drillRevisionAnswers)
+    .innerJoin(drillCards, eq(drillCards.id, drillRevisionAnswers.cardId))
+    .innerJoin(questions, eq(questions.id, drillCards.questionId))
+    .where(
+      and(
+        ofPool,
+        eq(drillRevisionAnswers.pass, 1),
+        // Answered: the answer, its correctness and its time are set together (`drill_revision_answers_answered_ck`).
+        isNotNull(drillRevisionAnswers.timeMs),
+        // The reset (F-STAT-05) covers this series too, by the instant the pass was served.
+        or(isNull(questions.statsSince), gte(drillRevisionAnswers.servedAt, questions.statsSince)),
+      ),
+    )
+    .orderBy(drillRevisionAnswers.cardId, asc(drillRevisionAnswers.answeredAt), asc(drillRevisionAnswers.id));
 }
 
 /** One counted exam answer to a question: its item, its attempt and its points. */
