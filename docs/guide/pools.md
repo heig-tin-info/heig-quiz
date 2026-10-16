@@ -158,7 +158,7 @@ A multiple-choice question also shows a **Scoring** card with **Never shuffle th
 
 ### Writing the statement
 
-The statement is written as in a word processor. Markdown is stored underneath, so `**bold**`, `$x^2$` for a formula and a fenced code block work if you prefer typing them. The toolbar offers bold, italic, inline code, a code block, a formula, an image, a table, a link and the **Markdown source**. A pasted or dragged image is uploaded and referenced by a stable id. The table button inserts a 3 by 3 table; with the caret inside one, the **Table** menu adds and removes rows and columns.
+The statement is written as in a word processor. Markdown is stored underneath, so `**bold**`, `$x^2$` for a formula and a fenced code block work if you prefer typing them. The toolbar offers the three heading levels, bold, italic, inline code, a code block, a formula, an image, a table, a link and the **Markdown source**. The heading button of the line the caret is on stays pressed: that is how a line typed as `# Title` shows it became a heading, once the `#` is gone from the surface. A pasted or dragged image is uploaded and referenced by a stable id. The table button inserts a 3 by 3 table; with the caret inside one, the **Table** menu adds and removes rows and columns.
 
 ### The explanation
 
