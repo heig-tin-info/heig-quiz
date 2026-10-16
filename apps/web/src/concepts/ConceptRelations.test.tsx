@@ -112,7 +112,7 @@ describe("the narrower concepts of a concept (#897)", () => {
     mockFetch({ [LIST]: ok({ concepts: chain }) });
     renderWithProviders(<ConceptQueue />);
     let sheet = await openSheet(/edit pointer$/i);
-    expect(within(sheet).getByRole("heading", { name: "Narrower concepts (2)" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("heading", { name: "Narrower concepts" })).toBeInTheDocument();
     let list = narrowerList(sheet);
     // Direct ones only: Fuite mémoire is under Dynamic allocation, not listed here.
     expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Dynamic allocation", "Pointer arithmetic"]);
@@ -144,16 +144,29 @@ describe("the narrower concepts of a concept (#897)", () => {
     const sheet = await openSheet(/edit address$/i);
     const search = within(sheet).getByRole("searchbox", { name: "Search a broader concept" });
     await userEvent.type(search, "pointer");
-    const row = (await within(sheet).findByRole("button", { name: "Pointer" })).closest("li")!;
+    const candidate = await within(sheet).findByRole("button", { name: "Pointer" });
+    const row = candidate.closest("li")!;
     expect(within(row).getByText("Currently holds: Dynamic allocation, Pointer arithmetic")).toBeInTheDocument();
+    // Its path, under its name.
+    expect(within(row).getByText(/Memory$/)).toBeInTheDocument();
+    // A keyboard user hears it with the candidate.
+    expect(candidate).toHaveAccessibleDescription("Currently holds: Dynamic allocation, Pointer arithmetic");
     // Pointer arithmetic holds nothing: no line.
-    const leafRow = within(sheet).getByRole("button", { name: "Pointer arithmetic" }).closest("li")!;
-    expect(within(leafRow).queryByText(/Currently holds/)).toBeNull();
+    const leaf = within(sheet).getByRole("button", { name: "Pointer arithmetic" });
+    expect(within(leaf.closest("li")!).queryByText(/Currently holds/)).toBeNull();
+    expect(leaf).not.toHaveAttribute("aria-describedby");
 
     await userEvent.clear(search);
     await userEvent.type(search, "memory");
     const memoryRow = (await within(sheet).findByRole("button", { name: "Memory" })).closest("li")!;
-    expect(within(memoryRow).getByText(/^Currently holds: Child 1, Child 2, Child 3, Child 4, Child 5/)).toHaveTextContent(/\+3$/);
+    expect(within(memoryRow).getByText(/^Currently holds: Child 1, Child 2, Child 3, Child 4, Child 5/)).toHaveTextContent(/\(\+3 more\)$/);
+
+    // The related search shows the path, never what a candidate holds.
+    await userEvent.clear(search);
+    await userEvent.type(within(sheet).getByRole("searchbox", { name: "Search a related concept" }), "pointer");
+    const related = (await within(sheet).findByRole("button", { name: "Pointer" })).closest("li")!;
+    expect(within(related).getByText(/Memory$/)).toBeInTheDocument();
+    expect(within(related).queryByText(/Currently holds/)).toBeNull();
   });
 });
 

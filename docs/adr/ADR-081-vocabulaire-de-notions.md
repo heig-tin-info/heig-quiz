@@ -645,10 +645,12 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
      Relations show, after the broader concepts, a read-only **Narrower
      concepts** list (the live concepts naming this one in their `broader`,
      by name, a proposed one marked, no name a link: the edge belongs to the
-     child and is placed from its sheet), and each candidate of the broader
-     search shows its path and "Currently holds" its direct narrower
-     concepts (five, then `+n`); both read `directNarrowerOf` of
-     `@quiz/domain`, client-side, and the search's accept rule is unchanged.
+     child and is placed from its sheet); each candidate of either search
+     shows its path; a broader candidate also "Currently holds" its direct
+     narrower concepts (five, then "(+n more)"), which describes its button
+     for a screen reader; both read
+     `directNarrowerOf` of `@quiz/domain`, client-side, and the searches'
+     accept rules are unchanged.
    - **Not here.** A concept selected anywhere covering its narrower ones
      (§4 of the Decision) is 7d (§10).
 6. **Suggest concepts (8a, built).** It sends the draft's statement and
