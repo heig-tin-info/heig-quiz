@@ -18,8 +18,9 @@ the question, 2026-10-16): the time of targeted revision
 ([ADR-115](ADR-115-revision-ciblee-par-notion.md) §6) feeds a SEPARATE series, §6b, never
 the exam series of §6; §8 widened to it. Two points are taken by assumption, for the
 product owner to change (§6b, Privacy): that anonymous aggregate sits in the pool's panel,
-across classrooms; and its residual differencing risk — reduced by showing no mean — is
-accepted. Code: `firstRevisionPassesOf` in `apps/api/src/modules/stats/service.ts`,
+across classrooms; and its residual differencing risk is accepted — without a mean no
+exact recovery always works, but the median, and sometimes a quartile, compared before and
+after one student's round, can still equal that student's first-try time or bound it. Code: `firstRevisionPassesOf` in `apps/api/src/modules/stats/service.ts`,
 `REVISION_TIME_MIN_STUDENTS` / `shownRevisionSpread` in `@quiz/domain/stats`,
 `RevisionTimeStats` and `QuestionStats.revisionTime` in `@quiz/contracts/stats`. No
 migration.
@@ -188,8 +189,8 @@ says how long a known question takes to re-answer, not what it costs in an exam.
   distinct students**, applied by the server (ADR-038 §4): below it `revisionTime` is
   null. The shape is `RevisionTimeStats`, the `TimeStats` of §6 **without the mean**, `n`
   counting students: the median with P25–P75, whole seconds, nothing else (N-DATA-06). No
-  mean, because a mean beside `n` gives back the one value a new student adds (Privacy
-  below); nothing adds this series up anyway (F-STAT-04 sums the exam means).
+  mean, because a mean beside `n` gives back exactly the one value a new student adds
+  (Privacy below); nothing adds this series up anyway (F-STAT-04 sums the exam means).
 - **The entry.** A question's entry exists when EITHER series qualifies. With fewer than
   ten exam answers, `n` and `p` are null, and so are the exam's time and discrimination;
   its distractors are absent. The pool's filters (F-STAT-03) and the similar questions
@@ -211,15 +212,21 @@ says how long a known question takes to re-answer, not what it costs in an exam.
   last revised (ADR-115 §9) and are often readers of the pool: comparing `revisionTime`
   just before and just after one known student's round (`n` from 10 to 11), they could tie
   the change to that student, whose time ADR-115 §9 promises never to show. A mean would
-  give the value back (`11·mean₁₁ − 10·mean₁₀`); so the series carries **no mean**. One
-  added value moves the median and the quartiles to neighbouring values of the series or
-  between them: the reader learns that it moved, and on which side, not the time itself.
+  give the value back exactly, in every case (`11·mean₁₁ − 10·mean₁₀`); so the series
+  carries **no mean**. That removes the exact recovery that always worked, not the risk:
+  the quantiles interpolate, so at an odd `n` the median IS one of the values, and a new
+  time that falls between the old middle values becomes the published median; from an
+  odd to an even `n`, `2·median_new − median_old` gives it back near the middle; the
+  quartiles leak likewise at some `n`. Compared before and after one student's round, the
+  median, and sometimes a quartile, can therefore equal that student's first-try time, or
+  bound it to an interval between published values.
   *Taken by assumption, the product owner may change them:* (1) the anonymous
   cross-classroom aggregate in the pool's panel, although ADR-085 §8 kept the confidence
   2×2 out of that panel for its readers span other classrooms — the difference is that
   the 2×2 reads classroom rows by classroom, while this series is the question's anonymous
   aggregate over every classroom, like the exam figures; (2) the acceptance of this
-  reduced residual risk.
+  residual risk: a classroom's staff may sometimes read, or bound, one of their students'
+  first-try time from the change of the median.
 
 ### 7. Who is measured
 

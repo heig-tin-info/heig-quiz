@@ -41,9 +41,8 @@ export type TimeStats = z.infer<typeof TimeStats>;
 
 /**
  * The time in targeted revision (ADR-039 §6b), over `n` students, in whole
- * seconds: the median and the middle half, NO mean. A mean beside `n` would
- * give back the one value a new student's round adds; a median moves to a
- * neighbouring value and does not.
+ * seconds: the median and the middle half, NO mean — beside `n`, a mean
+ * would give one student's time back exactly.
  */
 export const RevisionTimeStats = TimeStats.omit({ meanS: true });
 export type RevisionTimeStats = z.infer<typeof RevisionTimeStats>;
