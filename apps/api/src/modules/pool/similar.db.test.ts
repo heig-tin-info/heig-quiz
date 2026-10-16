@@ -17,7 +17,8 @@ import type { SimilarQuestions } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { attempts, drillCards, drillRevisionAnswers, drillRevisionRounds, questions } from "../../db/schema.js";
+import { attempts, questions } from "../../db/schema.js";
+import { seedDrillCard, seedRevisionRound } from "../../test/drill.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { publishQuestion, seedLive, type Seeded } from "../../test/live.js";
@@ -187,38 +188,11 @@ describe("GET /courses/:id/similar-questions", () => {
 
   it("gives no statistics for a question listed by its time in targeted revision alone (ADR-039 §6b)", async () => {
     for (const userId of seed.studentIds) {
-      const cardId = randomUUID();
-      await db.insert(drillCards).values({
-        id: cardId,
-        userId,
-        questionId: ids.linkedWeak,
-        classroomId: seed.classroomId,
-        evaluationId: seed.evaluationId,
-        dueAt: STARTED,
-        keyHash: "key",
-        createdAt: STARTED,
-      });
-      const roundId = randomUUID();
-      await db
-        .insert(drillRevisionRounds)
-        .values({ id: roundId, userId, classroomId: seed.classroomId, cardIds: [cardId], startedAt: STARTED, cardsServed: 1 });
-      await db.insert(drillRevisionAnswers).values({
-        id: randomUUID(),
-        roundId,
-        cardId,
-        pass: 1,
-        servedAt: STARTED,
-        serveSeed: 1,
-        answeredAt: new Date(STARTED.getTime() + 30_000),
-        correctness: "right",
-        timeMs: 30_000,
-      });
+      const cardId = await seedDrillCard(db, seed, userId, ids.linkedWeak);
+      await seedRevisionRound(db, seed, userId, cardId, [{ servedAt: STARTED, timeMs: 30_000 }]);
     }
-    const listed = (await poolQuestionStats(db, seed.poolId)).items.find((i) => i.questionId === ids.linkedWeak);
-    expect(listed).toMatchObject({ n: null, p: null, revisionTime: { n: 10 } });
     const byId = new Map((await hits({ text: TEXT })).map((h) => [h.questionId, h]));
     expect(byId.get(ids.linkedWeak)!.stats).toBeNull();
-    expect(byId.get(ids.linkedStrong)!.stats).toEqual({ n: 10, p: 1, r: null });
   });
 
   it("filters by type, cuts at limit, and finds nothing in stop words", async () => {

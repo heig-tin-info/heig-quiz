@@ -70,16 +70,16 @@ describe("QuestionStatsSheet", () => {
     expect(screen.queryByText("Median time")).not.toBeInTheDocument();
   });
 
-  it("shows the time in targeted revision apart, over students, and says it is not an exam time", () => {
+  it("shows the time in targeted revision apart, over students, with no mean, and says it is not an exam time", () => {
     mockFetch({});
-    const revisionTime = { n: 14, meanS: 50, medianS: 45, p25S: 30, p75S: 61 };
+    const revisionTime = { n: 14, medianS: 45, p25S: 30, p75S: 61 };
     renderWithProviders(
       <QuestionStatsSheet poolId="p1" row={ROW} stats={{ ...STATS, time: TIME, revisionTime }} canReset onClose={vi.fn()} />,
     );
     const block = screen.getByRole("heading", { name: "Time in targeted revision" }).closest("section")!;
     expect(within(block).getByText("45 s")).toBeInTheDocument();
     expect(within(block).getByText("Middle half: 30 s to 1 min 01 s")).toBeInTheDocument();
-    expect(within(block).getByText("50 s")).toBeInTheDocument();
+    expect(within(block).queryByText("Mean time")).not.toBeInTheDocument();
     expect(within(block).getByText("Students")).toBeInTheDocument();
     expect(within(block).getByText("14")).toBeInTheDocument();
     expect(
@@ -100,7 +100,7 @@ describe("QuestionStatsSheet", () => {
 
   it("says there are no exam statistics yet when only the time in revision qualifies", () => {
     mockFetch({});
-    const revisionOnly = { ...STATS, n: null, p: null, revisionTime: { n: 10, meanS: 50, medianS: 45, p25S: 30, p75S: 61 } };
+    const revisionOnly = { ...STATS, n: null, p: null, revisionTime: { n: 10, medianS: 45, p25S: 30, p75S: 61 } };
     renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={revisionOnly} canReset onClose={vi.fn()} />);
     expect(screen.getByText("No exam statistics yet: they show from 10 exam answers.")).toBeInTheDocument();
     expect(screen.queryByText("Success rate")).not.toBeInTheDocument();

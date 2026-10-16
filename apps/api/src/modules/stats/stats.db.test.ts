@@ -19,8 +19,6 @@ import {
   auditLog,
   classrooms,
   drillCards,
-  drillRevisionAnswers,
-  drillRevisionRounds,
   enrollments,
   evaluations,
   gradings,
@@ -29,6 +27,7 @@ import {
   questions,
 } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { seedDrillCard, seedRevisionRound } from "../../test/drill.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
@@ -157,54 +156,6 @@ async function anotherEvaluation(seed: Seeded, questionIds = [seed.questionIds[0
     { attemptCount: 0 },
   );
   return { evaluationId: evaluation.id, itemId: items[0]!.id, itemIds: items.map((i) => i.id) };
-}
-
-/** The drill card of `userId` on the seed's question `index`, met in its exam: one per student and question. */
-async function card(seed: Seeded, userId: string, index = 0) {
-  const id = randomUUID();
-  await db.insert(drillCards).values({
-    id,
-    userId,
-    questionId: seed.questionIds[index]!,
-    classroomId: seed.classroomId,
-    evaluationId: seed.evaluationId,
-    dueAt: BEFORE,
-    keyHash: "key",
-    createdAt: BEFORE,
-  });
-  return id;
-}
-
-interface Pass {
-  pass?: 1 | 2;
-  servedAt?: Date;
-  /** Null: served, never answered. */
-  timeMs?: number | null;
-  correctness?: "right" | "wrong";
-}
-
-/** A round of targeted revision of `userId` on one card, with its passes as the drill module writes them. */
-async function revise(seed: Seeded, userId: string, cardId: string, passes: readonly Pass[]) {
-  const roundId = randomUUID();
-  const startedAt = passes[0]?.servedAt ?? AFTER;
-  await db
-    .insert(drillRevisionRounds)
-    .values({ id: roundId, userId, classroomId: seed.classroomId, cardIds: [cardId], startedAt, cardsServed: 1 });
-  for (const p of passes) {
-    const servedAt = p.servedAt ?? AFTER;
-    const timeMs = p.timeMs === undefined ? 40_000 : p.timeMs;
-    await db.insert(drillRevisionAnswers).values({
-      id: randomUUID(),
-      roundId,
-      cardId,
-      pass: p.pass ?? 1,
-      servedAt,
-      serveSeed: 1,
-      answeredAt: timeMs === null ? null : new Date(servedAt.getTime() + timeMs),
-      correctness: timeMs === null ? null : (p.correctness ?? "right"),
-      timeMs,
-    });
-  }
 }
 
 /** Its time in targeted revision alone; undefined when the question is absent. */
@@ -537,7 +488,7 @@ describe("the time in targeted revision (ADR-039 §6b)", () => {
   async function firstTries(seed: Seeded, seconds: readonly number[], index = 0, servedAt = AFTER) {
     for (const [i, s] of seconds.entries()) {
       const userId = seed.studentIds[i]!;
-      await revise(seed, userId, await card(seed, userId, index), [{ servedAt, timeMs: s * 1000 }]);
+      await seedRevisionRound(db, seed, userId, await seedDrillCard(db, seed, userId, seed.questionIds[index]!), [{ servedAt, timeMs: s * 1000 }]);
     }
   }
 
@@ -557,7 +508,7 @@ describe("the time in targeted revision (ADR-039 §6b)", () => {
       since: null,
       time: null,
       discrimination: null,
-      revisionTime: { n: 10, meanS: 35, medianS: 35, p25S: 32, p75S: 37 },
+      revisionTime: { n: 10, medianS: 35, p25S: 32, p75S: 37 },
     });
   });
 
@@ -565,35 +516,28 @@ describe("the time in targeted revision (ADR-039 §6b)", () => {
     const seed = await seedLive(db, { students: 10 });
     const later = new Date(AFTER.getTime() + 86_400_000);
     for (const userId of seed.studentIds) {
-      const cardId = await card(seed, userId);
+      const cardId = await seedDrillCard(db, seed, userId, seed.questionIds[0]!);
       // An unanswered first pass, then the first try, wrong, then its second pass.
-      await revise(seed, userId, cardId, [{ servedAt: new Date(AFTER.getTime() - 3_600_000), timeMs: null }]);
-      await revise(seed, userId, cardId, [
+      await seedRevisionRound(db, seed, userId, cardId, [{ servedAt: new Date(AFTER.getTime() - 3_600_000), timeMs: null }]);
+      await seedRevisionRound(db, seed, userId, cardId, [
         { servedAt: AFTER, timeMs: 20_000, correctness: "wrong" },
         { pass: 2, servedAt: new Date(AFTER.getTime() + 60_000), timeMs: 90_000 },
       ]);
       // A first pass of a later round adds nothing.
-      await revise(seed, userId, cardId, [{ servedAt: later, timeMs: 90_000 }]);
+      await seedRevisionRound(db, seed, userId, cardId, [{ servedAt: later, timeMs: 90_000 }]);
     }
-    expect(await revisionTimeOf(seed)).toEqual({ n: 10, meanS: 20, medianS: 20, p25S: 20, p75S: 20 });
+    expect(await revisionTimeOf(seed)).toEqual({ n: 10, medianS: 20, p25S: 20, p75S: 20 });
   });
 
-  it("leaves out a zero time, and leaves the exam series as it was", async () => {
+  it("leaves out a zero time, leaves the exam series as it was, and keeps each series to its question", async () => {
     const seed = await seedLive(db, { students: 10 });
     await sitAll(seed, ten);
     await firstTries(seed, [...tens.slice(0, 9), 0]);
+    await firstTries(seed, tens, 1);
     expect(await statsOf(seed)).toEqual({ n: 10, p: 1 });
     expect(await revisionTimeOf(seed)).toBeNull();
     expect(await timeOf(seed)).toBeNull();
-  });
-
-  it("gives an entry with exam figures and one with the time in revision alone, each to its own question", async () => {
-    const seed = await seedLive(db, { students: 10 });
-    await sitAll(seed, ten);
-    await firstTries(seed, tens, 1);
-    const { items } = await poolQuestionStats(db, seed.poolId);
-    expect(items.find((i) => i.questionId === seed.questionIds[0])).toMatchObject({ n: 10, p: 1, revisionTime: null });
-    expect(items.find((i) => i.questionId === seed.questionIds[1])).toMatchObject({
+    expect((await poolQuestionStats(db, seed.poolId)).items.find((i) => i.questionId === seed.questionIds[1])).toMatchObject({
       n: null,
       p: null,
       time: null,
@@ -610,7 +554,7 @@ describe("the time in targeted revision (ADR-039 §6b)", () => {
 
     for (const userId of seed.studentIds) {
       const [row] = await db.select().from(drillCards).where(eq(drillCards.userId, userId));
-      await revise(seed, userId, row!.id, [{ servedAt: AFTER, timeMs: 50_000 }]);
+      await seedRevisionRound(db, seed, userId, row!.id, [{ servedAt: AFTER, timeMs: 50_000 }]);
     }
     expect(await revisionTimeOf(seed)).toMatchObject({ n: 10, medianS: 50 });
   });
@@ -814,10 +758,10 @@ describe("the routes of the statistics (ADR-038)", () => {
 
     it("serves the time in targeted revision to the same readers, and nothing more to anyone else", async () => {
       const url = `/app/api/pools/${seed.poolId}/question-stats`;
-      // Ten students' first tries in revision, before the reset below, which then clears both series.
+      // Ten students' first tries in revision, served before the reset of the next describe, which clears both series.
       const at = new Date(server.clock.now().getTime() - 60_000);
       for (const userId of seed.studentIds) {
-        await revise(seed, userId, await card(seed, userId), [{ servedAt: at, timeMs: 30_000 }]);
+        await seedRevisionRound(db, seed, userId, await seedDrillCard(db, seed, userId, seed.questionIds[0]!), [{ servedAt: at, timeMs: 30_000 }]);
       }
       expect((await get(url, stranger)).statusCode).toBe(404);
       expect((await get(url, student)).statusCode).toBe(403);
@@ -828,7 +772,7 @@ describe("the routes of the statistics (ADR-038)", () => {
           questionId: seed.questionIds[0],
           n: 10,
           p: 1,
-          revisionTime: { n: 10, meanS: 30, medianS: 30, p25S: 30, p75S: 30 },
+          revisionTime: { n: 10, medianS: 30, p25S: 30, p75S: 30 },
         }),
       ]);
     });

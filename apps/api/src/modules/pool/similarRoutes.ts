@@ -20,6 +20,7 @@ import { inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import {
+  hasExamStats,
   IdParam,
   SimilarQuestionSearch,
   type QuestionTypeId,
@@ -89,7 +90,7 @@ export function similarRoutes(app: FastifyInstance, ctx: PoolRouteContext): void
               canLink: linked || (held !== undefined && linkModeFor(held.role, held.isPublic) !== null),
               // Exam figures only: an entry carried by its time in revision alone has none (ADR-039 §6b).
               stats:
-                figures && figures.n !== null && figures.p !== null
+                figures && hasExamStats(figures)
                   ? { n: figures.n, p: figures.p, r: figures.discrimination?.r ?? null }
                   : null,
             };

@@ -3172,7 +3172,7 @@ const questionStats = new Map<string, QuestionStats>([
         since: null,
         time: { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 },
         discrimination: { r: 0.46, evaluations: 2, n: 21 },
-        revisionTime: { n: 14, meanS: 52, medianS: 45, p25S: 31, p75S: 66 },
+        revisionTime: { n: 14, medianS: 45, p25S: 31, p75S: 66 },
       },
       {
         n: 12,
@@ -3236,7 +3236,7 @@ const questionStats = new Map<string, QuestionStats>([
       since: null,
       time: null,
       discrimination: null,
-      revisionTime: { n: 11, meanS: 228, medianS: 196, p25S: 140, p75S: 290 },
+      revisionTime: { n: 11, medianS: 196, p25S: 140, p75S: 290 },
     },
   ],
   ...liveQuestions("p3")

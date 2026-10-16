@@ -24,7 +24,8 @@
  * The TIME IN TARGETED REVISION (ADR-039 §6b) is a separate series, never
  * merged into the exam's: per student, the time of their first try at the
  * question in a round of targeted revision (ADR-115), shown from
- * `REVISION_TIME_MIN_STUDENTS` distinct students. A question qualifies on
+ * `REVISION_TIME_MIN_STUDENTS` distinct students, median and middle half
+ * only: no mean. A question qualifies on
  * either series: with too few exam answers its entry carries null `n` and
  * `p`, and no exam figure.
  *
@@ -48,7 +49,7 @@
  */
 import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 
-import type { DistractorStats, PoolQuestionStats, TimeStats } from "@quiz/contracts";
+import type { DistractorStats, PoolQuestionStats, RevisionTimeStats, TimeStats } from "@quiz/contracts";
 import {
   discrimination,
   evaluationDiscrimination,
@@ -201,7 +202,7 @@ export async function poolQuestionStats(
       discrimination: shown ? discrimination(discriminations.get(questionId) ?? []) : null,
       // Absent for a type without the analysis; null below its threshold.
       ...(shown && distractors.has(questionId) ? { distractors: distractors.get(questionId)! } : {}),
-      revisionTime: revision && inSeconds(revision),
+      revisionTime: revision && withoutMean(inSeconds(revision)),
     });
   }
   return { items };
@@ -211,6 +212,14 @@ export async function poolQuestionStats(
 function inSeconds(ms: Spread): TimeStats {
   const s = (v: number) => Math.round(v / 1000);
   return { n: ms.n, meanS: s(ms.mean), medianS: s(ms.median), p25S: s(ms.p25), p75S: s(ms.p75) };
+}
+
+/**
+ * The time in targeted revision as the contract carries it: no mean, which
+ * beside `n` would give back the value one more student adds (ADR-039 §6b).
+ */
+function withoutMean({ meanS: _mean, ...middle }: TimeStats): RevisionTimeStats {
+  return middle;
 }
 
 /** The questions of the pool, or those of `ids` in it. */
@@ -270,7 +279,8 @@ async function firstRevisionPassesOf(db: Db, ofPool: SQL) {
       and(
         ofPool,
         eq(drillRevisionAnswers.pass, 1),
-        isNotNull(drillRevisionAnswers.answeredAt),
+        // Answered: the answer, its correctness and its time are set together (`drill_revision_answers_answered_ck`).
+        isNotNull(drillRevisionAnswers.timeMs),
         // The reset (F-STAT-05) covers this series too, by the instant the pass was served.
         or(isNull(questions.statsSince), gte(drillRevisionAnswers.servedAt, questions.statsSince)),
       ),

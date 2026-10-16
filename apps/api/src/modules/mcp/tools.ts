@@ -317,9 +317,11 @@ export const TOOLS: Tool[] = [
       "qualifies (ADR-042). `distractors`, on an " +
       "mcq question only, is the whole-percent share of students who picked each option (`correct` marks the " +
       "key) and of `none` (picked nothing), over `distractors.n` answers to the versions whose options are " +
-      "the current ones; null below ten such answers (ADR-043). `revisionTime` is a separate series: each " +
+      "the current ones; null below ten such answers, absent when the type has no distractor analysis or the " +
+      "entry has no exam figures (ADR-043). `revisionTime` is a separate series: each " +
       "student's first try at the question in targeted revision, on a question they had already met and " +
-      "whose key they could see, in whole seconds over `revisionTime.n` students, or null below ten students " +
+      "whose key they could see: median and middle half (P25, P75) only, no mean, in whole seconds over " +
+      "`revisionTime.n` students, or null below ten students " +
       "(ADR-039 §6b). `revisionTime` is not an exam time; never add it to a test's duration. Aggregates only: " +
       "no student, no individual grade.",
     input: z.object({ poolId: Id }),

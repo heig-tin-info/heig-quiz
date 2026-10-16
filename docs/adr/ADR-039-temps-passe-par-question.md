@@ -16,11 +16,13 @@ Amended 2026-10-09: the Rollback section is removed (the runbook owns operationa
 Amended 2026-10-16 (#897 E3, open question 60), decided by the product owner (option (b) of
 the question, 2026-10-16): the time of targeted revision
 ([ADR-115](ADR-115-revision-ciblee-par-notion.md) §6) feeds a SEPARATE series, §6b, never
-the exam series of §6; §8 widened to it. One point is taken by assumption, for the product
-owner to change: that anonymous aggregate sits in the pool's panel, across classrooms (§6b,
-Privacy). Code: `firstRevisionPassesOf` in `apps/api/src/modules/stats/service.ts`,
+the exam series of §6; §8 widened to it. Two points are taken by assumption, for the
+product owner to change (§6b, Privacy): that anonymous aggregate sits in the pool's panel,
+across classrooms; and its residual differencing risk — reduced by showing no mean — is
+accepted. Code: `firstRevisionPassesOf` in `apps/api/src/modules/stats/service.ts`,
 `REVISION_TIME_MIN_STUDENTS` / `shownRevisionSpread` in `@quiz/domain/stats`,
-`QuestionStats.revisionTime` in `@quiz/contracts/stats`. No migration.
+`RevisionTimeStats` and `QuestionStats.revisionTime` in `@quiz/contracts/stats`. No
+migration.
 
 ## Context
 
@@ -184,8 +186,10 @@ says how long a known question takes to re-answer, not what it costs in an exam.
   takes its passes, and its value, with it.
 - **The threshold.** `REVISION_TIME_MIN_STUDENTS` = `QUESTION_STATS_MIN_N` = **10
   distinct students**, applied by the server (ADR-038 §4): below it `revisionTime` is
-  null. The shape is `TimeStats` of §6, `n` counting students: median first with P25–P75,
-  the mean beside, whole seconds, nothing else (N-DATA-06).
+  null. The shape is `RevisionTimeStats`, the `TimeStats` of §6 **without the mean**, `n`
+  counting students: the median with P25–P75, whole seconds, nothing else (N-DATA-06). No
+  mean, because a mean beside `n` gives back the one value a new student adds (Privacy
+  below); nothing adds this series up anyway (F-STAT-04 sums the exam means).
 - **The entry.** A question's entry exists when EITHER series qualifies. With fewer than
   ten exam answers, `n` and `p` are null, and so are the exam's time and discrimination;
   its distractors are absent. The pool's filters (F-STAT-03) and the similar questions
@@ -202,16 +206,20 @@ says how long a known question takes to re-answer, not what it costs in an exam.
   sit in the pool's panel, read by the pool's readers across classrooms (ADR-038 §5),
   like the exam aggregates (settled question 28 (l), N-DATA-06), while a classroom's drill
   rows, and every per-classroom read of the drill, stay with that classroom's staff (28
-  (j), ADR-085 §8). No route returns a time of one student. The residual risk of ADR-038
-  holds here: a reader who reads `revisionTime` just before and just after a known
-  student's round (`n` from 10 to 11) learns that student's time, which no route shows;
-  accepted on the same grounds as ADR-038's exam points — the figure carries no identity,
-  only a reader who knows who revised in between can tie it to a student, and it is one
-  time on a question already met, not a grade. *Taken by assumption, the product owner may change it:* the
-  anonymous cross-classroom aggregate in the pool's panel, although ADR-085 §8 kept the
-  confidence 2×2 out of that panel for its readers span other classrooms; the difference
-  is that the 2×2 reads classroom rows by classroom, while this series is the question's
-  anonymous aggregate over every classroom, like the exam figures.
+  (j), ADR-085 §8). No route returns a time of one student.
+  **The residual risk is not ADR-038's.** A classroom's staff see, per student, when they
+  last revised (ADR-115 §9) and are often readers of the pool: comparing `revisionTime`
+  just before and just after one known student's round (`n` from 10 to 11), they could tie
+  the change to that student, whose time ADR-115 §9 promises never to show. A mean would
+  give the value back (`11·mean₁₁ − 10·mean₁₀`); so the series carries **no mean**. One
+  added value moves the median and the quartiles to neighbouring values of the series or
+  between them: the reader learns that it moved, and on which side, not the time itself.
+  *Taken by assumption, the product owner may change them:* (1) the anonymous
+  cross-classroom aggregate in the pool's panel, although ADR-085 §8 kept the confidence
+  2×2 out of that panel for its readers span other classrooms — the difference is that
+  the 2×2 reads classroom rows by classroom, while this series is the question's anonymous
+  aggregate over every classroom, like the exam figures; (2) the acceptance of this
+  reduced residual risk.
 
 ### 7. Who is measured
 

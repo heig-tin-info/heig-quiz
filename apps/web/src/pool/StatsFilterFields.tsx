@@ -1,4 +1,4 @@
-import type { PoolQuestionStats } from "@quiz/contracts";
+import { hasExamStats, type PoolQuestionStats } from "@quiz/contracts";
 import { QUESTION_STATS_MIN_N } from "@quiz/domain";
 
 import { useT } from "../i18n";
@@ -108,9 +108,10 @@ export function StatsFilterFields({
   onChange: (patch: Partial<QuestionFilters>) => void;
 }) {
   const t = useT();
+  const items = offer.data?.items ?? [];
   // The bounds read the exam's figures: an entry carried by its time in
   // targeted revision alone (ADR-039 §6b) offers none.
-  const items = (offer.data?.items ?? []).filter((s) => s.p !== null);
+  const withExam = items.some(hasExamStats);
   // A question may have its rate long before its time (ADR-039): the time
   // range shows once one question has a time.
   const withTime = items.some((s) => s.time !== null);
@@ -121,7 +122,7 @@ export function StatsFilterFields({
         <Spinner className="py-2" />
       ) : offer.isError ? (
         <p className="text-sm text-fg-muted">{t("pool.filter.statsError")}</p>
-      ) : items.length === 0 ? (
+      ) : !withExam ? (
         <p className="text-sm text-fg-muted">
           {t("pool.filter.statsNone", { n: QUESTION_STATS_MIN_N })}
         </p>

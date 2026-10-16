@@ -1,13 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 
-import type {
-  DiscriminationStats,
-  DistractorStats,
-  QuestionRow,
-  QuestionStats,
-  StatsReset,
-  TimeStats,
+import {
+  hasExamStats,
+  type DiscriminationStats,
+  type DistractorStats,
+  type QuestionRow,
+  type QuestionStats,
+  type StatsReset,
+  type RevisionTimeStats,
 } from "@quiz/contracts";
 import {
   DISCRIMINATION_FAIR,
@@ -99,6 +100,14 @@ export function QuestionStatsSheet({
     if (ok) reset.mutate();
   };
 
+  // The exam's figures, all or none: an entry listed for its time in revision alone has none.
+  const exam = hasExamStats(stats) ? stats : null;
+  const since = (
+    <p className="text-xs text-fg-faint">
+      {stats.since ? t("pool.stats.since", { date: isoDateParts(stats.since).date }) : t("pool.stats.sinceAlways")}
+    </p>
+  );
+
   return (
     <Sheet
       title={t("pool.stats.title")}
@@ -113,87 +122,91 @@ export function QuestionStatsSheet({
       }
     >
       <div className="space-y-6">
-        {stats.p === null ? null : (
-          <div className="grid grid-cols-2 gap-3">
-            <Stat
-              label={t("pool.stats.successRate")}
-              value={`${ratePercent(stats.p)}%`}
-              hint={stats.p < 0 ? t("pool.stats.negative") : undefined}
+        {exam ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Stat
+                label={t("pool.stats.successRate")}
+                value={`${ratePercent(exam.p)}%`}
+                hint={exam.p < 0 ? t("pool.stats.negative") : undefined}
+              />
+              <Stat label={t("pool.stats.answers")} value={exam.n} />
+            </div>
+            <div className="space-y-2 text-sm text-fg-muted">
+              <p>{t("pool.stats.scope")}</p>
+              {since}
+            </div>
+            <TimeBlock
+              title={t("pool.stats.time")}
+              time={exam.time}
+              count={t("pool.stats.timeAnswers")}
+              scope={t("pool.stats.timeScope", { cap: DWELL_IDLE_CAP_MS / 60_000 })}
+              none={t("pool.stats.timeNone", { min: QUESTION_TIME_MIN_N })}
             />
-            <Stat label={t("pool.stats.answers")} value={stats.n} />
+            <DiscriminationBlock discrimination={exam.discrimination} />
+            {exam.distractors === undefined ? null : <DistractorBlock distractors={exam.distractors} />}
+          </>
+        ) : (
+          <div className="space-y-2 text-sm text-fg-muted">
+            <p>{t("pool.stats.examNone", { min: QUESTION_STATS_MIN_N })}</p>
+            {since}
           </div>
         )}
-        <div className="space-y-2 text-sm text-fg-muted">
-          <p>{stats.p === null ? t("pool.stats.examNone", { min: QUESTION_STATS_MIN_N }) : t("pool.stats.scope")}</p>
-          <p className="text-xs text-fg-faint">
-            {stats.since
-              ? t("pool.stats.since", { date: isoDateParts(stats.since).date })
-              : t("pool.stats.sinceAlways")}
-          </p>
-        </div>
-        {stats.p === null ? null : (
-          <>
-            <section className="space-y-3">
-              <SectionHeading title={t("pool.stats.time")} />
-              {stats.time ? (
-                <>
-                  <TimeFigures time={stats.time} count={t("pool.stats.timeAnswers")} />
-                  <p className="text-sm text-fg-muted">
-                    {t("pool.stats.timeScope", { cap: DWELL_IDLE_CAP_MS / 60_000 })}
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-fg-muted">{t("pool.stats.timeNone", { min: QUESTION_TIME_MIN_N })}</p>
-              )}
-            </section>
-            <DiscriminationBlock discrimination={stats.discrimination} />
-            {stats.distractors === undefined ? null : <DistractorBlock distractors={stats.distractors} />}
-          </>
-        )}
-        <RevisionTimeBlock revisionTime={stats.revisionTime} />
+        {/* A separate series (ADR-039 §6b), last and apart from the exam's blocks: its `n` counts students. */}
+        <TimeBlock
+          title={t("pool.stats.revisionTime")}
+          time={stats.revisionTime}
+          count={t("pool.stats.revisionStudents")}
+          scope={t("pool.stats.revisionScope")}
+          none={t("pool.stats.revisionNone", { min: REVISION_TIME_MIN_STUDENTS })}
+        />
       </div>
     </Sheet>
   );
 }
 
-/** A time series' figures: the median with its middle half, the mean, and what `n` counts. */
-function TimeFigures({ time, count }: { time: TimeStats; count: string }) {
-  const t = useT();
-  return (
-    // On a phone the median takes the row, the two others share the next.
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-      <div className="col-span-2 sm:col-span-1">
-        <Stat
-          label={t("pool.stats.timeMedian")}
-          value={formatSpan(time.medianS, t)}
-          hint={t("pool.stats.timeRange", { p25: formatSpan(time.p25S, t), p75: formatSpan(time.p75S, t) })}
-        />
-      </div>
-      <Stat label={t("pool.stats.timeMean")} value={formatSpan(time.meanS, t)} />
-      <Stat label={count} value={time.n} />
-    </div>
-  );
-}
-
 /**
- * The time in targeted revision (ADR-039 §6b), the last block, apart from
- * the exam's blocks: a separate series — each student's first try at a
- * question they had already met, its key seen —, which its one line says is
- * not an exam time. Its `n` counts students; below its threshold the block
- * says so.
+ * A time series' block: the median with its middle half, the mean when the
+ * series carries one (the revision series does not, ADR-039 §6b), what `n`
+ * counts and one line on what the series is; below its threshold, one line
+ * saying when it will show.
  */
-function RevisionTimeBlock({ revisionTime }: { revisionTime: TimeStats | null }) {
+function TimeBlock({
+  title,
+  time,
+  count,
+  scope,
+  none,
+}: {
+  title: string;
+  time: (RevisionTimeStats & { meanS?: number }) | null;
+  count: string;
+  scope: string;
+  none: string;
+}) {
   const t = useT();
+  const mean = time?.meanS;
   return (
     <section className="space-y-3">
-      <SectionHeading title={t("pool.stats.revisionTime")} />
-      {revisionTime ? (
+      <SectionHeading title={title} />
+      {time ? (
         <>
-          <TimeFigures time={revisionTime} count={t("pool.stats.revisionStudents")} />
-          <p className="text-sm text-fg-muted">{t("pool.stats.revisionScope")}</p>
+          {/* With a mean, on a phone the median takes the row and the two others share the next. */}
+          <div className={mean === undefined ? "grid grid-cols-2 gap-3" : "grid grid-cols-2 gap-3 sm:grid-cols-3"}>
+            <div className={mean === undefined ? undefined : "col-span-2 sm:col-span-1"}>
+              <Stat
+                label={t("pool.stats.timeMedian")}
+                value={formatSpan(time.medianS, t)}
+                hint={t("pool.stats.timeRange", { p25: formatSpan(time.p25S, t), p75: formatSpan(time.p75S, t) })}
+              />
+            </div>
+            {mean === undefined ? null : <Stat label={t("pool.stats.timeMean")} value={formatSpan(mean, t)} />}
+            <Stat label={count} value={time.n} />
+          </div>
+          <p className="text-sm text-fg-muted">{scope}</p>
         </>
       ) : (
-        <p className="text-sm text-fg-muted">{t("pool.stats.revisionNone", { min: REVISION_TIME_MIN_STUDENTS })}</p>
+        <p className="text-sm text-fg-muted">{none}</p>
       )}
     </section>
   );

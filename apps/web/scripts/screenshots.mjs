@@ -1302,28 +1302,21 @@ const scenes = [
   { name: "pool-stats-reader", role: "teacher", path: "/pools/p3", fold: true, act: (p) => p.getByRole("button", { name: /^(Statistics of|Statistiques de) / }).first().click() },
   // The cards, and the question the mock gives a NEGATIVE rate (ADR-026).
   { name: "pool-stats-negative", role: "teacher", path: "/pools/p1", ls: { "quiz-pool-view": "cards" }, fold: true, act: (p) => p.getByRole("button", { name: /^(Statistics of|Statistiques de) / }).nth(1).click() },
-  // The choices picked on a multiple-choice question (ADR-043): a strong
-  // distractor, a multiple-answer question, and too few answers yet.
+  // One block of the panel scrolled into view: the choices picked on a
+  // multiple-choice question (ADR-043) — a strong distractor, a
+  // multiple-answer question, too few answers yet — and the time in targeted
+  // revision (ADR-039 §6b) — shown, not enough students yet, and a question
+  // listed for it alone.
   ...[
-    ["pool-stats-choices", "ptr-null-check"],
-    ["pool-stats-choices-multiple", "fopen-modes"],
-    ["pool-stats-choices-none", "array-decay"],
-  ].map(([name, question]) => ({ name, role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+    ["pool-stats-choices", "ptr-null-check", /^(Choices picked|Choix des étudiants)/],
+    ["pool-stats-choices-multiple", "fopen-modes", /^(Choices picked|Choix des étudiants)/],
+    ["pool-stats-choices-none", "array-decay", /^(Choices picked|Choix des étudiants)/],
+    ["pool-stats-revision", "ptr-arith-01", /^(Time in targeted revision|Temps en révision ciblée)/],
+    ["pool-stats-revision-none", "sizeof-ptr-64", /^(Time in targeted revision|Temps en révision ciblée)/],
+    ["pool-stats-revision-only", "strcpy-overflow", /^(Time in targeted revision|Temps en révision ciblée)/],
+  ].map(([name, question, section]) => ({ name, role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await p.getByRole("button", { name: new RegExp(`^(Statistics of|Statistiques de) ${question}$`) }).first().click();
-      await p
-        .getByRole("dialog")
-        .locator("section", { hasText: /^(Choices picked|Choix des étudiants)/ })
-        .evaluate((el) => el.scrollIntoView({ block: "end" }));
-    } })),
-  // The time in targeted revision (ADR-039 §6b), the panel's last block: shown,
-  // not enough students yet, and a question listed for it alone.
-  ...[
-    ["pool-stats-revision", "ptr-arith-01"],
-    ["pool-stats-revision-none", "sizeof-ptr-64"],
-    ["pool-stats-revision-only", "strcpy-overflow"],
-  ].map(([name, question]) => ({ name, role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
-      await p.getByRole("button", { name: new RegExp(`^(Statistics of|Statistiques de) ${question}$`) }).first().click();
-      await p.getByRole("dialog").locator("section").last().evaluate((el) => el.scrollIntoView({ block: "end" }));
+      await p.getByRole("dialog").locator("section", { hasText: section }).evaluate((el) => el.scrollIntoView({ block: "end" }));
     } })),
   { name: "pool-bulk", role: "teacher", path: "/pools/p1", act: async (p) => {
       await p.getByLabel(/ptr-arith-01/).first().check();

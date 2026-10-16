@@ -15,7 +15,10 @@ where they are shown (§8) — the 2×2 in the classroom's Drill tab rather
 than the pool's statistics panel.* *Amended 2026-10-15 by
 [ADR-115](ADR-115-revision-ciblee-par-notion.md) (§1, §4, §8): a round of
 targeted revision sends and stores no confidence; it moves no due date and
-enters neither the calibration nor the 2×2.*
+enters neither the calibration nor the 2×2.* *Noted 2026-10-16 by
+[ADR-039](ADR-039-temps-passe-par-question.md) §6b (§8): the time of targeted
+revision reaches the pool's panel as an anonymous per-question aggregate; §8
+draws the line between a classroom's drill rows and such an aggregate.*
 
 Scope: the column `drill_reviews.confidence`, the body of
 `POST /app/api/drill/cards/:id/answer` (`DrillAnswerBody`), the pure rule

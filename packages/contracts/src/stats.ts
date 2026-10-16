@@ -40,6 +40,15 @@ export const TimeStats = z.object({
 export type TimeStats = z.infer<typeof TimeStats>;
 
 /**
+ * The time in targeted revision (ADR-039 §6b), over `n` students, in whole
+ * seconds: the median and the middle half, NO mean. A mean beside `n` would
+ * give back the one value a new student's round adds; a median moves to a
+ * neighbouring value and does not.
+ */
+export const RevisionTimeStats = TimeStats.omit({ meanS: true });
+export type RevisionTimeStats = z.infer<typeof RevisionTimeStats>;
+
+/**
  * A question's discrimination index (ADR-042): the corrected point-biserial,
  * combined over `evaluations` exams and `n` attempts, to two decimals. Signed.
  */
@@ -100,11 +109,25 @@ export const QuestionStats = z.object({
   since: z.string().nullable(),
   time: TimeStats.nullable(),
   discrimination: DiscriminationStats.nullable(),
-  /** Absent: the type has no distractor analysis. Null: too few answers on the current options. */
+  /**
+   * Absent: the type has no distractor analysis, or the entry has no exam
+   * figures. Null: too few answers on the current options.
+   */
   distractors: DistractorStats.nullable().optional(),
-  revisionTime: TimeStats.nullable(),
+  revisionTime: RevisionTimeStats.nullable(),
 });
 export type QuestionStats = z.infer<typeof QuestionStats>;
+
+/**
+ * Whether an entry carries the exam's figures: `n`, the field the exam
+ * threshold sets, and `p` with it. False for an entry listed for its time
+ * in targeted revision alone (ADR-039 §6b).
+ */
+export function hasExamStats<T extends Pick<QuestionStats, "n" | "p">>(
+  stats: T,
+): stats is T & { n: number; p: number } {
+  return stats.n !== null;
+}
 
 /** `GET /pools/:id/question-stats`: one entry per question with enough exam answers or enough students in revision. */
 export const PoolQuestionStats = z.object({

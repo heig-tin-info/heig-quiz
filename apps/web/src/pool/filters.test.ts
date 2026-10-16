@@ -288,7 +288,7 @@ describe("the statistics bounds (F-STAT-03)", () => {
   });
 
   it("reads an entry with a time in revision but no exam figure as one without statistics (ADR-039 §6b)", () => {
-    const revisionOnly: QuestionStats = { ...stats(0), n: null, p: null, revisionTime: { ...TIME, medianS: 80 } };
+    const revisionOnly: QuestionStats = { ...stats(0), n: null, p: null, revisionTime: { n: 12, medianS: 80, p25S: 52, p75S: 121 } };
     for (const bound of [{ rateMin: 0 }, { timeMax: 120 }]) {
       const f = { ...EMPTY_FILTERS, ...bound };
       expect(matchesStats(revisionOnly, f)).toBe(false);
