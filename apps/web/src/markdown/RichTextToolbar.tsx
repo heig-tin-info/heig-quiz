@@ -4,6 +4,9 @@ import { useEditorState } from "@tiptap/react";
 import {
   Bold,
   Code,
+  Heading1,
+  Heading2,
+  Heading3,
   Image as ImageIcon,
   Italic,
   Link as LinkIcon,
@@ -35,6 +38,9 @@ interface Action {
   key: string;
   icon: IconType;
   labelKey:
+    | "md.heading1"
+    | "md.heading2"
+    | "md.heading3"
     | "md.bold"
     | "md.italic"
     | "md.code"
@@ -58,6 +64,14 @@ export function toolbarActions(mode: {
 }): Action[] {
   /** Every action the toolbar can offer, before the mode filters it. */
   const ACTIONS: Action[] = [
+    // The three levels a question or a journal page is written with, FIRST:
+    // a block's kind comes before what is done to the words inside it. And
+    // the button, pressed while the caret is in a heading, is what tells a
+    // teacher that `# ` became a title — the characters are gone from the
+    // rich surface, so something else has to say so.
+    { key: "heading1", icon: Heading1, labelKey: "md.heading1" },
+    { key: "heading2", icon: Heading2, labelKey: "md.heading2" },
+    { key: "heading3", icon: Heading3, labelKey: "md.heading3" },
     { key: "bold", icon: Bold, labelKey: "md.bold", shortcut: `${modKey()}+B` },
     { key: "italic", icon: Italic, labelKey: "md.italic", shortcut: `${modKey()}+I` },
     { key: "code", icon: Code, labelKey: "md.code" },
@@ -75,11 +89,16 @@ export function toolbarActions(mode: {
       (a.key !== "image" || mode.showImage) &&
       (a.key !== "blank" || mode.holes) &&
       // A one-paragraph field has nowhere to put a fenced block, and a table
-      // in a row of a list is a shape no one asked a CHOICE for. The schema
-      // still knows both, so a stored one is never dropped (tiptap.ts).
-      ((a.key !== "codeBlock" && a.key !== "table") || !mode.inline),
+      // or a heading in a row of a list is a shape no one asked a CHOICE for.
+      // The schema still knows them all, so a stored one is never dropped
+      // (tiptap.ts).
+      (!isBlockAction(a.key) || !mode.inline),
   );
 }
+
+/** The actions that shape a BLOCK, which an inline field never offers. */
+const isBlockAction = (key: string): boolean =>
+  key === "codeBlock" || key === "table" || key.startsWith("heading");
 
 /*
  * Which marks the caret sits in, for the pressed state of the toolbar.
@@ -94,6 +113,9 @@ export function useRichTextMarks(editor: Editor | null): RichTextMarks {
       e === null
         ? {}
         : {
+            heading1: e.isActive("heading", { level: 1 }),
+            heading2: e.isActive("heading", { level: 2 }),
+            heading3: e.isActive("heading", { level: 3 }),
             bold: e.isActive("bold"),
             italic: e.isActive("italic"),
             code: e.isActive("code"),
@@ -177,6 +199,16 @@ type ActionRunner = (editor: Editor, deps: ToolbarActionDeps) => void;
 
 /** What each toolbar button does, keyed like `toolbarActions`. */
 const RUNNERS: Record<string, ActionRunner> = {
+  // A toggle: pressed again on a heading of that level, it is a paragraph.
+  heading1: (editor) => {
+    editor.chain().focus().toggleHeading({ level: 1 }).run();
+  },
+  heading2: (editor) => {
+    editor.chain().focus().toggleHeading({ level: 2 }).run();
+  },
+  heading3: (editor) => {
+    editor.chain().focus().toggleHeading({ level: 3 }).run();
+  },
   bold: (editor) => {
     editor.chain().focus().toggleBold().run();
   },

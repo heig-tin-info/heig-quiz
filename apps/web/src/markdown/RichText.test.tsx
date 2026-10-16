@@ -181,9 +181,44 @@ describe("RichText — the toolbar", () => {
   it("offers the formatting actions, named and translated", () => {
     renderWithProviders(<Host initial="x" />);
     expect(screen.getByRole("toolbar", { name: "Formatting" })).toBeInTheDocument();
-    for (const name of [/^Bold/, /^Italic/, "Code", "Code block", "Equation", "Link"]) {
+    for (const name of [
+      "Heading 1",
+      "Heading 2",
+      "Heading 3",
+      /^Bold/,
+      /^Italic/,
+      "Code",
+      "Code block",
+      "Equation",
+      "Link",
+    ]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
+  });
+
+  it("turns the paragraph into a heading, and says so while the caret is in one", async () => {
+    const onValue = vi.fn();
+    renderWithProviders(<Host initial="Intro" onValue={onValue} />);
+    const h2 = screen.getByRole("button", { name: "Heading 2" });
+    expect(h2).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(h2);
+    await waitFor(() => expect(onValue).toHaveBeenCalled());
+    expect(onValue.mock.lastCall?.[0]).toBe("## Intro");
+    // The pressed button is what tells a teacher the line IS a title: the
+    // `## ` they could have typed is not on the rich surface any more.
+    await waitFor(() => expect(h2).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByRole("button", { name: "Heading 1" })).toHaveAttribute("aria-pressed", "false");
+    // Pressed again, the title is a paragraph.
+    await userEvent.click(h2);
+    await waitFor(() => expect(onValue.mock.lastCall?.[0]).toBe("Intro"));
+  });
+
+  it("lights the level up for a heading typed as markdown", async () => {
+    renderWithProviders(<Host initial="# Typed" />);
+    surface().focus();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Heading 1" })).toHaveAttribute("aria-pressed", "true"),
+    );
   });
 
   it("hides the image action when no upload handler was given", () => {
@@ -195,6 +230,7 @@ describe("RichText — the toolbar", () => {
     renderWithProviders(<Host initial="" />, { locale: "fr" });
     expect(screen.getByRole("toolbar", { name: "Mise en forme" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bloc de code" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Titre 1" })).toBeInTheDocument();
   });
 
   it("makes the selection bold", async () => {
@@ -522,9 +558,11 @@ describe("RichText — the toolbar of an inline field", () => {
     await waitFor(() =>
       expect(screen.getByRole("toolbar", { name: "Formatting" })).toBeInTheDocument(),
     );
-    // What a row of a list gets: the marks, a formula, a link. No fence.
+    // What a row of a list gets: the marks, a formula, a link. No fence, no
+    // heading: a choice is one paragraph.
     expect(screen.getByRole("button", { name: /^Bold/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Code block" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Heading 1" })).toBeNull();
   });
 
   it("does not take the caret out of the field when a button is pressed", async () => {
