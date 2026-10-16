@@ -640,7 +640,15 @@ decided plan, not yet built, except 8a (§6) and 9a (§9); §8 describes 7b as b
      #897): a view switch on All, To validate and Validated draws the same
      rows indented under the broader concept their path follows, each concept
      once with its other broader concepts named, the ancestors of a shown
-     concept as path-only rows (`conceptTree`, client-side).
+     concept as path-only rows (`conceptTree`, client-side). As built
+     (2026-10-16, #897, step D closed as covered by A1, B and C): the sheet's
+     Relations show, after the broader concepts, a read-only **Narrower
+     concepts** list (the live concepts naming this one in their `broader`,
+     by name, a proposed one marked, no name a link: the edge belongs to the
+     child and is placed from its sheet), and each candidate of the broader
+     search shows its path and "Currently holds" its direct narrower
+     concepts (five, then `+n`); both read `directNarrowerOf` of
+     `@quiz/domain`, client-side, and the search's accept rule is unchanged.
    - **Not here.** A concept selected anywhere covering its narrower ones
      (§4 of the Decision) is 7d (§10).
 6. **Suggest concepts (8a, built).** It sends the draft's statement and

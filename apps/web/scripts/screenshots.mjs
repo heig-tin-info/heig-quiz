@@ -1868,6 +1868,13 @@ const scenes = [
       await p.getByRole("searchbox", { name: /^search a broader concept$/i }).fill("fuite");
       await p.getByRole("group", { name: /^relations$/i }).scrollIntoViewIfNeeded();
     } },
+  // #897 (step D closed): Pointer's read-only Narrower concepts, and its broader search on Heap, which "Currently holds" Memory leak. Take it at --width=390 too.
+  { name: "admin-concepts-sheet-narrower", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^edit pointeur$|^edit pointer$/i }).click();
+      await p.getByRole("searchbox", { name: /^search a broader concept$/i }).fill("tas");
+      await p.getByText(/^currently holds/i).waitFor();
+      await p.getByRole("list", { name: /^narrower concepts$/i }).scrollIntoViewIfNeeded();
+    } },
   // ADR-114 §3 (#897 step A3): the sheet's Suggest a broader concept, Hash table's suggestions shown (one existing concept, one top to create).
   { name: "admin-concepts-sheet-broader-suggestion", role: "admin", path: "/admin?tab=concepts", fold: true, act: async (p) => {
       await p.getByRole("listitem").filter({ hasText: /anglicisme/i }).getByRole("button", { name: /^edit hash table$/i }).click();

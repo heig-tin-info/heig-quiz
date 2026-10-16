@@ -7,6 +7,7 @@ import {
   checkBroaderEdge,
   checkRelatedEdge,
   coverageOf,
+  directNarrowerOf,
   edgesOf,
   mergedRelations,
   narrowerDescendants,
@@ -200,5 +201,19 @@ describe("unplaced", () => {
     const lone = { id: "lone", broader: [], related: [] };
     const relatedOnly = { id: "rel", broader: [], related: ["lone"] };
     expect(unplaced([root, child, lone, relatedOnly])).toEqual([lone, relatedOnly]);
+  });
+});
+
+describe("directNarrowerOf", () => {
+  it("lists the concepts that name it as broader, not the ones further down nor a related one", () => {
+    const root = { id: "root", broader: [], related: ["rel"] };
+    const child = { id: "child", broader: ["root"], related: [] };
+    const grandchild = { id: "grand", broader: ["child"], related: [] };
+    const twoParents = { id: "two", broader: ["other", "root"], related: [] };
+    const rel = { id: "rel", broader: [], related: ["root"] };
+    const all = [root, child, grandchild, twoParents, rel];
+    expect(directNarrowerOf(all, "root")).toEqual([child, twoParents]);
+    expect(directNarrowerOf(all, "child")).toEqual([grandchild]);
+    expect(directNarrowerOf(all, "grand")).toEqual([]);
   });
 });
