@@ -1674,6 +1674,12 @@ export const en = {
   "pool.stats.timeScope":
     "Exams only. Time a question is on screen, measured by the server; a stretch without activity counts {cap} minutes at most.",
   "pool.stats.timeNone": "The time shows from {min} timed exam answers.",
+  "pool.stats.examNone": "No exam statistics yet: they show from {min} exam answers.",
+  "pool.stats.revisionTime": "Time in targeted revision",
+  "pool.stats.revisionStudents": "Students",
+  "pool.stats.revisionScope":
+    "First try per student, on a question they had already met and whose key they could see. Not an exam time, not comparable to it.",
+  "pool.stats.revisionNone": "Not enough students yet: it shows from {min} students.",
   "pool.stats.discrimination": "Discrimination",
   "pool.stats.discriminationIndex": "Discrimination index",
   "pool.stats.discriminationBand.good": "Good",
@@ -1697,7 +1703,7 @@ export const en = {
   "pool.stats.reset": "Reset statistics",
   "pool.stats.resetTitle": "Reset the statistics of {name}?",
   "pool.stats.resetBody":
-    "Only answers from attempts started after now will count. Nothing is deleted: grades and results stay as they are.",
+    "Only answers from exam attempts started after now, and first tries in targeted revision served after now, will count. Nothing is deleted: grades, results and revision rounds stay as they are.",
   "pool.stats.resetConfirm": "Reset",
   "pool.stats.resetDone": "Statistics reset.",
   "pool.stats.resetFailed": "The reset failed.",

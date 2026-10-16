@@ -16,7 +16,9 @@ import {
   quantile,
   QUESTION_STATS_MIN_N,
   QUESTION_TIME_MIN_N,
+  REVISION_TIME_MIN_STUDENTS,
   shownItemStats,
+  shownRevisionSpread,
   shownTimeSpread,
   spread,
 } from "./stats.js";
@@ -147,6 +149,14 @@ describe("shownTimeSpread", () => {
     expect(QUESTION_TIME_MIN_N).toBe(10);
     expect(shownTimeSpread(spread([1, 2, 3, 4, 5, 6, 7, 8, 9]))).toBeNull();
     expect(shownTimeSpread(spread([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))?.n).toBe(10);
+  });
+});
+
+describe("shownRevisionSpread", () => {
+  it("hides the time in targeted revision below ten students, shows it from ten", () => {
+    expect(REVISION_TIME_MIN_STUDENTS).toBe(QUESTION_STATS_MIN_N);
+    expect(shownRevisionSpread(spread([1, 2, 3, 4, 5, 6, 7, 8, 9]))).toBeNull();
+    expect(shownRevisionSpread(spread([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))?.n).toBe(10);
   });
 });
 

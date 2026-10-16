@@ -7,6 +7,7 @@ import type {
   QuestionRow,
   QuestionStats,
   StatsReset,
+  TimeStats,
 } from "@quiz/contracts";
 import {
   DISCRIMINATION_FAIR,
@@ -17,6 +18,7 @@ import {
   DWELL_IDLE_CAP_MS,
   QUESTION_STATS_MIN_N,
   QUESTION_TIME_MIN_N,
+  REVISION_TIME_MIN_STUDENTS,
   type DiscriminationBand,
 } from "@quiz/domain";
 import { choiceLetter } from "@quiz/qt-mcq/client";
@@ -40,6 +42,11 @@ import { ratePercent } from "./filters";
  * The time spent (ADR-039) is a second block, with its own threshold: a
  * question may show its rate long before it has enough timed exam answers,
  * and then the block says so in one line rather than showing nothing.
+ *
+ * The time in targeted revision (ADR-039 §6b) is a separate series, drawn
+ * last. A question may be in the list for it alone: its exam figures are
+ * then null, and the top block says there are no exam statistics yet
+ * instead of drawing the exam's blocks.
  *
  * A reading panel: it has no primary action. The only button is the reset,
  * drawn for a contributor or an owner and absent for a reader (what is not
@@ -106,53 +113,89 @@ export function QuestionStatsSheet({
       }
     >
       <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-3">
-          <Stat
-            label={t("pool.stats.successRate")}
-            value={`${ratePercent(stats.p)}%`}
-            hint={stats.p < 0 ? t("pool.stats.negative") : undefined}
-          />
-          <Stat label={t("pool.stats.answers")} value={stats.n} />
-        </div>
+        {stats.p === null ? null : (
+          <div className="grid grid-cols-2 gap-3">
+            <Stat
+              label={t("pool.stats.successRate")}
+              value={`${ratePercent(stats.p)}%`}
+              hint={stats.p < 0 ? t("pool.stats.negative") : undefined}
+            />
+            <Stat label={t("pool.stats.answers")} value={stats.n} />
+          </div>
+        )}
         <div className="space-y-2 text-sm text-fg-muted">
-          <p>{t("pool.stats.scope")}</p>
+          <p>{stats.p === null ? t("pool.stats.examNone", { min: QUESTION_STATS_MIN_N }) : t("pool.stats.scope")}</p>
           <p className="text-xs text-fg-faint">
             {stats.since
               ? t("pool.stats.since", { date: isoDateParts(stats.since).date })
               : t("pool.stats.sinceAlways")}
           </p>
         </div>
-        <section className="space-y-3">
-          <SectionHeading title={t("pool.stats.time")} />
-          {stats.time ? (
-            <>
-              {/* On a phone the median takes the row, the two others share the next. */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <div className="col-span-2 sm:col-span-1">
-                  <Stat
-                    label={t("pool.stats.timeMedian")}
-                    value={formatSpan(stats.time.medianS, t)}
-                    hint={t("pool.stats.timeRange", {
-                      p25: formatSpan(stats.time.p25S, t),
-                      p75: formatSpan(stats.time.p75S, t),
-                    })}
-                  />
-                </div>
-                <Stat label={t("pool.stats.timeMean")} value={formatSpan(stats.time.meanS, t)} />
-                <Stat label={t("pool.stats.timeAnswers")} value={stats.time.n} />
-              </div>
-              <p className="text-sm text-fg-muted">
-                {t("pool.stats.timeScope", { cap: DWELL_IDLE_CAP_MS / 60_000 })}
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-fg-muted">{t("pool.stats.timeNone", { min: QUESTION_TIME_MIN_N })}</p>
-          )}
-        </section>
-        <DiscriminationBlock discrimination={stats.discrimination} />
-        {stats.distractors === undefined ? null : <DistractorBlock distractors={stats.distractors} />}
+        {stats.p === null ? null : (
+          <>
+            <section className="space-y-3">
+              <SectionHeading title={t("pool.stats.time")} />
+              {stats.time ? (
+                <>
+                  <TimeFigures time={stats.time} count={t("pool.stats.timeAnswers")} />
+                  <p className="text-sm text-fg-muted">
+                    {t("pool.stats.timeScope", { cap: DWELL_IDLE_CAP_MS / 60_000 })}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-fg-muted">{t("pool.stats.timeNone", { min: QUESTION_TIME_MIN_N })}</p>
+              )}
+            </section>
+            <DiscriminationBlock discrimination={stats.discrimination} />
+            {stats.distractors === undefined ? null : <DistractorBlock distractors={stats.distractors} />}
+          </>
+        )}
+        <RevisionTimeBlock revisionTime={stats.revisionTime} />
       </div>
     </Sheet>
+  );
+}
+
+/** A time series' figures: the median with its middle half, the mean, and what `n` counts. */
+function TimeFigures({ time, count }: { time: TimeStats; count: string }) {
+  const t = useT();
+  return (
+    // On a phone the median takes the row, the two others share the next.
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="col-span-2 sm:col-span-1">
+        <Stat
+          label={t("pool.stats.timeMedian")}
+          value={formatSpan(time.medianS, t)}
+          hint={t("pool.stats.timeRange", { p25: formatSpan(time.p25S, t), p75: formatSpan(time.p75S, t) })}
+        />
+      </div>
+      <Stat label={t("pool.stats.timeMean")} value={formatSpan(time.meanS, t)} />
+      <Stat label={count} value={time.n} />
+    </div>
+  );
+}
+
+/**
+ * The time in targeted revision (ADR-039 §6b), the last block, apart from
+ * the exam's blocks: a separate series — each student's first try at a
+ * question they had already met, its key seen —, which its one line says is
+ * not an exam time. Its `n` counts students; below its threshold the block
+ * says so.
+ */
+function RevisionTimeBlock({ revisionTime }: { revisionTime: TimeStats | null }) {
+  const t = useT();
+  return (
+    <section className="space-y-3">
+      <SectionHeading title={t("pool.stats.revisionTime")} />
+      {revisionTime ? (
+        <>
+          <TimeFigures time={revisionTime} count={t("pool.stats.revisionStudents")} />
+          <p className="text-sm text-fg-muted">{t("pool.stats.revisionScope")}</p>
+        </>
+      ) : (
+        <p className="text-sm text-fg-muted">{t("pool.stats.revisionNone", { min: REVISION_TIME_MIN_STUDENTS })}</p>
+      )}
+    </section>
   );
 }
 

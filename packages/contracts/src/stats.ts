@@ -4,8 +4,9 @@
  *
  * A question's statistics are the mean success rate `p` over the `n`
  * answers counted. The server applies the threshold: below
- * `QUESTION_STATS_MIN_N` answers (`@quiz/domain`) a question is absent from
- * the pool list — a smaller `n` never goes on the wire. `p` is SIGNED: negative marking (ADR-026) can push it below
+ * `QUESTION_STATS_MIN_N` answers (`@quiz/domain`) `n` and `p` are null, and
+ * the question is absent from the pool list unless its time in targeted
+ * revision qualifies — a smaller `n` never goes on the wire. `p` is SIGNED: negative marking (ADR-026) can push it below
  * zero.
  *
  * The time spent on a question (ADR-039) has its own threshold,
@@ -84,17 +85,28 @@ export type DistractorStats = z.infer<typeof DistractorStats>;
  * there was none), its time — null below its own threshold —, its
  * discrimination, null when no exam qualifies, and, for a multiple-choice
  * question, its distractors.
+ *
+ * `revisionTime` is a SEPARATE series (ADR-039 §6b): the time of each
+ * student's first try at the question in targeted revision, one value per
+ * student, so its `n` counts students; null below
+ * `REVISION_TIME_MIN_STUDENTS` (`@quiz/domain`). Never an exam time, never
+ * added to one. An entry exists when either series qualifies: with too few
+ * exam answers, `n` and `p` are null, and so are the exam's time and
+ * discrimination, and its distractors absent.
  */
-export const QuestionStats = ItemStats.extend({
+export const QuestionStats = z.object({
+  n: ItemStats.shape.n.nullable(),
+  p: ItemStats.shape.p.nullable(),
   since: z.string().nullable(),
   time: TimeStats.nullable(),
   discrimination: DiscriminationStats.nullable(),
   /** Absent: the type has no distractor analysis. Null: too few answers on the current options. */
   distractors: DistractorStats.nullable().optional(),
+  revisionTime: TimeStats.nullable(),
 });
 export type QuestionStats = z.infer<typeof QuestionStats>;
 
-/** `GET /pools/:id/question-stats`: one entry per question that has enough answers. */
+/** `GET /pools/:id/question-stats`: one entry per question with enough exam answers or enough students in revision. */
 export const PoolQuestionStats = z.object({
   items: z.array(QuestionStats.extend({ questionId: z.uuid() })),
 });

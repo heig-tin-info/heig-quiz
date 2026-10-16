@@ -13,6 +13,15 @@ reached" bias; §8, the step it announced). Revises F-STAT-01 (docs/spec/02).
 
 Amended 2026-10-09: the Rollback section is removed (the runbook owns operational procedures).
 
+Amended 2026-10-16 (#897 E3, open question 60), decided by the product owner (option (b) of
+the question, 2026-10-16): the time of targeted revision
+([ADR-115](ADR-115-revision-ciblee-par-notion.md) §6) feeds a SEPARATE series, §6b, never
+the exam series of §6; §8 widened to it. One point is taken by assumption, for the product
+owner to change: that anonymous aggregate sits in the pool's panel, across classrooms (§6b,
+Privacy). Code: `firstRevisionPassesOf` in `apps/api/src/modules/stats/service.ts`,
+`REVISION_TIME_MIN_STUDENTS` / `shownRevisionSpread` in `@quiz/domain/stats`,
+`QuestionStats.revisionTime` in `@quiz/contracts/stats`. No migration.
+
 ## Context
 
 ADR-038 gave a question its success rate and announced a second step: the
@@ -150,6 +159,60 @@ seconds. No minimum, maximum or spread (N-DATA-06). Its own threshold,
 `n` and `p` show, and the question's entry still exists only when the
 success rate has its ten answers.
 
+*(Amended 2026-10-16, §6b: the entry also exists when the time in targeted
+revision qualifies alone; `n`, `p`, the time and the discrimination are
+then null.)*
+
+### 6b. The targeted-revision series
+
+*Amendment 2026-10-16 (#897 E3, open question 60, product owner's option (b)).*
+
+The time per question of a round of targeted revision (`drill_revision_answers.time_ms`,
+ADR-115 §6) is its own series, shown beside the exam series of §6 and never merged into
+it: a student who revises has already met the question and may see its key, so their time
+says how long a known question takes to re-answer, not what it costs in an exam.
+
+- **The value.** Per question, over `drill_revision_answers` joined to `drill_cards` (a
+  card is unique per student and question, so one card is one student): **one value per
+  student**, the `time_ms` of that card's earliest ANSWERED first pass (`pass = 1`), right,
+  partial or wrong, among the passes served at or after the question's `stats_since`; a
+  zero time is left out, a time at the idle cap kept. A second pass, or the first pass of a
+  later round, adds nothing: it follows a key just seen in a round, and one value per
+  student keeps `n` a count of students. The reset (F-STAT-05) covers this series by the
+  pass's `served_at`, as it covers the exams by the attempt's start. Rounds before an
+  opt-out, and the rounds of an archived classroom, count; a card the teacher removes
+  takes its passes, and its value, with it.
+- **The threshold.** `REVISION_TIME_MIN_STUDENTS` = `QUESTION_STATS_MIN_N` = **10
+  distinct students**, applied by the server (ADR-038 §4): below it `revisionTime` is
+  null. The shape is `TimeStats` of §6, `n` counting students: median first with P25–P75,
+  the mean beside, whole seconds, nothing else (N-DATA-06).
+- **The entry.** A question's entry exists when EITHER series qualifies. With fewer than
+  ten exam answers, `n` and `p` are null, and so are the exam's time and discrimination;
+  its distractors are absent. The pool's filters (F-STAT-03) and the similar questions
+  read the exam figures only: an entry carried by this series alone is a question without
+  statistics there.
+- **The labelling.** In the question's statistics panel, a block "Time in targeted
+  revision", last, with one line: "First try per student, on a question they had already
+  met and whose key they could see. Not an exam time, not comparable to it."; below the
+  threshold, "Not enough students yet". Not a column of the pool's table, not a filter;
+  never summed into "Generate a quiz" (F-STAT-04). The MCP tool `get_pool_question_stats`
+  says that `revisionTime` is not an exam time and must never be added to a test's
+  duration.
+- **Privacy.** An anonymous per-question aggregate of at least ten distinct students may
+  sit in the pool's panel, read by the pool's readers across classrooms (ADR-038 §5),
+  like the exam aggregates (settled question 28 (l), N-DATA-06), while a classroom's drill
+  rows, and every per-classroom read of the drill, stay with that classroom's staff (28
+  (j), ADR-085 §8). No route returns a time of one student. The residual risk of ADR-038
+  holds here: a reader who reads `revisionTime` just before and just after a known
+  student's round (`n` from 10 to 11) learns that student's time, which no route shows;
+  accepted on the same grounds as ADR-038's exam points — the figure carries no identity,
+  only a reader who knows who revised in between can tie it to a student, and it is one
+  time on a question already met, not a grade. *Taken by assumption, the product owner may change it:* the
+  anonymous cross-classroom aggregate in the pool's panel, although ADR-085 §8 kept the
+  confidence 2×2 out of that panel for its readers span other classrooms; the difference
+  is that the 2×2 reads classroom rows by classroom, while this series is the question's
+  anonymous aggregate over every classroom, like the exam figures.
+
 ### 7. Who is measured
 
 Never a delegated session (ADR-034): somebody acting as the student moves
@@ -160,7 +223,8 @@ member's test walk is measured and left out at read time, as in ADR-038.
 
 `dwell_ms`, `first_shown_at` and the open interval never leave the server:
 no route returns them, to the student or to the staff; only the aggregates
-of §6 do, above their threshold.
+of §6 and of §6b do, above their thresholds. *(Widened 2026-10-16: §6b,
+the time of targeted revision, `drill_revision_answers.time_ms`, likewise.)*
 
 ## Consequences
 

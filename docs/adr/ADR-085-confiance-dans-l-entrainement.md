@@ -197,6 +197,13 @@ targeted revision, which stores none (*amended by ADR-115 §6*); the pure rules 
   seen only by the staff of the classroom their card belongs to (F-DRILL-04,
   06, question 28 (j)). The 2×2 is therefore a classroom read beside the
   other drill aggregates, not a column of `GET /pools/:id/question-stats`.
+  *(Note 2026-10-16, [ADR-039](ADR-039-temps-passe-par-question.md) §6b: the
+  time of targeted revision does reach that route, as the question's anonymous
+  aggregate over every classroom, from ten distinct students — like the exam
+  figures, not a classroom's rows. The line drawn here is between a
+  classroom's drill rows and per-classroom reads, which stay with that
+  classroom's staff, and an anonymous per-question aggregate, which may sit in
+  the pool's panel. Taken by assumption; the product owner may change it.)*
 
 ## Consequences
 

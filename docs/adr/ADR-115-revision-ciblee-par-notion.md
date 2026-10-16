@@ -6,7 +6,9 @@ Accepted (2026-10-15) by the product owner ([#897](https://github.com/heig-tin-i
 answers of 2026-10-15 evening, step E, items 3 to 8). Assumed, for the product owner to
 change: "Another round" puts today's practised cards last (§3); a proposed narrower concept
 under a validated declared one counts (§3); `time_ms` never feeds the rating reference times
-(§6). Deferred: decision 7, `time_ms` feeding the question's mean answer time (§6, question 60).
+(§6). *Amended 2026-10-16 (#897 E3): decision 7, deferred until then, is settled — open
+question 60, option (b), product owner: `time_ms` feeds a separate series of the question's
+statistics, [ADR-039](ADR-039-temps-passe-par-question.md) §6b (§6, §9).*
 
 Scope: a student's targeted revision of one concept of their course — what a round holds,
 how it is served and answered, what it records, what it feeds, and who sees it.
@@ -130,7 +132,10 @@ could forge.
   the rounds' times into the exam series and a separate series (open question 60); until
   then they are stored and fed to nothing. *Assumed:* it never feeds the drill's rating
   reference times — an answer given right after seeing the key would skew every student's
-  ratings.
+  ratings. *Amended 2026-10-16 (open question 60 settled, option (b)): the time now feeds
+  a separate series of the question's statistics, "Time in targeted revision"
+  ([ADR-039](ADR-039-temps-passe-par-question.md) §6b) — each student's earliest answered
+  first pass, shown from ten distinct students, never merged into the exam time.*
 - **No confidence and no device class** are sent or stored: the answer's contract is
   strict and refuses both (400). A screen that asks the confidence keeps it in the browser.
 
@@ -179,6 +184,10 @@ purged by `drill.purge` with its answers; deleting the classroom deletes its rou
   (a proposed concept named, a merged one under its winner); a round whose concept was
   deleted counts for its student under no concept. **Never a card, a question, an answer
   or a time.**
+- *Amended 2026-10-16 ([ADR-039](ADR-039-temps-passe-par-question.md) §6b, open question
+  60):* **the pool's readers** see, per question, the time of the students' first tries
+  as an anonymous aggregate of at least ten distinct students, across classrooms — never a
+  time per person, nor a round, a classroom or a student.
 - **The student is told**: the drill tab says that the teacher sees the rounds, and the
   "Data and privacy" page has the row (N-DATA-07).
 - **No audit action**: a round is a student's own practice, like the daily reviews.
@@ -239,6 +248,7 @@ that the teacher sees the rounds.
 - A student before a test on new material may hold few cards: a round can be short or
   null, by design.
 - `time_ms` is stored now and read by nothing until the question statistics are amended.
+  *(2026-10-16: amended by ADR-039 §6b; the `stats` module reads it, by join.)*
 - The next-day bias of §7 is accepted.
 
 ## Alternatives considered

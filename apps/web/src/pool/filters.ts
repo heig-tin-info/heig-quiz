@@ -276,15 +276,17 @@ export function hasStatsFilter(filters: StatsBounds): boolean {
  *
  * The rate is compared in whole percent, as the panel shows it, so "from
  * 73 %" keeps the question whose panel says 73 %. A question without the
- * figure a bound reads — no entry for the rate, no `time` for the time — is
- * kept only with `withoutStats`; a figure that exists and falls outside a
- * bound always hides the question.
+ * figure a bound reads — no entry or a null `p` for the rate, no `time` for
+ * the time — is kept only with `withoutStats`; a figure that exists and
+ * falls outside a bound always hides the question. An entry carried by its
+ * time in targeted revision alone (ADR-039 §6b) has no exam statistics: the
+ * bounds read the exam's figures only.
  */
 export function matchesStats(stats: QuestionStats | undefined, filters: StatsBounds): boolean {
   const rate = hasRateBound(filters);
   const time = hasTimeBound(filters);
   if (!rate && !time) return true;
-  if (!stats) return filters.withoutStats;
+  if (!stats || stats.p === null) return filters.withoutStats;
   if (rate && !inRange(ratePercent(stats.p), filters.rateMin, filters.rateMax)) return false;
   if (!time) return true;
   if (!stats.time) return filters.withoutStats;

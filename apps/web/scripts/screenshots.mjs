@@ -1310,6 +1310,19 @@ const scenes = [
     ["pool-stats-choices-none", "array-decay"],
   ].map(([name, question]) => ({ name, role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await p.getByRole("button", { name: new RegExp(`^(Statistics of|Statistiques de) ${question}$`) }).first().click();
+      await p
+        .getByRole("dialog")
+        .locator("section", { hasText: /^(Choices picked|Choix des étudiants)/ })
+        .evaluate((el) => el.scrollIntoView({ block: "end" }));
+    } })),
+  // The time in targeted revision (ADR-039 §6b), the panel's last block: shown,
+  // not enough students yet, and a question listed for it alone.
+  ...[
+    ["pool-stats-revision", "ptr-arith-01"],
+    ["pool-stats-revision-none", "sizeof-ptr-64"],
+    ["pool-stats-revision-only", "strcpy-overflow"],
+  ].map(([name, question]) => ({ name, role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: new RegExp(`^(Statistics of|Statistiques de) ${question}$`) }).first().click();
       await p.getByRole("dialog").locator("section").last().evaluate((el) => el.scrollIntoView({ block: "end" }));
     } })),
   { name: "pool-bulk", role: "teacher", path: "/pools/p1", act: async (p) => {

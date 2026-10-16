@@ -3158,6 +3158,9 @@ const mockQuestionId = (poolId: string, name: string) =>
  * wrong option picked more than the key, and one nobody picks; `fopen-modes`
  * shows a multiple-choice question's (the shares add up past 100), and
  * `array-decay` an mcq with too few answers on its current choices.
+ * The time in targeted revision (ADR-039 §6b) shows on the first; the
+ * others have too few students for it, and `strcpy-overflow` is listed for
+ * it alone, with no exam statistics yet.
  */
 const questionStats = new Map<string, QuestionStats>([
   ...liveQuestions("p1")
@@ -3169,6 +3172,7 @@ const questionStats = new Map<string, QuestionStats>([
         since: null,
         time: { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 },
         discrimination: { r: 0.46, evaluations: 2, n: 21 },
+        revisionTime: { n: 14, meanS: 52, medianS: 45, p25S: 31, p75S: 66 },
       },
       {
         n: 12,
@@ -3187,6 +3191,7 @@ const questionStats = new Map<string, QuestionStats>([
           ],
           none: 8,
         },
+        revisionTime: null,
       },
       {
         n: 31,
@@ -3194,6 +3199,7 @@ const questionStats = new Map<string, QuestionStats>([
         since: iso(-40 * D),
         time: { n: 30, meanS: 540, medianS: 412, p25S: 260, p75S: 700 },
         discrimination: { r: 0.12, evaluations: 3, n: 30 },
+        revisionTime: null,
       },
     ][i]!] as const),
   [
@@ -3215,15 +3221,27 @@ const questionStats = new Map<string, QuestionStats>([
         ],
         none: 5,
       },
+      revisionTime: null,
     },
   ],
   [
     mockQuestionId("p1", "array-decay"),
-    { n: 15, p: 0.6, since: null, time: null, discrimination: null, distractors: null },
+    { n: 15, p: 0.6, since: null, time: null, discrimination: null, distractors: null, revisionTime: null },
+  ],
+  [
+    mockQuestionId("p1", "strcpy-overflow"),
+    {
+      n: null,
+      p: null,
+      since: null,
+      time: null,
+      discrimination: null,
+      revisionTime: { n: 11, meanS: 228, medianS: 196, p25S: 140, p75S: 290 },
+    },
   ],
   ...liveQuestions("p3")
     .slice(0, 1)
-    .map((q) => [q.id, { n: 18, p: 0.56, since: null, time: null, discrimination: null }] as const),
+    .map((q) => [q.id, { n: 18, p: 0.56, since: null, time: null, discrimination: null, revisionTime: null }] as const),
 ]);
 
 on("GET", "/app/api/pools/:id/question-stats", (m) => {

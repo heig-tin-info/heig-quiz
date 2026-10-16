@@ -305,10 +305,11 @@ export const TOOLS: Tool[] = [
     title: "Get the statistics of a pool's questions",
     description:
       "How students did on a pool's questions, to pick or fix one (ADR-038). One entry per question with " +
-      "enough answers: a question absent from `items` has fewer than ten counted answers, and its figures " +
-      "are withheld, not zero. `n` answers counted, every version pooled, over the exams " +
+      "enough exam answers or enough students in targeted revision: a question absent from `items` has " +
+      "neither, and its figures are withheld, not zero. `n` answers counted, every version pooled, over the exams " +
       "(never an exercise) of EVERY class that used the question (not only the teacher's own); `p` is the mean " +
-      "share of the points earned, from 0 to 1, and may be NEGATIVE under negative marking; `since` is the " +
+      "share of the points earned, from 0 to 1, and may be NEGATIVE under negative marking; `n` and `p` are " +
+      "null below ten exam answers, and so are `time` and `discrimination`. `since` is the " +
       "last reset (null: never). `time` is the time spent on the question in exams, in whole seconds " +
       "(median, P25, P75, mean, over `time.n` answers), or null below ten timed answers. `discrimination` is " +
       "the corrected point-biserial over exams (`r` from -1 to 1, weak below 0.2, good from 0.3, negative: the " +
@@ -316,7 +317,10 @@ export const TOOLS: Tool[] = [
       "qualifies (ADR-042). `distractors`, on an " +
       "mcq question only, is the whole-percent share of students who picked each option (`correct` marks the " +
       "key) and of `none` (picked nothing), over `distractors.n` answers to the versions whose options are " +
-      "the current ones; null below ten such answers (ADR-043). Aggregates only: " +
+      "the current ones; null below ten such answers (ADR-043). `revisionTime` is a separate series: each " +
+      "student's first try at the question in targeted revision, on a question they had already met and " +
+      "whose key they could see, in whole seconds over `revisionTime.n` students, or null below ten students " +
+      "(ADR-039 §6b). `revisionTime` is not an exam time; never add it to a test's duration. Aggregates only: " +
       "no student, no individual grade.",
     input: z.object({ poolId: Id }),
     annotations: READ,
@@ -375,7 +379,8 @@ export const TOOLS: Tool[] = [
       "each `excerpt`. `linked`: usable as is in the course's evaluations. `canLink`: call " +
       "link_pool_to_course first (`mode: \"read\"` for a colleague's public pool, which keeps the course staff readers; " +
       "`mode: \"edit\"` makes them contributors of that whole pool). `stats` " +
-      "`{ n, p, r }` reads as in get_pool_question_stats (`r`: discrimination); null below ten exam answers.",
+      "`{ n, p, r }` reads as in get_pool_question_stats (`r`: discrimination); null below ten exam answers, " +
+      "whatever the time in revision.",
     input: z.object({
       courseId: Id,
       text: SimilarQuestionSearch.shape.text.describe("The statement to compare, or its gist"),

@@ -230,6 +230,7 @@ describe("the statistics bounds (F-STAT-03)", () => {
     since: null,
     time,
     discrimination: null,
+    revisionTime: null,
   });
 
   it("lets everything through while no bound is set", () => {
@@ -284,6 +285,15 @@ describe("the statistics bounds (F-STAT-03)", () => {
     expect(matchesStats(stats(0.9), time)).toBe(false);
     expect(matchesStats(stats(0.9), { ...time, withoutStats: true })).toBe(true);
     expect(matchesStats(stats(0.9), rate)).toBe(true);
+  });
+
+  it("reads an entry with a time in revision but no exam figure as one without statistics (ADR-039 §6b)", () => {
+    const revisionOnly: QuestionStats = { ...stats(0), n: null, p: null, revisionTime: { ...TIME, medianS: 80 } };
+    for (const bound of [{ rateMin: 0 }, { timeMax: 120 }]) {
+      const f = { ...EMPTY_FILTERS, ...bound };
+      expect(matchesStats(revisionOnly, f)).toBe(false);
+      expect(matchesStats(revisionOnly, { ...f, withoutStats: true })).toBe(true);
+    }
   });
 
   it("never keeps a figure that falls outside a bound, even with the questions without one", () => {
