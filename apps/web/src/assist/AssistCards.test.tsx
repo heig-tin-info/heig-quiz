@@ -157,9 +157,9 @@ describe("a prepared write (ADR-080 P3, decision 7)", () => {
     renderWithProviders(<AssistDock me={makeMe()} route={{ view: "home" }} teacherUi navigate={vi.fn()} />);
     const panel = await ask("Lie la banque");
     const card = within(panel).getByRole("region", { name: "Link a pool to a course" });
-    expect(within(card).getByText("Gains access")).toBeVisible();
+    expect(within(card).getByText("Access for")).toBeVisible();
     expect(within(card).getByText("Alan Turing")).toBeVisible();
-    expect(within(card).getByText("The course's whole staff becomes contributor of this pool.")).toBeVisible();
+    expect(within(card).getByText("The course's whole staff becomes a contributor of this pool.")).toBeVisible();
     expect(calls.some((c) => c.url.includes("/writes/"))).toBe(false);
     await userEvent.click(within(card).getByRole("button", { name: "Confirm" }));
     expect(await within(card).findByText("Done.")).toBeVisible();
@@ -202,7 +202,7 @@ describe("a prepared write (ADR-080 P3, decision 7)", () => {
     renderWithProviders(<AssistDock me={makeMe()} route={{ view: "home" }} teacherUi />);
     const panel = await ask("Lie la banque");
     await userEvent.click(within(panel).getByRole("button", { name: "Confirm" }));
-    expect(await within(panel).findByText("Not done: the platform refused it (your role does not allow it).")).toBeVisible();
+    expect(await within(panel).findByText("Refused: your role does not allow it.")).toBeVisible();
   });
 });
 

@@ -56,7 +56,7 @@ const open = (concepts = all) =>
     <ConceptSheet concept={heap} concepts={concepts} byId={new Map(concepts.map((c) => [c.id, c]))} locale="en" onClose={() => undefined} />,
   );
 const ask = async () => {
-  await userEvent.click(await screen.findByRole("button", { name: /^suggest a broader concept$/i }));
+  await userEvent.click(await screen.findByRole("button", { name: /^suggest with AI$/i }));
   return screen.findByRole("list", { name: "Suggested broader concepts" });
 };
 const available = { [AVAILABILITY]: ok({ available: true, types: [] }) };
@@ -127,7 +127,7 @@ describe("Suggest a broader concept on the concept sheet (ADR-114 §3)", () => {
   it("says so when the reply holds nothing for this concept", async () => {
     mockFetch({ ...available, [AI]: ok({ ...reply, broader: [reply.broader[1]], tops: [] }) });
     open();
-    await userEvent.click(await screen.findByRole("button", { name: /^suggest a broader concept$/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /^suggest with AI$/i }));
     expect(await screen.findByText("The AI found no broader concept.")).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Suggested broader concepts" })).toBeNull();
   });
@@ -135,7 +135,7 @@ describe("Suggest a broader concept on the concept sheet (ADR-114 §3)", () => {
   it("says why the model failed", async () => {
     mockFetch({ ...available, [AI]: fail(502, { error: "llm_failed" }) });
     open();
-    await userEvent.click(await screen.findByRole("button", { name: /^suggest a broader concept$/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /^suggest with AI$/i }));
     expect(await screen.findByText("The AI could not suggest a broader concept")).toBeInTheDocument();
   });
 
@@ -143,6 +143,6 @@ describe("Suggest a broader concept on the concept sheet (ADR-114 §3)", () => {
     const { calls } = mockFetch({ [AVAILABILITY]: ok({ available: false, types: [] }) });
     open();
     await waitFor(() => expect(calls.some((c) => c.url.endsWith("/generate/availability"))).toBe(true));
-    expect(screen.queryByRole("button", { name: /suggest a broader concept/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /suggest with AI/i })).toBeNull();
   });
 });

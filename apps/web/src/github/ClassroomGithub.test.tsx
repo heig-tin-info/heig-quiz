@@ -166,7 +166,7 @@ describe("the classroom's GitHub section", () => {
       [`GET ${GITHUB}`]: ok({ ...connected, link: { ...connected.link!, org: EMB } }),
     });
     renderSection();
-    const link = await screen.findByRole("link", { name: /Upgrade with GitHub Education/ });
+    const link = await screen.findByRole("link", { name: /Get GitHub Education/ });
     expect(link).toHaveAttribute("href", "https://education.github.com/globalcampus/teacher");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");

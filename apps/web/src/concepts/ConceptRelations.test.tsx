@@ -124,7 +124,7 @@ describe("the narrower concepts of a concept (#897)", () => {
     list = narrowerList(sheet);
     const [item] = within(list).getAllByRole("listitem");
     expect(item).toHaveTextContent("Fuite mémoire");
-    expect(within(item!).getByText("Proposed")).toBeInTheDocument();
+    expect(within(item!).getByText("To validate")).toBeInTheDocument();
     expect(within(list).queryAllByRole("button")).toEqual([]);
   });
 

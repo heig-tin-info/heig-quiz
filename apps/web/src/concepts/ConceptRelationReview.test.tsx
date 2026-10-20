@@ -158,7 +158,7 @@ describe("the AI proposals of the Relations view (ADR-114 §2)", () => {
       ...routes,
     });
     await openRelations();
-    await userEvent.click(await screen.findByRole("button", { name: "Propose relations with AI" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Ask the AI" }));
     await screen.findByRole("checkbox", { name: ARRAY });
     return mocked;
   }
@@ -179,10 +179,10 @@ describe("the AI proposals of the Relations view (ADR-114 §2)", () => {
     expect(within(related).getByText("Both hold elements in order.")).toBeInTheDocument();
     const tops = screen.getByRole("region", { name: "Missing top concepts" });
     expect(within(tops).getByText("New concept: Data structure")).toBeInTheDocument();
-    expect(within(tops).getByText("Proposed")).toBeInTheDocument();
+    expect(within(tops).getByText("To validate")).toBeInTheDocument();
     expect(within(tops).getByText("They organise data.")).toBeInTheDocument();
     expect(within(tops).getAllByRole("checkbox")).toHaveLength(2);
-    expect(screen.getByText(/3 unplaced concepts are still to ask about/)).toBeInTheDocument();
+    expect(screen.getByText(/3 unplaced concepts remain/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Ask again" }));
     await waitFor(() => expect(count(calls, AI)).toBe(2));
@@ -236,7 +236,7 @@ describe("the AI proposals of the Relations view (ADR-114 §2)", () => {
       [AI]: fail(429, { error: "llm_budget_exhausted", message: "The AI budget is spent." }),
     });
     await openRelations();
-    await userEvent.click(await screen.findByRole("button", { name: "Propose relations with AI" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Ask the AI" }));
     expect(await screen.findByText("The AI could not propose relations")).toBeInTheDocument();
   });
 });

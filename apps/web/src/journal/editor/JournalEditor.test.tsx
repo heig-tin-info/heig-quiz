@@ -379,7 +379,7 @@ describe("the save flow", () => {
     await openEditor();
     await userEvent.type(screen.getByLabelText("Title"), "!");
     await userEvent.click(saveButton());
-    expect(await screen.findByText("This journal lives in a GitHub repository: edit it on GitHub.")).toBeInTheDocument();
+    expect(await screen.findByText("This journal is kept in a GitHub repository: edit it there.")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Page text" })).toBeInTheDocument();
   });
 });
