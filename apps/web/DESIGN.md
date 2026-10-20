@@ -2351,9 +2351,10 @@ what it can detect of the rules below.
   noun phrase ("Sorties de page enregistrées"), never a sentence with a
   verb and a subject ("Quitter la page … sont enregistrés"), never a
   question. A button is a verb. Ceilings: a button 24 characters, a tab or
-  a segmented option 18, a badge 14, a column header 16, a hint or a
-  description 110, a toast 80. A string over its ceiling is a finding, not
-  a wrapping problem.
+  a segmented option 18, a badge 14, a column header 16, a `.desc`, `.hint`
+  or `.help` 110, a toast 80. A string over its ceiling is a finding, not
+  a wrapping problem; `src/i18n/copy.test.ts` enforces the ones a key's
+  suffix lets it see.
 - **A sub-text earns its place.** A `.desc`, `.hint`, `.body` or `.help`
   exists only when it carries a fact the label does not: a consequence, a
   limit, a number. It never restates the label ("Projet publié" / "Un

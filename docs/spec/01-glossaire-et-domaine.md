@@ -214,7 +214,9 @@ The English column is the interface's English, the French column its French;
 neither is a translation of the other: each is written in its language,
 short, by the rules of `apps/web/DESIGN.md` (Voice). A word of this table
 replaces every variant listed under *never*; the i18n lint of
-`apps/web/src/i18n/` refuses the variants it can detect (N-I18N-04). Settled
+`apps/web/src/i18n/` (`copy.test.ts`, which owns the list of enforced
+variants: a new row here prompts a rule there) refuses the variants it can
+detect (N-I18N-04). Settled
 by the product owner on 2026-10-20.
 
 | Concept | English | French | Never (fr) |
