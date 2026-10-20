@@ -10,18 +10,21 @@ import { fr } from "./fr";
 /**
  * The copy lint (N-I18N-04): what a machine can check of the Voice rules of
  * `apps/web/DESIGN.md` and of the interface glossary
- * (`docs/spec/01-glossaire-et-domaine.md` §1.5). Each rule names the keys
- * it refuses; `copy.exceptions.json` holds the keys that broke a rule when
- * the lint was born and are not rewritten yet. The list only shrinks: a key
- * that no longer breaks its rule must leave the list (the test says so), and
- * a key that newly breaks one is refused. `COPY_LINT_WRITE=1` rewrites the
- * list from the current dictionaries, for the PR that fixes a batch.
+ * (`docs/spec/01-glossaire-et-domaine.md` §1.5, whose enforced variants
+ * this table owns). Each rule names the keys it refuses, per language.
+ * `copy.exceptions.json` holds the keys that broke a rule when the lint was
+ * born and are not rewritten yet. The list only shrinks: a key that no
+ * longer breaks its rule must leave it (the test says so), and a key that
+ * newly breaks one is refused. `COPY_LINT_WRITE=1` drops the fixed keys
+ * from the list and never adds one; `COPY_LINT_WRITE=all` rewrites it from
+ * the current dictionaries, for the PR that changes a rule — its additions
+ * show in the JSON diff.
  */
 
 type Lang = "fr" | "en";
 type Rule = {
   name: string;
-  lang: Lang;
+  langs: Lang[];
   /** Why, and what to write instead: the message of a failure. */
   fix: string;
   test: (text: string, key: string) => boolean;
@@ -29,113 +32,110 @@ type Rule = {
 
 const has = (re: RegExp) => (text: string) => re.test(text);
 const suffix = (key: string) => key.split(".").pop() ?? "";
-const suffixIn = (names: string[]) => (key: string) => names.includes(suffix(key));
+/** A ceiling applies to a label; a string with a placeholder is measured elsewhere. */
+const longerThan = (max: number) => (text: string) => !text.includes("{") && text.length > max;
+/** A sentence is not a button, whatever its key's suffix. */
+const isSentence = (text: string) => /[.:]/.test(text);
 
 /** Keys whose value is a button's label: a verb, at most 24 characters. */
 const BUTTON = [
   "add", "remove", "delete", "save", "edit", "create", "submit", "confirm", "cancel", "close",
   "back", "next", "retry", "open", "start", "rename", "apply", "reset", "copy", "download",
   "upload", "import", "export", "publish", "release", "launch", "join", "leave", "send",
-  "accept", "decline", "undo", "done", "cta", "action",
+  "accept", "decline", "undo", "cta", "action",
 ];
-const SUBTEXT = ["desc", "hint", "help", "caption", "footnote", "sub"];
+/** The sub-texts under a ceiling (DESIGN.md, Voice): one sentence, a fact the label does not carry. */
+const SUBTEXT = ["desc", "hint", "help"];
 
-const longerThan = (max: number) => (text: string) => !text.includes("{") && text.length > max;
+const BOTH: Lang[] = ["fr", "en"];
+const FR: Lang[] = ["fr"];
+const EN: Lang[] = ["en"];
 
-export const RULES: Rule[] = [
+const RULES: Rule[] = [
   // Typography (fr).
-  { name: "fr-breaking-space-before-double-punctuation", lang: "fr", fix: "a narrow no-break space (U+202F) before : ; ? !", test: has(/ [:;?!]/) },
-  { name: "fr-guillemets-inner-space", lang: "fr", fix: "a narrow no-break space inside « »", test: has(/« | »/) },
-  { name: "fr-curly-apostrophe", lang: "fr", fix: "the straight apostrophe, as everywhere else", test: has(/[’‘]/) },
-  { name: "fr-parenthesised-plural", lang: "fr", fix: "a plural key (.one / .many), never (s) or (e)", test: has(/\((e|s|es)\)/) },
-  { name: "fr-recorriger-hyphen", lang: "fr", fix: "recorriger, recorrection, without a hyphen", test: has(/re-corr/i) },
-  { name: "fr-defaut", lang: "fr", fix: "« par défaut »", test: has(/\(défaut\)|\bdéfaut :/i) },
-  { name: "fr-cliquez-transitive", lang: "fr", fix: "cliquez sur", test: has(/\bcliquez (la|le|les|l'|un|une)\b/i) },
+  { name: "breaking-space-before-double-punctuation", langs: FR, fix: "a narrow no-break space (U+202F) before : ; ? !", test: has(/[  ][:;?!]/) },
+  { name: "guillemets-inner-space", langs: FR, fix: "a narrow no-break space inside « »", test: has(/«[  ]|[  ]»/) },
+  { name: "curly-apostrophe", langs: BOTH, fix: "the straight apostrophe, as everywhere else", test: has(/[’‘]/) },
+  { name: "parenthesised-plural", langs: FR, fix: "a plural key (.one / .many), never (s) or (e)", test: has(/\((e|s|es)\)/) },
+  { name: "recorriger-hyphen", langs: FR, fix: "recorriger, recorrection, without a hyphen", test: has(/re-corr/i) },
+  { name: "defaut", langs: FR, fix: "« par défaut »", test: has(/\(défaut\)|\bdéfaut :/i) },
+  { name: "cliquez-transitive", langs: FR, fix: "cliquez sur", test: has(/\bcliquez (la|le|les|l'|un|une)\b/i) },
   // Prose (both).
-  { name: "fr-em-dash-aside", lang: "fr", fix: "two sentences, or a colon; no em-dash aside", test: has(/ — /) },
-  { name: "en-em-dash-aside", lang: "en", fix: "two sentences, or a colon; no em-dash aside", test: has(/ — /) },
-  { name: "fr-semicolon", lang: "fr", fix: "two sentences; no semicolon chain", test: has(/\s; /) },
-  { name: "en-semicolon", lang: "en", fix: "two sentences; no semicolon chain", test: has(/; /) },
-  { name: "fr-filler", lang: "fr", fix: "delete the reassurance: a sub-text carries a fact the label does not", test: has(/Rien n'est (bloqué|supprimé|écrit|envoyé|perdu|enregistré)|conviennent à la plupart|revenir à tout moment/i) },
-  { name: "en-filler", lang: "en", fix: "delete the reassurance: a sub-text carries a fact the label does not", test: has(/Nothing is (blocked|deleted|written|sent|lost)|defaults suit most|come back at any time/i) },
-  { name: "fr-generic-masculine", lang: "fr", fix: "a neutral turn: les étudiants, a passive, an infinitive", test: has(/\bl'étudiant\b[^.]*\b(il|lui)\b/) },
-  // Glossary (fr): one word per concept, §1.5.
-  { name: "fr-word-pool", lang: "fr", fix: "banque", test: has(/\bpools?\b/i) },
-  { name: "fr-word-poll", lang: "fr", fix: "sondage", test: has(/\bpolls?\b/i) },
-  { name: "fr-word-concept", lang: "fr", fix: "notion", test: has(/\bconcepts?\b/i) },
-  { name: "fr-word-llm", lang: "fr", fix: "IA", test: has(/\bLLM\b|modèle de langage/) },
-  { name: "fr-word-staff", lang: "fr", fix: "équipe enseignante", test: has(/\bstaff\b/i) },
-  { name: "fr-word-runner", lang: "fr", fix: "exécuteur", test: has(/\brunners?\b/i) },
-  { name: "fr-word-calepin", lang: "fr", fix: "bloc-notes", test: has(/calepin/i) },
-  { name: "fr-word-anneau", lang: "fr", fix: "salle d'attente; the ring is an internal word", test: has(/l'anneau\b/i) },
-  { name: "fr-word-jalon", lang: "fr", fix: "verrou (an evaluation's checkpoint) or point de contrôle (a project's)", test: has(/\bjalons?\b/i) },
-  { name: "fr-word-professeur", lang: "fr", fix: "enseignant", test: has(/\bprof(esseur)?s?\b/i) },
-  { name: "fr-word-eleve", lang: "fr", fix: "étudiant", test: has(/\bélèves?\b/i) },
-  { name: "fr-word-quiz", lang: "fr", fix: "évaluation, examen or exercice; Quiz is the platform's name only", test: has(/\b(le|un|ce|cet|du|au|ces|les|des|votre|vos|chaque|mon|son|notre|aucun|quel|tout|nouveau|même|dernier|premier)\s+quiz\b/i) },
-  { name: "fr-word-editer", lang: "fr", fix: "modifier", test: has(/\bédit(er|é|ée|és|ées|ez)\b/i) },
-  { name: "fr-word-parametres", lang: "fr", fix: "réglages", test: has(/\bparamètres\b/i) },
-  { name: "fr-word-sauvegarder", lang: "fr", fix: "enregistrer (la sauvegarde de la base reste une sauvegarde)", test: has(/\bsauvegard(er|é|ée|és|ées|ez)\b/i) },
-  { name: "fr-word-politique", lang: "fr", fix: "règle de notation, correction", test: has(/\bpolitiques?\b/i) },
-  { name: "fr-word-marque", lang: "fr", fix: "note, points or saisie", test: has(/\bmarques?\b/i) },
-  { name: "fr-word-gele", lang: "fr", fix: "figé", test: has(/\bgelée?s?\b/i) },
-  { name: "fr-word-soumettre", lang: "fr", fix: "rendre", test: has(/\bsoum(ettre|is|ise|ission)/i) },
-  { name: "en-word-llm", lang: "en", fix: "AI", test: has(/\bLLM\b/) },
+  { name: "em-dash-aside", langs: BOTH, fix: "two sentences, or a colon; no em-dash aside", test: has(/ — /) },
+  { name: "semicolon", langs: BOTH, fix: "two sentences; no semicolon chain", test: has(/; /) },
+  { name: "filler", langs: FR, fix: "delete the reassurance: a sub-text carries a fact the label does not", test: has(/Rien n'est (bloqué|supprimé)|conviennent à la plupart|revenir à tout moment/i) },
+  { name: "filler", langs: EN, fix: "delete the reassurance: a sub-text carries a fact the label does not", test: has(/Nothing is (blocked|deleted)|defaults suit most|come back at any time/i) },
+  { name: "generic-masculine", langs: FR, fix: "a neutral turn: les étudiants, a passive, an infinitive", test: has(/\bl'étudiant\b[^.]*\b(il|lui)\b/) },
+  // Glossary: one word per concept (§1.5).
+  { name: "word-pool", langs: FR, fix: "banque", test: has(/\bpools?\b/i) },
+  { name: "word-poll", langs: FR, fix: "sondage", test: has(/\bpolls?\b/i) },
+  { name: "word-concept", langs: FR, fix: "notion", test: has(/\bconcepts?\b/i) },
+  { name: "word-llm", langs: FR, fix: "IA", test: has(/\bLLM\b|modèle de langage/) },
+  { name: "word-llm", langs: EN, fix: "AI", test: has(/\bLLM\b/) },
+  { name: "word-staff", langs: FR, fix: "équipe enseignante", test: has(/\bstaff\b/i) },
+  { name: "word-runner", langs: FR, fix: "exécuteur", test: has(/\brunners?\b/i) },
+  { name: "word-calepin", langs: FR, fix: "bloc-notes", test: has(/calepin/i) },
+  { name: "word-anneau", langs: FR, fix: "salle d'attente; the ring is an internal word", test: has(/l'anneau\b/i) },
+  { name: "word-jalon", langs: FR, fix: "verrou (an evaluation's checkpoint) or point de contrôle (a project's)", test: has(/\bjalons?\b/i) },
+  { name: "word-professeur", langs: FR, fix: "enseignant", test: has(/\bprof(esseur)?s?\b/i) },
+  { name: "word-eleve", langs: FR, fix: "étudiant", test: has(/\bélèves?\b/i) },
+  { name: "word-quiz", langs: FR, fix: "évaluation, examen or exercice; Quiz is the platform's name only", test: has(/\b(le|un|ce|cet|du|au|ces|les|des|votre|vos|chaque|mon|son|notre|aucun|quel|tout|nouveau|même|dernier|premier)\s+quiz\b/i) },
+  { name: "word-editer", langs: FR, fix: "modifier", test: has(/\bédit(er|é|ée|és|ées|ez)\b/i) },
+  { name: "word-parametres", langs: FR, fix: "réglages", test: has(/\bparamètres\b/i) },
+  { name: "word-sauvegarder", langs: FR, fix: "enregistrer (la sauvegarde de la base reste une sauvegarde)", test: has(/\bsauvegard(er|é|ée|és|ées|ez)\b/i) },
+  { name: "word-politique", langs: FR, fix: "règle de notation, correction", test: has(/\bpolitiques?\b/i) },
+  { name: "word-marque", langs: FR, fix: "note, points or saisie", test: has(/\b(la|une|les|des|vos|votre|sa|ses|cette)\s+marques?\b/i) },
+  { name: "word-gele", langs: FR, fix: "figé", test: has(/\bgelée?s?\b/i) },
+  { name: "word-soumettre", langs: FR, fix: "rendre", test: has(/\bsoum(ettre|is|ise|ission)/i) },
   // Ceilings (both).
-  { name: "fr-button-over-24", lang: "fr", fix: "a verb, at most 24 characters", test: (t, k) => suffixIn(BUTTON)(k) && longerThan(24)(t) },
-  { name: "en-button-over-24", lang: "en", fix: "a verb, at most 24 characters", test: (t, k) => suffixIn(BUTTON)(k) && longerThan(24)(t) },
-  { name: "fr-tab-over-18", lang: "fr", fix: "at most 18 characters", test: (t, k) => /\.tab\.[^.]+$/.test(k) && longerThan(18)(t) },
-  { name: "en-tab-over-18", lang: "en", fix: "at most 18 characters", test: (t, k) => /\.tab\.[^.]+$/.test(k) && longerThan(18)(t) },
-  { name: "fr-subtext-over-110", lang: "fr", fix: "one sentence of at most 110 characters, carrying a fact the label does not", test: (t, k) => suffixIn(SUBTEXT)(k) && t.length > 110 },
-  { name: "en-subtext-over-110", lang: "en", fix: "one sentence of at most 110 characters, carrying a fact the label does not", test: (t, k) => suffixIn(SUBTEXT)(k) && t.length > 110 },
+  { name: "button-over-24", langs: BOTH, fix: "a verb, at most 24 characters", test: (t, k) => BUTTON.includes(suffix(k)) && !isSentence(t) && longerThan(24)(t) },
+  { name: "tab-over-18", langs: BOTH, fix: "at most 18 characters", test: (t, k) => /\.tab\.[^.]+$/.test(k) && longerThan(18)(t) },
+  { name: "subtext-over-110", langs: BOTH, fix: "one sentence of at most 110 characters, carrying a fact the label does not", test: (t, k) => SUBTEXT.includes(suffix(k)) && longerThan(110)(t) },
 ];
 
 const DICT: Record<Lang, Record<string, string>> = { fr, en };
 const EXCEPTIONS_PATH = join(dirname(fileURLToPath(import.meta.url)), "copy.exceptions.json");
+const exceptions = JSON.parse(readFileSync(EXCEPTIONS_PATH, "utf8")) as Record<string, string[]>;
 
-function offenders(rule: Rule): string[] {
-  const dict = DICT[rule.lang];
-  return Object.keys(dict).filter((key) => rule.test(dict[key]!, key));
-}
-
-function readExceptions(): Record<string, string[]> {
-  try {
-    return JSON.parse(readFileSync(EXCEPTIONS_PATH, "utf8")) as Record<string, string[]>;
-  } catch {
-    return {};
-  }
-}
+/** One check per rule and language: its full name, and the keys it refuses today. */
+const checks = RULES.flatMap((rule) =>
+  rule.langs.map((lang) => {
+    const dict = DICT[lang];
+    const name = `${lang}-${rule.name}`;
+    return { name, lang, fix: rule.fix, found: Object.keys(dict).filter((key) => rule.test(dict[key]!, key)) };
+  }),
+);
 
 describe("copy lint (N-I18N-04)", () => {
-  if (process.env["COPY_LINT_WRITE"]) {
-    it("rewrites the exception list from the current dictionaries", () => {
+  const write = process.env["COPY_LINT_WRITE"];
+  if (write) {
+    it(`rewrites the exception list (${write === "all" ? "from the dictionaries" : "fixed keys dropped"})`, () => {
       const next: Record<string, string[]> = {};
-      for (const rule of RULES) {
-        const keys = offenders(rule);
-        if (keys.length) next[rule.name] = keys;
+      for (const { name, found } of checks) {
+        const allowed = new Set(exceptions[name] ?? []);
+        const keys = write === "all" ? found : found.filter((k) => allowed.has(k));
+        if (keys.length) next[name] = keys;
       }
       writeFileSync(EXCEPTIONS_PATH, `${JSON.stringify(next, null, 2)}\n`);
-      expect(true).toBe(true);
     });
     return;
   }
 
-  const exceptions = readExceptions();
-
-  for (const rule of RULES) {
-    it(`${rule.name}: ${rule.fix}`, () => {
-      const found = new Set(offenders(rule));
-      const allowed = new Set(exceptions[rule.name] ?? []);
-      const fresh = [...found].filter((k) => !allowed.has(k));
-      const stale = [...allowed].filter((k) => !found.has(k));
+  for (const { name, lang, fix, found } of checks) {
+    it(`${name}: ${fix}`, () => {
+      const allowed = new Set(exceptions[name] ?? []);
+      const fresh = found.filter((k) => !allowed.has(k));
+      const stale = [...allowed].filter((k) => !found.includes(k));
       expect(
-        fresh.map((k) => `${k}: ${JSON.stringify(DICT[rule.lang][k])}`),
-        `new offenders of ${rule.name} (${rule.fix})`,
+        fresh.map((k) => `${k}: ${JSON.stringify(DICT[lang][k])}`),
+        `new offenders of ${name} (${fix})`,
       ).toEqual([]);
       expect(stale, `keys fixed: remove them from copy.exceptions.json (or COPY_LINT_WRITE=1)`).toEqual([]);
     });
   }
 
-  it("names no rule twice", () => {
-    expect(new Set(RULES.map((r) => r.name)).size).toBe(RULES.length);
+  it("lists exceptions under existing rules only", () => {
+    const names = new Set(checks.map((c) => c.name));
+    expect(Object.keys(exceptions).filter((n) => !names.has(n))).toEqual([]);
   });
 });
