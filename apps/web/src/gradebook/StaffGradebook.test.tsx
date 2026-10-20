@@ -117,7 +117,6 @@ describe("the matrix", () => {
     renderTab(makeTable());
     await cell("Alice Dupont", "Test 1");
     expect(screen.queryByRole("columnheader", { name: /Exercises/ })).toBeNull();
-    expect(screen.getByText("Exercises that do not count in the mean are hidden.")).toBeInTheDocument();
     const row = screen.getByRole("row", { name: /Alice Dupont/ });
     expect(within(row).getAllByRole("cell").at(-1)).toHaveTextContent("5.5");
     await showExercises();

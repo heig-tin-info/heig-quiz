@@ -441,7 +441,7 @@ describe("a retake of the questions to review (ADR-091)", () => {
     // The player: the carried question, read-only and marked.
     expect(await screen.findByText("Acquise")).toBeInTheDocument();
     expect(
-      screen.getByText("Acquise lors de votre tentative précédente : conservée telle quelle, avec ses points."),
+      screen.getByText("Conservée de votre tentative précédente, avec ses points."),
     ).toBeInTheDocument();
   });
 

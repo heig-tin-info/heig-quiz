@@ -164,7 +164,7 @@ describe("the student's Grades", () => {
     render();
     const counting = await screen.findByRole("region", { name: "Count toward your average" });
     const aside = screen.getByRole("region", { name: "Indicative" });
-    expect(within(aside).getByText(/These grades are indicative/)).toBeInTheDocument();
+    expect(within(aside).getByText(/Not counted in your average unless your teacher includes them/)).toBeInTheDocument();
     // What counts comes first.
     expect(counting.compareDocumentPosition(aside)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(within(counting).getAllByText("Série bonus").length).toBeGreaterThan(0);

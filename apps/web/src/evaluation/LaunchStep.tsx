@@ -164,7 +164,7 @@ function Checklist({
           title: warnings === 1 ? t("launch.heading.warnOne") : t("launch.heading.warn", { n: warnings }),
           detail: t("launch.heading.warn.detail"),
         }
-      : { title: t("launch.heading.ready"), detail: t("launch.heading.ready.detail") };
+      : { title: t("launch.heading.ready") };
 
   // The status line says what the button will do, or why it cannot. A
   // blocked launch names the first blocker, the one the heading's list starts
@@ -201,7 +201,7 @@ function Checklist({
     <div className="space-y-6">
       <header>
         <h2 className="text-xl font-bold tracking-[-0.01em]">{heading.title}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{heading.detail}</p>
+        {heading.detail ? <p className="mt-1 text-sm text-fg-muted">{heading.detail}</p> : null}
       </header>
 
       <Card className="divide-y divide-line overflow-hidden">
@@ -325,7 +325,7 @@ function CheckRow({
       <Icon className={cx("mt-0.5 size-4.5 shrink-0", level?.className ?? "text-fg-faint")} aria-hidden />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">{check.title}</span>
-        <span className="mt-0.5 block text-[13px] text-fg-muted">{check.detail}</span>
+        {check.detail ? <span className="mt-0.5 block text-[13px] text-fg-muted">{check.detail}</span> : null}
       </span>
     </>
   );

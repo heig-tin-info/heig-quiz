@@ -154,7 +154,6 @@ function CommandCard({ command }: { command: Command }) {
   return (
     <Shell icon={<Play className="size-4 text-fg-muted" aria-hidden />} title={t("assist.command.title")}>
       <p className="text-sm font-semibold text-fg">{command.label}</p>
-      <p className="text-[12px] text-fg-muted">{t("assist.command.body")}</p>
       {state === "open" ? (
         <Decide
           confirmLabel={t("assist.confirm")}
@@ -238,10 +237,7 @@ function WriteCard({ write, conversationId, navigate }: { write: Write; conversa
       ) : cancelled ? (
         <Outcome ok>{t("assist.cancelled")}</Outcome>
       ) : (
-        <>
-          <p className="text-[12px] text-fg-faint">{t("assist.write.notice")}</p>
-          <Decide confirmLabel={t("assist.confirm")} onConfirm={() => confirm.mutate()} onCancel={cancel} busy={confirm.isPending} />
-        </>
+        <Decide confirmLabel={t("assist.confirm")} onConfirm={() => confirm.mutate()} onCancel={cancel} busy={confirm.isPending} />
       )}
     </Shell>
   );

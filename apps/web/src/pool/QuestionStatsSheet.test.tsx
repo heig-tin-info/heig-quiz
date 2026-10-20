@@ -94,7 +94,7 @@ describe("QuestionStatsSheet", () => {
   it("says when there are not enough students in targeted revision", () => {
     mockFetch({});
     renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={STATS} canReset onClose={vi.fn()} />);
-    expect(screen.getByText("Not enough students yet: it shows from 10 students.")).toBeInTheDocument();
+    expect(screen.getByText("Shown from 10 students.")).toBeInTheDocument();
     expect(screen.queryByText("Students")).not.toBeInTheDocument();
   });
 
@@ -102,7 +102,7 @@ describe("QuestionStatsSheet", () => {
     mockFetch({});
     const revisionOnly = { ...STATS, n: null, p: null, revisionTime: { n: 10, medianS: 45, p25S: 30, p75S: 61 } };
     renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={revisionOnly} canReset onClose={vi.fn()} />);
-    expect(screen.getByText("No exam statistics yet: they show from 10 exam answers.")).toBeInTheDocument();
+    expect(screen.getByText("Statistics show from 10 exam answers.")).toBeInTheDocument();
     expect(screen.queryByText("Success rate")).not.toBeInTheDocument();
     expect(screen.queryByText("Time spent")).not.toBeInTheDocument();
     expect(screen.queryByText("Discrimination")).not.toBeInTheDocument();
@@ -196,7 +196,6 @@ describe("QuestionStatsSheet", () => {
       "No answer8%",
     ]);
     expect(screen.getByText("Share of 12 answers, on the versions whose choices are these ones.")).toBeInTheDocument();
-    expect(screen.getByText(/A wrong choice nobody picks distracts no one/)).toBeInTheDocument();
     expect(screen.queryByText(/add up to more than 100%/)).not.toBeInTheDocument();
   });
 
@@ -224,7 +223,7 @@ describe("QuestionStatsSheet", () => {
     );
     expect(
       screen.getByText(
-        "Share of 12 answers, on the versions whose choices are these ones. Several choices may be ticked, so the shares add up to more than 100%.",
+        "Share of 12 answers, on the versions whose choices are these ones. Multiple choices: shares add up to more than 100%.",
       ),
     ).toBeInTheDocument();
   });
@@ -235,7 +234,7 @@ describe("QuestionStatsSheet", () => {
       <QuestionStatsSheet poolId="p1" row={ROW} stats={{ ...STATS, distractors: null }} canReset onClose={vi.fn()} />,
     );
     expect(
-      screen.getByText("The choices picked show from 10 exam answers given to versions with the current choices."),
+      screen.getByText("Shown from 10 exam answers to the current choices."),
     ).toBeInTheDocument();
     unmount();
     renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={STATS} canReset onClose={vi.fn()} />);

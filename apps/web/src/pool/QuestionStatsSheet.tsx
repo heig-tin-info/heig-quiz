@@ -342,7 +342,6 @@ function DistractorRows({ distractors }: { distractors: DistractorStats }) {
         {t("pool.stats.choicesBasis", { n: distractors.n })}
         {distractors.multiple ? ` ${t("pool.stats.choicesMultiple")}` : null}
       </p>
-      <p className="text-sm text-fg-muted">{t("pool.stats.choicesScope")}</p>
     </>
   );
 }

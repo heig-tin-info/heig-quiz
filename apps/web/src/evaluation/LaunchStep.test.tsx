@@ -48,7 +48,7 @@ describe("LaunchStep checklist (#152)", () => {
     expect(screen.getByText(/24 expected in the room/i)).toBeInTheDocument();
     expect(screen.getByText(/2 are not yet attached/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeEnabled();
-    expect(screen.getByRole("status")).toHaveTextContent(/start the evaluation from the dashboard/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/you start it from the dashboard/i);
   });
 
   it("counts the warnings, lists them first, and updates stale versions in place", async () => {

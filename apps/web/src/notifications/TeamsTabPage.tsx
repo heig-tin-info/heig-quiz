@@ -129,7 +129,7 @@ function InTeams({ host }: { host: TeamsHost }) {
   const target = tabTargetPath(host.subPageId);
   if (target) {
     return (
-      <GateCard icon={<GateIcon icon={ExternalLink} />} title={t("teamsTab.target.title")} body={t("teamsTab.target.body")}>
+      <GateCard icon={<GateIcon icon={ExternalLink} />} title={t("teamsTab.target.title")}>
         <Button size="lg" className="mt-6 w-full" onClick={() => open(target)}>
           {t("teamsTab.target.action")}
         </Button>
@@ -156,7 +156,6 @@ function Outside() {
     <GateCard
       icon={<MessagesSquare className="mx-auto size-8 text-fg-muted" />}
       title={t("teamsTab.outside.title")}
-      body={t("teamsTab.outside.body")}
     />
   );
 }

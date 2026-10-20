@@ -384,9 +384,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
               {t("project.groupSet.pick")}
             </Button>
           }
-        >
-          {t("project.noGroupSet.body")}
-        </Alert>
+        />
       ) : null}
       {unassigned ? (
         <Alert

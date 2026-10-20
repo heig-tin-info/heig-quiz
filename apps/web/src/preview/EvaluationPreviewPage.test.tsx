@@ -186,7 +186,7 @@ describe("EvaluationPreviewPage", () => {
 
     // The student's own player, under the preview's strip: nothing laid over the question.
     expect(await screen.findByText("Quiz 3 — Pointeurs")).toBeInTheDocument();
-    const strip = screen.getByRole("region", { name: "Preview — nothing is saved" });
+    const strip = screen.getByRole("region", { name: "Preview: answers are not saved" });
     expect(within(strip).getByRole("button", { name: "Restart" })).toBeInTheDocument();
     // One start, StrictMode or not: two would be two seeds for one click.
     expect(calls.filter((c) => c.url === URL)).toHaveLength(1);
@@ -309,7 +309,7 @@ describe("EvaluationPreviewPage", () => {
     const { calls } = mockFetch({ [`POST ${URL}`]: () => ok(preview((seeds += 1))) });
     renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
     await user.click(await screen.findByRole("radio", { name: "&x" }));
-    const strip = screen.getByRole("region", { name: "Preview — nothing is saved" });
+    const strip = screen.getByRole("region", { name: "Preview: answers are not saved" });
     await user.click(within(strip).getByRole("button", { name: "Restart" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Restart the preview?" });

@@ -155,7 +155,7 @@ describe("the one primary action", () => {
     routes(makeDraft());
     renderPage();
     expect(await screen.findByRole("button", { name: /Publish/ })).toBeInTheDocument();
-    expect(status()).toMatch(/^Draft: the students see nothing yet/);
+    expect(status()).toMatch(/^Draft, invisible to students/);
   });
 
   it("is Sync, as a button, when the source is ahead (F-PROJ-12, M3-07): one POST, a toast, the page refreshed", async () => {
@@ -381,7 +381,7 @@ describe("the overflow menu", () => {
     await userEvent.click(screen.getByRole("button", { name: "More actions" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Delete project" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText(/Nothing is deleted on GitHub/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/On GitHub, the repositories stay in place/)).toBeInTheDocument();
     const confirm = within(dialog).getByRole("button", { name: "Delete" });
     expect(confirm).toBeDisabled();
     await userEvent.type(within(dialog).getByRole("textbox"), "Labo 2 — pointeurs");
@@ -770,7 +770,7 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
     renderPage();
     expect(await screen.findByRole("button", { name: "Release scores" })).toBeDisabled();
     expect(screen.getByTestId("project-release-waits")).toHaveTextContent("The release waits for the resync of the groups to be applied on GitHub.");
-    expect(screen.getByText("A resync is being applied on GitHub.")).toBeInTheDocument();
+    expect(screen.getByText("Resync in progress on GitHub.")).toBeInTheDocument();
   });
 });
 

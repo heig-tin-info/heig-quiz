@@ -80,7 +80,7 @@ describe("the teacher's confidence per question", () => {
     mockFetch({ [url]: ok([]) });
     renderWithProviders(<ConfidencePerQuestion classroomId="r1" />);
     expect(await screen.findByText("Not enough statements yet")).toBeVisible();
-    expect(screen.getByText(/once 10 students have said how sure they were/)).toBeVisible();
+    expect(screen.getByText(/once 10 students have stated their confidence/)).toBeVisible();
     expect(screen.queryByRole("table")).toBeNull();
   });
 });

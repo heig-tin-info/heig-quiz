@@ -45,7 +45,7 @@ describe("assigning a station from the dashboard (ADR-051 §7)", () => {
     render(fail(404, { error: "pairing_not_found" }));
     await userEvent.type(screen.getByLabelText("Code shown on the station"), "BCDFGHJK");
     await userEvent.click(screen.getByRole("button", { name: "Assign" }));
-    expect(await screen.findByText(/This code does not work/)).toBeInTheDocument();
+    expect(await screen.findByText(/Code refused: type the one on the station's screen now/)).toBeInTheDocument();
     vi.unstubAllGlobals();
     mockFetch({ [URL]: fail(409, { error: "evaluation_not_pairable" }) });
     await userEvent.click(screen.getByRole("button", { name: "Assign" }));

@@ -271,9 +271,7 @@ export function ProjectRepos({
                 {t("roster.add")}
               </Button>
             }
-          >
-            {t("project.repos.empty.body")}
-          </EmptyState>
+          />
         </Card>
       </section>
     );

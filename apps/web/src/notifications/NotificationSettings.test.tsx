@@ -83,7 +83,7 @@ describe("the notification settings", () => {
     expect(within(grid).queryByRole("switch", { name: "Session opened in your name: Email" })).toBeNull();
     expect(within(grid).queryByText("Grading to validate")).toBeNull();
     expect(within(grid).queryByRole("columnheader", { name: "Teams" })).toBeNull();
-    expect(screen.getByText("Sent to lea@heig.test. Nothing to set up.")).toBeVisible();
+    expect(screen.getByText("Sent to lea@heig.test.")).toBeVisible();
     expect(screen.getByText("Not available on this platform yet.")).toBeVisible();
     expect(screen.queryByRole("link", { name: "Download the Teams app" })).toBeNull();
   });

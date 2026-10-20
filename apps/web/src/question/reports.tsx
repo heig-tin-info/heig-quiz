@@ -58,7 +58,7 @@ function ReportTextDialog<Body extends ReportCreate | ReportResolve>({
   required: boolean;
   title: keyof Dict;
   label: keyof Dict;
-  help: keyof Dict;
+  help?: keyof Dict;
   submit: keyof Dict;
   failed: keyof Dict;
   /** A toast on success, none when absent. */
@@ -97,7 +97,7 @@ function ReportTextDialog<Body extends ReportCreate | ReportResolve>({
       <Textarea
         name={field}
         label={t(label)}
-        help={t(help)}
+        help={help ? t(help) : undefined}
         autoFocus
         maxLength={max}
         value={text}
@@ -212,7 +212,6 @@ export function QuestionReportsTab({
           required={false}
           title="question.reports.resolveTitle"
           label="question.reports.reply"
-          help="question.reports.replyHelp"
           submit="question.reports.resolve"
           failed="question.reports.resolveFailed"
           preview={resolving.message}

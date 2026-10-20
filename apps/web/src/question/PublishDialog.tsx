@@ -55,7 +55,6 @@ export function PublishDialog({
     >
       {blocked ? (
         <Alert tone="danger" icon={AlertTriangle} title={t("question.publishIssues")}>
-          <p>{t("question.publishIssuesBody")}</p>
           <ul className="mt-2 space-y-1">
             {issues.map((issue, i) => (
               <li key={`${issue.path.join(".")}-${i}`} className="text-[13px]">

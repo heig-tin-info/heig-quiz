@@ -141,7 +141,7 @@ describe("a project in progress", () => {
     render();
     expect(await screen.findByText("Indicative score")).toBeInTheDocument();
     expect(screen.getAllByText("34 / 40")).toHaveLength(1);
-    expect(screen.getByText(/From the latest graded commit\. Indicative until your teacher publishes the scores\./)).toBeInTheDocument();
+    expect(screen.getByText(/From the latest graded commit, indicative until the scores are released\./)).toBeInTheDocument();
     expect(screen.getByText("Grade")).toBeInTheDocument();
     expect(screen.getByText("5.3")).toBeInTheDocument();
     expect(screen.getAllByText(/indicative/).length).toBeGreaterThan(0);
@@ -166,7 +166,7 @@ describe("a project in progress", () => {
     render();
     expect(await screen.findByText("Score at the deadline")).toBeInTheDocument();
     expect(screen.getAllByText("30 / 40")).toHaveLength(1);
-    expect(screen.getByText(/Frozen at the deadline\. Indicative until/)).toBeInTheDocument();
+    expect(screen.getByText(/Frozen at the deadline, indicative until/)).toBeInTheDocument();
     expect(screen.getByText("Evaluated commit")).toBeInTheDocument();
     expect(screen.getByText("locked")).toBeInTheDocument();
     expect(screen.getByText("Read-only since the deadline")).toBeInTheDocument();
@@ -240,7 +240,7 @@ describe("without a repository", () => {
     mockFetch({ [URL]: ok(project({ status: "to_accept", repo: null })) });
     render();
     expect(await screen.findByRole("button", { name: "Accept" })).toHaveClass("bg-accent");
-    expect(screen.getByText(/Accept the project to get your repository/)).toBeInTheDocument();
+    expect(screen.getByText(/Accept the project: your repository is created within a minute/)).toBeInTheDocument();
     expect(screen.queryByText("Score")).toBeNull();
   });
 
@@ -327,7 +327,7 @@ describe("a reader who is not the student", () => {
     expect(await screen.findByRole("link", { name: "Open the invitation" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Resend the invitation" })).toBeInTheDocument();
     expect(screen.getByText(/counts nowhere/)).toBeInTheDocument();
-    expect(screen.queryByText(/Read-only view/)).toBeNull();
+    expect(screen.queryByText(/Read-only/)).toBeNull();
   });
 
   it("keeps an impersonation of a student read-only", async () => {
@@ -337,7 +337,7 @@ describe("a reader who is not the student", () => {
     });
     mockFetch({ [URL]: ok(project({ repo: { ...project().repo!, invitation: "pending" } })) });
     render({ me });
-    expect(await screen.findByText(/Read-only view: the student's actions are not available/)).toBeInTheDocument();
+    expect(await screen.findByText(/Read-only: student actions disabled/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open the invitation" })).toBeNull();
   });
 });

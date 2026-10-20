@@ -66,7 +66,7 @@ describe("the poll participant page", () => {
     expect(
       await screen.findByRole("heading", { name: "This poll is for another class" }),
     ).toBeVisible();
-    expect(screen.getByText(/your account is not on its list/)).toBeVisible();
+    expect(screen.getByText(/Your account is not in this classroom/)).toBeVisible();
     // No join is attempted, and no retry offered: another account is the repair.
     expect(calls.some((c) => c.method === "POST")).toBe(false);
     expect(screen.queryByRole("button", { name: /Retry/ })).toBeNull();
@@ -273,7 +273,7 @@ describe("the poll participant page", () => {
     expect(await screen.findByText(/Answering as Marie/)).toBeVisible();
     // An anonymous poll answered from an account says so rather than implying
     // the answer is untraceable.
-    expect(screen.getByText(/but you are signed in/)).toBeVisible();
+    expect(screen.getByText(/You answer under your name/)).toBeVisible();
   });
 });
 

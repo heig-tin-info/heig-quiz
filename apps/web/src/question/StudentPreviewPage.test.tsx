@@ -35,7 +35,7 @@ describe("StudentPreviewPage", () => {
     renderWithProviders(<StudentPreviewPage id="q1" />);
 
     // The subtitle is the whole contract of the page: nothing is kept.
-    expect(await screen.findByText("Answer freely: nothing is saved or graded")).toBeInTheDocument();
+    expect(await screen.findByText("Answers not saved")).toBeInTheDocument();
     // The statement went through `MarkdownView`, like the player's: a heading
     // is a heading and not the literal "# Les pointeurs".
     const heading = await screen.findByRole("heading", { name: "Les pointeurs" });
@@ -96,7 +96,7 @@ describe("StudentPreviewPage", () => {
       }),
     });
     renderWithProviders(<StudentPreviewPage id="q1" />);
-    expect(await screen.findByText("Answer freely: nothing is saved or graded")).toBeInTheDocument();
+    expect(await screen.findByText("Answers not saved")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Show answers" })).toBeNull();
   });
 

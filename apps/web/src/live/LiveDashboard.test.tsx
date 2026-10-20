@@ -537,7 +537,7 @@ describe("LiveDashboard — inspection", () => {
     );
     await user.click(await screen.findByRole("button", { name: /Nadia Roux 1 · Question 2/ }));
     const dialog = await screen.findByRole("dialog", { name: "Nadia Roux 1 · Question 2" });
-    expect(within(dialog).getByText(/answers are hidden/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/answers hidden/i)).toBeInTheDocument();
     // Projected: nothing of the answer is even fetched.
     expect(calls.filter((c) => c.url.includes("/attempts/"))).toHaveLength(0);
     await user.click(within(dialog).getByRole("button", { name: "See the whole paper" }));
@@ -592,7 +592,7 @@ describe("LiveDashboard — one question for the class (F-DASH-07, #353)", () =>
     );
     await user.click(await screen.findByRole("button", { name: "Open question 2 for every student" }));
     const dialog = await screen.findByRole("dialog", { name: "Question 2 · the whole class" });
-    expect(within(dialog).getByText(/answers are hidden/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/answers hidden/i)).toBeInTheDocument();
     expect(within(dialog).getByText("Student 1")).toBeInTheDocument();
     expect(within(dialog).queryByText(/Nadia Roux/)).toBeNull();
     expect(calls.filter((c) => c.url === answersUrl)).toHaveLength(0);

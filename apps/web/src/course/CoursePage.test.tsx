@@ -186,7 +186,7 @@ describe("CoursePage", () => {
     renderWithProviders(<CoursePage id="c1" tab="templates" navigate={vi.fn()} />);
 
     expect(await screen.findByText("No template yet")).toBeVisible();
-    expect(screen.getByText(/“New template”, or .* “Save as template” in its menu/)).toBeVisible();
+    expect(screen.getByText(/Create one, or save an existing evaluation as a template from its menu/)).toBeVisible();
     // The empty state's action, beside the header's.
     expect(screen.getAllByRole("button", { name: /New template/ })).toHaveLength(2);
   });
@@ -547,7 +547,7 @@ describe("CoursePage", () => {
 
       expect(await screen.findByRole("heading", { name: "Concepts" })).toBeVisible();
       expect(await screen.findByText("Pointer")).toBeVisible();
-      expect(await screen.findByText(/Only its teachers see this list; students never do/)).toBeVisible();
+      expect(await screen.findByText(/The concepts this course teaches, invisible to students/)).toBeVisible();
 
       const field = screen.getByRole("combobox", { name: "Add a concept" });
       await userEvent.type(field, "Arr");
@@ -589,7 +589,7 @@ describe("CoursePage", () => {
       expect(await screen.findByRole("textbox", { name: "Condition 1" })).toHaveValue("One A4 sheet of notes");
       expect(screen.getByRole("textbox", { name: "Condition 2" })).toHaveValue("Phones");
       expect(screen.queryByText("Bring your student card")).toBeNull();
-      expect(screen.getByText(/never changes the evaluations and templates that already exist/)).toBeVisible();
+      expect(screen.getByText(/editing it here does not change existing evaluations/)).toBeVisible();
 
       await userEvent.click(screen.getByRole("button", { name: /Show archived \(1\)/ }));
       expect(screen.getByText("Bring your student card")).toBeVisible();
@@ -642,7 +642,7 @@ describe("CoursePage", () => {
     it("says so when the catalog is empty", async () => {
       mockFetch({ ...world(), "GET /app/api/courses/c1/conditions": ok([]) });
       renderWithProviders(<CoursePage id="c1" tab="settings" navigate={vi.fn()} />);
-      expect(await screen.findByText(/No conditions yet/)).toBeVisible();
+      expect(await screen.findByText(/Keep here the conditions you announce often/)).toBeVisible();
     });
   });
 

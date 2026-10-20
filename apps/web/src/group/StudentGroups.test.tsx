@@ -144,7 +144,7 @@ describe("what the reader may not change", () => {
     expect(within(region).getByRole("listitem", { name: "Les As" })).toBeInTheDocument();
     expect(within(region).queryAllByRole("button", { name: (n) => n !== "Help" })).toEqual([]);
     const other = screen.getByRole("region", { name: "Binômes" });
-    expect(within(other).getByText("You are in no group of this set. Your teachers will place you.")).toBeInTheDocument();
+    expect(within(other).getByText("You are in no group yet.")).toBeInTheDocument();
   });
 
   it("draws an open set without a control when the server says it is not writable (a teacher in the student view, a frozen set)", async () => {

@@ -128,7 +128,7 @@ describe("Suggest a broader concept on the concept sheet (ADR-114 §3)", () => {
     mockFetch({ ...available, [AI]: ok({ ...reply, broader: [reply.broader[1]], tops: [] }) });
     open();
     await userEvent.click(await screen.findByRole("button", { name: /^suggest a broader concept$/i }));
-    expect(await screen.findByText(/^no suggestion/i)).toBeInTheDocument();
+    expect(await screen.findByText("The AI found no broader concept.")).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Suggested broader concepts" })).toBeNull();
   });
 

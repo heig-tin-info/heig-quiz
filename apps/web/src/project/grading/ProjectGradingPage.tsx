@@ -217,7 +217,6 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
         />
       }
       title={t("project.grading.title")}
-      description={t("project.grading.subtitle")}
       menu={repos.some((r) => r.frozen) ? <Menu items={menuItems} /> : undefined}
     />
   );

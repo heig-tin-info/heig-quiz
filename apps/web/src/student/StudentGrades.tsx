@@ -85,9 +85,7 @@ export function StudentGrades({ navigate }: { navigate: (r: Route) => void }) {
         <QueryError title={t("bnav.grades")} query={grades} />
       ) : groups.length === 0 ? (
         <Card>
-          <EmptyState icon={Trophy} title={t("sgrades.empty.title")}>
-            {t("sgrades.empty.body")}
-          </EmptyState>
+          <EmptyState icon={Trophy} title={t("sgrades.empty.title")} />
         </Card>
       ) : (
         <div className="space-y-8">

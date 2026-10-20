@@ -31,7 +31,6 @@ export type RichEditorStringKey = keyof typeof richEditorStrings;
 
 export const richPlayerStrings = {
   label: "Your answer",
-  placeholder: "Write your answer here.",
   count: "{count} characters",
   countOf: "{count} / {max} characters",
   pages: "about {pages} A4 page(s)",

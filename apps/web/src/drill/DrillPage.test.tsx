@@ -172,7 +172,7 @@ describe("the drill session", () => {
 
     const highlight = await screen.findByText("You were sure: look closely");
     expect(highlight).toBeVisible();
-    expect(screen.getByText("You said “Certain”, and the answer was wrong. This is the correction worth remembering.")).toBeVisible();
+    expect(screen.getByText("You said “Certain” and the answer was wrong.")).toBeVisible();
     // The rating is the server's, untouched: Again, as any wrong answer.
     expect(screen.getByText(/^To see again soon · next review/)).toBeVisible();
   });
@@ -292,7 +292,7 @@ describe("the opt-out", () => {
     });
     renderWithProviders(<DrillPage navigate={() => {}} />);
     // The tab says who sees the activity.
-    expect(await screen.findByText(/Your teachers see your drill activity/)).toBeVisible();
+    expect(await screen.findByText(/Your teachers see your activity/)).toBeVisible();
 
     await user.click(screen.getByRole("switch", { name: "Take part in the drill of PRG1-2026" }));
     const dialog = await screen.findByRole("dialog", { name: "Leave the drill of PRG1-2026?" });

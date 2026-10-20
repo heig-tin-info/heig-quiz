@@ -639,7 +639,7 @@ describe("the zen player", () => {
       await userEvent.click(blank);
       let dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByText("Valider cette question ?")).toBeInTheDocument();
-      expect(within(dialog).getByText(/elle comptera comme non répondue/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/Elle comptera comme sans réponse/)).toBeInTheDocument();
       await userEvent.click(within(dialog).getByRole("button", { name: "Annuler" }));
       expect(calls.some((c) => c.url.endsWith("/done"))).toBe(false);
 
@@ -743,7 +743,7 @@ describe("the zen player", () => {
       await userEvent.click(within(dialog).getByRole("button", { name: "Valider et continuer" }));
 
       expect(
-        await screen.findByText(/Votre dernière réponse n'est pas encore enregistrée/),
+        await screen.findByText(/Réponse pas encore enregistrée/),
       ).toBeInTheDocument();
       // Nothing was validated: the older answer is not locked for good.
       expect(calls.some((c) => c.url.endsWith("/done"))).toBe(false);
@@ -855,7 +855,7 @@ describe("the zen player", () => {
       renderWith(vi.fn());
       await typeThenHome();
       const dialog = await screen.findByRole("dialog", { name: "Quitter cet exercice ?" });
-      expect(within(dialog).getByText(/mis l'évaluation en pause/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/Évaluation en pause/)).toBeInTheDocument();
       expect(within(dialog).queryByText(/connexion/)).toBeNull();
     });
 

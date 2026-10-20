@@ -330,7 +330,7 @@ describe("EvaluationConfig", () => {
     expect(live).toHaveAttribute("aria-pressed", "true");
     expect(live).toHaveTextContent(/^Live30 minutes each, waiting room opened by you/);
     expect(live).not.toHaveTextContent(/45/);
-    expect(screen.getByRole("button", { name: /^automatic/i })).toHaveTextContent(/opens and closes by itself/i);
+    expect(screen.getByRole("button", { name: /^automatic/i })).toHaveTextContent(/opens and closes at the scheduled dates/i);
     expect(screen.getByRole("switch", { name: /time limit per student/i })).toBeChecked();
   });
 
@@ -383,7 +383,7 @@ describe("EvaluationConfig", () => {
     await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
     expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: /^right away$/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/not offered in class/i)).toBeInTheDocument();
+    expect(screen.getByText(/not available in class/i)).toBeInTheDocument();
   });
 
   /*
@@ -411,7 +411,7 @@ describe("EvaluationConfig", () => {
       });
       await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
       expect(await screen.findByRole("radio", { name: /^right away$/i })).toBeChecked();
-      expect(screen.queryByText(/not offered in class/i)).toBeNull();
+      expect(screen.queryByText(/not available in class/i)).toBeNull();
     });
 
     it("hides it, and says why, for an exercise with a waiting room", async () => {
@@ -423,7 +423,7 @@ describe("EvaluationConfig", () => {
       await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
       expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeChecked();
       expect(screen.queryByRole("radio", { name: /^right away$/i })).toBeNull();
-      expect(screen.getByText(/not offered in class/i)).toBeInTheDocument();
+      expect(screen.getByText(/not available in class/i)).toBeInTheDocument();
     });
 
     it("brings the policy back to 'on release' in the same patch that adds a waiting room", async () => {
@@ -567,7 +567,7 @@ describe("EvaluationConfig", () => {
       const backstop = await screen.findByLabelText(/^closes at the latest$/i);
       await user.click(screen.getByRole("button", { name: /^go to launch$/i }));
       expect(backstop).toHaveAttribute("aria-invalid", "true");
-      expect(backstop).toHaveAccessibleDescription(/an exam must end by itself: enter when it closes at the latest/i);
+      expect(backstop).toHaveAccessibleDescription(/required for an exam\. enter when the exam closes at the latest/i);
       expect(backstop).toHaveFocus();
     });
 

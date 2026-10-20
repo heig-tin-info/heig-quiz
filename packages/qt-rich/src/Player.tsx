@@ -103,7 +103,6 @@ export function RichPlayer({
               aria-label={s.label}
               value={text}
               onChange={change}
-              placeholder={s.placeholder}
               disabled={locked}
               rows={ESSAY_ROWS}
             />
@@ -119,7 +118,6 @@ export function RichPlayer({
               maxLength={limit}
               aria-describedby={`${id}-count`}
               className={cx(textareaClass, "w-full resize-y")}
-              placeholder={s.placeholder}
               value={text}
               disabled={locked}
               onChange={(e) => change(e.target.value)}

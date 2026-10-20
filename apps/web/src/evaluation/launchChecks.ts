@@ -54,7 +54,7 @@ export interface LaunchCheck {
   id: "items" | "stale" | "template" | "roster" | "conflicts" | "timing" | "feedback" | "rules" | "access" | "kiosk";
   level: LaunchLevel;
   title: string;
-  detail: string;
+  detail?: string;
   /** A blocker's reason for the action bar's status line, when it differs from `detail`. */
   status?: string;
   fix?: CheckFix;
@@ -281,7 +281,7 @@ function accessCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
     id: "access",
     level: "info",
     title: parts.length === 0 ? t("launch.access.open") : capitalize(parts.join(" · ")),
-    detail: parts.length === 0 ? t("launch.access.open.detail") : t("launch.access.detail"),
+    detail: parts.length === 0 ? undefined : t("launch.access.detail"),
     fix: { kind: "step", step: "timing" },
   };
 }

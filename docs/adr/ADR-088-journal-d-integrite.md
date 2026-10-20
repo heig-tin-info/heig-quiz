@@ -103,8 +103,8 @@ never presented as proof.
    outside, a toast says: "This event is recorded and visible to your
    teacher." At most one per kind every five minutes, shown on focus return
    (never during the absence) or at the paste, and never under a `seb` or
-   `kiosk` session. The conditions line `visibility_logged` reads "Leaving
-   the page and pasting from outside are recorded", and says that the pasted
+   `kiosk` session. The conditions line `visibility_logged` reads "Page exits
+   and outside pastes recorded", and says that the pasted
    content itself is never recorded.
 
 7. **The teacher's view.** A discreet list in the attempt inspector and the

@@ -223,7 +223,7 @@ describe("a reader who is not the student", () => {
     mockFetch({});
     render(card({ githubLinked: false }), { me: makeMe({ role: "teacher" }) });
     expect(await screen.findByRole("link", { name: "Link GitHub" })).toBeInTheDocument();
-    expect(screen.queryByText(/Read-only view/)).toBeNull();
+    expect(screen.queryByText(/Read-only/)).toBeNull();
   });
 
   it("gives an impersonation session no button either, whatever the state", async () => {
@@ -233,7 +233,7 @@ describe("a reader who is not the student", () => {
       session: { kind: "impersonation", evaluationId: null, projectId: null, readOnly: true, superPowersUntil: null, superPowersAvailable: false },
     });
     render(card({ status: "in_progress", invitation: "pending", ...REPO }), { me });
-    expect(await screen.findByText(/Read-only view/)).toBeInTheDocument();
+    expect(await screen.findByText(/Read-only/)).toBeInTheDocument();
     expect(actionLink("Open the invitation")).toBeNull();
   });
 });

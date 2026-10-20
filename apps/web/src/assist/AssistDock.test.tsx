@@ -69,9 +69,9 @@ describe("the chat", () => {
     );
     await userEvent.click(await screen.findByRole("button", OPEN));
     const panel = screen.getByRole("dialog", { name: "Help assistant" });
-    expect(within(panel).getByText(/kept 30 days/)).toBeVisible();
     // The notice of ADR-080 P2, item 4: what is read and who reads it.
     expect(within(panel).getByText(/students' names and results included, and sends it to Anthropic/)).toBeVisible();
+    expect(within(panel).getByText(/kept 30 days, readable by an administrator/)).toBeVisible();
     await userEvent.type(within(panel).getByRole("textbox"), "What is the Group option for?{Enter}");
     expect(await within(panel).findByText("category")).toBeVisible();
     const sent = calls.find((c) => c.method === "POST");

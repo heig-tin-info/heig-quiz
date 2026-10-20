@@ -161,7 +161,6 @@ export const EDITOR_STRINGS = {
   commonGroundHint:
     "Off, they become two free nets the student has to wire, and a ground symbol names node 0.",
   simulationsPerMinute: "Simulations per minute",
-  simulationsPerMinuteHint: "The budget of the student's Simulate button.",
 };
 
 export type CircuitEditorStrings = typeof EDITOR_STRINGS;

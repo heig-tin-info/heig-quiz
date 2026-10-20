@@ -237,7 +237,7 @@ describe("ConceptPicker", () => {
     await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([taken.id]));
-    expect(screen.getByRole("status")).toHaveTextContent("“Pointr” already existed: it was added instead.");
+    expect(screen.getByRole("status")).toHaveTextContent("“Pointr” already exists: added instead.");
     expect(screen.queryByLabelText("Label")).toBeNull();
   });
 
@@ -286,7 +286,7 @@ describe("ConceptPicker", () => {
     const { user, calls } = setup({ create: ok() });
     await user.type(combobox(), "--");
     await user.click(await screen.findByRole("option", { name: "Create “--”" }));
-    expect(screen.getByText(/it needs a letter or a digit/)).toBeInTheDocument();
+    expect(screen.getByText("The label needs a letter or a digit.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
     expect(calls.some((c) => c.method === "POST")).toBe(false);
   });

@@ -2966,12 +2966,12 @@ placement over an `offset` and `Z.tool`.
   prepared write lists what the server read back as a two-column list
   (label muted, value in ink; several values as bullets), then its notes
   ("created as a draft", "the course's whole staff becomes contributor")
-  and "Nothing is written until you confirm." in `fg-faint`. Its actions
+  in `fg-faint`. Its actions
   sit right-aligned at the bottom: **Cancel** `secondary`, then **Confirm**
   or **Apply to the draft**, an `ink` button (never the accent: the
   screen's primary keeps the one red). Acted on, the buttons give way to
   one 12 px line — muted with a corner arrow ("Done.", "Applied to the
-  draft…" with a ghost **Undo**, "Cancelled: nothing was done."), or
+  draft…" with a ghost **Undo**, "Cancelled."), or
   `danger` with an alert icon ("no longer applies", "expired").
 - **States**: empty — a muted bubble icon, "Ask about this screen" and
   what it answers (the screen, the teacher's own data), kept 30 days and

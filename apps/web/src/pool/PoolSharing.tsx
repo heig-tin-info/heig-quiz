@@ -294,9 +294,7 @@ export function PoolSharing({ pool }: { pool: Pool }) {
               ) : null}
             </div>
           )}
-          {/* The succession rule, where the consequence of the roles is:
-              a pool never becomes an orphan, and the order of this very
-              list is what decides who inherits it. */}
+          {/* The order of this list decides who inherits the pool. */}
           <p className="mt-3 text-xs text-fg-faint">{t("share.succession")}</p>
         </div>
 

@@ -63,7 +63,7 @@ describe("launchChecks: a ready evaluation", () => {
     expect(one(rows, "access")).toMatchObject({
       level: "info",
       title: "launch.access.open",
-      detail: "launch.access.open.detail",
+      detail: undefined,
     });
   });
 
@@ -93,7 +93,7 @@ describe("launchChecks: a ready evaluation", () => {
         ],
       }),
     );
-    const mix = one(rows, "items").detail.split(" · ");
+    const mix = one(rows, "items").detail!.split(" · ");
     expect(mix).toHaveLength(2);
     expect(mix[0]).toMatch(/"n":2/);
     expect(mix[1]).toMatch(/"n":1/);

@@ -60,7 +60,7 @@ export function PoolEmpty({
           )
         }
       >
-        {t(empty ? "pool.empty.body" : "pool.emptyFiltered.body")}
+        {empty ? t("pool.empty.body") : null}
       </EmptyState>
     </Card>
   );

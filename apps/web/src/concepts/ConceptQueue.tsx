@@ -218,9 +218,7 @@ export function ConceptQueue() {
           ) : filter === "unplaced" ? (
             <EmptyState icon={Check} title={t("admin.concepts.unplaced.empty")} />
           ) : filter === "proposed" ? (
-            <EmptyState icon={Check} title={t("admin.concepts.done.title")}>
-              {t("admin.concepts.done.body")}
-            </EmptyState>
+            <EmptyState icon={Check} title={t("admin.concepts.done.title")} />
           ) : (
             <EmptyState icon={BookMarked} title={t("admin.concepts.empty.title")}>
               {t("admin.concepts.empty.body")}

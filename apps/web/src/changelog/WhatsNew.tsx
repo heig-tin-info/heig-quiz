@@ -101,16 +101,14 @@ export function WhatsNewPage() {
   });
   return (
     <div className="space-y-6">
-      <PageHeader title={t("whatsNew.title")} description={t("whatsNew.description")} />
+      <PageHeader title={t("whatsNew.title")} />
       {list.isPending ? (
         <Skeleton className="h-40 w-full" />
       ) : list.isError ? (
         <QueryError title={t("whatsNew.title")} query={list} />
       ) : list.data.length === 0 ? (
         <Card className="px-6 py-4">
-          <EmptyState icon={Sparkles} title={t("whatsNew.empty")}>
-            {t("whatsNew.emptyBody")}
-          </EmptyState>
+          <EmptyState icon={Sparkles} title={t("whatsNew.empty")} />
         </Card>
       ) : (
         <Card className="p-5">

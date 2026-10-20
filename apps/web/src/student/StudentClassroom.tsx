@@ -289,9 +289,7 @@ function Activities({
         <SectionHeading title={t("shome.open")} />
         {polls.length === 0 && open.length === 0 && groupSets.length === 0 ? (
           <Card>
-            <EmptyState icon={CheckCircle2} title={t("sroom.empty.title")}>
-              {t("sroom.empty.body")}
-            </EmptyState>
+            <EmptyState icon={CheckCircle2} title={t("sroom.empty.title")} />
           </Card>
         ) : null}
         {polls.map((poll) => (

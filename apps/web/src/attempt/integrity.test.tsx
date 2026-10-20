@@ -22,7 +22,7 @@ interface Flags {
   notify: boolean;
 }
 
-const NOTICE = "You left the evaluation page. This event is recorded and visible to your teacher.";
+const NOTICE = "Leaving the page was recorded, visible to your teacher.";
 
 let seq = 0;
 
@@ -175,8 +175,7 @@ describe("the integrity journal, focus", () => {
  * copied on the page is journaled as its length, never its text. jsdom has
  * no ClipboardEvent nor DataTransfer: a plain event carries a stand-in.
  */
-const PASTE_NOTICE =
-  "You probably pasted content from outside the platform. This event is recorded and visible to your teacher.";
+const PASTE_NOTICE = "Paste from another source recorded, visible to your teacher.";
 const pasteToasts = () => screen.queryAllByText(PASTE_NOTICE).filter((el) => !el.closest(".toast-leave"));
 
 /** A clipboard (or drag) stand-in: what a handler sets, `getData` reads. */

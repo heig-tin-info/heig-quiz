@@ -17,7 +17,8 @@ describe("the notepad setting", () => {
     await open();
     const group = screen.getByRole("radiogroup", { name: "Notepad provided" });
     expect(within(group).getByRole("radio", { name: "None" })).toBeChecked();
-    expect(screen.getByText("No notepad on the student's screen.")).toBeInTheDocument();
+    // "None" carries no sub-text: the row describes the notepad only when one is provided.
+    expect(screen.queryByText(/kept on the device/)).toBeNull();
     await userEvent.click(within(group).getByRole("radio", { name: "No copy-paste" }));
     await waitFor(() =>
       expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ settings: { notepad: "provided_no_clipboard" } }),
@@ -28,7 +29,7 @@ describe("the notepad setting", () => {
     mockFetch(config);
     renderWithProviders(<Harness detail={withMode("exercise", { notepad: "provided" })} />);
     await open();
-    expect(screen.getByText(/never reach the server, and are deleted at hand-in/)).toBeInTheDocument();
+    expect(screen.getByText(/kept on the device, cleared at hand-in and at each checkpoint/)).toBeInTheDocument();
   });
 
   it("is not offered on a poll", async () => {

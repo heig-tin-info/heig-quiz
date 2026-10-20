@@ -129,7 +129,7 @@ export function AdvancedDisclosure({
           />
         </SettingRow>
 
-        <SettingRow title={t("eval.presentation")} desc={t("eval.presentation.desc")}>
+        <SettingRow title={t("eval.presentation")}>
           <Segmented
             name="presentation"
             value={settings.presentation}
@@ -189,7 +189,7 @@ export function AdvancedDisclosure({
             onChange={(shuffleChoices) => set({ shuffleChoices })}
           />
         </SettingRow>
-        <SettingRow title={t("eval.showProgressBar")} desc={t("eval.showProgressBar.desc")}>
+        <SettingRow title={t("eval.showProgressBar")}>
           <Switch
             checked={settings.showProgressBar}
             disabled={disabled}
@@ -245,7 +245,7 @@ export function AdvancedDisclosure({
           ) : null}
           {/* ADR-090: its sibling, the notepad — on the same modes. */}
           {notepadAllowedFor(mode) ? (
-            <SettingRow title={t("eval.notepad")} desc={t(`eval.notepad.desc.${notepad}`)}>
+            <SettingRow title={t("eval.notepad")} desc={notepad === "none" ? undefined : t(`eval.notepad.desc.${notepad}`)}>
               <Segmented
                 name="notepad"
                 label={t("eval.notepad")}

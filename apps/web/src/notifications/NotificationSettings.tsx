@@ -12,7 +12,7 @@ import {
 
 import { api } from "../api";
 import { useErrorToast, useToast } from "../notify";
-import { useT } from "../i18n";
+import { DICTS, useT } from "../i18n";
 import { notificationSettingsKey } from "../queryKeys";
 import {
   Button,
@@ -89,7 +89,9 @@ function ChannelGrid({
         >
           <div role="rowheader" className="min-w-0">
             <p className="text-sm font-medium text-fg">{t(`settings.kind.${kind}` as TKey)}</p>
-            <p className="mt-0.5 text-[13px] text-fg-muted">{t(`settings.kind.${kind}.desc` as TKey)}</p>
+            {`settings.kind.${kind}.desc` in DICTS.en ? (
+              <p className="mt-0.5 text-[13px] text-fg-muted">{t(`settings.kind.${kind}.desc` as TKey)}</p>
+            ) : null}
           </div>
           {channels.map((channel) => {
             // A channel the kind never uses (`KIND_CHANNELS`): no toggle, a dash.
