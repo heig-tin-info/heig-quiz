@@ -13,7 +13,7 @@
  * the question keeps the layout it has without the key.
  */
 import type { PlayerProps, StringOverrides } from "@quiz/core/client";
-import { resolveStrings } from "@quiz/core/client";
+import { fmt, resolveStrings } from "@quiz/core/client";
 import type { McqAnswer, McqSolution, McqStudent } from "./schema.js";
 import { mcqPlayerStrings, type McqPlayerStringKey } from "./strings.js";
 import { caption, cx, isLocked, markdown, Verdict } from "@quiz/ui";
@@ -52,7 +52,7 @@ export function McqPlayer({
     onChange({ selected: [...new Set(next)].sort((a, b) => a - b) });
   };
 
-  const instructions = !multiple ? s.chooseOne : limit === undefined ? s.chooseSeveral : s.chooseUpTo;
+  const instructions = !multiple ? s.chooseOne : limit === undefined ? s.chooseSeveral : fmt(s.chooseUpTo, { max: limit });
 
   return (
     <fieldset className="flex flex-col gap-4" disabled={locked}>

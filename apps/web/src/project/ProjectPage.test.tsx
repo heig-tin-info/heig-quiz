@@ -330,8 +330,8 @@ describe("a group project's set (ADR-070, M3-16a)", () => {
     });
     const { navigate } = renderPage();
     await userEvent.click(await screen.findByRole("button", { name: /Publish/ }));
-    const alert = (await screen.findByText("Cannot publish: 1 students are in no group")).closest("[role=status]")!;
-    const link = within(alert).getByRole("link", { name: "Place them in the group set" });
+    const alert = (await screen.findByText("Cannot publish: 1 students are in no group")).closest("[role=status]") as HTMLElement;
+    const link = within(alert).getByRole("link", { name: "Place these students" });
     await userEvent.click(link);
     expect(navigate).toHaveBeenCalledWith({
       view: "groupSet",
