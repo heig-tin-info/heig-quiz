@@ -23,7 +23,7 @@ describe("QuestionStatsSheet", () => {
     expect(screen.getByText("73%")).toBeInTheDocument();
     expect(screen.getByText("24")).toBeInTheDocument();
     expect(screen.getByText("Since the question was first used")).toBeInTheDocument();
-    expect(screen.queryByText(/Below zero/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Negative rate:/)).not.toBeInTheDocument();
   });
 
   it("keeps a negative rate signed, and says why", () => {
@@ -32,7 +32,7 @@ describe("QuestionStatsSheet", () => {
       <QuestionStatsSheet poolId="p1" row={ROW} stats={{ ...STATS, n: 12, p: -0.08 }} canReset onClose={vi.fn()} />,
     );
     expect(screen.getByText("-8%")).toBeInTheDocument();
-    expect(screen.getByText(/Below zero/)).toBeInTheDocument();
+    expect(screen.getByText(/Negative rate:/)).toBeInTheDocument();
   });
 
   it("says since when after a reset", () => {
@@ -84,7 +84,7 @@ describe("QuestionStatsSheet", () => {
     expect(within(block).getByText("14")).toBeInTheDocument();
     expect(
       within(block).getByText(
-        "First try per student, on a question they had already met and whose key they could see. Not an exam time, not comparable to it.",
+        "First try per student, on a question already met with its key visible. Not comparable to an exam time.",
       ),
     ).toBeInTheDocument();
     // The exam's time stays its own block.
@@ -191,11 +191,11 @@ describe("QuestionStatsSheet", () => {
     const rows = screen.getAllByRole("listitem");
     expect(rows.map((r) => r.textContent)).toEqual([
       "ANULL50%",
-      "BAn indeterminate valuecorrect answer33%",
+      "BAn indeterminate valuecorrect33%",
       "CZero8%",
       "No answer8%",
     ]);
-    expect(screen.getByText("Share of 12 answers, on the versions whose choices are these ones.")).toBeInTheDocument();
+    expect(screen.getByText("Share of 12 answers, on the versions with these choices.")).toBeInTheDocument();
     expect(screen.queryByText(/add up to more than 100%/)).not.toBeInTheDocument();
   });
 
@@ -223,7 +223,7 @@ describe("QuestionStatsSheet", () => {
     );
     expect(
       screen.getByText(
-        "Share of 12 answers, on the versions whose choices are these ones. Multiple choices: shares add up to more than 100%.",
+        "Share of 12 answers, on the versions with these choices. Multiple choices: shares add up to more than 100%.",
       ),
     ).toBeInTheDocument();
   });

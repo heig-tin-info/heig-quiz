@@ -53,7 +53,7 @@ describe("the Groups tab", () => {
     const { navigate } = renderList();
     expect(await screen.findByText("Projet final")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Labo 4" })).toBeInTheDocument();
-    expect(screen.getByText("stopped following")).toBeInTheDocument();
+    expect(screen.getByText("detached")).toBeInTheDocument();
     await userEvent.click(screen.getByText("Projet final"));
     expect(navigate).toHaveBeenCalledWith({ view: "groupSet", classroomId: ROOM_ID, id: SET_ID });
     // A project's link opens the project, not the row's set.

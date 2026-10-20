@@ -40,10 +40,10 @@ describe("clockSummary (#87, ADR-086)", () => {
       when: "on_release",
     });
     expect(clockSummary(e, makeT("en"), date)).toBe(
-      "30 minutes each, waiting room opened by you, free navigation, results released afterwards.",
+      "30 minutes each, lobby, started by you, free navigation, results released afterwards.",
     );
     expect(clockSummary(e, makeT("fr"), date)).toBe(
-      "30 minutes par étudiant, salle d'attente que vous ouvrez, navigation libre, résultats publiés ensuite.",
+      "30 minutes par étudiant, salle d'attente, départ manuel, navigation libre, résultats publiés ensuite.",
     );
   });
 
@@ -54,7 +54,7 @@ describe("clockSummary (#87, ADR-086)", () => {
       when: "none",
     });
     expect(clockSummary(e, makeT("en"), date)).toBe(
-      "1 minute each, waiting room opened by you, no going back, no feedback to students.",
+      "1 minute each, lobby, started by you, no going back, no feedback to students.",
     );
   });
 
@@ -65,10 +65,10 @@ describe("clockSummary (#87, ADR-086)", () => {
       when: "immediate",
     });
     expect(clockSummary(e, makeT("en"), date)).toBe(
-      "Open until <2026-10-02>, no going back past a milestone, feedback as each question is validated.",
+      "Open until <2026-10-02>, no going back past a checkpoint, feedback as each question is validated.",
     );
     expect(clockSummary({ ...e, closesAt: null }, makeT("fr"), date)).toMatch(
-      /^Date de fin pas encore fixée, pas de retour au-delà d'un jalon, /,
+      /^Date de fin à fixer, pas de retour au-delà d'un verrou, /,
     );
   });
 
@@ -79,9 +79,9 @@ describe("clockSummary (#87, ADR-086)", () => {
       when: "on_release",
     });
     expect(clockSummary(e, makeT("en"), date)).toMatch(
-      /^Open until you close it, <2026-10-02> at the latest, waiting room opened by you, /,
+      /^Open until you close it, <2026-10-02> at the latest, lobby, started by you, /,
     );
-    expect(clockSummary({ ...e, closesAt: null }, makeT("fr"), date)).toMatch(/^Ouvert jusqu'à ce que vous le clôturiez, salle d'attente/);
+    expect(clockSummary({ ...e, closesAt: null }, makeT("fr"), date)).toMatch(/^Ouvert jusqu'à ce que vous le clôturiez, salle d'attente, départ manuel/);
   });
 
   it("says a duration is missing rather than inventing one", () => {

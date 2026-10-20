@@ -69,7 +69,7 @@ describe("ModeControl", () => {
     renderWithProviders(<Harness detail={detail} />);
     expect(screen.getByRole("radio", { name: "Exam" })).toBeDisabled();
     expect(screen.getByRole("radio", { name: "Exercise" })).toBeEnabled();
-    expect(screen.getAllByText("Turn off multiple attempts first.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Turn off “Several attempts” first.").length).toBeGreaterThan(0);
   });
 
   it("asks first when the evaluation is scheduled, and writes nothing on Cancel", async () => {
@@ -82,7 +82,7 @@ describe("ModeControl", () => {
     expect(calls.filter((c) => c.method === "PATCH")).toEqual([]);
 
     await userEvent.click(screen.getByRole("radio", { name: "Exercise" }));
-    await userEvent.click(await screen.findByRole("button", { name: /Switch to: Exercise/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Switch to Exercise/ }));
     await waitFor(() => expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ mode: "exercise" }));
   });
 
@@ -98,6 +98,6 @@ describe("ModeControl", () => {
     mockFetch({ [PATCH]: ok(answer) });
     renderWithProviders(<Harness detail={detail} />);
     await userEvent.click(screen.getByRole("radio", { name: "Exam" }));
-    expect(await screen.findByText(/An exam never gives feedback immediately/)).toBeInTheDocument();
+    expect(await screen.findByText(/an exam gives none immediately/)).toBeInTheDocument();
   });
 });

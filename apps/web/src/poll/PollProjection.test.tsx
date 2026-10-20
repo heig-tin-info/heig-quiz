@@ -368,7 +368,7 @@ describe("PollProjection", () => {
     await screen.findByRole("heading", { name: /How many bytes/ });
 
     expect(screen.queryByRole("button", { name: /^actions$/i })).toBeNull();
-    expect(screen.getByRole("button", { name: "Keep this question" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save the question" })).toBeVisible();
     expect(screen.getByRole("button", { name: "End poll" })).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Back to the classroom" }));
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: ROOM });
@@ -464,10 +464,10 @@ describe("PollProjection — keep this question (ADR-014, addenda item 6)", () =
     await screen.findByRole("heading", { name: /How many bytes/ });
 
     // The wall is the room's: an icon while the poll runs, not a button in words.
-    await userEvent.click(screen.getByRole("button", { name: "Keep this question" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save the question" }));
     expect(calls.some((c) => c.url === `${POLL}/keep`)).toBe(true);
-    const where = await screen.findByRole("button", { name: "Kept in Polls" });
-    expect(screen.queryByRole("button", { name: "Keep this question" })).toBeNull();
+    const where = await screen.findByRole("button", { name: "Saved in Polls" });
+    expect(screen.queryByRole("button", { name: "Save the question" })).toBeNull();
     await userEvent.click(where);
     expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1" });
   });
@@ -482,9 +482,9 @@ describe("PollProjection — keep this question (ADR-014, addenda item 6)", () =
     });
     renderWithProviders(<PollProjection id={ID} navigate={navigate} />);
 
-    await userEvent.click(await screen.findByRole("button", { name: /Keep this question/ }));
-    const where = await screen.findByRole("button", { name: /Kept in Polls/ });
-    expect(screen.queryByRole("button", { name: /Keep this question/ })).toBeNull();
+    await userEvent.click(await screen.findByRole("button", { name: /Save the question/ }));
+    const where = await screen.findByRole("button", { name: /Saved in Polls/ });
+    expect(screen.queryByRole("button", { name: /Save the question/ })).toBeNull();
     await userEvent.click(where);
     expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1" });
   });
@@ -497,7 +497,7 @@ describe("PollProjection — keep this question (ADR-014, addenda item 6)", () =
     });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
     expect(await screen.findByRole("button", { name: /Run again/ })).toBeVisible();
-    expect(screen.queryByRole("button", { name: /Keep this question/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Kept in/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Save the question/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Saved in/ })).toBeNull();
   });
 });

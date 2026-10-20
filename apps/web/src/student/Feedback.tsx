@@ -126,7 +126,7 @@ function offersOf(
   }
   return {
     offers: [
-      { scope: "to_review", variant: "primary", label: t("feedback.retake.partial", { n: toReview }) },
+      { scope: "to_review", variant: "primary", label: toReview === 1 ? t("feedback.retake.partial.one") : t("feedback.retake.partial", { n: toReview }) },
       { scope: "all", variant: "secondary", label: t("feedback.retake.all") },
     ],
     note: null,

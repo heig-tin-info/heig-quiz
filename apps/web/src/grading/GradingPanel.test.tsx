@@ -386,7 +386,7 @@ describe("GradingPanel — the answer panel", () => {
 
     await userEvent.click(rowOf("a1"));
     const panel = await screen.findByRole("dialog", { name: "Anonymous answer" });
-    expect(within(panel).getByText("The AI's justification, never shown to the student")).toBeInTheDocument();
+    expect(within(panel).getByText("The AI's justification, not shown to the student")).toBeInTheDocument();
     expect(within(panel).getByText("Covers the rubric.")).toBeInTheDocument();
     // Its points per criterion and the model that wrote it (ADR-063).
     const criteria = within(panel).getByRole("list", { name: "Points per criterion" });
@@ -396,9 +396,9 @@ describe("GradingPanel — the answer panel", () => {
 
     // The teacher may copy it into the comment, which they then edit (ADR-063 §7).
     await userEvent.click(within(panel).getByRole("button", { name: /Adjust/ }));
-    await userEvent.click(within(panel).getByRole("button", { name: "Use the AI's justification" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Use as comment" }));
     expect(within(panel).getByRole("textbox", { name: /comment/i })).toHaveValue("Covers the rubric.");
-    expect(within(panel).queryByRole("button", { name: "Use the AI's justification" })).toBeNull();
+    expect(within(panel).queryByRole("button", { name: "Use as comment" })).toBeNull();
   });
 
   it("opens the key from the expected row, with Re-grade and Edit question", async () => {
@@ -578,7 +578,7 @@ describe("GradingPanel — edit, come back, re-grade", () => {
     const sheet = await screen.findByRole("dialog", { name: "Re-grade a question" });
     expect(await within(sheet).findByRole("radio", { name: /v2/ })).toBeChecked();
     // The evaluation's release reaches the sheet (its wording: RegradeSheet.test.tsx).
-    expect(within(sheet).getByText("The results are released")).toBeVisible();
+    expect(within(sheet).getByText("Results released")).toBeVisible();
   });
 
   it("is read-only for an assistant once released, saying why; the questions still walk (ADR-068 §3)", async () => {

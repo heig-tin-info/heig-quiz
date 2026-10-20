@@ -407,7 +407,7 @@ describe("LiveDashboard — keyboard", () => {
     });
     expect(await screen.findByRole("button", { name: /^extend$/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^start now$/i }));
-    expect(await screen.findByText(/push it back with extend/i)).toBeInTheDocument();
+    expect(await screen.findByText(/extend, then start/i)).toBeInTheDocument();
   });
 
   it("does not fire a shortcut typed into a field", async () => {
@@ -497,8 +497,8 @@ describe("LiveDashboard — inspection", () => {
     await user.click(screen.getByRole("button", { name: "1 incident for Nadia Roux 1: open the journal" }));
     const dialog = await screen.findByRole("dialog", { name: /answers of nadia roux 1/i });
     expect(within(dialog).getByRole("heading", { name: "Journal" })).toBeInTheDocument();
-    expect(within(dialog).getByText("Left the page")).toBeInTheDocument();
-    expect(within(dialog).getByText(/not proof/)).toBeInTheDocument();
+    expect(within(dialog).getByText("Page exit")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Indications only/)).toBeInTheDocument();
   });
 
   it("offers the journal list only when the evaluation keeps the journal", async () => {

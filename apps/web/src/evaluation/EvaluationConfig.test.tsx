@@ -235,7 +235,7 @@ describe("EvaluationConfig", () => {
       });
       await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
       const feedback = screen.getByRole("region", { name: "Feedback and scoring" });
-      expect(await within(feedback).findByRole("switch", { name: "Allow drill" })).toBeEnabled();
+      expect(await within(feedback).findByRole("switch", { name: "Allow practice" })).toBeEnabled();
     });
 
     it("shows a Scheduled window, and a Live date for the calendar with its safety deadline", async () => {
@@ -328,7 +328,7 @@ describe("EvaluationConfig", () => {
     });
     const live = await screen.findByRole("button", { name: /^live/i });
     expect(live).toHaveAttribute("aria-pressed", "true");
-    expect(live).toHaveTextContent(/^Live30 minutes each, waiting room opened by you/);
+    expect(live).toHaveTextContent(/^Live30 minutes each, lobby, started by you/);
     expect(live).not.toHaveTextContent(/45/);
     expect(screen.getByRole("button", { name: /^automatic/i })).toHaveTextContent(/opens and closes at the scheduled dates/i);
     expect(screen.getByRole("switch", { name: /time limit per student/i })).toBeChecked();
@@ -436,7 +436,7 @@ describe("EvaluationConfig", () => {
         route: "/evaluations/x?step=timing",
       });
       await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
-      await user.click(await screen.findByRole("radio", { name: /^you start$/i }));
+      await user.click(await screen.findByRole("radio", { name: /^manual$/i }));
       await waitFor(() =>
         expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
           settings: { lobby: "manual" },
@@ -455,7 +455,7 @@ describe("EvaluationConfig", () => {
         route: "/evaluations/x?step=timing",
       });
       await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
-      await user.click(await screen.findByRole("radio", { name: /^you start$/i }));
+      await user.click(await screen.findByRole("radio", { name: /^manual$/i }));
       await waitFor(() =>
         expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
           settings: { lobby: "manual" },
@@ -483,7 +483,7 @@ describe("EvaluationConfig", () => {
     await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
     const select = await screen.findByRole("combobox", { name: /multiple-answer scoring/i });
     expect(
-      screen.getByText(/full marks for the exact set of correct choices/i),
+      screen.getByText(/full marks for exactly the right set of choices/i),
     ).toBeInTheDocument();
     await user.selectOptions(select, "discordance");
     await waitFor(() => {
@@ -503,7 +503,7 @@ describe("EvaluationConfig", () => {
       route: "/evaluations/x?step=launch",
     });
 
-    await user.click(await screen.findByRole("button", { name: /open the waiting room/i }));
+    await user.click(await screen.findByRole("button", { name: /open the lobby/i }));
     await waitFor(() =>
       expect(calls.find((c) => c.url.endsWith("/state"))).toMatchObject({ body: { to: "lobby" } }),
     );
@@ -516,7 +516,7 @@ describe("EvaluationConfig", () => {
     });
     expect(await screen.findByRole("status")).toHaveTextContent(/add at least one question/i);
     expect(screen.getByRole("heading", { name: /not ready yet/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /open the lobby/i })).toBeDisabled();
   });
 
   /*
@@ -549,7 +549,7 @@ describe("EvaluationConfig", () => {
       expect(opensAt).not.toHaveAttribute("aria-invalid");
       await user.click(screen.getByRole("button", { name: /^go to launch$/i }));
 
-      expect(screen.queryByRole("button", { name: /open the waiting room/i })).toBeNull();
+      expect(screen.queryByRole("button", { name: /open the lobby/i })).toBeNull();
       expect(opensAt).toHaveAttribute("aria-invalid", "true");
       expect(opensAt).toHaveAccessibleDescription(/enter when it opens/i);
       expect(opensAt).toHaveFocus();
@@ -611,7 +611,7 @@ describe("EvaluationConfig", () => {
       renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
         route: "/evaluations/x?step=launch",
       });
-      await user.click(await screen.findByRole("button", { name: /open the waiting room/i }));
+      await user.click(await screen.findByRole("button", { name: /open the lobby/i }));
       expect(await screen.findByText(/did not change state/i)).toBeInTheDocument();
       expect(screen.getByText(/enter when it opens/i)).toBeInTheDocument();
       expect(screen.queryByText(/F-EVAL-04/)).toBeNull();
@@ -961,7 +961,7 @@ describe("EvaluationConfig — the questions step", () => {
     });
 
     await user.click(
-      await screen.findByRole("button", { name: /add a milestone after question 1/i }),
+      await screen.findByRole("button", { name: /add a checkpoint after question 1/i }),
     );
     await waitFor(() =>
       expect(calls.find((c) => c.method === "PATCH")).toMatchObject({
@@ -977,13 +977,13 @@ describe("EvaluationConfig — the questions step", () => {
       [`PATCH /app/api/evaluations/${EVALUATION_ID}/items/${flagged[0]!.id}`]: ok(flagged[0]),
     });
 
-    expect(await screen.findByText(/^milestone$/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^checkpoint$/i)).toBeInTheDocument();
     // The gap "+" is gone where a separator already stands.
-    expect(screen.queryByRole("button", { name: /add a milestone after question 1/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /add a checkpoint after question 1/i })).toBeNull();
     // ...and there is no per-row switch left to disagree with the separator.
-    expect(screen.queryByRole("switch", { name: /milestone/i })).toBeNull();
+    expect(screen.queryByRole("switch", { name: /checkpoint/i })).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: /remove the milestone after question 1/i }));
+    await user.click(screen.getByRole("button", { name: /remove the checkpoint after question 1/i }));
     await waitFor(() =>
       expect(calls.find((c) => c.method === "PATCH")).toMatchObject({
         body: { milestone: false },

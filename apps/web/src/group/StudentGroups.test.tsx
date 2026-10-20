@@ -150,7 +150,7 @@ describe("what the reader may not change", () => {
   it("draws an open set without a control when the server says it is not writable (a teacher in the student view, a frozen set)", async () => {
     renderTab([makeView({ writable: false })]);
     const region = await section();
-    expect(within(region).getByText("You can see these groups, not change them here.")).toBeInTheDocument();
+    expect(within(region).getByText("Read only: the groups are not changed from here.")).toBeInTheDocument();
     expect(within(region).queryAllByRole("button", { name: (n) => n !== "Help" })).toEqual([]);
   });
 
@@ -168,7 +168,7 @@ describe("what the reader may not change", () => {
     mockFetch({ [`GET ${LIST}`]: ok(list(makeView())) });
     renderWithProviders(<StudentGroups classroomId={ROOM} />, { queryClient: makeQueryClient(), locale: "fr" });
     expect(await screen.findByRole("button", { name: "Créer un groupe" })).toBeInTheDocument();
-    expect(screen.getByText("Pas encore dans un groupe")).toBeInTheDocument();
+    expect(screen.getByText("Sans groupe")).toBeInTheDocument();
   });
 });
 

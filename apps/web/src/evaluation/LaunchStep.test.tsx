@@ -38,16 +38,16 @@ describe("LaunchStep checklist (#152)", () => {
   it("carries its action bar as one (data-action-bar): the assistant steps aside while it is sticky (#450)", () => {
     mockFetch({});
     render(makeEvaluationDetail());
-    expect(screen.getByRole("button", { name: /open the waiting room/i }).closest("[data-action-bar]")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /open the lobby/i }).closest("[data-action-bar]")).not.toBeNull();
   });
 
   it("reads Ready when nothing needs a look, and keeps unlinked accounts as information", async () => {
     mockFetch({});
     render(makeEvaluationDetail());
     expect(screen.getByRole("heading", { name: /^ready$/i })).toBeInTheDocument();
-    expect(screen.getByText(/24 expected in the room/i)).toBeInTheDocument();
-    expect(screen.getByText(/2 are not yet attached/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeEnabled();
+    expect(screen.getByText(/24 students expected/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 not yet attached/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open the lobby/i })).toBeEnabled();
     expect(screen.getByRole("status")).toHaveTextContent(/you start it from the dashboard/i);
   });
 
@@ -62,9 +62,9 @@ describe("LaunchStep checklist (#152)", () => {
         roster: { enrolled: 24, unlinked: 0, conflicts: 2 },
       }),
     );
-    expect(screen.getByRole("heading", { name: /2 things to look at/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /2 warnings/i })).toBeInTheDocument();
     // A warning never disables the launch: only the server's refusals do.
-    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /open the lobby/i })).toBeEnabled();
     const rows = screen.getAllByText(/newer version|roster conflicts|questions,/i);
     expect(rows[0]).toHaveTextContent(/newer version/i);
     expect(rows[1]).toHaveTextContent(/2 roster conflicts/i);
@@ -93,7 +93,7 @@ describe("LaunchStep checklist (#152)", () => {
       }),
     });
     render(withEvaluation({ originRevision: 1 }, { templateRevision: 2 }));
-    expect(screen.getByRole("heading", { name: /1 thing to look at/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /1 warning/i })).toBeInTheDocument();
     expect(screen.getByText("The template has a newer revision (rev. 1 → 2)")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /update…/i }));
     const dialog = await screen.findByRole("dialog");
@@ -134,12 +134,12 @@ describe("LaunchStep checklist (#152)", () => {
     const settings = { ...makeEvaluationDetail().evaluation.settings, kiosk: true };
     mockFetch({ "GET /app/api/config": ok({ devLogin: false, kiosk: null }) });
     const { unmount } = render(withEvaluation({ settings }));
-    expect(await screen.findByText("Kiosk stations are not available")).toBeInTheDocument();
+    expect(await screen.findByText("Kiosk stations unavailable")).toBeInTheDocument();
     unmount();
     const { calls } = mockFetch({ "GET /app/api/config": ok({ devLogin: false, kiosk: { extensionId: null, mock: true } }) });
     render(withEvaluation({ settings }));
     await waitFor(() => expect(calls.some((c) => c.url === "/app/api/config")).toBe(true));
-    expect(screen.queryByText("Kiosk stations are not available")).toBeNull();
+    expect(screen.queryByText("Kiosk stations unavailable")).toBeNull();
   });
 
   it("warns on an empty roster, and blocks on a common end already past (#178)", async () => {
@@ -156,7 +156,7 @@ describe("LaunchStep checklist (#152)", () => {
     expect(screen.getByRole("heading", { name: /not ready yet/i })).toBeInTheDocument();
     expect(screen.getByText(/nobody in the classroom yet/i)).toBeInTheDocument();
     expect(screen.getByText(/its end has passed/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /open the lobby/i })).toBeDisabled();
     unmount();
 
     // Scheduled, its dates cannot be moved one at a time: the row points to
@@ -176,14 +176,14 @@ describe("LaunchStep checklist (#152)", () => {
       }),
     );
     expect(screen.getByText(/no question counts towards the total/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /open the lobby/i })).toBeDisabled();
   });
 
   it("sends a row to the step or the roster that fixes it", async () => {
     const user = userEvent.setup();
     mockFetch({});
     render(makeEvaluationDetail());
-    await user.click(screen.getByRole("button", { name: /24 expected in the room/i }));
+    await user.click(screen.getByRole("button", { name: /24 students expected/i }));
     expect(navigate).toHaveBeenCalledWith({
       view: "classroom",
       id: makeEvaluationDetail().evaluation.classroomId,
@@ -202,7 +202,7 @@ describe("LaunchStep checklist (#152)", () => {
         settings: { ...makeEvaluationDetail().evaluation.settings, lobby: "skip" },
       }),
     );
-    expect(screen.queryByRole("button", { name: /open the waiting room/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /open the lobby/i })).toBeNull();
     await user.click(screen.getByRole("button", { name: /^open$/i }));
     await waitFor(() =>
       expect(calls.find((c) => c.url.endsWith("/start"))).toMatchObject({ body: { confirm: true } }),
@@ -229,7 +229,7 @@ describe("the waiting-room preview (#152)", () => {
     mockFetch({});
     const detail = makeEvaluationDetail();
     render(detail);
-    const preview = screen.getByRole("complementary", { name: /what students will see/i });
+    const preview = screen.getByRole("complementary", { name: /student preview/i });
     expect(within(preview).getByText(detail.evaluation.title)).toBeInTheDocument();
     // Nobody is present yet, out of the roster the launch step counts.
     expect(within(preview).getByRole("img", { name: /0 .*24/ })).toBeInTheDocument();
@@ -250,16 +250,16 @@ describe("the waiting-room preview (#152)", () => {
         settings: { ...makeEvaluationDetail().evaluation.settings, lobby: "skip" },
       }),
     );
-    expect(screen.queryByRole("complementary", { name: /what students will see/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /what students will see/i })).toBeNull();
+    expect(screen.queryByRole("complementary", { name: /student preview/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /student preview/i })).toBeNull();
   });
 
   it("opens the same picture in a sheet from the phone row", async () => {
     const user = userEvent.setup();
     mockFetch({});
     render(makeEvaluationDetail());
-    await user.click(screen.getByRole("button", { name: /what students will see/i }));
-    const sheet = await screen.findByRole("dialog", { name: /what students will see/i });
+    await user.click(screen.getByRole("button", { name: /student preview/i }));
+    const sheet = await screen.findByRole("dialog", { name: /student preview/i });
     expect(within(sheet).getByText(makeEvaluationDetail().evaluation.title)).toBeInTheDocument();
   });
 });
@@ -298,7 +298,7 @@ describe("Schedule (#152, ADR-086)", () => {
     mockFetch({});
     render(withEvaluation({ opensAt: new Date(Date.now() + 24 * HOUR).toISOString() }));
     expect(screen.queryByRole("button", { name: /schedule/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /open the lobby/i })).toBeEnabled();
   });
 
   it("translates the server's refusal of an end its clock says has passed (#178)", async () => {

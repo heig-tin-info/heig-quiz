@@ -170,7 +170,7 @@ describe("the drill session", () => {
     await user.keyboard("4");
     await user.click(screen.getByRole("button", { name: "Show the answer" }));
 
-    const highlight = await screen.findByText("You were sure: look closely");
+    const highlight = await screen.findByText("A wrong answer, given with confidence");
     expect(highlight).toBeVisible();
     expect(screen.getByText("You said “Certain” and the answer was wrong.")).toBeVisible();
     // The rating is the server's, untouched: Again, as any wrong answer.
@@ -185,7 +185,7 @@ describe("the drill session", () => {
     await screen.findByRole("textbox", { name: "Your answer" });
     await user.keyboard("0");
     await user.click(screen.getByRole("button", { name: "Show the answer" }));
-    expect(await screen.findByText("You said: No idea — right this time, counted as luck.")).toBeVisible();
+    expect(await screen.findByText("You said “No idea”: right this time, counted as luck.")).toBeVisible();
   });
 
   it("reports the question hidden while the tab is, and shown when it comes back", async () => {
@@ -238,7 +238,7 @@ describe("the drill session", () => {
     await user.click(await screen.findByRole("button", { name: "Start" }));
 
     expect(await screen.findByText("This question could not be loaded")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Skip it" }));
+    await user.click(screen.getByRole("button", { name: "Skip" }));
     expect(await screen.findByText("Question 2 of 2")).toBeVisible();
     await user.click(await screen.findByRole("button", { name: "Show the answer" }));
     await user.click(await screen.findByRole("button", { name: "Finish" }));
@@ -297,7 +297,7 @@ describe("the opt-out", () => {
     await user.click(screen.getByRole("switch", { name: "Take part in the drill of PRG1-2026" }));
     const dialog = await screen.findByRole("dialog", { name: "Leave the drill of PRG1-2026?" });
     expect(within(dialog).getByText("What you practised until now stays visible to your teacher.")).toBeVisible();
-    expect(within(dialog).getByText("Your teacher sees that you left the drill, and when.")).toBeVisible();
+    expect(within(dialog).getByText("Your teacher sees the date you left.")).toBeVisible();
     await user.click(within(dialog).getByRole("button", { name: "Leave the drill" }));
 
     const put = calls.find((c) => c.method === "PUT");

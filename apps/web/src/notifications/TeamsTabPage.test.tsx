@@ -43,7 +43,7 @@ describe("the Teams tab", () => {
     const { host, connect } = fakeHost();
     renderWithProviders(<TeamsTabPage connect={connect} />, { route: "/teams" });
 
-    expect(await screen.findByRole("heading", { name: "Link Teams to your Quiz account" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Teams account not linked" })).toBeVisible();
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([TAB]);
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect(new Headers(init.headers).get("authorization")).toBe("Bearer sso.token.value");
@@ -52,7 +52,7 @@ describe("the Teams tab", () => {
     await user.click(screen.getByRole("button", { name: "Link to my Quiz account" }));
     expect(host.openLink).toHaveBeenCalledWith(LINK_URL);
 
-    await user.click(screen.getByRole("button", { name: "I linked it: check again" }));
+    await user.click(screen.getByRole("button", { name: "Check again" }));
     await waitFor(() => expect(calls).toHaveLength(2));
   });
 
@@ -62,7 +62,7 @@ describe("the Teams tab", () => {
     const user = userEvent.setup();
     renderWithProviders(<TeamsTabPage connect={connect} />, { route: "/teams" });
     expect(await screen.findByRole("heading", { name: "Linked to the Quiz account of Léa Rochat" })).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Open HEIG Quiz in the browser" }));
+    await user.click(screen.getByRole("button", { name: "Open HEIG Quiz" }));
     expect(host.openLink).toHaveBeenCalledWith(`${window.location.origin}/settings`);
   });
 

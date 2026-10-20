@@ -49,12 +49,12 @@ export function trainingFixture(questions: TrainingQuestionSpec[] = [TRAINING_MC
     evaluations: [
       {
         key: "welcome",
-        title: "Le quiz d'accueil",
+        title: "L'exercice d'accueil",
         mode: "exercise",
         target: "scheduled",
         questions: questions.map((q) => q.internalName),
       },
-      { key: "live", title: "Le quiz en direct", mode: "exam", target: "draft", questions: questions.map((q) => q.internalName) },
+      { key: "live", title: "L'examen en direct", mode: "exam", target: "draft", questions: questions.map((q) => q.internalName) },
     ],
   };
 }

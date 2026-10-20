@@ -23,7 +23,7 @@ describe("SettingsPage — multiple-answer scoring", () => {
     const select = screen.getByRole("combobox", { name: /multiple-answer scoring/i });
     expect(select).toHaveValue("all_or_nothing");
     expect(
-      screen.getByText(/full marks for the exact set of correct choices/i),
+      screen.getByText(/full marks for exactly the right set of choices/i),
     ).toBeInTheDocument();
 
     await user.selectOptions(select, "discordance");

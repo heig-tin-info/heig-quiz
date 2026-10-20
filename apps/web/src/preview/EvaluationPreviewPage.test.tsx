@@ -344,7 +344,7 @@ describe("EvaluationPreviewPage", () => {
     renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
     await screen.findByRole("button", { name: "Hand in" });
     await elapse(1_000);
-    expect(await screen.findByText("The grading failed")).toBeInTheDocument();
+    expect(await screen.findByText("Grading failed")).toBeInTheDocument();
     // The clock keeps ticking past zero: no retry every second.
     await elapse(3_000);
     expect(calls.filter((c) => c.url === `${URL}/grade`)).toHaveLength(1);
@@ -366,7 +366,7 @@ describe("EvaluationPreviewPage", () => {
     await user.click(await screen.findByRole("radio", { name: "&x" }));
     await user.click(screen.getByRole("button", { name: "Hand in" }));
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Hand in" }));
-    expect(await screen.findByText("The grading failed")).toBeInTheDocument();
+    expect(await screen.findByText("Grading failed")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(screen.getByRole("radio", { name: "&x" })).toBeChecked();
   });
@@ -441,14 +441,14 @@ describe("EvaluationPreviewPage — fixing a question", () => {
 
     await user.click(await screen.findByRole("button", { name: "Edit question" }));
     expect(open).toHaveBeenCalledWith(`/questions/q1?from=${EVAL}`, "_blank", "noopener");
-    expect(await screen.findByText("Version 2 of this question is published")).toBeInTheDocument();
+    expect(await screen.findByText("Version 2 of this question published")).toBeInTheDocument();
 
     // An answer on each question, then back to the first one.
     await user.click(screen.getByRole("radio", { name: "&x" }));
     await user.click(screen.getByRole("button", { name: "Next" }));
     await user.click(await screen.findByRole("radio", { name: "1 octet" }));
     // The notice is about the question on screen: this one is up to date.
-    expect(screen.queryByText("Version 2 of this question is published")).not.toBeInTheDocument();
+    expect(screen.queryByText("Version 2 of this question published")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Previous" }));
 
     await user.click(await screen.findByRole("button", { name: "Use the new version" }));
@@ -456,9 +456,9 @@ describe("EvaluationPreviewPage — fixing a question", () => {
     expect(calls.find((c) => c.url.endsWith("/items/update-versions"))?.body).toEqual({ itemIds: [I1] });
     expect(calls.filter((c) => c.url === URL).map((c) => c.body)).toEqual([null, { seed: 42 }]);
     await waitFor(() =>
-      expect(screen.queryByText("Version 2 of this question is published")).not.toBeInTheDocument(),
+      expect(screen.queryByText("Version 2 of this question published")).not.toBeInTheDocument(),
     );
-    expect(screen.queryByText("The evaluation changed since this preview started")).not.toBeInTheDocument();
+    expect(screen.queryByText("Evaluation changed since this preview started")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Hand in" }));
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Hand in" }));
@@ -497,6 +497,6 @@ describe("EvaluationPreviewPage — fixing a question", () => {
         ok(detailOf([row(I1, "q1"), row(I2, "q2"), row("33333333-3333-4333-8333-333333333333", "q3")])),
     });
     renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
-    expect(await screen.findByText("The evaluation changed since this preview started")).toBeInTheDocument();
+    expect(await screen.findByText("Evaluation changed since this preview started")).toBeInTheDocument();
   });
 });

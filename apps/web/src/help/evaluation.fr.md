@@ -53,7 +53,7 @@ Le reste vit sous **Options avancées**, en quatre groupes : **Déroulement**
 d'attente d'une évaluation en direct), **Sécurité** (journal d'intégrité,
 plein écran, appareils autorisés), **Aides** (calculatrice, bloc-notes) et
 **Retour et notation** (retour à l'étudiant, politiques de notation, et
-**Autoriser les révisions**, modifiable jusqu'à la publication des résultats).
+**Autoriser l'entraînement**, modifiable jusqu'à la publication des résultats).
 
 Pendant que l'évaluation est en cours ou en pause, cette étape est
 verrouillée jusqu'à la clôture : seuls le titre et le retour à l'étudiant

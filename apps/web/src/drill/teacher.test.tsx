@@ -27,11 +27,11 @@ describe("the classroom's drill switch", () => {
     });
     const { rerender } = renderWithProviders(<ClassroomDrillSetting room={makeClassroomDetail()} />);
 
-    const toggle = screen.getByRole("switch", { name: "Drill" });
+    const toggle = screen.getByRole("switch", { name: "Practice" });
     expect(toggle).toHaveAttribute("aria-checked", "false");
     await user.click(toggle);
 
-    expect(await screen.findByText("Drill on.")).toBeVisible();
+    expect(await screen.findByText("Practice on.")).toBeVisible();
     // The classroom, read again, has the drill on: the row keeps the count.
     rerender(<ClassroomDrillSetting room={makeClassroomDetail({ drillEnabled: true })} />);
     expect(screen.getByText("42 cards created from past evaluations.")).toBeVisible();
@@ -44,8 +44,8 @@ describe("the classroom's drill switch", () => {
       "PUT /app/api/classrooms/r1/drill": ok({ enabled: false, enabledAt: null, cardsCreated: 0 }),
     });
     renderWithProviders(<ClassroomDrillSetting room={makeClassroomDetail({ drillEnabled: true })} />);
-    await user.click(screen.getByRole("switch", { name: "Drill" }));
-    expect(await screen.findByText("Drill off.")).toBeVisible();
+    await user.click(screen.getByRole("switch", { name: "Practice" }));
+    expect(await screen.findByText("Practice off.")).toBeVisible();
     expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ enabled: false });
   });
 });
@@ -65,9 +65,9 @@ describe("an evaluation's Allow drill", () => {
       <EvaluationDrillSetting evaluation={{ ...detail.evaluation, state: "draft", allowDrill: false }} />,
     );
 
-    expect(screen.getByText("Students will see the key of these questions after each review.")).toBeVisible();
+    expect(screen.getByText("Students see the key of these questions after each review.")).toBeVisible();
     expect(screen.getByText(/seen with its key, in its latest published version/)).toBeVisible();
-    await user.click(screen.getByRole("switch", { name: "Allow drill" }));
+    await user.click(screen.getByRole("switch", { name: "Allow practice" }));
     await vi.waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ allowDrill: true }));
     // No card yet: nothing to remove.
     expect(screen.queryByRole("button", { name: /remove these questions/i })).toBeNull();
@@ -83,25 +83,25 @@ describe("an evaluation's Allow drill", () => {
       <EvaluationDrillSetting evaluation={{ ...detail.evaluation, state: "released", allowDrill: true }} />,
     );
 
-    expect(screen.getByRole("switch", { name: "Allow drill" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Allow practice" })).toBeDisabled();
     expect(screen.getByText("The results are released: this setting no longer changes.")).toBeVisible();
-    expect(await screen.findByText("3 drill cards come from this evaluation")).toBeVisible();
+    expect(await screen.findByText("3 practice cards come from this evaluation")).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Remove these questions from the drill" }));
-    const dialog = await screen.findByRole("dialog", { name: "Remove 3 cards from the drill?" });
+    await user.click(screen.getByRole("button", { name: "Remove these cards" }));
+    const dialog = await screen.findByRole("dialog", { name: "Remove 3 cards from the practice?" });
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
-    await user.click(within(dialog).getByRole("button", { name: "Remove these questions from the drill" }));
+    await user.click(within(dialog).getByRole("button", { name: "Remove these cards" }));
 
-    expect(await screen.findByText("3 cards removed from the drill.")).toBeVisible();
+    expect(await screen.findByText("3 cards removed from the practice.")).toBeVisible();
     expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(1);
-    expect(screen.queryByText("3 drill cards come from this evaluation")).toBeNull();
+    expect(screen.queryByText("3 practice cards come from this evaluation")).toBeNull();
   });
 
   it("removes nothing when the teacher cancels", async () => {
     const user = userEvent.setup();
     const { calls } = mockFetch({ [`GET ${url}`]: ok({ allowDrill: false, cards: 1 }) });
     renderWithProviders(<EvaluationDrillSetting evaluation={{ ...detail.evaluation, state: "closed" }} />);
-    await user.click(await screen.findByRole("button", { name: "Remove these questions from the drill" }));
+    await user.click(await screen.findByRole("button", { name: "Remove these cards" }));
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
   });

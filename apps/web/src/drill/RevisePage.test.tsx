@@ -183,7 +183,7 @@ describe("targeted revision", () => {
     const navigate = vi.fn();
     page(navigate);
     await startPointer(user);
-    await user.click(await screen.findByRole("button", { name: "Skip it" }));
+    await user.click(await screen.findByRole("button", { name: "Skip" }));
     await answer(user, "4", "Finish");
     expect(await screen.findByText(/^1 of 1 right at the first try/)).toBeVisible();
     await vi.waitFor(() => expect(calls.some((c) => c.url === `${round}/end`)).toBe(true));
@@ -205,7 +205,7 @@ describe("targeted revision", () => {
   it("says revision is not open when the server says so, with no Start", async () => {
     stub({ [`GET ${base}/concepts`]: ok({ available: false, concepts: [] }) });
     page();
-    expect(await screen.findByText("Targeted revision is not open to you in this classroom")).toBeVisible();
+    expect(await screen.findByText("Targeted revision is not available in this classroom")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
   });
 });

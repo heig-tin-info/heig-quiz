@@ -15,7 +15,7 @@ describe("the negative-marking setting", () => {
     await open();
     const toggle = screen.getByRole("switch", { name: "Negative marking" });
     expect(toggle).not.toBeChecked();
-    expect(screen.getByText(/a wrong answer costs points and no answer costs nothing/)).toBeVisible();
+    expect(screen.getByText(/A wrong multiple-choice or categorize answer costs points, no answer costs none/)).toBeVisible();
     await userEvent.click(toggle);
     await waitFor(() =>
       expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
@@ -48,7 +48,7 @@ describe("the categorize policy setting", () => {
     await open();
     const group = screen.getByRole("radiogroup", { name: "Categorize scoring" });
     expect(within(group).getByRole("radio", { name: "Per card" })).toBeChecked();
-    await userEvent.click(within(group).getByRole("radio", { name: "Exact" }));
+    await userEvent.click(within(group).getByRole("radio", { name: "All or nothing" }));
     await waitFor(() =>
       expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
         settings: { categorizePolicy: "all_or_nothing" },

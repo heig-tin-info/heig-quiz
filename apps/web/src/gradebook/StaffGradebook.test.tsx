@@ -138,9 +138,9 @@ describe("the matrix", () => {
     const table = makeTable();
     table.columns[0] = { ...table.columns[0]!, title: long };
     renderTab(table);
-    const head = await screen.findByRole("button", { name: (name) => name.startsWith(`${long} (Graded quiz)`) });
+    const head = await screen.findByRole("button", { name: (name) => name.startsWith(`${long} (Exam)`) });
     expect(head).toHaveTextContent(/100 %$/);
-    expect(within(head).queryByText(/Graded quiz ·/)).toBeNull();
+    expect(within(head).queryByText(/Exam ·/)).toBeNull();
   });
 
   it("lights the column of the hovered head, and only it", async () => {
@@ -158,14 +158,14 @@ describe("the matrix", () => {
     renderTab(makeTable());
     const head = await screen.findByRole("button", { name: /^Test 1/ });
     await userEvent.hover(head.firstElementChild!);
-    expect(await screen.findByText("Test 1 · Graded quiz")).toBeInTheDocument();
+    expect(await screen.findByText("Test 1 · Exam")).toBeInTheDocument();
     await userEvent.click(head.firstElementChild!);
     expect(await screen.findByRole("menu")).toBeInTheDocument();
-    expect(screen.queryByText("Test 1 · Graded quiz")).toBeNull();
+    expect(screen.queryByText("Test 1 · Exam")).toBeNull();
     await userEvent.unhover(head.firstElementChild!);
     await userEvent.hover(head.firstElementChild!);
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(screen.queryByText("Test 1 · Graded quiz")).toBeNull();
+    expect(screen.queryByText("Test 1 · Exam")).toBeNull();
   });
 
   it("closes on the class means: each column's, a dash where there is none, and the overall one under the mean", async () => {

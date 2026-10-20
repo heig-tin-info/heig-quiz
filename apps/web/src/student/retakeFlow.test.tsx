@@ -260,7 +260,7 @@ describe("retakes on an exercise (issues #120, #121)", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Recommencer" }));
 
     expect(await screen.findByText("Question 1")).toBeInTheDocument();
-    expect(screen.queryByText("Rendu")).toBeNull();
+    expect(screen.queryByText("Réponses rendues")).toBeNull();
     // Blank: nothing of attempt 1 came along, and nothing was written to it.
     expect(screen.queryByText("Répondue")).toBeNull();
     expect(routes.some((r) => r.view === "feedback")).toBe(false);
@@ -293,8 +293,8 @@ describe("retakes on an exercise (issues #120, #121)", () => {
     );
 
     // No "your answers are with your teacher" in between.
-    expect(await screen.findByText("Score de cette tentative")).toBeInTheDocument();
-    expect(screen.queryByText("Rendu")).toBeNull();
+    expect(await screen.findByText("Points de cette tentative")).toBeInTheDocument();
+    expect(screen.queryByText("Réponses rendues")).toBeNull();
     expect(routes).toContainEqual({ view: "feedback", attemptId: FIRST });
     expect(screen.getByText("tentatives : 1 sur 3")).toBeInTheDocument();
 
@@ -318,7 +318,7 @@ describe("retakes on an exercise (issues #120, #121)", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Recommencer" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("C'est votre dernière tentative qui compte")).toBeInTheDocument();
+    expect(within(dialog).getByText("La dernière tentative compte")).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "Annuler" }));
     expect(calls.some((c) => c.url.endsWith("/retake"))).toBe(false);
 
@@ -333,7 +333,7 @@ describe("retakes on an exercise (issues #120, #121)", () => {
   it.each([
     ["max_attempts", "Vous avez utilisé vos 3 tentatives."],
     ["closed", "L'exercice est terminé : plus de nouvelle tentative."],
-    ["not_open", "L'exercice ne prend pas de nouvelle tentative pour l'instant."],
+    ["not_open", "Nouvelle tentative impossible pour l'instant."],
   ] as const)("says why, with no dead button, when the server refuses (%s)", async (refusal, why) => {
     mockFetch({
       [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(refusal, { attemptCount: 3 })),
@@ -373,7 +373,7 @@ describe("retakes on an exercise (issues #120, #121)", () => {
     await userEvent.click(
       within(await screen.findByRole("dialog")).getByRole("button", { name: "Rendre" }),
     );
-    expect(await screen.findByText("Rendu")).toBeInTheDocument();
+    expect(await screen.findByText("Réponses rendues")).toBeInTheDocument();
     return mounted;
   }
 
@@ -425,7 +425,7 @@ describe("a retake of the questions to review (ADR-091)", () => {
     });
     mount({ view: "feedback", attemptId: FIRST });
 
-    const partial = await screen.findByRole("button", { name: "Refaire les questions à revoir (2)" });
+    const partial = await screen.findByRole("button", { name: "Refaire les 2 questions à revoir" });
     const all = screen.getByRole("button", { name: "Tout refaire" });
     expect(partial.className).toBe(buttonClass("primary", "md", ""));
     expect(all.className).toBe(buttonClass("secondary", "md", ""));
@@ -433,7 +433,7 @@ describe("a retake of the questions to review (ADR-091)", () => {
     expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
       "Question 1Acquise",
       "Question 2À revoir",
-      "Question 3En attente de correction",
+      "Question 3En attente",
     ]);
 
     await userEvent.click(partial);
@@ -465,7 +465,7 @@ describe("a retake of the questions to review (ADR-091)", () => {
     expect(screen.getByRole("button", { name: "Tout refaire" }).className).toBe(
       buttonClass("primary", "md", ""),
     );
-    expect(screen.queryByRole("button", { name: /Refaire les questions/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Refaire les \d+ questions à revoir$/ })).toBeNull();
   });
 
   it("takes the card's Try again to the results page, where the choice is", async () => {
@@ -476,9 +476,9 @@ describe("a retake of the questions to review (ADR-091)", () => {
       [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedback(null, { review: REVIEW })),
     });
     const { routes } = mount({ view: "home" });
-    await userEvent.click(await screen.findByRole("button", { name: "Voir mes résultats et recommencer" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Revoir et recommencer" }));
     expect(routes.at(-1)).toEqual({ view: "feedback", attemptId: FIRST });
-    expect(await screen.findByRole("button", { name: "Refaire les questions à revoir (2)" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Refaire les 2 questions à revoir" })).toBeInTheDocument();
     expect(calls.some((c) => c.url.endsWith("/retake"))).toBe(false);
   });
 });

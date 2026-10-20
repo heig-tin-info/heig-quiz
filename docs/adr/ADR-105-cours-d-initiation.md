@@ -126,7 +126,7 @@ text of a guide chapter, *The training course* (`docs/guide/training.md`), and o
 training classroom's help topic; the card of §4 links them. "Quiz" names what the
 teacher takes as a student; "mission" names what they do as a teacher.
 
-1. **Be a student** — "The welcome quiz" (« Le quiz d'accueil »): an exercise,
+1. **Be a student** — "The welcome exercise" (« L'exercice d'accueil », until 2026-10-20 « Le quiz d'accueil »; courses provisioned before keep their title): an exercise,
    Scheduled, open from the provisioning until the end of the classroom's period
    (the ticker closes it then, F-EVAL-04; a restart provisions a fresh one), free
    navigation, immediate correction, retakes allowed (ADR-025, which a staff seat
@@ -139,7 +139,7 @@ teacher takes as a student; "mission" names what they do as a teacher.
    that behaviour. Two clicks before it: **Join as student** on the classroom page
    (the coach anchor `classroom.join` already points at it), then **Switch to
    student view**.
-2. **Run a class** — "The live quiz" (« Le quiz en direct »), a draft in Live mode:
+2. **Run a class** — "The live exam" (« L'examen en direct », until 2026-10-20 « Le quiz en direct »), a draft in Live mode:
    the three screens and the start checklist with the waiting-room preview
    (F-EVAL-23); the teacher opens the room, opens a second tab in the student view
    (the mode is per tab, ADR-018), starts, answers, closes; grades the `rich`

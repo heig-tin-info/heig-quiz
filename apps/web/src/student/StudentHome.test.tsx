@@ -107,7 +107,7 @@ describe("the student home", () => {
       SEB_DOWNLOAD_URL,
     );
     expect(assign).not.toHaveBeenCalled();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Télécharger le fichier d'examen" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Télécharger le fichier" }));
     expect(assign).toHaveBeenCalledWith("/app/api/evaluations/e1/seb");
     expect(navigate).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -129,7 +129,7 @@ describe("the student home", () => {
     expect(within(dialog).getByRole("heading", { name: "Autorisé" })).toBeInTheDocument();
     expect(within(dialog).getByText("Une feuille A4 recto-verso")).toBeInTheDocument();
     expect(within(dialog).getByText("Toute autre application que Safe Exam Browser")).toBeInTheDocument();
-    const download = within(dialog).getByRole("button", { name: "Télécharger le fichier d'examen" });
+    const download = within(dialog).getByRole("button", { name: "Télécharger le fichier" });
     expect(
       within(dialog).getByText("Une feuille A4 recto-verso").compareDocumentPosition(download) &
         Node.DOCUMENT_POSITION_FOLLOWING,
@@ -158,7 +158,7 @@ describe("the student home", () => {
     });
     render();
     expect(await screen.findByRole("button", { name: "Ouvrir dans Safe Exam Browser" })).toBeInTheDocument();
-    expect(screen.queryByText(/poste kiosque/)).toBeNull();
+    expect(screen.queryByText(/poste d'examen/)).toBeNull();
   });
 
   it("opens no attempt on an exam sat on a kiosk station only: it says where, and leads to the pairing (ADR-051)", async () => {
@@ -168,7 +168,7 @@ describe("the student home", () => {
     });
     const { navigate } = render();
     const line = await screen.findByText(
-      "Passez cet examen sur un poste kiosque : scannez le code affiché sur le poste.",
+      "Cet examen se passe sur un poste d'examen : scannez le code affiché sur le poste.",
     );
     const row = line.closest("div.rounded-card") as HTMLElement;
     await userEvent.click(within(row).getByRole("button", { name: "Saisir le code d'un poste" }));
@@ -219,7 +219,7 @@ describe("the student home", () => {
     expect(screen.queryByText("Évaluations passées")).toBeNull();
     expect(screen.queryByRole("button", { name: "Voir mes résultats" })).toBeNull();
     // The open section is empty: nothing to do.
-    expect(screen.getByText("Rien à faire pour l'instant")).toBeInTheDocument();
+    expect(screen.getByText("Aucune activité pour l'instant")).toBeInTheDocument();
   });
 
   // Issue #163: a running poll of the classroom, answered on its own page.
@@ -248,7 +248,7 @@ describe("the student home", () => {
     await userEvent.click(within(row as HTMLElement).getByRole("button", { name: "Répondre" }));
     expect(navigate).toHaveBeenCalledWith({ view: "join", code: "NM2X9A" });
     // A running poll is something to do: no "nothing to do" beside it.
-    expect(screen.queryByText("Rien à faire pour l'instant")).toBeNull();
+    expect(screen.queryByText("Aucune activité pour l'instant")).toBeNull();
   });
 
   // M3-09a, M3-13 (F-PROJ-04): a project card among the evaluations — title,
@@ -297,7 +297,7 @@ describe("the student home", () => {
       "GET /app/api/student/classrooms": ok([]),
     });
     render();
-    expect(await screen.findByText("Rien à faire pour l'instant")).toBeInTheDocument();
+    expect(await screen.findByText("Aucune activité pour l'instant")).toBeInTheDocument();
     expect(await screen.findByText("Aucune classe")).toBeInTheDocument();
   });
 
@@ -363,7 +363,7 @@ describe("the student home", () => {
         "POST /app/api/evaluations/e9/retake": ok({ kind: "attempt", view: { attempt: { id: "a10" } } }),
       });
       const { navigate } = render();
-      expect(await screen.findByText("Meilleur score 7.5 / 10")).toBeInTheDocument();
+      expect(await screen.findByText("Meilleur résultat 7.5 / 10")).toBeInTheDocument();
       expect(screen.getByText("tentatives : 2 sur 3")).toBeInTheDocument();
       const row = screen.getByText("Série 3 — Entraînement").closest("div.rounded-card")!;
       const buttons = within(row as HTMLElement).getAllByRole("button");
@@ -384,7 +384,7 @@ describe("the student home", () => {
       const { navigate } = render();
       await userEvent.click(await screen.findByRole("button", { name: "Recommencer" }));
       const dialog = await screen.findByRole("dialog");
-      expect(within(dialog).getByText("C'est votre dernière tentative qui compte")).toBeInTheDocument();
+      expect(within(dialog).getByText("La dernière tentative compte")).toBeInTheDocument();
       await userEvent.click(within(dialog).getByRole("button", { name: "Annuler" }));
       expect(calls.some((c) => c.url.endsWith("/retake"))).toBe(false);
 

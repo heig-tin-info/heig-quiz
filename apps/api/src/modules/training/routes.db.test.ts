@@ -163,9 +163,9 @@ describe("provisioning over HTTP and the four missions (§1, §4)", () => {
     expect(second.statusCode).toBe(200);
     expect(second.json()).toEqual({ courseId, classroomId, created: false });
     const s = await statusOf();
-    const liveQuiz = await evaluationTitled("Le quiz en direct");
+    const liveQuiz = await evaluationTitled("L'examen en direct");
     expect(s.course).toEqual({ id: courseId, classroomId, liveEvaluationId: liveQuiz.id });
-    expect(await evaluationTitled("Le quiz d'accueil")).toMatchObject({ state: "running", mode: "exercise" });
+    expect(await evaluationTitled("L'exercice d'accueil")).toMatchObject({ state: "running", mode: "exercise" });
     // No LLM gateway and no OAuth client in this server: the fourth mission cannot be done.
     expect(missions(s)).toEqual({ student: "todo", run: "todo", own: "todo", tools: "unavailable" });
   });
@@ -175,7 +175,7 @@ describe("provisioning over HTTP and the four missions (§1, §4)", () => {
     // A full API token: an MCP one never reaches these routes at all (ADR-113).
     const token = (await post("/app/api/me/tokens", other.headers, { name: "t", scope: "api" })).json() as { token: string };
     const oauth = await oauthBearer(other.headers);
-    const welcome = await evaluationTitled("Le quiz d'accueil");
+    const welcome = await evaluationTitled("L'exercice d'accueil");
     const station = await kioskStation(server.app);
     const kiosk = await sessionOf(student.id, { kind: "kiosk", evaluationId: welcome.id, deviceId: station.deviceId });
     // An impersonation session's write is refused by the session layer first (ADR-034); its read by the route's guard.
@@ -222,14 +222,14 @@ describe("provisioning over HTTP and the four missions (§1, §4)", () => {
     const seat = await post(`/app/api/classrooms/${classroomId}/self-enroll`, teacher.headers);
     expect(seat.statusCode, seat.body).toBe(201);
     expect(missions(await statusOf()).student).toBe("todo");
-    await takeAsSeat((await evaluationTitled("Le quiz d'accueil")).id);
+    await takeAsSeat((await evaluationTitled("L'exercice d'accueil")).id);
     expect(missions(await statusOf()).student).toBe("done");
   });
 
   it("mission 2: a released evaluation — and the seat reads its released grade", async () => {
     const db = server.app.db;
     const now = () => server.clock.now();
-    let row = await evaluationTitled("Le quiz en direct");
+    let row = await evaluationTitled("L'examen en direct");
     row = await evaluationService.patchEvaluation(db, row, { durationS: 600 }, { attemptCount: 0, now: now() });
     evaluationService.guardTransition(row, "running", { items: await evaluationService.itemRows(db, row.id), attemptCount: 0, now: now() });
     row = await live.startEvaluation(db, row, now());
@@ -263,7 +263,7 @@ describe("provisioning over HTTP and the four missions (§1, §4)", () => {
     );
     await publishQuestion(db, mine.id, teacher.id, "ma-question", { type: "short", config: TRAINING_SHORT.config });
     expect(missions(await statusOf()).own).toBe("todo");
-    const welcome = await evaluationTitled("Le quiz d'accueil");
+    const welcome = await evaluationTitled("L'exercice d'accueil");
     await saveAsTemplate(db, welcome, { courseId, title: "Quiz d'accueil (modèle)", createdBy: teacher.id });
     expect(missions(await statusOf()).own).toBe("done");
   });

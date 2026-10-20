@@ -84,7 +84,7 @@ describe("the poll participant page", () => {
       "GET /app/api/config": ok({ devLogin: false }),
     });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Log in to answer" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Sign in to answer" }));
     expect(assign).toHaveBeenCalledWith("/app/auth/login?next=%2Fp%2FQZ4F7K");
     // The gate is a gate: nothing was joined behind it.
     expect(screen.queryByRole("button", { name: /Send/ })).not.toBeInTheDocument();
@@ -187,7 +187,7 @@ describe("the poll participant page", () => {
     });
 
     expect(await screen.findByText("Correct answer")).toBeVisible();
-    expect(screen.getByText("Your answer — wrong")).toBeVisible();
+    expect(screen.getByText("Your answer: wrong")).toBeVisible();
     expect(screen.queryByRole("button", { name: /Send|Update/ })).not.toBeInTheDocument();
   });
 
@@ -216,7 +216,7 @@ describe("the poll participant page", () => {
       ),
     });
 
-    expect(await screen.findByText("The results")).toBeVisible();
+    expect(await screen.findByText("Results")).toBeVisible();
     expect(screen.getByText("25%")).toBeVisible();
     expect(screen.getByText("75%")).toBeVisible();
     // Votes are not the key: nothing is marked right.
@@ -239,7 +239,7 @@ describe("the poll participant page", () => {
       ),
     });
 
-    expect(await screen.findByText("The results")).toBeVisible();
+    expect(await screen.findByText("Results")).toBeVisible();
     expect(screen.getByText("25%")).toBeVisible();
     expect(screen.getByText("75%")).toBeVisible();
     expect(screen.getByText("Your answer")).toBeVisible();
@@ -295,7 +295,7 @@ describe("a brainstorm on the participant page (ADR-071)", () => {
         }),
       ),
     });
-    expect(await screen.findByText(/read by an AI model \(Anthropic\)/)).toBeVisible();
+    expect(await screen.findByText(/read by an AI \(Anthropic\)/)).toBeVisible();
   });
 
   const brainstorm = (answer: unknown) =>

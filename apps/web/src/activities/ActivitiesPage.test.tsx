@@ -160,7 +160,7 @@ describe("ActivitiesPage", () => {
     const user = userEvent.setup();
     const { navigate } = render([...ALL, DRAFT]);
     const tabs = await screen.findByRole("tablist", { name: "Activities by state" });
-    expect(within(tabs).getByRole("tab", { name: /In progress & upcoming\s*4/, selected: true })).toBeInTheDocument();
+    expect(within(tabs).getByRole("tab", { name: /Current\s*4/, selected: true })).toBeInTheDocument();
     expect(within(tabs).getByRole("tab", { name: /Drafts\s*1/ })).toBeInTheDocument();
     expect(within(tabs).getByRole("tab", { name: /Ended\s*1/ })).toBeInTheDocument();
     expect(within(screen.getByRole("table")).queryByText("Quiz 1 — draft")).not.toBeInTheDocument();
@@ -198,7 +198,7 @@ describe("ActivitiesPage", () => {
     expect(within(table).queryByText("Test 0")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /^Projects in progress/ }));
-    expect(screen.getByRole("tab", { name: /In progress & upcoming/, selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Current/, selected: true })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Project", pressed: true })).toBeInTheDocument();
     expect(within(screen.getByRole("table")).getByText("Labo 2 — pointeurs")).toBeInTheDocument();
     expect(within(screen.getByRole("table")).queryByText("Quiz 3 — pointers")).not.toBeInTheDocument();

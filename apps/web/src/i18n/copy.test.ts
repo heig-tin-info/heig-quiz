@@ -30,7 +30,8 @@ type Rule = {
   test: (text: string, key: string) => boolean;
 };
 
-const has = (re: RegExp) => (text: string) => re.test(text);
+/** A rule reads the prose, not a placeholder's name (`{pool}` is a variable): one stands in for it. */
+const has = (re: RegExp) => (text: string) => re.test(text.replace(/\{\w+\}/g, "x"));
 const suffix = (key: string) => key.split(".").pop() ?? "";
 /** A ceiling applies to a label; a string with a placeholder is measured elsewhere. */
 const longerThan = (max: number) => (text: string) => !text.includes("{") && text.length > max;

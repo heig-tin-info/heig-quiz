@@ -130,7 +130,7 @@ describe("the phone's pairing page (ADR-051 §7)", () => {
       "GET /app/api/pair/BCDF-GHJK": fail(404, { error: "pairing_not_found" }),
       "GET /app/api/pair/CCCC-DDDD": ok(preview()),
     });
-    expect(await screen.findByText("This code does not work")).toBeVisible();
+    expect(await screen.findByText("Code refused")).toBeVisible();
     const field = screen.getByLabelText("Code shown on the station");
     await userEvent.clear(field);
     await userEvent.type(field, "ccccdddd");
@@ -246,7 +246,7 @@ describe("scanning the station's QR with the page's camera", () => {
     getUserMedia.mockRejectedValue(new DOMException("denied", "NotAllowedError"));
     render({}, "/pair");
     await userEvent.click(screen.getByRole("button", { name: "Scan with camera" }));
-    expect(await screen.findByText("Camera unavailable — type the code.")).toBeVisible();
+    expect(await screen.findByText("Camera unavailable. Type the code.")).toBeVisible();
     expect(screen.getByLabelText("Code shown on the station")).toHaveFocus();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   });

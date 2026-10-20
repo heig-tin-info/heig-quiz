@@ -108,7 +108,7 @@ describe("ConditionsSetting", () => {
     await renderOpen(<Harness detail={withSettings({ calculator: "scientific", negativeMarking: true })} />);
     expect(screen.getByText("Added by the platform")).toBeInTheDocument();
     expect(screen.getByText("A scientific calculator")).toBeInTheDocument();
-    expect(screen.getByText("Wrong answers cost points")).toBeInTheDocument();
+    expect(screen.getByText("Points off for wrong answers")).toBeInTheDocument();
   });
 
   it("previews the notepad, and its copy-paste line only when that is blocked (ADR-090)", async () => {

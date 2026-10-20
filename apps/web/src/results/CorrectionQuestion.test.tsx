@@ -88,7 +88,7 @@ describe("CorrectionQuestion, a canvas", () => {
   it("lends a program of blocks its warehouses' bars, beside its program in the canvas's words", async () => {
     expect(drawsKey("blocks")).toBe(true);
     draw(BLOCKS, true, undefined, "fr");
-    const program = await screen.findByRole("region", { name: "Solution de référence" });
+    const program = await screen.findByRole("region", { name: "Corrigé" });
     expect(program).toHaveTextContent("avancer");
     const cases = screen.getByRole("list", { name: "Cas de test" });
     expect(within(cases).getByText("Warehouse 1")).toBeVisible();

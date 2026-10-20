@@ -2,8 +2,8 @@
 
 ## Ce qu'est cet écran
 
-Votre propre cours d'initiation : une classe, aucun étudiant, deux quiz
-faits pour vous, et quatre missions sur les vrais écrans de la plateforme.
+Votre propre cours d'initiation : une classe, aucun étudiant, deux évaluations
+faites pour vous, et quatre missions sur les vrais écrans de la plateforme.
 Rien n'est noté : ce que vous faites comme étudiant ne compte dans aucune
 statistique ni aucun jeu d'entraînement.
 
@@ -16,13 +16,13 @@ mène là où la mission se joue — il ne fait jamais le geste à votre place.
 Cliquez **S'inscrire comme étudiant** sur cette page : vous obtenez une place
 dans votre propre classe, marquée *staff*. Ouvrez ensuite le menu de votre
 compte et **Passer en vue étudiant** : le portail devient ce qu'un étudiant
-voit. Faites le quiz d'accueil : une question par type, chacune sur un geste
+voit. Faites l'exercice d'accueil : une question par type, chacune sur un geste
 de la plateforme, avec une explication qui dit ce que vous configureriez
 pour obtenir ce comportement. Revenez par le même chemin.
 
 ## 2. Animer une classe
 
-Ouvrez le quiz en direct, un brouillon en mode direct. Parcourez ses trois
+Ouvrez l'examen en direct, un brouillon en mode direct. Parcourez ses trois
 écrans et la liste de contrôle du lancement avec l'aperçu de la salle
 d'attente. Ouvrez la salle, ouvrez un second onglet en vue étudiant (la vue
 est propre à l'onglet), lancez, répondez, fermez. Corrigez à la main la
@@ -33,10 +33,10 @@ depuis la vue étudiant.
 
 Sur la page des banques, **Nouvelle banque**. Sur la page du cours
 d'initiation, **Lier une banque**. Dans votre banque, créez une question
-avec la baguette, essayez-la, publiez-la. Enregistrez le quiz d'accueil
+avec la baguette, essayez-la, publiez-la. Enregistrez l'exercice d'accueil
 comme modèle, instanciez-le, ajoutez votre question, puis modifiez la
-question et voyez apparaître le badge « version plus récente ». Prévisualisez le
-quiz, faites-le depuis la place de la mission 1, réinitialisez votre propre
+question et voyez apparaître le badge « version plus récente ». Prévisualisez
+l'évaluation, faites-la depuis la place de la mission 1, réinitialisez votre propre
 tentative.
 
 ## 4. Les outils autour (facultatif)

@@ -324,7 +324,7 @@ describe("PoolView", () => {
     const { calls } = mockFetch(previews());
     renderWithProviders(<PoolView id="p1" navigate={navigate} />);
     await user.click(await screen.findByText("ptr-null-check"));
-    expect(await screen.findByText("Never published — this is its draft")).toBeVisible();
+    expect(await screen.findByText("Draft, never published")).toBeVisible();
     // The banner reads the row, the request follows from an effect: wait for it.
     await waitFor(() => expect(previewCalls(calls)[0]).toMatchObject({ body: { source: "draft" } }));
     // Same tab: the anchor keeps its href for a middle-click, a plain click navigates.
@@ -423,7 +423,7 @@ describe("PoolView", () => {
     // On a narrow window the arrows only move: the pane would hide the list.
     expect(screen.queryByText("Que vaut un pointeur non initialisé ?")).toBeNull();
     await user.keyboard("p");
-    expect(await screen.findByText("Never published — this is its draft")).toBeVisible();
+    expect(await screen.findByText("Draft, never published")).toBeVisible();
     expect(navigate).not.toHaveBeenCalled();
     await user.keyboard("{Escape}");
     expect(rowOf("ptr-null-check")).toHaveFocus();

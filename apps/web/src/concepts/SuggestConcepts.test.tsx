@@ -78,7 +78,7 @@ describe("SuggestConcepts", () => {
     expect(await screen.findByText("Elements are indexed.")).toBeInTheDocument();
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
     expect(calls.find((c) => c.method === "POST")?.body).toEqual({ config: DRAFT });
-    expect(screen.getByText(/Suggested “Memory allocation”; did you mean this one\?/)).toBeInTheDocument();
+    expect(screen.getByText(/Closest concept to “Memory allocation”\./)).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Add 0 selected" })).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: /Array/ }));

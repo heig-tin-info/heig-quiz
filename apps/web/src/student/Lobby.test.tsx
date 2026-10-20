@@ -83,7 +83,7 @@ describe("the lobby", () => {
     expect(
       screen.getByRole("img", { name: "18 étudiants présents sur 24" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Le professeur démarrera le quiz.")).toBeInTheDocument();
+    expect(screen.getByText("L'enseignant donnera le départ.")).toBeInTheDocument();
   });
 
   it("has no primary action, only the discreet way out", () => {
@@ -120,7 +120,7 @@ describe("the lobby", () => {
     expect(before("<b>Téléphones</b>", "Toute autre application que Safe Exam Browser")).toBeTruthy();
     expect(before("Toute autre application que Safe Exam Browser", "Une feuille A4 de notes")).toBeTruthy();
     expect(before("Répondez en français", "Une seule tentative")).toBeTruthy();
-    expect(before("Une seule tentative", "Enregistré au fil de la frappe")).toBeTruthy();
+    expect(before("Une seule tentative", "Enregistrement automatique")).toBeTruthy();
     // The teacher's text is plain text, never markup.
     expect(screen.getByText("<b>Téléphones</b>")).toBeInTheDocument();
     // No "Provided" block without a provided line.
@@ -130,7 +130,7 @@ describe("the lobby", () => {
   it("states the duration with the student's extra time, once", () => {
     render();
     expect(screen.getByText("27 minutes dès que vous commencez")).toBeInTheDocument();
-    expect(screen.getByText("Votre temps supplémentaire de 33 % est compris.")).toBeInTheDocument();
+    expect(screen.getByText("Temps supplémentaire de 33 % compris.")).toBeInTheDocument();
   });
 
   it("explains a locked navigation (F-LIVE-08)", () => {
@@ -138,7 +138,7 @@ describe("the lobby", () => {
       ...view,
       conditions: { announced: [], imposed: [{ key: "navigation", kind: "info", navigation: "forward_only" }] },
     });
-    expect(screen.getByText("Sens unique")).toBeInTheDocument();
+    expect(screen.getByText("Pas de retour en arrière")).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["À savoir"]);
   });
 
@@ -217,12 +217,12 @@ describe("the lobby", () => {
       ...view,
       conditions: { announced: [], imposed: [{ key: "negative_marking", kind: "info" }] },
     });
-    expect(screen.getByText("Les réponses fausses coûtent des points")).toBeInTheDocument();
-    expect(screen.getByText(/ne pas répondre ne coûte rien/)).toBeInTheDocument();
+    expect(screen.getByText("Réponses fausses pénalisées")).toBeInTheDocument();
+    expect(screen.getByText(/une question laissée sans réponse ne coûte rien/)).toBeInTheDocument();
   });
 
   it("says nothing of it otherwise", () => {
     render();
-    expect(screen.queryByText("Les réponses fausses coûtent des points")).toBeNull();
+    expect(screen.queryByText("Réponses fausses pénalisées")).toBeNull();
   });
 });

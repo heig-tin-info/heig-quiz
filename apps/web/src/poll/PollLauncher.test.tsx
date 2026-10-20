@@ -16,7 +16,7 @@ import { PollLauncher } from "./PollLauncher";
 
 /*
  * jsdom implements `Range` but none of its layout methods, and ProseMirror —
- * the statement field of the "Ask a new question" tab — calls them. Stubbed
+ * the statement field of the "New question" tab — calls them. Stubbed
  * here, as in `QuestionEditor.test.tsx`, never globally.
  */
 if (typeof Range !== "undefined") {
@@ -88,9 +88,9 @@ describe("PollLauncher", () => {
 
     await userEvent.click(screen.getByRole("tab", { name: /Recent polls/ }));
     expect(await screen.findByText("sizeof-ptr-64")).toBeVisible();
-    expect(screen.getByText(/Polled 4 times/)).toBeVisible();
+    expect(screen.getByText(/Run 4 times/)).toBeVisible();
     // A question never asked says so rather than showing "0".
-    expect(screen.getByText("Never polled")).toBeVisible();
+    expect(screen.getByText("Never run")).toBeVisible();
   });
 
   it("opens on a new question, even with past polls: nothing of them on the wall", async () => {
@@ -98,10 +98,10 @@ describe("PollLauncher", () => {
     renderWithProviders(<PollLauncher navigate={vi.fn()} />);
 
     expect(await screen.findByLabelText("Statement")).toBeVisible();
-    expect(screen.getByRole("tab", { name: /Ask a new question/, selected: true })).toBeVisible();
+    expect(screen.getByRole("tab", { name: /New question/, selected: true })).toBeVisible();
     expect(
       screen.getAllByRole("tab").map((tab) => tab.textContent?.replace(/\d+$/, "")),
-    ).toEqual(["Ask a new question", "Recent polls", "From pools"]);
+    ).toEqual(["New question", "Recent polls", "From pools"]);
     expect(screen.queryByText("sizeof-ptr-64")).toBeNull();
   }, 20_000);
 
@@ -115,9 +115,9 @@ describe("PollLauncher", () => {
     expect(
       screen.getByRole("img", { name: "Correct 45 % · Incorrect 30 % · No answer 25 % (last 4 runs)" }),
     ).toBeVisible();
-    // An opinion poll has no donut, a count instead; a question never kept says so.
+    // An opinion poll has no donut, a count instead; a question never saved says so.
     expect(screen.getByText("38 answers")).toBeVisible();
-    expect(screen.getByText(/not kept/)).toBeVisible();
+    expect(screen.getByText(/not saved/)).toBeVisible();
     // One legend names the colours, abstention included.
     expect(screen.getByText("Outcome of the last runs")).toBeVisible();
     expect(screen.getByText("no answer")).toBeVisible();
@@ -131,8 +131,8 @@ describe("PollLauncher", () => {
     expect(await screen.findByLabelText("Statement")).toBeVisible();
     await userEvent.click(screen.getByRole("tab", { name: /Recent polls/ }));
     expect(await screen.findByText("No poll yet")).toBeVisible();
-    expect(screen.getByText(/The questions of the polls you launch land here/)).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Ask a new question" }));
+    expect(screen.getByText(/The polls you launch land here/)).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "New question" }));
     expect(await screen.findByLabelText("Statement")).toBeVisible();
   }, 20_000);
 
@@ -196,7 +196,7 @@ describe("PollLauncher", () => {
     expect(screen.queryByRole("button", { name: "Start the poll" })).toBeNull();
     await user.click(screen.getByText("sizeof-ptr-64"));
 
-    expect(await screen.findByRole("tab", { name: /Ask a new question/, selected: true })).toBeVisible();
+    expect(await screen.findByRole("tab", { name: /New question/, selected: true })).toBeVisible();
     expect(await screen.findByLabelText("Text of choice B")).toBeVisible();
     // The key shows, as the teacher wrote it.
     expect(screen.getByRole("checkbox", { name: "Choice B is correct" })).toBeChecked();
@@ -226,7 +226,7 @@ describe("PollLauncher", () => {
     await user.click(screen.getByRole("tab", { name: /Recent polls/ }));
     await user.click(await screen.findByText("sizeof-ptr-64"));
     await user.click(await screen.findByRole("checkbox", { name: "Choice A is correct" }));
-    expect(screen.getByText(/Edited, this becomes a new question/)).toBeVisible();
+    expect(screen.getByText(/Edited, it becomes a new question/)).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Start the poll" }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "poll", id: "e1" }));
@@ -284,11 +284,11 @@ describe("PollLauncher", () => {
     const navigate = vi.fn();
     renderWithProviders(<PollLauncher navigate={navigate} />);
 
-    await user.click(await screen.findByRole("tab", { name: /Ask a new question/ }));
+    await user.click(await screen.findByRole("tab", { name: /New question/ }));
     // No name to give, nothing to save: the tile grid, then the editor.
     expect(screen.queryByLabelText("Internal name")).toBeNull();
     expect(screen.queryByRole("button", { name: "Create question" })).toBeNull();
-    expect(screen.getByText(/Nothing is saved/)).toBeVisible();
+    expect(screen.getByText(/The question is not saved yet/)).toBeVisible();
     await user.click(screen.getByRole("button", { name: /Short answer/ }));
     const prompt = await screen.findByLabelText("Statement");
     // A poll gives no marks: no points, no prefilters.
@@ -331,7 +331,7 @@ describe("PollLauncher", () => {
     const navigate = vi.fn();
     renderWithProviders(<PollLauncher navigate={navigate} />);
 
-    await user.click(await screen.findByRole("tab", { name: /Ask a new question/ }));
+    await user.click(await screen.findByRole("tab", { name: /New question/ }));
     await screen.findByLabelText("Statement");
     // The mcq editor, without its scoring card.
     expect(screen.queryByText("Scoring")).toBeNull();
@@ -340,7 +340,7 @@ describe("PollLauncher", () => {
     expect(await screen.findByText("Could not start the poll.")).toBeVisible();
     expect(screen.getByText(/Complete the fields marked below/)).toBeVisible();
     expect(
-      screen.getByText("A single-answer question has exactly one correct choice."),
+      screen.getByText("Tick exactly one correct choice: this is a single-answer question."),
     ).toBeVisible();
     expect(navigate).not.toHaveBeenCalled();
   }, 20_000);
@@ -355,7 +355,7 @@ describe("PollLauncher", () => {
     const navigate = vi.fn();
     renderWithProviders(<PollLauncher navigate={navigate} />);
 
-    await user.click(await screen.findByRole("tab", { name: /Ask a new question/ }));
+    await user.click(await screen.findByRole("tab", { name: /New question/ }));
     const prompt = await screen.findByLabelText("Statement");
     // Said once, quietly: the key is optional here.
     expect(screen.getByText(/A correct answer is optional/)).toBeVisible();
@@ -455,7 +455,7 @@ describe("PollLauncher · From pools (#162)", () => {
     expect(screen.getByText(/Systèmes embarqués · v1 · I2C/)).toBeVisible();
     expect(screen.getByText("2 questions")).toBeVisible();
     // An anonymous poll belongs to no course: nothing to narrow to.
-    expect(screen.queryByRole("radiogroup", { name: "Which pools" })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "Pools" })).toBeNull();
 
     const start = screen.getByRole("button", { name: "Start the poll" });
     expect(start).toBeDisabled();
@@ -480,7 +480,7 @@ describe("PollLauncher · From pools (#162)", () => {
 
     await user.selectOptions(await screen.findByRole("combobox", { name: "Who answers" }), ROOM);
     await user.click(screen.getByRole("tab", { name: /From pools/ }));
-    const scope = await screen.findByRole("radiogroup", { name: "Which pools" });
+    const scope = await screen.findByRole("radiogroup", { name: "Pools" });
     expect(within(scope).getByRole("radio", { name: "Classroom pools" })).toBeChecked();
     expect(await screen.findByText("ptr-arith")).toBeVisible();
     expect(screen.queryByText("i2c-lines")).toBeNull();

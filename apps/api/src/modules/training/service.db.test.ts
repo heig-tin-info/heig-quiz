@@ -192,8 +192,8 @@ describe("provision (§1)", () => {
     expect(await db.select().from(coursePools).where(eq(coursePools.courseId, course!.id))).toMatchObject([{ poolId: pool.id, mode: "read" }]);
 
     const rows = await db.select().from(evaluations).where(eq(evaluations.classroomId, room!.id));
-    const welcome = rows.find((r) => r.title === "Le quiz d'accueil")!;
-    const liveQuiz = rows.find((r) => r.title === "Le quiz en direct")!;
+    const welcome = rows.find((r) => r.title === "L'exercice d'accueil")!;
+    const liveQuiz = rows.find((r) => r.title === "L'examen en direct")!;
     expect(rows).toHaveLength(2);
     // The welcome quiz: an exercise, Scheduled (ADR-086), open now, closed by the ticker at the period's end, retakes allowed.
     expect(welcome).toMatchObject({ mode: "exercise", state: "running", createdBy: teacherId });

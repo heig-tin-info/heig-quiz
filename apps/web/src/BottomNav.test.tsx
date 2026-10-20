@@ -23,7 +23,7 @@ describe("the Drill slot", () => {
       />,
     );
     const bar = screen.getByRole("navigation", { name: "Main navigation" });
-    const drill = within(bar).getByRole("link", { name: /Drill/ });
+    const drill = within(bar).getByRole("link", { name: /Practice/ });
     expect(drill).toHaveAttribute("aria-current", "page");
     expect(within(drill).getByTestId("drill-available")).toBeInTheDocument();
     expect(within(drill).getByText("Today's drill is available")).toBeInTheDocument();

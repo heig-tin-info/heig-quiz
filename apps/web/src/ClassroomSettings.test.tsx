@@ -36,7 +36,7 @@ describe("the classroom's Settings tab", () => {
     renderSettings();
     expect(await screen.findByRole("tab", { name: /Settings/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Name")).toBeVisible();
-    expect(screen.getByRole("switch", { name: "Drill" })).toBeVisible();
+    expect(screen.getByRole("switch", { name: "Practice" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Archive" })).toBeVisible();
     expect(await screen.findByRole("button", { name: /Delete classroom/ })).toBeVisible();
     // The header's slot is empty on this tab: its one accent is its own.
@@ -171,7 +171,7 @@ describe("the classroom's Settings tab", () => {
     const navigate = vi.fn();
     renderWithProviders(<ClassroomView id="r1" navigate={navigate} />, { route: "/classrooms/r1?tab=drill" });
     expect(await screen.findByText("The drill is off for this classroom")).toBeVisible();
-    expect(screen.queryByRole("switch", { name: "Drill" })).toBeNull();
+    expect(screen.queryByRole("switch", { name: "Practice" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     expect(navigate).toHaveBeenCalledWith({ view: "classroomSettings", id: "r1" });
   });

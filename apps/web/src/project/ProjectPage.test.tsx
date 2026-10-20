@@ -1059,7 +1059,7 @@ describe("the review checkpoints", () => {
   it("adds one as days before the deadline, sent as a negative offset", async () => {
     const { calls } = routes(makeProject(), { [`POST ${BASE}/checkpoints`]: ok(makeCheckpoint(1)) });
     renderPage();
-    await userEvent.click(await screen.findByRole("button", { name: "Add a checkpoint" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Add" }));
     const dialog = await screen.findByRole("dialog");
     const create = within(dialog).getByRole("button", { name: "Create" });
     expect(create).toBeDisabled();
@@ -1085,7 +1085,7 @@ describe("the review checkpoints", () => {
     await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(await screen.findByText(/already sent to some repositories/)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Add a checkpoint" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.type(within(dialog).getByRole("textbox", { name: "Name" }), "late");
     await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
@@ -1098,7 +1098,7 @@ describe("the review checkpoints", () => {
     await screen.findByRole("heading", { level: 1 });
     // The rail stays (Published, Deadline, Freeze), without a checkpoint nor a Release step.
     const rail = screen.getByRole("region", { name: "Lifecycle" });
-    expect(within(rail).queryByRole("button", { name: "Add a checkpoint" })).toBeNull();
+    expect(within(rail).queryByRole("button", { name: "Add" })).toBeNull();
     expect(within(rail).queryByText("Release")).toBeNull();
   });
 });
@@ -1341,7 +1341,7 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     expect(steps[2]).toMatch(/^Deadline/);
     expect(steps[3]).toMatch(/^Freeze.*30 min grace/);
     expect(steps[4]).toMatch(/^Release.*to come/);
-    expect(within(rail).getByRole("button", { name: "Add a checkpoint" })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Add" })).toBeInTheDocument();
   });
 
   it("carries the page's one clock on the rail while open: the time left under the deadline and the elapsed bar (#798)", async () => {
@@ -1373,7 +1373,7 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     routes(makeDraft());
     renderPage();
     const rail = await screen.findByRole("region", { name: "Lifecycle" });
-    expect(await within(rail).findByRole("button", { name: "Add a checkpoint" })).toBeInTheDocument();
+    expect(await within(rail).findByRole("button", { name: "Add" })).toBeInTheDocument();
   });
 
   it("offers neither a new checkpoint, a deletion nor Sync on an archived project", async () => {
@@ -1387,7 +1387,7 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     renderPage();
     const rail = await screen.findByRole("region", { name: "Lifecycle" });
     expect(await within(rail).findByText("soon")).toBeInTheDocument();
-    expect(within(rail).queryByRole("button", { name: "Add a checkpoint" })).toBeNull();
+    expect(within(rail).queryByRole("button", { name: "Add" })).toBeNull();
     expect(within(rail).queryByRole("button", { name: "Delete checkpoint soon" })).toBeNull();
     expect(within(tiles()).queryByRole("button", { name: "Sync" })).toBeNull();
   });
@@ -1401,7 +1401,7 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     renderPage();
     const rail = await screen.findByRole("region", { name: "Lifecycle" });
     expect(await within(rail).findByText("never fires")).toBeInTheDocument();
-    expect(within(rail).queryByRole("button", { name: "Add a checkpoint" })).toBeNull();
+    expect(within(rail).queryByRole("button", { name: "Add" })).toBeNull();
     expect(within(rail).getByRole("button", { name: "Delete checkpoint late" })).toBeInTheDocument();
   });
 });

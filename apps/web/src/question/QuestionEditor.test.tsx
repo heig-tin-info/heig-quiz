@@ -1047,7 +1047,7 @@ describe("QuestionEditor — the AI card (ADR-082)", () => {
     expect(within(aside).getByText("Reviewed, nothing to report (v1).")).toBeInTheDocument();
   });
 
-  it("lists the findings, read-only, with the way to the pool's LLM review", async () => {
+  it("lists the findings, read-only, with the way to the pool's AI review", async () => {
     const user = userEvent.setup();
     const navigate = vi.fn();
     mockFetch(routes(published(FINDINGS), MODEL));
@@ -1059,7 +1059,7 @@ describe("QuestionEditor — the AI card (ADR-082)", () => {
     // Fix and Ignore are the tab's: the route writes the server's draft.
     expect(within(aside).queryByRole("button", { name: "Fix" })).toBeNull();
     expect(within(aside).queryByRole("button", { name: "Ignore" })).toBeNull();
-    const link = within(aside).getByRole("link", { name: "Fix them in the pool's LLM review" });
+    const link = within(aside).getByRole("link", { name: "Open the AI review" });
     expect(link).toHaveAttribute("href", "/pools/p1?tab=review");
     await user.click(link);
     expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p1", tab: "review" });

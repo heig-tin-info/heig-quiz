@@ -341,7 +341,7 @@ describe("Shell sidebar", () => {
     expect(within(sidebar()).getAllByRole("button").map((b) => b.textContent)).toEqual([
       "Activities",
       "Courses",
-      "Drill",
+      "Practice",
       "Grades",
     ]);
   });
@@ -355,7 +355,7 @@ describe("Shell sidebar", () => {
     ["a classroom's journal", { view: "classroomJournal", id: "c1" }, "/classrooms/c1/journal", "Courses"],
     ["a classroom's grades", { view: "classroomGrades", id: "c1" }, "/classrooms/c1/grades", "Courses"],
     ["a feedback page", { view: "feedback", attemptId: "a1" }, "/attempts/a1/feedback", "Grades"],
-    ["the drill", { view: "drill" }, "/drill", "Drill"],
+    ["the drill", { view: "drill" }, "/drill", "Practice"],
     ["an attempt", { view: "attempt", evaluationId: "e1" }, "/take/e1", null],
   ])("lights the student's row of %s", (_, route, path, lit) => {
     renderShell({
@@ -401,18 +401,18 @@ describe("Shell sidebar", () => {
   // ADR-041 (#317): the student's Drill row, once a classroom has the drill on.
   it("gives the student a Drill row, with today's dot, only when a classroom has the drill", () => {
     renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 1, cards: 2 } });
-    const row = within(sidebar()).getByRole("button", { name: /^Drill/ });
+    const row = within(sidebar()).getByRole("button", { name: /^Practice/ });
     expect(within(row).getByText("Today's drill is available")).toBeInTheDocument();
   });
 
   it("draws no Drill row without a classroom whose drill is on", () => {
     renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 0, cards: 0 } });
-    expect(within(sidebar()).queryByRole("button", { name: /^Drill/ })).toBeNull();
+    expect(within(sidebar()).queryByRole("button", { name: /^Practice/ })).toBeNull();
   });
 
   it("keeps the row but drops the dot on a day with nothing to review", () => {
     renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 1, cards: 0 } });
-    const row = within(sidebar()).getByRole("button", { name: "Drill" });
+    const row = within(sidebar()).getByRole("button", { name: "Practice" });
     expect(within(row).queryByText("Today's drill is available")).toBeNull();
   });
 });
@@ -487,7 +487,7 @@ describe("Shell sidebar classroom names", () => {
     act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(screen.getByText("Classroom 1 — PRG1 · Programmation C")).toBeInTheDocument();
+    expect(screen.getByText("Classroom 1 · PRG1 · Programmation C")).toBeInTheDocument();
   });
 
   it("reveals it to the keyboard as well, on the row that takes the focus", () => {
@@ -498,7 +498,7 @@ describe("Shell sidebar classroom names", () => {
     act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(screen.getByText("Classroom 1 — PRG1 · Programmation C")).toBeInTheDocument();
+    expect(screen.getByText("Classroom 1 · PRG1 · Programmation C")).toBeInTheDocument();
   });
 
   it("shows only the course when the name fits: repeating a readable label is noise", () => {
@@ -812,7 +812,7 @@ describe("Shell command palette", () => {
     const { navigate } = renderShell();
     await userEvent.keyboard("{Control>}k{/Control}");
     await userEvent.click(
-      within(palette()!).getByRole("option", { name: /^Open classroom Classroom 2(?!\d)/ }),
+      within(palette()!).getByRole("option", { name: /^Open the classroom Classroom 2(?!\d)/ }),
     );
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "c2" });
     expect(palette()).toBeNull();

@@ -103,12 +103,12 @@ describe("the schedule view", () => {
     // Every lane is a button named by its title, reachable by keyboard; the
     // bar beside it names its state and span, and stays out of the Tab order.
     const lane = await screen.findByRole("button", { name: "Série 4 — deux semaines" });
-    const bar = screen.getByRole("button", { name: /^Série 4 — deux semaines — running, / });
+    const bar = screen.getByRole("button", { name: /^Série 4 — deux semaines, running, / });
     expect(bar).toHaveAttribute("tabindex", "-1");
     expect(lane).not.toHaveAttribute("tabindex");
     // Next week's series is outside the default frame (what is in progress);
     // zooming out brings it in.
-    const nextBar = /^Série 6 — SPI — scheduled, /;
+    const nextBar = /^Série 6 — SPI, scheduled, /;
     expect(screen.queryByRole("button", { name: nextBar })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Série 6 — SPI" })).toBeInTheDocument(); // its lane
     await user.click(screen.getByRole("button", { name: "Zoom out" }));
@@ -133,16 +133,16 @@ describe("the schedule view", () => {
     mockFetch({ "GET /app/api/activities": ok([SERIES, LOBBY, LAB, DONE]) });
     renderWithProviders(<ActivitiesPage navigate={vi.fn()} />);
     const bar = async (name: RegExp) => (await screen.findByRole("button", { name })).className;
-    expect(await bar(/^Série 4 — deux semaines — running, /)).toContain("bg-success");
+    expect(await bar(/^Série 4 — deux semaines, running, /)).toContain("bg-success");
     // A published project is open to the students: green, like a running
     // evaluation, no longer the amber of M3-10.
-    expect(await bar(/^Labo 2 — pointeurs — published, /)).toContain("bg-success");
-    expect(await bar(/^Quiz 4 — chaînes — lobby, /)).toContain("bg-warning");
+    expect(await bar(/^Labo 2 — pointeurs, published, /)).toContain("bg-success");
+    expect(await bar(/^Quiz 4 — chaînes, lobby, /)).toContain("bg-warning");
     expect(screen.getByText("open to students")).toBeInTheDocument();
-    expect(screen.getByText("waiting room, paused")).toBeInTheDocument();
+    expect(screen.getByText("lobby, paused")).toBeInTheDocument();
     // The badge's outline (released) never reaches the bar: over is over.
     await user.click(screen.getByRole("tab", { name: /Ended/ }));
-    const done = await bar(/^Test 0 — released, /);
+    const done = await bar(/^Test 0, released, /);
     expect(done).toContain("bg-surface-3");
     expect(done).not.toContain("ring-");
   });
@@ -156,9 +156,9 @@ describe("the schedule view", () => {
     renderWithProviders(<ActivitiesPage navigate={vi.fn()} />);
     // A scheduled project is planned: under the current tab (#787); the draft under Drafts.
     const bar = async (name: RegExp) => (await screen.findByRole("button", { name })).className;
-    expect(await bar(/^Labo 3 — listes — scheduled, /)).toContain("ring-info");
+    expect(await bar(/^Labo 3 — listes, scheduled, /)).toContain("ring-info");
     await user.click(await screen.findByRole("tab", { name: /Drafts/ }));
-    const draft = await bar(/^Labo 4 — arbres — draft, /);
+    const draft = await bar(/^Labo 4 — arbres, draft, /);
     expect(draft).toContain("border-dashed");
     expect(draft).not.toContain("ring-info");
   });

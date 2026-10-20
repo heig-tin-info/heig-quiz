@@ -121,7 +121,7 @@ describe("the classroom's Drill tab", () => {
     mockFetch({ [`GET ${base}/activity`]: ok([row({ nom: "Cattaneo" })]) });
     renderWithProviders(<ClassroomDrill room={makeClassroomDetail()} onSettings={vi.fn()} />);
     expect(await screen.findByText("The drill is off for this classroom")).toBeVisible();
-    expect(screen.queryByRole("switch", { name: "Drill" })).toBeNull();
+    expect(screen.queryByRole("switch", { name: "Practice" })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });
 
@@ -179,10 +179,10 @@ describe("the classroom's Drill tab", () => {
     expect(screen.getByText("40 cards · 12 students")).toBeVisible();
     // No evidence is said, not drawn as 0%.
     expect(screen.getByText("Récursivité")).toBeVisible();
-    expect(screen.getByText("No evidence yet")).toBeVisible();
+    expect(screen.getByText("No data yet")).toBeVisible();
     expect(screen.queryByText("0%")).toBeNull();
     // Outside the list: folded until opened.
-    const outside = screen.getByRole("button", { name: /Outside the course's list/ });
+    const outside = screen.getByRole("button", { name: /Outside the course's concepts/ });
     expect(outside).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Without a concept")).toBeNull();
     await user.click(outside);
@@ -214,7 +214,7 @@ describe("the classroom's Drill tab", () => {
     // All time, and said so: the table's figure is the last 30 days'.
     expect(within(sheet).getByText("Recall rate, all time")).toBeVisible();
     expect(within(sheet).getByText("60%")).toBeVisible(); // 6 of 10 repeated reviews
-    expect(within(sheet).getByText("over 10 repeated reviews")).toBeVisible();
+    expect(within(sheet).getByText("over 10 reviews after the first")).toBeVisible();
     expect(await within(sheet).findByText("Reviews per week", { selector: "figcaption" })).toBeVisible();
     // The numbers behind each chart, as a table: a week without repeated reviews has no rate.
     const [reviews, recall] = within(sheet).getAllByRole("table");
@@ -266,7 +266,7 @@ describe("the classroom's Drill tab", () => {
       mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(NONE), [`GET ${base}/revision`]: ok(REVISION) });
       renderWithProviders(room());
       const table = await screen.findByRole("table");
-      expect(within(table).getByRole("button", { name: "Targeted" })).toBeInTheDocument();
+      expect(within(table).getByRole("button", { name: "Targeted rounds" })).toBeInTheDocument();
       const rowOf = (name: string) => within(table).getByRole("button", { name: `Progression of Ada ${name}` }).closest("tr")!;
       expect(within(rowOf("Bernard")).getByText("3")).toBeInTheDocument();
 
@@ -305,7 +305,7 @@ describe("the classroom's Drill tab", () => {
       });
       renderWithProviders(room());
       const table = await screen.findByRole("table");
-      expect(within(table).queryByRole("button", { name: "Targeted" })).toBeNull();
+      expect(within(table).queryByRole("button", { name: "Targeted rounds" })).toBeNull();
       expect(await screen.findByText("Could not load the targeted revisions")).toBeVisible();
       await user.click(screen.getByRole("button", { name: "Progression of Ada Bernard" }));
       const sheet = await screen.findByRole("dialog", { name: "Ada Bernard" });

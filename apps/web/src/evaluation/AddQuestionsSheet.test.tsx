@@ -631,7 +631,7 @@ describe("AddQuestionsSheet — the preview", () => {
 
     // Its checkbox is out of reach; looking at it is not.
     await user.click(screen.getByRole("button", { name: "Preview ptr-null-check" }));
-    expect(await screen.findByText("Never published — this is its draft")).toBeVisible();
+    expect(await screen.findByText("Draft, never published")).toBeVisible();
     expect(previewCalls(calls)[0]).toMatchObject({ body: { source: "draft" } });
   });
 
@@ -775,14 +775,14 @@ describe("AddQuestionsSheet — favourites", () => {
     expect(stubs.calls.some((c) => c.method === "DELETE")).toBe(false);
     expect(onClose).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Unstar these" }));
+    await user.click(screen.getByRole("button", { name: "Remove from favourites" }));
     await waitFor(() =>
       expect(stubs.calls.find((c) => c.method === "DELETE")).toMatchObject({
         url: "/app/api/questions/star",
         body: { questionIds: ["q1"] },
       }),
     );
-    expect(await screen.findByText(/Their stars are removed\./)).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Unstar these" })).toBeNull();
+    expect(await screen.findByText(/Removed from favourites\./)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Remove from favourites" })).toBeNull();
   });
 });

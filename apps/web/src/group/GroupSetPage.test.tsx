@@ -55,7 +55,7 @@ describe("the page's states", () => {
     expect(screen.getByText("2 groups · 2 placed · 3 not placed")).toBeInTheDocument();
     const none = screen.getByRole("region", { name: "No group" });
     expect(within(none).getByRole("button", { name: /^Martin Chloé/ })).toBeInTheDocument();
-    expect(within(none).getByRole("button", { name: /^Rochat David.*Has not opened Quiz yet/ })).toBeInTheDocument();
+    expect(within(none).getByRole("button", { name: /^Rochat David.*No sign-in to Quiz yet/ })).toBeInTheDocument();
     // The one primary while someone is in no group, and the secondary.
     expect(screen.getByRole("button", { name: "Form at random" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New group" })).toBeInTheDocument();
@@ -72,13 +72,13 @@ describe("the page's states", () => {
   it("says a 404 is a set that does not exist, or is not the caller's", async () => {
     routes(fail(404, { message: "Not found" }));
     renderPage();
-    expect(await screen.findByText("This group set does not exist, or it is not open to you.")).toBeInTheDocument();
+    expect(await screen.findByText("This group set does not exist, or you do not have access to it.")).toBeInTheDocument();
   });
 
   it("is read-only on an archived classroom: an alert, and no control at all", async () => {
     routes(makeSet({}, { readOnly: true }));
     renderPage();
-    expect(await screen.findByText("This classroom is archived; its groups are read-only.")).toBeInTheDocument();
+    expect(await screen.findByText("This classroom is archived: its groups are read-only.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Form at random|New group|More actions|Move .* to…/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Rename group set/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Martin Chloé/ })).toBeNull();
@@ -161,7 +161,7 @@ describe("a move", () => {
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "Move Martin Chloé to…" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Groupe 2" }));
-    expect(await screen.findByText("This classroom is archived; its groups are read-only.")).toBeInTheDocument();
+    expect(await screen.findByText("This classroom is archived: its groups are read-only.")).toBeInTheDocument();
     await waitFor(() =>
       expect(within(screen.getByRole("region", { name: "No group" })).getByText("Martin Chloé")).toBeInTheDocument(),
     );

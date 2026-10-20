@@ -71,7 +71,7 @@ describe("the student's own cells", () => {
     const indicative = await row("Test 3");
     expect(within(indicative).getByText("12 / 20")).toBeInTheDocument();
     expect(within(indicative).getByText("indicative")).toBeInTheDocument();
-    expect(within(await row("Quick quiz")).getByText("grade not shared")).toBeInTheDocument();
+    expect(within(await row("Quick quiz")).getByText("grade withheld")).toBeInTheDocument();
   });
 
   it("draws no mean and no weight while the payload has none (the teacher has not published it)", async () => {
@@ -83,7 +83,7 @@ describe("the student's own cells", () => {
 
   it("draws what counts, then what does not, its grade indicative in the ink (#803)", async () => {
     renderTab(book());
-    const counting = await screen.findByRole("region", { name: "Count toward your average" });
+    const counting = await screen.findByRole("region", { name: "In the average" });
     const aside = screen.getByRole("region", { name: "Indicative" });
     expect(within(aside).getByText(/Not counted in your average unless your teacher includes them/)).toBeInTheDocument();
     expect(within(counting).queryByText("Series 1")).toBeNull();
@@ -96,7 +96,7 @@ describe("the student's own cells", () => {
   it("draws no indicative group when everything counts", async () => {
     const all = book();
     renderTab({ ...all, columns: all.columns.filter((c) => c.counts) });
-    expect(await screen.findByRole("region", { name: "Count toward your average" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "In the average" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Indicative" })).toBeNull();
   });
 
