@@ -100,7 +100,7 @@ describe("ResultsView", () => {
     expect(await screen.findByRole("dialog", { name: "Adam Perret" })).toBeVisible();
 
     await userEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Open this question in the grading panel" }),
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Grade this question" }),
     );
     expect(navigate).toHaveBeenCalledWith({ view: "grading", evaluationId: "e1", item: "i1" });
   });

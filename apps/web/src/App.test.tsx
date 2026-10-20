@@ -156,7 +156,7 @@ describe("a Safe Exam Browser session (ADR-027)", () => {
     const quit = screen.getByRole("link", { name: "Quit Safe Exam Browser" });
     expect(quit).toHaveAttribute("href", "/seb/quit");
     expect(quit.className).toMatch(/bg-accent/);
-    expect(screen.getByText("Or press Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
+    expect(screen.getByText("Shortcut: Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Back to the exam" }));
     expect(await screen.findByText("Quiz 3 — Pointers")).toBeVisible();
   });
@@ -184,7 +184,7 @@ describe("a refused Safe Exam Browser launch (ADR-027)", () => {
     renderWithProviders(<App />, { route: "/?seb=invalid" });
     const quit = await screen.findByRole("link", { name: "Quit Safe Exam Browser" });
     expect(quit.className).toMatch(/bg-accent/);
-    expect(screen.getByText("Or press Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
+    expect(screen.getByText("Shortcut: Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
     expect(screen.queryByRole("link", { name: /sign in/i })).toBeNull();
     vi.restoreAllMocks();
   });
@@ -202,7 +202,7 @@ describe("the quit link outside SEB (ADR-027)", () => {
     const { calls } = mockFetch({});
     renderWithProviders(<App />, { route: "/seb/quit" });
     expect(await screen.findByRole("heading", { name: "You can close this window" })).toBeVisible();
-    expect(screen.getByText("Or press Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
+    expect(screen.getByText("Shortcut: Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
     expect(calls).toHaveLength(0);
   });
 });

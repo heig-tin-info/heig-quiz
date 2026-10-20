@@ -169,7 +169,7 @@ describe("CategoriesPage", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Delete category" }));
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("Delete “Pointeurs” and its subcategory?");
-    expect(dialog).toHaveTextContent("(3)");
+    expect(dialog).toHaveTextContent("Their 3 questions end up without a category.");
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
   });

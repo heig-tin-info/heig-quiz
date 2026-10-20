@@ -21,7 +21,7 @@ At the top of the classroom's **Activities** tab, a card lists the four missions
 Two gestures take you to the student side, and you will need both later to rehearse your own exams.
 
 1. On the classroom page, click **Join as student**, beside the primary action. It gives you a seat in your own classroom, flagged *staff* (see [Courses and classrooms](classrooms.md#join-as-student)).
-2. In the account menu, choose **Switch to student view**. The classroom now shows what a student gets: **Le quiz d'accueil** is open, an exercise scheduled from the moment the course was created until the end of the classroom's period.
+2. In the account menu, choose **Switch to student view**. The classroom now shows what a student gets: **L'exercice d'accueil** is open, an exercise scheduled from the moment the course was created until the end of the classroom's period.
 
 Take it. Seven questions, one per type that the platform grades by itself, in free navigation, corrected as soon as each is validated, and you may retake it as often as you like. Each statement is about the platform, its answer is on the screen around it, and its correction says what you would configure to obtain the behaviour you just saw. On a platform without a code runner, the circuit and the code question are graded as proposals rather than at once (see [When the runner is unavailable](grading.md#when-the-runner-is-unavailable)).
 
@@ -29,11 +29,11 @@ Hand in, then **Back to teacher view** in the banner. The mission is done once y
 
 ## Mission 2: Run a class
 
-**Le quiz en direct** is a draft in Exam mode, Live: the three configuration steps are yours to read (see [Evaluations](evaluations.md)). Open it from **Activities** and go through them; at **Format**, give it a time limit per student (ten minutes is enough), since a live exam must end by itself; on **Launch**, the checklist says what blocks the start and what deserves a look, beside a preview of the waiting room.
+**L'examen en direct** is a draft in Exam mode, Live: the three configuration steps are yours to read (see [Evaluations](evaluations.md)). Open it from **Activities** and go through them; at **Format**, give it a time limit per student (ten minutes is enough), since a live exam must end by itself; on **Launch**, the checklist says what blocks the start and what deserves a look, beside a preview of the waiting room.
 
 1. **Open the waiting room**: you are on the dashboard (see [Running an evaluation](live.md)).
 2. Open a second tab on the platform and switch it to the student view; the view is per tab, so the dashboard stays a teacher's. Enter the waiting room from the student's home.
-3. **Start** on the dashboard. In the student tab, answer the four questions: an essay in two sentences, a flowchart of the life of an evaluation, and two questions of the welcome quiz again. Hand in.
+3. **Start** on the dashboard. In the student tab, answer the four questions: an essay in two sentences, a flowchart of the life of an evaluation, and two questions of the welcome exercise again. Hand in.
 4. **Close** on the dashboard, then **Go to grading**. The multiple choice and the fill in the blanks arrive validated; the essay and the diagram wait for you, with the AI's proposal and its justification when the platform has a model (see [Grading and results](grading.md#essays-diagrams-and-ai-proposals)). Validate or adjust them.
 5. On the results page, **Publish results**. Back in the student tab, read the released grade and the feedback the policy allows.
 
@@ -41,11 +41,11 @@ The mission is done once an evaluation of the course is released.
 
 ## Mission 3: Make it yours
 
-This mission puts a question of yours into a copy of the welcome quiz.
+This mission puts a question of yours into a copy of the welcome exercise.
 
 1. On **Question pools**, **New pool** (see [Question pools](pools.md)). On the training course's page, **Linked pools** tab, **Link a pool** and pick it.
 2. In the pool, create a question. Let the wand write what you leave empty — the answer, the explanation — then **Try** it, and **Publish**.
-3. In the welcome quiz's menu, **Save as template**; on the course page's **Templates** tab, instantiate it into the classroom and add your question to it.
+3. In the welcome exercise's menu, **Save as template**; on the course page's **Templates** tab, instantiate it into the classroom and add your question to it.
 4. Edit your question and publish it again: the evaluation's **Questions** step shows the *newer version* badge, and you choose to update or not.
 5. **Student preview** walks the evaluation stateless, in its own tab. Then take it for real from the seat of mission 1, and reset your own attempt from the row's menu.
 

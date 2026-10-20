@@ -23,10 +23,10 @@ import { D, H, flags, iso, MockError, on, role } from "./runtime";
 let provisioned = flags.training || flags.trainingdone;
 
 /* The two quizzes of ADR-105 §3, in the training classroom, in their states. */
-const liveQuiz = provisioned && !flags.empty ? makeEvaluation(EVAL_ROOM, "Le quiz en direct", "draft", 2) : null;
+const liveQuiz = provisioned && !flags.empty ? makeEvaluation(EVAL_ROOM, "L'examen en direct", "draft", 2) : null;
 if (liveQuiz) {
   evaluations.push(
-    makeEvaluation(EVAL_ROOM, "Le quiz d'accueil", "scheduled", 7, {
+    makeEvaluation(EVAL_ROOM, "L'exercice d'accueil", "scheduled", 7, {
       mode: "exercise",
       durationS: null,
       opensAt: iso(-2 * H),

@@ -19,6 +19,9 @@
  */
 import type { TrainingContent } from "./content-types.js";
 
+// The folder names and the statements below keep their original words: a
+// change of a statement republishes a version in every installed course
+// (N-I18N-04 renamed only the two evaluation titles, 2026-10-20).
 const WELCOME = "Quiz d'accueil";
 const LIVE = "Quiz en direct";
 
@@ -418,7 +421,7 @@ export const TRAINING_CONTENT: TrainingContent = {
   evaluations: [
     {
       key: "welcome",
-      title: "Le quiz d'accueil",
+      title: "L'exercice d'accueil",
       mode: "exercise",
       target: "scheduled",
       questions: [
@@ -433,7 +436,7 @@ export const TRAINING_CONTENT: TrainingContent = {
     },
     {
       key: "live",
-      title: "Le quiz en direct",
+      title: "L'examen en direct",
       mode: "exam",
       target: "draft",
       // The two hand-graded types, then two automatically graded ones of the

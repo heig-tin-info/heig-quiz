@@ -251,7 +251,7 @@ describe("CommandPalette filtering", () => {
     renderPalette();
     await user.type(combobox(), "Classroom 2");
     expect(options()).toHaveLength(1);
-    expect(options()[0]).toHaveTextContent("Open classroom Classroom 2");
+    expect(options()[0]).toHaveTextContent("Open the classroom Classroom 2");
     expect(screen.queryByRole("group", { name: "Actions" })).toBeNull();
   });
 
@@ -296,7 +296,7 @@ describe("CommandPalette mouse", () => {
   it("runs the row that was clicked", async () => {
     const user = userEvent.setup();
     const { navigate, onClose } = renderPalette();
-    await user.click(screen.getByRole("option", { name: /Open classroom Classroom 2/ }));
+    await user.click(screen.getByRole("option", { name: /Open the classroom Classroom 2/ }));
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "c2" });
     expect(onClose).toHaveBeenCalledTimes(1);

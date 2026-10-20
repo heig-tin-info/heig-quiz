@@ -274,7 +274,7 @@ describe("StudentGrid — the row actions per state", () => {
     setup(viewIn("running", 1, 2));
     expect(actionsOf("Nadia Roux 0")).toEqual([
       "Open the whole paper",
-      "+5 minutes for this student",
+      "+5 minutes for this attempt",
       "Close this attempt",
     ]);
   });
@@ -283,7 +283,7 @@ describe("StudentGrid — the row actions per state", () => {
     setup(viewIn("paused", 1, 2));
     expect(actionsOf("Nadia Roux 0")).toEqual([
       "Open the whole paper",
-      "+5 minutes for this student",
+      "+5 minutes for this attempt",
       "Close this attempt",
     ]);
   });
@@ -347,7 +347,7 @@ describe("StudentGrid — the row actions per state", () => {
   it("hands the whole row back to the extend handler", async () => {
     const { onExtend } = setup(viewIn("running", 2, 2));
     await userEvent.click(
-      within(rowOf("Nadia Roux 1")).getByRole("button", { name: "+5 minutes for this student" }),
+      within(rowOf("Nadia Roux 1")).getByRole("button", { name: "+5 minutes for this attempt" }),
     );
     expect(onExtend).toHaveBeenCalledTimes(1);
     expect(onExtend.mock.calls[0]![0]).toMatchObject({

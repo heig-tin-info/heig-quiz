@@ -83,7 +83,7 @@ describe("the Teams link page", () => {
     const { calls } = mockFetch({ "GET /app/api/config": ok({ devLogin: false }) });
     renderWithProviders(<TeamsLinkPage me={null} />, { route: ROUTE });
     expect(screen.getByRole("heading", { name: "Sign in to link Microsoft Teams" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Sign in with Switch edu-ID" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeVisible();
     await waitFor(() => expect(calls.some((c) => c.url.includes("/teams/link"))).toBe(false));
   });
 });

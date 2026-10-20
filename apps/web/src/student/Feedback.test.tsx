@@ -57,7 +57,7 @@ describe("student feedback", () => {
     });
     renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
     expect(await screen.findByText("Attempt handed in")).toBeVisible();
-    expect(screen.getByText("Score of this attempt").nextSibling).toHaveTextContent("3 / 5");
+    expect(screen.getByText("Points for this attempt").nextSibling).toHaveTextContent("3 / 5");
     expect(screen.getByText("2 questions awaiting grading")).toBeVisible();
     expect(screen.queryByText("Grade")).toBeNull();
     expect(screen.queryByText(/Question 1/)).toBeNull();
@@ -107,7 +107,7 @@ describe("student feedback", () => {
       }),
     });
     renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
-    expect(await screen.findByText("Results will be available after the deadline")).toBeVisible();
+    expect(await screen.findByText("Results after the deadline")).toBeVisible();
     expect(screen.queryByText("Points")).toBeNull();
   });
 

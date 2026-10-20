@@ -314,7 +314,7 @@ describe("a reader who is not the student", () => {
     const pending = project({ seat: null, repo: { ...project().repo!, invitation: "pending" } });
     mockFetch({ [URL]: ok(pending) });
     render({ me: makeMe({ role: "teacher" }) });
-    expect(await screen.findByText(/Read-only view: you hold no seat in this classroom.*Join as student/)).toBeInTheDocument();
+    expect(await screen.findByText(/Read-only: you hold no seat in this classroom.*Join as student/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open the invitation" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
   });
@@ -326,7 +326,7 @@ describe("a reader who is not the student", () => {
     render({ me: makeMe({ role: "teacher" }) });
     expect(await screen.findByRole("link", { name: "Open the invitation" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Resend the invitation" })).toBeInTheDocument();
-    expect(screen.getByText(/counts nowhere/)).toBeInTheDocument();
+    expect(screen.getByText(/does not count/)).toBeInTheDocument();
     expect(screen.queryByText(/Read-only/)).toBeNull();
   });
 
@@ -410,7 +410,7 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     const dialog = await screen.findByRole("dialog", { name: "Open this workspace in Safe Exam Browser" });
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign });
-    await userEvent.click(within(dialog).getByRole("button", { name: "Download the workspace file" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Download the file" }));
     expect(assign).toHaveBeenCalledWith("/app/api/projects/p1/seb");
   });
 
@@ -494,7 +494,7 @@ describe("the criteria table (ADR-106 §9, L-02f)", () => {
     mockFetch({ [URL]: ok(project({ gradingMode: "criteria", criteria: criteria(false) })) });
     render();
     expect(await screen.findByRole("heading", { name: "Criteria" })).toBeInTheDocument();
-    expect(screen.getByText("Provisional, until your teacher validates")).toBeInTheDocument();
+    expect(screen.getByText("Provisional, until validated")).toBeInTheDocument();
     const table = screen.getByRole("table", { name: "Criteria" });
     const [, tests, jalon, commits] = within(table).getAllByRole("row");
     expect(within(tests!).getByText("indicative")).toBeInTheDocument();

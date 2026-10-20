@@ -51,11 +51,11 @@ describe("JournalSection", () => {
         ]}
       />,
     );
-    expect(screen.getByText(/not proof/)).toBeInTheDocument();
-    expect(screen.getAllByText("Left the page")).toHaveLength(2);
+    expect(screen.getByText(/Indications only/)).toBeInTheDocument();
+    expect(screen.getAllByText("Page exit")).toHaveLength(2);
     expect(screen.getByText("2 min 05 s")).toBeInTheDocument();
     expect(screen.getByText("312 characters · just after leaving the page")).toBeInTheDocument();
-    expect(screen.getByText("Still away")).toBeInTheDocument();
+    expect(screen.getByText("Still out")).toBeInTheDocument();
   });
 });
 

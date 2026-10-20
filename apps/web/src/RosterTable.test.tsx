@@ -89,12 +89,12 @@ describe("RosterTable impersonation link (ADR-034)", () => {
       "POST /app/api/classrooms/c1/roster/e-1/impersonation": ok({ url: "https://quiz.test/app/auth/as/s3cr3t" }),
     });
     const { unmount } = renderWithProviders(<RosterTable classroomId="c1" roster={[makeRosterEntry()]} />);
-    expect(within(await openRowMenu()).queryByRole("menuitem", { name: "Copy link as this student" })).toBeNull();
+    expect(within(await openRowMenu()).queryByRole("menuitem", { name: "Link to act as this student…" })).toBeNull();
     unmount();
 
     renderWithProviders(<RosterTable classroomId="c1" roster={[makeRosterEntry()]} canImpersonate />);
     await userEvent.click(
-      within(await openRowMenu()).getByRole("menuitem", { name: "Copy link as this student" }),
+      within(await openRowMenu()).getByRole("menuitem", { name: "Link to act as this student…" }),
     );
     // In a dialog, copied by a click of its own: Safari refuses a clipboard
     // write that follows the request's await.

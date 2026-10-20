@@ -218,7 +218,7 @@ describe("/take/:id on a running evaluation not yet started", () => {
   it("announces the clock, with the extra time, and starts nothing by itself", async () => {
     const { calls } = renderReady();
     expect(await screen.findByRole("button", { name: "Commencer" })).toBeInTheDocument();
-    expect(screen.getByText(/Le chronomètre de 25 minutes/)).toBeInTheDocument();
+    expect(screen.getByText(/Vous disposez de 25 minutes dès que vous commencez, temps supplémentaire de 25 % compris/)).toBeInTheDocument();
     expect(calls.filter((c) => c.url.endsWith("/attempt/start"))).toEqual([]);
     // No stream: the ready screen counts nobody present.
     expect(streams).toHaveLength(0);

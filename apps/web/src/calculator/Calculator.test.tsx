@@ -124,7 +124,7 @@ describe("the calculator dock in reverse Polish notation", () => {
   it("says so, and has an Enter key where the infix one has Equals", async () => {
     await openRpn("standard");
     expect(screen.getByText("Standard · RPN")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Enter: put the number on the stack/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Enter: push the number on the stack/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Equals" })).toBeNull();
     expect(screen.getByRole("button", { name: "Swap the top two values" })).toBeInTheDocument();
   });

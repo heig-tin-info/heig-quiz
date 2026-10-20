@@ -92,7 +92,7 @@ describe("PoolSettings", () => {
     const { calls } = mockFetch({ "DELETE /app/api/pools/p1/members/u-me": noContent() });
     const navigate = renderSettings(makeDetail({ ownerId: "t1" }, "contributor"));
 
-    expect(screen.getByText(/are its owners' to change/)).toBeVisible();
+    expect(screen.getByText(/the pool's owners only/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Delete pool/ })).toBeNull();
     // No sharing section, so no members call either.

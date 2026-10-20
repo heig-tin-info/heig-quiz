@@ -2433,9 +2433,9 @@ folds to its icons — both UIs get a bar at the bottom: ONE component
 - **Drill is drawn only when it leads somewhere**: for a student with at
   least one classroom whose drill is on (`visibleSlots`); the four others
   share the width otherwise. Its label is the page's title, `nav.drill`, in
-  the bar and the sidebar alike: the feature is "Révisions" everywhere in
-  French; in the bar it is
-  what a screen reader announces.
+  the bar and the sidebar alike: the feature is "Entraînement" everywhere
+  in French (glossary §1.5); in the bar it is what a screen reader
+  announces.
 - **The desktop sidebar mirrors the bar** (D07). The student's sidebar rows are the bar's slots, in the
   bar's order and under the same conditions, minus Profile, which is the
   account menu's at the foot of the sidebar: Activities, Courses, Drill,

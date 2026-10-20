@@ -114,7 +114,7 @@ describe("LiveDashboard — publishing the correction (ADR-050)", () => {
       calls.filter((c) => c.method === "GET" && c.url === `/app/api/evaluations/${EVALUATION_ID}`).length;
     const before = detailReads();
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: /publish the correction/i }));
-    expect(await screen.findByText(/can only be published while the exercise is running/i)).toBeVisible();
+    expect(await screen.findByText(/is published while the exercise is running/i)).toBeVisible();
     expect(screen.queryByText("only a running exercise publishes")).toBeNull();
     await waitFor(() => expect(detailReads()).toBeGreaterThan(before));
   });
@@ -131,7 +131,7 @@ describe("LiveDashboard — publishing the correction (ADR-050)", () => {
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText(/can still retake it/i)).toBeInTheDocument();
-    expect(within(dialog).getByText(/projection becomes available/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/correction can be projected/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/without the answer key/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/cannot be undone/i)).toBeInTheDocument();
     // Nothing is sent before the confirmation.

@@ -15,7 +15,7 @@ describe("the notepad setting", () => {
     const { calls } = mockFetch({ ...config, [PATCH]: ok(detail) });
     renderWithProviders(<Harness detail={detail} />);
     await open();
-    const group = screen.getByRole("radiogroup", { name: "Notepad provided" });
+    const group = screen.getByRole("radiogroup", { name: "Notepad" });
     expect(within(group).getByRole("radio", { name: "None" })).toBeChecked();
     // "None" carries no sub-text: the row describes the notepad only when one is provided.
     expect(screen.queryByText(/kept on the device/)).toBeNull();
@@ -36,6 +36,6 @@ describe("the notepad setting", () => {
     mockFetch(config);
     renderWithProviders(<Harness detail={withMode("poll")} />);
     await open();
-    expect(screen.queryByRole("radiogroup", { name: "Notepad provided" })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "Notepad" })).toBeNull();
   });
 });

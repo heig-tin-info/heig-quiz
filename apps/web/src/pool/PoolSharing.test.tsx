@@ -189,7 +189,7 @@ describe("PoolSharing", () => {
     });
     renderWithProviders(<PoolSharing pool={{ ...POOL, visibility: "public", isPublic: true }} />);
     await screen.findByText("Rita Reader");
-    expect(screen.getByRole("combobox", { name: "Role of Rita Reader" })).toHaveDisplayValue("Reader · covered by public");
+    expect(screen.getByRole("combobox", { name: "Role of Rita Reader" })).toHaveDisplayValue("Reader (pool already public)");
     const invite = screen.getByRole("combobox", { name: "Role" });
     expect(within(invite).queryByRole("option", { name: "Reader" })).toBeNull();
     expect(within(invite).getAllByRole("option").map((o) => o.textContent)).toEqual(["Contributor", "Owner"]);

@@ -77,7 +77,7 @@ describe("PollModeration", () => {
     expect(screen.getAllByLabelText("Decided by the AI")).toHaveLength(1);
     expect(screen.getByRole("switch", { name: "AI assistance" })).toBeChecked();
 
-    await userEvent.click(screen.getByRole("button", { name: /Approve all \(1\)/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Show all \(1\)/ }));
     expect(calls.find((c) => c.method === "POST")?.body).toEqual({ action: "approve", keys: ["grandit"] });
   });
 
@@ -87,7 +87,7 @@ describe("PollModeration", () => {
       [`GET ${POLL}/ideas`]: ok(board({ ai: { available: true, on: true, error: "budget_exhausted" } })),
     });
     const { unmount } = renderWithProviders(<PollModeration id={ID} />);
-    expect(await screen.findByText("The AI stopped judging the ideas")).toBeVisible();
+    expect(await screen.findByText("AI moderation stopped")).toBeVisible();
     unmount();
 
     mockFetch({
@@ -105,10 +105,10 @@ describe("PollModeration", () => {
       [`GET ${POLL}/ideas`]: ok(board()),
     });
     renderWithProviders(<PollModeration id={ID} />);
-    expect(await screen.findByText("This brainstorm is read-only")).toBeVisible();
+    expect(await screen.findByText("Brainstorm read-only")).toBeVisible();
     expect(screen.getByRole("switch", { name: "Moderation" })).toBeDisabled();
     expect(screen.getByRole("switch", { name: "AI assistance" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Approve all/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Show all/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Show “grandit”" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Hide “grandit”" })).toBeDisabled();
     for (const box of screen.getAllByRole("checkbox")) expect(box).toBeDisabled();

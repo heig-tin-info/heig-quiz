@@ -229,7 +229,7 @@ describe("RegradeSheet", () => {
   it("warns, once the results are released, that the re-grade changes them", async () => {
     setup({}, vi.fn(), FIXED, true);
     await radio(/v3/);
-    expect(screen.getByText("The results are released")).toBeVisible();
+    expect(screen.getByText("Results released")).toBeVisible();
     expect(screen.getByText(/updates the grades the students already see/)).toHaveTextContent(
       "Modified after publication",
     );

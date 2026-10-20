@@ -57,7 +57,7 @@ describe("QuestionReportsTab", () => {
     expect(screen.getByText("Marc Dupont")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Resolve" }));
-    await userEvent.type(screen.getByLabelText("Reply to the reporter (optional)"), "Fixed in v3");
+    await userEvent.type(screen.getByLabelText("Reply to the report (optional)"), "Fixed in v3");
     const buttons = screen.getAllByRole("button", { name: "Resolve" });
     await userEvent.click(buttons[buttons.length - 1]!);
 

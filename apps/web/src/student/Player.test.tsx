@@ -275,7 +275,7 @@ describe("the zen player", () => {
     expect((saves[0] as { payload: { text: string } }).payload.text).toBe("42");
     // The badge carries the word twice on purpose: visible from `sm` up, and
     // for a screen reader under it, where the bar has no room for it.
-    expect(await screen.findAllByText("Sauvegardé")).not.toHaveLength(0);
+    expect(await screen.findAllByText("Enregistré")).not.toHaveLength(0);
   });
 
   it("says 'not saved' while the question holds back an answer over its limit (#267)", async () => {
@@ -292,15 +292,15 @@ describe("the zen player", () => {
     const field = await screen.findByLabelText("Votre réponse");
     // `maxLength` stops a keyboard; a change event goes past it, as a drop may.
     fireEvent.change(field, { target: { value: "abcdefgh" } });
-    expect(await screen.findAllByText("Non sauvegardé")).not.toHaveLength(0);
+    expect(await screen.findAllByText("Non enregistré")).not.toHaveLength(0);
     fireEvent.change(field, { target: { value: "abc" } });
-    await waitFor(() => expect(screen.queryAllByText("Non sauvegardé")).toHaveLength(0));
+    await waitFor(() => expect(screen.queryAllByText("Non enregistré")).toHaveLength(0));
     // Leaving the question drops what it held back, and the flag with it.
     fireEvent.change(field, { target: { value: "abcdefgh" } });
-    expect(await screen.findAllByText("Non sauvegardé")).not.toHaveLength(0);
+    expect(await screen.findAllByText("Non enregistré")).not.toHaveLength(0);
     await userEvent.keyboard("{Alt>}{ArrowRight}{/Alt}");
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
-    expect(screen.queryAllByText("Non sauvegardé")).toHaveLength(0);
+    expect(screen.queryAllByText("Non enregistré")).toHaveLength(0);
   });
 
   /*
@@ -435,7 +435,7 @@ describe("the zen player", () => {
     expect(within(palette).getByRole("option", { name: /Rendre mes réponses/ })).toBeVisible();
     expect(within(palette).getByRole("option", { name: /Question suivante/ })).toBeVisible();
     expect(within(palette).getByRole("option", { name: /Question précédente/ })).toBeVisible();
-    expect(within(palette).getByRole("option", { name: /Revenir à mes quiz/ })).toBeVisible();
+    expect(within(palette).getByRole("option", { name: /Retour à l'accueil/ })).toBeVisible();
     // No teacher command anywhere near it.
     expect(within(palette).queryByRole("option", { name: /Administration/ })).toBeNull();
 
@@ -632,7 +632,7 @@ describe("the zen player", () => {
 
       // Empty, the step is named for what it closes, and it is the only
       // way to leave the question blank: no "Leave unanswered" beside it.
-      const blank = screen.getByRole("button", { name: "Laisser vide et continuer" });
+      const blank = screen.getByRole("button", { name: "Continuer sans répondre" });
       expect(isPrimary(blank)).toBe(true);
       expect(screen.queryByRole("button", { name: "Laisser sans réponse" })).toBeNull();
       // Cancelling the confirmation sends nothing.
@@ -670,7 +670,7 @@ describe("the zen player", () => {
       stubs(checkpointAt("i3"));
       const { unmount } = render(checkpointAt("i3"));
       await screen.findByText("Question 3");
-      expect(isPrimary(screen.getByRole("button", { name: "Laisser vide et continuer" }))).toBe(
+      expect(isPrimary(screen.getByRole("button", { name: "Continuer sans répondre" }))).toBe(
         true,
       );
       expect(screen.queryByRole("button", { name: "Laisser sans réponse" })).toBeNull();
@@ -682,7 +682,7 @@ describe("the zen player", () => {
       render(checkpointAt("i2"));
       await screen.findByText("Question 3");
       expect(screen.getByRole("button", { name: "Laisser sans réponse" })).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /et continuer$/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /^(Valider et continuer|Continuer sans répondre)$/ })).toBeNull();
     });
 
     it("milestones: the checkpoint's confirmation says the notepad is emptied too, when there is one (ADR-090)", async () => {
@@ -695,9 +695,9 @@ describe("the zen player", () => {
       stubs(view);
       render(view);
       await screen.findByText("Question 3");
-      await userEvent.click(screen.getByRole("button", { name: "Laisser vide et continuer" }));
+      await userEvent.click(screen.getByRole("button", { name: "Continuer sans répondre" }));
       const dialog = await screen.findByRole("dialog");
-      expect(within(dialog).getByText("Passer un jalon ferme toutes les questions qui le précèdent et vide le calepin.")).toBeInTheDocument();
+      expect(within(dialog).getByText("La validation de certaines questions ferme toutes les précédentes et vide le bloc-notes.")).toBeInTheDocument();
     });
 
     it("never sends the notes: no request carries them, through an autosave and a checkpoint (ADR-090)", async () => {
@@ -711,7 +711,7 @@ describe("the zen player", () => {
       render(view);
       await screen.findByText("Question 3");
       const marker = "NOTEPAD-MARKER-7f3a";
-      await userEvent.click(await screen.findByRole("button", { name: "Calepin" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Bloc-notes" }));
       await userEvent.type(screen.getByRole("textbox", { name: /^Page 1 sur 1$/ }), marker);
       await userEvent.keyboard("{Escape}");
       await userEvent.type(await screen.findByLabelText("Votre réponse"), "7");
@@ -784,7 +784,7 @@ describe("the zen player", () => {
       stubs(attemptView());
       render();
       await screen.findByText("Question 2");
-      expect(screen.queryByRole("button", { name: "Revenir à mes quiz" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Retour à l'accueil" })).toBeNull();
     });
 
     it(
@@ -803,7 +803,7 @@ describe("the zen player", () => {
         const field = await screen.findByLabelText("Votre réponse");
         // Typed, and still inside the 300 ms debounce when Home is pressed.
         await userEvent.type(field, "2");
-        await userEvent.click(screen.getByRole("button", { name: "Revenir à mes quiz" }));
+        await userEvent.click(screen.getByRole("button", { name: "Retour à l'accueil" }));
         await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "home" }));
         // The answer reached the server first…
         expect((saves.at(-1) as { payload: { text: string } }).payload.text).toBe("42");
@@ -815,7 +815,7 @@ describe("the zen player", () => {
     /** Home pressed with "2" typed and still in its debounce. */
     const typeThenHome = async (user: ReturnType<typeof userEvent.setup> = userEvent.setup()) => {
       await user.type(await screen.findByLabelText("Votre réponse"), "2");
-      await user.click(screen.getByRole("button", { name: "Revenir à mes quiz" }));
+      await user.click(screen.getByRole("button", { name: "Retour à l'accueil" }));
     };
 
     /** The leave bound is 6 s of wall clock: jumped, on a flowing clock. */
@@ -829,14 +829,14 @@ describe("the zen player", () => {
       renderWith(navigate);
       await typeThenHome();
       const dialog = await screen.findByRole("dialog");
-      expect(within(dialog).getByText(/risquent d'être perdues/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/seraient perdues/)).toBeInTheDocument();
       expect(within(dialog).getByRole("button", { name: "Rester" })).toHaveFocus();
       await userEvent.click(within(dialog).getByRole("button", { name: "Rester" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       expect(navigate).not.toHaveBeenCalledWith({ view: "home" });
 
       // Asked again, the student may leave anyway.
-      await userEvent.click(screen.getByRole("button", { name: "Revenir à mes quiz" }));
+      await userEvent.click(screen.getByRole("button", { name: "Retour à l'accueil" }));
       await userEvent.click(
         within(await screen.findByRole("dialog")).getByRole("button", { name: "Partir quand même" }),
       );
@@ -854,7 +854,7 @@ describe("the zen player", () => {
       });
       renderWith(vi.fn());
       await typeThenHome();
-      const dialog = await screen.findByRole("dialog", { name: "Quitter cet exercice ?" });
+      const dialog = await screen.findByRole("dialog", { name: "Quitter l'évaluation ?" });
       expect(within(dialog).getByText(/Évaluation en pause/)).toBeInTheDocument();
       expect(within(dialog).queryByText(/connexion/)).toBeNull();
     });
@@ -870,8 +870,8 @@ describe("the zen player", () => {
       });
       renderWith(vi.fn());
       await typeThenHome();
-      const dialog = await screen.findByRole("dialog", { name: "Quitter cet exercice ?" });
-      expect(within(dialog).getByText(/Cette tentative est fermée/)).toBeInTheDocument();
+      const dialog = await screen.findByRole("dialog", { name: "Quitter l'évaluation ?" });
+      expect(within(dialog).getByText(/Tentative fermée/)).toBeInTheDocument();
     });
 
     /** Every autosave hangs: the request leaves and never answers. */
@@ -889,7 +889,7 @@ describe("the zen player", () => {
       const navigate = vi.fn();
       renderWith(navigate);
       await typeThenHome(user);
-      const home = screen.getByRole("button", { name: "Revenir à mes quiz" });
+      const home = screen.getByRole("button", { name: "Retour à l'accueil" });
       // Leaving is under way: Home reads as disabled but keeps the focus,
       // and a second press asks nothing more.
       await waitFor(() => expect(home).toHaveAttribute("aria-disabled", "true"));
@@ -900,7 +900,7 @@ describe("the zen player", () => {
       await pastTheLeaveBound();
       const dialog = await screen.findByRole("dialog");
       expect(screen.getAllByRole("dialog")).toHaveLength(1);
-      expect(within(dialog).getByText(/risquent d'être perdues/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/seraient perdues/)).toBeInTheDocument();
       await user.click(within(dialog).getByRole("button", { name: "Rester" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       // Back where the student was: on Home, enabled again.
@@ -1165,7 +1165,7 @@ describe("the conditions during the attempt", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Voir les conditions" }));
     const dialog = await screen.findByRole("dialog", { name: "Conditions" });
     expect(within(dialog).getByText("Une feuille A4 de notes")).toBeInTheDocument();
-    expect(within(dialog).getByText("Enregistré au fil de la frappe")).toBeInTheDocument();
+    expect(within(dialog).getByText("Enregistrement automatique")).toBeInTheDocument();
   });
 
   it("are not offered when there are none", async () => {
@@ -1200,7 +1200,7 @@ describe("the text before a question (ADR-084)", () => {
     expect(screen.queryByRole("button", { name: "Marquer à revoir" })).toBeNull();
     const go = screen.getByRole("button", { name: "Continuer" });
     expect(isPrimary(go)).toBe(true);
-    expect(screen.queryByText(/ne pourrez plus relire/)).toBeNull();
+    expect(screen.queryByText(/ne sera plus affiché/)).toBeNull();
 
     await userEvent.click(go);
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
@@ -1214,7 +1214,7 @@ describe("the text before a question (ADR-084)", () => {
     stubs(view);
     render(view);
     expect(await screen.findByText("Avant la question 3")).toBeInTheDocument();
-    expect(screen.getByText(/ne pourrez plus relire ce texte/)).toBeInTheDocument();
+    expect(screen.getByText(/ce texte ne sera plus affiché/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
     expect(await screen.findByText("Question 3")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Relire le texte" })).toBeNull();

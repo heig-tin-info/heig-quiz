@@ -112,8 +112,8 @@ describe("PoolsPage", () => {
     renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
     await screen.findByText("Publique");
     // 5 subscribers + 2 members, in a discreet counter with its own label.
-    expect(screen.getByLabelText("7 following or sitting on this pool")).toHaveTextContent("7");
-    expect(screen.getAllByLabelText(/following or sitting on this pool/)).toHaveLength(1);
+    expect(screen.getByLabelText("7 subscribers or members of this pool")).toHaveTextContent("7");
+    expect(screen.getAllByLabelText(/subscribers or members of this pool/)).toHaveLength(1);
     // The domain beside the count of questions.
     expect(screen.getByText(/Embedded systems/)).toBeVisible();
   });

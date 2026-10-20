@@ -50,8 +50,8 @@ const trainingRoutes = (status: ReturnType<typeof trainingStatus>, detail = make
   [`GET ${ME}`]: ok(makeMe()),
   [`GET ${TRAINING}`]: ok(status),
   [`GET ${EVALUATIONS}`]: ok([
-    summary({ title: "Le quiz d'accueil", mode: "exercise", state: "scheduled" }),
-    summary({ id: LIVE_QUIZ_ID, title: "Le quiz en direct" }),
+    summary({ title: "L'exercice d'accueil", mode: "exercise", state: "scheduled" }),
+    summary({ id: LIVE_QUIZ_ID, title: "L'examen en direct" }),
   ]),
 });
 
@@ -525,7 +525,7 @@ describe("ClassroomView: the training classroom's card (ADR-105 §4)", () => {
     expect(await screen.findByRole("heading", { name: "Your four missions" })).toBeVisible();
     // One button on the card, the next mission's; the three others carry none.
     expect(classesOf(screen.getByRole("button", { name: "Show me the button" }))).toContain("bg-accent");
-    expect(screen.queryByRole("button", { name: "Open the live quiz" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open the live exam" })).toBeNull();
     await waitFor(() =>
       expect(classesOf(screen.getByRole("button", { name: /New evaluation/ }))).not.toContain("bg-accent"),
     );
@@ -569,16 +569,16 @@ describe("ClassroomView: the training classroom's card (ADR-105 §4)", () => {
     const navigate = vi.fn();
     mockFetch(trainingRoutes(trainingStatus({ student: "done" }), MY_SEAT));
     const first = renderWithProviders(<ClassroomView id="r1" navigate={navigate} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Open the live quiz" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Open the live exam" }));
     expect(navigate).toHaveBeenCalledWith({ view: "evaluation", id: LIVE_QUIZ_ID });
     first.unmount();
 
     mockFetch(trainingRoutes(trainingStatus({ student: "done" }, null), MY_SEAT));
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
     expect(await screen.findByText("Run a class")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Open the live quiz" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open the live exam" })).toBeNull();
     // The row keeps its text; the page keeps its accent, since no button carries it.
-    expect(screen.getByText(/Open the live quiz's waiting room/)).toBeVisible();
+    expect(screen.getByText(/Open the live exam's lobby/)).toBeVisible();
     await waitFor(() => expect(classesOf(screen.getByRole("button", { name: /New evaluation/ }))).toContain("bg-accent"));
   });
 

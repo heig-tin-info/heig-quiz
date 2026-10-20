@@ -219,7 +219,7 @@ describe("ConceptPicker", () => {
     await user.click(await screen.findByRole("option", { name: "Create “pointr”" }));
     await user.click(screen.getByRole("button", { name: "Create" }));
 
-    expect(await screen.findByText("Another concept already answers to this name.")).toBeInTheDocument();
+    expect(await screen.findByText("Another concept already has this name.")).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
   });
 

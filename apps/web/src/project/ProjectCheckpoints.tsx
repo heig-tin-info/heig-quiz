@@ -43,7 +43,7 @@ function AddCheckpoint({
   const body = checkpointBody(name, kind, local, days);
   return (
     <FormDialog
-      title={t("project.checkpoints.add")}
+      title={t("project.checkpoints.new")}
       onClose={onClose}
       onSubmit={() => body && onSubmit(body)}
       submitLabel={t("common.create")}

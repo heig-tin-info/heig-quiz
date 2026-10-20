@@ -40,7 +40,7 @@ describe("the end of a sitting in Safe Exam Browser (ADR-027)", () => {
     const quit = screen.getByRole("link", { name: "Quit Safe Exam Browser" });
     expect(quit).toHaveAttribute("href", "/seb/quit");
     expect(quit.className).toMatch(/bg-accent/);
-    expect(screen.getByText("Or press Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
+    expect(screen.getByText("Shortcut: Ctrl+Q (Windows) or ⌘Q (Mac).")).toBeVisible();
     // The rest of Quiz is out of SEB's reach: no Back to home, no results.
     expect(screen.queryByRole("button", { name: "Back to home" })).toBeNull();
     expect(calls).toHaveLength(0);

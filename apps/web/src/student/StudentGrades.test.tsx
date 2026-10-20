@@ -99,8 +99,8 @@ describe("the student's Grades", () => {
     for (const title of ["Quiz 3bis", "Série 8"]) {
       expect((await tableRow(title)).getAllByText("—")).toHaveLength(2);
     }
-    expect((await tableRow("Quiz 3bis")).getByText("results pending")).toBeInTheDocument();
-    expect((await tableRow("Série 8")).getByText("grade not shared")).toBeInTheDocument();
+    expect((await tableRow("Quiz 3bis")).getByText("pending")).toBeInTheDocument();
+    expect((await tableRow("Série 8")).getByText("grade withheld")).toBeInTheDocument();
     expect((await tableRow("Examen final")).getByText("not taken")).toBeInTheDocument();
   });
 
@@ -110,7 +110,7 @@ describe("the student's Grades", () => {
     const early = await tableRow("Série 2");
     expect(early.getByText("7 / 10")).toBeInTheDocument();
     expect(early.getByText("indicative")).toBeInTheDocument();
-    expect(early.getByText("results available")).toBeInTheDocument();
+    expect(early.getByText("results ready")).toBeInTheDocument();
     expect(early.queryByText("—")).toBeNull();
   });
 
@@ -162,7 +162,7 @@ describe("the student's Grades", () => {
     };
     mockFetch({ [URL]: ok([room]) });
     render();
-    const counting = await screen.findByRole("region", { name: "Count toward your average" });
+    const counting = await screen.findByRole("region", { name: "In the average" });
     const aside = screen.getByRole("region", { name: "Indicative" });
     expect(within(aside).getByText(/Not counted in your average unless your teacher includes them/)).toBeInTheDocument();
     // What counts comes first.
@@ -178,7 +178,7 @@ describe("the student's Grades", () => {
   it("draws no empty group", async () => {
     mockFetch({ [URL]: ok([groups[1]!]) });
     render();
-    expect(await screen.findByRole("region", { name: "Count toward your average" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "In the average" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Indicative" })).toBeNull();
   });
 

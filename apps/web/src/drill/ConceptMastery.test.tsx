@@ -55,12 +55,12 @@ describe("the student's concepts", () => {
 
     const line = (name: string) => screen.getByText(name).closest("div")!.parentElement!;
     expect(within(line("Pointeurs")).getByText("To work on")).toBeVisible();
-    expect(within(line("Pointeurs")).getByText("Based on 11 cards")).toBeVisible();
+    expect(within(line("Pointeurs")).getByText("11 cards")).toBeVisible();
     expect(within(line("Boucles")).getByText("Getting there")).toBeVisible();
-    expect(within(line("Boucles")).getByText("Based on 1 card")).toBeVisible();
+    expect(within(line("Boucles")).getByText("1 card")).toBeVisible();
     expect(within(line("Tableaux")).getByText("Solid")).toBeVisible();
     expect(within(line("Types")).getByText("No data yet")).toBeVisible();
-    expect(within(line("Types")).getByText("Based on 4 cards")).toBeVisible();
+    expect(within(line("Types")).getByText("4 cards")).toBeVisible();
     expect(within(line("Récursivité")).getByText("No card reviewed yet")).toBeVisible();
   });
 

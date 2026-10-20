@@ -44,7 +44,7 @@ describe("RosterImport rejected lines", () => {
     expect(dropZone.parentElement?.contains(first)).toBe(true);
 
     // The footer used to show nothing at all in this case.
-    expect(screen.getByText("2 lines rejected — see above.")).toBeVisible();
+    expect(screen.getByText("2 lines rejected, detailed above.")).toBeVisible();
   });
 
   it("keeps the plain failure line when the server names no line", async () => {
