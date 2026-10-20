@@ -95,7 +95,7 @@ describe("the grading screen's states", () => {
     expect(none).toHaveValue(null);
     expect(none).toHaveAttribute("placeholder", "—");
     // A milestone's lock beside the state, on its row only (ADR-106 §5).
-    const locks = within(table).getAllByRole("img", { name: /^Locked by a milestone/ });
+    const locks = within(table).getAllByRole("img", { name: /^Locked by a checkpoint/ });
     expect(locks).toHaveLength(1);
     expect(locks[0]!.closest("tr")).toHaveTextContent("Tests pass");
     expect(screen.getByText("Tests: 9 of 12 passed")).toBeInTheDocument();

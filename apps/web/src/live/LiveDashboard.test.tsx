@@ -604,7 +604,7 @@ describe("LiveDashboard — states", () => {
     const view = makeDashboard(4, 3);
     view.evaluation.state = "lobby";
     setup(view);
-    expect(await screen.findByText(/waiting room/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^Lobby$/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /start now/i })).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
@@ -695,7 +695,7 @@ describe("LiveDashboard — command palette", () => {
     const view = makeDashboard(4, 3);
     view.evaluation.state = "lobby";
     setup(view);
-    await screen.findByText(/waiting room/i);
+    await screen.findByText(/^Lobby$/);
     expect(paletteIds()).toEqual([
       "live:configure",
       "nav:home",

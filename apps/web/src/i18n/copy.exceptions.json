@@ -68,7 +68,6 @@
     "project.workspace.syncError.body",
     "project.sheet.ownDeadline.desc",
     "project.status.rerelease",
-    "project.grading.locked",
     "project.reviewState.unconfirmed.detail",
     "project.protection.reenabled",
     "journal.warning.front_matter_yaml",

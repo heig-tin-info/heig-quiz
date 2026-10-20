@@ -765,7 +765,7 @@ describe("AddQuestionsSheet — favourites", () => {
 
     await user.click(screen.getByRole("button", { name: "Add favourites" }));
     expect(
-      await screen.findByText("1 added, 2 skipped: 1 not published, 1 already in the list"),
+      await screen.findByText("added: 1, 2 skipped: 1 not published, 1 already in the list"),
     ).toBeVisible();
     expect(stubs.calls.find((c) => c.method === "POST")).toMatchObject({
       url: "/app/api/evaluations/e1/items",
