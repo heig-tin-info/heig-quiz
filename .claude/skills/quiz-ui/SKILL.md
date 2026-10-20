@@ -53,7 +53,13 @@ is the flow, not the styling. Stop and ask.
    (bold), numbers right-aligned and tabular, status as a `Badge`, actions in
    the last column, `—` for empty cells, hover on clickable rows.
 7. **Every** user-facing string follows invariant 1 of `CLAUDE.md`: `t()`,
-   with both an `en` and a `fr` entry in `src/i18n/{en,fr}.ts`.
+   with both an `en` and a `fr` entry in `src/i18n/{en,fr}.ts`. Both are
+   WRITTEN in their language, short, by the Voice rules of `DESIGN.md` and
+   the glossary of `docs/spec/01-glossaire-et-domaine.md` §1.5: a label is
+   a noun phrase, a button a verb, a sub-text only when it adds a fact, no
+   filler, no reassurance, no em-dash aside, no generic masculine. Run
+   `pnpm --filter @quiz/web test -- src/i18n` before the PR: the copy lint
+   refuses the rest.
 8. Question content reaches a student only through `toStudent` (invariant 4
    of `CLAUDE.md`). A component that renders a question renders what the
    server sent it; it never reconstructs an answer key, a tag or an
@@ -89,6 +95,10 @@ lives in `apps/web/scripts/`.
 - Any `window.confirm`? Reject.
 - Any state missing (loading / empty / error) on a new query? Reject.
 - Any string without a French entry? Compile error, reject.
+- A French string that reads as translated English (a sentence where a
+  noun phrase belongs, a hint that restates its label, "Rien n'est …", an
+  em-dash aside, "l'étudiant … il")? Reject; the Voice rules of
+  `DESIGN.md` say what to write instead.
 - Keyboard: Escape closes layers, focus returns to the trigger, menus
   navigate with arrows, tabs with arrows.
 - Did the author attach or describe the screenshots they looked at?

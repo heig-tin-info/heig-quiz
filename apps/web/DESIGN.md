@@ -2339,6 +2339,54 @@ Sentence case everywhere. Buttons start with a verb ("Create question",
 "Publish"). Status words are lowercase in badges. Every surface, teacher and
 student alike, goes through `t()` with an `en` and an `fr` entry (N-I18N-01).
 
+The two languages are WRITTEN, never translated: the French of a key is the
+sentence a French-speaking teacher in Yverdon would write for that place, not
+the English rendered word for word. Both are written short, at the same time,
+by the same person, before the component is styled. The words are those of
+the interface glossary, `docs/spec/01-glossaire-et-domaine.md` §1.5, in
+both languages; the i18n lint (`src/i18n/copy.test.ts`, N-I18N-04) refuses
+what it can detect of the rules below.
+
+- **A label is a label.** A heading, an option, a badge or a condition is a
+  noun phrase ("Sorties de page enregistrées"), never a sentence with a
+  verb and a subject ("Quitter la page … sont enregistrés"), never a
+  question. A button is a verb. Ceilings: a button 24 characters, a tab or
+  a segmented option 18, a badge 14, a column header 16, a hint or a
+  description 110, a toast 80. A string over its ceiling is a finding, not
+  a wrapping problem.
+- **A sub-text earns its place.** A `.desc`, `.hint`, `.body` or `.help`
+  exists only when it carries a fact the label does not: a consequence, a
+  limit, a number. It never restates the label ("Projet publié" / "Un
+  projet de votre classe est publié"), never defends a choice ("Les valeurs
+  par défaut conviennent à la plupart des évaluations"), never reassures
+  ("Rien n'est bloqué", "Rien n'est supprimé", "Vous pouvez revenir à tout
+  moment"), never repeats a sentence another key already says on the same
+  screen. One sentence; two when the second is a number or a limit.
+  `SettingRow`'s `desc` is optional: drop the prop rather than fill it.
+- **Plain prose.** Short sentences. No em-dash aside, no semicolon chain,
+  no triad, no rhetorical contrast ("des suggestions, jamais des décisions"),
+  no "ne … que" twist where a positive sentence says it, no "jamais … ni".
+  Vouvoiement. Neutral register, the same for students, teachers and the
+  coach's bubbles: no "Prêt ?", no "ça", no exclamation.
+- **No generic masculine.** "L'étudiant … il" becomes "les étudiants", a
+  passive, an infinitive or the thing itself ("la place est prise à la
+  première connexion"). A sentence about a named person never guesses their
+  gender ("Plus aucune réponse ne sera acceptée", not "Il ne pourra plus").
+- **One word per concept** (§1.5): banque, sondage, notion, correction /
+  corrigé / réponse attendue, points / note / score, verrou (an
+  evaluation's checkpoint) / point de contrôle (a project's), salle
+  d'attente, bloc-notes, modèle (a template) / IA (never LLM nor "modèle"
+  for the model), exécuteur, équipe enseignante, réglages, modifier,
+  enregistrer, rendre / publier, figé / verrouillé. The student never reads
+  an internal word: no "anneau", no "runner", no "jalon".
+- **French typography.** Straight apostrophe (`'`), guillemets « » with a
+  narrow no-break space inside, a narrow no-break space (U+202F) before
+  `:` `;` `?` `!`, "p. ex.", a plural key (`.one` / `.many`) rather than
+  "(s)", "recorriger" without a hyphen, "par défaut", "cliquez sur".
+- **English** keeps the same ceilings and the same ban on filler: the
+  verbosity of the French came from the English source. Sentence case,
+  serial comma, no em-dash aside either.
+
 ## The bottom bar (phone)
 
 A student opens the app on a phone far more often than a teacher does, and
