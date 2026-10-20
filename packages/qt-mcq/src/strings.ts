@@ -90,7 +90,7 @@ export type McqEditorStringKey = keyof typeof mcqEditorStrings;
 export const mcqPlayerStrings = {
   chooseOne: "Choose one answer.",
   chooseSeveral: "Choose every answer that applies.",
-  chooseUpTo: "At most {max} answers.",
+  chooseUpTo: "Answers: {max} at most.",
   limitReached: "You have reached the maximum number of selections.",
   /** Negative marking (ADR-026): shown on every choice question it applies to. */
   negativeMarking: "Wrong answers cost points; not answering costs nothing.",
