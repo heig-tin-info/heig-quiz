@@ -59,7 +59,10 @@ Never work around these, not even "temporarily".
    `index.tsx`) with both
    an `en` and a `fr` entry — teacher surfaces included (N-I18N-01). The `fr`
    dictionary is typed `Record<keyof Dict, string>`, so a missing French key
-   is a compile error. Keep it that way.
+   is a compile error. Keep it that way. Both languages are written, never
+   translated, short, by the Voice rules of `apps/web/DESIGN.md` and the
+   glossary of `docs/spec/01-glossaire-et-domaine.md` §1.5 (N-I18N-04);
+   the copy lint of `apps/web/src/i18n/` refuses what it can detect.
 2. **One primary action per screen.** If you cannot name the single thing a
    screen is for, the flow is wrong, not the styling. See
    `.claude/skills/quiz-ui/SKILL.md` and `apps/web/DESIGN.md`.

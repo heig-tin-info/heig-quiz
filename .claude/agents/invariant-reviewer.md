@@ -30,6 +30,12 @@ which items you skipped.
    a key in BOTH `apps/web/src/i18n/en.ts` and `fr.ts`. A literal string in
    JSX, a toast, an error message shown to a user, or an API error meant to
    be displayed verbatim is a finding. Identifiers, comments, commits: English.
+   The copy itself follows N-I18N-04: both languages written short, labels
+   as noun phrases within the ceilings of `apps/web/DESIGN.md` (Voice), a
+   sub-text only when it adds a fact, no filler nor reassurance, the words
+   of the glossary (`docs/spec/01-glossaire-et-domaine.md` §1.5), no
+   generic masculine. A new key that breaks one of these is a finding even
+   when the lint (`src/i18n/copy.test.ts`) lets it through.
 2. **One primary action.** A UI diff: can you name the single action of the
    screen? If `apps/web` changed, check that `quiz-ui`'s rules were applied
    (semantic tokens, primitives from `src/ui/`).

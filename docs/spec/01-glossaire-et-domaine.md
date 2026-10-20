@@ -206,3 +206,63 @@ erDiagram
 **Project repository**: accepted → `provision_status` `pending` → `ok` (or `error`, retried by the student) → invitation `pending` → `accepted`; at its effective deadline applied (provisional freeze) and locked, frozen definitively at the effective deadline plus the grace; its own deadline moved later reopens it alone; `deleted` for good when the repository is gone from GitHub.
 
 **Grading**: `proposed` → `validated`. An `auto` grading on a fully deterministic type is born `validated`. An `llm` grading is born `proposed`. A manual grading is born `validated`.
+
+## 1.5 The interface's words, in both languages
+
+One concept, one word in each language, on every screen, for both readers.
+The English column is the interface's English, the French column its French;
+neither is a translation of the other: each is written in its language,
+short, by the rules of `apps/web/DESIGN.md` (Voice). A word of this table
+replaces every variant listed under *never*; the i18n lint of
+`apps/web/src/i18n/` refuses the variants it can detect (N-I18N-04). Settled
+by the product owner on 2026-10-20.
+
+| Concept | English | French | Never (fr) |
+|---|---|---|---|
+| Pool | pool | banque | pool |
+| Poll | poll | sondage | poll |
+| Concept | concept | notion | concept |
+| Evaluation, mode unknown | evaluation | évaluation | quiz |
+| Exam / exercise, mode known | exam / exercise | examen / exercice | quiz, épreuve |
+| Feedback (what the student sees of the grading) | feedback | correction | retour, retour à l'étudiant, politique de retour |
+| Answer key (the published expected answer) | answer key | corrigé | solution, réponse modèle, solution de référence |
+| Expected answer (inside a question) | expected answer | réponse attendue | clé |
+| Explanation | explanation | explication | — |
+| Points of a question or an attempt | points | points | score, marque |
+| Grade (1 to 6) | grade | note | score, marque |
+| Score of a project (CI points) | score | score | note, marque |
+| Grade scale | grade scale | barème | échelle, politique de notation |
+| Grading policy (MCQ, categorize) | grading policy | règle de notation | politique |
+| All-or-nothing policy | all or nothing | tout ou rien | exact |
+| Navigation checkpoint of an evaluation (closes what precedes it) | checkpoint | verrou | jalon, étape, séparation de section |
+| Review checkpoint of a project | checkpoint | point de contrôle | jalon |
+| Lobby | lobby | salle d'attente | salle, anneau |
+| Notepad | notepad | bloc-notes | calepin |
+| Calculator | calculator | calculatrice | — |
+| Template (evaluation) | template | modèle | gabarit |
+| Code template, starter | starter | code de départ | modèle, template |
+| LLM, model, AI | AI | IA | LLM, modèle, modèle de langage |
+| Runner | runner | exécuteur | runner, simulateur (the circuit simulator keeps *simulation*) |
+| Staff of a course | staff | équipe enseignante | staff, équipe |
+| Teacher | teacher | enseignant·e in prose becomes a neutral turn; *enseignant* alone in a label | professeur, prof |
+| Student | student | étudiant (label); neutral turn in prose | élève |
+| Classroom | classroom | classe | salle, volée |
+| Roster | roster | liste des étudiants | effectif, liste |
+| Settings | settings | réglages | paramètres |
+| Edit | edit | modifier | éditer |
+| Save | save | enregistrer | sauvegarder |
+| Submit (an attempt) | hand in | rendre | soumettre, remettre |
+| Release (results, scores) | release | publier (les résultats, les notes) | rendre, relâcher |
+| Published correction (exercise) | published correction | corrigé publié | — |
+| Retake | retake | nouvelle tentative | reprise |
+| Frozen (score, list) | frozen | figé | gelé, verrouillé |
+| Locked (repository, question) | locked | verrouillé | figé, gelé |
+| Dashboard (live) | dashboard | tableau de bord | — |
+| Drill, practice | practice | entraînement | drill, révisions |
+| Targeted revision | targeted revision | révision ciblée | — |
+| Group set | group set | répartition | — |
+| Journal | journal | journal | carnet |
+| Gradebook | gradebook | carnet de notes | — |
+| Correct / wrong (a verdict) | correct / wrong | juste / faux | correct, bon |
+| Not answered | unanswered | sans réponse | pas répondu, non répondue |
+| Default | default | par défaut | défaut |

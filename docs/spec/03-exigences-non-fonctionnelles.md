@@ -75,6 +75,7 @@
 | N-I18N-01 | Interface in French and in English, language chosen by the user, the browser's by default. Every string goes through the translation system. |
 | N-I18N-02 | Dates, times and numbers formatted according to the locale. The displayed clock is in the user's local time. |
 | N-I18N-03 | Question content is not translated. |
+| N-I18N-04 | Interface copy is written in each language, not translated, by the writing rules of `apps/web/DESIGN.md` (Voice) and the interface glossary of chapter 1 §1.5: labels are noun phrases within their length ceilings, a sub-text carries a fact the label does not, no filler, no rhetorical turn, no generic masculine, one word per concept, French typography. A lint over `apps/web/src/i18n/` (`copy.test.ts`) refuses what it can detect (banned words, ceilings, em-dash asides, semicolons, "(s)" plurals, curly apostrophes, a breaking space before a double punctuation mark); its exception list only shrinks (product owner, 2026-10-20). |
 
 ## 3.6 Compatibility
 
