@@ -5877,7 +5877,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.reopen.title": "Réouvrir le projet ?",
   "project.reopen.body": "L'échéance est passée. La repousser déverrouille {n} dépôts : ils ne sont plus figés, leur revue finale est annulée et leurs exécutions sont reclassées. Les scores de l'enseignant et une publication déjà faite sont conservés.",
   "project.reopen.confirm": "Réouvrir",
-  "project.protected.desc": "Un push qui touche l'un d'eux est suivi d'un commit qui remet le fichier. Nouvelle liste : dès le prochain push.",
+  "project.protected.desc": "Un push qui touche l'un d'eux est suivi d'un commit qui remet le fichier. Nouvelle liste : prochain push.",
   "project.protected.none": "Aucun fichier protégé.",
   "project.distribution": "Dépôt de distribution",
   "project.distribution.building": "en construction",
