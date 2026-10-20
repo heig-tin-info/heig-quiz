@@ -139,7 +139,7 @@ describe("the zen player on a wide screen", () => {
     const view = attemptView();
     const { calls } = stubs(view);
     const { container } = render(view);
-    const list = await screen.findByRole("navigation", { name: "Progression : question 2 sur 3" });
+    const list = await screen.findByRole("navigation", { name: "Progression : question 2 sur 3" });
     // One list, and it is in the side column: no strip left in the bar.
     expect(list.closest("aside")).not.toBeNull();
     expect(container.querySelector("header nav")).toBeNull();
@@ -178,7 +178,7 @@ describe("the zen player on a wide screen", () => {
     const view = attemptView();
     stubs(view);
     const { container } = render(view);
-    const strip = await screen.findByRole("navigation", { name: "Progression : question 2 sur 3" });
+    const strip = await screen.findByRole("navigation", { name: "Progression : question 2 sur 3" });
     expect(strip.closest("header")).not.toBeNull();
     expect(container.querySelector("aside")).toBeNull();
   });
@@ -365,7 +365,7 @@ describe("the zen player", () => {
     stubs(view);
     render(view);
     const strip = await screen.findByRole("navigation", {
-      name: "Progression : question 2 sur 3",
+      name: "Progression : question 2 sur 3",
     });
     expect(within(strip).getAllByRole("button")).toHaveLength(3);
     // Answered with no click: the answer is there, so the list says so.
@@ -475,7 +475,7 @@ describe("the zen player", () => {
       await screen.findByText("Question 2");
 
       expect(
-        await screen.findByRole("navigation", { name: "Progression : question 2 sur 3" }),
+        await screen.findByRole("navigation", { name: "Progression : question 2 sur 3" }),
       ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Précédent" })).toBeEnabled();
       expect(screen.getByRole("button", { name: "Suivant" })).toBeEnabled();
@@ -520,7 +520,7 @@ describe("the zen player", () => {
         ).toBe(true),
       );
       expect(await screen.findByText("Laissée sans réponse")).toBeInTheDocument();
-      const strip = screen.getByRole("navigation", { name: "Progression : question 3 sur 3" });
+      const strip = screen.getByRole("navigation", { name: "Progression : question 3 sur 3" });
       expect(
         within(strip).getByRole("button", { name: "Question 3, laissée sans réponse, en cours" }),
       ).toBeInTheDocument();
@@ -593,7 +593,7 @@ describe("the zen player", () => {
           ),
         ).toBe(true),
       );
-      const strip = screen.getByRole("navigation", { name: "Progression : question 2 sur 3" });
+      const strip = screen.getByRole("navigation", { name: "Progression : question 2 sur 3" });
       expect(
         within(strip).getByRole("button", {
           name: "Question 2, répondue, marquée à revoir, en cours",
@@ -854,7 +854,7 @@ describe("the zen player", () => {
       });
       renderWith(vi.fn());
       await typeThenHome();
-      const dialog = await screen.findByRole("dialog", { name: "Quitter cet exercice ?" });
+      const dialog = await screen.findByRole("dialog", { name: "Quitter cet exercice ?" });
       expect(within(dialog).getByText(/mis l'évaluation en pause/)).toBeInTheDocument();
       expect(within(dialog).queryByText(/connexion/)).toBeNull();
     });
@@ -870,7 +870,7 @@ describe("the zen player", () => {
       });
       renderWith(vi.fn());
       await typeThenHome();
-      const dialog = await screen.findByRole("dialog", { name: "Quitter cet exercice ?" });
+      const dialog = await screen.findByRole("dialog", { name: "Quitter cet exercice ?" });
       expect(within(dialog).getByText(/Cette tentative est fermée/)).toBeInTheDocument();
     });
 
