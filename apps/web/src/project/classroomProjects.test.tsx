@@ -215,9 +215,9 @@ describe("the classroom's Projects table", () => {
     renderGroup("fr");
     const region = await screen.findByRole("region", { name: "Projets" });
     expect(within(region).getByText("verrouillé")).toBeInTheDocument();
-    // Never "publié", which names a published project (ADR-104).
+    // Never a bare "publié", which names a published project (ADR-104): the released phase names its scores.
     expect(within(region).getByText("corrigé")).toBeInTheDocument();
-    expect(within(region).getByText("rendu")).toBeInTheDocument();
+    expect(within(region).getByText("scores publiés")).toBeInTheDocument();
     expect(within(region).getByRole("columnheader", { name: /Échéance/ })).toBeInTheDocument();
   });
 });

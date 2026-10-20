@@ -75,7 +75,7 @@ describe("QuestionHost for a choice question", () => {
       { locale: "fr" },
     );
     expect(
-      await screen.findByText("Une réponse fausse coûte des points ; ne pas répondre ne coûte rien."),
+      await screen.findByText("Une réponse fausse coûte des points. Ne pas répondre ne coûte rien."),
     ).toBeInTheDocument();
     expect(screen.getByText("Choisissez une réponse.")).toBeInTheDocument();
   });

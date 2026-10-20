@@ -165,7 +165,7 @@ describe("SettingsPage — the data export", () => {
     try {
       renderWithProviders(<SettingsPage me={makeMe({ role: "student" })} />);
       await user.click(button()!);
-      expect(await screen.findByText(/several times this hour/i)).toBeInTheDocument();
+      expect(await screen.findByText(/too many downloads in an hour/i)).toBeInTheDocument();
       expect(click).not.toHaveBeenCalled();
     } finally {
       click.mockRestore();

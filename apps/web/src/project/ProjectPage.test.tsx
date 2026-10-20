@@ -330,7 +330,8 @@ describe("a group project's set (ADR-070, M3-16a)", () => {
     });
     const { navigate } = renderPage();
     await userEvent.click(await screen.findByRole("button", { name: /Publish/ }));
-    const link = await screen.findByRole("link", { name: "Place them in the group set" });
+    const alert = (await screen.findByText("Cannot publish: 1 students are in no group")).closest("[role=status]") as HTMLElement;
+    const link = within(alert).getByRole("link", { name: "Place these students" });
     await userEvent.click(link);
     expect(navigate).toHaveBeenCalledWith({
       view: "groupSet",
@@ -416,7 +417,7 @@ describe("the settings", () => {
     expect(writes(calls)[0]!.body).toEqual({ deadlineAt: new Date("2099-06-01T23:59").toISOString() });
 
     await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Mark" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Mark with a commit" }));
     await waitFor(() => expect(writes(calls)).toHaveLength(2));
     expect(writes(calls)[1]!.body).toEqual({ deadlineStrategy: "commit" });
 
@@ -466,7 +467,7 @@ describe("the settings", () => {
     fireEvent.blur(deadline);
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Reopen the project?")).toBeInTheDocument();
-    expect(within(dialog).getByText(/lifts the locks of 2 repositories/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/unlocks 2 repositories/)).toBeInTheDocument();
     // Declined: nothing written, the stored deadline back.
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(writes(calls)).toHaveLength(0);
@@ -745,7 +746,7 @@ describe("a group project's rows, drift and resync (ADR-070 §4, M3-16b)", () =>
       "heig-tin-info/labo-2-groupe-1",
       "heig-tin-info/labo-2-groupe-2",
     ]);
-    expect(within(dialog).getByText("Will have no repository — Accept is closed")).toBeInTheDocument();
+    expect(within(dialog).getByText("No repository: acceptance is closed")).toBeInTheDocument();
     expect(within(dialog).getByText("Dupont Chloé")).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "Resync" }));
     expect(await screen.findByText("Groups resynced with the set.")).toBeInTheDocument();
@@ -785,7 +786,7 @@ describe("the release (F-PROJ-14, M3-12c)", () => {
     await userEvent.click(button);
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Release the scores?")).toBeInTheDocument();
-    expect(within(dialog).getByText(/becomes the student's and the gradebook's/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/goes to the gradebook and to the students/)).toBeInTheDocument();
     // Declined: nothing posted.
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(writes(calls)).toHaveLength(0);
@@ -806,10 +807,10 @@ describe("the release (F-PROJ-14, M3-12c)", () => {
     );
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "Release again" }));
-    expect(status()).toMatch(/^Scores released on .*; some changed since\. Release again/);
+    expect(status()).toMatch(/^Scores released on .*\. Some changed since: release again/);
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Release the scores again?")).toBeInTheDocument();
-    expect(within(dialog).getByText(/snapshot is rewritten/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Today's final scores replace the released ones/)).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Release again" })).toBeInTheDocument();
   });
 
@@ -834,13 +835,13 @@ describe("the release (F-PROJ-14, M3-12c)", () => {
     };
     await attempt();
     const alert = (await screen.findByText("The scores were not released")).closest<HTMLElement>("[role=status]")!;
-    expect(within(alert).getByText("Not yet: 1 of 2 live repositories are frozen for good.")).toBeInTheDocument();
+    expect(within(alert).getByText("Only 1 of 2 live repositories are frozen for good.")).toBeInTheDocument();
     reply = fail(409, { error: "to_verify", message: "", repos: [frozenRepo(2).id] });
     await attempt();
     expect(await screen.findByText(/The score of Rochat Chloé rests on a run to verify/)).toBeInTheDocument();
     reply = fail(409, { error: "grading_none", message: "" });
     await attempt();
-    expect(await screen.findByText("This project is not graded: no score, no release.")).toBeInTheDocument();
+    expect(await screen.findByText("This project is not graded: no score to release.")).toBeInTheDocument();
   });
 });
 
@@ -911,7 +912,7 @@ describe("the sheet's writes (M3-12b)", () => {
     });
     renderPage("en", "repositories");
     const sheet = await openSheet();
-    expect(within(sheet).getByText(/No scored run to take the maximum from/)).toBeInTheDocument();
+    expect(within(sheet).getByText(/No scored run gives the maximum/)).toBeInTheDocument();
     const save = within(sheet).getByRole("button", { name: "Save" });
     await userEvent.type(within(sheet).getByRole("spinbutton", { name: "Points" }), "15");
     // Points alone do not do: the maximum is required with them.
@@ -926,7 +927,7 @@ describe("the sheet's writes (M3-12b)", () => {
     expect(await within(sheet).findByText("This repository is not frozen for good yet.")).toBeInTheDocument();
     reply = fail(409, { error: "grading_none", message: "" });
     await userEvent.click(save);
-    expect(await within(sheet).findByText("This project is not graded: no score, no release.")).toBeInTheDocument();
+    expect(await within(sheet).findByText("This project is not graded: no score to release.")).toBeInTheDocument();
   });
 
   it("offers no score form on a project graded none", async () => {
@@ -935,7 +936,7 @@ describe("the sheet's writes (M3-12b)", () => {
     renderPage("en", "repositories");
     const sheet = await openSheet();
     expect(within(sheet).queryByRole("button", { name: "Save" })).toBeNull();
-    expect(within(sheet).getByText("This project is not graded: no score, no release.")).toBeInTheDocument();
+    expect(within(sheet).getByText("This project is not graded: no score to release.")).toBeInTheDocument();
   });
 
   it("resends a pending invitation, once a minute (429 worded), and never an accepted one", async () => {
@@ -982,10 +983,10 @@ describe("the sheet's writes (M3-12b)", () => {
     renderPage("en", "repositories");
     const sheet = await openSheet();
     expect(within(sheet).getByText("protected files in conflict")).toBeInTheDocument();
-    expect(within(sheet).getByText(/The runs marked “to verify” meanwhile stay so/)).toBeInTheDocument();
+    expect(within(sheet).getByText(/Runs already marked “to verify” stay so/)).toBeInTheDocument();
     await userEvent.click(within(sheet).getByRole("button", { name: "Re-enable the protection" }));
     await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "POST", url: `${BASE}/repos/${repo.id}/protection` })]));
-    expect(await screen.findByText("Protection re-enabled; past runs stay to verify")).toBeInTheDocument();
+    expect(await screen.findByText("Protection re-enabled. Past runs stay to verify")).toBeInTheDocument();
     await waitFor(() => expect(within(sheet).queryByText("protected files in conflict")).toBeNull());
     expect(within(sheet).queryByRole("button", { name: "Re-enable the protection" })).toBeNull();
     // The "to verify" mark stays: only the conflict went.
@@ -1043,7 +1044,7 @@ describe("the review checkpoints", () => {
     });
     renderPage();
     const region = await screen.findByRole("region", { name: "Lifecycle" });
-    expect(await within(region).findByText("sent", { exact: false })).toBeInTheDocument();
+    expect(await within(region).findByText(/^sent/)).toBeInTheDocument();
     expect(within(region).getByText("void")).toBeInTheDocument();
     expect(within(region).getByText("scheduled")).toBeInTheDocument();
     // The two J−7 checkpoints say so; the dated one does not.
@@ -1064,7 +1065,7 @@ describe("the review checkpoints", () => {
     const create = within(dialog).getByRole("button", { name: "Create" });
     expect(create).toBeDisabled();
     await userEvent.type(within(dialog).getByRole("textbox", { name: "Name" }), "milestone-1");
-    const days = within(dialog).getByRole("spinbutton", { name: "Days before the deadline" });
+    const days = within(dialog).getByRole("spinbutton", { name: "Days before" });
     await userEvent.clear(days);
     await userEvent.type(days, "5");
     await userEvent.click(create);
@@ -1307,10 +1308,10 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     });
     renderPage();
     const settings = await screen.findByRole("tab", { name: "Settings" });
-    expect(screen.queryByRole("radio", { name: "Mark" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Mark with a commit" })).toBeNull();
     await userEvent.click(settings);
     expect(window.location.search).toBe("?tab=settings");
-    expect(screen.getByRole("radio", { name: "Mark" })).toBeEnabled();
+    expect(screen.getByRole("radio", { name: "Mark with a commit" })).toBeEnabled();
     expect(await screen.findByRole("checkbox", { name: "README.md" })).toBeInTheDocument();
     expect(await screen.findByRole("radiogroup", { name: "Where students work" })).toBeInTheDocument();
   });
@@ -1400,7 +1401,7 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     });
     renderPage();
     const rail = await screen.findByRole("region", { name: "Lifecycle" });
-    expect(await within(rail).findByText("never fires")).toBeInTheDocument();
+    expect(await within(rail).findByText("will not be sent")).toBeInTheDocument();
     expect(within(rail).queryByRole("button", { name: "Add" })).toBeNull();
     expect(within(rail).getByRole("button", { name: "Delete checkpoint late" })).toBeInTheDocument();
   });
@@ -1437,7 +1438,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
   it("says the distribution repository is missing, and that the draft must be created again", async () => {
     routes(makeDraft({ distribution: null }));
     renderPage();
-    expect(await screen.findByText("The students' repository was not built")).toBeInTheDocument();
+    expect(await screen.findByText("The distribution repository was not built")).toBeInTheDocument();
     expect(screen.getByText("being built")).toBeInTheDocument();
   });
 
@@ -1494,7 +1495,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     const stale = makeDraft({ publishMode: "scheduled", startAt: AHEAD, deadlineAt: new Date(Date.parse(AHEAD) + 86_400_000).toISOString() });
     routes(stale, { [`PATCH ${BASE}`]: fail(422, { error: "deadline_past", message: "The deadline has passed" }) });
     renderPage();
-    await userEvent.click(await screen.findByRole("radio", { name: "By hand" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Manual" }));
     expect(await screen.findByText("This deadline has already passed.")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "At the start" })).toBeChecked();
     expect(screen.getByLabelText("Start")).toBeInTheDocument();
@@ -1504,7 +1505,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     const { calls } = routes(makeDraft({ durationMinutes: 7 * 1440 }), { [`PATCH ${BASE}`]: ok({}) });
     renderPage();
     await userEvent.click(await screen.findByRole("radio", { name: "At the start" }));
-    await userEvent.click(screen.getByRole("radio", { name: "By hand" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Manual" }));
     expect(writes(calls)).toHaveLength(0);
     expect(await screen.findByLabelText("Duration in days")).toHaveValue(7);
   });
@@ -1538,7 +1539,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(screen.queryByLabelText("Grace")).toBeNull();
     await userEvent.click(advanced);
     expect(screen.getByLabelText("Grace")).toHaveValue(10);
-    for (const name of ["Lock", "Mark", "Automatic", "None", "Linear", "Score is the grade"]) {
+    for (const name of ["Lock", "Mark with a commit", "Automatic", "None", "Linear", "Score is the grade"]) {
       expect(screen.getByRole("radio", { name })).toBeEnabled();
     }
     expect(await screen.findByRole("checkbox", { name: "README.md" })).toBeInTheDocument();
@@ -1643,7 +1644,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
   it("draws every control disabled for an archived draft, and what `editable` does not name", async () => {
     routes(makeDraft({ archivedAt: PAST, editable: ["name"] }));
     renderPage();
-    expect(await screen.findByRole("radio", { name: "By hand" })).toBeDisabled();
+    expect(await screen.findByRole("radio", { name: "Manual" })).toBeDisabled();
     expect(screen.getByRole("switch", { name: "Groups" })).toBeDisabled();
   });
 
@@ -1752,7 +1753,7 @@ describe("the Grading tab", () => {
       ),
     });
     renderPage("en", "grading");
-    expect(await screen.findByTestId("grading-validated")).toHaveTextContent("2 of 3 validated");
+    expect(await screen.findByTestId("grading-validated")).toHaveTextContent("Validated repositories: 2 of 3.");
     const bars = within(screen.getByTestId("criteria-bars")).getAllByRole("listitem").map((li) => li.textContent);
     expect(bars).toEqual(["rendu.tests75%", "code100%"]);
     expect(screen.getByTestId("criteria-extras")).toHaveTextContent("rapport.cle · penalty applied in 1 of 2 repositories");
@@ -1777,7 +1778,7 @@ describe("the Grading tab", () => {
   it("speaks French", async () => {
     routes(criteria(), { [`GET ${BASE}/grading`]: ok(gradingView([gradingRepo(1, "Alice", [8, 2, 2, 0])])) });
     renderPage("fr", "grading");
-    expect(await screen.findByTestId("grading-validated")).toHaveTextContent("1 sur 1 validés");
+    expect(await screen.findByTestId("grading-validated")).toHaveTextContent("Dépôts validés : 1 sur 1.");
     const table = within(screen.getByRole("region", { name: /Critères par dépôt/ })).getByRole("table");
     expect(within(table).getByRole("columnheader", { name: "Note" })).toBeInTheDocument();
   });

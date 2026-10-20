@@ -462,7 +462,7 @@ describe("QuestionEditor — mcq", () => {
     const aside = await screen.findByRole("complementary", { name: "Question details" });
     await waitFor(() => expect(within(aside).getByText("Scoring")).toBeInTheDocument());
     expect(within(aside).getByRole("radiogroup", { name: "Scoring policy" })).toBeInTheDocument();
-    expect(within(aside).getByLabelText("Never shuffle this question")).toBeInTheDocument();
+    expect(within(aside).getByLabelText("Fixed choice order")).toBeInTheDocument();
     const headings = within(aside)
       .getAllByRole("heading")
       .map((h) => h.textContent);

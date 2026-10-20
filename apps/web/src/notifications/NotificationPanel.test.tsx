@@ -72,7 +72,7 @@ describe("the inbox in the account menu", () => {
     ).toBeVisible();
     expect(
       within(panel).getByText(
-        /You are now the owner of “Systèmes embarqués” \(from Grace Hopper\)\./,
+        /You now own “Systèmes embarqués”, handed over by Grace Hopper\./,
       ),
     ).toBeVisible();
   });

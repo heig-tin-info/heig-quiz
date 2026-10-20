@@ -524,7 +524,7 @@ describe("ClassroomView: the training classroom's card (ADR-105 §4)", () => {
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
     expect(await screen.findByRole("heading", { name: "Your four missions" })).toBeVisible();
     // One button on the card, the next mission's; the three others carry none.
-    expect(classesOf(screen.getByRole("button", { name: "Show me the button" }))).toContain("bg-accent");
+    expect(classesOf(screen.getByRole("button", { name: "Show the button" }))).toContain("bg-accent");
     expect(screen.queryByRole("button", { name: "Open the live exam" })).toBeNull();
     await waitFor(() =>
       expect(classesOf(screen.getByRole("button", { name: /New evaluation/ }))).not.toContain("bg-accent"),
@@ -536,7 +536,7 @@ describe("ClassroomView: the training classroom's card (ADR-105 §4)", () => {
   it("leads mission 1 to the page's own Join as student, under focus, and never clicks it", async () => {
     const { calls } = mockFetch(trainingRoutes(trainingStatus()));
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Show me the button" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Show the button" }));
     expect(screen.getByRole("button", { name: /Join as student/ })).toHaveFocus();
     expect(calls.some((c) => c.url.endsWith("/self-enroll"))).toBe(false);
   });
@@ -544,11 +544,11 @@ describe("ClassroomView: the training classroom's card (ADR-105 §4)", () => {
   it("steps the empty list's New evaluation down too, so the tab has exactly one accent (invariant 2)", async () => {
     mockFetch({ ...trainingRoutes(trainingStatus()), [`GET ${EVALUATIONS}`]: ok([]) });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
-    expect(await screen.findByRole("button", { name: "Show me the button" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Show the button" })).toBeVisible();
     await screen.findByText("No evaluation yet");
     await waitFor(() => {
       const accented = screen.getAllByRole("button").filter((b) => classesOf(b).includes("bg-accent"));
-      expect(accented.map((b) => b.textContent)).toEqual(["Show me the button"]);
+      expect(accented.map((b) => b.textContent)).toEqual(["Show the button"]);
     });
   });
 
@@ -586,7 +586,7 @@ describe("ClassroomView: the training classroom's card (ADR-105 §4)", () => {
     mockFetch(trainingRoutes(trainingStatus(), MY_SEAT));
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
     expect(await screen.findByText(/switch to the student view from your account menu/)).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Show me the button" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show the button" })).toBeNull();
     // A hint in words is no accent: the screen never has zero.
     await waitFor(() => expect(classesOf(screen.getByRole("button", { name: /New evaluation/ }))).toContain("bg-accent"));
   });

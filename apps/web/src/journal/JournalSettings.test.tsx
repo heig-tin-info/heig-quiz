@@ -135,7 +135,7 @@ describe("the Journal section — before a journal", () => {
     const root = await section();
     await chooseGithub();
     expect(within(root).getByText(/Written in a repository of the classroom's organization/)).toBeVisible();
-    expect(within(root).getByText("Needs the GitHub connection")).toBeVisible();
+    expect(within(root).getByText("GitHub connection required")).toBeVisible();
     expect(within(root).getByText(/in the GitHub section above/)).toBeVisible();
     expect(within(root).queryByRole("button", { name: /Create|Choose/ })).toBeNull();
   });
@@ -179,7 +179,7 @@ describe("the Journal section — Create a journal", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Create…" }));
     const dialog = await screen.findByRole("dialog", { name: /Create a journal/ });
     expect(within(dialog).getByLabelText(/Repository name/)).toHaveValue("prg1-2026-journal");
-    expect(within(dialog).getByText(/invited to it, with push rights/)).toBeVisible();
+    expect(within(dialog).getByText(/invited with push rights/)).toBeVisible();
     await userEvent.click(within(dialog).getByRole("button", { name: "Create the journal" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -222,7 +222,7 @@ describe("the Journal section — Create a journal", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Create the journal" }));
 
     expect(await within(dialog).findByText("heig-tin-info/prg1-journal already exists")).toBeVisible();
-    expect(within(dialog).getByText(/never takes over an existing repository/)).toBeVisible();
+    expect(within(dialog).getByText(/does not take over an existing repository/)).toBeVisible();
     await userEvent.click(within(dialog).getByRole("button", { name: "Create prg1-journal-0190d3c4" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

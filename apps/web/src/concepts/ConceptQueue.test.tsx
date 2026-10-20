@@ -584,7 +584,7 @@ describe("the concept curation queue (ADR-081, fifth addendum)", () => {
       it("is offered on All, To validate and Validated, never on Unplaced, Duplicates or Relations", async () => {
         mockFetch({ [LIST]: ok(page(tree)), "GET /app/api/admin/concepts/relations/candidates": ok({ candidates: [] }) });
         renderWithProviders(<ConceptQueue />);
-        expect(await screen.findByRole("radiogroup", { name: "Show the concepts as" })).toBeInTheDocument();
+        expect(await screen.findByRole("radiogroup", { name: "View" })).toBeInTheDocument();
         for (const filter of [/^to validate$/i, /^validated$/i]) {
           await userEvent.click(screen.getByRole("radio", { name: filter }));
           expect(screen.getByRole("radio", { name: "Tree" })).toBeInTheDocument();

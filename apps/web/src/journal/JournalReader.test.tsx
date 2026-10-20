@@ -214,12 +214,12 @@ describe("JournalReader — the strip of pages", () => {
     const pages = await screen.findByRole("navigation", { name: "Pages of the journal" });
     expect(within(pages).queryByRole("link", { name: /Semaine 2 été/ })).toBeNull();
     // The eye is on the page, never summed up on its folder's entry.
-    expect(within(pages).queryByRole("img", { name: "Hidden from students" })).toBeNull();
+    expect(within(pages).queryByRole("img", { name: "Hidden" })).toBeNull();
     navigateSpy.mockClear();
     await userEvent.click(within(pages).getByRole("button", { name: "Semaine 2 été" }));
     expect(navigateSpy).not.toHaveBeenCalled();
     const draft = within(screen.getByRole("menu")).getByRole("menuitem", { name: /Brouillon/ });
-    expect(draft).toContainElement(within(draft).getByRole("img", { name: "Hidden from students" }));
+    expect(draft).toContainElement(within(draft).getByRole("img", { name: "Hidden" }));
   });
 
   it("has no home entry when the journal has no home page", async () => {
@@ -350,7 +350,7 @@ describe("JournalReader — the staff", () => {
     expect(screen.getByText("Raw HTML is shown as text.")).toBeInTheDocument();
     expect(screen.getByText("The link ../x.md leads to nothing in the journal (x.md).")).toBeInTheDocument();
     expect(
-      screen.getByText("The front matter is not valid YAML (line 3); the page renders without it."),
+      screen.getByText("The front matter is not valid YAML (line 3): the page renders without it."),
     ).toBeInTheDocument();
     expect(screen.getByText(/Synced/)).toBeInTheDocument();
   });
@@ -497,10 +497,10 @@ describe("JournalReader — the student", () => {
     renderWithProviders(<Reader path={HOME} studentView />);
     expect(await screen.findByRole("heading", { level: 1, name: "Programmation 1" })).toBeInTheDocument();
     expect(calls.every((c) => c.url.endsWith("?view=student"))).toBe(true);
-    for (const text of [/Draft/, /Visible from/, /Warnings/, /Synced/, /Hidden from students/]) {
+    for (const text of [/Draft/, /Visible from/, /Warnings/, /Synced/, /Hidden/]) {
       expect(screen.queryByText(text)).toBeNull();
     }
-    expect(screen.queryByRole("img", { name: "Hidden from students" })).toBeNull();
+    expect(screen.queryByRole("img", { name: "Hidden" })).toBeNull();
     // No staff bar: a student has no action here (F-JRN-07).
     expect(screen.queryByRole("button", { name: /Refresh/ })).toBeNull();
     // The staff navigation's second section is not the student's.
@@ -508,7 +508,7 @@ describe("JournalReader — the student", () => {
     // Nor does a folder's menu carry a staff mark.
     await userEvent.click(screen.getByRole("button", { name: "Pages in Semaine 1" }));
     expect(within(screen.getByRole("menu")).getAllByRole("menuitem")).toHaveLength(2);
-    expect(screen.queryByRole("img", { name: "Hidden from students" })).toBeNull();
+    expect(screen.queryByRole("img", { name: "Hidden" })).toBeNull();
   });
 
   it("reads a 404 of the journal as not found", async () => {

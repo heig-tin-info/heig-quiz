@@ -128,15 +128,15 @@ describe("the new project form", () => {
     await userEvent.click(screen.getByRole("button", { name: "solution" }));
     expect(screen.getByText(/The first one chosen, main,/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "Whole history" }));
-    await userEvent.click(screen.getByRole("radio", { name: "Mark" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Mark with a commit" }));
     const grace = screen.getByLabelText("Grace");
     await userEvent.clear(grace);
     await userEvent.type(grace, "60");
     await userEvent.click(screen.getByRole("radio", { name: "Score is the grade" }));
-    expect(screen.getByText(/a score out of 6 is the grade itself/)).toBeInTheDocument();
-    expect(screen.queryByText(/workflow can be changed by the student/)).not.toBeInTheDocument();
+    expect(screen.getByText(/A score out of 6 is the grade\./)).toBeInTheDocument();
+    expect(screen.queryByText(/workflow can be changed by students/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("checkbox", { name: ".github/workflows/grading.yml" }));
-    expect(screen.getByText(/workflow can be changed by the student/)).toBeInTheDocument();
+    expect(screen.getByText(/workflow can be changed by students/)).toBeInTheDocument();
     // Group mode is offered (M3-16a), off by default: no set is asked for.
     expect(screen.getByRole("switch", { name: "Groups" })).not.toBeChecked();
     expect(screen.queryByRole("combobox", { name: "Group set" })).not.toBeInTheDocument();
@@ -231,7 +231,7 @@ describe("the new project form", () => {
     const { navigate } = renderPage();
     await fillNovice();
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
-    const alert = (await screen.findByText("The students' repository could not be built")).closest("[role=status]")!;
+    const alert = (await screen.findByText("The distribution repository could not be built")).closest("[role=status]")!;
     expect(within(alert as HTMLElement).getByText(/stays on GitHub/)).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toHaveValue("Labo 4");
     await userEvent.click(within(alert as HTMLElement).getByRole("button", { name: "Retry" }));
@@ -259,7 +259,7 @@ describe("the new project form", () => {
     renderPage();
     await fillNovice();
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
-    const building = await screen.findByRole("button", { name: /Building the students' repository/ });
+    const building = await screen.findByRole("button", { name: /Building the distribution repository/ });
     expect(building).toBeDisabled();
     expect(screen.getByLabelText("Name")).toBeDisabled();
     fireEvent.submit(building.closest("form")!);

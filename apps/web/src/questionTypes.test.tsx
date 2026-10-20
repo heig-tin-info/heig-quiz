@@ -369,7 +369,7 @@ describe("question type strings", () => {
     expect(fmt(p.components, { n: 3, max: 10 })).toBe("3 / 10 components");
     expect(fmt(p.issueFloatingPin, { ref: "R1.2" })).toBe("R1.2 is not connected.");
     expect(plural(p, "hiddenStimuli", 1, { count: 1, points: 2 })).toBe(
-      "1 hidden stimulus, worth 2 point(s).",
+      "1 hidden stimulus: 2 points.",
     );
     expect(fmt(r.hiddenStimulus, { n: 2 })).toBe("#2");
     expect(fmt(r.netSummary, { components: 4, nets: 5 })).toBe("Components: 4 · Nets: 5");
