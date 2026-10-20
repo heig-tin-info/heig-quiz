@@ -97,7 +97,7 @@ describe("an editor proposal (ADR-080 P3, decisions 1–2)", () => {
     await userEvent.click(within(card).getByRole("button", { name: "Apply to the draft" }));
     expect(screen.getByTestId("prompt")).toHaveTextContent("Quelle valeur ?");
     expect(edits.count).toBe(1);
-    expect(within(card).getByText("Applied to the draft: it is saved, not published.")).toBeVisible();
+    expect(within(card).getByText("Applied to the draft.")).toBeVisible();
     await userEvent.click(within(card).getByRole("button", { name: "Undo" }));
     expect(screen.getByTestId("prompt")).toHaveTextContent("quelle valeur ?");
     expect(edits.count).toBe(2);
@@ -160,7 +160,6 @@ describe("a prepared write (ADR-080 P3, decision 7)", () => {
     expect(within(card).getByText("Gains access")).toBeVisible();
     expect(within(card).getByText("Alan Turing")).toBeVisible();
     expect(within(card).getByText("The course's whole staff becomes contributor of this pool.")).toBeVisible();
-    expect(within(card).getByText("Nothing is written until you confirm.")).toBeVisible();
     expect(calls.some((c) => c.url.includes("/writes/"))).toBe(false);
     await userEvent.click(within(card).getByRole("button", { name: "Confirm" }));
     expect(await within(card).findByText("Done.")).toBeVisible();
@@ -177,7 +176,7 @@ describe("a prepared write (ADR-080 P3, decision 7)", () => {
     renderWithProviders(<AssistDock me={makeMe()} route={{ view: "home" }} teacherUi />);
     const panel = await ask("Lie la banque");
     await userEvent.click(within(panel).getByRole("button", { name: "Cancel" }));
-    expect(await within(panel).findByText("Cancelled: nothing was done.")).toBeVisible();
+    expect(await within(panel).findByText("Cancelled.")).toBeVisible();
     await waitFor(() => expect(calls.some((c) => c.url.endsWith("/cancel"))).toBe(true));
     expect(calls.some((c) => c.url.endsWith("/confirm"))).toBe(false);
   });
@@ -191,7 +190,7 @@ describe("a prepared write (ADR-080 P3, decision 7)", () => {
     renderWithProviders(<AssistDock me={makeMe()} route={{ view: "home" }} teacherUi />);
     const panel = await ask("Lie la banque");
     await userEvent.click(within(panel).getByRole("button", { name: "Confirm" }));
-    expect(await within(panel).findByText("This proposal expired or was already used: ask again.")).toBeVisible();
+    expect(await within(panel).findByText("Proposal expired or already used. Ask again.")).toBeVisible();
   });
 
   it("words a refused write in the UI language, never the route's text", async () => {
@@ -231,7 +230,7 @@ describe("a write command of the screen (ADR-080 P3, decision 5)", () => {
     expect(publish).not.toHaveBeenCalled();
     await userEvent.click(within(cards[0]!).getByRole("button", { name: "Cancel" }));
     expect(publish).not.toHaveBeenCalled();
-    expect(within(cards[0]!).getByText("Cancelled: nothing was done.")).toBeVisible();
+    expect(within(cards[0]!).getByText("Cancelled.")).toBeVisible();
     await userEvent.click(within(cards[1]!).getByRole("button", { name: "Confirm" }));
     expect(publish).toHaveBeenCalledTimes(1);
     expect(within(cards[1]!).getByText("Done: Publish this question")).toBeVisible();

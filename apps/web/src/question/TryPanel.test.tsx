@@ -55,15 +55,15 @@ describe("TryPanel — a proposed grade", () => {
     renderWith({ ...graded, manual: true, comment: "reference_failed" });
     await userEvent.click(await screen.findByRole("button", { name: "Grade my answer" }));
     expect(
-      await screen.findByText(/Your reference circuit did not simulate/),
+      await screen.findByText(/The reference circuit could not be simulated/),
     ).toBeInTheDocument();
   });
 });
 
 describe("TryPanel — a parameterized question", () => {
-  it("says the question is tried on draw 1 of the five, as the server says", async () => {
+  it("says the question is tried on draw 1 of 5, as the server says", async () => {
     mockFetch({ "POST /app/api/questions/q1/preview": ok({ ...PREVIEW, parameterized: true }) });
     renderWithProviders(<TryPanel questionId="q1" type="mcq" />);
-    expect(await screen.findByText(/you answer draw 1 of the five/)).toBeInTheDocument();
+    expect(await screen.findByText("Random values: draw 1 of 5.")).toBeInTheDocument();
   });
 });

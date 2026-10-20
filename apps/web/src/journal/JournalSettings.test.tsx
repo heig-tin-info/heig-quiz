@@ -121,7 +121,7 @@ describe("the Journal section — before a journal", () => {
     renderSection();
     const root = await section();
     expect(within(root).getByRole("radio", { name: "In Quiz" })).toBeChecked();
-    expect(within(root).getByText(/Written here, in Quiz's editor/)).toBeVisible();
+    expect(within(root).getByText(/Written in Quiz's editor/)).toBeVisible();
     expectNoAccent(root);
     await userEvent.click(within(root).getByRole("button", { name: "Create" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
@@ -383,7 +383,7 @@ describe("the Journal section — a journal", () => {
     await userEvent.click(within(root).getByRole("button", { name: /Remove…/ }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Remove the journal of PRG1-2026?")).toBeVisible();
-    expect(within(dialog).getByText(/heig-tin-info\/prg1-journal is kept on GitHub, unchanged/)).toBeVisible();
+    expect(within(dialog).getByText(/The repository heig-tin-info\/prg1-journal stays on GitHub/)).toBeVisible();
     await userEvent.click(within(dialog).getByRole("button", { name: "Remove the journal" }));
 
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));

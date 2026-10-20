@@ -85,7 +85,7 @@ describe("the student's own cells", () => {
     renderTab(book());
     const counting = await screen.findByRole("region", { name: "Count toward your average" });
     const aside = screen.getByRole("region", { name: "Indicative" });
-    expect(within(aside).getByText(/These grades are indicative/)).toBeInTheDocument();
+    expect(within(aside).getByText(/Not counted in your average unless your teacher includes them/)).toBeInTheDocument();
     expect(within(counting).queryByText("Series 1")).toBeNull();
     const grade = within(aside).getByText("3.0");
     expect(grade.className).not.toContain("text-danger");

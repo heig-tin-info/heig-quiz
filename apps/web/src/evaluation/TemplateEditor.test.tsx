@@ -86,7 +86,7 @@ describe("TemplateEditor", () => {
     expect(
       screen.getByText("1 question is in a pool no longer linked to the course"),
     ).toBeVisible();
-    expect(screen.getByText(/Using this template in a classroom is refused/)).toBeVisible();
+    expect(screen.getByText(/Link the pool to the course again or remove the questions concerned/)).toBeVisible();
 
     // The fix of the unlinked pool is the course's pools; the way back up, its templates.
     await userEvent.click(screen.getByRole("button", { name: "Open the course" }));

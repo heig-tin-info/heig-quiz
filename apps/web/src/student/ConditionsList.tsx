@@ -45,7 +45,7 @@ export function imposedText(line: ImposedCondition, t: TFunction): { title: stri
   switch (line.key) {
     case "trusted_client": {
       const which = line.clients.length > 1 ? "both" : line.clients[0]!;
-      return { title: t(`conditions.trusted.${which}`), body: t("conditions.trusted.body") };
+      return { title: t(`conditions.trusted.${which}`) };
     }
     case "calculator":
       return { title: t(`conditions.calculator.${line.calculator}`), body: t("conditions.calculator.body") };

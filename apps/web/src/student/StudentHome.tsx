@@ -87,7 +87,6 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
     <div className="space-y-8">
       <PageHeader
         title={t("shome.greeting", { name: me.givenName || me.familyName })}
-        description={t("shome.subtitle")}
       />
 
       {home.isLoading ? (

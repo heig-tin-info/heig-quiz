@@ -244,11 +244,7 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
         />
       </SettingRow>
       {hasOptional ? (
-        <SettingRow
-          title={t("gbook.exercises.show")}
-          desc={t(showExercises ? "gbook.exercises.shownDesc" : "gbook.exercises.hiddenDesc")}
-          className="py-0"
-        >
+        <SettingRow title={t("gbook.exercises.show")} className="py-0">
           <Switch checked={showExercises} label={t("gbook.exercises.show")} onChange={setShowExercises} />
         </SettingRow>
       ) : null}

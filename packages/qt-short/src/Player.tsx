@@ -99,7 +99,7 @@ export function ShortPlayer({
         ? s.hintDate
         : student.kind === "time"
           ? s.hintTime
-          : s.hintText;
+          : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -121,7 +121,7 @@ export function ShortPlayer({
           disabled={locked}
           onChange={(e) => onChange({ text: e.target.value })}
         />
-        <p className={caption}>{hint}</p>
+        {hint ? <p className={caption}>{hint}</p> : null}
       </div>
       {answerKey && answerKey.expected.length > 0 ? (
         <div className="flex flex-col gap-1.5">

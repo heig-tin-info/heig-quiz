@@ -305,7 +305,7 @@ describe("PoolView", () => {
     expect(previewCalls(calls)).toEqual([
       expect.objectContaining({ url: "/app/api/questions/q1/preview", body: { source: 3 } }),
     ]);
-    expect(screen.getByText(/Its draft has unpublished changes/)).toBeVisible();
+    expect(screen.getByText(/The draft has unpublished changes/)).toBeVisible();
     expect(screen.queryByText("ptr-null-check")).toBeNull();
     // The key stays with the picker and the item preview, not the pool.
     expect(screen.queryByRole("button", { name: "Show answers" })).toBeNull();
@@ -860,7 +860,7 @@ describe("PoolView", () => {
       expect(within(bar).getByRole("button", { name: "Unstar" })).toBeVisible();
     });
 
-    it("clears the caller's favourites after a confirm that counts them", async () => {
+    it("clears the caller's favourites after a confirm", async () => {
       const user = userEvent.setup();
       const starredPage: QuestionPage = {
         items: [{ ...PAGE.items[0]!, starred: true }],
@@ -880,7 +880,7 @@ describe("PoolView", () => {
       renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
       await user.click(await screen.findByRole("button", { name: "Clear favourites" }));
       const dialog = await screen.findByRole("dialog");
-      expect(dialog).toHaveTextContent("Remove your star from the 1 question of this pool?");
+      expect(dialog).toHaveTextContent("Remove your favourite from this pool?");
       await user.click(within(dialog).getByRole("button", { name: "Clear favourites" }));
       await waitFor(() =>
         expect(calls.some((c) => c.method === "DELETE" && c.url === "/app/api/pools/p1/stars")).toBe(

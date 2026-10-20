@@ -96,7 +96,7 @@ export function TryPanel({
           title={t("question.try.title")}
           // A parameterized question is tried on the first of its five draws
           // (ADR-056 §8): the server says which, and the hint says so.
-          description={t(preview.data?.parameterized ? "question.try.hintFirstDraw" : "question.try.hint")}
+          description={preview.data?.parameterized ? t("question.try.hintFirstDraw") : undefined}
         />
         {/*
          * `circuit` gets no `onSimulate` here, and its player hides the

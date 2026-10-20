@@ -171,7 +171,7 @@ function PreferencesCard({ me }: { me: Me }) {
             ]}
           />
         </SettingRow>
-        <SettingRow title={t("settings.appearance")} desc={t("settings.appearanceHint")}>
+        <SettingRow title={t("settings.appearance")}>
           <Segmented
             name="theme"
             value={theme}
@@ -183,7 +183,7 @@ function PreferencesCard({ me }: { me: Me }) {
             ]}
           />
         </SettingRow>
-        <SettingRow title={t("settings.dateFormat")} desc={t("settings.dateFormatHint")}>
+        <SettingRow title={t("settings.dateFormat")}>
           <Select
             value={current}
             disabled={saveDate.isPending}

@@ -67,7 +67,7 @@ describe("the student's concepts", () => {
   it("says the levels are as of today and fade, and offers neither a number nor a button", async () => {
     mockFetch({ [URL]: ok({ declared: true, concepts: [row("Pointeurs", "solid", 8)] }) });
     const { container } = renderWithProviders(<ConceptMastery room={ROOM} navigate={vi.fn()} />);
-    expect(await screen.findByText(/as of today and fade when a concept is not reviewed/)).toBeVisible();
+    expect(await screen.findByText(/Levels as of today: they fade when a concept is not reviewed/)).toBeVisible();
     expect(screen.queryByRole("button")).toBeNull();
     expect(container.textContent).not.toMatch(/%|\d\.\d/);
   });

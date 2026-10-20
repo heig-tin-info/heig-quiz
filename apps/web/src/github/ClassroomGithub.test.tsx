@@ -217,7 +217,7 @@ describe("the classroom's GitHub section", () => {
     renderSection();
     await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Nothing is deleted on GitHub");
+    expect(dialog).toHaveTextContent("The repositories stay in the GitHub organization.");
     await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.url === GITHUB)).toBe(true));
     expect(await screen.findByText("Classroom disconnected from GitHub.")).toBeVisible();

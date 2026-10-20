@@ -250,9 +250,7 @@ function UsageSection({ settings }: { settings: LlmSettings | null }) {
           </div>
           {usage.data.rows.length === 0 ? (
             <Card>
-              <EmptyState icon={BarChart3} title={t("admin.llm.usage.empty.title")}>
-                {t("admin.llm.usage.empty.body")}
-              </EmptyState>
+              <EmptyState icon={BarChart3} title={t("admin.llm.usage.empty.title")} />
             </Card>
           ) : (
             <Card className="overflow-x-auto">

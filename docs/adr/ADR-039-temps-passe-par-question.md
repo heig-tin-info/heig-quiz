@@ -199,7 +199,7 @@ says how long a known question takes to re-answer, not what it costs in an exam.
 - **The labelling.** In the question's statistics panel, a block "Time in targeted
   revision", last, with one line: "First try per student, on a question they had already
   met and whose key they could see. Not an exam time, not comparable to it."; below the
-  threshold, "Not enough students yet". Not a column of the pool's table, not a filter;
+  threshold, "Shown from {min} students.". Not a column of the pool's table, not a filter;
   never summed into "Generate a quiz" (F-STAT-04). The MCP tool `get_pool_question_stats`
   says that `revisionTime` is not an exam time and must never be added to a test's
   duration.

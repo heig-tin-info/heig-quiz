@@ -69,7 +69,7 @@ describe("Fill with AI on the concept sheet (ADR-081 §7, amendment of 2026-10-1
     open();
 
     await userEvent.click(await screen.findByRole("button", { name: /fill with ai/i }));
-    expect(await screen.findByText(/already names the concept “Inheritance”/)).toBeInTheDocument();
+    expect(await screen.findByText(/already a label of “Inheritance”: a probable duplicate/)).toBeInTheDocument();
     expect(within(side("English")).getByRole("textbox", { name: /^label/i })).toHaveValue("");
   });
 

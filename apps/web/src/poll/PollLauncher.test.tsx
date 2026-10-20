@@ -338,7 +338,7 @@ describe("PollLauncher", () => {
     await user.click(screen.getByRole("button", { name: "Start the poll" }));
 
     expect(await screen.findByText("Could not start the poll.")).toBeVisible();
-    expect(screen.getByText(/fields that need attention/)).toBeVisible();
+    expect(screen.getByText(/Complete the fields marked below/)).toBeVisible();
     expect(
       screen.getByText("A single-answer question has exactly one correct choice."),
     ).toBeVisible();
@@ -358,7 +358,7 @@ describe("PollLauncher", () => {
     await user.click(await screen.findByRole("tab", { name: /Ask a new question/ }));
     const prompt = await screen.findByLabelText("Statement");
     // Said once, quietly: the key is optional here.
-    expect(screen.getByText(/Marking a correct answer is optional/)).toBeVisible();
+    expect(screen.getByText(/A correct answer is optional/)).toBeVisible();
     // Nothing ticked in advance: a key the teacher never chose would be on the wall.
     expect(screen.getByRole("checkbox", { name: "Choice A is correct" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Choice B is correct" })).not.toBeChecked();

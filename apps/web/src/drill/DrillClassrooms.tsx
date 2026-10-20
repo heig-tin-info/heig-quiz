@@ -52,7 +52,6 @@ export function DrillClassrooms({ rooms }: { rooms: readonly DrillClassroom[] })
           <p>{t("drill.optOut.body")}</p>
           <p>{t("drill.optOut.past")}</p>
           <p>{t("drill.optOut.seen")}</p>
-          <p className="text-fg-muted">{t("drill.optOut.back")}</p>
         </div>
       ),
       confirmLabel: t("drill.optOut.confirm"),

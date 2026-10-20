@@ -66,7 +66,7 @@ describe("an evaluation's Allow drill", () => {
     );
 
     expect(screen.getByText("Students will see the key of these questions after each review.")).toBeVisible();
-    expect(screen.getByText(/serves the latest published version of each question/)).toBeVisible();
+    expect(screen.getByText(/seen with its key, in its latest published version/)).toBeVisible();
     await user.click(screen.getByRole("switch", { name: "Allow drill" }));
     await vi.waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ allowDrill: true }));
     // No card yet: nothing to remove.

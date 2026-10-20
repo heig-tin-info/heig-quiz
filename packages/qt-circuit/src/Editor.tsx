@@ -440,7 +440,6 @@ export function CircuitEditor({
           disabled={disabled}
           onChange={(n) => patch({ simulationsPerMinute: n || 1 })}
         />
-        <p className={hint}>{s.simulationsPerMinuteHint}</p>
       </AdvancedDisclosure>
 
       <GradingSection

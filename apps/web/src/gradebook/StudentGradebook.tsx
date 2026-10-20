@@ -56,9 +56,7 @@ export function StudentGradebook({ classroomId }: { classroomId: string }) {
   if (data.columns.length === 0) {
     return (
       <Card>
-        <EmptyState icon={Trophy} title={t("sgrades.empty.title")}>
-          {t("sgrades.empty.body")}
-        </EmptyState>
+        <EmptyState icon={Trophy} title={t("sgrades.empty.title")} />
       </Card>
     );
   }

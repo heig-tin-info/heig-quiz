@@ -5,7 +5,7 @@
 import type { EditorProps, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
 import { BRAINSTORM_MAX_IDEAS } from "@quiz/domain";
-import { hint, NumberField, PromptField, sectionClass } from "@quiz/ui";
+import { NumberField, PromptField, sectionClass } from "@quiz/ui";
 
 import type { BrainstormConfig } from "./schema.js";
 import { brainstormEditorStrings, type BrainstormEditorStringKey } from "./strings.js";
@@ -43,7 +43,6 @@ export function BrainstormEditor({ config, onChange, uploadAsset, disabled, Rich
             onChange({ ...config, maxIdeas: Math.min(BRAINSTORM_MAX_IDEAS, Math.max(1, Math.round(maxIdeas))) })
           }
         />
-        <p className={hint}>{s.maxIdeasHint}</p>
       </section>
     </div>
   );

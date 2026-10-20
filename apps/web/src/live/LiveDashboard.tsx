@@ -439,9 +439,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
 
       {view.rows.length === 0 ? (
         <Card>
-          <EmptyState icon={Users} title={t("live.empty.title")}>
-            {t("live.empty.body")}
-          </EmptyState>
+          <EmptyState icon={Users} title={t("live.empty.title")} />
         </Card>
       ) : lobby ? (
         <LobbyPanel state={state} />

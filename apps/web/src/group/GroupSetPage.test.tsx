@@ -177,7 +177,7 @@ describe("a write that meets a set changed meanwhile", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Move Martin Chloé to…" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Groupe 2" }));
     expect(
-      await screen.findByText("This group or student is no longer in the set. The set is shown as it now stands."),
+      await screen.findByText("This group or student is no longer in the set, shown up to date."),
     ).toBeInTheDocument();
     expect(screen.queryByText("Not found")).toBeNull();
     await waitFor(() => expect(calls.filter((c) => c.method === "GET" && c.url === SET_BASE)).toHaveLength(2));
@@ -292,7 +292,7 @@ describe("opening the set to its students (F-PROJ-22, M3-17)", () => {
     await userEvent.click(await screen.findByRole("button", { name: "More actions" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Open to students…" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText(/its first repository freezes the groups for the students/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/its first repository freezes the groups/)).toBeInTheDocument();
     const submit = within(dialog).getByRole("button", { name: "Open" });
     // No maximum yet: it is required.
     expect(submit).toBeDisabled();
@@ -317,11 +317,11 @@ describe("opening the set to its students (F-PROJ-22, M3-17)", () => {
       [`PATCH ${SET_BASE}`]: ok(makeSet({}, { maxSize: 2 })),
     });
     renderPage();
-    expect(await screen.findByText("They create, join and leave groups of at most 2.")).toBeInTheDocument();
+    expect(await screen.findByText("Groups of at most 2.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Close to students" }));
     await waitFor(() => expect(writes(calls)).toHaveLength(1));
     expect(writes(calls)[0]!.body).toEqual({ openUntil: null });
-    await waitFor(() => expect(screen.queryByText("They create, join and leave groups of at most 2.")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("Groups of at most 2.")).toBeNull());
   });
 });
 

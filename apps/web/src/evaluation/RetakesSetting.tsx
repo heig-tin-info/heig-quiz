@@ -78,7 +78,7 @@ export function RetakesSetting({
       </SettingRow>
       {retakes.enabled ? (
         <>
-          <SettingRow title={t("eval.retakes.keep")} desc={t("eval.retakes.keep.desc")}>
+          <SettingRow title={t("eval.retakes.keep")}>
             <Segmented
               name="retakes-keep"
               value={retakes.keep}

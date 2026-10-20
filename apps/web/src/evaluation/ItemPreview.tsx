@@ -115,9 +115,7 @@ export function ItemPreview({
       }
     >
       <div className="space-y-4">
-        <Alert icon={Eye} title={t("eval.questions.preview.banner")}>
-          {t("eval.questions.preview.bannerBody")}
-        </Alert>
+        <Alert icon={Eye} title={t("eval.questions.preview.banner")} />
         <PreviewedQuestion
           key={item.id}
           query={preview}

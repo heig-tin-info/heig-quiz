@@ -6,7 +6,6 @@
 export const brainstormEditorStrings = {
   prompt: "Question",
   maxIdeas: "Ideas per participant",
-  maxIdeasHint: "Each idea is a few words; the room sees them as bubbles.",
 } as const;
 
 export type BrainstormEditorStringKey = keyof typeof brainstormEditorStrings;

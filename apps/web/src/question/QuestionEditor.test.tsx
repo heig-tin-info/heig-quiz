@@ -609,7 +609,7 @@ describe("QuestionEditor — code", () => {
     await screen.findByLabelText("Starting code");
     await user.click(screen.getByRole("button", { name: "Try the reference solution" }));
     expect(
-      await screen.findByText("The question has errors, flagged on this page. Fix them, then try again."),
+      await screen.findByText("Fix the errors flagged on this page, then try again."),
     ).toBeInTheDocument();
     expect(screen.queryByText("The reference solution does not compile.")).toBeNull();
   });
@@ -738,7 +738,7 @@ describe("QuestionEditor — shared as reader", () => {
     renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: "ptr-null-check" });
     expect(
-      await screen.findByText("Read-only — shared with you as reader"),
+      await screen.findByText("Read-only"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Publish" })).toBeNull();
     // The menu keeps one entry for a reader: telling the writers it is wrong (issue #680).
@@ -755,7 +755,7 @@ describe("QuestionEditor — shared as reader", () => {
     renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
     // The badge is the proof the ROLE has landed: until the pool detail is
     // there the screen knows nothing and stays as it was.
-    await screen.findByText("Read-only — shared with you as reader");
+    await screen.findByText("Read-only");
     expect(await screen.findByRole("button", { name: "Add a choice" })).toBeDisabled();
     expect(screen.getByLabelText("Internal name")).toBeDisabled();
     expect(screen.getByLabelText("Category")).toBeDisabled();
@@ -1022,7 +1022,7 @@ describe("QuestionEditor — the AI card (ADR-082)", () => {
       routes(published(FINDINGS), { ...MODEL, "GET /app/api/pools/p1": ok({ ...POOL, role: "reader" as const }) }),
     );
     renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
-    await screen.findByText("Read-only — shared with you as reader");
+    await screen.findByText("Read-only");
     await settled(calls);
     expect(screen.queryByRole("heading", { name: "AI" })).toBeNull();
   });

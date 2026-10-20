@@ -190,7 +190,7 @@ describe("ConditionsSetting", () => {
 
       mockFetch({ [CATALOG]: ok([]) });
       await renderOpen(<Harness detail={withSettings({ conditions: two })} />);
-      expect(await screen.findByText(/The course has no catalog yet/)).toBeInTheDocument();
+      expect(await screen.findByText(/No condition in the course catalog/)).toBeInTheDocument();
     });
   });
 });

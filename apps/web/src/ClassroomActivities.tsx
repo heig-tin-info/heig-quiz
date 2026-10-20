@@ -104,9 +104,7 @@ function EmptyActivities({ doors }: { doors: ActivityDoors }) {
             ) : null}
           </div>
         }
-      >
-        {t("eval.empty.body")}
-      </EmptyState>
+      />
     </Card>
   );
 }

@@ -69,7 +69,6 @@ export type ShortEditorStringKey = keyof typeof shortEditorStrings;
 
 export const shortPlayerStrings = {
   label: "Your answer",
-  hintText: "Type your answer.",
   hintNumber: "Type a number; a comma or a dot both work.",
   hintDate: "Type a date, for instance 2026-09-20.",
   hintTime: "Type a time, for instance 14:05.",

@@ -210,7 +210,7 @@ describe("the classroom's Drill tab", () => {
     await user.click(await screen.findByRole("button", { name: "Progression of Ada Alder" }));
 
     const sheet = await screen.findByRole("dialog", { name: "Ada Alder" });
-    expect(within(sheet).getByText(/Opted out of the drill on 2026-10-20/)).toBeVisible();
+    expect(within(sheet).getByText(/Opted out of practice on 2026-10-20/)).toBeVisible();
     // All time, and said so: the table's figure is the last 30 days'.
     expect(within(sheet).getByText("Recall rate, all time")).toBeVisible();
     expect(within(sheet).getByText("60%")).toBeVisible(); // 6 of 10 repeated reviews
@@ -350,7 +350,7 @@ describe("the classroom's Drill tab", () => {
       expect(wednesday).not.toHaveAttribute("data-off");
       expect(within(grid).getByTitle("Sat, 00:00–01:00: 1 student · outside class hours")).toHaveAttribute("data-off", "true");
       expect(screen.getByText("20% of this practice falls outside class hours.")).toBeVisible();
-      expect(screen.getByText(/distinct students who reviewed in that hour of the week/)).toHaveTextContent(/since 2026-10-21/);
+      expect(screen.getByText(/^Distinct students who reviewed at that hour of the week/)).toHaveTextContent(/since 2026-10-21/);
       expect(screen.getByText(/Outside class hours: Mon–Fri 08:00–18:00/)).toBeVisible();
     });
 
@@ -381,7 +381,7 @@ describe("the classroom's Drill tab", () => {
       expect(await within(sheet).findByText("Hours of practice", { selector: "figcaption" })).toBeVisible();
       const grid = await within(sheet).findByRole("table", { name: "Hours of practice" });
       expect(within(grid).getByTitle("Wed, 09:00–10:00: 2 reviews")).toHaveTextContent("2");
-      expect(within(sheet).getByText(/the reviews made in that hour of the week/)).toBeVisible();
+      expect(within(sheet).getByText(/^Reviews made in that hour/)).toBeVisible();
     });
   });
 });
