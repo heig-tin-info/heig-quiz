@@ -10,9 +10,12 @@
  * pool's description, ADR-013 amendment of 2026-10-10; `domain`, the bilingual label
  * of a public pool, ADR-095; `concepts`, the probable duplicates of the
  * vocabulary, ADR-081 fifth addendum §4; `suggest`, the concepts proposed for a
- * question being edited, ADR-081 sixth addendum §6).
+ * question being edited, ADR-081 sixth addendum §6; `try`, the editor's
+ * Try tab asking the model to grade the teacher's own trial answer, ADR-063
+ * amendment of 2026-10-23: the grading prompt of `grade`, billed to the
+ * teacher and within their share).
  */
-export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll", "assist", "describe", "domain", "concepts", "suggest", "project"] as const;
+export const LLM_PURPOSES = ["test", "grade", "generate", "review", "poll", "assist", "describe", "domain", "concepts", "suggest", "project", "try"] as const;
 export type LlmPurpose = (typeof LLM_PURPOSES)[number];
 
 export interface LlmModel {
@@ -78,9 +81,14 @@ export function llmWorstCaseUsd(modelId: string, promptChars: number, maxTokens:
  */
 const PURPOSE_MODELS: Partial<Record<LlmPurpose, LlmModelId>> = { poll: "claude-haiku-4-5" };
 
-/** The model a purpose uses: its own, else its fixed one, else the default of the settings, else the platform's. */
+/**
+ * The model a purpose uses: its own, else its fixed one, else the default of
+ * the settings, else the platform's. A `try` is the pass's prompt on the
+ * pass's model: what the author tests is what will grade the class.
+ */
 export function modelFor(models: Partial<Record<LlmPurpose | "default", string>>, purpose: LlmPurpose): string {
-  return models[purpose] ?? PURPOSE_MODELS[purpose] ?? models.default ?? DEFAULT_LLM_MODEL;
+  const own = purpose === "try" ? models.grade : models[purpose];
+  return own ?? PURPOSE_MODELS[purpose] ?? models.default ?? DEFAULT_LLM_MODEL;
 }
 
 /** Whether the connection test's answer names Paris, whatever its case, accents or punctuation. */
@@ -96,7 +104,8 @@ export function isParis(answer: string): boolean {
  * ({@link LLM_REGRADES_PER_ITEM_PER_DAY}). A project's pass (`project`,
  * ADR-106 §4) likewise: billed to the project's creator, one call per
  * repository, its regrades capped per project and per repository
- * ({@link PROJECT_REGRADES_PER_DAY}).
+ * ({@link PROJECT_REGRADES_PER_DAY}). A `try` is NOT exempt: it is bounded
+ * by nothing but the teacher's clicks, so it spends their own share.
  */
 export const USER_SHARE_EXEMPT: readonly LlmPurpose[] = ["grade", "project"];
 

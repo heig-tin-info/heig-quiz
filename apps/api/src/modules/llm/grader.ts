@@ -10,7 +10,7 @@ import { LLM_CONFIDENCES, type LlmGradeOutcome, type LlmGradeRequest } from "@qu
 
 import type { LlmGateway } from "./gateway.js";
 import { reviewThroughGateway } from "./projectReviewer.js";
-import type { GradingLlm } from "./service.js";
+import type { GradePurpose, GradingLlm } from "./service.js";
 
 /** A criterion's sentence, the justification: long enough to say why, short enough to read beside a copy. */
 const SENTENCE_MAX = 600;
@@ -66,9 +66,9 @@ export function gatewayGrader(gateway: LlmGateway): GradingLlm {
   return {
     ready: () => gateway.ready(),
     reviewProject: (req, billedTo) => reviewThroughGateway(gateway, req, billedTo),
-    async grade(req: LlmGradeRequest, billedTo: string | null): Promise<LlmGradeOutcome> {
+    async grade(req: LlmGradeRequest, billedTo: string | null, purpose: GradePurpose): Promise<LlmGradeOutcome> {
       const { value, model } = await gateway.complete({
-        purpose: "grade",
+        purpose,
         userId: billedTo,
         system: SYSTEM,
         prompt: gradePrompt(req),

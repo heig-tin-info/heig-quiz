@@ -81,7 +81,7 @@ describe("gatewayGrader", () => {
     expect(await grader.ready()).toBe(true);
     seen = [];
 
-    const outcome = await grader.grade(request, teacher.id);
+    const outcome = await grader.grade(request, teacher.id, "grade");
 
     expect(outcome).toMatchObject({
       points: 1,

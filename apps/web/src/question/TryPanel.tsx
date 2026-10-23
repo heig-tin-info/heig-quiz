@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, FlaskConical, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import type { PreviewResult, TryResult } from "@quiz/contracts";
+import { type MachineReason, type PreviewResult, type TryResult } from "@quiz/contracts";
 import type {
   CodeAnswer,
   CodeImageAnswer,
@@ -13,9 +13,10 @@ import type {
 } from "@quiz/qt-code/client";
 
 import { api, apiErrorMessage } from "../api";
+import { AiJustification } from "../grading/AiJustification";
 import { machineReason } from "../grading/labels";
 import { canRunManually, runCode, runCodeImage } from "../runner/codeRun";
-import { useT } from "../i18n";
+import { useT, type Dict, type TFunction } from "../i18n";
 import { QuestionReviewHost } from "../questionTypes";
 import { emptyAnswerOf, QuestionHost } from "../student/QuestionHost";
 import { Alert, Button, Card, EmptyState, QueryError, SectionHeading, Skeleton } from "../ui";
@@ -39,6 +40,13 @@ import { questionPreviewQuery } from "./previewQuery";
  * Its "Run" button, on the other hand, is live even there when the question
  * says `runtime: "runno"`: the browser runs the teacher's own trial, exactly
  * as it will run the student's (ADR-015). Grading stays the server's.
+ *
+ * An essay or a diagram with a rubric comes back as the MODEL's proposal
+ * when the server has one (ADR-063, amendment of 2026-10-23): the points it
+ * would give, its confidence, its justification and its points per
+ * criterion — what the author reads to test the rubric. It stays a
+ * proposal (issue #267): the review shows no score, the heading says whose
+ * points these are.
  */
 export function TryPanel({
   questionId,
@@ -200,22 +208,22 @@ export function TryPanel({
         <Alert tone="warning" icon={AlertTriangle} title={t("question.try.runnerUnavailable")}>
           {t("question.try.runnerUnavailableBody")}
         </Alert>
-      ) : result.status === "llm_unavailable" ? (
-        <Alert tone="warning" icon={AlertTriangle} title={t("question.try.llmUnavailable")} />
       ) : (
         <Card className="space-y-4 p-5">
           <SectionHeading
-            title={
-              // A proposal is not a score: a person grades it (issue #267).
-              result.manual
-                ? t("question.try.manual")
-                : t("question.try.score", { points: result.points, max: result.maxPoints })
+            title={tryHeading(t, result)}
+            description={
+              result.confidence
+                ? t("question.try.aiConfidence", { level: t(`grading.filter.confidence.${result.confidence}`) })
+                : undefined
             }
           />
-          {/* Why the grader only proposed: usually the question's fault (#267). */}
+          {/* Why the grader only proposed: usually the question's fault (#267),
+              or the model could not be asked. */}
           {result.manual && result.comment ? (
-            <p className="text-[13px] text-warning">{machineReason(t, result.comment)}</p>
+            <p className="text-[13px] text-warning">{tryReason(t, result.comment)}</p>
           ) : null}
+          <AiJustification details={result.details} />
           <QuestionReviewHost
             type={type}
             student={student}
@@ -230,4 +238,27 @@ export function TryPanel({
       )}
     </div>
   );
+}
+
+/**
+ * The verdict line: a score, or — a proposal not being a score, since a
+ * person grades it (issue #267) — whose proposal it is: the model's, which
+ * says its points as the model's (`confidence` comes with them), or nobody's.
+ */
+function tryHeading(t: TFunction, result: Extract<TryResult, { status: "graded" }>): string {
+  const points = { points: result.points, max: result.maxPoints };
+  if (!result.manual) return t("question.try.score", points);
+  return result.confidence ? t("question.try.aiProposal", points) : t("question.try.manual");
+}
+
+/** The LLM's reasons, worded for a try (no class to grade by hand); the rest as the grading panel words them. */
+const TRY_REASONS: Partial<Record<MachineReason, keyof Dict>> = {
+  llm_budget: "question.try.reason.llm_budget",
+  llm_not_configured: "question.try.reason.llm_not_configured",
+  grader_error: "question.try.reason.grader_error",
+};
+
+function tryReason(t: TFunction, comment: string): string {
+  const key = TRY_REASONS[comment as MachineReason];
+  return key ? t(key) : machineReason(t, comment);
 }

@@ -34,6 +34,8 @@ describe("llmWorstCaseUsd", () => {
 describe("modelFor", () => {
   it("takes the purpose's model, else the default, else the platform's", () => {
     expect(modelFor({ test: "claude-haiku-4-5", default: "claude-opus-5-5" }, "test")).toBe("claude-haiku-4-5");
+    // A try tests the rubric on the model that will grade the class.
+    expect(modelFor({ grade: "claude-haiku-4-5", default: "claude-opus-5-5" }, "try")).toBe("claude-haiku-4-5");
     expect(modelFor({ default: "claude-opus-5-5" }, "generate")).toBe("claude-opus-5-5");
     expect(modelFor({}, "review")).toBe(DEFAULT_LLM_MODEL);
     // A live poll takes the fast model unless the settings name one for it.
@@ -81,5 +83,7 @@ describe("userShareAllows (audit L2)", () => {
     expect(userShareAllows({ ...day, spentUserUsd: 3 })).toBe(true);
     expect(userShareAllows({ ...day, spentUserUsd: 3.01 })).toBe(false);
     expect(userShareAllows({ ...day, spentUserUsd: 30, purpose: "grade" })).toBe(true);
+    // The editor's Try grades with the same prompt but is bounded by nothing: it spends the teacher's share.
+    expect(userShareAllows({ ...day, spentUserUsd: 3.01, purpose: "try" })).toBe(false);
   });
 });

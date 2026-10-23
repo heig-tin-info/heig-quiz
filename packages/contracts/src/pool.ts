@@ -9,6 +9,7 @@
 import { z } from "zod";
 
 import { QUESTION_TYPE_IDS } from "@quiz/core/contract";
+import { LLM_CONFIDENCES } from "@quiz/core/llm";
 import { CATALOGUE_QUERY_MAX, COURSE_POOL_MODES, POOL_DESCRIPTION_MAX, POOL_DESCRIPTION_SOURCES, POOL_ROLES, POOL_VISIBILITIES, SUBSCRIPTION_STATES } from "@quiz/domain";
 
 import { BoolFlag, IntList, PersonRef, StringList, ZodIssueLite, pageOf, teacherChoiceWith } from "./common.js";
@@ -758,13 +759,22 @@ export const TryResult = z.discriminatedUnion("status", [
      * manual circuit — a person decides (issue #267). Absent otherwise.
      */
     manual: z.literal(true).optional(),
-    /** With `manual`: the grader's machine reason, when it gave one (`reference_failed`, …). */
+    /**
+     * With `manual`: the grader's machine reason, when it gave one
+     * (`reference_failed`, …; `llm_budget`, `llm_not_configured` or
+     * `grader_error` when the model could not be asked).
+     */
     comment: z.string().optional(),
+    /**
+     * With `manual`, when a model wrote the proposal (ADR-063, amendment of
+     * 2026-10-23): how sure it said it was. Its justification and its points
+     * per criterion are in `details` (`justification`, `ai`), as the grading
+     * pass writes them.
+     */
+    confidence: z.enum(LLM_CONFIDENCES).optional(),
   }),
   /** No runner is configured or it refused the job (decision D14). */
   z.object({ status: z.literal("runner_unavailable"), reason: z.string() }),
-  /** Phase 2: an LLM matcher cannot be graded in the MVP. */
-  z.object({ status: z.literal("llm_unavailable") }),
 ]);
 export type TryResult = z.infer<typeof TryResult>;
 

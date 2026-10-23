@@ -104,8 +104,10 @@ Grade validates answers, applies the type's grading rule and evaluation defaults
 and runs all runner cases including hidden cases. It returns the correction outside
 the student's feedback policy. Manual/proposed outcomes are not silently treated
 as validated marks; an unavailable runner is an item status rather than failure
-of the whole correction. The current preview does not call the LLM provider and
-reports `llm_unavailable` for that path. Run/Simulate rebuild sources from stored
+of the whole correction. The preview never offers the model, so an essay or a
+diagram comes back as a proposal by hand — a choice, since 2026-10-23 (ADR-063
+§10): one "Grade" here grades every item of the evaluation, and the question
+editor's Try tab is where a teacher asks the model for one essay. Run/Simulate rebuild sources from stored
 templates, expose only visible cases, and share the real interactive helpers.
 Budgets are in memory per teacher: ten gradings/minute and the question's run
 budget; compilation has the separate budget of ADR-024.

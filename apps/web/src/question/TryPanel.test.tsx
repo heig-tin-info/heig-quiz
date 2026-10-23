@@ -60,6 +60,39 @@ describe("TryPanel — a proposed grade", () => {
   });
 });
 
+describe("TryPanel — a model's proposal (ADR-063, amendment of 2026-10-23)", () => {
+  const proposal: TryResult = {
+    ...graded,
+    points: 0.75,
+    manual: true,
+    confidence: "medium",
+    details: {
+      reason: "llm",
+      justification: "Names the stack but not the heap.",
+      ai: {
+        model: "development-stub",
+        criteria: [{ criterion: "The two memories", points: 0.75, maxPoints: 1, comment: "One of the two." }],
+      },
+    },
+  };
+
+  it("says the points are the AI's, with its confidence, justification and criteria", async () => {
+    renderWith(proposal);
+    await userEvent.click(await screen.findByRole("button", { name: "Grade my answer" }));
+    expect(await screen.findByText("AI proposal: 0.75 of 1 points")).toBeInTheDocument();
+    expect(screen.getByText("Confidence of the AI: Medium")).toBeInTheDocument();
+    expect(screen.getByText("Names the stack but not the heap.")).toBeInTheDocument();
+    expect(screen.getByText("The two memories")).toBeInTheDocument();
+    expect(screen.queryByText("To grade by hand")).toBeNull();
+  });
+
+  it("words the model's failure for a try, not for a class", async () => {
+    renderWith({ ...graded, manual: true, comment: "llm_budget" });
+    await userEvent.click(await screen.findByRole("button", { name: "Grade my answer" }));
+    expect(await screen.findByText("The AI's daily cap is reached: try again tomorrow.")).toBeInTheDocument();
+  });
+});
+
 describe("TryPanel — a parameterized question", () => {
   it("says the question is tried on draw 1 of 5, as the server says", async () => {
     mockFetch({ "POST /app/api/questions/q1/preview": ok({ ...PREVIEW, parameterized: true }) });

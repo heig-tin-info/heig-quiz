@@ -21,6 +21,12 @@ Amended 2026-10-09: [ADR-045](ADR-045-service-llm-de-correction.md) is
 folded into this record (§9, and the
 [correspondence table](#correspondence-with-adr-045) at the end).
 
+Amended 2026-10-23 (product owner's request of 2026-10-23; scope: the
+question editor's Try tab only): the editor's "Grade my answer" asks the
+model for the author's own trial answer, outside any evaluation, under
+§10. The evaluation preview of [ADR-018](ADR-018-vue-etudiant-reelle.md)
+stays without a model call.
+
 Amended 2026-10-12 by [ADR-106](ADR-106-notation-des-projets-par-criteres.md)
 (product owner, decision 2; scope: project criteria only). §2's failure
 reasons and §4's masking are reused by the LLM pass of a project graded by
@@ -213,6 +219,27 @@ justification is written under `details.justification`
 (`JUSTIFICATION_KEY`, `@quiz/core/reasons`), never in `comment`, which is
 what a student reads; the grading panel shows it to the teacher as the AI's
 justification, never shown to the student (§4, §7).
+
+### 10. The editor's Try asks the model (amendment of 2026-10-23)
+
+The author of an essay or a diagram tests the rubric before publishing:
+the Try tab's "Grade my answer" (F-QST-09, `POST /questions/:id/try`)
+offers the type a model on the pass's terms — a service, and a key to call
+it with (`ready()`) — and when the type asks (§5: a rubric or a reference,
+and something written), the API calls it at once, in the request, and
+answers the proposal the pass would have written (§4): the points, the
+confidence, the justification and the points per criterion, as a proposal
+(`manual`, issue #267), its points named as the AI's. Nothing is stored,
+nothing is masked: what leaves is the draft's statement, rubric and
+reference and the trial text as the author typed it, under the author's
+responsibility — the server cannot tell a trial from a pasted copy, and the
+Try is no place for one (open question 43, line of 2026-10-23). The call is logged under its
+own purpose, `try`, billed to the teacher and within their daily share
+(ADR-058 L2): a try is bounded by nothing but the teacher's clicks, unlike
+the pass. A failed call answers the pass's reason (§2), worded for a try.
+The evaluation preview (ADR-018) never offers the model, and an essay
+stays a proposal by hand there: one "Grade" grades every item, and a
+class's worth of essays per click is a cost nobody asked for.
 
 ## Consequences
 

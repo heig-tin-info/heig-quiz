@@ -20,7 +20,7 @@ import type {
   PreviewItemStatus,
   PreviewSolution,
 } from "@quiz/contracts";
-import { evaluationConditionsOf } from "@quiz/contracts";
+import { AI_KEY, JUSTIFICATION_KEY, evaluationConditionsOf } from "@quiz/contracts";
 import { evaluationTotal, gradeFromPoints, round2 } from "@quiz/domain";
 
 import { evaluationOr404, itemQuestion, templateOr404, type MockEvaluation } from "./evaluation";
@@ -29,6 +29,13 @@ import { MockError, flags, on } from "./runtime";
 
 /** The placeholder the API sends as the attempt id of a preview. */
 const PREVIEW_ATTEMPT_ID = "00000000-0000-4000-8000-000000000000";
+
+/** The details without the model's keys: what the real preview, which never asks one, would hold. */
+function withoutAi(details: unknown): unknown {
+  if (!details || typeof details !== "object") return details;
+  const { [JUSTIFICATION_KEY]: _j, [AI_KEY]: _a, ...rest } = details as Record<string, unknown>;
+  return rest;
+}
 
 let seeds = 1_000;
 
@@ -197,12 +204,15 @@ on("POST", "/app/api/evaluations/:id/preview/grade", (m, body): PreviewCorrectio
     let status: PreviewItemStatus = "graded";
     let itemPoints: number | null = 0;
     if (tried && tried.status !== "graded") {
-      status = tried.status === "llm_unavailable" ? "llm_unavailable" : "runner_unavailable";
+      status = "runner_unavailable";
       itemPoints = null;
       ungraded += 1;
     } else if (tried?.manual) {
+      // The preview never offers the model (ADR-063 §10): an essay is a
+      // proposal by hand, without the Try's AI keys.
       status = "manual";
       itemPoints = null;
+      tried.details = withoutAi(tried.details);
     } else if (tried) {
       // `tryAnswer` scores on the question's own scale; the item has its own.
       itemPoints = round2(((tried.points ?? 0) / (tried.maxPoints || 1)) * item.points);

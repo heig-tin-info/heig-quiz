@@ -50,9 +50,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { GradeContext, GradeResult, LlmGradeRequest, RunnerRequest } from "@quiz/core/server";
 import {
-  AI_KEY,
   INSTANCE_WARNING_KEY,
-  JUSTIFICATION_KEY,
   justificationOf,
   type GradingConfidence,
   type GradingSource,
@@ -78,7 +76,7 @@ import {
   type JobQueue,
   type JobTry,
 } from "../../jobs.js";
-import { llmFailure } from "../llm/service.js";
+import { askGrader } from "../llm/service.js";
 import {
   byId,
   gradeDefaults,
@@ -924,26 +922,14 @@ async function runLlmGrading(app: FastifyInstance, job: LlmGradingJob): Promise<
 
 /** The model's proposal for one answer, or the failed proposal that says why. */
 async function askModel(app: FastifyInstance, evaluation: EvaluationRecord, job: LlmGradingJob) {
-  if (!app.llm) return failedProposal("llm_not_configured", "llm");
   const request = { ...job.request, answer: maskNames(job.request.answer, await peopleOf(app.db, evaluation)) };
-  try {
-    const outcome = await app.llm.grade(request, evaluation.createdBy);
-    const own = job.details && typeof job.details === "object" ? job.details : {};
-    const points = round2(Math.min(request.maxPoints, Math.max(0, outcome.points)));
-    return {
-      points: itemPoints(points),
-      source: "llm" as const,
-      state: "proposed" as const,
-      details: {
-        ...own,
-        [JUSTIFICATION_KEY]: outcome.justification,
-        [AI_KEY]: { model: outcome.model, criteria: outcome.criteria },
-      },
-      confidence: outcome.confidence,
-    };
-  } catch (err) {
-    const reason = llmFailure(err);
-    if (reason === "grader_error") app.log.error({ err, itemId: job.itemId }, "grading: llm call failed");
-    return failedProposal(reason, "llm");
-  }
+  // The pass's purpose: billed to the evaluation's author, exempt from their share (ADR-058 L2).
+  const proposal = await askGrader(app.llm, request, {
+    billedTo: evaluation.createdBy,
+    purpose: "grade",
+    own: job.details,
+    log: app.log,
+    context: { itemId: job.itemId },
+  });
+  return { ...proposal, points: itemPoints(proposal.points), source: "llm" as const, state: "proposed" as const };
 }

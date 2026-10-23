@@ -26,6 +26,7 @@ import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import { questions } from "../../db/schema.js";
 import { rateLimited } from "../http.js";
 import { answerFromStudent, studentSolutionViewOf, studentViewOf, teacherPreviewView } from "../live/service.js";
+import { askGrader } from "../llm/service.js";
 import { isParameterized, loadConfig, tryLoadConfig, typeOf } from "./config.js";
 import { exampleInstance, explanationOrNull, parameterIssues, previewInstances } from "./instance.js";
 import type { VersionRecord } from "./shared.js";
@@ -179,7 +180,11 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
    * Teacher rehearsal (F-QST-09): the answer is graded in process and
    * nothing is persisted, {@link TRIES_PER_MINUTE} a minute. A `pending: runner` grading is forwarded to the
    * runner when there is one, and degrades to `runner_unavailable`
-   * otherwise (decision D14) — never to a 500.
+   * otherwise (decision D14) — never to a 500. A `pending: llm` grading —
+   * an essay or a diagram with a rubric or a reference, when a model is
+   * ready — is asked of the model at once, as the teacher, and comes back
+   * as the proposal the grading pass would write (ADR-063, amendment of
+   * 2026-10-23): how the author tests their rubric before publishing.
    */
   app.post(
     "/app/api/questions/:id/try",
@@ -215,13 +220,31 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           // machine without a container engine it is the `UnavailableRunner`,
           // whose `run()` rejects with `RunnerUnavailable` (decision D14).
           const runner = app.runner;
-          const ctx: GradeContext = { ...base, runner };
+          // A model is offered on the same terms as the grading pass's
+          // (`offersLlm`): a service, and a key to call it with. Without one
+          // the type grades as it can — an essay by hand, as before.
+          const llm = app.llm !== null && (await app.llm.ready()) ? app.llm : null;
+          const ctx: GradeContext = { ...base, runner, ...(llm ? { llm: true as const } : {}) };
           const result = await t.grade(loaded.config, answer, ctx);
+          const solution = t.toSolution(loaded.config, view);
 
-          if (result.kind === "graded") {
-            return graded(result, t.toSolution(loaded.config, view));
+          if (result.kind === "graded") return graded(result, solution);
+          if (result.via === "llm") {
+            // The teacher's own trial (ADR-063 §10): billed to them, within
+            // their share (purpose `try`), nothing masked — the text leaves
+            // as the author typed it, under their responsibility — and
+            // nothing stored. A failed call is the pass's proposal of 0 with
+            // its reason, never a 500.
+            const { request } = result;
+            const proposal = await askGrader(llm, request, {
+              billedTo: req.user!.id,
+              purpose: "try",
+              own: result.details,
+              log: app.log,
+              context: { questionId: scope.question.id },
+            });
+            return { status: "graded", maxPoints: request.maxPoints, solution, manual: true, ...proposal } satisfies TryResult;
           }
-          if (result.via === "llm") return { status: "llm_unavailable" } satisfies TryResult;
           if (!t.finalizeRunner) {
             return { status: "runner_unavailable", reason: "not_configured" } satisfies TryResult;
           }
@@ -234,7 +257,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
             { ...base, finalizeState: result.finalizeState },
             outcome,
           );
-          return graded(final, t.toSolution(loaded.config, view));
+          return graded(final, solution);
         } catch (error) {
           if (error instanceof RunnerUnavailable) {
             return { status: "runner_unavailable", reason: error.reason } satisfies TryResult;
