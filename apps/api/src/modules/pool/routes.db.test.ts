@@ -15,6 +15,9 @@ import { fakeRunnerType, fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
 import { addItems, applyState, byId } from "../evaluation/service.js";
 import * as live from "../live/service.js";
+import { LlmError } from "../llm/provider.js";
+import type { GradingLlm } from "../llm/service.js";
+import { STUB_MODEL, StubLlm } from "../llm/stub.js";
 import * as poolService from "./service.js";
 
 /** A real 1×1 PNG: the upload path reads the bytes, not the header we claim. */
@@ -356,6 +359,85 @@ describe("POST /questions/:id/try (F-QST-09)", () => {
     });
     expect(empty.json()).toMatchObject({ status: "graded", points: 0 });
     expect(empty.json()).not.toHaveProperty("manual");
+  });
+
+  describe("asks the model as the teacher (ADR-063, amendment of 2026-10-23)", () => {
+    /** The grading service of the tests: the stub's reply, and what it was called with. */
+    function llmOf(reply: GradingLlm["grade"] = (req) => new StubLlm().grade(req), ready = true) {
+      const calls: { billedTo: string | null; purpose: string | undefined }[] = [];
+      const llm: GradingLlm = {
+        ready: () => Promise.resolve(ready),
+        grade: (req, billedTo, purpose) => {
+          calls.push({ billedTo, purpose });
+          return reply(req, billedTo, purpose);
+        },
+        reviewProject: () => Promise.reject(new Error("not under test")),
+      };
+      return { llm, calls };
+    }
+    const ESSAY = { configVersion: 1, prompt: "Explain the stack.", rubric: "Mentions the stack and the heap", format: "plain" };
+    const ANSWER = { text: "The stack grows downward and the heap upward." };
+
+    async function tried(id: string, llm: GradingLlm | null) {
+      server.app.llm = llm;
+      try {
+        const res = await server.app.inject({
+          method: "POST",
+          url: `/app/api/questions/${id}/try`,
+          headers: owner.headers,
+          payload: { source: "draft", answer: ANSWER },
+        });
+        expect(res.statusCode).toBe(200);
+        return res.json();
+      } finally {
+        server.app.llm = null;
+      }
+    }
+
+    let id: string;
+    beforeAll(async () => {
+      id = await createQuestion("an essay with a rubric", "rich");
+      const put = await server.app.inject({
+        method: "PUT",
+        url: `/app/api/questions/${id}/draft`,
+        headers: owner.headers,
+        payload: { config: ESSAY },
+      });
+      expect(put.statusCode).toBe(200);
+    });
+
+    it("returns the model's proposal — points, confidence, justification and criteria — billed to the teacher as a try", async () => {
+      const { llm, calls } = llmOf();
+      const body = await tried(id, llm);
+      expect(body).toMatchObject({
+        status: "graded",
+        manual: true,
+        points: 0.75,
+        maxPoints: 1,
+        confidence: "low",
+        details: { reason: "llm", ai: { model: STUB_MODEL } },
+      });
+      expect(body.details.justification).toMatch(/Development stub/);
+      expect(body.details.ai.criteria).toHaveLength(1);
+      expect(body).not.toHaveProperty("comment");
+      // Within the teacher's own share, never the pass's exempt purpose.
+      expect(calls).toEqual([{ billedTo: owner.id, purpose: "try" }]);
+    });
+
+    it("keeps the proposal by hand, with no call, when the service is not ready", async () => {
+      const { llm, calls } = llmOf(undefined, false);
+      const body = await tried(id, llm);
+      expect(body).toMatchObject({ status: "graded", manual: true, points: 0 });
+      expect(body.details).not.toHaveProperty("justification");
+      expect(calls).toEqual([]);
+    });
+
+    it("answers a failed call with the pass's reason, never a 500", async () => {
+      const { llm } = llmOf(() => Promise.reject(new LlmError("budget_exhausted")));
+      expect(await tried(id, llm)).toMatchObject({ status: "graded", manual: true, points: 0, comment: "llm_budget" });
+      const { llm: broken } = llmOf(() => Promise.reject(new Error("boom")));
+      expect(await tried(id, broken)).toMatchObject({ status: "graded", manual: true, points: 0, comment: "grader_error" });
+    });
   });
 
   it("degrades to runner_unavailable when the grading needs a runner (D14)", async () => {

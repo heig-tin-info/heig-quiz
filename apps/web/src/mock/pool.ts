@@ -1,5 +1,7 @@
 /** Section 2 of the mock — see `index.ts` for the layout. */
 import {
+  AI_KEY,
+  JUSTIFICATION_KEY,
   PoolColor,
   type DraftInstances,
   type ParametersDraft,
@@ -2205,14 +2207,26 @@ export function tryAnswer(
   negativeMarking = false,
 ): unknown {
   if (q.type === "code") return { status: "runner_unavailable", reason: "not_configured" };
-  // An essay or a diagram is graded by hand: the type proposes 0 points and the teacher decides.
+  // An essay or a diagram is a proposal the teacher decides: the model's
+  // when the type asks for one (a rubric or a reference, and something
+  // written; ADR-063, amendment of 2026-10-23), else the type's 0 points.
   if (q.type === "rich" || q.type === "diagram") {
-    const ctx = { seed: 0, itemId: q.id, attemptId: "", itemPoints: 1, now: new Date(), runner: NO_RUNNER };
+    const ctx = { seed: 0, itemId: q.id, attemptId: "", itemPoints: 1, now: new Date(), runner: NO_RUNNER, llm: true as const };
     const graded = (
       q.type === "rich"
         ? richServer.grade(config as RichConfig, (answer as { text: string } | null) ?? null, ctx)
         : diagramServer.grade(config as DiagramConfig, (answer as DiagramAnswer | null) ?? null, ctx)
-    ) as { points: number; maxPoints: number; details: unknown; state?: string };
+    ) as
+      | { kind: "graded"; points: number; maxPoints: number; details: unknown; state?: string }
+      | { kind: "pending"; request: { maxPoints: number }; details?: unknown };
+    if (graded.kind === "pending") {
+      const { maxPoints } = graded.request;
+      const points = Math.round(maxPoints * 0.75 * 4) / 4;
+      const justification = "Development stub, not a model: the answer covers part of the rubric.";
+      const ai = { model: "development-stub", criteria: [{ criterion: "Coverage of the rubric", points, maxPoints, comment: justification }] };
+      const details = { ...(graded.details as object), [JUSTIFICATION_KEY]: justification, [AI_KEY]: ai };
+      return { status: "graded", points, maxPoints, details, solution: solutionOf(q), manual: true, confidence: "medium" };
+    }
     return {
       status: "graded",
       points: graded.points,

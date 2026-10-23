@@ -15,10 +15,11 @@
  *    capped. Off without `LLM_KEY_SECRET`.
  */
 import { eq } from "drizzle-orm";
+import type { FastifyBaseLogger } from "fastify";
 
-import type { LlmErrorCode, LlmSettings, LlmSettingsPatch } from "@quiz/contracts";
-import type { LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
-import { DEFAULT_LLM_MODEL, LLM_MODEL_IDS, type LlmModelId } from "@quiz/domain";
+import { AI_KEY, JUSTIFICATION_KEY, type LlmErrorCode, type LlmSettings, type LlmSettingsPatch } from "@quiz/contracts";
+import type { LlmConfidence, LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
+import { DEFAULT_LLM_MODEL, LLM_MODEL_IDS, round2, type LlmModelId, type LlmPurpose } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
@@ -51,11 +52,19 @@ export function llmFailure(err: unknown): "llm_budget" | "llm_not_configured" | 
   return "grader_error";
 }
 
+/**
+ * What a grading call is logged as: the pass's `grade` (exempt from the
+ * person's share, bounded by the students' answers), or the editor's `try`
+ * (ADR-063, amendment of 2026-10-23), the same prompt within the teacher's
+ * own share.
+ */
+export type GradePurpose = Extract<LlmPurpose, "grade" | "try">;
+
 export interface GradingLlm {
   /** Whether a call can be made now; the grading pass offers the service only then. */
   ready(): Promise<boolean>;
   /** `billedTo` is the person the call is logged against (`llm_calls`, F-LLM-04), never sent to the model. */
-  grade(req: LlmGradeRequest, billedTo: string | null): Promise<LlmGradeOutcome>;
+  grade(req: LlmGradeRequest, billedTo: string | null, purpose: GradePurpose): Promise<LlmGradeOutcome>;
   /** A project's pass for one repository (ADR-106 §4): `req` masked by the caller, `billedTo` the project's creator. */
   reviewProject(req: ProjectReviewRequest, billedTo: string | null): Promise<ProjectReviewOutcome>;
 }
@@ -75,6 +84,41 @@ export function createLlm(config: Pick<AppConfig, "LLM_PROVIDER">, gateway: LlmG
     };
   }
   return gateway?.enabled ? gatewayGrader(gateway) : null;
+}
+
+/**
+ * What a model's grading leaves for the teacher (ADR-063 §4), the one
+ * shape for the grading pass and the editor's Try. On a reply: the points
+ * clamped to the item's scale, the type's own details completed with the
+ * justification and the rest of the reply (`details.ai`) — both
+ * teacher-only, stripped from every student payload — and the confidence.
+ * On a failed call (§2), or with no service at all: a proposal of 0 whose
+ * details and comment carry the reason, never a throw; `grader_error` is
+ * logged with `context`.
+ */
+export async function askGrader(
+  llm: GradingLlm | null,
+  request: LlmGradeRequest,
+  call: { billedTo: string | null; purpose: GradePurpose; own: unknown; log: FastifyBaseLogger; context: object },
+): Promise<{ points: number; details: Record<string, unknown>; confidence?: LlmConfidence; comment?: string }> {
+  if (!llm) return { points: 0, details: { reason: "llm_not_configured" }, comment: "llm_not_configured" };
+  try {
+    const outcome = await llm.grade(request, call.billedTo, call.purpose);
+    const own = call.own && typeof call.own === "object" && !Array.isArray(call.own) ? call.own : {};
+    return {
+      points: round2(Math.min(request.maxPoints, Math.max(0, outcome.points))),
+      details: {
+        ...own,
+        [JUSTIFICATION_KEY]: outcome.justification,
+        [AI_KEY]: { model: outcome.model, criteria: outcome.criteria },
+      },
+      confidence: outcome.confidence,
+    };
+  } catch (err) {
+    const reason = llmFailure(err);
+    if (reason === "grader_error") call.log.error({ err, ...call.context }, "grading: llm call failed");
+    return { points: 0, details: { reason }, comment: reason };
+  }
 }
 
 declare module "fastify" {
