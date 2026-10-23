@@ -28,6 +28,15 @@ const VARIABLES_RULES = [
   "Publication draws 200 seeds and refuses an expression that fails, a condition never met, or (mcq) choices that render alike.",
 ];
 
+/**
+ * How a Markdown field of any type is rendered (apps/web/src/markdown/render.ts):
+ * KaTeX takes `$…$` and `$$…$$`, and a model left to itself writes bare LaTeX
+ * or Unicode approximations instead.
+ */
+const MARKDOWN_RULES = [
+  "Every Markdown field (prompt, choices, cards, explanation…) renders LaTeX with KaTeX: write any formula, symbol or unit in math mode, `$…$` inline (no space after the opening `$` nor before the closing one, no digit right after it) or `$$…$$` in its own paragraph for a display equation. Never bare LaTeX (`\\frac{1}{2}` outside `$`), no Unicode substitutes (`x²`, `√2`, `≤`) when a formula is meant. A `$` that is a price stays text; `\\$` forces a literal dollar. A formula never spans a backtick or a link.",
+];
+
 interface TypeGuide {
   summary: string;
   rules: string[];
@@ -84,7 +93,7 @@ const GUIDES: Record<string, TypeGuide> = {
     summary: "Math expression: the student types a formula in a math field; any form equivalent to an accepted answer is right.",
     rules: [
       "`symbols` declares the variable names the answer may use (`x`, `R_1`, `omega`), each with the interval `[min, max]` the comparison points are drawn in; `e`, `i` and `pi` are constants, not names.",
-      "`answers` are LaTeX, in order, each with `points` (0..1): the first that matches at the sample points wins. Write the key once; equivalent forms are found by evaluation, never list them.",
+      "`answers` are raw LaTeX (no `$` around them), in order, each with `points` (0..1): the first that matches at the sample points wins. Write the key once; equivalent forms are found by evaluation, never list them.",
       "`tolerance` is relative (default 1e-6, exact formulas); 0.01 accepts a rounded constant. `samples` (default 10) is how many points are compared.",
       "`forbidden` names functions the answer may not use, from: sin cos tan asin acos atan sinh cosh tanh sqrt exp ln log abs power; it is shown to the student while typing. Sums, derivatives, factorials and complex numbers have no value here.",
       '`plot` is `"none"`, `"answer"` (the student\'s expression drawn as they type) or `"target"` (the first answer\'s curve drawn too, as the target to match); a plot needs exactly one symbol.',
@@ -287,7 +296,7 @@ export function describeQuestionType(type: string) {
   return {
     type,
     summary: guide?.summary ?? "",
-    rules: [...(guide?.rules ?? []), ...(PARAMETERIZED_TYPES.has(type) ? VARIABLES_RULES : [])],
+    rules: [...(guide?.rules ?? []), ...MARKDOWN_RULES, ...(PARAMETERIZED_TYPES.has(type) ? VARIABLES_RULES : [])],
     configSchema: configJsonSchema(type),
     ...(guide?.example === undefined ? {} : { example: guide.example }),
   };

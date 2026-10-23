@@ -14,7 +14,7 @@ import { conceptTagSortings, courseConcepts, evaluations } from "../../db/schema
 import { testServer, type TestServer } from "../../test/http.js";
 import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
 
-import { checkConfig, describeQuestionType } from "./questionTypes.js";
+import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
 import { TOOLS } from "./tools.js";
 
 let server: TestServer;
@@ -92,6 +92,7 @@ describe("the transport", () => {
     expect(result.instructions).toContain("create_template");
     expect(result.instructions).toContain("create_project");
     expect(result.instructions).toContain("DRAFT the teacher publishes");
+    expect(result.instructions).toContain("`$…$` inline or `$$…$$`");
 
     const unknown = await rpc("initialize", { protocolVersion: "1999-01-01" });
     expect(unknown.result.protocolVersion).toBe("2025-06-18");
@@ -230,6 +231,13 @@ describe("the question-type guide", () => {
     const guide = describeQuestionType(type) as { example: unknown; configSchema: { type: string } };
     expect(guide.configSchema.type).toBe("object");
     expect(checkConfig(type, guide.example)).toBeNull();
+  });
+
+  it("tells every type to write formulas in math mode", () => {
+    for (const { type } of questionTypeSummaries()) {
+      const { rules } = describeQuestionType(type);
+      expect(rules.some((r) => r.includes("`$…$` inline") && r.includes("`$$…$$`"))).toBe(true);
+    }
   });
 
   it("reports a pattern RE2 refuses before anything is published (ADR-099)", () => {

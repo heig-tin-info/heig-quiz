@@ -561,8 +561,8 @@ export const TOOLS: Tool[] = [
       "Creates a question in a pool, saves its config and explanation, and publishes it (unless " +
       "`publish` is false). Call `find_similar_questions` first and reuse a close hit rather than " +
       "writing a duplicate. Call `describe_question_types` for the type first. An invalid config is " +
-      "refused with the list of issues and nothing is created. `explanation` is Markdown shown " +
-      "after grading when the evaluation allows it.",
+      "refused with the list of issues and nothing is created. `explanation` is Markdown (formulas " +
+      "in `$…$` or `$$…$$`) shown after grading when the evaluation allows it.",
     input: z.object({
       poolId: Id,
       type: QuestionCreate.shape.type,
