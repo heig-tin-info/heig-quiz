@@ -71,7 +71,7 @@ The platform receives data from three sources: Switch edu-ID at sign-in, the cla
 | Gradebook marks (absent, a mark entered by hand) | `gradebook_marks` (`db/gradebook.ts`) | teacher | The student leaves the list, or a teacher deletes |
 | Drill: per question practised, the scheduler's state; per review, the rating, right or wrong, active time, the answer given, the device class (touch or mouse) | `drill_cards`, `drill_reviews` (`db/drill.ts`, ADR-041) | the student | Five years, or sooner if a teacher deletes |
 | Targeted revision: per round, the concept, start and end, the cards answered and answered right; per answer, right or wrong and the time it took (never the answer itself, nor a confidence) | `drill_revision_rounds`, `drill_revision_answers` (`db/drill.ts`, ADR-115) | the student | Five years from the round's start, or sooner if a teacher deletes |
-| Poll participants without an account (a hash of a cookie, a chosen pseudonym) and their answers | `guest_participants` (`db/live.ts`) | the browser | 30 days after the poll closed; the poll's results stay, frozen (below) |
+| Poll participants without an account (a hash of a cookie; no name or pseudonym is asked for, F-AUTH-05) and their answers | `guest_participants` (`db/live.ts`) | the browser | 30 days after the poll closed; the poll's results stay, frozen (below) |
 | Kiosk pairing: which student sat which exam on which school Chromebook, who approved it | `kiosk_pairings` (`db/kiosk.ts`, ADR-051) | the student's phone, the supervisor | Never deleted automatically |
 
 ### Projects, GitHub and the journal

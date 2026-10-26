@@ -348,7 +348,8 @@ N-DATA-07 (docs/spec/03), and ADR-022's consequence.
    read off to another site is never one click away.
 9. **What is stored** is the question and the answer, never a tool call nor
    its result. A student's name the answer quotes may stay in the teacher's
-   conversation up to 30 days after that student's erasure;
+   conversation up to 30 days, even once that student leaves the classroom
+   (no account is ever erased, ADR-013; wording corrected 2026-10-26, #681);
    `docs/guide/data-protection.md` says so.
 10. **The prompt** lets the assistant answer about the user's own data from
     what a tool returned; it still declines anything off-topic, never claims
