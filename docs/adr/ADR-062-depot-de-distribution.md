@@ -30,6 +30,30 @@ as for the journal (F-JRN-02): nobody is invited on joining the staff and
 nobody is revoked on leaving it; a former member keeps `pull` until the
 organization removes it.
 
+**Amended 2026-10-26 (#917; scope: the commit of the `squash` strategy, the
+root commit of every student repository; nothing else here changes): that
+commit is created by the API, GitHub-signed and attributed to the App.**
+git still builds the tree (the head tree, the handout conventions applied)
+and pushes a throwaway commit of it to `<branch>` of the new repository, as
+before; then `POST /git/commits` with that tree, no parent and no
+`author`/`committer`, authenticated as the App (`signedCommit`,
+`apps/api/src/github/signedCommit.ts`), and the branch is moved onto it by
+`PATCH /git/refs/heads/<branch>` with `force: true`. That is the only forced
+move of a build, on a repository that is empty, private, claimed by no
+other project and cloned by no one yet: no temporary ref is needed, and none
+can confuse the adoption of an empty repository (the 409 of `GET /commits`).
+The head recorded as handed out is the signed commit. GitHub signs it with
+its web-flow key: the commit shows **Verified**, authored by
+`<app-id>+<slug>[bot]@users.noreply.github.com` and committed by
+`GitHub <noreply@github.com>`; anyone verifies it from the badge, or with
+`gpg --verify` against the key GitHub publishes at
+https://github.com/web-flow.gpg. No key is held by Quiz (ADR-010 unchanged).
+The throwaway commit's identity (`heig-quiz <bot@heig-quiz.local>`,
+`apps/api/src/github/git.ts`) lands on no branch. The `whole` strategy
+creates no commit and is unchanged. This holds from its deploy: a
+distribution built before keeps its unsigned root commit, and the
+`heig-quiz` name criterion of the evidence (`evidence.ts`) stays for it.
+
 **Addendum (2026-10-02, product owner; merge task M3-04): the distribution
 repository is also the reference of the protected files.** F-PROJ-08 is
 amended to match:

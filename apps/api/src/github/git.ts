@@ -1,7 +1,7 @@
 /**
  * Single git CLI wrapper for the GitHub plumbing (squash, provision, sync).
- * `identity: true` sets the bot committer, needed wherever commits are
- * created; plain clone/push runners skip it.
+ * `identity: true` sets the throwaway committer, needed wherever git builds
+ * a commit to carry a tree; plain clone/push runners skip it.
  *
  * Asynchronous (`execFile`, never `execFileSync`): a clone or a push of a
  * project's sources takes seconds, and a request that builds a distribution
@@ -25,7 +25,13 @@ import { execFile } from "node:child_process";
 
 import { redactTokens } from "../redact.js";
 
-/** The bot's identity; it never signs, whatever the machine's own git configuration says. */
+/**
+ * The identity of the THROWAWAY commits that carry a tree to GitHub (the
+ * squash's, the sync's): git has none of its own here (`HOME=/nonexistent`).
+ * No branch ever ends on one: the platform's commits are created by the API,
+ * GitHub-signed and attributed to the App (`signedCommit.ts`, #917). It
+ * never signs, whatever the machine's own git configuration says.
+ */
 const BOT_IDENTITY = [
   "-c",
   "user.name=heig-quiz",

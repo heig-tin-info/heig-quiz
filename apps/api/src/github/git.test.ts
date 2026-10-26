@@ -51,7 +51,9 @@ describe("gitRunner", () => {
     expect(ticked).toBe(true);
   });
 
-  it("commits as the bot when asked for an identity, never signing", async () => {
+  // The throwaway identity: what carries a tree to GitHub. No branch of the
+  // platform ends on such a commit (lifecycle.db.test.ts, sync.db.test.ts).
+  it("commits with the throwaway identity when asked for one, never signing", async () => {
     await plain.git(seed, "commit", "-q", "--allow-empty", "-m", "bot");
     expect(JSON.stringify(spawned.mock.calls.at(-1)![1])).toContain("commit.gpgsign=false");
     expect((await plain.git(seed, "log", "-1", "--format=%an <%ae>")).trim()).toBe("heig-quiz <bot@heig-quiz.local>");

@@ -1,5 +1,5 @@
 /**
- * Bot-signed empty commit (GH-42, deadline commit strategy): same tree as
+ * GitHub-signed empty commit (GH-42, deadline commit strategy; `signedCommit.ts`): same tree as
  * the head commit, pushed as a non-forced fast-forward; a race with a
  * student push fails cleanly (GitHub's 422) and the job retries.
  *
@@ -15,6 +15,7 @@
 import type { Octokit } from "octokit";
 
 import { unless404 } from "./app.js";
+import { signedCommit } from "./signedCommit.js";
 
 /**
  * The deadline commit on `branch`: its sha, `"done"` when the head already
@@ -48,20 +49,14 @@ export async function pushEmptyCommit(opts: {
     "GET /repos/{owner}/{repo}/git/commits/{commit_sha}",
     { owner: org, repo, commit_sha: headSha },
   );
-  const { data: commit } = await octokit.request("POST /repos/{owner}/{repo}/git/commits", {
-    owner: org,
-    repo,
-    message,
-    tree: headCommit.tree.sha,
-    parents: [headSha],
-  });
-  await opts.beforeMove(commit.sha);
+  const sha = await signedCommit({ octokit, owner: org, repo, tree: headCommit.tree.sha, parents: [headSha], message });
+  await opts.beforeMove(sha);
   await octokit.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
     owner: org,
     repo,
     ref: `heads/${branch}`,
-    sha: commit.sha,
+    sha,
     force: false,
   });
-  return commit.sha;
+  return sha;
 }

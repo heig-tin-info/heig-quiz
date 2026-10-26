@@ -6,8 +6,11 @@
 const TRANSIENT_PUSH =
   /error:? (500|502|503)|hung up unexpectedly|early EOF|RPC failed|Internal Server Error|Failed sending data/i;
 
+/** The waits between attempts of a call GitHub may refuse while a fresh repository settles: a push, a signed commit (`signedCommit.ts`). */
+export const RETRY_DELAYS_MS = [1000, 2000, 4000];
+
 export async function pushWithRetry(fn: () => unknown): Promise<void> {
-  const delays = [1000, 2000, 4000];
+  const delays = RETRY_DELAYS_MS;
   for (let attempt = 0; ; attempt += 1) {
     try {
       await fn();

@@ -15,6 +15,30 @@ two webhook handlers, the page's state) on the adapters
 Scope: F-PROJ-12 (amended the same day), the `project` module's sync and
 its GitHub App's `pull_request` subscription.
 
+**Amended 2026-10-26 (#917; scope: how the distribution's commit of the
+`squash` strategy is created; §3's recording and the forced
+`sync/<branch>` are unchanged): the sync commit is created by the API,
+GitHub-signed and attributed to the App.** Per changed branch, git still
+replays the source's tree on the distribution's history and makes a
+throwaway commit of it, pushed with `--force` to
+`refs/quiz/tmp-<branch>` of the DISTRIBUTION repository (never a student's:
+their repositories receive `refs/heads/*` only, and the branch heads read
+by a sync ignore any other ref). Then `POST /git/commits` with that tree,
+the distribution's current head as parent and `Project update` as message,
+no `author`/`committer`, authenticated as the App (`signedCommit`,
+`apps/api/src/github/signedCommit.ts`, the installation client handed to
+`updateSquashedRepo` by `requestSync`); `PATCH /git/refs/heads/<branch>`
+with `force: false` moves the branch onto it; the temporary ref is then
+deleted, best-effort (a failure is logged and fails nothing; the next sync
+forces it anyway). The commit students receive on `sync/<branch>` is that
+signed one, recorded in `bot_commits(sync)` per student repository before
+the push, as §3 says. It shows **Verified**, authored by the App's
+`<slug>[bot]` and committed by GitHub; a third party verifies it as
+ADR-062's amendment of the same day says. This holds from its deploy:
+sync commits made before keep the unsigned `heig-quiz <bot@heig-quiz.local>`
+identity, which the evidence's name criterion (`evidence.ts`) still
+recognises. The `whole` strategy creates no commit and is unchanged.
+
 Relations: depends on [ADR-064](ADR-064-echeance-des-projets-baux.md) (the
 claims and leases of a project's GitHub work, reused as they are) and on
 [ADR-062](ADR-062-depot-de-distribution.md) (the distribution repository,

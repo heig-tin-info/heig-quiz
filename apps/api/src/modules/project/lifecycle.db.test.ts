@@ -167,6 +167,16 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     expect(world.git(dist, "rev-list", "--count", "main").trim()).toBe("1");
     expect(world.git(dist, "show", "main:src/main.c")).toBe("// todo");
     expect(world.git(dist, "ls-tree", "-r", "--name-only", "main")).not.toContain("student/");
+    // That commit is the API's root commit, GitHub-signed for the App (#917):
+    // no identity sent, the App's author, GitHub's committer, no parent; the
+    // throwaway commit that carried the tree is on no ref.
+    const created = world.apiCommits.filter((c) => c.repo === dist);
+    expect(created).toHaveLength(1);
+    expect(created[0]!.body).toMatchObject({ parents: [], message: "Initial assignment commit" });
+    expect(created[0]!.body).not.toHaveProperty("author");
+    expect(created[0]!.body).not.toHaveProperty("committer");
+    expect(world.git(dist, "log", "--all", "--format=%P|%an|%cn").trim()).toBe(`|${world.botLogin}|GitHub`);
+    expect(world.git(dist, "for-each-ref", "--format=%(refname)").trim()).toBe("refs/heads/main");
     const row = await rowOf(project.id);
     expect(row).toMatchObject({ orgId: expect.any(String), createdBy: teacher.id, distributionRepoId: world.ids.get(dist) });
     const audited = await auditOf(project.id, "project.create");
@@ -187,6 +197,8 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     expect(project).toMatchObject({ sourceStrategy: "whole", durationMinutes: 120, deadlineAt: new Date(Date.parse(NOW) + 120 * 60_000).toISOString() });
     expect(project.gradingScale.kind).toBe("score_is_grade");
     expect(world.git(`${room.login}/history-squashed`, "rev-list", "--count", "main").trim()).toBe("3");
+    // The source's own commits, as they are: the platform creates none.
+    expect(world.apiCommits.filter((c) => c.repo === `${room.login}/history-squashed`)).toEqual([]);
 
     const both = await create(room.id, { ...LAB, name: "Both", branches: ["solution", "main"] });
     expect(both.branches).toEqual(["solution", "main"]);

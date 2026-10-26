@@ -368,6 +368,16 @@ Status values: `open`, `settled`, `superseded`.
   bot logins for commits made before the cutover.
 - Blocks: M2-06.
 - **Status**: settled 2026-09-30 (product owner, conversation).
+- **Addendum (2026-10-26, #917)**: every commit the App writes into a
+  repository (deadline, restore, the distribution's root commit, the sync
+  commit) is created by `POST /git/commits` without `author`/`committer`,
+  so GitHub signs it with its web-flow key (Verified) and attributes it to
+  the App's `<slug>[bot]`; anyone verifies it from the badge or with
+  `gpg --verify` against https://github.com/web-flow.gpg. No key is held,
+  the trust in GitHub is the one the installation tokens already need.
+  From the deploy date: repositories built before keep their unsigned
+  `heig-quiz` root and sync commits. Details in the amendments of ADR-062
+  and ADR-073 of the same day.
 
 ### D24 — The classroom's Settings tab
 - **Answer**: the teacher classroom page gains a **Settings** tab. Its

@@ -7,6 +7,11 @@
  * bot-only ref is the single place where a forced update is allowed; the
  * handed-out branches are never touched directly.
  *
+ * The `squash` strategy's commit is created by the API, GitHub-signed and
+ * attributed to the App (`signedCommit.ts`, #917; ADR-073 amendment): git
+ * builds its tree and carries it on `refs/quiz/tmp-<branch>`, deleted
+ * afterwards, best-effort.
+ *
  * Nothing the students receive names the SOURCE (N-SEC-20): the
  * distribution's commit message carries no sha, and the sync's pull
  * request names the distribution's commit (`modules/project/sync.ts`).
@@ -15,10 +20,13 @@ import { cpSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { Octokit } from "octokit";
+
 import type { SourceStrategy } from "@quiz/contracts";
 
 import { type GitRunner, gitRunner, repoUrl } from "./git.js";
 import { pushWithRetry } from "./retry.js";
+import { signedCommit } from "./signedCommit.js";
 import { applyStudentHandout } from "./studentize.js";
 
 export interface SquashedUpdate {
@@ -45,15 +53,18 @@ const NON_FAST_FORWARD = /non-fast-forward|fetch first|\[rejected\]/i;
 
 /** Step 1: bring the distribution repository up to date with the source. */
 export async function updateSquashedRepo(opts: {
+  octokit: Octokit;
   token: string;
   org: string;
   sourceRepo: string;
   squashedRepo: string;
   strategy: SourceStrategy;
   branches: string[];
+  /** Where a temporary ref left behind is reported. */
+  log: { warn: (obj: object, msg: string) => void };
 }): Promise<SquashedUpdate> {
-  const { token, org, sourceRepo, squashedRepo, strategy, branches } = opts;
-  // Sync creates the per-branch commits: bot identity required.
+  const { octokit, token, org, sourceRepo, squashedRepo, strategy, branches, log } = opts;
+  // The sync's throwaway commits need an identity; they end on no branch.
   const runner = gitRunner({ identity: true, token });
   const { git, gitBare } = runner;
   const work = mkdtempSync(join(tmpdir(), "quiz-sync-"));
@@ -109,9 +120,28 @@ export async function updateSquashedRepo(opts: {
         heads[branch] = (await git(sqDir, "rev-parse", "HEAD")).trim();
         continue; // already up to date
       }
+      // A throwaway commit carries the tree to GitHub on a temporary ref of
+      // the distribution (never a student's: they receive refs/heads only);
+      // the branch fast-forwards onto the API's commit of that tree,
+      // GitHub-signed (#917).
+      const base = (await git(sqDir, "rev-parse", "HEAD")).trim();
       await git(sqDir, "commit", "-q", "-m", SYNC_COMMIT_MESSAGE);
-      await pushWithRetry(() => git(sqDir, "push", "-q", repoUrl(org, squashedRepo), `${branch}:${branch}`));
-      heads[branch] = (await git(sqDir, "rev-parse", "HEAD")).trim();
+      const tmp = `quiz/tmp-${branch}`;
+      await pushWithRetry(() => git(sqDir, "push", "-q", "--force", repoUrl(org, squashedRepo), `HEAD:refs/${tmp}`));
+      const tree = (await git(sqDir, "rev-parse", "HEAD^{tree}")).trim();
+      const sha = await signedCommit({ octokit, owner: org, repo: squashedRepo, tree, parents: [base], message: SYNC_COMMIT_MESSAGE });
+      await octokit.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
+        owner: org,
+        repo: squashedRepo,
+        ref: `heads/${branch}`,
+        sha,
+        force: false,
+      });
+      // Best-effort: a leftover is harmless, and the next sync forces it anyway.
+      await octokit
+        .request("DELETE /repos/{owner}/{repo}/git/refs/{ref}", { owner: org, repo: squashedRepo, ref: tmp })
+        .catch((err: unknown) => log.warn({ err, repo: squashedRepo, ref: tmp }, "sync: the temporary ref could not be deleted"));
+      heads[branch] = sha;
       changed.push(branch);
     }
     return { heads, sourceHeads, changed };
@@ -129,7 +159,8 @@ async function squashedBranchHeads(
   const out: Record<string, string> = {};
   for (const line of (await git(work, "ls-remote", squashedUrl)).split("\n")) {
     const [sha, ref] = line.split("\t");
-    const b = ref?.replace("refs/heads/", "");
+    // Branches only: never HEAD, a tag, nor a temporary `refs/quiz/*`.
+    const b = ref?.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : undefined;
     if (sha && b && branches.includes(b)) out[b] = sha;
   }
   return out;

@@ -4,7 +4,9 @@
  * - `whole`  : the full history of the selected branches is pushed as is;
  * - `squash` : each selected branch is reduced to a single initial commit,
  *   after the student handout conventions (studentize.ts) are applied.
- * Git operations use the installation token (GH-03).
+ * Git operations use the installation token (GH-03). The `squash`
+ * strategy's commit is created by the API, GitHub-signed and attributed to
+ * the App (`signedCommit.ts`, #917); git only builds its tree.
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,7 +18,11 @@ import type { SourceStrategy } from "@quiz/contracts";
 
 import { gitRunner, repoUrl } from "./git.js";
 import { pushWithRetry } from "./retry.js";
+import { signedCommit } from "./signedCommit.js";
 import { applyStudentHandout } from "./studentize.js";
+
+/** The message of a branch's single commit under the `squash` strategy: the root of every student repository. */
+export const INITIAL_COMMIT_MESSAGE = "Initial assignment commit";
 
 export interface SquashedResult {
   repoId: number;
@@ -43,7 +49,7 @@ export async function createSquashedRepo(opts: {
   claim?: (repo: { repoId: number; fullName: string }) => Promise<boolean>;
 }): Promise<SquashedResult> {
   const { octokit, token, org, sourceRepo, targetRepo, strategy, branches } = opts;
-  // Squashing creates commits: run git with the bot identity.
+  // The squash's throwaway commit needs an identity; it ends on no branch.
   const { git, gitBare } = gitRunner({ identity: true, token });
   const url = (repo: string) => repoUrl(org, repo);
 
@@ -110,9 +116,21 @@ export async function createSquashedRepo(opts: {
         applyStudentHandout(dir);
         await git(dir, "init", "-q", "-b", branch);
         await git(dir, "add", "-A");
-        await git(dir, "commit", "-q", "-m", "Initial assignment commit");
+        // A throwaway commit carries the tree to GitHub; the branch ends on
+        // the API's root commit of that tree, GitHub-signed (#917). One
+        // forced move, on a repository no student has cloned yet.
+        await git(dir, "commit", "-q", "-m", INITIAL_COMMIT_MESSAGE);
         await pushWithRetry(() => git(dir, "push", "-q", url(targetRepo), `${branch}:${branch}`));
-        heads[branch] = (await git(dir, "rev-parse", "HEAD")).trim();
+        const tree = (await git(dir, "rev-parse", "HEAD^{tree}")).trim();
+        const sha = await signedCommit({ octokit, owner: org, repo: targetRepo, tree, parents: [], message: INITIAL_COMMIT_MESSAGE });
+        await octokit.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
+          owner: org,
+          repo: targetRepo,
+          ref: `heads/${branch}`,
+          sha,
+          force: true,
+        });
+        heads[branch] = sha;
       }
     }
     return { repoId: created.id, fullName: created.full_name, heads, sourceHeads };
