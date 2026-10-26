@@ -225,14 +225,13 @@ export async function listCourses(
 
 /**
  * Creates a course with its creator as the first member of the staff, its
- * owner: a course without one would be run by nobody but an admin. `null`
- * when the code is taken (nothing is written then).
+ * owner: a course without one would be run by nobody but an admin.
  */
 export async function createCourse(
   db: Db,
   input: CourseCreate,
   creatorId: string,
-): Promise<CourseRecord | null> {
+): Promise<CourseRecord> {
   const id = randomUUID();
   const [created] = await db
     .insert(courses)
@@ -243,11 +242,9 @@ export async function createCourse(
       icon: input.icon ?? null,
       color: input.color ?? null,
     })
-    .onConflictDoNothing({ target: courses.code })
     .returning();
-  if (!created) return null;
   await db.insert(courseStaff).values({ courseId: id, userId: creatorId, role: "owner" });
-  return created;
+  return created!;
 }
 
 /**
@@ -269,32 +266,26 @@ export async function claimTrainingCourse(db: Db, courseId: string, userId: stri
 
 /**
  * Renames a course, its name or its code, or changes its icon and colour
- * (null puts the default back). `null` when the new code is
- * already another course's: the code is unique across the instance, and the
- * caller answers 409 `duplicate_code` as the creation does.
+ * (null puts the default back). The code is a free label (ADR-119): another
+ * course may hold the same.
  */
 export async function updateCourse(
   db: Db,
   courseId: string,
   patch: CoursePatch,
 ) {
-  try {
-    const [updated] = await db
-      .update(courses)
-      .set({
-        ...(patch.name ? { name: patch.name } : {}),
-        ...(patch.code ? { code: patch.code } : {}),
-        ...(patch.icon !== undefined ? { icon: patch.icon } : {}),
-        ...(patch.color !== undefined ? { color: patch.color } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(courses.id, courseId))
-      .returning();
-    return updated;
-  } catch (err) {
-    if (isUniqueViolation(err, "courses_code_unique")) return null;
-    throw err;
-  }
+  const [updated] = await db
+    .update(courses)
+    .set({
+      ...(patch.name ? { name: patch.name } : {}),
+      ...(patch.code ? { code: patch.code } : {}),
+      ...(patch.icon !== undefined ? { icon: patch.icon } : {}),
+      ...(patch.color !== undefined ? { color: patch.color } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(courses.id, courseId))
+    .returning();
+  return updated;
 }
 
 /**

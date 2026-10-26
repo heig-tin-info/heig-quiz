@@ -407,6 +407,16 @@ describe("import-classroom", () => {
     expect(report.refusals).toEqual([expect.stringContaining('mapping incomplete: "Sandbox"')]);
   });
 
+  it("refuses a course code two Quiz courses share (ADR-119)", async () => {
+    const w = await world();
+    await w.db.insert(courses).values({ id: randomUUID(), name: "Programmation (bis)", code: "PROG" });
+    const before = await everything(w.db);
+    const report = await runImport(w.db, config, snapshot, MAPPING, DECIDED);
+    expect(report.outcome).toBe("refused");
+    expect(report.refusals).toEqual(expect.arrayContaining([expect.stringContaining('more than one Quiz course has the code "PROG"')]));
+    expect(await everything(w.db)).toEqual(before);
+  });
+
   it("creates nothing for a missing student or an assistant by default, and lists them", async () => {
     const w = await world();
     const { assistants: _a, missingStudents: _m, ...asked } = DECIDED;

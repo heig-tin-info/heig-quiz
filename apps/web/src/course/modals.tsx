@@ -46,10 +46,9 @@ export function NewCourseModal({ onClose }: { onClose: () => void }) {
 }
 
 /**
- * The course's name, code and icon, from its Settings tab. The code is unique
- * across the instance and printed in the exports, so a code another course
- * holds is refused (409 `duplicate_code`) and said here; only what changed is
- * sent.
+ * The course's name, code and icon, from its Settings tab. The code is the
+ * school's abbreviation, a free label another course may share (ADR-119);
+ * only what changed is sent.
  */
 export function EditCourseModal({ course, onClose }: { course: CourseSummary; onClose: () => void }) {
   const t = useT();

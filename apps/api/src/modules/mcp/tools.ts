@@ -480,8 +480,9 @@ export const TOOLS: Tool[] = [
     name: "create_course",
     title: "Create a course",
     description:
-      "Creates a course with the teacher as its only staff member. `code` is the short school code " +
-      "(`FRA1`), unique on the platform. Check `list_courses` first: do not create a duplicate.",
+      "Creates a course with the teacher as its only staff member. `code` is the school's short " +
+      "abbreviation (`FRA1`), a free label another course may share. Check `list_courses` first: " +
+      "do not create a course that already exists (same name AND code).",
     input: CourseCreate,
     annotations: WRITE,
     run: (api, a) => api.post("/courses", a),

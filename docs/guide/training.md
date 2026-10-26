@@ -10,7 +10,7 @@ The first time you sign in, the **Courses** home is empty and offers **New cours
 
 If your home is not empty, because a colleague already put you on the staff of a course, the entry is **Training course** in the account menu at the bottom of the sidebar, and in the **Help** group of the command palette (`Ctrl+K`). Each of the three opens the same course: there is one per teacher, and asking again opens it rather than making a second one.
 
-The course is named for you and gets a free code of the form `INIT-1`. It is an ordinary course in every other respect: rename it, change its code, link pools to it, and delete it from its **Settings** tab like any other. None of these entries is shown while an administrator has not installed the training content on the platform.
+The course is named for you and gets the code `INIT`. It is an ordinary course in every other respect: rename it, change its code, link pools to it, and delete it from its **Settings** tab like any other. None of these entries is shown while an administrator has not installed the training content on the platform.
 
 ## The card
 

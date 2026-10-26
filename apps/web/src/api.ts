@@ -177,8 +177,6 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   no_review: "error.noReview",
   no_fix: "error.noFix",
   fix_stale: "error.fixStale",
-  // A course's code is unique across the instance: at creation and on edit.
-  duplicate_code: "courses.codeTaken",
   // ADR-068: what only a course owner may do, the last owner, a second seat.
   owner_required: "error.ownerRequired",
   // Audit L6: an administrator's token without a lifetime.
