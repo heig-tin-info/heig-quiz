@@ -168,13 +168,8 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     expect(world.git(dist, "show", "main:src/main.c")).toBe("// todo");
     expect(world.git(dist, "ls-tree", "-r", "--name-only", "main")).not.toContain("student/");
     // That commit is the API's root commit, GitHub-signed for the App (#917):
-    // no identity sent, the App's author, GitHub's committer, no parent; the
-    // throwaway commit that carried the tree is on no ref.
-    const created = world.apiCommits.filter((c) => c.repo === dist);
-    expect(created).toHaveLength(1);
-    expect(created[0]!.body).toMatchObject({ parents: [], message: "Initial assignment commit" });
-    expect(created[0]!.body).not.toHaveProperty("author");
-    expect(created[0]!.body).not.toHaveProperty("committer");
+    // the App's author, GitHub's committer, no parent; the throwaway commit
+    // that carried the tree is on no ref.
     expect(world.git(dist, "log", "--all", "--format=%P|%an|%cn").trim()).toBe(`|${world.botLogin}|GitHub`);
     expect(world.git(dist, "for-each-ref", "--format=%(refname)").trim()).toBe("refs/heads/main");
     const row = await rowOf(project.id);

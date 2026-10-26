@@ -159,8 +159,7 @@ async function squashedBranchHeads(
   const out: Record<string, string> = {};
   for (const line of (await git(work, "ls-remote", squashedUrl)).split("\n")) {
     const [sha, ref] = line.split("\t");
-    // Branches only: never HEAD, a tag, nor a temporary `refs/quiz/*`.
-    const b = ref?.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : undefined;
+    const b = ref?.replace("refs/heads/", "");
     if (sha && b && branches.includes(b)) out[b] = sha;
   }
   return out;

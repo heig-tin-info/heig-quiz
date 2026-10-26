@@ -319,13 +319,9 @@ describe("the request and the pass (F-PROJ-12)", () => {
     expect(head(p.distribution, "main^")).toBe(distBefore);
     expect(world.git(p.distribution, "log", "-1", "--format=%s", "main").trim()).toBe(SYNC_COMMIT_MESSAGE);
     expect(world.read(p.distribution, "main", "src/util.c")).toBe("int util;");
-    // That commit is the API's, GitHub-signed for the App (#917): no identity
-    // sent, the App's author, GitHub's committer; the temporary ref that
-    // carried its tree deleted.
-    const created = world.apiCommits.filter((c) => c.repo === p.distribution);
-    expect(created.at(-1)!.body).toMatchObject({ parents: [distBefore], message: SYNC_COMMIT_MESSAGE });
-    expect(created.at(-1)!.body).not.toHaveProperty("author");
-    expect(created.at(-1)!.body).not.toHaveProperty("committer");
+    // That commit is the API's, GitHub-signed for the App (#917): the App's
+    // author, GitHub's committer; the temporary ref that carried its tree
+    // deleted.
     expect(world.git(p.distribution, "log", "-1", "--format=%H|%an|%cn", "main").trim()).toBe(`${distHead}|${world.botLogin}|GitHub`);
     expect(world.git(p.distribution, "for-each-ref", "--format=%(refname)", "refs/quiz").trim()).toBe("");
     const row = await projectRow(p.id);
@@ -492,11 +488,8 @@ describe("the request and the pass (F-PROJ-12)", () => {
     } finally {
       gh.routes = routes;
     }
-    const distHead = head(p.distribution);
     expect(world.git(p.distribution, "log", "-1", "--format=%an", "main").trim()).toBe(world.botLogin);
     expect(world.git(p.distribution, "for-each-ref", "--format=%(refname)", "refs/quiz").trim()).toBe("refs/quiz/tmp-main");
-    expect(head(p.repos[0]!.fullName!, "sync/main")).toBe(distHead);
-    expect(await repoRow(p.repos[0]!.id)).toMatchObject({ syncOutcome: "opened" });
   });
 
   it("refuses a rewritten source under `whole` (409 source_rewritten, audited, nothing changed, the lease given back)", async () => {

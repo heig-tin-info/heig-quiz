@@ -1,15 +1,10 @@
 /**
  * THE way the platform creates a commit in a repository on GitHub (#917):
  * `POST /git/commits` authenticated as the App, WITHOUT `author` nor
- * `committer`. GitHub then signs it with its web-flow key (the Verified
- * badge; anyone can check it with `gpg --verify` against
- * https://github.com/web-flow.gpg) and attributes it to `<slug>[bot]`, so
- * the platform's commits cannot be imitated in appearance by a student. The
- * input has no field for an identity: none can be passed.
- *
- * Only the commit object: the caller builds its tree (the Git Data API, or
- * a throwaway git commit pushed beforehand) and moves the ref itself, after
- * recording the sha where it must (N-RES-08, N-SEC-21).
+ * `committer`, so that GitHub signs it and attributes it to the App
+ * (D23's addendum of 2026-10-26, `docs/merge/08-decisions.md`). The input
+ * has no field for an identity. The caller builds the tree and moves the
+ * ref itself, after recording the sha where it must (N-RES-08, N-SEC-21).
  *
  * A tree pushed a moment ago may not be visible to the API yet (a fresh
  * repository settles asynchronously, `provision.ts`): a 404 or a 422 whose

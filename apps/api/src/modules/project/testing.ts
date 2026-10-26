@@ -21,8 +21,8 @@
  * URL carries a `token=`, and the gzipped `git archive` it serves (past
  * the cap for a repository in `oversized`). For the identity criterion, a
  * commit listing from a sha (`?sha=`), and a commit by a given author.
- * From #917, every `POST /git/commits` body recorded (`apiCommits`), its
- * commit authored by the App and committed by GitHub as a signed one is,
+ * From #917, every `POST /git/commits` body recorded (`apiCommits`) and its
+ * commit made as GitHub makes a signed one (App author, GitHub committer),
  * and a ref deleted (the sync's temporary ref).
  * Test support only; nothing in the application imports it.
  */

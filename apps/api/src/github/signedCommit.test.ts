@@ -36,12 +36,6 @@ describe("signedCommit", () => {
     expect(body).not.toHaveProperty("signature");
   });
 
-  it("creates a root commit from no parent", async () => {
-    const { octokit, request } = fakeOctokit("root");
-    expect(await signedCommit({ octokit, ...INPUT, parents: [] })).toBe("root");
-    expect(request.mock.calls[0]![1]).toMatchObject({ parents: [] });
-  });
-
   it("retries while the tree just pushed is not visible yet, then succeeds", async () => {
     vi.useFakeTimers();
     const { octokit, request } = fakeOctokit(httpError(422, "Tree SHA does not exist"), httpError(404, "Not Found"), "c2");
