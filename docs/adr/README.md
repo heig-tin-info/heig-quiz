@@ -71,6 +71,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-061 — Login adoption of the accounts imported from heig-classroom](ADR-061-adoption-des-comptes-importes.md)
 - [ADR-111 — Login admission: an account is created only for a member of a listed institution or an invited person](ADR-111-admission-a-la-connexion.md)
 - [ADR-112 — A person's data export: their own student views gathered in one file, plus three account rows](ADR-112-export-des-donnees-personnelles.md)
+- [ADR-117 — Account pseudonymization on request](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) (proposed)
 
 ### Question authoring and types
 

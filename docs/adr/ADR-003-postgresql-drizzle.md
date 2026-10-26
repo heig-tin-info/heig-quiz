@@ -4,7 +4,7 @@
 
 Accepted (2026-07-03, phase 3).
 
-Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`randomUUID()`), not v7; §4 drops the repository layer that was never built (the modules import `drizzle-orm`). §5 (audit immutability): enforced by the trigger of migration `0096_audit_log_immutable`, not by SQL roles (the application connects as the owner role, so no GRANT or REVOKE could take the privileges away); account pseudonymization is not a Quiz requirement (NFR-07 is heig-classroom's and was not carried over; Quiz keeps data until the teacher deletes it, N-DATA-03), and issue #681, in the backlog, keeps its analysis.
+Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`randomUUID()`), not v7; §4 drops the repository layer that was never built (the modules import `drizzle-orm`). §5 (audit immutability): enforced by the trigger of migration `0096_audit_log_immutable`, not by SQL roles (the application connects as the owner role, so no GRANT or REVOKE could take the privileges away); account pseudonymization is not a Quiz requirement (NFR-07 is heig-classroom's and was not carried over; Quiz keeps data until the teacher deletes it, N-DATA-03), and issue #681, in the backlog, keeps its analysis. [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) (proposed 2026-10-26) proposes to amend that "not a Quiz requirement" sentence on acceptance; it keeps this trigger and states the re-identification it allows.
 
 ## Context
 

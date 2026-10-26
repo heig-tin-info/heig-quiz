@@ -580,8 +580,8 @@ describe("EvaluationConfig", () => {
         route: "/evaluations/x?step=timing",
       });
       await user.click(await screen.findByRole("button", { name: /^go to launch$/i }));
-      // Scheduled, its start passed: the one action opens the evaluation (#152).
-      expect(await screen.findByRole("button", { name: /^open$/i })).toBeEnabled();
+      // Scheduled, its start passed: the one action opens the evaluation now (#152, #921).
+      expect(await screen.findByRole("button", { name: /^open now$/i })).toBeEnabled();
     });
 
     it("says what is missing on the launch step reached by its tab, and offers no launch", async () => {
@@ -825,6 +825,31 @@ describe("EvaluationConfig", () => {
       });
       expect(await screen.findByRole("button", { name: /^schedule$/i })).toBeInTheDocument();
       expect(screen.queryByText("Not scheduled yet")).toBeNull();
+    });
+
+    it("says a draft whose opening passed did not open, without a button (#921)", async () => {
+      const base = makeEvaluationDetail().evaluation;
+      const missed = makeEvaluationDetail({
+        evaluation: {
+          ...base,
+          mode: "exercise",
+          settings: { ...base.settings, timing: "deadline", lobby: "skip" },
+          opensAt: new Date(Date.now() - 86_400_000).toISOString(),
+          closesAt: new Date(Date.now() + 86_400_000).toISOString(),
+        },
+      });
+      mockFetch(routes(missed));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      expect(await screen.findByText("draft · not scheduled")).toBeInTheDocument();
+      const hint = screen.getByText("Not opened").closest("[role=status]") as HTMLElement;
+      expect(hint).toHaveTextContent(/Never scheduled, so it did not open/);
+      expect(hint).toHaveTextContent(/Open it now in Launch, or move the date/);
+      expect(within(hint).queryByRole("button")).toBeNull();
+      expect(screen.queryByText("Not scheduled yet")).toBeNull();
+      // The Format summary does not state the window as a fact.
+      expect(screen.getByText(/Once open, until/)).toBeInTheDocument();
     });
 
     it("says nothing of the kind for a Live draft, whose date is a calendar hint", async () => {

@@ -369,6 +369,24 @@ describe("an authoring session", () => {
     expect(evaluation.evaluation).toMatchObject({ mode: "exercise", state: "draft" });
     expect(evaluation.items).toHaveLength(3);
     expect(evaluation.url).toContain(`/evaluations/${evaluation.evaluation.id}`);
+
+    // Dates do not schedule it (#921): on the Scheduled clock the result says
+    // so, with the link to Launch. A Live draft's date is a calendar hint.
+    const day = 86_400_000;
+    const dates = {
+      opensAt: new Date(Date.now() + day).toISOString(),
+      closesAt: new Date(Date.now() + 2 * day).toISOString(),
+    };
+    const live = await ok("update_evaluation", { evaluationId: evaluation.evaluation.id, ...dates });
+    expect(live.notice).toBeUndefined();
+    expect(live.url).toContain(`/evaluations/${evaluation.evaluation.id}`);
+    const dated = await ok("update_evaluation", {
+      evaluationId: evaluation.evaluation.id,
+      settings: { ...live.evaluation.settings, timing: "deadline", lobby: "skip" },
+    });
+    expect(dated.evaluation).toMatchObject({ state: "draft", settings: { timing: "deadline", lobby: "skip" } });
+    expect(dated.notice).toMatch(/NOT scheduled/);
+    expect(dated.url).toContain(`/evaluations/${evaluation.evaluation.id}`);
   });
 
   it("cannot add questions to an evaluation once it is opened (issue #79)", async () => {

@@ -4,6 +4,7 @@ import {
   clockChoiceOf,
   clockFields,
   clockPatch,
+  isUnscheduledDraft,
   clockSettingsFor,
   CLOCK_MODES,
   DEFAULT_LIMIT_S,
@@ -105,5 +106,15 @@ describe("clockPatch", () => {
     expect(clockPatch({ mode: "live", limited: true }, { ...scheduled, durationS: 600 })).toEqual({
       settings: { timing: "duration", lobby: "manual" },
     });
+  });
+});
+
+describe("isUnscheduledDraft (#857, #921)", () => {
+  const at = "2026-10-15T14:15:00.000Z";
+  it("holds for a dated draft on the Scheduled clock only", () => {
+    expect(isUnscheduledDraft({ state: "draft", opensAt: at, clock: "scheduled" })).toBe(true);
+    expect(isUnscheduledDraft({ state: "draft", opensAt: at, clock: "live" })).toBe(false);
+    expect(isUnscheduledDraft({ state: "draft", opensAt: null, clock: "scheduled" })).toBe(false);
+    expect(isUnscheduledDraft({ state: "scheduled", opensAt: at, clock: "scheduled" })).toBe(false);
   });
 });

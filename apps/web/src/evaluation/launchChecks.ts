@@ -38,6 +38,7 @@ import type { CheckLevel } from "../ui";
 import { typeLabel } from "../questionTypes";
 import { imposedText } from "../student/ConditionsList";
 import { timingFragment } from "./clockSummary";
+import { scheduleFactsOf, schedulingPhase } from "./common";
 import { missingTiming, missingTimingKey } from "./timing";
 
 /** The shared check levels (`ui`), less `unknown`, plus the rules of the session. */
@@ -214,6 +215,7 @@ function timingCheck(
           id: "timing",
           level: "blocker",
           title: t("launch.timing.past"),
+          ...(schedulingPhase(scheduleFactsOf(evaluation), now) === "over" ? { status: t("launch.status.missedOver") } : {}),
           detail: t("launch.timing.past.detail", { date }),
           fix,
         };

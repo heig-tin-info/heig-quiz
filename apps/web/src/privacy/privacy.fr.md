@@ -42,7 +42,7 @@ Si vous ouvrez un projet dans l'espace de travail en ligne, chaque lancement est
 
 ### Les sondages
 
-Vos réponses à un sondage. Si vous rejoignez un sondage sans compte, un pseudonyme que vous choisissez et un cookie de votre navigateur.
+Vos réponses à un sondage. Si vous rejoignez un sondage sans compte, seulement un cookie de votre navigateur : aucun nom ni pseudonyme ne vous est demandé.
 
 ### Quand vous utilisez la plateforme
 
@@ -69,7 +69,7 @@ Certaines données sont supprimées automatiquement :
 | Les fichiers, commits et sorties de tests gardés pour noter un projet par critères | Six mois après la publication des résultats du projet (la liste des tests et leurs résultats restent) |
 | Le contenu des messages de GitHub sur vos dépôts | 30 jours après leur arrivée |
 | Les conversations d'un enseignant avec l'assistant d'aide, qui peuvent citer votre nom ou votre note | 30 jours après chaque échange |
-| Un sondage auquel vous avez répondu sans compte : votre pseudonyme, la trace du cookie et vos réponses | 30 jours après la fin du sondage. Les résultats du sondage restent pour l'enseignant, liés à personne, mais avec ce que vous y avez écrit |
+| Un sondage auquel vous avez répondu sans compte : la trace du cookie et vos réponses | 30 jours après la fin du sondage. Les résultats du sondage restent pour l'enseignant, liés à personne, mais avec ce que vous y avez écrit |
 
 Les données supprimées restent environ quatre mois de plus dans les sauvegardes de la plateforme. Ce délai ne tient que si les plus anciennes sauvegardes sont retirées comme prévu, ce qui se fait à la main. Les copies quotidiennes de la base de données gardées sur le serveur lui-même ne sont pas chiffrées ; la copie conservée en Finlande l'est.
 

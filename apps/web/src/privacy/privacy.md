@@ -42,7 +42,7 @@ If you open a project in the online workspace, each launch is recorded, and the 
 
 ### Polls
 
-Your answers to a poll. If you join a poll without an account, a pseudonym you choose and a cookie of your browser.
+Your answers to a poll. If you join a poll without an account, only a cookie of your browser: no name or pseudonym is asked for.
 
 ### When you use the platform
 
@@ -69,7 +69,7 @@ Some data is deleted automatically:
 | The files, commits and test outputs kept to grade a project by criteria | Six months after the project's results are published (the list of tests and their results stays) |
 | The content of GitHub's messages about your repositories | 30 days after they arrive |
 | A teacher's conversations with the help assistant, which may quote your name or grade | 30 days after each exchange |
-| A poll you answered without an account: your pseudonym, the cookie's trace and your answers | 30 days after the poll ended. The poll's results stay for the teacher, linked to no one, but with what you typed in them |
+| A poll you answered without an account: the cookie's trace and your answers | 30 days after the poll ended. The poll's results stay for the teacher, linked to no one, but with what you typed in them |
 
 Deleted data stays in the platform's backups for about four more months. That period holds only while the oldest backups are removed as planned, which is done by hand. The daily copies of the database kept on the server itself are not encrypted; the copy kept in Finland is.
 
