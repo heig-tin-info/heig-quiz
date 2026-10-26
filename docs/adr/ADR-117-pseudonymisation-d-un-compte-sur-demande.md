@@ -3,7 +3,8 @@
 ## Status
 
 Proposed (2026-10-26, issue #681, from the product owner's analysis of
-2026-10-10). Nothing is implemented; the routine stays in the backlog until
+2026-10-10; the owner confirmed on 2026-10-26 that nothing is built before
+the questions below are answered). Nothing is implemented; the routine stays in the backlog until
 the owner answers the questions at the end of this record.
 
 Scope: what happens to one account, on request, so that its person's identity

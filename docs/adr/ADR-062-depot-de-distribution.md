@@ -30,7 +30,7 @@ as for the journal (F-JRN-02): nobody is invited on joining the staff and
 nobody is revoked on leaving it; a former member keeps `pull` until the
 organization removes it.
 
-**Amended 2026-10-26 (#917; scope: the `squash` strategy's commit):** each
+**Amended 2026-10-26 (#917, product owner; scope: the `squash` strategy's commit):** each
 branch's root commit is created by the API, GitHub-signed for the App
 (`signedCommit.ts`). git builds the tree and pushes a throwaway commit of it
 straight to `<branch>`; the branch is then forced once onto the signed root,

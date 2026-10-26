@@ -25,7 +25,7 @@ Amended 2026-10-14 (#857): the first 2026-10-13 amendment's item 1 — a
 dated draft is still zinc, and its word says it is not scheduled
 ([amendment](#amendment-2026-10-14-a-dated-draft-is-not-scheduled)).
 
-Amended 2026-10-26 (#921): the 2026-10-14 amendment's item 2 — once a dated
+Amended 2026-10-26 (#921, product owner): the 2026-10-14 amendment's item 2 — once a dated
 draft's opening has passed, the configuration says it did not open, and
 the Format summary and the MCP no longer present a draft's window as
 planned
@@ -309,7 +309,7 @@ contrast, IS published by the ticker, hence its blue phase.
 
 ## Amendment 2026-10-26: a dated draft whose opening passed
 
-Recorded with #921: a teacher took a dated draft, whose dates the MCP had
+Recorded with #921, validated by the product owner on 2026-10-26: a teacher took a dated draft, whose dates the MCP had
 set, for scheduled; its opening passed and it never opened. The model
 stays (a draft opens only once scheduled, F-EVAL-04); the screen now says
 what happened.
