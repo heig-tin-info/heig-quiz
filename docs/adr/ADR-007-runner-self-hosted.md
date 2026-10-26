@@ -20,6 +20,12 @@ objective tier keeps running on these runners, as the student's indicative
 feedback; the `llm-review` tier is decommissioned progressively (M3-14f).
 A project in `auto` mode is unchanged.
 
+**Amended 2026-10-26 by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)**
+(scope: the amendment above, superseded): a project in the `criteria` mode
+gets its automatic evidence from these runners again — a `quiz-grade`
+dispatch of the platform, staggered because the runners are shared; its
+review stays the platform's LLM pass.
+
 Until 2026-09-30 this record read: *Not applicable to quiz — see ADR-016
 and `apps/runner`. This record is inherited from heig-classroom, where
 grading runs on GitHub Actions. Quiz has no GitHub Actions grading: code is

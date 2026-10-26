@@ -11,6 +11,16 @@ spec challenge and the lean review of the same day. Amended 2026-10-14
 check (F-GH-03) is dropped outright, not course by course; the CI's
 `llm-review` tier still retires course by course.
 
+**Superseded in part by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
+(2026-10-26, product owner):** §1's network refusal; §2's kinds of
+criterion (`testsCriterion`, `test:`, `identityCriterion`) and its v2 file;
+§3 whole; §4's inputs (now the sources and the masked `log` fields of
+`results.json`); §7's scale reference (`score_is_grade` removed); the
+alternative "CI artifacts as evidence"; this record's amendments to
+ADR-007, ADR-016 point 2, ADR-101 and ADR-062 addendum 1. §1's "never
+automatically" is amended for the creation form (ADR-119 §9). The rest
+holds (ADR-119 §1).
+
 Scope: how a project whose staff chose the `criteria` grading mode is graded —
 its criteria, the evidence the platform collects, the LLM pass, the
 milestones, the teacher's validation, the release and what the student sees.

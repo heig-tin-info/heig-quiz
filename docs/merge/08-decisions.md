@@ -155,6 +155,11 @@ Status values: `open`, `settled`, `superseded`.
   final after the release. A fourth final-score
   source, `criteria`, ranks between the teacher's and the review's
   (ADR-106 §7).
+  Amended 2026-10-26 (product owner,
+  [ADR-119](../adr/ADR-119-criteres-v3-preuves-de-la-ci.md) §11): the
+  `score_is_grade` preset is removed; its projects' scores out of 6 are
+  converted to their linear equivalent (`(g − 1)/5`), and the grades of
+  projects already released are stored, so that none moves.
 
 ### D06 — Gradebook rules
 - **Suggested**: exams and projects count by default, exercises opt-in,

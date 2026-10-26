@@ -9,6 +9,10 @@ Accepted (2026-09-21, first production deployment).
 action, `project`, with its lab image; the flags of `containerArgs` do not
 change and invariants 10–14 hold, invariant 12 gaining the archive rule.
 
+**Amended 2026-10-26 by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
+§10** (scope: the amendment above, superseded): the `project` action and
+the `lab-c` image are removed; the runner executes question code only.
+
 **Addendum (2026-09-30, ADR-035, the classroom merge):** the code VM
 (`code.chevallier.io`, "the engine VM") also hosts the online workspace
 portal (`apps/codespace`, ADR-047), which already runs there natively
