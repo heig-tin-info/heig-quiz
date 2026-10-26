@@ -90,8 +90,14 @@ close this before it ships.
    table, proves it on one account beside an untouched one. The fragment
    covers what the script already does for a person (account fields,
    addresses, IdP claims, avatar, Teams link, roster lines, grants, GitHub
-   identities, repository full names, group names, legacy audit payloads);
-   the account's `oidc_sub` becomes `anon-<id>` (4). Beyond the script, the
+   identities, group names), with two exceptions: `project_repos.full_name`
+   stays in staging's whole-copy part, because the repository on GitHub is
+   kept and unrenamed (2) and the platform reaches it by that name
+   (`modules/codespace/service.ts`, `modules/project/webhooks.ts`), so the
+   name stays in the database as the residual §6 names; and the legacy audit
+   payloads, which staging nulls wholesale, need a selection of the payloads
+   naming this account. The account's `oidc_sub` becomes `anon-<id>` (4).
+   Beyond the script, the
    routine deletes what staging truncates wholesale
    (`scripts/staging-scrub.sql`) — the account's sessions, launch tickets, API
    tokens, OAuth grants, Teams link tokens, kiosk pairings in progress — and
@@ -130,7 +136,7 @@ close this before it ships.
    dumps, until their retention prunes them (about three months from
    2026-10-14); GitHub repository names and commits; the help assistant's
    stored conversations, which may quote the name until their 30 days pass
-   (ADR-080 §6); the provider's side of past model calls; the online
+   (ADR-080 §9); the provider's side of past model calls; the online
    workspace's own database (`apps/codespace/src/db/schema.ts`: login,
    email, display name, GitHub login, and the volume directory named after
    the login), which the operator handles by hand in the same run. The
