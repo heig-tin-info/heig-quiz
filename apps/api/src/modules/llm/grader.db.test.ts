@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadConfig } from "../../config.js";
 import { llmCalls } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
-import { criteriaPrompt, gatewayGrader, gradePrompt } from "./grader.js";
+import { gatewayGrader, gradePrompt } from "./grader.js";
 import type { LlmProvider, ProviderRequest } from "./provider.js";
 import { LlmGateway, writeSettings } from "./service.js";
 
@@ -86,15 +86,22 @@ const CRITERIA = [
   { id: "depth", title: "La profondeur", weight: 1, prompt: "" },
 ];
 
-describe("criteriaPrompt (ADR-118)", () => {
-  it("lists each criterion with its id, its range in weight units and what to check, the answer last", () => {
-    const prompt = criteriaPrompt({ ...request, criteria: CRITERIA }, CRITERIA);
-    expect(prompt).toContain("- id: guard\n  title: La page de garde\n  points: 0 to 2 (quarter points)\n  what to check: Nomme la page de garde.");
-    expect(prompt).toContain("what to check: (the title)");
-    expect(prompt).toContain(`Grading instructions:\n${request.rubric}`);
-    expect(prompt).not.toContain("worth 2 points");
-    expect(prompt.endsWith(`<student_answer>\n${request.answer}\n</student_answer>`)).toBe(true);
-    expect(criteriaPrompt({ ...request, rubric: " " }, CRITERIA)).not.toContain("Grading instructions");
+describe("gradePrompt with criteria (ADR-118)", () => {
+  const withCriteria = { ...request, criteria: CRITERIA };
+
+  it("gives each criterion its id and its range in weight units, never the item's points", () => {
+    const prompt = gradePrompt(withCriteria);
+    expect(prompt).toContain("- id: guard");
+    expect(prompt).toContain("points: 0 to 2 (quarter points)");
+    expect(prompt).toContain("points: 0 to 1 (quarter points)");
+    expect(prompt).not.toMatch(/worth \d+ points/);
+    expect(prompt).not.toContain("Rubric:");
+  });
+
+  it("sends the rubric as grading instructions only when written, and the answer last, fenced", () => {
+    expect(gradePrompt(withCriteria)).toContain("Grading instructions:");
+    expect(gradePrompt({ ...withCriteria, rubric: " " })).not.toContain("Grading instructions");
+    expect(gradePrompt(withCriteria).endsWith(`<student_answer>\n${request.answer}\n</student_answer>`)).toBe(true);
   });
 });
 
@@ -131,7 +138,7 @@ describe("gatewayGrader", () => {
     seen = [];
     const outcome = await gatewayGrader(gateway).grade({ ...request, criteria: CRITERIA }, teacher.id, "try");
     expect(outcome).toMatchObject({
-      points: 1.5,
+      points: 0,
       confidence: "medium",
       justification: "Half of it.",
       criteria: [

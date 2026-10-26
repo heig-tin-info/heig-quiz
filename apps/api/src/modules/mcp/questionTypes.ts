@@ -136,7 +136,7 @@ const GUIDES: Record<string, TypeGuide> = {
   rich: {
     summary: "Essay: the student writes a text, graded by the teacher against structured criteria, with an AI proposal when one is configured.",
     rules: [
-      "Prefer `criteria`: 1 to 12 entries `{ id, title, weight, prompt }`. `id` is an opaque string of 8 random lowercase letters and digits, unique in the question. `title` names the criterion in a few words (students will read it beside their points once the grading is validated). `weight` is a whole number of points, 1 to 100. `prompt` is plain text, for the grader only: what earns the weight, concretely.",
+      "Prefer `criteria`: 1 to 12 entries `{ id, title, weight, prompt }`. `id` is an opaque string of 8 random lowercase letters and digits, unique in the question. `title` names the criterion in a few words, written for the student: short, neutral, no hint of the answer. `weight` is a whole number of points, 1 to 100. `prompt` is plain text, for the grader only: what earns the weight, concretely.",
       "The grader scores each criterion from 0 to its weight in quarter points, reading its prompt alone. Write each prompt so that another person reaches the same score: what must be present, and what loses part of the weight.",
       "The question's points default to the sum of the weights; the evaluation may set others, and the criteria are then scaled.",
       "`rubric` is optional Markdown: global instructions for the grader that apply to every criterion. Leave it empty when nothing does. `prompt` and `reference` are Markdown; `rubric`, `criteria` and `reference` never reach the student before grading, and `reference` is shown when the evaluation shows the expected answer.",

@@ -13,8 +13,8 @@ there is no automatic disclosure of the justification.
 
 Amended 2026-10-26 by [ADR-118](ADR-118-criteres-structures-des-essais.md)
 (product owner; scope: §1, essays with structured criteria): a criterion's
-title and its validated points reach a student under `showKey`, delivered
-by ADR-118's PR3. Its prompt and the rubric stay the teacher's.
+title and its validated points reach a student under `showKey`, once
+ADR-118's student view is built. Its prompt and the rubric stay the teacher's.
 
 ## Context
 

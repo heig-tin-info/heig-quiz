@@ -88,43 +88,35 @@ export function createLlm(config: Pick<AppConfig, "LLM_PROVIDER">, gateway: LlmG
 
 /**
  * The model's points and breakdown on the item's scale, the two in
- * agreement (ADR-118). Structured criteria come back in weight units and are
- * scaled by the domain's rule, keyed by the request's ids. A free rubric's
- * breakdown is the model's own: when its maxima do not add up to the item's
- * points, points and maxima are rescaled in proportion, and the total is
- * their sum; the clamp to `[0, maxPoints]` stays the last guard.
+ * agreement (ADR-118), through the one scaling rule (`scaleCriteria`).
+ * Structured criteria are read in the request's order and titles, their
+ * points in weight units, a criterion the reply left out earning 0. A free
+ * rubric's breakdown is the model's own, its maxima taken as the weights,
+ * so a breakdown that misses the item's points is rescaled to them. With no
+ * breakdown, or only empty maxima, the model's total is clamped to
+ * `[0, maxPoints]`.
  */
 export function onItemScale(request: LlmGradeRequest, outcome: LlmGradeOutcome): { points: number; criteria: LlmCriterion[] } {
-  const max = request.maxPoints;
-  const clampTotal = (x: number) => round2(Math.min(max, Math.max(0, x)));
-  if (request.criteria !== undefined && request.criteria.length > 0) {
-    const replied = new Map(outcome.criteria.map((c) => [c.id, c]));
-    const scaled = scaleCriteria(
-      request.criteria.map((c) => ({ id: c.id, weight: c.weight, earned: replied.get(c.id)?.points ?? 0 })),
-      max,
-    );
-    return {
-      points: scaled.total,
-      criteria: request.criteria.map((c, i) => ({
-        id: c.id,
-        criterion: c.title,
-        points: scaled.criteria[i]!.points,
-        maxPoints: scaled.criteria[i]!.maxPoints,
-        comment: replied.get(c.id)?.comment ?? "",
-      })),
-    };
+  const asked = request.criteria ?? [];
+  const replied = new Map(outcome.criteria.map((c) => [c.id, c]));
+  const breakdown: LlmCriterion[] =
+    asked.length > 0
+      ? asked.map((c) => ({
+          id: c.id,
+          criterion: c.title,
+          points: replied.get(c.id)?.points ?? 0,
+          maxPoints: c.weight,
+          comment: replied.get(c.id)?.comment ?? "",
+        }))
+      : outcome.criteria;
+  if (!breakdown.some((c) => c.maxPoints > 0)) {
+    return { points: round2(Math.min(request.maxPoints, Math.max(0, outcome.points))), criteria: breakdown };
   }
-  const sum = outcome.criteria.reduce((s, c) => s + Math.max(0, c.maxPoints), 0);
-  if (outcome.criteria.length === 0 || sum <= 0 || Math.abs(sum - max) < 0.005) {
-    return { points: clampTotal(outcome.points), criteria: outcome.criteria };
-  }
-  const k = max / sum;
-  const criteria = outcome.criteria.map((c) => {
-    const cap = Math.max(0, c.maxPoints);
-    return { ...c, points: round2(Math.min(cap, Math.max(0, c.points)) * k), maxPoints: round2(cap * k) };
-  });
-  const earned = outcome.criteria.reduce((s, c) => s + Math.min(Math.max(0, c.maxPoints), Math.max(0, c.points)), 0);
-  return { points: clampTotal(earned * k), criteria };
+  const scaled = scaleCriteria(
+    breakdown.map((c) => ({ weight: c.maxPoints, earned: c.points })),
+    request.maxPoints,
+  );
+  return { points: scaled.total, criteria: breakdown.map((c, i) => ({ ...c, ...scaled.criteria[i]! })) };
 }
 
 /**

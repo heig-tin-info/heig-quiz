@@ -16,6 +16,8 @@ export const RICH_CONFIG_VERSION = 2;
 /** How many criteria an essay may have: as many as a grader reads beside one answer. */
 export const RICH_MAX_CRITERIA = 12;
 export const RICH_MAX_WEIGHT = 100;
+export const RICH_MAX_CRITERION_TITLE = 120;
+export const RICH_MAX_CRITERION_PROMPT = 2_000;
 
 /**
  * The hard cap of an answer, whatever the question says: about seventeen A4
@@ -53,18 +55,19 @@ export type RichFormat = z.infer<typeof RichFormatSchema>;
 /**
  * One grading criterion (ADR-118): what earns `weight` points, said
  * concretely in `prompt` for the grader. The id is minted by the editor
- * (`newId`) and never changes: the model's reply is keyed by it.
+ * (`newId`) and never changes: the model's reply is keyed by it, so it is a
+ * plain JSON property name, letters, digits, `_` and `-`.
  */
 export const RichCriterionSchema = z.object({
-  id: z.string().min(1).max(40),
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/),
   /** What the criterion judges, in a few words: a blank title is no criterion. */
   title: z
     .string()
     .min(1)
-    .max(120)
+    .max(RICH_MAX_CRITERION_TITLE)
     .refine((t) => t.trim() !== "", "blank title"),
   weight: z.number().int().min(1).max(RICH_MAX_WEIGHT),
-  prompt: z.string().max(2_000).default(""),
+  prompt: z.string().max(RICH_MAX_CRITERION_PROMPT).default(""),
 });
 export type RichCriterion = z.infer<typeof RichCriterionSchema>;
 

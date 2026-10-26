@@ -2231,13 +2231,13 @@ export function tryAnswer(
       const justification = "Development stub, not a model: the answer covers part of the rubric.";
       // Three quarters of every criterion, in its weight units, then scaled like `askGrader` (ADR-118).
       const scaled = scaleCriteria(
-        asked.map((c) => ({ id: c.id, weight: c.weight, earned: Math.round(c.weight * 0.75 * 4) / 4 })),
+        asked.map((c) => ({ weight: c.weight, earned: Math.round(c.weight * 0.75 * 4) / 4 })),
         maxPoints,
       );
       const points = asked.length > 0 ? scaled.total : Math.round(maxPoints * 0.75 * 4) / 4;
       const criteria =
         asked.length > 0
-          ? scaled.criteria.map((c, i) => ({ ...c, criterion: asked[i]!.title, comment: justification }))
+          ? scaled.criteria.map((c, i) => ({ id: asked[i]!.id, criterion: asked[i]!.title, ...c, comment: justification }))
           : [{ criterion: "Coverage of the rubric", points, maxPoints, comment: justification }];
       const ai = { model: "development-stub", criteria };
       const details = { ...(graded.details as object), [JUSTIFICATION_KEY]: justification, [AI_KEY]: ai };

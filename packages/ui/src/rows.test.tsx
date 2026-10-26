@@ -105,4 +105,32 @@ describe("RowHead", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove the case sum" }));
     expect(calls.remove).toHaveBeenCalledOnce();
   });
+
+  it("draws no Hidden for a list whose rows cannot be hidden, and takes the points' range", () => {
+    render(
+      <RowHead
+        nameId="n"
+        nameLabel="Criterion"
+        nameAriaLabel="Criterion 1"
+        name="Names it"
+        nameMaxLength={120}
+        onNameChange={() => {}}
+        pointsId="w"
+        pointsLabel="Weight"
+        points={2}
+        pointsMin={1}
+        pointsMax={100}
+        pointsStep={1}
+        onPointsChange={() => {}}
+        removeLabel="Remove criterion 1"
+        onRemove={() => {}}
+      />,
+    );
+    expect(screen.queryByText("Hidden")).toBeNull();
+    expect(screen.getByLabelText("Criterion 1")).toHaveAttribute("maxLength", "120");
+    const weight = screen.getByLabelText("Weight");
+    expect(weight).toHaveAttribute("min", "1");
+    expect(weight).toHaveAttribute("max", "100");
+    expect(weight).toHaveAttribute("step", "1");
+  });
 });

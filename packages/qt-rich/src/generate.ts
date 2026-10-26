@@ -9,7 +9,15 @@ import { z } from "zod";
 import type { AnswerGenerator } from "@quiz/core/server";
 import { newId } from "@quiz/core/id";
 
-import { RICH_MAX_CHARS, RICH_MAX_CRITERIA, RICH_MAX_WEIGHT, type RichConfig, type RichCriterion } from "./schema.js";
+import {
+  RICH_MAX_CHARS,
+  RICH_MAX_CRITERIA,
+  RICH_MAX_CRITERION_PROMPT,
+  RICH_MAX_CRITERION_TITLE,
+  RICH_MAX_WEIGHT,
+  type RichConfig,
+  type RichCriterion,
+} from "./schema.js";
 
 const RichProposal = z.object({
   reference: z.string(),
@@ -27,9 +35,9 @@ function proposedCriteria(proposal: RichProposal["criteria"] | undefined): RichC
     .slice(0, RICH_MAX_CRITERIA)
     .map((c) => ({
       id: newId(),
-      title: c.title.trim().slice(0, 120),
+      title: c.title.trim().slice(0, RICH_MAX_CRITERION_TITLE),
       weight: Math.min(RICH_MAX_WEIGHT, Math.max(1, Math.round(Number.isFinite(c.weight) ? c.weight : 1))),
-      prompt: c.prompt.trim().slice(0, 2_000),
+      prompt: c.prompt.trim().slice(0, RICH_MAX_CRITERION_PROMPT),
     }));
 }
 

@@ -49,7 +49,11 @@ export const LLM_CONFIDENCES = ["low", "medium", "high"] as const;
 export type LlmConfidence = (typeof LLM_CONFIDENCES)[number];
 
 export interface LlmGradeOutcome {
-  /** On the item's scale; the pass clamps it to `[0, maxPoints]`. */
+  /**
+   * On the item's scale; the pass clamps it to `[0, maxPoints]`. Ignored
+   * when the request has criteria (0 by convention): the server scales the
+   * breakdown instead (ADR-118).
+   */
   points: number;
   /**
    * Why: for the TEACHER only (ADR-045, open question 27). The pass stores

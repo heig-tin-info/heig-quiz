@@ -40,6 +40,9 @@ describe("the rich config", () => {
     expect(at([{ ...one("a"), weight: 0 }])).toBe(false);
     expect(at([{ ...one("a"), weight: 1.5 }])).toBe(false);
     expect(at([{ ...one("a"), title: "  " }])).toBe(false);
+    expect(at([one("a b")])).toBe(false);
+    expect(at([one("a.b")])).toBe(false);
+    expect(at([one("Ab_9-z")])).toBe(true);
     expect(at(Array.from({ length: RICH_MAX_CRITERIA + 1 }, (_, i) => one(`c${i}`)))).toBe(false);
   });
 

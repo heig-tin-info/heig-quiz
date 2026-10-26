@@ -29,7 +29,6 @@ export const richEditorStrings = {
   criterionWeightAria: "Weight of criterion {n}",
   criterionPrompt: "What earns the weight",
   criterionPromptAria: "What earns the weight of criterion {n}",
-  moveCriterionUp: "Move criterion {n} up",
   removeCriterion: "Remove criterion {n}",
   rubric: "Grading instructions",
   rubricHint: "Optional. Context for the grader beside every answer. The criteria carry the points.",

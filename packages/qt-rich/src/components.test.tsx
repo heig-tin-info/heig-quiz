@@ -216,7 +216,7 @@ describe("RichEditor", () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ rubric: "?" }));
   });
 
-  it("adds, edits, moves and removes criteria, and says the default points", async () => {
+  it("adds, edits and removes criteria, and says the default points", async () => {
     const onChange = vi.fn();
     const { rerender } = render(<RichEditor config={config()} onChange={onChange} />);
     expect(screen.getByText("Default points: 1")).toBeInTheDocument();
@@ -241,9 +241,6 @@ describe("RichEditor", () => {
     fireEvent.change(screen.getByLabelText("What earns the weight of criterion 2"), { target: { value: "More." } });
     expect(onChange.mock.lastCall![0].criteria[1]).toMatchObject({ id: "b", prompt: "More." });
 
-    expect(screen.getByRole("button", { name: "Move criterion 1 up" })).toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: "Move criterion 2 up" }));
-    expect(onChange.mock.lastCall![0].criteria.map((c: { id: string }) => c.id)).toEqual(["b", "a"]);
     await userEvent.click(screen.getByRole("button", { name: "Remove criterion 1" }));
     expect(onChange.mock.lastCall![0].criteria.map((c: { id: string }) => c.id)).toEqual(["b"]);
   });

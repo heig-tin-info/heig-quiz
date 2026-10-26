@@ -88,6 +88,5 @@ describe("the stub with structured criteria (ADR-118)", () => {
     ]);
     expect(out.criteria[0]!.points).toBe(2);
     expect(out.criteria[1]!.points).toBe(0);
-    expect(out.points).toBe(2);
   });
 });

@@ -50,7 +50,8 @@ const CLOSING = [
   "`confidence` to `low`. `[student]` replaces a name the student wrote.",
 ].join(" ");
 
-const SYSTEM = [
+/** The system prompt of a free rubric: the model splits it into criteria on the item's scale. */
+const RUBRIC_SYSTEM = [
   OPENING,
   "You receive the statement, the form of the answer, the teacher's rubric, a reference answer when there is one,",
   "and the answer. Split the rubric into its criteria (when the rubric is empty, take the points the reference",
@@ -84,8 +85,8 @@ export function criteriaReplySchema(ids: readonly string[]) {
   }>;
 }
 
-/** The prompt of one answer graded by criteria: each criterion labelled, the instructions, the reference, the answer last and fenced off. */
-export function criteriaPrompt(req: LlmGradeRequest, criteria: readonly LlmRequestCriterion[]): string {
+/** The criteria block of the prompt: each one's id, title, range in weight units and what to check. */
+function criteriaBlock(criteria: readonly LlmRequestCriterion[]): string {
   const listed = criteria.map((c) =>
     [
       `- id: ${c.id}`,
@@ -94,90 +95,105 @@ export function criteriaPrompt(req: LlmGradeRequest, criteria: readonly LlmReque
       `  what to check: ${c.prompt.trim() === "" ? "(the title)" : c.prompt}`,
     ].join("\n"),
   );
-  return [
-    `Statement:\n${req.statement}`,
-    `The answer is ${req.form}.`,
-    `Criteria:\n${listed.join("\n")}`,
-    ...(req.rubric.trim() === "" ? [] : [`Grading instructions:\n${req.rubric}`]),
-    `Reference answer:\n${req.reference?.trim() ? req.reference : "(none)"}`,
-    `<student_answer>\n${req.answer}\n</student_answer>`,
-  ].join("\n\n");
-}
-
-/** The prompt of one answer: every field labelled, the answer last and fenced off. */
-export function gradePrompt(req: LlmGradeRequest): string {
-  return [
-    `Statement:\n${req.statement}`,
-    `The answer is ${req.form}. The question is worth ${req.maxPoints} points.`,
-    `Rubric:\n${req.rubric.trim() === "" ? "(none: grade against the reference answer)" : req.rubric}`,
-    `Reference answer:\n${req.reference?.trim() ? req.reference : "(none)"}`,
-    `<student_answer>\n${req.answer}\n</student_answer>`,
-  ].join("\n\n");
-}
-
-export function gatewayGrader(gateway: LlmGateway): GradingLlm {
-  return {
-    ready: () => gateway.ready(),
-    reviewProject: (req, billedTo) => reviewThroughGateway(gateway, req, billedTo),
-    async grade(req: LlmGradeRequest, billedTo: string | null, purpose: GradePurpose): Promise<LlmGradeOutcome> {
-      if (req.criteria !== undefined && req.criteria.length > 0) return gradeByCriteria(gateway, req, req.criteria, billedTo, purpose);
-      const { value, model } = await gateway.complete({
-        purpose,
-        userId: billedTo,
-        system: SYSTEM,
-        prompt: gradePrompt(req),
-        schema: GradeReply,
-        maxTokens: MAX_TOKENS,
-        effort: "medium",
-      });
-      return {
-        points: value.points,
-        confidence: value.confidence,
-        justification: value.justification.trim().slice(0, JUSTIFICATION_MAX),
-        criteria: value.criteria.map((c) => ({ ...c, comment: c.comment.trim().slice(0, SENTENCE_MAX) })),
-        model,
-      };
-    },
-  };
+  return `Criteria:\n${listed.join("\n")}`;
 }
 
 /**
- * An essay with structured criteria (ADR-118): the model scores each one in
- * its weight units, keyed by id; `askGrader` scales them to the item. The
- * total here is their raw sum, in weight units too.
+ * The prompt of one answer: every field labelled, the answer last and fenced
+ * off. The middle is the structured criteria and the optional grading
+ * instructions (ADR-118), or the free rubric and the item's points.
  */
-async function gradeByCriteria(
+export function gradePrompt(req: LlmGradeRequest): string {
+  const criteria = req.criteria ?? [];
+  const middle =
+    criteria.length > 0
+      ? [
+          `The answer is ${req.form}.`,
+          criteriaBlock(criteria),
+          ...(req.rubric.trim() === "" ? [] : [`Grading instructions:\n${req.rubric}`]),
+        ]
+      : [
+          `The answer is ${req.form}. The question is worth ${req.maxPoints} points.`,
+          `Rubric:\n${req.rubric.trim() === "" ? "(none: grade against the reference answer)" : req.rubric}`,
+        ];
+  return [
+    `Statement:\n${req.statement}`,
+    ...middle,
+    `Reference answer:\n${req.reference?.trim() ? req.reference : "(none)"}`,
+    `<student_answer>\n${req.answer}\n</student_answer>`,
+  ].join("\n\n");
+}
+
+/** What a reply becomes before trimming: the outcome without its model. */
+type Read = Omit<LlmGradeOutcome, "model">;
+
+/** The system prompt, the reply's schema and its reading, chosen by whether the request has criteria. */
+interface Contract<T> {
+  system: string;
+  schema: z.ZodType<T>;
+  read: (value: T) => Read;
+}
+
+const RUBRIC_CONTRACT: Contract<z.infer<typeof GradeReply>> = { system: RUBRIC_SYSTEM, schema: GradeReply, read: (v) => v };
+
+/**
+ * Structured criteria (ADR-118): the reply keyed by id, read back in the
+ * request's order and titles, in weight units; `points` is 0, the server
+ * scales the breakdown (`askGrader`).
+ */
+function criteriaContract(criteria: readonly LlmRequestCriterion[]) {
+  return {
+    system: CRITERIA_SYSTEM,
+    schema: criteriaReplySchema(criteria.map((c) => c.id)),
+    read: (v) => ({
+      points: 0,
+      confidence: v.confidence,
+      justification: v.justification,
+      // The schema requires every criterion's key: the reply holds each one.
+      criteria: criteria.map((c) => ({
+        id: c.id,
+        criterion: c.title,
+        points: v.criteria[c.id]!.points,
+        maxPoints: c.weight,
+        comment: v.criteria[c.id]!.comment,
+      })),
+    }),
+  } satisfies Contract<ReturnType<ReturnType<typeof criteriaReplySchema>["parse"]>>;
+}
+
+/** One call through the gateway, the sentences trimmed in one place. */
+async function ask<T>(
   gateway: LlmGateway,
   req: LlmGradeRequest,
-  criteria: readonly LlmRequestCriterion[],
+  contract: Contract<T>,
   billedTo: string | null,
   purpose: GradePurpose,
 ): Promise<LlmGradeOutcome> {
   const { value, model } = await gateway.complete({
     purpose,
     userId: billedTo,
-    system: CRITERIA_SYSTEM,
-    prompt: criteriaPrompt(req, criteria),
-    schema: criteriaReplySchema(criteria.map((c) => c.id)),
+    system: contract.system,
+    prompt: gradePrompt(req),
+    schema: contract.schema,
     maxTokens: MAX_TOKENS,
     effort: "medium",
   });
-  // The schema requires every criterion's key: the reply holds each one.
-  const scored = criteria.map((c) => {
-    const reply = value.criteria[c.id]!;
-    return {
-      id: c.id,
-      criterion: c.title,
-      points: reply.points,
-      maxPoints: c.weight,
-      comment: reply.comment.trim().slice(0, SENTENCE_MAX),
-    };
-  });
+  const read = contract.read(value);
   return {
-    points: scored.reduce((sum, c) => sum + c.points, 0),
-    confidence: value.confidence,
-    justification: value.justification.trim().slice(0, JUSTIFICATION_MAX),
-    criteria: scored,
+    ...read,
+    justification: read.justification.trim().slice(0, JUSTIFICATION_MAX),
+    criteria: read.criteria.map((c) => ({ ...c, comment: c.comment.trim().slice(0, SENTENCE_MAX) })),
     model,
+  };
+}
+
+export function gatewayGrader(gateway: LlmGateway): GradingLlm {
+  return {
+    ready: () => gateway.ready(),
+    reviewProject: (req, billedTo) => reviewThroughGateway(gateway, req, billedTo),
+    grade: (req, billedTo, purpose) =>
+      req.criteria !== undefined && req.criteria.length > 0
+        ? ask(gateway, req, criteriaContract(req.criteria), billedTo, purpose)
+        : ask(gateway, req, RUBRIC_CONTRACT, billedTo, purpose),
   };
 }

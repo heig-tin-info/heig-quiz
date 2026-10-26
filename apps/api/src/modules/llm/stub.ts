@@ -79,7 +79,8 @@ function byCriteria(req: LlmGradeRequest, criteria: readonly LlmRequestCriterion
   const confidence = all.size === 0 ? "low" : confidenceOf(coverageOf(all, answer), req.answer);
   const justification = `Development stub, not a model: ${JUDGEMENTS[confidence]}.`;
   return {
-    points: entries.reduce((sum, c) => sum + c.points, 0),
+    // Ignored with criteria: `askGrader` scales the breakdown (ADR-118).
+    points: 0,
     justification,
     confidence,
     criteria: entries.map((c) => ({ ...c, comment: justification })),

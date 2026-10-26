@@ -2305,7 +2305,6 @@ export const fr: Record<keyof Dict, string> = {
   "qt.rich.e.criterionWeightAria": "Poids du critère {n}",
   "qt.rich.e.criterionPrompt": "Ce qui vaut le poids",
   "qt.rich.e.criterionPromptAria": "Ce qui vaut le poids du critère {n}",
-  "qt.rich.e.moveCriterionUp": "Monter le critère {n}",
   "qt.rich.e.removeCriterion": "Supprimer le critère {n}",
   "qt.rich.e.rubric": "Consignes de correction",
   "qt.rich.e.rubricHint": "Facultatif. Contexte lu à chaque correction. Les critères portent les points.",

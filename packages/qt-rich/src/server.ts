@@ -32,10 +32,6 @@ import {
   type RichStudent,
 } from "./schema.js";
 
-/** The criteria as the grader reads them, nothing else (`config.criteria` may be absent from an unparsed draft). */
-const criteriaOf = (config: RichConfig) =>
-  (config.criteria ?? []).map(({ id, title, weight, prompt }) => ({ id, title, weight, prompt }));
-
 export const richServer: QuestionTypeServer<
   RichConfig,
   RichAnswer,
@@ -86,7 +82,7 @@ export const richServer: QuestionTypeServer<
   },
 
   toSolution(config): RichSolution {
-    const criteria = criteriaOf(config);
+    const { criteria } = config;
     return {
       rubric: config.rubric,
       ...(criteria.length === 0 ? {} : { criteria }),
@@ -130,7 +126,7 @@ export const richServer: QuestionTypeServer<
       return { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "empty", chars } };
     }
     const reference = config.reference?.trim() ?? "";
-    const criteria = criteriaOf(config);
+    const { criteria } = config;
     if (ctx.llm !== undefined && (criteria.length > 0 || config.rubric.trim() !== "" || reference !== "")) {
       return {
         kind: "pending",

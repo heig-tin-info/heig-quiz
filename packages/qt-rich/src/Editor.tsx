@@ -18,20 +18,17 @@ import {
   cx,
   FieldCell,
   hint,
-  IconButton,
   IssueList,
   label,
   NumberField,
   patchAt,
   PromptField,
   removeAt,
-  RemoveRowButton,
+  RowHead,
   RowList,
   RowListHeader,
   sectionClass,
   Segmented,
-  StrokeIcon,
-  TextInput,
   textareaClass,
 } from "@quiz/ui";
 
@@ -41,6 +38,8 @@ import {
   pagesText,
   RICH_MAX_CHARS,
   RICH_MAX_CRITERIA,
+  RICH_MAX_CRITERION_PROMPT,
+  RICH_MAX_CRITERION_TITLE,
   RICH_MAX_WEIGHT,
   type RichConfig,
   type RichCriterion,
@@ -67,12 +66,6 @@ export function RichEditor({
   const patch = (next: Partial<RichConfig>) => onChange({ ...config, ...next });
   const criteria = config.criteria ?? [];
   const setCriteria = (next: RichCriterion[]) => patch({ criteria: next });
-  /** The criterion at `i` swapped with the one above it: the one reorder, enough for a dozen rows. */
-  const moveUp = (i: number) => {
-    const next = [...criteria];
-    [next[i - 1], next[i]] = [next[i]!, next[i - 1]!];
-    setCriteria(next);
-  };
   /** Optional fields are ABSENT when empty, never `""` or `0`: the schema reads absence. */
   const withOptional = <K extends "reference" | "maxChars">(key: K, value: RichConfig[K] | undefined) => {
     const next = { ...config };
@@ -112,52 +105,31 @@ export function RichEditor({
             const n = i + 1;
             return (
               <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-end gap-3">
-                  <FieldCell label={s.criterionTitle} htmlFor={`${id}-criterion-${i}`} className="min-w-40 flex-1">
-                    <TextInput
-                      id={`${id}-criterion-${i}`}
-                      size="sm"
-                      className="w-full font-medium"
-                      aria-label={fmt(s.criterionTitleAria, { n })}
-                      maxLength={120}
-                      disabled={disabled}
-                      value={criterion.title}
-                      onChange={(e) => setCriteria(patchAt(criteria, i, { title: e.target.value }))}
-                    />
-                  </FieldCell>
-                  <NumberField
-                    id={`${id}-weight-${i}`}
-                    label={s.criterionWeight}
-                    aria-label={fmt(s.criterionWeightAria, { n })}
-                    value={criterion.weight}
-                    min={1}
-                    max={RICH_MAX_WEIGHT}
-                    step={1}
-                    width="w-20"
-                    disabled={disabled}
-                    onChange={(weight) => setCriteria(patchAt(criteria, i, { weight }))}
-                  />
-                  <IconButton
-                    label={fmt(s.moveCriterionUp, { n })}
-                    disabled={disabled || i === 0}
-                    onClick={() => moveUp(i)}
-                  >
-                    <StrokeIcon strokeWidth={1.7}>
-                      <path d="M12 19V5M6 11l6-6 6 6" />
-                    </StrokeIcon>
-                  </IconButton>
-                  <RemoveRowButton
-                    label={fmt(s.removeCriterion, { n })}
-                    disabled={disabled}
-                    onClick={() => setCriteria(removeAt(criteria, i))}
-                  />
-                </div>
+                <RowHead
+                  disabled={disabled}
+                  nameId={`${id}-criterion-${i}`}
+                  nameLabel={s.criterionTitle}
+                  nameAriaLabel={fmt(s.criterionTitleAria, { n })}
+                  name={criterion.title}
+                  nameMaxLength={RICH_MAX_CRITERION_TITLE}
+                  onNameChange={(title) => setCriteria(patchAt(criteria, i, { title }))}
+                  pointsId={`${id}-weight-${i}`}
+                  pointsLabel={s.criterionWeight}
+                  pointsAriaLabel={fmt(s.criterionWeightAria, { n })}
+                  points={criterion.weight}
+                  pointsMin={1}
+                  pointsMax={RICH_MAX_WEIGHT}
+                  pointsStep={1}
+                  onPointsChange={(weight) => setCriteria(patchAt(criteria, i, { weight }))}
+                  removeLabel={fmt(s.removeCriterion, { n })}
+                  onRemove={() => setCriteria(removeAt(criteria, i))}
+                />
                 <FieldCell label={s.criterionPrompt} htmlFor={`${id}-criterion-prompt-${i}`}>
                   <textarea
                     id={`${id}-criterion-prompt-${i}`}
                     rows={2}
                     aria-label={fmt(s.criterionPromptAria, { n })}
-                    maxLength={2_000}
+                    maxLength={RICH_MAX_CRITERION_PROMPT}
                     className={cx(textareaClass, "w-full")}
                     disabled={disabled}
                     value={criterion.prompt}

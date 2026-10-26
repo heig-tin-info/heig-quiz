@@ -2333,7 +2333,6 @@ export const en = {
   "qt.rich.e.criterionWeightAria": "Weight of criterion {n}",
   "qt.rich.e.criterionPrompt": "What earns the weight",
   "qt.rich.e.criterionPromptAria": "What earns the weight of criterion {n}",
-  "qt.rich.e.moveCriterionUp": "Move criterion {n} up",
   "qt.rich.e.removeCriterion": "Remove criterion {n}",
   "qt.rich.e.rubric": "Grading instructions",
   "qt.rich.e.rubricHint": "Optional. Context for the grader beside every answer. The criteria carry the points.",
