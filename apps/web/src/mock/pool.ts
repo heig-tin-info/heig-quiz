@@ -3071,19 +3071,20 @@ on("POST", "/app/api/questions/:id/generate", (m, body) => {
 /**
  * The essay wand's two targets, canned and deterministic: one criterion's
  * prompt names its title and weight; a legacy rubric becomes the three
- * criteria of `RICH_LEGACY_CONFIG`'s barème, and its global line stays the
+ * criteria of `RICH_LEGACY_CONFIG`'s grading scheme, and its global line stays the
  * rubric. The merge rules themselves are `qt-rich`'s, tested there.
  */
 function mockEssayTarget(config: Record<string, unknown>, target: GenerateTarget): Record<string, unknown> {
   const criteria = Array.isArray(config.criteria) ? (config.criteria as { id: string; title: string; weight: number; prompt: string }[]) : [];
   if (target.kind === "criterionPrompt") {
-    const criterion = criteria.find((c) => c.id === target.criterionId);
+    const criterion = criteria.find((c) => c.id === target.id);
     if (!criterion || criterion.title.trim() === "") throw new MockPayload(400, { error: "target_unavailable" });
     const prompt =
       `La réponse explique « ${criterion.title.trim()} » avec ses propres mots et dit pourquoi c'est le cas : ` +
       `${criterion.weight} pt. Énoncer le fait sans l'expliquer vaut la moitié du poids.`;
     return { ...config, criteria: criteria.map((c) => (c.id === criterion.id ? { ...c, prompt } : c)) };
   }
+  if (target.kind !== "criteriaFromRubric") throw new MockPayload(400, { error: "generate_unsupported" });
   if (criteria.length > 0 || typeof config.rubric !== "string" || config.rubric.trim() === "") {
     throw new MockPayload(400, { error: "target_unavailable" });
   }

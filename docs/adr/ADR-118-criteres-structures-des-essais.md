@@ -13,6 +13,18 @@ Relations: amends [ADR-037](ADR-037-materiel-reserve-a-l-enseignant.md) §1
 and [ADR-063](ADR-063-correction-llm.md) §4; settles the structured rubric
 that docs/spec/04 §4.8 and open question 27 (docs/spec/06) left deferred.
 
+### Amendment of 2026-10-27 (the owner's feedback on the shipped editor)
+
+Decision 1 and alternative 3 are amended. A teacher-triggered conversion of
+a legacy rubric into criteria is accepted as a wand action (ADR-059, target
+`criteriaFromRubric` of the `rich` generator). The model proposes criteria
+that land in the draft like an edit, undoable, and only the teacher saves
+them. What applies to every criterion stays the rubric. An automatic
+conversion, by migration or without the teacher, stays rejected. The same
+wand writes one criterion's grading prompt on request (target
+`criterionPrompt`). Beside criteria the rubric is labelled "Global
+instructions" and folded while empty (decision 4).
+
 ## Context
 
 An essay was graded against a free markdown `rubric` and worth 1 point by
@@ -72,10 +84,8 @@ cost them points.
 - The MCP guide and the wand propose criteria; a free rubric alone still
   grades as before, with a breakdown that now agrees with its total.
 - Writing one criterion's prompt and converting a legacy rubric into
-  criteria are wand actions (ADR-059: targets `criterionPrompt` and
-  `criteriaFromRubric` of the `rich` generator), proposed into the draft;
-  decision 1's "no conversion of an old rubric" holds for the data: nothing
-  is converted without the teacher.
+  criteria are wand actions proposed into the draft (amendment of
+  2026-10-27); no stored question is converted without its teacher.
 - Still to build after the first delivery (config, editor, model contract,
   scaling): the per-criterion grading of §6, then the student view of §5.
 
@@ -86,4 +96,6 @@ cost them points.
 2. **The model scores on the item's scale**: rounding and clamping in the
    model's hands, the bug this record fixes.
 3. **Parsing the free rubric into criteria**: fragile, and an old rubric's
-   points rarely match its item's.
+   points rarely match its item's. Rejected as an automatic conversion; a
+   teacher-triggered proposal into the draft is accepted by the amendment
+   of 2026-10-27.

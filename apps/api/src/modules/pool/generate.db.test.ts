@@ -179,7 +179,7 @@ describe("an essay's targets (ADR-118)", () => {
 
   it("writes one criterion's prompt from its title, weight and the other criteria", async () => {
     next = () => ({ prompt: "Les deux entrées sont au même potentiel. La moitié si le fait est dit sans la contre-réaction." });
-    const res = await ask({ config: essay(), explanation: "Mine", target: { kind: "criterionPrompt", criterionId: "c1" } });
+    const res = await ask({ config: essay(), explanation: "Mine", target: { kind: "criterionPrompt", id: "c1" } });
     expect(res.statusCode).toBe(200);
     const result = GenerateResult.parse(res.json());
     expect(result.explanation).toBe("Mine");
@@ -219,8 +219,8 @@ describe("an essay's targets (ADR-118)", () => {
   it("refuses a target the draft does not allow, before asking anyone", async () => {
     const untitled = essay({ criteria: [{ id: "c1", title: " ", weight: 1, prompt: "" }] });
     const refused = [
-      await ask({ config: untitled, explanation: "", target: { kind: "criterionPrompt", criterionId: "c1" } }),
-      await ask({ config: essay(), explanation: "", target: { kind: "criterionPrompt", criterionId: "nope" } }),
+      await ask({ config: untitled, explanation: "", target: { kind: "criterionPrompt", id: "c1" } }),
+      await ask({ config: essay(), explanation: "", target: { kind: "criterionPrompt", id: "nope" } }),
       await ask({ config: essay({ rubric: "Barème" }), explanation: "", target: { kind: "criteriaFromRubric" } }),
       await ask({ config: essay({ criteria: [] }), explanation: "", target: { kind: "criteriaFromRubric" } }),
     ];
@@ -231,6 +231,9 @@ describe("an essay's targets (ADR-118)", () => {
   it("refuses a target the type does not serve, and an element and a target together", async () => {
     const mcqTarget = await generate({ config: mcq([{ text: "", correct: true }]), explanation: "", target: { kind: "criteriaFromRubric" } });
     expect(mcqTarget.json()).toEqual({ error: "generate_unsupported" });
+    // A kind is the request's word: an inherited property is no target.
+    const inherited = await ask({ config: essay(), explanation: "", target: { kind: "constructor" } });
+    expect(inherited.json()).toEqual({ error: "generate_unsupported" });
     const both = await ask({ config: essay(), explanation: "", item: 0, target: { kind: "criteriaFromRubric" } });
     expect(both.statusCode).toBe(400);
     expect(seen).toHaveLength(0);

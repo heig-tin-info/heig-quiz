@@ -22,6 +22,10 @@ import { questionType } from "@quiz/registry/server";
 
 import type { LlmGateway } from "../llm/service.js";
 
+/** A registered type's generator, and how it writes one part of the draft. */
+type Generator = NonNullable<ReturnType<typeof questionType>["generator"]>;
+type Writer = TargetGenerator<Parameters<Generator["merge"]>[0]>;
+
 /** Why a wand cannot run, before any model is asked: `400 { error: code }`. */
 export class GenerateRefusal extends Error {
   readonly status = 400;
@@ -56,6 +60,38 @@ export function generatorTypes(types: readonly string[]): string[] {
   return types.filter((type) => questionType(type).generator !== undefined);
 }
 
+/**
+ * The part of the draft a request asks for, as ONE shape: a target the type
+ * declares (ADR-118; its own instructions, not the whole question's, which
+ * ask for more), or the element of `item` (an MCQ choice, ADR-059) adapted
+ * to it. `null`: the whole question. A kind the type does not declare, or
+ * an element of a type without one, is `generate_unsupported`.
+ */
+function partOf(
+  generator: Generator,
+  input: { item?: number | undefined; target?: GenerateTarget | undefined },
+): { writer: Writer; target: GenerateTarget; refusal: "item_not_empty" | "target_unavailable"; maxTokens: number } | null {
+  if (input.target !== undefined) {
+    const targets = generator.targets ?? {};
+    // Own keys only: a kind is a request's word, and `constructor` is not a target.
+    const writer = Object.hasOwn(targets, input.target.kind) ? targets[input.target.kind] : undefined;
+    if (!writer) throw new GenerateRefusal("generate_unsupported");
+    return { writer, target: input.target, refusal: "target_unavailable", maxTokens: MAX_TOKENS.target };
+  }
+  if (input.item === undefined) return null;
+  const item = generator.item;
+  if (!item) throw new GenerateRefusal("generate_unsupported");
+  const index = input.item;
+  const writer: Writer = {
+    accepts: (config) => item.accepts(config, index),
+    instructions: generator.instructions,
+    ask: () => `The empty element is number ${index + 1}. ${item.instructions}`,
+    schema: item.schema,
+    place: (config, _target, value) => item.place(config, index, value),
+  };
+  return { writer, target: { kind: "item" }, refusal: "item_not_empty", maxTokens: MAX_TOKENS.item };
+}
+
 export async function generateAnswers(
   gateway: LlmGateway,
   runner: RunnerService,
@@ -80,38 +116,20 @@ export async function generateAnswers(
     `The draft's explanation: ${input.explanation.trim() === "" ? "(empty)" : `\n${input.explanation}`}`,
   ].join("\n\n");
 
-  if (input.target !== undefined) {
-    // One part of the draft, written by the type's own target (ADR-118): the
-    // type's whole-question instructions are not sent, they ask for more.
-    const target = generator.targets?.[input.target.kind] as TargetGenerator<never, GenerateTarget> | undefined;
-    if (!target) throw new GenerateRefusal("generate_unsupported");
-    if (!target.accepts(config, input.target)) throw new GenerateRefusal("target_unavailable");
+  const part = partOf(generator, input);
+  if (part) {
+    // One part of the draft: the explanation is left as it is.
+    if (!part.writer.accepts(config, part.target)) throw new GenerateRefusal(part.refusal);
     const { value } = await gateway.complete({
       purpose: "generate",
       userId: input.userId,
-      system: `${SYSTEM}\n\n${target.instructions}`,
-      prompt: `${draft}\n\n${target.ask(config, input.target)}`,
-      schema: target.schema,
-      maxTokens: MAX_TOKENS.target,
+      system: `${SYSTEM}\n\n${part.writer.instructions}`,
+      prompt: `${draft}\n\n${part.writer.ask(config, part.target)}`,
+      schema: part.writer.schema,
+      maxTokens: part.maxTokens,
       effort: "low",
     });
-    return { config: target.place(config, input.target, value), explanation: input.explanation };
-  }
-
-  if (input.item !== undefined) {
-    const item = generator.item;
-    if (!item) throw new GenerateRefusal("generate_unsupported");
-    if (!item.accepts(config, input.item)) throw new GenerateRefusal("item_not_empty");
-    const { value } = await gateway.complete({
-      purpose: "generate",
-      userId: input.userId,
-      system: `${SYSTEM}\n\n${generator.instructions}`,
-      prompt: `${draft}\n\nThe empty element is number ${input.item + 1}. ${item.instructions}`,
-      schema: item.schema as z.ZodType<unknown>,
-      maxTokens: MAX_TOKENS.item,
-      effort: "low",
-    });
-    return { config: item.place(config, input.item, value), explanation: input.explanation };
+    return { config: part.writer.place(config, part.target, value), explanation: input.explanation };
   }
 
   const { value } = await gateway.complete({

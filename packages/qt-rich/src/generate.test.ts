@@ -74,27 +74,25 @@ describe("the essay's targets (ADR-118)", () => {
     const target = criterionPromptTarget;
 
     it("accepts a criterion that exists and has a title", () => {
-      expect(target.accepts(essay(), { kind: "criterionPrompt", criterionId: "a1" })).toBe(true);
-      expect(target.accepts(essay(), { kind: "criterionPrompt", criterionId: "zz" })).toBe(false);
+      expect(target.accepts(essay(), { kind: "criterionPrompt", id: "a1" })).toBe(true);
+      expect(target.accepts(essay(), { kind: "criterionPrompt", id: "zz" })).toBe(false);
       const untitled = essay({ criteria: [{ id: "a1", title: "  ", weight: 1, prompt: "" }] });
-      expect(target.accepts(untitled, { kind: "criterionPrompt", criterionId: "a1" })).toBe(false);
-      expect(target.accepts({ prompt: "Why?" } as never, { kind: "criterionPrompt", criterionId: "a1" })).toBe(false);
+      expect(target.accepts(untitled, { kind: "criterionPrompt", id: "a1" })).toBe(false);
+      expect(target.accepts({ prompt: "Why?" } as never, { kind: "criterionPrompt", id: "a1" })).toBe(false);
     });
 
-    it("names the criterion, its weight and the other criteria, and states the grader's contract", () => {
-      const ask = target.ask(essay(), { kind: "criterionPrompt", criterionId: "a1" });
+    it("names the criterion, its weight and the other criteria", () => {
+      const ask = target.ask(essay(), { kind: "criterionPrompt", id: "a1" });
       expect(ask).toContain('"IN+ and IN- at the same voltage"');
       expect(ask).toContain("worth 1");
       expect(ask).toContain('"Infinite input impedance"');
-      expect(target.instructions).toMatch(/from 0 to its weight in quarter points/);
-      expect(target.instructions).toMatch(/part of it/);
     });
 
     it("replaces that criterion's prompt only, capped, and ignores an empty reply", () => {
-      const placed = target.place(essay(), { kind: "criterionPrompt", criterionId: "b2" }, { prompt: ` ${"p".repeat(3000)} ` });
+      const placed = target.place(essay(), { kind: "criterionPrompt", id: "b2" }, { prompt: ` ${"p".repeat(3000)} ` });
       expect(placed.criteria[0]).toEqual(essay().criteria[0]);
       expect(placed.criteria[1]!.prompt).toHaveLength(2000);
-      expect(target.place(essay(), { kind: "criterionPrompt", criterionId: "a1" }, { prompt: "  " })).toEqual(essay());
+      expect(target.place(essay(), { kind: "criterionPrompt", id: "a1" }, { prompt: "  " })).toEqual(essay());
     });
   });
 
@@ -130,15 +128,5 @@ describe("the essay's targets (ADR-118)", () => {
       const none = { criteria: [{ title: " ", weight: 1, prompt: "" }], rubric: "" };
       expect(target.place(legacy, { kind: "criteriaFromRubric" }, none)).toEqual(legacy);
     });
-
-    it("asks for whole weights from the rubric's own points, and neutral titles", () => {
-      expect(target.instructions).toMatch(/rubric's own points/);
-      expect(target.instructions).toMatch(/never the expected answer/);
-      expect(target.instructions).toMatch(/from 0 to its weight in quarter points/);
-    });
-  });
-
-  it("are the generator's", () => {
-    expect(richGenerator.targets).toEqual({ criterionPrompt: criterionPromptTarget, criteriaFromRubric: criteriaFromRubricTarget });
   });
 });

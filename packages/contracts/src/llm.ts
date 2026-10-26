@@ -125,13 +125,17 @@ export type LlmAvailability = z.infer<typeof LlmAvailability>;
 
 /**
  * One part of the draft the wand writes on its own (`GenerateTarget` of
- * `@quiz/core`): an essay criterion's grading prompt, by the criterion's id,
- * or an essay's free rubric split into criteria (ADR-118).
+ * `@quiz/core`): a kind the question's type declares (an essay's
+ * `criterionPrompt`, ADR-118) and, when it is about one element, that
+ * element's id. The kinds are the types'; here only their spelling is bound,
+ * and a kind the type does not serve is `generate_unsupported`.
  */
-export const GenerateTarget = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("criterionPrompt"), criterionId: z.string().min(1).max(64) }).strict(),
-  z.object({ kind: z.literal("criteriaFromRubric") }).strict(),
-]) satisfies z.ZodType<CoreGenerateTarget>;
+export const GenerateTarget = z
+  .object({
+    kind: z.string().regex(/^[a-z][A-Za-z0-9]{0,39}$/),
+    id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
+  })
+  .strict() satisfies z.ZodType<CoreGenerateTarget>;
 export type GenerateTarget = z.infer<typeof GenerateTarget>;
 
 /**

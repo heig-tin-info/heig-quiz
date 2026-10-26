@@ -271,7 +271,7 @@ describe("RichEditor", () => {
     );
     expect(screen.getByRole("button", { name: "Generate the prompt of criterion 2" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Generate the prompt of criterion 1" }));
-    expect(onGenerateTarget).toHaveBeenCalledWith({ kind: "criterionPrompt", criterionId: "a" });
+    expect(onGenerateTarget).toHaveBeenCalledWith({ kind: "criterionPrompt", id: "a" });
 
     rerender(<RichEditor config={two} onChange={vi.fn()} onGenerateTarget={onGenerateTarget} disabled />);
     expect(screen.queryByRole("button", { name: /^Generate the prompt/ })).toBeNull();

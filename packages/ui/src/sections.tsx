@@ -5,7 +5,7 @@
  * editors is what goes INSIDE these blocks; the blocks themselves were the
  * same markup written twice.
  */
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { ConfigIssue, RichTextComponent } from "@quiz/core/client";
 
@@ -104,16 +104,33 @@ export function PromptSection({
 export function AdvancedDisclosure({
   summary,
   className,
+  plain = false,
+  defaultOpen = false,
   children,
 }: {
   summary: ReactNode;
   className: string;
+  /**
+   * A fold inside a plain-form editor (the essay's instructions): no card,
+   * and the summary in the field label's face rather than a section title.
+   */
+  plain?: boolean | undefined;
+  /** Open at mount; afterwards the fold is the teacher's, so a later change of this prop is ignored. */
+  defaultOpen?: boolean | undefined;
   children: ReactNode;
 }): ReactNode {
+  const [open] = useState(defaultOpen);
   return (
-    <details className={cx(card, "p-4")}>
-      <summary className={cx(sectionTitle, "cursor-pointer")}>{summary}</summary>
-      <div className={cx("mt-4", className)}>{children}</div>
+    <details className={plain ? undefined : cx(card, "p-4")} open={open}>
+      <summary className={cx(plain ? FOLD_LABEL : sectionTitle, "cursor-pointer")}>{summary}</summary>
+      <div className={cx(plain ? "mt-2" : "mt-4", className)}>{children}</div>
     </details>
   );
 }
+
+/**
+ * The face of the `label` token without its flex row: a `summary` laid out
+ * as a row loses the browser's disclosure marker, which is the fold's
+ * affordance.
+ */
+const FOLD_LABEL = "text-[13px] font-medium text-fg";

@@ -9,13 +9,14 @@
  * new config through `onChange` and never fetches. An invalid draft is a
  * normal state (decision D16).
  */
-import { useId, useState } from "react";
+import { useId } from "react";
 
 import type { EditorProps, StringOverrides } from "@quiz/core/client";
 import type { GenerateTarget } from "@quiz/core/generate";
 import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
 import { newId } from "@quiz/core/id";
 import {
+  AdvancedDisclosure,
   AsideSection,
   Button,
   cx,
@@ -32,8 +33,8 @@ import {
   RowListHeader,
   sectionClass,
   Segmented,
-  StrokeIcon,
   textareaClass,
+  useWandRunner,
   WandIcon,
 } from "@quiz/ui";
 
@@ -46,6 +47,7 @@ import {
   RICH_MAX_CRITERION_PROMPT,
   RICH_MAX_CRITERION_TITLE,
   RICH_MAX_WEIGHT,
+  RICH_TARGETS,
   type RichConfig,
   type RichCriterion,
   type RichFormat,
@@ -56,8 +58,10 @@ type RichEditorProps = EditorProps<RichConfig> & {
   strings?: StringOverrides<RichEditorStringKey>;
 };
 
-/** The key of the conversion's wand in `generating`: a criterion id never has a space. */
-const CONVERT = "convert rubric";
+/** A target's own key, for the wand that waits: its kind, and the criterion it is about. */
+const targetKey = (target: GenerateTarget) => (target.id === undefined ? target.kind : `${target.kind}:${target.id}`);
+
+const CONVERT: GenerateTarget = { kind: RICH_TARGETS.criteriaFromRubric };
 
 /**
  * A wand of one part of the draft (ADR-059, ADR-118): a secondary button,
@@ -109,19 +113,17 @@ export function RichEditor({
   const rubric = config.rubric ?? "";
   /** An essay from before criteria: its whole barème is the rubric, which the wand converts. */
   const legacyRubric = criteria.length === 0 && rubric.trim() !== "";
-  const [rubricOpen, setRubricOpen] = useState(() => rubric.trim() !== "");
-  /** The part whose wand waits for the model (a criterion's id, or the conversion); one at a time. */
-  const [generating, setGenerating] = useState<string | null>(null);
+  /** The target whose wand waits for the model, by its key; one at a time. */
+  const { running, run } = useWandRunner<string>();
   const wand =
     onGenerateTarget === undefined || disabled
       ? null
-      : (key: string, target: GenerateTarget) => {
-          setGenerating(key);
-          // The host words a failure; the button only stops waiting.
-          onGenerateTarget(target)
-            .catch(() => undefined)
-            .finally(() => setGenerating(null));
-        };
+      : (target: GenerateTarget) => run(targetKey(target), () => onGenerateTarget(target));
+  /** The props of the wand button of one target. */
+  const wandState = (target: GenerateTarget) => ({
+    running: running === targetKey(target),
+    onClick: () => wand?.(target),
+  });
   const setCriteria = (next: RichCriterion[]) => patch({ criteria: next });
   /** Optional fields are ABSENT when empty, never `""` or `0`: the schema reads absence. */
   const withOptional = <K extends "reference" | "maxChars">(key: K, value: RichConfig[K] | undefined) => {
@@ -199,9 +201,8 @@ export function RichEditor({
                       <WandButton
                         label={s.generatePrompt}
                         ariaLabel={fmt(s.generatePromptAria, { n })}
-                        running={generating === criterion.id}
-                        disabled={generating !== null || criterion.title.trim() === ""}
-                        onClick={() => wand(criterion.id, { kind: "criterionPrompt", criterionId: criterion.id })}
+                        {...wandState({ kind: RICH_TARGETS.criterionPrompt, id: criterion.id })}
+                        disabled={running !== null || criterion.title.trim() === ""}
                       />
                     ) : null}
                   </div>
@@ -214,41 +215,33 @@ export function RichEditor({
         <IssueList issues={issuesAt(issues, "criteria").filter((issue) => issue.path.length === 1)} />
       </section>
 
-      {/* The rubric, folded unless written (ADR-118): beside criteria it is
-          global context; alone, it is an essay's whole barème from before
-          criteria, which the wand converts. One fold in both cases, so typing
-          in it never remounts the field. */}
+      {/* The rubric, folded unless written at mount (ADR-118): beside
+          criteria it is global context; alone, it is an essay's whole grading
+          scheme from before criteria, which the wand converts. One fold in
+          both cases, so typing in it never remounts the field. */}
       <section className={sectionClass}>
-        <details className="group" open={rubricOpen} onToggle={(e) => setRubricOpen(e.currentTarget.open)}>
-          <summary className={cx(label, "w-fit cursor-pointer select-none")}>
-            <StrokeIcon className="size-3.5 text-fg-muted transition-transform group-open:rotate-90" strokeWidth={2}>
-              <path d="m9 6 6 6-6 6" />
-            </StrokeIcon>
-            {legacyRubric ? s.rubric : s.globalRubric}
-          </summary>
-          <div className="mt-2 flex flex-col gap-2">
-            <p className={hint}>{legacyRubric ? s.rubricHint : s.globalRubricHint}</p>
-            <PromptField
-              id={`${id}-rubric`}
-              label={legacyRubric ? s.rubric : s.globalRubricField}
-              labelHidden
-              value={rubric}
-              onChange={(next) => patch({ rubric: next })}
-              disabled={disabled}
-              RichText={RichText}
-            />
-            {legacyRubric && wand ? (
-              <div>
-                <WandButton
-                  label={s.convertRubric}
-                  running={generating === CONVERT}
-                  disabled={generating !== null}
-                  onClick={() => wand(CONVERT, { kind: "criteriaFromRubric" })}
-                />
-              </div>
-            ) : null}
-          </div>
-        </details>
+        <AdvancedDisclosure
+          plain
+          defaultOpen={rubric.trim() !== ""}
+          summary={legacyRubric ? s.rubric : s.globalRubric}
+          className="flex flex-col gap-2"
+        >
+          <p className={hint}>{legacyRubric ? s.rubricHint : s.globalRubricHint}</p>
+          <PromptField
+            id={`${id}-rubric`}
+            label={legacyRubric ? s.rubric : s.globalRubricField}
+            labelHidden
+            value={rubric}
+            onChange={(next) => patch({ rubric: next })}
+            disabled={disabled}
+            RichText={RichText}
+          />
+          {legacyRubric && wand ? (
+            <div>
+              <WandButton label={s.convertRubric} {...wandState(CONVERT)} disabled={running !== null} />
+            </div>
+          ) : null}
+        </AdvancedDisclosure>
         <IssueList issues={issuesAt(issues, "rubric")} />
       </section>
 

@@ -5,10 +5,10 @@ import { GenerateRequest } from "./llm.js";
 describe("GenerateRequest's target (ADR-118)", () => {
   const draft = { config: { prompt: "Why?" }, explanation: "" };
 
-  it("takes a criterion's prompt by id, or the rubric's conversion", () => {
-    expect(GenerateRequest.parse({ ...draft, target: { kind: "criterionPrompt", criterionId: "a1" } }).target).toEqual({
+  it("takes a kind, and the id of the element it is about", () => {
+    expect(GenerateRequest.parse({ ...draft, target: { kind: "criterionPrompt", id: "a1" } }).target).toEqual({
       kind: "criterionPrompt",
-      criterionId: "a1",
+      id: "a1",
     });
     expect(GenerateRequest.parse({ ...draft, target: { kind: "criteriaFromRubric" } }).target).toEqual({
       kind: "criteriaFromRubric",
@@ -16,11 +16,18 @@ describe("GenerateRequest's target (ADR-118)", () => {
     expect(GenerateRequest.parse(draft).target).toBeUndefined();
   });
 
-  it("refuses an unknown kind, a missing id and a stray key", () => {
-    expect(GenerateRequest.safeParse({ ...draft, target: { kind: "variant" } }).success).toBe(false);
-    expect(GenerateRequest.safeParse({ ...draft, target: { kind: "criterionPrompt" } }).success).toBe(false);
-    expect(GenerateRequest.safeParse({ ...draft, target: { kind: "criterionPrompt", criterionId: "" } }).success).toBe(false);
-    expect(GenerateRequest.safeParse({ ...draft, target: { kind: "criteriaFromRubric", criterionId: "a" } }).success).toBe(false);
+  it("bounds the spelling of a kind and an id, and refuses a stray key", () => {
+    for (const target of [
+      { kind: "" },
+      { kind: "Constructor" },
+      { kind: "__proto__" },
+      { kind: "x".repeat(41) },
+      { kind: "criterionPrompt", id: "" },
+      { kind: "criterionPrompt", id: "a/b" },
+      { kind: "criterionPrompt", criterionId: "a" },
+    ]) {
+      expect(GenerateRequest.safeParse({ ...draft, target }).success).toBe(false);
+    }
   });
 
   it("is never asked together with an element", () => {
