@@ -62,7 +62,11 @@ const CODE = makeByQuestion({
 const ESSAY = makeByQuestion({
   item: byQuestionItem(4, "rich"),
   student: { prompt: "Explain `malloc`.", format: "markdown" },
-  solution: { rubric: "secret-rubric", reference: "It allocates on the heap." },
+  solution: {
+    rubric: "secret-rubric",
+    criteria: [{ id: "c1", title: "secret-criterion", weight: 2, prompt: "secret-prompt" }],
+    reference: "It allocates on the heap.",
+  },
   outcomes: { correct: 0, partial: 1, wrong: 0, blank: 0 },
 });
 
@@ -172,7 +176,9 @@ describe("ByQuestionView", () => {
     expect(await screen.findByText("Model answer")).toBeVisible();
     expect(screen.getByText("It allocates on the heap.")).toBeVisible();
     expect(document.body.innerHTML).not.toContain("secret-rubric");
-    expect(screen.queryByText("Grading criteria")).toBeNull();
+    expect(document.body.innerHTML).not.toContain("secret-criterion");
+    expect(document.body.innerHTML).not.toContain("secret-prompt");
+    expect(screen.queryByText("Grading instructions")).toBeNull();
   });
 
   it("draws a program of blocks' key itself: the reference, the cases and the visible warehouses beside it", async () => {

@@ -3,7 +3,7 @@ import { RichConfigSchema, type RichConfig } from "../schema.js";
 
 export function config(over: Partial<RichConfig> = {}): RichConfig {
   return RichConfigSchema.parse({
-    configVersion: 1,
+    configVersion: 2,
     prompt: "Explain why a stack overflow crashes a C program.",
     ...over,
   });

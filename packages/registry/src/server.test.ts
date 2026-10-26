@@ -49,7 +49,7 @@ const CONFIG_VERSIONS: Record<RegisteredId, number> = {
   code: 1,
   circuit: 1,
   codeimage: 1,
-  rich: 1,
+  rich: 2,
   categorize: 1,
   diagram: 1,
   brainstorm: 1,

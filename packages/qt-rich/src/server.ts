@@ -16,6 +16,7 @@ import { ConfigMigrationError, zeroGrade, type QuestionTypeServer } from "@quiz/
 import { richGenerator } from "./generate.js";
 import {
   countChars,
+  criteriaPoints,
   emptyRichDraft,
   isRichAnswered,
   RICH_CONFIG_VERSION,
@@ -30,6 +31,10 @@ import {
   type RichSolution,
   type RichStudent,
 } from "./schema.js";
+
+/** The criteria as the grader reads them, nothing else (`config.criteria` may be absent from an unparsed draft). */
+const criteriaOf = (config: RichConfig) =>
+  (config.criteria ?? []).map(({ id, title, weight, prompt }) => ({ id, title, weight, prompt }));
 
 export const richServer: QuestionTypeServer<
   RichConfig,
@@ -50,19 +55,29 @@ export const richServer: QuestionTypeServer<
 
   emptyDraft: emptyRichDraft,
 
+  /**
+   * v1 → v2 (ADR-118): no criteria, the rubric kept as it was. Total: it
+   * adds a field and parses nothing, so an invalid v1 draft (D16) comes up
+   * as invalid as it went in.
+   */
   migrate(config: unknown, fromVersion: number): RichConfig {
     if (fromVersion === RICH_CONFIG_VERSION) return config as RichConfig;
+    if (fromVersion === 1) {
+      const v1 = config !== null && typeof config === "object" && !Array.isArray(config) ? config : {};
+      return { criteria: [], ...v1, configVersion: RICH_CONFIG_VERSION } as unknown as RichConfig;
+    }
     throw new ConfigMigrationError("rich", fromVersion, RICH_CONFIG_VERSION, "unknown source version");
   },
 
-  defaultPoints: () => 1,
+  /** The sum of the criteria's weights, else 1 (ADR-118); the evaluation item may say otherwise. */
+  defaultPoints: (config) => criteriaPoints(config.criteria),
 
   /** Nothing to shuffle: one statement, one field. */
   shuffleable: () => false,
 
   /**
-   * THE single exit toward a student (invariant 4): the rubric and the model
-   * answer are dropped whole. The limit stays — it is what the field takes.
+   * THE single exit toward a student (invariant 4): the rubric, the criteria
+   * and the model answer are dropped whole. The limit stays — it is what the field takes.
    */
   toStudent(config): RichStudent {
     const student: RichStudent = { prompt: config.prompt, format: config.format };
@@ -71,9 +86,12 @@ export const richServer: QuestionTypeServer<
   },
 
   toSolution(config): RichSolution {
-    return config.reference === undefined
-      ? { rubric: config.rubric }
-      : { rubric: config.rubric, reference: config.reference };
+    const criteria = criteriaOf(config);
+    return {
+      rubric: config.rubric,
+      ...(criteria.length === 0 ? {} : { criteria }),
+      ...(config.reference === undefined ? {} : { reference: config.reference }),
+    };
   },
 
   /**
@@ -100,10 +118,11 @@ export const richServer: QuestionTypeServer<
 
   /**
    * Nothing written is worth 0, and that IS the grade. Anything else goes to
-   * the LLM service when there is one and a rubric or a model answer to
-   * grade against — the request holds the criteria and the text, nothing
-   * that names the student (F-LLM-04) — and is otherwise a proposal of 0
-   * points that a teacher must settle (F-GRADE-01).
+   * the LLM service when there is one and criteria, a rubric or a model
+   * answer to grade against — the request holds them and the text, nothing
+   * that names the student (F-LLM-04); structured criteria are scored in
+   * weight units and scaled by the API (ADR-118) — and is otherwise a
+   * proposal of 0 points that a teacher must settle (F-GRADE-01).
    */
   grade(config, answer, ctx) {
     const chars = answer === null ? 0 : countChars(answer.text);
@@ -111,7 +130,8 @@ export const richServer: QuestionTypeServer<
       return { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "empty", chars } };
     }
     const reference = config.reference?.trim() ?? "";
-    if (ctx.llm !== undefined && (config.rubric.trim() !== "" || reference !== "")) {
+    const criteria = criteriaOf(config);
+    if (ctx.llm !== undefined && (criteria.length > 0 || config.rubric.trim() !== "" || reference !== "")) {
       return {
         kind: "pending",
         via: "llm",
@@ -119,6 +139,7 @@ export const richServer: QuestionTypeServer<
           statement: config.prompt,
           form: config.format === "markdown" ? "free text, in markdown" : "free text",
           rubric: config.rubric,
+          ...(criteria.length === 0 ? {} : { criteria }),
           ...(reference === "" ? {} : { reference }),
           answer: answer.text,
           maxPoints: ctx.itemPoints,
@@ -140,8 +161,14 @@ export const richServer: QuestionTypeServer<
     return config.maxChars === undefined ? String(chars) : `${chars}/${config.maxChars}`;
   },
 
-  /** Teacher-facing (`question_versions.search`): the rubric and the model answer belong in it. */
-  searchText: (config) => [config.prompt, config.rubric, config.reference ?? ""].join("\n"),
+  /** Teacher-facing (`question_versions.search`): the rubric, the criteria and the model answer belong in it. */
+  searchText: (config) =>
+    [
+      config.prompt,
+      config.rubric,
+      ...(config.criteria ?? []).flatMap((c) => [c.title, c.prompt]),
+      config.reference ?? "",
+    ].join("\n"),
 
   generator: richGenerator,
 };

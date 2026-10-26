@@ -143,6 +143,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-059 — "Generate": the wand of the question editor](ADR-059-generer-la-reponse.md)
 - [ADR-060 — The LLM review of the published questions](ADR-060-revue-llm-des-questions.md)
 - [ADR-063 — LLM grading of essays and diagrams](ADR-063-correction-llm.md)
+- [ADR-118 — Structured criteria for essays: scored in weights by the model, scaled to the item](ADR-118-criteres-structures-des-essais.md)
 - [ADR-080 — The teacher assistant: ask the documentation and your own data from any screen](ADR-080-assistant-enseignant.md)
 - [ADR-082 — The AI card of the question editor](ADR-082-carte-ia-de-l-editeur.md)
 

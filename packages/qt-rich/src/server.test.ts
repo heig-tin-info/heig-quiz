@@ -40,12 +40,22 @@ describe("grade", () => {
         statement: SECRET_CONFIG.prompt,
         form: "free text, in markdown",
         rubric: SECRET_CONFIG.rubric,
+        criteria: SECRET_CONFIG.criteria,
         reference: SECRET_CONFIG.reference,
         answer: "The guard page.",
         maxPoints: 4,
       },
       details: { reason: "llm", chars: 15 },
     });
+  });
+
+  it("sends an essay with criteria alone, and no criteria key without them", async () => {
+    const ctx = { ...testGradeContext(3), llm: true as const };
+    const criteria = [{ id: "a", title: "Names the guard page", weight: 2, prompt: "" }];
+    const only = await richServer.grade(config({ criteria }), { text: "The guard page." }, ctx);
+    expect(only.kind === "pending" && only.via === "llm" && only.request.criteria).toEqual(criteria);
+    const rubric = await richServer.grade(config({ rubric: "Names it" }), { text: "The guard page." }, ctx);
+    expect(rubric.kind === "pending" && rubric.via === "llm" && "criteria" in rubric.request).toBe(false);
   });
 
   it("keeps an essay with nothing to grade against, and a blank one, off the LLM", async () => {
@@ -83,9 +93,10 @@ describe("the dashboard and the list", () => {
 });
 
 describe("the key", () => {
-  it("serves the rubric and the model answer to the grader", () => {
+  it("serves the rubric, the criteria and the model answer to the grader", () => {
     expect(richServer.toSolution(SECRET_CONFIG, { seed: 0, itemId: "i", shuffle: false })).toEqual({
       rubric: SECRET_CONFIG.rubric,
+      criteria: SECRET_CONFIG.criteria,
       reference: SECRET_CONFIG.reference,
     });
     expect(richServer.toSolution(config(), { seed: 0, itemId: "i", shuffle: false })).toEqual({ rubric: "" });
@@ -96,6 +107,7 @@ describe("the key", () => {
     const student = richServer.studentSolution!(richServer.toSolution(SECRET_CONFIG, view), SECRET_CONFIG);
     expect(student).toEqual({ reference: SECRET_CONFIG.reference });
     expect(JSON.stringify(student)).not.toContain("RUBRIC-SECRET");
+    expect(JSON.stringify(student)).not.toContain("CRITERION-");
   });
 
   it("gives a student nothing when there is no model answer", () => {
@@ -109,6 +121,19 @@ describe("the key", () => {
     const text = richServer.searchText(SECRET_CONFIG);
     expect(text).toContain("guard page");
     expect(text).toContain("unmapped memory");
+    expect(text).toContain("CRITERION-TITLE-SECRET");
+    expect(text).toContain("CRITERION-PROMPT-SECRET");
+  });
+
+  it("raises a v1 config to v2 with no criteria, an invalid draft included", () => {
+    const v1 = { configVersion: 1, prompt: "Explain.", rubric: "2 pts: names it", format: "plain" };
+    expect(richServer.migrate(v1, 1)).toEqual({ ...v1, configVersion: 2, criteria: [] });
+    expect(richServer.migrate({ configVersion: 1, prompt: "" }, 1)).toEqual({ configVersion: 2, prompt: "", criteria: [] });
+  });
+
+  it("is worth the sum of its weights by default, else 1", () => {
+    expect(richServer.defaultPoints(config())).toBe(1);
+    expect(richServer.defaultPoints(SECRET_CONFIG)).toBe(3);
   });
 
   it("refuses a version it never emitted", () => {

@@ -123,7 +123,7 @@ describe("RichPlayer", () => {
 describe("RichReview", () => {
   const solution = richServer.toSolution(SECRET_CONFIG, view);
 
-  it("shows the answer beside the rubric and the model answer", () => {
+  it("shows the answer beside the criteria, the instructions and the model answer", () => {
     render(
       <RichReview
         student={student}
@@ -139,6 +139,27 @@ describe("RichReview", () => {
     expect(screen.getByText("31 characters")).toBeInTheDocument();
     expect(screen.getByText(/RUBRIC-SECRET/)).toBeInTheDocument();
     expect(screen.getByText(/REFERENCE-SECRET/)).toBeInTheDocument();
+    expect(screen.getByText("Criteria")).toBeInTheDocument();
+    expect(screen.getByText("CRITERION-TITLE-SECRET-guard page")).toBeInTheDocument();
+    expect(screen.getByText("Weight 2")).toBeInTheDocument();
+    expect(screen.getByText(/CRITERION-PROMPT-SECRET/)).toBeInTheDocument();
+  });
+
+  it("drops an empty instructions panel when the criteria say it all", () => {
+    const cfg = config({ criteria: [{ id: "a", title: "Names it", weight: 1, prompt: "" }] });
+    render(
+      <RichReview
+        student={student}
+        answer={{ text: "x" }}
+        solution={richServer.toSolution(cfg, view)}
+        details={null}
+        points={null}
+        maxPoints={1}
+        audience="teacher"
+      />,
+    );
+    expect(screen.getByText("Names it")).toBeInTheDocument();
+    expect(screen.queryByText("Grading instructions")).toBeNull();
   });
 
   it("hides the guide when the policy withholds the key or the teacher folds it", () => {
@@ -151,13 +172,14 @@ describe("RichReview", () => {
       audience: "student" as const,
     };
     const { unmount } = render(<RichReview {...props} solution={null} />);
-    expect(screen.queryByText("Grading criteria")).toBeNull();
+    expect(screen.queryByText("Grading instructions")).toBeNull();
     unmount();
     render(<RichReview {...props} solution={solution} sections={{ solution: false }} />);
-    expect(screen.queryByText("Grading criteria")).toBeNull();
+    expect(screen.queryByText("Grading instructions")).toBeNull();
+    expect(screen.queryByText("Criteria")).toBeNull();
   });
 
-  it("shows a student the model answer alone: the rubric is not in their key (ADR-037)", () => {
+  it("shows a student the model answer alone: the rubric and the criteria are not in their key (ADR-037)", () => {
     const studentKey = richServer.studentSolution!(solution, SECRET_CONFIG);
     render(
       <RichReview
@@ -172,8 +194,10 @@ describe("RichReview", () => {
     );
     expect(screen.getByText(/REFERENCE-SECRET/)).toBeInTheDocument();
     expect(screen.getByText("Model answer")).toBeInTheDocument();
-    expect(screen.queryByText("Grading criteria")).toBeNull();
-    expect(screen.queryByText("No grading criteria.")).toBeNull();
+    expect(screen.queryByText("Grading instructions")).toBeNull();
+    expect(screen.queryByText("No grading instructions.")).toBeNull();
+    expect(screen.queryByText("Criteria")).toBeNull();
+    expect(screen.queryByText(/CRITERION-/)).toBeNull();
   });
 
   it("says when nothing was written", () => {
@@ -188,8 +212,40 @@ describe("RichEditor", () => {
   it("reports a typed rubric without keeping it", async () => {
     const onChange = vi.fn();
     render(<RichEditor config={emptyRichDraft()} onChange={onChange} />);
-    await userEvent.type(screen.getByLabelText("Grading criteria"), "?");
+    await userEvent.type(screen.getByLabelText("Grading instructions"), "?");
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ rubric: "?" }));
+  });
+
+  it("adds, edits, moves and removes criteria, and says the default points", async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<RichEditor config={config()} onChange={onChange} />);
+    expect(screen.getByText("Default points: 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Add a criterion" }));
+    const added = onChange.mock.lastCall![0].criteria;
+    expect(added).toEqual([{ id: expect.stringMatching(/^[a-z0-9]{8}$/), title: "", weight: 1, prompt: "" }]);
+
+    const two = config({
+      criteria: [
+        { id: "a", title: "First", weight: 2, prompt: "" },
+        { id: "b", title: "Second", weight: 3, prompt: "Says why." },
+      ],
+    });
+    rerender(<RichEditor config={two} onChange={onChange} />);
+    expect(screen.getByText("Default points: 5")).toBeInTheDocument();
+    expect(screen.getByText("2 criteria")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Criterion 1"), { target: { value: "Premier" } });
+    expect(onChange.mock.lastCall![0].criteria[0]).toMatchObject({ id: "a", title: "Premier" });
+    fireEvent.change(screen.getByLabelText("Weight of criterion 2"), { target: { value: "4" } });
+    expect(onChange.mock.lastCall![0].criteria[1]).toMatchObject({ id: "b", weight: 4 });
+    fireEvent.change(screen.getByLabelText("What earns the weight of criterion 2"), { target: { value: "More." } });
+    expect(onChange.mock.lastCall![0].criteria[1]).toMatchObject({ id: "b", prompt: "More." });
+
+    expect(screen.getByRole("button", { name: "Move criterion 1 up" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Move criterion 2 up" }));
+    expect(onChange.mock.lastCall![0].criteria.map((c: { id: string }) => c.id)).toEqual(["b", "a"]);
+    await userEvent.click(screen.getByRole("button", { name: "Remove criterion 1" }));
+    expect(onChange.mock.lastCall![0].criteria.map((c: { id: string }) => c.id)).toEqual(["b"]);
   });
 
   it("stores no empty model answer and no empty limit", () => {

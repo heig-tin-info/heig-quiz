@@ -15,6 +15,15 @@ describe("toStudent", () => {
     expect(student).toEqual({ prompt: SECRET_CONFIG.prompt, format: "markdown", maxChars: 3000 });
   });
 
+  it("never carries a criterion's title, prompt or weight (ADR-118)", () => {
+    const text = JSON.stringify(richServer.toStudent(SECRET_CONFIG, view));
+    for (const c of SECRET_CONFIG.criteria) {
+      expect(text).not.toContain(c.title);
+      if (c.prompt !== "") expect(text).not.toContain(c.prompt);
+    }
+    expect(text).not.toContain("criteria");
+  });
+
   it("omits the limit when the teacher set none", () => {
     const { maxChars: _drop, ...unlimited } = SECRET_CONFIG;
     expect("maxChars" in richServer.toStudent(unlimited, view)).toBe(false);

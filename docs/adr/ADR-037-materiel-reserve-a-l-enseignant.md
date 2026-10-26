@@ -11,6 +11,11 @@ Amended by [ADR-063](ADR-063-correction-llm.md) §7: a teacher may explicitly co
 justification into the student-visible comment. Grading criteria stay private;
 there is no automatic disclosure of the justification.
 
+Amended 2026-10-26 by [ADR-118](ADR-118-criteres-structures-des-essais.md)
+(product owner; scope: §1, essays with structured criteria): a criterion's
+title and its validated points reach a student under `showKey`, delivered
+by ADR-118's PR3. Its prompt and the rubric stay the teacher's.
+
 ## Context
 
 A type's `toSolution` is served whole to the teacher's surfaces, and was

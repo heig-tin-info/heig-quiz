@@ -3,8 +3,9 @@
  *
  * The answer, rendered as the student saw it while writing, and — when the
  * feedback policy lets the key through, which the teacher's panel always
- * does — the rubric and the model answer BESIDE it on a wide pane, under it on
- * a narrow one. A student's key holds the model answer alone (ADR-037).
+ * does — the criteria (ADR-118), the grading instructions and the model
+ * answer BESIDE it on a wide pane, under it on a narrow one. A student's key
+ * holds the model answer alone (ADR-037).
  * There is no verdict: the points are the teacher's, and the score line
  * under the review says them once set.
  */
@@ -65,8 +66,27 @@ export function RichReview({
 
           {guide ? (
             <div className="flex flex-col gap-3">
-              {/* Absent from a student's key (ADR-037): no panel at all. */}
-              {guide.rubric === undefined ? null : (
+              {/* The teacher's alone, like the rubric (ADR-118): absent from a student's key. */}
+              {guide.criteria !== undefined && guide.criteria.length > 0 ? (
+                <NotePanel eyebrow={s.criteria} tone="soft">
+                  <ul className="flex flex-col gap-2">
+                    {guide.criteria.map((c) => (
+                      <li key={c.id}>
+                        <span className="flex items-baseline justify-between gap-3">
+                          <span className="font-medium text-fg">{c.title}</span>
+                          <span className="shrink-0 tabular-nums text-fg-muted">{fmt(s.weight, { n: c.weight })}</span>
+                        </span>
+                        {c.prompt.trim() === "" ? null : (
+                          <span className="block whitespace-pre-wrap text-fg-muted">{c.prompt}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </NotePanel>
+              ) : null}
+              {/* Absent from a student's key (ADR-037): no panel at all. With criteria, only when written. */}
+              {guide.rubric === undefined ||
+              (guide.rubric.trim() === "" && (guide.criteria?.length ?? 0) > 0) ? null : (
                 <NotePanel eyebrow={s.rubric} tone="soft">
                   {guide.rubric.trim() === "" ? (
                     <span className={caption}>{s.noRubric}</span>

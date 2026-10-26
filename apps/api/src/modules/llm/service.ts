@@ -18,8 +18,8 @@ import { eq } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
 import { AI_KEY, JUSTIFICATION_KEY, type LlmErrorCode, type LlmSettings, type LlmSettingsPatch } from "@quiz/contracts";
-import type { LlmConfidence, LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
-import { DEFAULT_LLM_MODEL, LLM_MODEL_IDS, round2, type LlmModelId, type LlmPurpose } from "@quiz/domain";
+import type { LlmConfidence, LlmCriterion, LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
+import { DEFAULT_LLM_MODEL, LLM_MODEL_IDS, round2, scaleCriteria, type LlmModelId, type LlmPurpose } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
@@ -87,9 +87,50 @@ export function createLlm(config: Pick<AppConfig, "LLM_PROVIDER">, gateway: LlmG
 }
 
 /**
+ * The model's points and breakdown on the item's scale, the two in
+ * agreement (ADR-118). Structured criteria come back in weight units and are
+ * scaled by the domain's rule, keyed by the request's ids. A free rubric's
+ * breakdown is the model's own: when its maxima do not add up to the item's
+ * points, points and maxima are rescaled in proportion, and the total is
+ * their sum; the clamp to `[0, maxPoints]` stays the last guard.
+ */
+export function onItemScale(request: LlmGradeRequest, outcome: LlmGradeOutcome): { points: number; criteria: LlmCriterion[] } {
+  const max = request.maxPoints;
+  const clampTotal = (x: number) => round2(Math.min(max, Math.max(0, x)));
+  if (request.criteria !== undefined && request.criteria.length > 0) {
+    const replied = new Map(outcome.criteria.map((c) => [c.id, c]));
+    const scaled = scaleCriteria(
+      request.criteria.map((c) => ({ id: c.id, weight: c.weight, earned: replied.get(c.id)?.points ?? 0 })),
+      max,
+    );
+    return {
+      points: scaled.total,
+      criteria: request.criteria.map((c, i) => ({
+        id: c.id,
+        criterion: c.title,
+        points: scaled.criteria[i]!.points,
+        maxPoints: scaled.criteria[i]!.maxPoints,
+        comment: replied.get(c.id)?.comment ?? "",
+      })),
+    };
+  }
+  const sum = outcome.criteria.reduce((s, c) => s + Math.max(0, c.maxPoints), 0);
+  if (outcome.criteria.length === 0 || sum <= 0 || Math.abs(sum - max) < 0.005) {
+    return { points: clampTotal(outcome.points), criteria: outcome.criteria };
+  }
+  const k = max / sum;
+  const criteria = outcome.criteria.map((c) => {
+    const cap = Math.max(0, c.maxPoints);
+    return { ...c, points: round2(Math.min(cap, Math.max(0, c.points)) * k), maxPoints: round2(cap * k) };
+  });
+  const earned = outcome.criteria.reduce((s, c) => s + Math.min(Math.max(0, c.maxPoints), Math.max(0, c.points)), 0);
+  return { points: clampTotal(earned * k), criteria };
+}
+
+/**
  * What a model's grading leaves for the teacher (ADR-063 §4), the one
  * shape for the grading pass and the editor's Try. On a reply: the points
- * clamped to the item's scale, the type's own details completed with the
+ * on the item's scale, in agreement with the breakdown ({@link onItemScale}), the type's own details completed with the
  * justification and the rest of the reply (`details.ai`) — both
  * teacher-only, stripped from every student payload — and the confidence.
  * On a failed call (§2), or with no service at all: a proposal of 0 whose
@@ -105,12 +146,13 @@ export async function askGrader(
   try {
     const outcome = await llm.grade(request, call.billedTo, call.purpose);
     const own = call.own && typeof call.own === "object" && !Array.isArray(call.own) ? call.own : {};
+    const { points, criteria } = onItemScale(request, outcome);
     return {
-      points: round2(Math.min(request.maxPoints, Math.max(0, outcome.points))),
+      points,
       details: {
         ...own,
         [JUSTIFICATION_KEY]: outcome.justification,
-        [AI_KEY]: { model: outcome.model, criteria: outcome.criteria },
+        [AI_KEY]: { model: outcome.model, criteria },
       },
       confidence: outcome.confidence,
     };

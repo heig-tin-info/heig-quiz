@@ -27,7 +27,11 @@ describe("the training content", () => {
     "%s parses with its type's schema and passes its publication gate",
     (_name, q) => {
       const type = questionType(q.type);
-      const parsed = type.configSchema.safeParse(q.config);
+      // As the install writes it (`saveConfig`): a config of an older shape is raised first (an essay's v1 rubric, ADR-118).
+      const declared = (q.config as { configVersion?: unknown }).configVersion;
+      const raised =
+        typeof declared === "number" && declared !== type.configVersion ? type.migrate(q.config, declared) : q.config;
+      const parsed = type.configSchema.safeParse(raised);
       expect(parsed.success, JSON.stringify(parsed.success ? null : parsed.error.issues, null, 1)).toBe(true);
       if (!parsed.success) return;
       expect(type.publicationIssues?.(parsed.data) ?? []).toEqual([]);

@@ -10,7 +10,12 @@
  */
 import { z } from "zod";
 
-export const RICH_CONFIG_VERSION = 1;
+/** v2 (ADR-118): `criteria`, an empty list for every v1 config. */
+export const RICH_CONFIG_VERSION = 2;
+
+/** How many criteria an essay may have: as many as a grader reads beside one answer. */
+export const RICH_MAX_CRITERIA = 12;
+export const RICH_MAX_WEIGHT = 100;
 
 /**
  * The hard cap of an answer, whatever the question says: about seventeen A4
@@ -45,6 +50,30 @@ export const pagesText = (chars: number, decimal: string): string =>
 export const RichFormatSchema = z.enum(["markdown", "plain"]);
 export type RichFormat = z.infer<typeof RichFormatSchema>;
 
+/**
+ * One grading criterion (ADR-118): what earns `weight` points, said
+ * concretely in `prompt` for the grader. The id is minted by the editor
+ * (`newId`) and never changes: the model's reply is keyed by it.
+ */
+export const RichCriterionSchema = z.object({
+  id: z.string().min(1).max(40),
+  /** What the criterion judges, in a few words: a blank title is no criterion. */
+  title: z
+    .string()
+    .min(1)
+    .max(120)
+    .refine((t) => t.trim() !== "", "blank title"),
+  weight: z.number().int().min(1).max(RICH_MAX_WEIGHT),
+  prompt: z.string().max(2_000).default(""),
+});
+export type RichCriterion = z.infer<typeof RichCriterionSchema>;
+
+/** The points an essay is worth by default: the sum of its criteria's weights, else 1. */
+export function criteriaPoints(criteria: readonly { weight: number }[] | undefined): number {
+  const total = (criteria ?? []).reduce((sum, c) => sum + (Number.isFinite(c.weight) ? c.weight : 0), 0);
+  return total > 0 ? total : 1;
+}
+
 export const RichConfigSchema = z.object({
   configVersion: z.literal(RICH_CONFIG_VERSION),
   prompt: z.string().min(1).max(20_000),
@@ -55,6 +84,22 @@ export const RichConfigSchema = z.object({
    * released (invariant 4).
    */
   rubric: z.string().max(20_000).default(""),
+  /**
+   * The structured criteria (ADR-118), the grader's alone like the rubric:
+   * each scored `0..weight`, the item's points scaled over their sum. With
+   * criteria, the rubric is the grader's global instructions.
+   */
+  criteria: z
+    .array(RichCriterionSchema)
+    .max(RICH_MAX_CRITERIA)
+    .default([])
+    .superRefine((criteria, ctx) => {
+      const seen = new Set<string>();
+      criteria.forEach((c, i) => {
+        if (seen.has(c.id)) ctx.addIssue({ code: "custom", message: "duplicate criterion id", path: [i, "id"] });
+        seen.add(c.id);
+      });
+    }),
   /** A model answer, for the grader's eyes only. */
   reference: z.string().max(RICH_MAX_CHARS).optional(),
   /** Absent: no limit but {@link RICH_MAX_CHARS}. */
@@ -80,8 +125,8 @@ export function charLimit(maxChars: number | undefined): number {
 
 /**
  * What a student may see: the statement, the field's format and its limit —
- * a limit is what the FIELD takes, not what the grader expects. The rubric
- * and the model answer are dropped whole.
+ * a limit is what the FIELD takes, not what the grader expects. The rubric,
+ * the criteria and the model answer are dropped whole.
  */
 export const RichStudentSchema = z.object({
   prompt: z.string(),
@@ -92,11 +137,15 @@ export type RichStudent = z.infer<typeof RichStudentSchema>;
 
 /**
  * The grader's guide. The teacher's panel gets it whole; a student, once the
- * key is shown, gets the model answer alone — the rubric is the teacher's
+ * key is shown, gets the model answer alone — the rubric and the criteria are the teacher's
  * (`studentSolution`, ADR-037), hence optional here.
  */
 export const RichSolutionSchema = z.object({
   rubric: z.string().optional(),
+  /** The teacher's criteria (ADR-118); absent from a student's key. */
+  criteria: z
+    .array(z.object({ id: z.string(), title: z.string(), weight: z.number(), prompt: z.string() }))
+    .optional(),
   reference: z.string().optional(),
 });
 export type RichSolution = z.infer<typeof RichSolutionSchema>;
@@ -119,6 +168,7 @@ export function emptyRichDraft(): RichConfig {
     configVersion: RICH_CONFIG_VERSION,
     prompt: "",
     rubric: "",
+    criteria: [],
     format: "markdown",
   };
 }
