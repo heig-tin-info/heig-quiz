@@ -42,7 +42,7 @@ cost them points.
    minted by the editor, letters, digits, `_` and `-` (it keys the model's
    reply); `title` a short name; `weight` an integer 1..100; `prompt` plain
    text, what earns the weight, for the grader only. v1 configs migrate to
-   `criteria: []`; no SQL migration, no conversion of an old rubric.
+   `criteria: []`; no SQL migration, no conversion of an old rubric (amended 2026-10-27, see above: the teacher may ask the wand for one).
 2. **Points.** `defaultPoints(config)` is the sum of the weights, else 1.
    The evaluation item's points (`evaluation_items.points`) stay the one
    source of points and stay editable. No points field on the question, no
@@ -58,7 +58,7 @@ cost them points.
    without criteria, a diagram) goes through the same rule, the model's
    maxima taken as the weights: its breakdown is rescaled to the item's
    points instead of clamping the total alone.
-4. **The rubric stays**, labelled "Grading instructions": optional global
+4. **The rubric stays**, labelled "Grading instructions" (amended 2026-10-27, see above: "Global instructions", folded while empty, once criteria exist): optional global
    context for the grader, sent beside the criteria.
 5. **What a student sees**: under `showKey`, once the teacher has validated
    the grading, each criterion's title and its validated points. Never a
