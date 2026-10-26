@@ -63,6 +63,7 @@ function activeCards(db: DbOrTx, where: SQL | undefined) {
     .select({
       card: drillCards,
       type: questions.type,
+      courseId: courses.id,
       courseCode: courses.code,
       courseName: courses.name,
     })

@@ -119,7 +119,7 @@ export async function resolveMapping(
     }
 
     const { course: code, classroom: name } = row.target;
-    // A course code is a free label (ADR-119): a code two courses share names neither.
+    // A course code is a free label (ADR-119): it names a course only when exactly one holds it.
     const coded = await db.select({ id: courses.id }).from(courses).where(eq(courses.code, code));
     if (coded.length !== 1) {
       refusals.push(`${at}: ${coded.length === 0 ? "no" : "more than one"} Quiz course has the code "${code}"`);

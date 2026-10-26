@@ -7,7 +7,7 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
-import { concepts, questionConcepts, questions } from "./db/schema.js";
+import { concepts, courses, questionConcepts, questions } from "./db/schema.js";
 import { seed } from "./seed.js";
 import { CONCEPTS, POOLS } from "./seed/content.js";
 import { testDb } from "./test/db.js";
@@ -34,5 +34,8 @@ describe("the demo seed's concepts", () => {
     await seed(db, () => {});
     expect(await db.select().from(concepts)).toHaveLength(CONCEPTS.length);
     expect(await db.select().from(questionConcepts)).toHaveLength(links);
+    // The demo course is upserted on its fixed id: the code alone no longer
+    // finds it (ADR-119), so a second seed must not make a second course.
+    expect(await db.select().from(courses).where(eq(courses.code, "PRG1"))).toHaveLength(1);
   }, 120_000);
 });

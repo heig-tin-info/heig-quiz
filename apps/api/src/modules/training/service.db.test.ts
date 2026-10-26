@@ -6,7 +6,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { TrainingInstallResult } from "@quiz/contracts";
@@ -262,12 +262,12 @@ describe("provision (§1)", () => {
     expect((await status(db, { userId: unlucky, llmEnabled: false })).course).toBeNull();
   });
 
-  it("codes every training course INIT, a code other courses already hold (ADR-119)", async () => {
-    const third = await makeUser("teacher");
-    await provisionFor(third);
-    const [course] = await db.select().from(courses).where(eq(courses.trainingFor, third));
-    expect(course!.code).toBe("INIT");
-    expect((await db.select().from(courses).where(eq(courses.code, "INIT"))).length).toBeGreaterThan(1);
+  it("codes every training course INIT, shared between teachers (ADR-119)", async () => {
+    const [third, fourth] = await Promise.all([makeUser("teacher"), makeUser("teacher")]);
+    await provisionFor(third!);
+    await provisionFor(fourth!);
+    const theirs = await db.select().from(courses).where(inArray(courses.trainingFor, [third!, fourth!]));
+    expect(theirs.map((c) => c.code)).toEqual(["INIT", "INIT"]);
   });
 
   it("rebuilds a deleted classroom with the teacher's own links kept, and traces the rebuild", async () => {
@@ -294,11 +294,11 @@ describe("provision (§1)", () => {
     const links = await db.select().from(coursePools).where(eq(coursePools.courseId, course!.id));
     expect(links.map((l) => [l.poolId, l.mode]).sort()).toEqual([[mine.id, "edit"], [training.id, "read"]].sort());
     expect(await db.select().from(evaluations).where(eq(evaluations.classroomId, result.classroomId))).toHaveLength(2);
-    expect(await auditRows("training.provision")).toMatchObject([
-      { subjectId: course!.id, payload: { code: "INIT" } },
-      { subjectId: expect.any(String) },
-      { subjectId: expect.any(String) },
-      { subjectId: course!.id, payload: { classroomId: result.classroomId, rebuilt: true } },
+    // This course's own trail, whatever the other teachers provisioned before.
+    const trail = (await auditRows("training.provision")).filter((r) => r.subjectId === course!.id);
+    expect(trail).toMatchObject([
+      { payload: { code: "INIT" } },
+      { payload: { classroomId: result.classroomId, rebuilt: true } },
     ]);
   });
 

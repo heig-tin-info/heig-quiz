@@ -152,7 +152,8 @@ export async function listCourses(
       and(eq(userCoursePrefs.courseId, courses.id), eq(userCoursePrefs.userId, viewerId)),
     )
     .where(access)
-    .orderBy(asc(courses.code));
+    // Codes may be shared (ADR-119): the name, then the id, settle the order.
+    .orderBy(asc(courses.code), asc(courses.name), asc(courses.id));
   const ids = rows.map((r) => r.id);
   const rooms = ids.length
     ? await db
