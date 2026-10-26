@@ -19,7 +19,7 @@ import { courseRoleAllows, EVALUATION_STEPS, isEvaluationOver, itemListLock } fr
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
-import { useT } from "../i18n";
+import { useT, type Dict } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import { routeToPath, useSearchParam } from "../router";
@@ -41,7 +41,7 @@ import {
   Tabs,
   useNow,
 } from "../ui";
-import { awaitsScheduling, evaluationBadgeLabel, scheduleFactsOf, stateStyle } from "./common";
+import { evaluationBadgeLabel, scheduleFactsOf, schedulingPhase, stateStyle, type SchedulingPhase } from "./common";
 import { evaluationTarget } from "./editTarget";
 import { useItemPane } from "./ItemPreview";
 import { ItemsStep } from "./ItemsStep";
@@ -84,6 +84,13 @@ type Step = (typeof EVALUATION_STEPS)[number];
 function isStep(value: string): value is Step {
   return (EVALUATION_STEPS as readonly string[]).includes(value);
 }
+
+/** What the steps before Launch say of a dated draft nobody scheduled, by its phase (#857, #921). */
+const SCHEDULING_HINT: Record<SchedulingPhase, { title: keyof Dict; body: keyof Dict }> = {
+  toSchedule: { title: "eval.unscheduled.title", body: "eval.unscheduled.body" },
+  missed: { title: "eval.missed.title", body: "eval.missed.body" },
+  over: { title: "eval.missedOver.title", body: "eval.missedOver.body" },
+};
 
 export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
@@ -168,6 +175,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const links = gradingLinks(id);
   const self = data.self;
   const scheduleFacts = scheduleFactsOf(evaluation);
+  const phase = schedulingPhase(scheduleFacts, now);
 
   /*
    * The title, renamed from the heading itself. The same `PATCH` every other
@@ -351,13 +359,14 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
 
       {/*
        * A Scheduled draft with its dates set is still a draft (#857): it
-       * opens by itself only once scheduled. Said on the steps before
-       * Launch, without a button — the step frame's own "Go to Launch" is
-       * the way there, and Launch's Schedule stays its one primary action.
+       * opens by itself only once scheduled, and did not open if its date
+       * passed (#921). Said on the steps before Launch, without a button:
+       * the step frame's own "Go to Launch" is the way there, and Launch's
+       * primary stays its one action.
        */}
-      {step !== "launch" && awaitsScheduling(scheduleFacts, now) ? (
-        <Alert icon={CalendarClock} title={t("eval.unscheduled.title")}>
-          {t("eval.unscheduled.body", { date: isoDateTime(evaluation.opensAt!) })}
+      {step !== "launch" && phase ? (
+        <Alert icon={CalendarClock} title={t(SCHEDULING_HINT[phase].title)}>
+          {t(SCHEDULING_HINT[phase].body, { date: isoDateTime(evaluation.opensAt!) })}
         </Alert>
       ) : null}
 

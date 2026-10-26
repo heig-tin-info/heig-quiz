@@ -12,7 +12,7 @@
 import { BarChart3, ClipboardCheck, ClipboardList, MonitorPlay, Presentation } from "lucide-react";
 
 import type { Evaluation, EvaluationMode, EvaluationState, EvaluationSummary } from "@quiz/contracts";
-import { clockChoiceOf, isDebriefOpen, isEvaluationOpen, isEvaluationOver } from "@quiz/domain";
+import { clockChoiceOf, isDebriefOpen, isEvaluationOpen, isEvaluationOver, isUnscheduledDraft } from "@quiz/domain";
 
 import { gradingLinks } from "../grading";
 import type { Dict, TFunction } from "../i18n";
@@ -60,36 +60,35 @@ export function evaluationStateLabel(state: EvaluationState, t: TFunction): stri
 }
 
 /** What tells a dated draft from a scheduled evaluation: a list row's own fields. */
-export type ScheduleFacts = Pick<EvaluationSummary, "state" | "opensAt" | "clock">;
+export type ScheduleFacts = Pick<EvaluationSummary, "state" | "opensAt" | "closesAt" | "clock">;
 
 /** An evaluation's {@link ScheduleFacts}: its clock read back from its settings. */
-export function scheduleFactsOf(e: Pick<Evaluation, "state" | "opensAt" | "settings">): ScheduleFacts {
-  return { state: e.state, opensAt: e.opensAt, clock: clockChoiceOf(e.settings).mode };
+export function scheduleFactsOf(e: Pick<Evaluation, "state" | "opensAt" | "closesAt" | "settings">): ScheduleFacts {
+  return { state: e.state, opensAt: e.opensAt, closesAt: e.closesAt, clock: clockChoiceOf(e.settings).mode };
 }
 
 /**
- * A draft on the Scheduled clock with its opening time set, that nobody
- * scheduled (#857): its dates are written, yet it never opens by itself —
- * the ticker opens a `scheduled` one only. Its badge keeps the zinc of a draft and
- * says so ({@link evaluationBadgeLabel}), whether the date is still to come
- * or already gone by. A Live draft's date is a calendar hint, nothing more.
+ * Where a dated draft nobody scheduled stands at `now` (`isUnscheduledDraft`,
+ * #857, #921), null for any other evaluation. `toSchedule`: its opening is
+ * to come, so Launch's one primary action is Schedule (ADR-086) and the
+ * steps before it point there. `missed`: its opening passed and it did not
+ * open; it can no longer be scheduled at that date (`opens_at_past`), so
+ * Launch opens it now. `over`: its end has passed too, and its dates must move.
  */
-function unscheduledDraft(e: ScheduleFacts): boolean {
-  return e.state === "draft" && e.clock === "scheduled" && e.opensAt !== null;
+export type SchedulingPhase = "toSchedule" | "missed" | "over";
+
+export function schedulingPhase(e: ScheduleFacts, now: number): SchedulingPhase | null {
+  if (!isUnscheduledDraft(e)) return null;
+  if (Date.parse(e.opensAt!) > now) return "toSchedule";
+  return e.closesAt !== null && Date.parse(e.closesAt) <= now ? "over" : "missed";
 }
 
 /**
- * An {@link unscheduledDraft} whose opening is still to come at `now`: one
- * the Launch step can schedule, so scheduling it is that step's one primary
- * action (ADR-086), and the configuration screen points to it.
+ * The word of an evaluation's badge: its state's, or "draft · not scheduled"
+ * for a dated draft nobody scheduled, whether its date is to come or gone by.
  */
-export function awaitsScheduling(e: ScheduleFacts, now: number): boolean {
-  return unscheduledDraft(e) && Date.parse(e.opensAt!) > now;
-}
-
-/** The word of an evaluation's badge: its state's, or "draft · not scheduled" for an {@link unscheduledDraft}. */
 export function evaluationBadgeLabel(e: ScheduleFacts, t: TFunction): string {
-  return unscheduledDraft(e) ? t("eval.state.draftUnscheduled") : evaluationStateLabel(e.state, t);
+  return isUnscheduledDraft(e) ? t("eval.state.draftUnscheduled") : evaluationStateLabel(e.state, t);
 }
 
 /**

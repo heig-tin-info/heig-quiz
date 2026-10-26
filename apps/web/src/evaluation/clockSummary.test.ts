@@ -21,6 +21,7 @@ function evaluation(over: {
   durationS?: number | null;
   closesAt?: string | null;
   when?: "none" | "on_release" | "immediate";
+  state?: "draft" | "scheduled" | "running";
 }) {
   const base = makeEvaluationDetail().evaluation;
   return {
@@ -28,6 +29,7 @@ function evaluation(over: {
     settings: { ...base.settings, ...over.settings },
     durationS: over.durationS === undefined ? base.durationS : over.durationS,
     closesAt: over.closesAt === undefined ? base.closesAt : over.closesAt,
+    state: over.state ?? "running",
     feedbackPolicy: { ...base.feedbackPolicy, when: over.when ?? base.feedbackPolicy.when },
   };
 }
@@ -81,7 +83,37 @@ describe("clockSummary (#87, ADR-086)", () => {
     expect(clockSummary(e, makeT("en"), date)).toMatch(
       /^Open until you close it, <2026-10-02> at the latest, lobby, started by you, /,
     );
-    expect(clockSummary({ ...e, closesAt: null }, makeT("fr"), date)).toMatch(/^Ouvert jusqu'à ce que vous le clôturiez, salle d'attente, départ manuel/);
+    expect(clockSummary({ ...e, closesAt: null }, makeT("fr"), date)).toMatch(/^Ouverte jusqu'à ce que vous la clôturiez, salle d'attente, départ manuel/);
+  });
+
+  it("words the window by the clock, not the stored timing: a Live deadline is the teacher's close", () => {
+    const e = evaluation({
+      settings: { timing: "deadline", lobby: "manual", navigation: "free" },
+      closesAt: "2026-10-02T08:00:00.000Z",
+    });
+    expect(clockSummary(e, makeT("en"), date)).toMatch(/^Open until you close it, <2026-10-02> at the latest, /);
+  });
+
+  it("does not state a draft's window as a fact (#921)", () => {
+    const scheduled = evaluation({
+      state: "draft",
+      settings: { timing: "deadline", lobby: "skip", navigation: "free" },
+      closesAt: "2026-10-26T14:30:00.000Z",
+    });
+    expect(clockSummary(scheduled, makeT("en"), date)).toMatch(/^Once open, until <2026-10-26>, /);
+    expect(clockSummary(scheduled, makeT("fr"), date)).toMatch(/^Une fois ouverte, jusqu'au <2026-10-26>, /);
+    expect(clockSummary({ ...scheduled, state: "scheduled" }, makeT("en"), date)).toMatch(/^Open until <2026-10-26>, /);
+    const live = evaluation({
+      state: "draft",
+      settings: { timing: "manual", lobby: "manual", navigation: "free" },
+      closesAt: "2026-10-26T14:30:00.000Z",
+    });
+    expect(clockSummary(live, makeT("en"), date)).toMatch(
+      /^Once open, stays open until you close it, <2026-10-26> at the latest, /,
+    );
+    expect(clockSummary({ ...live, closesAt: null }, makeT("fr"), date)).toMatch(
+      /^Une fois ouverte, reste ouverte jusqu'à ce que vous la clôturiez, salle d'attente/,
+    );
   });
 
   it("says a duration is missing rather than inventing one", () => {
