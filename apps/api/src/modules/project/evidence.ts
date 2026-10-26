@@ -348,8 +348,9 @@ const SUBJECT_MAX = 200;
 /**
  * The bots, by git name or GitHub account: heig-classroom's (`hgc-*`), any
  * GitHub App's (`…[bot]`, Quiz's and the workflows' included) and Quiz's
- * own git identity (`heig-quiz`, `github/git.ts`; its commits are in
- * `bot_commits` too).
+ * former git identity (`heig-quiz`, the root and sync commits of the
+ * repositories built before #917, whose commits are GitHub-signed for the
+ * App; its commits are in `bot_commits` too).
  */
 const BOT_NAME = /^hgc-|^heig-quiz$|\[bot\]$/i;
 

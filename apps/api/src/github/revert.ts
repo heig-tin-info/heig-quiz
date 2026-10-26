@@ -16,6 +16,7 @@
 import type { Octokit } from "octokit";
 
 import { unless404 } from "./app.js";
+import { signedCommit } from "./signedCommit.js";
 
 export interface RevertResult {
   sha: string;
@@ -132,21 +133,22 @@ export async function revertProtectedFiles(opts: {
     tree,
   });
   const files = tree.map((t) => t.path);
-  const { data: commit } = await octokit.request("POST /repos/{owner}/{repo}/git/commits", {
+  const sha = await signedCommit({
+    octokit,
     owner: org,
     repo: studentRepo,
     message: `Restore protected files\n\n${files.join("\n")}`,
     tree: newTree.sha,
     parents: [headSha],
   });
-  const result = { sha: commit.sha, files, covered: headSha };
+  const result = { sha, files, covered: headSha };
   if (!(await opts.beforeMove(result))) return { head: headSha, restored: null };
   // Strict fast-forward: force=false; in case of a race, GitHub refuses.
   await octokit.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
     owner: org,
     repo: studentRepo,
     ref: `heads/${branch}`,
-    sha: commit.sha,
+    sha,
     force: false,
   });
   return { head: headSha, restored: result };

@@ -308,6 +308,8 @@ describe("the request and the pass (F-PROJ-12)", () => {
     const [r1, r2] = p.repos as [Repo, Repo];
     const sourceSha = await sourcePush(p, { "src/util.c": "int util;", "README.md": "# Lab v2" });
     const distBefore = head(p.distribution);
+    // A temporary ref a previous sync failed to delete: the next push forces it.
+    world.git(p.distribution, "update-ref", "refs/quiz/tmp-main", distBefore);
 
     server.clock.set(at(NOW, HOUR));
     expect(await synced(p.id)).toEqual({ requestedAt: at(NOW, HOUR).toISOString() });
@@ -317,6 +319,11 @@ describe("the request and the pass (F-PROJ-12)", () => {
     expect(head(p.distribution, "main^")).toBe(distBefore);
     expect(world.git(p.distribution, "log", "-1", "--format=%s", "main").trim()).toBe(SYNC_COMMIT_MESSAGE);
     expect(world.read(p.distribution, "main", "src/util.c")).toBe("int util;");
+    // That commit is the API's, GitHub-signed for the App (#917): the App's
+    // author, GitHub's committer; the temporary ref that carried its tree
+    // deleted.
+    expect(world.git(p.distribution, "log", "-1", "--format=%H|%an|%cn", "main").trim()).toBe(`${distHead}|${world.botLogin}|GitHub`);
+    expect(world.git(p.distribution, "for-each-ref", "--format=%(refname)", "refs/quiz").trim()).toBe("");
     const row = await projectRow(p.id);
     expect(row).toMatchObject({ sourceHeads: { main: sourceSha }, sourceAheadSha: null, sourceAhead: null, syncedAt: at(NOW, HOUR), syncJobAt: null });
     expect(await auditOf(p.id, "project.sync_requested")).toMatchObject([{ actorUserId: teacher.id, payload: { changed: ["main"] } }]);
@@ -327,6 +334,7 @@ describe("the request and the pass (F-PROJ-12)", () => {
     for (const repo of [r1, r2]) {
       expect(head(repo.fullName!, "sync/main")).toBe(distHead);
       expect(head(repo.fullName!, "main")).not.toBe(distHead); // the student's branch untouched
+      expect(world.git(repo.fullName!, "for-each-ref", "--format=%(refname)", "refs/quiz").trim()).toBe("");
       expect(await syncCommits(repo.id)).toMatchObject([{ sha: distHead }]);
       const [pr] = pulls(repo.fullName!);
       expect(pulls(repo.fullName!)).toHaveLength(1);
@@ -470,6 +478,20 @@ describe("the request and the pass (F-PROJ-12)", () => {
     expect((await projectRow(p.id)).sourceAheadSha).toBeNull();
   });
 
+  it("fails nothing when the temporary ref cannot be deleted: the distribution and the students get the signed commit (#917)", async () => {
+    const p = await project();
+    await sourcePush(p, { "src/util.c": "v1" });
+    const routes = gh.routes;
+    gh.routes = [(url, req) => (req.method === "DELETE" && url.pathname.includes("/git/refs/") ? new Response("{}", { status: 500 }) : undefined), ...routes];
+    try {
+      await synced(p.id);
+    } finally {
+      gh.routes = routes;
+    }
+    expect(world.git(p.distribution, "log", "-1", "--format=%an", "main").trim()).toBe(world.botLogin);
+    expect(world.git(p.distribution, "for-each-ref", "--format=%(refname)", "refs/quiz").trim()).toBe("refs/quiz/tmp-main");
+  });
+
   it("refuses a rewritten source under `whole` (409 source_rewritten, audited, nothing changed, the lease given back)", async () => {
     const p = await project({ body: { sourceStrategy: "whole" }, commits: 2 });
     const distBefore = head(p.distribution);
@@ -479,6 +501,7 @@ describe("the request and the pass (F-PROJ-12)", () => {
     expect(refusal(await sync(p.id))).toEqual([409, "source_rewritten"]);
     expect(await auditOf(p.id, "project.sync_failed")).toMatchObject([{ payload: { reason: "source_rewritten" } }]);
     expect(head(p.distribution)).toBe(distBefore);
+    expect(world.apiCommits.filter((c) => c.repo === p.distribution)).toEqual([]); // `whole` creates no commit
     expect(await projectRow(p.id)).toMatchObject({ syncJobAt: null, syncedAt: null });
     expect(await auditOf(p.id, "project.sync_requested")).toHaveLength(0);
     // Given back: the next request is refused for the same reason, not as in progress.

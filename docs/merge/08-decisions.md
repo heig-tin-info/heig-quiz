@@ -368,6 +368,21 @@ Status values: `open`, `settled`, `superseded`.
   bot logins for commits made before the cutover.
 - Blocks: M2-06.
 - **Status**: settled 2026-09-30 (product owner, conversation).
+- **Addendum (2026-10-26, #917)**: every commit the App writes into a
+  repository (deadline, restore, the distribution's root commit, the sync
+  commit) is created by `POST /git/commits` without `author`/`committer`
+  (`apps/api/src/github/signedCommit.ts`). GitHub then signs it with its
+  web-flow key (**Verified**), authors it as
+  `<app-id>+<slug>[bot]@users.noreply.github.com` and commits it as
+  `GitHub <noreply@github.com>`. Anyone verifies it from the badge, or with
+  `gpg --verify` against https://github.com/web-flow.gpg. No key is held
+  (ADR-010 unchanged); the trust in GitHub is the one the installation
+  tokens already need. Where git builds the tree (the build and the sync,
+  amendments of ADR-062 and ADR-073 of the same day), a throwaway commit
+  under `heig-quiz <bot@heig-quiz.local>` carries it to GitHub and lands
+  on no branch. From the deploy date only: repositories built before keep
+  their unsigned `heig-quiz` root and sync commits, and the evidence's name
+  criterion (`evidence.ts`) stays for them.
 
 ### D24 — The classroom's Settings tab
 - **Answer**: the teacher classroom page gains a **Settings** tab. Its

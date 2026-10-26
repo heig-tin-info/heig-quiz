@@ -30,6 +30,16 @@ as for the journal (F-JRN-02): nobody is invited on joining the staff and
 nobody is revoked on leaving it; a former member keeps `pull` until the
 organization removes it.
 
+**Amended 2026-10-26 (#917; scope: the `squash` strategy's commit):** each
+branch's root commit is created by the API, GitHub-signed for the App
+(`signedCommit.ts`). git builds the tree and pushes a throwaway commit of it
+straight to `<branch>`; the branch is then forced once onto the signed root,
+on a repository nobody has cloned: no temporary ref. A build failing after
+that push leaves a non-empty distribution, so a retry steps to
+`-squashed-2` and leaves an orphan, as a partial multi-branch push already
+did. Identity, verification and older repositories: D23's addendum
+(`docs/merge/08-decisions.md`).
+
 **Addendum (2026-10-02, product owner; merge task M3-04): the distribution
 repository is also the reference of the protected files.** F-PROJ-08 is
 amended to match:

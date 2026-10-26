@@ -190,9 +190,11 @@ export async function requestSync(
 
   const subject = { subjectType: "project" as const, subjectId: project.id };
   try {
-    const { token } = await installationClient(config, org.installationId);
+    const { octokit, token } = await installationClient(config, org.installationId);
     const update = await updateSquashedRepo({
+      octokit,
       token,
+      log,
       org: org.login,
       sourceRepo: ownerRepo(project.sourceFullName).repo,
       squashedRepo: ownerRepo(project.distributionFullName).repo,

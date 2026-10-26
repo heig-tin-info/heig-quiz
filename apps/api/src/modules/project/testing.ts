@@ -21,6 +21,9 @@
  * URL carries a `token=`, and the gzipped `git archive` it serves (past
  * the cap for a repository in `oversized`). For the identity criterion, a
  * commit listing from a sha (`?sha=`), and a commit by a given author.
+ * From #917, every `POST /git/commits` body recorded (`apiCommits`) and its
+ * commit made as GitHub makes a signed one (App author, GitHub committer),
+ * and a ref deleted (the sync's temporary ref).
  * Test support only; nothing in the application imports it.
  */
 import { execFileSync } from "node:child_process";
@@ -45,6 +48,11 @@ const AUTHOR = {
   GIT_COMMITTER_NAME: "t",
   GIT_COMMITTER_EMAIL: "t@x",
 };
+
+/** The App's id in the private address GitHub gives the commits it signs for it. */
+const APP_ID = 4242;
+/** The committer GitHub sets on a commit it creates and signs (web-flow). */
+const GITHUB_COMMITTER = { name: "GitHub", email: "noreply@github.com" };
 
 /** A commit's git author. */
 export interface CommitAuthor {
@@ -99,8 +107,10 @@ export interface RepoWorld {
   pulls: Map<string, FakePull[]>;
   /** The comments on each repository's pull requests, by `org/name` then number. */
   comments: Map<string, Map<number, string[]>>;
-  /** The App's login, author of the pull requests it opens. */
+  /** The App's login, author of the pull requests it opens and of the commits the API creates for it. */
   botLogin: string;
+  /** Every `POST /git/commits` body, in order, with its repository (`org/name`): a test asserts no identity is ever given (#917). */
+  apiCommits: { repo: string; body: Record<string, unknown> }[];
   /**
    * Repositories, by `org/name`, whose tarball `codeload` serves past the
    * runner's archive cap (ADR-106 §3): `extra` bytes of gzip padding.
@@ -170,9 +180,13 @@ export function repoWorld(): RepoWorld {
   };
   const writeBlob = (fullName: string, bytes: Buffer) =>
     shWith({}, bytes, "--git-dir", pathOf(fullName), "hash-object", "-w", "--stdin");
-  const commitTree = (fullName: string, tree: string, parents: string[], message: string, author?: CommitAuthor) =>
+  const commitTree = (fullName: string, tree: string, parents: string[], message: string, author?: CommitAuthor, committer?: CommitAuthor) =>
     shWith(
-      author ? { ...AUTHOR, GIT_AUTHOR_NAME: author.name, GIT_AUTHOR_EMAIL: author.email } : AUTHOR,
+      {
+        ...AUTHOR,
+        ...(author && { GIT_AUTHOR_NAME: author.name, GIT_AUTHOR_EMAIL: author.email }),
+        ...(committer && { GIT_COMMITTER_NAME: committer.name, GIT_COMMITTER_EMAIL: committer.email }),
+      },
       message,
       "--git-dir",
       pathOf(fullName),
@@ -250,8 +264,21 @@ export function repoWorld(): RepoWorld {
       return json({ sha: buildTree(fullName, base_tree ?? null, tree) }, 201);
     }
     if (req.method === "POST" && rest === "/git/commits") {
-      const { tree, parents, message } = body() as { tree: string; parents: string[]; message: string };
-      return json({ sha: commitTree(fullName, tree, parents, message) }, 201);
+      const request = body();
+      world.apiCommits.push({ repo: fullName, body: request });
+      const { tree, parents, message } = request as { tree: string; parents: string[]; message: string };
+      // As GitHub signs one made by the App with no identity given (#917): the App's author, GitHub's committer.
+      const app = { name: world.botLogin, email: `${APP_ID}+${world.botLogin}@users.noreply.github.com` };
+      return json({ sha: commitTree(fullName, tree, parents, message, app, GITHUB_COMMITTER) }, 201);
+    }
+    if (req.method === "DELETE" && (m = /^\/git\/refs\/(.+)$/.exec(rest))) {
+      try {
+        world.git(fullName, "rev-parse", "--verify", "--quiet", `refs/${m[1]}`);
+      } catch {
+        return json({ message: "Reference does not exist" }, 422);
+      }
+      world.git(fullName, "update-ref", "-d", `refs/${m[1]}`);
+      return new Response(null, { status: 204 });
     }
     if (req.method === "PATCH" && (m = /^\/git\/refs\/heads\/(.+)$/.exec(rest))) {
       const { sha, force } = body() as { sha: string; force?: boolean };
@@ -350,6 +377,7 @@ export function repoWorld(): RepoWorld {
     pulls: new Map(),
     comments: new Map(),
     botLogin: "quiz-test[bot]",
+    apiCommits: [],
     oversized: new Map(),
     release(ok) {
       writeFileSync(join(dir, "release"), ok ? "0" : "1");
