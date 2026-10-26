@@ -231,16 +231,16 @@ Project grading by criteria on the platform ([ADR-106](../adr/ADR-106-notation-d
 | L-02f | Student criteria table | done | L-02c, L-02g | `student-criteria-table` | #815 | `studentView.ts` (the one exit): `criteria` (`StudentCriteriaRow[]`: the `student` audience of `criteriaTable` over the seat's own repository; final once every row is validated), null off the `criteria` mode; N-SEC-20 search test extended (second student, superseded and milestone rationales, reason, source, pass and checkpoint ids, another mode); web `student/ProjectCriteria.tsx` under the score (row cards on a phone), one `RationaleFold` shared with the grading table, mock `?projects=1&pjcriteria=1`; no migration. Ahead of L-02g by the orchestrator's order. |
 | L-02g | Labo 00 pilot | todo | L-02c, L-02e | | | |
 
-Criteria v3, the CI produces the evidence ([ADR-119](../adr/ADR-119-criteres-v3-preuves-de-la-ci.md)); L-03f's lab migration comes before L-03b's data migration runs.
+Criteria v3, the CI produces the evidence ([ADR-119](../adr/ADR-119-criteres-v3-preuves-de-la-ci.md)); L-06f's lab migration comes before L-06b's data migration runs.
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| L-03a | Criteria v3 parser, fraction arithmetic, results validator, published schemas | planned | ADR-119 | | | |
-| L-03b | CI dispatch and intake, removals, `score_is_grade` migration | planned | L-03a | | | |
-| L-03c | LLM inputs: sources and masked `results.json` logs | planned | L-03b | | | |
-| L-03d | Creation panel, protected tree, segmented control | planned | L-03a | | | |
-| L-03e | Commit graph and CI logs on the grading screen | planned | L-03b | | | |
-| L-03f | StudentScore 1.0 and the lab repositories (external) | planned | L-03a | | | |
+| L-06a | Criteria v3 parser, fraction arithmetic, results validator, published schemas | planned | ADR-119 | | | |
+| L-06b | CI dispatch and intake, removals, `score_is_grade` migration | planned | L-06a | | | |
+| L-06c | LLM inputs: sources and masked `results.json` logs | planned | L-06b | | | |
+| L-06d | Creation panel, protected tree, segmented control | planned | L-06a | | | |
+| L-06e | Commit graph and CI logs on the grading screen | planned | L-06b | | | |
+| L-06f | StudentScore 1.0 and the lab repositories (external) | planned | L-06a | | | |
 
 ## Rehearsal log
 

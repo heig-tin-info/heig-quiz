@@ -415,13 +415,13 @@ Migrated now, no coexistence discriminator:
   changed afterwards still follows F-PROJ-14 ("changed after release").
 - **`labo-04-pcb` and `labo-03-darts`**: their sources move to v3 and the
   shim; the snapshot is reloaded; `labo-04-pcb`'s 26 repositories receive
-  the new protected files as App restore commits (L-03f).
+  the new protected files as App restore commits (L-06f).
 - **`labo-00`, `-01`, `-02`, `linked-list-2`** (released): their rows,
   snapshots and stored evidence stay as data, under their retention.
 
 A live project that used `score_is_grade` in `auto` mode and whose CI still
 emits a mark (StudentScore 0.7.5) would have its next scores misread as
-points out of 6: L-03b lists those projects before it migrates, and L-03f
+points out of 6: L-06b lists those projects before it migrates, and L-06f
 moves their CI to StudentScore 1.0.
 
 ### 12. The `GRADE` contract
@@ -435,7 +435,7 @@ preset read.
 
 ### 13. Invariants
 
-`CLAUDE.md`'s wording changes with L-03b, the PR that removes the action:
+`CLAUDE.md`'s wording changes with L-06b, the PR that removes the action:
 
 - **Invariant 12**: its sentence on the `project` action (ADR-106 §3) is
   deleted; the runner receives no archive.
@@ -449,7 +449,7 @@ preset read.
 
 10, 11 and 13 are unchanged.
 
-Delivery: task cards L-03a to L-03f (`docs/merge/09-tasks.md`,
+Delivery: task cards L-06a to L-06f (`docs/merge/09-tasks.md`,
 `PROGRESS.md`).
 
 ## Consequences
