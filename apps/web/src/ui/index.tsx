@@ -42,6 +42,8 @@
 //             ComboboxList, ComboboxOption), on layers and menu.
 //   selection the floating bar of a list's ticked rows (SelectionBar), on
 //             layers.
+//   paintSelection a drag across checkboxes ticks them all
+//             (usePaintSelection). Imports no sibling.
 //   state     browser state a screen reads: remembered choices
 //             (usePersistentChoice), isTyping, useFullscreen. Imports no
 //             sibling.
@@ -80,6 +82,7 @@ export * from "./bar";
 export * from "./forms";
 export * from "./combobox";
 export * from "./selection";
+export * from "./paintSelection";
 export * from "./state";
 export * from "./expand";
 export * from "./disclosure";

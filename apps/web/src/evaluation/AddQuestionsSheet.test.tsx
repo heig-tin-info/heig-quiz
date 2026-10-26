@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -784,5 +784,140 @@ describe("AddQuestionsSheet — favourites", () => {
     );
     expect(await screen.findByText(/Removed from favourites\./)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Remove from favourites" })).toBeNull();
+  });
+});
+
+/*
+ * Painting: press a box and drag along the list, as in a file manager. The
+ * browser's order is pointerdown, pointerenter on each box passed with the
+ * button held, pointerup, then the click — on the pressed box only when the
+ * release lands back on it.
+ */
+describe("AddQuestionsSheet — painting the boxes", () => {
+  const boxOf = (name: string) => within(rowOf(name)).getByRole("checkbox");
+  const press = (name: string) => fireEvent.pointerDown(boxOf(name), { button: 0, buttons: 1 });
+  const pass = (name: string, buttons = 1) => fireEvent.pointerEnter(boxOf(name), { buttons });
+  const release = () => fireEvent.pointerUp(window);
+
+  const THREE: QuestionPage = {
+    items: [
+      row({ id: "q1", internalName: "ptr-arith-01" }),
+      row({ id: "q2", internalName: "ptr-null-check" }),
+      row({ id: "q3", internalName: "array-decay" }),
+    ],
+    nextCursor: null,
+    total: 3,
+  };
+
+  it("ticks every box the pointer passes, the pressed one included, without a click", async () => {
+    setup(questions("", ok(THREE)));
+    await screen.findByText("ptr-arith-01");
+    press("ptr-arith-01");
+    pass("ptr-null-check");
+    pass("array-decay");
+    release();
+    expect(boxOf("ptr-arith-01")).toBeChecked();
+    expect(boxOf("ptr-null-check")).toBeChecked();
+    expect(boxOf("array-decay")).toBeChecked();
+    expect(screen.getByText("3 selected")).toBeVisible();
+  });
+
+  it("skips a box out of reach on the way: a draft only, a question already in the list", async () => {
+    const page: QuestionPage = {
+      items: [
+        row({ id: "q1", internalName: "ptr-arith-01" }),
+        row({ id: "q2", internalName: "ptr-null-check", latestNumber: null }),
+        row({ id: "q3", internalName: "array-decay" }),
+        row({ id: "q4", internalName: "sizeof-char" }),
+      ],
+      nextCursor: null,
+      total: 4,
+    };
+    setup(questions("", ok(page)), { existing: new Set(["q3"]) });
+    await screen.findByText("ptr-arith-01");
+    press("ptr-arith-01");
+    pass("ptr-null-check");
+    pass("array-decay");
+    pass("sizeof-char");
+    release();
+    expect(boxOf("ptr-arith-01")).toBeChecked();
+    expect(boxOf("ptr-null-check")).not.toBeChecked();
+    expect(boxOf("array-decay")).toBeChecked(); // as it was: in the list, ticked and disabled
+    expect(boxOf("sizeof-char")).toBeChecked();
+    expect(screen.getByText("2 selected")).toBeVisible();
+  });
+
+  it("unticks when the pressed box was ticked", async () => {
+    const user = userEvent.setup();
+    setup(questions("", ok(THREE)));
+    await screen.findByText("ptr-arith-01");
+    for (const name of ["ptr-arith-01", "ptr-null-check", "array-decay"]) await user.click(boxOf(name));
+    expect(screen.getByText("3 selected")).toBeVisible();
+
+    press("ptr-arith-01");
+    pass("ptr-null-check");
+    release();
+    expect(boxOf("ptr-arith-01")).not.toBeChecked();
+    expect(boxOf("ptr-null-check")).not.toBeChecked();
+    expect(boxOf("array-decay")).toBeChecked();
+    expect(screen.getByText("1 selected")).toBeVisible();
+  });
+
+  it("paints nothing when the button is not held", async () => {
+    setup(questions("", ok(THREE)));
+    await screen.findByText("ptr-arith-01");
+    press("ptr-arith-01");
+    pass("ptr-null-check", 0);
+    pass("array-decay", 0);
+    expect(boxOf("ptr-arith-01")).not.toBeChecked();
+    expect(boxOf("ptr-null-check")).not.toBeChecked();
+    expect(boxOf("array-decay")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Add questions" })).toBeDisabled();
+  });
+
+  it("swallows the click of a release back on the pressed box, which would untick it", async () => {
+    setup(questions("", ok(THREE)));
+    await screen.findByText("ptr-arith-01");
+    press("ptr-arith-01");
+    pass("ptr-null-check");
+    pass("ptr-arith-01");
+    release();
+    fireEvent.click(boxOf("ptr-arith-01"));
+    expect(boxOf("ptr-arith-01")).toBeChecked();
+    expect(boxOf("ptr-null-check")).toBeChecked();
+    expect(screen.getByText("2 selected")).toBeVisible();
+  });
+
+  it("still toggles on a plain click, and on a click after a paint is over", async () => {
+    const user = userEvent.setup();
+    setup(questions("", ok(THREE)));
+    await screen.findByText("ptr-arith-01");
+    await user.click(boxOf("array-decay"));
+    expect(boxOf("array-decay")).toBeChecked();
+
+    press("ptr-arith-01");
+    pass("ptr-null-check");
+    release();
+    // The next press starts a new gesture: its click toggles as usual.
+    await user.click(boxOf("ptr-arith-01"));
+    expect(boxOf("ptr-arith-01")).not.toBeChecked();
+  });
+
+  it("carries on from the favourites into the whole list: one gesture, not one per section", async () => {
+    const starred: QuestionPage = {
+      items: [row({ id: "q1", internalName: "ptr-arith-01", starred: true })],
+      nextCursor: null,
+      total: 1,
+    };
+    setup({ [STARRED()]: ok(starred), ...questions("", ok(THREE)) });
+    const section = await screen.findByRole("region", { name: "Favourites" });
+    fireEvent.pointerDown(within(section).getByRole("checkbox"), { button: 0, buttons: 1 });
+    pass("ptr-null-check");
+    pass("array-decay");
+    release();
+    expect(within(section).getByRole("checkbox")).toBeChecked();
+    expect(boxOf("ptr-null-check")).toBeChecked();
+    expect(boxOf("array-decay")).toBeChecked();
+    expect(screen.getByText("3 selected")).toBeVisible();
   });
 });
