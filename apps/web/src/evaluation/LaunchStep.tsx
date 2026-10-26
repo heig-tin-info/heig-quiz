@@ -171,22 +171,20 @@ function Checklist({
   // blocked launch names the first blocker, the one the heading's list starts
   // with.
   const blocker = checks.find((c) => c.level === "blocker");
-  // A dated draft nobody scheduled (#921): what its phase means for the button.
-  const phaseStatus: Record<SchedulingPhase, () => string> = {
+  // A dated draft nobody scheduled (#921): what its phase means for the
+  // button. The `over` phase is always a timing blocker, whose own status wins.
+  const phaseStatus: Partial<Record<SchedulingPhase, () => string>> = {
     toSchedule: () => t("launch.status.toSchedule", { date: isoDateTime(evaluation.opensAt!) }),
     missed: () =>
       evaluation.closesAt === null
         ? t("launch.status.missedOpen")
         : t("launch.status.missed", { date: isoDateTime(evaluation.closesAt) }),
-    over: () => t("launch.status.missedOver"),
   };
   const status = blocker
     ? (blocker.status ?? blocker.detail)
     : evaluation.state === "scheduled" && evaluation.opensAt !== null
       ? t("launch.status.scheduled", { date: isoDateTime(evaluation.opensAt) })
-      : phase
-        ? phaseStatus[phase]()
-        : `${t("launch.when.now")} ${t(lobbyKey(evaluation.settings.lobby))}`;
+      : (phase && phaseStatus[phase]?.()) ?? `${t("launch.when.now")} ${t(lobbyKey(evaluation.settings.lobby))}`;
 
   const fix = (check: LaunchCheck) => {
     if (!check.fix) return;
