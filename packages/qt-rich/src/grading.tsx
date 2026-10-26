@@ -2,8 +2,9 @@
  * The `rich` column of the grading table (ADR-044): ONE wide column, the
  * essay as plain text clamped to three lines — enough to tell a paragraph
  * from a sentence and a sentence from nothing; the answer panel has the
- * rest. The expected row holds the model answer, else the rubric: both are
- * the grader's, and a teacher reads them beside every answer (ADR-037).
+ * rest. The expected row holds the criteria's titles (ADR-118), else the
+ * model answer, else the rubric: all are the grader's, and a teacher reads
+ * them beside every answer (ADR-037).
  *
  * The text is PLAIN: an essay written in the formatted field is markdown,
  * and its marks are stripped here rather than rendered — a cell is a line
@@ -49,7 +50,9 @@ export const richGrading: QuestionTypeGrading<RichStudent, RichAnswer, RichSolut
       const text = answer?.text ?? "";
       return student.format === "markdown" ? plainText(text) : text.replace(/\s+/g, " ").trim();
     };
-    const guide = solution?.reference?.trim() || solution?.rubric?.trim() || "";
+    // The criteria's titles first (ADR-118): the shortest reading of what earns the points.
+    const titles = (solution?.criteria ?? []).map((c) => c.title.trim()).filter((t) => t !== "");
+    const guide = titles.length > 0 ? titles.join(" · ") : solution?.reference?.trim() || solution?.rubric?.trim() || "";
     const column: GradingColumn<RichAnswer, RichDetails> = {
       key: "essay",
       label: s.essay,

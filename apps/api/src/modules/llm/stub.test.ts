@@ -66,3 +66,27 @@ describe("the stub LLM grader", () => {
     expect(await llm.grade(req)).toEqual(await llm.grade(req));
   });
 });
+
+describe("the stub with structured criteria (ADR-118)", () => {
+  const criteria = [
+    { id: "bound", title: "Pile bornée", prompt: "La taille de la pile est limitée.", weight: 2 },
+    { id: "signal", title: "Signal", prompt: "Le noyau envoie SIGSEGV.", weight: 1 },
+  ];
+
+  it("scores each criterion from its own terms, in its weight units, keyed by id", () => {
+    const out = stubGrade({
+      statement: "Pourquoi ?",
+      form: "free text",
+      rubric: "",
+      criteria,
+      answer: "La pile est bornée : sa taille est limitée, elle déborde vite.",
+      maxPoints: 1,
+    });
+    expect(out.criteria.map((c) => [c.id, c.maxPoints])).toEqual([
+      ["bound", 2],
+      ["signal", 1],
+    ]);
+    expect(out.criteria[0]!.points).toBe(2);
+    expect(out.criteria[1]!.points).toBe(0);
+  });
+});

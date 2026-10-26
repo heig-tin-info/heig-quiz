@@ -517,10 +517,14 @@ function buildGradingWorld(
       } else {
         const graded = tryAnswer(q, config, answer, evaluation.mcqPolicy, negativeOf(evaluation)) as {
           points: number;
+          maxPoints: number;
           details: unknown;
         };
+        // Each branch of the try grades on its own scale (an essay at the
+        // sum of its weights, ADR-118): read as a fraction, then the item's.
+        const fraction = graded.maxPoints > 0 ? graded.points / graded.maxPoints : 0;
         // Stored raw, as the server writes it (ADR-108).
-        points = itemPoints(halfPoints(graded.points * item.points));
+        points = itemPoints(halfPoints(fraction * item.points));
         details = graded.details;
       }
 

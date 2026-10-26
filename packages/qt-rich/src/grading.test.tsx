@@ -55,6 +55,15 @@ describe("rich grading column", () => {
     expect(html(richGrading.columns(markdown, null)[0]!.expected()).textContent).toBe("—");
   });
 
+  it("puts the criteria's titles first when there are criteria (ADR-118)", () => {
+    const criteria = [
+      { id: "a", title: "Names the guard page", weight: 2, prompt: "secret prompt" },
+      { id: "b", title: "Recursion", weight: 1, prompt: "" },
+    ];
+    const [col] = richGrading.columns(markdown, { rubric: "r", reference: "The model.", criteria });
+    expect(html(col!.expected()).textContent).toBe("Names the guard page · Recursion");
+  });
+
   it("sorts by the text, normalised", () => {
     expect(column!.sortKey({ text: "  The **Stack**  " })).toBe("the stack");
     expect(column!.sortKey(null)).toBe("");

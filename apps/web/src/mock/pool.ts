@@ -27,6 +27,7 @@ import {
   UNREVIEWED_TYPES,
   poolRoleAllows,
   holdsSeatOnPublic,
+  scaleCriteria,
   subscriptionState,
 } from "@quiz/domain";
 import type {
@@ -108,7 +109,7 @@ import { EXAMPLES, type Scene } from "@quiz/diagram/server";
 /* `blocks` likewise: its `toStudent` keeps the hidden warehouses home, its grade is the domain's run. */
 import { blocksServer } from "@quiz/qt-blocks/server";
 import type { BlocksAnswer, BlocksConfig } from "@quiz/qt-blocks/client";
-import type { AnyQuestionTypeServer, RunnerService } from "@quiz/core/server";
+import type { AnyQuestionTypeServer, LlmGradeRequest, RunnerService } from "@quiz/core/server";
 import { shortServer } from "@quiz/qt-short/server";
 
 /** `rich` never runs anything; its grade context still names a runner. */
@@ -792,14 +793,17 @@ export function makeQuestion(
 
 /** The essay of the mock: a rubric, a model answer and a limit of half a page. */
 export const RICH_CONFIG: Record<string, unknown> = {
-  configVersion: 1,
+  configVersion: 2,
   prompt:
     "Expliquez en quelques phrases pourquoi une **récursion infinie** fait planter un programme C, " +
     "et ce que le système d'exploitation y voit.",
-  rubric:
-    "- **2 pts** : la pile a une taille bornée et chaque appel y empile un cadre.\n" +
-    "- **1 pt** : le dépassement touche une page non allouée (page de garde).\n" +
-    "- **1 pt** : le noyau envoie `SIGSEGV`, le programme s'arrête.",
+  rubric: "Ignorer l'orthographe. Un terme anglais correct compte.",
+  // Structured criteria (ADR-118): the question is worth the sum of the weights, 4.
+  criteria: [
+    { id: "pq4n7c2k", title: "La pile est bornée", weight: 2, prompt: "Chaque appel empile un cadre, et la pile a une taille bornée. 1 point si un seul des deux est dit." },
+    { id: "gx8r1m5d", title: "La page de garde", weight: 1, prompt: "Le dépassement touche une page non allouée, la page de garde." },
+    { id: "sv3b9e6w", title: "Le signal", weight: 1, prompt: "Le noyau envoie SIGSEGV, le programme s'arrête." },
+  ],
   reference:
     "Chaque appel empile un cadre (adresse de retour, variables locales). La pile ayant une " +
     "taille fixe, une récursion sans fin finit par écrire au-delà, dans une page de garde non " +
@@ -2211,19 +2215,31 @@ export function tryAnswer(
   // when the type asks for one (a rubric or a reference, and something
   // written; ADR-063, amendment of 2026-10-23), else the type's 0 points.
   if (q.type === "rich" || q.type === "diagram") {
-    const ctx = { seed: 0, itemId: q.id, attemptId: "", itemPoints: 1, now: new Date(), runner: NO_RUNNER, llm: true as const };
+    // The points the Try asks at: the type's default, as the API's (ADR-118: the sum of an essay's weights).
+    const itemPoints =
+      q.type === "rich" ? richServer.defaultPoints(config as RichConfig) : diagramServer.defaultPoints(config as DiagramConfig);
+    const ctx = { seed: 0, itemId: q.id, attemptId: "", itemPoints, now: new Date(), runner: NO_RUNNER, llm: true as const };
     const graded = (
       q.type === "rich"
         ? richServer.grade(config as RichConfig, (answer as { text: string } | null) ?? null, ctx)
         : diagramServer.grade(config as DiagramConfig, (answer as DiagramAnswer | null) ?? null, ctx)
     ) as
       | { kind: "graded"; points: number; maxPoints: number; details: unknown; state?: string }
-      | { kind: "pending"; request: { maxPoints: number }; details?: unknown };
+      | { kind: "pending"; request: LlmGradeRequest; details?: unknown };
     if (graded.kind === "pending") {
-      const { maxPoints } = graded.request;
-      const points = Math.round(maxPoints * 0.75 * 4) / 4;
+      const { maxPoints, criteria: asked = [] } = graded.request;
       const justification = "Development stub, not a model: the answer covers part of the rubric.";
-      const ai = { model: "development-stub", criteria: [{ criterion: "Coverage of the rubric", points, maxPoints, comment: justification }] };
+      // Three quarters of every criterion, in its weight units, then scaled like `askGrader` (ADR-118).
+      const scaled = scaleCriteria(
+        asked.map((c) => ({ weight: c.weight, earned: Math.round(c.weight * 0.75 * 4) / 4 })),
+        maxPoints,
+      );
+      const points = asked.length > 0 ? scaled.total : Math.round(maxPoints * 0.75 * 4) / 4;
+      const criteria =
+        asked.length > 0
+          ? scaled.criteria.map((c, i) => ({ id: asked[i]!.id, criterion: asked[i]!.title, ...c, comment: justification }))
+          : [{ criterion: "Coverage of the rubric", points, maxPoints, comment: justification }];
+      const ai = { model: "development-stub", criteria };
       const details = { ...(graded.details as object), [JUSTIFICATION_KEY]: justification, [AI_KEY]: ai };
       return { status: "graded", points, maxPoints, details, solution: solutionOf(q), manual: true, confidence: "medium" };
     }

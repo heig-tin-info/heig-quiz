@@ -134,17 +134,33 @@ const GUIDES: Record<string, TypeGuide> = {
     ],
   },
   rich: {
-    summary: "Essay: the student writes a text, graded by hand by the teacher against a rubric.",
+    summary: "Essay: the student writes a text, graded by the teacher against structured criteria, with an AI proposal when one is configured.",
     rules: [
-      "`prompt`, `rubric` and `reference` are Markdown. `rubric` is never shown to the student; `reference` is shown when the evaluation shows the expected answer.",
-      "Write the rubric as a list of criteria, each with its points, so the grader can apply it.",
+      "Prefer `criteria`: 1 to 12 entries `{ id, title, weight, prompt }`. `id` is an opaque string of 8 random lowercase letters and digits, unique in the question. `title` names the criterion in a few words, written for the student: short, neutral, no hint of the answer. `weight` is a whole number of points, 1 to 100. `prompt` is plain text, for the grader only: what earns the weight, concretely.",
+      "The grader scores each criterion from 0 to its weight in quarter points, reading its prompt alone. Write each prompt so that another person reaches the same score: what must be present, and what loses part of the weight.",
+      "The question's points default to the sum of the weights; the evaluation may set others, and the criteria are then scaled.",
+      "`rubric` is optional Markdown: global instructions for the grader that apply to every criterion. Leave it empty when nothing does. `prompt` and `reference` are Markdown; `rubric`, `criteria` and `reference` never reach the student before grading, and `reference` is shown when the evaluation shows the expected answer.",
       '`format: "markdown"` gives the student a formatted editor, `"plain"` a bare text field.',
       "`maxChars` limits the answer in characters (markdown marks included); about 3000 fill an A4 page. Omit it for no limit.",
     ],
     example: {
-      configVersion: 1,
+      configVersion: 2,
       prompt: "Expliquez pourquoi une **récursion infinie** fait planter un programme C.",
-      rubric: "- **2 pts** : la pile est bornée, chaque appel y empile un cadre.\n- **1 pt** : le noyau envoie `SIGSEGV`.",
+      rubric: "",
+      criteria: [
+        {
+          id: "p4k8v2ma",
+          title: "La pile est bornée",
+          weight: 2,
+          prompt: "Dit que chaque appel empile un cadre et que la pile a une taille limitée. 1 point si seul l'un des deux est dit.",
+        },
+        {
+          id: "s7d1q9xe",
+          title: "Le signal",
+          weight: 1,
+          prompt: "Nomme SIGSEGV ou l'accès à une page non allouée (page de garde).",
+        },
+      ],
       reference: "Chaque appel empile un cadre ; la pile finit par déborder sur une page de garde.",
       maxChars: 1500,
       format: "markdown",

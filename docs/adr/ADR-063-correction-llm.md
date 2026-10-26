@@ -36,6 +36,15 @@ provisional after the repository's definitive freeze, final (validated)
 after the release. An essay's or a diagram's justification and `details.ai`
 stay the teacher's.
 
+Amended 2026-10-26 by [ADR-118](ADR-118-criteres-structures-des-essais.md)
+(product owner; scope: §4 for essays): an essay's structured criteria are
+sent with the request and scored in weight units, then scaled to the item;
+the structured rubric is no longer deferred. `details.ai` stays the
+teacher's; a student-readable breakdown is still to be built (ADR-118).
+`diagram` keeps the free rubric. On the free-rubric path of every type (an
+essay without criteria, a diagram), a breakdown whose maxima miss the item's
+points is rescaled to them instead of clamping the total alone.
+
 Amended 2026-10-15 (§8 only, issue #868): the page of §8 is the "Data and
 privacy" page of N-DATA-07 (`/privacy`); it says what §8 asks.
 

@@ -670,17 +670,36 @@ const C_POOL: PoolSpec = {
         "La pile d'un thread a une taille fixe ; une récursion sans fin l'épuise, et " +
         "l'écriture suivante touche la page de garde, ce qui déclenche une erreur de segmentation.",
       // Graded by hand (issue #192), or proposed by the LLM service when the
-      // process has one (`LLM_PROVIDER=stub` in development): the rubric and
-      // the model answer are what the grader reads, never the student.
+      // process has one (`LLM_PROVIDER=stub` in development): the criteria
+      // and the model answer are what the grader reads, never the student.
+      // The one seeded essay with structured criteria (ADR-118), worth the
+      // sum of their weights; the training essays keep a v1 rubric.
       config: {
-        configVersion: 1,
+        configVersion: 2,
         prompt:
           "Expliquez en quelques phrases pourquoi une **récursion infinie** fait planter un " +
           "programme C, et ce que le système d'exploitation y voit.",
-        rubric:
-          "- **2 pts** : la pile a une taille bornée et chaque appel y empile un cadre.\n" +
-          "- **1 pt** : le dépassement touche une page non allouée (page de garde).\n" +
-          "- **1 pt** : le noyau envoie `SIGSEGV`, le programme s'arrête.",
+        rubric: "",
+        criteria: [
+          {
+            id: "pq4n7c2k",
+            title: "La pile est bornée",
+            weight: 2,
+            prompt: "Chaque appel empile un cadre, et la pile a une taille bornée.",
+          },
+          {
+            id: "gx8r1m5d",
+            title: "La page de garde",
+            weight: 1,
+            prompt: "Le dépassement touche une page non allouée, la page de garde.",
+          },
+          {
+            id: "sv3b9e6w",
+            title: "Le signal",
+            weight: 1,
+            prompt: "Le noyau envoie SIGSEGV, le programme s'arrête.",
+          },
+        ],
         reference:
           "Chaque appel empile un cadre (adresse de retour, variables locales). La pile " +
           "ayant une taille fixe, une récursion sans fin finit par écrire au-delà, dans une " +

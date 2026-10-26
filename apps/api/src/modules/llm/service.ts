@@ -18,8 +18,8 @@ import { eq } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
 import { AI_KEY, JUSTIFICATION_KEY, type LlmErrorCode, type LlmSettings, type LlmSettingsPatch } from "@quiz/contracts";
-import type { LlmConfidence, LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
-import { DEFAULT_LLM_MODEL, LLM_MODEL_IDS, round2, type LlmModelId, type LlmPurpose } from "@quiz/domain";
+import type { LlmConfidence, LlmCriterion, LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
+import { DEFAULT_LLM_MODEL, LLM_MODEL_IDS, round2, scaleCriteria, type LlmModelId, type LlmPurpose } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
@@ -87,9 +87,42 @@ export function createLlm(config: Pick<AppConfig, "LLM_PROVIDER">, gateway: LlmG
 }
 
 /**
+ * The model's points and breakdown on the item's scale, the two in
+ * agreement (ADR-118), through the one scaling rule (`scaleCriteria`).
+ * Structured criteria are read in the request's order and titles, their
+ * points in weight units, a criterion the reply left out earning 0. A free
+ * rubric's breakdown is the model's own, its maxima taken as the weights,
+ * so a breakdown that misses the item's points is rescaled to them. With no
+ * breakdown, or only empty maxima, the model's total is clamped to
+ * `[0, maxPoints]`.
+ */
+export function onItemScale(request: LlmGradeRequest, outcome: LlmGradeOutcome): { points: number; criteria: LlmCriterion[] } {
+  const asked = request.criteria ?? [];
+  const replied = new Map(outcome.criteria.map((c) => [c.id, c]));
+  const breakdown: LlmCriterion[] =
+    asked.length > 0
+      ? asked.map((c) => ({
+          id: c.id,
+          criterion: c.title,
+          points: replied.get(c.id)?.points ?? 0,
+          maxPoints: c.weight,
+          comment: replied.get(c.id)?.comment ?? "",
+        }))
+      : outcome.criteria;
+  if (!breakdown.some((c) => c.maxPoints > 0)) {
+    return { points: round2(Math.min(request.maxPoints, Math.max(0, outcome.points))), criteria: breakdown };
+  }
+  const scaled = scaleCriteria(
+    breakdown.map((c) => ({ weight: c.maxPoints, earned: c.points })),
+    request.maxPoints,
+  );
+  return { points: scaled.total, criteria: breakdown.map((c, i) => ({ ...c, ...scaled.criteria[i]! })) };
+}
+
+/**
  * What a model's grading leaves for the teacher (ADR-063 §4), the one
  * shape for the grading pass and the editor's Try. On a reply: the points
- * clamped to the item's scale, the type's own details completed with the
+ * on the item's scale, in agreement with the breakdown ({@link onItemScale}), the type's own details completed with the
  * justification and the rest of the reply (`details.ai`) — both
  * teacher-only, stripped from every student payload — and the confidence.
  * On a failed call (§2), or with no service at all: a proposal of 0 whose
@@ -105,12 +138,13 @@ export async function askGrader(
   try {
     const outcome = await llm.grade(request, call.billedTo, call.purpose);
     const own = call.own && typeof call.own === "object" && !Array.isArray(call.own) ? call.own : {};
+    const { points, criteria } = onItemScale(request, outcome);
     return {
-      points: round2(Math.min(request.maxPoints, Math.max(0, outcome.points))),
+      points,
       details: {
         ...own,
         [JUSTIFICATION_KEY]: outcome.justification,
-        [AI_KEY]: { model: outcome.model, criteria: outcome.criteria },
+        [AI_KEY]: { model: outcome.model, criteria },
       },
       confidence: outcome.confidence,
     };

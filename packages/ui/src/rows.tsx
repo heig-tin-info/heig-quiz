@@ -95,7 +95,8 @@ export function RemoveRowButton({
 /**
  * The first line of a row panel, the same in every list of weighted rows
  * (audit P-15): the row's name, its points, whatever the type adds beside
- * them (`children`: a time budget), "Hidden" and the remove button.
+ * them (`children`: a time budget), "Hidden" and the remove button. A list
+ * without hidden rows (an essay's criteria) leaves the "Hidden" props out.
  *
  * "Hidden" is the inverse of the stored `visible` flag — the word a teacher
  * ticks is the exception, not the rule — so the component takes `visible`
@@ -107,11 +108,15 @@ export function RowHead({
   nameLabel,
   nameAriaLabel,
   name,
+  nameMaxLength,
   onNameChange,
   pointsId,
   pointsLabel,
   pointsAriaLabel,
   points,
+  pointsMin = 0,
+  pointsMax,
+  pointsStep = 0.5,
   onPointsChange,
   hiddenLabel,
   hiddenAriaLabel,
@@ -129,16 +134,22 @@ export function RowHead({
   /** The name field's accessible name ("Name 2"). */
   nameAriaLabel: string;
   name: string;
+  nameMaxLength?: number | undefined;
   onNameChange: (name: string) => void;
   pointsId: string;
   pointsLabel: string;
   pointsAriaLabel?: string | undefined;
   points: number;
+  /** The points field's range and step: `0`, none and `0.5` by default; an integer weight passes `1`, `100`, `1`. */
+  pointsMin?: number | undefined;
+  pointsMax?: number | undefined;
+  pointsStep?: number | undefined;
   onPointsChange: (points: number) => void;
-  hiddenLabel: string;
-  hiddenAriaLabel: string;
-  visible: boolean;
-  onVisibleChange: (visible: boolean) => void;
+  /** All four or none: a list whose rows cannot be hidden shows no "Hidden". */
+  hiddenLabel?: string | undefined;
+  hiddenAriaLabel?: string | undefined;
+  visible?: boolean | undefined;
+  onVisibleChange?: ((visible: boolean) => void) | undefined;
   removeLabel: string;
   removeDisabled?: boolean | undefined;
   onRemove: () => void;
@@ -153,6 +164,7 @@ export function RowHead({
           size="sm"
           className="w-full font-medium"
           aria-label={nameAriaLabel}
+          maxLength={nameMaxLength}
           disabled={disabled}
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
@@ -163,21 +175,24 @@ export function RowHead({
         label={pointsLabel}
         aria-label={pointsAriaLabel}
         value={points}
-        min={0}
-        step={0.5}
+        min={pointsMin}
+        max={pointsMax}
+        step={pointsStep}
         width="w-20"
         disabled={disabled}
         onChange={onPointsChange}
       />
       {children}
-      <CheckboxField
-        className="flex h-7 items-center gap-2 text-[13px] text-fg-muted"
-        label={hiddenLabel}
-        aria-label={hiddenAriaLabel}
-        checked={!visible}
-        disabled={disabled}
-        onChange={(hidden) => onVisibleChange(!hidden)}
-      />
+      {hiddenLabel === undefined || onVisibleChange === undefined ? null : (
+        <CheckboxField
+          className="flex h-7 items-center gap-2 text-[13px] text-fg-muted"
+          label={hiddenLabel}
+          aria-label={hiddenAriaLabel}
+          checked={visible === false}
+          disabled={disabled}
+          onChange={(hidden) => onVisibleChange(!hidden)}
+        />
+      )}
       <RemoveRowButton label={removeLabel} disabled={removeDisabled} onClick={onRemove} />
     </div>
   );

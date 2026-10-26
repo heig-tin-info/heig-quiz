@@ -25,8 +25,17 @@ export interface LlmGradeRequest {
    * prompt quotes: "free text", "a PlantUML class diagram".
    */
   form: string;
-  /** The teacher's rubric, verbatim. */
+  /**
+   * The teacher's rubric, verbatim. With {@link criteria} it is the grader's
+   * global instructions; without, the free text the model splits itself.
+   */
   rubric: string;
+  /**
+   * The structured criteria of an essay (ADR-118): the model scores each one
+   * in weight units, `0..weight`, keyed by `id`, and the API scales them to
+   * {@link maxPoints}. Absent: the model reads the free rubric.
+   */
+  criteria?: LlmRequestCriterion[];
   /** An optional reference answer. */
   reference?: string;
   /** The student's answer, already normalised by the question type. */
@@ -40,7 +49,11 @@ export const LLM_CONFIDENCES = ["low", "medium", "high"] as const;
 export type LlmConfidence = (typeof LLM_CONFIDENCES)[number];
 
 export interface LlmGradeOutcome {
-  /** On the item's scale; the pass clamps it to `[0, maxPoints]`. */
+  /**
+   * On the item's scale; the pass clamps it to `[0, maxPoints]`. Ignored
+   * when the request has criteria (0 by convention): the server scales the
+   * breakdown instead (ADR-118).
+   */
   points: number;
   /**
    * Why: for the TEACHER only (ADR-045, open question 27). The pass stores
@@ -51,8 +64,10 @@ export interface LlmGradeOutcome {
   /** How sure the model says it is: what the batch and its filter read (F-GRADE-04). */
   confidence: LlmConfidence;
   /**
-   * The points per criterion (F-GRADE-02): the model's reading of the
-   * free-text rubric, or of the reference when the rubric is empty. The
+   * The points per criterion (F-GRADE-02): the request's structured
+   * criteria (ADR-118, in weight units until the API scales them), else the
+   * model's reading of the free-text rubric, or of the reference when the
+   * rubric is empty. The
    * teacher's, like the justification.
    */
   criteria: LlmCriterion[];
@@ -60,7 +75,20 @@ export interface LlmGradeOutcome {
   model: string;
 }
 
+/** One criterion of a request (ADR-118): what earns its weight, said in `prompt`. */
+export interface LlmRequestCriterion {
+  /** Stable, from the question's config: the key of the model's reply. */
+  id: string;
+  title: string;
+  /** A positive integer; the criterion scores `0..weight`. */
+  weight: number;
+  /** What to check, plain text; empty: the title says it. */
+  prompt: string;
+}
+
 export interface LlmCriterion {
+  /** The request's criterion id, when the request had structured criteria (ADR-118). */
+  id?: string;
   criterion: string;
   points: number;
   maxPoints: number;

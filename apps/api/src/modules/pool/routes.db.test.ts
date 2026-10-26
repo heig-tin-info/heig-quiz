@@ -424,6 +424,35 @@ describe("POST /questions/:id/try (F-QST-09)", () => {
       expect(calls).toEqual([{ billedTo: owner.id, purpose: "try" }]);
     });
 
+    it("tries an essay with criteria at the sum of their weights, the breakdown in agreement (ADR-118)", async () => {
+      const withCriteria = await createQuestion("an essay with criteria", "rich");
+      const put = await server.app.inject({
+        method: "PUT",
+        url: `/app/api/questions/${withCriteria}/draft`,
+        headers: owner.headers,
+        payload: {
+          config: {
+            configVersion: 2,
+            prompt: "Explain the stack.",
+            rubric: "",
+            criteria: [
+              { id: "stackgrw", title: "The stack grows downward", weight: 1, prompt: "" },
+              { id: "heapgrow", title: "The heap grows upward", weight: 1, prompt: "" },
+            ],
+            format: "plain",
+          },
+        },
+      });
+      expect(put.statusCode).toBe(200);
+      const { llm } = llmOf();
+      const body = await tried(withCriteria, llm);
+      expect(body).toMatchObject({ status: "graded", manual: true, maxPoints: 2, points: 2 });
+      expect(body.details.ai.criteria).toMatchObject([
+        { id: "stackgrw", criterion: "The stack grows downward", points: 1, maxPoints: 1 },
+        { id: "heapgrow", criterion: "The heap grows upward", points: 1, maxPoints: 1 },
+      ]);
+    });
+
     it("keeps the proposal by hand, with no call, when the service is not ready", async () => {
       const { llm, calls } = llmOf(undefined, false);
       const body = await tried(id, llm);

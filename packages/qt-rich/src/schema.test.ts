@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   a4Pages,
   countChars,
+  criteriaPoints,
   pagesText,
   RICH_MAX_CHARS,
+  RICH_MAX_CRITERIA,
   RichAnswerSchema,
   RichConfigSchema,
 } from "./schema.js";
@@ -26,6 +28,27 @@ describe("the rich config", () => {
     expect(at(0)).toBe(false);
     expect(at(RICH_MAX_CHARS + 1)).toBe(false);
     expect(at(2.5)).toBe(false);
+  });
+
+  it("has no criteria by default, and holds a few with unique ids", () => {
+    expect(config().criteria).toEqual([]);
+    const one = (id: string) => ({ id, title: "Names the guard page", weight: 2 });
+    const parsed = config({ criteria: [one("a")] } as never);
+    expect(parsed.criteria).toEqual([{ id: "a", title: "Names the guard page", weight: 2, prompt: "" }]);
+    const at = (criteria: unknown) => RichConfigSchema.safeParse({ ...config(), criteria }).success;
+    expect(at([one("a"), one("a")])).toBe(false);
+    expect(at([{ ...one("a"), weight: 0 }])).toBe(false);
+    expect(at([{ ...one("a"), weight: 1.5 }])).toBe(false);
+    expect(at([{ ...one("a"), title: "  " }])).toBe(false);
+    expect(at([one("a b")])).toBe(false);
+    expect(at([one("a.b")])).toBe(false);
+    expect(at([one("Ab_9-z")])).toBe(true);
+    expect(at(Array.from({ length: RICH_MAX_CRITERIA + 1 }, (_, i) => one(`c${i}`)))).toBe(false);
+  });
+
+  it("is worth the sum of its weights, else 1", () => {
+    expect(criteriaPoints([])).toBe(1);
+    expect(criteriaPoints([{ weight: 2 }, { weight: 3 }])).toBe(5);
   });
 
   it("takes a plain field", () => {
