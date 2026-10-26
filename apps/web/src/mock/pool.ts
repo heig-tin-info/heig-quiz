@@ -8,6 +8,7 @@ import {
   type QuestionReview,
   type QuestionStats,
   type ConceptSuggestions,
+  type GenerateTarget,
   type PoolConceptMap,
   type ReviewList,
   type ZodIssueLite,
@@ -813,6 +814,30 @@ export const RICH_CONFIG: Record<string, unknown> = {
 };
 
 /**
+ * An essay written before criteria (ADR-118): its whole barème is the free
+ * rubric, points and common mistakes included. The editor offers "Convert to
+ * criteria", which the mock answers with `mockEssayTarget`.
+ */
+export const RICH_LEGACY_CONFIG: Record<string, unknown> = {
+  configVersion: 2,
+  prompt: "Décrivez le rôle de la **pile** d'un programme C et ce qui se passe quand elle déborde.",
+  rubric: [
+    "Barème (10 points)",
+    "",
+    "- 4 pts : la pile garde un cadre par appel (adresse de retour, variables locales).",
+    "- 3 pts : la pile a une taille bornée.",
+    "- 3 pts : le débordement touche la page de garde, le noyau envoie `SIGSEGV`.",
+    "",
+    "Erreurs fréquentes : confondre pile et tas ; citer le signal sans dire d'où il vient.",
+    "",
+    "Ignorer l'orthographe.",
+  ].join("\n"),
+  criteria: [],
+  maxChars: 2000,
+  format: "markdown",
+};
+
+/**
  * The categorize question of the mock (docs/04 §4.13): the "C types" of
  * `mockups/categorize.html`. Three columns, eight targets and one distractor
  * (`string`, which C does not have). The ids are opaque, as the editor mints them.
@@ -1373,6 +1398,24 @@ export const questions: MockQuestion[] = [
     config: BLOCKS_CONFIG,
     explanation: "Longer le mur à droite mène au quai quelle que soit la disposition des rayonnages.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 2 }],
+  }),
+  /*
+   * An essay from before criteria (ADR-118), its barème in the rubric: the
+   * editor's "Convert to criteria". Under an id of its own, last, so no id
+   * above moves.
+   */
+  makeQuestion({
+    id: "q-rich-legacy",
+    poolId: "p1",
+    type: "rich",
+    internalName: "pile-bareme-libre",
+    categoryId: "k1",
+    difficulty: 2,
+    randomizable: false,
+    concepts: seedConceptIds(["Pile"]),
+    config: RICH_LEGACY_CONFIG,
+    explanation: "",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 30 }],
   }),
 ];
 
@@ -2998,6 +3041,10 @@ on("GET", "/app/api/generate/availability", () =>
 on("POST", "/app/api/questions/:id/generate", (m, body) => {
   questionOr404(m.groups!.id!);
   const config = { ...((body.config ?? {}) as Record<string, unknown>) };
+  const explanationAsIs = typeof body.explanation === "string" ? body.explanation : "";
+  // An essay's targets (ADR-118): a canned prompt for one criterion, a canned split of the rubric.
+  const target = body.target as GenerateTarget | undefined;
+  if (target !== undefined) return { config: mockEssayTarget(config, target), explanation: explanationAsIs };
   if (Array.isArray(config.choices)) {
     config.choices = (config.choices as { text: string; correct: boolean }[]).map((c) =>
       c.text.trim() === "" ? { text: "Une adresse au hasard, différente à chaque exécution", correct: false } : c,
@@ -3021,6 +3068,36 @@ on("POST", "/app/api/questions/:id/generate", (m, body) => {
       : "Une variable locale non initialisée a une valeur indéterminée : la lire est un comportement indéfini.";
   return { config, explanation, ...(program ? { incomplete: "runner_unavailable" } : {}) };
 });
+/**
+ * The essay wand's two targets, canned and deterministic: one criterion's
+ * prompt names its title and weight; a legacy rubric becomes the three
+ * criteria of `RICH_LEGACY_CONFIG`'s barème, and its global line stays the
+ * rubric. The merge rules themselves are `qt-rich`'s, tested there.
+ */
+function mockEssayTarget(config: Record<string, unknown>, target: GenerateTarget): Record<string, unknown> {
+  const criteria = Array.isArray(config.criteria) ? (config.criteria as { id: string; title: string; weight: number; prompt: string }[]) : [];
+  if (target.kind === "criterionPrompt") {
+    const criterion = criteria.find((c) => c.id === target.criterionId);
+    if (!criterion || criterion.title.trim() === "") throw new MockPayload(400, { error: "target_unavailable" });
+    const prompt =
+      `La réponse explique « ${criterion.title.trim()} » avec ses propres mots et dit pourquoi c'est le cas : ` +
+      `${criterion.weight} pt. Énoncer le fait sans l'expliquer vaut la moitié du poids.`;
+    return { ...config, criteria: criteria.map((c) => (c.id === criterion.id ? { ...c, prompt } : c)) };
+  }
+  if (criteria.length > 0 || typeof config.rubric !== "string" || config.rubric.trim() === "") {
+    throw new MockPayload(400, { error: "target_unavailable" });
+  }
+  return {
+    ...config,
+    criteria: [
+      { id: "mkcv1a2b", title: "Rôle de la pile", weight: 4, prompt: "La pile garde un cadre par appel : adresse de retour et variables locales. 2 pts si un seul des deux est nommé." },
+      { id: "mkcv3c4d", title: "Taille bornée", weight: 3, prompt: "La pile a une taille fixe, quelques mégaoctets. Confondre pile et tas ne rapporte rien." },
+      { id: "mkcv5e6f", title: "Signal reçu", weight: 3, prompt: "Le dépassement touche une page de garde et le noyau envoie SIGSEGV. Le nom du signal seul vaut 1 pt." },
+    ],
+    rubric: "Ignorer l'orthographe.",
+  };
+}
+
 // "Suggest concepts" (ADR-081 sixth addendum §6): canned, from the vocabulary.
 // Two concepts the question does not hold, one close-only "did you mean" and
 // one new label, so that the screenshots show every kind of row.

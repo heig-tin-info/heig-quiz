@@ -45,6 +45,32 @@ export type AssistTextLabel = (typeof ASSIST_TEXT_LABELS)[number];
 export const GENERATE_INCOMPLETE = ["runner_unavailable", "draft_invalid", "compile_failed", "partial"] as const;
 export type GenerateIncomplete = (typeof GENERATE_INCOMPLETE)[number];
 
+/**
+ * A part of the draft the wand writes on its own, beside the whole-question
+ * proposal and the one-element `item`: the grading prompt of one essay
+ * criterion, an essay's free rubric split into criteria (ADR-118). A closed
+ * list, so the request schema (`@quiz/contracts`) and the editors name the
+ * same targets; a type serves the ones it declares in `targets`.
+ */
+export type GenerateTarget = { kind: "criterionPrompt"; criterionId: string } | { kind: "criteriaFromRubric" };
+export type GenerateTargetKind = GenerateTarget["kind"];
+
+/**
+ * How a type writes one target: whether the draft allows it, what to ask,
+ * the reply's narrow schema, and where the reply goes. Like `merge`, `place`
+ * is pure and tested without a model.
+ */
+export interface TargetGenerator<TConfig, TTarget extends GenerateTarget, TValue = unknown> {
+  /** Whether the draft allows the target now (the criterion exists and has a title, the rubric is written…). */
+  accepts(config: TConfig, target: TTarget): boolean;
+  /** What the model must know, in English, for the system prompt. */
+  instructions: string;
+  /** The request's last line: what to write, named (a criterion's id). */
+  ask(config: TConfig, target: TTarget): string;
+  schema: z.ZodType<TValue>;
+  place(config: TConfig, target: TTarget, value: TValue): TConfig;
+}
+
 export interface AnswerGenerator<TConfig, TProposal = unknown, TItem = unknown> {
   /** The draft's statement: the wand is refused while it is empty. */
   statement(config: TConfig): string;
@@ -74,4 +100,6 @@ export interface AnswerGenerator<TConfig, TProposal = unknown, TItem = unknown> 
     accepts(config: TConfig, index: number): boolean;
     place(config: TConfig, index: number, item: TItem): TConfig;
   };
+  /** The targets this type writes on their own ({@link GenerateTarget}). Absent: none. */
+  targets?: { [K in GenerateTargetKind]?: TargetGenerator<TConfig, Extract<GenerateTarget, { kind: K }>> };
 }

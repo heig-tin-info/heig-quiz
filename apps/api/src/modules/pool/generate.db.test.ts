@@ -1,7 +1,8 @@
 /**
  * "Generate answers" (ADR-059) on a real application over PGlite, with a fake
  * provider in place of Anthropic: what is sent, what comes back merged, the
- * wand of one MCQ choice, the refusals, and access (invariant 6).
+ * wand of one MCQ choice, an essay's targets (ADR-118), the refusals, and
+ * access (invariant 6).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -151,6 +152,87 @@ describe("POST /questions/:id/generate", () => {
   it("is a 404 for a teacher outside the pool (invariant 6)", async () => {
     const res = await generate({ config: mcq([{ text: "", correct: true }]), explanation: "" }, stranger);
     expect(res.statusCode).toBe(404);
+    expect(seen).toHaveLength(0);
+  });
+});
+
+describe("an essay's targets (ADR-118)", () => {
+  let essayId: string;
+  const essay = (over: Record<string, unknown> = {}) => ({
+    configVersion: 2,
+    prompt: "Décrivez le fonctionnement d'un amplificateur opérationnel idéal.",
+    rubric: "",
+    criteria: [
+      { id: "c1", title: "Tension IN+, IN− nulle", weight: 1, prompt: "" },
+      { id: "c2", title: "Impédance d'entrée", weight: 2, prompt: "Les entrées ne tirent aucun courant." },
+    ],
+    format: "markdown",
+    ...over,
+  });
+  const ask = (payload: Payload) => call(owner, "POST", `/app/api/questions/${essayId}/generate`, payload);
+
+  beforeAll(async () => {
+    const pool = (await call(owner, "POST", "/app/api/pools", { name: "Generate essay" })).json<{ id: string }>().id;
+    const created = await call(owner, "POST", `/app/api/pools/${pool}/questions`, { type: "rich", internalName: "aop" });
+    essayId = created.json<{ meta: { id: string } }>().meta.id;
+  });
+
+  it("writes one criterion's prompt from its title, weight and the other criteria", async () => {
+    next = () => ({ prompt: "Les deux entrées sont au même potentiel. La moitié si le fait est dit sans la contre-réaction." });
+    const res = await ask({ config: essay(), explanation: "Mine", target: { kind: "criterionPrompt", criterionId: "c1" } });
+    expect(res.statusCode).toBe(200);
+    const result = GenerateResult.parse(res.json());
+    expect(result.explanation).toBe("Mine");
+    expect(result.config).toMatchObject({
+      criteria: [
+        { id: "c1", prompt: expect.stringContaining("même potentiel") },
+        { id: "c2", prompt: "Les entrées ne tirent aucun courant." },
+      ],
+    });
+    expect(seen[0]!.prompt).toContain('criterion "Tension IN+, IN− nulle" (id c1), worth 1');
+    expect(seen[0]!.prompt).toContain("\"Impédance d'entrée\"");
+    expect(seen[0]!.system).toMatch(/from 0 to its weight in quarter points/);
+    // The whole-question instructions are not sent: they ask for more than one prompt.
+    expect(seen[0]!.system).not.toContain("Propose:");
+  });
+
+  it("splits a legacy rubric into criteria and keeps the global line as the rubric", async () => {
+    next = () => ({
+      criteria: [
+        { title: "Rôle de la pile", weight: 4, prompt: "Un cadre par appel." },
+        { title: "Signal reçu", weight: 6, prompt: "SIGSEGV." },
+      ],
+      rubric: "Ignorer l'orthographe.",
+    });
+    const legacy = essay({ criteria: [], rubric: "Barème (10 points)\n- 4 pts : la pile\n- 6 pts : le signal\n\nIgnorer l'orthographe." });
+    const result = GenerateResult.parse((await ask({ config: legacy, explanation: "", target: { kind: "criteriaFromRubric" } })).json());
+    expect(result.config).toMatchObject({
+      rubric: "Ignorer l'orthographe.",
+      criteria: [
+        { title: "Rôle de la pile", weight: 4, prompt: "Un cadre par appel." },
+        { title: "Signal reçu", weight: 6, prompt: "SIGSEGV." },
+      ],
+    });
+    expect(seen[0]!.prompt).toContain("Barème (10 points)");
+  });
+
+  it("refuses a target the draft does not allow, before asking anyone", async () => {
+    const untitled = essay({ criteria: [{ id: "c1", title: " ", weight: 1, prompt: "" }] });
+    const refused = [
+      await ask({ config: untitled, explanation: "", target: { kind: "criterionPrompt", criterionId: "c1" } }),
+      await ask({ config: essay(), explanation: "", target: { kind: "criterionPrompt", criterionId: "nope" } }),
+      await ask({ config: essay({ rubric: "Barème" }), explanation: "", target: { kind: "criteriaFromRubric" } }),
+      await ask({ config: essay({ criteria: [] }), explanation: "", target: { kind: "criteriaFromRubric" } }),
+    ];
+    for (const res of refused) expect(res.json()).toEqual({ error: "target_unavailable" });
+    expect(seen).toHaveLength(0);
+  });
+
+  it("refuses a target the type does not serve, and an element and a target together", async () => {
+    const mcqTarget = await generate({ config: mcq([{ text: "", correct: true }]), explanation: "", target: { kind: "criteriaFromRubric" } });
+    expect(mcqTarget.json()).toEqual({ error: "generate_unsupported" });
+    const both = await ask({ config: essay(), explanation: "", item: 0, target: { kind: "criteriaFromRubric" } });
+    expect(both.statusCode).toBe(400);
     expect(seen).toHaveLength(0);
   });
 });

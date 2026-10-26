@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mergeRich, richGenerator } from "./generate.js";
+import { criteriaFromRubricTarget, criterionPromptTarget, mergeRich, richGenerator } from "./generate.js";
 import { emptyRichDraft } from "./schema.js";
 
 describe("mergeRich", () => {
@@ -56,5 +56,89 @@ describe("mergeRich", () => {
   it("reads the statement, empty when the draft has none", () => {
     expect(richGenerator.statement({ ...emptyRichDraft(), prompt: "Why?" })).toBe("Why?");
     expect(richGenerator.statement({} as Parameters<typeof mergeRich>[0])).toBe("");
+  });
+});
+
+describe("the essay's targets (ADR-118)", () => {
+  const essay = (over: Partial<Parameters<typeof mergeRich>[0]> = {}) => ({
+    ...emptyRichDraft(),
+    prompt: "Describe how an ideal op-amp works.",
+    criteria: [
+      { id: "a1", title: "IN+ and IN- at the same voltage", weight: 1, prompt: "" },
+      { id: "b2", title: "Infinite input impedance", weight: 2, prompt: "Mine" },
+    ],
+    ...over,
+  });
+
+  describe("criterionPrompt", () => {
+    const target = criterionPromptTarget;
+
+    it("accepts a criterion that exists and has a title", () => {
+      expect(target.accepts(essay(), { kind: "criterionPrompt", criterionId: "a1" })).toBe(true);
+      expect(target.accepts(essay(), { kind: "criterionPrompt", criterionId: "zz" })).toBe(false);
+      const untitled = essay({ criteria: [{ id: "a1", title: "  ", weight: 1, prompt: "" }] });
+      expect(target.accepts(untitled, { kind: "criterionPrompt", criterionId: "a1" })).toBe(false);
+      expect(target.accepts({ prompt: "Why?" } as never, { kind: "criterionPrompt", criterionId: "a1" })).toBe(false);
+    });
+
+    it("names the criterion, its weight and the other criteria, and states the grader's contract", () => {
+      const ask = target.ask(essay(), { kind: "criterionPrompt", criterionId: "a1" });
+      expect(ask).toContain('"IN+ and IN- at the same voltage"');
+      expect(ask).toContain("worth 1");
+      expect(ask).toContain('"Infinite input impedance"');
+      expect(target.instructions).toMatch(/from 0 to its weight in quarter points/);
+      expect(target.instructions).toMatch(/part of it/);
+    });
+
+    it("replaces that criterion's prompt only, capped, and ignores an empty reply", () => {
+      const placed = target.place(essay(), { kind: "criterionPrompt", criterionId: "b2" }, { prompt: ` ${"p".repeat(3000)} ` });
+      expect(placed.criteria[0]).toEqual(essay().criteria[0]);
+      expect(placed.criteria[1]!.prompt).toHaveLength(2000);
+      expect(target.place(essay(), { kind: "criterionPrompt", criterionId: "a1" }, { prompt: "  " })).toEqual(essay());
+    });
+  });
+
+  describe("criteriaFromRubric", () => {
+    const target = criteriaFromRubricTarget;
+    const legacy = essay({ criteria: [], rubric: "Barème (10 points)\n- 4 pts: the stack\n- 6 pts: the signal\n\nIgnore spelling." });
+
+    it("accepts a rubric without criteria only", () => {
+      expect(target.accepts(legacy, { kind: "criteriaFromRubric" })).toBe(true);
+      expect(target.accepts(essay({ rubric: "Ignore spelling." }), { kind: "criteriaFromRubric" })).toBe(false);
+      expect(target.accepts(essay({ criteria: [], rubric: " " }), { kind: "criteriaFromRubric" })).toBe(false);
+    });
+
+    it("sets the criteria and keeps only the global instructions as the rubric", () => {
+      const placed = target.place(legacy, { kind: "criteriaFromRubric" }, {
+        criteria: [
+          { title: "The stack", weight: 4, prompt: "A frame per call." },
+          { title: "The signal", weight: 6.2, prompt: "SIGSEGV." },
+        ],
+        rubric: " Ignore spelling. ",
+      });
+      expect(placed.rubric).toBe("Ignore spelling.");
+      expect(placed.criteria).toMatchObject([
+        { title: "The stack", weight: 4, prompt: "A frame per call." },
+        { title: "The signal", weight: 6, prompt: "SIGSEGV." },
+      ]);
+      expect(placed.prompt).toBe(legacy.prompt);
+    });
+
+    it("empties the rubric when all of it became criteria, and keeps it when no criterion came", () => {
+      const all = target.place(legacy, { kind: "criteriaFromRubric" }, { criteria: [{ title: "The stack", weight: 4, prompt: "" }], rubric: "" });
+      expect(all.rubric).toBe("");
+      const none = { criteria: [{ title: " ", weight: 1, prompt: "" }], rubric: "" };
+      expect(target.place(legacy, { kind: "criteriaFromRubric" }, none)).toEqual(legacy);
+    });
+
+    it("asks for whole weights from the rubric's own points, and neutral titles", () => {
+      expect(target.instructions).toMatch(/rubric's own points/);
+      expect(target.instructions).toMatch(/never the expected answer/);
+      expect(target.instructions).toMatch(/from 0 to its weight in quarter points/);
+    });
+  });
+
+  it("are the generator's", () => {
+    expect(richGenerator.targets).toEqual({ criterionPrompt: criterionPromptTarget, criteriaFromRubric: criteriaFromRubricTarget });
   });
 });

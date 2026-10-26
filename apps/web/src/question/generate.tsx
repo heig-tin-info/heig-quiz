@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
-import type { GenerateRequest, GenerateResult } from "@quiz/contracts";
+import type { GenerateRequest, GenerateResult, GenerateTarget } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
@@ -80,16 +80,19 @@ export function useGenerate({
     onError: (error) => toast(apiErrorMessage(error, t("question.generate.failed")), "error"),
   });
 
-  const item = async (index: number): Promise<void> => {
+  /** The wand of one part of the draft: an element (`item`) or a target the type declares. */
+  const part = async (which: Pick<GenerateRequest, "item" | "target">): Promise<void> => {
     const before = latest.current;
     if (!before) return;
     try {
-      apply(before, await ask({ config: before.config, explanation: before.explanation, item: index }));
+      apply(before, await ask({ config: before.config, explanation: before.explanation, ...which }));
     } catch (error) {
       toast(apiErrorMessage(error, t("question.generate.failed")), "error");
       throw error;
     }
   };
+  const item = (index: number) => part({ item: index });
+  const target = (which: GenerateTarget) => part({ target: which });
 
   // The last proposal, while the draft is still what it made.
   const current = undo && draft?.config === undo.config ? undo : null;
@@ -105,6 +108,8 @@ export function useGenerate({
     run: () => (draft ? whole.mutate(draft) : undefined),
     /** The wand of one element, for the type's editor; undefined while it would be refused. */
     item: enabled && ready ? item : undefined,
+    /** The wand of one target of the type (an essay criterion's prompt…), under the same conditions. */
+    target: enabled && ready ? target : undefined,
     /** What running could not settle (a code question's outputs, a picture's target), while Undo stands. */
     incomplete: current?.incomplete,
     /** Undo is offered until the teacher's next edit of the config. */

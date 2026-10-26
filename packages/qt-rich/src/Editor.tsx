@@ -1,6 +1,7 @@
 /**
  * The `rich` editor: the statement, then what the GRADER reads — the
- * criteria (ADR-118), the grading instructions and an optional model answer
+ * criteria (ADR-118), the grading instructions (folded beside criteria, an
+ * old barème to convert without them) and an optional model answer
  * — and, in the host's right column, the two settings of the student's
  * field, its format and its limit, and the points the criteria are worth.
  *
@@ -8,13 +9,15 @@
  * new config through `onChange` and never fetches. An invalid draft is a
  * normal state (decision D16).
  */
-import { useId } from "react";
+import { useId, useState } from "react";
 
 import type { EditorProps, StringOverrides } from "@quiz/core/client";
+import type { GenerateTarget } from "@quiz/core/generate";
 import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
 import { newId } from "@quiz/core/id";
 import {
   AsideSection,
+  Button,
   cx,
   FieldCell,
   hint,
@@ -29,7 +32,9 @@ import {
   RowListHeader,
   sectionClass,
   Segmented,
+  StrokeIcon,
   textareaClass,
+  WandIcon,
 } from "@quiz/ui";
 
 import {
@@ -51,6 +56,41 @@ type RichEditorProps = EditorProps<RichConfig> & {
   strings?: StringOverrides<RichEditorStringKey>;
 };
 
+/** The key of the conversion's wand in `generating`: a criterion id never has a space. */
+const CONVERT = "convert rubric";
+
+/**
+ * A wand of one part of the draft (ADR-059, ADR-118): a secondary button,
+ * Save stays the screen's one primary. It pulses while its request runs.
+ */
+function WandButton({
+  label: text,
+  ariaLabel,
+  running,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  ariaLabel?: string;
+  running: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      size="sm"
+      className={cx(running && "animate-pulse")}
+      aria-busy={running || undefined}
+      {...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel })}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <WandIcon />
+      {text}
+    </Button>
+  );
+}
+
 export function RichEditor({
   config,
   onChange,
@@ -60,11 +100,28 @@ export function RichEditor({
   RichText,
   uploadAsset,
   aside,
+  onGenerateTarget,
 }: RichEditorProps) {
   const s = resolveStrings(richEditorStrings, strings);
   const id = useId();
   const patch = (next: Partial<RichConfig>) => onChange({ ...config, ...next });
-  const criteria = config.criteria ?? [];
+  const criteria = Array.isArray(config.criteria) ? config.criteria : [];
+  const rubric = config.rubric ?? "";
+  /** An essay from before criteria: its whole barème is the rubric, which the wand converts. */
+  const legacyRubric = criteria.length === 0 && rubric.trim() !== "";
+  const [rubricOpen, setRubricOpen] = useState(() => rubric.trim() !== "");
+  /** The part whose wand waits for the model (a criterion's id, or the conversion); one at a time. */
+  const [generating, setGenerating] = useState<string | null>(null);
+  const wand =
+    onGenerateTarget === undefined || disabled
+      ? null
+      : (key: string, target: GenerateTarget) => {
+          setGenerating(key);
+          // The host words a failure; the button only stops waiting.
+          onGenerateTarget(target)
+            .catch(() => undefined)
+            .finally(() => setGenerating(null));
+        };
   const setCriteria = (next: RichCriterion[]) => patch({ criteria: next });
   /** Optional fields are ABSENT when empty, never `""` or `0`: the schema reads absence. */
   const withOptional = <K extends "reference" | "maxChars">(key: K, value: RichConfig[K] | undefined) => {
@@ -126,16 +183,28 @@ export function RichEditor({
                   onRemove={() => setCriteria(removeAt(criteria, i))}
                 />
                 <FieldCell label={s.criterionPrompt} htmlFor={`${id}-criterion-prompt-${i}`}>
-                  <textarea
-                    id={`${id}-criterion-prompt-${i}`}
-                    rows={2}
-                    aria-label={fmt(s.criterionPromptAria, { n })}
-                    maxLength={RICH_MAX_CRITERION_PROMPT}
-                    className={cx(textareaClass, "w-full")}
-                    disabled={disabled}
-                    value={criterion.prompt}
-                    onChange={(e) => setCriteria(patchAt(criteria, i, { prompt: e.target.value }))}
-                  />
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <textarea
+                      id={`${id}-criterion-prompt-${i}`}
+                      rows={2}
+                      aria-label={fmt(s.criterionPromptAria, { n })}
+                      placeholder={s.criterionPromptPlaceholder}
+                      maxLength={RICH_MAX_CRITERION_PROMPT}
+                      className={cx(textareaClass, "w-full sm:flex-1")}
+                      disabled={disabled}
+                      value={criterion.prompt}
+                      onChange={(e) => setCriteria(patchAt(criteria, i, { prompt: e.target.value }))}
+                    />
+                    {wand ? (
+                      <WandButton
+                        label={s.generatePrompt}
+                        ariaLabel={fmt(s.generatePromptAria, { n })}
+                        running={generating === criterion.id}
+                        disabled={generating !== null || criterion.title.trim() === ""}
+                        onClick={() => wand(criterion.id, { kind: "criterionPrompt", criterionId: criterion.id })}
+                      />
+                    ) : null}
+                  </div>
                 </FieldCell>
                 <IssueList issues={issuesAt(issues, "criteria", i)} />
               </div>
@@ -145,16 +214,41 @@ export function RichEditor({
         <IssueList issues={issuesAt(issues, "criteria").filter((issue) => issue.path.length === 1)} />
       </section>
 
+      {/* The rubric, folded unless written (ADR-118): beside criteria it is
+          global context; alone, it is an essay's whole barème from before
+          criteria, which the wand converts. One fold in both cases, so typing
+          in it never remounts the field. */}
       <section className={sectionClass}>
-        <PromptField
-          id={`${id}-rubric`}
-          label={s.rubric}
-          value={config.rubric ?? ""}
-          onChange={(rubric) => patch({ rubric })}
-          disabled={disabled}
-          RichText={RichText}
-        />
-        <p className={hint}>{s.rubricHint}</p>
+        <details className="group" open={rubricOpen} onToggle={(e) => setRubricOpen(e.currentTarget.open)}>
+          <summary className={cx(label, "w-fit cursor-pointer select-none")}>
+            <StrokeIcon className="size-3.5 text-fg-muted transition-transform group-open:rotate-90" strokeWidth={2}>
+              <path d="m9 6 6 6-6 6" />
+            </StrokeIcon>
+            {legacyRubric ? s.rubric : s.globalRubric}
+          </summary>
+          <div className="mt-2 flex flex-col gap-2">
+            <p className={hint}>{legacyRubric ? s.rubricHint : s.globalRubricHint}</p>
+            <PromptField
+              id={`${id}-rubric`}
+              label={legacyRubric ? s.rubric : s.globalRubricField}
+              labelHidden
+              value={rubric}
+              onChange={(next) => patch({ rubric: next })}
+              disabled={disabled}
+              RichText={RichText}
+            />
+            {legacyRubric && wand ? (
+              <div>
+                <WandButton
+                  label={s.convertRubric}
+                  running={generating === CONVERT}
+                  disabled={generating !== null}
+                  onClick={() => wand(CONVERT, { kind: "criteriaFromRubric" })}
+                />
+              </div>
+            ) : null}
+          </div>
+        </details>
         <IssueList issues={issuesAt(issues, "rubric")} />
       </section>
 

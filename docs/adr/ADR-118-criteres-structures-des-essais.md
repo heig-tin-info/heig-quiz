@@ -71,6 +71,11 @@ cost them points.
   evaluation items keep the points they were given.
 - The MCP guide and the wand propose criteria; a free rubric alone still
   grades as before, with a breakdown that now agrees with its total.
+- Writing one criterion's prompt and converting a legacy rubric into
+  criteria are wand actions (ADR-059: targets `criterionPrompt` and
+  `criteriaFromRubric` of the `rich` generator), proposed into the draft;
+  decision 1's "no conversion of an old rubric" holds for the data: nothing
+  is converted without the teacher.
 - Still to build after the first delivery (config, editor, model contract,
   scaling): the per-criterion grading of §6, then the student view of §5.
 

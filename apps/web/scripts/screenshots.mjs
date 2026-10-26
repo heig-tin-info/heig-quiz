@@ -1467,6 +1467,9 @@ const scenes = [
   // The teacher's expand layer over the reference circuit: its title, the save state, "Close".
   { name: "editor-circuit-expanded", role: "teacher", path: "/questions/q8", fold: true, settle: 2000, act: async (p) => { await p.getByRole("button", { name: /^(Expand|Agrandir)$/ }).first().click(); await p.waitForTimeout(400); } },
   { name: "editor-rich", role: "teacher", path: "/questions/q17", settle: 3000 },
+  // An essay from before criteria (ADR-118): its barème in the rubric, "Convert to criteria"; then converted.
+  { name: "editor-rich-legacy", role: "teacher", path: "/questions/q-rich-legacy", settle: 3000 },
+  { name: "editor-rich-converted", role: "teacher", path: "/questions/q-rich-legacy", settle: 3000, act: async (p) => { await p.getByRole("button", { name: /^(Convert to criteria|Convertir en critères)$/ }).click(); await p.waitForTimeout(800); } },
   { name: "editor-categorize", role: "teacher", path: "/questions/q18", settle: 3000 },
   // The blocks editor (docs/04 §4.17): toolbox, starter, reference, warehouses on their grids; then the reference checked.
   { name: "editor-blocks", role: "teacher", path: "/questions/q-blocks", settle: 4000 },

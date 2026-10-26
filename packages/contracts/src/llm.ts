@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { GENERATE_INCOMPLETE } from "@quiz/core/generate";
+import { GENERATE_INCOMPLETE, type GenerateTarget as CoreGenerateTarget } from "@quiz/core/generate";
 import { LLM_MODEL_IDS } from "@quiz/domain";
 
 /**
@@ -124,17 +124,31 @@ export const LlmAvailability = z.object({
 export type LlmAvailability = z.infer<typeof LlmAvailability>;
 
 /**
+ * One part of the draft the wand writes on its own (`GenerateTarget` of
+ * `@quiz/core`): an essay criterion's grading prompt, by the criterion's id,
+ * or an essay's free rubric split into criteria (ADR-118).
+ */
+export const GenerateTarget = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("criterionPrompt"), criterionId: z.string().min(1).max(64) }).strict(),
+  z.object({ kind: z.literal("criteriaFromRubric") }).strict(),
+]) satisfies z.ZodType<CoreGenerateTarget>;
+export type GenerateTarget = z.infer<typeof GenerateTarget>;
+
+/**
  * `POST /app/api/questions/:id/generate`: the editor's draft as it stands,
- * saved or not, and the element to fill when the wand is one element's (an
- * MCQ choice). The question's type is the server's, never the client's.
+ * and at most one of: the element to fill (an MCQ choice), the target to
+ * write (an essay criterion's prompt…). Neither: the whole question. Saved
+ * or not; the question's type is the server's, never the client's.
  */
 export const GenerateRequest = z
   .object({
     config: LlmDraftConfig,
     explanation: z.string().max(20_000),
     item: z.number().int().min(0).max(100).optional(),
+    target: GenerateTarget.optional(),
   })
-  .strict();
+  .strict()
+  .refine((body) => body.item === undefined || body.target === undefined, { message: "item_or_target" });
 export type GenerateRequest = z.infer<typeof GenerateRequest>;
 
 /** The draft with the proposal merged in: what the editor sets, and what Undo reverts. */

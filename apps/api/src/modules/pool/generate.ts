@@ -11,7 +11,13 @@
 import { z } from "zod";
 
 import type { GenerateResult } from "@quiz/contracts";
-import { RunnerBusy, RunnerUnavailable, type RunnerService } from "@quiz/core/server";
+import {
+  RunnerBusy,
+  RunnerUnavailable,
+  type GenerateTarget,
+  type RunnerService,
+  type TargetGenerator,
+} from "@quiz/core/server";
 import { questionType } from "@quiz/registry/server";
 
 import type { LlmGateway } from "../llm/service.js";
@@ -19,14 +25,17 @@ import type { LlmGateway } from "../llm/service.js";
 /** Why a wand cannot run, before any model is asked: `400 { error: code }`. */
 export class GenerateRefusal extends Error {
   readonly status = 400;
-  constructor(readonly code: "generate_unsupported" | "statement_empty" | "item_not_empty") {
+  constructor(readonly code: "generate_unsupported" | "statement_empty" | "item_not_empty" | "target_unavailable") {
     super(code);
     this.name = "GenerateRefusal";
   }
 }
 
-/** The output budgets: a whole proposal (a program and its cases, at worst), and one element. */
-const MAX_TOKENS = { whole: 12_000, item: 1_500 } as const;
+/**
+ * The output budgets: a whole proposal (a program and its cases, at worst),
+ * one element, and one target (a rubric split into a dozen criteria, at worst).
+ */
+const MAX_TOKENS = { whole: 12_000, item: 1_500, target: 6_000 } as const;
 
 const SYSTEM = [
   "You help a teacher of the HEIG-VD, a Swiss school of engineering, finish a quiz question they are writing.",
@@ -50,7 +59,14 @@ export function generatorTypes(types: readonly string[]): string[] {
 export async function generateAnswers(
   gateway: LlmGateway,
   runner: RunnerService,
-  input: { type: string; config: unknown; explanation: string; item?: number | undefined; userId: string },
+  input: {
+    type: string;
+    config: unknown;
+    explanation: string;
+    item?: number | undefined;
+    target?: GenerateTarget | undefined;
+    userId: string;
+  },
 ): Promise<GenerateResult> {
   const generator = questionType(input.type).generator;
   if (!generator) throw new GenerateRefusal("generate_unsupported");
@@ -63,6 +79,24 @@ export async function generateAnswers(
     `The draft's config, as JSON:\n${JSON.stringify(input.config)}`,
     `The draft's explanation: ${input.explanation.trim() === "" ? "(empty)" : `\n${input.explanation}`}`,
   ].join("\n\n");
+
+  if (input.target !== undefined) {
+    // One part of the draft, written by the type's own target (ADR-118): the
+    // type's whole-question instructions are not sent, they ask for more.
+    const target = generator.targets?.[input.target.kind] as TargetGenerator<never, GenerateTarget> | undefined;
+    if (!target) throw new GenerateRefusal("generate_unsupported");
+    if (!target.accepts(config, input.target)) throw new GenerateRefusal("target_unavailable");
+    const { value } = await gateway.complete({
+      purpose: "generate",
+      userId: input.userId,
+      system: `${SYSTEM}\n\n${target.instructions}`,
+      prompt: `${draft}\n\n${target.ask(config, input.target)}`,
+      schema: target.schema,
+      maxTokens: MAX_TOKENS.target,
+      effort: "low",
+    });
+    return { config: target.place(config, input.target, value), explanation: input.explanation };
+  }
 
   if (input.item !== undefined) {
     const item = generator.item;

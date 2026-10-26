@@ -39,6 +39,7 @@ export function PromptField({
   uploadImage,
   holes,
   rows = 4,
+  labelHidden,
 }: {
   /** Shared by both surfaces, so a host can focus the field by id. */
   id: string;
@@ -54,11 +55,14 @@ export function PromptField({
   /** `cloze` only: the `{{…}}` holes are objects of the rich field (`RichTextProps.holes`). */
   holes?: boolean | undefined;
   rows?: number | undefined;
+  /** The caption is read by a screen reader only: a heading right above already shows it (a fold's summary). */
+  labelHidden?: boolean | undefined;
 }): ReactNode {
+  const labelClass = labelHidden ? "sr-only" : labelToken;
   if (RichText) {
     return (
       <>
-        <span className={labelToken}>{label}</span>
+        <span className={labelClass}>{label}</span>
         <RichText
           id={id}
           aria-label={label}
@@ -73,7 +77,7 @@ export function PromptField({
   }
   return (
     <>
-      <label className={labelToken} htmlFor={id}>
+      <label className={labelClass} htmlFor={id}>
         {label}
       </label>
       {/* Markdown SOURCE, so the code face; `!` because `textareaClass`

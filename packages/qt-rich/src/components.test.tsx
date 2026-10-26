@@ -212,8 +212,71 @@ describe("RichEditor", () => {
   it("reports a typed rubric without keeping it", async () => {
     const onChange = vi.fn();
     render(<RichEditor config={emptyRichDraft()} onChange={onChange} />);
-    await userEvent.type(screen.getByLabelText("Grading instructions"), "?");
+    await userEvent.click(screen.getByText("Global instructions (optional)"));
+    await userEvent.type(screen.getByLabelText("Global instructions"), "?");
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ rubric: "?" }));
+  });
+
+  describe("the rubric's three states (ADR-118)", () => {
+    const fold = () => screen.getByText(/^(Global instructions \(optional\)|Grading instructions)$/, { selector: "summary" }).closest("details")!;
+    const criteria = [{ id: "a", title: "First", weight: 2, prompt: "" }];
+
+    it("folds the global instructions beside criteria, unless they are written", () => {
+      const { unmount } = render(<RichEditor config={config({ criteria })} onChange={vi.fn()} onGenerateTarget={vi.fn()} />);
+      expect(screen.getByText("Global instructions (optional)")).toBeInTheDocument();
+      expect(fold().open).toBe(false);
+      expect(screen.queryByRole("button", { name: "Convert to criteria" })).toBeNull();
+      unmount();
+      render(<RichEditor config={config({ criteria, rubric: "Ignore spelling." })} onChange={vi.fn()} />);
+      expect(fold().open).toBe(true);
+    });
+
+    it("offers to convert a legacy rubric, open, and waits for the host", async () => {
+      let resolve = () => {};
+      const onGenerateTarget = vi.fn(() => new Promise<void>((r) => (resolve = r)));
+      render(<RichEditor config={config({ rubric: "- 4 pts: the stack" })} onChange={vi.fn()} onGenerateTarget={onGenerateTarget} />);
+      expect(screen.getByText("Grading instructions", { selector: "summary" })).toBeInTheDocument();
+      expect(fold().open).toBe(true);
+      const convert = screen.getByRole("button", { name: "Convert to criteria" });
+      await userEvent.click(convert);
+      expect(onGenerateTarget).toHaveBeenCalledWith({ kind: "criteriaFromRubric" });
+      expect(convert).toBeDisabled();
+      expect(convert).toHaveAttribute("aria-busy", "true");
+      resolve();
+      await vi.waitFor(() => expect(convert).toBeEnabled());
+    });
+
+    it("leaves an empty essay to its criteria, the instructions folded and nothing to convert", () => {
+      render(<RichEditor config={emptyRichDraft()} onChange={vi.fn()} onGenerateTarget={vi.fn()} />);
+      expect(screen.getByRole("button", { name: "Add a criterion" })).toBeEnabled();
+      expect(fold().open).toBe(false);
+      expect(screen.queryByRole("button", { name: "Convert to criteria" })).toBeNull();
+    });
+  });
+
+  it("generates one criterion's prompt, once it has a title", async () => {
+    const onGenerateTarget = vi.fn(() => Promise.resolve());
+    // A draft with an untitled criterion, as the editor holds it (D16): not a valid config.
+    const two = {
+      ...config(),
+      criteria: [
+        { id: "a", title: "First", weight: 2, prompt: "" },
+        { id: "b", title: " ", weight: 1, prompt: "" },
+      ],
+    };
+    const { rerender } = render(<RichEditor config={two} onChange={vi.fn()} onGenerateTarget={onGenerateTarget} />);
+    expect(screen.getByLabelText("Grading prompt of criterion 1")).toHaveAttribute(
+      "placeholder",
+      "What the answer must say to earn the weight, and what earns part of it",
+    );
+    expect(screen.getByRole("button", { name: "Generate the prompt of criterion 2" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Generate the prompt of criterion 1" }));
+    expect(onGenerateTarget).toHaveBeenCalledWith({ kind: "criterionPrompt", criterionId: "a" });
+
+    rerender(<RichEditor config={two} onChange={vi.fn()} onGenerateTarget={onGenerateTarget} disabled />);
+    expect(screen.queryByRole("button", { name: /^Generate the prompt/ })).toBeNull();
+    rerender(<RichEditor config={two} onChange={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /^Generate the prompt/ })).toBeNull();
   });
 
   it("adds, edits and removes criteria, and says the default points", async () => {
@@ -238,7 +301,7 @@ describe("RichEditor", () => {
     expect(onChange.mock.lastCall![0].criteria[0]).toMatchObject({ id: "a", title: "Premier" });
     fireEvent.change(screen.getByLabelText("Weight of criterion 2"), { target: { value: "4" } });
     expect(onChange.mock.lastCall![0].criteria[1]).toMatchObject({ id: "b", weight: 4 });
-    fireEvent.change(screen.getByLabelText("What earns the weight of criterion 2"), { target: { value: "More." } });
+    fireEvent.change(screen.getByLabelText("Grading prompt of criterion 2"), { target: { value: "More." } });
     expect(onChange.mock.lastCall![0].criteria[1]).toMatchObject({ id: "b", prompt: "More." });
 
     await userEvent.click(screen.getByRole("button", { name: "Remove criterion 1" }));
@@ -257,7 +320,7 @@ describe("RichEditor", () => {
     for (const n of [1, 2]) {
       expect(screen.getByLabelText(`Criterion ${n}`)).toBeDisabled();
       expect(screen.getByLabelText(`Weight of criterion ${n}`)).toBeDisabled();
-      expect(screen.getByLabelText(`What earns the weight of criterion ${n}`)).toBeDisabled();
+      expect(screen.getByLabelText(`Grading prompt of criterion ${n}`)).toBeDisabled();
       expect(screen.getByRole("button", { name: `Remove criterion ${n}` })).toBeDisabled();
     }
   });
