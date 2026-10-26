@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff, LogOut, Trash2, UserCog, UserMinus, UserPlus } from "lucide-react";
+import { Eye, EyeOff, LogOut, UserCog, UserMinus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import type { CourseRole, CourseSummary, EvaluationTemplate, StaffPatch } from "@quiz/contracts";
@@ -23,13 +23,14 @@ type StaffMember = CourseSummary["staff"][number];
  * share this ONE copy, so the readings of the same course cannot offer
  * different things; the hook owns the two dialogs those items open as well.
  *
- * `items` are the actions of the COURSE and `staffActions` those of one
- * person, because that is where each is read: the two icon buttons sit beside
- * the title, and "remove from the staff" waits inside the card of the
- * colleague it is about, where the name is already written.
- *
- * The course page reads the same actions by name, in its tabs rather than a
- * menu: `addStaff` on Members, `setHidden` and `remove` on Settings.
+ * `items` is the menu of the list's card and row, and `staffActions` the
+ * actions of one person, because that is where each is read: the menu sits
+ * beside the title, and "remove from the staff" waits inside the card of the
+ * colleague it is about, where the name is already written. The menu holds
+ * only what concerns the list — hiding the course for oneself; adding a
+ * colleague and deleting the course are reached from the course page alone,
+ * by name, in its tabs rather than a menu: `addStaff` on Members, `setHidden`
+ * and `remove` on Settings (product owner, 2026-10-26).
  *
  * What is offered follows the caller's role on the course (ADR-068): an
  * owner runs the course — its staff and their roles, its classrooms, its
@@ -97,7 +98,8 @@ export function useCourseActions(
     onError: toastError("error.save"),
   });
   const toast = useToast();
-  // A hidden course leaves the list at once, so the toast says where it went.
+  // A hidden course leaves the list at once, so the toast says where it went
+  // and that nobody else lost it.
   const hide = useMutation({
     mutationFn: (hidden: boolean) =>
       api(`/app/api/courses/${course.id}/${hidden ? "hide" : "unhide"}`, { method: "POST" }),
@@ -198,12 +200,7 @@ export function useCourseActions(
 
   const visibility: MenuItem = course.hidden
     ? { label: t("courses.unhide"), icon: Eye, onSelect: () => setHidden(false) }
-    : {
-        label: t("courses.hide"),
-        description: t("courses.hideHint"),
-        icon: EyeOff,
-        onSelect: () => setHidden(true),
-      };
+    : { label: t("courses.hide"), icon: EyeOff, onSelect: () => setHidden(true) };
 
   return {
     isOwner,
@@ -214,19 +211,10 @@ export function useCourseActions(
     remove,
     removing: removeCourse.isPending,
     staffActions,
-    items: isOwner
-      ? [
-          { label: t("courses.staffAdd"), icon: UserPlus, onSelect: addStaff },
-          visibility,
-          {
-            label: t("courses.delete"),
-            icon: Trash2,
-            danger: true,
-            separator: true,
-            onSelect: remove,
-          },
-        ]
-      : [visibility],
+    // The list offers only what is about the list: hiding the course. Adding
+    // a colleague and deleting the course wait on the course page (Members
+    // and Settings), where the name and what goes with it are in view.
+    items: [visibility],
     dialogs: (
       <>
         {newRoom ? <NewClassroomModal course={course} onClose={() => setNewRoom(false)} /> : null}

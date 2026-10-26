@@ -144,15 +144,15 @@ describe("TeacherHome", () => {
     expect(await screen.findByRole("radio", { name: "List" })).toBeChecked();
   });
 
-  it("offers the three course actions in one menu", async () => {
+  it("offers hiding from the list, and keeps the staff and the deletion for the course page", async () => {
     mockFetch({ [`GET ${COURSES}`]: ok([makeCourseSummary()]) });
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);
 
-    // Three actions, so a menu: `Actions` decides the shape.
-    await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
-    expect(screen.getByRole("menuitem", { name: /Add a staff member/ })).toBeVisible();
-    expect(screen.getByRole("menuitem", { name: /Hide for me/ })).toBeVisible();
-    expect(screen.getByRole("menuitem", { name: /Delete course/ })).toBeVisible();
+    // One action, so a button, not a menu: `Actions` decides the shape.
+    expect(await screen.findByRole("button", { name: "Hide for me" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add a staff member/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Delete course/ })).toBeNull();
   });
 
   it("hides a course for the caller from its menu (#155)", async () => {
@@ -161,8 +161,7 @@ describe("TeacherHome", () => {
       "POST /app/api/courses/c1/hide": ok(undefined),
     });
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: /Hide for me/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Hide for me" }));
     expect(calls.some((c) => c.method === "POST" && c.url === "/app/api/courses/c1/hide")).toBe(
       true,
     );
@@ -188,9 +187,7 @@ describe("TeacherHome", () => {
     expect(screen.getByText("Algorithmique")).toBeVisible();
     expect(screen.getByText("Hidden")).toBeVisible();
 
-    const menus = screen.getAllByRole("button", { name: "Actions" });
-    await userEvent.click(menus[1]!);
-    await userEvent.click(screen.getByRole("menuitem", { name: /Show again/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Show again" }));
     expect(calls.some((c) => c.method === "POST" && c.url === "/app/api/courses/c3/unhide")).toBe(
       true,
     );

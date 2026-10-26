@@ -439,11 +439,10 @@ export const fr: Record<keyof Dict, string> = {
   "courses.leaveConfirm": "Quitter l'équipe enseignante de « {course} » ? Vous n'y aurez plus accès.",
 
   "courses.hide": "Masquer pour moi",
-  "courses.hideHint": "Vos collègues le voient toujours.",
   "courses.unhide": "Réafficher",
   "courses.hidden": "Masqué",
   "courses.showHidden": "Afficher les masqués ({n})",
-  "courses.hiddenToast": "{code} est masqué.",
+  "courses.hiddenToast": "{code} est masqué pour vous. Vos collègues le voient toujours.",
   "courses.allHidden": "Tous vos cours sont masqués",
   "courses.allHiddenBody": "Affichez-les pour en ouvrir un.",
   "courses.notFound": "Ce cours n'existe pas, ou vous n'y avez pas accès.",

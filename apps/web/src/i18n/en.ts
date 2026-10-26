@@ -447,11 +447,10 @@ export const en = {
   "courses.leaveConfirm": "Leave the staff of “{course}”? You will no longer reach it.",
 
   "courses.hide": "Hide for me",
-  "courses.hideHint": "Your colleagues still see it.",
   "courses.unhide": "Show again",
   "courses.hidden": "Hidden",
   "courses.showHidden": "Show hidden ({n})",
-  "courses.hiddenToast": "{code} is hidden.",
+  "courses.hiddenToast": "{code} is hidden for you. Your colleagues still see it.",
   "courses.allHidden": "All your courses are hidden",
   "courses.allHiddenBody": "Show them to open one.",
   "courses.notFound": "This course does not exist, or you do not have access to it.",
