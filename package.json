@@ -26,8 +26,8 @@
     "overrides": {
       "esbuild@<0.25.0": ">=0.28.1",
       "find-my-way@<9.7.0": "^9.9.0",
-      "fast-uri@>=3.0.0 <3.1.6": "^3.1.8",
-      "dompurify@<3.4.13": "^3.4.16",
+      "fast-uri@>=3.0.0 <3.1.6": "^3.1.9",
+      "dompurify@<3.4.13": "^3.4.17",
       "postcss@<8.5.23": "^8.5.28",
       "nanoid@<3.3.18": "^3.3.19",
       "brace-expansion@>=4.0.0 <5.0.9": "^5.0.12"
@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.3",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "typescript": "^6.0.3"
   }
 }

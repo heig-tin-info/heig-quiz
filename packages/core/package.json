@@ -67,6 +67,6 @@
   "devDependencies": {
     "@types/react": "^19.2.17",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }
