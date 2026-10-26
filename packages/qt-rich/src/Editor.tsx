@@ -122,6 +122,7 @@ export function RichEditor({
                   pointsStep={1}
                   onPointsChange={(weight) => setCriteria(patchAt(criteria, i, { weight }))}
                   removeLabel={fmt(s.removeCriterion, { n })}
+                  removeDisabled={disabled}
                   onRemove={() => setCriteria(removeAt(criteria, i))}
                 />
                 <FieldCell label={s.criterionPrompt} htmlFor={`${id}-criterion-prompt-${i}`}>

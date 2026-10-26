@@ -245,6 +245,23 @@ describe("RichEditor", () => {
     expect(onChange.mock.lastCall![0].criteria.map((c: { id: string }) => c.id)).toEqual(["b"]);
   });
 
+  it("locks every field of a criterion, the remove button included, when the editor is disabled", () => {
+    const two = config({
+      criteria: [
+        { id: "a", title: "First", weight: 2, prompt: "" },
+        { id: "b", title: "Second", weight: 3, prompt: "Says why." },
+      ],
+    });
+    render(<RichEditor config={two} onChange={vi.fn()} disabled />);
+    expect(screen.getByRole("button", { name: "Add a criterion" })).toBeDisabled();
+    for (const n of [1, 2]) {
+      expect(screen.getByLabelText(`Criterion ${n}`)).toBeDisabled();
+      expect(screen.getByLabelText(`Weight of criterion ${n}`)).toBeDisabled();
+      expect(screen.getByLabelText(`What earns the weight of criterion ${n}`)).toBeDisabled();
+      expect(screen.getByRole("button", { name: `Remove criterion ${n}` })).toBeDisabled();
+    }
+  });
+
   it("stores no empty model answer and no empty limit", () => {
     const onChange = vi.fn();
     render(<RichEditor config={SECRET_CONFIG} onChange={onChange} />);
