@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { en } from "../i18n/en";
 import type { TFunction } from "../i18n";
-import { awaitsScheduling, evaluationBadgeLabel, type ScheduleFacts } from "./common";
+import { evaluationBadgeLabel, schedulingPhase, type ScheduleFacts } from "./common";
 
 const t = ((key: keyof typeof en) => en[key]) as TFunction;
 const NOW = Date.parse("2026-10-14T10:00:00.000Z");
@@ -12,6 +12,7 @@ const facts = (over: Partial<ScheduleFacts> = {}): ScheduleFacts => ({
   state: "draft",
   clock: "scheduled",
   opensAt: LATER,
+  closesAt: null,
   ...over,
 });
 
@@ -27,10 +28,17 @@ describe("a draft whose dates are set but which nobody scheduled (#857)", () => 
     expect(evaluationBadgeLabel(facts({ opensAt: null }), t)).toBe("draft");
   });
 
-  it("can be scheduled only while its opening is to come", () => {
-    expect(awaitsScheduling(facts(), NOW)).toBe(true);
-    expect(awaitsScheduling(facts({ opensAt: EARLIER }), NOW)).toBe(false);
-    expect(awaitsScheduling(facts({ clock: "live" }), NOW)).toBe(false);
-    expect(awaitsScheduling(facts({ state: "scheduled" }), NOW)).toBe(false);
+  it.each([
+    ["opening to come", {}, "toSchedule"],
+    ["opening passed", { opensAt: EARLIER }, "missed"],
+    ["opening at this instant", { opensAt: new Date(NOW).toISOString() }, "missed"],
+    ["opening passed, end to come", { opensAt: EARLIER, closesAt: LATER }, "missed"],
+    ["both passed", { opensAt: EARLIER, closesAt: new Date(NOW - 1).toISOString() }, "over"],
+    ["Live", { clock: "live" }, null],
+    ["Live, passed", { clock: "live", opensAt: EARLIER }, null],
+    ["scheduled", { state: "scheduled" }, null],
+    ["undated", { opensAt: null }, null],
+  ] as const)("its scheduling phase: %s (#921)", (_, over, phase) => {
+    expect(schedulingPhase(facts(over), NOW)).toBe(phase);
   });
 });

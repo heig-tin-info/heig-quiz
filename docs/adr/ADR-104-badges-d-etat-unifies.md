@@ -25,6 +25,12 @@ Amended 2026-10-14 (#857): the first 2026-10-13 amendment's item 1 — a
 dated draft is still zinc, and its word says it is not scheduled
 ([amendment](#amendment-2026-10-14-a-dated-draft-is-not-scheduled)).
 
+Amended 2026-10-26 (#921): the 2026-10-14 amendment's item 2 — once a dated
+draft's opening has passed, the configuration says it did not open, and
+the Format summary and the MCP no longer present a draft's window as
+planned
+([amendment](#amendment-2026-10-26-a-dated-draft-whose-opening-passed)).
+
 Scope: the state badge of an evaluation and of a project on every staff
 surface of `apps/web` (the classroom's Activities tab, `/activities`, the
 evaluation's configuration, the live header, the project page) and the bars
@@ -300,3 +306,22 @@ contrast, IS published by the ticker, hence its blue phase.
    action keep their words. Recorded in
    [ADR-086's amendment of 2026-10-14](ADR-086-planifiee-ou-en-direct.md#amendment-2026-10-14-the-scheduled-mode-is-labelled-automatic),
    which owns the mode's names.
+
+## Amendment 2026-10-26: a dated draft whose opening passed
+
+Recorded with #921: a teacher took a dated draft, whose dates the MCP had
+set, for scheduled; its opening passed and it never opened. The model
+stays (a draft opens only once scheduled, F-EVAL-04); the screen now says
+what happened.
+
+1. **A passed opening is said.** `schedulingPhase` (`evaluation/common.ts`,
+   over the domain's `isUnscheduledDraft`) tells a draft to schedule, one
+   that missed its opening and one whose end has passed too. The steps
+   before Launch show one neutral `Alert` per phase, without a button;
+   Launch's status line follows the phase, and its primary opens it now.
+   Scheduling at a past date stays refused (`opens_at_past`).
+2. **A draft's window is never stated as a fact.** The Format summary and
+   Launch's timing check word a draft's window conditionally, by the clock.
+3. **The MCP says it.** `update_evaluation` returns the evaluation's `url`,
+   plus a `notice` for a dated draft on the Scheduled clock; no MCP tool
+   schedules or opens anything.
