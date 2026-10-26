@@ -1292,6 +1292,41 @@ export const ProjectInvitationResent = z.object({
 export type ProjectInvitationResent = z.infer<typeof ProjectInvitationResent>;
 
 /**
+ * `POST /app/api/projects/:id/distribution/access` (F-PROJ-02 as amended
+ * 2026-10-26, #899; ADR-062): the CALLER invited with `pull` on the
+ * project's distribution repository, by the login GitHub knows today for
+ * the account they linked; a permission they already hold, at least `read`,
+ * is left as it is (`accepted`). `status`: `pending` — accept the
+ * invitation on GitHub (`invitationsUrl`); `accepted` — the caller already
+ * has access. Only a seat on the course staff asks: Super Powers without one
+ * are refused.
+ */
+export const ProjectDistributionAccess = z.object({
+  status: SentInvitation,
+  invitationsUrl: z.url(),
+});
+export type ProjectDistributionAccess = z.infer<typeof ProjectDistributionAccess>;
+
+/**
+ * Its refusals, `{ error, message }`: `staff_seat_required` (403) — the
+ * caller reaches the project through Super Powers, not a staff seat;
+ * `distribution_missing` (409) — not built yet; `github_not_linked` (409) —
+ * link a GitHub account in Settings first (F-GH-05); `github_account_stale`
+ * (409) — the linked account is gone: relink; `app_not_installed` (409);
+ * `invite_failed` (502) — GitHub failed: try again.
+ */
+export const PROJECT_DISTRIBUTION_ACCESS_REFUSALS = [
+  "staff_seat_required",
+  "distribution_missing",
+  "github_not_linked",
+  "github_account_stale",
+  "app_not_installed",
+  "invite_failed",
+] as const;
+export const ProjectDistributionAccessErrorCode = z.enum(PROJECT_DISTRIBUTION_ACCESS_REFUSALS);
+export type ProjectDistributionAccessErrorCode = z.infer<typeof ProjectDistributionAccessErrorCode>;
+
+/**
  * The `409 unassigned_students` body of `POST /app/api/projects/:id/publish`
  * (ADR-048): the claimed students of the classroom in no group of the
  * project, by name; empty when the group project has no group at all.

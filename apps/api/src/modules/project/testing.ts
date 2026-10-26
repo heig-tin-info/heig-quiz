@@ -476,6 +476,15 @@ export function repoWorld(): RepoWorld {
       if (rest === "/invitations") {
         return json([...(world.invitations.get(fullName) ?? new Map<number, string>())].map(([id, login]) => ({ id, invitee: { login } })));
       }
+      // A collaborator's permission, in GitHub's legacy words; an invitee still pending, or nobody, is GitHub's 404.
+      if ((m = /^\/collaborators\/([^/]+)\/permission$/.exec(rest))) {
+        const login = m[1]!;
+        const held = world.collaborators.get(fullName)?.get(login);
+        const pending = [...(world.invitations.get(fullName)?.values() ?? [])].includes(login);
+        if (held === undefined || pending) return json({ message: "Not Found" }, 404);
+        const legacy: Record<string, string> = { pull: "read", triage: "read", push: "write", maintain: "write", admin: "admin" };
+        return json({ permission: legacy[held] ?? "none", user: { login } });
+      }
       if ((m = /^\/contents\/(.+)$/.exec(rest))) {
         const sha = blobOf(fullName, url.searchParams.get("ref") ?? "HEAD", m[1]!);
         if (!sha) return undefined;

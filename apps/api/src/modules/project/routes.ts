@@ -41,6 +41,7 @@ import {
   CriterionGradeWrite,
   ProjectCreate,
   ProjectCriterionParams,
+  ProjectDistributionAccess,
   ProjectGradingRepo,
   ProjectGradingView,
   ProjectGroupResync,
@@ -224,6 +225,30 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     session,
     teacher(onStaffedProject, async ({ req, reply, now, scope }) =>
       reply.code(202).send(ProjectValidated.parse(await service.validateProject(app.db, scope.project, actorOf(req), now))),
+    ),
+  );
+
+  /**
+   * F-PROJ-02 as amended 2026-10-26 (#899): the caller's own `pull` on the
+   * distribution repository, on demand. A staff seat only (`403
+   * staff_seat_required` under Super Powers without one); the loader's own
+   * portal session keeps impersonation and delegated sessions out, as the
+   * account link does (F-GH-05).
+   */
+  app.post(
+    "/app/api/projects/:id/distribution/access",
+    session,
+    teacher(onProject, async ({ req, scope }) =>
+      ProjectDistributionAccess.parse(
+        await service.requestDistributionAccess(
+          app.db,
+          config,
+          { project: scope.project, courseId: scope.course.id },
+          req.user!.id,
+          actorOf(req),
+          req.log,
+        ),
+      ),
     ),
   );
 

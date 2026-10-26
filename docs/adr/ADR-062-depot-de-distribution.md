@@ -17,6 +17,36 @@ the evidence run of a project graded by criteria overlays the
 distribution's current protected files on the student's tree, exactly as a
 restore takes them, and records the distribution sha it used.
 
+**Amended 2026-10-26 (#899, product owner)** (scope: who may read the
+distribution repository; the build, the claim and the never-delete rule are
+unchanged): the repository is private and Quiz grants nobody access to it
+at creation, so its link on the project page opened only for a member of
+the organization holding a role there. A seat on the course staff now
+**asks for access on demand**: `POST /app/api/projects/:id/distribution/access`
+(`distributionAccess.ts`) invites the CALLER, by the login GitHub knows
+today for the account they linked (`linkedLogin`), with `pull` and never
+more — the distribution is managed by the App alone (F-PROJ-02): a sync
+replays the source over it, and a restore reads it as the reference
+(addendum below). A permission already held, at least `read` (an owner of
+the organization), is left as it is, read first as the journal's staff
+invitation does (F-JRN-02): an invitation SETS the permission. The answer
+is GitHub's: `pending` (with the repository's invitations page) or
+`accepted`; a second click on a collaborator already in is `accepted`.
+Audited `project.distribution_access` (the login, the status, never a
+token). On demand rather than at creation, because GitHub drops an
+invitation left unaccepted for seven days, and staff join the course or
+link their account later. Refused: a caller without a linked account
+(`409 github_not_linked`, the page then points at Settings, F-GH-05, and
+nothing else reminds them), a distribution not built (`409
+distribution_missing`), Super Powers without a staff seat (`403
+staff_seat_required`), an impersonation or delegated session (the
+project loader's own portal session, as the account link). No GitHub read
+at render time: the link stays for every staff member. **Known gap**,
+as for the journal (F-JRN-02): nothing follows the staff — no invitation
+when a seat is added, no revocation when one is removed; a former member
+keeps their `pull` until the organization removes it. The source
+repository and the student repositories are out of this amendment's scope.
+
 **Addendum (2026-10-02, product owner; merge task M3-04): the distribution
 repository is also the reference of the protected files.** F-PROJ-08 is
 amended to match:

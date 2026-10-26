@@ -60,6 +60,34 @@ export async function inviteCollaborator(
   return res.status === 201 ? "pending" : "accepted";
 }
 
+/** GitHub's permissions of a collaborator, from the least to the most. */
+const PERMISSION_RANK: Record<string, number> = { none: 0, read: 1, triage: 2, write: 3, maintain: 4, admin: 5 };
+
+/**
+ * True when `login` already holds at least `least` on `owner/repo`. An
+ * invitation SETS the permission, so a caller that only means to grant
+ * reads this first and leaves a higher one alone (an owner of the
+ * organization would be lowered to what the invitation names). GitHub
+ * answers 404 for a user who is not a collaborator: they hold nothing.
+ */
+export async function holdsAtLeast(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  login: string,
+  least: "read" | "write",
+): Promise<boolean> {
+  const held = await unless404(async () => {
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/collaborators/{username}/permission", {
+      owner,
+      repo,
+      username: login,
+    });
+    return (data as { permission?: string }).permission ?? null;
+  });
+  return (PERMISSION_RANK[held ?? "none"] ?? 0) >= PERMISSION_RANK[least]!;
+}
+
 /** The pending invitations of `owner/repo`: each one's id and its invitee's login. */
 export async function pendingInvitees(octokit: Octokit, owner: string, repo: string): Promise<{ id: number; login: string }[]> {
   const { data } = await octokit.request("GET /repos/{owner}/{repo}/invitations", { owner, repo, per_page: 100 });

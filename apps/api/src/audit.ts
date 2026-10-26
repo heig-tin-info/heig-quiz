@@ -388,6 +388,15 @@ export type AuditAction =
   | "project.archive"
   | "project.unarchive"
   /**
+   * A staff member's own access to the project's distribution repository
+   * (F-PROJ-02 as amended 2026-10-26, #899), subject the project:
+   * `payload.fullName` (the distribution), `login` (the caller's GitHub login
+   * today), `permission` (`pull`, always), `status` (`pending`: invited;
+   * `accepted`: already a collaborator, or holding `read` or more). Never a
+   * token.
+   */
+  | "project.distribution_access"
+  /**
    * A project's deadline (F-PROJ-09, F-PROJ-11; merge task M3-05a), subject
    * the project. By the ticker: `deadline_applied` (`payload.deadlineAt`;
    * the project `locked`); by the `project.deadline` job,

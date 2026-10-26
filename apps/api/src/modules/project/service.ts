@@ -55,9 +55,12 @@
  * pass at the freeze (`jobs.ts`), a Regrade and the staff's criteria table
  * (`regrade.ts`); §8, the teacher's grading screen and the validation
  * (`criteriaGrading.ts`), the release waiting for it (`grades.ts`).
+ * From #899: a staff member's own read access to the distribution
+ * repository, on demand (`distributionAccess.ts`).
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
+export { requestDistributionAccess } from "./distributionAccess.js";
 export { criteriaForSwitch, criteriaView, refreshCriteria, reloadCriteria } from "./criteria.js";
 export { gradeCriterion, gradingRepo, gradingView, validateProject, validateRepo } from "./criteriaGrading.js";
 export { regrade } from "./regrade.js";

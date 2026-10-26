@@ -62,6 +62,7 @@ import {
   type ProjectDetail,
   type ProjectDetailGroup,
   type ProjectDetailRow,
+  type ProjectDistributionAccess,
   type ProjectGradingRepo,
   type ProjectGradingView,
   type ProjectRegradeAccepted,
@@ -1130,6 +1131,16 @@ on("POST", "/app/api/projects/:id/sync", (m) => {
   p.sync.inProgressReads = 2;
   const answer: ProjectSyncAccepted = { requestedAt: iso(0) };
   return answer;
+});
+
+/** The caller's own `pull` on the distribution (#899): invited at the first click, already in at the next. */
+const distributionAsked = new Set<string>();
+on("POST", "/app/api/projects/:id/distribution/access", (m): ProjectDistributionAccess => {
+  const p = projectOr404(m.groups!.id!);
+  if (p.summary.distribution === null) throw refuse(409, "distribution_missing", "The distribution repository is not built");
+  const status = distributionAsked.has(p.summary.id) ? "accepted" : "pending";
+  distributionAsked.add(p.summary.id);
+  return { status, invitationsUrl: `https://github.com/${p.summary.distribution.fullName}/invitations` };
 });
 
 on("GET", "/app/api/projects/:id", (m) => detailOf(projectOr404(m.groups!.id!)));
