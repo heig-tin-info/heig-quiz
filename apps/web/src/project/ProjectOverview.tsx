@@ -20,6 +20,7 @@ import {
 } from "../ui";
 import { foreignZone } from "./newProject";
 import { RepoLink, SyncButton } from "./parts";
+import { DistributionRepo } from "./DistributionRepo";
 import {
   deadlineDesc,
   deadlinePassed,
@@ -291,7 +292,7 @@ function SourceTile({
           [
             t("project.distribution"),
             project.distribution ? (
-              <RepoLink key="d" fullName={project.distribution.fullName} />
+              <DistributionRepo key="d" projectId={project.id} fullName={project.distribution.fullName} />
             ) : (
               <span className="text-fg-muted">{t("project.distribution.building")}</span>
             ),

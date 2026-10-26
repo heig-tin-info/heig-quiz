@@ -116,6 +116,7 @@ import {
   ProjectCreate,
   ProjectCriteriaView,
   ProjectDetail,
+  ProjectDistributionAccess,
   ProjectGradingRepo,
   ProjectGradingView,
   PointsOutOfRange,
@@ -955,6 +956,16 @@ describe("the mock's project writes (M3-12b, M3-12c)", () => {
     expect(reenabled.status).toBe(200);
     expect(issuesOf(ProjectRepoProtection, reenabled.body)).toEqual([]);
     expect((reenabled.body as ProjectRepoProtection).reenabledAt).not.toBeNull();
+  });
+
+  it("invites the caller on the distribution, then finds them in (ProjectDistributionAccess, #899)", async () => {
+    const { id } = await published();
+    const first = await send(`/app/api/projects/${id}/distribution/access`, "POST");
+    expect(first.status).toBe(200);
+    expect(issuesOf(ProjectDistributionAccess, first.body)).toEqual([]);
+    expect((first.body as ProjectDistributionAccess).status).toBe("pending");
+    const second = await send(`/app/api/projects/${id}/distribution/access`, "POST");
+    expect((second.body as ProjectDistributionAccess).status).toBe("accepted");
   });
 });
 

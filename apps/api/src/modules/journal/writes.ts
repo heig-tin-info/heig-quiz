@@ -49,8 +49,8 @@ import {
   journalPages,
   users,
 } from "../../db/schema.js";
-import { githubApp, githubStatus, unless404 } from "../../github/app.js";
-import { inviteCollaborator } from "../../github/collaborators.js";
+import { githubApp, githubStatus } from "../../github/app.js";
+import { holdsAtLeast, inviteCollaborator } from "../../github/collaborators.js";
 import { actsOn, offLimitsRepos } from "../github/service.js";
 import type { Caller } from "../guards.js";
 import { DomainError } from "../http.js";
@@ -388,24 +388,6 @@ export async function removeJournal(ctx: WriteContext, room: Room, confirm: stri
 
 // ---------------------------------------------------------------- invitations (D27)
 
-/** GitHub's permissions of a collaborator, from the least to the most. */
-const PERMISSION_RANK: Record<string, number> = { none: 0, read: 1, triage: 2, write: 3, maintain: 4, admin: 5 };
-
-/**
- * `login`'s permission on the repository now, or null when they hold none
- * (GitHub answers 404 for a user who is not a collaborator).
- */
-async function permissionOf(octokit: Octokit, repo: ResolvedRepo, login: string): Promise<string | null> {
-  return unless404(async () => {
-    const { data } = await octokit.request("GET /repos/{owner}/{repo}/collaborators/{username}/permission", {
-      owner: repo.owner,
-      repo: repo.name,
-      username: login,
-    });
-    return (data as { permission?: string }).permission ?? null;
-  });
-}
-
 /**
  * Invites the course's staff who linked a GitHub account as collaborators
  * of a repository Quiz just created for the classroom, `push` only — never
@@ -432,11 +414,9 @@ async function inviteStaff(ctx: WriteContext, octokit: Octokit, repo: ResolvedRe
       if (typeof current !== "string") outcome = "stale"; // GITHUB_ACCOUNT_STALE
       else {
         login = current;
-        const held = await permissionOf(octokit, repo, current);
-        outcome =
-          (PERMISSION_RANK[held ?? "none"] ?? 0) >= PERMISSION_RANK.write!
-            ? "accepted"
-            : await inviteCollaborator(octokit, repo.owner, repo.name, current, "push");
+        outcome = (await holdsAtLeast(octokit, repo.owner, repo.name, current, "write"))
+          ? "accepted"
+          : await inviteCollaborator(octokit, repo.owner, repo.name, current, "push");
       }
     } catch (err) {
       outcome = "failed";

@@ -388,6 +388,12 @@ export type AuditAction =
   | "project.archive"
   | "project.unarchive"
   /**
+   * A staff member's own `pull` on the distribution repository (ADR-062,
+   * amendment of 2026-10-26), subject the project: `payload.fullName`,
+   * `login`, `permission`, `status` (`pending`, `accepted`). Never a token.
+   */
+  | "project.distribution_access"
+  /**
    * A project's deadline (F-PROJ-09, F-PROJ-11; merge task M3-05a), subject
    * the project. By the ticker: `deadline_applied` (`payload.deadlineAt`;
    * the project `locked`); by the `project.deadline` job,

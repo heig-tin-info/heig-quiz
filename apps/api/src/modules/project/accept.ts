@@ -137,18 +137,18 @@ export interface AcceptInput {
   log: FastifyBaseLogger;
 }
 
-/** What Accept needs of GitHub before it writes anything: the student's link, the organization, a client. */
-interface GithubSide {
+/** What Accept (and a staff member's distribution access) needs of GitHub before it writes anything: the user's link, the organization, a client. */
+export interface GithubSide {
   account: AccountRow;
   org: InstalledOrg;
   client: InstallationClient;
 }
 
-/** The student's side on GitHub, or the refusal: `github_not_linked`, `app_not_installed`. */
-async function githubSide(db: Db, config: AppConfig, input: AcceptInput): Promise<GithubSide> {
-  const [account] = await db.select().from(githubAccounts).where(eq(githubAccounts.userId, input.userId));
+/** The user's side on GitHub for the project's organization, or the refusal: `github_not_linked`, `app_not_installed`. */
+export async function githubSide(db: Db, config: AppConfig, userId: string, orgId: string): Promise<GithubSide> {
+  const [account] = await db.select().from(githubAccounts).where(eq(githubAccounts.userId, userId));
   if (!account) throw new ProjectError("github_not_linked", "Link your GitHub account first");
-  const org = await projectInstallation(db, input.project.orgId);
+  const org = await projectInstallation(db, orgId);
   if (!org) throw new ProjectError("app_not_installed", "Quiz's GitHub App no longer acts on the project's organization");
   return { account, org, client: await installationClient(config, org.installationId) };
 }
@@ -196,7 +196,7 @@ export async function acceptProject(db: Db, config: AppConfig, input: AcceptInpu
 
   const refusal = acceptRefusal(project, now);
   if (refusal) throw new ProjectError(refusal);
-  const github = await githubSide(db, config, input);
+  const github = await githubSide(db, config, input.userId, input.project.orgId);
   const login = await loginOf(db, input, github);
 
   const mine = and(eq(projectRepos.projectId, project.id), eq(projectRepos.userId, userId), isNull(projectRepos.groupId));
@@ -226,7 +226,7 @@ async function acceptGroup(db: Db, config: AppConfig, input: AcceptInput, seat: 
 
   const refusal = acceptRefusal(project, now);
   if (refusal) throw new ProjectError(refusal);
-  const github = await githubSide(db, config, input);
+  const github = await githubSide(db, config, input.userId, input.project.orgId);
   const login = await loginOf(db, input, github);
 
   // The row of the student's group as the copy holds it NOW: the project
@@ -422,7 +422,7 @@ async function joinRepo(db: Db, config: AppConfig, input: AcceptInput, repo: Rep
       .limit(1);
     if (live) return acceptance(repo);
   }
-  const github = await githubSide(db, config, input);
+  const github = await githubSide(db, config, input.userId, input.project.orgId);
   const member = { enrollmentId: input.enrollmentId, userId: input.userId, account: github.account };
   const ctx = { actor: input.actor, now: input.now, log: input.log, via: "accept", failure: "provision_failed" } as const;
   const invited = await inviteAccount(db, github.client.octokit, repo, member, ctx);

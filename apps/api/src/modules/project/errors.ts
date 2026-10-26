@@ -1,15 +1,22 @@
 /**
  * The project lifecycle's refusals (`ProjectErrorCode`), Accept's
- * (`ProjectAcceptErrorCode`) and the review checkpoints'
- * (`ProjectCheckpointErrorCode`), worded by the web app (invariant 1): one
+ * (`ProjectAcceptErrorCode`), the review checkpoints'
+ * (`ProjectCheckpointErrorCode`) and the distribution's access
+ * (`ProjectDistributionAccessErrorCode`), worded by the web app (invariant 1): one
  * class, its status by code. (A revocation's `revoke_failed` is a roster
  * refusal, `rosterRefusal` of the `org` module.)
  */
-import type { ProjectAcceptErrorCode, ProjectCheckpointErrorCode, ProjectErrorCode, WorkModeRefusal } from "@quiz/contracts";
+import type {
+  ProjectAcceptErrorCode,
+  ProjectCheckpointErrorCode,
+  ProjectDistributionAccessErrorCode,
+  ProjectErrorCode,
+  WorkModeRefusal,
+} from "@quiz/contracts";
 
 import { DomainError } from "../http.js";
 
-type Code = ProjectErrorCode | ProjectAcceptErrorCode | ProjectCheckpointErrorCode | WorkModeRefusal;
+type Code = ProjectErrorCode | ProjectAcceptErrorCode | ProjectCheckpointErrorCode | ProjectDistributionAccessErrorCode | WorkModeRefusal;
 
 /** The state of things is a 409; what the clock or GitHub's contents refuse a 422; too soon a 429; GitHub failing a 502. */
 const STATUS: Record<Code, number> = {
@@ -80,6 +87,9 @@ const STATUS: Record<Code, number> = {
   criteria_incomplete: 409,
   not_validated: 409,
   owner_required: 403,
+  // Access to the distribution repository (#899): only a staff seat asks.
+  staff_seat_required: 403,
+  invite_refused: 422,
   codespace_not_granted: 403,
   work_mode_frozen: 409,
   work_mode_group: 409,

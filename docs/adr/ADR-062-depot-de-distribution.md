@@ -17,6 +17,19 @@ the evidence run of a project graded by criteria overlays the
 distribution's current protected files on the student's tree, exactly as a
 restore takes them, and records the distribution sha it used.
 
+**Amended 2026-10-26 (#899, product owner)** (scope: who may read the
+distribution repository): Quiz grants nobody access to it at creation. A
+seat on the course staff asks for it on demand and is invited, by the login
+GitHub knows today for the account they linked, with `pull` and never more;
+a higher permission already held (an owner of the organization) is left as
+it is. On demand, because GitHub drops an invitation left unaccepted for
+seven days and staff join the course or link their account later; `pull`,
+because the distribution is the App's alone: a sync replays the source over
+it and a restore reads it as the reference (addendum below). **Known gap**,
+as for the journal (F-JRN-02): nobody is invited on joining the staff and
+nobody is revoked on leaving it; a former member keeps `pull` until the
+organization removes it.
+
 **Addendum (2026-10-02, product owner; merge task M3-04): the distribution
 repository is also the reference of the protected files.** F-PROJ-08 is
 amended to match:
