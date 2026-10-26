@@ -230,12 +230,18 @@ async function courseRoleOf(
   user: Pick<Caller, "id" | "reach">,
 ): Promise<CourseRole | null> {
   if (user.reach === "all") return effectiveCourseRole({ reachesAll: true, seatRole: null });
+  const seat = await seatOf(db, courseId, user.id);
+  return effectiveCourseRole({ reachesAll: false, seatRole: seat?.role ?? null });
+}
+
+/** The user's own seat on the course staff, whatever their reach, or null: Super Powers hold none. */
+export async function seatOf(db: Db, courseId: string, userId: string) {
   const [seat] = await db
     .select({ role: courseStaff.role })
     .from(courseStaff)
-    .where(and(eq(courseStaff.courseId, courseId), eq(courseStaff.userId, user.id)))
+    .where(and(eq(courseStaff.courseId, courseId), eq(courseStaff.userId, userId)))
     .limit(1);
-  return effectiveCourseRole({ reachesAll: false, seatRole: seat?.role ?? null });
+  return seat ?? null;
 }
 
 /**

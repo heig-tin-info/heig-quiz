@@ -1292,14 +1292,10 @@ export const ProjectInvitationResent = z.object({
 export type ProjectInvitationResent = z.infer<typeof ProjectInvitationResent>;
 
 /**
- * `POST /app/api/projects/:id/distribution/access` (F-PROJ-02 as amended
- * 2026-10-26, #899; ADR-062): the CALLER invited with `pull` on the
- * project's distribution repository, by the login GitHub knows today for
- * the account they linked; a permission they already hold, at least `read`,
- * is left as it is (`accepted`). `status`: `pending` — accept the
- * invitation on GitHub (`invitationsUrl`); `accepted` — the caller already
- * has access. Only a seat on the course staff asks: Super Powers without one
- * are refused.
+ * `POST /app/api/projects/:id/distribution/access`: the caller's own `pull`
+ * on the distribution repository, on demand (ADR-062, amendment of
+ * 2026-10-26). `pending`: accept the invitation on GitHub
+ * (`invitationsUrl`); `accepted`: the caller already has access.
  */
 export const ProjectDistributionAccess = z.object({
   status: SentInvitation,
@@ -1313,7 +1309,9 @@ export type ProjectDistributionAccess = z.infer<typeof ProjectDistributionAccess
  * `distribution_missing` (409) — not built yet; `github_not_linked` (409) —
  * link a GitHub account in Settings first (F-GH-05); `github_account_stale`
  * (409) — the linked account is gone: relink; `app_not_installed` (409);
- * `invite_failed` (502) — GitHub failed: try again.
+ * `invite_refused` (422) — GitHub refused the invitation (an organization
+ * forbidding outside collaborators); `invite_failed` (502) — GitHub did not
+ * answer: try again.
  */
 export const PROJECT_DISTRIBUTION_ACCESS_REFUSALS = [
   "staff_seat_required",
@@ -1321,6 +1319,7 @@ export const PROJECT_DISTRIBUTION_ACCESS_REFUSALS = [
   "github_not_linked",
   "github_account_stale",
   "app_not_installed",
+  "invite_refused",
   "invite_failed",
 ] as const;
 export const ProjectDistributionAccessErrorCode = z.enum(PROJECT_DISTRIBUTION_ACCESS_REFUSALS);

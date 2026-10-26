@@ -388,12 +388,9 @@ export type AuditAction =
   | "project.archive"
   | "project.unarchive"
   /**
-   * A staff member's own access to the project's distribution repository
-   * (F-PROJ-02 as amended 2026-10-26, #899), subject the project:
-   * `payload.fullName` (the distribution), `login` (the caller's GitHub login
-   * today), `permission` (`pull`, always), `status` (`pending`: invited;
-   * `accepted`: already a collaborator, or holding `read` or more). Never a
-   * token.
+   * A staff member's own `pull` on the distribution repository (ADR-062,
+   * amendment of 2026-10-26), subject the project: `payload.fullName`,
+   * `login`, `permission`, `status` (`pending`, `accepted`). Never a token.
    */
   | "project.distribution_access"
   /**

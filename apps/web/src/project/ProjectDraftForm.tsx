@@ -23,7 +23,7 @@ import { ProtectedFilesRow, useProtectedSuggestions } from "./ProjectSettings";
 import { WorkModeSetting, useWorkspace } from "./ProjectWorkspace";
 import { advancedCount, type WriteProject } from "./projectPage";
 import { RepoLink } from "./parts";
-import { DistributionRepo } from "./DistributionAccess";
+import { DistributionRepo } from "./DistributionRepo";
 
 /** The grace, in minutes: written when the teacher leaves the field; 0 is a grace of none. */
 function GraceRow({ value, disabled, onWrite }: { value: number; disabled: boolean; onWrite: (minutes: number) => void }) {

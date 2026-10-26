@@ -65,9 +65,11 @@ import {
   callerOf,
   projectsAuthoringClassroom,
   projectsClassroom,
+  seatOf,
   studentProject,
   studentProjectView,
   withCourseRole,
+  withRoleStep,
 } from "../guards.js";
 import { codespaceOn, requestCodespaceSync } from "../codespace/service.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
@@ -94,6 +96,18 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   const onOwnedProject = {
     params: IdParam,
     load: withCourseRole(app, accessibleProject.bind(null, app), (scope) => scope.course.id, "owner"),
+  };
+  // A staff member's own access to the distribution (ADR-062, amendment of
+  // 2026-10-26): a seat on the course staff, whatever its role; Super Powers
+  // without one get `403 staff_seat_required` (`requireCourseRole` would
+  // give them an effective role).
+  const onSeatedProject = {
+    params: IdParam,
+    load: withRoleStep(accessibleProject.bind(null, app), async (req, reply, scope) => {
+      if (await seatOf(app.db, scope.course.id, req.user!.id)) return true;
+      await reply.code(403).send({ error: "staff_seat_required", message: "Only a seat on the course staff may ask for access" });
+      return false;
+    }),
   };
   // A grading write by criteria (ADR-106 §8, 05 §5.11): an owner or an assistant of the course.
   const onStaffedProject = {
@@ -228,22 +242,16 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     ),
   );
 
-  /**
-   * F-PROJ-02 as amended 2026-10-26 (#899): the caller's own `pull` on the
-   * distribution repository, on demand. A staff seat only (`403
-   * staff_seat_required` under Super Powers without one); the loader's own
-   * portal session keeps impersonation and delegated sessions out, as the
-   * account link does (F-GH-05).
-   */
+  /** The caller's own `pull` on the distribution repository (ADR-062, amendment of 2026-10-26). */
   app.post(
     "/app/api/projects/:id/distribution/access",
     session,
-    teacher(onProject, async ({ req, scope }) =>
+    teacher(onSeatedProject, async ({ req, scope }) =>
       ProjectDistributionAccess.parse(
         await service.requestDistributionAccess(
           app.db,
           config,
-          { project: scope.project, courseId: scope.course.id },
+          scope.project,
           req.user!.id,
           actorOf(req),
           req.log,

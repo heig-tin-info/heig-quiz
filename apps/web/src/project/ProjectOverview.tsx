@@ -20,7 +20,7 @@ import {
 } from "../ui";
 import { foreignZone } from "./newProject";
 import { RepoLink, SyncButton } from "./parts";
-import { DistributionRepo } from "./DistributionAccess";
+import { DistributionRepo } from "./DistributionRepo";
 import {
   deadlineDesc,
   deadlinePassed,

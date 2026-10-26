@@ -4,7 +4,7 @@
  * against the fake GitHub and the local bare repositories:
  *
  * - the caller invited with `pull`, by the login GitHub knows today, audited;
- *   GitHub's 204 for a collaborator already in is `accepted`;
+ *   a collaborator already in is `accepted`;
  * - a permission already held, at least `read`, is left as it is;
  * - no linked account: `409 github_not_linked`;
  * - off the staff: the 404 of a missing project; an impersonation: refused
@@ -138,26 +138,29 @@ describe("a staff member's access to the distribution repository (#899)", () => 
     expect((await audits(p.id)).map((a) => (a.payload as { status: string }).status)).toEqual(["pending", "accepted"]);
   });
 
-  it("answers 204 from GitHub as accepted", async () => {
+  it("answers GitHub refusing the account as a stale link, and any other refusal as refused", async () => {
     const teacher = await newTeacher();
     const p = await project(teacher);
-    // A collaborator GitHub does not report through the permission read: the PUT answers 204.
-    world.collaborators.set(p.fullName, new Map([[teacher.login!, "pull"]]));
+    world.uninvitable.add(teacher.login!);
+    try {
+      const res = await ask(p.id, teacher.headers);
+      expect([res.statusCode, res.json().error]).toEqual([409, "github_account_stale"]);
+    } finally {
+      world.uninvitable.delete(teacher.login!);
+    }
+    // An organization forbidding outside collaborators: GitHub's 422.
     const before = gh.routes;
     gh.routes = [
-      (url, req) =>
-        req.method === "GET" && url.pathname.endsWith(`/collaborators/${teacher.login}/permission`)
-          ? json({ message: "Not Found" }, 404)
-          : undefined,
+      (url, req) => (req.method === "PUT" && url.pathname.endsWith(`/collaborators/${teacher.login}`) ? json({ message: "Validation Failed" }, 422) : undefined),
       ...before,
     ];
     try {
       const res = await ask(p.id, teacher.headers);
-      expect([res.statusCode, res.json().status]).toEqual([200, "accepted"]);
-      expect(invites(p.fullName, teacher.login!)).toBe(1);
+      expect([res.statusCode, res.json().error]).toEqual([422, "invite_refused"]);
     } finally {
       gh.routes = before;
     }
+    expect(await audits(p.id)).toEqual([]);
   });
 
   it("leaves a higher permission as it is", async () => {

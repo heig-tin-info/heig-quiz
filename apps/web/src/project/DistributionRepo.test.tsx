@@ -1,9 +1,9 @@
-import { screen } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
-import { DistributionRepo } from "./DistributionAccess";
+import { DistributionRepo } from "./DistributionRepo";
 
 /*
  * The distribution repository's access on demand (#899): a button for a
@@ -61,15 +61,19 @@ describe("DistributionRepo", () => {
     });
     renderWithProviders(<DistributionRepo projectId={ID} fullName={FULL} />);
     await userEvent.click(await screen.findByRole("button", { name: "Request access" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("GitHub did not answer. Try again.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("GitHub did not answer. Try again in a moment.");
     expect(screen.getByRole("button", { name: "Request access" })).toBeInTheDocument();
   });
 
   it("shows the link alone on a platform without the App", async () => {
-    mockFetch({});
+    const { fetchMock } = mockFetch({});
     renderWithProviders(<DistributionRepo projectId={ID} fullName={FULL} />);
     expect(screen.getByRole("link", { name: "lab-squashed" })).toBeInTheDocument();
-    await new Promise((r) => setTimeout(r, 20));
+    // The account's read answered (404: no App), and its answer handled.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/app/api/me/github", expect.anything()));
+    await act(async () => {
+      await fetchMock.mock.results[0]!.value;
+    });
     expect(screen.queryByRole("button")).toBeNull();
     expect(screen.queryByTestId("distribution-link-first")).toBeNull();
   });

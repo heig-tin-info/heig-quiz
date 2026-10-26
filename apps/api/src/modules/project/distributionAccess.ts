@@ -13,11 +13,9 @@
  * Nothing follows the staff: no invitation when a seat is added, no
  * revocation when one is removed (as the journal's, F-JRN-02).
  *
- * Reached through `accessibleProject` (the caller's own portal session,
- * `staffAccess` or Super Powers); only a seat on the course staff asks
- * (`403 staff_seat_required`).
+ * The route's loader admits a seat on the course staff only (`403
+ * staff_seat_required` for Super Powers without one, `routes.ts`).
  */
-import { and, eq } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
 import type { ProjectDistributionAccess } from "@quiz/contracts";
@@ -26,55 +24,49 @@ import { audit, type AuditActor } from "../../audit.js";
 import { linkedLogin } from "../../auth/linkedLogin.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { courseStaff, githubAccounts, projects } from "../../db/schema.js";
-import { githubStatus, installationClient, ownerRepo } from "../../github/app.js";
-import { holdsAtLeast, inviteCollaborator } from "../../github/collaborators.js";
-import { projectInstallation } from "../github/service.js";
+import type { projects } from "../../db/schema.js";
+import { githubStatus, ownerRepo } from "../../github/app.js";
+import { holdsAtLeast, inviteCollaborator, isInvitationRefused } from "../../github/collaborators.js";
+import { githubSide } from "./accept.js";
 import { ProjectError } from "./errors.js";
 
 type Project = typeof projects.$inferSelect;
+
+const stale = () => new ProjectError("github_account_stale", "The linked GitHub account was not found: relink it");
 
 /** `POST /app/api/projects/:id/distribution/access`: the caller invited, or already in. */
 export async function requestDistributionAccess(
   db: Db,
   config: AppConfig,
-  scope: { project: Project; courseId: string },
+  project: Project,
   userId: string,
   actor: AuditActor,
   log: FastifyBaseLogger,
 ): Promise<ProjectDistributionAccess> {
-  const { project } = scope;
-  const [seat] = await db
-    .select({ userId: courseStaff.userId })
-    .from(courseStaff)
-    .where(and(eq(courseStaff.courseId, scope.courseId), eq(courseStaff.userId, userId)))
-    .limit(1);
-  if (!seat) throw new ProjectError("staff_seat_required", "Only a seat on the course staff may ask for access");
   const fullName = project.distributionFullName;
   if (fullName === null) throw new ProjectError("distribution_missing", "The distribution repository is not built");
-  const [account] = await db.select().from(githubAccounts).where(eq(githubAccounts.userId, userId));
-  if (!account) throw new ProjectError("github_not_linked", "Link a GitHub account first");
-  const org = await projectInstallation(db, project.orgId);
-  if (!org) throw new ProjectError("app_not_installed", "Quiz's GitHub App no longer acts on the project's organization");
+  const { account, client } = await githubSide(db, config, userId, project.orgId);
 
   const { owner, repo } = ownerRepo(fullName);
   let login: string;
   let status: ProjectDistributionAccess["status"];
   try {
-    const { octokit } = await installationClient(config, org.installationId);
-    const current = await linkedLogin(db, octokit, userId, account);
-    if (typeof current !== "string") {
-      // GITHUB_ACCOUNT_STALE
-      throw new ProjectError("github_account_stale", "The linked GitHub account is gone: relink it");
-    }
+    const current = await linkedLogin(db, client.octokit, userId, account);
+    if (typeof current !== "string") throw stale(); // GITHUB_ACCOUNT_STALE
     login = current;
-    status = (await holdsAtLeast(octokit, owner, repo, login, "read"))
+    status = (await holdsAtLeast(client.octokit, owner, repo, login, "read"))
       ? "accepted"
-      : await inviteCollaborator(octokit, owner, repo, login, "pull");
+      : await inviteCollaborator(client.octokit, owner, repo, login, "pull");
   } catch (err) {
     if (err instanceof ProjectError) throw err;
-    log.warn({ projectId: project.id, repository: fullName, status: githubStatus(err), error: (err as Error)?.name }, "a distribution access invitation failed");
-    throw new ProjectError("invite_failed", "GitHub did not take the invitation");
+    // GitHub refusing the account itself (renamed away) is answered as Accept's invitation is.
+    if (isInvitationRefused(err)) throw stale();
+    const code = githubStatus(err);
+    // Any other refusal of GitHub's (a 4xx: an organization forbidding outside collaborators) is no outage.
+    const refused = code !== undefined && code >= 400 && code < 500;
+    log.warn({ projectId: project.id, repository: fullName, status: code, error: (err as Error)?.name }, "a distribution access invitation failed");
+    if (refused) throw new ProjectError("invite_refused", "GitHub refused the invitation");
+    throw new ProjectError("invite_failed", "GitHub did not answer: try again");
   }
 
   await audit(db, {

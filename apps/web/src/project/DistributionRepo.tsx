@@ -21,7 +21,10 @@ import { RepoLink } from "./parts";
 /** The refusals the tile words itself; any other is the server's message. */
 const REFUSALS: Partial<Record<string, keyof Dict>> = {
   github_account_stale: "project.distribution.stale",
-  invite_failed: "project.distribution.failed",
+  staff_seat_required: "project.distribution.seatRequired",
+  distribution_missing: "project.refusal.distributionMissing",
+  invite_refused: "project.distribution.refused",
+  invite_failed: "sproj.refusal.provisionFailed",
 };
 
 const settingsHref = routeToPath({ view: "settings" });

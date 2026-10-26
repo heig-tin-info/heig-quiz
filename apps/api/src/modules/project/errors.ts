@@ -89,6 +89,7 @@ const STATUS: Record<Code, number> = {
   owner_required: 403,
   // Access to the distribution repository (#899): only a staff seat asks.
   staff_seat_required: 403,
+  invite_refused: 422,
   codespace_not_granted: 403,
   work_mode_frozen: 409,
   work_mode_group: 409,
