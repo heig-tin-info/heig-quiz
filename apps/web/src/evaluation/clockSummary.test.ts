@@ -83,17 +83,25 @@ describe("clockSummary (#87, ADR-086)", () => {
     expect(clockSummary(e, makeT("en"), date)).toMatch(
       /^Open until you close it, <2026-10-02> at the latest, lobby, started by you, /,
     );
-    expect(clockSummary({ ...e, closesAt: null }, makeT("fr"), date)).toMatch(/^Ouvert jusqu'à ce que vous le clôturiez, salle d'attente, départ manuel/);
+    expect(clockSummary({ ...e, closesAt: null }, makeT("fr"), date)).toMatch(/^Ouverte jusqu'à ce que vous la clôturiez, salle d'attente, départ manuel/);
   });
 
-  it("puts a draft's window in the future: it opens once scheduled, or once opened (#921)", () => {
+  it("words the window by the clock, not the stored timing: a Live deadline is the teacher's close", () => {
+    const e = evaluation({
+      settings: { timing: "deadline", lobby: "manual", navigation: "free" },
+      closesAt: "2026-10-02T08:00:00.000Z",
+    });
+    expect(clockSummary(e, makeT("en"), date)).toMatch(/^Open until you close it, <2026-10-02> at the latest, /);
+  });
+
+  it("does not state a draft's window as a fact (#921)", () => {
     const scheduled = evaluation({
       state: "draft",
       settings: { timing: "deadline", lobby: "skip", navigation: "free" },
       closesAt: "2026-10-26T14:30:00.000Z",
     });
-    expect(clockSummary(scheduled, makeT("en"), date)).toMatch(/^Opens by itself once scheduled, until <2026-10-26>, /);
-    expect(clockSummary(scheduled, makeT("fr"), date)).toMatch(/^S'ouvrira une fois planifiée, jusqu'au <2026-10-26>, /);
+    expect(clockSummary(scheduled, makeT("en"), date)).toMatch(/^Once open, until <2026-10-26>, /);
+    expect(clockSummary(scheduled, makeT("fr"), date)).toMatch(/^Une fois ouverte, jusqu'au <2026-10-26>, /);
     expect(clockSummary({ ...scheduled, state: "scheduled" }, makeT("en"), date)).toMatch(/^Open until <2026-10-26>, /);
     const live = evaluation({
       state: "draft",
@@ -101,7 +109,7 @@ describe("clockSummary (#87, ADR-086)", () => {
       closesAt: "2026-10-26T14:30:00.000Z",
     });
     expect(clockSummary(live, makeT("en"), date)).toMatch(
-      /^Once opened, stays open until you close it, <2026-10-26> at the latest, /,
+      /^Once open, stays open until you close it, <2026-10-26> at the latest, /,
     );
     expect(clockSummary({ ...live, closesAt: null }, makeT("fr"), date)).toMatch(
       /^Une fois ouverte, reste ouverte jusqu'à ce que vous la clôturiez, salle d'attente/,

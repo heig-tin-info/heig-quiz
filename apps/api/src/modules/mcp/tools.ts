@@ -42,7 +42,7 @@ import {
   type ConceptResolveResponse,
   type TokenScope,
 } from "@quiz/contracts";
-import { filterIds, scopeCovers, type LabelResolution } from "@quiz/domain";
+import { clockChoiceOf, filterIds, isUnscheduledDraft, scopeCovers, type LabelResolution } from "@quiz/domain";
 
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
 
@@ -239,7 +239,7 @@ async function createQuiz(
   return { ...(await api.get(`/${kind}/${created.id}`)), url: api.link(`/${kind}/${created.id}`) };
 }
 
-/** What `update_evaluation` adds to a dated draft (#921): the model is to pass it on to the teacher. */
+/** What `update_evaluation` adds to a dated draft on the Scheduled clock (#921): the model is to pass it on to the teacher. */
 const UNSCHEDULED_NOTICE =
   "This evaluation is NOT scheduled: it is still a draft and will not open by itself at opensAt. " +
   "The teacher must schedule it (or open it) in the Launch step of the web app, at `url`.";
@@ -701,7 +701,8 @@ export const TOOLS: Tool[] = [
     run: async (api, { evaluationId, ...body }) => {
       const detail = await api.patch(`/evaluations/${evaluationId}`, body);
       // A dated draft is not a scheduled one (ADR-104, amendment of 2026-10-26): say so, with the way to it.
-      const unscheduled = detail.evaluation.state === "draft" && detail.evaluation.opensAt !== null;
+      const { state, opensAt, settings } = detail.evaluation;
+      const unscheduled = isUnscheduledDraft({ state, opensAt, clock: clockChoiceOf(settings).mode });
       return {
         ...detail,
         ...(unscheduled ? { notice: UNSCHEDULED_NOTICE } : {}),

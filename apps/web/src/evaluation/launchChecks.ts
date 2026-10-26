@@ -38,7 +38,7 @@ import type { CheckLevel } from "../ui";
 import { typeLabel } from "../questionTypes";
 import { imposedText } from "../student/ConditionsList";
 import { timingFragment } from "./clockSummary";
-import { missedScheduling, scheduleFactsOf } from "./common";
+import { scheduleFactsOf, schedulingPhase } from "./common";
 import { missingTiming, missingTimingKey } from "./timing";
 
 /** The shared check levels (`ui`), less `unknown`, plus the rules of the session. */
@@ -188,8 +188,6 @@ function timingCheck(
   const { evaluation } = detail;
   const fix = { kind: "step", step: "timing" } as const;
   const missing = missingTiming(evaluation);
-  // A draft that missed its opening (#921) opens now: its window is a fact once the button is pressed.
-  const missed = missedScheduling(scheduleFactsOf(evaluation), now);
   if (missing.length > 0) {
     return {
       id: "timing",
@@ -217,7 +215,7 @@ function timingCheck(
           id: "timing",
           level: "blocker",
           title: t("launch.timing.past"),
-          ...(missed ? { status: t("launch.status.missedOver") } : {}),
+          ...(schedulingPhase(scheduleFactsOf(evaluation), now) === "over" ? { status: t("launch.status.missedOver") } : {}),
           detail: t("launch.timing.past.detail", { date }),
           fix,
         };
@@ -225,7 +223,7 @@ function timingCheck(
   return {
     id: "timing",
     level: "ok",
-    title: capitalize(timingFragment(evaluation, t, formatDate, evaluation.state === "draft" && !missed)),
+    title: capitalize(timingFragment(evaluation, t, formatDate)),
     detail: t(lobbyKey(evaluation.settings.lobby)),
     fix,
   };

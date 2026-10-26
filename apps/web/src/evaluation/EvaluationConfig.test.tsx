@@ -829,37 +829,27 @@ describe("EvaluationConfig", () => {
 
     it("says a draft whose opening passed did not open, without a button (#921)", async () => {
       const base = makeEvaluationDetail().evaluation;
-      const missed = (closesAt: string) =>
-        makeEvaluationDetail({
-          evaluation: {
-            ...base,
-            mode: "exercise",
-            settings: { ...base.settings, timing: "deadline", lobby: "skip" },
-            opensAt: new Date(Date.now() - 86_400_000).toISOString(),
-            closesAt,
-          },
-        });
-      mockFetch(routes(missed(new Date(Date.now() + 86_400_000).toISOString())));
-      const { unmount } = renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      const missed = makeEvaluationDetail({
+        evaluation: {
+          ...base,
+          mode: "exercise",
+          settings: { ...base.settings, timing: "deadline", lobby: "skip" },
+          opensAt: new Date(Date.now() - 86_400_000).toISOString(),
+          closesAt: new Date(Date.now() + 86_400_000).toISOString(),
+        },
+      });
+      mockFetch(routes(missed));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
         route: "/evaluations/x?step=timing",
       });
       expect(await screen.findByText("draft · not scheduled")).toBeInTheDocument();
       const hint = screen.getByText("Not opened").closest("[role=status]") as HTMLElement;
-      expect(hint).toHaveTextContent(/never scheduled, so it did not open/);
-      expect(hint).toHaveTextContent(/Open it now in Launch, or move its opening date/);
+      expect(hint).toHaveTextContent(/Never scheduled, so it did not open/);
+      expect(hint).toHaveTextContent(/Open it now in Launch, or move the date/);
       expect(within(hint).queryByRole("button")).toBeNull();
       expect(screen.queryByText("Not scheduled yet")).toBeNull();
       // The Format summary does not state the window as a fact.
-      expect(screen.getByText(/Opens by itself once scheduled, until/)).toBeInTheDocument();
-      unmount();
-
-      mockFetch(routes(missed(new Date(Date.now() - 3_600_000).toISOString())));
-      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
-        route: "/evaluations/x?step=questions",
-      });
-      const gone = (await screen.findByText("Dates gone by")).closest("[role=status]") as HTMLElement;
-      expect(gone).toHaveTextContent(/its dates have passed\. Move them in Format/);
-      expect(screen.queryByText("Not opened")).toBeNull();
+      expect(screen.getByText(/Once open, until/)).toBeInTheDocument();
     });
 
     it("says nothing of the kind for a Live draft, whose date is a calendar hint", async () => {

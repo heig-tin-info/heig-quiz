@@ -54,6 +54,16 @@ export function clockChoiceOf(settings: ClockSettings): ClockChoice {
   };
 }
 
+/**
+ * A draft on the Scheduled clock with its opening time set, that nobody
+ * scheduled (#857, #921): its dates are written, yet it never opens by
+ * itself, as the ticker opens a `scheduled` one only. A Live draft's date
+ * is a calendar hint, nothing more, and an undated draft promises nothing.
+ */
+export function isUnscheduledDraft(e: { state: string; opensAt: string | Date | null; clock: ClockMode }): boolean {
+  return e.state === "draft" && e.clock === "scheduled" && e.opensAt !== null;
+}
+
 /** The waiting rooms a live evaluation may use (advanced options), in screen order. */
 export function liveLobbies(limited: boolean): readonly LobbyName[] {
   return limited ? ["manual", "auto"] : ["manual", "auto", "skip"];

@@ -10,9 +10,8 @@
  * fragment; the sentence is the fragments joined by commas, which reads the
  * same in English and in French.
  *
- * A draft's window is not a fact yet (#921): it opens only once scheduled
- * (Scheduled) or opened (Live), so its sentence says so rather than
- * "open until", which read as a promise the badge contradicted.
+ * A draft's window is not a fact yet (#921): its sentence says "once open"
+ * rather than "open until", which read as a promise the badge contradicted.
  */
 import type { Evaluation } from "@quiz/contracts";
 import { clockChoiceOf } from "@quiz/domain";
@@ -23,29 +22,35 @@ import type { Dict, TFunction } from "../i18n";
 type SummaryInput = Pick<Evaluation, "settings" | "durationS" | "feedbackPolicy"> &
   Partial<Pick<Evaluation, "closesAt" | "state">>;
 
-/** `draft`: the window is still to be opened, so the sentence is in the future (#921). */
-export function timingFragment(
-  e: SummaryInput,
-  t: TFunction,
-  formatDate: (iso: string) => string,
-  draft = e.state === "draft",
-): string {
-  const key = (k: "deadline" | "manual" | "manualBackstop") => `eval.summary.${k}${draft ? ".draft" : ""}` as const;
-  switch (e.settings.timing) {
-    case "duration": {
-      if (e.durationS === null || e.durationS <= 0) return t("eval.summary.durationUnset");
-      const n = Math.max(1, Math.round(e.durationS / 60));
-      return n === 1 ? t("eval.summary.durationOne") : t("eval.summary.duration", { n });
-    }
-    case "deadline":
-      return e.closesAt == null
-        ? t("eval.summary.deadlineUnset")
-        : t(key("deadline"), { date: formatDate(e.closesAt) });
-    case "manual":
-      return e.closesAt == null
-        ? t(key("manual"))
-        : t(key("manualBackstop"), { date: formatDate(e.closesAt) });
+const WINDOW = {
+  deadline: "eval.summary.deadline",
+  manual: "eval.summary.manual",
+  manualBackstop: "eval.summary.manualBackstop",
+} as const satisfies Record<string, keyof Dict>;
+const DRAFT_WINDOW = {
+  deadline: "eval.summary.deadline.draft",
+  manual: "eval.summary.manual.draft",
+  manualBackstop: "eval.summary.manualBackstop.draft",
+} as const satisfies Record<string, keyof Dict>;
+
+/**
+ * The window's words: the Scheduled clock's end, or Live's close by the
+ * teacher (and its safety deadline), whatever the stored `timing` that is not
+ * a duration. A draft's are conditional (#921).
+ */
+export function timingFragment(e: SummaryInput, t: TFunction, formatDate: (iso: string) => string): string {
+  if (e.settings.timing === "duration") {
+    if (e.durationS === null || e.durationS <= 0) return t("eval.summary.durationUnset");
+    const n = Math.max(1, Math.round(e.durationS / 60));
+    return n === 1 ? t("eval.summary.durationOne") : t("eval.summary.duration", { n });
   }
+  const words = e.state === "draft" ? DRAFT_WINDOW : WINDOW;
+  if (clockChoiceOf(e.settings).mode === "scheduled") {
+    return e.closesAt == null
+      ? t("eval.summary.deadlineUnset")
+      : t(words.deadline, { date: formatDate(e.closesAt) });
+  }
+  return e.closesAt == null ? t(words.manual) : t(words.manualBackstop, { date: formatDate(e.closesAt) });
 }
 
 export function clockSummary(

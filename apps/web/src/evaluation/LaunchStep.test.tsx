@@ -296,7 +296,7 @@ describe("Schedule (#152, ADR-086)", () => {
     expect(screen.getByRole("button", { name: /^open now$/i })).toBeEnabled();
     const closesAt = isoDateTime(new Date(Date.parse(opensAt) + 48 * HOUR).toISOString());
     expect(screen.getByRole("status")).toHaveTextContent(
-      `Its opening date has passed: it opens now and closes on ${closesAt}.`,
+      `Its opening date has passed: it opens now, with its end on ${closesAt}.`,
     );
   });
 
@@ -310,7 +310,7 @@ describe("Schedule (#152, ADR-086)", () => {
         closesAt: new Date(Date.now() - HOUR).toISOString(),
       }),
     );
-    expect(screen.getByRole("status")).toHaveTextContent(/opening and closing dates have passed: move them in Format/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/opening and end dates have passed: move them in Format/i);
     expect(screen.getByRole("button", { name: /^open now$/i })).toBeDisabled();
   });
 
