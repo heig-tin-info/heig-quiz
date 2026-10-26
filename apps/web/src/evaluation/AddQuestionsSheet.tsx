@@ -28,6 +28,8 @@ import {
   Skeleton,
   Tip,
   useMinWidth,
+  usePaintSelection,
+  type PaintSelection,
 } from "../ui";
 import { poolQuestionsKey } from "../queryKeys";
 import { useTargetRefresh, type EditTarget } from "./editTarget";
@@ -181,6 +183,11 @@ export function AddQuestionsSheet({
 
   const toggle = (id: string) =>
     setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // One gesture for both lists: a drag may start among the favourites and
+  // carry on down the whole pool.
+  const paint = usePaintSelection((id, on) =>
+    setPicked((prev) => (on ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((x) => x !== id))),
+  );
 
   // The row last looked at, by its section: "Back" returns to that very
   // button, whichever of the two lists it was in.
@@ -206,6 +213,7 @@ export function AddQuestionsSheet({
       picked={picked}
       shown={shown}
       docked={docked}
+      paint={paint}
       onToggle={toggle}
       onLook={look}
     />
@@ -436,6 +444,8 @@ export function favouriteSummary(t: TFunction, plan: FavouritePlan): string {
  * inside the preview, whose fields take the arrows for themselves. Space
  * ticks the row, as on the checkbox beside it: shopping a list with the
  * keyboard is ↓ to read, Space to take. Enter (and a click) looks.
+ * With the mouse, pressing a box and dragging along the list ticks (or
+ * unticks) every box it passes, disabled ones skipped (`usePaintSelection`).
  */
 function PickerRows({
   section,
@@ -444,6 +454,7 @@ function PickerRows({
   picked,
   shown,
   docked,
+  paint,
   onToggle,
   onLook,
 }: {
@@ -454,13 +465,13 @@ function PickerRows({
   picked: string[];
   shown: QuestionRow | null;
   docked: boolean;
+  paint: PaintSelection;
   onToggle: (id: string) => void;
   onLook: (row: QuestionRow, key: string) => void;
 }) {
   const t = useT();
   const nameId = useId();
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
-
   const walk = (e: React.KeyboardEvent, index: number, tickable: boolean) => {
     if (e.key === " ") {
       e.preventDefault();
@@ -483,15 +494,22 @@ function PickerRows({
         const reason = skipReason(row, existing);
         const looked = shown?.id === row.id;
         const key = `${section}:${row.id}`;
+        const checked = reason === "already" || picked.includes(row.id);
         return (
-          <li key={row.id} className={cx("flex items-center gap-3 px-3", looked && "bg-accent-soft")}>
-            <Checkbox
-              checked={reason === "already" || picked.includes(row.id)}
-              disabled={reason !== null}
-              onChange={() => onToggle(row.id)}
-              label={null}
-              aria-labelledby={`${nameId}-${index}`}
-            />
+          <li key={row.id} className={cx("flex select-none items-center gap-3 px-3", looked && "bg-accent-soft")}>
+            <span
+              className="inline-flex"
+              onPointerDown={reason === null ? paint.start(row.id, checked) : undefined}
+              onPointerEnter={reason === null ? paint.enter(row.id) : undefined}
+            >
+              <Checkbox
+                checked={checked}
+                disabled={reason !== null}
+                onChange={paint.change(row.id, () => onToggle(row.id))}
+                label={null}
+                aria-labelledby={`${nameId}-${index}`}
+              />
+            </span>
             <button
               type="button"
               data-look={key}
