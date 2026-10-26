@@ -25,6 +25,12 @@ Amended 2026-10-14 (#857): the first 2026-10-13 amendment's item 1 — a
 dated draft is still zinc, and its word says it is not scheduled
 ([amendment](#amendment-2026-10-14-a-dated-draft-is-not-scheduled)).
 
+Amended 2026-10-26 (#921): the 2026-10-14 amendment's item 2 — once a dated
+draft's opening has passed, the configuration says it did not open, and
+the Format summary and the MCP no longer present a draft's window as
+planned
+([amendment](#amendment-2026-10-26-a-dated-draft-whose-opening-passed)).
+
 Scope: the state badge of an evaluation and of a project on every staff
 surface of `apps/web` (the classroom's Activities tab, `/activities`, the
 evaluation's configuration, the live header, the project page) and the bars
@@ -300,3 +306,40 @@ contrast, IS published by the ticker, hence its blue phase.
    action keep their words. Recorded in
    [ADR-086's amendment of 2026-10-14](ADR-086-planifiee-ou-en-direct.md#amendment-2026-10-14-the-scheduled-mode-is-labelled-automatic),
    which owns the mode's names.
+
+## Amendment 2026-10-26: a dated draft whose opening passed
+
+Recorded with #921: a teacher read "brouillon · non planifiée" in the
+header but « Ouvert jusqu'au … » in the Format summary, with dates already
+past, and believed the exercise had been scheduled. It never opened. Its
+dates had been set through the MCP (`update_evaluation`), which, by
+design, schedules and opens nothing. The model stays: a dated draft is a
+draft until Launch's Schedule (F-EVAL-04,
+[ADR-086](ADR-086-planifiee-ou-en-direct.md)). What was missing is what
+the screen says once the opening has passed.
+
+1. **The past case has its guidance.** `missedScheduling` (beside
+   `awaitsScheduling` in `evaluation/common.ts`) holds for a draft on the
+   Scheduled clock whose `opensAt` has come. The steps before Launch then
+   show the same neutral `Alert`, still without a button: it did not open
+   because it was never scheduled, and Launch opens it now or its opening
+   date moves; once `closesAt` has passed too, the dates are gone by and
+   must move. Launch's status line says the opening date has passed and
+   that the evaluation opens now and closes on its `closesAt` (or that
+   both dates have passed, the blocker that refuses the opening); the
+   primary action reads "Open now". Scheduling at a past date stays
+   refused (`opens_at_past`).
+2. **A draft's window is in the future tense.** The Format summary
+   (`clockSummary`) and Launch's timing check no longer state a draft's
+   window as a fact: "Opens by itself once scheduled, until …" / « S'ouvrira
+   une fois planifiée, jusqu'au … » on the Scheduled clock, "Once opened,
+   stays open until you close it" on Live. A scheduled or open evaluation
+   keeps "Open until …"; a draft that missed its opening reads it too in
+   Launch, where the button opens it now.
+3. **The MCP says it.** `update_evaluation`'s description says that
+   `opensAt`/`closesAt` do not schedule the evaluation, and its result
+   carries the evaluation's `url` and, for a draft with an `opensAt`, a
+   `notice` the model is to pass on to the teacher: not scheduled, it will
+   not open by itself, schedule it in Launch. The MCP still gains no tool
+   that schedules or opens anything. `create_evaluation` and
+   `instantiate_template` set no dates, so they carry no notice.

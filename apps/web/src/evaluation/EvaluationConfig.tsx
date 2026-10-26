@@ -41,7 +41,7 @@ import {
   Tabs,
   useNow,
 } from "../ui";
-import { awaitsScheduling, evaluationBadgeLabel, scheduleFactsOf, stateStyle } from "./common";
+import { awaitsScheduling, evaluationBadgeLabel, missedScheduling, scheduleFactsOf, stateStyle } from "./common";
 import { evaluationTarget } from "./editTarget";
 import { useItemPane } from "./ItemPreview";
 import { ItemsStep } from "./ItemsStep";
@@ -359,6 +359,22 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         <Alert icon={CalendarClock} title={t("eval.unscheduled.title")}>
           {t("eval.unscheduled.body", { date: isoDateTime(evaluation.opensAt!) })}
         </Alert>
+      ) : null}
+      {/*
+       * Its opening came and went with nobody scheduling it (#921): it did
+       * not open. Launch opens it now, or the dates move; once its end has
+       * passed too, only moving them helps.
+       */}
+      {step !== "launch" && missedScheduling(scheduleFacts, now) ? (
+        evaluation.closesAt !== null && Date.parse(evaluation.closesAt) <= now ? (
+          <Alert icon={CalendarClock} title={t("eval.missedOver.title")}>
+            {t("eval.missedOver.body")}
+          </Alert>
+        ) : (
+          <Alert icon={CalendarClock} title={t("eval.missed.title")}>
+            {t("eval.missed.body", { date: isoDateTime(evaluation.opensAt!) })}
+          </Alert>
+        )
       ) : null}
 
       <FormError error={remove.error} title={t("eval.saveFailed")} />

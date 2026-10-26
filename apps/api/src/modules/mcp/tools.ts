@@ -239,6 +239,11 @@ async function createQuiz(
   return { ...(await api.get(`/${kind}/${created.id}`)), url: api.link(`/${kind}/${created.id}`) };
 }
 
+/** What `update_evaluation` adds to a dated draft (#921): the model is to pass it on to the teacher. */
+const UNSCHEDULED_NOTICE =
+  "This evaluation is NOT scheduled: it is still a draft and will not open by itself at opensAt. " +
+  "The teacher must schedule it (or open it) in the Launch step of the web app, at `url`.";
+
 /** The project routes exist only with Quiz's GitHub App (`app.ts`): without it, say so rather than a 404. */
 function requireGithub(api: Api) {
   if (!api.github) {
@@ -684,13 +689,25 @@ export const TOOLS: Tool[] = [
       "Changes an evaluation's title, `mode` (`exam` or `exercise`, only while it is a draft or scheduled with " +
       "no attempt, else 409 `mode_frozen`; nothing but the forced consequences changes with it: `immediate` " +
       "feedback becomes `on_release` for an exam, and an exam refuses retakes), settings, feedback policy, grading scale (linear, its rounding) or schedule (`opensAt`, " +
-      "`closesAt` as ISO date-times, `durationS` in seconds). Does not start it. While it is running or " +
+      "`closesAt` as ISO date-times, `durationS` in seconds). Does not start it, and setting `opensAt` or " +
+      "`closesAt` does NOT schedule it: it stays a draft that never opens, not even at `opensAt`, until the " +
+      "teacher schedules it in the Launch step of the web app (#921). Tell the teacher so, with the returned " +
+      "`url`, whenever the result carries a `notice`. While it is running or " +
       "paused, only the title, the IP allowlist and the feedback policy may change " +
         "(an evaluation with a waiting room never takes `immediate` feedback). A poll's feedback policy " +
         "is never patched: it follows the poll's reveal.",
     input: z.object({ evaluationId: Id, ...EvaluationPatch.shape }),
     annotations: { ...WRITE, idempotentHint: true },
-    run: (api, { evaluationId, ...body }) => api.patch(`/evaluations/${evaluationId}`, body),
+    run: async (api, { evaluationId, ...body }) => {
+      const detail = await api.patch(`/evaluations/${evaluationId}`, body);
+      // A dated draft is not a scheduled one (ADR-104, amendment of 2026-10-26): say so, with the way to it.
+      const unscheduled = detail.evaluation.state === "draft" && detail.evaluation.opensAt !== null;
+      return {
+        ...detail,
+        ...(unscheduled ? { notice: UNSCHEDULED_NOTICE } : {}),
+        url: api.link(`/evaluations/${evaluationId}`),
+      };
+    },
   }),
 
   // --- Templates (ADR-031; ADR-022, addendum of 2026-10-01) ------------------

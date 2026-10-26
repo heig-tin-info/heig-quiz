@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { en } from "../i18n/en";
 import type { TFunction } from "../i18n";
-import { awaitsScheduling, evaluationBadgeLabel, type ScheduleFacts } from "./common";
+import { awaitsScheduling, evaluationBadgeLabel, missedScheduling, type ScheduleFacts } from "./common";
 
 const t = ((key: keyof typeof en) => en[key]) as TFunction;
 const NOW = Date.parse("2026-10-14T10:00:00.000Z");
@@ -32,5 +32,14 @@ describe("a draft whose dates are set but which nobody scheduled (#857)", () => 
     expect(awaitsScheduling(facts({ opensAt: EARLIER }), NOW)).toBe(false);
     expect(awaitsScheduling(facts({ clock: "live" }), NOW)).toBe(false);
     expect(awaitsScheduling(facts({ state: "scheduled" }), NOW)).toBe(false);
+  });
+
+  it("missed its opening once that date has come, never both to schedule and missed (#921)", () => {
+    expect(missedScheduling(facts({ opensAt: EARLIER }), NOW)).toBe(true);
+    expect(missedScheduling(facts({ opensAt: new Date(NOW).toISOString() }), NOW)).toBe(true);
+    expect(missedScheduling(facts(), NOW)).toBe(false);
+    expect(missedScheduling(facts({ opensAt: EARLIER, clock: "live" }), NOW)).toBe(false);
+    expect(missedScheduling(facts({ opensAt: EARLIER, state: "scheduled" }), NOW)).toBe(false);
+    expect(missedScheduling(facts({ opensAt: null }), NOW)).toBe(false);
   });
 });

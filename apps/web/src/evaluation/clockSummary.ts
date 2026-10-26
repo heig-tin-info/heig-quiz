@@ -9,17 +9,28 @@
  * navigation and when the feedback comes — in that order, each a translated
  * fragment; the sentence is the fragments joined by commas, which reads the
  * same in English and in French.
+ *
+ * A draft's window is not a fact yet (#921): it opens only once scheduled
+ * (Scheduled) or opened (Live), so its sentence says so rather than
+ * "open until", which read as a promise the badge contradicted.
  */
 import type { Evaluation } from "@quiz/contracts";
 import { clockChoiceOf } from "@quiz/domain";
 
 import type { Dict, TFunction } from "../i18n";
 
-/** `closesAt` is an evaluation's only: a template has no dates, so no end yet. */
+/** `closesAt` and `state` are an evaluation's only: a template has no dates, so no end yet. */
 type SummaryInput = Pick<Evaluation, "settings" | "durationS" | "feedbackPolicy"> &
-  Partial<Pick<Evaluation, "closesAt">>;
+  Partial<Pick<Evaluation, "closesAt" | "state">>;
 
-export function timingFragment(e: SummaryInput, t: TFunction, formatDate: (iso: string) => string): string {
+/** `draft`: the window is still to be opened, so the sentence is in the future (#921). */
+export function timingFragment(
+  e: SummaryInput,
+  t: TFunction,
+  formatDate: (iso: string) => string,
+  draft = e.state === "draft",
+): string {
+  const key = (k: "deadline" | "manual" | "manualBackstop") => `eval.summary.${k}${draft ? ".draft" : ""}` as const;
   switch (e.settings.timing) {
     case "duration": {
       if (e.durationS === null || e.durationS <= 0) return t("eval.summary.durationUnset");
@@ -29,11 +40,11 @@ export function timingFragment(e: SummaryInput, t: TFunction, formatDate: (iso: 
     case "deadline":
       return e.closesAt == null
         ? t("eval.summary.deadlineUnset")
-        : t("eval.summary.deadline", { date: formatDate(e.closesAt) });
+        : t(key("deadline"), { date: formatDate(e.closesAt) });
     case "manual":
       return e.closesAt == null
-        ? t("eval.summary.manual")
-        : t("eval.summary.manualBackstop", { date: formatDate(e.closesAt) });
+        ? t(key("manual"))
+        : t(key("manualBackstop"), { date: formatDate(e.closesAt) });
   }
 }
 

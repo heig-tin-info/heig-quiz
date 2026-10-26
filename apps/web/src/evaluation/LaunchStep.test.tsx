@@ -6,6 +6,7 @@ import type { EvaluationDetail } from "@quiz/contracts";
 
 import { EVALUATION_ID, makeEvaluationDetail, makeItemRow } from "../test/live-fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { isoDateTime } from "../ui";
 import { LaunchStep } from "./LaunchStep";
 
 
@@ -287,11 +288,30 @@ describe("Schedule (#152, ADR-086)", () => {
     expect(calls.some((c) => c.method === "PATCH")).toBe(false);
   });
 
-  it("is not offered once the start has passed: the action is to open it", () => {
+  it("is not offered once the start has passed: the action is to open it now (#921)", () => {
     mockFetch({});
-    render(scheduled(new Date(Date.now() - HOUR).toISOString()));
+    const opensAt = new Date(Date.now() - HOUR).toISOString();
+    render(scheduled(opensAt));
     expect(screen.queryByRole("button", { name: /^schedule$/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /^open$/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^open now$/i })).toBeEnabled();
+    const closesAt = isoDateTime(new Date(Date.parse(opensAt) + 48 * HOUR).toISOString());
+    expect(screen.getByRole("status")).toHaveTextContent(
+      `Its opening date has passed: it opens now and closes on ${closesAt}.`,
+    );
+  });
+
+  it("says both dates have passed on a draft that missed them, and opens nothing (#921)", () => {
+    mockFetch({});
+    render(
+      withEvaluation({
+        mode: "exercise",
+        settings: { ...makeEvaluationDetail().evaluation.settings, timing: "deadline", lobby: "skip" },
+        opensAt: new Date(Date.now() - 48 * HOUR).toISOString(),
+        closesAt: new Date(Date.now() - HOUR).toISOString(),
+      }),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(/opening and closing dates have passed: move them in Format/i);
+    expect(screen.getByRole("button", { name: /^open now$/i })).toBeDisabled();
   });
 
   it("is never offered Live, whose date is for the calendar only", () => {

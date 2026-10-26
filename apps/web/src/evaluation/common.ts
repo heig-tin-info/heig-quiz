@@ -87,6 +87,16 @@ export function awaitsScheduling(e: ScheduleFacts, now: number): boolean {
   return unscheduledDraft(e) && Date.parse(e.opensAt!) > now;
 }
 
+/**
+ * An {@link unscheduledDraft} whose opening has come at `now` (#921): it did
+ * not open, as nobody scheduled it, and it can no longer be scheduled at that
+ * date (`opens_at_past`). The configuration screen says what happened, and
+ * Launch's one primary action is to open it now.
+ */
+export function missedScheduling(e: ScheduleFacts, now: number): boolean {
+  return unscheduledDraft(e) && Date.parse(e.opensAt!) <= now;
+}
+
 /** The word of an evaluation's badge: its state's, or "draft · not scheduled" for an {@link unscheduledDraft}. */
 export function evaluationBadgeLabel(e: ScheduleFacts, t: TFunction): string {
   return unscheduledDraft(e) ? t("eval.state.draftUnscheduled") : evaluationStateLabel(e.state, t);
