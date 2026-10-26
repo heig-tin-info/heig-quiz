@@ -368,7 +368,7 @@ Status values: `open`, `settled`, `superseded`.
   bot logins for commits made before the cutover.
 - Blocks: M2-06.
 - **Status**: settled 2026-09-30 (product owner, conversation).
-- **Addendum (2026-10-26, #917)**: every commit the App writes into a
+- **Addendum (2026-10-26, #917, product owner)**: every commit the App writes into a
   repository (deadline, restore, the distribution's root commit, the sync
   commit) is created by `POST /git/commits` without `author`/`committer`
   (`apps/api/src/github/signedCommit.ts`). GitHub then signs it with its

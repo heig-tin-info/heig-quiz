@@ -15,7 +15,7 @@ two webhook handlers, the page's state) on the adapters
 Scope: F-PROJ-12 (amended the same day), the `project` module's sync and
 its GitHub App's `pull_request` subscription.
 
-**Amended 2026-10-26 (#917; scope: the `squash` strategy's distribution
+**Amended 2026-10-26 (#917, product owner; scope: the `squash` strategy's distribution
 commit; §3 unchanged):** the sync commit is created by the API,
 GitHub-signed for the App (`signedCommit.ts`). git builds the tree and
 force-pushes a throwaway commit of it to `refs/quiz/tmp-<branch>` of the
