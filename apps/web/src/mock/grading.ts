@@ -24,7 +24,6 @@ import type { GradingConfidence, GradingSource, GradingState, ItemCounting } fro
 import type { AnyQuestionTypeServer, ItemAggregate } from "@quiz/core/server";
 import { blocksServer } from "@quiz/qt-blocks/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
-import { diagramServer } from "@quiz/qt-diagram/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
 import { richServer } from "@quiz/qt-rich/server";
 import { shortServer } from "@quiz/qt-short/server";
@@ -163,15 +162,24 @@ interface MockGradingWorld {
 
 const cellKey = (attemptId: string, itemId: string) => `${attemptId}:${itemId}`;
 
-/** The types the model grades, through their own `gradingCriteria` hook as the API reads it (ADR-118 §6). */
-const LLM_GRADED: Partial<Record<string, AnyQuestionTypeServer>> = {
+/**
+ * The server halves the mock runs for real: in the debrief (ADR-033), their
+ * `isAnswered` and their per-attempt `aggregate`; in grading, an essay's
+ * `gradingCriteria` as the API reads it (ADR-118 §6). `code` is not one —
+ * its server half holds the grader, which needs Node — so its case tally is
+ * summed from the mock details below.
+ */
+const MOCK_SERVERS: Record<string, AnyQuestionTypeServer | undefined> = {
+  mcq: mcqServer,
+  short: shortServer,
+  cloze: clozeServer,
+  blocks: blocksServer,
   rich: richServer,
-  diagram: diagramServer,
 };
 
 /** A question's criteria, from its type's hook on the published config; none without one. */
 function criteriaOfQuestion(q: MockQuestion | undefined): DeclaredCriterion[] {
-  const hook = q ? LLM_GRADED[q.type]?.gradingCriteria : undefined;
+  const hook = q ? MOCK_SERVERS[q.type]?.gradingCriteria : undefined;
   return hook ? [...hook(publishedConfig(q!))] : [];
 }
 
@@ -886,7 +894,7 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       type: i.type,
       points: i.points,
       minPoints: scoresNegatively(i.type, negativeOf(e.evaluation), i.counting) ? -i.points : 0,
-      criteria: criteriaOfItem(e, i.id),
+      criteria: criteriaOfItem(e, i.id).map(({ id, title, weight }) => ({ id, title, weight })),
       explanation: questions.find((q) => q.id === i.questionId)?.versions.at(-1)?.explanation || null,
       ...(FALL && i.questionId === FALL.id
         ? {
@@ -1204,21 +1212,8 @@ function resultsView(e: MockGradingWorld) {
 
 on("GET", "/app/api/evaluations/:id/results", (m) => resultsView(gradingWorldOr404(m.groups!.id!)));
 
-/**
- * The server halves the mock runs for real in the debrief (ADR-033): their
- * `isAnswered` and their per-attempt `aggregate`. `code` is not one — its
- * server half holds the grader, which needs Node — so its case tally is
- * summed from the mock details below.
- */
-const DEBRIEF_TYPES: Record<string, AnyQuestionTypeServer | undefined> = {
-  mcq: mcqServer,
-  short: shortServer,
-  cloze: clozeServer,
-  blocks: blocksServer,
-};
-
 function attemptAggregate(type: string, answer: unknown, details: unknown): ItemAggregate {
-  const server = DEBRIEF_TYPES[type];
+  const server = MOCK_SERVERS[type];
   if (server?.aggregate) return server.aggregate({ answers: [answer], details: [details] });
   const cases = (details as { cases?: { name: string; ok: boolean }[] } | null)?.cases ?? [];
   return { casePassRate: cases.map((c) => ({ name: c.name, passed: c.ok ? 1 : 0, total: 1 })) };
@@ -1240,7 +1235,7 @@ on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
     const q = questions.find((x) => x.id === item.questionId)!;
     // A parameterized question projects its example instance (ADR-056 §9).
     const config = attemptConfig(q, null);
-    const server = DEBRIEF_TYPES[q.type];
+    const server = MOCK_SERVERS[q.type];
     // As `byQuestion` does it: one tally per attempt of the class, a blank
     // for no answer (or one that holds nothing), nothing at all for an
     // answer still waiting for its grading to be validated.

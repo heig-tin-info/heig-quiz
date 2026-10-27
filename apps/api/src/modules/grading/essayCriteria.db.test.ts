@@ -231,6 +231,46 @@ describe("a validation writes the breakdown (ADR-118 §6)", () => {
     );
 
     expect(row).toMatchObject({ points: 2, source: "llm" });
+
+    // Three criteria of weight 1 on a 1-point item, two earned: the parts are
+    // 0.33 + 0.33 + 0 = 0.66, the proposal's total 0.67 (from the raw sum).
+    // Sent back unchanged, the total stays the proposal's.
+    const thirds = ["a", "b", "c"].map((id) => ({ id, title: id.toUpperCase(), weight: 1 }));
+    const other = cells.find((c) => c.essay && c.attemptId !== cell.attemptId)!;
+    const [proposal] = await service.writeGradings(db, [
+      {
+        attemptId: other.attemptId,
+        itemId: other.itemId,
+        answerId: other.answerId,
+        points: 0.67,
+        maxPoints: 1,
+        source: "llm",
+        state: "proposed",
+        confidence: "high",
+        now: app.clock.now(),
+        details: {
+          reason: "llm",
+          chars: 30,
+          ai: {
+            model: MODEL,
+            criteria: [
+              { id: "a", criterion: "A", points: 0.33, maxPoints: 0.33, comment: COMMENT },
+              { id: "b", criterion: "B", points: 0.33, maxPoints: 0.33, comment: COMMENT },
+              { id: "c", criterion: "C", points: 0, maxPoints: 0.33, comment: COMMENT },
+            ],
+          },
+        },
+      },
+    ]);
+    const kept = await service.validateGrading(
+      db,
+      proposal!,
+      thirds,
+      { criteria: [{ id: "a", points: 0.33 }, { id: "b", points: 0.33 }, { id: "c", points: 0 }] },
+      teacher,
+      app.clock.now(),
+    );
+    expect(kept).toMatchObject({ points: 0.67, source: "llm" });
   });
 
   for (const [what, replied] of [

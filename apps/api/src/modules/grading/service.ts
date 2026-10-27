@@ -203,9 +203,11 @@ const WRITE_CHUNK = 500;
  * The rows come back in the order of `inputs`.
  *
  * `guard`, when given, runs first inside each chunk's transaction and returns
- * the inputs that may still be written: the grading jobs lock the attempts
- * there and drop the cells of one reopened meanwhile (ADR-067). The rows of
- * the dropped inputs are simply not returned.
+ * the inputs to write: it may drop an input or amend its `details`, never its
+ * cell, state or points (`results_updated` is read before it). The grading
+ * jobs lock the attempts there and drop the cells of one reopened meanwhile
+ * (ADR-067); an override keeps the proposal it replaces there (ADR-118 §6).
+ * The rows of the dropped inputs are simply not returned.
  */
 export async function writeGradings(
   db: Db,
@@ -237,8 +239,9 @@ export async function writeGradings(
 }
 
 /**
- * Which of `inputs` may still be written, decided inside the write's
- * transaction (see {@link writeGradings}).
+ * The inputs to write, decided inside the write's transaction: it may drop
+ * an input or amend its `details`, never its cell, state or points
+ * (`results_updated` is read before it; see {@link writeGradings}).
  */
 export type WriteGuard = (
   tx: Tx,
@@ -699,7 +702,8 @@ export async function gradingQueue(
       type: i.question.type,
       points: i.item.points,
       minPoints: pointsRangeOf(evaluation, i, i.item.points).min,
-      criteria: [...criteriaOf(i)],
+      // The declared fields only: a criterion's prompt stays in the key.
+      criteria: criteriaOf(i).map(({ id, title, weight }) => ({ id, title, weight })),
       explanation: explanationOrNull(i.version.explanation),
       ...(isParameterized(i.version) ? { parameters: writtenOf(i) } : {}),
     })),
@@ -836,8 +840,11 @@ export async function manualOverride(
     now,
   };
   if (!graded.breakdown) return writeGrading(db, write);
-  // The details kept are read inside the write's transaction, from the
-  // grading it supersedes: a validation landing meanwhile is the one kept.
+  // The details kept are read inside the write's transaction, the row locked
+  // (`gradingInForce`): a correction of the cell committing at the same time
+  // waits for this one, or this one reads after it. At worst, a correction
+  // that supersedes the read row first leaves this override without the
+  // proposal's `ai`; the override itself still wins (F-GRADE-05).
   const [row] = await writeGradings(db, [write], async (tx, inputs) => {
     const previous = await gradingInForce(tx, write.attemptId, write.itemId);
     return inputs.map((i) => ({ ...i, details: { ...teacherKept(previous?.details), ...(i.details as object) } }));
@@ -855,14 +862,15 @@ function teacherKept(details: unknown): Record<string, unknown> {
   return kept;
 }
 
-/** The newest grading of a cell that is not superseded: what a correction replaces. */
-async function gradingInForce(db: DbOrTx, attemptId: string, itemId: string): Promise<GradingRecord | null> {
-  const [row] = await db
+/** The newest grading of a cell that is not superseded, locked: what a correction replaces. */
+async function gradingInForce(tx: Tx, attemptId: string, itemId: string): Promise<GradingRecord | null> {
+  const [row] = await tx
     .select()
     .from(gradings)
     .where(and(eq(gradings.attemptId, attemptId), eq(gradings.itemId, itemId), ne(gradings.state, "superseded")))
     .orderBy(...NEWEST_FIRST)
-    .limit(1);
+    .limit(1)
+    .for("update");
   return row ?? null;
 }
 
@@ -958,10 +966,12 @@ function validationOf(
 ): WriteGradingInput {
   if (grading.state !== "proposed") throw new GradingError("not_pending");
   const graded = criteriaOutcome(declared, grading.maxPoints, input, grading.details);
-  const points = graded.points ?? input.points ?? grading.points;
   const resplit =
     input.criteria !== undefined &&
     !sameSplit(graded.breakdown!, criteriaOutcome(declared, grading.maxPoints, {}, grading.details).breakdown);
+  // The proposal's own split sent back keeps the proposal's total: the sum
+  // of its rounded parts may be 0.01 off (ADR-118 §3).
+  const points = input.criteria !== undefined && !resplit ? grading.points : (graded.points ?? input.points ?? grading.points);
   const adjusted = round2(points) !== grading.points || resplit;
   // The proposal's details, the model's `ai` included, live on beside it.
   const details = graded.breakdown

@@ -39,6 +39,8 @@ export interface StepState {
   validated: number;
 }
 
+const NO_CRITERIA: NonNullable<GradingQueueItem["criteria"]> = [];
+
 /**
  * Everything the grading screen reads (ADR-044): the evaluation and its
  * questions, the state of every question (`…/grading/steps`, two counters
@@ -52,8 +54,6 @@ export interface StepState {
  * Names are a REQUEST parameter (`?anonymous=0`), never a client-side
  * unmasking: anonymised, the server sends no label at all.
  */
-const NO_CRITERIA: NonNullable<GradingQueueItem["criteria"]> = [];
-
 export function useGradingData(evaluationId: string, itemId: string | null, named: boolean) {
   const evaluation = useEvaluation(evaluationId);
 
