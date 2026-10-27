@@ -245,7 +245,7 @@ export function AdvancedDisclosure({
           ) : null}
           {/* ADR-090: its sibling, the notepad — on the same modes. */}
           {notepadAllowedFor(mode) ? (
-            <SettingRow title={t("eval.notepad")} desc={notepad === "none" ? undefined : t(`eval.notepad.desc.${notepad}`)}>
+            <SettingRow title={t("eval.notepad")} desc={t(`eval.notepad.desc.${notepad}`)}>
               <Segmented
                 name="notepad"
                 label={t("eval.notepad")}
@@ -289,7 +289,7 @@ export function AdvancedDisclosure({
             }))}
           />
         </SettingRow>
-        <SettingRow title={t("eval.feedback.showKey")}>
+        <SettingRow title={t("eval.feedback.showKey")} desc={t("eval.feedback.showKey.desc")}>
           <Switch
             checked={feedbackPolicy.showKey}
             disabled={feedbackDisabled}
@@ -297,7 +297,7 @@ export function AdvancedDisclosure({
             onChange={(showKey) => feedback({ showKey })}
           />
         </SettingRow>
-        <SettingRow title={t("eval.feedback.showExplanation")}>
+        <SettingRow title={t("eval.feedback.showExplanation")} desc={t("eval.feedback.showExplanation.desc")}>
           <Switch
             checked={feedbackPolicy.showExplanation}
             disabled={feedbackDisabled}

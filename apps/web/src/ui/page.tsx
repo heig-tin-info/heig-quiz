@@ -376,7 +376,8 @@ export function EditableTitle({
  * A titled group inside a card or a panel: a 12 px uppercase eyebrow (h3) over
  * its content, the group named by that visible title. `className` sets the
  * spacing around the group; `divided` puts a hairline between its children
- * (settings rows).
+ * (settings rows), and its heading then outranks those 14 px rows: the same
+ * uppercase at 14 px semibold in `fg`, not a faint eyebrow under them.
  */
 export function Section({
   title,
@@ -392,7 +393,13 @@ export function Section({
   const id = useId();
   return (
     <section aria-labelledby={id} className={cx("space-y-2", className)}>
-      <h3 id={id} className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+      <h3
+        id={id}
+        className={cx(
+          "font-semibold uppercase tracking-wide",
+          divided ? "pt-2 text-sm text-fg" : "text-xs text-fg-faint",
+        )}
+      >
         {title}
       </h3>
       {divided ? <div className="divide-y divide-line">{children}</div> : children}
