@@ -42,8 +42,6 @@ each the smallest option where the owner's decisions left a detail open:
 - (l) the migration converts only scores out of 6 (any other maximum was
   already read linearly), clamped to `[0, 5]`, and stores the released grade
   of the repositories of projects released before it (§11);
-- (m) a project whose snapshot is v2 may reload a v2 file; creating a
-  project, or switching one to `criteria`, needs v3 (§11).
 
 Scope: how a project in the `criteria` grading mode whose snapshot is
 schema version 3 gets its automatic evidence (the repository's CI,
@@ -180,10 +178,12 @@ criteria:           # a tree: a section is a mapping with an optional
   **numbers only**: v3 drops v2's percentages (`"50%"`), one semantics.
   A name (section or leaf) holds no dot and no space; a criterion's id is
   its dotted path. The totals keep ADR-106 §7's clamp.
-- **Versions**: where v3 is required (§11, choice m), a file with
-  `schema_version: 2` is refused with one error that names v3 and the
-  schema's URL. The stored snapshots of released projects stay as data,
-  never re-parsed.
+- **Versions**: a snapshot's schema version is fixed when the snapshot is
+  first taken; a reload must parse at that version, else it is refused
+  `422 schema_version_fixed`; new snapshots are v3 (§11), and a v2 file
+  offered for one is refused with one error that names v3 and the schema's
+  URL. The stored snapshots of released projects stay as data, never
+  re-parsed.
 
 ### 4. `results.json`, the result of a run (normative)
 
@@ -411,8 +411,9 @@ are kept as data.
 (2026-10-28) are graded on the current model. A project whose stored
 snapshot is v2 keeps ADR-106's runner path unchanged; a v3 snapshot takes
 the CI path of this record. The schema version is the discriminator: no new
-column. A new project, and a switch to `criteria`, need v3; a v2 project
-may still reload a v2 file (choice m).
+column. One rule covers creation, the switch to `criteria` and reloads: a
+snapshot's schema version is fixed when the snapshot is first taken; a
+reload must parse at that version; new snapshots are v3.
 
 **`score_is_grade`** leaves every project, with L-06b:
 
@@ -457,11 +458,12 @@ preset read.
   refused; its commands are fixed argv arrays, never a shell string; on the
   way out a link is never followed and only regular text files are
   returned."
-- **Invariant 14** (L-06b), its second sentence becomes: "A project's
-  graded commit is the sha the server chose from its push receipts, sent in
-  its dispatch and bound by its nonce and the protected workflow (ADR-119
-  §6); its sources reach the model only from the server's own fetch at that
-  sha, never uploaded by a client."
+- **Invariant 14**: L-06b keeps its current sentence ("A project's source
+  is fetched by the server at a commit the server chose from its push
+  receipts, never uploaded by a client") and appends: "The graded run of a
+  v3 project checks out the sha the server dispatches, bound by its nonce
+  and the protected workflow (ADR-119 §6)." L-06g deletes the runner part
+  of the invariant, as of invariant 12.
 - **Invariant 15** (L-06b) gains `sig=` beside `token=` in its redaction,
   for the artifact's blob URL.
 

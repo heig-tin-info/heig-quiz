@@ -380,8 +380,7 @@ released; L-06g removes that path last (product owner, 2026-10-27).
   fraction arithmetic (§5, rounding to 0.01 half away from zero); the
   platform-side caps of `results.json` (§4).
 - **Acceptance**: the published files are generated, never hand-edited; a
-  v2 file is refused for a new project with one error naming v3, accepted on
-  a v2 project's reload; `0.125` rounds to `0.13`, `-0.125` to `-0.13`;
+  v2 file is refused for a new snapshot with one error naming v3; `0.125` rounds to `0.13`, `-0.125` to `-0.13`;
   `n > m` clamps; a zero denominator (`1/0`, `1/0.0`) fails the score
   pattern; a penalty passed costs 0, failed its whole value; a log over
   8 KiB keeps its tail; a file over 256 KiB is refused.
@@ -396,8 +395,9 @@ released; L-06g removes that path last (product owner, 2026-10-27).
   dispatching with a new nonce; the `score_is_grade` removal and migration
   of §11 (scores out of 6 → `(g − 1)/5`, released grades stored), after
   listing the live projects that used it and their CI's StudentScore
-  version; `CLAUDE.md` invariants 14 and 15 reworded as ADR-119 §13
-  proposes. Audit (closed union, invariant 9): the dispatch reuses
+  version; `CLAUDE.md` invariant 14 keeps its sentence and gains the v3
+  clause, invariant 15 gains `sig=` (ADR-119 §13); a snapshot's schema
+  version fixed when first taken (ADR-119 §3, §11). Audit (closed union, invariant 9): the dispatch reuses
   `project.review_dispatched` and `project.checkpoint_dispatched`; new
   members `project_repo.ci_tampered` (subject the repository, the differing
   paths) and `project.scale_migrated` (one per migrated project); a
@@ -413,7 +413,9 @@ released; L-06g removes that path last (product owner, 2026-10-27).
   error payload and the redaction test covers `sig=`; a zip with two
   entries, a `../` path, a link or an over-budget inflation is refused; a
   released project's grades are identical before and after the migration;
-  a project with a v2 snapshot still runs its evidence in the runner.
+  a project with a v2 snapshot still runs its evidence in the runner;
+  reloading a v3 file into a v2 project, or a v2 file into a v3 project, is
+  refused `422 schema_version_fixed`.
 
 ### L-06c — LLM inputs and the privacy page (ADR-119 §7)
 - **Depends on**: L-06b.
@@ -475,7 +477,8 @@ released; L-06g removes that path last (product owner, 2026-10-27).
   `buildCommand`, `testCommand`, `evidenceOutputs`, the JUnit reading and
   the overlay, `apps/runner`'s `project` action, its ceilings and the
   `lab-c` image, and v2 parsing; `CLAUDE.md` invariant 12's archive sentence
-  made conditional as ADR-119 §13 proposes.
+  made conditional and invariant 14's runner part deleted, as ADR-119 §13
+  proposes.
 - **Acceptance**: no project with a v2 snapshot is unreleased; the released
   projects' rows and snapshots read as before; the runner's `containerArgs`
   and env list are unchanged, the `project` route gone.
