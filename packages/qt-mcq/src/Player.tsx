@@ -54,8 +54,10 @@ export function McqPlayer({
 
   const instructions = !multiple ? s.chooseOne : limit === undefined ? s.chooseSeveral : fmt(s.chooseUpTo, { max: limit });
 
+  // `min-w-0`: a fieldset is never narrower than its content by default, so a
+  // long line of code in a choice pushed the question out of a narrow pane.
   return (
-    <fieldset className="flex flex-col gap-4" disabled={locked}>
+    <fieldset className="flex min-w-0 flex-col gap-4" disabled={locked}>
       <legend className="mb-2 text-lg leading-relaxed text-fg">
         {markdown(renderMarkdown, student.prompt)}
       </legend>
