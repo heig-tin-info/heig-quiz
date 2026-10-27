@@ -47,7 +47,7 @@ export function NewCourseModal({ onClose }: { onClose: () => void }) {
 
 /**
  * The course's name, code and icon, from its Settings tab. The code is the
- * school's abbreviation, a free label another course may share (ADR-119);
+ * school's abbreviation, a free label another course may share (ADR-120);
  * only what changed is sent.
  */
 export function EditCourseModal({ course, onClose }: { course: CourseSummary; onClose: () => void }) {

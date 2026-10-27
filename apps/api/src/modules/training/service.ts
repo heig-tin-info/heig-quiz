@@ -219,7 +219,7 @@ const WORDS: Record<Locale, { course: string; autumn: string; spring: string }> 
 /** The classroom of the training course (§1): one, named so whatever the language. */
 const CLASSROOM_NAME = "Initiation";
 
-/** The training course's code (§1): the same for every teacher, a free label (ADR-119). */
+/** The training course's code (§1): the same for every teacher, a free label (ADR-120). */
 const TRAINING_CODE = "INIT";
 
 /**

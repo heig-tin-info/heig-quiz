@@ -852,7 +852,7 @@ describe("PATCH /courses/:id (#294)", () => {
     expect(row!.name).toBe("Old name");
   });
 
-  it("changes the code, upper-cased, to another course's too: a code is a free label (ADR-119)", async () => {
+  it("changes the code, upper-cased, to another course's too: a code is a free label (ADR-120)", async () => {
     const id = await course("RECODE1");
     const other = await course("RECODE2");
     const res = await patch(id, { code: "recode3" });
@@ -865,7 +865,7 @@ describe("PATCH /courses/:id (#294)", () => {
     expect(rows.map((r) => r.id).sort()).toEqual([id, other].sort());
   });
 
-  it("creates a second course with a code another course holds (ADR-119)", async () => {
+  it("creates a second course with a code another course holds (ADR-120)", async () => {
     const create = () =>
       server.app.inject({
         method: "POST",

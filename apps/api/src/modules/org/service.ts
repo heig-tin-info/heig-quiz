@@ -152,7 +152,7 @@ export async function listCourses(
       and(eq(userCoursePrefs.courseId, courses.id), eq(userCoursePrefs.userId, viewerId)),
     )
     .where(access)
-    // Codes may be shared (ADR-119): the name, then the id, settle the order.
+    // Codes may be shared (ADR-120): the name, then the id, settle the order.
     .orderBy(asc(courses.code), asc(courses.name), asc(courses.id));
   const ids = rows.map((r) => r.id);
   const rooms = ids.length
@@ -267,7 +267,7 @@ export async function claimTrainingCourse(db: Db, courseId: string, userId: stri
 
 /**
  * Renames a course, its name or its code, or changes its icon and colour
- * (null puts the default back). The code is a free label (ADR-119): another
+ * (null puts the default back). The code is a free label (ADR-120): another
  * course may hold the same.
  */
 export async function updateCourse(
