@@ -2,84 +2,79 @@
 
 ## Status
 
-Proposed (2026-10-26). The ten product decisions are the **product
-owner's** (2026-10-26, numbered 1–10 below where they are cited); the
-schemas, the run's acceptance checks and the migration's arithmetic were
-fixed by the orchestrator from them, after the spec challenge of the same
-day, and refined after StudentScore 1.0's implementation (numbers-only
-maxima, `rationale` ignored, rounding, the command's directory, the
-default-branch check, the 1.0 `GRADE`). Orchestrator's choices, each the
-smallest option where the owner's decisions left a detail open:
+Proposed (2026-10-26). The product decisions are the **product owner's**
+(2026-10-26, numbered 1–10 below where they are cited; amended 2026-10-27:
+coexistence by the snapshot's schema version, §11); the schemas, the run's
+acceptance checks and the migration's arithmetic were fixed by the
+orchestrator from them, after the spec challenge, StudentScore 1.0's
+implementation and the lean and invariant reviews. Orchestrator's choices,
+each the smallest option where the owner's decisions left a detail open:
 
-- (a) the schemas are static files of the web app, `/schemas/criteria-3.json`
-  and `/schemas/results-1.json` (production
-  `https://quiz.chevallier.io/schemas/…`), whose text lives in
-  `packages/contracts/schemas/` (§2);
+- (a) the zod schemas of `packages/contracts` are the one source; the build
+  generates the published JSON Schemas from them (§2);
 - (b) `results.json`'s `$schema` is optional and never read; unknown
   top-level keys are ignored; a malformed entry, a file over its cap or
-  without a `criteria` object counts as a missing result (`no_result`); a
-  `log` over 8 KiB keeps its last 8 KiB (§4);
-- (c) the protected files are compared against one sha the distribution
-  handed out (its build or a sync, ADR-073), all files of one comparison
-  from that same sha; the default branch's head is read as the run's
-  `head_sha`; a file added under a protected directory makes the trees
-  differ, and the restore (F-PROJ-08) is unchanged: it never deletes a
-  student's file (§6);
+  without a `criteria` object counts as a missing result (`no_result`) (§4);
+- (c) a protected file is compared against one sha the distribution handed
+  out (its build or a sync, ADR-073), all files of one comparison from that
+  same sha; a file added under a protected directory of the project's list
+  makes the trees differ (§6);
 - (d) a run is read whatever its conclusion, provided its artifact
   `results` exists; the platform waits 24 h after a dispatch, then writes
   `no_result` (§6);
 - (e) the nonce is 128 random bits stored with the pass's claim in
-  `grade_dispatches`; a Regrade that dispatches sends a new one and the old
-  one is no longer accepted (§6);
-- (f) dispatches go through the `project.dispatch` queue at a configured
-  pace, by default one every 15 s per App installation (§6);
+  `grade_dispatches`; a new dispatch retires the previous nonce (§6);
+- (f) dispatches are paced at one every 15 s per App installation, a
+  constant (§6);
 - (g) the artifact's download is capped at 1 MiB, its one entry inflated to
   at most 256 KiB, counted while inflating (§6);
 - (h) an automatic row's rationale is its fraction (`7.5/10`); the `log` is
   staff-only, shown on the grading screen, never in the student payload (§5,
-  §9);
+  §8);
 - (i) the commit graph is read on demand through the App, cached as the
   repository's live state (F-PROJ-13), never stored (§8);
 - (j) the creation preview extends `GET …/classrooms/:id/projects/sources/:repo`
   with a `branch` query; creating in `criteria` mode with a file that does
   not parse is refused `422` with the parser's errors (§9);
 - (k) choosing `criteria` adds `.github/workflows/` and `criteria.yml` to
-  the protected list; the platform never inspects the workflow's content (§6, §9);
+  the protected list; the platform never inspects the workflow's content
+  (§6, §9);
 - (l) the migration converts only scores out of 6 (any other maximum was
   already read linearly), clamped to `[0, 5]`, and stores the released grade
   of the repositories of projects released before it (§11);
-- (m) a Regrade dispatches only when the pass has no accepted results; it
-  otherwise reuses them and re-runs the LLM pass (§6);
-- (n) a `criteria` project still shows no "final reviews dispatched" notice
-  (F-PROJ-21), though it now dispatches its graded runs.
+- (m) a project whose snapshot is v2 may reload a v2 file; creating a
+  project, or switching one to `criteria`, needs v3 (§11).
 
-Scope: how a project in the `criteria` grading mode gets its automatic
-evidence (the repository's CI, answering a dispatch of the platform), the
-format of its criteria and of the run's result, the inputs of its LLM pass,
-its git criteria, its creation panel; the removal of the runner's `project`
-action and of the `score_is_grade` scale, and the data migration they need.
-Projects in `auto` and `none` mode keep their behaviour (decision 7),
-except that the `score_is_grade` scale leaves every project (§11).
+Scope: how a project in the `criteria` grading mode whose snapshot is
+schema version 3 gets its automatic evidence (the repository's CI,
+answering a dispatch of the platform), the format of its criteria and of
+the run's result, the inputs of its LLM pass, its git criteria, its creation
+panel; the later removal of the v2 path (§10); the removal of the
+`score_is_grade` scale and its data migration (§11). Projects in `auto` and
+`none` mode keep their behaviour (decision 7), except that the
+`score_is_grade` scale leaves every project.
 
 Relations: **supersedes in part**
-[ADR-106](ADR-106-notation-des-projets-par-criteres.md): §1's refusal of
-commands that need the network; §2's kinds of criterion (`testsCriterion`,
-`test:`, `identityCriterion` and the schema v2 file); §3 whole (the
-evidence run in `apps/runner`, its overlay and its stored outputs); §4's
-inputs (the sources and the JUnit summary become the sources and the logs
-of `results.json`); §7's scale reference (`projectGrade` with
-`score_is_grade`); the rejected alternative "CI artifacts as evidence"; and
-the 2026-10-12 amendments ADR-106 made to [ADR-007](ADR-007-runner-self-hosted.md),
+[ADR-106](ADR-106-notation-des-projets-par-criteres.md), for a v3 snapshot
+now and whole once the v2 path is removed (L-06g): §1's refusal of commands
+that need the network; §2's kinds of criterion (`testsCriterion`, `test:`,
+`identityCriterion` and the schema v2 file); §3 whole (the evidence run in
+`apps/runner`, its overlay and its stored outputs); §4's inputs (the
+sources and the JUnit summary become the sources and the logs of
+`results.json`); §7's scale reference (`projectGrade` with
+`score_is_grade`); the rejected alternative "CI artifacts as evidence"; and,
+at L-06g, the 2026-10-12 amendments ADR-106 made to
+[ADR-007](ADR-007-runner-self-hosted.md),
 [ADR-016](ADR-016-runner-sur-vm-separee.md) point 2,
 [ADR-101](ADR-101-budget-du-runner.md) and the overlay use of
 [ADR-062](ADR-062-depot-de-distribution.md) addendum 1. Amends ADR-106
 §1's "never automatically" for the creation form only (§9). Amends D05's
 addendum (`docs/merge/08-decisions.md`, the scale preset); F-PROJ intro,
-F-PROJ-01, -08, -10, -11, -14, -21, -23 to -26 (docs/spec/02); N-SEC-21,
-N-DATA-03, N-DATA-05 (docs/spec/03); 05 §5.5, §5.7, §5.11; open questions
-43 and 52(a) (docs/spec/06). Proposes the wording of `CLAUDE.md`
-invariants 12 and 14 (§13) and adds `sig=` to invariant 15's redaction.
-Builds on [ADR-012](ADR-012-gel-note-deux-temps.md) (receipt time),
+F-PROJ-01, -03, -08, -10, -11, -14, -21, -23 to -26 (docs/spec/02);
+N-SEC-21, N-DATA-03, N-DATA-05 (docs/spec/03); 05 §5.5, §5.7, §5.11; open
+questions 43 and 52(a) (docs/spec/06). Proposes the wording of `CLAUDE.md`
+invariants 12, 14 and 15 (§13). Builds on
+[ADR-012](ADR-012-gel-note-deux-temps.md) (receipt time),
 [ADR-064](ADR-064-echeance-des-projets-baux.md) (effective deadline,
 freezes), [ADR-058](ADR-058-passerelle-llm.md) and
 [ADR-063](ADR-063-correction-llm.md) (as ADR-106 amended them, unchanged).
@@ -109,47 +104,49 @@ install what each lab needs. What the platform must own is not the
 toolchain but the format: what a criterion is, what a run's result is, and
 the checks that make a result the one the platform asked for.
 
-The only live projects in `criteria` mode are `labo-04-pcb` (published, 26
-repositories) and `labo-03-darts` (draft); `labo-00`, `-01`, `-02` and
-`linked-list-2` are released (decision 10).
+The live projects in `criteria` mode are `labo-04-pcb` (published, 26
+repositories, deadline 2026-11-01) and `labo-03-darts` (deadline
+2026-10-28); `labo-00`, `-01`, `-02` and `linked-list-2` are released.
 
 ## Decision
 
 ### 1. What stays of ADR-106
 
 Unchanged, and still ADR-106's: the opt-in `criteria` mode and when it may
-be switched (§1, without its network refusal); the snapshot read from the
-**distribution** at the switch, the publication, each sync and *Reload from
-source* (§2, the file now v3); the target commit — the last commit received
-before the repository's effective deadline that no bot pushed, at the
-checkpoint's date for a milestone (§3); the tarball fetch at that sha, its
-`token=` redaction, its size cap and the stripping of its top-level
-directory (§3), now for the LLM pass only; the no-evidence reasons
-`no_commit`, `archive_too_large` (the LLM's sources), `repo_missing`; the
-retention rule (§3, its object renamed in §6); the LLM pass, its purpose,
-budget, masking, failures and Regrade caps (§4, its inputs replaced in §7);
-the rows of `project_criterion_grades` and their states (§4); milestones as
-checkpoints and their locks (§5); the final pass at the definitive freeze
-and the report rendered on read (§6); the final-score order with the
-`criteria` source and its clamp (§7, without the scale preset); the grading
-screen and the release gate (§8); the student view (§9).
+be switched (§1, without its network refusal for a v3 snapshot); the
+snapshot read from the **distribution** at the switch, the publication,
+each sync and *Reload from source* (§2); the target commit — the last commit
+received before the repository's effective deadline that no bot pushed, at
+the checkpoint's date for a milestone (§3); the tarball fetch at that sha,
+its `token=` redaction, its size cap and the stripping of its top-level
+directory (§3), for the LLM pass only on the CI path; the no-evidence
+reasons `no_commit`, `archive_too_large` (the LLM's sources),
+`repo_missing`; the retention rule (§3, its object renamed in §6); the LLM
+pass, its purpose, budget, masking, failures and Regrade caps (§4, its
+inputs replaced in §7); the rows of `project_criterion_grades` and their
+states (§4); milestones as checkpoints and their locks (§5); the final pass
+at the definitive freeze and the report rendered on read (§6); the
+final-score order with the `criteria` source and its clamp (§7, without the
+scale preset); the grading screen and the release gate (§8); the student
+view (§9). A project whose snapshot is v2 keeps all of ADR-106, runner path
+included, until it is released (§11).
 
 ### 2. The platform publishes two schemas (decision 1)
 
 The platform is agnostic of the teacher's tools: it publishes the format of
-the criteria and of a run's result as two JSON Schemas (draft 2020-12),
-served by the web app as static files at stable URLs:
+the criteria and of a run's result as two JSON Schemas, served by the web
+app at stable URLs (production `https://quiz.chevallier.io/schemas/…`):
 
 - `/schemas/criteria-3.json` — `criteria.yml`, `schema_version: 3` (§3);
 - `/schemas/results-1.json` — `results.json` (§4).
 
-Their text lives in `packages/contracts/schemas/`, the one source; the web
-build copies them to its public directory. A test of `packages/contracts`
-runs the domain parser (§3) and the results validator (§4) and the JSON
-Schemas over the same fixtures and fails when they disagree. A new
-incompatible version gets a new file and number; a published file never
-changes meaning. StudentScore (`heig-tin-info/score`) is one
-implementation, not the definition.
+**One source**: the zod schemas of `packages/contracts` define both shapes;
+the build generates the published files from them (`z.toJSONSchema`) into
+the web app's public directory. `packages/domain` keeps only the semantics
+the shapes cannot say: the tree, the kinds, the handling of v2, the
+arithmetic. A new incompatible version gets a new file and number; a
+published file never changes meaning. StudentScore (`heig-tin-info/score`)
+is one implementation, not the definition.
 
 ### 3. `criteria.yml`, schema version 3 (normative)
 
@@ -183,11 +180,10 @@ criteria:           # a tree: a section is a mapping with an optional
   **numbers only**: v3 drops v2's percentages (`"50%"`), one semantics.
   A name (section or leaf) holds no dot and no space; a criterion's id is
   its dotted path. The totals keep ADR-106 §7's clamp.
-- **Versions**: a file with `schema_version: 2` is refused with one error
-  that names v3 and the schema's URL; there is no runtime support of v2. The
-  stored snapshots of released projects stay as data, never re-parsed.
-- **Parser**: the pure parser of `packages/domain` (ADR-106 §2) moves to v3
-  and returns the normalised tree or the errors with their paths.
+- **Versions**: where v3 is required (§11, choice m), a file with
+  `schema_version: 2` is refused with one error that names v3 and the
+  schema's URL. The stored snapshots of released projects stay as data,
+  never re-parsed.
 
 ### 4. `results.json`, the result of a run (normative)
 
@@ -202,10 +198,11 @@ criteria:           # a tree: a section is a mapping with an optional
 ```
 
 - `criteria`: an object keyed by criterion id (§3).
-- `score`: a string `n/m` matching
-  `^\s*\d+(\.\d+)?\s*/\s*\d+(\.\d+)?\s*$`, with `m > 0`.
-- `log`: an optional string, at most 8 KiB per criterion; the file is at
-  most 256 KiB.
+- `score`: a string `n/m` whose pattern excludes a zero denominator:
+  `^\s*\d+(\.\d+)?\s*/\s*(0*[1-9]\d*(\.\d+)?|0*\.\d*[1-9]\d*)\s*$`.
+- `log`: an optional string.
+- **Caps, platform-side and outside the schema**: a `log` over 8 KiB keeps
+  its last 8 KiB; a file over 256 KiB is refused whole.
 - The platform reads **only the `command` leaves** of the snapshot; an
   unknown id is ignored; a `command` leaf absent from the file, or whose
   entry is malformed, gets a 0-point `proposed` row with the reason
@@ -270,8 +267,9 @@ tag. GitHub runs a `repository_dispatch` workflow from the **default
 branch's head**, not from the target: the workflow checks out
 `client_payload.sha`, runs the tool, uploads **one** artifact named
 `results` holding `results.json`, and its `run-name` carries the nonce.
-Dispatches are **staggered** (choice f): the CI runners of ADR-007 are
-shared, and a freeze of 100 repositories must not queue 100 runs at once.
+Dispatches are **staggered**, one every 15 s per App installation (choice
+f): the CI runners of ADR-007 are shared, and a freeze of 100 repositories
+must not queue 100 runs at once.
 
 **Acceptance.** The platform accepts a run, found by its `workflow_run`
 event or by the reconciliation (ADR-011), only if all of these hold:
@@ -283,28 +281,33 @@ event or by the reconciliation (ADR-011), only if all of these hold:
   the App's);
 - its `run_attempt` is 1 (a re-run is never accepted);
 - its `run-name` carries the pass's nonce;
-- the protected files — all of `.github/workflows/`, `criteria.yml` and the
-  project's protected list — are the distribution's at the **target sha**
-  (choice c), which covers the code and the `criteria.yml` the tool read;
-- `.github/workflows/` is also the distribution's at the **default branch's
-  head** the run executed (its `head_sha`): GitHub runs a dispatched
-  workflow from there, and App commits — a restore, the deadline's empty
-  commit — or a later push may have moved it past the target.
+- at the **target sha**, `criteria.yml` and the project's protected list
+  are the distribution's (choice c): the code and the commands the tool
+  read;
+- at the run's `head_sha` (the default branch's head GitHub executed),
+  `.github/workflows/grading.yml` is the distribution's: App commits — a
+  restore, the deadline's empty commit — or a later push may have moved the
+  head past the target.
 
-**The checked-out sha** is verified through what ran, not through the
-run's log: the workflow that ran is the protected shim (checked at
-the default branch's head), which checks out `client_payload.sha` by a
-reusable workflow pinned by sha, and the nonce binds that payload to the
-platform's pass. `results.json` carries no sha of its own: a direct check
-would need a field the schema does not have.
+**The checked-out sha is bound, not observed**: the run's checkout of
+`client_payload.sha` is bound by its nonce and by the protected workflow
+that ran (checked at `head_sha`), whose reusable workflow is pinned by sha.
+`results.json` carries no sha of its own: a direct check would need a field
+the schema does not have.
+
+**Never a review.** A `quiz-grade` run fills no review slot and no `GRADE`
+slot: in the `criteria` mode the dispatched run is read only for its
+artifact, never ingested as a review (`runKind` classifies a
+`repository_dispatch` of `grading.yml` as a review today; that branch
+excludes it).
 
 **Reasons**, shown to the staff on the grading screen, never to the student
-(ADR-106 §9): `ci_tampered` (a protected file differs, at either sha);
-`no_result` (no accepted run within 24 h of the dispatch — choice d —, no
-artifact, an artifact refused below, a leaf missing or malformed);
-`ci_unavailable` (the repository is archived, Actions cannot run: nothing is
-dispatched, the teacher grades). With `no_commit` and `repo_missing` they
-are 0-point `proposed` rows on the automatic criteria of the pass.
+(ADR-106 §9): `ci_tampered` (a protected file differs); `no_result` (no
+accepted run within 24 h of the dispatch — choice d —, no artifact, an
+artifact refused below, a leaf missing or malformed); `ci_unavailable` (the
+repository is archived, Actions cannot run: nothing is dispatched, the
+teacher grades). With `no_commit` and `repo_missing` they are 0-point
+`proposed` rows on the automatic criteria of the pass.
 
 **The artifact.** Downloaded through the App, whose `actions: read`
 permission it already holds; no new App permission. GitHub answers with a
@@ -315,7 +318,7 @@ holds exactly one entry, `results.json`, at its root — no directory, no
 `..`, no absolute path, no link —, and is inflated under a byte budget that
 stops a zip bomb. It is copied as soon as the run is accepted: artifacts
 expire. The platform stores the validated `results.json` per (repository,
-pass, run).
+pass).
 
 **Forgeability** (accepted by the owner): the student's code runs in the
 same job as the tool and could rewrite `results.json`. The protected files
@@ -323,13 +326,13 @@ make the commands and the workflow the distribution's, not the student's
 code's behaviour; the score stays **indicative** until the teacher
 validates it (N-SEC-21), and the grading screen shows each criterion's log.
 
-**Regrade** (ADR-106 §4, caps unchanged): it reuses the pass's accepted
-results when they exist and re-runs the LLM pass; it dispatches anew, with a
-new nonce, only when the pass has none (choice m).
+**Regrade** (ADR-106 §4, caps unchanged) always dispatches anew, with a new
+nonce, then re-runs the LLM pass on the new results.
 
 **Push runs** stay indicative: the `GRADE` badge and the `auto` mode's
 ingestion (F-PROJ-10) are unchanged (decision 7); the platform never reads
-a push run's artifact.
+a push run's artifact. The project page keeps no "final reviews
+dispatched" notice for a `criteria` project (F-PROJ-21).
 
 **Retention** (N-DATA-03): the stored `results.json` replaces ADR-106's
 evidence files under the same rule — deleted with the project, or six
@@ -343,8 +346,9 @@ The LLM does static analysis only. Its inputs are:
   fetches itself at the target sha (§1);
 - the `log` fields of the accepted `results.json` for the pass's `command`
   leaves, **masked**: `maskNames` over the roster and the repository's
-  members (ADR-106 §4), plus the repository's name, which also masks the
-  runner's work path `/home/runner/work/<repo>/<repo>`.
+  members (ADR-106 §4), plus the organization's login and the repository's
+  name, which also masks the runner's work path
+  `/home/runner/work/<repo>/<repo>` (N-DATA-05).
 
 Never the full CI logs, never the commit metadata. The repository's content
 and the logs are **data, not instructions**: the system prompt says so, they
@@ -363,7 +367,8 @@ has one (`push_receipts`), the App's and the handed-out commits marked, and
 the author labelled **declared author** — git's author field, which anyone
 can write. Staff only; never sent to the model, never in the student
 payload. `identityCriterion` (#820) and its code (`commitIdentityPoints`,
-`commitIdentityRationale`, the evidence job's commit read) are removed.
+`commitIdentityRationale`, the evidence job's commit read) leave with the
+v2 path (§10).
 
 ### 9. The creation panel (decisions 8, 9)
 
@@ -379,50 +384,57 @@ transform (`student/` overlay, `.studentignore`, F-PROJ-02) and shows:
 - the **protected files** picked from the handed-out tree, by checkboxes; a
   directory protects its content. In `criteria` mode `.github/workflows/`
   and `criteria.yml` are **forced**: ticked and disabled, at creation and in
-  the settings afterwards; switching an existing project to `criteria` adds
-  them (choice k).
+  the settings afterwards, so the restore (F-PROJ-08) covers them; switching
+  an existing project to `criteria` adds them (choice k).
 
 The binding snapshot is still the distribution's (ADR-106 §2), taken once
 the distribution is built. On the project's settings, the segmented control
 "Où travaillent les étudiants" (work mode, F-PROJ-19) is aligned right like
 the other options (decision 9).
 
-### 10. Removals (decision 6)
+### 10. Removal of the v2 path (decision 6, as amended 2026-10-27)
 
-From the platform: `testsCriterion`, the `test:` leaves, `identityCriterion`,
-`buildCommand`, `testCommand`, `evidenceOutputs` (settings, columns,
-contracts, UI); the JUnit reading and the overlay of the evidence job;
-`apps/runner`'s `project` action, its ceilings (`RUNNER_PROJECT_TIMEOUT_MS`,
-`RUNNER_PROJECT_WORKDIR_MB`) and the `lab-c` image; the `score_is_grade`
-scale (`PROJECT_SCALE_KINDS` keeps `linear` only; the setting leaves the
-form). The rows of `project_criterion_grades` of released projects, those
-of the removed kinds included, are kept as data.
+A separate, last card (L-06g), merged only once `labo-04-pcb` and
+`labo-03-darts` are released, removes from the platform: `testsCriterion`,
+the `test:` leaves, `identityCriterion`, `buildCommand`, `testCommand`,
+`evidenceOutputs` (settings, columns, contracts, UI); the JUnit reading and
+the overlay of the evidence job; `apps/runner`'s `project` action, its
+ceilings (`RUNNER_PROJECT_TIMEOUT_MS`, `RUNNER_PROJECT_WORKDIR_MB`) and the
+`lab-c` image; the parsing of v2. The rows of `project_criterion_grades` and
+the snapshots of released projects, those of the removed kinds included,
+are kept as data.
 
-### 11. The data migration (decision 6, 10)
+### 11. Coexistence and the data migration (decisions 6, 10, as amended 2026-10-27)
 
-Migrated now, no coexistence discriminator:
+**Coexistence by the snapshot's schema version** (product owner,
+2026-10-27): `labo-04-pcb` (deadline 2026-11-01) and `labo-03-darts`
+(2026-10-28) are graded on the current model. A project whose stored
+snapshot is v2 keeps ADR-106's runner path unchanged; a v3 snapshot takes
+the CI path of this record. The schema version is the discriminator: no new
+column. A new project, and a switch to `criteria`, need v3; a v2 project
+may still reload a v2 file (choice m).
 
-- **`score_is_grade`**: in every project that uses it, each stored score
-  out of 6 (`g/6`, a mark) becomes its linear equivalent `(g − 1)/5`, clamped
-  to `[0, 5]`, so that `1 + 5 · p/max = g` (choice l): the current, frozen,
-  review, teacher and released scores and the runs' scores. A score whose
-  maximum is not 6 was already read linearly (`fellBack`) and is unchanged.
-  The project's scale becomes `linear`.
-- **Released grades are frozen**: for every repository of a project
+**`score_is_grade`** leaves every project, with L-06b:
+
+- in every project that uses it, each stored score out of 6 (`g/6`, a mark)
+  becomes its linear equivalent `(g − 1)/5`, clamped to `[0, 5]`, so that
+  `1 + 5 · p/max = g` (choice l): the current, frozen, review, teacher and
+  released scores and the runs' scores. A score whose maximum is not 6 was
+  already read linearly (`fellBack`) and is unchanged. The project's scale
+  becomes `linear`;
+- **released grades are frozen**: for every repository of a project
   released before the migration, the grade its release produced is stored
   and read in place of a recomputation (choice l), so that nothing moves
   what a student was given (as D05's addendum did at the import). A score
   changed afterwards still follows F-PROJ-14 ("changed after release").
-- **`labo-04-pcb` and `labo-03-darts`**: their sources move to v3 and the
-  shim; the snapshot is reloaded; `labo-04-pcb`'s 26 repositories receive
-  the new protected files as App restore commits (L-06f).
-- **`labo-00`, `-01`, `-02`, `linked-list-2`** (released): their rows,
-  snapshots and stored evidence stay as data, under their retention.
 
 A live project that used `score_is_grade` in `auto` mode and whose CI still
 emits a mark (StudentScore 0.7.5) would have its next scores misread as
 points out of 6: L-06b lists those projects before it migrates, and L-06f
 moves their CI to StudentScore 1.0.
+
+`labo-00`, `-01`, `-02` and `linked-list-2` (released) keep their rows,
+snapshots and stored evidence as data, under their retention.
 
 ### 12. The `GRADE` contract
 
@@ -435,28 +447,34 @@ preset read.
 
 ### 13. Invariants
 
-`CLAUDE.md`'s wording changes with L-06b, the PR that removes the action:
+`CLAUDE.md`'s wording changes with the cards named:
 
-- **Invariant 12**: its sentence on the `project` action (ADR-106 §3) is
-  deleted; the runner receives no archive.
-- **Invariant 14**, its second sentence becomes: "A project's graded commit
-  is the sha the server chose from its push receipts, sent in its dispatch
-  and verified on the run it accepts (ADR-119 §6); its sources reach the
-  model only from the server's own fetch at that sha, never uploaded by a
-  client."
-- **Invariant 15** gains `sig=` beside `token=` in its redaction, for the
-  artifact's blob URL.
+- **Invariant 12** (L-06g): its sentence on the `project` action becomes a
+  conditional rule, since open question 52(a) is open again: "An archive,
+  if any action takes one, is ONE size-capped tar on stdin unpacked inside
+  the tmpfs with every entry sanitized: relative, no `..`, no absolute
+  path, no symbolic or hard link, no device — else the whole archive is
+  refused; its commands are fixed argv arrays, never a shell string; on the
+  way out a link is never followed and only regular text files are
+  returned."
+- **Invariant 14** (L-06b), its second sentence becomes: "A project's
+  graded commit is the sha the server chose from its push receipts, sent in
+  its dispatch and bound by its nonce and the protected workflow (ADR-119
+  §6); its sources reach the model only from the server's own fetch at that
+  sha, never uploaded by a client."
+- **Invariant 15** (L-06b) gains `sig=` beside `token=` in its redaction,
+  for the artifact's blob URL.
 
 10, 11 and 13 are unchanged.
 
-Delivery: task cards L-06a to L-06f (`docs/merge/09-tasks.md`,
+Delivery: task cards L-06a to L-06g (`docs/merge/09-tasks.md`,
 `PROGRESS.md`).
 
 ## Consequences
 
 - The platform owns the format, not the toolchain: a lab in any language
-  runs what its CI installs; the runner keeps question code only, and its
-  attack surface loses the archive form.
+  runs what its CI installs; once L-06g lands the runner keeps question code
+  only, and its attack surface loses the archive form.
 - Every automatic check is a command with a fraction, so an automatic
   criterion is no longer limited to JUnit shares.
 - The evidence comes from a run in the student's repository, where the
@@ -467,9 +485,8 @@ Delivery: task cards L-06a to L-06f (`docs/merge/09-tasks.md`,
 - The graded run depends on GitHub Actions: an archived repository, an
   organization with Actions off, a full CI queue or an expired artifact
   yields a reason and a teacher's row, never a silent zero.
-- A file added under `.github/workflows/` before the deadline makes the run
-  `ci_tampered`, and the restore cannot remove it (choice c): the teacher
-  grades that repository.
+- Two paths coexist until the last v2 project is released; the schema
+  version of each snapshot decides, and L-06g ends it.
 - The LLM sees less (logs of the commands, not full outputs) and nothing of
   the history; git criteria cost the teacher a look at the graph.
 - The scale preset leaves; projects that used it read linearly, with
@@ -485,12 +502,18 @@ Delivery: task cards L-06a to L-06f (`docs/merge/09-tasks.md`,
   only the masked `log` fields of `results.json` go.
 - **Keep `score_is_grade`, hidden from the form**: rejected by the owner
   (decision 6); `GRADE` has one reading, points out of a maximum.
-- **A discriminator to run v2 and v3 side by side**: rejected by the owner
-  (decision 10) — the two live projects are migrated now instead.
+- **Migrate the two live projects now**: rejected by the owner on
+  2026-10-27 — their deadlines are days away; they finish on the current
+  model.
+- **A coexistence discriminator column**: not needed — the snapshot's
+  schema version already says which path a project takes.
 - **A `quiz.yml` configuration file in the repository**: not now — the owner
   is not convinced; `criteria.yml` carries the commands.
 - **A separate job computing the results from raw artifacts** (JUnit,
   coverage) uploaded by the lab's job: rejected — it imposes a structure on
   the teacher's tools; a command's fraction is enough.
+- **Hand-written JSON Schemas beside the zod schemas**: rejected (lean
+  review) — two sources and a test to keep them in step; the published
+  files are generated.
 - **CI artifacts as evidence** (ADR-106's rejected alternative) is now the
   decision: the owner accepts the forgeability against the toolchain cost.

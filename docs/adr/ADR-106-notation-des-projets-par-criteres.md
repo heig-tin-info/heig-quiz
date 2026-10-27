@@ -12,7 +12,9 @@ check (F-GH-03) is dropped outright, not course by course; the CI's
 `llm-review` tier still retires course by course.
 
 **Superseded in part by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
-(2026-10-26, product owner):** §1's network refusal; §2's kinds of
+(2026-10-26, product owner), for a project whose snapshot is schema
+version 3, and whole once the v2 path is removed (L-06g, after the last v2
+project's release; product owner, 2026-10-27):** §1's network refusal; §2's kinds of
 criterion (`testsCriterion`, `test:`, `identityCriterion`) and its v2 file;
 §3 whole; §4's inputs (now the sources and the masked `log` fields of
 `results.json`); §7's scale reference (`score_is_grade` removed); the

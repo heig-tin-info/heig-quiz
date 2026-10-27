@@ -21,8 +21,9 @@ feedback; the `llm-review` tier is decommissioned progressively (M3-14f).
 A project in `auto` mode is unchanged.
 
 **Amended 2026-10-26 by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)**
-(scope: the amendment above, superseded): a project in the `criteria` mode
-gets its automatic evidence from these runners again — a `quiz-grade`
+(scope: the amendment above, superseded for a v3 snapshot, and whole once
+the v2 path is removed): a project in the `criteria` mode gets its
+automatic evidence from these runners again — a `quiz-grade`
 dispatch of the platform, staggered because the runners are shared; its
 review stays the platform's LLM pass.
 

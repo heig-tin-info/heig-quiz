@@ -27,8 +27,8 @@ budget for it is that ceiling plus 60 s. Its jobs run on the grading
 priority, paced so that a pass never fills the runner's queue.
 
 **Amended 2026-10-26 by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
-§10** (scope: the amendment above, superseded): the `project` action and
-its two ceilings are removed.
+§10** (scope: the amendment above, superseded once the v2 path is
+removed): the `project` action and its two ceilings leave with card L-06g.
 
 ## Context
 
