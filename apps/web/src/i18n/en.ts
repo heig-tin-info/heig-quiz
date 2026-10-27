@@ -1385,6 +1385,9 @@ export const en = {
   "time.left.minSec": "{m} min {s} s",
   "time.left.seconds": "{n} s",
   "time.closesIn": "closes in {time}",
+  // A deadline field's shortcut (ui/dates.tsx `EndOfWeek`).
+  "time.endOfWeek": "End of week",
+  "time.endOfWeek.tip": "Set to {when}",
 
   // --- Live primitives (ui/live.tsx) ---
   "countdown.remaining": "{time} remaining",

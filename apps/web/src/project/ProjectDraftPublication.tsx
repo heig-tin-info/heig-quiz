@@ -141,6 +141,7 @@ export function ProjectDraftPublication({
                 key={scheduled ? "scheduled-deadline" : "manual-deadline"}
                 id={FIELD_ID.deadline}
                 label={t("project.deadline")}
+                endOfWeek
                 disabled={held || !can("deadlineAt")}
                 value={view.deadlineAt}
                 onCommit={(value) => change({ type: "deadline", at: value })}

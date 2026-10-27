@@ -32,6 +32,7 @@ import {
   Card,
   cx,
   DateRangeField,
+  EndOfWeek,
   FieldError,
   fromLocalInput,
   fieldErrorProps,
@@ -161,6 +162,7 @@ function invalid(missing: ReadonlySet<TimingField>, field: TimingField) {
 export function DateField({
   value,
   onCommit,
+  endOfWeek = false,
   ...field
 }: {
   id: string;
@@ -170,24 +172,39 @@ export function DateField({
   "aria-describedby"?: string;
   /** What the date means, one line under the input (the project page's deadline). */
   description?: ReactNode;
+  /** A deadline: the "End of week" shortcut on the label line, committed at once. */
+  endOfWeek?: boolean;
   value: string | null;
   /** Writes the value; `reset` is for a refusal, to show the stored value again. */
   onCommit: (value: string | null, reset: () => void) => void;
 }) {
   const [local, setLocal] = useState(() => toLocalInput(value));
+  const commit = (next: string) => {
+    if (next !== toLocalInput(value)) {
+      onCommit(fromLocalInput(next), () => setLocal(toLocalInput(value)));
+    }
+  };
   return (
     <Field
       {...field}
+      hint={
+        endOfWeek ? (
+          <EndOfWeek
+            disabled={field.disabled}
+            onPick={(iso) => {
+              const next = toLocalInput(iso);
+              setLocal(next);
+              commit(next);
+            }}
+          />
+        ) : undefined
+      }
       type="datetime-local"
       size="sm"
       width="w-52"
       value={local}
       onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => {
-        if (local !== toLocalInput(value)) {
-          onCommit(fromLocalInput(local), () => setLocal(toLocalInput(value)));
-        }
-      }}
+      onBlur={() => commit(local)}
     />
   );
 }
@@ -396,6 +413,7 @@ export function TimingStep({
           {...invalid(missing, field)}
           label={label}
           description={description}
+          endOfWeek={field === "closesAt"}
           disabled={locked}
           value={value}
           onCommit={(next, reset) => patch.mutate({ [field]: next }, { onError: reset })}

@@ -220,6 +220,7 @@ function DeadlineTile({
           id={DEADLINE_ID}
           label={t("project.deadline.change")}
           description={deadlineDesc(project, foreignZone(), t)}
+          endOfWeek
           disabled={busy || !project.editable.includes("deadlineAt")}
           value={project.deadlineAt}
           onCommit={(value, reset) => void commitDeadline(value, reset)}

@@ -1374,6 +1374,8 @@ export const fr: Record<keyof Dict, string> = {
   "time.left.minSec": "{m} min {s} s",
   "time.left.seconds": "{n} s",
   "time.closesIn": "ferme dans {time}",
+  "time.endOfWeek": "Fin de semaine",
+  "time.endOfWeek.tip": "Fixer au {when}",
 
   // --- Live primitives (ui/live.tsx) ---
   "countdown.remaining": "il reste {time}",

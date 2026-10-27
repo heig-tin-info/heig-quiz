@@ -20,6 +20,7 @@ import {
   Card,
   EditableTitle,
   EmptyState,
+  EndOfWeek,
   Field,
   FieldError,
   fieldErrorProps,
@@ -571,6 +572,7 @@ function OpenDialog({
           <Field
             id={OPEN_UNTIL_ID}
             label={t("groups.open.until")}
+            hint={<EndOfWeek onPick={(iso) => setUntil(toLocalInput(iso))} />}
             type="datetime-local"
             width="w-56"
             min={toLocalInput(new Date().toISOString())}
