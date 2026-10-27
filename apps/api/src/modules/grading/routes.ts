@@ -149,11 +149,12 @@ export async function gradingPlugin(app: FastifyInstance) {
     body: ManualGradingBody,
     now: Date,
   ) {
-    await service.assertPointsInRange(app.db, evaluation, cell, body.points);
+    // An essay's criteria derive a total within range (ADR-118 §6).
+    if (body.points !== undefined) await service.assertPointsInRange(app.db, evaluation, cell, body.points);
     const row = await service.manualOverride(
       app.db,
       cell,
-      { points: body.points, comment: body.comment },
+      { points: body.points, criteria: body.criteria, comment: body.comment },
       req.user!.id,
       now,
     );

@@ -30,6 +30,14 @@ import {
   Section,
 } from "../ui";
 import { AiJustification } from "./AiJustification";
+import {
+  CriteriaFields,
+  criteriaBody,
+  essayCriteriaOf,
+  initialCriteriaPoints,
+  invalidCriteria,
+  ValidatedBreakdown,
+} from "./EssayCriteria";
 import { RowMarks } from "./GradingTable";
 import { GradingHistory } from "./GradingHistory";
 import { gradingStateLabel, machineReason, sourceLabel, whoOf } from "./labels";
@@ -263,7 +271,7 @@ function EntryPanel({
     : entry.answerId
       ? `/app/api/answers/${entry.answerId}/gradings`
       : null;
-  const save = useMutation<Grading, unknown, { points: number; comment: string }>({
+  const save = useMutation<Grading, unknown, AdjustBody>({
     mutationFn: (body) => api(path!, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       invalidate();
@@ -356,6 +364,7 @@ function EntryPanel({
         {/* An LLM's why: the teacher's alone, stripped from every student
             payload (ADR-045, ADR-063, open question 27). */}
         <AiJustification details={grading?.details ?? null} />
+        <ValidatedBreakdown details={grading?.details ?? null} />
         {ownExplanation ? (
           <NotePanel eyebrow={t("grading.explanation")}>
             <MarkdownView size="sm" source={ownExplanation} />
@@ -384,11 +393,15 @@ function EntryPanel({
   );
 }
 
+/** The override's body: the points, or an essay's points per criterion (ADR-118 §6). */
+type AdjustBody = { comment: string } & ({ points: number } | { criteria: { id: string; points: number }[] });
+
 /**
  * F-GRADE-05: the teacher's own points, with their MANDATORY comment. The
  * grading it replaces is not deleted — the server supersedes it, and the
  * history under this form is where it goes on living. The check is quiet
- * until the first submit, then marks what is wrong.
+ * until the first submit, then marks what is wrong. An essay with criteria
+ * is graded criterion by criterion, its total derived (ADR-118 §6).
  */
 function AdjustForm({
   id,
@@ -406,10 +419,13 @@ function AdjustForm({
   minPoints: number;
   /** The AI's, which the teacher may copy into the comment and edit (ADR-063 §7). */
   justification: string | null;
-  onSave: (body: { points: number; comment: string }) => void;
+  onSave: (body: AdjustBody) => void;
   error: ReactNode;
 }) {
   const t = useT();
+  const [criteria] = useState(() => essayCriteriaOf(entry.solution));
+  const graded = criteria.length > 0;
+  const [values, setValues] = useState(() => initialCriteriaPoints(criteria, entry.grading?.details ?? null));
   const [points, setPoints] = useState(() =>
     entry.grading ? formatPoints(entry.grading.points) : "0",
   );
@@ -419,10 +435,11 @@ function AdjustForm({
   const [touched, setTouched] = useState(false);
   // ADR-110: a typed grade holds the tab on its build until it is saved
   // (docked as a pane, it has no sheet to hold it).
-  useHoldChanged({ points, comment });
+  useHoldChanged({ points, values, comment });
   const value = Number(points.replace(",", "."));
-  const pointsInvalid =
-    points.trim() === "" || !Number.isFinite(value) || value < minPoints || value > maxPoints;
+  const pointsInvalid = graded
+    ? invalidCriteria(criteria, maxPoints, values).size > 0
+    : points.trim() === "" || !Number.isFinite(value) || value < minPoints || value > maxPoints;
   const commentInvalid = comment.trim() === "";
   const range = { min: formatPoints(minPoints), max: formatPoints(maxPoints) };
   const pointsId = useId();
@@ -439,26 +456,41 @@ function AdjustForm({
         e.preventDefault();
         setTouched(true);
         if (pointsInvalid || commentInvalid) return;
-        onSave({ points: value, comment: comment.trim() });
+        onSave(
+          graded
+            ? { criteria: criteriaBody(criteria, values), comment: comment.trim() }
+            : { points: value, comment: comment.trim() },
+        );
       }}
     >
       {/* The points over their maximum, one pill (F-PROJ-25 as amended):
           the maximum is its suffix, so the label line says the range only
           when the floor is not 0 (negative marking). */}
-      <div className="flex flex-col gap-1.5">
-        <FieldLabel htmlFor={pointsId} hint={minPoints < 0 ? t("grading.override.range", range) : undefined}>
-          {t("grading.override.points")}
-        </FieldLabel>
-        <PointsPill
-          id={pointsId}
-          bounds={{ max: maxPoints }}
-          autoFocus
-          value={points}
-          onChange={(e) => setPoints(e.target.value)}
-          {...fieldErrorProps(pointsId, showPointsError)}
+      {graded ? (
+        <CriteriaFields
+          criteria={criteria}
+          itemPoints={maxPoints}
+          values={values}
+          onChange={(id, text) => setValues((v) => ({ ...v, [id]: text }))}
+          details={entry.grading?.details ?? null}
+          showErrors={touched}
         />
-        <FieldError id={pointsId}>{showPointsError ? t("grading.override.pointsInvalid", range) : null}</FieldError>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <FieldLabel htmlFor={pointsId} hint={minPoints < 0 ? t("grading.override.range", range) : undefined}>
+            {t("grading.override.points")}
+          </FieldLabel>
+          <PointsPill
+            id={pointsId}
+            bounds={{ max: maxPoints }}
+            autoFocus
+            value={points}
+            onChange={(e) => setPoints(e.target.value)}
+            {...fieldErrorProps(pointsId, showPointsError)}
+          />
+          <FieldError id={pointsId}>{showPointsError ? t("grading.override.pointsInvalid", range) : null}</FieldError>
+        </div>
+      )}
       <div className="space-y-1.5">
         <Textarea
           label={t("grading.override.comment")}

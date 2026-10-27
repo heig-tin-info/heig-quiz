@@ -235,6 +235,7 @@ by the product owner on 2026-10-20.
 | Score of a project (CI points) | score | score | note, marque |
 | Grade scale | grade scale | barème | échelle, politique de notation |
 | Grading policy (MCQ, categorize) | grading policy | règle de notation | politique |
+| Criterion of an essay (earns a share of its points, by its weight) | criterion | critère | — |
 | All-or-nothing policy | all or nothing | tout ou rien | exact |
 | Navigation checkpoint of an evaluation (closes what precedes it) | checkpoint | verrou | jalon, étape, séparation de section |
 | Review checkpoint of a project | checkpoint | point de contrôle | jalon |

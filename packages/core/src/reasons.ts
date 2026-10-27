@@ -123,3 +123,45 @@ export function justificationOf(details: unknown): string | null {
   }
   return null;
 }
+
+/**
+ * What a criterion's id may hold (ADR-118): letters, digits, `_` and `-`,
+ * a plain JSON property name, since the model's reply is keyed by it. One
+ * pattern for the question's config and the grading routes that name it.
+ */
+export const CRITERION_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
+
+/**
+ * Where a grading's `details` keep the VALIDATED points of an essay's
+ * criteria (ADR-118 §6, amendment of 2026-10-27): written when a teacher
+ * validates or overrides a grading of an item whose criteria every entry
+ * names, in the criteria's order, the titles snapshotted from the item's
+ * version, the points on the item's scale. Distinct from {@link AI_KEY}:
+ * never a weight, a prompt, a sentence or a model. A student reads it only
+ * under a shown key (the type's `studentDetails`).
+ */
+export const BREAKDOWN_KEY = "breakdown";
+
+export interface BreakdownEntry {
+  id: string;
+  title: string;
+  points: number;
+  maxPoints: number;
+}
+
+const isBreakdownEntry = (e: unknown): e is BreakdownEntry =>
+  e !== null &&
+  typeof e === "object" &&
+  typeof (e as BreakdownEntry).id === "string" &&
+  typeof (e as BreakdownEntry).title === "string" &&
+  typeof (e as BreakdownEntry).points === "number" &&
+  typeof (e as BreakdownEntry).maxPoints === "number";
+
+/** `details.breakdown`, when a validation wrote one. */
+export function breakdownOf(details: unknown): BreakdownEntry[] | null {
+  if (details && typeof details === "object" && BREAKDOWN_KEY in details) {
+    const list = (details as Record<string, unknown>)[BREAKDOWN_KEY];
+    if (Array.isArray(list) && list.every(isBreakdownEntry)) return list;
+  }
+  return null;
+}

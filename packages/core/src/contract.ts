@@ -8,7 +8,7 @@
  */
 import type { z } from "zod";
 import type { AnswerGenerator, AssistTextLabel } from "./generate.js";
-import type { LlmGradeRequest } from "./llm.js";
+import type { LlmGradeRequest, LlmRequestCriterion } from "./llm.js";
 import type { InteractiveOutcome, RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
 
 /**
@@ -475,6 +475,15 @@ export interface QuestionTypeServer<
    * fit for a student.
    */
   studentSolution?(solution: TSolution, config: TConfig): TSolution | null;
+
+  /**
+   * The structured grading criteria of `config` (ADR-118), in their order:
+   * what a teacher grades criterion by criterion and what a validated
+   * grading's breakdown (`BREAKDOWN_KEY`, `@quiz/core/reasons`) is checked
+   * against. Pure. Omitting it, or an empty list, means the type is graded
+   * by one total.
+   */
+  gradingCriteria?(config: TConfig): readonly LlmRequestCriterion[];
 
   /**
    * Whether this config holds an answer key at all. Only a config accepted

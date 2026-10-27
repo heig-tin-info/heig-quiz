@@ -744,6 +744,119 @@ describe("GradingPanel — adjusting an answer (F-GRADE-05)", () => {
   });
 });
 
+describe("GradingPanel — an essay graded by criteria (ADR-118 §6)", () => {
+  const ESSAY_ITEM = { id: "i1", position: 0, internalName: "essay", type: "rich", points: 3 };
+  const essay = (grading: Partial<Parameters<typeof makeGrading>[0]>) =>
+    makeEntry({
+      attemptId: "a1",
+      answer: { text: "The stack grows down." },
+      student: { prompt: "Explain the stack.", format: "plain" },
+      solution: {
+        rubric: "",
+        criteria: [
+          { id: "thesis", title: "Thesis", weight: 2, prompt: "States it." },
+          { id: "sources", title: "Sources", weight: 1, prompt: "" },
+        ],
+      },
+      grading: makeGrading({ id: "g-a1", attemptId: "a1", maxPoints: 3, ...grading }),
+    });
+  const detail = makeEvaluationDetail();
+  const essayRoutes = (entry: GradingEntry, over: Record<string, unknown> = {}) =>
+    routes([entry], {
+      [`GET ${EVAL}`]: ok({
+        ...detail,
+        items: detail.items.map((i) => (i.id === "i1" ? { ...i, type: "rich", points: 3 } : i)),
+      }),
+      [`GET ${QUEUE("i1")}`]: ok(makeQueue([entry], { items: [ESSAY_ITEM] })),
+      ...over,
+    });
+
+  it("edits each criterion within its maximum, derives the total, and sends the criteria", async () => {
+    const entry = essay({
+      points: 2,
+      state: "proposed",
+      source: "llm",
+      details: {
+        reason: "llm",
+        chars: 21,
+        justification: "Fair.",
+        ai: {
+          model: "claude-sonnet-5-5",
+          criteria: [
+            { id: "thesis", criterion: "Thesis", points: 1.5, maxPoints: 2, comment: "Clear thesis." },
+            { id: "sources", criterion: "Sources", points: 0.5, maxPoints: 1, comment: "One source." },
+          ],
+        },
+      },
+    });
+    const { calls } = mockFetch(essayRoutes(entry, { [`POST /app/api/gradings/g-a1/override`]: ok(makeGrading()) }));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await screen.findByRole("table", { name: "Answers to question 1" });
+    await userEvent.click(rowOf("a1"));
+    const panel = await screen.findByRole("dialog");
+    await userEvent.click(within(panel).getByRole("button", { name: "Adjust" }));
+
+    // One pill per criterion, from the proposal, bounded by its share; no total to type.
+    const form = within(panel).getByRole("group", { name: "Criteria" });
+    const thesis = within(form).getByRole("spinbutton", { name: "Thesis", description: "points out of 2" });
+    const sources = within(form).getByRole("spinbutton", { name: "Sources", description: "points out of 1" });
+    expect(thesis).toHaveValue(1.5);
+    expect(within(form).getByText("Weight 2")).toBeInTheDocument();
+    expect(within(form).getByText("Clear thesis.")).toBeInTheDocument();
+    expect(within(panel).queryByRole("spinbutton", { name: "Points" })).toBeNull();
+    const total = within(form).getByRole("status", { name: "Total" });
+    expect(total).toHaveTextContent("2 / 3");
+
+    await userEvent.clear(thesis);
+    await userEvent.type(thesis, "2");
+    await userEvent.clear(sources);
+    await userEvent.type(sources, "1.5");
+    expect(total).toHaveTextContent("3 / 3");
+    await userEvent.type(within(panel).getByRole("textbox", { name: /Comment/ }), "Read again.");
+    await userEvent.click(within(panel).getByRole("button", { name: "Save and validate" }));
+    expect(await within(form).findByText("Between 0 and 1 points.")).toBeInTheDocument();
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+
+    await userEvent.clear(sources);
+    await userEvent.type(sources, "0.75");
+    expect(total).toHaveTextContent("2.75 / 3");
+    await userEvent.click(within(panel).getByRole("button", { name: "Save and validate" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url === "/app/api/gradings/g-a1/override")?.body).toEqual({
+        criteria: [
+          { id: "thesis", points: 2 },
+          { id: "sources", points: 0.75 },
+        ],
+        comment: "Read again.",
+      }),
+    );
+  });
+
+  it("shows a validated grading's points per criterion", async () => {
+    const entry = essay({
+      points: 2.5,
+      state: "validated",
+      source: "manual",
+      details: {
+        manual: true,
+        breakdown: [
+          { id: "thesis", title: "Thesis", points: 2, maxPoints: 2 },
+          { id: "sources", title: "Sources", points: 0.5, maxPoints: 1 },
+        ],
+      },
+    });
+    mockFetch(essayRoutes(entry));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await screen.findByRole("table", { name: "Answers to question 1" });
+    await userEvent.click(rowOf("a1"));
+    const panel = await screen.findByRole("dialog");
+
+    expect(within(panel).getByText("Validated points")).toBeInTheDocument();
+    const rows = within(panel).getAllByRole("row").filter((r) => /Thesis|Sources/.test(r.textContent ?? ""));
+    expect(rows.map((r) => r.textContent)).toEqual(["Thesis2 / 2", "Sources0.5 / 1"]);
+  });
+});
+
 describe("GradingPanel — how a question counts (ADR-108)", () => {
   const COUNTING = `PUT ${EVAL}/items/i1/counting`;
   const base = makeEvaluationDetail();

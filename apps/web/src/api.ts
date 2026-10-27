@@ -159,6 +159,8 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   // ADR-056 §5 and §10: a regrade across other variables, a poll on a parameterized question.
   variables_changed: "error.variablesChanged",
   poll_parameterized: "error.pollParameterized",
+  // ADR-118 §6: points per criterion that no longer match the essay's criteria.
+  criteria_invalid: "error.criteriaInvalid",
   // A per-minute guard (`budget.ts`): the test e-mail, the AI connection test.
   rate_limited: "error.rateLimited",
   // ADR-058: the AI settings without a master key, and a cap over its ceiling.

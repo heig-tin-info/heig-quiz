@@ -34,7 +34,16 @@ import type {
   GradingState,
   Verdict,
 } from "@quiz/contracts";
-import { reasonOf, RUNNER_WAITING_REASONS } from "@quiz/contracts";
+import {
+  AI_KEY,
+  aiOf,
+  BREAKDOWN_KEY,
+  JUSTIFICATION_KEY,
+  reasonOf,
+  RUNNER_WAITING_REASONS,
+  type BreakdownEntry,
+  type CriterionPointsBody,
+} from "@quiz/contracts";
 import {
   attemptTotal,
   countsForStudent,
@@ -46,13 +55,24 @@ import {
   overridePointsRange,
   round2,
   scoresNegatively,
+  type DeclaredCriterion,
   type ItemCounting,
   type StoodItem,
+  validatedBreakdown,
 } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
-import { answers, attempts, auditLog, evaluationItems, gradings, questionVersions, users } from "../../db/schema.js";
+import {
+  answers,
+  attempts,
+  auditLog,
+  evaluationItems,
+  gradings,
+  questions,
+  questionVersions,
+  users,
+} from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 import {
   flagReleasedEvaluationsOf,
@@ -69,6 +89,7 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import { solutionViewOf, studentViewOf } from "../live/studentView.js";
+import { typeOf } from "../pool/config.js";
 import { formattedValues, sameTable } from "@quiz/domain/parameters";
 import {
   explanationOrNull,
@@ -115,6 +136,10 @@ const REFUSALS = {
   // Audit L2: an item the model grades is re-graded at most
   // `LLM_REGRADES_PER_ITEM_PER_DAY` times a day; the code is the gateway's.
   llm_budget_exhausted: [429, "this item was re-graded by the model as often as a day allows: try again tomorrow"],
+  // ADR-118 §6: the points per criterion name every criterion of the item
+  // exactly once, each within its maximum; an essay with criteria is graded
+  // by them, never by a bare total; an item without criteria takes none.
+  criteria_invalid: [422, "the points per criterion do not match the item's criteria"],
 } satisfies Record<string, Refusal>;
 
 export class GradingError extends refusalClass("GradingError", REFUSALS) {}
@@ -772,63 +797,181 @@ export async function assertPointsInRange(
 /**
  * F-GRADE-05. The comment is not optional and the previous grading is kept as
  * `superseded`: a manual correction must always be explainable afterwards.
+ *
+ * An essay with criteria (ADR-118 §6) is overridden criterion by criterion:
+ * the total is derived from `input.criteria`, and the details of the grading
+ * in force — the model's proposal, `ai` and `justification` — survive beside
+ * the new breakdown. Every other item writes `{ manual: true }`.
  */
 export async function manualOverride(
   db: Db,
   target: { attemptId: string; itemId: string; answerId: string | null; maxPoints: number },
-  input: { points: number; comment: string; details?: unknown },
+  input: { points?: number | undefined; criteria?: readonly CriterionPointsBody[] | undefined; comment: string },
   userId: string,
   now: Date,
 ): Promise<GradingRecord> {
   if (input.comment.trim().length === 0) throw new GradingError("comment_required");
+  const declared = await declaredCriteria(db, target.itemId);
+  const graded = criteriaOutcome(declared, target.maxPoints, input, null);
+  const details = graded.breakdown
+    ? {
+        ...teacherKept((await gradingInForce(db, target.attemptId, target.itemId))?.details),
+        manual: true,
+        [BREAKDOWN_KEY]: graded.breakdown,
+      }
+    : { manual: true };
   return writeGrading(db, {
     attemptId: target.attemptId,
     itemId: target.itemId,
     answerId: target.answerId,
-    points: input.points,
+    points: graded.points ?? input.points ?? 0,
     maxPoints: target.maxPoints,
     source: "manual",
     state: "validated",
-    details: input.details ?? { manual: true },
+    details,
     comment: input.comment.trim(),
     gradedBy: userId,
     now,
   });
 }
 
+/** What an override keeps of the details it replaces: the model's proposal, for the teacher. */
+function teacherKept(details: unknown): Record<string, unknown> {
+  if (!details || typeof details !== "object") return {};
+  const kept: Record<string, unknown> = {};
+  for (const key of [AI_KEY, JUSTIFICATION_KEY]) {
+    if (key in details) kept[key] = (details as Record<string, unknown>)[key];
+  }
+  return kept;
+}
+
+/** The newest grading of a cell that is not superseded: what a correction replaces. */
+async function gradingInForce(db: Db, attemptId: string, itemId: string): Promise<GradingRecord | null> {
+  const [row] = await db
+    .select()
+    .from(gradings)
+    .where(and(eq(gradings.attemptId, attemptId), eq(gradings.itemId, itemId), ne(gradings.state, "superseded")))
+    .orderBy(...NEWEST_FIRST)
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * The criteria an item is graded by (ADR-118 §6): its type's
+ * `gradingCriteria` of the version it holds, as written. None for a type
+ * without the hook, an essay without criteria, or a config that no longer
+ * reads.
+ */
+async function declaredCriteria(db: Db, itemId: string): Promise<readonly DeclaredCriterion[]> {
+  const [row] = await db
+    .select({ type: questions.type, version: questionVersions })
+    .from(evaluationItems)
+    .innerJoin(questionVersions, eq(evaluationItems.questionVersionId, questionVersions.id))
+    .innerJoin(questions, eq(questionVersions.questionId, questions.id))
+    .where(eq(evaluationItems.id, itemId))
+    .limit(1);
+  return row ? criteriaOfVersion(row.type, row.version) : [];
+}
+
+function criteriaOfVersion(type: string, version: JoinedItem["version"]): readonly DeclaredCriterion[] {
+  const hook = typeOf(type).gradingCriteria;
+  if (!hook) return [];
+  try {
+    return hook(writtenConfig(type, version).config);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * What a correction makes of an item's criteria (ADR-118 §6). With
+ * criteria, the teacher's `input.criteria` give the total and the breakdown
+ * (`validatedBreakdown`), a bare total is refused; without the teacher's,
+ * a proposal whose every criterion names one of the item's is copied into
+ * the breakdown and its total kept — a free rubric or an id that matches
+ * nothing gives no breakdown, never a partial one. Without criteria,
+ * `input.criteria` is refused and nothing changes.
+ */
+function criteriaOutcome(
+  declared: readonly DeclaredCriterion[],
+  maxPoints: number,
+  input: { points?: number | undefined; criteria?: readonly CriterionPointsBody[] | undefined },
+  details: unknown,
+): { points?: number; breakdown?: BreakdownEntry[] } {
+  if (declared.length === 0) {
+    if (input.criteria !== undefined) throw new GradingError("criteria_invalid", "this item has no criteria");
+    return {};
+  }
+  if (input.points !== undefined) {
+    throw new GradingError("criteria_invalid", "an essay with criteria is graded criterion by criterion");
+  }
+  if (input.criteria !== undefined) {
+    const result = validatedBreakdown(declared, maxPoints, input.criteria);
+    if (!result) throw new GradingError("criteria_invalid");
+    return { points: result.total, breakdown: result.breakdown };
+  }
+  const proposed = aiOf(details)?.criteria;
+  if (!proposed || proposed.some((c) => c.id === undefined)) return {};
+  const result = validatedBreakdown(
+    declared,
+    maxPoints,
+    proposed.map((c) => ({ id: c.id!, points: c.points })),
+  );
+  return result ? { breakdown: result.breakdown } : {};
+}
+
+type ValidationInput = {
+  points?: number | undefined;
+  criteria?: readonly CriterionPointsBody[] | undefined;
+  comment?: string | undefined;
+};
+
 /**
  * F-GRADE-04. Validating a proposal keeps its details and its source: what
  * changes is that it now counts. Adjusting the points on the way makes it a
- * `manual` grading, because a teacher's number is not a machine's.
+ * `manual` grading, because a teacher's number is not a machine's. An essay
+ * with criteria is adjusted criterion by criterion (ADR-118 §6).
  */
 export async function validateGrading(
   db: Db,
   grading: GradingRecord,
-  input: { points?: number | undefined; comment?: string | undefined },
+  input: ValidationInput,
   userId: string,
   now: Date,
 ): Promise<GradingRecord> {
-  return writeGrading(db, validationOf(grading, input, userId, now));
+  const declared = await declaredCriteria(db, grading.itemId);
+  return writeGrading(db, validationOf(grading, input, declared, userId, now));
 }
 
-/** The write that validates `grading`: {@link validateGrading}'s, and each of {@link batchValidate}'s. */
+/**
+ * The write that validates `grading`: {@link validateGrading}'s, and each of
+ * {@link batchValidate}'s. The validated breakdown of an essay with criteria
+ * joins the details here, whichever path validates it.
+ */
 function validationOf(
   grading: GradingRecord,
-  input: { points?: number | undefined; comment?: string | undefined },
+  input: ValidationInput,
+  declared: readonly DeclaredCriterion[],
   userId: string,
   now: Date,
 ): WriteGradingInput {
   if (grading.state !== "proposed") throw new GradingError("not_pending");
-  const adjusted = input.points !== undefined && round2(input.points) !== grading.points;
+  const graded = criteriaOutcome(declared, grading.maxPoints, input, grading.details);
+  const points = graded.points ?? input.points ?? grading.points;
+  const adjusted = round2(points) !== grading.points;
+  // The proposal's details, the model's `ai` included, live on beside it.
+  const details = graded.breakdown
+    ? { ...(grading.details as Record<string, unknown> | null), [BREAKDOWN_KEY]: graded.breakdown }
+    : grading.details;
   return {
     attemptId: grading.attemptId,
     itemId: grading.itemId,
     answerId: grading.answerId,
-    points: input.points ?? grading.points,
+    points,
     maxPoints: grading.maxPoints,
     source: adjusted ? "manual" : grading.source,
     state: "validated",
-    details: grading.details,
+    details,
     confidence: grading.confidence ?? undefined,
     comment: input.comment ?? grading.comment ?? undefined,
     gradedBy: userId,
@@ -874,9 +1017,14 @@ export async function batchValidate(
   // The placeholders (0 points, no confidence: an essay, a manual circuit,
   // no runner) are left to a person — the same rule the panel counts by, so
   // it is read here in TypeScript rather than restated in SQL.
+  const batchable = rows.filter(({ grading }) => isBatchable(grading)).map(({ grading }) => grading);
+  const declared = new Map<string, readonly DeclaredCriterion[]>();
+  for (const itemId of new Set(batchable.map((g) => g.itemId))) {
+    declared.set(itemId, await declaredCriteria(db, itemId));
+  }
   const written = await writeGradings(
     db,
-    rows.filter(({ grading }) => isBatchable(grading)).map(({ grading }) => validationOf(grading, {}, userId, now)),
+    batchable.map((grading) => validationOf(grading, {}, declared.get(grading.itemId)!, userId, now)),
   );
   return written.length;
 }

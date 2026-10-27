@@ -13,6 +13,7 @@
 import { z } from "zod";
 
 import { LLM_CONFIDENCES } from "@quiz/core/llm";
+import { CRITERION_ID_PATTERN } from "@quiz/core/reasons";
 import { GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
 
 import { IdParam, StaffItemRef } from "./common.js";
@@ -43,6 +44,9 @@ export type GradingConfidence = z.infer<typeof GradingConfidence>;
 export {
   AI_KEY,
   aiOf,
+  BREAKDOWN_KEY,
+  breakdownOf,
+  CRITERION_ID_PATTERN,
   isMachineReason,
   isRetryableReason,
   INSTANCE_WARNING_KEY,
@@ -54,6 +58,7 @@ export {
   RETRYABLE_REASONS,
   RUNNER_WAITING_REASONS,
   type AiDetails,
+  type BreakdownEntry,
   type MachineReason,
   type PassReason,
 } from "@quiz/core/reasons";
@@ -254,18 +259,44 @@ export const GradingRunAccepted = z.object({
 });
 export type GradingRunAccepted = z.infer<typeof GradingRunAccepted>;
 
-/** F-GRADE-05: the comment is mandatory, the previous grading is superseded. */
-export const ManualGradingBody = z.object({
-  points: z.number().min(-1000).max(1000),
-  comment: z.string().trim().min(1).max(4000),
+/**
+ * The points a teacher gives each criterion of an essay (ADR-118 §6), on the
+ * item's scale. The server checks them against the item's criteria (every
+ * one exactly once, each within its maximum: `422 criteria_invalid`) and
+ * derives the total from them: with `criteria`, a body carries no `points`.
+ */
+export const CriterionPointsBody = z.object({
+  id: z.string().regex(CRITERION_ID_PATTERN),
+  points: z.number().min(0).max(1000),
 });
+export type CriterionPointsBody = z.infer<typeof CriterionPointsBody>;
+
+const CriteriaPoints = z.array(CriterionPointsBody).max(12);
+
+/** The total, or the criteria it is derived from: never both. */
+const notBoth = (body: { points?: number | undefined; criteria?: unknown }) =>
+  body.points === undefined || body.criteria === undefined;
+
+/** F-GRADE-05: the comment is mandatory, the previous grading is superseded. */
+export const ManualGradingBody = z
+  .object({
+    points: z.number().min(-1000).max(1000).optional(),
+    criteria: CriteriaPoints.optional(),
+    comment: z.string().trim().min(1).max(4000),
+  })
+  .refine((b) => notBoth(b) && (b.points !== undefined || b.criteria !== undefined), {
+    message: "either points or criteria",
+  });
 export type ManualGradingBody = z.infer<typeof ManualGradingBody>;
 
 /** F-GRADE-04: validate a proposal, possibly adjusting it on the way. */
-export const ValidateGradingBody = z.object({
-  points: z.number().min(-1000).max(1000).optional(),
-  comment: z.string().trim().max(4000).optional(),
-});
+export const ValidateGradingBody = z
+  .object({
+    points: z.number().min(-1000).max(1000).optional(),
+    criteria: CriteriaPoints.optional(),
+    comment: z.string().trim().max(4000).optional(),
+  })
+  .refine(notBoth, { message: "points and criteria are exclusive" });
 export type ValidateGradingBody = z.infer<typeof ValidateGradingBody>;
 
 /** F-GRADE-04: "every high-confidence proposal of question 3", in one call. */

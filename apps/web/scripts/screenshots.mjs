@@ -1560,6 +1560,16 @@ const scenes = [
   { name: "grading-circuit", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 2) },
   { name: "grading-short", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 3) },
   { name: "grading-rich", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 4) },
+  // ADR-118 §6: an essay graded by criteria, the AI's proposal and one pill per criterion.
+  { name: "grading-rich-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => {
+      await nextQuestion(p, 4);
+      // The first answer the AI proposed for.
+      await p.locator("tbody tr", { hasText: /(AI|IA) · / }).first().click();
+      await p.waitForTimeout(400);
+      // Docked as a pane on a wide screen, a sheet on a phone: A adjusts in both.
+      await p.keyboard.press("a");
+      await p.waitForTimeout(400);
+    } },
   { name: "grading-categorize", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 5) },
   { name: "grading-codeimage", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 6) },
   { name: "grading-diagram", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 7) },

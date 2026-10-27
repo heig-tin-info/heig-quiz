@@ -86,6 +86,43 @@ describe("the blind strip of `details` (layer 2, H1)", () => {
   });
 });
 
+describe("the details filter for `rich` (ADR-118 §5)", () => {
+  // The real type, from the registry: its `studentDetails` hook.
+  const details = {
+    reason: "llm",
+    chars: 40,
+    justification: "MODEL-SENTENCE",
+    ai: {
+      model: "claude-sonnet-5-5",
+      criteria: [{ id: "thesis", criterion: "Thesis", points: 1, maxPoints: 2, comment: "SECRET-COMMENT" }],
+    },
+    breakdown: [{ id: "thesis", title: "BREAKDOWN-TITLE-SECRET", points: 1, maxPoints: 2 }],
+  };
+  const policy = (showKey: boolean) => ({
+    when: "on_release" as const,
+    showAnswer: true,
+    showKey,
+    showExplanation: true,
+    showHiddenCaseNames: false,
+    showTeacherComment: true,
+  });
+
+  it("gives neither the model's reply nor the breakdown without the key", () => {
+    const filtered = JSON.stringify(service.filterDetails("rich", details, policy(false)));
+    for (const secret of ["SECRET-COMMENT", "MODEL-SENTENCE", "claude-sonnet-5-5", "BREAKDOWN-TITLE-SECRET"]) {
+      expect(filtered).not.toContain(secret);
+    }
+  });
+
+  it("gives the validated breakdown with the key, never the model's reply", () => {
+    const filtered = service.filterDetails("rich", details, policy(true));
+    expect(filtered).toEqual({ reason: "llm", chars: 40, breakdown: details.breakdown });
+    for (const secret of ["SECRET-COMMENT", "MODEL-SENTENCE", "claude-sonnet-5-5"]) {
+      expect(JSON.stringify(filtered)).not.toContain(secret);
+    }
+  });
+});
+
 describe("the details filter for `code` (decision D15, deviation W3-5)", () => {
   const details: CodeDetails = {
     runner: "ok",

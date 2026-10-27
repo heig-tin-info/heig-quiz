@@ -25,6 +25,41 @@ wand writes one criterion's grading prompt on request (target
 `criterionPrompt`). Beside criteria the rubric is labelled "Global
 instructions" and folded while empty (decision 4).
 
+### Amendment of 2026-10-27 (per-criterion grading)
+
+Decision 6 is settled as follows.
+
+- **Storage.** The validated breakdown lives in the grading's `details`
+  under `breakdown` (`BREAKDOWN_KEY`, `@quiz/core/reasons`): one entry
+  `{ id, title, points, maxPoints }` per criterion, in the config's order,
+  the titles snapshotted from the version the item holds, the points on the
+  item's scale to two decimals. Never a weight, a prompt, a sentence of the
+  model nor its name: `details.ai` keeps those, teacher-only.
+- **When it is written.** By every validation path: one Validate, the batch
+  "Validate N", and an override. As-is, only when every entry of
+  `details.ai.criteria` carries an id and those ids are exactly the item's
+  criteria; the proposal's points are copied and its total kept (a 0.01 gap
+  between the rounded parts and the total is accepted). A free rubric, a
+  diagram, or ids that match nothing get no breakdown, never a partial one.
+  The criteria come from the type's `gradingCriteria` hook on the version's
+  config; a type without it is graded by one total.
+- **The total is never typed for an essay with criteria.** The teacher sends
+  `criteria: [{ id, points }]`, each within `[0, maxPoints]` of its
+  criterion; the server derives the total, `clamp(round2(Σ points), 0,
+  itemPoints)` (`validatedBreakdown`, `@quiz/domain`), the rule the grading
+  form shows. `criteria` and `points` are exclusive in a body (400); a
+  missing, unknown or duplicate id, a point out of range, a bare `points`
+  for an essay with criteria, or `criteria` for an item without them is
+  `422 criteria_invalid`.
+- **What an override keeps.** For an essay with criteria, the details of the
+  grading in force survive (`ai`, `justification`) beside `manual: true` and
+  the new breakdown; a teacher grading a cell no model proposed for gets a
+  breakdown without `ai`. Every other type keeps writing `{ manual: true }`.
+- **After the release.** `results_updated` compares grades only: a new split
+  with an unchanged total notifies nobody.
+- **Who reads it.** `rich`'s `studentDetails` drops `breakdown` unless the
+  key is shown; the student view of §5 is still to build.
+
 ## Context
 
 An essay was graded against a free markdown `rubric` and worth 1 point by
@@ -86,8 +121,11 @@ cost them points.
 - Writing one criterion's prompt and converting a legacy rubric into
   criteria are wand actions proposed into the draft (amendment of
   2026-10-27); no stored question is converted without its teacher.
-- Still to build after the first delivery (config, editor, model contract,
-  scaling): the per-criterion grading of §6, then the student view of §5.
+- The per-criterion grading of §6 is delivered (amendment of 2026-10-27):
+  the grading screen edits each criterion's points and every validation
+  stores the breakdown.
+- Still to build: the student view of §5, which renders the breakdown under
+  `showKey`.
 
 ## Alternatives considered
 

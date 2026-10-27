@@ -10,6 +10,8 @@
  */
 import { z } from "zod";
 
+import { CRITERION_ID_PATTERN } from "@quiz/core/reasons";
+
 /** v2 (ADR-118): `criteria`, an empty list for every v1 config. */
 export const RICH_CONFIG_VERSION = 2;
 
@@ -72,7 +74,7 @@ export type RichFormat = z.infer<typeof RichFormatSchema>;
  * plain JSON property name, letters, digits, `_` and `-`.
  */
 export const RichCriterionSchema = z.object({
-  id: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/),
+  id: z.string().regex(CRITERION_ID_PATTERN),
   /** What the criterion judges, in a few words: a blank title is no criterion. */
   title: z
     .string()
@@ -175,6 +177,14 @@ export type RichSolution = z.infer<typeof RichSolutionSchema>;
 export const RichDetailsSchema = z.object({
   reason: z.enum(["manual", "empty", "llm"]),
   chars: z.number().int().min(0),
+  /**
+   * The validated points per criterion (`BREAKDOWN_KEY`, ADR-118 §6): written
+   * by the teacher's validation, never by `grade`; a student reads it only
+   * under a shown key ({@link richServer}'s `studentDetails`).
+   */
+  breakdown: z
+    .array(z.object({ id: z.string(), title: z.string(), points: z.number(), maxPoints: z.number() }))
+    .optional(),
 });
 export type RichDetails = z.infer<typeof RichDetailsSchema>;
 

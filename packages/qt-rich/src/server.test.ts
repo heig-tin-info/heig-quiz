@@ -110,6 +110,23 @@ describe("the key", () => {
     expect(JSON.stringify(student)).not.toContain("CRITERION-");
   });
 
+  it("names its criteria for the grading screen, none without", () => {
+    expect(richServer.gradingCriteria!(SECRET_CONFIG)).toEqual(SECRET_CONFIG.criteria);
+    expect(richServer.gradingCriteria!(config())).toEqual([]);
+  });
+
+  it("gives a student the validated breakdown only under a shown key (ADR-118 §5)", () => {
+    const details = {
+      reason: "llm" as const,
+      chars: 12,
+      breakdown: [{ id: "c1", title: "BREAKDOWN-TITLE-SECRET", points: 1, maxPoints: 2 }],
+    };
+    const hidden = richServer.studentDetails!(details, { showKey: false, showHiddenCaseNames: false });
+    expect(hidden).toEqual({ reason: "llm", chars: 12 });
+    expect(JSON.stringify(hidden)).not.toContain("BREAKDOWN-TITLE-SECRET");
+    expect(richServer.studentDetails!(details, { showKey: true, showHiddenCaseNames: false })).toEqual(details);
+  });
+
   it("gives a student nothing when there is no model answer", () => {
     const view = { seed: 0, itemId: "i", shuffle: false };
     for (const cfg of [config({ rubric: "criteria" }), config({ rubric: "criteria", reference: "  " })]) {
