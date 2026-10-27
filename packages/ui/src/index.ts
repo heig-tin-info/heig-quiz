@@ -50,6 +50,7 @@ export {
 } from "./styles.js";
 export { breakdownOf, isLocked, markdown } from "./content.js";
 export { answeredCount, CORRECTION_SCALE, CorrectionCount, ExpectedAnswers, KeyFigure, KeyFrame, KeyHatch, type Density } from "./correction.js";
+export { type CriterionLine, PointsByCriterion } from "./criteria.js";
 export { ExpandableCanvas, type ExpandableCanvasProps, type ExpandableCanvasStrings } from "./expand.js";
 export { Button, IconButton, iconButtonClass, type IconButtonSize, Select, TextInput } from "./controls.js";
 export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";

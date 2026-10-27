@@ -862,7 +862,7 @@ describe("GradingPanel — an essay graded by criteria (ADR-118 §6)", () => {
     await userEvent.click(rowOf("a1"));
     const panel = await screen.findByRole("dialog");
 
-    const lines = within(within(panel).getByRole("list", { name: "Validated points" })).getAllByRole("listitem");
+    const lines = within(within(panel).getByRole("list", { name: "Points per criterion" })).getAllByRole("listitem");
     expect(lines.map((l) => l.textContent)).toEqual(["Thesis2 / 2", "Sources0.5 / 1"]);
   });
 });

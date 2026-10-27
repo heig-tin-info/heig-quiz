@@ -41,7 +41,6 @@ import {
   criteriaBody,
   initialCriteriaPoints,
   invalidCriteria,
-  ValidatedBreakdown,
 } from "./EssayCriteria";
 import { RowMarks } from "./GradingTable";
 import { GradingHistory } from "./GradingHistory";
@@ -372,7 +371,6 @@ function EntryPanel({
         {/* An LLM's why: the teacher's alone, stripped from every student
             payload (ADR-045, ADR-063, open question 27). */}
         <AiJustification details={grading?.details ?? null} />
-        <ValidatedBreakdown details={grading?.details ?? null} />
         {ownExplanation ? (
           <NotePanel eyebrow={t("grading.explanation")}>
             <MarkdownView size="sm" source={ownExplanation} />

@@ -7,10 +7,10 @@
  */
 import { aiOf, breakdownOf, justificationOf, type AiDetails } from "@quiz/contracts";
 import { LLM_MODELS } from "@quiz/domain";
+import { PointsByCriterion } from "@quiz/ui";
 
 import { useT } from "../i18n";
 import { NotePanel } from "../ui";
-import { PointsByCriterion } from "./PointsByCriterion";
 
 /** The note of a proposal a model wrote; nothing when it wrote none. */
 export function AiJustification({ details }: { details: unknown }) {
@@ -20,7 +20,7 @@ export function AiJustification({ details }: { details: unknown }) {
   return (
     <NotePanel tone="soft" eyebrow={t("grading.aiJustification")}>
       <p className="text-[13px] text-fg">{justification}</p>
-      {/* Once validated, the split is the validated one, shown beside (ADR-118 §6). */}
+      {/* Once validated, the split is the validated one, under the answer (the essay review, ADR-118 §6). */}
       <AiBreakdown ai={aiOf(details)} split={breakdownOf(details) === null} />
     </NotePanel>
   );

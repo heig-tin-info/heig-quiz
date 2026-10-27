@@ -19,7 +19,7 @@ import {
   type AttemptTally,
   type DeclaredCriterion,
 } from "@quiz/domain";
-import { AI_KEY, aiOf, BREAKDOWN_KEY, JUSTIFICATION_KEY } from "@quiz/contracts";
+import { AI_KEY, aiOf, BREAKDOWN_KEY, INSTANCE_WARNING_KEY, JUSTIFICATION_KEY } from "@quiz/contracts";
 import type { GradingConfidence, GradingSource, GradingState, ItemCounting } from "@quiz/contracts";
 import type { AnyQuestionTypeServer, ItemAggregate } from "@quiz/core/server";
 import { blocksServer } from "@quiz/qt-blocks/server";
@@ -1363,13 +1363,32 @@ function feedbackPage(attemptId: string) {
     };
   }
   const copy = copyOf(e, attempt);
+  const showKey = (e.evaluation.feedbackPolicy as { showKey?: boolean }).showKey === true;
   return {
     available: true as const,
     evaluation: { id: e.evaluation.id, title: e.evaluation.title, releasedAt: e.evaluation.releasedAt },
     ...copy,
+    items: copy.items.map((item) => ({ ...item, details: studentDetailsOf(item.details, showKey) })),
     // The server's rule (F-RES-04): released, and no question pending.
     grade: feedbackGradeShown({ released: true, pendingCount: copy.pendingCount }) ? copy.grade : null,
   };
+}
+
+/**
+ * A grading's details as the server's `filterDetails` hands them to a
+ * student: never the model's reply, and an essay's validated points per
+ * criterion only under a shown key (ADR-118 §5).
+ */
+function studentDetailsOf(details: unknown, showKey: boolean): unknown {
+  if (details === null || typeof details !== "object") return details ?? null;
+  const {
+    [AI_KEY]: _ai,
+    [JUSTIFICATION_KEY]: _justification,
+    [INSTANCE_WARNING_KEY]: _warning,
+    [BREAKDOWN_KEY]: breakdown,
+    ...rest
+  } = details as Record<string, unknown>;
+  return showKey && breakdown !== undefined ? { ...rest, [BREAKDOWN_KEY]: breakdown } : rest;
 }
 
 function attemptWorldOr404(attemptId: string) {
