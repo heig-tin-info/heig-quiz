@@ -51,4 +51,11 @@ describe("frenchSpacing", () => {
     expect(frenchSpacing("un mot, puis : deux")).toBe(n("un mot, puis_: deux"));
     expect(frenchSpacing("a\n\nb")).toBe("a\n\nb");
   });
+
+  it("stays linear on a long run of spaces", () => {
+    const start = performance.now();
+    frenchSpacing(`a${" ".repeat(100_000)}b`);
+    frenchSpacing(`a${" \n".repeat(50_000)}b`);
+    expect(performance.now() - start).toBeLessThan(200);
+  });
 });

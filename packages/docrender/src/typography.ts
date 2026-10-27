@@ -19,7 +19,9 @@
  *
  * It sees TEXT only — the caller hands it marked's plain text tokens, never
  * code, maths, a link's target or raw HTML — so a ternary `a ? b : c` in a
- * code span keeps its spaces.
+ * code span keeps its spaces. Nor does it see an entity (`mot&nbsp;:`), an
+ * escaped mark (`mot \!`) or an image's alt text: those are not text tokens,
+ * and stay as written.
  */
 import type { Token } from "marked";
 
@@ -29,9 +31,15 @@ const SPACE = "[ \\t\\u00A0\\u202F]";
 /**
  * The spaces before a closing mark, with at most one line break among them:
  * a soft break (`mot\n:`) is a space to the reader. Two line breaks are a
- * new paragraph and never reach one text token.
+ * new paragraph and never reach one text token. A match only STARTS where a
+ * run starts (the lookbehind): retried at every space of a long run, the
+ * pattern would be quadratic, and one page of spaces would stall the API's
+ * journal rendering.
  */
-const BEFORE = new RegExp(`${SPACE}*(?:\\n${SPACE}*)?(?=[:;!?\\u00BB])`, "g");
+const BEFORE = new RegExp(
+  `(?<![ \\t\\u00A0\\u202F\\n])(?:${SPACE}+(?:\\n${SPACE}*)?|\\n${SPACE}*)(?=[:;!?\\u00BB])`,
+  "g",
+);
 
 /** `«` and the spaces after it, under the same rule. */
 const AFTER = new RegExp(`\\u00AB${SPACE}*(?:\\n${SPACE}*)?`, "g");
@@ -47,7 +55,7 @@ export const NNBSP = "\u202F";
 export function frenchSpacing(text: string): string {
   return text
     .replace(AFTER, (run) => (run.length > 1 ? `«${NNBSP}` : run))
-    .replace(BEFORE, (run) => (run ? NNBSP : run));
+    .replace(BEFORE, NNBSP);
 }
 
 /**

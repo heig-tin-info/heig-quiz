@@ -90,6 +90,11 @@ describe("renderMarkdown — holes", () => {
     expect(html).toContain('<span data-cloze-hole="1"></span>');
   });
 
+  it("keeps a hole beside a French mark, which gets its no-break space", () => {
+    const html = renderMarkdown(studentOf("Capitale {{Berne}} ?").template, "Code", { holes: true, formula: FORMULA_LABELS });
+    expect(html).toContain('<span data-cloze-hole="0"></span> ?');
+  });
+
   it("never lets the document write a hole of its own", () => {
     const forged = renderMarkdown('<span data-cloze-hole="0">x</span>', "Code", { holes: true, formula: FORMULA_LABELS });
     expect(forged).not.toContain("data-cloze-hole");
