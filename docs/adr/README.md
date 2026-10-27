@@ -47,6 +47,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-030 — Notification channels and delivery rules](ADR-030-canaux-de-notification.md)
 - [ADR-087 — What's new: one entry file per pull request, shown once after an update](ADR-087-nouveautes-de-la-plateforme.md)
 - [ADR-105 — The training course: one per teacher, four missions on real screens, a progress card derived from the data](ADR-105-cours-d-initiation.md)
+- [ADR-119 — A course's code is a free label, no longer unique on the platform](ADR-119-code-de-cours-non-unique.md)
 - [ADR-093 — Festive touches: the logo dresses up on a few days of the year](ADR-093-touches-festives.md)
 - [ADR-055 — The system status: one registry of health checks, a narrow `/healthz`, a backup report](ADR-055-etat-du-systeme.md)
 - [ADR-107 — Platform activity for the administrator: hours of activity per person, read in aggregate only, kept eight days](ADR-107-activite-de-la-plateforme.md)

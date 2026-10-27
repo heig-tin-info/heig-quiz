@@ -677,20 +677,6 @@ describe("CoursePage", () => {
     expect(await screen.findByText("PRG2 — Programmation C")).toBeVisible();
   });
 
-  it("says a code another course holds, in the dialog", async () => {
-    mockFetch({
-      ...world(),
-      "PATCH /app/api/courses/c1": fail(409, { error: "duplicate_code", message: "A course already uses this code" }),
-    });
-    renderWithProviders(<CoursePage id="c1" tab="settings" navigate={vi.fn()} />);
-
-    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    const dialog = await screen.findByRole("dialog", { name: "Edit the course" });
-    await userEvent.type(within(dialog).getByRole("textbox", { name: /^Course code/ }), "X");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    expect(await within(dialog).findByText("Another course already uses this code. Make it more specific, e.g. PRG1-IL.")).toBeVisible();
-  });
-
   it("hides the course for its reader from its settings", async () => {
     const { calls } = mockFetch({ ...world(), "POST /app/api/courses/c1/hide": noContent() });
     renderWithProviders(<CoursePage id="c1" tab="settings" navigate={vi.fn()} />);

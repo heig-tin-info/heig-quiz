@@ -31,8 +31,11 @@ export const courses = pgTable(
   {
     id: uuid("id").primaryKey(),
     name: text("name").notNull(),
-    /** Short school code (`PRG1`), unique across the instance. */
-    code: text("code").notNull().unique(),
+    /**
+     * Short school code (`PRG1`), a display label like the name: two courses
+     * may share one (ADR-119).
+     */
+    code: text("code").notNull(),
     /** A lucide icon name (`cpu`), drawn as a pool's is; null shows the default. */
     icon: text("icon"),
     /** The icon's colour, a `PoolColor` name (`teal`); null is grey, the default. */

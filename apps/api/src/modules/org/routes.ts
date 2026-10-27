@@ -77,10 +77,6 @@ const RowsBody = z.object({
 const lastOwner = (reply: FastifyReply) =>
   reply.code(409).send({ error: "last_owner", message: "A course keeps at least one owner" });
 
-/** A course code is unique across the instance: the one refusal of a create and of an edit. */
-const duplicateCode = (reply: FastifyReply) =>
-  reply.code(409).send({ error: "duplicate_code", message: "A course already uses this code" });
-
 export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const requireTeacher = teacherGuard(app);
@@ -140,7 +136,6 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     const body = CourseCreate.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     const created = await service.createCourse(app.db, body.data, req.user!.id);
-    if (!created) return duplicateCode(reply);
     await trace(req, "course.create", "course", created.id, { name: created.name, code: created.code });
     publish("courses", [`teacher:${req.user!.id}`]);
     return reply.code(201).send({ ...created, createdAt: created.createdAt.toISOString() });
@@ -184,9 +179,8 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.patch(
     "/app/api/courses/:id",
     { preHandler: requireTeacher },
-    teacher({ ...onCourse("owner"), body: CoursePatch }, async ({ req, reply, body, scope: course }) => {
+    teacher({ ...onCourse("owner"), body: CoursePatch }, async ({ req, body, scope: course }) => {
       const updated = await service.updateCourse(app.db, course.id, body);
-      if (updated === null) return duplicateCode(reply);
       await trace(req, "course.update", "course", course.id, body);
       return updated;
     }),

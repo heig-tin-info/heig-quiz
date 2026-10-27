@@ -119,11 +119,13 @@ export async function resolveMapping(
     }
 
     const { course: code, classroom: name } = row.target;
-    const [course] = await db.select({ id: courses.id }).from(courses).where(eq(courses.code, code));
-    if (!course) {
-      refusals.push(`${at}: no Quiz course has the code "${code}"`);
+    // A course code is a free label (ADR-119): it names a course only when exactly one holds it.
+    const coded = await db.select({ id: courses.id }).from(courses).where(eq(courses.code, code));
+    if (coded.length !== 1) {
+      refusals.push(`${at}: ${coded.length === 0 ? "no" : "more than one"} Quiz course has the code "${code}"`);
       continue;
     }
+    const course = coded[0]!;
     const rooms = await db
       .select({ id: classrooms.id })
       .from(classrooms)

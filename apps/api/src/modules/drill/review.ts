@@ -227,13 +227,15 @@ export async function drillSession(
   const ids = composeDrillSession({
     cards: rows
       .filter(({ card }) => !heldToday(card, day, practised))
-      .map(({ card, courseCode }) => ({
+      // Keyed by the course's id, not its code: two courses may share a code
+      // (ADR-119), and their cards must still interleave as two groups.
+      .map(({ card, courseId }) => ({
         id: card.id,
         isNew: card.lastReviewAt === null,
         dueAt: card.dueAt,
         retrievability: drillRetrievability(stateOf(card), now),
         referenceMs: references.get(card.questionId) ?? null,
-        group: `${courseCode}\u0000${conceptOf.get(card.questionId) ?? ""}`,
+        group: `${courseId}\u0000${conceptOf.get(card.questionId) ?? ""}`,
       })),
     // "Due" is due before the day ends: FSRS counts whole days from the
     // instant of the last review, and a card due at 14:00 belongs to the

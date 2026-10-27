@@ -29,7 +29,11 @@ import { UnavailableRunner } from "./modules/runner/unavailable.js";
 import { MIGRATIONS_DIR } from "./paths.js";
 import { seedDemoContent } from "./seed/demo.js";
 
-const COURSE = { name: "Programmation C", code: "PRG1" };
+/**
+ * The demo course. Its id is fixed: the seed upserts on it, the code being a
+ * free label another course may share (ADR-119).
+ */
+const COURSE = { id: "00000000-0000-4000-8000-00000000c001", name: "Programmation C", code: "PRG1" };
 /** Dated explicitly (#156): autumn 2026, so the sidebar's "right now" list holds it. */
 const CLASSROOM = {
   name: "PRG1-2026",
@@ -78,8 +82,8 @@ export async function seed(
 
   const [course] = await db
     .insert(courses)
-    .values({ id: randomUUID(), name: COURSE.name, code: COURSE.code })
-    .onConflictDoUpdate({ target: courses.code, set: { name: COURSE.name } })
+    .values(COURSE)
+    .onConflictDoUpdate({ target: courses.id, set: { name: COURSE.name, code: COURSE.code } })
     .returning();
   log(`course       ${course!.code} — ${course!.name}`);
 

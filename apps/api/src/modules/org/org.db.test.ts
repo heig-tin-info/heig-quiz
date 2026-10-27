@@ -852,18 +852,32 @@ describe("PATCH /courses/:id (#294)", () => {
     expect(row!.name).toBe("Old name");
   });
 
-  it("changes the code, upper-cased, and refuses another course's with a 409", async () => {
+  it("changes the code, upper-cased, to another course's too: a code is a free label (ADR-119)", async () => {
     const id = await course("RECODE1");
-    await course("RECODE2");
+    const other = await course("RECODE2");
     const res = await patch(id, { code: "recode3" });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ code: "RECODE3" });
 
-    const taken = await patch(id, { code: "recode2" });
-    expect(taken.statusCode).toBe(409);
-    expect(taken.json()).toMatchObject({ error: "duplicate_code" });
-    const [row] = await server.app.db.select().from(courses).where(eq(courses.id, id));
-    expect(row!.code).toBe("RECODE3");
+    const shared = await patch(id, { code: "recode2" });
+    expect(shared.statusCode).toBe(200);
+    const rows = await server.app.db.select().from(courses).where(eq(courses.code, "RECODE2"));
+    expect(rows.map((r) => r.id).sort()).toEqual([id, other].sort());
+  });
+
+  it("creates a second course with a code another course holds (ADR-119)", async () => {
+    const create = () =>
+      server.app.inject({
+        method: "POST",
+        url: "/app/api/courses",
+        headers: teacher.headers,
+        payload: { name: "Programmation", code: "SAME1" },
+      });
+    const first = await create();
+    const second = await create();
+    expect([first.statusCode, second.statusCode]).toEqual([201, 201]);
+    expect(second.json().id).not.toBe(first.json().id);
+    expect(await server.app.db.select().from(courses).where(eq(courses.code, "SAME1"))).toHaveLength(2);
   });
 });
 

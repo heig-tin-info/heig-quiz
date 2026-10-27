@@ -17,7 +17,7 @@ The course's name opens its page. Under the title, five tabs, and the primary ac
 
 A course outlives a class. The same "Programmation C" carries the classroom of 2026, then the one of 2027, and its staff and pools stay in place from one year to the next.
 
-To rename a course or change its code, open its **Settings** tab and click **Edit** on the **Name and code** row. The code is unique across the platform: a code another course already uses is refused. The same tab hides the course from your own navigation (**Hide for me**) and deletes it.
+To rename a course or change its code, open its **Settings** tab and click **Edit** on the **Name and code** row. The code is your school's abbreviation, as is: another course may use the same one. The same tab hides the course from your own navigation (**Hide for me**) and deletes it.
 
 The **Concepts** section of the **Settings** tab lists the concepts the course teaches. An owner adds one by typing in the **Add a concept** field, as in the question editor: pick one of the vocabulary, or create a new one, which stays *proposed* until the administrator validates it. Remove a concept with the cross on its chip. The list is sorted by name and is kept as you leave it: there is no order to maintain. An assistant reads it without being able to change it. Students never see it. A concept the course lists cannot be deleted by the administrator, and when the administrator merges it into another, your list shows the surviving concept instead.
 

@@ -219,6 +219,9 @@ const WORDS: Record<Locale, { course: string; autumn: string; spring: string }> 
 /** The classroom of the training course (§1): one, named so whatever the language. */
 const CLASSROOM_NAME = "Initiation";
 
+/** The training course's code (§1): the same for every teacher, a free label (ADR-119). */
+const TRAINING_CODE = "INIT";
+
 /**
  * The caller's training course: marked for them AND reached through their
  * own seat on its staff (invariant 6, the seat branch — never Super Powers).
@@ -244,18 +247,6 @@ async function classroomIdOf(db: Db, courseId: string): Promise<string | null> {
     .orderBy(asc(classrooms.createdAt))
     .limit(1);
   return row?.id ?? null;
-}
-
-/** `INIT-<n>`, the smallest free `n`: the teacher may rename it afterwards. */
-async function freeCode(db: Db): Promise<string> {
-  const rows = await db
-    .select({ code: courses.code })
-    .from(courses)
-    .where(sql`${courses.code} ~ '^INIT-[0-9]+$'`);
-  const taken = new Set(rows.map((r) => Number(r.code.slice("INIT-".length))));
-  let n = 1;
-  while (taken.has(n)) n += 1;
-  return `INIT-${n}`;
 }
 
 /** The last second of a `YYYY-MM` month, UTC: when the ticker closes the welcome quiz. */
@@ -421,11 +412,7 @@ export async function provision(
   const existing = await courseOf(db, input.userId);
   if (existing) return found(existing);
 
-  let course: CourseRow | null = null;
-  for (let attempt = 0; course === null && attempt < 5; attempt += 1) {
-    course = await orgService.createCourse(db, { name: WORDS[input.lang].course, code: await freeCode(db) }, input.userId);
-  }
-  if (course === null) throw new Error("training: no free INIT code after five tries");
+  const course = await orgService.createCourse(db, { name: WORDS[input.lang].course, code: TRAINING_CODE }, input.userId);
 
   let classroomId: string;
   try {
