@@ -406,7 +406,7 @@ export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue,
   await queue.work<ReviewJob>(
     PROJECT_REVIEW_QUEUE,
     async (job) => {
-      await runReview(app, job);
+      await runReview(app, config, job);
     },
     { localConcurrency: REVIEW_CONCURRENCY },
   );

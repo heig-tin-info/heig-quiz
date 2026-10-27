@@ -36,7 +36,7 @@ When you revise a concept on purpose ("Revise a concept"), each round is recorde
 
 ### Projects and GitHub
 
-When a course uses GitHub projects: the repository you accepted, the GitHub account you linked, the time of each push, the results of the automatic tests, your score and your teacher's comment. For a project graded by criteria, also what each graded commit produced (test results, outputs, files) and the points and explanations given for each criterion.
+When a course uses GitHub projects: the repository you accepted, the GitHub account you linked, the time of each push, the results of the automatic tests, your score and your teacher's comment. For a project graded by criteria, also what each graded commit produced (test results, outputs, files) and the points and explanations given for each criterion. When your repository's own checks on GitHub grade it, Quiz keeps the result file they produce: each check's score and the end of its log. Only the teaching staff see the logs.
 
 If you open a project in the online workspace, each launch is recorded, and the workspace keeps your name, your e-mail address and your files.
 
@@ -66,7 +66,7 @@ Some data is deleted automatically:
 | Your drill activity | Five years after each review |
 | Your rounds of revision by concept | Five years after each round |
 | The hours in which you used Quiz | After eight days |
-| The files, commits and test outputs kept to grade a project by criteria | Six months after the project's results are published (the list of tests and their results stays) |
+| The files, commits and test outputs kept to grade a project by criteria, and the result files of its checks with their logs | Six months after the project's results are published (the list of tests and their results, and the points of each criterion, stay) |
 | The content of GitHub's messages about your repositories | 30 days after they arrive |
 | A teacher's conversations with the help assistant, which may quote your name or grade | 30 days after each exchange |
 | A poll you answered without an account: the cookie's trace and your answers | 30 days after the poll ended. The poll's results stay for the teacher, linked to no one, but with what you typed in them |
@@ -87,7 +87,7 @@ Deleted data stays in the platform's backups for about four more months. That pe
 Quiz sends some content to an AI model of Anthropic, a company of the United States, through one gateway that records every call (never its content). No model is called while an evaluation runs, except in a brainstorm.
 
 - **Essay and diagram questions**: after the evaluation closes, your answer is sent, without your name, so that the model proposes a grade. Your teacher reviews it and decides. You read only the comment your teacher writes or accepts.
-- **Projects graded by criteria**: the files the criteria name, the test results and the build outputs of your repository are sent, with names, e-mail addresses and GitHub logins masked. Your teacher validates the points of each criterion; you read the explanations, marked provisional until the results are published.
+- **Projects graded by criteria**: the files the criteria name, the test results and the build outputs of your repository are sent, with names, e-mail addresses and GitHub logins masked. When your repository's checks grade it, what is sent is the files the criteria name and the logs of those checks, masked the same way, with the organization's and the repository's names masked too; never your commits, their authors or messages, nor the full logs of GitHub. Your teacher validates the points of each criterion; you read the explanations, marked provisional until the results are published.
 - **The final review of a project**: some projects run a final review that sends your code to an AI model (Anthropic), from your repository's checks on GitHub, on the organization's account, outside Quiz.
 - **Brainstorms with AI assistance**: the model reads the ideas live, the names of the class masked. If you join without an account, your idea is sent as you typed it; the page tells you before you send it.
 - **Your teacher's help assistant**: when your teacher asks it about their classroom, your name and your final results may be sent, not masked. Such a name may remain up to 30 days in your teacher's saved conversation, even if you leave the class.

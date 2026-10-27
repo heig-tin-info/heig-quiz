@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { header, paxRecord, readTar, sanitizeArchive, TarError, writeTar } from "./tar.js";
+import { decodeUtf8, header, paxRecord, readTar, sanitizeArchive, TarError, writeTar } from "./tar.js";
+
+describe("decodeUtf8", () => {
+  it("decodes valid UTF-8, null for anything else", () => {
+    expect(decodeUtf8(new TextEncoder().encode("Zoé"))).toBe("Zoé");
+    expect(decodeUtf8(new Uint8Array([0xff, 0xfe, 0x00]))).toBeNull();
+  });
+});
 
 /**
  * The archive rule of invariant 12, on raw headers: what a student's tar

@@ -14,7 +14,7 @@
 import { randomUUID } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { and, eq, inArray, not, or, isNotNull, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
@@ -29,7 +29,7 @@ import {
   type ProjectRunRefusal,
   type ProjectRunResult,
 } from "@quiz/core/server";
-import { readTar, writeTar, type CleanEntry } from "@quiz/core/tar";
+import { decodeUtf8, readTar, writeTar, type CleanEntry } from "@quiz/core/tar";
 import {
   automaticPoints,
   classifyCriterion,
@@ -38,6 +38,7 @@ import {
   effectiveDeadline,
   parseJunit,
   plainSources,
+  sourcePaths,
   proratedByTests,
   REPORT_FILE,
   stripTarballRoot,
@@ -182,6 +183,35 @@ function unpack(gzipped: Uint8Array): Uint8Array | null {
 
 /** Regular files: `0`, the old `\0`, `7`. Anything else but a directory is dropped (a committed link included). */
 const FILE_TYPES = new Set(["0", "\0", "7"]);
+
+/**
+ * The text files of the repository at `sha` that `sources` name
+ * (`sourcePaths`), by path, for a schema-3 pass's LLM material (ADR-119
+ * §7): the tarball the platform fetches itself, its top-level
+ * `<owner>-<repo>-<sha>/` stripped (it names the student), regular files
+ * that are UTF-8 only (a binary file is nothing the model reads). Nothing
+ * of a commit's metadata. Or why there are none; GitHub failing throws
+ * {@link TarballUnavailable}.
+ */
+export async function fetchSourceFiles(
+  octokit: Octokit,
+  fullName: string,
+  sha: string,
+  sources: readonly string[],
+): Promise<Record<string, string> | "repo_missing" | "archive_too_large"> {
+  const tarball = await fetchTarball(octokit, fullName, sha);
+  if (typeof tarball === "string") return tarball;
+  const tar = unpack(tarball);
+  if (tar === null) return "archive_too_large";
+  const entries = stripTarballRoot(readTar(tar)).filter((entry) => FILE_TYPES.has(entry.typeflag) && entry.utf8);
+  const named = new Set(sourcePaths(sources, entries.map((entry) => entry.path)));
+  const files: Record<string, string> = {};
+  for (const entry of entries) {
+    const text = named.has(entry.path) ? decodeUtf8(entry.data) : null;
+    if (text !== null) files[entry.path] = text;
+  }
+  return files;
+}
 
 /**
  * The archive the runner receives (§3): the tarball's tree without its
@@ -332,11 +362,22 @@ async function store(
   });
 }
 
-/** The installation's client of the project's organization. */
-async function projectOctokit(db: Db, config: AppConfig, project: ProjectRow): Promise<Octokit> {
+/**
+ * The installation's client of the project's organization, or null when
+ * Quiz's App cannot act there: no installation, or its client could not
+ * be made (the App's key, the network; logged). The one entry of the
+ * evidence, the CI's dispatch and the review: each turns null into its
+ * reason, never a failed job with nothing written.
+ */
+export async function projectOctokit(db: Db, config: AppConfig, project: Pick<ProjectRow, "orgId">, log: FastifyBaseLogger): Promise<Octokit | null> {
   const org = await projectInstallation(db, project.orgId);
-  if (!org) throw new Error("Quiz's GitHub App no longer acts on the project's organization");
-  return (await installationClient(config, org.installationId)).octokit;
+  if (!org) return null;
+  try {
+    return (await installationClient(config, org.installationId)).octokit;
+  } catch (err) {
+    log.error({ err, installationId: org.installationId }, "github: the installation's client could not be made");
+    return null;
+  }
 }
 
 /** The commits the identity criterion reads: one page of GitHub's listing, the newest. */
@@ -414,8 +455,10 @@ type Prepared = { distributionSha: string } & ({ reused: EvidenceRow } | { value
  * blocks the tests), and the tarball fetched and composed with the
  * protected files.
  */
-async function prepare(db: Db, config: AppConfig, repoId: string, fullName: string, project: ProjectRow, target: string, now: Date): Promise<Prepared> {
-  const octokit = await projectOctokit(db, config, project);
+async function prepare(app: FastifyInstance, config: AppConfig, repoId: string, fullName: string, project: ProjectRow, target: string, now: Date): Promise<Prepared> {
+  const db = app.db;
+  const octokit = await projectOctokit(db, config, project, app.log);
+  if (!octokit) throw new Error("Quiz's GitHub App cannot act on the project's organization");
   const { owner, repo: name } = ownerRepo(project.distributionFullName!);
   const distributionSha = await branchHead(octokit, owner, name, project.branches[0]!);
   if (distributionSha === null) throw new Error("the distribution repository has no handed-out branch");
@@ -459,7 +502,7 @@ export async function collectEvidence(
   if (repo.deletedAt !== null || repo.fullName === null) return store(db, project, repo.id, target, null, { status: "repo_missing" }, now);
   let prepared: Prepared;
   try {
-    prepared = await prepare(db, config, repo.id, repo.fullName, project, target, now);
+    prepared = await prepare(app, config, repo.id, repo.fullName, project, target, now);
   } catch (err) {
     return store(db, project, repo.id, target, null, { status: "github_unavailable", reason: failureReason(err) }, now);
   }
