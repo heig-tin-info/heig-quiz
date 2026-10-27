@@ -33,6 +33,7 @@ const STANDING_COLUMNS = {
   reason: projectCriterionGrades.reason,
   createdAt: projectCriterionGrades.createdAt,
   lockedAt: projectCriterionGrades.lockedAt,
+  passId: projectCriterionGrades.passId,
 };
 type StandingRow = Pick<CriterionGradeRow, keyof typeof STANDING_COLUMNS>;
 

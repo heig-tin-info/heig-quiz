@@ -152,6 +152,10 @@ export const projectCheckpointsKey = (id: string) => [...projectKey(id), "checkp
 /** The snapshot of the source's `criteria.yml` (ADR-106 §2): under the project's key, so a write re-reads it. */
 export const projectCriteriaKey = (id: string) => [...projectKey(id), "criteria"] as const;
 export const projectGradingKey = (id: string) => [...projectKey(id), "grading"] as const;
+/** A repository's commit graph on the grading screen (ADR-119 §8). */
+export const projectCommitsKey = (id: string, repoId: string) => [...projectKey(id), "commits", repoId] as const;
+/** A criterion's CI log on the grading screen, by its route's path (ADR-119 §8). */
+export const projectCiLogKey = (path: string) => ["projectCiLog", path] as const;
 /** The online workspace of a project (ADR-047, M6-06): its mode and sync, and its open workspaces live from the portal. */
 export const projectWorkspaceKey = (id: string) => [...projectKey(id), "workspace"] as const;
 export const projectWorkspaceSessionsKey = (id: string) => [...projectWorkspaceKey(id), "sessions"] as const;

@@ -36,6 +36,7 @@ import {
   type MenuItem,
 } from "../../ui";
 import { refusalMessage, shortSha } from "../projectPage";
+import { CommitGraphPanel } from "./CommitGraphPanel";
 import { CriteriaTable, type GradeWrite } from "./CriteriaTable";
 import { gradingPrimary, toValidate, type GradingPrimary } from "./gradingModel";
 import { RepoBar } from "./RepoBar";
@@ -49,6 +50,9 @@ import { RepoBar } from "./RepoBar";
  * action — Validate this repository, then Next, then Release once every one
  * is validated (`gradingPrimary`); then its criteria (`CriteriaTable`),
  * each one's points editable in place — a teacher's row, never a validation.
+ * An automatic criterion of a v3 project folds its CI log under it; below
+ * the table, folded, the repository's history (`CommitGraphPanel`, ADR-119
+ * §8), what a git criterion is graded from: no action of its own.
  *
  * A criterion with no points (a teacher-only one) holds Validate back: the
  * screen names it above the table, never defaults it to 0. *Validate the
@@ -66,6 +70,8 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
   const [repoParam, setRepoParam] = useSearchParam("repo", "");
   /** The repositories and criteria a refused *Validate the rest* named. */
   const [incomplete, setIncomplete] = useState<CriteriaIncomplete["repos"] | null>(null);
+  /** The history panel stays unfolded from one repository to the next, as the teacher walks them for a git criterion. */
+  const [graphOpen, setGraphOpen] = useState(false);
 
   const view = useQuery<ProjectGradingView>({
     queryKey: projectGradingKey(id),
@@ -291,8 +297,10 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
           label={t("project.grading.table", { name: repo.label })}
           writable={repo.frozen}
           onGrade={onGrade}
+          repoPath={`/app/api/projects/${id}/repos/${repo.id}`}
         />
       </Card>
+      <CommitGraphPanel projectId={id} repoId={repo.id} open={graphOpen} onOpenChange={setGraphOpen} />
       <p className="hidden text-xs text-fg-faint sm:block">{t("project.grading.keys")}</p>
     </div>
   );

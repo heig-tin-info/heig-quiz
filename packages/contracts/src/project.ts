@@ -1501,6 +1501,12 @@ export const CriteriaTableRow = z.object({
   source: z.enum(GRADING_SOURCES).optional(),
   rationale: z.string().optional(),
   reason: CriterionReason.optional(),
+  /**
+   * The row was set by a CI pass whose stored results answer it (ADR-119
+   * §8): its log is read on demand ({@link CriterionCiLog}); the fraction is
+   * the rationale (choice h). Staff only, never in the student's row.
+   */
+  ciLog: z.literal(true).optional(),
 });
 export type CriteriaTableRow = z.infer<typeof CriteriaTableRow>;
 
@@ -1510,9 +1516,9 @@ export type CriteriaTableRow = z.infer<typeof CriteriaTableRow>;
  * description), max, obtained (null until a pass or a teacher graded it,
  * and for a failed pass), `indicative` until validated and released, the
  * milestone's lock; the rationale only after the repository's definitive
- * freeze, plain text. Never a row's source nor its reason.
+ * freeze, plain text. Never a row's source, its reason nor its CI log.
  */
-export const StudentCriteriaRow = CriteriaTableRow.omit({ source: true, reason: true });
+export const StudentCriteriaRow = CriteriaTableRow.omit({ source: true, reason: true, ciLog: true });
 export type StudentCriteriaRow = z.infer<typeof StudentCriteriaRow>;
 
 /**
@@ -1784,6 +1790,66 @@ export const ProjectGradingView = z.object({
   repos: z.array(ProjectGradingRepo),
 });
 export type ProjectGradingView = z.infer<typeof ProjectGradingView>;
+
+/**
+ * `GET /app/api/projects/:id/repos/:rid/criteria/:criterionId/ci-log`
+ * (ADR-119 §8, staff only, N-SEC-20): the log the CI pass that set the
+ * criterion's current row wrote for it, its tail (plain text, shown
+ * escaped); null when that row was set by no CI pass, or the run wrote
+ * none. Never sent to the model, never in a student's payload.
+ */
+export const CriterionCiLog = z.object({ log: z.string().nullable() });
+export type CriterionCiLog = z.infer<typeof CriterionCiLog>;
+
+/** What marks a commit of the graph: handed out by the distribution, or one of the App's own (a restore, a sync, the deadline's). */
+export const COMMIT_MARKS = ["handout", "app"] as const;
+
+/**
+ * One commit of a repository's graph (ADR-119 §8). `authorName` is git's
+ * author field, which anyone can write: the screen labels it "declared
+ * author". `member` is the index in the graph's `members` of the linked
+ * member whose GitHub account GitHub matched to the commit; null otherwise.
+ * `receivedAt`: the server's receipt of the first push that carried it,
+ * when the platform has one.
+ */
+export const ProjectCommit = z.object({
+  sha: z.string(),
+  parents: z.array(z.string()),
+  message: z.string(),
+  authorName: z.string(),
+  authoredAt: z.iso.datetime().nullable(),
+  member: z.number().int().nonnegative().nullable(),
+  receivedAt: z.iso.datetime().nullable(),
+  mark: z.enum(COMMIT_MARKS).nullable(),
+});
+export type ProjectCommit = z.infer<typeof ProjectCommit>;
+
+/** The most commits the graph lists per handed-out branch: past it the graph says it is `truncated`. */
+export const COMMIT_GRAPH_MAX_PER_BRANCH = 300;
+
+/** Why a repository has no graph: no GitHub repository (yet, or any more), or GitHub did not answer. */
+export const COMMIT_GRAPH_UNAVAILABLE = ["no_repo", "github"] as const;
+
+/**
+ * `GET /app/api/projects/:id/repos/:rid/commits` (ADR-119 §8, staff only,
+ * N-SEC-20): the commit graph of the handed-out branches, read on demand
+ * through the App and cached as the live state (`stale`: served from the
+ * cache while it refreshes), never stored, never sent to the model. The
+ * members are the repository's linked students (a group's every member),
+ * in the order their colours follow.
+ */
+export const ProjectCommitGraph = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ok"),
+    branches: z.array(z.object({ name: z.string(), head: z.string().nullable() })),
+    members: z.array(z.object({ name: z.string(), login: z.string().nullable() })),
+    commits: z.array(ProjectCommit),
+    truncated: z.boolean(),
+    stale: z.boolean(),
+  }),
+  z.object({ status: z.literal("unavailable"), reason: z.enum(COMMIT_GRAPH_UNAVAILABLE) }),
+]);
+export type ProjectCommitGraph = z.infer<typeof ProjectCommitGraph>;
 
 /** The `422 points_out_of_range` body of a teacher's points: the criterion's range, which the field says. */
 export const PointsOutOfRange = z.object({ error: z.literal("points_out_of_range"), message: z.string(), min: z.number(), max: z.number() });

@@ -2139,6 +2139,14 @@ header, whatever the tab.
   primary (Validate → Next → Release, a `HeldButton` while held), then five
   columns — criterion (rationale folded, plain text), max, points (an `sm`
   number input bounded to the range), source, state. Row cards on a phone.
+  An automatic criterion set by a CI pass folds its CI output like the
+  rationale, read when unfolded (monospace, a text node, scrolled within
+  its box); its fraction is the rationale. Below the table, a folded `Disclosure`, *Repository
+  history* (ADR-119 §8): no action of its own, read only when unfolded, kept
+  unfolded from one repository to the next. The graph's lanes are
+  `fg-faint` hairlines; a node and the dot before a declared author wear
+  their member's `--chart-n` slot (the legend's order), anyone else
+  `fg-faint`; a merge is a ring. Marks and branch heads are badges.
 - **The Grading tab** (`project/grading/GradingTab.tsx`, rules in
   `matrix.ts`; ADR-106 §8 as amended 2026-10-13): read only, no primary —
   the grading screen is a ghost link of the matrix's heading. On top, the

@@ -389,14 +389,23 @@ const scenes = [
   { name: "project-draft", role: "teacher", path: "/projects/pj-draft?projects=1" },
   // ADR-106 §8: the grading screen of a project graded by criteria
   // (`?pjcriteria=1`), on the first repository to validate, its second
-  // criterion's rationale unfolded (the guide's `mock-project-grading-{light,dark}`);
-  // the open project's empty state.
+  // criterion's rationale unfolded, the tests' CI output and the repository's
+  // history (ADR-119 §8: a merge, two declared authors) unfolded too (the
+  // guide's `mock-project-grading-{light,dark}`); the open project's empty state.
   {
     name: "project-grading",
     role: "teacher",
     path: "/projects/0190d3c4-0000-7000-8000-0000000000c1/grading?projects=1&pjcriteria=1",
     settle: 1500,
-    act: (p) => p.getByRole("button", { name: /^(Rationale|Justification)$/ }).nth(1).click(),
+    act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(Rationale|Justification)$/ }).nth(1).click();
+      await p.getByRole("button", { name: /^(CI output|Sortie de la CI)$/ }).first().click();
+      await p.locator("pre").first().waitFor();
+      await p.getByRole("button", { name: /(Repository history|Historique du dépôt)/ }).click();
+      await p.getByTestId("commit-graph").waitFor();
+      await p.evaluate(() => window.scrollTo(0, 0));
+    },
   },
   { name: "project-grading-empty", role: "teacher", path: "/projects/0190d3c4-0000-7000-8000-0000000000c2/grading?projects=1&pjcriteria=1" },
   // Its project page: Grade, the primary action while a repository is to
