@@ -24,6 +24,7 @@ import {
   Card,
   Disclosure,
   EmptyState,
+  EndOfWeek,
   Field,
   FieldError,
   fieldErrorProps,
@@ -383,6 +384,7 @@ function DateInput({
         label={label}
         type="datetime-local"
         width="w-56"
+        hint={field === "deadline" ? <EndOfWeek onPick={(iso) => onChange(toLocalInput(iso))} /> : undefined}
         min={toLocalInput(new Date().toISOString())}
         value={value}
         onChange={(e) => onChange(e.target.value)}

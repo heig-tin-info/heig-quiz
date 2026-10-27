@@ -238,6 +238,7 @@ export function RepoSheet({
                 key={repo.deadlineAt ?? ""}
                 id={OWN_DEADLINE_ID}
                 label={t("project.sheet.ownDeadline")}
+                endOfWeek
                 disabled={!can || busy}
                 value={repo.deadlineAt}
                 onCommit={(deadlineAt, reset) => {

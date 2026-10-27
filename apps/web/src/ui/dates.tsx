@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { DateFormat } from "@quiz/contracts";
 
 import { useI18n, useT, type Locale, type TFunction } from "../i18n";
+import { textLink } from "./controls";
 import { cx, Tip, useNow } from "./layers";
 
 // Dates: the account's date format, absolute and relative times.
@@ -59,6 +60,33 @@ export function fromLocalInput(value: string): string | null {
   if (!value) return null;
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** The coming Sunday at 23:59 in the browser's zone, as an ISO instant: today on a Sunday, next week once it has passed. */
+export function endOfWeek(now = new Date()): string {
+  const at = new Date(now);
+  at.setDate(at.getDate() + ((7 - at.getDay()) % 7));
+  at.setHours(23, 59, 0, 0);
+  if (at <= now) at.setDate(at.getDate() + 7);
+  return at.toISOString();
+}
+
+/** A deadline field's shortcut to {@link endOfWeek}, on its label line (a `Field`'s `hint`). */
+export function EndOfWeek({ onPick, disabled = false }: { onPick: (iso: string) => void; disabled?: boolean }) {
+  const t = useT();
+  const at = endOfWeek();
+  return (
+    <Tip label={disabled ? null : t("time.endOfWeek.tip", { when: isoDateTime(at) })}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onPick(endOfWeek())}
+        className={cx("text-fg-muted disabled:pointer-events-none disabled:opacity-50", textLink)}
+      >
+        {t("time.endOfWeek")}
+      </button>
+    </Tip>
+  );
 }
 
 /** The browser's time zone: where the reader's day begins and ends, and what a `datetime-local` means. */
