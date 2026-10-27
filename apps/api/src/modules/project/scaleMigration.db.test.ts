@@ -10,9 +10,11 @@
  * live final score's — whatever the source of the score (a run, the review,
  * a teacher's with or without its own maximum), its maximum (6, or another
  * one the preset already read linearly) and the project's rounding; the
- * scores out of 6 become points out of 5, the scale linear, and each
- * migrated project gets one `project.scale_migrated` entry. A linear project
- * is left alone.
+ * scores out of 6 (the staff's gradebook marks included) become points out
+ * of 5, the scale linear, and each migrated project gets one
+ * `project.scale_migrated` entry. A linear project keeps its scores, and its
+ * released grades are stored too: editing its rounding afterwards moves
+ * none of them.
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -21,10 +23,19 @@ import type { PGlite } from "@electric-sql/pglite";
 import { and, eq, inArray } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { clamp, gradeFromPoints, roundToTenth, type Rounding } from "@quiz/domain";
+import { clamp, gradeFromPoints, projectGrade, roundToTenth, type Rounding } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { auditLog, enrollments, githubOrganizations, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import {
+  auditLog,
+  enrollments,
+  githubOrganizations,
+  gradebookColumns,
+  gradebookMarks,
+  projectGradeRuns,
+  projectRepos,
+  projects,
+} from "../../db/schema.js";
 import { testDatabase } from "../../test/db.js";
 import { seedLive } from "../../test/live.js";
 import { projectLiveScores, projectReleasedScore } from "./gradebook.js";
@@ -147,18 +158,26 @@ async function snapshot(projectId: string): Promise<void> {
 
 const projectRow = async (id: string): Promise<ProjectRow> => (await db.select().from(projects).where(eq(projects.id, id)))[0]!;
 
-/** Every grade of the project as its readers give it, by seat: the live final's and the release's. */
-async function grades(projectId: string, read: (points: number, max: number, readerGrade: number) => number) {
+/**
+ * Every grade of the project by seat, the live final's and the release's:
+ * with `oracle`, the scores (the live final, the release's snapshot) read by
+ * it — before the migration, no grade is stored yet; without, as the readers
+ * give them.
+ */
+async function grades(projectId: string, oracle?: (points: number, max: number) => number) {
   const row = await projectRow(projectId);
   const live = await projectLiveScores(db, row, seats.map((s) => s.enrollmentId));
+  const repos = await db.select().from(projectRepos).where(eq(projectRepos.projectId, projectId));
   const out: Record<string, { live: number | null; released: number | null }> = {};
   for (const [i, seat] of seats.entries()) {
     const cell = live.get(seat.enrollmentId);
-    const released = await projectReleasedScore(db, row, seat.enrollmentId);
-    out[i] = {
-      live: cell ? read(cell.points, cell.max, cell.grade) : null,
-      released: released ? read(released.points, released.max, released.grade) : null,
-    };
+    if (oracle) {
+      const r = repos.find((x) => x.userId === seat.userId);
+      const snap = row.releasedAt !== null && r?.releasedPoints != null && r.releasedMax != null ? oracle(r.releasedPoints, r.releasedMax) : null;
+      out[i] = { live: cell ? oracle(cell.points, cell.max) : null, released: snap };
+    } else {
+      out[i] = { live: cell?.grade ?? null, released: (await projectReleasedScore(db, row, seat.enrollmentId))?.grade ?? null };
+    }
   }
   return out;
 }
@@ -169,6 +188,16 @@ let control: string;
 let before: Record<string, Record<string, { live: number | null; released: number | null }>>;
 let runIds: Record<string, string[]>;
 let runsBefore: Map<string, { points: number | null; max: number | null }>;
+let marks: Record<string, string>;
+
+/** A staff `score` mark on the project's gradebook column, for seat `seat`. */
+async function mark(projectId: string, seat: number, points: number, max: number): Promise<string> {
+  const columnId = randomUUID();
+  await db.insert(gradebookColumns).values({ id: columnId, classroomId, projectId, counts: true, updatedAt: new Date() });
+  const id = randomUUID();
+  await db.insert(gradebookMarks).values({ id, classroomId, columnId, enrollmentId: seats[seat]!.enrollmentId, kind: "score", points, max, setAt: new Date() });
+  return id;
+}
 
 beforeAll(async () => {
   ({ db, client } = await testDatabase());
@@ -204,21 +233,24 @@ beforeAll(async () => {
   const c0 = await repo(control, 0, { current: { points: 4.5, max: 6 } });
   await snapshot(control);
 
+  // A staff mark out of 6 in each project's gradebook column (ADR-074).
+  marks = { unreleased: await mark(unreleased, 3, 4.5, 6), control: await mark(control, 3, 4.5, 6) };
+
   runIds = { released: [r0, r1, r2, r3, r4, r5].flatMap((r) => r.runs), unreleased: [u0, u1, u2].flatMap((r) => r.runs), control: c0.runs };
   runsBefore = new Map((await db.select().from(projectGradeRuns)).map((r) => [r.id, { points: r.points, max: r.max }]));
 
-  // What the removed preset gave, from the scores the readers return before the migration.
+  // What the removed preset gave (the linear scale for the control), from the scores before the migration.
   before = {
     released: await grades(released, (p, m) => presetGrade(p, m, "nearest")),
     unreleased: await grades(unreleased, (p, m) => presetGrade(p, m, "down")),
-    control: await grades(control, (_p, _m, grade) => grade),
+    control: await grades(control, (p, m) => gradeFromPoints(p, m, { rounding: "up" })),
   };
 
   await client.exec(`ALTER TABLE "project_repos" DROP COLUMN "released_grade";`);
   for (const statement of readFileSync(MIGRATION, "utf8").split("--> statement-breakpoint")) await client.exec(statement);
 });
 
-const after = (projectId: string) => grades(projectId, (_p, _m, grade) => grade);
+const after = (projectId: string) => grades(projectId);
 
 describe("0120_score_is_grade_linear (ADR-119 §11)", () => {
   it("keeps every grade of a released project, the release's stored", async () => {
@@ -273,13 +305,32 @@ describe("0120_score_is_grade_linear (ADR-119 §11)", () => {
     expect(runs.get(runIds.control![0]!)).toMatchObject({ points: 4.5, max: 6 });
   });
 
-  it("makes the scale linear, keeps the rounding, and leaves a linear project alone", async () => {
+  it("makes the scale linear, keeps the rounding, and leaves a linear project's scores alone", async () => {
     expect((await projectRow(released)).gradingScale).toEqual({ kind: "linear", rounding: "nearest" });
     expect((await projectRow(unreleased)).gradingScale).toEqual({ kind: "linear", rounding: "down" });
     expect((await projectRow(control)).gradingScale).toEqual({ kind: "linear", rounding: "up" });
+    expect(before.control![0]).toEqual({ live: 4.8, released: 4.8 });
     expect(await after(control)).toEqual(before.control);
     const [c] = await db.select().from(projectRepos).where(eq(projectRepos.projectId, control));
-    expect(c).toMatchObject({ releasedPoints: 4.5, releasedMax: 6, releasedGrade: null });
+    expect(c).toMatchObject({ releasedPoints: 4.5, releasedMax: 6, releasedGrade: 4.8 });
+  });
+
+  it("freezes every released grade: a rounding edited afterwards moves the live grade, never the release's", async () => {
+    const row = await projectRow(control);
+    await db.update(projects).set({ gradingScale: { kind: "linear", rounding: "down" } }).where(eq(projects.id, control));
+    try {
+      expect((await after(control))[0]).toEqual({ live: 4.7, released: 4.8 });
+    } finally {
+      await db.update(projects).set({ gradingScale: row.gradingScale }).where(eq(projects.id, control));
+    }
+  });
+
+  it("converts the staff's marks out of 6 of a migrated project's column, and keeps their grade", async () => {
+    const byId = async (id: string) => (await db.select().from(gradebookMarks).where(eq(gradebookMarks.id, id)))[0]!;
+    const converted = await byId(marks.unreleased!);
+    expect(converted).toMatchObject({ points: 3.5, max: 5 });
+    expect(projectGrade(converted.points!, converted.max!, { kind: "linear", rounding: "down" }).grade).toBe(presetGrade(4.5, 6, "down"));
+    expect(await byId(marks.control!)).toMatchObject({ points: 4.5, max: 6 });
   });
 
   it("audits one entry per migrated project, by the system", async () => {
@@ -294,11 +345,11 @@ describe("0120_score_is_grade_linear (ADR-119 §11)", () => {
         actorType: "system",
         actorUserId: null,
         subjectType: "project",
-        payload: { from: "score_is_grade", released: true, runs: 7, teacherScores: 2, releasedScores: 5, frozenGrades: 6 },
+        payload: { from: "score_is_grade", released: true, runs: 7, teacherScores: 2, releasedScores: 5, gradebookMarks: 0 },
       }),
     ]);
     expect(of(unreleased)).toEqual([
-      expect.objectContaining({ payload: { from: "score_is_grade", released: false, runs: 3, teacherScores: 1, releasedScores: 0, frozenGrades: 0 } }),
+      expect.objectContaining({ payload: { from: "score_is_grade", released: false, runs: 3, teacherScores: 1, releasedScores: 0, gradebookMarks: 1 } }),
     ]);
   });
 });

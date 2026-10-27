@@ -77,13 +77,13 @@ const repositoriesPerProject: ImportCheck = {
 /** `sum(teacher_points)` per project, as carried (a mark as points, `carriedScores`), over the rows Quiz did not re-score. */
 const teacherPoints: ImportCheck = {
   name: "teacher points",
-  run: perProject("sum of teacher points", "carriedUnkept", (repos, quiz, ctx) => {
+  run: (ctx) => {
     const scored = sourceScores(ctx);
-    return [
+    return perProject("sum of teacher points", "carriedUnkept", (repos, quiz) => [
       repos.reduce((n, r) => n + (carriedScores(r, scored).teacherPoints ?? 0), 0),
       repos.reduce((n, r) => n + (quiz.get(r.id)?.teacherPoints ?? 0), 0),
-    ];
-  }),
+    ])(ctx);
+  },
 };
 
 /** The count of frozen grades (a frozen run set) per project, over the rows Quiz did not change. */

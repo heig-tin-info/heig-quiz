@@ -270,10 +270,10 @@ describe("import-classroom projects (M8-01b)", () => {
       // classroom's mark 5.5 out of 6, as points (ADR-119 §11): the same grade, 5.5.
       releasedPoints: 4.5,
       releasedMax: 5,
+      releasedGrade: 5.5,
     });
-    // A teacher's score wins and keeps no maximum of its own (the CI's is read); the released score says the same.
-    // Read against a run out of 6, it was a mark: 4.5 becomes 3.5 out of 5.
-    expect(byId.get(ID.repoSolSeven)).toMatchObject({ teacherPoints: 3.5, teacherMax: null, releasedPoints: 3.5, releasedMax: 5, deadlineCommittedAt: null });
+    // A teacher's score wins; read against a run out of 6, it was a mark: 4.5 becomes 3.5 out of 5, its maximum stored.
+    expect(byId.get(ID.repoSolSeven)).toMatchObject({ teacherPoints: 3.5, teacherMax: 5, releasedPoints: 3.5, releasedMax: 5, releasedGrade: 4.5, deadlineCommittedAt: null });
     // Not released: the score and its comment stay the staff's.
     expect(byId.get(ID.repoSue)).toMatchObject({ teacherPoints: 5, teacherComment: "Good work", teacherGradedBy: w.t1, releasedPoints: null, releasedComment: null });
     // A repository still pending, no GitHub id.

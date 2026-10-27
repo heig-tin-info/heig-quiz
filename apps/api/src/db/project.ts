@@ -553,10 +553,9 @@ export const projectRepos = pgTable(
     /**
      * The grade the release gave that score, stored so that nothing
      * recomputes what a student was given (ADR-119 §11): written by each
-     * release, and by migration 0120 for the repositories released under
-     * the removed `score_is_grade` scale. Null with no released score, or on
-     * a row released before 0120 under the linear scale, whose grade is
-     * read from the released points (`releasedGrade`).
+     * release and by the import, and by migration 0120 for every
+     * repository released before it. What the readers of the release
+     * read; null with no released score.
      */
     releasedGrade: doublePrecision("released_grade"),
     /**

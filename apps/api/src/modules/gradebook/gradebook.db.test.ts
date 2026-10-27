@@ -213,7 +213,8 @@ async function makeProject(name: string, released: boolean, scored: { student: n
       teacherPoints: points,
       teacherMax: max,
       teacherComment: SECRET,
-      ...(released ? { releasedPoints: points, releasedMax: max, releasedComment: SECRET } : {}),
+      // The release's snapshot, its grade stored as `releaseProject` writes it (ADR-119 §11).
+      ...(released ? { releasedPoints: points, releasedMax: max, releasedGrade: gradeFromPoints(points, max, { rounding: "nearest" }), releasedComment: SECRET } : {}),
     });
   }
   return id;

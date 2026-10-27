@@ -499,8 +499,8 @@ export type AuditAction =
    * by the system, subject the project: `payload.from` (`score_is_grade`),
    * `released` (whether the project was released then), and the counts
    * converted from a mark out of 6 to points out of 5 — `runs`,
-   * `teacherScores`, `releasedScores` — and `frozenGrades`, the released
-   * grades stored as they stood.
+   * `teacherScores`, `releasedScores`, `gradebookMarks` (the staff's
+   * `score` marks of the project's column).
    */
   | "project.scale_migrated"
   /**

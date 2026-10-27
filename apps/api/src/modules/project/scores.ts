@@ -8,7 +8,7 @@
  */
 import { inArray } from "drizzle-orm";
 
-import { resolveFinalScore, scoreGrade, type FinalScore, type ProjectGrade, type ProjectScale } from "@quiz/domain";
+import { resolveFinalScore, type FinalScore } from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
 import { projectGradeRuns } from "../../db/schema.js";
@@ -59,17 +59,4 @@ export function finalOf(
     frozenScore: frozen ?? null,
     score: current ?? null,
   });
-}
-
-/**
- * The grade of the release's snapshot (ADR-119 §11): the grade the release
- * stored, else — a row released before it stored one — the released score
- * read by the project's scale. Null without a released score.
- */
-export function releasedGrade(
-  project: { gradingScale: ProjectScale },
-  repo: Pick<RepoRow, "releasedPoints" | "releasedMax" | "releasedGrade"> | null | undefined,
-): ProjectGrade | null {
-  const computed = scoreGrade(repo?.releasedPoints ?? null, repo?.releasedMax ?? null, project.gradingScale);
-  return computed !== null && repo?.releasedGrade != null ? { grade: repo.releasedGrade } : computed;
 }
