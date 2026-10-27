@@ -8,7 +8,7 @@
  * - one row per student of the roster, accepted or not, and a repository
  *   whose student left the roster;
  * - each flag, the final score's precedence (teacher, review, frozen,
- *   current) and its grade by the project's scale, `fellBack` included;
+ *   current) and its grade by the project's scale;
  * - "changed after release" and the primary action;
  * - the live state: never read for a deleted repository, a rate-limited
  *   cold read answers the stored state at once, a slow GitHub is cut by
@@ -363,7 +363,7 @@ describe("the project page (F-PROJ-13)", () => {
   });
 
   it("resolves the final score teacher, else review, else frozen, else current, graded by the project's scale", async () => {
-    const w = await world({ students: 4, scale: { kind: "score_is_grade", rounding: "nearest" } });
+    const w = await world({ students: 4 });
     const [s1, s2, s3, s4] = w.students;
     const slots = async (userId: string, teacherPoints: number | null, withReview: boolean, withFrozen: boolean) => {
       const repo = await repoOf(w, userId, { teacherPoints, teacherComment: teacherPoints === null ? null : "seen" });
@@ -379,14 +379,14 @@ describe("the project page (F-PROJ-13)", () => {
 
     const d = await detail(w.projectId);
     const scores = (userId: string) => rowOf(d, userId).repo!.scores;
-    expect(scores(s1!.id).final).toEqual({ points: 5.5, max: 6, source: "teacher", toVerify: false, grade: { grade: 5.5, fellBack: false } });
+    expect(scores(s1!.id).final).toEqual({ points: 5.5, max: 6, source: "teacher", toVerify: false, grade: { grade: 5.6 } });
     // A row without its own maximum (heig-classroom's imported ones) reads the review's.
     expect(scores(s1!.id).teacher).toEqual({ points: 5.5, max: null, comment: "seen", gradedAt: null });
-    expect(scores(s2!.id).final).toEqual({ points: 3, max: 6, source: "review", toVerify: false, grade: { grade: 3, fellBack: false } });
-    // A frozen score out of 10 under "the score is the grade": the linear scale, and says so.
-    expect(scores(s3!.id).final).toEqual({ points: 7, max: 10, source: "ci", toVerify: false, grade: { grade: 4.5, fellBack: true } });
-    expect(scores(s3!.id).frozen).toMatchObject({ points: 7, max: 10, grade: { grade: 4.5, fellBack: true } });
-    expect(scores(s4!.id).final).toEqual({ points: 4.5, max: 6, source: "ci", toVerify: false, grade: { grade: 4.5, fellBack: false } });
+    expect(scores(s2!.id).final).toEqual({ points: 3, max: 6, source: "review", toVerify: false, grade: { grade: 3.5 } });
+    // Each score converts with its own maximum: a frozen score out of 10 beside a current one out of 6.
+    expect(scores(s3!.id).final).toEqual({ points: 7, max: 10, source: "ci", toVerify: false, grade: { grade: 4.5 } });
+    expect(scores(s3!.id).frozen).toMatchObject({ points: 7, max: 10, grade: { grade: 4.5 } });
+    expect(scores(s4!.id).final).toEqual({ points: 4.5, max: 6, source: "ci", toVerify: false, grade: { grade: 4.8 } });
     expect(scores(s4!.id).frozen).toBeNull();
     // The maximum a teacher's score is held to, per row: the review's, the frozen run's, the current one's (`teacherRunMax`).
     expect([s1, s2, s3, s4].map((s) => scores(s!.id).scoreMax)).toEqual([6, 6, 10, 6]);

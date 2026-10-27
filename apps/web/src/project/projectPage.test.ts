@@ -705,11 +705,10 @@ describe("deadlinePassed", () => {
 });
 
 describe("advancedCount", () => {
-  const defaults = { graceMinutes: 30, deadlineStrategy: "lock", gradingMode: "auto", gradingScale: { kind: "linear", rounding: "nearest" } } as const;
-  it("counts what differs from the defaults, the scale only while graded", () => {
+  const defaults = { graceMinutes: 30, deadlineStrategy: "lock", gradingMode: "auto" } as const;
+  it("counts what differs from the defaults", () => {
     expect(advancedCount(defaults)).toBe(0);
     expect(advancedCount({ ...defaults, graceMinutes: 0, deadlineStrategy: "commit" })).toBe(2);
-    expect(advancedCount({ ...defaults, gradingScale: { kind: "score_is_grade", rounding: "nearest" } })).toBe(1);
-    expect(advancedCount({ ...defaults, gradingMode: "none", gradingScale: { kind: "score_is_grade", rounding: "nearest" } })).toBe(1);
+    expect(advancedCount({ ...defaults, gradingMode: "none" })).toBe(1);
   });
 });

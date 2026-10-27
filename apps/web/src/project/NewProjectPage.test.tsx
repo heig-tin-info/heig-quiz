@@ -136,8 +136,6 @@ describe("the new project form", () => {
     const grace = screen.getByLabelText("Grace");
     await userEvent.clear(grace);
     await userEvent.type(grace, "60");
-    await userEvent.click(screen.getByRole("radio", { name: "Score is the grade" }));
-    expect(screen.getByText(/A score out of 6 is the grade\./)).toBeInTheDocument();
     expect(screen.queryByText(/workflow can be changed by students/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("checkbox", { name: ".github/workflows/grading.yml" }));
     expect(screen.getByText(/workflow can be changed by students/)).toBeInTheDocument();
@@ -151,11 +149,11 @@ describe("the new project form", () => {
       sourceStrategy: "whole",
       deadlineStrategy: "commit",
       graceMinutes: 60,
-      gradingScale: { kind: "score_is_grade" },
       protectedFiles: ["criteria.yml", "README.md"],
       groupMode: false,
     });
     expect(posted(calls)[0]).not.toHaveProperty("groupSetId");
+    expect(posted(calls)[0]).not.toHaveProperty("gradingScale");
   });
 
   it("holds a date or a duration, and a start only when scheduled — never a start with a duration", async () => {

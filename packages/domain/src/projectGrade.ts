@@ -1,23 +1,19 @@
 /**
  * A project's score as a Swiss grade (F-PROJ-14, D05, spec 06 no. 49).
  *
- * A project has a scale of its own, distinct from an evaluation's (which is
- * linear only, ADR-052):
- *   - `linear` — Quiz's scale, the default: 1 + 5 × points / max, capped
- *     at 6, rounded to the tenth ({@link gradeFromPoints});
- *   - `score_is_grade` — the preset for a CI that already reports a mark
- *     out of 6 (heig-classroom read `max = 6` as a mark): the points ARE the
- *     grade, clamped to 1…6 and rounded to the tenth. Any other maximum
- *     falls back to the linear scale, and says so (`fellBack`), for the
- *     teacher's warning.
+ * A project has a scale of its own, distinct from an evaluation's: linear,
+ * 1 + 5 × points / max, capped at 6, rounded to the tenth by the project's
+ * rounding ({@link gradeFromPoints}). The `score_is_grade` preset, which read
+ * a score out of 6 as the grade, is gone: its scores were converted to their
+ * linear equivalent (ADR-119 §11, migration 0120).
  *
  * Every score converts with its OWN maximum: a final score whose maximum
  * differs from the frozen one's is not rescaled first.
  */
-import { gradeFromPoints, MAX_GRADE, MIN_GRADE } from "./grade.js";
-import { clamp, roundToTenth, type Rounding } from "./round.js";
+import { gradeFromPoints } from "./grade.js";
+import type { Rounding } from "./round.js";
 
-export const PROJECT_SCALE_KINDS = ["linear", "score_is_grade"] as const;
+export const PROJECT_SCALE_KINDS = ["linear"] as const;
 export type ProjectScaleKind = (typeof PROJECT_SCALE_KINDS)[number];
 
 export interface ProjectScale {
@@ -25,23 +21,28 @@ export interface ProjectScale {
   rounding?: Rounding | undefined;
 }
 
-/** The maximum at which "the score is the grade" applies. */
-export const SCORE_IS_GRADE_MAX = 6;
-
 export interface ProjectGrade {
   grade: number;
-  /** `score_is_grade` asked for, but the maximum is not 6: the linear scale was used. */
-  fellBack: boolean;
+}
+
+/**
+ * heig-classroom's reading of a score out of 6: a mark, which its CI
+ * (StudentScore 0.7.5) printed. Only the import still meets one.
+ */
+const MARK_MAX = 6;
+
+/**
+ * A score heig-classroom read as a mark, as points: `g` out of 6 becomes
+ * `(g − 1)` out of 5, clamped to `[0, 5]`, so that the linear scale gives
+ * `g` back (ADR-119 §11, the arithmetic of migration `0120`). Any other
+ * maximum was already read linearly and is unchanged; so is a missing score.
+ */
+export function markAsPoints<T extends { points: number | null; max: number | null }>(score: T): T {
+  if (score.max !== MARK_MAX || score.points === null) return score;
+  return { ...score, points: Math.min(MARK_MAX - 1, Math.max(0, score.points - 1)), max: MARK_MAX - 1 };
 }
 
 /** points / max → Swiss grade 1.0 … 6.0 by the project's scale. */
 export function projectGrade(points: number, max: number, scale: ProjectScale): ProjectGrade {
-  const rounding = scale.rounding ?? "nearest";
-  if (scale.kind === "score_is_grade") {
-    if (max === SCORE_IS_GRADE_MAX) {
-      return { grade: clamp(roundToTenth(points, rounding), MIN_GRADE, MAX_GRADE), fellBack: false };
-    }
-    return { grade: gradeFromPoints(points, max, { rounding }), fellBack: true };
-  }
-  return { grade: gradeFromPoints(points, max, { rounding }), fellBack: false };
+  return { grade: gradeFromPoints(points, max, { rounding: scale.rounding ?? "nearest" }) };
 }

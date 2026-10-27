@@ -869,8 +869,8 @@ const studentProjectView = (card: CardFacts): StudentProject => {
           score: !graded
             ? null
             : released
-              ? { points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, frozen: true }
-              : { points: Math.min(40, 34 + 2 * pushes), max: 40, grade: { grade: 5.3, fellBack: false }, frozen: card.status === "locked" },
+              ? { points: 18, max: 20, grade: { grade: 5.5 }, frozen: true }
+              : { points: Math.min(40, 34 + 2 * pushes), max: 40, grade: { grade: 5.3 }, frozen: card.status === "locked" },
         };
   return {
     ...facts,
@@ -878,7 +878,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
     gradingMode: criteria === null ? "auto" : "criteria",
     repo,
     release: released
-      ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5, fellBack: false }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." }
+      ? { at: iso(-5 * D), points: 18, max: 20, grade: { grade: 5.5 }, comment: "Très bon travail, attention aux fuites mémoire dans la libération de la liste." }
       : null,
     criteria,
     // `?codespace=1` (ADR-047, M6-06): the open project runs in the workspace, the invited one under Safe Exam Browser.

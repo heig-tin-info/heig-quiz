@@ -211,7 +211,7 @@ describe("the teacher's score (F-PROJ-14)", () => {
     // The FROZEN run's maximum (10), never the current one's (20) — and the page is told which (`scoreMax`).
     expect(scores.scores.teacher).toEqual({ points: 8, max: 10, comment: "Late fixes counted", gradedAt: NOW });
     expect(scores.scores.scoreMax).toBe(10);
-    expect(scores.scores.final).toEqual({ points: 8, max: 10, source: "teacher", toVerify: false, grade: { grade: 5, fellBack: false } });
+    expect(scores.scores.final).toEqual({ points: 8, max: 10, source: "teacher", toVerify: false, grade: { grade: 5 } });
     expect(scores).toMatchObject({ released: null, changedAfterRelease: false });
     expect(await repoRow(repo)).toMatchObject({ teacherPoints: 8, teacherMax: 10, teacherGradedBy: teacher.id, teacherGradedAt: at(NOW) });
     // The same maximum given is accepted.
@@ -252,7 +252,7 @@ describe("the teacher's score (F-PROJ-14)", () => {
         max: 20,
         source: "teacher",
         toVerify: false,
-        grade: { grade: 3, fellBack: false },
+        grade: { grade: 3 },
       });
       // No scored run to hold the score to: the page shows the maximum field.
       expect(scores.scoreMax).toBeNull();

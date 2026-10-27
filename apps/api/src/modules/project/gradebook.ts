@@ -2,7 +2,8 @@
  * What the gradebook reads of a project (F-GBOOK, D06, ADR-074; merge task
  * M5-03a). It never recomputes: the final score is the page's own
  * (`repoScores`, `releasableScore`), the grade `scoreGrade` by the project's
- * scale, the snapshot what the release wrote (decision 3 of `grades.ts`).
+ * scale, the snapshot what the release wrote, its grade included
+ * (`releasedGrade`; decision 3 of `grades.ts`).
  *
  * - The STAFF read the LIVE final score of each seat's repository
  *   ({@link projectLiveScores}), with its source (I42) and whether it moved
@@ -16,12 +17,12 @@
  */
 import { and, eq, isNull, ne } from "drizzle-orm";
 
-import { scoreGrade, type FinalScoreSource } from "@quiz/domain";
+import type { FinalScoreSource } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { projects } from "../../db/schema.js";
 import { repoScores, releasableScore } from "./detail.js";
-import { scoreFacts } from "./scores.js";
+import { releasedGrade, scoreFacts } from "./scores.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
 import type { ProjectRow } from "./views.js";
 
@@ -88,6 +89,6 @@ export async function projectReleasedScore(
 ): Promise<{ points: number; max: number; grade: number } | null> {
   if (project.releasedAt === null) return null;
   const repo = await seatRepo(db, project, enrollmentId);
-  const grade = scoreGrade(repo?.releasedPoints ?? null, repo?.releasedMax ?? null, project.gradingScale);
+  const grade = releasedGrade(project, repo);
   return repo === null || grade === null ? null : { points: repo.releasedPoints!, max: repo.releasedMax!, grade: grade.grade };
 }

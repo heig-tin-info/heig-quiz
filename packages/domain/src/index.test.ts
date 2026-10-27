@@ -58,6 +58,7 @@ describe("@quiz/domain public surface", () => {
       "pickStudentRepo",
       // A project's score as a grade (M3-01, D05).
       "projectGrade",
+      "markAsPoints",
       // What of a project may still change (M3-02, F-PROJ-03).
       "projectFieldRefusal",
       "editableProjectFields",

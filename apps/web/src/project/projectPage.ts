@@ -717,13 +717,12 @@ export function railCountdown(p: ProjectDetail, steps: RailStep[], now: number):
  * defaults (the badge beside its title, so a folded card never hides a change).
  */
 export function advancedCount(
-  p: Pick<ProjectDetail, "graceMinutes" | "deadlineStrategy" | "gradingMode" | "gradingScale">,
+  p: Pick<ProjectDetail, "graceMinutes" | "deadlineStrategy" | "gradingMode">,
 ): number {
   return [
     p.graceMinutes !== PROJECT_DEFAULTS.graceMinutes,
     p.deadlineStrategy !== PROJECT_DEFAULTS.deadlineStrategy,
     p.gradingMode !== PROJECT_DEFAULTS.gradingMode,
-    projectGraded(p.gradingMode) && p.gradingScale.kind !== PROJECT_DEFAULTS.scaleKind,
   ].filter(Boolean).length;
 }
 

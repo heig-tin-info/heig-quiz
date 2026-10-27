@@ -14,9 +14,7 @@ import {
 
 describe("scoreGrade", () => {
   it("reads a score by the project's scale, with its own maximum", () => {
-    expect(scoreGrade(5, 10, { kind: "linear" })).toEqual({ grade: 3.5, fellBack: false });
-    expect(scoreGrade(4.5, 6, { kind: "score_is_grade" })).toEqual({ grade: 4.5, fellBack: false });
-    expect(scoreGrade(8, 10, { kind: "score_is_grade" })).toEqual({ grade: 5, fellBack: true });
+    expect(scoreGrade(5, 10, { kind: "linear" })).toEqual({ grade: 3.5 });
   });
 
   it("gives no grade without points or a maximum", () => {

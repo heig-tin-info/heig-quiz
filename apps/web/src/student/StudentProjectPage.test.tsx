@@ -51,7 +51,7 @@ const project = (over: Partial<StudentProject> = {}): StudentProject => ({
     commits: 3,
     ciStatus: "pass",
     run: { sha: SHA, url: "https://github.com/heig/labo-1-lea/actions/runs/42", conclusion: "success", completedAt: at(-0.1) },
-    score: { points: 34, max: 40, grade: { grade: 5.3, fellBack: false }, frozen: false },
+    score: { points: 34, max: 40, grade: { grade: 5.3 }, frozen: false },
   },
   release: null,
   serverNow: at(0),
@@ -281,7 +281,7 @@ describe("the release", () => {
       status: "released",
       deadlineAt: at(-7),
       repo: { ...project().repo!, locked: true, score: { points: 30, max: 40, grade: null, frozen: true } },
-      release: { at: at(-5), points: 36, max: 40, grade: { grade: 5.5, fellBack: false }, comment: "Bon travail,\nattention aux fuites." },
+      release: { at: at(-5), points: 36, max: 40, grade: { grade: 5.5 }, comment: "Bon travail,\nattention aux fuites." },
     });
     mockFetch({ [URL]: ok(p) });
     render();

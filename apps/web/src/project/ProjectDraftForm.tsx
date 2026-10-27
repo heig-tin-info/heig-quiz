@@ -18,7 +18,7 @@ import { ProjectDraftPublication, publicationKey } from "./ProjectDraftPublicati
 import { GroupSetBody } from "./ProjectGroupSet";
 import { CriteriaErrors, CriteriaRows, useGradingModeWrite } from "./ProjectCriteria";
 import { ProjectRail } from "./ProjectRail";
-import { DeadlineStrategyRow, GraceMinutesRow, GradingModeRow, ScaleRow } from "./ProjectSettingRows";
+import { DeadlineStrategyRow, GraceMinutesRow, GradingModeRow } from "./ProjectSettingRows";
 import { ProtectedFilesRow, useHandoutTree } from "./ProjectSettings";
 import { WorkModeSetting, useWorkspace } from "./ProjectWorkspace";
 import { advancedCount, type WriteProject } from "./projectPage";
@@ -90,7 +90,7 @@ export function ProjectDraftForm({
   const source = useHandoutTree(project, open);
   const changed = advancedCount(project);
   const grading = useGradingModeWrite(write);
-  const can = (field: "gradingMode" | "gradingScale" | "graceMinutes" | "deadlineStrategy") => project.editable.includes(field);
+  const can = (field: "gradingMode" | "graceMinutes" | "deadlineStrategy") => project.editable.includes(field);
 
   return (
     <div className="max-w-3xl space-y-8" data-testid="project-draft-form">
@@ -179,13 +179,6 @@ export function ProjectDraftForm({
         />
         <CriteriaErrors errors={grading.errors} />
         {project.gradingMode === "criteria" ? <CriteriaRows project={project} disabled={disabled} write={write} /> : null}
-        {projectGraded(project.gradingMode) ? (
-          <ScaleRow
-            value={project.gradingScale.kind}
-            disabled={disabled || !can("gradingScale")}
-            onChange={(kind) => write({ gradingScale: { ...project.gradingScale, kind } })}
-          />
-        ) : null}
         <ProtectedFilesRow
           project={project}
           disabled={disabled}

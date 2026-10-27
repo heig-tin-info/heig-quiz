@@ -189,10 +189,10 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
       sourceRepo: "history",
       sourceStrategy: "whole",
       durationMinutes: 120,
-      gradingScale: { kind: "score_is_grade" },
+      gradingScale: { kind: "linear", rounding: "down" },
     });
     expect(project).toMatchObject({ sourceStrategy: "whole", durationMinutes: 120, deadlineAt: new Date(Date.parse(NOW) + 120 * 60_000).toISOString() });
-    expect(project.gradingScale.kind).toBe("score_is_grade");
+    expect(project.gradingScale).toEqual({ kind: "linear", rounding: "down" });
     expect(world.git(`${room.login}/history-squashed`, "rev-list", "--count", "main").trim()).toBe("3");
     // The source's own commits, as they are: the platform creates none.
     expect(world.apiCommits.filter((c) => c.repo === `${room.login}/history-squashed`)).toEqual([]);
@@ -364,7 +364,7 @@ describe("patch (F-PROJ-03)", () => {
       graceMinutes: 10,
       gradingMode: "none",
       groupMode: true,
-      gradingScale: { kind: "score_is_grade" },
+      gradingScale: { kind: "linear", rounding: "up" },
     });
     expect(res.statusCode, res.body).toBe(200);
     expect(ProjectSummary.parse(res.json())).toMatchObject({

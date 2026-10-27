@@ -12,7 +12,6 @@ import {
   GradingModeRow,
   GraceMinutesRow,
   PublishModeRow,
-  ScaleRow,
   SourceStrategyRow,
 } from "./ProjectSettingRows";
 
@@ -93,8 +92,6 @@ export function ProjectAdvanced({
         value={mode}
         onChange={(gradingMode) => update({ gradingMode })}
       />
-
-      {mode === "auto" ? <ScaleRow value={draft.scaleKind} onChange={(scaleKind) => update({ scaleKind })} /> : null}
 
       {detail ? (
         <SettingRow stacked title={t("project.protected")} desc={`${t("project.protected.desc")} ${t("project.protected.hint")}`}>

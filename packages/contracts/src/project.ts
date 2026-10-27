@@ -91,15 +91,12 @@ export const PROJECT_DEFAULTS = {
   deadlineStrategy: "lock",
   gradingMode: "auto",
   publishMode: "manual",
-  /** The scale of an automatically graded project (`defaultProjectGradingScale`). */
-  scaleKind: "linear",
 } as const satisfies {
   graceMinutes: number;
   sourceStrategy: (typeof SOURCE_STRATEGIES)[number];
   deadlineStrategy: (typeof DEADLINE_STRATEGIES)[number];
   gradingMode: (typeof PROJECT_GRADING_MODES)[number];
   publishMode: (typeof PUBLISH_MODES)[number];
-  scaleKind: (typeof PROJECT_SCALE_KINDS)[number];
 };
 
 /**
@@ -147,9 +144,9 @@ export const REVIEW_DISPATCH_TRIGGERS = ["deadline", "checkpoint", "regrade"] as
 /**
  * A project's grading scale (F-PROJ-14, D05, spec 06 no. 49), stored in
  * `projects.grading_scale`. Its own type: an evaluation's `GradingScale`
- * stays linear only (ADR-052). `score_is_grade` reads a score out of 6 as
- * the grade, and falls back to the linear scale for any other maximum
- * (`projectGrade` of `@quiz/domain`).
+ * stays linear only (ADR-052). Linear too since ADR-119 §11 removed the
+ * preset that read a score out of 6 as the grade; the rounding is the
+ * project's own (`projectGrade` of `@quiz/domain`).
  */
 export const ProjectGradingScale = z.object({
   kind: z.enum(PROJECT_SCALE_KINDS),
@@ -158,7 +155,7 @@ export const ProjectGradingScale = z.object({
 export type ProjectGradingScale = z.infer<typeof ProjectGradingScale>;
 
 export const defaultProjectGradingScale = (): ProjectGradingScale =>
-  ProjectGradingScale.parse({ kind: PROJECT_DEFAULTS.scaleKind });
+  ProjectGradingScale.parse({ kind: "linear" });
 
 // ---------------------------------------------------------- activities
 
@@ -851,8 +848,8 @@ export const GradeRunList = z.object({
 });
 export type GradeRunList = z.infer<typeof GradeRunList>;
 
-/** A score read as a Swiss grade by the project's scale; `fellBack` — `score_is_grade` asked, the maximum not 6. */
-export const ProjectGradeView = z.object({ grade: z.number(), fellBack: z.boolean() });
+/** A score read as a Swiss grade by the project's scale. */
+export const ProjectGradeView = z.object({ grade: z.number() });
 export type ProjectGradeView = z.infer<typeof ProjectGradeView>;
 
 /**

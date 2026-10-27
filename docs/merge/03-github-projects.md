@@ -317,7 +317,8 @@ LLM —, teacher) and `resolveFinalScore` (`@quiz/domain`). Classroom's
 `project_grade_final`), which snapshots each repository's final score
 (`project_repos.released_points`, `released_max`). The Swiss grade comes
 from `projectGrade` (`@quiz/domain`) with the project's `grading_scale`, a
-project-only type: `linear` or `score_is_grade` (D05 and its addendum).
+project-only type, linear since ADR-119 §11 removed `score_is_grade` (D05 and its
+addendum); the release also stores the grade it gave (`released_grade`).
 Quiz's `gradings` table is not reused.
 
 ### Audit actions

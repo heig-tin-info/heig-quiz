@@ -551,6 +551,15 @@ export const projectRepos = pgTable(
     releasedPoints: doublePrecision("released_points"),
     releasedMax: doublePrecision("released_max"),
     /**
+     * The grade the release gave that score, stored so that nothing
+     * recomputes what a student was given (ADR-119 §11): written by each
+     * release, and by migration 0120 for the repositories released under
+     * the removed `score_is_grade` scale. Null with no released score, or on
+     * a row released before 0120 under the linear scale, whose grade is
+     * read from the released points (`releasedGrade`).
+     */
+    releasedGrade: doublePrecision("released_grade"),
+    /**
      * The teacher's comment as the release wrote it (M3-09a): what the
      * student reads with their released score (F-PROJ-15). A comment written
      * since names a score not yet released again, so it stays the staff's

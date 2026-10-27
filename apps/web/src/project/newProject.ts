@@ -18,7 +18,7 @@ import {
   type PublishMode,
   type SourceStrategy,
 } from "@quiz/contracts";
-import { SCHOOL_TIME_ZONE, withForcedProtected, type ProjectScaleKind } from "@quiz/domain";
+import { SCHOOL_TIME_ZONE, withForcedProtected } from "@quiz/domain";
 
 import { api, ApiError } from "../api";
 import type { Dict } from "../i18n";
@@ -43,7 +43,6 @@ export interface ProjectDraft {
   deadlineStrategy: DeadlineStrategy;
   /** null: the source's (`criteria` when it holds a `criteria.yml`, ADR-119 §9) until the teacher picks one. */
   gradingMode: ProjectGradingMode | null;
-  scaleKind: ProjectScaleKind;
   /** null: the source's suggestions (`suggestedProtected`), the default even while Advanced stays folded. */
   protectedFiles: string[] | null;
   groupMode: boolean;
@@ -64,7 +63,6 @@ export const emptyDraft = (): ProjectDraft => ({
   sourceStrategy: PROJECT_DEFAULTS.sourceStrategy,
   deadlineStrategy: PROJECT_DEFAULTS.deadlineStrategy,
   gradingMode: null,
-  scaleKind: PROJECT_DEFAULTS.scaleKind,
   protectedFiles: null,
   groupMode: false,
   groupSetId: null,
@@ -155,7 +153,6 @@ function rawBody(draft: ProjectDraft, detail: ProjectSourceDetail | undefined): 
     sourceStrategy: draft.sourceStrategy,
     deadlineStrategy: draft.deadlineStrategy,
     gradingMode: chosenGradingMode(draft, detail),
-    gradingScale: { kind: draft.scaleKind },
     groupMode: draft.groupMode,
     // Never outside group mode: `ProjectCreate` refuses a set on an individual project.
     ...(draft.groupMode && draft.groupSetId ? { groupSetId: draft.groupSetId } : {}),

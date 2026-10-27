@@ -19,7 +19,7 @@
  * columns (refused by the pre-flight), `llm_dispatched_at` (it becomes the
  * ledger's synthetic row, `steps-repos.ts`).
  */
-import { ProjectGradingScale } from "@quiz/contracts";
+import { defaultProjectGradingScale } from "@quiz/contracts";
 import { DEADLINE_REMINDER_MS } from "@quiz/domain";
 import { and, eq, getTableName, inArray, isNull } from "drizzle-orm";
 
@@ -126,8 +126,9 @@ export async function carryOwned(ctx: Ctx, rows: OwnedRow[], conflict: (row: Own
 /**
  * Assignments → projects. `org_id` is the mapped classroom's link (the import
  * never writes it, D22); `created_by` the classroom's owner, else the
- * `--actor`; `grading_scale` heig-classroom's own reading, a score out of 6
- * is the grade and any other maximum linear (product owner, 2026-10-02);
+ * `--actor`; `grading_scale` linear, the only scale (ADR-119 §11): the
+ * scores heig-classroom read as a mark (out of 6) are carried as their
+ * linear equivalent (`markAsPoints`, `steps-repos.ts`);
  * `squashed_*` become `distribution_*`; `grades_validated_*` the release.
  * Neither the freeze nor the reminder is the project's: see `steps-repos.ts`
  * and {@link importReminders}.
@@ -185,7 +186,7 @@ export async function importProjects(ctx: Ctx) {
         sourceAheadSha: a.sourceAheadSha,
         sourcePushedAt: a.sourcePushedAt,
         syncedAt: a.syncedAt,
-        gradingScale: ProjectGradingScale.parse({ kind: "score_is_grade" }),
+        gradingScale: defaultProjectGradingScale(),
         deadlineAppliedAt: a.deadlineAppliedAt,
         releasedAt: a.gradesValidatedAt,
         releasedBy: target(ctx, a.gradesValidatedBy),

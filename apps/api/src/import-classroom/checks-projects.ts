@@ -19,7 +19,7 @@ import type { Ctx } from "./ctx.js";
 import type { ImportCheck } from "./registry.js";
 import type { SourceStudentRepo } from "./source.js";
 import { assignmentsInScope, repoLeftOut, reposInScope } from "./steps-projects.js";
-import { IN_CHUNK, REPO_COLUMNS, latest } from "./steps-repos.js";
+import { IN_CHUNK, REPO_COLUMNS, carriedScores, latest, sourceScores } from "./steps-repos.js";
 
 const same = (a: number, b: number) => Math.abs(a - b) < 1e-9;
 
@@ -74,13 +74,16 @@ const repositoriesPerProject: ImportCheck = {
   ]),
 };
 
-/** `sum(teacher_points)` per project, over the rows Quiz did not re-score. */
+/** `sum(teacher_points)` per project, as carried (a mark as points, `carriedScores`), over the rows Quiz did not re-score. */
 const teacherPoints: ImportCheck = {
   name: "teacher points",
-  run: perProject("sum of teacher points", "carriedUnkept", (repos, quiz) => [
-    repos.reduce((n, r) => n + (r.teacherPoints ?? 0), 0),
-    repos.reduce((n, r) => n + (quiz.get(r.id)?.teacherPoints ?? 0), 0),
-  ]),
+  run: perProject("sum of teacher points", "carriedUnkept", (repos, quiz, ctx) => {
+    const scored = sourceScores(ctx);
+    return [
+      repos.reduce((n, r) => n + (carriedScores(r, scored).teacherPoints ?? 0), 0),
+      repos.reduce((n, r) => n + (quiz.get(r.id)?.teacherPoints ?? 0), 0),
+    ];
+  }),
 };
 
 /** The count of frozen grades (a frozen run set) per project, over the rows Quiz did not change. */

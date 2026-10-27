@@ -17,7 +17,9 @@
  *    final score rests on a run to verify (F-PROJ-08; orchestrator,
  *    2026-10-04): the teacher's score settles each of those.
  * 3. **The release writes a snapshot per repository** (`released_points`,
- *    `released_max`: the final score as it stood, null without one) and
+ *    `released_max`: the final score as it stood, null without one;
+ *    `released_grade`, its grade, which the readers of the snapshot read
+ *    rather than recompute it, ADR-119 §11) and
  *    `projects.released_at / by`; the readers keep showing the LIVE final
  *    score, flagged "changed after release" when it differs
  *    (`changedAfterRelease`, `@quiz/domain`). A release again rewrites the
@@ -157,7 +159,12 @@ export async function releaseProject(db: Db, projectId: string, actor: AuditActo
       await tx
         .update(projectRepos)
         // The comment travels with the score (M3-09a): the student reads the pair the release wrote.
-        .set({ releasedPoints: final?.points ?? null, releasedMax: final?.max ?? null, releasedComment: final ? repo.teacherComment : null })
+        .set({
+          releasedPoints: final?.points ?? null,
+          releasedMax: final?.max ?? null,
+          releasedGrade: final?.grade?.grade ?? null,
+          releasedComment: final ? repo.teacherComment : null,
+        })
         .where(eq(projectRepos.id, repo.id));
     }
     await tx.update(projects).set({ releasedAt: now, releasedBy: userId }).where(eq(projects.id, project.id));

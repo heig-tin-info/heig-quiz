@@ -79,7 +79,7 @@ import type { StudentProjectScope } from "../guards.js";
 import { countedReceipts, repoCommitCount } from "./commits.js";
 import { criteriaStandings } from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
-import { slotRuns } from "./scores.js";
+import { releasedGrade, slotRuns } from "./scores.js";
 import { ProjectError } from "./errors.js";
 import { seatRepo, seatRepos } from "./groupRepos.js";
 import { resendInvitation } from "./invitation.js";
@@ -338,7 +338,7 @@ export async function studentProject(
             at: iso(project.releasedAt),
             points: repo?.releasedPoints ?? null,
             max: repo?.releasedMax ?? null,
-            grade: scoreGrade(repo?.releasedPoints ?? null, repo?.releasedMax ?? null, project.gradingScale),
+            grade: releasedGrade(project, repo),
             comment: repo?.releasedComment ?? null,
           },
     criteria,
