@@ -1,5 +1,5 @@
 /**
- * The removal of the `score_is_grade` scale (`0120_score_is_grade_linear`,
+ * The removal of the `score_is_grade` scale (`0121_score_is_grade_linear`,
  * ADR-119 §11, L-06b), read from the shipped SQL: the rows are written while
  * the table still has its new column, the column is dropped to put
  * `project_repos` back in its old shape, and the migration's statements run
@@ -41,7 +41,7 @@ import { seedLive } from "../../test/live.js";
 import { projectLiveScores, projectReleasedScore } from "./gradebook.js";
 import type { ProjectRow } from "./views.js";
 
-const MIGRATION = new URL("../../../drizzle/0120_score_is_grade_linear.sql", import.meta.url);
+const MIGRATION = new URL("../../../drizzle/0121_score_is_grade_linear.sql", import.meta.url);
 const DEADLINE = new Date("2026-10-09T22:00:00Z");
 
 /** What the removed preset gave a score: a score out of 6 IS the grade, any other maximum linear. */
@@ -252,7 +252,7 @@ beforeAll(async () => {
 
 const after = (projectId: string) => grades(projectId);
 
-describe("0120_score_is_grade_linear (ADR-119 §11)", () => {
+describe("0121_score_is_grade_linear (ADR-119 §11)", () => {
   it("keeps every grade of a released project, the release's stored", async () => {
     expect(before.released).toEqual({
       0: { live: 4.4, released: 4.4 },

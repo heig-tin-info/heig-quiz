@@ -5,7 +5,7 @@
  * 1 + 5 × points / max, capped at 6, rounded to the tenth by the project's
  * rounding ({@link gradeFromPoints}). The `score_is_grade` preset, which read
  * a score out of 6 as the grade, is gone: its scores were converted to their
- * linear equivalent (ADR-119 §11, migration 0120).
+ * linear equivalent (ADR-119 §11, migration 0121).
  *
  * Every score converts with its OWN maximum: a final score whose maximum
  * differs from the frozen one's is not rescaled first.
@@ -34,7 +34,7 @@ const MARK_MAX = 6;
 /**
  * A score heig-classroom read as a mark, as points: `g` out of 6 becomes
  * `(g − 1)` out of 5, clamped to `[0, 5]`, so that the linear scale gives
- * `g` back (ADR-119 §11, the arithmetic of migration `0120`). Any other
+ * `g` back (ADR-119 §11, the arithmetic of migration `0121`). Any other
  * maximum was already read linearly and is unchanged; so is a missing score.
  */
 export function markAsPoints<T extends { points: number | null; max: number | null }>(score: T): T {

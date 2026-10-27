@@ -553,7 +553,7 @@ export const projectRepos = pgTable(
     /**
      * The grade the release gave that score, stored so that nothing
      * recomputes what a student was given (ADR-119 §11): written by each
-     * release and by the import, and by migration 0120 for every
+     * release and by the import, and by migration 0121 for every
      * repository released before it. What the readers of the release
      * read; null with no released score.
      */
