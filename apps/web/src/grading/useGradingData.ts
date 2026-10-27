@@ -39,6 +39,8 @@ export interface StepState {
   validated: number;
 }
 
+const NO_CRITERIA: NonNullable<GradingQueueItem["criteria"]> = [];
+
 /**
  * Everything the grading screen reads (ADR-044): the evaluation and its
  * questions, the state of every question (`…/grading/steps`, two counters
@@ -119,6 +121,8 @@ export function useGradingData(evaluationId: string, itemId: string | null, name
     explanation: queue.data?.items[0]?.explanation ?? null,
     /** A parameterized question's table and the question as written (ADR-056 §9); null when static. */
     parameters: queue.data?.items[0]?.parameters ?? null,
+    /** An essay's criteria (ADR-118 §6); empty for every other question. */
+    criteria: queue.data?.items[0]?.criteria ?? NO_CRITERIA,
     progress: useGradingProgress(evaluationId),
   };
 }

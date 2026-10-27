@@ -328,7 +328,7 @@ describe("the justification never reaches a student (ADR-045, open question 27)"
       // One proposal validated by a click, the other by the batch.
       const [first, second] = await gradingsOf(evaluation.id);
       const teacher = (await reload(db, evaluation.id)).createdBy!;
-      await service.validateGrading(db, first!, {}, teacher, app.clock.now());
+      await service.validateGrading(db, first!, [], {}, teacher, app.clock.now());
       expect(
         await service.batchValidate(db, evaluation.id, { itemId, source: "llm" }, teacher, app.clock.now()),
       ).toBe(1);

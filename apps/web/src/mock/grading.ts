@@ -13,14 +13,19 @@ import {
   negativeMarkingOn,
   parseCloze,
   round2,
+  scaleCriteria,
   scoresNegatively,
+  validatedBreakdown,
   type AttemptTally,
+  type DeclaredCriterion,
 } from "@quiz/domain";
+import { AI_KEY, aiOf, BREAKDOWN_KEY, JUSTIFICATION_KEY } from "@quiz/contracts";
 import type { GradingConfidence, GradingSource, GradingState, ItemCounting } from "@quiz/contracts";
 import type { AnyQuestionTypeServer, ItemAggregate } from "@quiz/core/server";
 import { blocksServer } from "@quiz/qt-blocks/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
+import { richServer } from "@quiz/qt-rich/server";
 import { shortServer } from "@quiz/qt-short/server";
 import type {
   CircuitStudent,
@@ -156,6 +161,90 @@ interface MockGradingWorld {
 }
 
 const cellKey = (attemptId: string, itemId: string) => `${attemptId}:${itemId}`;
+
+/**
+ * The server halves the mock runs for real: in the debrief (ADR-033), their
+ * `isAnswered` and their per-attempt `aggregate`; in grading, an essay's
+ * `gradingCriteria` as the API reads it (ADR-118 §6). `code` is not one —
+ * its server half holds the grader, which needs Node — so its case tally is
+ * summed from the mock details below.
+ */
+const MOCK_SERVERS: Record<string, AnyQuestionTypeServer | undefined> = {
+  mcq: mcqServer,
+  short: shortServer,
+  cloze: clozeServer,
+  blocks: blocksServer,
+  rich: richServer,
+};
+
+/** A question's criteria, from its type's hook on the published config; none without one. */
+function criteriaOfQuestion(q: MockQuestion | undefined): DeclaredCriterion[] {
+  const hook = q ? MOCK_SERVERS[q.type]?.gradingCriteria : undefined;
+  return hook ? [...hook(publishedConfig(q!))] : [];
+}
+
+function criteriaOfItem(e: MockGradingWorld, itemId: string): DeclaredCriterion[] {
+  const item = e.items.find((i) => i.id === itemId);
+  return criteriaOfQuestion(item ? questions.find((q) => q.id === item.questionId) : undefined);
+}
+
+/** The model's sentence per criterion, by how much of it the answer earned. */
+const ESSAY_SENTENCES = [
+  "Not addressed.",
+  "Mentioned, not explained.",
+  "Explained in part.",
+  "Fully explained.",
+];
+
+/**
+ * What the AI proposes for an essay with criteria, as `askGrader` writes it
+ * (ADR-118): each criterion scored in its weight units by the student's
+ * ability, scaled to the item's points, keyed by the criterion's id.
+ */
+function essayProposal(criteria: DeclaredCriterion[], itemPoints: number, ability: number, chars: number) {
+  const earned = criteria.map((c, i) => {
+    // A little spread between criteria, so the rows do not all read alike.
+    const share = Math.min(1, Math.max(0, ability + (i % 2 === 0 ? 0.1 : -0.15)));
+    return Math.round(c.weight * share * 4) / 4;
+  });
+  const scaled = scaleCriteria(
+    criteria.map((c, i) => ({ weight: c.weight, earned: earned[i]! })),
+    itemPoints,
+  );
+  const ai = {
+    model: "claude-sonnet-5-5",
+    criteria: criteria.map((c, i) => ({
+      id: c.id,
+      criterion: c.title,
+      ...scaled.criteria[i]!,
+      comment: ESSAY_SENTENCES[Math.min(3, Math.round((earned[i]! / c.weight) * 3))]!,
+    })),
+  };
+  return {
+    points: scaled.total,
+    details: {
+      reason: "llm",
+      chars,
+      [JUSTIFICATION_KEY]: "The answer names the mechanism; the signal is only implied.",
+      [AI_KEY]: ai,
+    } as Record<string, unknown>,
+  };
+}
+
+/**
+ * The validated breakdown a validation writes (ADR-118 §6): the teacher's
+ * points per criterion, else the proposal's when it names every criterion.
+ * `null` when nothing matches, as the API never writes a partial one.
+ */
+function breakdownFor(
+  criteria: DeclaredCriterion[],
+  itemPoints: number,
+  details: unknown,
+  given?: { id: string; points: number }[],
+) {
+  const scored = given ?? aiOf(details)?.criteria.map((c) => ({ id: c.id ?? "", points: c.points })) ?? [];
+  return validatedBreakdown(criteria, itemPoints, scored);
+}
 
 // --- A parameterized question (ADR-056 §9) ---------------------------------
 //
@@ -532,7 +621,21 @@ function buildGradingWorld(
       // type proposes 0, and only a teacher turns it into points — already
       // done once released.
       const byHand = q.type === "rich" || q.type === "diagram";
-      if (byHand && !blank) {
+      // With criteria and an AI, an essay comes back as the model's proposal (ADR-118).
+      const criteria = criteriaOfQuestion(q);
+      if (criteria.length > 0 && !blank) {
+        const text = (answer as { text?: string } | null)?.text ?? "";
+        const proposal = essayProposal(criteria, item.points, attempt.ability, text.length);
+        points = proposal.points;
+        details = proposal.details;
+        source = "llm";
+        if (options.allValidated) {
+          details = { ...proposal.details, [BREAKDOWN_KEY]: breakdownFor(criteria, item.points, details)?.breakdown };
+        } else {
+          state = "proposed";
+          confidence = attempt.ability > 0.7 ? "high" : "medium";
+        }
+      } else if (byHand && !blank) {
         if (options.allValidated) {
           points = halfPoints(attempt.ability * item.points);
           source = "manual";
@@ -575,7 +678,8 @@ function buildGradingWorld(
         regradeNote: null,
       };
 
-      if (!blank && rand() < 0.05) {
+      // An essay with criteria is overridden by them (ADR-118 §6): no bare bump.
+      if (!blank && rand() < 0.05 && criteria.length === 0) {
         const bumped = Math.min(item.points, Math.round((points + 1) * 100) / 100);
         history.push({ ...base, state: "superseded" });
         history.push({
@@ -790,6 +894,7 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       type: i.type,
       points: i.points,
       minPoints: scoresNegatively(i.type, negativeOf(e.evaluation), i.counting) ? -i.points : 0,
+      criteria: criteriaOfItem(e, i.id).map(({ id, title, weight }) => ({ id, title, weight })),
       explanation: questions.find((q) => q.id === i.questionId)?.versions.at(-1)?.explanation || null,
       ...(FALL && i.questionId === FALL.id
         ? {
@@ -867,17 +972,27 @@ on("POST", "/app/api/evaluations/:id/grading/run", (m) => {
   return { evaluationId: e.evaluation.id, itemIds: e.items.map((i) => i.id), queued: false };
 });
 
-function validateChain(e: MockGradingWorld, g: MockGrading) {
+function validateChain(e: MockGradingWorld, g: MockGrading, given?: { id: string; points: number }[]) {
+  const criteria = criteriaOfItem(e, g.itemId);
+  const graded = criteria.length > 0 ? breakdownFor(criteria, g.maxPoints, g.details, given) : null;
+  if (given && !graded) throw refuse(422, "criteria_invalid", "the points per criterion do not match the item's criteria");
+  if (graded) {
+    g.details = { ...(g.details as Record<string, unknown> | null), [BREAKDOWN_KEY]: graded.breakdown };
+    if (given && graded.total !== g.points) {
+      g.points = graded.total;
+      g.source = "manual";
+    }
+  }
   g.state = "validated";
   e.evaluation.modifiedAfterRelease = e.evaluation.releasedAt !== null ? true : e.evaluation.modifiedAfterRelease;
   return g;
 }
 
-on("POST", "/app/api/gradings/:id/validate", (m) => {
+on("POST", "/app/api/gradings/:id/validate", (m, body) => {
   for (const e of gradingWorlds) {
     for (const chain of e.gradings.values()) {
       const g = chain.find((x) => x.id === m.groups!.id);
-      if (g) return validateChain(e, g);
+      if (g) return validateChain(e, g, body.criteria as { id: string; points: number }[] | undefined);
     }
   }
   throw new MockError(404, "Grading not found");
@@ -885,11 +1000,29 @@ on("POST", "/app/api/gradings/:id/validate", (m) => {
 
 function overrideCell(e: MockGradingWorld, g: MockGrading, body: Record<string, unknown>) {
   const chain = e.gradings.get(cellKey(g.attemptId, g.itemId))!;
+  // The API's rule (ADR-118 §6): an essay with criteria is overridden by
+  // them, the model's reply kept beside the new breakdown; any other item
+  // writes `{ manual: true }`.
+  const criteria = criteriaOfItem(e, g.itemId);
+  const given = body.criteria as { id: string; points: number }[] | undefined;
+  const graded = criteria.length > 0 ? breakdownFor(criteria, g.maxPoints, null, given ?? []) : null;
+  if ((criteria.length > 0) !== (given !== undefined) || (given && !graded)) {
+    throw refuse(422, "criteria_invalid", "the points per criterion do not match the item's criteria");
+  }
+  const previous = (g.details ?? {}) as Record<string, unknown>;
   g.state = "superseded";
   const next: MockGrading = {
     ...g,
     id: `g${(gradingSeq += 1)}`,
-    points: Number(body.points ?? 0),
+    points: graded ? graded.total : Number(body.points ?? 0),
+    details: graded
+      ? {
+          ...(AI_KEY in previous ? { [AI_KEY]: previous[AI_KEY] } : {}),
+          ...(JUSTIFICATION_KEY in previous ? { [JUSTIFICATION_KEY]: previous[JUSTIFICATION_KEY] } : {}),
+          manual: true,
+          [BREAKDOWN_KEY]: graded.breakdown,
+        }
+      : { manual: true },
     source: "manual",
     state: "validated",
     confidence: null,
@@ -1079,21 +1212,8 @@ function resultsView(e: MockGradingWorld) {
 
 on("GET", "/app/api/evaluations/:id/results", (m) => resultsView(gradingWorldOr404(m.groups!.id!)));
 
-/**
- * The server halves the mock runs for real in the debrief (ADR-033): their
- * `isAnswered` and their per-attempt `aggregate`. `code` is not one — its
- * server half holds the grader, which needs Node — so its case tally is
- * summed from the mock details below.
- */
-const DEBRIEF_TYPES: Record<string, AnyQuestionTypeServer | undefined> = {
-  mcq: mcqServer,
-  short: shortServer,
-  cloze: clozeServer,
-  blocks: blocksServer,
-};
-
 function attemptAggregate(type: string, answer: unknown, details: unknown): ItemAggregate {
-  const server = DEBRIEF_TYPES[type];
+  const server = MOCK_SERVERS[type];
   if (server?.aggregate) return server.aggregate({ answers: [answer], details: [details] });
   const cases = (details as { cases?: { name: string; ok: boolean }[] } | null)?.cases ?? [];
   return { casePassRate: cases.map((c) => ({ name: c.name, passed: c.ok ? 1 : 0, total: 1 })) };
@@ -1115,7 +1235,7 @@ on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
     const q = questions.find((x) => x.id === item.questionId)!;
     // A parameterized question projects its example instance (ADR-056 §9).
     const config = attemptConfig(q, null);
-    const server = DEBRIEF_TYPES[q.type];
+    const server = MOCK_SERVERS[q.type];
     // As `byQuestion` does it: one tally per attempt of the class, a blank
     // for no answer (or one that holds nothing), nothing at all for an
     // answer still waiting for its grading to be validated.

@@ -254,7 +254,7 @@ describe("a reopen of an exercise attempt graded at hand-in", () => {
     app.clock.advance(1000);
     const override = await manualOverride(
       db,
-      { attemptId: attempt.id, itemId: code.id, answerId: null, maxPoints: code.points },
+      { attemptId: attempt.id, itemId: code.id, answerId: null, maxPoints: code.points, criteria: [] },
       { points: 0.5, comment: "partial credit" },
       seed.teacherId,
       app.clock.now(),

@@ -359,6 +359,21 @@ describe("the order of the refusals, over HTTP", () => {
     expect(second.statusCode).toBe(200);
     expect(second.json()).toMatchObject({ points: 0.75, source: "manual", state: "validated" });
 
+    // The total or the points per criterion, never both (ADR-118 §6); and an
+    // item without criteria takes none: `criteria_invalid`, its own 422.
+    const both = await post(`/app/api/gradings/${second.json().id}/override`, teacher.headers, {
+      points: 1,
+      criteria: [{ id: "thesis", points: 1 }],
+      comment: "both",
+    });
+    expect(both.statusCode).toBe(400);
+    const noCriteria = await post(`/app/api/gradings/${second.json().id}/override`, teacher.headers, {
+      criteria: [{ id: "thesis", points: 1 }],
+      comment: "criteria",
+    });
+    expect(noCriteria.statusCode).toBe(422);
+    expect(noCriteria.json().error).toBe("criteria_invalid");
+
     // A validated grading is no proposal: `not_pending` comes back as its own 409.
     const again = await post(`/app/api/gradings/${second.json().id}/validate`, teacher.headers);
     expect(again.statusCode).toBe(409);

@@ -133,6 +133,8 @@ A proposal is asked once: closing again, or a retake, keeps it; a **Re-grade** a
 
 **Adjust**, on a row or at the foot of the open answer, opens **Adjust this grading** under the answer. Enter the **Points** (between 0 and the item's maximum) and a **Comment**. The comment is mandatory, and it is the one comment the student may read with their result if the feedback policy shows comments: a student who reads a grade different from the machine's deserves to know why. **Save and validate** stores it as a manual grading and validates it. The grading it replaces is never deleted: it stays in the answer's **Grading history**.
 
+An essay with **criteria** is adjusted criterion by criterion. **Adjust** lists each criterion with its weight, the AI's points and its sentence when it proposed, and a points field bounded by the criterion's share of the item's points; the **Total** is their sum, which you never type. Validating an essay, one answer at a time or with **Validate 4**, keeps the points of each criterion with the grading, and the open answer then shows them under **Validated points**. The AI's sentences stay yours: they are never part of what is kept for the student.
+
 <figure markdown="span">
   ![The primary button offering to validate the four AI proposals of an essay](../assets/screenshots/grading-batch-light.png#only-light)
   ![The primary button offering to validate the four AI proposals of an essay](../assets/screenshots/grading-batch-dark.png#only-dark)

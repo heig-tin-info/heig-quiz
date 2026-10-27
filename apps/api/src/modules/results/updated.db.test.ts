@@ -120,6 +120,7 @@ async function override(built: Built, userId: string, item: number, points: numb
       itemId: built.itemIds[item]!,
       answerId: null,
       maxPoints: ITEM_POINTS,
+      criteria: [],
     },
     { points, comment: "re-read" },
     built.seed.teacherId,

@@ -4,8 +4,11 @@
  * `comment`) of a grading no grader could settle. Wire values, closed here
  * once for the API (through `@quiz/contracts`, which re-exports them), the
  * web, and the grading columns of the question types (`@quiz/ui`), which
- * cannot depend on `@quiz/contracts`. No runtime import: plain values.
+ * cannot depend on `@quiz/contracts`. Plain values, and one zod schema (a
+ * validated breakdown's entry), which `zod` already brings to every reader.
  */
+import { z } from "zod";
+
 import type { LlmCriterion } from "./llm.js";
 
 /**
@@ -120,6 +123,44 @@ export function justificationOf(details: unknown): string | null {
   if (details && typeof details === "object" && JUSTIFICATION_KEY in details) {
     const text = (details as Record<string, unknown>)[JUSTIFICATION_KEY];
     return typeof text === "string" ? text : null;
+  }
+  return null;
+}
+
+/**
+ * What a criterion's id may hold (ADR-118): letters, digits, `_` and `-`,
+ * a plain JSON property name, since the model's reply is keyed by it. One
+ * pattern for the question's config and the grading routes that name it.
+ */
+export const CRITERION_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
+
+/**
+ * Where a grading's `details` keep the VALIDATED points of an essay's
+ * criteria (ADR-118 §6, amendment of 2026-10-27): written when a teacher
+ * validates or overrides a grading of an item whose criteria every entry
+ * names, in the criteria's order, the titles snapshotted from the item's
+ * version, the points on the item's scale. Distinct from {@link AI_KEY}:
+ * never a weight, a prompt, a sentence or a model. A student reads it only
+ * under a shown key (the type's `studentDetails`).
+ */
+export const BREAKDOWN_KEY = "breakdown";
+
+/** One criterion of a validated breakdown: the one shape, for the types' details schemas and the readers. */
+export const BreakdownEntrySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  points: z.number(),
+  maxPoints: z.number(),
+});
+export type BreakdownEntry = z.infer<typeof BreakdownEntrySchema>;
+
+const BreakdownSchema = z.array(BreakdownEntrySchema);
+
+/** `details.breakdown`, when a validation wrote one. */
+export function breakdownOf(details: unknown): BreakdownEntry[] | null {
+  if (details && typeof details === "object" && BREAKDOWN_KEY in details) {
+    const parsed = BreakdownSchema.safeParse((details as Record<string, unknown>)[BREAKDOWN_KEY]);
+    if (parsed.success) return parsed.data;
   }
   return null;
 }

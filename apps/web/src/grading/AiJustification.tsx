@@ -5,11 +5,12 @@
  * tab's, where the same proposal comes back for the author's own trial.
  * Stripped from every student payload, so a student never reaches this.
  */
-import { aiOf, justificationOf, type AiDetails } from "@quiz/contracts";
-import { formatPoints, LLM_MODELS } from "@quiz/domain";
+import { aiOf, breakdownOf, justificationOf, type AiDetails } from "@quiz/contracts";
+import { LLM_MODELS } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { NotePanel } from "../ui";
+import { PointsByCriterion } from "./PointsByCriterion";
 
 /** The note of a proposal a model wrote; nothing when it wrote none. */
 export function AiJustification({ details }: { details: unknown }) {
@@ -19,35 +20,36 @@ export function AiJustification({ details }: { details: unknown }) {
   return (
     <NotePanel tone="soft" eyebrow={t("grading.aiJustification")}>
       <p className="text-[13px] text-fg">{justification}</p>
-      <AiBreakdown ai={aiOf(details)} />
+      {/* Once validated, the split is the validated one, shown beside (ADR-118 §6). */}
+      <AiBreakdown ai={aiOf(details)} split={breakdownOf(details) === null} />
     </NotePanel>
   );
 }
 
 /**
- * The rest of an AI proposal (ADR-063 §4): its points per criterion and the
- * model that wrote it (N-DATA-05), under its justification.
+ * The rest of an AI proposal (ADR-063 §4): its points per criterion, unless
+ * `split` is off, and the model that wrote it (N-DATA-05), under its
+ * justification.
  */
-function AiBreakdown({ ai }: { ai: AiDetails | null }) {
+function AiBreakdown({ ai, split }: { ai: AiDetails | null; split: boolean }) {
   const t = useT();
   if (ai === null) return null;
   const model = LLM_MODELS.find((m) => m.id === ai.model)?.label ?? ai.model;
   return (
     <>
-      {ai.criteria.length > 0 ? (
-        <ul className="mt-3 space-y-2" aria-label={t("grading.ai.criteria")}>
-          {ai.criteria.map((c, i) => (
-            <li key={i} className="text-[13px]">
-              <span className="flex items-baseline justify-between gap-3">
-                <span className="font-medium text-fg">{c.criterion}</span>
-                <span className="shrink-0 tabular-nums text-fg-muted">
-                  {formatPoints(c.points)} / {formatPoints(c.maxPoints)}
-                </span>
-              </span>
-              <span className="block text-fg-muted">{c.comment}</span>
-            </li>
-          ))}
-        </ul>
+      {split && ai.criteria.length > 0 ? (
+        <div className="mt-3">
+          <PointsByCriterion
+            label={t("grading.ai.criteria")}
+            lines={ai.criteria.map((c, i) => ({
+              key: c.id ?? String(i),
+              title: c.criterion,
+              points: c.points,
+              maxPoints: c.maxPoints,
+              note: c.comment,
+            }))}
+          />
+        </div>
       ) : null}
       <p className="mt-3 text-xs text-fg-faint">{t("grading.ai.model", { model })}</p>
     </>

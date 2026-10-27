@@ -11,6 +11,7 @@
  * the development stub yet) and something to grade against, the essay goes
  * to it instead (`pending: 'llm'`, docs/spec/04 §4.8, F-GRADE-02).
  */
+import { BREAKDOWN_KEY } from "@quiz/core/reasons";
 import { ConfigMigrationError, zeroGrade, type QuestionTypeServer } from "@quiz/core/server";
 
 import { richGenerator } from "./generate.js";
@@ -99,6 +100,21 @@ export const richServer: QuestionTypeServer<
     return solution.reference === undefined || solution.reference.trim() === ""
       ? null
       : { reference: solution.reference };
+  },
+
+  /** Graded criterion by criterion when it has criteria (ADR-118 §6). */
+  gradingCriteria: (config) => config.criteria,
+
+  /**
+   * The validated points per criterion are the key's (ADR-118 §5): a
+   * student reads them only once the key is shown, and only through this
+   * breakdown — the model's reply (`ai`, `justification`) is stripped by the
+   * results module whatever the policy.
+   */
+  studentDetails(details, policy) {
+    if (policy.showKey) return details;
+    const { [BREAKDOWN_KEY]: _breakdown, ...rest } = details;
+    return rest;
   },
 
   /**

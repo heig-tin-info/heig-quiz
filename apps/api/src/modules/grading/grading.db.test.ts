@@ -36,7 +36,7 @@ import { subscribe } from "../../events.js";
 import { pgliteDb, testApp, testDatabase } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
-import { reload, seedLive } from "../../test/live.js";
+import { closedWithAnswers, reload, seedLive } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import { applyState, byId, createEvaluation, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
@@ -72,31 +72,11 @@ async function appFor() {
  */
 async function closedEvaluation(options: Parameters<typeof seedLive>[1] = {}) {
   const app = await appFor();
-  const seed = await seedLive(db, { students: 2, questions: 2, ...options });
-  let evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
-  const items = await joinedItems(db, evaluation.id);
-
-  const attemptRows = [];
-  for (const [index, userId] of seed.studentIds.entries()) {
-    // One millisecond apart: the panel orders attempts by creation, and two
-    // rows created on the same instant have no order of their own.
-    app.clock.advance(1);
-    const participant = (await live.participantOf(db, evaluation, userId))!;
-    const created = await live.ensureAttempt(db, evaluation, participant, app.clock.now());
-    const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());
-    await live.saveAnswer(db, {
-      evaluation,
-      attempt,
-      itemId: items[0]!.item.id,
-      // The fake `short` type matches `answer-q0` exactly.
-      payload: index === 0 ? "answer-q0" : "nope",
-      revision: 1,
-      now: app.clock.now(),
-    });
-    attemptRows.push(attempt);
-  }
-  evaluation = await live.closeEvaluation(db, evaluation, app.clock.now());
-  return { app, seed, evaluation, items, attempts: attemptRows };
+  const closed = await closedWithAnswers(db, app.clock, { students: 2, questions: 2, ...options }, (student, item) =>
+    // The fake `short` type matches `answer-q0` exactly.
+    item === 0 ? (student === 0 ? "answer-q0" : "nope") : null,
+  );
+  return { app, ...closed };
 }
 
 const gradingsOf = (evaluationId: string) =>
@@ -373,7 +353,7 @@ describe("the supersede chain (F-GRADE-05)", () => {
     app.clock.advance(1000);
     const override = await service.manualOverride(
       db,
-      { ...cell, answerId: answer!.id, maxPoints: items[0]!.item.points },
+      { ...cell, answerId: answer!.id, maxPoints: items[0]!.item.points, criteria: [] },
       { points: 0.5, comment: "half a point for the idea" },
       rows[0]!.userId!,
       app.clock.now(),
@@ -397,6 +377,7 @@ describe("the supersede chain (F-GRADE-05)", () => {
           itemId: items[0]!.item.id,
           answerId: null,
           maxPoints: 1,
+          criteria: [],
         },
         { points: 1, comment: "   " },
         rows[0]!.userId!,
@@ -535,7 +516,7 @@ describe("batch validation (F-GRADE-04)", () => {
     const [clicked, batched] = [await propose(rows[0]!.id), await propose(rows[1]!.id)];
     app.clock.advance(1000);
     const teacher = rows[0]!.userId!;
-    await service.validateGrading(db, clicked, {}, teacher, app.clock.now());
+    await service.validateGrading(db, clicked, [], {}, teacher, app.clock.now());
     expect(
       await service.batchValidate(db, evaluation.id, { itemId: items[1]!.item.id }, teacher, app.clock.now()),
     ).toBe(1);

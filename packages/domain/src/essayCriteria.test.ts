@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { scaleCriteria } from "./essayCriteria.js";
+import { breakdownTotal, criteriaMaxima, scaleCriteria, validatedBreakdown } from "./essayCriteria.js";
 
 describe("scaleCriteria", () => {
   it("keeps weight units when the item is worth the sum of the weights", () => {
@@ -89,5 +89,71 @@ describe("scaleCriteria", () => {
       criteria: [{ points: 0, maxPoints: 0 }],
       total: 0,
     });
+  });
+});
+
+describe("validatedBreakdown (ADR-118, per-criterion grading)", () => {
+  const declared = [
+    { id: "a", title: "Argument", weight: 2 },
+    { id: "b", title: "Sources", weight: 1 },
+    { id: "c", title: "Style", weight: 1 },
+  ];
+
+  it("derives the total from the parts, in the declared order, titles from the declaration", () => {
+    const result = validatedBreakdown(declared, 4, [
+      { id: "c", points: 0.5 },
+      { id: "a", points: 1.5 },
+      { id: "b", points: 1 },
+    ]);
+    expect(result).toEqual({
+      breakdown: [
+        { id: "a", title: "Argument", points: 1.5, maxPoints: 2 },
+        { id: "b", title: "Sources", points: 1, maxPoints: 1 },
+        { id: "c", title: "Style", points: 0.5, maxPoints: 1 },
+      ],
+      total: 3,
+    });
+  });
+
+  it("bounds each criterion by its scaled maximum, and rounds the total once", () => {
+    const thirds = [
+      { id: "x", title: "X", weight: 1 },
+      { id: "y", title: "Y", weight: 1 },
+      { id: "z", title: "Z", weight: 1 },
+    ];
+    expect(criteriaMaxima(thirds, 2)).toEqual([0.67, 0.67, 0.67]);
+    const full = validatedBreakdown(thirds, 2, thirds.map((c) => ({ id: c.id, points: 0.67 })));
+    // 2.01 clamped to the item's 2 points.
+    expect(full?.total).toBe(2);
+    const over = [
+      { id: "x", points: 0.68 },
+      { id: "y", points: 0 },
+      { id: "z", points: 0 },
+    ];
+    expect(validatedBreakdown(thirds, 2, over)).toBeNull();
+  });
+
+  it("refuses anything that is not every criterion exactly once", () => {
+    const ok = [
+      { id: "a", points: 1 },
+      { id: "b", points: 1 },
+      { id: "c", points: 1 },
+    ];
+    const two = ok.slice(0, 2);
+    expect(validatedBreakdown(declared, 4, ok)).not.toBeNull();
+    // Missing, unknown, duplicate, negative, not a number.
+    expect(validatedBreakdown(declared, 4, two)).toBeNull();
+    expect(validatedBreakdown(declared, 4, [...two, { id: "z", points: 1 }])).toBeNull();
+    expect(validatedBreakdown(declared, 4, [...two, { id: "a", points: 1 }])).toBeNull();
+    expect(validatedBreakdown(declared, 4, [...two, { id: "c", points: -0.5 }])).toBeNull();
+    expect(validatedBreakdown(declared, 4, [...two, { id: "c", points: Number.NaN }])).toBeNull();
+    // No declared criteria: no breakdown at all.
+    expect(validatedBreakdown([], 4, [])).toBeNull();
+  });
+
+  it("sums to the item's points at most", () => {
+    expect(breakdownTotal([1.25, 2], 4)).toBe(3.25);
+    expect(breakdownTotal([3, 3], 4)).toBe(4);
+    expect(breakdownTotal([], 4)).toBe(0);
   });
 });

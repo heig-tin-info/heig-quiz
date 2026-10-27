@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { aiOf, isMachineReason, isRetryableReason, justificationOf, reasonOf } from "./reasons.js";
+import { aiOf, breakdownOf, CRITERION_ID_PATTERN, isMachineReason, isRetryableReason, justificationOf, reasonOf } from "./reasons.js";
 
 describe("the machine reasons of a grading", () => {
   it("knows its own codes, and which of them a new pass may clear", () => {
@@ -36,5 +36,22 @@ describe("an LLM's reply in the details (ADR-045, ADR-063)", () => {
     expect(aiOf({ ai: null })).toBeNull();
     expect(aiOf({})).toBeNull();
     expect(aiOf(null)).toBeNull();
+  });
+});
+
+describe("a validated breakdown in the details (ADR-118 §6)", () => {
+  it("reads the list only when every entry has the shape", () => {
+    const breakdown = [{ id: "a", title: "Argument", points: 1, maxPoints: 2 }];
+    expect(breakdownOf({ breakdown })).toEqual(breakdown);
+    expect(breakdownOf({ breakdown: [{ id: "a", points: 1 }] })).toBeNull();
+    expect(breakdownOf({ breakdown: "a" })).toBeNull();
+    expect(breakdownOf({})).toBeNull();
+    expect(breakdownOf(null)).toBeNull();
+  });
+
+  it("knows a criterion id: a plain property name", () => {
+    expect(CRITERION_ID_PATTERN.test("c_1-x")).toBe(true);
+    expect(CRITERION_ID_PATTERN.test("a b")).toBe(false);
+    expect(CRITERION_ID_PATTERN.test("")).toBe(false);
   });
 });

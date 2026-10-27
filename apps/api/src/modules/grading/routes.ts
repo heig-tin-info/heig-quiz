@@ -30,7 +30,7 @@ import { evaluationGradingRole } from "@quiz/domain";
 import { tracer, type AuditAction } from "../../audit.js";
 import { loadEvaluation, staffAnswer, staffGrading, teacherGuard, withCourseRole } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
-import { joinedItem, joinedItems } from "../evaluation/service.js";
+import { joinedItem, joinedItems, type JoinedItem } from "../evaluation/service.js";
 import { listVersions } from "../pool/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
@@ -145,15 +145,17 @@ export async function gradingPlugin(app: FastifyInstance) {
   async function applyOverride(
     req: FastifyRequest,
     evaluation: Parameters<typeof events.gradingChanged>[0],
-    cell: Parameters<typeof service.manualOverride>[1],
+    cell: Omit<Parameters<typeof service.manualOverride>[1], "criteria">,
+    item: JoinedItem | null,
     body: ManualGradingBody,
     now: Date,
   ) {
-    await service.assertPointsInRange(app.db, evaluation, cell, body.points);
+    // An essay's criteria derive a total within range (ADR-118 §6).
+    if (body.points !== undefined) service.assertPointsInRange(evaluation, item, cell, body.points);
     const row = await service.manualOverride(
       app.db,
-      cell,
-      { points: body.points, comment: body.comment },
+      { ...cell, criteria: service.criteriaOf(item) },
+      { points: body.points, criteria: body.criteria, comment: body.comment },
       req.user!.id,
       now,
     );
@@ -177,7 +179,10 @@ export async function gradingPlugin(app: FastifyInstance) {
           return null;
         },
       },
-      ({ req, now, body, scope }) => applyOverride(req, scope.evaluation, { ...scope.cell }, body, now),
+      ({ req, now, body, scope }) => {
+        const { item, ...cell } = scope.cell;
+        return applyOverride(req, scope.evaluation, cell, item, body, now);
+      },
     ),
   );
 
@@ -191,7 +196,7 @@ export async function gradingPlugin(app: FastifyInstance) {
     { preHandler: requireTeacher },
     teacher(
       { params: GradingIdParam, body: ManualGradingBody, load: gradedGrading },
-      ({ req, now, body, scope }) =>
+      async ({ req, now, body, scope }) =>
         applyOverride(
           req,
           scope.evaluation,
@@ -201,6 +206,7 @@ export async function gradingPlugin(app: FastifyInstance) {
             answerId: scope.grading.answerId,
             maxPoints: scope.grading.maxPoints,
           },
+          await joinedItem(app.db, scope.evaluation.id, scope.grading.itemId),
           body,
           now,
         ),
@@ -214,10 +220,16 @@ export async function gradingPlugin(app: FastifyInstance) {
     teacher(
       { params: GradingIdParam, body: ValidateGradingBody, optionalBody: true, load: gradedGrading },
       async ({ req, now, body, scope }) => {
-        if (body.points !== undefined) {
-          await service.assertPointsInRange(app.db, scope.evaluation, scope.grading, body.points);
-        }
-        const row = await service.validateGrading(app.db, scope.grading, body, req.user!.id, now);
+        const item = await joinedItem(app.db, scope.evaluation.id, scope.grading.itemId);
+        if (body.points !== undefined) service.assertPointsInRange(scope.evaluation, item, scope.grading, body.points);
+        const row = await service.validateGrading(
+          app.db,
+          scope.grading,
+          service.criteriaOf(item),
+          body,
+          req.user!.id,
+          now,
+        );
         await afterCorrection(req, scope.evaluation, row, "grading.validate");
         return service.toGrading(row);
       },
