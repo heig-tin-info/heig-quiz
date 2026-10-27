@@ -494,6 +494,16 @@ export type AuditAction =
   | "project.grading_mode"
   | "project.criteria_reload"
   /**
+   * ADR-119 §11 (L-06b): the removed `score_is_grade` scale left the
+   * project, written once by migration `0122` (never by the application),
+   * by the system, subject the project: `payload.from` (`score_is_grade`),
+   * `released` (whether the project was released then), and the counts
+   * converted from a mark out of 6 to points out of 5 — `runs`,
+   * `teacherScores`, `releasedScores`, `gradebookMarks` (the staff's
+   * `score` marks of the project's column).
+   */
+  | "project.scale_migrated"
+  /**
    * A Regrade by the staff (ADR-106 §4), both subject the project, each
    * action counted by its own three a day: `project.regrade` —
    * `payload.passId`, `repos` (their count), the project's cap;

@@ -12,15 +12,20 @@
  * of a frozen one its `frozen_at`; `deadline_committed_at` is read from the
  * `deadline` bot commit. A released project's repositories carry the final
  * score at the import as `released_points` / `released_max` (so nothing reads
- * "changed after release"); `teacher_max` stays null on an imported row
- * (the CI's maximum is read, `resolveFinalScore`). The runs, commits,
+ * "changed after release") and its grade as `released_grade`; `teacher_max`
+ * stays null on an imported row (the CI's maximum is read,
+ * `resolveFinalScore`). A score heig-classroom read as a mark (out of 6: a
+ * run's, or a teacher's against such a run, whose `teacher_max` is then 5)
+ * is carried as its linear equivalent, `(g − 1)` out of 5 (`markAsPoints`,
+ * ADR-119 §11), so that no grade moves. The runs, commits,
  * ledger, restores and receipts are insert-only and immutable: a row present
  * is left alone, whoever wrote it, and parity looks them up by their natural
  * key, so a run Quiz's own ingestion already took is no loss.
  */
 import { randomUUID } from "node:crypto";
 
-import { isLiveIndividualRepo, resolveFinalScore, type ScoreLike } from "@quiz/domain";
+import { defaultProjectGradingScale } from "@quiz/contracts";
+import { isLiveIndividualRepo, markAsPoints, resolveFinalScore, scoreGrade, type ScoreLike } from "@quiz/domain";
 import { getTableName, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
@@ -139,6 +144,35 @@ function deadlineCommits(ctx: Ctx): Map<string, Date> {
   return first;
 }
 
+/** A source run's score by its id, as heig-classroom stored it (a mark when out of 6). */
+export function sourceScores(ctx: Ctx): (id: string | null) => ScoreLike | null {
+  const runs = new Map(ctx.snapshot.gradeRuns.map((r) => [r.id, r]));
+  return (id) => {
+    const run = id === null ? undefined : runs.get(id);
+    return run ? { points: run.gradePoints, max: run.gradeMax, parseStatus: run.parseStatus } : null;
+  };
+}
+
+/**
+ * A repository's scores as Quiz carries them: each run's, and the teacher's,
+ * which heig-classroom read against the CI's maximum, as points
+ * (`markAsPoints`): a mark out of 6 becomes `(g − 1)` out of 5 (ADR-119 §11).
+ */
+export function carriedScores(r: SourceStudentRepo, scored: (id: string | null) => ScoreLike | null) {
+  const read = { reviewScore: scored(r.llmGradeRunId), frozenScore: scored(r.frozenGradeRunId), score: scored(r.currentGradeRunId) };
+  const readMax = r.teacherPoints === null ? null : (resolveFinalScore({ teacherPoints: r.teacherPoints, teacherMax: null, ...read })?.max ?? null);
+  const asPoints = (s: ScoreLike | null) => s && markAsPoints(s);
+  const teacher = r.teacherPoints === null ? null : markAsPoints({ points: r.teacherPoints, max: readMax });
+  return {
+    teacherPoints: teacher?.points ?? null,
+    // A converted mark keeps its maximum, 5, as migration 0122 writes it; any other stays null (the CI's is read).
+    teacherMax: teacher !== null && teacher.max !== readMax ? teacher.max : null,
+    reviewScore: asPoints(read.reviewScore),
+    frozenScore: asPoints(read.frozenScore),
+    score: asPoints(read.score),
+  };
+}
+
 /** What `project_repos` holds of one carried repository: the columns the import owns. */
 function repoRow(
   ctx: Ctx,
@@ -149,15 +183,9 @@ function repoRow(
   const student = ctx.usersById.get(r.userId);
   const group = r.groupId === null ? undefined : ctx.groupsById.get(r.groupId);
   const released = a.gradesValidatedAt !== null;
-  const final = released
-    ? resolveFinalScore({
-        teacherPoints: r.teacherPoints,
-        teacherMax: null,
-        reviewScore: facts.scored(r.llmGradeRunId),
-        frozenScore: facts.scored(r.frozenGradeRunId),
-        score: facts.scored(r.currentGradeRunId),
-      })
-    : null;
+  const scores = carriedScores(r, facts.scored);
+  const final = released ? resolveFinalScore(scores) : null;
+  const { teacherPoints, teacherMax } = scores;
   return {
     sourceTable: "student_repos",
     sourceId: r.id,
@@ -186,13 +214,14 @@ function repoRow(
       currentGradeRunId: r.currentGradeRunId,
       frozenGradeRunId: r.frozenGradeRunId,
       reviewGradeRunId: r.llmGradeRunId,
-      teacherPoints: r.teacherPoints,
-      teacherMax: null,
+      teacherPoints,
+      teacherMax,
       teacherComment: r.teacherComment,
       teacherGradedBy: target(ctx, r.teacherGradedBy) ?? null,
       teacherGradedAt: r.teacherGradedAt,
       releasedPoints: final?.points ?? null,
       releasedMax: final?.max ?? null,
+      releasedGrade: final ? (scoreGrade(final.points, final.max, defaultProjectGradingScale())?.grade ?? null) : null,
       releasedComment: released ? r.teacherComment : null,
       deletedAt: r.deletedAt,
     },
@@ -201,12 +230,8 @@ function repoRow(
 
 /** `student_repos` → `project_repos`, then the sync pull requests. */
 export async function importRepos(ctx: Ctx) {
-  const runs = new Map(ctx.snapshot.gradeRuns.map((r) => [r.id, r]));
   const facts = {
-    scored: (id: string | null): ScoreLike | null => {
-      const run = id === null ? undefined : runs.get(id);
-      return run ? { points: run.gradePoints, max: run.gradeMax, parseStatus: run.parseStatus } : null;
-    },
+    scored: sourceScores(ctx),
     committed: deadlineCommits(ctx),
   };
   const assignments = new Map(assignmentsInScope(ctx).map((a) => [a.id, a]));
@@ -300,8 +325,7 @@ export async function importGradeRuns(ctx: Ctx) {
       headBranch: r.headBranch,
       headSha: r.headSha,
       conclusion: r.conclusion,
-      points: r.gradePoints,
-      max: r.gradeMax,
+      ...markAsPoints({ points: r.gradePoints, max: r.gradeMax }),
       testsPassed: r.testsPassed,
       testsTotal: r.testsTotal,
       parseStatus: r.parseStatus as "ok",

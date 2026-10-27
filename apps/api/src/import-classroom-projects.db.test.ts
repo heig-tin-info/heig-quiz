@@ -199,7 +199,7 @@ describe("import-classroom projects (M8-01b)", () => {
       protectedFiles: ["README.md"],
       sourceAheadSha: sha("d"),
       sourceHeads: null,
-      gradingScale: { kind: "score_is_grade", rounding: "nearest" },
+      gradingScale: { kind: "linear", rounding: "nearest" },
       deadlineAppliedAt: null,
       releasedAt: null,
       createdBy: w.t1,
@@ -267,11 +267,13 @@ describe("import-classroom projects (M8-01b)", () => {
       reviewGradeRunId: "c9000000-0000-4000-8000-000000000003",
       teacherPoints: null,
       teacherMax: null,
-      releasedPoints: 5.5,
-      releasedMax: 6,
+      // classroom's mark 5.5 out of 6, as points (ADR-119 §11): the same grade, 5.5.
+      releasedPoints: 4.5,
+      releasedMax: 5,
+      releasedGrade: 5.5,
     });
-    // A teacher's score wins and keeps no maximum of its own (the CI's is read); the released score says the same.
-    expect(byId.get(ID.repoSolSeven)).toMatchObject({ teacherPoints: 4.5, teacherMax: null, releasedPoints: 4.5, releasedMax: 6, deadlineCommittedAt: null });
+    // A teacher's score wins; read against a run out of 6, it was a mark: 4.5 becomes 3.5 out of 5, its maximum stored.
+    expect(byId.get(ID.repoSolSeven)).toMatchObject({ teacherPoints: 3.5, teacherMax: 5, releasedPoints: 3.5, releasedMax: 5, releasedGrade: 4.5, deadlineCommittedAt: null });
     // Not released: the score and its comment stay the staff's.
     expect(byId.get(ID.repoSue)).toMatchObject({ teacherPoints: 5, teacherComment: "Good work", teacherGradedBy: w.t1, releasedPoints: null, releasedComment: null });
     // A repository still pending, no GitHub id.
@@ -286,16 +288,17 @@ describe("import-classroom projects (M8-01b)", () => {
       [ID.repoSam, "main", 7, "open", NOW],
     ]);
 
-    // Runs: `llm` is `review`, nothing to verify, no parse detail, the group repositories' runs carried.
+    // Runs: `llm` is `review`, nothing to verify, no parse detail, the group repositories' runs carried;
+    // classroom's marks out of 6 as points out of 5 (ADR-119 §11).
     const runs = await w.db.select().from(projectGradeRuns).orderBy(projectGradeRuns.workflowRunId);
     expect(runs.map((r) => [r.workflowRunId, r.kind, r.points, r.max, r.parseStatus, r.toVerify, r.parseDetail, r.afterDeadline])).toEqual([
-      [70001, "ci", 4, 6, "ok", false, null, false],
-      [70002, "ci", 5, 6, "ok", false, null, false],
-      [70003, "review", 5.5, 6, "ok", false, null, false],
-      [70004, "ci", 3, 6, "ok", false, null, false],
-      [70005, "ci", 2, 6, "ok", false, null, false],
+      [70001, "ci", 3, 5, "ok", false, null, false],
+      [70002, "ci", 4, 5, "ok", false, null, false],
+      [70003, "review", 4.5, 5, "ok", false, null, false],
+      [70004, "ci", 2, 5, "ok", false, null, false],
+      [70005, "ci", 1, 5, "ok", false, null, false],
       [70006, "ci", null, null, "malformed", false, null, true],
-      [70007, "ci", 4.5, 6, "ok", false, null, false],
+      [70007, "ci", 3.5, 5, "ok", false, null, false],
     ]);
     expect(runs[3]).toMatchObject({ testsPassed: 6, testsTotal: 10 });
     expect(runs[5]).toMatchObject({ runAttempt: 2 });

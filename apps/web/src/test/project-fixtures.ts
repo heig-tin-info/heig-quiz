@@ -58,11 +58,11 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
     commits: 11,
     live: { commitCount: 12, checksPassed: 1, checksTotal: 1, stale: false },
     scores: {
-      current: { runId: "run-2", points: 8, max: 10, grade: { grade: 5, fellBack: false } },
+      current: { runId: "run-2", points: 8, max: 10, grade: { grade: 5 } },
       frozen: null,
       review: null,
       teacher: null,
-      final: { points: 8, max: 10, source: "ci", toVerify: false, grade: { grade: 5, fellBack: false } },
+      final: { points: 8, max: 10, source: "ci", toVerify: false, grade: { grade: 5 } },
       scoreMax: 10,
     },
     review: { status: "pending", reason: null, askedAt: null, sha: null, runId: null },

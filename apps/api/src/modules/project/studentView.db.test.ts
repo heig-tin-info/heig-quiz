@@ -470,7 +470,7 @@ describe("the student's project (F-PROJ-15)", () => {
       lastCommit: { sha, at: NOW },
       ciStatus: "pass",
       run: { sha, url: `https://github.com/${fullName}/actions/runs/4242`, conclusion: "success", completedAt: NOW },
-      score: { points: 7.5, max: 10, grade: { grade: 4.8, fellBack: false }, frozen: false },
+      score: { points: 7.5, max: 10, grade: { grade: 4.8 }, frozen: false },
     });
 
     // The deadline passed, not yet applied by the ticker: the row's head moved to a late push, the view stands on the selected run.
@@ -513,7 +513,7 @@ describe("the student's project (F-PROJ-15)", () => {
       at: at(DEADLINE, DAY).toISOString(),
       points: 8.25,
       max: 10,
-      grade: { grade: 5.1, fellBack: false },
+      grade: { grade: 5.1 },
       comment: "Own-note",
     });
     // The indicative score stays what it was: the release is the one that counts.

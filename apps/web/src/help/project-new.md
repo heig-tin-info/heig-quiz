@@ -24,7 +24,6 @@ distribution ones).
   repository open and adds a marker commit.
 - **Grace**: minutes after the deadline before the work is frozen.
 - **Score**: **Automatic**, or **None** for no score and no review.
-- **Grade scale**: linear, or the score is the grade (out of 6).
 - **Protected files**: restored by Quiz if a student touches them.
   Unprotecting `grading.yml` lets a student alter the grading.
 - **Groups**: one repository per group of a group set.

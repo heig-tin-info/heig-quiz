@@ -23,9 +23,9 @@ describe("ProjectGradingScale (D05, spec 06 no. 49)", () => {
     expect(defaultProjectGradingScale()).toEqual({ kind: "linear", rounding: "nearest" });
   });
 
-  it("offers the preset 'the score is the grade', and nothing else", () => {
-    expect(ProjectGradingScale.parse({ kind: "score_is_grade" })).toEqual({ kind: "score_is_grade", rounding: "nearest" });
-    expect(ProjectGradingScale.safeParse({ kind: "threshold" }).success).toBe(false);
+  it("is linear only: the removed preset is refused (ADR-119 §11)", () => {
+    expect(ProjectGradingScale.parse({ kind: "linear", rounding: "up" })).toEqual({ kind: "linear", rounding: "up" });
+    expect(ProjectGradingScale.safeParse({ kind: "score_is_grade" }).success).toBe(false);
   });
 });
 
@@ -76,7 +76,7 @@ describe("the student's project card (F-PROJ-04)", () => {
         commits: 4,
         ciStatus: "pass",
         run: { sha: "a".repeat(40), url: `${repoUrl}/actions/runs/7`, conclusion: "success", completedAt: START },
-        score: { points: 7, max: 10, grade: { grade: 4.5, fellBack: false }, frozen: false },
+        score: { points: 7, max: 10, grade: { grade: 4.5 }, frozen: false },
       },
       release: null,
       workspace: null,
@@ -162,7 +162,7 @@ describe("ProjectCreate and ProjectPatch (F-PROJ-01, F-PROJ-03, M3-02)", () => {
       protectedFiles: [],
       groupMode: false,
     });
-    expect(PROJECT_DEFAULTS).toEqual({ graceMinutes: 30, sourceStrategy: "squash", deadlineStrategy: "lock", gradingMode: "auto", publishMode: "manual", scaleKind: "linear" });
+    expect(PROJECT_DEFAULTS).toEqual({ graceMinutes: 30, sourceStrategy: "squash", deadlineStrategy: "lock", gradingMode: "auto", publishMode: "manual" });
   });
 
   it("asks a manual publication for a deadline or a duration, a scheduled one for both dates", () => {

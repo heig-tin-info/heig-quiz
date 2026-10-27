@@ -648,7 +648,7 @@ function seeded(): MockProject[] {
       sourceStrategy: "squash",
       deadlineStrategy: "lock",
       gradingMode: "auto",
-      gradingScale: seed.state === "locked" ? { kind: "score_is_grade", rounding: "nearest" } : { kind: "linear", rounding: "nearest" },
+      gradingScale: { kind: "linear", rounding: "nearest" },
       branches: ["main"],
       protectedFiles: PROTECTED,
       groupMode: false,

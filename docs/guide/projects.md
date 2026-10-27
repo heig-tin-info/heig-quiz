@@ -24,7 +24,7 @@ The form asks for a **Name**, a **Source repository** (only a repository of the 
 - **At the deadline**: **Lock** (default) refuses every push after the deadline; **Mark** leaves the repository open and pushes one empty commit per handed-out branch as a marker.
 - **Grace**: minutes after the deadline during which a run started in time may still finish (30 by default).
 - **Score**: **Automatic**, **None** (no score is shown and no review is dispatched), or **By criteria** when the source holds a `criteria.yml`.
-- **Grade scale**: **Linear** (1 + 5 × points / maximum, capped at 6, rounded to a tenth), or **Score is the grade** for a score out of 6.
+- The grade of a score is linear: 1 + 5 × points / maximum, capped at 6, rounded to a tenth.
 - **Protected files** and **Groups** (see below and [Groups](groups.md)).
 
 **Create** builds a private *distribution repository* in the organization, which only Quiz's App manages. The project is born a **draft**: students see nothing. The source, the branches and the history are fixed at creation; to change them, delete the draft and create it again.

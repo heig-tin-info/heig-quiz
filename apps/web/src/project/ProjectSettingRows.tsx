@@ -8,7 +8,6 @@ import {
   type PublishMode,
   type SourceStrategy,
 } from "@quiz/contracts";
-import type { ProjectScaleKind } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { Field, FieldError, fieldErrorProps, Segmented, SettingRow, TextInput } from "../ui";
@@ -122,25 +121,6 @@ export function GradingModeRow<M extends ProjectGradingMode>({
   return (
     <SettingRow title={t("project.gradingMode")} desc={modes.includes("criteria" as M) ? t(`project.gradingMode.desc.${value}`) : undefined}>
       <Segmented name="gradingMode" label={t("project.gradingMode")} value={value} disabled={disabled} onChange={onChange} options={options} />
-    </SettingRow>
-  );
-}
-
-export function ScaleRow({ value, disabled, onChange }: RowProps<ProjectScaleKind>) {
-  const t = useT();
-  return (
-    <SettingRow title={t("project.scale")} desc={t("project.scale.desc")}>
-      <Segmented
-        name="scale"
-        label={t("project.scale")}
-        value={value}
-        disabled={disabled}
-        onChange={onChange}
-        options={[
-          { value: "linear", label: t("project.scale.linear") },
-          { value: "score_is_grade", label: t("project.scale.score_is_grade") },
-        ]}
-      />
     </SettingRow>
   );
 }

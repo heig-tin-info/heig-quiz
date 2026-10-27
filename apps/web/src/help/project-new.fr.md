@@ -27,7 +27,6 @@ avez saisi un. La liste omet les dépôts que Quiz a créés pour un projet
 - **Délai de grâce** : minutes après l'échéance avant que le travail soit
   gelé.
 - **Score** : **Automatique**, ou **Aucun** (ni score, ni revue).
-- **Barème** : linéaire, ou le score est la note (sur 6).
 - **Fichiers protégés** : restaurés par Quiz si un étudiant les modifie.
   Retirer `grading.yml` permet à un étudiant de fausser l'évaluation.
 - **Groupes** : un dépôt par groupe d'une répartition.

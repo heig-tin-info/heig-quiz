@@ -620,7 +620,7 @@ const frozenRepo = (n: number, over: Partial<ProjectRepoView> = {}) =>
     locked: true,
     scores: {
       ...makeRepo(n).scores,
-      frozen: { runId: "run-2", points: 8, max: 10, grade: { grade: 5, fellBack: false } },
+      frozen: { runId: "run-2", points: 8, max: 10, grade: { grade: 5 } },
     },
     review: { status: "done", reason: null, askedAt: PAST, sha: "9a3f1c7e2b4d6f8a0c1e3b5d7f9a1c3e5b7d9f1a", runId: "run-9" },
     ...over,
@@ -865,7 +865,7 @@ describe("the sheet's writes (M3-12b)", () => {
       scores: {
         ...repo.scores,
         teacher: { points: 9, max: 10, comment: "Bien.", gradedAt: PAST },
-        final: { points: 9, max: 10, source: "teacher", toVerify: false, grade: { grade: 5.5, fellBack: false } },
+        final: { points: 9, max: 10, source: "teacher", toVerify: false, grade: { grade: 5.5 } },
       },
       released: null,
       changedAfterRelease: false,
@@ -1557,7 +1557,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(writes(calls)[0]!.body).toEqual({ groupMode: true });
   });
 
-  it("folds the grace, the strategy, the grading, the scale, the protected files and the work mode under Advanced options", async () => {
+  it("folds the grace, the strategy, the grading, the protected files and the work mode under Advanced options", async () => {
     const { calls } = routes(makeDraft({ graceMinutes: 10 }), {
       [WORKSPACE]: workspace("free"),
       [`PATCH ${BASE}`]: ok({}),
@@ -1569,9 +1569,11 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     expect(screen.queryByLabelText("Grace")).toBeNull();
     await userEvent.click(advanced);
     expect(screen.getByLabelText("Grace")).toHaveValue(10);
-    for (const name of ["Lock", "Mark with a commit", "Automatic", "None", "Linear", "Score is the grade"]) {
+    for (const name of ["Lock", "Mark with a commit", "Automatic", "None"]) {
       expect(screen.getByRole("radio", { name })).toBeEnabled();
     }
+    // The scale is linear, no choice (ADR-119 §11).
+    expect(screen.queryByRole("radiogroup", { name: "Grade scale" })).toBeNull();
     expect(await screen.findByRole("checkbox", { name: "README.md" })).toBeInTheDocument();
     expect(await screen.findByRole("radiogroup", { name: "Where students work" })).toBeInTheDocument();
 
@@ -1579,9 +1581,6 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     fill("Grace", "0");
     await waitFor(() => expect(writes(calls)).toHaveLength(1));
     expect(writes(calls)[0]!.body).toEqual({ graceMinutes: 0 });
-    await userEvent.click(screen.getByRole("radio", { name: "Score is the grade" }));
-    await waitFor(() => expect(writes(calls)).toHaveLength(2));
-    expect(writes(calls)[1]!.body).toEqual({ gradingScale: { kind: "score_is_grade", rounding: "nearest" } });
   });
 
   it("lists the errors of a refused switch to grading by criteria (ADR-106 §1)", async () => {

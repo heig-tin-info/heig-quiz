@@ -338,7 +338,7 @@ export async function studentProject(
             at: iso(project.releasedAt),
             points: repo?.releasedPoints ?? null,
             max: repo?.releasedMax ?? null,
-            grade: scoreGrade(repo?.releasedPoints ?? null, repo?.releasedMax ?? null, project.gradingScale),
+            grade: repo?.releasedGrade == null ? null : { grade: repo.releasedGrade },
             comment: repo?.releasedComment ?? null,
           },
     criteria,
