@@ -119,6 +119,8 @@ import {
   ProjectDistributionAccess,
   ProjectGradingRepo,
   ProjectGradingView,
+  ProjectCommitGraph,
+  CriterionCiLog,
   PointsOutOfRange,
   ProjectInvitationResent,
   ProjectRefusal,
@@ -712,6 +714,8 @@ const UNCHECKED = [
   "/app/api/classrooms/:id", // ClassroomDetail
   "/app/api/admin/teachers", // AdminTeacher[]
   "/app/api/projects/:id/grading", // ProjectGradingView: checked under its flag, by "the mock's grading by criteria"
+  "/app/api/projects/:id/repos/:rid/commits", // ProjectCommitGraph: checked under the same flag
+  "/app/api/projects/:id/repos/:rid/criteria/:criterionId/ci-log", // CriterionCiLog: checked under the same flag
 ];
 
 // ADR-051 §7: one pending pairing (the mock keeps it in localStorage, which
@@ -774,6 +778,14 @@ describe("the mock's grading by criteria (?pjcriteria=1)", () => {
     const view = raw as ProjectGradingView;
     const todo = view.repos.find((r) => r.frozen && !r.validation.validated)!;
     expect(todo.validation.missing).toEqual(["git.commits"]);
+    // ADR-119 §8: the history (a merge, two declared authors) and a criterion's CI output, read on demand.
+    const history = ProjectCommitGraph.parse(await get(`/app/api/projects/${id}/repos/${todo.id}/commits`));
+    if (history.status !== "ok") throw new Error(history.status);
+    expect(history.commits.some((c) => c.parents.length > 1)).toBe(true);
+    expect(new Set(history.commits.filter((c) => c.mark === null).map((c) => c.authorName)).size).toBe(2);
+    const logged = todo.table.find((r) => r.ciLog)!;
+    const output = CriterionCiLog.parse(await get(`/app/api/projects/${id}/repos/${todo.id}/criteria/${logged.criterionId}/ci-log`));
+    expect(output.log).toContain("tests passed");
     // The release waits for every repository's validation.
     const blocked = await send(`/app/api/projects/${id}/release`, "POST");
     expect(ProjectReleaseRefusal.parse(blocked.body)).toMatchObject({ error: "not_validated" });
