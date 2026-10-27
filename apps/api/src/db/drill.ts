@@ -19,6 +19,9 @@
  *     anonymisation, never by a DELETE;
  *   - `drill_cards_serve_ck`: no time on screen without a served question.
  *
+ * The new cards a student unlocked beyond the day's cap (ADR-041 §6,
+ * amendment of 2026-10-27) are counted per day in `drill_new_unlocks`.
+ *
  * Targeted revision (ADR-115) keeps its own two tables below: a round and
  * its answers, never a `drill_reviews` row nor a write to a card.
  */
@@ -140,6 +143,27 @@ export const drillReviews = pgTable(
     check("drill_reviews_rating_ck", sql`${t.rating} between 1 and 4`),
     check("drill_reviews_confidence_ck", sql`${t.confidence} between 0 and 4`),
   ],
+);
+
+/**
+ * The batches of new cards a student unlocked beyond the daily cap ("Add 10
+ * new questions", ADR-041 §6, amendment of 2026-10-27): one row per student,
+ * for the drill day it names. That day's allowance is `DRILL_NEW_PER_DAY ×
+ * (1 + batches)` (`drillNewAllowed`). `day` is the first instant of the
+ * Europe/Zurich day (`drillDayBounds().start`), the server's. A row of an
+ * earlier day counts as no batch, and the next unlock overwrites it. The
+ * user is NO ACTION like the cards'.
+ */
+export const drillNewUnlocks = pgTable(
+  "drill_new_unlocks",
+  {
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => users.id),
+    day: timestamp("day", { withTimezone: true }).notNull(),
+    batches: integer("batches").notNull(),
+  },
+  (t) => [check("drill_new_unlocks_batches_ck", sql`${t.batches} >= 1`)],
 );
 
 /**

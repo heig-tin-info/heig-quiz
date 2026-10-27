@@ -57,6 +57,17 @@ of the daily reviews; a card served in one of its rounds today leaves today's
 session (§2, §5, §6, §7, §8, §11, §12, §14, Consequences: settled question
 28 (b)).
 
+Amended 2026-10-27 (product owner; §6, §11 and §12 only): the cap of new
+cards per day is a default, not a ceiling. A student whose session is empty
+while new cards wait beyond the cap may let in the next batch of
+`DRILL_NEW_PER_DAY` for the rest of the day, as often as they like; these are
+real first reviews. An empty day with no new card waiting leads to targeted
+revision ([ADR-115](ADR-115-revision-ciblee-par-notion.md) §13). Cards not
+yet due are never reviewed early, and the badge is unchanged. Case: a
+student met the cap two days in a row with 21 new cards waiting, after five
+series of exercises created 41 cards at once, and saw "Nothing to review
+today" with no action.
+
 ## Context
 
 The spec reserved a phase-2 drill in five lines: every question a student meets
@@ -203,6 +214,17 @@ The web build then contains none of it.
   concept, on the student's own cards, outside FSRS and the level; the empty
   day is unchanged, and there is still no whole-pool drill. A card served in a
   round today is not in today's session (ADR-115 §7).*
+  *Amended 2026-10-27 (product owner):* the cap is where a day's new cards
+  stop by default. When the session is empty and new cards are held back by
+  it, the empty day's one action lets in the next batch of 10 for the rest
+  of the day ("Add 10 new questions"; the session reloads with them), real
+  first reviews rated and scheduled like any other; no ceiling on the
+  batches, each session keeping its budget. The session reports the count
+  held back (`heldNew`). With nothing held back, the empty day's one action
+  is "Practise anyway", targeted revision (ADR-115) in the first of the
+  student's drill classrooms, in the tab's order, where it is open to them
+  and offers a concept; open nowhere, the empty day keeps its date alone. A
+  card not yet due is never reviewed early, and the badge counts as before.
 - A card leaves the session when its classroom is archived; its data is kept
   for the retention period. *(Second round, 28 (g).)*
 - An opt-out hides the activity **from then on**: what was recorded before stays
@@ -309,6 +331,13 @@ a student cannot re-answer a card at once to forge a rating or the recall rate,
 and there is no extra practice (06, question 28 (b)). Anything else is the 404
 of a missing card.
 
+*Amended 2026-10-27:* "new within the day's cap" reads "new within the
+day's allowance": the cap, raised by `DRILL_NEW_PER_DAY` for each batch the
+student unlocked today (§6), so each card still has its one review a day and
+the rule above still closes every path to a forged rating. The unlock is a
+compare-and-set on the count it read: a second click, or two requests at
+once, unlock one batch.
+
 *Amended by ADR-115 §1, §7 (2026-10-15):* the extra practice of targeted
 revision runs on routes of its own that never write a review nor a card, so
 the serving rule above still closes every path to a rating; and a card served
@@ -324,7 +353,14 @@ the next day, may follow that key: an accepted bias.
   cap of new cards resets at local midnight. *Amended by ADR-115 §5, §7: the
   same day bounds a round of targeted revision, and "practised today".*
 - **A new card held back by the cap is announced for tomorrow**: an empty day
-  gives the start of the next day as its next due date.
+  gives the start of the next day as its next due date. *Amended 2026-10-27
+  (§6):* and its count, `heldNew`, which the empty day offers to let in.
+  The batches unlocked are a counter per student, `drill_new_unlocks`, for
+  the drill day it names (its first instant, Zurich); a row of an earlier day
+  counts no batch and the next unlock restarts it. The session and the
+  serving rule read it through `drillNewAllowed` of `@quiz/domain`. A counter,
+  not a mark on the cards: the serving rule has always been "a new card while the allowance
+  is not spent", whichever new card it is, and a count keeps it so.
 - **Interleaving** groups the session by course and the question's first tag in
   alphabetical order. *Amended by ADR-081 (third addendum §8):* by the
   question's first concept id, which carries no alphabetical meaning.

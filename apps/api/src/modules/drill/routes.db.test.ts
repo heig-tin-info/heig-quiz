@@ -27,7 +27,8 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { auditLog, drillCards, drillReviews } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { testServer, type Payload, type TestServer } from "../../test/http.js";
+import { sessionOf, testServer, type Payload, type TestServer } from "../../test/http.js";
+import { kioskStation } from "../../test/kiosk.js";
 import { handIn, reload, seedLive, type Seeded } from "../../test/live.js";
 import { applyState, setAllowDrill } from "../evaluation/service.js";
 import * as live from "../live/service.js";
@@ -99,6 +100,28 @@ describe("the drill over HTTP", () => {
     const rooms = (await call("GET", "/app/api/drill/classrooms", student)).json();
     expect(rooms.map((r: unknown) => DrillClassroom.parse(r).classroomId)).toEqual([seed.classroomId]);
     expect((await call("GET", "/app/api/drill/classrooms", outsider)).json()).toEqual([]);
+  });
+
+  it("unlocks more new cards on a portal session only; nothing held back is a no-op", async () => {
+    const url = "/app/api/drill/session/unlock";
+    const res = await call("POST", `${url}?device=coarse`, student);
+    expect(res.statusCode).toBe(200);
+    const session = DrillSession.parse(res.json());
+    expect(session.cards).toHaveLength(2);
+    expect(session.heldNew).toBe(0);
+    expect((await call("POST", `${url}?device=tablet`, student)).statusCode).toBe(400);
+    expect(DrillSession.parse((await call("POST", url, outsider)).json())).toMatchObject({ cards: [], heldNew: 0 });
+
+    const seb = await sessionOf(server.app.db, student.id, { kind: "seb", evaluationId: seed.evaluationId });
+    const station = await kioskStation(server.app);
+    const kiosk = await sessionOf(server.app.db, student.id, {
+      kind: "kiosk",
+      evaluationId: seed.evaluationId,
+      deviceId: station.deviceId,
+    });
+    for (const headers of [seb, { ...kiosk, cookie: `${kiosk.cookie}; ${station.cookie}` }]) {
+      expect((await server.app.inject({ method: "POST", url, headers })).statusCode).toBe(401);
+    }
   });
 
   it("keeps a student's cards from every other student", async () => {

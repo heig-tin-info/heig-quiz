@@ -9,6 +9,8 @@ under a validated declared one counts (§3); `time_ms` never feeds the rating re
 (§6). *Amended 2026-10-16 (#897 E3): decision 7, deferred until then, is settled — open
 question 60, option (b), product owner: `time_ms` feeds a separate series of the question's
 statistics, [ADR-039](ADR-039-temps-passe-par-question.md) §6b (§6, §9).*
+*Amended 2026-10-27 by [ADR-041](ADR-041-entrainement-espace.md) §6 (product owner): the
+daily session's empty day, with no new card held back, leads here (§13).*
 
 Scope: a student's targeted revision of one concept of their course — what a round holds,
 how it is served and answered, what it records, what it feeds, and who sees it.
@@ -234,6 +236,12 @@ its own screen, whose one primary action is Start; the empty day of the daily se
 unchanged; the "Allow drill" note mentions that students may also revise these questions
 by concept. The screen says that a round feeds neither the schedule nor the level, and
 that the teacher sees the rounds.
+
+*Amended 2026-10-27 by [ADR-041](ADR-041-entrainement-espace.md) §6 (product owner):* the
+empty day is no longer unchanged. When no new card is held back by the day's cap, its one
+action is "Practise anyway", which opens this screen in the first of the student's drill
+classrooms, in the tab's order, where revision is open to them and offers a concept; open
+nowhere, the empty day has no action. No new kind of round.
 
 ## Consequences
 

@@ -43,6 +43,13 @@ export const DrillSession = z.object({
    * 06, question 28 (b)); null when the student has no card at all.
    */
   nextDueAt: z.iso.datetime().nullable(),
+  /**
+   * New cards held back by today's cap (`drillNewToday` of `@quiz/domain`):
+   * on an empty day, what `POST /drill/session/unlock` would let in — a
+   * batch of `DRILL_NEW_PER_DAY` at a time (ADR-041 §6, amendment of
+   * 2026-10-27). 0 when none waits.
+   */
+  heldNew: z.number().int().nonnegative(),
 });
 export type DrillSession = z.infer<typeof DrillSession>;
 

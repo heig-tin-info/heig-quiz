@@ -9,7 +9,7 @@ import { renderWithProviders } from "./test/render";
  * `visibleSlots`' (bottomNavSlots.test.ts); here, the dot — never a count —
  * while today's drill holds something, and the slot lit on its page.
  */
-const SESSION = { cards: [], budgetMs: 600_000, nextDueAt: null };
+const SESSION = { cards: [], budgetMs: 600_000, nextDueAt: null, heldNew: 0 };
 const NO_DRILL = { shown: false, available: false, session: null };
 
 describe("the Drill slot", () => {

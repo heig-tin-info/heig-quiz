@@ -14,13 +14,14 @@ import { and, desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
-import { drillDayBounds } from "@quiz/domain";
+import { drillDayBounds, DRILL_NEW_PER_DAY } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
 import {
   classrooms,
   drillCards,
+  drillNewUnlocks,
   drillReviews,
   enrollments,
   evaluationItems,
@@ -372,6 +373,118 @@ describe("today's session (F-DRILL-03)", () => {
     app.clock.advance(86_400_000);
     const tomorrow = await drill.drillSession(db, userId, "fine", app.clock.now());
     expect(tomorrow.cards.filter((c) => c.isNew)).toHaveLength(3);
+  });
+});
+
+describe("more new cards on demand (ADR-041 §6, amendment of 2026-10-27)", () => {
+  /** One student with `extra` more new cards than the seed's two, as if a series of exercises had just been handed in. */
+  async function crowded(app: App, extra: number) {
+    const { seed, userId } = await oneStudent(app);
+    const more = await seedLive(db, { studentIds: [], questions: extra, teacherId: seed.teacherId });
+    await db.insert(drillCards).values(
+      more.questionIds.map((questionId) => ({
+        id: randomUUID(),
+        userId,
+        questionId,
+        classroomId: seed.classroomId,
+        evaluationId: seed.evaluationId,
+        dueAt: app.clock.now(),
+        keyHash: "x",
+        createdAt: app.clock.now(),
+      })),
+    );
+    return { userId };
+  }
+  /** Reviews every card of the session (wrong: nothing reviewed today comes back today). */
+  async function review(app: App, userId: string, ids: readonly string[]) {
+    for (const id of ids) {
+      await drill.serveCard(db, userId, id, app.clock.now());
+      await drill.answerCard(db, userId, id, { answer: "wrong", deviceClass: "fine" }, app.clock.now());
+    }
+  }
+  const batchesOf = async (userId: string) =>
+    (await db.select().from(drillNewUnlocks).where(eq(drillNewUnlocks.userId, userId)))[0]?.batches ?? 0;
+  const session = (app: App, userId: string) => drill.drillSession(db, userId, "fine", app.clock.now());
+
+  it("reports the new cards held back by the cap, and lets a batch in on demand, served and rated", async () => {
+    const app = await appAt();
+    const { userId } = await crowded(app, 23);
+    const first = await session(app, userId);
+    expect(first.cards).toHaveLength(DRILL_NEW_PER_DAY);
+    expect(first.heldNew).toBe(15);
+    await review(app, userId, first.cards.map((c) => c.id));
+
+    const empty = await session(app, userId);
+    expect(empty.cards).toEqual([]);
+    expect(empty.heldNew).toBe(15);
+    // Beyond the cap and not unlocked: still refused at the serve.
+    const waiting = (await cardsOf({ userId })).filter((c) => c.lastReviewAt === null);
+    expect(waiting).toHaveLength(15);
+    await expect(drill.serveCard(db, userId, waiting[0]!.id, app.clock.now())).rejects.toMatchObject(cardNotFound);
+
+    const unlocked = await drill.unlockNewCards(db, userId, "fine", app.clock.now());
+    expect(unlocked.cards).toHaveLength(DRILL_NEW_PER_DAY);
+    expect(unlocked.cards.every((c) => c.isNew)).toBe(true);
+    expect(unlocked.heldNew).toBe(5);
+    expect(await batchesOf(userId)).toBe(1);
+
+    // A second click before the batch is met unlocks nothing.
+    const again = await drill.unlockNewCards(db, userId, "fine", app.clock.now());
+    expect(again.cards.map((c) => c.id)).toEqual(unlocked.cards.map((c) => c.id));
+    expect(await batchesOf(userId)).toBe(1);
+
+    // Real first reviews: the FSRS state is written.
+    await review(app, userId, unlocked.cards.map((c) => c.id));
+    const reviewed = (await cardsOf({ userId })).filter((c) => unlocked.cards.some((u) => u.id === c.id));
+    expect(reviewed.every((c) => c.lastReviewAt !== null && c.reps === 1)).toBe(true);
+    expect((await session(app, userId)).heldNew).toBe(5);
+
+    // No ceiling: a second batch, smaller when fewer wait.
+    const second = await drill.unlockNewCards(db, userId, "fine", app.clock.now());
+    expect(second.cards).toHaveLength(5);
+    expect(second.heldNew).toBe(0);
+    expect(await batchesOf(userId)).toBe(2);
+    await review(app, userId, second.cards.map((c) => c.id));
+
+    // Nothing held back: a no-op, which writes nothing and answers the empty day.
+    const none = await drill.unlockNewCards(db, userId, "fine", app.clock.now());
+    expect(none).toMatchObject({ cards: [], heldNew: 0 });
+    expect(await batchesOf(userId)).toBe(2);
+  });
+
+  it("unlocks for the day only: tomorrow the cap is back to 10, the stale row ignored then restarted", async () => {
+    const app = await appAt();
+    const { userId } = await crowded(app, 28);
+    await review(app, userId, (await session(app, userId)).cards.map((c) => c.id));
+    await drill.unlockNewCards(db, userId, "fine", app.clock.now());
+    expect(await batchesOf(userId)).toBe(1);
+
+    app.clock.advance(86_400_000);
+    // Thirty new cards, ten introduced yesterday: twenty wait, ten of them held back by today's cap.
+    const tomorrow = await session(app, userId);
+    expect(tomorrow.heldNew).toBe(10);
+    // Yesterday's row is still there, and counts no batch today.
+    expect(await batchesOf(userId)).toBe(1);
+
+    // Today's ten spent (the budget may split them over sessions), the first unlock restarts it at one batch.
+    for (let left = tomorrow; left.cards.length > 0; left = await session(app, userId)) {
+      await review(app, userId, left.cards.map((c) => c.id));
+    }
+    expect((await session(app, userId)).heldNew).toBe(10);
+    const more = await drill.unlockNewCards(db, userId, "fine", app.clock.now());
+    expect(more.cards.length).toBeGreaterThan(0);
+    const [row] = await db.select().from(drillNewUnlocks).where(eq(drillNewUnlocks.userId, userId));
+    expect(row).toMatchObject({ batches: 1, day: drillDayBounds(app.clock.now()).start });
+  });
+
+  it("unlocks nothing while today's allowance is not spent", async () => {
+    const app = await appAt();
+    const { userId } = await crowded(app, 13);
+    const before = await session(app, userId);
+    expect(before.heldNew).toBe(5);
+    const after = await drill.unlockNewCards(db, userId, "fine", app.clock.now());
+    expect(after.cards.map((c) => c.id)).toEqual(before.cards.map((c) => c.id));
+    expect(await batchesOf(userId)).toBe(0);
   });
 });
 
