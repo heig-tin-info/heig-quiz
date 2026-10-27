@@ -31,8 +31,8 @@ import { and, eq } from "drizzle-orm";
 import { snapshotSettings } from "@quiz/contracts";
 import {
   awardedRange,
+  ciLogs,
   clampAwarded,
-  effectiveDeadline,
   llmLeaves,
   maskNames,
   projectMaskTerms,
@@ -40,6 +40,7 @@ import {
   renderMaterial,
   type CriteriaLeaf,
   type CriterionReason,
+  type ParsedCriteria,
   type ProjectPerson,
 } from "@quiz/domain";
 
@@ -60,10 +61,12 @@ import {
 import { PROJECT_REVIEW_QUEUE } from "../../jobs.js";
 import { llmFailure, type ProjectReviewCriterion } from "../llm/service.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
-import { fetchSourceFiles, projectOctokit, runEvidence, type EvidenceJob } from "./evidence.js";
+import { installationClient } from "../../github/app.js";
+import { projectInstallation } from "../github/service.js";
+import { fetchSourceFiles, runEvidence, TarballUnavailable, type EvidenceJob } from "./evidence.js";
 import { passScope, type PassScope } from "./milestone.js";
 import { hintProjectStaff, type RepoRow } from "./repos.js";
-import { lastStudentPush } from "./review.js";
+import { passTarget } from "./review.js";
 import type { ProjectRow } from "./views.js";
 
 /** The `project.review` job's data. */
@@ -158,12 +161,21 @@ async function ask(
 /** The material the model reads, or why there is none to judge (a 0-point proposal with that reason, no call). */
 type Material = string | { reason: CriterionReason };
 
+/** A pass's repository, project, snapshot and scope, as the review loaded them. */
+interface Loaded {
+  repo: RepoRow;
+  project: ProjectRow;
+  snapshot: ParsedCriteria;
+  scope: PassScope<CriteriaLeaf>;
+}
+
 /**
  * A schema-2 pass's material: its runner evidence (ADR-106 §4). No
  * evidence to judge: the evidence's status as the reason (a row a later
  * run replaced: `grader_error`).
  */
-async function runnerMaterial(db: Db, repo: RepoRow, project: ProjectRow, evidenceId: string | undefined, sources: readonly string[]): Promise<Material> {
+async function runnerMaterial(db: Db, { repo, project, snapshot }: Loaded, evidenceId: string | undefined): Promise<Material> {
+  const sources = snapshot.grading.sources;
   const [evidence] =
     evidenceId === undefined
       ? []
@@ -179,7 +191,7 @@ async function runnerMaterial(db: Db, repo: RepoRow, project: ProjectRow, eviden
 /**
  * A schema-3 pass's material (ADR-119 §7): the sources at the pass's
  * target commit — the one it dispatched, else (a pass settled before its
- * dispatch: archived, no installation) the last student push by its date —
+ * dispatch: archived, no installation, never sent) `passTarget` —
  * from the tarball the platform fetches itself, and the `log` of each of
  * the pass's automatic criteria in its accepted `results.json`; a pass that
  * accepted none (`no_result`, `ci_tampered`, `ci_unavailable`) is judged
@@ -187,15 +199,7 @@ async function runnerMaterial(db: Db, repo: RepoRow, project: ProjectRow, eviden
  * No commit, the repository gone, the tarball too large or GitHub out of
  * reach: the reason, no call.
  */
-async function ciMaterial(
-  app: FastifyInstance,
-  config: AppConfig,
-  repo: RepoRow,
-  project: ProjectRow,
-  scope: PassScope<CriteriaLeaf>,
-  passId: string,
-  sources: readonly string[],
-): Promise<Material> {
+async function ciMaterial(app: FastifyInstance, config: AppConfig, { repo, project, snapshot, scope }: Loaded, passId: string): Promise<Material> {
   const db = app.db;
   const [found] = await db
     .select({ sha: gradeDispatches.sha, results: projectCiResults.results })
@@ -203,28 +207,23 @@ async function ciMaterial(
     .leftJoin(projectCiResults, eq(projectCiResults.passId, gradeDispatches.id))
     .where(and(eq(gradeDispatches.id, passId), eq(gradeDispatches.repoId, repo.id)));
   if (!found) return { reason: "grader_error" };
-  const due = scope.dueAt ?? effectiveDeadline(repo, project);
-  const target = found.sha !== "" ? found.sha : repo.githubRepoId === null ? null : await lastStudentPush(db, repo.githubRepoId, project.branches, due);
-  if (target === null) return { reason: "no_commit" };
   if (repo.deletedAt !== null || repo.fullName === null) return { reason: "repo_missing" };
+  const target = found.sha !== "" ? found.sha : await passTarget(db, repo, project, scope);
+  if (target === null) return { reason: "no_commit" };
+  const org = await projectInstallation(db, project.orgId);
+  if (!org) return { reason: "github_unavailable" };
+  const { octokit } = await installationClient(config, org.installationId);
   let files: Awaited<ReturnType<typeof fetchSourceFiles>>;
   try {
-    files = await fetchSourceFiles(await projectOctokit(db, config, project), repo.fullName, target);
+    files = await fetchSourceFiles(octokit, repo.fullName, target, snapshot.grading.sources);
   } catch (err) {
-    // `TarballUnavailable`'s message is redacted: the `codeload` URL's `token=` never reaches the log.
+    if (!(err instanceof TarballUnavailable)) throw err;
+    // Its message is redacted: the `codeload` URL's `token=` never reaches the log.
     app.log.warn({ err, repo: repo.id }, "project review: the sources could not be fetched");
     return { reason: "github_unavailable" };
   }
   if (typeof files === "string") return { reason: files };
-  const results = found.results;
-  const logs =
-    results === null
-      ? null
-      : scope.leaves.flatMap((leaf) => {
-          const log = leaf.command === undefined ? undefined : results.criteria[leaf.id]?.log;
-          return log ? [{ id: leaf.id, log }] : [];
-        });
-  return renderCiMaterial({ files, logs }, sources, await masker(db, repo, project));
+  return renderCiMaterial({ files, logs: ciLogs(scope.leaves, found.results) }, snapshot.grading.sources, await masker(db, repo, project));
 }
 
 /**
@@ -245,14 +244,15 @@ export async function runReview(app: FastifyInstance, config: AppConfig, job: Re
   const { repo, project, snapshot } = row;
   const scope = await passScope(db, project.id, snapshot.leaves, job.checkpointId);
   if (!scope) return 0;
+  const loaded: Loaded = { repo, project, snapshot, scope };
   // Not held, nor already proposed by this pass (a job run twice): spares a needless call, the writer checks again.
   const held = await heldCriteria(db, repo.id, job.passId);
   const leaves = llmLeaves(scope.leaves, snapshotSettings(project, snapshot.schemaVersion)).filter((leaf) => !held.has(leaf.id));
   if (leaves.length === 0) return 0;
   const material =
     snapshot.schemaVersion === 3
-      ? await ciMaterial(app, config, repo, project, scope, job.passId, snapshot.grading.sources)
-      : await runnerMaterial(db, repo, project, job.evidenceId, snapshot.grading.sources);
+      ? await ciMaterial(app, config, loaded, job.passId)
+      : await runnerMaterial(db, loaded, job.evidenceId);
   const inputs =
     typeof material === "string"
       ? await ask(app, leaves, { context: snapshot.grading.context, material }, project.createdBy, job.passId)

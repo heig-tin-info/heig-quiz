@@ -44,6 +44,15 @@ const strict = new TextDecoder("utf-8", { fatal: true });
 const lossy = new TextDecoder("utf-8");
 const encoder = new TextEncoder();
 
+/** `bytes` as text when they are valid UTF-8, else null (a binary file, a foreign encoding). */
+export function decodeUtf8(bytes: Uint8Array): string | null {
+  try {
+    return strict.decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
 function latin1(bytes: Uint8Array): string {
   return String.fromCharCode(...bytes);
 }

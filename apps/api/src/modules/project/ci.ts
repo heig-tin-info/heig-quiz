@@ -16,7 +16,7 @@
  *
  * **The dispatch** ({@link runCiDispatch}, the `project.ci` job): the
  * target commit — the last student push received by the effective deadline
- * (by the checkpoint's date for a milestone, `lastStudentPush`) — recorded
+ * (by the checkpoint's date for a milestone, `passTarget`) — recorded
  * on the row before GitHub is called (at most once: a row whose `sha` is
  * set is never sent again), then `repository_dispatch` `quiz-grade` with
  * `{ sha, nonce, pass, milestone? }` (`postDispatch`). No commit, a
@@ -61,10 +61,10 @@ import { and, eq, exists, inArray, isNotNull, isNull, lt, ne, sql } from "drizzl
 import type { Octokit } from "octokit";
 
 import { readResults, snapshotSettings } from "@quiz/contracts";
+import { decodeUtf8 } from "@quiz/core/tar";
 import {
   checkOutcomes,
   classifyCriterion,
-  effectiveDeadline,
   GRADING_WORKFLOW_PATH,
   runKind,
   type CheckResults,
@@ -86,7 +86,7 @@ import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./
 import { ingestCompletedRun, type CompletedRun } from "./grading.js";
 import { CI_SNAPSHOT, ciNonce, passScope, type PassScope } from "./milestone.js";
 import { hintProjectStaff, markRepoDeleted, releasedBefore, type RepoContext, type RepoRow } from "./repos.js";
-import { lastStudentPush, postDispatch } from "./review.js";
+import { passTarget, postDispatch } from "./review.js";
 import type { ReviewJob } from "./reviewPass.js";
 import type { ProjectRow } from "./views.js";
 
@@ -239,7 +239,8 @@ async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Sett
     now,
   );
   await hintProjectStaff(db, [loaded.project.id]);
-  // The pass's LLM review follows (ADR-119 §7), on its results' logs or, without any, the sources alone; a queue's job, as the dispatch.
+  // The pass's LLM review follows (ADR-119 §7), on its results' logs or, without any, the sources alone.
+  // A queue's job: without `app.boss` the review is not run, as the dispatch is not sent (`sendCiPasses`).
   const review: ReviewJob = { repoId: pass.repoId, passId: pass.id, checkpointId: pass.checkpointId ?? undefined };
   if (app.boss) await app.boss.send(PROJECT_REVIEW_QUEUE, review);
   return true;
@@ -262,7 +263,7 @@ export async function runCiDispatch(app: FastifyInstance, config: AppConfig, job
   const loaded = await loadPass(db, job.passId);
   if (!loaded || loaded.pass.sha !== "" || loaded.pass.closedAt !== null) return "none";
   const { pass, repo, project, scope } = loaded;
-  const target = repo.githubRepoId === null ? null : await lastStudentPush(db, repo.githubRepoId, project.branches, scope.dueAt ?? effectiveDeadline(repo, project));
+  const target = await passTarget(db, repo, project, scope);
   const settled = async (reason: CriterionReason) => ((await settle(app, loaded, { reason })) ? "settled" : "none");
   if (target === null) return settled("no_commit");
   if (repo.deletedAt !== null || repo.fullName === null) return settled("repo_missing");
@@ -360,18 +361,10 @@ export async function intakeGradedRun(app: FastifyInstance, octokit: Octokit, ct
   }
   const { owner, repo } = ownerRepo(ctx.repo.fullName);
   const bytes = await fetchResultsArtifact(octokit, owner, repo, run.workflowRunId);
-  const results = typeof bytes === "string" ? null : readResults(utf8(bytes) ?? "");
+  // Not UTF-8: no result. Within the inflation budget: `RESULTS_FILE_MAX_BYTES`.
+  const results = typeof bytes === "string" ? null : readResults(decodeUtf8(bytes) ?? "");
   await settle(app, loaded, results === null ? { reason: "no_result" } : { results, workflowRunId: run.workflowRunId });
   return results === null ? "no_result" : "accepted";
-}
-
-/** The artifact's bytes as text, null when not UTF-8 (no result). Within the inflation budget: `RESULTS_FILE_MAX_BYTES`. */
-function utf8(bytes: Uint8Array): string | null {
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    return null;
-  }
 }
 
 /** A commit's blobs by path (`mode:sha`, so a link in a file's place differs), or null when GitHub truncated the listing. */

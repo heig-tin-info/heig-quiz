@@ -29,7 +29,7 @@ import {
   type ProjectRunRefusal,
   type ProjectRunResult,
 } from "@quiz/core/server";
-import { readTar, writeTar, type CleanEntry } from "@quiz/core/tar";
+import { decodeUtf8, readTar, writeTar, type CleanEntry } from "@quiz/core/tar";
 import {
   automaticPoints,
   classifyCriterion,
@@ -38,6 +38,7 @@ import {
   effectiveDeadline,
   parseJunit,
   plainSources,
+  sourcePaths,
   proratedByTests,
   REPORT_FILE,
   stripTarballRoot,
@@ -183,29 +184,31 @@ function unpack(gzipped: Uint8Array): Uint8Array | null {
 /** Regular files: `0`, the old `\0`, `7`. Anything else but a directory is dropped (a committed link included). */
 const FILE_TYPES = new Set(["0", "\0", "7"]);
 
-const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
-
 /**
- * The text files of the repository at `sha`, by path, for a schema-3
- * pass's LLM material (ADR-119 §7): the tarball the platform fetches
- * itself, its top-level `<owner>-<repo>-<sha>/` stripped (it names the
- * student), regular files that are UTF-8 only. Nothing of a commit's
- * metadata. Or why there are none; GitHub failing throws
+ * The text files of the repository at `sha` that `sources` name
+ * (`sourcePaths`), by path, for a schema-3 pass's LLM material (ADR-119
+ * §7): the tarball the platform fetches itself, its top-level
+ * `<owner>-<repo>-<sha>/` stripped (it names the student), regular files
+ * that are UTF-8 only (a binary file is nothing the model reads). Nothing
+ * of a commit's metadata. Or why there are none; GitHub failing throws
  * {@link TarballUnavailable}.
  */
-export async function fetchSourceFiles(octokit: Octokit, fullName: string, sha: string): Promise<Record<string, string> | "repo_missing" | "archive_too_large"> {
+export async function fetchSourceFiles(
+  octokit: Octokit,
+  fullName: string,
+  sha: string,
+  sources: readonly string[],
+): Promise<Record<string, string> | "repo_missing" | "archive_too_large"> {
   const tarball = await fetchTarball(octokit, fullName, sha);
   if (typeof tarball === "string") return tarball;
   const tar = unpack(tarball);
   if (tar === null) return "archive_too_large";
+  const entries = stripTarballRoot(readTar(tar)).filter((entry) => FILE_TYPES.has(entry.typeflag) && entry.utf8);
+  const named = new Set(sourcePaths(sources, entries.map((entry) => entry.path)));
   const files: Record<string, string> = {};
-  for (const entry of stripTarballRoot(readTar(tar))) {
-    if (!FILE_TYPES.has(entry.typeflag) || !entry.utf8) continue;
-    try {
-      files[entry.path] = strictUtf8.decode(entry.data);
-    } catch {
-      // A binary file: nothing the model reads.
-    }
+  for (const entry of entries) {
+    const text = named.has(entry.path) ? decodeUtf8(entry.data) : null;
+    if (text !== null) files[entry.path] = text;
   }
   return files;
 }
@@ -360,7 +363,7 @@ async function store(
 }
 
 /** The installation's client of the project's organization. */
-export async function projectOctokit(db: Db, config: AppConfig, project: ProjectRow): Promise<Octokit> {
+async function projectOctokit(db: Db, config: AppConfig, project: ProjectRow): Promise<Octokit> {
   const org = await projectInstallation(db, project.orgId);
   if (!org) throw new Error("Quiz's GitHub App no longer acts on the project's organization");
   return (await installationClient(config, org.installationId)).octokit;

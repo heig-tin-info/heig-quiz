@@ -809,6 +809,38 @@ describe("the LLM pass of a schema-3 pass (ADR-119 §7)", () => {
     expect((await rowsOf(empty.id))["rapport.style"]).toEqual([0, "no_commit", null]);
   });
 
+  it("asks nothing when the sources cannot be read: archive_too_large, github_unavailable", async () => {
+    const settledPass = async (suffix: string) => {
+      const repo = await namedRepo(suffix);
+      await work(repo);
+      const claimed = await claimFinal(repo.id);
+      await runCiDispatch(server.app, config, { passId: claimed.passId });
+      return { repo, passId: claimed.passId };
+    };
+    const big = await settledPass("e5");
+    world.oversized.set(big.repo.fullName, 21 * 1024 * 1024);
+    seen.length = 0;
+    expect(await runReview(server.app, config, { repoId: big.repo.id, passId: big.passId })).toBe(1);
+    expect((await rowsOf(big.repo.id))["rapport.style"]).toEqual([0, "archive_too_large", null]);
+
+    const away = await settledPass("f6");
+    const routes = gh.routes;
+    gh.routes = [
+      (url) =>
+        url.host === "api.github.com" && url.pathname.includes("/tarball/")
+          ? new Response(null, { status: 302, headers: { location: "https://evil.example/archive.tar.gz?token=x" } })
+          : undefined,
+      ...routes,
+    ];
+    try {
+      expect(await runReview(server.app, config, { repoId: away.repo.id, passId: away.passId })).toBe(1);
+    } finally {
+      gh.routes = routes;
+    }
+    expect((await rowsOf(away.repo.id))["rapport.style"]).toEqual([0, "github_unavailable", null]);
+    expect(seen).toHaveLength(0);
+  });
+
   it("queues the pass's review once it is settled", async () => {
     const repo = await namedRepo("d4");
     const claimed = await claimFinal(repo.id);

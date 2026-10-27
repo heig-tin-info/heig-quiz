@@ -64,7 +64,8 @@ import { gradeDispatches, projectCheckpoints, projectGradeRuns, projectRepos, pr
 import { githubStatus, ownerRepo } from "../../github/app.js";
 import { LIVE, ts } from "./deadline.js";
 import { claimLeases, runLeased, type LeasedRun, type ProjectJob } from "./lease.js";
-import { hintProjectStaff, markRepoDeleted } from "./repos.js";
+import { hintProjectStaff, markRepoDeleted, type RepoRow } from "./repos.js";
+import type { ProjectRow } from "./views.js";
 
 // ---------------------------------------------------------------- what is due, in SQL
 
@@ -267,6 +268,16 @@ export async function lastStudentPush(db: Db | Tx, githubRepoId: number, branche
     .orderBy(desc(pushReceipts.receivedAt))
     .limit(1);
   return row?.sha ?? null;
+}
+
+/**
+ * A CI pass's target commit (ADR-106 §3, ADR-119 §6): the last student
+ * push by the pass's date — a milestone's checkpoint, else the
+ * repository's effective deadline. Null without one.
+ */
+export async function passTarget(db: Db | Tx, repo: RepoRow, project: ProjectRow, scope: { dueAt: Date | null }): Promise<string | null> {
+  if (repo.githubRepoId === null) return null;
+  return lastStudentPush(db, repo.githubRepoId, project.branches, scope.dueAt ?? effectiveDeadline(repo, project));
 }
 
 /**
