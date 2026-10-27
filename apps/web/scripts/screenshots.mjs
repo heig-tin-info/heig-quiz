@@ -866,6 +866,9 @@ const scenes = [
   // ADR-098: the student's level on the course's concepts, one section per classroom.
   { name: "drill-concepts", role: "student", path: "/drill", fold: true, act: (p) => p.getByRole("heading", { name: /^(Concepts|Notions)$/ }).first().scrollIntoViewIfNeeded() },
   { name: "drill-empty", role: "student", path: "/drill?reviewed=1" },
+  // ADR-041 §6, amendment of 2026-10-27: new cards held back by the cap, then revision open nowhere.
+  { name: "drill-more", role: "student", path: "/drill?reviewed=1&held=1" },
+  { name: "drill-empty-closed", role: "student", path: "/drill?reviewed=1&reviseoff=1" },
   { name: "drill-off", role: "student", path: "/drill?empty=1" },
   { name: "drill-error", role: "student", path: "/drill?fail=1", settle: 2500 },
   { name: "drill-optout", role: "student", path: "/drill", fold: true, act: (p) => p.getByRole("switch", { name: /PRG1-2026/ }).click() },

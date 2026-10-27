@@ -30,7 +30,8 @@ const card = (id: string) => ({
   isNew: id === "k2",
 });
 
-const SESSION: DrillSession = { cards: [card("k1"), card("k2")], budgetMs: 600_000, nextDueAt: null };
+const SESSION: DrillSession = { cards: [card("k1"), card("k2")], budgetMs: 600_000, nextDueAt: null, heldNew: 0 };
+const EMPTY: DrillSession = { cards: [], budgetMs: 600_000, nextDueAt: "2026-10-01T10:00:00.000Z", heldNew: 0 };
 
 const served = (id: string) => ({
   cardId: id,
@@ -263,11 +264,50 @@ describe("the drill session", () => {
 
 describe("the drill's day", () => {
   it("says there is nothing to review today, and when the next review is", async () => {
-    stub({ [SESSION_URL]: ok({ cards: [], budgetMs: 600_000, nextDueAt: "2026-10-01T10:00:00.000Z" }) });
+    stub({ [SESSION_URL]: ok(EMPTY) });
     renderWithProviders(<DrillPage navigate={() => {}} />);
     expect(await screen.findByText("Nothing to review today")).toBeVisible();
     expect(screen.getByText(/^Your next review is on 2026-10-01\.$/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+    // Revision is open nowhere (its read fails here): the date alone, no action.
+    expect(screen.queryByRole("button", { name: "Practise anyway" })).toBeNull();
+  });
+
+  it("offers the next batch of new cards held back by the cap, then the session with them", async () => {
+    const user = userEvent.setup();
+    const { calls } = stub({
+      [SESSION_URL]: ok({ ...EMPTY, heldNew: 21 }),
+      "POST /app/api/drill/session/unlock?device=fine": ok({ ...SESSION, heldNew: 11 }),
+    });
+    renderWithProviders(<DrillPage navigate={() => {}} />);
+    expect(await screen.findByText("21 new questions are waiting. Each one joins your review schedule.")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Add 10 new questions" }));
+    expect(await screen.findByRole("button", { name: "Start" })).toBeVisible();
+    expect(calls.filter((c) => c.method === "POST" && c.url.startsWith("/app/api/drill/session/unlock"))).toHaveLength(1);
+  });
+
+  it("names the last new card alone", async () => {
+    stub({ [SESSION_URL]: ok({ ...EMPTY, heldNew: 1 }) });
+    renderWithProviders(<DrillPage navigate={() => {}} />);
+    expect(await screen.findByRole("button", { name: "Add one new question" })).toBeVisible();
+  });
+
+  it("sends a day with no new card left to targeted revision, in the first classroom that offers it", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const closed = { ...ROOM, classroomId: "r0", classroomName: "PRG1-2025" };
+    stub({
+      "GET /app/api/drill/classrooms": ok([closed, ROOM]),
+      [SESSION_URL]: ok(EMPTY),
+      "GET /app/api/student/classrooms/r0/revision/concepts": ok({ available: false, concepts: [] }),
+      "GET /app/api/student/classrooms/r1/revision/concepts": ok({
+        available: true,
+        concepts: [{ id: "c1", label: "Pointeurs", qualifier: null }],
+      }),
+    });
+    renderWithProviders(<DrillPage navigate={navigate} />);
+    await user.click(await screen.findByRole("button", { name: "Practise anyway" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "revise", classroomId: "r1" });
   });
 
   it("says the drill is not on anywhere when no classroom has it", async () => {

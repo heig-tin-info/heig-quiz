@@ -4,7 +4,7 @@
  * it with (invariant 7); every answer is typed by the same module, as the
  * rest of the app reads its answers.
  */
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 import {
   DrillAnswerBody,
@@ -69,6 +69,17 @@ export function useDrillDevice(): DrillDeviceClass {
 export const fetchDrillSession = (device: DrillDeviceClass) =>
   api<DrillSession>(
     `/app/api/drill/session?${new URLSearchParams(DrillSessionQuery.parse({ device }))}`,
+  );
+
+/**
+ * The next batch of new cards beyond the day's cap (ADR-041 §6, amendment
+ * of 2026-10-27); answers today's session with them in it. The server
+ * decides: nothing held back, or a batch still to meet, unlocks nothing.
+ */
+export const unlockNewCards = (device: DrillDeviceClass) =>
+  api<DrillSession>(
+    `/app/api/drill/session/unlock?${new URLSearchParams(DrillSessionQuery.parse({ device }))}`,
+    { method: "POST" },
   );
 
 export const fetchDrillClassrooms = () => api<DrillClassroom[]>("/app/api/drill/classrooms");
@@ -144,13 +155,36 @@ export function useStudentConceptMastery(classroomId: string) {
 
 // --- Targeted revision (ADR-115) -------------------------------------------
 
+const fetchRevisionConcepts = (classroomId: string) =>
+  api<StudentRevisionConcepts>(`/app/api/student/classrooms/${classroomId}/revision/concepts`);
+
 /** The concepts the student may revise in a classroom; `available` false when revision is closed to them. */
 export function useRevisionConcepts(classroomId: string, enabled = true) {
   return useQuery({
     queryKey: revisionConceptsKey(classroomId),
-    queryFn: () => api<StudentRevisionConcepts>(`/app/api/student/classrooms/${classroomId}/revision/concepts`),
+    queryFn: () => fetchRevisionConcepts(classroomId),
     enabled,
   });
+}
+
+/**
+ * Where the empty day's "Practise anyway" leads (ADR-041 §6, amendment of
+ * 2026-10-27): the first of the student's drill classrooms, in the tab's
+ * order, where targeted revision is open to them and offers a concept; null
+ * while that is read, and where it is open nowhere. Asked only when
+ * `enabled`, from the same cache as the Concepts sections.
+ */
+export function useRevisableClassroom(rooms: readonly DrillClassroom[], enabled: boolean): DrillClassroom | null {
+  const open = rooms.filter((r) => r.optedOutAt === null);
+  const concepts = useQueries({
+    queries: open.map((room) => ({
+      queryKey: revisionConceptsKey(room.classroomId),
+      queryFn: () => fetchRevisionConcepts(room.classroomId),
+      enabled,
+    })),
+  });
+  const index = concepts.findIndex((q) => q.data?.available === true && q.data.concepts.length > 0);
+  return index === -1 ? null : open[index]!;
 }
 
 /** The student's own rounds in a classroom, newest first: what their teacher sees of them. */

@@ -125,6 +125,7 @@ function renderShell({
       })),
       budgetMs: 600_000,
       nextDueAt: null,
+      heldNew: 0,
     });
   }
   renderWithProviders(

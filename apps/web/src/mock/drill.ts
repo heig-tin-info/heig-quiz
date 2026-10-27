@@ -12,7 +12,11 @@
  * without a reference time (ADR-041 §4, §10 item 7).
  *
  * Scene flag `?reviewed=1`: today's drill is already done — the empty day,
- * "nothing to review today" with the next due date. `?empty=1` has no
+ * "nothing to review today" with the next due date, and its "Practise
+ * anyway" into targeted revision (`?reviseoff=1`: none, the date alone).
+ * `?held=1` with it: fifteen new cards wait beyond the day's cap, and the
+ * empty day offers the next batch (ADR-041 §6, amendment of 2026-10-27),
+ * which brings the new cards back into the session. `?empty=1` has no
  * classroom at all, so no drill. `?unstated=1`: no confidence stated yet
  * (ADR-085 §8) — no calibration for the student, and no question of `r1`
  * stated by enough students for the teacher's 2×2.
@@ -46,6 +50,7 @@ import type {
 import { RevisionAnswerBody, RevisionRoundBody } from "@quiz/contracts";
 import {
   allowDrillWritable,
+  DRILL_NEW_PER_DAY,
   DRILL_REVISION_ROUND_SIZE,
   DRILL_TYPES,
   drillWeekStarts,
@@ -117,9 +122,12 @@ const tomorrow = () => {
   return d.toISOString();
 };
 
+/** New cards held back by the day's cap (`?held=1`): the mock's own count, the batch it unlocks back into the session. */
+let heldNew = flags.held ? 15 : 0;
+
 // --- Student ---------------------------------------------------------------
 
-on("GET", "/app/api/drill/session", (): DrillSession => {
+const drillSession = (): DrillSession => {
   const session = inSession();
   const courseOf = (card: MockCard) => {
     const room = rooms.find((r) => r.id === card.classroomId);
@@ -135,7 +143,19 @@ on("GET", "/app/api/drill/session", (): DrillSession => {
     })),
     budgetMs: 10 * 60_000,
     nextDueAt: session.length === 0 && active().length > 0 ? tomorrow() : null,
+    heldNew: session.length === 0 ? heldNew : 0,
   };
+};
+
+on("GET", "/app/api/drill/session", drillSession);
+
+/** The next batch: the mock's new cards come back as if they were the batch. A no-op when nothing waits. */
+on("POST", "/app/api/drill/session/unlock", (): DrillSession => {
+  if (inSession().length === 0 && heldNew > 0) {
+    heldNew = Math.max(0, heldNew - DRILL_NEW_PER_DAY);
+    for (const card of cards) if (card.isNew) reviewedToday.delete(card.id);
+  }
+  return drillSession();
 });
 
 const drillClassroom = (id: string): DrillClassroom => {

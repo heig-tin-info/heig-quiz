@@ -2,11 +2,19 @@
  * The student's drill (F-DRILL-03, ADR-041 §6): today's session, its end,
  * or the day with nothing left; and the classrooms it draws from.
  *
+ * The empty day has one action, by what is left (ADR-041 §6, amendment of
+ * 2026-10-27): new cards held back by the day's cap, the next batch of them
+ * ("Add 10 new questions", real first reviews), after which the session
+ * reloads with them; none, "Practise anyway", targeted revision (ADR-115) in
+ * the first classroom of the tab where it is open to the student; revision
+ * open nowhere, the date of the next review alone.
+ *
  * The four decisions:
  *   - Type: the page title, then ONE 17 px line for the thing to do (today's
  *     drill, the end of it, or the empty day); everything else 13–14 px.
  *   - Color: one accent, the page's one primary — Start, then Check and Next
- *     inside the run (`DrillRun`), then Back to home. The switches are the
+ *     inside the run (`DrillRun`), then Back to home; on the empty day, the
+ *     next batch or "Practise anyway". The switches are the
  *     success green of every switch; nothing else is coloured.
  *   - Space: 32 between the day and the classrooms, 16–20 inside a card.
  *   - Finish: cards on the warm canvas, hairlines, no shadow.
@@ -15,17 +23,19 @@
  * one card at a time is all there is. Under the classrooms, once the student
  * has stated a confidence, their calibration (ADR-085 §8): a read, no action.
  */
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarCheck, Dumbbell } from "lucide-react";
 import { useState } from "react";
 
-import type { DrillSessionCard } from "@quiz/contracts";
+import type { DrillClassroom, DrillDeviceClass, DrillSession, DrillSessionCard } from "@quiz/contracts";
+import { DRILL_NEW_PER_DAY } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { drillRootKey } from "../queryKeys";
+import { useErrorToast } from "../notify";
+import { drillRootKey, drillSessionKey } from "../queryKeys";
 import type { Route } from "../router";
 import { Button, Card, EmptyState, isoDateParts, PageHeader, QueryError, Skeleton } from "../ui";
-import { useDrillClassrooms, useDrillDevice, useDrillSession } from "./api";
+import { unlockNewCards, useDrillClassrooms, useDrillDevice, useDrillSession, useRevisableClassroom } from "./api";
 import { DrillCalibration } from "./Confidence";
 import { ConceptMastery } from "./ConceptMastery";
 import { DrillClassrooms } from "./DrillClassrooms";
@@ -87,15 +97,7 @@ export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
     }
     const today = session.data!;
     if (today.cards.length === 0) {
-      return (
-        <Card>
-          <EmptyState icon={CalendarCheck} title={t("drill.empty.title")}>
-            {today.nextDueAt
-              ? t("drill.empty.next", { date: isoDateParts(today.nextDueAt).date })
-              : t("drill.empty.none")}
-          </EmptyState>
-        </Card>
-      );
+      return <EmptyDay today={today} rooms={rooms.data!} device={device} navigate={navigate} />;
     }
     return (
       <Card className="flex flex-wrap items-center gap-x-5 gap-y-3 p-5">
@@ -119,5 +121,68 @@ export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
       {/* Secondary, after the switches: what the statements on the cards add up to (ADR-085 §8). */}
       {hasRooms ? <DrillCalibration /> : null}
     </div>
+  );
+}
+
+/** The day with nothing in the session: its one action, by what is left (see the header). */
+function EmptyDay({
+  today,
+  rooms,
+  device,
+  navigate,
+}: {
+  today: DrillSession;
+  rooms: readonly DrillClassroom[];
+  device: DrillDeviceClass;
+  navigate: (r: Route) => void;
+}) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toastError = useErrorToast();
+  const held = today.heldNew;
+  const revise = useRevisableClassroom(rooms, held === 0);
+  const unlock = useMutation({
+    mutationFn: () => unlockNewCards(device),
+    // The answer is today's session with the batch in it: the page and the badge read it.
+    onSuccess: (session) => qc.setQueryData(drillSessionKey(device), session),
+    onError: toastError("drill.more.failed"),
+  });
+
+  if (held > 0) {
+    const batch = Math.min(held, DRILL_NEW_PER_DAY);
+    return (
+      <Card>
+        <EmptyState
+          icon={CalendarCheck}
+          title={t("drill.empty.title")}
+          action={
+            <Button loading={unlock.isPending} onClick={() => unlock.mutate()}>
+              {batch === 1 ? t("drill.more.one.action") : t("drill.more.action", { n: batch })}
+            </Button>
+          }
+        >
+          {held === 1 ? t("drill.more.body.one") : t("drill.more.body", { n: held })}
+        </EmptyState>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <EmptyState
+        icon={CalendarCheck}
+        title={t("drill.empty.title")}
+        action={
+          revise ? (
+            <Button onClick={() => navigate({ view: "revise", classroomId: revise.classroomId })}>
+              {t("drill.empty.revise.cta")}
+            </Button>
+          ) : null
+        }
+      >
+        {today.nextDueAt
+          ? t("drill.empty.next", { date: isoDateParts(today.nextDueAt).date })
+          : t("drill.empty.none")}
+      </EmptyState>
+    </Card>
   );
 }

@@ -90,6 +90,7 @@ export const FLAG_NAMES = [
   "seb",
   "kiosk",
   "reviewed",
+  "held",
   "reviseempty",
   "reviseoff",
   "unlinked",

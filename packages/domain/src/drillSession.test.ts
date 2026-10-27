@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   composeDrillSession,
   drillDayBounds,
+  DRILL_NEW_PER_DAY,
+  drillNewAllowed,
+  drillNewToday,
   DRILL_UNKNOWN_REFERENCE_MS,
   type DrillCandidate,
 } from "./drillSession.js";
@@ -92,6 +95,39 @@ describe("composeDrillSession", () => {
     // round-robin in the order the groups first appear, each keeping its own order
     const mixed = ["x1", "y1", "x2", "x3", "z1", "y2"].map((id, i) => card(id, { retrievability: i / 10, group: id[0]! }));
     expect(compose(mixed)).toEqual(["x1", "y1", "z1", "x2", "y2", "x3"]);
+  });
+});
+
+describe("drillNewToday", () => {
+  it("allows the daily cap, and holds back what waits beyond it", () => {
+    expect(drillNewToday({ introduced: 0, unlocks: 0, waiting: 41 })).toEqual({ allowed: 10, held: 31, unlockable: false });
+    expect(drillNewToday({ introduced: 4, unlocks: 0, waiting: 3 })).toEqual({ allowed: 6, held: 0, unlockable: false });
+  });
+
+  it("offers a batch once the allowance is spent and a new card waits", () => {
+    expect(drillNewToday({ introduced: DRILL_NEW_PER_DAY, unlocks: 0, waiting: 21 })).toEqual({
+      allowed: 0,
+      held: 21,
+      unlockable: true,
+    });
+    expect(drillNewToday({ introduced: 10, unlocks: 0, waiting: 0 }).unlockable).toBe(false);
+  });
+
+  it("raises the allowance by a batch per unlock, with no ceiling", () => {
+    expect(drillNewToday({ introduced: 10, unlocks: 1, waiting: 21 })).toEqual({ allowed: 10, held: 11, unlockable: false });
+    expect(drillNewToday({ introduced: 20, unlocks: 1, waiting: 11 }).unlockable).toBe(true);
+    expect(drillNewToday({ introduced: 20, unlocks: 2, waiting: 11 })).toEqual({ allowed: 10, held: 1, unlockable: false });
+    expect(drillNewToday({ introduced: 70, unlocks: 6, waiting: 1 })).toEqual({ allowed: 0, held: 1, unlockable: true });
+  });
+
+  it("names the allowance alone", () => {
+    expect(drillNewAllowed(0, 0)).toBe(DRILL_NEW_PER_DAY);
+    expect(drillNewAllowed(15, 1)).toBe(5);
+    expect(drillNewAllowed(25, 1)).toBe(0);
+  });
+
+  it("never allows a negative number", () => {
+    expect(drillNewToday({ introduced: 12, unlocks: 0, waiting: 5 })).toEqual({ allowed: 0, held: 5, unlockable: true });
   });
 });
 

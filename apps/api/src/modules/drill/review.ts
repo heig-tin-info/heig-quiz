@@ -16,7 +16,9 @@
  *     (invariant 6) — which is also what closes answering a card twice in a
  *     day. Extra practice is targeted revision (`revision.ts`, ADR-115), on
  *     routes of its own that never write a review: a card served in one of
- *     its rounds today is not servable here before tomorrow.
+ *     its rounds today is not servable here before tomorrow. More NEW cards
+ *     than the day's cap only through a batch the student unlocked today
+ *     ({@link unlockNewCards}), which the same rule then reads.
  */
 import { randomUUID } from "node:crypto";
 
@@ -37,7 +39,8 @@ import {
   drillConfidenceOutcome,
   type DrillConfidence,
   drillDayBounds,
-  DRILL_NEW_PER_DAY,
+  drillNewAllowed,
+  drillNewToday,
   DRILL_SESSION_BUDGET_MS,
   drillRating,
   drillReferenceOf,
@@ -52,7 +55,15 @@ import {
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, drillCards, drillReviews, enrollments, questionConcepts } from "../../db/schema.js";
+import {
+  classrooms,
+  courses,
+  drillCards,
+  drillNewUnlocks,
+  drillReviews,
+  enrollments,
+  questionConcepts,
+} from "../../db/schema.js";
 import type { DbOrTx } from "../evaluation/service.js";
 import { drawSeed } from "../live/service.js";
 import { instanceOf } from "../pool/service.js";
@@ -62,6 +73,7 @@ import {
   gradeServed,
   openCards,
   openQuestionOf,
+  type ActiveRow,
   ownActiveCard,
   practisedToday,
   reviewInstance,
@@ -95,6 +107,18 @@ async function introducedToday(db: DbOrTx, userId: string, day: Day): Promise<nu
 }
 
 /**
+ * The batches of new cards the student unlocked today beyond the cap
+ * (ADR-041 §6, amendment of 2026-10-27); a row of an earlier day counts 0.
+ */
+async function unlocksToday(db: DbOrTx, userId: string, day: Day): Promise<number> {
+  const [row] = await db
+    .select({ batches: drillNewUnlocks.batches })
+    .from(drillNewUnlocks)
+    .where(and(eq(drillNewUnlocks.userId, userId), eq(drillNewUnlocks.day, day.start)));
+  return row?.batches ?? 0;
+}
+
+/**
  * Held back for the rest of the day: reviewed already today (a card is
  * reviewed at most once a day), or served in a round of targeted revision
  * today (ADR-115), whose key would otherwise forge a daily rating.
@@ -106,20 +130,39 @@ function heldToday(card: CardRow, day: Day, practised: ReadonlySet<string>): boo
 /**
  * Whether today's session may hand this card out (F-DRILL-03): not held
  * back today ({@link heldToday}), and either due before the day ends or new
- * while the day's cap of new cards is not reached. The same rule the session
- * is composed under, the budget aside: the budget orders a session, it does
+ * while the day's allowance of new cards — the cap, raised by each batch
+ * the student unlocked today — is not spent. The same rule the session is
+ * composed under, the budget aside: the budget orders a session, it does
  * not forbid a card.
  */
-function servableToday(card: CardRow, day: Day, introduced: number, practised: ReadonlySet<string>): boolean {
+function servableToday(card: CardRow, day: Day, newAllowed: number, practised: ReadonlySet<string>): boolean {
   if (heldToday(card, day, practised)) return false;
-  if (card.lastReviewAt === null) return introduced < DRILL_NEW_PER_DAY;
+  if (card.lastReviewAt === null) return newAllowed > 0;
   return card.dueAt < day.end;
 }
 
-/** What holds cards back today: the new cards already introduced, and those revised in a round. */
+/**
+ * What holds cards back today: the new cards already introduced against the
+ * batches unlocked, and the cards revised in a round.
+ */
 async function todayOf(db: DbOrTx, userId: string, day: Day) {
-  const [introduced, practised] = await Promise.all([introducedToday(db, userId, day), practisedToday(db, userId, day)]);
-  return { introduced, practised };
+  const [introduced, unlocks, practised] = await Promise.all([
+    introducedToday(db, userId, day),
+    unlocksToday(db, userId, day),
+    practisedToday(db, userId, day),
+  ]);
+  return { introduced, unlocks, practised };
+}
+
+/**
+ * Where today's new cards stand (`drillNewToday`): the allowance left, the
+ * new cards waiting beyond it, and whether a batch may be unlocked. Only the
+ * cards the session could hand out count as waiting: active, key open, not
+ * held back today.
+ */
+function newCardsToday(rows: readonly ActiveRow[], day: Day, today: Awaited<ReturnType<typeof todayOf>>) {
+  const waiting = rows.filter(({ card }) => card.lastReviewAt === null && !heldToday(card, day, today.practised)).length;
+  return drillNewToday({ introduced: today.introduced, unlocks: today.unlocks, waiting });
 }
 
 /**
@@ -130,8 +173,8 @@ async function todayOf(db: DbOrTx, userId: string, day: Day) {
 async function servable(db: DbOrTx, userId: string, cardId: string, now: Date) {
   const row = await ownActiveCard(db, userId, cardId);
   const day = drillDayBounds(now);
-  const { introduced, practised } = await todayOf(db, userId, day);
-  if (!servableToday(row.card, day, introduced, practised)) throw new DrillError("not_found");
+  const today = await todayOf(db, userId, day);
+  if (!servableToday(row.card, day, drillNewAllowed(today.introduced, today.unlocks), today.practised)) throw new DrillError("not_found");
   return { row, question: await openQuestionOf(db, row) };
 }
 
@@ -193,11 +236,13 @@ async function referenceTimes(
 
 /**
  * Today's session (F-DRILL-03, ADR-041 §6): the due cards — due before the
- * end of the day, Zurich time — then the new ones up to the day's cap, until
- * the budget is spent, courses and concepts interleaved (a question by its
- * first concept id, ADR-081 third addendum §8). A card reviewed or revised today,
- * or whose key may not reach the student yet, is left out. An empty day
- * gives the next due date (06, question 28 (b)).
+ * end of the day, Zurich time — then the new ones up to the day's allowance
+ * (the cap, and a batch more per unlock), until the budget is spent, courses
+ * and concepts interleaved (a question by its first concept id, ADR-081
+ * third addendum §8). A card reviewed or revised today, or whose key may not
+ * reach the student yet, is left out. An empty day gives the next due date
+ * (06, question 28 (b)) and the new cards held back by the cap, which
+ * {@link unlockNewCards} lets in.
  */
 export async function drillSession(
   db: Db,
@@ -208,7 +253,8 @@ export async function drillSession(
   const day = drillDayBounds(now);
   const rows = await openCards(db, eq(drillCards.userId, userId));
   const questionIds = [...new Set(rows.map((r) => r.card.questionId))];
-  const { introduced, practised } = await todayOf(db, userId, day);
+  const today = await todayOf(db, userId, day);
+  const news = newCardsToday(rows, day, today);
   const firsts =
     questionIds.length === 0
       ? []
@@ -226,7 +272,7 @@ export async function drillSession(
   const rowOf = new Map(rows.map((r) => [r.card.id, r]));
   const ids = composeDrillSession({
     cards: rows
-      .filter(({ card }) => !heldToday(card, day, practised))
+      .filter(({ card }) => !heldToday(card, day, today.practised))
       // Keyed by the course's id, not its code: two courses may share a code
       // (ADR-120), and their cards must still interleave as two groups.
       .map(({ card, courseId }) => ({
@@ -242,7 +288,7 @@ export async function drillSession(
     // morning's session.
     now: new Date(day.end.getTime() - 1),
     budgetMs: DRILL_SESSION_BUDGET_MS,
-    newAllowed: DRILL_NEW_PER_DAY - introduced,
+    newAllowed: news.allowed,
   });
 
   let nextDueAt: Date | null = null;
@@ -261,7 +307,49 @@ export async function drillSession(
     }),
     budgetMs: DRILL_SESSION_BUDGET_MS,
     nextDueAt: nextDueAt === null ? null : iso(nextDueAt),
+    heldNew: news.held,
   };
+}
+
+/**
+ * "10 more new questions" (ADR-041 §6, amendment of 2026-10-27): once the
+ * day's allowance of new cards is spent and a new card still waits, one more
+ * batch of `DRILL_NEW_PER_DAY` is let in for the rest of the day — real first
+ * reviews, served and rated like any other. No ceiling on the batches; each
+ * session keeps its time budget. Otherwise nothing is written: a second click
+ * before the first batch is met, or nothing held back, is a no-op. One
+ * upsert, a compare-and-set on the count read (a row of an earlier day read
+ * as 0 and restarted at 1), so two requests at once unlock one batch.
+ * Answers today's session, as it now stands.
+ */
+export async function unlockNewCards(
+  db: Db,
+  userId: string,
+  device: DrillDeviceClass,
+  now: Date,
+): Promise<DrillSession> {
+  const day = drillDayBounds(now);
+  const rows = await openCards(db, eq(drillCards.userId, userId));
+  const today = await todayOf(db, userId, day);
+  if (newCardsToday(rows, day, today).unlockable) {
+    const sameDay = sql`${drillNewUnlocks.day} = excluded.day`;
+    await db
+      .insert(drillNewUnlocks)
+      .values({ userId, day: day.start, batches: 1 })
+      .onConflictDoUpdate({
+        target: drillNewUnlocks.userId,
+        set: {
+          batches: sql`case when ${sameDay} then ${drillNewUnlocks.batches} + 1 else 1 end`,
+          day: sql`excluded.day`,
+        },
+        // What was read: today's count, or no batch today (no row, or an earlier day's).
+        setWhere:
+          today.unlocks === 0
+            ? sql`not (${sameDay})`
+            : sql`${sameDay} and ${drillNewUnlocks.batches} = ${today.unlocks}`,
+      });
+  }
+  return drillSession(db, userId, device, now);
 }
 
 /**

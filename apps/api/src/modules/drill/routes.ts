@@ -77,6 +77,20 @@ export async function drillPlugin(app: FastifyInstance) {
     return service.drillSession(app.db, req.user!.id, query.data.device, now);
   });
 
+  /**
+   * ADR-041 §6, amendment of 2026-10-27: an empty day whose new cards are
+   * held back by the cap lets the next batch in, then answers the session.
+   * A no-op when nothing is held back or the allowance is not spent. Portal
+   * sessions only, like the session's (a `seb` or `kiosk` session is refused
+   * before the route); an impersonation session is read-only in production.
+   */
+  app.post("/app/api/drill/session/unlock", { preHandler: requireSession }, async (req, reply) => {
+    const now = app.clock.now();
+    const query = DrillSessionQuery.safeParse(req.query ?? {});
+    if (!query.success) return invalid(reply, query.error);
+    return service.unlockNewCards(app.db, req.user!.id, query.data.device, now);
+  });
+
   /** The classrooms whose drill the student is in (or opted out of): the tab's notice and switches. */
   app.get(
     "/app/api/drill/classrooms",

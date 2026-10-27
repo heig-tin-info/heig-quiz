@@ -19,8 +19,8 @@
  *     activity, the weekly progression, the mastery per concept, the confidence
  *     per question (aggregated only), who revised which concept.
  *
- * The module owns `drill_cards`, `drill_reviews`, `drill_revision_rounds` and
- * `drill_revision_answers`. The switches it reads
+ * The module owns `drill_cards`, `drill_reviews`, `drill_new_unlocks`,
+ * `drill_revision_rounds` and `drill_revision_answers`. The switches it reads
  * belong to their modules and are written through their services:
  * `classrooms.drill_enabled_at` and `enrollments.drill_opted_out_at`
  * (`org`), `settings.allowDrill` (`evaluation`). It depends on `live` (the
@@ -59,6 +59,7 @@ export {
   serveCard,
   studentCalibration,
   studentDrillClassrooms,
+  unlockNewCards,
 } from "./review.js";
 export {
   answerRound,

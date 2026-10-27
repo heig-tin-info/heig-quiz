@@ -8,7 +8,11 @@ import { SCHOOL_TIME_ZONE, zoneOffset } from "./zone.js";
 
 /** The target length of a session, before a teacher or the admin sets another (F-ADMIN-03). */
 export const DRILL_SESSION_BUDGET_MS = 600_000;
-/** New cards a student meets per day at most, so that one exam does not flood the next day. */
+/**
+ * New cards a student meets per day before asking for more, so that one exam
+ * does not flood the next day; also the size of each batch they ask for
+ * (ADR-041 §6, amendment of 2026-10-27).
+ */
 export const DRILL_NEW_PER_DAY = 10;
 /** The time counted for a card with no reference time at all. */
 export const DRILL_UNKNOWN_REFERENCE_MS = 60_000;
@@ -36,6 +40,45 @@ export function drillDayBounds(now: Date, timeZone: string = SCHOOL_TIME_ZONE): 
   const nextMidnight = localMidnight + 86_400_000;
   const end = nextMidnight - offset(new Date(nextMidnight - offset(now)));
   return { start: new Date(start), end: new Date(end) };
+}
+
+/** Where the new cards of one student's day stand (ADR-041 §6, amendment of 2026-10-27). */
+export interface DrillNewToday {
+  /** New cards still allowed today: the cap, raised by a batch per unlock, minus those already introduced. Never negative. */
+  allowed: number;
+  /** New cards waiting beyond that allowance: what "more new questions" would unlock. */
+  held: number;
+  /** Whether asking for more unlocks a batch now: the allowance is spent and a new card waits. */
+  unlockable: boolean;
+}
+
+/**
+ * New cards still allowed today: `DRILL_NEW_PER_DAY`, and as many more for
+ * each batch unlocked today, minus those already introduced. Never negative.
+ */
+export function drillNewAllowed(introduced: number, unlocks: number): number {
+  return Math.max(0, DRILL_NEW_PER_DAY * (1 + Math.max(0, unlocks)) - introduced);
+}
+
+/**
+ * The day's new cards: `DRILL_NEW_PER_DAY` per day, and as many more for
+ * each batch the student unlocked today (`unlocks`); `introduced` were met
+ * for the first time today, `waiting` are new and not held back today. A
+ * batch is unlocked only once the allowance is spent, so a second click on
+ * "more" before the first batch is met unlocks nothing.
+ */
+export function drillNewToday({
+  introduced,
+  unlocks,
+  waiting,
+}: {
+  introduced: number;
+  unlocks: number;
+  waiting: number;
+}): DrillNewToday {
+  const allowed = drillNewAllowed(introduced, unlocks);
+  const held = Math.max(0, waiting - allowed);
+  return { allowed, held, unlockable: allowed === 0 && held > 0 };
 }
 
 export interface DrillCandidate {
