@@ -27,8 +27,10 @@ import {
   EVIDENCE_STATUSES,
   GRADING_SOURCES,
   CRITERIA_PARSE_ERROR_CODES,
+  CRITERIA_FILE,
   CRITERION_KINDS,
   DEADLINE_STRATEGIES,
+  GRADING_WORKFLOW,
   FINAL_SCORE_SOURCES,
   GRADE_RUN_KINDS,
   GRADE_RUN_PARSE_STATUSES,
@@ -206,7 +208,7 @@ export type ProjectSeatKind = z.infer<typeof ProjectSeatKind>;
  * The files the creation form pre-checks as protected when the source holds
  * them (F-PROJ-01); unchecking `grading.yml` warns.
  */
-export const PROTECTED_FILE_SUGGESTIONS = ["criteria.yml", "README.md", ".github/workflows/grading.yml"] as const;
+export const PROTECTED_FILE_SUGGESTIONS = [CRITERIA_FILE, "README.md", GRADING_WORKFLOW] as const;
 
 /** A repository's name in the organization: a name, never a path nor an owner. */
 export const RepoName = z
@@ -379,8 +381,8 @@ export const ProjectCreate = z
     graceMinutes: GraceMinutes.default(PROJECT_DEFAULTS.graceMinutes),
     sourceStrategy: SourceStrategy.default(PROJECT_DEFAULTS.sourceStrategy),
     deadlineStrategy: DeadlineStrategy.default(PROJECT_DEFAULTS.deadlineStrategy),
-    // `criteria` is chosen on the draft, which reads its `criteria.yml` (ADR-106 §1).
-    gradingMode: ProjectGradingMode.exclude(["criteria"]).default(PROJECT_DEFAULTS.gradingMode),
+    // `criteria` reads the handed-out `criteria.yml` at schema 3 first (ADR-119 §9): `422 source_criteria_invalid` otherwise.
+    gradingMode: ProjectGradingMode.default(PROJECT_DEFAULTS.gradingMode),
     gradingScale: ProjectGradingScale.optional(),
     protectedFiles: z.array(ProtectedPath).max(50).default([]),
     groupMode: z.boolean().default(false),
@@ -602,6 +604,10 @@ export const PROJECT_REFUSALS = [
   // whose `criteria.yml` is missing or does not parse; the body names the
   // errors (`errors`, {@link CriteriaError}).
   "criteria_invalid",
+  // ADR-119 §9: a creation in `criteria` mode whose handed-out
+  // `criteria.yml` is missing or does not parse at schema 3 (422); the body
+  // names the errors (`errors`, {@link CriteriaError}).
+  "source_criteria_invalid",
   // ADR-106 §5: a snapshot (switch or reload) that tags no criterion with a
   // checkpoint's name; the body names them (`checkpoints`).
   "checkpoint_untagged",
@@ -658,19 +664,15 @@ export const ProjectSourceParams = z.object({ id: z.uuid(), repo: RepoName });
 export type ProjectSourceParams = z.infer<typeof ProjectSourceParams>;
 
 /**
- * `GET /app/api/classrooms/:id/projects/sources/:repo`: one source, its
- * branches, the tree of its default branch (capped: `truncated`), and the
- * {@link PROTECTED_FILE_SUGGESTIONS} it holds.
+ * The query of `GET …/projects/sources/:repo` (ADR-119 §9): the branch the
+ * preview reads (by default the source's default branch, the students'
+ * first) and the strategy whose handout it shows (by default `squash`).
  */
-export const ProjectSourceDetail = z.object({
-  name: z.string(),
-  defaultBranch: z.string(),
-  branches: z.array(z.string()),
-  tree: z.array(z.object({ path: z.string(), type: z.enum(["blob", "tree"]) })),
-  truncated: z.boolean(),
-  suggestedProtected: z.array(z.enum(PROTECTED_FILE_SUGGESTIONS)),
+export const ProjectSourceQuery = z.strictObject({
+  branch: BranchName.optional(),
+  strategy: SourceStrategy.optional(),
 });
-export type ProjectSourceDetail = z.infer<typeof ProjectSourceDetail>;
+export type ProjectSourceQuery = z.infer<typeof ProjectSourceQuery>;
 
 // ---------------------------------------------------------- the acceptance (M3-03)
 
@@ -1580,8 +1582,12 @@ export const CriteriaError = z.object({
 });
 export type CriteriaError = z.infer<typeof CriteriaError>;
 
-/** The body of `409 criteria_invalid`. */
-export const CriteriaInvalid = z.object({ error: z.literal("criteria_invalid"), message: z.string(), errors: z.array(CriteriaError) });
+/** The body of `409 criteria_invalid`, and of a creation's `422 source_criteria_invalid`. */
+export const CriteriaInvalid = z.object({
+  error: z.enum(["criteria_invalid", "source_criteria_invalid"]),
+  message: z.string(),
+  errors: z.array(CriteriaError),
+});
 export type CriteriaInvalid = z.infer<typeof CriteriaInvalid>;
 
 /** The body of `422 schema_version_fixed`: the snapshot's schema version, the one a reload must parse at. */
@@ -1622,6 +1628,8 @@ export type ProjectCriterion = z.infer<typeof ProjectCriterion>;
 export const ProjectCriteriaView = z.object({
   snapshot: z
     .object({
+      /** The schema the snapshot was first taken at (ADR-119 §3): 2 keeps ADR-106's settings, 3 has none. */
+      schemaVersion: z.union([z.literal(2), z.literal(3)]),
       fileSha: z.string(),
       sourceSha: z.string(),
       loadedAt: z.iso.datetime(),
@@ -1638,6 +1646,42 @@ export const ProjectCriteriaView = z.object({
     .nullable(),
 });
 export type ProjectCriteriaView = z.infer<typeof ProjectCriteriaView>;
+
+/**
+ * The handed-out `criteria.yml` of a source, parsed at schema 3 (ADR-119
+ * §9): its criteria, each with its kind, and its totals; or why it does not
+ * parse (a schema-2 file included), each error with its path.
+ */
+export const ProjectSourceCriteria = z.discriminatedUnion("ok", [
+  z.object({
+    ok: z.literal(true),
+    leaves: z.array(ProjectCriterion),
+    max: z.number(),
+    bonusMax: z.number(),
+  }),
+  z.object({ ok: z.literal(false), errors: z.array(CriteriaError) }),
+]);
+export type ProjectSourceCriteria = z.infer<typeof ProjectSourceCriteria>;
+
+/**
+ * `GET /app/api/classrooms/:id/projects/sources/:repo?branch=&strategy=`
+ * (staff, ADR-119 §9): one source, its branches, the branch read, the tree
+ * the students receive from it (after the handout of `strategy`: a path
+ * `.studentignore` reserves is absent; capped: `truncated`), the
+ * {@link PROTECTED_FILE_SUGGESTIONS} that tree holds, and its
+ * `criteria.yml` (null without one).
+ */
+export const ProjectSourceDetail = z.object({
+  name: z.string(),
+  defaultBranch: z.string(),
+  branches: z.array(z.string()),
+  branch: z.string(),
+  tree: z.array(z.object({ path: z.string(), type: z.enum(["blob", "tree"]) })),
+  truncated: z.boolean(),
+  suggestedProtected: z.array(z.enum(PROTECTED_FILE_SUGGESTIONS)),
+  criteria: ProjectSourceCriteria.nullable(),
+});
+export type ProjectSourceDetail = z.infer<typeof ProjectSourceDetail>;
 
 /**
  * `POST /app/api/projects/:id/regrade` and `…/repos/:rid/regrade` (ADR-106

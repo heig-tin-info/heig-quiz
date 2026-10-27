@@ -52,6 +52,7 @@ import {
   ProjectRepoDeadline,
   ProjectRepoParams,
   ProjectSourceParams,
+  ProjectSourceQuery,
   ReviewCheckpointCreate,
   ScoreOverride,
 } from "@quiz/contracts";
@@ -150,13 +151,19 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     teacher(onClassroom, async ({ req, scope }) => service.listSources(app.db, config, scope.room.id, callerOf(req))),
   );
 
+  /**
+   * One source, and what the students would receive from it (ADR-119 §9):
+   * the handed-out tree and its `criteria.yml` parsed at schema 3. The
+   * course's staff only (`staffAccess`): anyone else gets the 404 of a
+   * missing classroom.
+   */
   app.get(
     "/app/api/classrooms/:id/projects/sources/:repo",
     session,
     teacher(
-      { params: ProjectSourceParams, load: projectsClassroom.bind(null, app) },
-      async ({ req, reply, params, scope }) =>
-        (await service.sourceDetail(app.db, config, scope.room.id, params.repo, callerOf(req))) ?? notFound(reply),
+      { params: ProjectSourceParams, query: ProjectSourceQuery, load: projectsClassroom.bind(null, app) },
+      async ({ req, reply, params, query, scope }) =>
+        (await service.sourceDetail(app.db, config, scope.room.id, params.repo, callerOf(req), query)) ?? notFound(reply),
     ),
   );
 
@@ -177,7 +184,8 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   app.patch(
     "/app/api/projects/:id",
     session,
-    teacher({ ...onProject, body: ProjectPatch }, async ({ req, now, body, scope }) => {
+    // A write of the settings: the course role (owner or assistant, ADR-068).
+    teacher({ ...onStaffedProject, body: ProjectPatch }, async ({ req, now, body, scope }) => {
       // A switch to `criteria` reads the source's file first, outside the row's lock (ADR-106 §1).
       const criteria = await service.criteriaForSwitch(app.db, config, scope.project, body, now);
       const row = await service.patchProject(app.db, scope.project.id, body, actorOf(req), now, criteria);

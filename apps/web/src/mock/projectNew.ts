@@ -19,12 +19,22 @@
 import {
   PROTECTED_FILE_SUGGESTIONS,
   ProjectCreate,
+  type ProjectSourceCriteria,
   type ProjectSourceDetail,
   type ProjectSourceRepo,
   type ProjectSummary,
 } from "@quiz/contracts";
 
-import { PROJECT_PATCH_FIELDS, slugify } from "@quiz/domain";
+import {
+  classifyCriterion,
+  criteriaTotals,
+  handoutTree,
+  parseStudentIgnore,
+  PROJECT_PATCH_FIELDS,
+  slugify,
+  withForcedProtected,
+} from "@quiz/domain";
+import { parseCriteria } from "@quiz/domain/criteriaParse";
 
 import { mockClassroomOrg } from "./github";
 import { isSetOf } from "./groups";
@@ -35,23 +45,65 @@ import { D, flags, H, iso, MockError, MockPayload, nextId, on, role } from "./ru
 /** How long the mock's GitHub takes to build a distribution repository. */
 const BUILD_MS = 2500;
 
-/** A repository of the organization: its listing, its branches and its tree. */
+/** A repository of the organization: its listing, its branches, its files and the text of those the API reads. */
 interface MockSource {
   repo: ProjectSourceRepo;
   branches: string[];
   files: string[];
+  texts?: Record<string, string>;
 }
 
 const C_LAB = (topic: string) => [
   "README.md",
   "Makefile",
   "criteria.yml",
+  ".studentignore",
   ".github/workflows/grading.yml",
   `src/${topic}.c`,
   `src/${topic}.h`,
   `tests/test_${topic}.c`,
+  `solution/${topic}.c`,
   "student/README.md",
+  `student/src/${topic}.c`,
 ];
+
+/** A schema-3 `criteria.yml` (ADR-119 §3): a check, an AI-proposed criterion, the teacher's, a bonus. */
+const CRITERIA_V3 = `schema_version: 3
+criteria:
+  rendu:
+    description: Le code rendu
+    tests:
+      description: Les tests unitaires passent
+      max_points: 6
+      command: [make, test]
+    compilation:
+      description: Compile sans avertissement
+      max_points: 2
+      command: [make, CFLAGS=-Werror]
+  rapport:
+    analyse:
+      description: Analyse de la complexité des opérations
+      max_points: 4
+      prompt: Juge la justesse de l'analyse de complexité.
+    style:
+      description: Lisibilité et nommage
+      max_points: 2
+    equilibrage:
+      description: Arbre équilibré (AVL)
+      bonus_points: 1
+`;
+
+/** A schema-2 file (ADR-106), which a new project refuses (ADR-119 §3). */
+const CRITERIA_V2 = `schema_version: 2
+criteria:
+  rendu:
+    all-tests-passed:
+      description: Les tests passent
+      max_points: 6
+      awarded_points: 0
+`;
+
+const IGNORE = "# Réservé aux enseignants\nsolution/\n";
 
 /** The organization's repositories, the most recently pushed first, as GitHub lists them. */
 const SOURCES: MockSource[] = [
@@ -59,16 +111,19 @@ const SOURCES: MockSource[] = [
     repo: { name: "prg1-labo-04-arbres", defaultBranch: "main", private: true, pushedAt: iso(-2 * H) },
     branches: ["main", "solution", "tests-etendus"],
     files: C_LAB("arbre"),
+    texts: { "criteria.yml": CRITERIA_V3, ".studentignore": IGNORE },
   },
   {
     repo: { name: "prg1-labo-03-listes", defaultBranch: "main", private: true, pushedAt: iso(-1 * D) },
     branches: ["main", "solution"],
     files: C_LAB("liste"),
+    texts: { "criteria.yml": CRITERIA_V2, ".studentignore": IGNORE },
   },
   {
     repo: { name: "prg1-labo-02-pointeurs", defaultBranch: "main", private: true, pushedAt: iso(-8 * D) },
     branches: ["main"],
-    files: C_LAB("pointeurs"),
+    files: C_LAB("pointeurs").filter((f) => f !== "criteria.yml"),
+    texts: { ".studentignore": IGNORE },
   },
   {
     repo: { name: "prg1-exercices-libres", defaultBranch: "master", private: false, pushedAt: iso(-40 * D) },
@@ -98,22 +153,46 @@ on("GET", "/app/api/classrooms/:id/projects/sources", (m): ProjectSourceRepo[] =
   return sourcesOf(id).map((s) => s.repo);
 });
 
-on("GET", "/app/api/classrooms/:id/projects/sources/:repo", (m): ProjectSourceDetail => {
+/** A source's `criteria.yml` as the API reads it at creation (`sources.ts`): schema 3, or its errors; null without one. */
+function criteriaOf(text: string | undefined): ProjectSourceCriteria | null {
+  if (text === undefined) return null;
+  const parsed = parseCriteria(text, { version: 3 });
+  if (!parsed.ok) return parsed;
+  const { leaves } = parsed.criteria;
+  const { max, bonusMax } = criteriaTotals(leaves, {});
+  return { ok: true, leaves: leaves.map((leaf) => ({ ...leaf, kind: classifyCriterion(leaf, null) })), max, bonusMax };
+}
+
+/** What the students receive from a source (`readHandout` of `sources.ts`): the handout's tree, its criteria. */
+function handoutOf(source: MockSource, strategy: string): Pick<ProjectSourceDetail, "tree" | "suggestedProtected" | "criteria"> {
+  const dirs = [...new Set(source.files.flatMap((f) => f.split("/").slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join("/"))))];
+  const raw = [...dirs.map((path) => ({ path, type: "tree" as const })), ...source.files.map((path) => ({ path, type: "blob" as const }))];
+  const ignore = source.texts?.[".studentignore"];
+  const tree = strategy === "whole" ? raw.map((e) => ({ ...e, from: e.path })) : handoutTree(raw, ignore ? parseStudentIgnore(ignore) : []);
+  const criteria = tree.find((e) => e.path === "criteria.yml");
+  return {
+    tree: tree.map(({ path, type }) => ({ path, type })),
+    suggestedProtected: PROTECTED_FILE_SUGGESTIONS.filter((p) => tree.some((e) => e.path === p)),
+    criteria: criteria ? criteriaOf(source.texts?.[criteria.from]) : null,
+  };
+}
+
+on("GET", "/app/api/classrooms/:id/projects/sources/:repo", (m, _b, url): ProjectSourceDetail => {
   const id = m.groups!.id!;
   connectedRoom(id);
   const source = sourcesOf(id).find((s) => s.repo.name === decodeURIComponent(m.groups!.repo!));
   if (!source) throw new MockError(404, "Not found");
-  const dirs = [...new Set(source.files.flatMap((f) => f.split("/").slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join("/"))))];
+  const branch = url.searchParams.get("branch") ?? source.repo.defaultBranch;
+  if (!source.branches.includes(branch)) {
+    throw new MockPayload(422, { error: "source_not_found", message: "The source lacks a branch", branches: [branch] });
+  }
   return {
     name: source.repo.name,
     defaultBranch: source.repo.defaultBranch,
     branches: source.branches,
-    tree: [
-      ...dirs.map((path) => ({ path, type: "tree" as const })),
-      ...source.files.map((path) => ({ path, type: "blob" as const })),
-    ].sort((a, b) => a.path.localeCompare(b.path)),
+    branch,
     truncated: false,
-    suggestedProtected: PROTECTED_FILE_SUGGESTIONS.filter((p) => source.files.includes(p)),
+    ...handoutOf(source, url.searchParams.get("strategy") ?? "squash"),
   };
 });
 
@@ -139,6 +218,11 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
   if (lacking.length > 0) {
     throw new MockPayload(422, { error: "source_not_found", message: "The source lacks a branch", branches: lacking });
   }
+  if (body.gradingMode === "criteria") {
+    const { criteria } = handoutOf(source, body.sourceStrategy);
+    const errors = criteria === null ? [{ path: "criteria.yml", code: "missing_file" }] : criteria.ok ? null : criteria.errors;
+    if (errors) throw new MockPayload(422, { error: "source_criteria_invalid", message: "criteria.yml is missing or invalid", errors });
+  }
   await new Promise((resolve) => setTimeout(resolve, BUILD_MS));
   if (flags.distfail) {
     throw new MockPayload(502, { error: "distribution_failed", message: "Building the distribution repository failed: try again" });
@@ -161,7 +245,7 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
     gradingMode: body.gradingMode,
     gradingScale: body.gradingScale ?? { kind: "linear", rounding: "nearest" },
     branches,
-    protectedFiles: body.protectedFiles,
+    protectedFiles: withForcedProtected(body.protectedFiles, body.gradingMode),
     groupMode: body.groupMode,
     groupSetId: body.groupSetId ?? null,
     testsCriterion: null,

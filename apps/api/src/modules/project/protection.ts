@@ -45,6 +45,7 @@ import { and, count, eq, gt, gte, isNotNull, isNull } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import type { ProjectRepoProtection } from "@quiz/contracts";
+import { pathWithin } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
@@ -90,6 +91,36 @@ async function touchedFiles(octokit: Octokit, fullName: string, push: ProtectedP
 }
 
 /**
+ * The protected files a push may have changed, in the list's order: a
+ * listed file it touched, and every file it touched under a listed
+ * directory (a directory protects its content, ADR-119 §9). When the push
+ * cannot tell (`touched` null), every protected file: the distribution's
+ * files at `branch` the list protects, and a listed path it lacks (the
+ * restore skips it). GitHub's recursive listing stops at its cap
+ * (`truncated`): then every listed entry is kept too, and a protected
+ * directory's files past the cap are not restored by this push's answer.
+ */
+async function protectedHit(
+  octokit: Octokit,
+  distribution: string,
+  branch: string,
+  entries: readonly string[],
+  touched: Set<string> | null,
+): Promise<string[]> {
+  let files: readonly string[];
+  if (touched !== null) {
+    files = [...touched];
+  } else {
+    const { owner, repo } = ownerRepo(distribution);
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { owner, repo, tree_sha: branch, recursive: "1" });
+    const blobs = data.tree.filter((e) => e.type === "blob" && e.path).map((e) => e.path!);
+    // A listed directory path itself has no blob: `alteredFiles` finds no reference for it and skips it; only its files are restored.
+    files = [...blobs, ...entries.filter((entry) => data.truncated || !blobs.some((b) => pathWithin(b, entry)))];
+  }
+  return [...new Set(entries.flatMap((entry) => files.filter((f) => pathWithin(f, entry))))];
+}
+
+/**
  * Answers a push not made by the App: restores the protected files it
  * touched, or suspends the protection past the cap. A no-op for a branch
  * not handed out, a project without protected files or distribution, a
@@ -125,7 +156,7 @@ export async function protectFiles(
   const { octokit } = await installationClient(config, org.installationId);
 
   const touched = await touchedFiles(octokit, repo.fullName, push);
-  const hit = project.protectedFiles.filter((f) => touched === null || touched.has(f));
+  const hit = await protectedHit(octokit, project.distributionFullName, push.branch, project.protectedFiles, touched);
   if (hit.length === 0) return;
 
   const now = app.clock.now();

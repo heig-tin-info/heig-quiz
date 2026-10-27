@@ -22,6 +22,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import {
   CSRF_COOKIE,
   ActivitySummary,
+  CriteriaInvalid,
   defaultProjectGradingScale,
   ProjectActivitySummary,
   ProjectErrorCode,
@@ -38,6 +39,7 @@ import {
   enrollments,
   githubClassroomLinks,
   githubOrganizations,
+  projectCriteria,
   projectGroupMembers,
   projectRepos,
   projects,
@@ -863,6 +865,145 @@ describe("the organization's repository browser (M3-11)", () => {
   });
 });
 
+// ---------------------------------------------------------------- the creation panel (ADR-119 §9)
+
+describe("the creation panel: handout preview, criteria mode, forced protected files (ADR-119 §9)", () => {
+  const V3 = [
+    "schema_version: 3",
+    "criteria:",
+    "  rendu:",
+    "    tests:",
+    "      description: Les tests passent",
+    "      max_points: 6",
+    "      command: [make, test]",
+    "    rapport:",
+    "      description: Le rapport",
+    "      max_points: 4",
+    "      prompt: Juge le rapport",
+    "    style:",
+    "      description: Le style",
+    "      bonus_points: 1",
+    "",
+  ].join("\n");
+  const V2 = "schema_version: 2\ncriteria:\n  rendu:\n    tests:\n      description: x\n      max_points: 1\n      awarded_points: 0\n";
+  const preview = (roomId: string, repo: string, query = "") => call("GET", `${base(roomId)}/sources/${repo}${query}`, teacher.headers);
+
+  /** A classroom whose organization also holds `graded` (a v3 file, a reserved solution) and `old` (a v2 file). */
+  async function gradedClassroom() {
+    const room = await connectedClassroom();
+    world.source(room.login, "graded", {
+      main: {
+        "README.md": "# Lab",
+        "criteria.yml": V3,
+        ".studentignore": "# teacher only\nsolution/\n",
+        "solution/answer.c": "int answer = 42;",
+        "src/main.c": "int main(){ return 42; }",
+        "student/src/main.c": "// todo",
+        ".github/workflows/grading.yml": "on: workflow_dispatch",
+      },
+      v2: { "README.md": "# Old", "criteria.yml": V2 },
+    });
+    world.source(room.login, "old", { main: { "criteria.yml": V2 } });
+    return room;
+  }
+
+  it("previews the handed-out tree, without what .studentignore reserves, and the criteria parsed at schema 3", async () => {
+    const room = await gradedClassroom();
+    const res = await preview(room.id, "graded");
+    expect(res.statusCode, res.body).toBe(200);
+    const detail = ProjectSourceDetail.parse(res.json());
+    const paths = detail.tree.map((e) => e.path);
+    expect(paths).toEqual([".github", ".github/workflows", ".github/workflows/grading.yml", "README.md", "criteria.yml", "src", "src/main.c"]);
+    expect(detail).toMatchObject({ branch: "main", suggestedProtected: ["criteria.yml", "README.md", ".github/workflows/grading.yml"] });
+    expect(detail.criteria).toMatchObject({ ok: true, max: 10, bonusMax: 1 });
+    const kinds = detail.criteria?.ok ? detail.criteria.leaves.map((l) => [l.id, l.kind]) : [];
+    expect(kinds).toEqual([
+      ["rendu.tests", "automatic"],
+      ["rendu.rapport", "llm"],
+      ["rendu.style", "teacher"],
+    ]);
+    // `whole` hands the tree out as it is.
+    const whole = ProjectSourceDetail.parse((await preview(room.id, "graded", "?strategy=whole")).json());
+    expect(whole.tree.map((e) => e.path)).toContain("solution/answer.c");
+    // Another branch: a v2 file is an error naming the schema.
+    const v2 = ProjectSourceDetail.parse((await preview(room.id, "graded", "?branch=v2")).json());
+    expect(v2.criteria).toEqual({ ok: false, errors: [{ path: "schema_version", code: "schema_version", params: { expected: 3 } }] });
+    expect(refusal(await preview(room.id, "graded", "?branch=nope"))).toEqual([422, "source_not_found"]);
+    // No criteria.yml: none to preview.
+    world.source(room.login, "plain", { main: { "README.md": "# Plain" } });
+    expect(ProjectSourceDetail.parse((await preview(room.id, "plain")).json()).criteria).toBeNull();
+  });
+
+  it("refuses a creation in criteria mode whose file is v2, invalid or missing: 422 with the errors, nothing built", async () => {
+    const room = await gradedClassroom();
+    world.source(room.login, "plain", { main: { "README.md": "# Plain" } });
+    const before = (await server.app.db.select().from(projects)).length;
+    for (const [sourceRepo, code] of [
+      ["old", "schema_version"],
+      ["lab", "schema_v1"],
+      ["plain", "missing_file"],
+    ] as const) {
+      const res = await call("POST", base(room.id), teacher.headers, { ...LAB, sourceRepo, gradingMode: "criteria" });
+      expect(refusal(res), sourceRepo).toEqual([422, "source_criteria_invalid"]);
+      expect(CriteriaInvalid.parse(res.json()).errors.map((e) => e.code), sourceRepo).toEqual([code]);
+    }
+    // The branch asked is the one read.
+    const onV2 = await call("POST", base(room.id), teacher.headers, { ...LAB, sourceRepo: "graded", branches: ["v2"], gradingMode: "criteria" });
+    expect(refusal(onV2)).toEqual([422, "source_criteria_invalid"]);
+    expect((await server.app.db.select().from(projects)).length).toBe(before);
+  });
+
+  it("creates in criteria mode: the forced entries protected, the snapshot taken at schema 3, the mode audited", async () => {
+    const room = await gradedClassroom();
+    const project = await create(room.id, { ...LAB, sourceRepo: "graded", gradingMode: "criteria", protectedFiles: ["README.md"] });
+    expect(project).toMatchObject({ gradingMode: "criteria", protectedFiles: ["README.md", ".github/workflows", "criteria.yml"] });
+    const [snapshot] = await server.app.db.select().from(projectCriteria).where(eq(projectCriteria.projectId, project.id));
+    expect(snapshot?.criteria).toMatchObject({ schemaVersion: 3 });
+    expect(snapshot?.criteria.leaves.map((l) => l.id)).toEqual(["rendu.tests", "rendu.rapport", "rendu.style"]);
+    const [created] = await auditOf(project.id, "project.create");
+    expect(created?.payload).toMatchObject({ gradingMode: "criteria" });
+    // Another mode is audited too.
+    const plain = await create(room.id, { ...LAB, name: "Lab 2" });
+    expect((await auditOf(plain.id, "project.create"))[0]?.payload).toMatchObject({ gradingMode: "auto" });
+  });
+
+  it("keeps the forced entries through a patch in criteria mode, and drops them only with the mode", async () => {
+    const room = await gradedClassroom();
+    const project = await create(room.id, { ...LAB, sourceRepo: "graded", gradingMode: "criteria" });
+    const patch = (body: object) => call("PATCH", `/app/api/projects/${project.id}`, teacher.headers, body);
+    const kept = await patch({ protectedFiles: ["README.md"] });
+    expect(kept.statusCode, kept.body).toBe(200);
+    expect(ProjectSummary.parse(kept.json()).protectedFiles).toEqual(["README.md", ".github/workflows", "criteria.yml"]);
+    const emptied = ProjectSummary.parse((await patch({ protectedFiles: [] })).json());
+    expect(emptied.protectedFiles).toEqual([".github/workflows", "criteria.yml"]);
+    // Leaving the mode frees them.
+    const auto = ProjectSummary.parse((await patch({ gradingMode: "auto", protectedFiles: ["README.md"] })).json());
+    expect(auto.protectedFiles).toEqual(["README.md"]);
+  });
+
+  it("adds the forced entries when a draft switches to criteria through the route", async () => {
+    const room = await gradedClassroom();
+    const project = await create(room.id, { ...LAB, sourceRepo: "graded", protectedFiles: ["README.md"] });
+    expect(project.protectedFiles).toEqual(["README.md"]);
+    const res = await call("PATCH", `/app/api/projects/${project.id}`, teacher.headers, { gradingMode: "criteria" });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(ProjectSummary.parse(res.json())).toMatchObject({
+      gradingMode: "criteria",
+      protectedFiles: ["README.md", ".github/workflows", "criteria.yml"],
+    });
+  });
+
+  it("never moves the protected list of a project in criteria mode on a patch that does not write it", async () => {
+    const room = await gradedClassroom();
+    const project = await create(room.id, { ...LAB, sourceRepo: "graded" });
+    // A live schema-2 project from before ADR-119: its list holds neither forced entry.
+    await server.app.db.update(projects).set({ gradingMode: "criteria", protectedFiles: ["README.md"] }).where(eq(projects.id, project.id));
+    const renamed = await call("PATCH", `/app/api/projects/${project.id}`, teacher.headers, { name: "Lab one" });
+    expect(renamed.statusCode, renamed.body).toBe(200);
+    expect(ProjectSummary.parse(renamed.json()).protectedFiles).toEqual(["README.md"]);
+  });
+});
+
 // ---------------------------------------------------------------- who reaches a project
 
 describe("who reaches a project (invariant 6)", () => {
@@ -885,7 +1026,14 @@ describe("who reaches a project (invariant 6)", () => {
     ];
     const seb = await sessionOf(teacher.id, { kind: "seb", actorUserId: null, projectId: null, evaluationId: seeded.evaluationId });
     // The archive (`?archived=1`, #864's "Show archived") is behind the same 404.
-    for (const url of [`/app/api/projects/${project.id}`, base(room.id), `${base(room.id)}?archived=1`, `${base(room.id)}/sources`]) {
+    for (const url of [
+      `/app/api/projects/${project.id}`,
+      base(room.id),
+      `${base(room.id)}?archived=1`,
+      `${base(room.id)}/sources`,
+      // The creation's preview (ADR-119 §9): the handed-out tree and the criteria.
+      `${base(room.id)}/sources/lab?branch=main`,
+    ]) {
       for (const [who, headers] of callers) {
         const res = await call("GET", url, headers);
         expect([res.statusCode, res.json().error], `${who} GET ${url}`).toEqual([404, "not_found"]);

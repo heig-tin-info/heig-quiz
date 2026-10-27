@@ -17,10 +17,7 @@
 import { cpSync, existsSync, lstatSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 
-import { parseStudentIgnore } from "@quiz/domain";
-
-export const OVERLAY_DIR = "student";
-export const IGNORE_FILE = ".studentignore";
+import { HANDOUT_IGNORE, HANDOUT_OVERLAY, parseStudentIgnore } from "@quiz/domain";
 
 function lstatOrNull(path: string) {
   try {
@@ -51,11 +48,11 @@ export function applyStudentHandout(dir: string): StudentizeResult {
   const removed: string[] = [];
 
   // Read the ignore list first: the overlay may not bring its own.
-  const ignorePath = join(root, IGNORE_FILE);
+  const ignorePath = join(root, HANDOUT_IGNORE);
   const ignoreStat = lstatOrNull(ignorePath);
   const ignored = ignoreStat?.isFile() ? parseStudentIgnore(readFileSync(ignorePath, "utf8")) : [];
 
-  const overlayPath = join(root, OVERLAY_DIR);
+  const overlayPath = join(root, HANDOUT_OVERLAY);
   // lstat: a `student` symlink is not an overlay (it could point anywhere).
   const overlaid = lstatOrNull(overlayPath)?.isDirectory() ?? false;
   if (overlaid) {
@@ -63,7 +60,7 @@ export function applyStudentHandout(dir: string): StudentizeResult {
     // to absolute paths into this temporary directory.
     cpSync(overlayPath, root, { recursive: true, force: true, verbatimSymlinks: true });
     rmSync(overlayPath, { recursive: true, force: true });
-    removed.push(OVERLAY_DIR);
+    removed.push(HANDOUT_OVERLAY);
   }
 
   for (const rel of ignored) {
@@ -74,7 +71,7 @@ export function applyStudentHandout(dir: string): StudentizeResult {
   }
   if (lstatOrNull(ignorePath)) {
     rmSync(ignorePath, { force: true });
-    removed.push(IGNORE_FILE);
+    removed.push(HANDOUT_IGNORE);
   }
   return { overlaid, removed };
 }

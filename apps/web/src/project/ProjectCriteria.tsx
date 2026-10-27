@@ -10,6 +10,7 @@ import {
   type CriteriaErrorCode,
   type CriterionKind,
   type ProjectCriteriaView,
+  type ProjectCriterion,
   type ProjectDetail,
 } from "@quiz/contracts";
 
@@ -253,47 +254,46 @@ export function CriteriaRows({ project, disabled, write }: { project: ProjectDet
       </>
     );
   };
-  const columns = [
-    { key: "section", label: t("project.criteria.section"), className: T.colHigh },
-    { key: "criterion", label: t("project.criteria.criterion") },
-    { key: "max", label: t("project.criteria.max"), right: true },
-    { key: "kind", label: t("project.criteria.kind") },
-  ];
-
+  // ADR-106's settings (the runner's evidence) belong to a schema-2 snapshot only (ADR-119 §1).
+  const schema2 = snapshot?.schemaVersion === 2;
   return (
     <>
-      {criterionRow("tests", t("project.criteria.tests.default", { id: PROJECT_CRITERIA_DEFAULTS.testsCriterion }))}
-      {criterionRow("identity", t("project.criteria.identity.none"))}
-      <ListRow
-        key={`b${project.buildCommand?.join(" ")}`}
-        title={t("project.criteria.build")}
-        desc={t("project.criteria.build.desc")}
-        value={project.buildCommand}
-        fallback={PROJECT_CRITERIA_DEFAULTS.buildCommand}
-        schema={ProjectPatch.shape.buildCommand}
-        disabled={disabled}
-        onWrite={(buildCommand) => write({ buildCommand })}
-      />
-      <ListRow
-        key={`t${project.testCommand?.join(" ")}`}
-        title={t("project.criteria.test")}
-        desc={t("project.criteria.test.desc")}
-        value={project.testCommand}
-        fallback={PROJECT_CRITERIA_DEFAULTS.testCommand}
-        schema={ProjectPatch.shape.testCommand}
-        disabled={disabled}
-        onWrite={(testCommand) => write({ testCommand })}
-      />
-      <ListRow
-        key={`o${project.evidenceOutputs?.join(" ")}`}
-        title={t("project.criteria.outputs")}
-        desc={t("project.criteria.outputs.desc")}
-        value={project.evidenceOutputs}
-        fallback={PROJECT_CRITERIA_DEFAULTS.evidenceOutputs}
-        schema={ProjectPatch.shape.evidenceOutputs}
-        disabled={disabled}
-        onWrite={(evidenceOutputs) => write({ evidenceOutputs })}
-      />
+      {schema2 ? (
+        <>
+          {criterionRow("tests", t("project.criteria.tests.default", { id: PROJECT_CRITERIA_DEFAULTS.testsCriterion }))}
+          {criterionRow("identity", t("project.criteria.identity.none"))}
+          <ListRow
+            key={`b${project.buildCommand?.join(" ")}`}
+            title={t("project.criteria.build")}
+            desc={t("project.criteria.build.desc")}
+            value={project.buildCommand}
+            fallback={PROJECT_CRITERIA_DEFAULTS.buildCommand}
+            schema={ProjectPatch.shape.buildCommand}
+            disabled={disabled}
+            onWrite={(buildCommand) => write({ buildCommand })}
+          />
+          <ListRow
+            key={`t${project.testCommand?.join(" ")}`}
+            title={t("project.criteria.test")}
+            desc={t("project.criteria.test.desc")}
+            value={project.testCommand}
+            fallback={PROJECT_CRITERIA_DEFAULTS.testCommand}
+            schema={ProjectPatch.shape.testCommand}
+            disabled={disabled}
+            onWrite={(testCommand) => write({ testCommand })}
+          />
+          <ListRow
+            key={`o${project.evidenceOutputs?.join(" ")}`}
+            title={t("project.criteria.outputs")}
+            desc={t("project.criteria.outputs.desc")}
+            value={project.evidenceOutputs}
+            fallback={PROJECT_CRITERIA_DEFAULTS.evidenceOutputs}
+            schema={ProjectPatch.shape.evidenceOutputs}
+            disabled={disabled}
+            onWrite={(evidenceOutputs) => write({ evidenceOutputs })}
+          />
+        </>
+      ) : null}
       <SettingRow
         stacked
         title={t("project.criteria.table")}
@@ -314,37 +314,53 @@ export function CriteriaRows({ project, disabled, write }: { project: ProjectDet
           </Button>
         </div>
         <CriteriaErrors errors={reloadErrors} />
-        {snapshot === null ? null : (
-          <div className={cx(T.container, "overflow-x-auto")}>
-            <table className={T.table}>
-              <TableHead columns={columns} />
-              <tbody>
-                {snapshot.leaves.map((leaf) => (
-                  <tr key={leaf.id} className={T.row}>
-                    <td className={cx(T.td, T.colHigh, "align-top font-mono text-[13px] text-fg-muted")}>{leaf.sectionPath.join(".") || "—"}</td>
-                    <td className={cx(T.td, "align-top")}>
-                      <span className="font-mono text-[13px] font-semibold">{leaf.id.split(".").at(-1)}</span>
-                      {leaf.milestone ? (
-                        <Badge tone="zinc" className="ml-2">
-                          {leaf.milestone}
-                        </Badge>
-                      ) : null}
-                      <p className="mt-0.5 text-[13px] text-fg-muted">{leaf.description}</p>
-                    </td>
-                    <td className={cx(T.td, "align-top text-right tabular-nums")}>
-                      {leaf.bonusPoints !== undefined ? `+${leaf.bonusPoints}` : leaf.maxPoints}
-                    </td>
-                    <td className={cx(T.td, "align-top")}>
-                      <Badge tone={KIND_TONE[leaf.kind]}>{t(KIND_LABEL[leaf.kind])}</Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {snapshot === null ? null : <CriteriaTable leaves={snapshot.leaves} />}
       </SettingRow>
     </>
+  );
+}
+
+/**
+ * The criteria of a `criteria.yml`, one row each: its section, its name and
+ * description, its points (a bonus `+n`), who grades it. The settings'
+ * snapshot and the creation's preview of the source (ADR-119 §9) draw it.
+ */
+export function CriteriaTable({ leaves }: { leaves: readonly ProjectCriterion[] }) {
+  const t = useT();
+  const columns = [
+    { key: "section", label: t("project.criteria.section"), className: T.colHigh },
+    { key: "criterion", label: t("project.criteria.criterion") },
+    { key: "max", label: t("project.criteria.max"), right: true },
+    { key: "kind", label: t("project.criteria.kind") },
+  ];
+  return (
+    <div className={cx(T.container, "overflow-x-auto")}>
+      <table className={T.table}>
+        <TableHead columns={columns} />
+        <tbody>
+          {leaves.map((leaf) => (
+            <tr key={leaf.id} className={T.row}>
+              <td className={cx(T.td, T.colHigh, "align-top font-mono text-[13px] text-fg-muted")}>{leaf.sectionPath.join(".") || "—"}</td>
+              <td className={cx(T.td, "align-top")}>
+                <span className="font-mono text-[13px] font-semibold">{leaf.id.split(".").at(-1)}</span>
+                {leaf.milestone ? (
+                  <Badge tone="zinc" className="ml-2">
+                    {leaf.milestone}
+                  </Badge>
+                ) : null}
+                <p className="mt-0.5 text-[13px] text-fg-muted">{leaf.description}</p>
+              </td>
+              <td className={cx(T.td, "align-top text-right tabular-nums")}>
+                {leaf.bonusPoints !== undefined ? `+${leaf.bonusPoints}` : leaf.maxPoints}
+              </td>
+              <td className={cx(T.td, "align-top")}>
+                <Badge tone={KIND_TONE[leaf.kind]}>{t(KIND_LABEL[leaf.kind])}</Badge>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

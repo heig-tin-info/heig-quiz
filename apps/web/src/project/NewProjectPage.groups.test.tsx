@@ -22,9 +22,11 @@ const DETAIL: ProjectSourceDetail = {
   name: "prg1-labo-04",
   defaultBranch: "main",
   branches: ["main"],
+  branch: "main",
   tree: [],
   truncated: false,
   suggestedProtected: [],
+  criteria: null,
 };
 const NEW_SET = "0190d3c4-0000-7000-8000-00000000f002";
 

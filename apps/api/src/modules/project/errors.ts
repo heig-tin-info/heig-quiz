@@ -74,6 +74,8 @@ const STATUS: Record<Code, number> = {
   not_invitable: 409,
   // Grading by criteria (ADR-106 §2): the source's `criteria.yml` missing or invalid.
   criteria_invalid: 409,
+  // ADR-119 §9: a creation in `criteria` mode whose handed-out file does not parse at schema 3.
+  source_criteria_invalid: 422,
   checkpoint_untagged: 409,
   schema_version_fixed: 422,
   unknown_criterion: 422,

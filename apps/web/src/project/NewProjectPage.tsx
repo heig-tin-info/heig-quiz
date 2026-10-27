@@ -2,19 +2,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import type { ProjectCreate, ProjectSourceDetail, ProjectSourceRepo, ProjectSummary } from "@quiz/contracts";
+import {
+  PROJECT_DEFAULTS,
+  type CriteriaError,
+  type ProjectCreate,
+  type ProjectSourceCriteria,
+  type ProjectSourceRepo,
+  type ProjectSummary,
+} from "@quiz/contracts";
 
 import { api } from "../api";
 import { useHoldChanged } from "../build";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import {
-  activitiesKey,
-  classroomGroupSetsKey,
-  classroomProjectsKey,
-  projectSourceKey,
-  projectSourcesKey,
-} from "../queryKeys";
+import { activitiesKey, classroomGroupSetsKey, classroomProjectsKey, projectSourcesKey } from "../queryKeys";
 import type { Navigate } from "../router";
 import { Trail, useClassroomCrumbs } from "../Trail";
 import {
@@ -33,20 +34,25 @@ import {
   QueryError,
   RelativeTime,
   Select,
+  SettingRow,
   Skeleton,
+  Switch,
 } from "../ui";
 import {
   byDuration,
+  chosenGradingMode,
   emptyDraft,
   FIELD_ID,
   foreignZone,
   pickSource,
   projectBody,
   refusalPlace,
+  sourceDetailQuery,
   type ProjectDraft,
   type ProjectField,
 } from "./newProject";
 import { ProjectAdvanced } from "./ProjectAdvanced";
+import { CriteriaErrors, CriteriaTable } from "./ProjectCriteria";
 import { DurationDaysField } from "./ProjectSettingRows";
 
 /** The fields under "Advanced options": a message there unfolds it. */
@@ -89,13 +95,26 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
     queryKey: projectSourcesKey(classroomId),
     queryFn: () => api(`/app/api/classrooms/${classroomId}/projects/sources`),
   });
-  /** One source in detail: its branches, its tree, the protected files it suggests. */
-  const detailOf = (repo: string) => ({
-    queryKey: projectSourceKey(classroomId, repo),
-    queryFn: () =>
-      api<ProjectSourceDetail>(`/app/api/classrooms/${classroomId}/projects/sources/${encodeURIComponent(repo)}`),
+  /**
+   * One source in detail: its branches, and what the students receive from
+   * the first branch chosen under the strategy chosen (ADR-119 §9) — the
+   * tree, the protected files it suggests, its criteria.
+   */
+  const detailOf = (d: ProjectDraft) => {
+    // The source's default branch is the one read without asking: one entry, not two.
+    const first = d.branches?.[0];
+    const fallback = sources.data?.find((s) => s.name === d.sourceRepo)?.defaultBranch;
+    return sourceDetailQuery(classroomId, d.sourceRepo, {
+      branch: first === fallback ? undefined : first,
+      strategy: d.sourceStrategy,
+    });
+  };
+  const detail = useQuery({
+    ...detailOf(draft),
+    enabled: draft.sourceRepo !== "",
+    // Another branch or strategy of the same source keeps the form drawn while it is read.
+    placeholderData: (previous) => (previous?.name === draft.sourceRepo ? previous : undefined),
   });
-  const detail = useQuery({ ...detailOf(draft.sourceRepo), enabled: draft.sourceRepo !== "" });
 
   const create = useMutation({
     mutationFn: (body: ProjectCreate) =>
@@ -197,7 +216,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
     let read = detail.data;
     if (!read && draft.sourceRepo !== "" && !detail.isError) {
       setReading(true);
-      read = await qc.ensureQueryData(detailOf(draft.sourceRepo)).catch(() => undefined);
+      read = await qc.ensureQueryData(detailOf(draft)).catch(() => undefined);
       setReading(false);
     }
     // No body without the source's detail: the source field says it could not be read.
@@ -235,6 +254,9 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
             >
               {t(refusal.message)}
             </Alert>
+          ) : refusal?.at === "criteria" && !detail.data?.criteria ? (
+            // The file gone from the source since it was read: the errors stand above the form.
+            <CriteriaErrors errors={refusal.errors} />
           ) : create.isError && !refusal ? (
             <Alert tone="danger" title={t("eval.createFailed")}>
               {t("error.server")}
@@ -303,6 +325,15 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
               </div>
             </div>
 
+            {detail.data?.criteria ? (
+              <SourceCriteria
+                criteria={detail.data.criteria}
+                byCriteria={chosenGradingMode(draft, detail.data) === "criteria"}
+                refused={refusal?.at === "criteria" ? refusal.errors : null}
+                onChange={(on) => update({ gradingMode: on ? "criteria" : PROJECT_DEFAULTS.gradingMode })}
+              />
+            ) : null}
+
             <div className="space-y-2">
               <div className="flex flex-wrap items-start gap-4">
                 {scheduled ? (
@@ -359,6 +390,44 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
           </div>
         </fieldset>
       </form>
+    </div>
+  );
+}
+
+/**
+ * The source's `criteria.yml` as the students would receive it (ADR-119
+ * §9): grading by criteria, on by default since the file exists — the
+ * teacher confirms it by creating —, and the criteria it reads, or the
+ * parser's errors with their paths. A creation the server refused for the
+ * file (`422 source_criteria_invalid`) says its errors here too.
+ */
+function SourceCriteria({
+  criteria,
+  byCriteria,
+  refused,
+  onChange,
+}: {
+  criteria: ProjectSourceCriteria;
+  byCriteria: boolean;
+  refused: CriteriaError[] | null;
+  onChange: (byCriteria: boolean) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="space-y-3 border-t border-line pt-4" data-testid="source-criteria">
+      <SettingRow
+        className="py-0"
+        title={t("project.criteria.switch")}
+        desc={
+          criteria.ok
+            ? t("project.criteria.source.desc", { max: criteria.max, bonus: criteria.bonusMax })
+            : undefined
+        }
+      >
+        <Switch checked={byCriteria} label={t("project.criteria.source.use")} onChange={onChange} />
+      </SettingRow>
+      {criteria.ok ? <CriteriaTable leaves={criteria.leaves} /> : <CriteriaErrors errors={criteria.errors} />}
+      {refused && criteria.ok ? <CriteriaErrors errors={refused} /> : null}
     </div>
   );
 }

@@ -26,6 +26,7 @@ import {
   RelativeTime,
   SectionHeading,
   Segmented,
+  SettingRow,
   Skeleton,
   T,
   TableHead,
@@ -96,19 +97,20 @@ export function WorkModeSetting({ projectId, archived }: { projectId: string; ar
   }));
 
   return (
-    // Title and description above, the three long options below: they wrap on a phone instead of overflowing.
-    <div className="space-y-2.5 py-3" data-testid="project-work-mode">
-      <div>
-        <p id="project-work-mode" className="text-sm font-medium text-fg">
-          {t("project.workspace.mode")}
-        </p>
-        <p className="mt-0.5 text-[13px] text-fg-muted">{t(`project.workspace.mode.desc.${ws.mode}`)}</p>
-        {ws.refusal && !archived ? (
-          <p className="mt-1 text-[13px] text-fg-faint" data-testid="workspace-refusal">
-            {t(`project.workspace.refusal.${ws.refusal}`)}
-          </p>
-        ) : null}
-      </div>
+    // Aligned right like the other options' controls (ADR-119 §9); the row wraps it under its title on a phone.
+    <SettingRow
+      title={<span id="project-work-mode">{t("project.workspace.mode")}</span>}
+      desc={
+        <>
+          {t(`project.workspace.mode.desc.${ws.mode}`)}
+          {ws.refusal && !archived ? (
+            <span className="mt-1 block text-fg-faint" data-testid="workspace-refusal">
+              {t(`project.workspace.refusal.${ws.refusal}`)}
+            </span>
+          ) : null}
+        </>
+      }
+    >
       <Segmented
         name="workMode"
         labelledBy="project-work-mode"
@@ -118,7 +120,7 @@ export function WorkModeSetting({ projectId, archived }: { projectId: string; ar
         onChange={(mode) => setMode.mutate(mode)}
         options={options}
       />
-    </div>
+    </SettingRow>
   );
 }
 

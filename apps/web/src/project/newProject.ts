@@ -5,20 +5,24 @@
  * each refusal of the server is said. `NewProjectPage.tsx` draws them.
  */
 import {
+  CriteriaInvalid,
   MINUTES_PER_DAY,
   PROJECT_DEFAULTS,
   ProjectCreate,
   ProjectRefusal,
+  type CriteriaError,
   type DeadlineStrategy,
   type ProjectGradingMode,
   type ProjectSourceDetail,
+  type ProjectSourceQuery,
   type PublishMode,
   type SourceStrategy,
 } from "@quiz/contracts";
-import { SCHOOL_TIME_ZONE, type ProjectScaleKind } from "@quiz/domain";
+import { SCHOOL_TIME_ZONE, withForcedProtected, type ProjectScaleKind } from "@quiz/domain";
 
-import { ApiError } from "../api";
+import { api, ApiError } from "../api";
 import type { Dict } from "../i18n";
+import { projectSourceKey } from "../queryKeys";
 import { fromLocalInput, humanize, localTimeZone } from "../ui";
 
 /** What the teacher fills in. Strings where an input holds one: the form keeps what was typed. */
@@ -37,8 +41,8 @@ export interface ProjectDraft {
   graceMinutes: string;
   sourceStrategy: SourceStrategy;
   deadlineStrategy: DeadlineStrategy;
-  /** `criteria` is chosen on the draft (ADR-106 §1). */
-  gradingMode: Exclude<ProjectGradingMode, "criteria">;
+  /** null: the source's (`criteria` when it holds a `criteria.yml`, ADR-119 §9) until the teacher picks one. */
+  gradingMode: ProjectGradingMode | null;
   scaleKind: ProjectScaleKind;
   /** null: the source's suggestions (`suggestedProtected`), the default even while Advanced stays folded. */
   protectedFiles: string[] | null;
@@ -59,7 +63,7 @@ export const emptyDraft = (): ProjectDraft => ({
   graceMinutes: String(PROJECT_DEFAULTS.graceMinutes),
   sourceStrategy: PROJECT_DEFAULTS.sourceStrategy,
   deadlineStrategy: PROJECT_DEFAULTS.deadlineStrategy,
-  gradingMode: PROJECT_DEFAULTS.gradingMode,
+  gradingMode: null,
   scaleKind: PROJECT_DEFAULTS.scaleKind,
   protectedFiles: null,
   groupMode: false,
@@ -73,7 +77,33 @@ export const emptyDraft = (): ProjectDraft => ({
  */
 export function pickSource(draft: ProjectDraft, sourceRepo: string): Partial<ProjectDraft> {
   const follows = draft.name.trim() === "" || draft.name === humanize(draft.sourceRepo);
-  return { sourceRepo, branches: null, protectedFiles: null, ...(follows ? { name: humanize(sourceRepo) } : {}) };
+  return {
+    sourceRepo,
+    branches: null,
+    protectedFiles: null,
+    gradingMode: null,
+    ...(follows ? { name: humanize(sourceRepo) } : {}),
+  };
+}
+
+/**
+ * The read of one source (ADR-119 §9): what the students receive from
+ * `query.branch` under `query.strategy`, its key and its URL from the one
+ * query (`ProjectSourceQuery`), a default left out of both.
+ */
+export function sourceDetailQuery(classroomId: string, repo: string, query: ProjectSourceQuery = {}) {
+  const asked: ProjectSourceQuery = {
+    ...(query.branch ? { branch: query.branch } : {}),
+    ...(query.strategy && query.strategy !== PROJECT_DEFAULTS.sourceStrategy ? { strategy: query.strategy } : {}),
+  };
+  const search = new URLSearchParams(asked).toString();
+  return {
+    queryKey: projectSourceKey(classroomId, repo, asked),
+    queryFn: () =>
+      api<ProjectSourceDetail>(
+        `/app/api/classrooms/${classroomId}/projects/sources/${encodeURIComponent(repo)}${search ? `?${search}` : ""}`,
+      ),
+  };
 }
 
 /** The fields a message can stand under, and the DOM id of each control (focus, `fieldErrorProps`). */
@@ -94,9 +124,13 @@ export function chosenBranches(draft: ProjectDraft, detail: ProjectSourceDetail)
   return kept.length > 0 ? kept : [detail.defaultBranch];
 }
 
-/** The protected files sent: those chosen, or the source's suggestions. */
+/** The grading mode sent: the one chosen, else `criteria` when the source holds a `criteria.yml` (ADR-119 §9), else the default. */
+export const chosenGradingMode = (draft: ProjectDraft, detail: ProjectSourceDetail | undefined): ProjectGradingMode =>
+  draft.gradingMode ?? (detail?.criteria ? "criteria" : PROJECT_DEFAULTS.gradingMode);
+
+/** The protected files sent: those chosen, or the source's suggestions, and what the grading mode forces. */
 export const chosenProtected = (draft: ProjectDraft, detail: ProjectSourceDetail): string[] =>
-  draft.protectedFiles ?? [...detail.suggestedProtected];
+  withForcedProtected(draft.protectedFiles ?? detail.suggestedProtected, chosenGradingMode(draft, detail));
 
 /** A count typed in a field: an integer, or undefined when it is empty or not one. */
 function count(value: string): number | undefined {
@@ -120,7 +154,7 @@ function rawBody(draft: ProjectDraft, detail: ProjectSourceDetail | undefined): 
     graceMinutes: count(draft.graceMinutes) ?? Number.NaN,
     sourceStrategy: draft.sourceStrategy,
     deadlineStrategy: draft.deadlineStrategy,
-    gradingMode: draft.gradingMode,
+    gradingMode: chosenGradingMode(draft, detail),
     gradingScale: { kind: draft.scaleKind },
     groupMode: draft.groupMode,
     // Never outside group mode: `ProjectCreate` refuses a set on an individual project.
@@ -190,10 +224,14 @@ export function projectBody(
 export type RefusalPlace =
   | { at: "field"; field: ProjectField; message: keyof Dict; branches?: string[] }
   | { at: "page"; code: "not_connected" | "app_not_installed" }
-  | { at: "form"; message: keyof Dict };
+  | { at: "form"; message: keyof Dict }
+  | { at: "criteria"; errors: CriteriaError[] };
 
 export function refusalPlace(error: unknown): RefusalPlace | null {
   if (!(error instanceof ApiError)) return null;
+  // A creation in `criteria` mode whose file does not parse (ADR-119 §9): its errors, under the criteria.
+  const criteria = CriteriaInvalid.safeParse(error.body);
+  if (criteria.success && criteria.data.error === "source_criteria_invalid") return { at: "criteria", errors: criteria.data.errors };
   const refusal = ProjectRefusal.safeParse(error.body);
   if (!refusal.success) return null;
   const { error: code, branches } = refusal.data;

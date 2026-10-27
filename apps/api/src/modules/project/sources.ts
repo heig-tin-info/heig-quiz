@@ -6,16 +6,31 @@
  * Reads serving a request: a rate limit fails at once (`HTTP_READ`).
  */
 import {
+  PROJECT_DEFAULTS,
   PROTECTED_FILE_SUGGESTIONS,
+  type ProjectSourceCriteria,
   type ProjectSourceDetail,
+  type ProjectSourceQuery,
   type ProjectSourceRepo,
+  type SourceStrategy,
 } from "@quiz/contracts";
+import {
+  classifyCriterion,
+  criteriaTotals,
+  HANDOUT_IGNORE,
+  handoutTree,
+  parseStudentIgnore,
+  type HandoutEntry,
+  type TreeEntry,
+} from "@quiz/domain";
+import { parseCriteria } from "@quiz/domain/criteriaParse";
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { githubStatus, HTTP_READ, installationClient, unless404, type InstallationClient } from "../../github/app.js";
 import { classroomInstallation, heldRepos, offLimitsRepos, type InstalledOrg } from "../github/service.js";
 import type { Caller } from "../guards.js";
+import { CRITERIA_FILE, fileAt, type TextFile } from "./criteria.js";
 import { ProjectError } from "./errors.js";
 
 /** The platform's own repositories, never a source: `<slug>-squashed`, `<slug>-squashed-N`. */
@@ -165,41 +180,101 @@ export async function listSources(db: Db, config: AppConfig, classroomId: string
   return sources.slice(0, MAX_SOURCES);
 }
 
-/** One source of the organization ({@link fetchSource}); null when it may not be one. */
+/** A handed-out `criteria.yml` read at schema 3 (ADR-119 §9): its criteria with their kinds and totals, or its errors. */
+function sourceCriteria(file: TextFile): ProjectSourceCriteria {
+  if (file.tooLarge) return { ok: false, errors: [{ path: CRITERIA_FILE, code: "too_large" }] };
+  const parsed = parseCriteria(file.text, { version: 3 });
+  if (!parsed.ok) return parsed;
+  const { leaves } = parsed.criteria;
+  const { max, bonusMax } = criteriaTotals(leaves, {});
+  return { ok: true, leaves: leaves.map((leaf) => ({ ...leaf, kind: classifyCriterion(leaf, null) })), max, bonusMax };
+}
+
+/** What the students receive from a source's branch: its tree after the handout, and its `criteria.yml`. */
+export interface Handout {
+  tree: ProjectSourceDetail["tree"];
+  truncated: boolean;
+  criteria: ProjectSourceCriteria | null;
+}
+
+/**
+ * The tree the students receive from `branch` of `source` under `strategy`
+ * (F-PROJ-02): `squash` applies the handout (`handoutTree`: the
+ * `student/` overlay, `.studentignore`), `whole` hands the tree out as it
+ * is; and its `criteria.yml`, read from the source path it comes from and
+ * parsed at schema 3. An empty repository hands out nothing.
+ */
+export async function readHandout(
+  client: InstallationClient,
+  org: InstalledOrg,
+  source: Source,
+  branch: string,
+  strategy: SourceStrategy,
+): Promise<Handout> {
+  let entries: TreeEntry[] = [];
+  let truncated = false;
+  try {
+    const { data } = await client.octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
+      owner: org.login,
+      repo: source.name,
+      tree_sha: branch,
+      recursive: "1",
+      request: HTTP_READ,
+    });
+    entries = data.tree
+      .filter((e) => e.path && (e.type === "blob" || e.type === "tree"))
+      .map((e) => ({ path: e.path!, type: e.type as TreeEntry["type"] }));
+    truncated = data.truncated;
+  } catch (err) {
+    // An empty repository has no tree (409): nothing to pick.
+    if (githubStatus(err) !== 409 && githubStatus(err) !== 404) throw err;
+  }
+  const read = (path: string) => fileAt(client.octokit, org.login, source.name, path, branch);
+  let tree: HandoutEntry[] = entries.map((e) => ({ ...e, from: e.path }));
+  if (strategy === "squash") {
+    const hasIgnore = entries.some((e) => e.path === HANDOUT_IGNORE && e.type === "blob");
+    const ignore = hasIgnore ? await read(HANDOUT_IGNORE) : null;
+    tree = handoutTree(entries, ignore && !ignore.tooLarge ? parseStudentIgnore(ignore.text) : []);
+  }
+  const file = tree.find((e) => e.path === CRITERIA_FILE && e.type === "blob");
+  const text = file ? await read(file.from) : null;
+  return {
+    tree: tree.slice(0, MAX_TREE_ENTRIES).map(({ path, type }) => ({ path, type })),
+    truncated: truncated || tree.length > MAX_TREE_ENTRIES,
+    criteria: text ? sourceCriteria(text) : null,
+  };
+}
+
+/**
+ * One source of the organization ({@link fetchSource}), and what the
+ * students receive from `query.branch` (its default branch otherwise)
+ * under `query.strategy` (`squash` otherwise, {@link readHandout}); null
+ * when it may not be a source. A branch it does not have is `422
+ * source_not_found`, naming it, as the creation answers.
+ */
 export async function sourceDetail(
   db: Db,
   config: AppConfig,
   classroomId: string,
   name: string,
   caller: Caller,
+  query: ProjectSourceQuery,
 ): Promise<ProjectSourceDetail | null> {
   const { org, client } = await classroomClient(db, config, classroomId);
   const source = await fetchSource(db, client, org, name, caller);
   if (!source) return null;
-  let tree: ProjectSourceDetail["tree"] = [];
-  let truncated = false;
-  try {
-    const { data } = await client.octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
-      owner: org.login,
-      repo: source.name,
-      tree_sha: source.defaultBranch,
-      recursive: "1",
-      request: HTTP_READ,
-    });
-    const entries = data.tree.filter((e) => e.path && (e.type === "blob" || e.type === "tree"));
-    tree = entries.slice(0, MAX_TREE_ENTRIES).map((e) => ({ path: e.path!, type: e.type as "blob" | "tree" }));
-    truncated = data.truncated || entries.length > MAX_TREE_ENTRIES;
-  } catch (err) {
-    // An empty repository has no tree (409): nothing to pick.
-    if (githubStatus(err) !== 409 && githubStatus(err) !== 404) throw err;
+  const branch = query.branch ?? source.defaultBranch;
+  if (!source.branches.includes(branch)) {
+    throw new ProjectError("source_not_found", `${source.fullName} has no branch ${branch}`, { branches: [branch] });
   }
-  const files = new Set(tree.filter((e) => e.type === "blob").map((e) => e.path));
+  const handout = await readHandout(client, org, source, branch, query.strategy ?? PROJECT_DEFAULTS.sourceStrategy);
+  const files = new Set(handout.tree.filter((e) => e.type === "blob").map((e) => e.path));
   return {
     name: source.name,
     defaultBranch: source.defaultBranch,
     branches: source.branches,
-    tree,
-    truncated,
+    branch,
+    ...handout,
     suggestedProtected: PROTECTED_FILE_SUGGESTIONS.filter((p) => files.has(p)),
   };
 }

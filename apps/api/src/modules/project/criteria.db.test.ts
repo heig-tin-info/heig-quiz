@@ -286,6 +286,8 @@ describe("the mode switch (ADR-106 §1)", () => {
     const snapshot = await snapshotOf(project.id);
     expect(snapshot!.criteria.leaves).toHaveLength(6);
     expect(snapshot!.criteria.schemaVersion).toBe(3);
+    // The switch protects the workflows and the criteria (ADR-119 §9, choice k).
+    expect(ProjectSummary.parse(res.json()).protectedFiles).toEqual([".github/workflows", "criteria.yml"]);
     const [audit] = await auditOf(project.id, "project.grading_mode");
     expect(audit!.payload).toEqual({ from: "auto", to: "criteria", fileSha: snapshot!.fileSha });
     expect(await auditOf(project.id, "project.criteria_reload")).toEqual([]);

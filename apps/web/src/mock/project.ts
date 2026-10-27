@@ -102,6 +102,7 @@ import {
   reviewState,
   scoreGrade,
   teacherScoreMax,
+  withForcedProtected,
   type CriterionGradeLike,
   type ProjectDatesChange,
   type ProjectLifeLike,
@@ -668,6 +669,7 @@ function seeded(): MockProject[] {
     if (flags.groups && seed.id === "pj-draft") summary.groupMode = true;
     if (seed.groupSet) Object.assign(summary, { groupMode: true, groupSetId: seed.groupSet });
     Object.assign(summary, seed.summary);
+    summary.protectedFiles = withForcedProtected(summary.protectedFiles, summary.gradingMode);
     const following = seed.groupSet ? setGroupsOf(seed.groupSet).map((g) => ({ ...g, stopped: false })) : [];
     const copy = seed.groupSet && seed.state === "locked" ? driftedCopy(following) : null;
     const project: MockProject = {
@@ -1224,6 +1226,8 @@ on("PATCH", "/app/api/projects/:id", (m, raw) => {
     CRITERIA.set(p.summary.id, sampleSnapshot(iso(-2 * H)));
   }
   if (body.gradingMode !== undefined) s.gradingMode = body.gradingMode;
+  // ADR-119 §9: in `criteria` mode the workflows and the criteria stay protected.
+  s.protectedFiles = withForcedProtected(s.protectedFiles, s.gradingMode);
   for (const field of ["testsCriterion", "identityCriterion"] as const) {
     const id = body[field];
     if (id && !SAMPLE_LEAVES.some((leaf) => leaf.id === id)) {
@@ -1284,7 +1288,7 @@ const CRITERIA = new Map<string, Omit<NonNullable<ProjectCriteriaView["snapshot"
 
 function sampleSnapshot(loadedAt: string) {
   const sections = ["rendu", "code", "code.structure", "code.style", "rapport", "git", "bonus"].map((id) => ({ id, path: id.split("."), description: null }));
-  return { fileSha: "3f1c2a9", sourceSha: "9b4e7d21c0a5", loadedAt, grading: { context: null, sources: [] }, sections };
+  return { schemaVersion: 2 as const, fileSha: "3f1c2a9", sourceSha: "9b4e7d21c0a5", loadedAt, grading: { context: null, sources: [] }, sections };
 }
 
 function criteriaViewOf(p: MockProject): ProjectCriteriaView {

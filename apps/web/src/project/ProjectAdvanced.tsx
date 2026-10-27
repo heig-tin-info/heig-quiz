@@ -1,10 +1,11 @@
 import type { ProjectSourceDetail } from "@quiz/contracts";
+import { forcedProtected, PROJECT_GRADING_MODES } from "@quiz/domain";
 
 import { GroupSetPicker } from "../group/GroupSetPicker";
 import { useT } from "../i18n";
 import { SettingRow, Switch, ToggleChip } from "../ui";
-import { chosenBranches, chosenProtected, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
-import { ProtectedFiles, sourceFiles } from "./ProtectedFiles";
+import { chosenBranches, chosenGradingMode, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
+import { ProtectedFiles } from "./ProtectedFiles";
 import {
   DeadlineKindRow,
   DeadlineStrategyRow,
@@ -15,7 +16,7 @@ import {
   SourceStrategyRow,
 } from "./ProjectSettingRows";
 
-/** `criteria` is chosen on the draft, which reads its `criteria.yml` (ADR-106 §1). */
+/** A source without `criteria.yml` offers no grading by criteria (ADR-119 §9). */
 const CREATION_MODES = ["auto", "none"] as const;
 
 /**
@@ -44,6 +45,7 @@ export function ProjectAdvanced({
 }) {
   const t = useT();
   const branches = detail ? chosenBranches(draft, detail) : [];
+  const mode = chosenGradingMode(draft, detail);
 
   const toggleBranch = (branch: string) => {
     if (!branches.includes(branch)) update({ branches: [...branches, branch] });
@@ -86,18 +88,21 @@ export function ProjectAdvanced({
         onChange={(e) => update({ graceMinutes: e.target.value })}
       />
 
-      <GradingModeRow modes={CREATION_MODES} value={draft.gradingMode} onChange={(gradingMode) => update({ gradingMode })} />
+      <GradingModeRow
+        modes={detail?.criteria ? PROJECT_GRADING_MODES : CREATION_MODES}
+        value={mode}
+        onChange={(gradingMode) => update({ gradingMode })}
+      />
 
-      {draft.gradingMode === "auto" ? (
-        <ScaleRow value={draft.scaleKind} onChange={(scaleKind) => update({ scaleKind })} />
-      ) : null}
+      {mode === "auto" ? <ScaleRow value={draft.scaleKind} onChange={(scaleKind) => update({ scaleKind })} /> : null}
 
       {detail ? (
         <SettingRow stacked title={t("project.protected")} desc={`${t("project.protected.desc")} ${t("project.protected.hint")}`}>
           <ProtectedFiles
-            suggested={detail.suggestedProtected}
-            files={sourceFiles(detail)}
-            value={chosenProtected(draft, detail)}
+            tree={detail.tree}
+            truncated={detail.truncated}
+            value={draft.protectedFiles ?? detail.suggestedProtected}
+            forced={forcedProtected(mode)}
             onChange={(protectedFiles) => update({ protectedFiles })}
           />
         </SettingRow>
