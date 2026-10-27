@@ -57,7 +57,7 @@ on GitHub (*Settings → Permissions & events*), never the other way round.
 | `actions` | repository | read | the grading workflow's runs (`GET …/actions/runs`): the pipeline, the reconciliation, the live state; the `results` artifact of a graded run (ADR-119) |
 | `administration` | repository | write | the students' repositories created (`POST /orgs/{org}/repos`), the rulesets `hgc-protect` and `hgc-deadline-lock`, collaborators and invitations, the archive that stands for a lock |
 | `checks` | repository | read | a run's check runs and their annotations: the score lines the grading parses |
-| `contents` | repository | write | git clone and push (provisioning, the deadline commit, protected-file reverts, the sync branches), commits and refs, the reviews' `repository_dispatch`, the journal's reads and page writes |
+| `contents` | repository | write | git clone and push (provisioning, the deadline commit, protected-file reverts, the sync branches), commits and refs, the reviews' and graded runs' `repository_dispatch` (`quiz-grade`, ADR-119), the journal's reads and page writes |
 | `metadata` | repository | read | GitHub's mandatory baseline: repositories by id, listings, a collaborator's permission |
 | `pull_requests` | repository | write | the source sync's pull requests (opened, commented, their state read) |
 | `workflows` | repository | write | pushing `.github/workflows/*` (the grading workflow) into the distribution, the students' repositories and the sync branches |

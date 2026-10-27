@@ -11,7 +11,8 @@
  *   (`protection.ts`). The receipt itself was written by the intake,
  *   before the 200 (ADR-012), for the repositories {@link tracksRepo} claims.
  * - `workflow_run`: `pending` while an eligible run runs; completed, ONE
- *   ingestion (`ingestCompletedRun`, `grading.ts`), the path M3-06's
+ *   ingestion (`ingestRun`, `ci.ts`: `ingestCompletedRun`, or a schema-3
+ *   project's graded run), the path M3-06's
  *   reconciliation takes too.
  * - `member` added: the student accepted the invitation.
  * - `repository`: renamed (the name follows the immutable id — a student's
@@ -33,11 +34,14 @@ import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { runKind } from "@quiz/domain";
+
 import { githubOrganizations, projectRepos, projects, botCommits } from "../../db/schema.js";
 import { installationClient, isZeroSha } from "../../github/app.js";
 import { forgetRepoLiveState } from "../../github/metrics.js";
 import { onEvent, onReceipt, projectInstallation, pushAuthor, type WebhookHandler } from "../github/service.js";
-import { completedRun, ingestCompletedRun, isEligible, isLastStudentCommit, RawWorkflowRun } from "./grading.js";
+import { ingestRun } from "./ci.js";
+import { completedRun, isEligible, isLastStudentCommit, RawWorkflowRun } from "./grading.js";
 import { protectFiles } from "./protection.js";
 import { BRANCH_REF, followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, PushEvent, repoContext, tracksRepo } from "./repos.js";
 import { pullRequest, sourcePush } from "./sync.js";
@@ -97,13 +101,14 @@ const workflowRun: WebhookHandler = async (app, config, delivery) => {
   // The one mapping, the reconciliation's too (ADR-011 §1).
   const run = completedRun(config, event.data.workflow_run, delivery.receivedAt);
   if (event.data.action !== "completed") {
-    if (!isLastStudentCommit(ctx, run.headSha) || !(await isEligible(app.db, ctx, run))) return;
+    // A dispatched run (a review, a graded run) is not the student's CI (`ciStatusOf`): it never marks pending.
+    if (runKind(run) !== "ci" || !isLastStudentCommit(ctx, run.headSha) || !(await isEligible(app.db, ctx, run))) return;
     await app.db.update(projectRepos).set({ ciStatus: "pending" }).where(eq(projectRepos.id, ctx.repo.id));
   } else {
     const org = await projectInstallation(app.db, ctx.project.orgId);
     if (!org) return; // the App gone: the reconciliation catches up once it is back
     const { octokit } = await installationClient(config, org.installationId);
-    if ((await ingestCompletedRun(app, octokit, ctx, run)) === null) return;
+    if ((await ingestRun(app, octokit, ctx, run)) === null) return;
   }
   await hintRepo(app.db, ctx);
 };

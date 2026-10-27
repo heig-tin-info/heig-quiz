@@ -156,20 +156,28 @@ async function claimDispatch(tx: Tx, repoId: string, plan: Plan, checkpointId: s
 }
 
 /**
- * The claimed dispatch sent. Accepted: `dispatched_at`. A 4xx: GitHub did
- * not take it — the claim given back for the next pass (thrown), or, a
- * 404, the repository marked deleted. No response, or a 5xx GitHub may
- * have acted on: the row stays unconfirmed, never sent again.
+ * ONE `repository_dispatch` of a claimed ledger row (the review's here, a
+ * CI pass's in `ci.ts`), never retried by Octokit: at most once. Accepted:
+ * the row's `dispatched_at`, `dispatched`. No response, or a 5xx GitHub may
+ * have acted on: `unconfirmed`, logged, never sent again. A 404: `missing`
+ * (the repository gone). Any other 4xx: `refused`. The caller settles the
+ * last two.
  */
-async function send(app: FastifyInstance, octokit: Octokit, claim: Claim): Promise<Outcome> {
-  const db = app.db;
-  const { owner, repo } = ownerRepo(claim.fullName);
+export async function postDispatch(
+  app: FastifyInstance,
+  octokit: Octokit,
+  fullName: string,
+  eventType: string,
+  payload: Record<string, unknown>,
+  dispatchId: string,
+): Promise<"dispatched" | "unconfirmed" | "missing" | "refused"> {
+  const { owner, repo } = ownerRepo(fullName);
   try {
     await octokit.request("POST /repos/{owner}/{repo}/dispatches", {
       owner,
       repo,
-      event_type: claim.plan.eventType,
-      client_payload: claim.plan.clientPayload,
+      event_type: eventType,
+      client_payload: payload,
       // At most once: Octokit's retry plugin would send it again after a 5xx GitHub may have acted on.
       request: { retries: 0 },
     });
@@ -178,17 +186,29 @@ async function send(app: FastifyInstance, octokit: Octokit, claim: Claim): Promi
     const answered = (err as { response?: unknown } | null)?.response !== undefined;
     const status = githubStatus(err) ?? 500;
     if (!answered || status >= 500) {
-      app.log.error({ err, repo: claim.fullName }, "review dispatch: not confirmed, never sent again");
+      app.log.error({ err, repo: fullName }, "dispatch: not confirmed, never sent again");
       return "unconfirmed";
     }
-    await db.delete(gradeDispatches).where(eq(gradeDispatches.id, claim.dispatchId));
-    if (status !== 404) throw err;
-    // Gone from GitHub: terminal, never retried (F-PROJ-18).
-    await markRepoDeleted(db, claim.repoId, app.clock.now(), "dispatch");
-    return "deleted";
+    return status === 404 ? "missing" : "refused";
   }
-  await db.update(gradeDispatches).set({ dispatchedAt: app.clock.now() }).where(eq(gradeDispatches.id, claim.dispatchId));
+  await app.db.update(gradeDispatches).set({ dispatchedAt: app.clock.now() }).where(eq(gradeDispatches.id, dispatchId));
   return "dispatched";
+}
+
+/**
+ * The claimed review dispatch sent ({@link postDispatch}). A 4xx: GitHub
+ * did not take it — the claim given back for the next pass (thrown), or, a
+ * 404, the repository marked deleted.
+ */
+async function send(app: FastifyInstance, octokit: Octokit, claim: Claim): Promise<Outcome> {
+  const db = app.db;
+  const outcome = await postDispatch(app, octokit, claim.fullName, claim.plan.eventType, claim.plan.clientPayload, claim.dispatchId);
+  if (outcome === "dispatched" || outcome === "unconfirmed") return outcome;
+  await db.delete(gradeDispatches).where(eq(gradeDispatches.id, claim.dispatchId));
+  if (outcome === "refused") throw new Error(`GitHub refused the review dispatch of ${claim.fullName}`);
+  // Gone from GitHub: terminal, never retried (F-PROJ-18).
+  await markRepoDeleted(db, claim.repoId, app.clock.now(), "dispatch");
+  return "deleted";
 }
 
 /**

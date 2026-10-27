@@ -3,7 +3,8 @@
  * a real RSA key for the App's JWT, and a `fetch` stand-in that records
  * every call and answers from routes the test sets. No network is ever
  * reached: a request no route answers is GitHub's 404, and a host other
- * than GitHub's three (the API, the avatars, codeload) is an error.
+ * than GitHub's four (the API, the avatars, codeload, the artifacts' blob
+ * store) is an error.
  *
  * Test support only; nothing in the application imports it.
  */
@@ -46,6 +47,8 @@ export const on =
 export const AVATAR_HOST = "avatars.githubusercontent.com";
 /** Where GitHub redirects a tarball request, with a `token=` in the query (ADR-106 §3). */
 export { CODELOAD_HOST };
+/** Where GitHub redirects an artifact's download, a signed URL with `sig=` and `se=` (ADR-119 §6). */
+export const BLOB_HOST = "productionresultssa0.blob.core.windows.net";
 
 /** Every request to the avatar host, answered by `answer`. */
 export const avatarRoute =
@@ -175,11 +178,11 @@ export function fakeGithub(): FakeGithub {
         // The avatar proxy must never follow GitHub elsewhere (M2-02).
         throw new Error(`an avatar fetched without redirect: "error"`);
       }
-      if (url.host === CODELOAD_HOST && init.redirect !== "error") {
-        // A tarball's download never follows GitHub further (ADR-106 §3).
-        throw new Error(`a tarball fetched without redirect: "error"`);
+      if ((url.host === CODELOAD_HOST || url.host === BLOB_HOST) && init.redirect !== "error") {
+        // A tarball's or an artifact's download never follows GitHub further (ADR-106 §3, ADR-119 §6).
+        throw new Error(`a download fetched without redirect: "error"`);
       }
-      if (url.host !== "api.github.com" && url.host !== AVATAR_HOST && url.host !== CODELOAD_HOST) {
+      if (url.host !== "api.github.com" && url.host !== AVATAR_HOST && url.host !== CODELOAD_HOST && url.host !== BLOB_HOST) {
         throw new Error(`unexpected request to ${url.href}`);
       }
       for (const route of fake.routes) {

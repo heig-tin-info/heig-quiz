@@ -134,9 +134,11 @@ export const BOT_COMMIT_KINDS = ["revert", "deadline", "sync", "grader"] as cons
  * A review dispatch (`grade_dispatches`): the final review after the freeze
  * (`deadline`, `grade-final` on the wire) or a review checkpoint
  * (`checkpoint`, `grade-milestone` on the wire, I16; heig-classroom's
- * `milestone`, which the import maps).
+ * `milestone`, which the import maps); a Regrade's graded run of a
+ * schema-3 project (`regrade`, `quiz-grade` on the wire with `pass:
+ * final`, ADR-119 §6), one row per Regrade.
  */
-export const REVIEW_DISPATCH_TRIGGERS = ["deadline", "checkpoint"] as const;
+export const REVIEW_DISPATCH_TRIGGERS = ["deadline", "checkpoint", "regrade"] as const;
 
 // ---------------------------------------------------------- grading scale
 
@@ -272,6 +274,15 @@ export const criterionSettings = (project: { testsCriterion: string | null; iden
   testsCriterion: effectiveTestsCriterion(project),
   identityCriterion: project.identityCriterion,
 });
+
+/**
+ * What `classifyCriterion` reads for a snapshot of `schemaVersion`: the
+ * project's settings for a schema-2 snapshot, none (null) for a schema-3
+ * one, whose kinds the file alone says (ADR-119 §3, §11). Every caller
+ * classifies through this.
+ */
+export const snapshotSettings = (project: { testsCriterion: string | null; identityCriterion: string | null }, schemaVersion: 2 | 3) =>
+  schemaVersion === 2 ? criterionSettings(project) : null;
 
 /** Whether a project's identity criterion is also its effective tests criterion: one criterion, one check (`422 criterion_conflict`). */
 export const criterionConflict = (project: { testsCriterion: string | null; identityCriterion: string | null }): boolean => {
@@ -594,6 +605,10 @@ export const PROJECT_REFUSALS = [
   // ADR-106 §5: a snapshot (switch or reload) that tags no criterion with a
   // checkpoint's name; the body names them (`checkpoints`).
   "checkpoint_untagged",
+  // ADR-119 §3, §11: a reload whose `criteria.yml` is of another schema
+  // version than the snapshot's — fixed when the snapshot was first taken
+  // (422, `expected` the snapshot's version).
+  "schema_version_fixed",
   // ADR-106 §2: a tests criterion that names no criterion of the snapshot (422).
   "unknown_criterion",
   // ADR-106 §2: an identity criterion that is also the (effective) tests criterion (422, `field: "identityCriterion"`).
@@ -1568,6 +1583,14 @@ export type CriteriaError = z.infer<typeof CriteriaError>;
 /** The body of `409 criteria_invalid`. */
 export const CriteriaInvalid = z.object({ error: z.literal("criteria_invalid"), message: z.string(), errors: z.array(CriteriaError) });
 export type CriteriaInvalid = z.infer<typeof CriteriaInvalid>;
+
+/** The body of `422 schema_version_fixed`: the snapshot's schema version, the one a reload must parse at. */
+export const SchemaVersionFixed = z.object({
+  error: z.literal("schema_version_fixed"),
+  message: z.string(),
+  expected: z.union([z.literal(2), z.literal(3)]),
+});
+export type SchemaVersionFixed = z.infer<typeof SchemaVersionFixed>;
 
 /** Who proposes a criterion's points (`classifyCriterion` of `@quiz/domain`). */
 export const CriterionKind = z.enum(CRITERION_KINDS);

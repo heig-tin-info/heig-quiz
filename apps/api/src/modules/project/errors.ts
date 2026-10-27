@@ -75,6 +75,7 @@ const STATUS: Record<Code, number> = {
   // Grading by criteria (ADR-106 §2): the source's `criteria.yml` missing or invalid.
   criteria_invalid: 409,
   checkpoint_untagged: 409,
+  schema_version_fixed: 422,
   unknown_criterion: 422,
   criterion_conflict: 422,
   identity_criterion_invalid: 422,

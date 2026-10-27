@@ -66,6 +66,8 @@ export interface CompletedRun {
   path: string;
   /** What triggered it: `push`, `repository_dispatch` (the review), ... */
   event: string;
+  /** Its name as GitHub shows it (the workflow's `run-name`): a graded run's carries its pass's nonce (ADR-119 §6). */
+  title: string;
   /**
    * Who triggered it (`pushedBy` of the run's `triggering_actor` alone; none
    * is a `person`, failing closed): only a review run Quiz's App dispatched —
@@ -98,6 +100,7 @@ export const RawWorkflowRun = z.object({
   conclusion: z.string().nullish(),
   path: z.string().nullish(),
   event: z.string().nullish(),
+  display_title: z.string().nullish(),
   check_suite_id: z.union([z.number().int(), z.bigint()]).nullish(),
   updated_at: z.string().nullish(),
   run_started_at: z.string().nullish(),
@@ -127,6 +130,7 @@ export function completedRun(config: AppConfig, raw: RawWorkflowRun, receivedAt:
     conclusion: raw.conclusion ?? "unknown",
     path: raw.path ?? "",
     event: raw.event ?? "",
+    title: raw.display_title ?? "",
     // A re-run's triggering actor is who re-ran it; none at all counts as a person's (fail closed).
     triggeredBy: pushedBy(config, raw.triggering_actor?.login),
     checkSuiteId: raw.check_suite_id == null ? null : Number(raw.check_suite_id),
@@ -353,6 +357,10 @@ export async function aggregateCiStatus(
  *
  * `to_verify`: ingested while the repository's protection is suspended, or
  * on a head whose protected files were restored (F-PROJ-08).
+ *
+ * A schema-3 project's dispatched run (its CI's graded run, ADR-119 §6)
+ * never reaches here: `ingestRun` (`ci.ts`), the callers' entry, hands it
+ * to the graded intake instead.
  */
 export async function ingestCompletedRun(
   app: FastifyInstance,

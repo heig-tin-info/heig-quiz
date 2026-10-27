@@ -129,3 +129,16 @@ describe("a tarball's codeload URL (ADR-106 §3)", () => {
     expect(redactTokens(`GET /x?a=1&token=s3cret&b=2`)).toBe("GET /x?a=1&token=***&b=2");
   });
 });
+
+describe("a graded run's artifact blob URL (ADR-119 §6)", () => {
+  const BLOB =
+    "https://productionresultssa1.blob.core.windows.net/actions-results/abc/artifact.zip?rscd=attachment&se=2026-10-27T10%3A00%3A00Z&sig=Zm9vYmFyU0lHTkFUVVJF%2Bxyz%3D&sp=r&sv=2021-12-02";
+
+  it("masks its sig= wherever it appears in a text, keeping the rest", () => {
+    const masked = redactTokens(`artifact download failed: ${BLOB}`);
+    expect(masked).not.toContain("Zm9vYmFyU0lHTkFUVVJF");
+    expect(masked).toContain("&sig=***&sp=r");
+    expect(redactTokens("GET /x?sig=abc")).toBe("GET /x?sig=***");
+    expect(redactUrl("/a?sig=abc&b=1")).toBe("/a?sig=***&b=1");
+  });
+});

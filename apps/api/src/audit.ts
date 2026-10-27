@@ -453,9 +453,17 @@ export type AuditAction =
    * `name` besides; both `dispatched`, `deleted` (404: the repository gone),
    * `unconfirmed` (counts: GitHub's answer never came, never sent again) and
    * `failed` (full names: GitHub refused, sent again on the next pass).
-   * A milestone of a project graded by criteria (ADR-106 §5), by the
-   * ticker: `checkpoint_dispatched` with `payload.checkpointId`, `name` and
-   * `passes` (the milestone passes claimed; nothing goes to GitHub).
+   * A milestone of a project graded by criteria on a schema-2 snapshot
+   * (ADR-106 §5), by the ticker: `checkpoint_dispatched` with
+   * `payload.checkpointId`, `name` and `passes` (the milestone passes
+   * claimed; nothing goes to GitHub). The
+   * `quiz-grade` dispatch of a schema-3 project's CI pass (ADR-119 §6), by
+   * the `project.ci` job, one entry per repository and dispatch (a
+   * schema-3 milestone has no claim-time entry):
+   * `review_dispatched` (the final pass, a Regrade) or
+   * `checkpoint_dispatched` (a milestone), `payload.repoId`, `passId`,
+   * `trigger`, `checkpointId`, `sha` (the target) and `outcome`
+   * (`dispatched`, `unconfirmed`, `missing`: the repository gone, `refused`).
    */
   | "project.review_dispatched"
   | "project.checkpoint_dispatched"
@@ -490,6 +498,8 @@ export type AuditAction =
    * action counted by its own three a day: `project.regrade` —
    * `payload.passId`, `repos` (their count), the project's cap;
    * `project_repo.regrade` — `payload.passId`, `repoId`, that repository's.
+   * For a schema-3 project (ADR-119 §6) each repository's pass is its own:
+   * `passId` is the first's, `passIds` (the project's) all of them.
    */
   | "project.regrade"
   | "project_repo.regrade"
@@ -544,6 +554,18 @@ export type AuditAction =
   | "project_repo.unlock"
   | "project_repo.archived"
   | "project_repo.review_skipped"
+  /**
+   * A graded run of the CI (ADR-119 §6), by the system, subject the
+   * `project_repos` row: `ci_tampered` — the run answered the pass's
+   * nonce, but a protected file differs from the distribution's, so its
+   * results are not read and the pass's automatic criteria get the reason
+   * `ci_tampered`; `payload.projectId`, `passId`, `workflowRunId`,
+   * `target` (the paths differing at the target commit: `criteria.yml`,
+   * the protected list) and `head` (at the run's head: the grading
+   * workflow). The final and milestone dispatches themselves reuse
+   * `project.review_dispatched` and `project.checkpoint_dispatched`.
+   */
+  | "project_repo.ci_tampered"
   /**
    * The staff's writes on a repository (F-PROJ-07, F-PROJ-08, F-PROJ-14;
    * merge task M3-08b), subject the `project_repos` row. `grade_override`:

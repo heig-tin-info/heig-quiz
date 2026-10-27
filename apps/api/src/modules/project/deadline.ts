@@ -69,6 +69,13 @@ export const PROVISIONED = and(
  */
 export const LIVE = and(PROVISIONED, isNull(projects.archivedAt))!;
 
+/**
+ * A repository's final passes in the ledger: its final review or pass
+ * (`deadline`) and a schema-3 Regrade's CI passes (`regrade`, ADR-119 §6),
+ * which a reopen or leaving `criteria` forgets with it.
+ */
+const FINAL_PASSES = inArray(gradeDispatches.trigger, ["deadline", "regrade"]);
+
 /** {@link LIVE}, for a row already read. */
 export function isLive(repo: RepoRow, project: ProjectRow): boolean {
   return (
@@ -149,7 +156,7 @@ export async function effectiveDeadlineMoved(tx: Tx, project: ProjectRow, repoId
       .where(inArray(projectRepos.id, reopened));
     await tx
       .delete(gradeDispatches)
-      .where(and(inArray(gradeDispatches.repoId, reopened), eq(gradeDispatches.trigger, "deadline")));
+      .where(and(inArray(gradeDispatches.repoId, reopened), FINAL_PASSES));
     // Graded by criteria (ADR-106 §5, §6): the final pass's rows and their validations go with its claim,
     // the milestones' locked rows stay — before the release only: a released project's rows never change
     // by a side effect.
@@ -176,10 +183,10 @@ export async function effectiveDeadlineMoved(tx: Tx, project: ProjectRow, repoId
   return reopened;
 }
 
-/** The `deadline` ledger rows of a project's repositories forgotten: its final passes, when it leaves `criteria` (ADR-106 §6). */
+/** The final passes of a project's repositories forgotten ({@link FINAL_PASSES}), when it leaves `criteria` (ADR-106 §6). */
 export async function forgetFinalPasses(tx: Tx, projectId: string): Promise<void> {
   const repos = tx.select({ id: projectRepos.id }).from(projectRepos).where(eq(projectRepos.projectId, projectId));
-  await tx.delete(gradeDispatches).where(and(inArray(gradeDispatches.repoId, repos), eq(gradeDispatches.trigger, "deadline")));
+  await tx.delete(gradeDispatches).where(and(inArray(gradeDispatches.repoId, repos), FINAL_PASSES));
 }
 
 /**

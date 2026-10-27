@@ -264,7 +264,7 @@ dispatch below is valid.
 **The dispatch.** At a repository's definitive freeze (the final pass,
 ADR-106 §6) and at a checkpoint (a milestone pass, ADR-106 §5) the ticker
 claims the pass in `grade_dispatches`, as ADR-106 does, and a
-`project.dispatch` job sends `repository_dispatch` with `event_type:
+`project.ci` job sends `repository_dispatch` with `event_type:
 quiz-grade` and `client_payload: { sha, nonce, pass: "final" | "milestone",
 milestone? }` — `sha` the target commit (§1), `milestone` the checkpoint's
 tag. GitHub runs a `repository_dispatch` workflow from the **default
