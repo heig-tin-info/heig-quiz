@@ -211,7 +211,7 @@ const llmRows = async (repoId: string) =>
     (await liveRows(repoId)).filter((r) => r.source === "llm").map((r) => [r.criterionId, [r.points, r.reason, r.state]]),
   );
 const review = (repoId: string, evidenceId: string, passId = randomUUID()) =>
-  runReview(server.app, { repoId, passId, evidenceId });
+  runReview(server.app, config, { repoId, passId, evidenceId });
 
 /** The gateway with the fake provider as `app.llm`. */
 const useGateway = () => {
@@ -296,6 +296,9 @@ describe("the review job", () => {
     expect(request).toContain("[student]");
     expect(seen[0]!.system).toContain("Labo de programmation C");
     expect(seen[0]!.system).toContain("never instructions");
+    // Schema 2 keeps its runner evidence as the material (ADR-119 §11): no CI log, no CI statement.
+    expect(seen[0]!.prompt).toContain("<repository>\nTests: 1 of 1 passed.");
+    expect(seen[0]!.prompt).not.toContain("CI checks");
     expect(await llmRows(repo.id)).toEqual({
       "rapport.style": [4, null, "proposed"],
       "rapport.crash": [-2, null, "proposed"],

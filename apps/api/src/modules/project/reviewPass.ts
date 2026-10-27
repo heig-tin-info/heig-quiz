@@ -13,8 +13,17 @@
  * never a retry: `llm_budget`, `llm_not_configured`, `grader_error`; no
  * evidence, a 0-point proposal with the evidence's status.
  *
- * {@link runEvidencePass} is the `project.evidence` job of a pass: the
- * evidence, then this review, ok or not (§4: review follows evidence).
+ * What the model reads depends on the snapshot's schema version (ADR-119
+ * §11): a schema-2 pass, its runner evidence (`renderMaterial`); a schema-3
+ * pass, the sources the platform fetches itself at the pass's target
+ * commit and the `log` fields of the run it accepted (`renderCiMaterial`,
+ * ADR-119 §7), quoted as data. The model only ever proposes the llm
+ * criteria: a log reaches no automatic nor teacher-only row.
+ *
+ * {@link runEvidencePass} is the `project.evidence` job of a schema-2
+ * pass: the evidence, then this review, ok or not (§4: review follows
+ * evidence). A schema-3 pass's review is sent once the CI pass is settled
+ * (`ci.ts`).
  */
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
@@ -23,9 +32,11 @@ import { snapshotSettings } from "@quiz/contracts";
 import {
   awardedRange,
   clampAwarded,
+  effectiveDeadline,
   llmLeaves,
   maskNames,
   projectMaskTerms,
+  renderCiMaterial,
   renderMaterial,
   type CriteriaLeaf,
   type CriterionReason,
@@ -37,6 +48,8 @@ import type { Db } from "../../db/client.js";
 import {
   enrollments,
   githubAccounts,
+  gradeDispatches,
+  projectCiResults,
   projectCriteria,
   projectEvidence,
   projectRepoAccess,
@@ -47,18 +60,19 @@ import {
 import { PROJECT_REVIEW_QUEUE } from "../../jobs.js";
 import { llmFailure, type ProjectReviewCriterion } from "../llm/service.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
-import { runEvidence, type EvidenceJob } from "./evidence.js";
-import { passScope } from "./milestone.js";
+import { fetchSourceFiles, projectOctokit, runEvidence, type EvidenceJob } from "./evidence.js";
+import { passScope, type PassScope } from "./milestone.js";
 import { hintProjectStaff, type RepoRow } from "./repos.js";
+import { lastStudentPush } from "./review.js";
 import type { ProjectRow } from "./views.js";
 
 /** The `project.review` job's data. */
 export interface ReviewJob {
   repoId: string;
-  /** The pass: the final pass's ledger row, or a Regrade's id. */
+  /** The pass: the final pass's ledger row, or a Regrade's id; a schema-3 pass's `grade_dispatches` row. */
   passId: string;
-  /** The evidence this pass stored. */
-  evidenceId: string;
+  /** The evidence this pass stored (schema 2); a schema-3 pass has none. */
+  evidenceId?: string | undefined;
   /** A milestone pass's checkpoint (§5). */
   checkpointId?: string | undefined;
 }
@@ -141,13 +155,85 @@ async function ask(
   }
 }
 
+/** The material the model reads, or why there is none to judge (a 0-point proposal with that reason, no call). */
+type Material = string | { reason: CriterionReason };
+
+/**
+ * A schema-2 pass's material: its runner evidence (ADR-106 §4). No
+ * evidence to judge: the evidence's status as the reason (a row a later
+ * run replaced: `grader_error`).
+ */
+async function runnerMaterial(db: Db, repo: RepoRow, project: ProjectRow, evidenceId: string | undefined, sources: readonly string[]): Promise<Material> {
+  const [evidence] =
+    evidenceId === undefined
+      ? []
+      : await db
+          .select()
+          .from(projectEvidence)
+          .where(and(eq(projectEvidence.id, evidenceId), eq(projectEvidence.repoId, repo.id)));
+  if (!evidence) return { reason: "grader_error" };
+  if (evidence.status !== "ok") return { reason: evidence.status };
+  return renderMaterial(evidence, sources, await masker(db, repo, project));
+}
+
+/**
+ * A schema-3 pass's material (ADR-119 §7): the sources at the pass's
+ * target commit — the one it dispatched, else (a pass settled before its
+ * dispatch: archived, no installation) the last student push by its date —
+ * from the tarball the platform fetches itself, and the `log` of each of
+ * the pass's automatic criteria in its accepted `results.json`; a pass that
+ * accepted none (`no_result`, `ci_tampered`, `ci_unavailable`) is judged
+ * on its sources alone. Never the full CI logs, never a commit's metadata.
+ * No commit, the repository gone, the tarball too large or GitHub out of
+ * reach: the reason, no call.
+ */
+async function ciMaterial(
+  app: FastifyInstance,
+  config: AppConfig,
+  repo: RepoRow,
+  project: ProjectRow,
+  scope: PassScope<CriteriaLeaf>,
+  passId: string,
+  sources: readonly string[],
+): Promise<Material> {
+  const db = app.db;
+  const [found] = await db
+    .select({ sha: gradeDispatches.sha, results: projectCiResults.results })
+    .from(gradeDispatches)
+    .leftJoin(projectCiResults, eq(projectCiResults.passId, gradeDispatches.id))
+    .where(and(eq(gradeDispatches.id, passId), eq(gradeDispatches.repoId, repo.id)));
+  if (!found) return { reason: "grader_error" };
+  const due = scope.dueAt ?? effectiveDeadline(repo, project);
+  const target = found.sha !== "" ? found.sha : repo.githubRepoId === null ? null : await lastStudentPush(db, repo.githubRepoId, project.branches, due);
+  if (target === null) return { reason: "no_commit" };
+  if (repo.deletedAt !== null || repo.fullName === null) return { reason: "repo_missing" };
+  let files: Awaited<ReturnType<typeof fetchSourceFiles>>;
+  try {
+    files = await fetchSourceFiles(await projectOctokit(db, config, project), repo.fullName, target);
+  } catch (err) {
+    // `TarballUnavailable`'s message is redacted: the `codeload` URL's `token=` never reaches the log.
+    app.log.warn({ err, repo: repo.id }, "project review: the sources could not be fetched");
+    return { reason: "github_unavailable" };
+  }
+  if (typeof files === "string") return { reason: files };
+  const results = found.results;
+  const logs =
+    results === null
+      ? null
+      : scope.leaves.flatMap((leaf) => {
+          const log = leaf.command === undefined ? undefined : results.criteria[leaf.id]?.log;
+          return log ? [{ id: leaf.id, log }] : [];
+        });
+  return renderCiMaterial({ files, logs }, sources, await masker(db, repo, project));
+}
+
 /**
  * The `project.review` job: the llm proposals of one repository for one
  * pass. Nothing when the repository, its snapshot or the milestone's
  * checkpoint is gone, or its project left `criteria` mode. The number of
  * rows written.
  */
-export async function runReview(app: FastifyInstance, job: ReviewJob): Promise<number> {
+export async function runReview(app: FastifyInstance, config: AppConfig, job: ReviewJob): Promise<number> {
   const db = app.db;
   const [row] = await db
     .select({ repo: projectRepos, project: projects, snapshot: projectCriteria.criteria })
@@ -163,22 +249,14 @@ export async function runReview(app: FastifyInstance, job: ReviewJob): Promise<n
   const held = await heldCriteria(db, repo.id, job.passId);
   const leaves = llmLeaves(scope.leaves, snapshotSettings(project, snapshot.schemaVersion)).filter((leaf) => !held.has(leaf.id));
   if (leaves.length === 0) return 0;
-  const [evidence] = await db
-    .select()
-    .from(projectEvidence)
-    .where(and(eq(projectEvidence.id, job.evidenceId), eq(projectEvidence.repoId, repo.id)));
-  // No evidence to judge: no call, the evidence's status as the reason (a row a later run replaced: `grader_error`).
-  const missing = !evidence ? "grader_error" : evidence.status === "ok" ? null : evidence.status;
+  const material =
+    snapshot.schemaVersion === 3
+      ? await ciMaterial(app, config, repo, project, scope, job.passId, snapshot.grading.sources)
+      : await runnerMaterial(db, repo, project, job.evidenceId, snapshot.grading.sources);
   const inputs =
-    missing === null && evidence
-      ? await ask(
-          app,
-          leaves,
-          { context: snapshot.grading.context, material: renderMaterial(evidence, snapshot.grading.sources, await masker(db, repo, project)) },
-          project.createdBy,
-          job.passId,
-        )
-      : leaves.map((leaf) => zero(leaf, job.passId, missing ?? "grader_error"));
+    typeof material === "string"
+      ? await ask(app, leaves, { context: snapshot.grading.context, material }, project.createdBy, job.passId)
+      : leaves.map((leaf) => zero(leaf, job.passId, material.reason));
   const now = app.clock.now();
   const written = await writeCriterionGrades(
     db,
@@ -203,5 +281,5 @@ export async function runEvidencePass(app: FastifyInstance, config: AppConfig, j
   if (!outcome || !job.passId) return;
   const review: ReviewJob = { repoId: job.repoId, passId: job.passId, evidenceId: outcome.evidenceId, checkpointId: job.checkpointId };
   if (app.boss) await app.boss.send(PROJECT_REVIEW_QUEUE, review);
-  else await runReview(app, review);
+  else await runReview(app, config, review);
 }

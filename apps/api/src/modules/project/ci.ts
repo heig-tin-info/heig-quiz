@@ -51,7 +51,8 @@
  * `no_result`.
  *
  * Settling writes through the single writer (`writeCriterionGrades`),
- * never over a held criterion. The LLM pass of a schema-3 project is L-06c's.
+ * never over a held criterion; once settled, the pass's LLM review is
+ * queued (`project.review`, `reviewPass.ts`, ADR-119 §7).
  */
 import { randomUUID } from "node:crypto";
 
@@ -78,7 +79,7 @@ import type { Db, Tx } from "../../db/client.js";
 import { githubOrganizations, gradeDispatches, projectCiResults, projectCriteria, projectRepos, projects } from "../../db/schema.js";
 import { branchHead, installationClient, ownerRepo } from "../../github/app.js";
 import { fetchResultsArtifact } from "../../github/artifact.js";
-import { PROJECT_CI_QUEUE } from "../../jobs.js";
+import { PROJECT_CI_QUEUE, PROJECT_REVIEW_QUEUE } from "../../jobs.js";
 import { projectInstallation } from "../github/service.js";
 import { CRITERIA_FILE, snapshotVersion } from "./criteria.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
@@ -86,6 +87,7 @@ import { ingestCompletedRun, type CompletedRun } from "./grading.js";
 import { CI_SNAPSHOT, ciNonce, passScope, type PassScope } from "./milestone.js";
 import { hintProjectStaff, markRepoDeleted, releasedBefore, type RepoContext, type RepoRow } from "./repos.js";
 import { lastStudentPush, postDispatch } from "./review.js";
+import type { ReviewJob } from "./reviewPass.js";
 import type { ProjectRow } from "./views.js";
 
 /** The `repository_dispatch` event a graded run answers. */
@@ -237,6 +239,9 @@ async function settle(app: FastifyInstance, loaded: LoadedPass, settlement: Sett
     now,
   );
   await hintProjectStaff(db, [loaded.project.id]);
+  // The pass's LLM review follows (ADR-119 §7), on its results' logs or, without any, the sources alone; a queue's job, as the dispatch.
+  const review: ReviewJob = { repoId: pass.repoId, passId: pass.id, checkpointId: pass.checkpointId ?? undefined };
+  if (app.boss) await app.boss.send(PROJECT_REVIEW_QUEUE, review);
   return true;
 }
 

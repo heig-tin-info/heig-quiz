@@ -36,7 +36,7 @@ Quand vous révisez une notion à dessein (« Réviser une notion »), chaque s�
 
 ### Les projets et GitHub
 
-Quand un cours utilise des projets GitHub : le dépôt que vous avez accepté, le compte GitHub que vous avez lié, l'heure de chaque push, les résultats des tests automatiques, votre score et le commentaire de votre enseignant. Pour un projet noté par critères, aussi ce que chaque commit noté a produit (résultats des tests, sorties, fichiers) et les points et explications donnés pour chaque critère.
+Quand un cours utilise des projets GitHub : le dépôt que vous avez accepté, le compte GitHub que vous avez lié, l'heure de chaque push, les résultats des tests automatiques, votre score et le commentaire de votre enseignant. Pour un projet noté par critères, aussi ce que chaque commit noté a produit (résultats des tests, sorties, fichiers) et les points et explications donnés pour chaque critère. Quand les vérifications de votre dépôt sur GitHub le notent, Quiz garde le fichier de résultats qu'elles produisent : le score de chaque vérification et la fin de son journal. Seule l'équipe enseignante voit les journaux.
 
 Si vous ouvrez un projet dans l'espace de travail en ligne, chaque lancement est enregistré, et l'espace de travail conserve votre nom, votre adresse e-mail et vos fichiers.
 
@@ -66,7 +66,7 @@ Certaines données sont supprimées automatiquement :
 | Votre activité de révision | Cinq ans après chaque révision |
 | Vos séries de révision par notion | Cinq ans après chaque série |
 | Les heures pendant lesquelles vous avez utilisé Quiz | Après huit jours |
-| Les fichiers, commits et sorties de tests gardés pour noter un projet par critères | Six mois après la publication des résultats du projet (la liste des tests et leurs résultats restent) |
+| Les fichiers, commits et sorties de tests gardés pour noter un projet par critères, et les fichiers de résultats de ses vérifications avec leurs journaux | Six mois après la publication des résultats du projet (la liste des tests et leurs résultats, et les points de chaque critère, restent) |
 | Le contenu des messages de GitHub sur vos dépôts | 30 jours après leur arrivée |
 | Les conversations d'un enseignant avec l'assistant d'aide, qui peuvent citer votre nom ou votre note | 30 jours après chaque échange |
 | Un sondage auquel vous avez répondu sans compte : la trace du cookie et vos réponses | 30 jours après la fin du sondage. Les résultats du sondage restent pour l'enseignant, liés à personne, mais avec ce que vous y avez écrit |
@@ -87,7 +87,7 @@ Les données supprimées restent environ quatre mois de plus dans les sauvegarde
 Quiz envoie certains contenus à un modèle d'IA d'Anthropic, une entreprise des États-Unis, par une passerelle unique qui enregistre chaque appel (jamais son contenu). Aucun modèle n'est appelé pendant une évaluation, sauf dans un brainstorm.
 
 - **Questions de rédaction et de diagramme** : après la clôture de l'évaluation, votre réponse est envoyée, sans votre nom, pour que le modèle propose une note. Votre enseignant la relit et décide. Vous ne lisez que le commentaire que votre enseignant écrit ou accepte.
-- **Projets notés par critères** : les fichiers que les critères désignent, les résultats des tests et les sorties de compilation de votre dépôt sont envoyés, noms, adresses e-mail et identifiants GitHub masqués. Votre enseignant valide les points de chaque critère ; vous lisez les explications, marquées provisoires jusqu'à la publication des résultats.
+- **Projets notés par critères** : les fichiers que les critères désignent, les résultats des tests et les sorties de compilation de votre dépôt sont envoyés, noms, adresses e-mail et identifiants GitHub masqués. Quand les vérifications de votre dépôt le notent, ce sont les fichiers que les critères désignent et les journaux de ces vérifications qui sont envoyés, masqués de la même façon, les noms de l'organisation et du dépôt masqués aussi ; jamais vos commits, leurs auteurs ou leurs messages, ni les journaux complets de GitHub. Votre enseignant valide les points de chaque critère ; vous lisez les explications, marquées provisoires jusqu'à la publication des résultats.
 - **La revue finale d'un projet** : certains projets lancent une revue finale qui envoie votre code à un modèle d'IA (Anthropic), depuis les vérifications de votre dépôt sur GitHub, sur le compte de l'organisation, en dehors de Quiz.
 - **Brainstorms avec assistance IA** : le modèle lit les idées en direct, les noms de la classe masqués. Si vous participez sans compte, votre idée part telle que vous l'avez écrite ; la page vous le dit avant l'envoi.
 - **L'assistant d'aide de votre enseignant** : quand votre enseignant l'interroge sur sa classe, votre nom et vos résultats finaux peuvent être envoyés, sans masquage. Un tel nom peut rester jusqu'à 30 jours dans la conversation enregistrée de votre enseignant, même si vous quittez la classe.

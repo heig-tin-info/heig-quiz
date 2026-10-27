@@ -134,8 +134,9 @@ export const PROJECT_CI_QUEUE = "project.ci";
 
 /**
  * The LLM pass of one repository of a project graded by criteria (ADR-106
- * §4): `{ repoId, passId, trigger, evidenceId }`, sent by the evidence job
- * of a pass once its evidence is stored, whatever its status. As
+ * §4): `{ repoId, passId, evidenceId?, checkpointId? }`, sent by the
+ * evidence job of a schema-2 pass once its evidence is stored, whatever its
+ * status, and by a schema-3 pass once settled (ADR-119 §7). As
  * `grading.llm`: `standard`, no dedupe, no retry (a failure is a 0-point
  * proposal with its reason, the next Regrade settles it), two at a time per
  * process; idempotent per (repository, pass).

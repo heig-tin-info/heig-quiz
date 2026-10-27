@@ -1,8 +1,10 @@
 /**
  * What a project's LLM pass sends (ADR-106 §4): the llm criteria of a
  * snapshot ({@link llmLeaves}) and the repository's evidence rendered as
- * the model reads it ({@link renderMaterial}), every piece masked BEFORE
- * any cut so that no truncated fragment of a name, an address or a login
+ * the model reads it — a schema-2 snapshot's runner evidence
+ * ({@link renderMaterial}), a schema-3 snapshot's sources and CI logs
+ * ({@link renderCiMaterial}, ADR-119 §7) — every piece masked BEFORE any
+ * cut so that no truncated fragment of a name, an address or a login
  * escapes the mask (N-DATA-05). Pure: the `project` module loads and calls.
  */
 import { classifyCriterion, type CriteriaLeaf, type CriterionSettings } from "./criteria.js";
@@ -34,7 +36,7 @@ export interface MaterialEvidence {
 }
 
 /** What one file, one step's output, and the whole material may weigh in characters. */
-export const MATERIAL_LIMITS = { file: 30_000, output: 4_000, material: 150_000, failures: 50 } as const;
+export const MATERIAL_LIMITS = { file: 30_000, output: 4_000, log: 8_000, material: 150_000, failures: 50 } as const;
 
 /** The end of a step's output, where the error is. */
 const tail = (text: string, max: number) => (text.length > max ? `…${text.slice(-max)}` : text);
@@ -72,4 +74,57 @@ export function renderMaterial(evidence: MaterialEvidence, sources: readonly str
     parts.push(`File ${mask(path)}${file.truncated ? " (truncated)" : ""}:\n\`\`\`\n${content}\n\`\`\``);
   }
   return head(parts.join("\n\n"), MATERIAL_LIMITS.material);
+}
+
+/** A schema-3 pass's material (ADR-119 §7), as the `project` module reads it. */
+export interface CiMaterialInput {
+  /** The repository's text files at the target commit, by path (the tarball's root stripped). */
+  files: Readonly<Record<string, string>>;
+  /** The `log` of each automatic criterion of the pass in the accepted `results.json`; null when the pass accepted no run. */
+  logs: readonly { id: string; log: string }[] | null;
+}
+
+/**
+ * A GitHub-hosted runner's checkout, `/home/runner/work/<repo>/<repo>`: it
+ * names the repository (N-DATA-05), so it goes whatever the repository's
+ * name became.
+ */
+const RUNNER_WORKSPACE = /\/home\/runner\/work\/[^/\s]+\/[^/\s]+/g;
+
+/**
+ * `text` fenced as quoted material: the fence a run of backticks longer
+ * than any inside, so nothing in a file or a log can close it early and
+ * pass for the prompt's own words.
+ */
+export function quoted(text: string): string {
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = "`".repeat(Math.max(3, longest + 1));
+  return `${fence}\n${text}\n${fence}`;
+}
+
+/**
+ * A schema-3 repository's material (ADR-119 §7): the logs of the CI's
+ * checks — or, when the pass accepted no run, that the sources are judged
+ * alone — then the files the sources name; each piece masked (the runner's
+ * workspace path first), then cut, then quoted. Never a commit's metadata:
+ * the caller hands none.
+ */
+export function renderCiMaterial(input: CiMaterialInput, sources: readonly string[], mask: (text: string) => string): string {
+  const clean = (text: string) => mask(text.replace(RUNNER_WORKSPACE, "<workspace>"));
+  const parts: string[] = [];
+  if (input.logs === null) parts.push("CI checks: no accepted result for this pass. Judge the sources alone.");
+  else parts.push(input.logs.length === 0 ? "CI checks: no log." : "CI checks: the logs of their commands, quoted.");
+  for (const { id, log } of input.logs ?? []) parts.push(`Log of ${id}:\n${quoted(tail(clean(log), MATERIAL_LIMITS.log))}`);
+  // Whole quoted pieces only, so the cap never leaves a fence open.
+  let size = parts.reduce((n, part) => n + part.length + 2, 0);
+  for (const path of sourcePaths(sources, Object.keys(input.files))) {
+    const part = `File ${clean(path)}:\n${quoted(head(clean(input.files[path]!), MATERIAL_LIMITS.file))}`;
+    if (size + part.length > MATERIAL_LIMITS.material) {
+      parts.push("More files are left out: the material is full.");
+      break;
+    }
+    parts.push(part);
+    size += part.length + 2;
+  }
+  return parts.join("\n\n");
 }
