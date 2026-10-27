@@ -3,7 +3,10 @@
 // every pull request: a branch never deletes a database migration, a
 // migration snapshot, an entry of the migrations' journal or an ADR. These
 // only ever grow; a branch whose tree lost them was committed on a stale
-// index (#806 squashed onto a moved origin/main and erased #800 whole).
+// index (#806 squashed onto a moved origin/main and erased #800 whole). The
+// one move admitted is an ADR renamed to another ADR path: the remedy the
+// index prescribes for a duplicate number (docs/adr/README.md, #937), which
+// loses no content; a migration or a snapshot is never renamed.
 //
 //   node scripts/check-deletions.mjs --base origin/main
 //
@@ -14,14 +17,20 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
 
-const KEPT = [/^apps\/api\/drizzle\/[^/]+\.sql$/, /^apps\/api\/drizzle\/meta\/\d+_snapshot\.json$/, /^docs\/adr\/ADR-\d+-[^/]+\.md$/];
+const ADR = /^docs\/adr\/ADR-\d+-[^/]+\.md$/;
+const KEPT = [/^apps\/api\/drizzle\/[^/]+\.sql$/, /^apps\/api\/drizzle\/meta\/\d+_snapshot\.json$/, ADR];
 const JOURNAL = 'apps/api/drizzle/meta/_journal.json';
 
 export function deletedKept(nameStatus) {
   return nameStatus
     .split('\n')
     .map((line) => line.split('\t'))
-    .filter(([status, path]) => (status === 'D' || status?.startsWith('R')) && KEPT.some((re) => re.test(path)))
+    .filter(([status, path, to]) => {
+      if (!KEPT.some((re) => re.test(path))) return false;
+      if (status === 'D') return true;
+      // A rename: lost unless it is an ADR renumbered to another ADR path.
+      return status?.startsWith('R') && !(ADR.test(path) && ADR.test(to ?? ''));
+    })
     .map(([, path]) => path);
 }
 
