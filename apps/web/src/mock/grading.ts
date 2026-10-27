@@ -19,9 +19,9 @@ import {
   type AttemptTally,
   type DeclaredCriterion,
 } from "@quiz/domain";
-import { AI_KEY, aiOf, BREAKDOWN_KEY, INSTANCE_WARNING_KEY, JUSTIFICATION_KEY } from "@quiz/contracts";
+import { AI_KEY, aiOf, BREAKDOWN_KEY, JUSTIFICATION_KEY, TEACHER_ONLY_DETAIL_KEYS } from "@quiz/contracts";
 import type { GradingConfidence, GradingSource, GradingState, ItemCounting } from "@quiz/contracts";
-import type { AnyQuestionTypeServer, ItemAggregate } from "@quiz/core/server";
+import type { AnyQuestionTypeServer, ItemAggregate, StudentDetailsPolicy } from "@quiz/core/server";
 import { blocksServer } from "@quiz/qt-blocks/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
@@ -1363,12 +1363,13 @@ function feedbackPage(attemptId: string) {
     };
   }
   const copy = copyOf(e, attempt);
-  const showKey = (e.evaluation.feedbackPolicy as { showKey?: boolean }).showKey === true;
+  const policy = e.evaluation.feedbackPolicy as { showKey?: boolean; showHiddenCaseNames?: boolean };
+  const shown = { showKey: policy.showKey === true, showHiddenCaseNames: policy.showHiddenCaseNames === true };
   return {
     available: true as const,
     evaluation: { id: e.evaluation.id, title: e.evaluation.title, releasedAt: e.evaluation.releasedAt },
     ...copy,
-    items: copy.items.map((item) => ({ ...item, details: studentDetailsOf(item.details, showKey) })),
+    items: copy.items.map((item) => ({ ...item, details: studentDetailsOf(item.type, item.details, shown) })),
     // The server's rule (F-RES-04): released, and no question pending.
     grade: feedbackGradeShown({ released: true, pendingCount: copy.pendingCount }) ? copy.grade : null,
   };
@@ -1376,19 +1377,18 @@ function feedbackPage(attemptId: string) {
 
 /**
  * A grading's details as the server's `filterDetails` hands them to a
- * student: never the model's reply, and an essay's validated points per
- * criterion only under a shown key (ADR-118 §5).
+ * student, its rules borrowed, none of its own: the teacher-only keys
+ * stripped, then, without the key, the essay's own hook (which drops the
+ * validated points per criterion, ADR-118 §5).
  */
-function studentDetailsOf(details: unknown, showKey: boolean): unknown {
+function studentDetailsOf(type: string, details: unknown, policy: StudentDetailsPolicy): unknown {
   if (details === null || typeof details !== "object") return details ?? null;
-  const {
-    [AI_KEY]: _ai,
-    [JUSTIFICATION_KEY]: _justification,
-    [INSTANCE_WARNING_KEY]: _warning,
-    [BREAKDOWN_KEY]: breakdown,
-    ...rest
-  } = details as Record<string, unknown>;
-  return showKey && breakdown !== undefined ? { ...rest, [BREAKDOWN_KEY]: breakdown } : rest;
+  const stripped = Object.fromEntries(
+    Object.entries(details).filter(([key]) => !TEACHER_ONLY_DETAIL_KEYS.includes(key)),
+  );
+  return type === "rich" && !policy.showKey
+    ? richServer.studentDetails!(stripped as Parameters<NonNullable<typeof richServer.studentDetails>>[0], policy)
+    : stripped;
 }
 
 function attemptWorldOr404(attemptId: string) {

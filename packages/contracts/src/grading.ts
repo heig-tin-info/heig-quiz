@@ -58,6 +58,7 @@ export {
   reasonOf,
   RETRYABLE_REASONS,
   RUNNER_WAITING_REASONS,
+  TEACHER_ONLY_DETAIL_KEYS,
   type AiDetails,
   type BreakdownEntry,
   type MachineReason,

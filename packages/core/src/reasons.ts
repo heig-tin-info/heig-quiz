@@ -104,6 +104,13 @@ export const INSTANCE_WARNING_KEY = "instanceWarning";
  */
 export const AI_KEY = "ai";
 
+/**
+ * The keys of a grading's `details` that stay the teacher's whatever the
+ * feedback policy, the published key included: the model's reply and an
+ * instance's fallback warning. The one list `filterDetails` strips.
+ */
+export const TEACHER_ONLY_DETAIL_KEYS: readonly string[] = [JUSTIFICATION_KEY, AI_KEY, INSTANCE_WARNING_KEY];
+
 export interface AiDetails {
   model: string;
   criteria: LlmCriterion[];
