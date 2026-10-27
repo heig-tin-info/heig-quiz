@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 
 import type { FastifyInstance } from "fastify";
-import { and, eq, inArray, lt, or, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, not, or, isNotNull, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { criterionSettings, effectiveCommand, PROJECT_CRITERIA_DEFAULTS } from "@quiz/contracts";
@@ -56,8 +56,8 @@ import { referenceBlob } from "../../github/revert.js";
 import { redactTokens } from "../../redact.js";
 import { projectInstallation } from "../github/service.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
-import type { RepoRow } from "./repos.js";
-import { passScope } from "./milestone.js";
+import { releasedBefore, type RepoRow } from "./repos.js";
+import { CI_SNAPSHOT, passScope } from "./milestone.js";
 import { lastStudentPush } from "./review.js";
 import type { ProjectRow } from "./views.js";
 
@@ -100,8 +100,6 @@ const UNPACKED_MAX_BYTES = 2 * PROJECT_ARCHIVE_MAX_BYTES;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 /** A refusal's entries kept in the row's reason. */
 const REASON_MAX = 2_000;
-/** The evidence files' retention after the release (N-DATA-03). */
-const EVIDENCE_FILES_MONTHS = 6;
 
 export type EvidenceRow = typeof projectEvidence.$inferSelect;
 type EvidenceValues = Pick<typeof projectEvidence.$inferInsert, "status" | "reason" | "build" | "test" | "cases" | "files" | "commits">;
@@ -512,10 +510,9 @@ export async function runEvidence(app: FastifyInstance, config: AppConfig, repoI
     .from(projectRepos)
     .innerJoin(projects, eq(projects.id, projectRepos.projectId))
     .innerJoin(projectCriteria, eq(projectCriteria.projectId, projects.id))
-    .where(eq(projectRepos.id, repoId));
+    // A schema-3 snapshot's evidence is the CI's graded run (`ci.ts`, ADR-119 §6, §11): never the runner's.
+    .where(and(eq(projectRepos.id, repoId), not(CI_SNAPSHOT)));
   if (!row || row.project.gradingMode !== "criteria" || !row.project.distributionFullName) return null;
-  // A schema-3 snapshot's evidence is the CI's graded run (`ci.ts`, ADR-119 §6, §11): never the runner's.
-  if (row.snapshot.schemaVersion !== 2) return null;
   const { repo, project, snapshot } = row;
   const scope = await passScope(app.db, project.id, snapshot.leaves, checkpointId);
   if (!scope) return null;
@@ -547,13 +544,7 @@ export async function runEvidence(app: FastifyInstance, config: AppConfig, repoI
  * the cases and the statuses stay. Run by the daily `reconcile.repos`.
  */
 export async function purgeEvidenceFiles(db: Db, now: Date): Promise<number> {
-  const before = new Date(now);
-  before.setUTCMonth(before.getUTCMonth() - EVIDENCE_FILES_MONTHS);
-  const released = db
-    .select({ id: projectRepos.id })
-    .from(projectRepos)
-    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
-    .where(lt(projects.releasedAt, before));
+  const released = releasedBefore(db, now);
   const blank = (step: typeof projectEvidence.build | typeof projectEvidence.test) =>
     sql`CASE WHEN ${step} IS NULL THEN NULL ELSE ${step} || '{"stdout":"","stderr":""}'::jsonb END`;
   const output = (step: typeof projectEvidence.build | typeof projectEvidence.test) =>

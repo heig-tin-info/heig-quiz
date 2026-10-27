@@ -5,7 +5,7 @@
  * a push as the module's handlers read it, shared by a student
  * repository's (`webhooks.ts`) and a source's (`sync.ts`).
  */
-import { and, eq, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -16,6 +16,20 @@ import { projectsChanged, repoChanged } from "./events.js";
 import { repoMembers } from "./groupRepos.js";
 
 export type RepoRow = typeof projectRepos.$inferSelect;
+
+/** How long a project's graded material (the runner's evidence files, the CI's results) is kept after its release (N-DATA-03). */
+export const GRADED_MATERIAL_MONTHS = 6;
+
+/** The repositories of the projects released more than {@link GRADED_MATERIAL_MONTHS} before `now`: a subquery of their ids. */
+export function releasedBefore(db: Db | Tx, now: Date) {
+  const before = new Date(now);
+  before.setUTCMonth(before.getUTCMonth() - GRADED_MATERIAL_MONTHS);
+  return db
+    .select({ id: projectRepos.id })
+    .from(projectRepos)
+    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+    .where(lt(projects.releasedAt, before));
+}
 
 /** A push's `ref` on a branch: its name. */
 export const BRANCH_REF = /^refs\/heads\/(.+)$/;

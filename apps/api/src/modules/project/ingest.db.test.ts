@@ -1030,6 +1030,15 @@ describe("a completed run (F-PROJ-10, ADR-011)", () => {
     await handled("workflow_run", runPayload(f, after, {}, "in_progress"));
     expect((await repoRow(f.projectId)).ciStatus).toBe("pending");
   });
+
+  it("never marks it pending for a dispatched run on the student's last commit: not the student's CI (`ciStatusOf`)", async () => {
+    const f = await acceptedRepo({ protectedFiles: [] });
+    const { after } = await push(f, { "i.c": "1" });
+    const before = (await repoRow(f.projectId)).ciStatus;
+    await handled("workflow_run", runPayload(f, after, { event: "repository_dispatch", triggering_actor: { login: APP_BOT } }, "in_progress"));
+    expect((await repoRow(f.projectId)).ciStatus).toBe(before);
+    expect(before).not.toBe("pending");
+  });
 });
 
 describe("a review run (F-PROJ-11)", () => {

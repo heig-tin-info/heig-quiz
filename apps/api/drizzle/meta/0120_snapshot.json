@@ -1,5 +1,5 @@
 {
-  "id": "d989c0d3-1f58-4843-b4a1-f3019bfd9a8a",
+  "id": "4155f0ec-e7c4-4323-a565-533c0a08da35",
   "prevId": "c813c44e-ceb5-4a79-934e-61d8b412eabd",
   "version": "7",
   "dialect": "postgresql",
@@ -8384,14 +8384,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "retired_at": {
-          "name": "retired_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "settled_at": {
-          "name": "settled_at",
+        "closed_at": {
+          "name": "closed_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -8452,7 +8446,7 @@
             }
           ],
           "isUnique": false,
-          "where": "\"grade_dispatches\".\"nonce\" IS NOT NULL AND \"grade_dispatches\".\"settled_at\" IS NULL AND \"grade_dispatches\".\"retired_at\" IS NULL",
+          "where": "\"grade_dispatches\".\"nonce\" IS NOT NULL AND \"grade_dispatches\".\"closed_at\" IS NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -8610,12 +8604,6 @@
           "primaryKey": true,
           "notNull": true
         },
-        "repo_id": {
-          "name": "repo_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
         "workflow_run_id": {
           "name": "workflow_run_id",
           "type": "bigint",
@@ -8643,19 +8631,6 @@
           "tableTo": "grade_dispatches",
           "columnsFrom": [
             "pass_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "project_ci_results_repo_id_project_repos_id_fk": {
-          "name": "project_ci_results_repo_id_project_repos_id_fk",
-          "tableFrom": "project_ci_results",
-          "tableTo": "project_repos",
-          "columnsFrom": [
-            "repo_id"
           ],
           "columnsTo": [
             "id"
@@ -8921,31 +8896,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.project_dispatch_slots": {
-      "name": "project_dispatch_slots",
-      "schema": "",
-      "columns": {
-        "installation_id": {
-          "name": "installation_id",
-          "type": "bigint",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "next_at": {
-          "name": "next_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

@@ -2,7 +2,7 @@ import { CRITERIA_SCHEMA_ID, RESULTS_SCHEMA_ID, checkOutcomes } from "@quiz/doma
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 import { describe, expect, it } from "vitest";
 
-import { CheckScore, CriteriaFile3, ResultsFile, publishedSchemas } from "./checkResults.js";
+import { CheckScore, CriteriaFile3, readResults, ResultsFile, publishedSchemas } from "./checkResults.js";
 
 const VALID_RESULTS = {
   $schema: RESULTS_SCHEMA_ID,
@@ -111,5 +111,27 @@ describe("the published schemas", () => {
     expect(["1/0", "0/0.00", "-1/2"].some((s) => pattern.test(s))).toBe(false);
     expect(entry.additionalProperties).toEqual({});
     expect(JSON.stringify(schemas["criteria-3.json"])).toContain('"maxItems":20');
+  });
+});
+
+describe("readResults", () => {
+  const json = (value: unknown) => JSON.stringify(value);
+
+  it("keeps the valid entries, drops a malformed one alone, never reads $schema", () => {
+    const read = readResults(
+      json({ $schema: 42, extra: true, criteria: { "a.b": { score: "1/2", log: "x" }, "a.c": { score: "1/0" }, "a d": { score: "1/1" }, "a.e": "1/1" } }),
+    );
+    expect(read).toEqual({ criteria: { "a.b": { score: "1/2", log: "x" } } });
+  });
+
+  it("is no result at all without a criteria object, or for invalid JSON", () => {
+    expect(readResults(json({ results: {} }))).toBeNull();
+    expect(readResults(json({ criteria: [] }))).toBeNull();
+    expect(readResults("1/1")).toBeNull();
+  });
+
+  it("keeps a log's tail only", () => {
+    const read = readResults(json({ criteria: { a: { score: "1/1", log: "x".repeat(9000) } } }));
+    expect(read!.criteria.a!.log!.length).toBeLessThanOrEqual(8 * 1024);
   });
 });

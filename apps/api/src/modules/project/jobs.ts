@@ -279,7 +279,7 @@ async function freezeDue(db: Db, now: Date): Promise<{ projectIds: string[]; pas
  * Regrade runs the pass); a milestone's is only claimed with a queue
  * ({@link projectTick}).
  */
-async function sendPasses(app: FastifyInstance, config: AppConfig, passes: readonly ClaimedPass[]): Promise<void> {
+async function sendPasses(app: FastifyInstance, passes: readonly ClaimedPass[]): Promise<void> {
   if (!app.boss) return;
   for (const { ci, ...pass } of passes) {
     if (ci) continue;
@@ -289,7 +289,6 @@ async function sendPasses(app: FastifyInstance, config: AppConfig, passes: reado
   }
   await sendCiPasses(
     app,
-    config,
     passes.filter((p) => p.ci).map((p) => p.passId),
   );
 }
@@ -358,12 +357,12 @@ export async function projectTick(app: FastifyInstance, config: AppConfig): Prom
   const frozen = await freezeDue(app.db, now);
   await hintProjectStaff(app.db, [...published, ...applied, ...frozen.projectIds]);
   await remindDeadlines(app.db, now, app.log);
-  await sendPasses(app, config, frozen.passes);
+  await sendPasses(app, frozen.passes);
   // The CI passes 24 h without an accepted run (ADR-119 §6): settled `no_result`, no HTTP.
   await expireCiPasses(app, now);
   if (!app.boss) return;
   // The milestone passes due (ADR-106 §5): claimed in the ledger, sent as the final passes are; nothing to GitHub here.
-  await sendPasses(app, config, await claimMilestonePasses(app.db, now));
+  await sendPasses(app, await claimMilestonePasses(app.db, now));
   // An online project published by the schedule goes to the portal (ADR-047 §6, M6-06): a job, never a call here.
   for (const id of published) await requestCodespaceSync(app, config, id);
   await sendDeadlineJobs(app, config, await claimDeadlineWork(app.db, now));

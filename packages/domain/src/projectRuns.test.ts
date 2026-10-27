@@ -33,12 +33,6 @@ describe("runKind", () => {
     expect(runKind({ event: "repository_dispatch", path: ".github/workflows/own.yml" })).toBe("ci");
     expect(runKind({ event: "", path: GRADING_WORKFLOW_PATH })).toBe("ci");
   });
-
-  it("is the graded run, never a review, for a project whose evidence comes from the CI (ADR-119 §6)", () => {
-    expect(runKind({ event: "repository_dispatch", path: GRADING_WORKFLOW_PATH }, true)).toBe("graded");
-    expect(runKind({ event: "push", path: GRADING_WORKFLOW_PATH }, true)).toBe("ci");
-    expect(runKind({ event: "repository_dispatch", path: ".github/workflows/own.yml" }, true)).toBe("ci");
-  });
 });
 
 describe("ciStatusOf", () => {

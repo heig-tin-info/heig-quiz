@@ -236,7 +236,7 @@ Criteria v3, the CI produces the evidence ([ADR-119](../adr/ADR-119-criteres-v3-
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | L-06a | Criteria v3 zod schemas, published JSON Schemas, parser semantics, fraction arithmetic | planned | ADR-119 | | | |
-| L-06b | CI dispatch and intake, `score_is_grade` migration | planned | L-06a | | | |
+| L-06b | CI dispatch and intake, `score_is_grade` migration | in review (part 2) | L-06a | `l06b-ci-evidence` | #943 | Part 2, the CI's evidence of a schema-3 snapshot: `modules/project/ci.ts` (passes in `grade_dispatches` with a nonce and `closed_at`, the `project.ci` dispatch paced 15 s per installation within a batch, `ingestRun` routing a graded run to the intake: acceptance checks, `ci_tampered`, the `results` artifact through `github/artifact.ts`, `readResults` in contracts, `project_ci_results`, `no_result` after 24 h), `postDispatch` shared with `review.ts`, the redaction's `sig=`, migration `0120`; `score_is_grade` is #940's. |
 | L-06c | LLM inputs (sources and masked `results.json` logs), privacy page | planned | L-06b | | | |
 | L-06d | Creation panel, protected tree, segmented control | planned | L-06a | | | |
 | L-06e | Commit graph and CI logs on the grading screen | planned | L-06b | | | |

@@ -38,7 +38,7 @@ import {
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { botCommits, gradeDispatches, projectCriteria, projectGradeRuns, projectRepos, projects, pushReceipts, reverts } from "../../db/schema.js";
+import { botCommits, gradeDispatches, projectGradeRuns, projectRepos, projects, pushReceipts, reverts } from "../../db/schema.js";
 import { ownerRepo } from "../../github/app.js";
 import { pushedBy } from "../github/service.js";
 import type { RepoContext } from "./repos.js";
@@ -184,15 +184,6 @@ export async function isEligible(
  */
 export function isLastStudentCommit(ctx: RepoContext, sha: string): boolean {
   return ctx.repo.lastCommitSha === null || ctx.repo.lastCommitSha === sha;
-}
-
-/** Whether a project graded by criteria holds a schema-3 snapshot: its dispatched runs are the CI's graded runs (ADR-119 §11). */
-async function gradedByCi(db: Db, projectId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: projectCriteria.projectId })
-    .from(projectCriteria)
-    .where(and(eq(projectCriteria.projectId, projectId), sql`(${projectCriteria.criteria}->>'schemaVersion') = '3'`));
-  return row !== undefined;
 }
 
 /** The server's receipt time of `headSha` on the repository, or null when none was written. */
@@ -367,10 +358,9 @@ export async function aggregateCiStatus(
  * `to_verify`: ingested while the repository's protection is suspended, or
  * on a head whose protected files were restored (F-PROJ-08).
  *
- * A dispatched run of a project whose criteria snapshot is schema 3 is its
- * CI's graded run (`runKind(run, true)`, ADR-119 §6): handed to the
- * intake (`intakeGradedRun`), never written as a grade run — it fills
- * neither the review slot nor the `GRADE` one.
+ * A schema-3 project's dispatched run (its CI's graded run, ADR-119 §6)
+ * never reaches here: `ingestRun` (`ci.ts`), the callers' entry, hands it
+ * to the graded intake instead.
  */
 export async function ingestCompletedRun(
   app: FastifyInstance,
@@ -379,16 +369,7 @@ export async function ingestCompletedRun(
   run: CompletedRun,
 ): Promise<string | null> {
   const db = app.db;
-  // The snapshot is read only for a dispatched run of a project graded by criteria.
-  const ciEvidence = runKind(run) === "review" && ctx.project.gradingMode === "criteria" && (await gradedByCi(db, ctx.project.id));
-  const kind = runKind(run, ciEvidence);
-  if (kind === "graded") {
-    // Loaded here, not at the top: `ci.ts` reaches `deadline.ts`, which imports this file — a static
-    // import would evaluate `review.ts`'s SQL constants before `deadline.ts` defines `LIVE`.
-    const { intakeGradedRun } = await import("./ci.js");
-    await intakeGradedRun(app, octokit, ctx, run);
-    return null;
-  }
+  const kind = runKind(run);
   if (!ctx.repo.fullName || !(await isEligible(db, ctx, run))) return null;
   const [existing] = await db
     .select({ id: projectGradeRuns.id })

@@ -19,6 +19,7 @@
  * - a schema-2 snapshot still on the runner, a schema-3 one never.
  */
 import { randomUUID } from "node:crypto";
+import { inspect } from "node:util";
 
 import { zipSync } from "fflate";
 import { and, eq, ne } from "drizzle-orm";
@@ -45,17 +46,18 @@ import {
   projectRepos,
   projects,
   pushReceipts,
+  webhookDeliveries,
 } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
 import { ArtifactUnavailable } from "../../github/artifact.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
-import { appKey, BLOB_HOST, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
+import { appKey, BLOB_HOST, fakeGithub, json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import type { JobQueue } from "../../jobs.js";
-import { DISPATCH_PACE_MS, expireCiPasses, intakeGradedRun, RESULT_WAIT_MS, reserveSlot, runCiDispatch, sendCiPasses } from "./ci.js";
+import { DISPATCH_PACE_MS, expireCiPasses, ingestRun, intakeGradedRun, RESULT_WAIT_MS, runCiDispatch, sendCiPasses } from "./ci.js";
 import { runEvidence } from "./evidence.js";
-import { completedRun, ingestCompletedRun, type CompletedRun } from "./grading.js";
+import { completedRun, type CompletedRun } from "./grading.js";
 import { claimPasses } from "./milestone.js";
 import { regrade } from "./regrade.js";
 import { repoContext } from "./repos.js";
@@ -284,7 +286,7 @@ describe("the dispatch", () => {
       fullName: repo.fullName,
       body: { event_type: "quiz-grade", client_payload: { sha: target, nonce: claimed.nonce, pass: "final" } },
     });
-    expect(await passRow(pass.passId)).toMatchObject({ sha: target, dispatchedAt: new Date(NOW), settledAt: null });
+    expect(await passRow(pass.passId)).toMatchObject({ sha: target, dispatchedAt: new Date(NOW), closedAt: null });
     const [entry] = await server.app.db.select().from(auditLog).where(and(eq(auditLog.subjectId, l.projectId), eq(auditLog.action, "project.review_dispatched")));
     expect(entry!.payload).toMatchObject({ repoId: repo.id, passId: pass.passId, sha: target, outcome: "dispatched" });
 
@@ -334,17 +336,7 @@ describe("the dispatch", () => {
     expect((await rowsOf(off.id))["code.format"]).toEqual([0, "ci_unavailable", null]);
   });
 
-  it("paces the dispatches: one every 15 s per installation", async () => {
-    const now = new Date("2026-10-20T10:00:00Z");
-    const slots = [await reserveSlot(server.app.db, 77_001, now), await reserveSlot(server.app.db, 77_001, now), await reserveSlot(server.app.db, 77_001, now)];
-    expect(slots.map((s) => s.getTime() - now.getTime())).toEqual([0, DISPATCH_PACE_MS, 2 * DISPATCH_PACE_MS]);
-    expect((await reserveSlot(server.app.db, 77_002, now)).getTime()).toBe(now.getTime());
-    // Once the pace has passed, the next is at once.
-    const later = new Date(now.getTime() + 10 * DISPATCH_PACE_MS);
-    expect((await reserveSlot(server.app.db, 77_001, later)).getTime()).toBe(later.getTime());
-  });
-
-  it("queues the passes on project.ci, each at its installation's next slot, calling GitHub for none", async () => {
+  it("queues a batch on project.ci, each installation's passes 15 s apart, calling GitHub for none", async () => {
     const repos = [await studentRepo(l, "lab-q1"), await studentRepo(l, "lab-q2"), await studentRepo(l, "lab-q3")];
     const passes = await server.app.db.transaction((tx) => claimPasses(tx, repos.map((r) => r.id), server.clock.now()));
     const sent: { name: string; data: object; options: unknown }[] = [];
@@ -358,7 +350,7 @@ describe("the dispatch", () => {
     const count = dispatched.length;
     app.boss = queue;
     try {
-      await sendCiPasses(server.app, config, passes.map((p) => p.passId));
+      await sendCiPasses(server.app, passes.map((p) => p.passId));
     } finally {
       delete app.boss;
     }
@@ -391,7 +383,7 @@ describe("the intake", () => {
       },
     });
     // Through the one ingestion path, as the webhook and the reconciliation call it.
-    expect(await ingestCompletedRun(server.app, await octokitOf(l), ctx, run)).toBeNull();
+    expect(await ingestRun(server.app, await octokitOf(l), ctx, run)).toBeNull();
 
     expect(await rowsOf(repo.id)).toEqual({
       "code.format": [1, null, "1/1"],
@@ -401,9 +393,9 @@ describe("the intake", () => {
       // A malformed entry is a missing result; an llm criterion is never read from the file.
       "bonus.extra": [0, "no_result", null],
     });
-    expect((await passRow(pass.id)).settledAt).toEqual(new Date(NOW));
+    expect((await passRow(pass.id)).closedAt).toEqual(new Date(NOW));
     const [stored] = await server.app.db.select().from(projectCiResults).where(eq(projectCiResults.passId, pass.id));
-    expect(stored).toMatchObject({ repoId: repo.id, workflowRunId: run.workflowRunId });
+    expect(stored).toMatchObject({ workflowRunId: run.workflowRunId });
     expect(stored!.results.criteria["code.tests"]).toEqual({ score: " 7.5 / 10 ", log: "7 passed" });
 
     // Never a grade run: neither the review slot nor the GRADE one.
@@ -446,7 +438,7 @@ describe("the intake", () => {
       expect(await intakeGradedRun(server.app, octokit, ctx, run), JSON.stringify(variant)).toBe("ignored");
     }
     expect(await rowsOf(repo.id)).toEqual({});
-    expect((await passRow(pass.id)).settledAt).toBeNull();
+    expect((await passRow(pass.id)).closedAt).toBeNull();
   });
 
   it("gives ci_tampered for a changed criteria.yml or protected file at the target, audited with the paths", async () => {
@@ -503,7 +495,7 @@ describe("the intake", () => {
     }
   });
 
-  it("throws without the blob URL when the store fails, and leaves the pass waiting", async () => {
+  it("throws without the blob URL when the store fails, and leaves the pass open", async () => {
     const { pass, target, ctx } = await dispatchedPass(l, "lab-hugo");
     const run = gradedRun(pass.nonce!, target);
     upload(run.workflowRunId, { criteria: {} }, { status: 500 });
@@ -511,7 +503,53 @@ describe("the intake", () => {
     expect(err).toBeInstanceOf(ArtifactUnavailable);
     expect(String((err as Error).message)).not.toContain(SIG);
     expect(String((err as Error).message)).not.toContain(BLOB_HOST);
-    expect((await passRow(pass.id)).settledAt).toBeNull();
+    expect((await passRow(pass.id)).closedAt).toBeNull();
+  });
+
+  it("logs and keeps no blob URL when the webhook's intake fails", async () => {
+    const { repo, pass, target } = await dispatchedPass(l, "lab-ines");
+    const runId = 7_000_001;
+    upload(runId, { criteria: {} }, { status: 500 });
+    const logged: unknown[][] = [];
+    const log = server.app.log as unknown as Record<string, (...args: unknown[]) => void>;
+    const spies = ["fatal", "error", "warn", "info", "debug", "trace"].map((level) =>
+      vi.spyOn(log, level).mockImplementation((...args: unknown[]) => void logged.push(args)),
+    );
+    const id = randomUUID();
+    try {
+      const payload = {
+        action: "completed",
+        repository: { id: repo.githubRepoId },
+        workflow_run: {
+          id: runId,
+          run_attempt: 1,
+          head_branch: "main",
+          head_sha: target,
+          conclusion: "success",
+          path: ".github/workflows/grading.yml",
+          event: "repository_dispatch",
+          display_title: `grading ${pass.nonce}`,
+          triggering_actor: { login: "quiz-test[bot]" },
+          updated_at: NOW,
+        },
+      };
+      const res = await signedDelivery(server.app, ENV.GITHUB_WEBHOOK_SECRET, payload, { event: "workflow_run", id });
+      expect(res.statusCode, res.body).toBe(200);
+      await vi.waitFor(
+        async () => {
+          const [row] = await server.app.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.deliveryId, id));
+          expect(row?.error).toEqual(expect.stringContaining("artifact"));
+        },
+        { timeout: 20_000 },
+      );
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+    const [row] = await server.app.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.deliveryId, id));
+    const everything = `${row!.error} ${inspect(logged, { depth: 8 })}`;
+    expect(everything).not.toContain(SIG);
+    expect(everything).not.toContain(BLOB_HOST);
+    expect((await passRow(pass.id)).closedAt).toBeNull();
   });
 
   it("maps the webhook's run, its name included", () => {
@@ -539,7 +577,7 @@ describe("the 24 h and a Regrade", () => {
     // This pass, and any other left waiting by the tests above.
     expect(await expireCiPasses(server.app, server.clock.now())).toBeGreaterThanOrEqual(1);
     expect(Object.values(await rowsOf(repo.id)).map((r) => r[1])).toEqual(["no_result", "no_result", "no_result", "no_result"]);
-    expect((await passRow(pass.id)).settledAt).not.toBeNull();
+    expect((await passRow(pass.id)).closedAt).not.toBeNull();
     server.clock.set(NOW);
   });
 
@@ -550,11 +588,15 @@ describe("the 24 h and a Regrade", () => {
     const [row] = await server.app.db.select().from(projectRepos).where(eq(projectRepos.id, repo.id));
     const count = dispatched.length;
     expect(await regrade(server.app, config, project!, row!, SYSTEM_ACTOR, server.clock.now())).toEqual({ repos: 1 });
+    // Without a queue nothing is sent: the job's own call, as `project.ci` would run it.
+    expect(dispatched.length).toBe(count);
+    const [fresh0] = await server.app.db.select().from(gradeDispatches).where(and(eq(gradeDispatches.repoId, repo.id), eq(gradeDispatches.trigger, "regrade")));
+    expect(await runCiDispatch(server.app, config, { passId: fresh0!.id })).toBe("dispatched");
     expect(dispatched.length).toBe(count + 1);
     const sent = dispatched.at(-1)!.body.client_payload;
     expect(sent).toMatchObject({ sha: target, pass: "final" });
     expect(sent.nonce).not.toBe(pass.nonce);
-    expect((await passRow(pass.id)).retiredAt).not.toBeNull();
+    expect((await passRow(pass.id)).closedAt).not.toBeNull();
 
     const octokit = await octokitOf(l);
     // The retired nonce's run is not accepted; the new one's is.

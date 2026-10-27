@@ -17,12 +17,12 @@
  * a student (N-SEC-20).
  *
  * **The schema version** (ADR-119 §3, §11) is fixed when a snapshot is
- * first taken: a new snapshot — the switch to `criteria`, a publication, a
- * reload or a sync of a project without one — is parsed at schema 3; a
- * reload or a sync parses at the existing snapshot's version, and a file of
- * the other version is refused `422 schema_version_fixed` (a sync keeps
- * the last snapshot). The version picks the grading path: schema 2 keeps
- * ADR-106's runner evidence, schema 3 takes the CI's (`ci.ts`).
+ * first taken: every read (`readCriteria`: the switch, a publication, a
+ * sync, a reload alike) parses at the held snapshot's version, at schema 3
+ * without one; a file of the other version is refused `422
+ * schema_version_fixed` (a publication or a sync keeps the last snapshot).
+ * The version picks the grading path: schema 2 keeps ADR-106's runner
+ * evidence, schema 3 takes the CI's (`ci.ts`).
  */
 import type { FastifyBaseLogger } from "fastify";
 import { and, eq, isNull } from "drizzle-orm";
@@ -69,8 +69,11 @@ export type SchemaVersion = ParsedCriteria["schemaVersion"];
 /** The version a new snapshot is taken at. */
 export const NEW_SNAPSHOT_VERSION: SchemaVersion = 3;
 
-/** A file read: the snapshot, or the errors to show. */
-export type CriteriaRead = ({ ok: true } & CriteriaSnapshot) | { ok: false; errors: CriteriaError[] };
+/**
+ * A file read: the snapshot, or the errors to show — `fixed`, the held
+ * snapshot's version, when the file is only of the other one.
+ */
+export type CriteriaRead = ({ ok: true } & CriteriaSnapshot) | { ok: false; errors: CriteriaError[]; fixed?: SchemaVersion };
 
 /** Why a load was asked, besides the switch: the audit's `payload.trigger`. */
 export type CriteriaTrigger = "reload" | "publish" | "sync";
@@ -79,14 +82,16 @@ const refused = (code: CriteriaError["code"], path = CRITERIA_FILE): CriteriaRea
 
 /**
  * `criteria.yml` at the head of the project's first branch, in its
- * distribution repository (its source's while it has none), parsed at
- * `version`, and — schema 2 — the grading workflow beside it. A missing
- * branch or file, or one too
+ * distribution repository (its source's while it has none), parsed at the
+ * held snapshot's version (schema 3 without one), and — schema 2 — the
+ * grading workflow beside it. A missing branch or file, or one too
  * large, is a refusal like a parse error;
  * GitHub failing otherwise throws. `409 app_not_installed` when the App no
  * longer acts on the project's organization.
  */
-export async function readCriteria(db: Db, config: AppConfig, project: ProjectRow, version: SchemaVersion): Promise<CriteriaRead> {
+export async function readCriteria(db: Db, config: AppConfig, project: ProjectRow): Promise<CriteriaRead> {
+  const held = await snapshotVersion(db, project.id);
+  const version = held ?? NEW_SNAPSHOT_VERSION;
   const org = await projectInstallation(db, project.orgId);
   if (!org) throw new ProjectError("app_not_installed", "Quiz's GitHub App no longer acts on the project's organization");
   const { octokit } = await installationClient(config, org.installationId);
@@ -111,7 +116,7 @@ export async function readCriteria(db: Db, config: AppConfig, project: ProjectRo
   if (file === null) return refused("missing_file");
   if (file.tooLarge) return refused("too_large");
   const parsed = parseCriteria(file.text, { version });
-  if (!parsed.ok) return parsed;
+  if (!parsed.ok) return held !== null && versionOnly(parsed) ? { ...parsed, fixed: held } : parsed;
   // The workflow's `tests-criterion` pre-fills a schema-2 setting only.
   const workflow = version === 2 ? await fileAt(GRADING_WORKFLOW) : null;
   const text = workflow === null || workflow.tooLarge ? null : workflow.text;
@@ -140,10 +145,15 @@ async function untagged(db: Db | Tx, projectId: string, snapshot: CriteriaSnapsh
 
 /**
  * The snapshot a project in (or entering) `criteria` mode may take: the
- * file read, or `409 criteria_invalid`; then `409 checkpoint_untagged`,
- * naming the checkpoints whose name would tag no criterion.
+ * file read, or `422 schema_version_fixed` (a file of the other version
+ * than the held snapshot's), or `409 criteria_invalid`; then `409
+ * checkpoint_untagged`, naming the checkpoints whose name would tag no
+ * criterion.
  */
 async function acceptable(db: Db | Tx, projectId: string, read: CriteriaRead, criteriaMode: boolean): Promise<CriteriaSnapshot> {
+  if (!read.ok && read.fixed !== undefined) {
+    throw new ProjectError("schema_version_fixed", `The snapshot is schema ${read.fixed}: a reload keeps its version`, { expected: read.fixed });
+  }
   if (!read.ok) throw criteriaInvalid(read.errors);
   const names = criteriaMode ? await untagged(db, projectId, read) : [];
   if (names.length > 0) throw new ProjectError("checkpoint_untagged", "A checkpoint's name tags no criterion", { checkpoints: names });
@@ -190,8 +200,8 @@ export async function snapshotVersion(db: Db | Tx, projectId: string): Promise<S
 }
 
 /** A refusal that is only the file's schema version: one error on `schema_version`. */
-const versionOnly = (read: CriteriaRead): boolean =>
-  !read.ok && read.errors.length === 1 && (read.errors[0]!.code === "schema_version" || read.errors[0]!.code === "schema_v1");
+const versionOnly = (read: { errors: readonly CriteriaError[] }): boolean =>
+  read.errors.length === 1 && (read.errors[0]!.code === "schema_version" || read.errors[0]!.code === "schema_v1");
 
 /** The criteria of the project's snapshot, null without one. */
 export async function snapshotLeaves(db: Db | Tx, projectId: string): Promise<ParsedCriteria["leaves"] | null> {
@@ -222,21 +232,16 @@ export async function criteriaView(db: Db | Tx, project: ProjectRow): Promise<Pr
 
 /**
  * `POST /app/api/projects/:id/criteria/reload` (the staff, any mode): the
- * file read again at the snapshot's schema version (a new one without a
- * snapshot) and the snapshot replaced, audited; a refusal
+ * file read again (`readCriteria`: at the snapshot's schema version) and
+ * the snapshot replaced, audited; a refusal
  * (`criteria_invalid`, `checkpoint_untagged` in `criteria` mode, `422
  * schema_version_fixed` for a file of the other version) leaves the last
  * snapshot.
  */
 export async function reloadCriteria(db: Db, config: AppConfig, project: ProjectRow, actor: AuditActor, now: Date): Promise<ProjectCriteriaView> {
-  const held = await snapshotVersion(db, project.id);
-  const version = held ?? NEW_SNAPSHOT_VERSION;
-  const read = await readCriteria(db, config, project, version);
+  const read = await readCriteria(db, config, project);
   let snapshot: CriteriaSnapshot;
   try {
-    if (held !== null && versionOnly(read)) {
-      throw new ProjectError("schema_version_fixed", `The snapshot is schema ${version}: a reload keeps its version`, { expected: version });
-    }
     snapshot = await acceptable(db, project.id, read, project.gradingMode === "criteria");
   } catch (err) {
     await auditReload(db, project.id, read, false, "reload", actor);
@@ -254,8 +259,9 @@ export async function reloadCriteria(db: Db, config: AppConfig, project: Project
  * read before the switch's transaction: null when the patch does not switch
  * it. The switch's own refusal is judged first (`projectFieldRefusal`), so a
  * published project answers `not_draft`, not the state of its file; then
- * `criteria_invalid` (the file, a new snapshot at schema 3: a schema-2 file
- * gets one error naming 3, ADR-119 §3) or `checkpoint_untagged`. A schema-3
+ * `criteria_invalid` (the file, at the held snapshot's version — schema 3
+ * without one: a schema-2 file then gets one error naming 3, ADR-119 §3),
+ * `schema_version_fixed`, or `checkpoint_untagged`. A schema-3
  * snapshot's commands run in the CI, which installs what it needs: no
  * network refusal (ADR-119 §1). Audited by the switch itself.
  */
@@ -270,14 +276,14 @@ export async function criteriaForSwitch(
   if (to !== "criteria" || project.gradingMode === "criteria") return null;
   const refusal = projectFieldRefusal(lifeOf(project), "gradingMode", now, to);
   if (refusal) throw new ProjectError(refusal, "gradingMode can no longer change");
-  return acceptable(db, project.id, await readCriteria(db, config, project, NEW_SNAPSHOT_VERSION), true);
+  return acceptable(db, project.id, await readCriteria(db, config, project), true);
 }
 
 /**
  * After a publication or a sync, a project in `criteria` mode loads its
- * file again — a publication as a new snapshot (schema 3), a sync at the
- * snapshot's version; best-effort — a failure, a file that no longer
- * parses (at that version) or one that would leave a checkpoint untagged
+ * file again, at the snapshot's version (`readCriteria`); best-effort — a
+ * failure, a file that no longer parses (at that version, or of the other)
+ * or one that would leave a checkpoint untagged
  * keeps the last snapshot (audited, logged), never fails the act it
  * follows.
  */
@@ -293,8 +299,7 @@ export async function refreshCriteria(
   try {
     const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
     if (project?.gradingMode !== "criteria") return;
-    const version = trigger === "publish" ? NEW_SNAPSHOT_VERSION : ((await snapshotVersion(db, project.id)) ?? NEW_SNAPSHOT_VERSION);
-    const read = await readCriteria(db, config, project, version);
+    const read = await readCriteria(db, config, project);
     const snapshot = await acceptable(db, project.id, read, true).catch((err: unknown) => {
       if (err instanceof ProjectError) return null;
       throw err;

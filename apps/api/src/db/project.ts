@@ -759,10 +759,10 @@ export const botCommits = pgTable(
  * for a schema-3 snapshot (ADR-119 §6) the row is its CI pass — the
  * `quiz-grade` dispatch with its `nonce` (128 random bits, hex), its
  * target commit in `sha` (empty until the dispatch job claims it), and
- * `settled_at` once its automatic rows are written (an accepted run, a
- * reason, the 24 h without one). A Regrade adds a `regrade` row, outside
- * the unique index, and retires (`retired_at`) the nonce it replaces: a
- * retired or settled pass accepts no run.
+ * `closed_at` once it accepts no run any more: its automatic rows written
+ * (an accepted run, a reason, the 24 h without one), or its nonce retired
+ * by a newer dispatch — a Regrade adds a `regrade` row, outside the unique
+ * index, and closes the pass it replaces.
  */
 export const gradeDispatches = pgTable(
   "grade_dispatches",
@@ -779,10 +779,8 @@ export const gradeDispatches = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** A CI pass's nonce (ADR-119 §6), carried by its run's name; null for any other row. */
     nonce: text("nonce"),
-    /** A newer dispatch of the same slot replaced this nonce: no run of it is accepted. */
-    retiredAt: timestamp("retired_at", { withTimezone: true }),
-    /** The CI pass's automatic rows written: no run of it is accepted any more. */
-    settledAt: timestamp("settled_at", { withTimezone: true }),
+    /** The CI pass accepts no run any more: settled (its automatic rows written), or retired by a newer dispatch. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("grade_dispatches_repo_trigger_uq")
@@ -792,7 +790,7 @@ export const gradeDispatches = pgTable(
     // The 24 h sweep's scan of the CI passes still waiting (ADR-119 §6).
     index("grade_dispatches_ci_waiting_idx")
       .on(t.createdAt)
-      .where(sql`${t.nonce} IS NOT NULL AND ${t.settledAt} IS NULL AND ${t.retiredAt} IS NULL`),
+      .where(sql`${t.nonce} IS NOT NULL AND ${t.closedAt} IS NULL`),
   ],
 );
 
@@ -808,24 +806,10 @@ export const projectCiResults = pgTable("project_ci_results", {
   passId: uuid("pass_id")
     .primaryKey()
     .references(() => gradeDispatches.id, { onDelete: "cascade" }),
-  repoId: uuid("repo_id")
-    .notNull()
-    .references(() => projectRepos.id, { onDelete: "cascade" }),
   /** GitHub's id of the run accepted. */
   workflowRunId: bigint("workflow_run_id", { mode: "number" }).notNull(),
   results: jsonb("results").$type<CheckResults>().notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-});
-
-/**
- * The pace of the `quiz-grade` dispatches (ADR-119 §6, choice f): the
- * next free slot of each App installation, one dispatch every
- * `DISPATCH_PACE_MS`. A slot is reserved by one upsert when a pass is
- * queued, its job starting at the slot.
- */
-export const projectDispatchSlots = pgTable("project_dispatch_slots", {
-  installationId: bigint("installation_id", { mode: "number" }).primaryKey(),
-  nextAt: timestamp("next_at", { withTimezone: true }).notNull(),
 });
 
 /**

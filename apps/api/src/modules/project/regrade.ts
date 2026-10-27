@@ -16,7 +16,7 @@
  *
  * A project whose snapshot is schema 3 (ADR-119 §6) regrades through its
  * CI: each repository gets a new pass (`claimRegrades`: a new nonce, the
- * previous one retired) and its `quiz-grade` dispatch (`sendCiPasses`);
+ * previous one closed) and its `quiz-grade` dispatch (`sendCiPasses`);
  * the automatic criteria follow from the run accepted. `payload.passId` is
  * then the first repository's pass, `payload.passIds` all of them.
  */
@@ -34,6 +34,7 @@ import type { Db } from "../../db/client.js";
 import { auditLog, projectCriteria, projectRepos, projects } from "../../db/schema.js";
 import { PROJECT_EVIDENCE_QUEUE } from "../../jobs.js";
 import { claimRegrades, sendCiPasses } from "./ci.js";
+import { snapshotVersion } from "./criteria.js";
 import { isLive, LIVE } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import type { EvidenceJob } from "./evidence.js";
@@ -100,7 +101,7 @@ export async function regrade(
     throw new ProjectError("regrade_limit", "Regraded as often as a day allows: try again tomorrow");
   }
   // A schema-3 snapshot: each repository's CI graded run dispatched anew, a new nonce each (ADR-119 §6).
-  const ci = snapshot.criteria.schemaVersion === 3;
+  const ci = (await snapshotVersion(db, project.id)) === 3;
   const passIds = ci ? await claimRegrades(db, repos.map((r) => r.id), now) : [randomUUID()];
   const passId = passIds[0]!;
   // Both on the project; the repository's in the payload, which its own day's cap counts.
@@ -113,7 +114,7 @@ export async function regrade(
     at: now,
   });
   if (ci) {
-    await sendCiPasses(app, config, passIds);
+    await sendCiPasses(app, passIds);
     return { repos: repos.length };
   }
   for (const { id } of repos) {

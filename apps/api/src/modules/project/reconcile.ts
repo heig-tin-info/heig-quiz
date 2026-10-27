@@ -9,7 +9,8 @@
  * - `reconcile.grades` (every 15 minutes): the last 20 completed runs of
  *   every repository in scope that is QUIET — no push received and no run
  *   completed for 30 minutes (while the webhooks flow there is nothing to
- *   catch up) — through `ingestCompletedRun`: a run already known reads and
+ *   catch up) — through `ingestRun` (`ingestCompletedRun`, or a schema-3
+ *   project's graded run, `ci.ts`): a run already known reads and
  *   writes nothing (the UNIQUE of `project_grade_runs`). A reconciled run
  *   has no receipt: late once the deadline passed (GR-14.3).
  * - `reconcile.repos` (daily): a pending invitation of a student's own
@@ -63,11 +64,11 @@ import { protectStudentRepo } from "../../github/provision.js";
 import type { ScheduledTask } from "../../ticker.js";
 import { pushedBy } from "../github/service.js";
 import { followInvitation, installationClients, inviteAccount, notRecorded } from "./access.js";
-import { CI_PASS_WAITING, purgeCiResults } from "./ci.js";
+import { ciPassOpen, ingestRun, purgeCiResults } from "./ci.js";
 import { LIVE } from "./deadline.js";
 import { purgeEvidenceFiles } from "./evidence.js";
 import { ProjectError } from "./errors.js";
-import { aggregateCiStatus, completedRun, ingestCompletedRun, refreshScoreSelection } from "./grading.js";
+import { aggregateCiStatus, completedRun, refreshScoreSelection } from "./grading.js";
 import { repoMembers } from "./groupRepos.js";
 import { followRepoRename, hintRepo, markRepoDeleted, moveLastCommit, type RepoContext } from "./repos.js";
 
@@ -118,7 +119,7 @@ async function candidates(db: Db, now: Date): Promise<Candidate[]> {
   // still waiting for its graded run (ADR-119 §6): its runs are read until the pass settles.
   const reviewAsked = sql<boolean>`(EXISTS (SELECT 1 FROM ${gradeDispatches}
     WHERE ${gradeDispatches.repoId} = ${projectRepos.id} AND ${gradeDispatches.trigger} = 'deadline'
-    AND ${projects.gradingMode} = 'auto') OR ${CI_PASS_WAITING})`.mapWith(Boolean);
+    AND ${projects.gradingMode} = 'auto') OR ${ciPassOpen(db)})`.mapWith(Boolean);
   const rows = await db
     .select({ repo: projectRepos, project: projects, courseId: classrooms.courseId, reviewAsked })
     .from(projectRepos)
@@ -253,7 +254,7 @@ async function ingestRuns({ app, config, octokit, ctx, located, counts, now }: S
   const { data } = await octokit.request("GET /repos/{owner}/{repo}/actions/runs", { owner, repo, status: "completed", per_page: RUNS_PER_REPO });
   let ingested = 0;
   for (const raw of data.workflow_runs) {
-    if ((await ingestCompletedRun(app, octokit, ctx, completedRun(config, raw, now))) !== null) ingested += 1;
+    if ((await ingestRun(app, octokit, ctx, completedRun(config, raw, now))) !== null) ingested += 1;
   }
   // A run on a restored head whose stored `to_verify` lags (a receipt that
   // widened the window after it was ingested, M3-06b) is caught up here,

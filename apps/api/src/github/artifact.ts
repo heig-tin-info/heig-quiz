@@ -13,6 +13,9 @@
  * stored or deflated only —; its inflation counted while it runs and
  * stopped past `RESULTS_FILE_MAX_BYTES` (a zip bomb ends there). Anything
  * else is `refused`: the pass's reason `no_result`, never an exception.
+ *
+ * Not fflate's `unzipSync`: it inflates to the size the entry's header
+ * declares, which a zip bomb lies about; this reader counts while inflating.
  */
 import { inflateRawSync } from "node:zlib";
 

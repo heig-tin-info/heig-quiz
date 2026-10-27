@@ -32,15 +32,10 @@ export const GRADING_WORKFLOW_PATH = ".github/workflows/grading.yml";
 
 /**
  * The review dispatched by Quiz (`grade-final`, `grade-milestone`) is a
- * `review` run; every other run is the indicative `ci` tier. In a project
- * whose criteria snapshot is schema 3 (`ciEvidence`), the dispatched run
- * is the CI's graded run (`quiz-grade`, ADR-119 §6): `graded`, read only
- * for its artifact — never a review, never a score (it fills neither the
- * review slot nor the `GRADE` one).
+ * `review` run; every other run is the indicative `ci` tier.
  */
-export function runKind(run: { event: string; path: string }, ciEvidence = false): GradeRunKindName | "graded" {
-  if (run.event !== "repository_dispatch" || run.path !== GRADING_WORKFLOW_PATH) return "ci";
-  return ciEvidence ? "graded" : "review";
+export function runKind(run: { event: string; path: string }): GradeRunKindName {
+  return run.event === "repository_dispatch" && run.path === GRADING_WORKFLOW_PATH ? "review" : "ci";
 }
 
 /**

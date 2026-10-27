@@ -130,8 +130,9 @@ export async function passScope<L extends Pick<CriteriaLeaf, "milestone">>(
  * checkpoint it voids no longer fires), their checkpoints due under an
  * update lock (of two ticks, one claims; a deletion waits), each one's
  * repositories claimed ({@link claimPasses}), the checkpoint marked
- * dispatched and audited `project.checkpoint_dispatched`
- * (`payload.passes`). The passes claimed.
+ * dispatched and — a schema-2 project's — audited
+ * `project.checkpoint_dispatched` (`payload.passes`; a schema-3 project's
+ * dispatch audits each repository, `ci.ts`). The passes claimed.
  */
 export async function claimMilestonePasses(db: Db, now: Date): Promise<ClaimedPass[]> {
   return db.transaction(async (tx) => {
@@ -166,13 +167,16 @@ export async function claimMilestonePasses(db: Db, now: Date): Promise<ClaimedPa
         checkpoint.id,
       );
       await tx.update(projectCheckpoints).set({ dispatchedAt: now }).where(eq(projectCheckpoints.id, checkpoint.id));
-      await audit(tx, {
-        ...SYSTEM_ACTOR,
-        action: "project.checkpoint_dispatched",
-        subjectType: "project",
-        subjectId: checkpoint.projectId,
-        payload: { checkpointId: checkpoint.id, name: checkpoint.name, passes: claimed.length },
-      });
+      // A schema-3 project's milestone is audited per repository by its dispatch (`ci.ts`), not here.
+      if (!claimed.some((p) => p.ci)) {
+        await audit(tx, {
+          ...SYSTEM_ACTOR,
+          action: "project.checkpoint_dispatched",
+          subjectType: "project",
+          subjectId: checkpoint.projectId,
+          payload: { checkpointId: checkpoint.id, name: checkpoint.name, passes: claimed.length },
+        });
+      }
       passes.push(...claimed);
     }
     return passes;

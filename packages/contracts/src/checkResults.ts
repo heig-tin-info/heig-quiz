@@ -20,7 +20,10 @@ import {
   MILESTONE_PATTERN,
   NAME_PATTERN,
   PLAIN_SOURCE_PATTERN,
+  RESULT_LOG_MAX_BYTES,
   RESULTS_SCHEMA_ID,
+  tailUtf8,
+  type CheckResults,
 } from "@quiz/domain";
 import { z } from "zod";
 
@@ -50,6 +53,39 @@ export const ResultsFile = z
   })
   .meta({ $id: RESULTS_SCHEMA_ID, title: "Quiz graded run results, version 1" });
 export type ResultsFile = z.infer<typeof ResultsFile>;
+
+/** The file's outer shape: a `criteria` object; its entries are judged one by one. */
+const ResultsShape = z.looseObject({ criteria: z.record(z.string(), z.unknown()) });
+
+/**
+ * A graded run's `results.json` read (ADR-119 §4), each piece validated
+ * once against {@link ResultsFile}'s parts: null when it is not JSON or has
+ * no `criteria` object — no result at all. An entry whose id is not a
+ * criterion id, or that is not a {@link CheckResult}, is dropped alone (its
+ * criterion gets `no_result` from `checkOutcomes`). `$schema` and any
+ * other key are never read; each log keeps its tail. The text comes
+ * decoded and within `RESULTS_FILE_MAX_BYTES` (the artifact's inflation
+ * budget). Here rather than beside `checkOutcomes`: `@quiz/domain` holds
+ * no schema.
+ */
+export function readResults(text: string): CheckResults | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const shape = ResultsShape.safeParse(data);
+  if (!shape.success) return null;
+  const criteria: CheckResults["criteria"] = {};
+  for (const [id, raw] of Object.entries(shape.data.criteria)) {
+    const entry = CheckResult.safeParse(raw);
+    if (!CriterionId.safeParse(id).success || !entry.success) continue;
+    const { score, log } = entry.data;
+    criteria[id] = log === undefined ? { score } : { score, log: tailUtf8(log, RESULT_LOG_MAX_BYTES) };
+  }
+  return { criteria };
+}
 
 // ---------------------------------------------------------------- criteria-3
 
