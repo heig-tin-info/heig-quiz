@@ -63,6 +63,10 @@ describe("results.json (results-1)", () => {
     }
     expect(ResultsFile.safeParse({ criteria: { a: { score: "1/1", log: "x".repeat(100_000) } } }).success).toBe(true);
     expect(CheckScore.safeParse(" 7.5 / 10 ").success).toBe(true);
+    const start = performance.now();
+    expect(CheckScore.safeParse(`0/.${"1".repeat(100_000)}x`).success).toBe(false);
+    expect(performance.now() - start).toBeLessThan(50);
+    expect(CheckScore.safeParse(`1/${"1".repeat(63)}`).success).toBe(false);
   });
 });
 

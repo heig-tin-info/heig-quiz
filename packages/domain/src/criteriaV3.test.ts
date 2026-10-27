@@ -65,6 +65,14 @@ describe("a check's result", () => {
     expect(parseCheckScore("2/010")).toEqual({ n: 2, m: 10 });
   });
 
+  it("refuses a long run of digits in linear time (no ReDoS)", () => {
+    for (const text of [`0/.${"1".repeat(100_000)}x`, `${"1".repeat(100_000)}/1x`, `1/${"0".repeat(100_000)}x`, `1/0.${"0".repeat(100_000)}x`]) {
+      const start = performance.now();
+      expect(parseCheckScore(text)).toBeNull();
+      expect(performance.now() - start, text.slice(0, 8)).toBeLessThan(50);
+    }
+  });
+
   it("reads a number that is not finite as no result", () => {
     const huge = "9".repeat(400);
     expect(parseCheckScore(`${huge}/1`)).toBeNull();

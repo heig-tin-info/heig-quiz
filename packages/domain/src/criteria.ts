@@ -224,7 +224,7 @@ export function classifyCriterion(
 // ---------------------------------------------------------------- a check's result
 
 /** A check's result as `results.json` writes it (ADR-119 §4): `n/m`, `n` and `m` decimal, spaces allowed around each, `m` positive. */
-export const CHECK_SCORE_PATTERN = /^\s*\d+(\.\d+)?\s*\/\s*(0*[1-9]\d*(\.\d+)?|0*\.\d*[1-9]\d*)\s*$/;
+export const CHECK_SCORE_PATTERN = /^\s*\d+(\.\d+)?\s*\/\s*(0*[1-9]\d*(\.\d+)?|0*\.0*[1-9]\d*)\s*$/;
 
 /** A parsed `n/m`. */
 export interface CheckScore {

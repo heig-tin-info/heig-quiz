@@ -199,7 +199,11 @@ criteria:           # a tree: a section is a mapping with an optional
 
 - `criteria`: an object keyed by criterion id (§3).
 - `score`: a string `n/m` whose pattern excludes a zero denominator:
-  `^\s*\d+(\.\d+)?\s*/\s*(0*[1-9]\d*(\.\d+)?|0*\.\d*[1-9]\d*)\s*$`.
+  `^\s*\d+(\.\d+)?\s*/\s*(0*[1-9]\d*(\.\d+)?|0*\.0*[1-9]\d*)\s*$`.
+  *Amended 2026-10-27 (L-06a):* the second alternative was
+  `0*\.\d*[1-9]\d*`, which backtracks quadratically on a long run of digits
+  (ReDoS); `0*\.0*[1-9]\d*` accepts the same strings in linear time, and a
+  score is at most 64 characters.
 - `log`: an optional string.
 - **Caps, platform-side and outside the schema**: a `log` over 8 KiB keeps
   its last 8 KiB; a file over 256 KiB is refused whole.

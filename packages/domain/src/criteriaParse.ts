@@ -191,10 +191,12 @@ const SCHEMA_2: Schema = {
     if (!("awarded_points" in node)) c.add([...path, "awarded_points"], "missing_awarded");
     const key = leafPointsKey(c, node, path);
     const points = key === null ? null : v2Total(c, node[key], [...path, key]);
-    if (points !== null && key === "bonus_points" && points < 0) c.add([...path, key], "negative_bonus");
-    if (points !== null && "awarded_points" in node) v2Awarded(c, node.awarded_points, points, [...path, key!]);
-    if (c.errors.length > before) return null;
-    return leafOf(path, sectionPath, description!, key!, points!, { prompt, test, milestone });
+    if (key !== null && points !== null) {
+      if (key === "bonus_points" && points < 0) c.add([...path, key], "negative_bonus");
+      if ("awarded_points" in node) v2Awarded(c, node.awarded_points, points, [...path, key]);
+    }
+    if (c.errors.length > before || description === null || key === null || points === null) return null;
+    return leafOf(path, sectionPath, description, key, points, { prompt, test, milestone });
   },
   sources(c, value, path) {
     if (isTextList(value)) return value;
@@ -253,8 +255,8 @@ const SCHEMA_3: Schema = {
     const milestone = leafMilestone(c, node, path);
     const key = leafPointsKey(c, node, path);
     const points = key === null ? null : v3Amount(c, node[key], [...path, key], key === "bonus_points");
-    if (c.errors.length > before) return null;
-    return leafOf(path, sectionPath, description!, key!, points!, { prompt, command, milestone });
+    if (c.errors.length > before || description === null || key === null || points === null) return null;
+    return leafOf(path, sectionPath, description, key, points, { prompt, command, milestone });
   },
   /** A list of plain paths, each wildcard refused under its index. */
   sources(c, value, path) {

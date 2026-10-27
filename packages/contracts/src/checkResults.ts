@@ -29,7 +29,7 @@ import { CriterionId } from "./project.js";
 // ---------------------------------------------------------------- results-1
 
 /** A check's result, `n/m`: `n` and `m` decimal, `m > 0` (ADR-119 §4). A number too large to be finite reads as no result (`parseCheckScore`). */
-export const CheckScore = z.string().regex(CHECK_SCORE_PATTERN, "not a fraction n/m with m > 0");
+export const CheckScore = z.string().max(64).regex(CHECK_SCORE_PATTERN, "not a fraction n/m with m > 0");
 
 /**
  * One criterion's entry: its `n/m` and its log. The log is not bounded
