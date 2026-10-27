@@ -1,5 +1,5 @@
 /**
- * The "zen" player: one question per screen (F-EVAL-08, mockup 07).
+ * The player: one question per screen, always (F-EVAL-08 withdrawn, mockup 07).
  *
  * A question is ANSWERED as soon as it holds an answer — the type says what
  * an empty one is (`isAnswered`) — with no click (issue #89, F-LIVE-08). What

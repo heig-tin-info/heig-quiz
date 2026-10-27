@@ -790,7 +790,7 @@ describe("patch and duplicate", () => {
 
     // The take-home preset: a common end, no waiting room, feedback right away.
     const homework = await send({
-      settings: { timing: "deadline", lobby: "skip", presentation: "continuous" },
+      settings: { timing: "deadline", lobby: "skip", shuffleChoices: false },
       feedbackPolicy: { when: "immediate", showKey: true },
     });
     expect(homework.statusCode).toBe(200);
@@ -801,7 +801,7 @@ describe("patch and duplicate", () => {
       shuffleItems: true,
       timing: "deadline",
       lobby: "skip",
-      presentation: "continuous",
+      shuffleChoices: false,
     });
 
     const keyless = await send({ feedbackPolicy: { showExplanation: true } });

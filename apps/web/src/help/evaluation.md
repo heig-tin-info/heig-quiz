@@ -45,7 +45,7 @@ student's own start, cut at the end (the window's, or the safety deadline) even 
 time remains. Extra time from the roster applies on top, past that end too.
 
 The rest lives under **Advanced options**, in four groups: **Flow** (navigation,
-presentation, shuffling, progress bar, and Live's waiting room), **Security**
+shuffling, and Live's waiting room), **Security**
 (integrity journal, full screen, allowed devices), **Aids** (calculator,
 notepad) and **Feedback and scoring** (feedback to students, scoring policies,
 and **Allow drill**, which stays editable until the results are released).

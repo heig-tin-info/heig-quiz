@@ -411,12 +411,10 @@ export const setStudentDeadline = (at: number) => {
 /** The settings of the student's evaluation, which every one of its views states. */
 const studentSettings = (): AttemptView["evaluation"]["settings"] => ({
   navigation: scene === "forward" ? "forward_only" : "free",
-  presentation: "zen",
   lobby: "manual",
   shuffleItems: false,
   shuffleChoices: true,
   timing: "duration",
-  showProgressBar: true,
   logVisibility: true,
   requireFullscreen: false,
   ...(flags.negative ? { negativeMarking: true } : {}),

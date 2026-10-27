@@ -673,7 +673,7 @@ describe("EvaluationConfig", () => {
       // A forgotten answer key must be hideable mid-run (#86); the rest stays frozen.
       expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeEnabled();
       expect(screen.getByRole("switch", { name: /show the expected answer/i })).toBeEnabled();
-      expect(screen.getByRole("switch", { name: /progress bar/i })).toBeDisabled();
+      expect(screen.getByRole("switch", { name: /shuffle the questions/i })).toBeDisabled();
       expect(screen.getByText(/feedback policy can still change/i)).toBeInTheDocument();
       // No access code any more (ADR-053).
       expect(screen.queryByRole("textbox", { name: /access code/i })).toBeNull();

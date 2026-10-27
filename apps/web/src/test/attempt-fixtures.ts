@@ -90,12 +90,10 @@ export function makeAttemptView(options: AttemptViewOptions = {}): AttemptView {
       ...options.evaluation,
       settings: {
         navigation: "free",
-        presentation: "zen",
         lobby: "manual",
         shuffleItems: false,
         shuffleChoices: true,
         timing: "duration",
-        showProgressBar: true,
         logVisibility: true,
         requireFullscreen: false,
         ...options.settings,

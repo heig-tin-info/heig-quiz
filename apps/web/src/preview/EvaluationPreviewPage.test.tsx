@@ -50,12 +50,10 @@ const view = (): AttemptView => ({
     state: "draft",
     settings: {
       navigation: "free",
-      presentation: "zen",
       lobby: "manual",
       shuffleItems: true,
       shuffleChoices: true,
       timing: "duration",
-      showProgressBar: true,
       logVisibility: true,
       requireFullscreen: false,
     },

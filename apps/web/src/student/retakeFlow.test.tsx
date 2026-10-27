@@ -73,12 +73,10 @@ function view(
       state: "running",
       settings: {
         navigation: "free",
-        presentation: "zen",
         lobby: "skip",
         shuffleItems: false,
         shuffleChoices: false,
         timing: "manual",
-        showProgressBar: true,
         logVisibility: true,
         requireFullscreen: false,
         ...(mode === "exercise"

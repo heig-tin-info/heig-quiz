@@ -1918,8 +1918,19 @@ describe("settings round trip", () => {
     const row = await reload(db, seed.evaluationId);
     const settings = settingsOf(row);
     expect(settings.navigation).toBe("forward_only");
-    expect(settings.presentation).toBe("zen");
     expect(settings.shuffleChoices).toBe(true);
+  });
+
+  it("drops the withdrawn presentation and progress-bar keys a stored row still carries (F-EVAL-08)", async () => {
+    const seed = await seedLive(db, { settings: { navigation: "forward_only" } });
+    await db
+      .update(evaluations)
+      .set({ settings: { navigation: "forward_only", presentation: "continuous", showProgressBar: false } })
+      .where(eq(evaluations.id, seed.evaluationId));
+    const settings = settingsOf(await reload(db, seed.evaluationId));
+    expect(settings.navigation).toBe("forward_only");
+    expect(settings).not.toHaveProperty("presentation");
+    expect(settings).not.toHaveProperty("showProgressBar");
   });
 });
 

@@ -65,12 +65,10 @@ function view(
       state: "running",
       settings: {
         navigation,
-        presentation: "zen",
         lobby: "manual",
         shuffleItems: false,
         shuffleChoices: true,
         timing: "duration",
-        showProgressBar: true,
         logVisibility: true,
         requireFullscreen: false,
       },

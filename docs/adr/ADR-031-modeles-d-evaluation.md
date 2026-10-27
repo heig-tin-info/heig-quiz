@@ -18,7 +18,9 @@ milestone flag — a template carries it, a copy and a pull copy it, a change of
 shows in a pull's summary. The `threshold` grade scale a template could hold is gone. **Amended by
 [ADR-092](ADR-092-changer-le-mode-d-une-evaluation.md) (2026-10-09):** a template's mode is editable in
 place (`mode` joins `TemplatePatch`) and moves the revision; an instance keeps its own mode, a pull never
-carrying it.
+carrying it. **Amended 2026-10-27 (product owner):** the `presentation` and `showProgressBar` settings are
+withdrawn (F-EVAL-08): the player is always one question per screen, so §3's "settings in full" no longer
+holds a presentation; a stored row's old keys are dropped when its settings are read.
 
 ## Context
 
