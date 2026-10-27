@@ -495,7 +495,7 @@ export type AuditAction =
   | "project.criteria_reload"
   /**
    * ADR-119 §11 (L-06b): the removed `score_is_grade` scale left the
-   * project, written once by migration `0121` (never by the application),
+   * project, written once by migration `0122` (never by the application),
    * by the system, subject the project: `payload.from` (`score_is_grade`),
    * `released` (whether the project was released then), and the counts
    * converted from a mark out of 6 to points out of 5 — `runs`,

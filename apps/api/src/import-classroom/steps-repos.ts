@@ -165,7 +165,7 @@ export function carriedScores(r: SourceStudentRepo, scored: (id: string | null) 
   const teacher = r.teacherPoints === null ? null : markAsPoints({ points: r.teacherPoints, max: readMax });
   return {
     teacherPoints: teacher?.points ?? null,
-    // A converted mark keeps its maximum, 5, as migration 0121 writes it; any other stays null (the CI's is read).
+    // A converted mark keeps its maximum, 5, as migration 0122 writes it; any other stays null (the CI's is read).
     teacherMax: teacher !== null && teacher.max !== readMax ? teacher.max : null,
     reviewScore: asPoints(read.reviewScore),
     frozenScore: asPoints(read.frozenScore),
