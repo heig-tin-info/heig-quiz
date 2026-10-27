@@ -143,7 +143,7 @@ async function lab(criteria = CRITERIA): Promise<Lab> {
   });
   expect(res.statusCode, res.body).toBe(201);
   const project = ProjectSummary.parse(res.json());
-  const parsed = parseCriteria(criteria);
+  const parsed = parseCriteria(criteria, { version: 2 });
   if (!parsed.ok) throw new Error("the fixture does not parse");
   await db.update(projects).set({ gradingMode: "criteria", state: "locked" }).where(eq(projects.id, project.id));
   await db.insert(projectCriteria).values({ projectId: project.id, fileSha: "f", sourceSha: "s", criteria: parsed.criteria, loadedAt: new Date() });

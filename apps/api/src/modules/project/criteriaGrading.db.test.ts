@@ -107,7 +107,7 @@ async function world(students = 2): Promise<World> {
     gradingScale: { kind: "linear", rounding: "nearest" },
     createdBy: teacher.id,
   });
-  const parsed = parseCriteria(CRITERIA);
+  const parsed = parseCriteria(CRITERIA, { version: 2 });
   if (!parsed.ok) throw new Error("the fixture does not parse");
   await db.insert(projectCriteria).values({ projectId, fileSha: "f", sourceSha: "s", criteria: parsed.criteria, loadedAt: new Date() });
   return { projectId, classroomId: seeded.classroomId, courseId: seeded.courseId, students: people };

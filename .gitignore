@@ -25,4 +25,7 @@ site/
 /apps/web/public/runtimes/
 # Blockly's media, copied from the package (apps/web/scripts/copy-blockly-media.mjs)
 /apps/web/public/blockly-media/
+# The published JSON Schemas, generated from @quiz/contracts (apps/web/scripts/write-schemas.mjs)
+/apps/web/public/schemas/
 /.refresh.dump
+

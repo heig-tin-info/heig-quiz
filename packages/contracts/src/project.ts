@@ -1580,6 +1580,9 @@ export const ProjectCriterion = z.object({
   maxPoints: z.number(),
   bonusPoints: z.number().optional(),
   prompt: z.string().optional(),
+  /** Its check's argv (schema 3): makes it automatic. */
+  command: z.array(z.string()).optional(),
+  /** Schema 2's `test` (ADR-106 §2); never in schema 3. */
   test: z.string().optional(),
   milestone: z.string().optional(),
   kind: CriterionKind,

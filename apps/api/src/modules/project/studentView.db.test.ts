@@ -169,7 +169,7 @@ const setProject = (id: string, patch: Partial<typeof projects.$inferInsert>) =>
 
 /** `projectId` switched to grading by criteria, with `yml` as its snapshot (ADR-106 §1, §2). */
 async function toCriteria(projectId: string, yml: string) {
-  const parsed = parseCriteria(yml);
+  const parsed = parseCriteria(yml, { version: 2 });
   if (!parsed.ok) throw new Error("the fixture does not parse");
   await setProject(projectId, { gradingMode: "criteria" });
   await server.app.db.insert(projectCriteria).values({ projectId, fileSha: "f", sourceSha: "s", criteria: parsed.criteria, loadedAt: at(NOW) });

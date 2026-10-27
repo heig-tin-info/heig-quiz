@@ -189,6 +189,18 @@ describe("the criteria snapshot", () => {
     expect(await snapshotOf(project.id)).toEqual(before);
   });
 
+  it("refuses a schema-3 file until the CI's evidence lands (ADR-119 §11), keeping the snapshot", async () => {
+    const { project } = await draft({ "criteria.yml": SMALL });
+    expect((await call("POST", url(project.id, "/criteria/reload"), teacher.headers)).statusCode).toBe(200);
+    const before = await snapshotOf(project.id);
+    world.commit(project.distribution!.fullName, "main", { "criteria.yml": "schema_version: 3\ncriteria:\n  a: {description: x, max_points: 1, command: [make, test]}\n" });
+
+    const res = await call("POST", url(project.id, "/criteria/reload"), teacher.headers);
+    expect(res.statusCode).toBe(409);
+    expect(CriteriaInvalid.parse(res.json()).errors).toEqual([{ path: "schema_version", code: "schema_version", params: { expected: 2 } }]);
+    expect(await snapshotOf(project.id)).toEqual(before);
+  });
+
   it("is the project's staff's only", async () => {
     const { project } = await draft({ "criteria.yml": SMALL });
     expect((await call("GET", url(project.id, "/criteria"), outsider.headers)).statusCode).toBe(404);
@@ -217,7 +229,7 @@ describe("the mode switch (ADR-106 §1)", () => {
 
     world.commit(project.distribution!.fullName, "main", { "criteria.yml": "criteria:\n  a:\n    $desc: x\n    $points: [0, 2]\n" });
     const v1 = await toCriteria(project.id);
-    expect(CriteriaInvalid.parse(v1.json()).errors).toEqual([{ path: "schema_version", code: "schema_v1" }]);
+    expect(CriteriaInvalid.parse(v1.json()).errors).toEqual([{ path: "schema_version", code: "schema_v1", params: { expected: 2 } }]);
     expect((await rowOf(project.id)).gradingMode).toBe("auto");
     expect(await snapshotOf(project.id)).toBeUndefined();
     expect(await auditOf(project.id, "project.grading_mode")).toEqual([]);

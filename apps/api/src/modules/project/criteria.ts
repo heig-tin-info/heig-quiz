@@ -107,7 +107,8 @@ export async function readCriteria(db: Db, config: AppConfig, project: ProjectRo
   const file = await fileAt(CRITERIA_FILE);
   if (file === null) return refused("missing_file");
   if (file.tooLarge) return refused("too_large");
-  const parsed = parseCriteria(file.text);
+  // Schema 2 only until the CI's evidence lands (ADR-119 §11, L-06b): a schema-3 file is refused.
+  const parsed = parseCriteria(file.text, { version: 2 });
   if (!parsed.ok) return parsed;
   const workflow = await fileAt(GRADING_WORKFLOW);
   const text = workflow === null || workflow.tooLarge ? null : workflow.text;
