@@ -37,9 +37,11 @@ describe("checkOutcomes", () => {
   });
 
   it("reads an invalid score, or an inherited key, as no result", () => {
-    const outcomes = checkOutcomes([leaf("a", { command: ["x"] }), leaf("toString", { command: ["y"] })], { criteria: { a: { score: "1/0" } } });
+    const leaves = [leaf("a", { command: ["x"] }), leaf("b", { command: ["x"] }), leaf("toString", { command: ["y"] })];
+    const outcomes = checkOutcomes(leaves, { criteria: { a: { score: "1/0" }, b: { score: `${"9".repeat(400)}/1` } } });
     expect(outcomes).toEqual([
       { id: "a", reason: "no_result" },
+      { id: "b", reason: "no_result" },
       { id: "toString", reason: "no_result" },
     ]);
   });

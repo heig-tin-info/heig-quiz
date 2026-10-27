@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "runtimes": "node scripts/fetch-runtimes.mjs",
-    "dev": "node scripts/fetch-runtimes.mjs && node scripts/copy-blockly-media.mjs && vite",
-    "build": "node scripts/fetch-runtimes.mjs && node scripts/copy-blockly-media.mjs && vite build",
+    "dev": "node scripts/fetch-runtimes.mjs && node scripts/copy-blockly-media.mjs && node scripts/write-schemas.mjs && vite",
+    "build": "node scripts/fetch-runtimes.mjs && node scripts/copy-blockly-media.mjs && node scripts/write-schemas.mjs && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "dev:mock": "node scripts/fetch-runtimes.mjs && node scripts/copy-blockly-media.mjs && VITE_MOCK=1 vite",

@@ -38,7 +38,7 @@ const variant = (change: (file: CriteriaData) => void): Record<string, unknown> 
 describe("results.json (results-1)", () => {
   it("takes a valid file, ignoring unknown keys and ids, and maps it onto the criteria", () => {
     const file = ResultsFile.parse(VALID_RESULTS);
-    const parsed = parseCriteria(JSON.stringify(VALID_CRITERIA));
+    const parsed = parseCriteria(JSON.stringify(VALID_CRITERIA), { version: 3 });
     if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
     expect(checkOutcomes(parsed.criteria.leaves, file)).toEqual([
       { id: "code.format", points: 1, max: 1, log: "formatted" },
@@ -68,7 +68,7 @@ describe("results.json (results-1)", () => {
 
 describe("criteria.yml (criteria-3)", () => {
   it("states the structure the parser reads: a valid file passes both, an invalid one neither", () => {
-    expect(parseCriteria(JSON.stringify(VALID_CRITERIA)).ok).toBe(true);
+    expect(parseCriteria(JSON.stringify(VALID_CRITERIA), { version: 3 }).ok).toBe(true);
     expect(CriteriaFile3.safeParse(VALID_CRITERIA).success).toBe(true);
     const invalid: [string, (file: CriteriaData) => void][] = [
       ["a shell string", (f) => void ((f.criteria.tests.functional as Record<string, unknown>).command = "make test")],
@@ -83,7 +83,7 @@ describe("criteria.yml (criteria-3)", () => {
     ];
     for (const [name, change] of invalid) {
       const file = variant(change);
-      expect(parseCriteria(JSON.stringify(file)).ok, name).toBe(false);
+      expect(parseCriteria(JSON.stringify(file), { version: 3 }).ok, name).toBe(false);
       expect(CriteriaFile3.safeParse(file).success, name).toBe(false);
     }
   });

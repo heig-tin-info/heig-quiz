@@ -128,6 +128,10 @@ export interface ParsedCriteria {
 export const MILESTONE_PATTERN = /^[a-z0-9][a-z0-9_-]{0,49}$/;
 /** The most words a schema-3 `command` has (StudentScore's `_MAX_COMMAND_ARGS`). */
 export const COMMAND_MAX_ARGS = 20;
+/** A schema-3 section or criterion name (StudentScore's `_NAME_PATTERN`): neither a dot nor a space. */
+export const NAME_PATTERN = /^[^.\s]+$/;
+/** A schema-3 source: a plain path, no wildcard (StudentScore's `_WILDCARD_PATTERN`, negated). */
+export const PLAIN_SOURCE_PATTERN = /^[^*?[]*$/;
 /** `tests-criterion: <id>` in a workflow's `with:` block, quoted or not (schema 2's workflow). */
 const TESTS_CRITERION_INPUT = /^\s*tests-criterion\s*:\s*["']?([^\s"'#]+)["']?\s*(?:#.*)?$/m;
 
@@ -202,14 +206,15 @@ export interface CriterionSettings {
  * `command` (schema 3) — even with a `prompt`, the check decides alone;
  * `llm` for one with a `prompt`; `teacher` otherwise.
  *
- * `schema2` is passed for a schema-2 snapshot only (ADR-106 §2): the
+ * `schema2`: the project's settings for a schema-2 snapshot, null for a
+ * schema-3 one — every caller chooses (ADR-106 §2): with them, the
  * project's tests criterion, its identity criterion (graded from the
  * commits' metadata, an identity never sent to the model) and a leaf
  * carrying `test` are automatic too.
  */
 export function classifyCriterion(
   leaf: Pick<CriteriaLeaf, "id" | "prompt" | "command" | "test">,
-  schema2?: CriterionSettings,
+  schema2: CriterionSettings | null,
 ): CriterionKind {
   if (leaf.command !== undefined) return "automatic";
   if (schema2 && (leaf.id === schema2.testsCriterion || leaf.id === schema2.identityCriterion || leaf.test !== undefined)) return "automatic";
@@ -218,8 +223,8 @@ export function classifyCriterion(
 
 // ---------------------------------------------------------------- a check's result
 
-/** A check's result as `results.json` writes it: `n/m`, `n` and `m` decimal, spaces allowed around each, `m` never zero. */
-export const CHECK_SCORE_PATTERN = /^\s*(\d+(?:\.\d+)?)\s*\/\s*(?!0+(?:\.0+)?\s*$)(\d+(?:\.\d+)?)\s*$/;
+/** A check's result as `results.json` writes it (ADR-119 §4): `n/m`, `n` and `m` decimal, spaces allowed around each, `m` positive. */
+export const CHECK_SCORE_PATTERN = /^\s*\d+(\.\d+)?\s*\/\s*(0*[1-9]\d*(\.\d+)?|0*\.\d*[1-9]\d*)\s*$/;
 
 /** A parsed `n/m`. */
 export interface CheckScore {
@@ -227,13 +232,17 @@ export interface CheckScore {
   m: number;
 }
 
-/** Reads `n/m`; null when it does not match {@link CHECK_SCORE_PATTERN} or `m` is not positive (the result is then invalid). */
+/**
+ * Reads `n/m`; null when it does not match {@link CHECK_SCORE_PATTERN} or
+ * a number does not read as a finite one (a 400-digit `n`, a denominator
+ * that underflows to 0): the result is then
+ * invalid, as if absent.
+ */
 export function parseCheckScore(text: string): CheckScore | null {
-  const match = CHECK_SCORE_PATTERN.exec(text);
-  if (!match) return null;
-  const n = Number(match[1]);
-  const m = Number(match[2]);
-  return m > 0 ? { n, m } : null;
+  if (!CHECK_SCORE_PATTERN.test(text)) return null;
+  const [n, m] = text.split("/").map(Number) as [number, number];
+  // The pattern says `m > 0`; a 400-digit number is infinite, and a denominator below 1e-324 reads as 0.
+  return Number.isFinite(n) && Number.isFinite(m) && m > 0 ? { n, m } : null;
 }
 
 /** The fraction a check earned: `n` clamped to `[0, m]`, over `m`. */
@@ -256,10 +265,9 @@ export function roundPoints(value: number): number {
  * A criterion's points for a check's fraction `f` (criteria-3 contract):
  * a positive criterion earns `max × f`, a penalty (negative max)
  * `max × (1 − f)` — a passed check costs nothing —, a bonus `bonus × f`;
- * rounded by {@link roundPoints}. `f` is clamped to `[0, 1]`.
+ * rounded by {@link roundPoints}. `f` is {@link checkFraction}'s, in `[0, 1]`.
  */
-export function checkPoints(leaf: Pick<CriteriaLeaf, "maxPoints" | "bonusPoints">, fraction: number): number {
-  const f = Math.max(0, Math.min(1, fraction));
+export function checkPoints(leaf: Pick<CriteriaLeaf, "maxPoints" | "bonusPoints">, f: number): number {
   if (leaf.bonusPoints !== undefined) return roundPoints(leaf.bonusPoints * f);
   return roundPoints(leaf.maxPoints < 0 ? leaf.maxPoints * (1 - f) : leaf.maxPoints * f);
 }

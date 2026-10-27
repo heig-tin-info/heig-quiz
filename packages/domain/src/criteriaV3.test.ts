@@ -8,13 +8,13 @@ import { parseCriteria, type CriteriaParse } from "./criteriaParse.js";
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/criteria/${name}`, import.meta.url), "utf8");
 
 function parsed(text: string): ParsedCriteria {
-  const result = parseCriteria(text);
+  const result = parseCriteria(text, { version: 3 });
   if (!result.ok) throw new Error(JSON.stringify(result.errors));
   return result.criteria;
 }
 
 function errors(text: string): CriteriaParse & { ok: false } {
-  const result = parseCriteria(text);
+  const result = parseCriteria(text, { version: 3 });
   if (result.ok) throw new Error("parsed");
   return result;
 }
@@ -40,17 +40,17 @@ describe("parseCriteria, schema 3, on labo 00", () => {
   });
 
   it("classifies by the file alone: the check automatic, the rest by its prompt", () => {
-    expect(parsed(LABO_00_V3).leaves.map((l) => classifyCriterion(l))).toEqual(["automatic", "llm", "llm", "llm", "llm", "llm", "llm"]);
+    expect(parsed(LABO_00_V3).leaves.map((l) => classifyCriterion(l, null))).toEqual(["automatic", "llm", "llm", "llm", "llm", "llm", "llm"]);
   });
 });
 
 describe("classifyCriterion without the schema-2 settings", () => {
   it("makes a criterion with a command automatic, even with a prompt; a prompt the model's; neither the teacher's", () => {
-    expect(classifyCriterion({ id: "a.b", command: ["make", "check"], prompt: "p" })).toBe("automatic");
-    expect(classifyCriterion({ id: "a.b", command: ["make", "check"] })).toBe("automatic");
-    expect(classifyCriterion({ id: "a.b", prompt: "p" })).toBe("llm");
-    expect(classifyCriterion({ id: "a.b" })).toBe("teacher");
-    expect(classifyCriterion({ id: "a.b", test: "test_x", prompt: "p" })).toBe("llm");
+    expect(classifyCriterion({ id: "a.b", command: ["make", "check"], prompt: "p" }, null)).toBe("automatic");
+    expect(classifyCriterion({ id: "a.b", command: ["make", "check"] }, null)).toBe("automatic");
+    expect(classifyCriterion({ id: "a.b", prompt: "p" }, null)).toBe("llm");
+    expect(classifyCriterion({ id: "a.b" }, null)).toBe("teacher");
+    expect(classifyCriterion({ id: "a.b", test: "test_x", prompt: "p" }, null)).toBe("llm");
   });
 });
 
@@ -61,6 +61,15 @@ describe("a check's result", () => {
     expect(parseCheckScore("\t3/2.5\n")).toEqual({ n: 3, m: 2.5 });
     expect(parseCheckScore("0/1")).toEqual({ n: 0, m: 1 });
     expect(parseCheckScore("1/0.5")).toEqual({ n: 1, m: 0.5 });
+    expect(parseCheckScore("1/.5")).toEqual({ n: 1, m: 0.5 });
+    expect(parseCheckScore("2/010")).toEqual({ n: 2, m: 10 });
+  });
+
+  it("reads a number that is not finite as no result", () => {
+    const huge = "9".repeat(400);
+    expect(parseCheckScore(`${huge}/1`)).toBeNull();
+    expect(parseCheckScore(`1/${huge}`)).toBeNull();
+    expect(parseCheckScore(`1/0.${"0".repeat(400)}1`)).toBeNull();
   });
 
   it("refuses a zero denominator, a sign, a bare number, an exponent and a dangling dot", () => {
@@ -85,9 +94,7 @@ describe("a check's result", () => {
     expect(checkPoints({ maxPoints: 0, bonusPoints: 2 }, 0)).toBe(0);
   });
 
-  it("clamps f into [0, 1] and rounds to 0.01, half away from zero", () => {
-    expect(checkPoints({ maxPoints: 4 }, 2)).toBe(4);
-    expect(checkPoints({ maxPoints: 4 }, -1)).toBe(0);
+  it("rounds to 0.01, half away from zero", () => {
     expect(checkPoints({ maxPoints: 2 }, 1 / 3)).toBe(0.67);
     expect(checkPoints({ maxPoints: -3.5 }, 0.25)).toBe(-2.63);
     expect(checkPoints({ maxPoints: 7 }, checkFraction({ n: 7.5, m: 10 }))).toBe(5.25);
@@ -146,6 +153,13 @@ describe("parseCriteria, schema 3", () => {
   it("makes a mapping with any leaf key a leaf, so a missing maximum or description is named", () => {
     expect(errors("schema_version: 3\ncriteria:\n  c: {description: c, command: [make]}\n").errors).toEqual([{ path: "criteria/c", code: "missing_points" }]);
     expect(errors("schema_version: 3\ncriteria:\n  c: {max_points: 1}\n").errors).toEqual([{ path: "criteria/c", code: "missing_description" }]);
+  });
+
+  it("parses at the version the caller expects, naming it in the refusal of any other", () => {
+    const v3 = "schema_version: 3\ncriteria:\n  c: {description: c, max_points: 1}\n";
+    expect(parseCriteria(v3, { version: 2 })).toEqual({ ok: false, errors: [{ path: "schema_version", code: "schema_version", params: { expected: 2 } }] });
+    expect(errors(v3.replace("3", "2")).errors).toEqual([{ path: "schema_version", code: "schema_version", params: { expected: 3 } }]);
+    expect(errors("criteria: {}\n").errors).toEqual([{ path: "schema_version", code: "schema_v1", params: { expected: 3 } }]);
   });
 
   it("refuses an unknown top-level key", () => {

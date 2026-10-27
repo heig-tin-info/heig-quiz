@@ -17,13 +17,13 @@ import { parseCriteria, type CriteriaParse } from "./criteriaParse.js";
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/criteria/${name}`, import.meta.url), "utf8");
 
 function parsed(text: string): ParsedCriteria {
-  const result = parseCriteria(text);
+  const result = parseCriteria(text, { version: 2 });
   if (!result.ok) throw new Error(JSON.stringify(result.errors));
   return result.criteria;
 }
 
 function errors(text: string): CriteriaParse & { ok: false } {
-  const result = parseCriteria(text);
+  const result = parseCriteria(text, { version: 2 });
   if (result.ok) throw new Error("parsed");
   return result;
 }
@@ -183,8 +183,8 @@ describe("parseCriteria refusals", () => {
   });
 
   it("refuses schema version 1, an unknown version, and a file without criteria", () => {
-    expect(errors("criteria:\n  a:\n    $desc: x\n").errors).toEqual([{ path: "schema_version", code: "schema_v1" }]);
-    expect(errors("schema_version: 4\n").errors[0]!.code).toBe("schema_version");
+    expect(errors("criteria:\n  a:\n    $desc: x\n").errors).toEqual([{ path: "schema_version", code: "schema_v1", params: { expected: 2 } }]);
+    expect(errors("schema_version: 4\n").errors).toEqual([{ path: "schema_version", code: "schema_version", params: { expected: 2 } }]);
     expect(errors("schema_version: 2\n").errors).toEqual([{ path: "criteria", code: "missing_criteria" }]);
     expect(errors("schema_version: 2\ncriteria: [a]\n").errors[0]!.code).toBe("not_mapping");
     expect(errors("schema_version: 2\ncriteria:\n  s:\n    description: only\n").errors[0]!.code).toBe("no_criteria");
@@ -237,7 +237,7 @@ describe("parseCriteria refusals", () => {
   });
 
   it("checks awarded_points against the criterion's range, a percentage of its own maximum", () => {
-    const awarded = (value: string, max = 4) => parseCriteria(item(`      max_points: ${max}\n`).replace("awarded_points: 0", `awarded_points: ${value}`));
+    const awarded = (value: string, max = 4) => parseCriteria(item(`      max_points: ${max}\n`).replace("awarded_points: 0", `awarded_points: ${value}`), { version: 2 });
     expect(awarded("'50%'").ok).toBe(true);
     expect(awarded("'-50%'", -2).ok).toBe(true);
     const refusal = (value: string, max?: number) => {

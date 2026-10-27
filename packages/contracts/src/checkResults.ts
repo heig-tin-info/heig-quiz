@@ -1,7 +1,8 @@
 /**
  * The two files of the criteria-3 contract (ADR-119), each defined once
- * here and published as a JSON Schema generated from it at build
- * (`scripts/write-schemas.mjs`, `publishedSchemas`):
+ * here and published as a JSON Schema generated from it by the web's
+ * build (`publishedSchemas`, `apps/web/scripts/write-schemas.mjs`, served
+ * under `/schemas/`):
  *
  * - `results-1.json`, a graded run's `results.json`: what the CI uploads as
  *   its `results` artifact. `ResultsFile` is what the platform validates
@@ -12,18 +13,23 @@
  *   is looser where JSON Schema cannot say a rule (both a `description`
  *   and a `desc`, a maximum of 0).
  */
-import { CHECK_SCORE_PATTERN, COMMAND_MAX_ARGS, CRITERIA_SCHEMA_ID, MILESTONE_PATTERN, RESULTS_SCHEMA_ID, parseCheckScore } from "@quiz/domain";
+import {
+  CHECK_SCORE_PATTERN,
+  COMMAND_MAX_ARGS,
+  CRITERIA_SCHEMA_ID,
+  MILESTONE_PATTERN,
+  NAME_PATTERN,
+  PLAIN_SOURCE_PATTERN,
+  RESULTS_SCHEMA_ID,
+} from "@quiz/domain";
 import { z } from "zod";
 
 import { CriterionId } from "./project.js";
 
 // ---------------------------------------------------------------- results-1
 
-/** A check's result, `n/m`: `n` and `m` decimal, `m > 0`. */
-export const CheckScore = z
-  .string()
-  .regex(CHECK_SCORE_PATTERN, "not a fraction n/m with m > 0")
-  .refine((text) => parseCheckScore(text) !== null, "the denominator must be positive");
+/** A check's result, `n/m`: `n` and `m` decimal, `m > 0` (ADR-119 §4). A number too large to be finite reads as no result (`parseCheckScore`). */
+export const CheckScore = z.string().regex(CHECK_SCORE_PATTERN, "not a fraction n/m with m > 0");
 
 /**
  * One criterion's entry: its `n/m` and its log. The log is not bounded
@@ -47,8 +53,6 @@ export type ResultsFile = z.infer<typeof ResultsFile>;
 
 // ---------------------------------------------------------------- criteria-3
 
-/** A name: neither a dot nor a space. */
-const NAME = /^[^.\s]+$/;
 /** No argv word can carry NUL. */
 const ARGV_WORD = /^[^\0]*$/;
 /** A string, or a list of strings joined by lines. */
@@ -87,9 +91,9 @@ const Section: z.ZodType<Section> = z
   .looseObject({ description: z.string().nullable().optional() })
   .catchall(z.union([Criterion, z.lazy(() => Section)]))
   .superRefine((section, ctx) => {
-    for (const name of Object.keys(section)) if (!NAME.test(name)) ctx.addIssue({ code: "custom", message: "a name holds neither a dot nor a space", path: [name] });
+    for (const name of Object.keys(section)) if (!NAME_PATTERN.test(name)) ctx.addIssue({ code: "custom", message: "a name holds neither a dot nor a space", path: [name] });
   })
-  .meta({ propertyNames: { pattern: NAME.source } });
+  .meta({ propertyNames: { pattern: NAME_PATTERN.source } });
 
 export const CriteriaFile3 = z
   .strictObject({
@@ -99,7 +103,7 @@ export const CriteriaFile3 = z
         context: Text.optional(),
         student: z.strictObject({ level: z.string().optional(), knows: z.array(z.string()).optional(), learning: z.array(z.string()).optional() }).optional(),
         sources: z
-          .array(z.string().regex(/^[^*?\[]*$/))
+          .array(z.string().regex(PLAIN_SOURCE_PATTERN))
           .optional()
           .meta({ description: "Plain paths from the repository root; a directory ends with /. No wildcard." }),
       })

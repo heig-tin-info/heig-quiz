@@ -29,14 +29,17 @@
  * dot nor a space; no percentage anywhere; `grading.sources` are plain
  * paths (a directory ends with `/`), never a wildcard.
  *
- * Schema 1 (`$`-prefixed keys, or no `schema_version`) is refused
- * (`schema_v1`).
+ * The caller says which version it expects (`CriteriaParseOptions`); any
+ * other is refused, schema 1 (`$`-prefixed keys, or no `schema_version`)
+ * with `schema_v1`.
  */
 import { parseDocument } from "yaml";
 
 import {
   COMMAND_MAX_ARGS,
   MILESTONE_PATTERN,
+  NAME_PATTERN,
+  PLAIN_SOURCE_PATTERN,
   type CriteriaError,
   type CriteriaGrading,
   type CriteriaLeaf,
@@ -74,6 +77,8 @@ class Collector {
 /** How a schema reads its tree: which mapping is a leaf, which names it refuses, how it reads a leaf and the sources. */
 interface Schema {
   version: 2 | 3;
+  /** The keys the document's top level may hold; null: not checked (schema 2, as 0.7.5). */
+  topKeys: ReadonlySet<string> | null;
   isLeaf(node: Node): boolean;
   badName(name: string): CriteriaParseErrorCode | null;
   item(c: Collector, node: Node, path: string[], sectionPath: string[]): CriteriaLeaf | null;
@@ -100,13 +105,17 @@ function leafMilestone(c: Collector, node: Node, path: string[]): string | undef
   return undefined;
 }
 
-/** Which points key a leaf carries: one of `max_points` and `bonus_points`, else null (refused). */
+/**
+ * Which points key a leaf's amount is read from: `max_points` when present
+ * (beside a `bonus_points` too, refused `both_points`, so both refusals are
+ * named), else `bonus_points`, else null (refused `missing_points`).
+ */
 function leafPointsKey(c: Collector, node: Node, path: string[]): "max_points" | "bonus_points" | null {
   const hasMax = "max_points" in node;
   const hasBonus = "bonus_points" in node;
   if (hasMax && hasBonus) c.add(path, "both_points");
   if (!hasMax && !hasBonus) c.add(path, "missing_points");
-  return hasMax === hasBonus ? null : hasMax ? "max_points" : "bonus_points";
+  return hasMax ? "max_points" : hasBonus ? "bonus_points" : null;
 }
 
 /** The leaf as both schemas return it, once its checks passed. */
@@ -168,6 +177,7 @@ function v2Awarded(c: Collector, value: unknown, max: number, path: string[]): v
 
 const SCHEMA_2: Schema = {
   version: 2,
+  topKeys: null,
   isLeaf: (node) => V2_POINT_KEYS.some((k) => k in node),
   badName: (name) => (name.includes(".") ? "dotted_key" : null),
   /** `_validate_v2_item`. */
@@ -179,15 +189,12 @@ const SCHEMA_2: Schema = {
     const test = node.test === undefined ? undefined : c.string(node.test, [...path, "test"]);
     const milestone = leafMilestone(c, node, path);
     if (!("awarded_points" in node)) c.add([...path, "awarded_points"], "missing_awarded");
-    leafPointsKey(c, node, path);
-    const hasMax = "max_points" in node;
-    const key = hasMax ? "max_points" : "bonus_points";
-    // Beside a second points key, the maximum is still read: both refusals are named, as before.
-    const points = key in node ? v2Total(c, node[key], [...path, key]) : null;
+    const key = leafPointsKey(c, node, path);
+    const points = key === null ? null : v2Total(c, node[key], [...path, key]);
     if (points !== null && key === "bonus_points" && points < 0) c.add([...path, key], "negative_bonus");
-    if (points !== null && "awarded_points" in node) v2Awarded(c, node.awarded_points, points, [...path, key]);
+    if (points !== null && "awarded_points" in node) v2Awarded(c, node.awarded_points, points, [...path, key!]);
     if (c.errors.length > before) return null;
-    return leafOf(path, sectionPath, description!, key, points!, { prompt, test, milestone });
+    return leafOf(path, sectionPath, description!, key!, points!, { prompt, test, milestone });
   },
   sources(c, value, path) {
     if (isTextList(value)) return value;
@@ -201,8 +208,6 @@ const SCHEMA_2: Schema = {
 const V3_FIELDS = new Set(["description", "desc", "max_points", "bonus_points", "awarded_points", "rationale", "prompt", "command", "milestone"]);
 /** A mapping carrying one of these is a leaf, never a section (StudentScore's `_V3_LEAF_MARKERS`). */
 const V3_LEAF_MARKERS = [...V3_FIELDS].filter((key) => key !== "description");
-/** A wildcard in a source (StudentScore's `_WILDCARD_PATTERN`). */
-const WILDCARD = /[*?[]/;
 
 /** A maximum or a bonus (`_v3_amount`): a non-zero number, a bonus positive. */
 function v3Amount(c: Collector, value: unknown, path: string[], bonus: boolean): number | null {
@@ -236,8 +241,9 @@ function v3Command(c: Collector, value: unknown, path: string[]): string[] | und
 
 const SCHEMA_3: Schema = {
   version: 3,
+  topKeys: new Set(["schema_version", "grading", "criteria"]),
   isLeaf: (node) => V3_LEAF_MARKERS.some((k) => k in node),
-  badName: (name) => (name.includes(".") ? "dotted_key" : /\s/.test(name) ? "spaced_key" : null),
+  badName: (name) => (NAME_PATTERN.test(name) ? null : name.includes(".") ? "dotted_key" : "spaced_key"),
   /** `_validate_v3_item`. */
   item(c, node, path, sectionPath) {
     const before = c.errors.length;
@@ -254,7 +260,7 @@ const SCHEMA_3: Schema = {
   sources(c, value, path) {
     const sources = SCHEMA_2.sources(c, value, path);
     sources.forEach((source, index) => {
-      if (WILDCARD.test(source)) c.add([...path, String(index)], "wildcard_source", { source });
+      if (!PLAIN_SOURCE_PATTERN.test(source)) c.add([...path, String(index)], "wildcard_source", { source });
     });
     return sources;
   },
@@ -320,13 +326,22 @@ function grading(c: Collector, schema: Schema, value: unknown): CriteriaGrading 
   return out;
 }
 
+/** What a caller expects: the schema version its snapshot is (or will be) taken at (ADR-119 §3, "Versions"). */
+export interface CriteriaParseOptions {
+  version: 2 | 3;
+}
+
+const SCHEMAS = { 2: SCHEMA_2, 3: SCHEMA_3 } as const;
+
 /**
- * Reads a `criteria.yml`: the criteria, or every refusal with its path.
- * `schema_version` 2 or 3 picks the rules; `1` (or its absence, which
- * StudentScore reads as 1) is refused with `schema_v1`, anything else with
- * `schema_version`.
+ * Reads a `criteria.yml` at the version the caller expects: the criteria,
+ * or every refusal with its path. A file of another version gets one
+ * refusal naming the expected version (`params.expected`): `schema_v1`
+ * for 1 (or no `schema_version`, which StudentScore reads as 1),
+ * `schema_version` for anything else — a reload never changes a
+ * snapshot's version.
  */
-export function parseCriteria(yamlText: string): CriteriaParse {
+export function parseCriteria(yamlText: string, { version }: CriteriaParseOptions): CriteriaParse {
   const c = new Collector();
   const doc = parseDocument(yamlText);
   if (doc.errors.length > 0) {
@@ -338,15 +353,14 @@ export function parseCriteria(yamlText: string): CriteriaParse {
     c.add([], "not_mapping");
     return { ok: false, errors: c.errors };
   }
-  const schema = data.schema_version === 2 ? SCHEMA_2 : data.schema_version === 3 ? SCHEMA_3 : null;
-  if (schema === null) {
-    c.add(["schema_version"], data.schema_version === undefined || data.schema_version === 1 ? "schema_v1" : "schema_version");
+  if (data.schema_version !== version) {
+    const v1 = data.schema_version === undefined || data.schema_version === 1;
+    c.add(["schema_version"], v1 ? "schema_v1" : "schema_version", { expected: version });
     return { ok: false, errors: c.errors };
   }
-  const out: ParsedCriteria = { schemaVersion: schema.version, grading: grading(c, schema, data.grading), sections: [], leaves: [] };
-  if (schema.version === 3) {
-    for (const key of Object.keys(data)) if (key !== "schema_version" && key !== "grading" && key !== "criteria") c.add([key], "unknown_key");
-  }
+  const schema = SCHEMAS[version];
+  const out: ParsedCriteria = { schemaVersion: version, grading: grading(c, schema, data.grading), sections: [], leaves: [] };
+  if (schema.topKeys) for (const key of Object.keys(data)) if (!schema.topKeys.has(key)) c.add([key], "unknown_key");
   if (data.criteria === undefined || data.criteria === null) c.add(["criteria"], "missing_criteria");
   else if (!isMapping(data.criteria)) c.add(["criteria"], "not_mapping");
   else section(c, schema, data.criteria, ["criteria"], [], out);

@@ -13,8 +13,6 @@ export const RESULTS_SCHEMA_ID = "https://quiz.chevallier.io/schemas/results-1.j
 export const CRITERIA_SCHEMA_ID = "https://quiz.chevallier.io/schemas/criteria-3.json";
 /** The most UTF-8 bytes of a criterion's `log` the platform keeps (its tail, {@link tailUtf8}). */
 export const RESULT_LOG_MAX_BYTES = 8 * 1024;
-/** The most UTF-8 bytes of a `results.json` the platform reads: its reader stops there, never refuses the file for its logs. */
-export const RESULTS_FILE_MAX_BYTES = 256 * 1024;
 /** What starts a log that was cut (StudentScore's `_TRUNCATED`). */
 export const TRUNCATED_MARK = "[... truncated]\n";
 
