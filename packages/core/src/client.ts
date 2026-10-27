@@ -7,6 +7,7 @@
  */
 import type { ComponentType, LazyExoticComponent, ReactNode } from "react";
 import type { QuestionTypeId } from "./contract.js";
+import type { GenerateTarget } from "./generate.js";
 
 export interface EditorProps<TConfig> {
   config: TConfig;
@@ -114,6 +115,14 @@ export interface EditorProps<TConfig> {
    * or a type the host does not offer it for — the editor shows no wand.
    */
   onGenerateItem?: (index: number) => Promise<void>;
+  /**
+   * The wand of one part of the draft the type declares as a target
+   * (`GenerateTarget`: an essay criterion's grading prompt, an essay's rubric
+   * split into criteria). Same contract as `onGenerateItem`: the host asks,
+   * sets the merged draft, and resolves once applied or rejects after saying
+   * why. Absent: no wand.
+   */
+  onGenerateTarget?: (target: GenerateTarget) => Promise<void>;
 }
 
 /**

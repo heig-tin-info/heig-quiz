@@ -18,6 +18,19 @@ export const RICH_MAX_CRITERIA = 12;
 export const RICH_MAX_WEIGHT = 100;
 export const RICH_MAX_CRITERION_TITLE = 120;
 export const RICH_MAX_CRITERION_PROMPT = 2_000;
+/** The longest grading instructions (`rubric`). */
+export const RICH_MAX_RUBRIC = 20_000;
+
+/**
+ * The parts of an essay the wand writes on their own (`GenerateTarget`,
+ * ADR-118), named once for the editor that asks and the generator that
+ * answers: one criterion's prompt (`id`: the criterion's), and a legacy
+ * rubric split into criteria.
+ */
+export const RICH_TARGETS = {
+  criterionPrompt: "criterionPrompt",
+  criteriaFromRubric: "criteriaFromRubric",
+} as const;
 
 /**
  * The hard cap of an answer, whatever the question says: about seventeen A4
@@ -86,7 +99,7 @@ export const RichConfigSchema = z.object({
    * owes the tool no form — but it never reaches a student before the key is
    * released (invariant 4).
    */
-  rubric: z.string().max(20_000).default(""),
+  rubric: z.string().max(RICH_MAX_RUBRIC).default(""),
   /**
    * The structured criteria (ADR-118), the grader's alone like the rubric:
    * each scored `0..weight`, the item's points scaled over their sum. With

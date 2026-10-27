@@ -179,6 +179,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
           config: body.config,
           explanation: body.explanation,
           item: body.item,
+          target: body.target,
           userId: req.user!.id,
         });
       },

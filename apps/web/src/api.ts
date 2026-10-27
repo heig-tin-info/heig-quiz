@@ -170,6 +170,7 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   llm_failed: "error.llmFailed",
   statement_empty: "error.statementEmpty",
   item_not_empty: "error.itemNotEmpty",
+  target_unavailable: "error.targetUnavailable",
   generate_unsupported: "error.generateUnsupported",
   // ADR-060: the LLM review.
   not_published: "error.notPublished",

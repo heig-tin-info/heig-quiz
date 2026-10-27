@@ -65,4 +65,23 @@ describe("AdvancedDisclosure", () => {
     expect(details?.querySelector("summary")?.textContent).toBe("Advanced options");
     expect(screen.getByText("budget").parentElement?.className).toBe("mt-4 flex flex-col gap-3");
   });
+
+  it("opens at mount on request, plain without a card, and keeps the teacher's fold afterwards", () => {
+    const { container, rerender } = render(
+      <AdvancedDisclosure summary="Global instructions" className="flex" plain defaultOpen>
+        <span>spelling</span>
+      </AdvancedDisclosure>,
+    );
+    const details = container.querySelector("details")!;
+    expect(details.open).toBe(true);
+    expect(details.className).toBe("");
+    fireEvent.click(details.querySelector("summary")!);
+    details.open = false;
+    rerender(
+      <AdvancedDisclosure summary="Global instructions" className="flex" plain defaultOpen={false}>
+        <span>spelling</span>
+      </AdvancedDisclosure>,
+    );
+    expect(details.open).toBe(false);
+  });
 });

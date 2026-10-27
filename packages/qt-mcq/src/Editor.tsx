@@ -77,6 +77,7 @@ import {
   Segmented,
   TextInput,
   TrashIcon,
+  useWandRunner,
   WandIcon,
 } from "@quiz/ui";
 import { choiceLetter, Pastille, Tip } from "./ui.js";
@@ -173,15 +174,8 @@ export function McqEditor({
 }: McqEditorProps) {
   const s = resolveStrings(mcqEditorStrings, strings);
   /** The row whose wand is waiting for the model (ADR-059); one at a time. */
-  const [generating, setGenerating] = useState<number | null>(null);
-  const generate = (ask: (index: number) => Promise<void>, index: number) => {
-    setGenerating(index);
-    // The host words a failure; the row only stops waiting. A second wand
-    // cannot start meanwhile: every row's is disabled while one waits.
-    ask(index)
-      .catch(() => undefined)
-      .finally(() => setGenerating(null));
-  };
+  const { running: generating, run } = useWandRunner<number>();
+  const generate = (ask: (index: number) => Promise<void>, index: number) => run(index, () => ask(index));
   const multiple = config.mode === "multiple";
   const correctCount = config.choices.filter((c) => c.correct).length;
   /**

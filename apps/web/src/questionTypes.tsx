@@ -25,7 +25,7 @@
  */
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 
-import type { TryResult } from "@quiz/contracts";
+import type { GenerateTarget, TryResult } from "@quiz/contracts";
 import type {
   ConfigIssue,
   EditorProps,
@@ -715,6 +715,7 @@ export function QuestionEditorHost({
   published,
   onTry,
   onGenerateItem,
+  onGenerateTarget,
 }: {
   type: string;
   config: unknown;
@@ -743,6 +744,8 @@ export function QuestionEditorHost({
   onTry?: (config: unknown) => Promise<TryOutcome>;
   /** The wand of one element of the type's list (`EditorProps.onGenerateItem`, ADR-059). */
   onGenerateItem?: (index: number) => Promise<void>;
+  /** The wand of one target of the type (`EditorProps.onGenerateTarget`, ADR-118). */
+  onGenerateTarget?: (target: GenerateTarget) => Promise<void>;
 }) {
   // A focused canvas (the reference, the starter) lends its keys to the
   // sidebar strip, on top of the page's, like a rich-text field (issue #549).
@@ -772,6 +775,7 @@ export function QuestionEditorHost({
         {...(published === undefined ? {} : { published })}
         {...(onTry === undefined ? {} : { onTry })}
         {...(onGenerateItem === undefined ? {} : { onGenerateItem })}
+        {...(onGenerateTarget === undefined ? {} : { onGenerateTarget })}
         onTryInBrowser={tryReferenceInBrowser}
         // Every editor host lends the layer; the save state in its bar is the
         // question editor's (`EditorExpandChrome`), absent elsewhere.

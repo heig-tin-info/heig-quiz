@@ -124,6 +124,7 @@ export function QuestionEditTab({
               published={data.latestPublished !== null}
               {...(onTry === undefined ? {} : { onTry })}
               {...(wand.item === undefined ? {} : { onGenerateItem: wand.item })}
+              {...(wand.target === undefined ? {} : { onGenerateTarget: wand.target })}
             />
           ) : (
             <Spinner />
