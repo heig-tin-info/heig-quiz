@@ -184,7 +184,7 @@ describe("parseCriteria refusals", () => {
 
   it("refuses schema version 1, an unknown version, and a file without criteria", () => {
     expect(errors("criteria:\n  a:\n    $desc: x\n").errors).toEqual([{ path: "schema_version", code: "schema_v1" }]);
-    expect(errors("schema_version: 3\n").errors[0]!.code).toBe("schema_version");
+    expect(errors("schema_version: 4\n").errors[0]!.code).toBe("schema_version");
     expect(errors("schema_version: 2\n").errors).toEqual([{ path: "criteria", code: "missing_criteria" }]);
     expect(errors("schema_version: 2\ncriteria: [a]\n").errors[0]!.code).toBe("not_mapping");
     expect(errors("schema_version: 2\ncriteria:\n  s:\n    description: only\n").errors[0]!.code).toBe("no_criteria");

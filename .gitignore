@@ -26,3 +26,6 @@ site/
 # Blockly's media, copied from the package (apps/web/scripts/copy-blockly-media.mjs)
 /apps/web/public/blockly-media/
 /.refresh.dump
+
+# Generated at build from packages/contracts/src/checkResults.ts
+packages/contracts/schemas/

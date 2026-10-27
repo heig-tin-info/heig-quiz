@@ -7,10 +7,11 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./schemas/*": "./schemas/*"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/write-schemas.mjs",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run"
   },
