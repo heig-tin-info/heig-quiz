@@ -37,7 +37,7 @@ import type {
   StudentFeedback,
   StudentResultItem,
 } from "@quiz/contracts";
-import { AI_KEY, INSTANCE_WARNING_KEY, JUSTIFICATION_KEY } from "@quiz/contracts";
+import { TEACHER_ONLY_DETAIL_KEYS } from "@quiz/contracts";
 import {
   evaluationTotal,
   attemptTotal,
@@ -992,7 +992,7 @@ export const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
   "referenceSolution",
 ];
 
-const teacherOnlyDetailKeys = new Set([JUSTIFICATION_KEY, AI_KEY, INSTANCE_WARNING_KEY]);
+const teacherOnlyDetailKeys = new Set(TEACHER_ONLY_DETAIL_KEYS);
 const forbiddenDetailKeys = new Set([...FORBIDDEN_DETAIL_KEYS, ...teacherOnlyDetailKeys]);
 
 /**

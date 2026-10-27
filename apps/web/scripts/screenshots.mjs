@@ -1657,6 +1657,12 @@ const scenes = [
   { name: "results-error", role: "teacher", path: "/evaluations/closed/results?fail=1", settle: 2500 },
 
   { name: "feedback", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback` },
+  // ADR-118 §5: the key published, an essay's validated points per criterion under the answer.
+  { name: "feedback-rich", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback?showkey=1`, fold: true, act: async (p) => {
+      const list = p.getByRole("list", { name: /^(Points per criterion|Points par critère)$/ }).first();
+      await list.waitFor();
+      await list.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    } },
   // ADR-026 (#130): negative marking, the mock's `?negative=1` scene flag.
   { name: "negative-eval-advanced", role: "teacher", path: "/evaluations/draft?step=timing&negative=1", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
   { name: "negative-lobby", role: "student", path: `${TAKE}?scene=lobby&negative=1` },

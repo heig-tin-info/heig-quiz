@@ -1,5 +1,5 @@
 /** Smoke tests: the components render, report every change and keep no state they should not. */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { RichTextProps } from "@quiz/core/client";
@@ -198,6 +198,55 @@ describe("RichReview", () => {
     expect(screen.queryByText("No grading instructions.")).toBeNull();
     expect(screen.queryByText("Criteria")).toBeNull();
     expect(screen.queryByText(/CRITERION-/)).toBeNull();
+  });
+
+  describe("the validated points per criterion (ADR-118 §5)", () => {
+    const breakdown = [
+      { id: "thesis", title: "Thesis", points: 2, maxPoints: 2.5 },
+      { id: "sources", title: "Sources", points: 0.75, maxPoints: 1.5 },
+    ];
+    const ai = {
+      model: "model-x",
+      criteria: [{ id: "thesis", criterion: "Thesis", points: 2, maxPoints: 2.5, comment: "MODEL-SENTENCE" }],
+    };
+    const lines = (name: string) =>
+      within(screen.getByRole("list", { name })).getAllByRole("listitem").map((l) => l.textContent);
+
+    it("lists each title and its points under the answer, the score line unchanged", () => {
+      render(
+        <RichReview
+          student={student}
+          answer={{ text: "x" }}
+          solution={null}
+          details={{ reason: "llm", chars: 1, breakdown }}
+          points={2.74}
+          maxPoints={4}
+          audience="student"
+        />,
+      );
+      expect(lines("Points per criterion")).toEqual(["Thesis2 / 2.5", "Sources0.75 / 1.5"]);
+      expect(screen.getByText("2.74 / 4")).toBeInTheDocument();
+    });
+
+    it("adds the model's sentence for the teacher only", () => {
+      const details = { reason: "llm" as const, chars: 1, breakdown, ai };
+      const props = { student, answer: { text: "x" }, solution: null, points: 2.75, maxPoints: 4 };
+      const { unmount } = render(<RichReview {...props} details={details} audience="teacher" />);
+      expect(screen.getByText("MODEL-SENTENCE")).toBeInTheDocument();
+      unmount();
+      render(<RichReview {...props} details={details} audience="student" />);
+      expect(screen.queryByText("MODEL-SENTENCE")).toBeNull();
+      expect(lines("Points per criterion")).toHaveLength(2);
+    });
+
+    it("shows no list without a breakdown, nor for an empty answer", () => {
+      const props = { student, solution: null, points: 0, maxPoints: 4, audience: "student" as const };
+      const { unmount } = render(<RichReview {...props} answer={{ text: "x" }} details={{ reason: "llm", chars: 1 }} />);
+      expect(screen.queryByRole("list", { name: "Points per criterion" })).toBeNull();
+      unmount();
+      render(<RichReview {...props} answer={{ text: "  " }} details={{ reason: "empty", chars: 0, breakdown }} />);
+      expect(screen.queryByRole("list", { name: "Points per criterion" })).toBeNull();
+    });
   });
 
   it("says when nothing was written", () => {

@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { makeFeedback } from "../test/grading-fixtures";
@@ -148,5 +148,41 @@ describe("student feedback", () => {
     expect(await screen.findByRole("heading", { name: "Question 1" })).toBeVisible();
     expect(screen.queryByText("Explanation")).toBeNull();
     expect(screen.queryByText("Your teacher's comment")).toBeNull();
+  });
+
+  // ADR-118 §5: the essay's validated points per criterion, when the key let them through.
+  it("lists an essay's points per criterion only when its details carry them", async () => {
+    const essay = (details: Record<string, unknown>) => ({
+      itemId: "i1",
+      position: 0,
+      type: "rich",
+      points: 2.75,
+      maxPoints: 4,
+      counting: "normal" as const,
+      verdict: "partial" as const,
+      student: { prompt: "Explain the stack.", format: "plain" },
+      answer: { text: "It grows down." },
+      solution: { reference: "A model answer." },
+      explanation: null,
+      details,
+      comment: null,
+    });
+    const breakdown = [
+      { id: "thesis", title: "Thesis", points: 2, maxPoints: 2.5 },
+      { id: "sources", title: "Sources", points: 0.75, maxPoints: 1.5 },
+    ];
+    mockFetch({ [`GET ${URL}`]: ok(makeFeedback({ items: [essay({ reason: "llm", chars: 14, breakdown })] })) });
+    const { unmount } = renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    const list = await screen.findByRole("list", { name: "Points per criterion" });
+    expect(within(list).getAllByRole("listitem").map((l) => l.textContent)).toEqual([
+      "Thesis2 / 2.5",
+      "Sources0.75 / 1.5",
+    ]);
+    unmount();
+
+    mockFetch({ [`GET ${URL}`]: ok(makeFeedback({ items: [essay({ reason: "llm", chars: 14 })] })) });
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    expect(await screen.findByText("It grows down.")).toBeVisible();
+    expect(screen.queryByRole("list", { name: "Points per criterion" })).toBeNull();
   });
 });

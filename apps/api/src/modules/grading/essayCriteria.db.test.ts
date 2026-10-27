@@ -365,10 +365,20 @@ describe("the breakdown reaches a student under a shown key only (ADR-118 §5)",
       const released = await reload(db, evaluation.id);
 
       for (const attempt of await db.select().from(attempts).where(eq(attempts.evaluationId, evaluation.id))) {
-        const payload = JSON.stringify(await results.studentFeedback(db, released, attempt, app.clock.now()));
+        const feedback = await results.studentFeedback(db, released, attempt, app.clock.now());
+        const payload = JSON.stringify(feedback);
         for (const secret of [SENTENCE, COMMENT, MODEL, PROMPT]) expect(payload).not.toContain(secret);
+        // A weight is the config's, never the breakdown's: no key names one.
+        expect(payload).not.toContain('"weight"');
         if (showKey) expect(payload).toContain(TITLE);
         else expect(payload).not.toContain(TITLE);
+        // The essay's details: the breakdown's own fields, the model's reply gone.
+        const essay = feedback.available ? feedback.items.find((i) => breakdownOf(i.details) !== null) : undefined;
+        if (showKey) {
+          expect(essay?.details).toEqual({ reason: "llm", chars: 30, breakdown: BREAKDOWN });
+        } else {
+          expect(essay).toBeUndefined();
+        }
       }
     });
   }

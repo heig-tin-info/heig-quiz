@@ -606,7 +606,8 @@ export function makeEvaluation(
     feedbackPolicy: {
       when: "on_release",
       showAnswer: true,
-      showKey: false,
+      // `?showkey=1`: the key is published, an essay's points per criterion with it (ADR-118 §5).
+      showKey: flags.showkey === true,
       showExplanation: false,
       showHiddenCaseNames: true,
       showTeacherComment: true,

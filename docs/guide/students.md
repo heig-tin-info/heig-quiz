@@ -217,7 +217,7 @@ For a graded quiz, nothing shows until your teacher publishes the results: the p
   <figcaption>Published results: the grade, the points, and one card per question.</figcaption>
 </figure>
 
-Once published, the page shows your **Grade** and your **Points**, then one card per question with your answer and its score. According to the feedback policy of the evaluation, a card may also show the expected answer, an **Explanation** written by the teacher, and **Your teacher's comment** on your answer. If your teacher adjusts a grading afterwards and publishes again, the page updates.
+Once published, the page shows your **Grade** and your **Points**, then one card per question with your answer and its score. According to the feedback policy of the evaluation, a card may also show the expected answer, an **Explanation** written by the teacher, and **Your teacher's comment** on your answer. When the expected answer is shown, an essay graded by criteria also lists **Points per criterion**: the name of each criterion and the points your teacher gave it. The question's score is the one that counts; its parts are rounded, so their sum may differ by 0.01. If your teacher adjusts a grading afterwards and publishes again, the page updates.
 
 ## Projects
 

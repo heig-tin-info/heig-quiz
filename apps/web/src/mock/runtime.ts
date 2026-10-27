@@ -76,6 +76,8 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  *   shows that teacher's test repository, badged (`mock/project.ts`).
  * `nollm`: the platform has no model (`GET /generate/availability` says so):
  *   no AI card in the question editor, no "LLM review" tab (ADR-082).
+ * `showkey`: every evaluation's feedback policy shows the key, so the
+ *   student's feedback carries an essay's points per criterion (ADR-118 §5).
  * `whatsnew`: the last release's entries are unseen, so What's new opens
  *   on the home and the lists until acknowledged (ADR-087, `mock/session.ts`).
  */
@@ -127,6 +129,7 @@ export const FLAG_NAMES = [
   "codespace",
   "sebproject",
   "nollm",
+  "showkey",
   "unstated",
   "whatsnew",
   "training",

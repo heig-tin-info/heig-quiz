@@ -2,8 +2,12 @@
  * Points per criterion, read-only: one line per criterion, its title, its
  * points over its maximum and, when there is one, the AI's sentence under
  * it. The one list of an AI proposal's breakdown (ADR-063 §4) and of a
- * validated one (ADR-118 §6), teacher-facing both.
+ * validated one (ADR-118 §6): the grading panel's, and the essay review's,
+ * which a student reads under a shown key — without any sentence, which
+ * the caller never passes there.
  */
+import type { ReactNode } from "react";
+
 import { formatPoints } from "@quiz/domain";
 
 export interface CriterionLine {
@@ -15,7 +19,7 @@ export interface CriterionLine {
   note?: string | undefined;
 }
 
-export function PointsByCriterion({ label, lines }: { label: string; lines: readonly CriterionLine[] }) {
+export function PointsByCriterion({ label, lines }: { label: string; lines: readonly CriterionLine[] }): ReactNode {
   return (
     <ul className="space-y-2" aria-label={label}>
       {lines.map((line) => (

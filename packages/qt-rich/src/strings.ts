@@ -69,6 +69,7 @@ export const richReviewStrings = {
   noRubric: "No grading instructions.",
   criteria: "Criteria",
   weight: "Weight {n}",
+  byCriterion: "Points per criterion",
   reference: "Model answer",
   score: "Score",
 } as const;

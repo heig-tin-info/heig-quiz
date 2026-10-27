@@ -1,10 +1,10 @@
 /**
  * An essay graded criterion by criterion (ADR-118 §6, amendment of
  * 2026-10-27): the points of each criterion on the item's scale, the total
- * derived from them and never typed (`breakdownTotal`, the server's rule),
- * and the validated breakdown read back on the panel. Everything here is
- * the teacher's; a student reads a breakdown only through the results'
- * student view.
+ * derived from them and never typed (`breakdownTotal`, the server's rule).
+ * Everything here is the teacher's. The validated breakdown is read back
+ * by the essay's review (`RichReview`), the teacher's and, under a shown
+ * key, the student's.
  */
 import { useId } from "react";
 
@@ -12,8 +12,7 @@ import { aiOf, breakdownOf } from "@quiz/contracts";
 import { breakdownTotal, criteriaMaxima, formatPoints, type DeclaredCriterion } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { FieldError, fieldErrorProps, PointsPill, Section } from "../ui";
-import { PointsByCriterion } from "./PointsByCriterion";
+import { FieldError, fieldErrorProps, PointsPill } from "../ui";
 
 /** What the form starts from, per criterion id: the validated breakdown, else the proposal, else 0. */
 export function initialCriteriaPoints(criteria: readonly DeclaredCriterion[], details: unknown): Record<string, string> {
@@ -119,24 +118,5 @@ export function CriteriaFields({
         </output>
       </p>
     </fieldset>
-  );
-}
-
-/**
- * The validated points per criterion of a grading, read-only, with the AI's
- * sentence under each when it proposed; nothing without a breakdown.
- */
-export function ValidatedBreakdown({ details }: { details: unknown }) {
-  const t = useT();
-  const breakdown = breakdownOf(details);
-  if (breakdown === null) return null;
-  const sentences = new Map((aiOf(details)?.criteria ?? []).map((c) => [c.id, c.comment]));
-  return (
-    <Section title={t("grading.criteria.validated")}>
-      <PointsByCriterion
-        label={t("grading.criteria.validated")}
-        lines={breakdown.map((line) => ({ ...line, key: line.id, note: sentences.get(line.id) }))}
-      />
-    </Section>
   );
 }

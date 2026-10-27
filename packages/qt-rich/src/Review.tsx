@@ -6,12 +6,18 @@
  * does — the criteria (ADR-118), the grading instructions and the model
  * answer BESIDE it on a wide pane, under it on a narrow one. A student's key
  * holds the model answer alone (ADR-037).
+ * Under the answer, once a teacher validated an essay graded by criteria,
+ * its points per criterion (`details.breakdown`, ADR-118 §5-§6): the
+ * snapshotted titles and validated points, which a student's details carry
+ * only under a shown key. The model's sentence per criterion joins them for
+ * the teacher alone; the score line stays the one total, never a re-sum.
  * There is no verdict: the points are the teacher's, and the score line
  * under the review says them once set.
  */
 import type { ReviewProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
-import { caption, cx, markdown, NotePanel, ReviewPrompt, ScoreHeader } from "@quiz/ui";
+import { aiOf, breakdownOf } from "@quiz/core/reasons";
+import { caption, cx, markdown, NotePanel, PointsByCriterion, ReviewPrompt, ScoreHeader, type CriterionLine } from "@quiz/ui";
 
 import { countChars, type RichAnswer, type RichDetails, type RichSolution, type RichStudent } from "./schema.js";
 import { richReviewStrings, type RichReviewStringKey } from "./strings.js";
@@ -24,8 +30,10 @@ export function RichReview({
   student,
   answer,
   solution,
+  details,
   points,
   maxPoints,
+  audience,
   sections,
   strings,
   renderMarkdown,
@@ -34,6 +42,7 @@ export function RichReview({
   const text = answer?.text ?? "";
   const written = text.trim() !== "";
   const guide = solution !== null && showsSection(sections, "solution") ? solution : null;
+  const lines = written ? criterionLines(details, audience) : null;
 
   const body = written ? (
     student.format === "markdown" ? (
@@ -56,13 +65,20 @@ export function RichReview({
             guide ? "grid items-start gap-3 @2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" : "grid",
           )}
         >
-          <NotePanel
-            eyebrow={s.answer}
-            tone="outlined"
-            aside={written ? fmt(s.count, { count: countChars(text) }) : null}
-          >
-            {body}
-          </NotePanel>
+          <div className="flex flex-col gap-3">
+            <NotePanel
+              eyebrow={s.answer}
+              tone="outlined"
+              aside={written ? fmt(s.count, { count: countChars(text) }) : null}
+            >
+              {body}
+            </NotePanel>
+            {lines ? (
+              <NotePanel eyebrow={s.byCriterion} tone="soft">
+                <PointsByCriterion label={s.byCriterion} lines={lines} />
+              </NotePanel>
+            ) : null}
+          </div>
 
           {guide ? (
             <div className="flex flex-col gap-3">
@@ -108,4 +124,24 @@ export function RichReview({
       <ScoreHeader label={s.score} points={points} maxPoints={maxPoints} />
     </div>
   );
+}
+
+/**
+ * The validated breakdown as lines, or `null` when there is none (a free
+ * rubric, a proposal not yet validated, a key not shown). The model's
+ * sentences are read for the teacher only: a student's details never carry
+ * them (the results module strips `ai`), and this review never asks.
+ */
+function criterionLines(details: RichDetails | null, audience: "teacher" | "student"): CriterionLine[] | null {
+  const breakdown = breakdownOf(details);
+  if (breakdown === null || breakdown.length === 0) return null;
+  const sentences =
+    audience === "teacher" ? new Map((aiOf(details)?.criteria ?? []).map((c) => [c.id, c.comment])) : null;
+  return breakdown.map((line) => ({
+    key: line.id,
+    title: line.title,
+    points: line.points,
+    maxPoints: line.maxPoints,
+    note: sentences?.get(line.id),
+  }));
 }

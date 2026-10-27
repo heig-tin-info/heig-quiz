@@ -62,8 +62,10 @@ Decision 6 is settled as follows.
 - **After the release.** `results_updated` compares grades only: a new split
   with an unchanged total notifies nobody.
 - **Who reads it.** `rich`'s `studentDetails` drops `breakdown` unless the
-  key is shown: under `showKey` the feedback payload carries it; the
-  student screen of §5 that renders it is still to build.
+  key is shown: under `showKey` the feedback payload carries it, and the
+  essay's `Review` lists it under the answer, "Points per criterion", for
+  the student and the teacher alike (the teacher's list adds the model's
+  sentence per criterion). The score line stays the item's points.
 
 ## Context
 
@@ -102,9 +104,10 @@ cost them points.
    context for the grader, sent beside the criteria.
 5. **What a student sees**: under `showKey`, once the teacher has validated
    the grading, each criterion's title and its validated points. Never a
-   criterion's prompt, never the model's sentence or justification. Until
-   that view exists, no criterion reaches any student payload: `toStudent`
-   and `studentSolution` drop them, tested by forbidden key and by value.
+   criterion's prompt, never the model's sentence or justification. They
+   come from the grading's validated breakdown (§6), never from the
+   question: `toStudent` and `studentSolution` keep dropping the criteria,
+   tested by forbidden key and by value.
 6. **Per-criterion grading**: the grading screen lets the teacher edit each
    criterion's points; the validated breakdown is stored with the grading
    under a student-readable key, distinct from `details.ai`.
@@ -129,8 +132,8 @@ cost them points.
 - The per-criterion grading of §6 is delivered (amendment of 2026-10-27):
   the grading screen edits each criterion's points and every validation
   stores the breakdown.
-- Still to build: the student view of §5, which renders the breakdown under
-  `showKey`.
+- The student view of §5 is delivered: under `showKey`, a validated
+  essay's review lists each criterion's title and points under the answer.
 
 ## Alternatives considered
 
