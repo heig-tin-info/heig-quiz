@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 
 import type { EvaluationMode, EvaluationSettings } from "@quiz/contracts";
 
+import type { TestClock } from "../clock.js";
 import type { Db } from "../db/client.js";
 import {
   classrooms,
@@ -30,9 +31,11 @@ import {
   answerToStudent,
   attemptItemView,
   beginAttempt,
+  closeEvaluation,
   ensureAttempt,
   enterEvaluation,
   participantOf,
+  saveAnswer,
   submitAttempt,
 } from "../modules/live/service.js";
 import * as evaluationService from "../modules/evaluation/service.js";
@@ -228,4 +231,36 @@ export async function shownAnswer(
   const entry = (await evaluationService.joinedItem(db, evaluationId, itemId))!;
   const { type, config, view } = attemptItemView(evaluation, entry, attempt);
   return answerToStudent(type, config, view, canonical);
+}
+
+/**
+ * A closed evaluation of a fresh {@link seedLive}: each student opened an
+ * attempt, one millisecond apart (the panel orders attempts by creation),
+ * and answered the items for which `answer` returns a payload; `null` leaves
+ * an item untouched.
+ */
+export async function closedWithAnswers(
+  db: Db,
+  clock: TestClock,
+  options: SeedOptions,
+  answer: (student: number, item: number) => unknown,
+) {
+  const seed = await seedLive(db, options);
+  let evaluation = await evaluationService.applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+  const items = await evaluationService.joinedItems(db, evaluation.id);
+  const attempts = [];
+  for (const [index, userId] of seed.studentIds.entries()) {
+    clock.advance(1);
+    const participant = (await participantOf(db, evaluation, userId))!;
+    const created = await ensureAttempt(db, evaluation, participant, clock.now());
+    const attempt = await beginAttempt(db, evaluation, created, participant, clock.now());
+    for (const [itemIndex, item] of items.entries()) {
+      const payload = answer(index, itemIndex);
+      if (payload === null) continue;
+      await saveAnswer(db, { evaluation, attempt, itemId: item.item.id, payload, revision: 1, now: clock.now() });
+    }
+    attempts.push(attempt);
+  }
+  evaluation = await closeEvaluation(db, evaluation, clock.now());
+  return { seed, evaluation, items, attempts };
 }

@@ -4,7 +4,13 @@ import { useId, useState, type ReactNode } from "react";
 
 import type { GradingColumn } from "@quiz/core/client";
 import { WandIcon } from "@quiz/ui";
-import { justificationOf, type Grading, type GradingEntry } from "@quiz/contracts";
+import {
+  justificationOf,
+  type Grading,
+  type GradingEntry,
+  type GradingQueueItem,
+  type ManualGradingBody,
+} from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { api } from "../api";
@@ -33,7 +39,6 @@ import { AiJustification } from "./AiJustification";
 import {
   CriteriaFields,
   criteriaBody,
-  essayCriteriaOf,
   initialCriteriaPoints,
   invalidCriteria,
   ValidatedBreakdown,
@@ -64,6 +69,8 @@ interface PanelProps {
   /** A parameterized question's table and template; null when static. */
   parameters?: GradingParameters | null;
   explanation: string | null;
+  /** The essay's criteria, from the queue's item (ADR-118 §6); none for every other question. */
+  criteria: NonNullable<GradingQueueItem["criteria"]>;
   onClose: () => void;
   /** One row up or down the table, the expected row included (↑ / ↓). */
   onMove: (delta: number) => void;
@@ -247,6 +254,7 @@ function EntryPanel({
   named,
   pane,
   explanation,
+  criteria,
   onClose,
   onAdjust,
   onValidate,
@@ -271,7 +279,7 @@ function EntryPanel({
     : entry.answerId
       ? `/app/api/answers/${entry.answerId}/gradings`
       : null;
-  const save = useMutation<Grading, unknown, AdjustBody>({
+  const save = useMutation<Grading, unknown, ManualGradingBody>({
     mutationFn: (body) => api(path!, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       invalidate();
@@ -377,6 +385,7 @@ function EntryPanel({
               key={`${entry.attemptId}:${entry.itemId}`}
               id={formId}
               entry={entry}
+              criteria={criteria}
               maxPoints={grading?.maxPoints ?? item.points}
               minPoints={item.minPoints ?? 0}
               justification={justification}
@@ -393,9 +402,6 @@ function EntryPanel({
   );
 }
 
-/** The override's body: the points, or an essay's points per criterion (ADR-118 §6). */
-type AdjustBody = { comment: string } & ({ points: number } | { criteria: { id: string; points: number }[] });
-
 /**
  * F-GRADE-05: the teacher's own points, with their MANDATORY comment. The
  * grading it replaces is not deleted — the server supersedes it, and the
@@ -406,6 +412,7 @@ type AdjustBody = { comment: string } & ({ points: number } | { criteria: { id: 
 function AdjustForm({
   id,
   entry,
+  criteria,
   maxPoints,
   minPoints,
   justification,
@@ -414,16 +421,17 @@ function AdjustForm({
 }: {
   id: string;
   entry: GradingEntry;
+  /** An essay's criteria: one points field each, the total derived (ADR-118 §6). */
+  criteria: PanelProps["criteria"];
   maxPoints: number;
   /** 0, or `-maxPoints` for a choice question under negative marking (ADR-026). */
   minPoints: number;
   /** The AI's, which the teacher may copy into the comment and edit (ADR-063 §7). */
   justification: string | null;
-  onSave: (body: AdjustBody) => void;
+  onSave: (body: ManualGradingBody) => void;
   error: ReactNode;
 }) {
   const t = useT();
-  const [criteria] = useState(() => essayCriteriaOf(entry.solution));
   const graded = criteria.length > 0;
   const [values, setValues] = useState(() => initialCriteriaPoints(criteria, entry.grading?.details ?? null));
   const [points, setPoints] = useState(() =>

@@ -159,7 +159,7 @@ describe("a failing notification", () => {
     const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());
     evaluation = await live.closeEvaluation(db, evaluation, app.clock.now());
     const [item] = await evaluationService.joinedItems(db, evaluation.id);
-    const cell = { attemptId: attempt.id, itemId: item!.item.id, answerId: null, maxPoints: item!.item.points };
+    const cell = { attemptId: attempt.id, itemId: item!.item.id, answerId: null, maxPoints: item!.item.points, criteria: [] };
     await grading.manualOverride(db, cell, { points: 0, comment: "blank" }, seed.teacherId, app.clock.now());
 
     vi.mocked(notifyMany).mockClear();

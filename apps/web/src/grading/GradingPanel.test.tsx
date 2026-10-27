@@ -745,7 +745,18 @@ describe("GradingPanel — adjusting an answer (F-GRADE-05)", () => {
 });
 
 describe("GradingPanel — an essay graded by criteria (ADR-118 §6)", () => {
-  const ESSAY_ITEM = { id: "i1", position: 0, internalName: "essay", type: "rich", points: 3 };
+  // The criteria come with the queue's item, from the type's `gradingCriteria`.
+  const ESSAY_ITEM = {
+    id: "i1",
+    position: 0,
+    internalName: "essay",
+    type: "rich",
+    points: 3,
+    criteria: [
+      { id: "thesis", title: "Thesis", weight: 2 },
+      { id: "sources", title: "Sources", weight: 1 },
+    ],
+  };
   const essay = (grading: Partial<Parameters<typeof makeGrading>[0]>) =>
     makeEntry({
       attemptId: "a1",
@@ -851,9 +862,8 @@ describe("GradingPanel — an essay graded by criteria (ADR-118 §6)", () => {
     await userEvent.click(rowOf("a1"));
     const panel = await screen.findByRole("dialog");
 
-    expect(within(panel).getByText("Validated points")).toBeInTheDocument();
-    const rows = within(panel).getAllByRole("row").filter((r) => /Thesis|Sources/.test(r.textContent ?? ""));
-    expect(rows.map((r) => r.textContent)).toEqual(["Thesis2 / 2", "Sources0.5 / 1"]);
+    const lines = within(within(panel).getByRole("list", { name: "Validated points" })).getAllByRole("listitem");
+    expect(lines.map((l) => l.textContent)).toEqual(["Thesis2 / 2", "Sources0.5 / 1"]);
   });
 });
 

@@ -4415,7 +4415,6 @@ export const en = {
   "grading.ai.model": "Proposed by {model}",
   "grading.ai.useAsComment": "Use as comment",
   "grading.criteria.legend": "Criteria",
-  "grading.criteria.criterion": "Criterion",
   "grading.criteria.weight": "Weight {n}",
   "grading.criteria.pointsInvalid": "Between 0 and {max} points.",
   "grading.criteria.total": "Total",

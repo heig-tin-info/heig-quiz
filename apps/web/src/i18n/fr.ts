@@ -4384,7 +4384,6 @@ export const fr: Record<keyof Dict, string> = {
   "grading.ai.model": "Proposé par {model}",
   "grading.ai.useAsComment": "Reprendre en commentaire",
   "grading.criteria.legend": "Critères",
-  "grading.criteria.criterion": "Critère",
   "grading.criteria.weight": "Poids {n}",
   "grading.criteria.pointsInvalid": "Entre 0 et {max} points.",
   "grading.criteria.total": "Total",

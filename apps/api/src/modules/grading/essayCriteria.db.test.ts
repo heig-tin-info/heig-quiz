@@ -21,9 +21,7 @@ import type { Db } from "../../db/client.js";
 import { answers, attempts, evaluations, gradings } from "../../db/schema.js";
 import { testApp, testDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { reload, seedLive } from "../../test/live.js";
-import { applyState, joinedItems } from "../evaluation/service.js";
-import * as live from "../live/service.js";
+import { closedWithAnswers, reload } from "../../test/live.js";
 import { typeOf } from "../pool/config.js";
 import * as results from "../results/service.js";
 import * as service from "./service.js";
@@ -56,22 +54,16 @@ beforeAll(async () => {
 afterAll(() => restore());
 
 /** What `askGrader` writes for the criteria item (ids) and the free one (none). */
-const proposalOf = (criteria: boolean) =>
-  criteria
+const PROPOSED = [
+  { id: "thesis", criterion: TITLE, points: 1.5, maxPoints: 2, comment: COMMENT },
+  { id: "sources", criterion: "Sources", points: 0.5, maxPoints: 1, comment: COMMENT },
+];
+
+const proposalOf = (essay: boolean, replied: object[] = PROPOSED) =>
+  essay
     ? {
         points: 2,
-        details: {
-          reason: "llm",
-          chars: 30,
-          justification: SENTENCE,
-          ai: {
-            model: MODEL,
-            criteria: [
-              { id: "thesis", criterion: TITLE, points: 1.5, maxPoints: 2, comment: COMMENT },
-              { id: "sources", criterion: "Sources", points: 0.5, maxPoints: 1, comment: COMMENT },
-            ],
-          },
-        },
+        details: { reason: "llm", chars: 30, justification: SENTENCE, ai: { model: MODEL, criteria: replied } },
       }
     : {
         points: 1,
@@ -83,48 +75,30 @@ const proposalOf = (criteria: boolean) =>
         },
       };
 
-/** Two students answered both questions; the model proposed for every cell, unless `proposals` is false. */
-async function proposed(options: { proposals?: boolean } = {}) {
+/**
+ * Two students answered both questions; the model proposed for every cell
+ * (its criteria `replied` on the essay), unless `proposals` is false.
+ */
+async function proposed(options: { proposals?: boolean; replied?: object[] } = {}) {
   const app = await testApp(db);
   app.clock.set("2026-10-27T09:00:00.000Z");
-  const seed = await seedLive(db, { students: 2, questions: 2 });
-  let evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
-  const items = await joinedItems(db, evaluation.id);
-  for (const userId of seed.studentIds) {
-    app.clock.advance(1);
-    const participant = (await live.participantOf(db, evaluation, userId))!;
-    const created = await live.ensureAttempt(db, evaluation, participant, app.clock.now());
-    const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());
-    for (const item of items) {
-      await live.saveAnswer(db, {
-        evaluation,
-        attempt,
-        itemId: item.item.id,
-        payload: "An essay of some length.",
-        revision: 1,
-        now: app.clock.now(),
-      });
-    }
-  }
-  evaluation = await live.closeEvaluation(db, evaluation, app.clock.now());
-  const attemptRows = await db.select().from(attempts).where(eq(attempts.evaluationId, evaluation.id));
-  const cells = [];
-  for (const attempt of attemptRows) {
-    for (const [index, item] of items.entries()) {
-      const [answer] = await db
-        .select()
-        .from(answers)
-        .where(eq(answers.attemptId, attempt.id))
-        .then((rows) => rows.filter((a) => a.itemId === item.item.id));
-      cells.push({
-        attemptId: attempt.id,
-        itemId: item.item.id,
-        answerId: answer!.id,
-        maxPoints: item.item.points,
-        criteria: index === 0,
-      });
-    }
-  }
+  const { evaluation, items, attempts: attemptRows } = await closedWithAnswers(
+    db,
+    app.clock,
+    { students: 2, questions: 2 },
+    () => "An essay of some length.",
+  );
+  const answerRows = await db.select().from(answers);
+  const cells = attemptRows.flatMap((attempt) =>
+    items.map((item, index) => ({
+      attemptId: attempt.id,
+      itemId: item.item.id,
+      answerId: answerRows.find((a) => a.attemptId === attempt.id && a.itemId === item.item.id)!.id,
+      maxPoints: item.item.points,
+      criteria: service.criteriaOf(item),
+      essay: index === 0,
+    })),
+  );
   if (options.proposals !== false) {
     await service.writeGradings(
       db,
@@ -137,7 +111,7 @@ async function proposed(options: { proposals?: boolean } = {}) {
         state: "proposed" as const,
         confidence: "high" as const,
         now: app.clock.now(),
-        ...proposalOf(c.criteria),
+        ...proposalOf(c.essay, options.replied),
       })),
     );
   }
@@ -158,9 +132,9 @@ const BREAKDOWN = [
 describe("a validation writes the breakdown (ADR-118 §6)", () => {
   it("as-is: the proposal's points per criterion, its total, its reply kept beside", async () => {
     const { app, cells, teacher } = await proposed();
-    const cell = cells.find((c) => c.criteria)!;
+    const cell = cells.find((c) => c.essay)!;
 
-    const row = await service.validateGrading(db, await standing(cell), {}, teacher, app.clock.now());
+    const row = await service.validateGrading(db, await standing(cell), cell.criteria, {}, teacher, app.clock.now());
 
     expect(row).toMatchObject({ points: 2, source: "llm", state: "validated" });
     expect(breakdownOf(row.details)).toEqual(BREAKDOWN);
@@ -178,17 +152,18 @@ describe("a validation writes the breakdown (ADR-118 §6)", () => {
     for (const cell of cells) {
       const row = await standing(cell);
       expect(row.state).toBe("validated");
-      expect(breakdownOf(row.details)).toEqual(cell.criteria ? BREAKDOWN : null);
+      expect(breakdownOf(row.details)).toEqual(cell.essay ? BREAKDOWN : null);
     }
   });
 
   it("adjusted per criterion: the total is derived, and the grading becomes the teacher's", async () => {
     const { app, cells, teacher } = await proposed();
-    const cell = cells.find((c) => c.criteria)!;
+    const cell = cells.find((c) => c.essay)!;
 
     const row = await service.validateGrading(
       db,
       await standing(cell),
+      cell.criteria,
       { criteria: [{ id: "sources", points: 0.25 }, { id: "thesis", points: 2 }] },
       teacher,
       app.clock.now(),
@@ -203,10 +178,11 @@ describe("a validation writes the breakdown (ADR-118 §6)", () => {
 
   it("refuses points per criterion that are not the item's, and a bare total for a criteria essay", async () => {
     const { app, cells, teacher } = await proposed();
-    const withCriteria = await standing(cells.find((c) => c.criteria)!);
-    const free = await standing(cells.find((c) => !c.criteria)!);
-    const refused = (grading: typeof withCriteria, input: Parameters<typeof service.validateGrading>[2]) =>
-      service.validateGrading(db, grading, input, teacher, app.clock.now()).then(
+    const essay = cells.find((c) => c.essay)!;
+    const withCriteria = await standing(essay);
+    const free = await standing(cells.find((c) => !c.essay)!);
+    const refused = (grading: typeof withCriteria, input: Parameters<typeof service.validateGrading>[3]) =>
+      service.validateGrading(db, grading, grading === free ? [] : essay.criteria, input, teacher, app.clock.now()).then(
         () => null,
         (err: { code?: string }) => err.code,
       );
@@ -221,15 +197,64 @@ describe("a validation writes the breakdown (ADR-118 §6)", () => {
     expect(await refused(withCriteria, { points: 1 })).toBe("criteria_invalid");
     expect(await refused(free, { criteria: [thesis] })).toBe("criteria_invalid");
     // Nothing was written.
-    expect((await standing(cells.find((c) => c.criteria)!)).state).toBe("proposed");
+    expect((await standing(cells.find((c) => c.essay)!)).state).toBe("proposed");
   });
+
+  it("makes the grading the teacher's when points only move between criteria", async () => {
+    const { app, cells, teacher } = await proposed();
+    const cell = cells.find((c) => c.essay)!;
+
+    // The proposal's 1.5 + 0.5, split 1 + 1: the same total.
+    const row = await service.validateGrading(
+      db,
+      await standing(cell),
+      cell.criteria,
+      { criteria: [{ id: "thesis", points: 1 }, { id: "sources", points: 1 }] },
+      teacher,
+      app.clock.now(),
+    );
+
+    expect(row).toMatchObject({ points: 2, source: "manual" });
+  });
+
+  it("keeps the proposal's split as the model's when the teacher sends it unchanged", async () => {
+    const { app, cells, teacher } = await proposed();
+    const cell = cells.find((c) => c.essay)!;
+
+    const row = await service.validateGrading(
+      db,
+      await standing(cell),
+      cell.criteria,
+      { criteria: [{ id: "thesis", points: 1.5 }, { id: "sources", points: 0.5 }] },
+      teacher,
+      app.clock.now(),
+    );
+
+    expect(row).toMatchObject({ points: 2, source: "llm" });
+  });
+
+  for (const [what, replied] of [
+    ["a criterion without an id", [{ ...PROPOSED[0]!, id: undefined }, PROPOSED[1]!]],
+    ["ids that are not the item's", [PROPOSED[0]!, { ...PROPOSED[1]!, id: "style" }]],
+    ["one criterion missing", [PROPOSED[0]!]],
+  ] as const) {
+    it(`writes no breakdown for a proposal with ${what}, and keeps its total`, async () => {
+      const { app, cells, teacher } = await proposed({ replied: [...replied] });
+      const cell = cells.find((c) => c.essay)!;
+
+      const row = await service.validateGrading(db, await standing(cell), cell.criteria, {}, teacher, app.clock.now());
+
+      expect(row).toMatchObject({ points: 2, source: "llm", state: "validated" });
+      expect(breakdownOf(row.details)).toBeNull();
+    });
+  }
 });
 
 describe("an override of an essay with criteria (F-GRADE-05)", () => {
   it("keeps the model's reply, writes the new breakdown and derives the total", async () => {
     const { app, cells, teacher } = await proposed();
-    const cell = cells.find((c) => c.criteria)!;
-    await service.validateGrading(db, await standing(cell), {}, teacher, app.clock.now());
+    const cell = cells.find((c) => c.essay)!;
+    await service.validateGrading(db, await standing(cell), cell.criteria, {}, teacher, app.clock.now());
     app.clock.advance(1000);
 
     const row = await service.manualOverride(
@@ -250,7 +275,7 @@ describe("an override of an essay with criteria (F-GRADE-05)", () => {
 
   it("grades by criteria a cell no model proposed for", async () => {
     const { app, cells, teacher } = await proposed({ proposals: false });
-    const cell = cells.find((c) => c.criteria)!;
+    const cell = cells.find((c) => c.essay)!;
 
     const row = await service.manualOverride(
       db,
@@ -272,7 +297,7 @@ describe("an override of an essay with criteria (F-GRADE-05)", () => {
 
   it("writes `{ manual: true }` for an item without criteria, as before", async () => {
     const { app, cells, teacher } = await proposed();
-    const cell = cells.find((c) => !c.criteria)!;
+    const cell = cells.find((c) => !c.essay)!;
 
     const row = await service.manualOverride(db, cell, { points: 2, comment: "Fine." }, teacher, app.clock.now());
 

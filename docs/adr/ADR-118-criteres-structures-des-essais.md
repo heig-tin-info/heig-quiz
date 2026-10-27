@@ -51,6 +51,10 @@ Decision 6 is settled as follows.
   missing, unknown or duplicate id, a point out of range, a bare `points`
   for an essay with criteria, or `criteria` for an item without them is
   `422 criteria_invalid`.
+- **Whose grading it is.** A validation with the teacher's points per
+  criterion becomes `source: manual` when the total changes, and also when
+  the points only move between criteria: a teacher's split is not the
+  machine's (F-GRADE-04). Sent unchanged, the proposal stays the model's.
 - **What an override keeps.** For an essay with criteria, the details of the
   grading in force survive (`ai`, `justification`) beside `manual: true` and
   the new breakdown; a teacher grading a cell no model proposed for gets a
@@ -58,7 +62,8 @@ Decision 6 is settled as follows.
 - **After the release.** `results_updated` compares grades only: a new split
   with an unchanged total notifies nobody.
 - **Who reads it.** `rich`'s `studentDetails` drops `breakdown` unless the
-  key is shown; the student view of §5 is still to build.
+  key is shown: under `showKey` the feedback payload carries it; the
+  student screen of §5 that renders it is still to build.
 
 ## Context
 

@@ -45,6 +45,7 @@ export {
   AI_KEY,
   aiOf,
   BREAKDOWN_KEY,
+  BreakdownEntrySchema,
   breakdownOf,
   CRITERION_ID_PATTERN,
   isMachineReason,
@@ -109,6 +110,13 @@ export const GradingQueueItem = StaffItemRef.extend({
    * reads as 0.
    */
   minPoints: z.number().optional(),
+  /**
+   * The criteria an essay is graded by (ADR-118 §6), in their order, from
+   * the type's `gradingCriteria` on the version the item holds: the grading
+   * form offers one points field per criterion. The server always sends it;
+   * absent or empty, the item is graded by one total.
+   */
+  criteria: z.array(z.object({ id: z.string(), title: z.string(), weight: z.number() })).optional(),
   /**
    * The question's explanation, an aid beside the answer being graded; the
    * server sends it (`null`: none; absent in older fixtures). Teacher-facing only.

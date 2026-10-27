@@ -294,6 +294,7 @@ export function GradingPanel({
       student={shown?.student ?? null}
       parameters={parameters}
       explanation={data.explanation}
+      criteria={data.criteria}
       onClose={close}
       onMove={move}
       onAdjust={readOnly ? undefined : (on) => setPanel((p) => (p ? { ...p, adjust: on } : p))}

@@ -4,8 +4,11 @@
  * `comment`) of a grading no grader could settle. Wire values, closed here
  * once for the API (through `@quiz/contracts`, which re-exports them), the
  * web, and the grading columns of the question types (`@quiz/ui`), which
- * cannot depend on `@quiz/contracts`. No runtime import: plain values.
+ * cannot depend on `@quiz/contracts`. Plain values, and one zod schema (a
+ * validated breakdown's entry), which `zod` already brings to every reader.
  */
+import { z } from "zod";
+
 import type { LlmCriterion } from "./llm.js";
 
 /**
@@ -142,26 +145,22 @@ export const CRITERION_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
  */
 export const BREAKDOWN_KEY = "breakdown";
 
-export interface BreakdownEntry {
-  id: string;
-  title: string;
-  points: number;
-  maxPoints: number;
-}
+/** One criterion of a validated breakdown: the one shape, for the types' details schemas and the readers. */
+export const BreakdownEntrySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  points: z.number(),
+  maxPoints: z.number(),
+});
+export type BreakdownEntry = z.infer<typeof BreakdownEntrySchema>;
 
-const isBreakdownEntry = (e: unknown): e is BreakdownEntry =>
-  e !== null &&
-  typeof e === "object" &&
-  typeof (e as BreakdownEntry).id === "string" &&
-  typeof (e as BreakdownEntry).title === "string" &&
-  typeof (e as BreakdownEntry).points === "number" &&
-  typeof (e as BreakdownEntry).maxPoints === "number";
+const BreakdownSchema = z.array(BreakdownEntrySchema);
 
 /** `details.breakdown`, when a validation wrote one. */
 export function breakdownOf(details: unknown): BreakdownEntry[] | null {
   if (details && typeof details === "object" && BREAKDOWN_KEY in details) {
-    const list = (details as Record<string, unknown>)[BREAKDOWN_KEY];
-    if (Array.isArray(list) && list.every(isBreakdownEntry)) return list;
+    const parsed = BreakdownSchema.safeParse((details as Record<string, unknown>)[BREAKDOWN_KEY]);
+    if (parsed.success) return parsed.data;
   }
   return null;
 }

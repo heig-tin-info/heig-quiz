@@ -24,7 +24,9 @@ import type { GradingConfidence, GradingSource, GradingState, ItemCounting } fro
 import type { AnyQuestionTypeServer, ItemAggregate } from "@quiz/core/server";
 import { blocksServer } from "@quiz/qt-blocks/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
+import { diagramServer } from "@quiz/qt-diagram/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
+import { richServer } from "@quiz/qt-rich/server";
 import { shortServer } from "@quiz/qt-short/server";
 import type {
   CircuitStudent,
@@ -161,9 +163,16 @@ interface MockGradingWorld {
 
 const cellKey = (attemptId: string, itemId: string) => `${attemptId}:${itemId}`;
 
-/** An essay's criteria, as its published config declares them (ADR-118); none for any other type. */
+/** The types the model grades, through their own `gradingCriteria` hook as the API reads it (ADR-118 §6). */
+const LLM_GRADED: Partial<Record<string, AnyQuestionTypeServer>> = {
+  rich: richServer,
+  diagram: diagramServer,
+};
+
+/** A question's criteria, from its type's hook on the published config; none without one. */
 function criteriaOfQuestion(q: MockQuestion | undefined): DeclaredCriterion[] {
-  return q?.type === "rich" ? ((publishedConfig(q).criteria ?? []) as DeclaredCriterion[]) : [];
+  const hook = q ? LLM_GRADED[q.type]?.gradingCriteria : undefined;
+  return hook ? [...hook(publishedConfig(q!))] : [];
 }
 
 function criteriaOfItem(e: MockGradingWorld, itemId: string): DeclaredCriterion[] {
@@ -877,6 +886,7 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       type: i.type,
       points: i.points,
       minPoints: scoresNegatively(i.type, negativeOf(e.evaluation), i.counting) ? -i.points : 0,
+      criteria: criteriaOfItem(e, i.id),
       explanation: questions.find((q) => q.id === i.questionId)?.versions.at(-1)?.explanation || null,
       ...(FALL && i.questionId === FALL.id
         ? {

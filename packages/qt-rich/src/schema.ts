@@ -10,7 +10,7 @@
  */
 import { z } from "zod";
 
-import { CRITERION_ID_PATTERN } from "@quiz/core/reasons";
+import { BreakdownEntrySchema, CRITERION_ID_PATTERN } from "@quiz/core/reasons";
 
 /** v2 (ADR-118): `criteria`, an empty list for every v1 config. */
 export const RICH_CONFIG_VERSION = 2;
@@ -182,9 +182,7 @@ export const RichDetailsSchema = z.object({
    * by the teacher's validation, never by `grade`; a student reads it only
    * under a shown key ({@link richServer}'s `studentDetails`).
    */
-  breakdown: z
-    .array(z.object({ id: z.string(), title: z.string(), points: z.number(), maxPoints: z.number() }))
-    .optional(),
+  breakdown: z.array(BreakdownEntrySchema).optional(),
 });
 export type RichDetails = z.infer<typeof RichDetailsSchema>;
 

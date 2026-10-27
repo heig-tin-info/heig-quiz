@@ -13,23 +13,7 @@ import { breakdownTotal, criteriaMaxima, formatPoints, type DeclaredCriterion } 
 
 import { useT } from "../i18n";
 import { FieldError, fieldErrorProps, PointsPill, Section } from "../ui";
-
-/**
- * The criteria an entry's key declares, read structurally from the teacher's
- * solution (an essay's `toSolution` carries them): none for every other type.
- */
-export function essayCriteriaOf(solution: unknown): DeclaredCriterion[] {
-  const list = solution && typeof solution === "object" ? (solution as { criteria?: unknown }).criteria : undefined;
-  if (!Array.isArray(list)) return [];
-  return list.filter(
-    (c): c is DeclaredCriterion =>
-      c !== null &&
-      typeof c === "object" &&
-      typeof (c as DeclaredCriterion).id === "string" &&
-      typeof (c as DeclaredCriterion).title === "string" &&
-      typeof (c as DeclaredCriterion).weight === "number",
-  );
-}
+import { PointsByCriterion } from "./PointsByCriterion";
 
 /** What the form starts from, per criterion id: the validated breakdown, else the proposal, else 0. */
 export function initialCriteriaPoints(criteria: readonly DeclaredCriterion[], details: unknown): Record<string, string> {
@@ -138,31 +122,21 @@ export function CriteriaFields({
   );
 }
 
-/** The validated points per criterion of a grading, read-only; nothing without a breakdown. */
+/**
+ * The validated points per criterion of a grading, read-only, with the AI's
+ * sentence under each when it proposed; nothing without a breakdown.
+ */
 export function ValidatedBreakdown({ details }: { details: unknown }) {
   const t = useT();
   const breakdown = breakdownOf(details);
   if (breakdown === null) return null;
+  const sentences = new Map((aiOf(details)?.criteria ?? []).map((c) => [c.id, c.comment]));
   return (
     <Section title={t("grading.criteria.validated")}>
-      <table className="w-full text-[13px]">
-        <thead className="sr-only">
-          <tr>
-            <th scope="col">{t("grading.criteria.criterion")}</th>
-            <th scope="col">{t("grading.override.points")}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line">
-          {breakdown.map((line) => (
-            <tr key={line.id}>
-              <td className="py-1.5 pr-4 text-fg">{line.title}</td>
-              <td className="whitespace-nowrap py-1.5 text-right tabular-nums text-fg-muted">
-                {formatPoints(line.points)} / {formatPoints(line.maxPoints)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <PointsByCriterion
+        label={t("grading.criteria.validated")}
+        lines={breakdown.map((line) => ({ ...line, key: line.id, note: sentences.get(line.id) }))}
+      />
     </Section>
   );
 }

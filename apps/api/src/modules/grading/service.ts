@@ -69,7 +69,6 @@ import {
   auditLog,
   evaluationItems,
   gradings,
-  questions,
   questionVersions,
   users,
 } from "../../db/schema.js";
@@ -700,6 +699,7 @@ export async function gradingQueue(
       type: i.question.type,
       points: i.item.points,
       minPoints: pointsRangeOf(evaluation, i, i.item.points).min,
+      criteria: [...criteriaOf(i)],
       explanation: explanationOrNull(i.version.explanation),
       ...(isParameterized(i.version) ? { parameters: writtenOf(i) } : {}),
     })),
@@ -782,13 +782,12 @@ function pointsRangeOf(
 }
 
 /** Refuses a manual score outside {@link pointsRangeOf} with `422 points_out_of_range`. */
-export async function assertPointsInRange(
-  db: Db,
+export function assertPointsInRange(
   evaluation: EvaluationRecord,
-  cell: { itemId: string; maxPoints: number },
+  item: JoinedItem | null,
+  cell: { maxPoints: number },
   points: number,
-): Promise<void> {
-  const item = await joinedItem(db, evaluation.id, cell.itemId);
+): void {
   const range = pointsRangeOf(evaluation, item, cell.maxPoints);
   const value = round2(points);
   if (value < range.min || value > range.max) throw new GradingError("points_out_of_range", `the points must lie in [${range.min}, ${range.max}]`);
@@ -798,41 +797,52 @@ export async function assertPointsInRange(
  * F-GRADE-05. The comment is not optional and the previous grading is kept as
  * `superseded`: a manual correction must always be explainable afterwards.
  *
- * An essay with criteria (ADR-118 §6) is overridden criterion by criterion:
- * the total is derived from `input.criteria`, and the details of the grading
- * in force — the model's proposal, `ai` and `justification` — survive beside
- * the new breakdown. Every other item writes `{ manual: true }`.
+ * An essay with criteria (`target.criteria`, ADR-118 §6) is overridden
+ * criterion by criterion: the total is derived from `input.criteria`, and
+ * the details of the grading in force — the model's proposal, `ai` and
+ * `justification` — survive beside the new breakdown. Every other item
+ * writes `{ manual: true }`.
  */
 export async function manualOverride(
   db: Db,
-  target: { attemptId: string; itemId: string; answerId: string | null; maxPoints: number },
+  target: {
+    attemptId: string;
+    itemId: string;
+    answerId: string | null;
+    maxPoints: number;
+    /** The item's criteria ({@link criteriaOf}); none for an item graded by one total. */
+    criteria: readonly DeclaredCriterion[];
+  },
   input: { points?: number | undefined; criteria?: readonly CriterionPointsBody[] | undefined; comment: string },
   userId: string,
   now: Date,
 ): Promise<GradingRecord> {
   if (input.comment.trim().length === 0) throw new GradingError("comment_required");
-  const declared = await declaredCriteria(db, target.itemId);
-  const graded = criteriaOutcome(declared, target.maxPoints, input, null);
-  const details = graded.breakdown
-    ? {
-        ...teacherKept((await gradingInForce(db, target.attemptId, target.itemId))?.details),
-        manual: true,
-        [BREAKDOWN_KEY]: graded.breakdown,
-      }
-    : { manual: true };
-  return writeGrading(db, {
+  const graded = criteriaOutcome(target.criteria, target.maxPoints, input, null);
+  const points = graded.points ?? input.points;
+  // `ManualGradingBody` holds one of the two; a caller that sends neither is a bug.
+  if (points === undefined) throw new Error("manualOverride: neither points nor criteria");
+  const write: WriteGradingInput = {
     attemptId: target.attemptId,
     itemId: target.itemId,
     answerId: target.answerId,
-    points: graded.points ?? input.points ?? 0,
+    points,
     maxPoints: target.maxPoints,
     source: "manual",
     state: "validated",
-    details,
+    details: graded.breakdown ? { manual: true, [BREAKDOWN_KEY]: graded.breakdown } : { manual: true },
     comment: input.comment.trim(),
     gradedBy: userId,
     now,
+  };
+  if (!graded.breakdown) return writeGrading(db, write);
+  // The details kept are read inside the write's transaction, from the
+  // grading it supersedes: a validation landing meanwhile is the one kept.
+  const [row] = await writeGradings(db, [write], async (tx, inputs) => {
+    const previous = await gradingInForce(tx, write.attemptId, write.itemId);
+    return inputs.map((i) => ({ ...i, details: { ...teacherKept(previous?.details), ...(i.details as object) } }));
   });
+  return row!;
 }
 
 /** What an override keeps of the details it replaces: the model's proposal, for the teacher. */
@@ -846,7 +856,7 @@ function teacherKept(details: unknown): Record<string, unknown> {
 }
 
 /** The newest grading of a cell that is not superseded: what a correction replaces. */
-async function gradingInForce(db: Db, attemptId: string, itemId: string): Promise<GradingRecord | null> {
+async function gradingInForce(db: DbOrTx, attemptId: string, itemId: string): Promise<GradingRecord | null> {
   const [row] = await db
     .select()
     .from(gradings)
@@ -858,29 +868,13 @@ async function gradingInForce(db: Db, attemptId: string, itemId: string): Promis
 
 /**
  * The criteria an item is graded by (ADR-118 §6): its type's
- * `gradingCriteria` of the version it holds, as written. None for a type
- * without the hook, an essay without criteria, or a config that no longer
- * reads.
+ * `gradingCriteria` of the version it holds, as written. None for a missing
+ * item, a type without the hook or an essay without criteria; a config that
+ * does not read throws, as every reader of it does.
  */
-async function declaredCriteria(db: Db, itemId: string): Promise<readonly DeclaredCriterion[]> {
-  const [row] = await db
-    .select({ type: questions.type, version: questionVersions })
-    .from(evaluationItems)
-    .innerJoin(questionVersions, eq(evaluationItems.questionVersionId, questionVersions.id))
-    .innerJoin(questions, eq(questionVersions.questionId, questions.id))
-    .where(eq(evaluationItems.id, itemId))
-    .limit(1);
-  return row ? criteriaOfVersion(row.type, row.version) : [];
-}
-
-function criteriaOfVersion(type: string, version: JoinedItem["version"]): readonly DeclaredCriterion[] {
-  const hook = typeOf(type).gradingCriteria;
-  if (!hook) return [];
-  try {
-    return hook(writtenConfig(type, version).config);
-  } catch {
-    return [];
-  }
+export function criteriaOf(item: JoinedItem | null): readonly DeclaredCriterion[] {
+  const hook = item ? typeOf(item.question.type).gradingCriteria : undefined;
+  return hook ? hook(writtenConfig(item!.question.type, item!.version).config) : [];
 }
 
 /**
@@ -920,6 +914,10 @@ function criteriaOutcome(
   return result ? { breakdown: result.breakdown } : {};
 }
 
+/** Whether a teacher's breakdown splits the points as the proposal did, criterion by criterion. */
+const sameSplit = (given: readonly BreakdownEntry[], proposed: readonly BreakdownEntry[] | undefined): boolean =>
+  proposed !== undefined && given.every((line, i) => line.points === proposed[i]?.points);
+
 type ValidationInput = {
   points?: number | undefined;
   criteria?: readonly CriterionPointsBody[] | undefined;
@@ -930,23 +928,26 @@ type ValidationInput = {
  * F-GRADE-04. Validating a proposal keeps its details and its source: what
  * changes is that it now counts. Adjusting the points on the way makes it a
  * `manual` grading, because a teacher's number is not a machine's. An essay
- * with criteria is adjusted criterion by criterion (ADR-118 §6).
+ * with criteria (`criteria`, {@link criteriaOf}) is adjusted criterion by
+ * criterion (ADR-118 §6).
  */
 export async function validateGrading(
   db: Db,
   grading: GradingRecord,
+  criteria: readonly DeclaredCriterion[],
   input: ValidationInput,
   userId: string,
   now: Date,
 ): Promise<GradingRecord> {
-  const declared = await declaredCriteria(db, grading.itemId);
-  return writeGrading(db, validationOf(grading, input, declared, userId, now));
+  return writeGrading(db, validationOf(grading, input, criteria, userId, now));
 }
 
 /**
  * The write that validates `grading`: {@link validateGrading}'s, and each of
  * {@link batchValidate}'s. The validated breakdown of an essay with criteria
- * joins the details here, whichever path validates it.
+ * joins the details here, whichever path validates it. A teacher's points
+ * per criterion make the grading `manual` when they change the total or
+ * only move points between criteria (ADR-118, amendment of 2026-10-27).
  */
 function validationOf(
   grading: GradingRecord,
@@ -958,7 +959,10 @@ function validationOf(
   if (grading.state !== "proposed") throw new GradingError("not_pending");
   const graded = criteriaOutcome(declared, grading.maxPoints, input, grading.details);
   const points = graded.points ?? input.points ?? grading.points;
-  const adjusted = round2(points) !== grading.points;
+  const resplit =
+    input.criteria !== undefined &&
+    !sameSplit(graded.breakdown!, criteriaOutcome(declared, grading.maxPoints, {}, grading.details).breakdown);
+  const adjusted = round2(points) !== grading.points || resplit;
   // The proposal's details, the model's `ai` included, live on beside it.
   const details = graded.breakdown
     ? { ...(grading.details as Record<string, unknown> | null), [BREAKDOWN_KEY]: graded.breakdown }
@@ -1018,13 +1022,10 @@ export async function batchValidate(
   // no runner) are left to a person — the same rule the panel counts by, so
   // it is read here in TypeScript rather than restated in SQL.
   const batchable = rows.filter(({ grading }) => isBatchable(grading)).map(({ grading }) => grading);
-  const declared = new Map<string, readonly DeclaredCriterion[]>();
-  for (const itemId of new Set(batchable.map((g) => g.itemId))) {
-    declared.set(itemId, await declaredCriteria(db, itemId));
-  }
+  const criteria = new Map((await joinedItems(db, evaluationId)).map((i) => [i.item.id, criteriaOf(i)]));
   const written = await writeGradings(
     db,
-    batchable.map((grading) => validationOf(grading, {}, declared.get(grading.itemId)!, userId, now)),
+    batchable.map((grading) => validationOf(grading, {}, criteria.get(grading.itemId) ?? [], userId, now)),
   );
   return written.length;
 }
@@ -1184,6 +1185,8 @@ export async function cellOfAnswer(
   itemId: string;
   answerId: string;
   maxPoints: number;
+  /** The item, for its range and its criteria (ADR-118 §6). */
+  item: JoinedItem;
 } | null> {
   const [row] = await db
     .select({
@@ -1204,6 +1207,7 @@ export async function cellOfAnswer(
     itemId: row.itemId,
     answerId,
     maxPoints: item.item.points,
+    item,
   };
 }
 
