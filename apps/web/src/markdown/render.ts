@@ -4,6 +4,7 @@ import { Marked, type Tokens } from "marked";
 import { decodeEntities } from "@quiz/docrender/entities";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
 import { FormulaBudget } from "@quiz/docrender/katex";
+import { spaceTextToken } from "@quiz/docrender/typography";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 
 import { escapableStart, referenceAt } from "./delimiters";
@@ -155,6 +156,12 @@ const LINK_INSIDE = /\]\(/;
 const marked = new Marked({
   gfm: true, // tables, task lists, strikethrough, autolinks
   breaks: false,
+  // `automatiquement :` must not leave its colon alone on the next line: the
+  // space of a plain text token before `:` `;` `!` `?` `»` (after `«`)
+  // becomes a narrow no-break one (`@quiz/docrender/typography`, shared with
+  // the journal). Code, the `math` and `bracketRef` tokens and links' targets
+  // are other tokens and keep their spaces.
+  walkTokens: spaceTextToken,
   extensions: [
     /*
      * A `[[…]]` that reaches this renderer is LITERAL text: the server
@@ -253,7 +260,10 @@ function renderMathIn(
   while (match) {
     if (match.index > last) frag.append(doc.createTextNode(text.slice(last, match.index)));
     const display = match[1] !== undefined;
-    const tex = (match[1] ?? match[2] ?? "").trim();
+    // A `$…$` the `math` token refused (`$ a : b $`) reached this pass as
+    // TEXT, so French spacing went through it: its U+202F is a space again
+    // for KaTeX, which skips spaces in maths and would not know that one.
+    const tex = (match[1] ?? match[2] ?? "").replace(/\u202F/g, " ").trim();
     const host = doc.createElement("span");
     host.className = display ? "md-math md-math-display" : "md-math";
     // A broken or refused formula renders its source in the error colour

@@ -607,6 +607,8 @@ describe("the renderer version", () => {
       "",
       "![img](images/p.svg) [video](video.mp4) <b>raw</b>",
       "",
+      "Note : « oui » ?",
+      "",
     ].join("\n");
     const page = renderPage(source, ctx());
     const names = ["README.md", "010-basics/020-the_pointers.md", "B-notes/2-intro.md"].map((p) => [prettifyName(p), navSortKey(p)]);
@@ -616,9 +618,42 @@ describe("the renderer version", () => {
       .slice(0, 16);
     expect({ version: RENDERER_VERSION, hash }).toMatchInlineSnapshot(`
       {
-        "hash": "4a3ef992448e6af3",
-        "version": 2,
+        "hash": "4786ec00bfdf7bad",
+        "version": 3,
       }
     `);
+  });
+});
+
+describe("French spacing", () => {
+  const html = (source: string) => renderPage(source, ctx()).html;
+
+  it("puts a narrow no-break space before : ; ! ? » and after «", () => {
+    expect(html("automatiquement : oui ; non ! vrai ? « cité »")).toContain(
+      "automatiquement : oui ; non ! vrai ? « cité »",
+    );
+  });
+
+  it("spaces a mark that follows bold, a soft break or a list item", () => {
+    expect(html("**gras** :")).toContain("<strong>gras</strong> :");
+    expect(html("mot\n: suite")).toContain("mot : suite");
+    expect(html("- a :\n- b ?\n")).toContain("<li>a :</li>");
+    expect(html("- a :\n\n- b ?\n")).toContain("a :</p>");
+  });
+
+  it("leaves code, maths and a link's target as written", () => {
+    const out = html(
+      "`a ? b : c`\n\n```c\nx = a ? b : c;\n```\n\n$a : b$\n\n[voir ?](https://x.ch/q?a=1 \"t ?\")",
+    );
+    expect(out).toContain("<code>a ? b : c</code>");
+    expect(out).toContain("a ? b : c;");
+    expect(out).not.toContain("md-math-error");
+    expect(out).toContain('href="https://x.ch/q?a=1"');
+    expect(out).toContain(">voir ?</a>");
+  });
+
+  it("keeps a heading's anchor and spaces its TOC entry", () => {
+    const page = renderPage("# Exemple : x\n", ctx());
+    expect(page.toc).toEqual([{ id: "exemple-x", depth: 1, text: "Exemple : x" }]);
   });
 });

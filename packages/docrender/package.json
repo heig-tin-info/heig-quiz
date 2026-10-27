@@ -32,6 +32,10 @@
       "types": "./dist/katex.d.ts",
       "default": "./dist/katex.js"
     },
+    "./typography": {
+      "types": "./dist/typography.d.ts",
+      "default": "./dist/typography.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

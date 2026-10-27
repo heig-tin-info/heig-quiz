@@ -52,6 +52,7 @@ import { escapeHtml, highlight } from "./highlight.js";
 import { relativeHref, resolveRelative } from "./journalTree.js";
 import { FormulaBudget, KATEX_LIMITS, refusedBeforeKatex } from "./katex.js";
 import { taskTally } from "./tasks.js";
+import { spaceTextToken } from "./typography.js";
 
 export interface RenderContext {
   /** The classroom whose copy the page belongs to: asset URLs are scoped to it (D03). */
@@ -184,8 +185,9 @@ const EXTERNAL = /^(https?|mailto):/i;
  * `render.test.ts` pins a fixture's output to this version.
  *
  * 1: before the version existed. 2: task lists drawn as a course plan (#657).
+ * 3: French no-break spacing before `:` `;` `!` `?` `»` and after `«`.
  */
-export const RENDERER_VERSION = 2;
+export const RENDERER_VERSION = 3;
 
 /**
  * The rendered page. One `Marked` instance per call, closed over the warnings
@@ -222,6 +224,10 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
   const marked = new Marked({
     gfm: true, // tables, task lists, strikethrough, autolinks
     breaks: false,
+    // `automatiquement :` must not leave its colon alone on the next line
+    // (`typography.ts`). Text tokens only: code, maths and links' targets
+    // keep their spaces. It reaches the TOC and the title too.
+    walkTokens: spaceTextToken,
     renderer: {
       /**
        * Raw HTML never reaches the page: it is shown as the text the author

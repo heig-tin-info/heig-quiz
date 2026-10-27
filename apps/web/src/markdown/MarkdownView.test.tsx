@@ -440,3 +440,40 @@ describe("MarkdownView — a code block's own metrics", () => {
     expect(rule).toMatch(/line-height:\s*1\.6\b/);
   });
 });
+
+/*
+ * French spacing (`@quiz/docrender/typography`): the space an author typed
+ * before `:` `;` `!` `?` `»`, or after `«`, becomes U+202F so the mark never
+ * wraps alone onto the next line. Text only: code, maths and URLs keep theirs.
+ */
+describe("MarkdownView — French spacing", () => {
+  const html = (source: string) => renderMarkdown(source, "Code", { formula: FORMULA_LABELS });
+
+  it("makes the space before a French mark a narrow no-break one", () => {
+    expect(html("automatiquement : oui ; « non » !")).toContain(
+      "automatiquement\u202F: oui\u202F; «\u202Fnon\u202F»\u202F!",
+    );
+    expect(html("**gras** :")).toContain("<strong>gras</strong>\u202F:");
+    expect(html("- a :\n- b\n")).toContain("<li>a\u202F:</li>");
+  });
+
+  it("leaves code spans, fences and link targets as written", () => {
+    const out = html("`a ? b : c`\n\n```c\nx = a ? b : c;\n```\n\n[voir ?](https://x.ch/q?a=1)");
+    expect(out).toContain("<code>a ? b : c</code>");
+    expect(out).not.toMatch(/a\u202F\?|b\u202F:/);
+    expect(out).toContain('href="https://x.ch/q?a=1"');
+    expect(out).toContain(">voir\u202F?</a>");
+  });
+
+  it("still finds the maths beside a spaced mark, and inside a refused $…$", () => {
+    for (const source of ["$x$ :", "soit $x$ ;", "$a : b$", "$ a : b $"]) {
+      const body = document.createElement("div");
+      body.innerHTML = html(source);
+      expect(body.querySelectorAll(".md-math"), source).toHaveLength(1);
+      expect(body.querySelector(".katex-error"), source).toBeNull();
+      // KaTeX draws an unknown U+202F as a glyph it has no metrics for.
+      expect(body.querySelector(".md-math")!.innerHTML, source).not.toContain("\u202F");
+    }
+    expect(html("$x$ :")).toContain("</span>\u202F:");
+  });
+});
