@@ -239,7 +239,7 @@ Criteria v3, the CI produces the evidence ([ADR-119](../adr/ADR-119-criteres-v3-
 | L-06b | CI dispatch and intake, `score_is_grade` migration | in review (part 2) | L-06a | `l06b-ci-evidence` | #943 | Part 2, the CI's evidence of a schema-3 snapshot: `modules/project/ci.ts` (passes in `grade_dispatches` with a nonce and `closed_at`, the `project.ci` dispatch paced 15 s per installation within a batch, `ingestRun` routing a graded run to the intake: acceptance checks, `ci_tampered`, the `results` artifact through `github/artifact.ts`, `readResults` in contracts, `project_ci_results`, `no_result` after 24 h), `postDispatch` shared with `review.ts`, the redaction's `sig=`, migration `0120`; `score_is_grade` is #940's. |
 | L-06c | LLM inputs (sources and masked `results.json` logs), privacy page | planned | L-06b | | | |
 | L-06d | Creation panel, protected tree, segmented control | planned | L-06a | | | |
-| L-06e | Commit graph and CI logs on the grading screen | planned | L-06b | | | |
+| L-06e | Commit graph and CI logs on the grading screen | in review | L-06b | `l06e-ci-logs-commit-graph` | | An automatic criterion's `check` (fraction, log) on the staff's table from `project_ci_results`; `GET …/repos/:rid/commits` (`ProjectCommitGraph`, `modules/project/commitGraph.ts`, `github/commitGraph.ts`) read through the App in the live state's cache (`repoReadCache`, now generic), never stored; `CommitGraphPanel` folded under the table, members in `--chart-n`, "declared author". |
 | L-06f | StudentScore 1.0 and the lab repositories (external) | planned | L-06a | | | |
 | L-06g | Removal of the v2 path (after `labo-04-pcb` and `labo-03-darts` are released) | planned | L-06b | | | |
 

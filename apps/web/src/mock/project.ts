@@ -58,6 +58,8 @@ import {
   type GradeRunView,
   type ProjectActivitySummary,
   type ProjectCriteriaView,
+  type ProjectCommit,
+  type ProjectCommitGraph,
   type ProjectCriterion,
   type ProjectDetail,
   type ProjectDetailGroup,
@@ -1409,6 +1411,58 @@ function unvalidatedOf(p: MockProject): string[] {
   return p.repos.filter((r) => isLive(p, r) && !repoValidation(SNAPSHOT, CRITERION_ROWS.get(r.id) ?? []).validated).map((r) => r.id);
 }
 
+/** A test runner's tail as the CI's log keeps it: `passed` of `total` cases, the failures named; a script quoted, shown as text. */
+function ciLog(passed: number, total: number): string {
+  const cases = ["parse_empty_line", "parse_quoted", "split_words", "trim_spaces", "join_lines", "count_words", "upper_case", "reverse"];
+  const lines = ["$ make test", "gcc -Wall -Wextra -std=c11 -o build/tests tests/*.c src/*.c", "./build/tests"];
+  cases.slice(0, total).forEach((name, i) => {
+    lines.push(`[ RUN      ] ${name}`);
+    lines.push(i < passed ? `[       OK ] ${name}` : `[  FAILED  ] ${name}: expected "<script>a b</script>", got "a"`);
+  });
+  lines.push(`${passed}/${total} tests passed`);
+  return lines.join("\n");
+}
+
+/**
+ * `GET …/repos/:rid/commits` (ADR-119 §8): a history with a merge — the
+ * handed-out commit, the student's work on the default branch and on a
+ * branch merged back, a commit whose declared author is no member (neutral),
+ * the App's deadline commit — every repository the same shape.
+ */
+function commitGraphOf(r: MockRepo): ProjectCommitGraph {
+  const accepted = Date.parse(r.acceptedAt);
+  const hours = (h: number) => new Date(accepted + h * H).toISOString();
+  const name = `${r.student.prenom} ${r.student.nom}`;
+  const commit = (n: number, parents: number[], message: string, authorName: string, h: number, extra: Partial<ProjectCommit> = {}): ProjectCommit => ({
+    sha: sha(900 + n),
+    parents: parents.map((p) => sha(900 + p)),
+    message,
+    authorName,
+    authoredAt: hours(h),
+    member: authorName === name ? 0 : null,
+    receivedAt: hours(h + 0.05),
+    mark: null,
+    ...extra,
+  });
+  return {
+    status: "ok",
+    branches: [{ name: "main", head: sha(908) }],
+    members: [{ name, login: r.student.githubLogin ?? null }],
+    commits: [
+      commit(8, [7], "Deadline", "quiz-app[bot]", 170, { mark: "app" }),
+      commit(7, [6], "Answer the report's questions 3 to 9", name, 160),
+      commit(6, [4, 5], "Merge branch 'parser'", name, 140),
+      commit(5, [3], "Handle quoted words in the parser\n\nA quoted word keeps its spaces.", name, 120),
+      commit(4, [2], "Fix the Makefile's test target", "Léa Martin", 100),
+      commit(3, [2], "Split the line into words", name, 60),
+      commit(2, [1], "Read a line from stdin", name, 30),
+      commit(1, [], "Initial commit", "HEIG-VD", -48, { mark: "handout", receivedAt: hours(0) }),
+    ],
+    truncated: false,
+    stale: false,
+  };
+}
+
 function gradingRepoOf(p: MockProject, r: MockRepo): ProjectGradingRepo {
   const rows = CRITERION_ROWS.get(r.id) ?? [];
   return {
@@ -1417,7 +1471,12 @@ function gradingRepoOf(p: MockProject, r: MockRepo): ProjectGradingRepo {
     group: false,
     frozen: r.frozenAt !== null,
     validation: repoValidation(SNAPSHOT, rows),
-    table: criteriaTable(SNAPSHOT, rows, { audience: "staff", frozen: r.frozenAt !== null, released: p.releasedAt !== null }),
+    table: criteriaTable(SNAPSHOT, rows, { audience: "staff", frozen: r.frozenAt !== null, released: p.releasedAt !== null }).map((row) =>
+      // The tests' check of the CI (ADR-119 §8): its fraction and its log, staff only.
+      row.criterionId === "rendu.all-tests-passed" && row.source === "auto" && row.points !== null
+        ? { ...row, check: { score: `${row.points}/${row.max}`, log: ciLog(row.points, row.max) } }
+        : row,
+    ),
     evidence: EVIDENCE.get(r.id) ?? null,
     total: criteriaScore(SNAPSHOT, rows),
   };
@@ -1479,6 +1538,12 @@ on("GET", "/app/api/projects/:id/grading", (m): ProjectGradingView => {
       .map((r) => gradingRepoOf(p, r))
       .sort((a, b) => a.label.localeCompare(b.label, "fr")),
   };
+});
+
+on("GET", "/app/api/projects/:id/repos/:rid/commits", (m): ProjectCommitGraph => {
+  const r = projectOr404(m.groups!.id!).repos.find((x) => x.id === m.groups!.rid!);
+  if (!r) throw new MockError(404, "Not found");
+  return r.deleted ? { status: "unavailable", reason: "no_repo" } : commitGraphOf(r);
 });
 
 on("PUT", "/app/api/projects/:id/repos/:rid/criteria/:criterionId", (m, raw): ProjectGradingRepo => {

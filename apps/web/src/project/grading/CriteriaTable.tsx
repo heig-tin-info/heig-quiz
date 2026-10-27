@@ -97,10 +97,20 @@ function CriterionRow({ row, writable, onGrade }: { row: CriteriaTableRow; writa
             <span className="font-mono">{row.criterionId}</span>
             {row.bonus !== undefined ? <Badge tone="green">{t("project.grading.bonus", { n: row.bonus })}</Badge> : null}
             {row.max < 0 ? <Badge tone="amber">{t("project.grading.penalty")}</Badge> : null}
+            {row.check ? (
+              <span className="font-mono tabular-nums text-fg-muted" data-testid="ci-check">
+                {t("project.grading.check", { score: row.check.score.replace(/\s+/g, "") })}
+              </span>
+            ) : null}
           </span>
           {row.rationale !== undefined || (writable && row.points !== null) ? (
             <RationaleFold>
               <Rationale row={row} writable={writable && row.points !== null} onGrade={onGrade} />
+            </RationaleFold>
+          ) : null}
+          {row.check ? (
+            <RationaleFold label={t("project.grading.ciLog")}>
+              <CiLog log={row.check.log} />
             </RationaleFold>
           ) : null}
         </span>
@@ -180,6 +190,21 @@ function StateBadge({ row }: { row: CriteriaTableRow }) {
     );
   }
   return <Badge tone="zinc">{t("project.grading.state.empty")}</Badge>;
+}
+
+/**
+ * An automatic criterion's CI log (ADR-119 §8): its tail as the run wrote
+ * it, plain text (a text node, never markup), monospace, scrolled within
+ * its box. Staff only: the student's row has no check.
+ */
+function CiLog({ log }: { log: string | null }) {
+  const t = useT();
+  if (log === null || log === "") return <RationaleText>{t("project.grading.ciLog.none")}</RationaleText>;
+  return (
+    <pre className="max-h-72 w-full overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-surface-2 p-2.5 font-mono text-[12px] leading-relaxed text-fg-muted">
+      {log}
+    </pre>
+  );
 }
 
 /**

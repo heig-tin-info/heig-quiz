@@ -39,6 +39,7 @@ import {
   ProjectAcceptance,
   ProjectCheckpointParams,
   CriterionGradeWrite,
+  ProjectCommitGraph,
   ProjectCreate,
   ProjectCriterionParams,
   ProjectDistributionAccess,
@@ -371,6 +372,19 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id/repos/:rid/criteria",
     session,
     teacher(onRepo, async ({ scope }) => ProjectGradingRepo.parse(await service.gradingRepo(app.db, scope.project, scope.repo))),
+  );
+
+  /**
+   * ADR-119 §8: the repository's commit graph for its staff — the
+   * handed-out branches read through the App, cached as the live state,
+   * never stored; `unavailable` without a repository or an answer.
+   */
+  app.get(
+    "/app/api/projects/:id/repos/:rid/commits",
+    session,
+    teacher(onRepo, async ({ req, scope }) =>
+      ProjectCommitGraph.parse(await service.repoCommitGraph(app.db, config, scope.project, scope.repo, req.log)),
+    ),
   );
 
   /**

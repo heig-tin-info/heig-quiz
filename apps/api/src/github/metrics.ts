@@ -96,24 +96,32 @@ export async function fetchRepoLiveState(
  *   ~2 s of GitHub calls); past MAX_STALE it is fetched again;
  * - no waiting on a rate limit: the installation is skipped until the reset
  *   and the caller falls back to the stored state (`null`).
+ *
+ * The same cache ({@link repoReadCache}) holds every other on-demand read
+ * of a repository that is never stored, such as the grading screen's
+ * commit graph (ADR-119 §8): one TTL, one rate-limit book per installation,
+ * one invalidation by a push.
  */
 export const LIVE_STATE_TTL_MS = 60_000;
 export const LIVE_STATE_MAX_STALE_MS = 15 * 60_000;
 
-interface LiveEntry {
+interface CacheEntry<T> {
   /** Start of the fetch that fills (or filled) this entry. */
   at: number;
-  state: Promise<RepoLiveState | null>;
+  state: Promise<T | null>;
   /** Set once `state` has resolved. */
-  settled?: { value: RepoLiveState | null };
+  settled?: { value: T | null };
   /** Previous value, served while this entry's fetch is in flight. */
-  previous?: { value: RepoLiveState | null };
+  previous?: { value: T | null };
 }
-const liveCache = new Map<string, LiveEntry>();
 const rateLimitedUntil = new Map<number, number>();
+/** Every cache made by {@link repoReadCache}: a push forgets its repository in each, the test hook clears them all. */
+const caches = new Set<Map<string, unknown>>();
 
+/** Drops every cached read of the repository (its live state, its commit graph): a push changed it. */
 export function forgetRepoLiveState(fullName: string | null | undefined): void {
-  if (fullName) liveCache.delete(fullName.toLowerCase());
+  if (!fullName) return;
+  for (const cache of caches) cache.delete(fullName.toLowerCase());
 }
 
 /**
@@ -124,90 +132,105 @@ export function isRateLimited(installationId: number, now = Date.now()): boolean
   return (rateLimitedUntil.get(installationId) ?? 0) > now;
 }
 
-/** Test hook: start from an empty cache and no rate-limited installation. */
+/** Test hook: start from empty caches and no rate-limited installation. */
 export function resetLiveStateCache(): void {
-  liveCache.clear();
+  for (const cache of caches) cache.clear();
   rateLimitedUntil.clear();
 }
 
-export interface LiveRead {
-  state: RepoLiveState | null;
+/** A cached read: null when GitHub could not be asked (a rate limit); `stale` when older than the TTL, refreshed in the background. */
+export interface CachedRead<T> {
+  state: T | null;
   /** Older than the TTL: a background refresh is under way. */
   stale: boolean;
 }
+export type LiveRead = CachedRead<RepoLiveState>;
 
-export async function readRepoLiveState(
+/**
+ * A read of one repository through the cache: `fetch` asks GitHub, never
+ * waiting on a rate limit. `args` are the read's own (constant for a
+ * repository: they are not part of the key).
+ */
+export type RepoCacheRead<T, A extends unknown[] = []> = (
   octokit: Octokit,
   installationId: number,
   fullName: string,
-  now = Date.now(),
-): Promise<LiveRead> {
-  const key = fullName.toLowerCase();
-  const hit = liveCache.get(key);
-  const limited = isRateLimited(installationId, now);
+  now?: number,
+  ...args: A
+) => Promise<CachedRead<T>>;
 
-  if (hit) {
-    const age = now - hit.at;
-    if (hit.settled) {
-      if (age < LIVE_STATE_TTL_MS) return { state: hit.settled.value, stale: false };
-      if (age < LIVE_STATE_MAX_STALE_MS) {
-        if (!limited) refresh(octokit, installationId, key, fullName, now, hit.settled);
-        return { state: hit.settled.value, stale: true };
+/** A per-repository stale-while-revalidate cache over `fetch`, with the live state's TTL and rate-limit rule (above). */
+export function repoReadCache<T, A extends unknown[] = []>(
+  fetch: (octokit: Octokit, fullName: string, ...args: A) => Promise<T | null>,
+): RepoCacheRead<T, A> {
+  const cache = new Map<string, CacheEntry<T>>();
+  caches.add(cache);
+
+  /** Starts a fetch into a new entry; `previous` is served until it settles. */
+  const refresh = (octokit: Octokit, installationId: number, key: string, fullName: string, args: A, now: number, previous?: { value: T | null }) => {
+    if (cache.size > 5000) {
+      for (const [k, v] of cache) {
+        if (now - v.at >= LIVE_STATE_MAX_STALE_MS) cache.delete(k);
       }
-    } else if (hit.previous) {
-      return { state: hit.previous.value, stale: true };
-    } else if (age < LIVE_STATE_TTL_MS) {
-      return { state: await hit.state, stale: false };
     }
-  }
-  if (limited) return { state: null, stale: false };
-  const entry = refresh(octokit, installationId, key, fullName, now);
-  return { state: await entry.state, stale: false };
-}
-
-/** Starts a fetch into a new entry; `previous` is served until it settles. */
-function refresh(
-  octokit: Octokit,
-  installationId: number,
-  key: string,
-  fullName: string,
-  now: number,
-  previous?: { value: RepoLiveState | null },
-): LiveEntry {
-  if (liveCache.size > 5000) {
-    for (const [k, v] of liveCache) {
-      if (now - v.at >= LIVE_STATE_MAX_STALE_MS) liveCache.delete(k);
-    }
-  }
-  const entry: LiveEntry = { at: now, state: Promise.resolve(null) };
-  if (previous) entry.previous = previous;
-  // The promise settles the same way for every concurrent caller: a rate
-  // limit resolves to null (fallback), other errors reject.
-  entry.state = fetchRepoLiveState(octokit, fullName, { noRateLimitWait: true }).then(
-    (value) => {
-      entry.settled = { value };
-      return value;
-    },
-    (err: unknown) => {
-      const reset = rateLimitReset(err, Date.now());
-      if (reset !== null) {
-        rateLimitedUntil.set(installationId, reset);
-        // Rate-limited background refresh: keep serving the last value.
-        if (previous) {
-          entry.settled = previous;
-          return previous.value;
+    const entry: CacheEntry<T> = { at: now, state: Promise.resolve(null) };
+    if (previous) entry.previous = previous;
+    // The promise settles the same way for every concurrent caller: a rate
+    // limit resolves to null (fallback), other errors reject.
+    entry.state = fetch(octokit, fullName, ...args).then(
+      (value) => {
+        entry.settled = { value };
+        return value;
+      },
+      (err: unknown) => {
+        const reset = rateLimitReset(err, Date.now());
+        if (reset !== null) {
+          rateLimitedUntil.set(installationId, reset);
+          // Rate-limited background refresh: keep serving the last value.
+          if (previous) {
+            entry.settled = previous;
+            return previous.value;
+          }
         }
+        if (cache.get(key) === entry) cache.delete(key);
+        if (reset === null) throw err;
+        return null;
+      },
+    );
+    // A background refresh has no awaiting caller: never an unhandled rejection.
+    if (previous) entry.state.catch(() => undefined);
+    cache.set(key, entry);
+    return entry;
+  };
+
+  return async (octokit, installationId, fullName, now = Date.now(), ...args) => {
+    const key = fullName.toLowerCase();
+    const hit = cache.get(key);
+    const limited = isRateLimited(installationId, now);
+
+    if (hit) {
+      const age = now - hit.at;
+      if (hit.settled) {
+        if (age < LIVE_STATE_TTL_MS) return { state: hit.settled.value, stale: false };
+        if (age < LIVE_STATE_MAX_STALE_MS) {
+          if (!limited) refresh(octokit, installationId, key, fullName, args, now, hit.settled);
+          return { state: hit.settled.value, stale: true };
+        }
+      } else if (hit.previous) {
+        return { state: hit.previous.value, stale: true };
+      } else if (age < LIVE_STATE_TTL_MS) {
+        return { state: await hit.state, stale: false };
       }
-      if (liveCache.get(key) === entry) liveCache.delete(key);
-      if (reset === null) throw err;
-      return null;
-    },
-  );
-  // A background refresh has no awaiting caller: never an unhandled rejection.
-  if (previous) entry.state.catch(() => undefined);
-  liveCache.set(key, entry);
-  return entry;
+    }
+    if (limited) return { state: null, stale: false };
+    const entry = refresh(octokit, installationId, key, fullName, args, now);
+    return { state: await entry.state, stale: false };
+  };
 }
+
+export const readRepoLiveState: RepoCacheRead<RepoLiveState> = repoReadCache((octokit, fullName) =>
+  fetchRepoLiveState(octokit, fullName, { noRateLimitWait: true }),
+);
 
 /** The state alone, for callers that do not report staleness. */
 export async function cachedRepoLiveState(

@@ -63,6 +63,7 @@ export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoin
 export { requestDistributionAccess } from "./distributionAccess.js";
 export { criteriaForSwitch, criteriaView, refreshCriteria, reloadCriteria } from "./criteria.js";
 export { gradeCriterion, gradingRepo, gradingView, validateProject, validateRepo } from "./criteriaGrading.js";
+export { repoCommitGraph } from "./commitGraph.js";
 export { regrade } from "./regrade.js";
 export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";

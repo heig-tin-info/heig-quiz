@@ -129,6 +129,7 @@ export * from "./projectStudent.js";
 export * from "./deadlineReminder.js";
 export * from "./criteria.js";
 export * from "./checkResults.js";
+export * from "./commitGraph.js";
 export * from "./evidence.js";
 export * from "./criteriaTable.js";
 export * from "./projectReview.js";

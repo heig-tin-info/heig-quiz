@@ -13,12 +13,16 @@
  *   refused as a whole while a criterion has no row (`409
  *   criteria_incomplete`) — a teacher-only criterion is never defaulted.
  *
+ * An automatic criterion of a schema-3 snapshot carries its CI check (its
+ * `n/m` and its log, ADR-119 §8) from the last accepted run that answered
+ * it (`project_ci_results`): staff only, like everything here.
+ *
  * Grading starts at a repository's definitive freeze (`409 not_frozen`).
  * STAFF ONLY (N-SEC-20): the routes load the project (and repository)
  * through `staffAccess`, every write also behind `requireCourseRole`
  * (invariant 6); nothing here is a student's view.
  */
-import { desc, eq, inArray } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 
 import type {
   CriteriaTableRow as TableRowContract,
@@ -33,7 +37,7 @@ import { awardedRange, criteriaTable, currentCriterionRows, type CriteriaTableRo
 import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { projectCriteria, projectEvidence, projectGroups, users } from "../../db/schema.js";
+import { gradeDispatches, projectCiResults, projectCriteria, projectEvidence, projectGroups, users } from "../../db/schema.js";
 import { notFoundError } from "../http.js";
 import { criteriaStandings, validateProposals, writeCriterionGrades } from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
@@ -97,14 +101,40 @@ async function evidenceSummaries(db: Db, repoIds: readonly string[]): Promise<Ma
   );
 }
 
+type CiCheck = NonNullable<TableRowContract["check"]>;
+
+/**
+ * Each criterion's CI check of each of `repos`, by repository then
+ * criterion: from every stored `results.json` of its passes, the latest
+ * answering the criterion winning (a milestone's pass answers only its
+ * own). Logs as stored, their tail (ADR-119 §6).
+ */
+async function ciChecks(db: Db, repoIds: readonly string[]): Promise<Map<string, Map<string, CiCheck>>> {
+  const checks = new Map<string, Map<string, CiCheck>>();
+  if (repoIds.length === 0) return checks;
+  const rows = await db
+    .select({ repoId: gradeDispatches.repoId, results: projectCiResults.results })
+    .from(projectCiResults)
+    .innerJoin(gradeDispatches, eq(gradeDispatches.id, projectCiResults.passId))
+    .where(inArray(gradeDispatches.repoId, [...repoIds]))
+    .orderBy(asc(projectCiResults.createdAt));
+  for (const { repoId, results } of rows) {
+    const own = checks.get(repoId) ?? new Map<string, CiCheck>();
+    for (const [criterionId, entry] of Object.entries(results.criteria)) own.set(criterionId, { score: entry.score, log: entry.log ?? null });
+    checks.set(repoId, own);
+  }
+  return checks;
+}
+
 /** The screen's entry of each of `repos` (of a project graded by criteria), named, in the order of their names. */
 async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow[]): Promise<ProjectGradingRepo[]> {
   if (repos.length === 0) return [];
   const groupIds = repos.flatMap((r) => (r.groupId === null ? [] : [r.groupId]));
   const userIds = repos.filter((r) => r.groupId === null).map((r) => r.userId);
-  const [standings, evidence, groups, people] = await Promise.all([
+  const [standings, evidence, checks, groups, people] = await Promise.all([
     criteriaStandings(db, repos),
     evidenceSummaries(db, repos.map((r) => r.id)),
+    ciChecks(db, repos.map((r) => r.id)),
     groupIds.length === 0
       ? []
       : db.select({ id: projectGroups.id, name: projectGroups.name }).from(projectGroups).where(inArray(projectGroups.id, groupIds)),
@@ -119,6 +149,10 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
     .flatMap((repo) => {
       const standing = standings.get(repo.id);
       if (!standing) return [];
+      const own = checks.get(repo.id);
+      // Only a criterion with a command has a check: a results file naming another is not read.
+      const automatic = new Set(standing.snapshot.leaves.filter((leaf) => leaf.command !== undefined).map((leaf) => leaf.id));
+      const table = criteriaTable(standing.snapshot, standing.rows, { audience: "staff", frozen: repo.frozenAt !== null, released });
       return [
         {
           id: repo.id,
@@ -126,7 +160,10 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
           group: repo.groupId !== null,
           frozen: repo.frozenAt !== null,
           validation: standing.validation,
-          table: criteriaTable(standing.snapshot, standing.rows, { audience: "staff", frozen: repo.frozenAt !== null, released }),
+          table: table.map((row): TableRowContract => {
+            const check = automatic.has(row.criterionId) ? own?.get(row.criterionId) : undefined;
+            return check ? { ...row, check } : row;
+          }),
           evidence: evidence.get(repo.id) ?? null,
           total: standing.score,
         },

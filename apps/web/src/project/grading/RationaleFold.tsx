@@ -7,9 +7,10 @@ import { cx } from "../../ui";
 /**
  * A criterion's rationale folded under it (ADR-106 §6), on the staff's
  * grading table and the student's criteria table alike: a "Rationale"
- * toggle, then, unfolded, what the table puts there.
+ * toggle, then, unfolded, what the table puts there. `label` names another
+ * fold of the same kind (an automatic criterion's CI log, ADR-119 §8).
  */
-export function RationaleFold({ children }: { children: ReactNode }) {
+export function RationaleFold({ label, children }: { label?: string; children: ReactNode }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -23,7 +24,7 @@ export function RationaleFold({ children }: { children: ReactNode }) {
         className="inline-flex items-center gap-0.5 self-start rounded-sm text-xs font-medium text-fg-muted transition-colors hover:text-fg"
       >
         <ChevronRight aria-hidden className={cx("size-3.5 transition-transform", open && "rotate-90")} />
-        {t("project.grading.rationale")}
+        {label ?? t("project.grading.rationale")}
       </button>
       {open ? (
         <span id={id} className="mt-1 flex max-w-[70ch] flex-col items-start gap-1">
