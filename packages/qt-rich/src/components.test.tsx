@@ -348,7 +348,7 @@ describe("RichEditor", () => {
 
     fireEvent.change(screen.getByLabelText("Criterion 1"), { target: { value: "Premier" } });
     expect(onChange.mock.lastCall![0].criteria[0]).toMatchObject({ id: "a", title: "Premier" });
-    fireEvent.change(screen.getByLabelText("Weight of criterion 2"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Points of criterion 2"), { target: { value: "4" } });
     expect(onChange.mock.lastCall![0].criteria[1]).toMatchObject({ id: "b", weight: 4 });
     fireEvent.change(screen.getByLabelText("Grading prompt of criterion 2"), { target: { value: "More." } });
     expect(onChange.mock.lastCall![0].criteria[1]).toMatchObject({ id: "b", prompt: "More." });
@@ -366,9 +366,10 @@ describe("RichEditor", () => {
     });
     render(<RichEditor config={two} onChange={vi.fn()} disabled />);
     expect(screen.getByRole("button", { name: "Add a criterion" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Normalize" })).toBeDisabled();
     for (const n of [1, 2]) {
       expect(screen.getByLabelText(`Criterion ${n}`)).toBeDisabled();
-      expect(screen.getByLabelText(`Weight of criterion ${n}`)).toBeDisabled();
+      expect(screen.getByLabelText(`Points of criterion ${n}`)).toBeDisabled();
       expect(screen.getByLabelText(`Grading prompt of criterion ${n}`)).toBeDisabled();
       expect(screen.getByRole("button", { name: `Remove criterion ${n}` })).toBeDisabled();
     }
@@ -393,5 +394,60 @@ describe("RichEditor", () => {
   it("gives the limit in A4 pages", () => {
     render(<RichEditor config={config({ maxChars: 4500 })} onChange={() => {}} />);
     expect(screen.getByText("About 1.5 A4 page(s).")).toBeInTheDocument();
+  });
+
+  describe("the weighting (ADR-118, amendment of 2026-10-27)", () => {
+    const two = config({
+      criteria: [
+        { id: "a", title: "First", weight: 2, prompt: "" },
+        { id: "b", title: "Second", weight: 3, prompt: "" },
+      ],
+    });
+
+    it("is absent without criteria", () => {
+      // A stale switch left on after the last criterion went shows nowhere.
+      render(<RichEditor config={config({ normalize: true, totalPoints: 5 })} onChange={vi.fn()} />);
+      expect(screen.queryByRole("switch")).toBeNull();
+      expect(screen.queryByLabelText("Total points")).toBeNull();
+      expect(screen.queryByText("Weighting")).toBeNull();
+      expect(screen.getByText("Default points: 1")).toBeInTheDocument();
+    });
+
+    it("reads the numbers as points while off, their sum the default", () => {
+      render(<RichEditor config={two} onChange={vi.fn()} />);
+      expect(screen.getByRole("switch", { name: "Normalize" })).toHaveAttribute("aria-checked", "false");
+      expect(screen.getAllByText("Points").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Weight")).toBeNull();
+      expect(screen.getByLabelText("Points of criterion 1")).toHaveValue(2);
+      expect(screen.getByText("Default points: 5")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Total points")).toBeNull();
+    });
+
+    it("turns on with the sum as its total, the weights untouched", async () => {
+      const onChange = vi.fn();
+      render(<RichEditor config={two} onChange={onChange} />);
+      await userEvent.click(screen.getByRole("switch", { name: "Normalize" }));
+      const next = onChange.mock.lastCall![0];
+      expect(next).toMatchObject({ normalize: true, totalPoints: 5 });
+      expect(next.criteria).toEqual(two.criteria);
+    });
+
+    it("shows the weights and the total while on, and drops the total when turned off", async () => {
+      const onChange = vi.fn();
+      const on = config({ ...two, normalize: true, totalPoints: 10 });
+      render(<RichEditor config={on} onChange={onChange} />);
+      expect(screen.getAllByText("Weight").length).toBeGreaterThan(0);
+      expect(screen.getByLabelText("Weight of criterion 2")).toHaveValue(3);
+      expect(screen.getByLabelText("Total points")).toHaveValue(10);
+      expect(screen.queryByText(/^Default points/)).toBeNull();
+      fireEvent.change(screen.getByLabelText("Total points"), { target: { value: "7.5" } });
+      expect(onChange.mock.lastCall![0]).toMatchObject({ normalize: true, totalPoints: 7.5 });
+
+      await userEvent.click(screen.getByRole("switch", { name: "Normalize" }));
+      const off = onChange.mock.lastCall![0];
+      expect(off.normalize).toBe(false);
+      expect("totalPoints" in off).toBe(false);
+      expect(off.criteria).toEqual(two.criteria);
+    });
   });
 });

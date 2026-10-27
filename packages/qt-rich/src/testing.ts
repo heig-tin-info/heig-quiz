@@ -12,6 +12,8 @@ const SECRET_VALUES = [
   "REFERENCE-SECRET-the stack grows down into unmapped memory",
   "CRITERION-TITLE-SECRET-guard page",
   "CRITERION-PROMPT-SECRET-says the stack hits the guard page",
+  /* `totalPoints`: a figure no other field holds, so the value search finds it. */
+  "737.5",
 ] as const;
 
 export const SECRET_CONFIG: RichConfig = RichConfigSchema.parse({
@@ -25,11 +27,13 @@ export const SECRET_CONFIG: RichConfig = RichConfigSchema.parse({
   ],
   maxChars: 3000,
   format: "markdown",
+  normalize: true,
+  totalPoints: 737.5,
 });
 
 export const richLeakFixture: StudentLeakFixture<RichConfig> = {
   config: SECRET_CONFIG,
-  /* What only `rich` holds: the model answer and the criteria (ADR-118). */
-  forbiddenKeys: ["compare", "expected", "reference", "criteria", "weight"],
+  /* What only `rich` holds: the model answer, the criteria and their weighting (ADR-118). */
+  forbiddenKeys: ["compare", "expected", "reference", "criteria", "weight", "normalize", "totalPoints"],
   secrets: SECRET_VALUES,
 };

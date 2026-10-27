@@ -20,6 +20,7 @@ import {
   RICH_TARGETS,
   type RichConfig,
   type RichCriterion,
+  weightSum,
 } from "./schema.js";
 
 const RichProposal = z.object({
@@ -52,16 +53,31 @@ function proposedCriteria(proposal: RichProposal["criteria"] | undefined): RichC
     }));
 }
 
+/**
+ * Proposed criteria placed in a draft with their weighting (ADR-118,
+ * amendment of 2026-10-27): their weights are points, so the switch is off
+ * and no total is kept, unless the model gave a total the weights do not
+ * sum to (a rubric in half points, its weights doubled); then the weights
+ * are normalized to that total. A bad total shows in the draft's issues (D16).
+ */
+function withCriteria(config: RichConfig, criteria: RichCriterion[], totalPoints?: number): RichConfig {
+  const { totalPoints: _dropped, ...rest } = config;
+  return totalPoints === undefined || totalPoints === weightSum(criteria)
+    ? { ...rest, criteria, normalize: false }
+    : { ...rest, criteria, normalize: true, totalPoints };
+}
+
 export function mergeRich(config: RichConfig, proposal: RichProposal): RichConfig {
   const reference = proposal.reference.trim().slice(0, RICH_MAX_CHARS);
   const rubric = proposal.rubric.trim().slice(0, RICH_MAX_RUBRIC);
   const criteria = criteriaOf(config).length === 0 ? proposedCriteria(proposal.criteria) : [];
-  return {
+  const merged = {
     ...config,
     ...(blank(config.reference) && reference ? { reference } : {}),
     ...(blank(config.rubric) && rubric ? { rubric } : {}),
-    ...(criteria.length > 0 ? { criteria } : {}),
   };
+  /* The proposed weights are points (the instructions say so): the switch goes off with them. */
+  return criteria.length > 0 ? withCriteria(merged, criteria) : merged;
 }
 
 const CriterionPromptReply = z.object({ prompt: z.string() });
@@ -101,7 +117,12 @@ export const criterionPromptTarget: TargetGenerator<RichConfig, z.infer<typeof C
   },
 };
 
-const CriteriaFromRubricReply = z.object({ criteria: RichProposal.shape.criteria, rubric: z.string() });
+const CriteriaFromRubricReply = z.object({
+  criteria: RichProposal.shape.criteria,
+  rubric: z.string(),
+  /** The rubric's stated total, only when its weights were doubled from half points. */
+  totalPoints: z.number().optional(),
+});
 
 /**
  * "Convert to criteria" (ADR-118, amendment of 2026-10-27): an essay written
@@ -117,8 +138,9 @@ export const criteriaFromRubricTarget: TargetGenerator<RichConfig, z.infer<typeo
     "The question is an essay whose grading scheme is a free text, `rubric`. Split it into grading criteria:",
     "`criteria`, at most twelve, in the rubric's order, each a `title`, a `weight` and a `prompt`.",
     GRADER_CONTRACT,
-    "`weight` is a whole number: the rubric's own points when it states them (double every weight when it uses half points),",
-    "else 1 to 5 by importance.",
+    "`weight` is a whole number: the rubric's own points when it states them, else 1 to 5 by importance.",
+    "When the rubric uses half points, double every weight and give `totalPoints` the rubric's stated total;",
+    "otherwise leave `totalPoints` out.",
     "`title` is short and neutral, a few words naming what is judged, never the expected answer: a student may read it after grading.",
     "`prompt` is plain text for the grader: what earns the weight, what earns part of it. A common mistake the rubric lists",
     "goes into the prompt of the criterion it concerns.",
@@ -129,7 +151,7 @@ export const criteriaFromRubricTarget: TargetGenerator<RichConfig, z.infer<typeo
   place(config, _target, value) {
     const criteria = proposedCriteria(value.criteria);
     if (criteria.length === 0) return config;
-    return { ...config, criteria, rubric: value.rubric.trim().slice(0, RICH_MAX_RUBRIC) };
+    return withCriteria({ ...config, rubric: value.rubric.trim().slice(0, RICH_MAX_RUBRIC) }, criteria, value.totalPoints);
   },
 };
 

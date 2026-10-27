@@ -1426,7 +1426,7 @@ The editors, players and reviews of the question types live in `qt-*`
 packages, which cannot import `apps/web`. What they share with the app is
 therefore written in `packages/ui/src/styles.ts` and read by both sides, never
 copied: `cx`, `inputClass` / `inputSize` / `textareaClass`, the field
-label, `buttonClass` and `Segmented`. The rest of that file is the vocabulary
+label, `buttonClass`, `Segmented` and `Switch`. The rest of that file is the vocabulary
 of the question surfaces, one token per role and never two dialects of it:
 
 | Token | Value | Role |

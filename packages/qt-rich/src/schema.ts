@@ -86,10 +86,27 @@ export const RichCriterionSchema = z.object({
 });
 export type RichCriterion = z.infer<typeof RichCriterionSchema>;
 
-/** The points an essay is worth by default: the sum of its criteria's weights, else 1. */
-export function criteriaPoints(criteria: readonly { weight: number }[] | undefined): number {
-  const total = (criteria ?? []).reduce((sum, c) => sum + (Number.isFinite(c.weight) ? c.weight : 0), 0);
-  return total > 0 ? total : 1;
+/** The bounds of an essay's `totalPoints`: the item's `points` column is numeric(6,2). */
+export const RICH_MIN_TOTAL_POINTS = 0.5;
+export const RICH_MAX_TOTAL_POINTS = 1_000;
+
+/** The sum of the criteria's weights; a weight that is not a number counts 0 (an invalid draft, D16). */
+export function weightSum(criteria: readonly { weight: number }[] | undefined): number {
+  return (criteria ?? []).reduce((sum, c) => sum + (Number.isFinite(c.weight) ? c.weight : 0), 0);
+}
+
+/**
+ * The points an essay is worth by default (ADR-118, amendment of
+ * 2026-10-27): without criteria, 1; with criteria, their weights' sum, or
+ * the teacher's `totalPoints` when the weights are normalized. The
+ * evaluation item may say otherwise and scales the criteria to its points.
+ */
+export function essayPoints(
+  config: Pick<Partial<RichConfig>, "criteria" | "normalize" | "totalPoints">,
+): number {
+  const sum = weightSum(config.criteria);
+  if (sum <= 0) return 1;
+  return config.normalize === true && config.totalPoints !== undefined ? config.totalPoints : sum;
 }
 
 export const RichConfigSchema = z.object({
@@ -124,6 +141,22 @@ export const RichConfigSchema = z.object({
   maxChars: z.number().int().min(1).max(RICH_MAX_CHARS).optional(),
   /** `markdown` lends the student the formatted editor; `plain` a bare field. */
   format: RichFormatSchema.default("markdown"),
+  /**
+   * Off (the default, and every config from before the switch): the
+   * criteria's weights are points, the question's default their sum. On:
+   * they are relative weights, and the question's default is `totalPoints`
+   * ({@link essayPoints}, ADR-118, amendment of 2026-10-27).
+   */
+  normalize: z.boolean().default(false),
+  /** The question's default points when `normalize` is on; required then, absent otherwise. */
+  totalPoints: z.number().min(RICH_MIN_TOTAL_POINTS).max(RICH_MAX_TOTAL_POINTS).optional(),
+}).superRefine((config, ctx) => {
+  if (config.normalize && config.totalPoints === undefined) {
+    ctx.addIssue({ code: "custom", message: "totalPoints is required when normalize is on", path: ["totalPoints"] });
+  }
+  if (!config.normalize && config.totalPoints !== undefined) {
+    ctx.addIssue({ code: "custom", message: "totalPoints is only allowed when normalize is on", path: ["totalPoints"] });
+  }
 });
 export type RichConfig = z.infer<typeof RichConfigSchema>;
 
@@ -194,5 +227,6 @@ export function emptyRichDraft(): RichConfig {
     rubric: "",
     criteria: [],
     format: "markdown",
+    normalize: false,
   };
 }

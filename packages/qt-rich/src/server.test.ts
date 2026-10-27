@@ -148,9 +148,11 @@ describe("the key", () => {
     expect(richServer.migrate({ configVersion: 1, prompt: "" }, 1)).toEqual({ configVersion: 2, prompt: "", criteria: [] });
   });
 
-  it("is worth the sum of its weights by default, else 1", () => {
+  it("is worth the sum of its weights by default, else 1, or its total when normalized", () => {
     expect(richServer.defaultPoints(config())).toBe(1);
-    expect(richServer.defaultPoints(SECRET_CONFIG)).toBe(3);
+    const { normalize: _n, totalPoints: _t, ...points } = SECRET_CONFIG;
+    expect(richServer.defaultPoints(config(points))).toBe(3);
+    expect(richServer.defaultPoints(SECRET_CONFIG)).toBe(737.5);
   });
 
   it("refuses a version it never emitted", () => {

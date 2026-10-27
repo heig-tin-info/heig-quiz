@@ -67,6 +67,47 @@ Decision 6 is settled as follows.
   the student and the teacher alike (the teacher's list adds the model's
   sentence per criterion). The score line stays the item's points.
 
+### Amendment of 2026-10-27 (the owner's weighting switch)
+
+Decision 2's last sentence ("no points field on the question, no 'use
+criteria' switch") is reversed. The essay editor gains a "Weighting"
+section (« Pondération ») with a "Normalize" switch (« Normaliser »), off by
+default.
+
+- **Two stored fields.** `normalize` (boolean, default `false`) and
+  `totalPoints` (0.5 to 1000).
+  `totalPoints` is required when `normalize` is true and refused when it is
+  false, so an MCP or import input says which reading it means. No
+  `configVersion` bump: a config without the fields reads as off, which is
+  what every stored essay meant.
+- **Off: the numbers are points.** The criteria's column reads "Points",
+  and `defaultPoints` is their sum, as before.
+- **On: the numbers are weights.** The column reads "Weight", and
+  `defaultPoints` is `totalPoints`; the criteria share it by weight.
+- **A default, not a second source.** `totalPoints`, like the sum in points
+  mode, is only the question's DEFAULT points. The evaluation item stays the
+  source of points and may differ: `scaleCriteria` scales the criteria to
+  the item's points in both modes, so in points mode a criterion's number is
+  its points by default, and its share of the item's points otherwise.
+  Grading, the model's scoring in weight units, the stored breakdown,
+  `toSolution`, the review and the grading screen are unchanged.
+- **Whole weights in both modes.** A weight stays an integer 1..100; a
+  teacher who needs half points switches Normalize on and types the total.
+- **The switch never rescales.** Turning it on prefills `totalPoints` with
+  the weights' sum, so nothing changes at that instant; turning it off keeps
+  the weights as they are and drops `totalPoints`, and the question is worth
+  their sum again.
+- **Only beside criteria.** Without criteria the section is hidden and the
+  default stays 1.
+- **The wand.** `criteriaFromRubric` asks for the rubric's own whole points
+  as weights; when the rubric uses half points, the model doubles every
+  weight and returns the rubric's total as `totalPoints`. A total that
+  differs from the weights' sum turns `normalize` on with it; otherwise the
+  proposal lands in points mode. Proposed criteria from "Generate answers"
+  are points, and land with the switch off.
+- **The student** never reads either field: `toStudent` builds its view
+  field by field, tested by forbidden key and by value.
+
 ## Context
 
 An essay was graded against a free markdown `rubric` and worth 1 point by
@@ -88,7 +129,8 @@ cost them points.
 2. **Points.** `defaultPoints(config)` is the sum of the weights, else 1.
    The evaluation item's points (`evaluation_items.points`) stay the one
    source of points and stay editable. No points field on the question, no
-   "use criteria" switch.
+   "use criteria" switch (reversed by the amendment of 2026-10-27: a
+   "Normalize" switch and a `totalPoints` default).
 3. **The model scores in weights; the server scales.** With criteria, the
    request carries them and the model scores each one from 0 to its weight
    in quarter points, its reply keyed by criterion id. The server scales to
@@ -138,7 +180,10 @@ cost them points.
 ## Alternatives considered
 
 1. **A points field on the question**: a second source of points beside the
-   item's, which would drift.
+   item's, which would drift. Accepted by the amendment of 2026-10-27 as a
+   DEFAULT only (`totalPoints`, behind the "Normalize" switch): the item
+   stays the one stored source of an evaluation's points, as the sum of the
+   weights already was a default.
 2. **The model scores on the item's scale**: rounding and clamping in the
    model's hands, the bug this record fixes.
 3. **Parsing the free rubric into criteria**: fragile, and an old rubric's

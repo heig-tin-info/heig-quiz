@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   a4Pages,
   countChars,
-  criteriaPoints,
+  essayPoints,
   pagesText,
   RICH_MAX_CHARS,
   RICH_MAX_CRITERIA,
@@ -46,9 +46,31 @@ describe("the rich config", () => {
     expect(at(Array.from({ length: RICH_MAX_CRITERIA + 1 }, (_, i) => one(`c${i}`)))).toBe(false);
   });
 
-  it("is worth the sum of its weights, else 1", () => {
-    expect(criteriaPoints([])).toBe(1);
-    expect(criteriaPoints([{ weight: 2 }, { weight: 3 }])).toBe(5);
+  it("is worth the sum of its weights, else 1, or its total when normalized", () => {
+    const two = [
+      { id: "a", title: "A", weight: 2, prompt: "" },
+      { id: "b", title: "B", weight: 3, prompt: "" },
+    ];
+    expect(essayPoints(config())).toBe(1);
+    expect(essayPoints(config({ criteria: two }))).toBe(5);
+    expect(essayPoints(config({ criteria: two, normalize: true, totalPoints: 7.5 }))).toBe(7.5);
+    // Without criteria the switch is hidden, and the default stays 1.
+    expect(essayPoints({ criteria: [], normalize: true, totalPoints: 7.5 })).toBe(1);
+  });
+
+  it("reads a config from before the switch as points, and holds a total only when normalized", () => {
+    const old = config({ criteria: [{ id: "a", title: "A", weight: 2, prompt: "" }] });
+    expect(old.normalize).toBe(false);
+    expect(old.totalPoints).toBeUndefined();
+    const at = (over: Record<string, unknown>) => RichConfigSchema.safeParse({ ...old, ...over }).success;
+    expect(at({ normalize: true, totalPoints: 10 })).toBe(true);
+    expect(at({ normalize: true, totalPoints: 0.5 })).toBe(true);
+    expect(at({ normalize: true, totalPoints: 1000 })).toBe(true);
+    expect(at({ normalize: true })).toBe(false);
+    expect(at({ normalize: false, totalPoints: 10 })).toBe(false);
+    expect(at({ totalPoints: 10 })).toBe(false);
+    expect(at({ normalize: true, totalPoints: 0.25 })).toBe(false);
+    expect(at({ normalize: true, totalPoints: 1000.5 })).toBe(false);
   });
 
   it("takes a plain field", () => {
