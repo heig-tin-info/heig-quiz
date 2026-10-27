@@ -14,7 +14,7 @@
  * model, never in a student's payload. GitHub failing answers
  * `unavailable` — no message, no URL (invariant 15).
  */
-import { asc, eq, sql, type AnyColumn } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
 import type { ProjectCommitGraph } from "@quiz/contracts";
@@ -32,26 +32,30 @@ import type { ProjectRow } from "./views.js";
 
 type Member = { name: string; login: string | null; githubUserId: number | null };
 
-/** The repository's linked students, by name: a group's every member, or the student whose repository it is. */
+/**
+ * The repository's linked students: a group's every member, or the student
+ * whose repository it is, named and ordered as the grading screen names a
+ * student (`family given`, French collation).
+ */
 async function membersOf(db: Db, repo: RepoRow): Promise<Member[]> {
-  if (repo.groupId !== null) {
-    return db
-      .select({ name: sqlName(enrollments.prenom, enrollments.nom), login: githubAccounts.login, githubUserId: githubAccounts.githubUserId })
-      .from(projectGroupMembers)
-      .innerJoin(enrollments, eq(enrollments.id, projectGroupMembers.enrollmentId))
-      .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
-      .where(eq(projectGroupMembers.groupId, repo.groupId))
-      .orderBy(asc(enrollments.nom), asc(enrollments.prenom));
-  }
-  return db
-    .select({ name: sqlName(users.givenName, users.familyName), login: githubAccounts.login, githubUserId: githubAccounts.githubUserId })
-    .from(users)
-    .leftJoin(githubAccounts, eq(githubAccounts.userId, users.id))
-    .where(eq(users.id, repo.userId));
+  const account = { login: githubAccounts.login, githubUserId: githubAccounts.githubUserId };
+  const rows =
+    repo.groupId !== null
+      ? await db
+          .select({ family: enrollments.nom, given: enrollments.prenom, ...account })
+          .from(projectGroupMembers)
+          .innerJoin(enrollments, eq(enrollments.id, projectGroupMembers.enrollmentId))
+          .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
+          .where(eq(projectGroupMembers.groupId, repo.groupId))
+      : await db
+          .select({ family: users.familyName, given: users.givenName, ...account })
+          .from(users)
+          .leftJoin(githubAccounts, eq(githubAccounts.userId, users.id))
+          .where(eq(users.id, repo.userId));
+  return rows
+    .map(({ family, given, login, githubUserId }) => ({ name: `${family} ${given}`.trim(), login, githubUserId }))
+    .sort((x, y) => x.name.localeCompare(y.name, "fr"));
 }
-
-/** `given family`, as one column. */
-const sqlName = (given: AnyColumn, family: AnyColumn) => sql<string>`trim(${given} || ' ' || ${family})`;
 
 /** A date GitHub gave, as the contract's ISO string; null when absent or unreadable. */
 const isoDate = (value: string | null) => {
@@ -74,7 +78,12 @@ export async function repoCommitGraph(
   let read;
   try {
     const { octokit } = await installationClient(config, org.installationId);
-    read = await readCommitListing(octokit, org.installationId, repo.fullName, undefined, project.branches, project.distributionFullName);
+    read = await readCommitListing({
+      octokit,
+      installationId: org.installationId,
+      fullName: repo.fullName,
+      args: { branches: project.branches, distribution: project.distributionFullName },
+    });
   } catch (err) {
     log.warn({ err, repo: repo.id }, "project commit graph: GitHub read failed");
     return unavailable;

@@ -13,19 +13,20 @@
  *   refused as a whole while a criterion has no row (`409
  *   criteria_incomplete`) — a teacher-only criterion is never defaulted.
  *
- * An automatic criterion of a schema-3 snapshot carries its CI check (its
- * `n/m` and its log, ADR-119 §8) from the last accepted run that answered
- * it (`project_ci_results`): staff only, like everything here.
+ * A criterion whose current row a CI pass set, with a log stored for it,
+ * is marked `ciLog`; the log is read on demand from that pass's results
+ * (`criterionCiLog`, ADR-119 §8): staff only, like everything here.
  *
  * Grading starts at a repository's definitive freeze (`409 not_frozen`).
  * STAFF ONLY (N-SEC-20): the routes load the project (and repository)
  * through `staffAccess`, every write also behind `requireCourseRole`
  * (invariant 6); nothing here is a student's view.
  */
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 
 import type {
   CriteriaTableRow as TableRowContract,
+  CriterionCiLog,
   CriterionGradeWrite,
   ProjectGradingRepo,
   ProjectGradingView,
@@ -37,9 +38,9 @@ import { awardedRange, criteriaTable, currentCriterionRows, type CriteriaTableRo
 import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { gradeDispatches, projectCiResults, projectCriteria, projectEvidence, projectGroups, users } from "../../db/schema.js";
+import { projectCiResults, projectCriteria, projectEvidence, projectGroups, users } from "../../db/schema.js";
 import { notFoundError } from "../http.js";
-import { criteriaStandings, validateProposals, writeCriterionGrades } from "./criterionGrades.js";
+import { criteriaStandings, type CriteriaStanding, validateProposals, writeCriterionGrades } from "./criterionGrades.js";
 import { isLive } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { studentRepos, type RepoRow } from "./repos.js";
@@ -101,29 +102,32 @@ async function evidenceSummaries(db: Db, repoIds: readonly string[]): Promise<Ma
   );
 }
 
-type CiCheck = NonNullable<TableRowContract["check"]>;
+/** The current row of each criterion set by a CI pass (ADR-119 §6): its pass, by criterion. */
+const ciPasses = (standing: CriteriaStanding) =>
+  [...currentCriterionRows(standing.rows).values()].filter((row) => row.source === "auto" && row.passId !== null && row.reason === null);
 
 /**
- * Each criterion's CI check of each of `repos`, by repository then
- * criterion: from every stored `results.json` of its passes, the latest
- * answering the criterion winning (a milestone's pass answers only its
- * own). Logs as stored, their tail (ADR-119 §6).
+ * The criteria, by repository, whose current row's CI pass stored a
+ * non-empty log for them, in one read that never loads a log: what the
+ * table marks `ciLog` (the log itself is {@link criterionCiLog}'s).
  */
-async function ciChecks(db: Db, repoIds: readonly string[]): Promise<Map<string, Map<string, CiCheck>>> {
-  const checks = new Map<string, Map<string, CiCheck>>();
-  if (repoIds.length === 0) return checks;
-  const rows = await db
-    .select({ repoId: gradeDispatches.repoId, results: projectCiResults.results })
+async function loggedCriteria(db: Db, standings: ReadonlyMap<string, CriteriaStanding>): Promise<Map<string, Set<string>>> {
+  const rows = [...standings].flatMap(([repoId, standing]) => ciPasses(standing).map((row) => ({ repoId, criterionId: row.criterionId, passId: row.passId! })));
+  const logged = new Map<string, Set<string>>();
+  if (rows.length === 0) return logged;
+  const passes = await db
+    .select({
+      passId: projectCiResults.passId,
+      criteria: sql<string[]>`array(select key from jsonb_each(${projectCiResults.results}->'criteria') where coalesce(value->>'log', '') <> '')`,
+    })
     .from(projectCiResults)
-    .innerJoin(gradeDispatches, eq(gradeDispatches.id, projectCiResults.passId))
-    .where(inArray(gradeDispatches.repoId, [...repoIds]))
-    .orderBy(asc(projectCiResults.createdAt));
-  for (const { repoId, results } of rows) {
-    const own = checks.get(repoId) ?? new Map<string, CiCheck>();
-    for (const [criterionId, entry] of Object.entries(results.criteria)) own.set(criterionId, { score: entry.score, log: entry.log ?? null });
-    checks.set(repoId, own);
+    .where(inArray(projectCiResults.passId, [...new Set(rows.map((r) => r.passId))]));
+  const byPass = new Map(passes.map((p) => [p.passId, new Set(p.criteria)]));
+  for (const { repoId, criterionId, passId } of rows) {
+    if (!byPass.get(passId)?.has(criterionId)) continue;
+    logged.set(repoId, (logged.get(repoId) ?? new Set()).add(criterionId));
   }
-  return checks;
+  return logged;
 }
 
 /** The screen's entry of each of `repos` (of a project graded by criteria), named, in the order of their names. */
@@ -131,10 +135,9 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
   if (repos.length === 0) return [];
   const groupIds = repos.flatMap((r) => (r.groupId === null ? [] : [r.groupId]));
   const userIds = repos.filter((r) => r.groupId === null).map((r) => r.userId);
-  const [standings, evidence, checks, groups, people] = await Promise.all([
+  const [standings, evidence, groups, people] = await Promise.all([
     criteriaStandings(db, repos),
     evidenceSummaries(db, repos.map((r) => r.id)),
-    ciChecks(db, repos.map((r) => r.id)),
     groupIds.length === 0
       ? []
       : db.select({ id: projectGroups.id, name: projectGroups.name }).from(projectGroups).where(inArray(projectGroups.id, groupIds)),
@@ -142,6 +145,7 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
       ? []
       : db.select({ id: users.id, given: users.givenName, family: users.familyName }).from(users).where(inArray(users.id, userIds)),
   ]);
+  const logged = await loggedCriteria(db, standings);
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
   const personName = new Map(people.map((p) => [p.id, `${p.family} ${p.given}`.trim()]));
   const released = project.releasedAt !== null;
@@ -149,9 +153,7 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
     .flatMap((repo) => {
       const standing = standings.get(repo.id);
       if (!standing) return [];
-      const own = checks.get(repo.id);
-      // Only a criterion with a command has a check: a results file naming another is not read.
-      const automatic = new Set(standing.snapshot.leaves.filter((leaf) => leaf.command !== undefined).map((leaf) => leaf.id));
+      const own = logged.get(repo.id);
       const table = criteriaTable(standing.snapshot, standing.rows, { audience: "staff", frozen: repo.frozenAt !== null, released });
       return [
         {
@@ -160,10 +162,7 @@ async function gradingRepos(db: Db, project: ProjectRow, repos: readonly RepoRow
           group: repo.groupId !== null,
           frozen: repo.frozenAt !== null,
           validation: standing.validation,
-          table: table.map((row): TableRowContract => {
-            const check = automatic.has(row.criterionId) ? own?.get(row.criterionId) : undefined;
-            return check ? { ...row, check } : row;
-          }),
+          table: table.map((row): TableRowContract => (own?.has(row.criterionId) ? { ...row, ciLog: true } : row)),
           evidence: evidence.get(repo.id) ?? null,
           total: standing.score,
         },
@@ -190,6 +189,25 @@ export async function gradingView(db: Db, project: ProjectRow): Promise<ProjectG
     project: { id: project.id, classroomId: project.classroomId, name: project.name, deadlineAt: iso(project.deadlineAt) },
     repos: await gradingRepos(db, project, await gradedRepos(db, project)),
   };
+}
+
+/**
+ * `GET …/repos/:rid/criteria/:criterionId/ci-log` (ADR-119 §8): the log the
+ * CI pass that set the criterion's current row stored for it, its tail;
+ * null when no CI pass set it or the run wrote none. A 404 for a criterion
+ * the snapshot lacks, `409 not_criteria` off the mode. Staff only.
+ */
+export async function criterionCiLog(db: Db, project: ProjectRow, repo: RepoRow, criterionId: string): Promise<CriterionCiLog> {
+  const snapshot = await snapshotOf(db, project);
+  if (!snapshot.leaves.some((l) => l.id === criterionId)) throw notFoundError("criterion");
+  const standing = (await criteriaStandings(db, [repo])).get(repo.id);
+  const row = standing ? ciPasses(standing).find((r) => r.criterionId === criterionId) : undefined;
+  if (!row) return { log: null };
+  const [stored] = await db
+    .select({ log: sql<string | null>`${projectCiResults.results}->'criteria'->${criterionId}->>'log'` })
+    .from(projectCiResults)
+    .where(eq(projectCiResults.passId, row.passId!));
+  return { log: stored?.log || null };
 }
 
 /**

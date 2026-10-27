@@ -1502,12 +1502,11 @@ export const CriteriaTableRow = z.object({
   rationale: z.string().optional(),
   reason: CriterionReason.optional(),
   /**
-   * An automatic criterion's CI check (ADR-119 §8, choice h): its `n/m` and
-   * its log's tail, from the last accepted run that answered it. Staff
-   * only, plain text shown escaped; never sent to the model, never in the
-   * student's row.
+   * The row was set by a CI pass whose stored results answer it (ADR-119
+   * §8): its log is read on demand ({@link CriterionCiLog}); the fraction is
+   * the rationale (choice h). Staff only, never in the student's row.
    */
-  check: z.object({ score: z.string(), log: z.string().nullable() }).optional(),
+  ciLog: z.literal(true).optional(),
 });
 export type CriteriaTableRow = z.infer<typeof CriteriaTableRow>;
 
@@ -1517,9 +1516,9 @@ export type CriteriaTableRow = z.infer<typeof CriteriaTableRow>;
  * description), max, obtained (null until a pass or a teacher graded it,
  * and for a failed pass), `indicative` until validated and released, the
  * milestone's lock; the rationale only after the repository's definitive
- * freeze, plain text. Never a row's source, its reason nor its CI check.
+ * freeze, plain text. Never a row's source, its reason nor its CI log.
  */
-export const StudentCriteriaRow = CriteriaTableRow.omit({ source: true, reason: true, check: true });
+export const StudentCriteriaRow = CriteriaTableRow.omit({ source: true, reason: true, ciLog: true });
 export type StudentCriteriaRow = z.infer<typeof StudentCriteriaRow>;
 
 /**
@@ -1791,6 +1790,16 @@ export const ProjectGradingView = z.object({
   repos: z.array(ProjectGradingRepo),
 });
 export type ProjectGradingView = z.infer<typeof ProjectGradingView>;
+
+/**
+ * `GET /app/api/projects/:id/repos/:rid/criteria/:criterionId/ci-log`
+ * (ADR-119 §8, staff only, N-SEC-20): the log the CI pass that set the
+ * criterion's current row wrote for it, its tail (plain text, shown
+ * escaped); null when that row was set by no CI pass, or the run wrote
+ * none. Never sent to the model, never in a student's payload.
+ */
+export const CriterionCiLog = z.object({ log: z.string().nullable() });
+export type CriterionCiLog = z.infer<typeof CriterionCiLog>;
 
 /** What marks a commit of the graph: handed out by the distribution, or one of the App's own (a restore, a sync, the deadline's). */
 export const COMMIT_MARKS = ["handout", "app"] as const;

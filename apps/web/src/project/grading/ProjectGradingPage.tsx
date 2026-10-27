@@ -297,6 +297,7 @@ export function ProjectGradingPage({ id, navigate }: { id: string; navigate: Nav
           label={t("project.grading.table", { name: repo.label })}
           writable={repo.frozen}
           onGrade={onGrade}
+          repoPath={`/app/api/projects/${id}/repos/${repo.id}`}
         />
       </Card>
       <CommitGraphPanel projectId={id} repoId={repo.id} open={graphOpen} onOpenChange={setGraphOpen} />

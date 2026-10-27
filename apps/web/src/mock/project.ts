@@ -58,6 +58,7 @@ import {
   type GradeRunView,
   type ProjectActivitySummary,
   type ProjectCriteriaView,
+  type CriterionCiLog,
   type ProjectCommit,
   type ProjectCommitGraph,
   type ProjectCriterion,
@@ -1411,6 +1412,9 @@ function unvalidatedOf(p: MockProject): string[] {
   return p.repos.filter((r) => isLive(p, r) && !repoValidation(SNAPSHOT, CRITERION_ROWS.get(r.id) ?? []).validated).map((r) => r.id);
 }
 
+/** The criterion the mock's CI checks. */
+const CI_CRITERION = "rendu.all-tests-passed";
+
 /** A test runner's tail as the CI's log keeps it: `passed` of `total` cases, the failures named; a script quoted, shown as text. */
 function ciLog(passed: number, total: number): string {
   const cases = ["parse_empty_line", "parse_quoted", "split_words", "trim_spaces", "join_lines", "count_words", "upper_case", "reverse"];
@@ -1472,10 +1476,8 @@ function gradingRepoOf(p: MockProject, r: MockRepo): ProjectGradingRepo {
     frozen: r.frozenAt !== null,
     validation: repoValidation(SNAPSHOT, rows),
     table: criteriaTable(SNAPSHOT, rows, { audience: "staff", frozen: r.frozenAt !== null, released: p.releasedAt !== null }).map((row) =>
-      // The tests' check of the CI (ADR-119 §8): its fraction and its log, staff only.
-      row.criterionId === "rendu.all-tests-passed" && row.source === "auto" && row.points !== null
-        ? { ...row, check: { score: `${row.points}/${row.max}`, log: ciLog(row.points, row.max) } }
-        : row,
+      // The tests' row was set by a CI pass with a log (ADR-119 §8), read by `…/ci-log`.
+      row.criterionId === CI_CRITERION && row.source === "auto" && row.points !== null ? { ...row, ciLog: true as const } : row,
     ),
     evidence: EVIDENCE.get(r.id) ?? null,
     total: criteriaScore(SNAPSHOT, rows),
@@ -1538,6 +1540,14 @@ on("GET", "/app/api/projects/:id/grading", (m): ProjectGradingView => {
       .map((r) => gradingRepoOf(p, r))
       .sort((a, b) => a.label.localeCompare(b.label, "fr")),
   };
+});
+
+on("GET", "/app/api/projects/:id/repos/:rid/criteria/:criterionId/ci-log", (m): CriterionCiLog => {
+  const p = criteriaProjectOr409(m.groups!.id!);
+  const r = p.repos.find((x) => x.id === m.groups!.rid!);
+  if (!r) throw new MockError(404, "Not found");
+  const row = gradingRepoOf(p, r).table.find((x) => x.criterionId === decodeURIComponent(m.groups!.criterionId!));
+  return { log: row?.ciLog && row.points !== null ? ciLog(row.points, row.max) : null };
 });
 
 on("GET", "/app/api/projects/:id/repos/:rid/commits", (m): ProjectCommitGraph => {

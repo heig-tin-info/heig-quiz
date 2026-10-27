@@ -118,10 +118,16 @@ const rateLimitedUntil = new Map<number, number>();
 /** Every cache made by {@link repoReadCache}: a push forgets its repository in each, the test hook clears them all. */
 const caches = new Set<Map<string, unknown>>();
 
+/** A repository's entries of a cache start with this: one per read's `args`. */
+const repoPrefix = (fullName: string) => `${fullName.toLowerCase()}\u0000`;
+
 /** Drops every cached read of the repository (its live state, its commit graph): a push changed it. */
 export function forgetRepoLiveState(fullName: string | null | undefined): void {
   if (!fullName) return;
-  for (const cache of caches) cache.delete(fullName.toLowerCase());
+  const prefix = repoPrefix(fullName);
+  for (const cache of caches) {
+    for (const key of cache.keys()) if (key.startsWith(prefix)) cache.delete(key);
+  }
 }
 
 /**
@@ -146,28 +152,23 @@ export interface CachedRead<T> {
 }
 export type LiveRead = CachedRead<RepoLiveState>;
 
-/**
- * A read of one repository through the cache: `fetch` asks GitHub, never
- * waiting on a rate limit. `args` are the read's own (constant for a
- * repository: they are not part of the key).
- */
-export type RepoCacheRead<T, A extends unknown[] = []> = (
-  octokit: Octokit,
-  installationId: number,
-  fullName: string,
-  now?: number,
-  ...args: A
-) => Promise<CachedRead<T>>;
+/** What a cached read asks about: a repository, through an installation, with the read's own `args` (part of the key). */
+export interface RepoRead<A> {
+  octokit: Octokit;
+  installationId: number;
+  fullName: string;
+  args: A;
+}
 
 /** A per-repository stale-while-revalidate cache over `fetch`, with the live state's TTL and rate-limit rule (above). */
-export function repoReadCache<T, A extends unknown[] = []>(
-  fetch: (octokit: Octokit, fullName: string, ...args: A) => Promise<T | null>,
-): RepoCacheRead<T, A> {
+export function repoReadCache<T, A>(
+  fetch: (octokit: Octokit, fullName: string, args: A) => Promise<T | null>,
+): (read: RepoRead<A>, now?: number) => Promise<CachedRead<T>> {
   const cache = new Map<string, CacheEntry<T>>();
   caches.add(cache);
 
   /** Starts a fetch into a new entry; `previous` is served until it settles. */
-  const refresh = (octokit: Octokit, installationId: number, key: string, fullName: string, args: A, now: number, previous?: { value: T | null }) => {
+  const refresh = ({ octokit, installationId, fullName, args }: RepoRead<A>, key: string, now: number, previous?: { value: T | null }) => {
     if (cache.size > 5000) {
       for (const [k, v] of cache) {
         if (now - v.at >= LIVE_STATE_MAX_STALE_MS) cache.delete(k);
@@ -177,7 +178,7 @@ export function repoReadCache<T, A extends unknown[] = []>(
     if (previous) entry.previous = previous;
     // The promise settles the same way for every concurrent caller: a rate
     // limit resolves to null (fallback), other errors reject.
-    entry.state = fetch(octokit, fullName, ...args).then(
+    entry.state = fetch(octokit, fullName, args).then(
       (value) => {
         entry.settled = { value };
         return value;
@@ -203,17 +204,17 @@ export function repoReadCache<T, A extends unknown[] = []>(
     return entry;
   };
 
-  return async (octokit, installationId, fullName, now = Date.now(), ...args) => {
-    const key = fullName.toLowerCase();
+  return async (read, now = Date.now()) => {
+    const key = repoPrefix(read.fullName) + JSON.stringify(read.args ?? null);
     const hit = cache.get(key);
-    const limited = isRateLimited(installationId, now);
+    const limited = isRateLimited(read.installationId, now);
 
     if (hit) {
       const age = now - hit.at;
       if (hit.settled) {
         if (age < LIVE_STATE_TTL_MS) return { state: hit.settled.value, stale: false };
         if (age < LIVE_STATE_MAX_STALE_MS) {
-          if (!limited) refresh(octokit, installationId, key, fullName, args, now, hit.settled);
+          if (!limited) refresh(read, key, now, hit.settled);
           return { state: hit.settled.value, stale: true };
         }
       } else if (hit.previous) {
@@ -223,14 +224,17 @@ export function repoReadCache<T, A extends unknown[] = []>(
       }
     }
     if (limited) return { state: null, stale: false };
-    const entry = refresh(octokit, installationId, key, fullName, args, now);
+    const entry = refresh(read, key, now);
     return { state: await entry.state, stale: false };
   };
 }
 
-export const readRepoLiveState: RepoCacheRead<RepoLiveState> = repoReadCache((octokit, fullName) =>
-  fetchRepoLiveState(octokit, fullName, { noRateLimitWait: true }),
-);
+const liveStateRead = repoReadCache<RepoLiveState, null>((octokit, fullName) => fetchRepoLiveState(octokit, fullName, { noRateLimitWait: true }));
+
+/** The live state of `fullName` through the cache. */
+export function readRepoLiveState(octokit: Octokit, installationId: number, fullName: string, now = Date.now()): Promise<LiveRead> {
+  return liveStateRead({ octokit, installationId, fullName, args: null }, now);
+}
 
 /** The state alone, for callers that do not report staleness. */
 export async function cachedRepoLiveState(

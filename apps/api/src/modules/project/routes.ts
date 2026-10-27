@@ -38,6 +38,7 @@ import {
   IdParam,
   ProjectAcceptance,
   ProjectCheckpointParams,
+  CriterionCiLog,
   CriterionGradeWrite,
   ProjectCommitGraph,
   ProjectCreate,
@@ -372,6 +373,15 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id/repos/:rid/criteria",
     session,
     teacher(onRepo, async ({ scope }) => ProjectGradingRepo.parse(await service.gradingRepo(app.db, scope.project, scope.repo))),
+  );
+
+  /** ADR-119 §8: a criterion's CI log for its staff, read when its fold opens (a 404 for an unknown criterion). */
+  app.get(
+    "/app/api/projects/:id/repos/:rid/criteria/:criterionId/ci-log",
+    session,
+    teacher({ params: ProjectCriterionParams, load: onRepo.load }, async ({ params, scope }) =>
+      CriterionCiLog.parse(await service.criterionCiLog(app.db, scope.project, scope.repo, params.criterionId)),
+    ),
   );
 
   /**

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { GitBranch } from "lucide-react";
 
-import { COMMIT_GRAPH_MAX_PER_BRANCH, type ProjectCommit, type ProjectCommitGraph } from "@quiz/contracts";
+import { COMMIT_GRAPH_MAX_PER_BRANCH, ProjectCommitGraph, type ProjectCommit } from "@quiz/contracts";
 
 import { api } from "../../api";
 import { useT } from "../../i18n";
@@ -62,7 +62,7 @@ function GraphBody({ projectId, repoId }: { projectId: string; repoId: string })
   const t = useT();
   const graph = useQuery<ProjectCommitGraph>({
     queryKey: projectCommitsKey(projectId, repoId),
-    queryFn: () => api(`/app/api/projects/${projectId}/repos/${repoId}/commits`),
+    queryFn: async () => ProjectCommitGraph.parse(await api(`/app/api/projects/${projectId}/repos/${repoId}/commits`)),
   });
   if (graph.isLoading) {
     return (

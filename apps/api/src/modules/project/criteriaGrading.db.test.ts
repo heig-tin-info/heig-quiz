@@ -25,7 +25,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { PointsOutOfRange, ProjectDetail, ProjectGradingRepo, ProjectGradingView, ProjectValidated } from "@quiz/contracts";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 
-import { auditLog, courseStaff, enrollments, githubOrganizations, projectCriteria, projectCriterionGrades, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import { auditLog, courseStaff, enrollments, githubOrganizations, gradeDispatches, projectCiResults, projectCriteria, projectCriterionGrades, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
 import { resetLiveStateCache } from "../../github/metrics.js";
 import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -244,6 +244,42 @@ describe("the grading screen's payload (ADR-106 §8)", () => {
     await server.app.db.update(projects).set({ gradingMode: "auto" }).where(eq(projects.id, w.projectId));
     const off = await call("GET", gradingUrl(w));
     expect([off.statusCode, off.json().error]).toEqual([409, "not_criteria"]);
+  });
+});
+
+describe("a criterion's CI log (ADR-119 §8)", () => {
+  it("marks a row its CI pass logged, reads the log of that pass only, and forgets it once a teacher replaces the row", async () => {
+    const w = await world(1);
+    const repo = await repoOf(w, w.students[0]!.id);
+    const db = server.app.db;
+    const pass = async (results: Record<string, { score: string; log?: string }>) => {
+      const id = randomUUID();
+      await db.insert(gradeDispatches).values({ id, repoId: repo, trigger: "regrade", sha: "a".repeat(40), nonce: randomUUID(), closedAt: at(NOW) });
+      await db.insert(projectCiResults).values({ passId: id, workflowRunId: Math.floor(Math.random() * 1e9), results: { criteria: results }, createdAt: at(NOW) });
+      return id;
+    };
+    const older = await pass({ "rendu.all-tests-passed": { score: "3/10", log: "Log-of-an-older-pass" } });
+    const current = await pass({ "rendu.all-tests-passed": { score: "8/10", log: "Log-current <b>8</b>" }, "rapport.style": { score: "1/1", log: "Forged" } });
+    await writeCriterionGrades(db, repo, [{ criterionId: "rendu.all-tests-passed", points: 3, max: 10, source: "auto", state: "proposed", passId: older }], at(FROZEN_AT));
+    await writeCriterionGrades(db, repo, [
+      { criterionId: "rendu.all-tests-passed", points: 8, max: 10, source: "auto", state: "proposed", rationale: "8/10", passId: current },
+      { criterionId: "rapport.style", points: 3, max: 4, source: "llm", state: "proposed", passId: current },
+    ], at(NOW));
+
+    const logUrl = (criterion: string) => `/app/api/projects/${w.projectId}/repos/${repo}/criteria/${criterion}/ci-log`;
+    const res = await call("GET", gradingUrl(w));
+    expect(res.body).not.toMatch(/Log-|Forged/);
+    const rows = Object.fromEntries(ProjectGradingView.parse(res.json()).repos[0]!.table.map((r) => [r.criterionId, r]));
+    expect([rows["rendu.all-tests-passed"]!.ciLog, rows["rapport.style"]!.ciLog, rows["git.commits"]!.ciLog]).toEqual([true, undefined, undefined]);
+    expect((await call("GET", logUrl("rendu.all-tests-passed"))).json()).toEqual({ log: "Log-current <b>8</b>" });
+    // A row no CI pass set has no log, whatever a results file says of it.
+    expect((await call("GET", logUrl("rapport.style"))).json()).toEqual({ log: null });
+    expect((await call("GET", logUrl("nope.none"))).statusCode).toBe(404);
+
+    // A teacher's row replaces the pass's: no log any more.
+    expect((await call("PUT", criterionUrl(w, repo, "rendu.all-tests-passed"), teacher.headers, { points: 9 })).statusCode).toBe(200);
+    expect((await grading(w)).repos[0]!.table.find((r) => r.criterionId === "rendu.all-tests-passed")!.ciLog).toBeUndefined();
+    expect((await call("GET", logUrl("rendu.all-tests-passed"))).json()).toEqual({ log: null });
   });
 });
 

@@ -3,23 +3,23 @@
  * §8, card L-06e), on a server built with Quiz's App against the fake
  * GitHub, the rows written directly as the passes leave them:
  *
- * - an automatic criterion of a v3 project carries its CI check (its
- *   fraction and its log) from the last stored `results.json` answering it;
- *   a criterion with no command never does;
+ * - an automatic criterion's CI log is read through its own route, never
+ *   in the grading payload (its rows: `criteriaGrading.db.test.ts`);
  * - the commit graph: the handed-out branch's commits with their parents (a
  *   merge), the declared author, the member GitHub matched (a group's
  *   colours), the receipt times, the App's and the handed-out commits
  *   marked; never an e-mail address;
  * - cached as the live state: a second view asks GitHub nothing, a push
  *   forgets it; GitHub failing answers `unavailable` without a URL;
- * - staff only: an outsider and a student get the 404 of a missing project;
+ * - staff only: an outsider, a student and an impersonation get the 404 of
+ *   a missing project, a SEB or kiosk session the 401 of a confined one;
  *   the logs and the graph are absent from every student response.
  */
 import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ProjectCommitGraph, ProjectGradingView } from "@quiz/contracts";
+import { CSRF_COOKIE, ProjectCommitGraph } from "@quiz/contracts";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
 
 import {
@@ -28,6 +28,7 @@ import {
   githubAccounts,
   githubOrganizations,
   gradeDispatches,
+  kioskDevices,
   projectCiResults,
   projectCriteria,
   projectGroupMembers,
@@ -36,6 +37,7 @@ import {
   projects,
   pushReceipts,
 } from "../../db/schema.js";
+import { createSession, SESSION_COOKIE, type NewSession } from "../../auth/session.js";
 import { forgetRepoLiveState, LIVE_STATE_TTL_MS, resetLiveStateCache } from "../../github/metrics.js";
 import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -124,6 +126,7 @@ interface World {
   students: { id: string; headers: Headers }[];
   enrollmentIds: string[];
   org: string;
+  evaluationId: string;
 }
 
 /** A locked v3 project graded by criteria, past its deadline, with its snapshot; no repository yet. */
@@ -161,7 +164,7 @@ async function world(): Promise<World> {
   await db.insert(projectCriteria).values({ projectId, fileSha: "f", sourceSha: "s", criteria: parsed.criteria, loadedAt: new Date() });
   const lines = await db.select({ id: enrollments.id, userId: enrollments.userId }).from(enrollments);
   const enrollmentIds = people.map((p) => lines.find((l) => l.userId === p.id)!.id);
-  return { projectId, classroomId: seeded.classroomId, students: people, enrollmentIds, org };
+  return { projectId, classroomId: seeded.classroomId, students: people, enrollmentIds, org, evaluationId: seeded.evaluationId };
 }
 
 /** The repository of `userId` (of `groupId` when given), frozen for good. */
@@ -219,27 +222,6 @@ afterAll(async () => {
   await server.close();
   vi.unstubAllGlobals();
   key.remove();
-});
-
-describe("an automatic criterion's CI check (ADR-119 §8)", () => {
-  it("carries the fraction and the log of the last results answering it, never on a criterion without a command", async () => {
-    const w = await world();
-    const repo = await repoOf(w, w.students[0]!.id);
-    const older = await ciPass(repo.id, { "code.tests": { score: "3/10", log: "old" }, "code.format": { score: "1/1", log: "formatted" } }, "2026-10-09T23:00:00Z");
-    const newer = await ciPass(repo.id, { "code.tests": { score: " 7.5 / 10 ", log: LOG_SECRET }, "rapport.style": { score: "2/2", log: "forged" } }, "2026-10-10T07:00:00Z");
-    await writeCriterionGrades(server.app.db, repo.id, [
-      { criterionId: "code.tests", points: 7.5, max: 10, source: "auto", state: "proposed", rationale: "7.5/10", passId: newer },
-      { criterionId: "code.format", points: 1, max: 1, source: "auto", state: "proposed", rationale: "1/1", passId: older },
-    ], at(NOW));
-
-    const res = await call(`/app/api/projects/${w.projectId}/grading`);
-    expect(res.statusCode, res.body).toBe(200);
-    const rows = Object.fromEntries(ProjectGradingView.parse(res.json()).repos[0]!.table.map((r) => [r.criterionId, r]));
-    expect(rows["code.tests"]!.check).toEqual({ score: " 7.5 / 10 ", log: LOG_SECRET });
-    expect(rows["code.format"]!.check).toEqual({ score: "1/1", log: "formatted" });
-    expect(rows["rapport.style"]!.check).toBeUndefined();
-    expect(rows["git.commits"]!.check).toBeUndefined();
-  });
 });
 
 describe("the commit graph (ADR-119 §8)", () => {
@@ -315,17 +297,39 @@ describe("staff only (invariant 6, N-SEC-20)", () => {
     await db().insert(githubAccounts).values({ userId: w.students[0]!.id, githubUserId: 600_000 + nextOrg, login: `ada-${nextOrg}` });
     const pass = await ciPass(repo.id, { "code.tests": { score: "7/10", log: LOG_SECRET } }, "2026-10-10T07:00:00Z");
     await writeCriterionGrades(db(), repo.id, [{ criterionId: "code.tests", points: 7, max: 10, source: "auto", state: "proposed", rationale: "7/10", passId: pass }], at(NOW));
-    // The staff read both, warming the graph's cache.
+    // The staff read both, warming the graph's cache; the grading payload marks the log, never carries it.
+    const logUrl = (projectId: string) => `/app/api/projects/${projectId}/repos/${repo.id}/criteria/code.tests/ci-log`;
     expect(JSON.stringify(await graph(w, repo.id))).toContain(MESSAGE_SECRET);
-    expect((await call(`/app/api/projects/${w.projectId}/grading`)).body).toContain("Ci-log-secret");
+    const staffGrading = await call(`/app/api/projects/${w.projectId}/grading`);
+    expect(staffGrading.body).toContain('"ciLog":true');
+    expect(staffGrading.body).not.toContain("Ci-log-secret");
+    expect((await call(logUrl(w.projectId))).json()).toEqual({ log: LOG_SECRET });
 
-    const missing = await call(graphUrl({ ...w, projectId: randomUUID() }, repo.id));
-    expect(missing.statusCode).toBe(404);
+    const missingGraph = await call(graphUrl({ ...w, projectId: randomUUID() }, repo.id));
+    const missingLog = await call(logUrl(randomUUID()));
+    expect([missingGraph.statusCode, missingLog.statusCode]).toEqual([404, 404]);
     const outsider = await server.signIn("teacher");
     const student = w.students[0]!;
-    for (const headers of [outsider.headers, student.headers]) {
-      const res = await call(graphUrl(w, repo.id), headers);
-      expect([res.statusCode, res.body]).toEqual([404, missing.body]);
+    // The teacher's own seat, through a session that is not their portal: an admin's impersonation, SEB, a kiosk station.
+    const admin = await server.signIn("admin");
+    const deviceId = randomUUID();
+    await db().insert(kioskDevices).values({ id: deviceId, googleDeviceId: `mock-${deviceId}`, status: "active", label: "Poste 1" });
+    const confined = await Promise.all([
+      sessionOf(teacher.id, { kind: "impersonation", actorUserId: admin.id, evaluationId: null, projectId: null }),
+      sessionOf(teacher.id, { kind: "seb", actorUserId: null, evaluationId: w.evaluationId, projectId: null }),
+      sessionOf(teacher.id, { kind: "kiosk", actorUserId: null, evaluationId: w.evaluationId, projectId: null, deviceId }),
+    ]);
+    for (const headers of [outsider.headers, student.headers, ...confined]) {
+      const graphRes = await call(graphUrl(w, repo.id), headers);
+      const logRes = await call(logUrl(w.projectId), headers);
+      // A SEB or kiosk session is confined to its evaluation: refused as unauthenticated before any loader, as on every portal route.
+      if (headers === confined[1] || headers === confined[2]) {
+        expect([graphRes.statusCode, logRes.statusCode]).toEqual([401, 401]);
+        expect(`${graphRes.body}${logRes.body}`).not.toMatch(/Ci-log-secret|Graph-message-secret/);
+        continue;
+      }
+      expect([graphRes.statusCode, graphRes.body]).toEqual([404, missingGraph.body]);
+      expect([logRes.statusCode, logRes.body]).toEqual([404, missingLog.body]);
       expect((await call(`/app/api/projects/${w.projectId}/grading`, headers)).statusCode).toBe(404);
     }
 
@@ -338,7 +342,7 @@ describe("staff only (invariant 6, N-SEC-20)", () => {
     // The student's own criteria table is there: the search is not vacuous.
     expect(bodies[0]).toContain("code.tests");
     for (const body of bodies) {
-      for (const secret of ["Ci-log-secret", "alert(1)", '"check"', '"log"', MESSAGE_SECRET, AUTHOR_SECRET, EMAIL_SECRET, sha("m"), "Ada Member"]) {
+      for (const secret of ["Ci-log-secret", "alert(1)", '"ciLog"', '"log"', MESSAGE_SECRET, AUTHOR_SECRET, EMAIL_SECRET, sha("m"), "Ada Member"]) {
         expect(body, secret).not.toContain(secret);
       }
     }
@@ -346,3 +350,9 @@ describe("staff only (invariant 6, N-SEC-20)", () => {
 });
 
 const db = () => server.app.db;
+
+/** A session of `userId` of another kind than the portal's, as its cookies. */
+async function sessionOf(userId: string, auth: NewSession): Promise<Headers> {
+  const s = await createSession(db(), userId, 8, auth);
+  return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
+}

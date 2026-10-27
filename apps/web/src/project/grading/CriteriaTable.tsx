@@ -1,12 +1,15 @@
+import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Check, FlaskConical, Lock, Sparkles, UserRound } from "lucide-react";
 import { useState } from "react";
 
-import type { CriteriaTableRow, CriterionGradeWrite, CriterionReason } from "@quiz/contracts";
+import { CriterionCiLog, type CriteriaTableRow, type CriterionGradeWrite, type CriterionReason } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
+import { api } from "../../api";
 import { useHold } from "../../build";
 import { useT, type Dict } from "../../i18n";
-import { Badge, Button, cx, PointsInput, pointsSuffix, T, TableHead, Textarea, Tip, type Column } from "../../ui";
+import { projectCiLogKey } from "../../queryKeys";
+import { Badge, Button, cx, PointsInput, pointsSuffix, QueryError, Skeleton, T, TableHead, Textarea, Tip, type Column } from "../../ui";
 import { RationaleFold, RationaleText } from "./RationaleFold";
 
 type Source = NonNullable<CriteriaTableRow["source"]>;
@@ -58,12 +61,15 @@ export function CriteriaTable({
   label,
   writable,
   onGrade,
+  repoPath,
 }: {
   rows: CriteriaTableRow[];
   label: string;
   /** Frozen for good: the points can be written (the server refuses them before). */
   writable: boolean;
   onGrade: GradeWrite;
+  /** The repository's API path (`/app/api/projects/:id/repos/:rid`): where a criterion's CI log is read. */
+  repoPath: string;
 }) {
   const t = useT();
   const columns: Column<string>[] = [
@@ -78,7 +84,7 @@ export function CriteriaTable({
         <TableHead columns={columns} />
         <tbody role="rowgroup">
           {rows.map((row) => (
-            <CriterionRow key={row.criterionId} row={row} writable={writable} onGrade={onGrade} />
+            <CriterionRow key={row.criterionId} row={row} writable={writable} onGrade={onGrade} repoPath={repoPath} />
           ))}
         </tbody>
       </table>
@@ -86,7 +92,7 @@ export function CriteriaTable({
   );
 }
 
-function CriterionRow({ row, writable, onGrade }: { row: CriteriaTableRow; writable: boolean; onGrade: GradeWrite }) {
+function CriterionRow({ row, writable, onGrade, repoPath }: { row: CriteriaTableRow; writable: boolean; onGrade: GradeWrite; repoPath: string }) {
   const t = useT();
   return (
     <tr role="row" className={cx(T.row, T.stack.row, "align-top")}>
@@ -97,20 +103,15 @@ function CriterionRow({ row, writable, onGrade }: { row: CriteriaTableRow; writa
             <span className="font-mono">{row.criterionId}</span>
             {row.bonus !== undefined ? <Badge tone="green">{t("project.grading.bonus", { n: row.bonus })}</Badge> : null}
             {row.max < 0 ? <Badge tone="amber">{t("project.grading.penalty")}</Badge> : null}
-            {row.check ? (
-              <span className="font-mono tabular-nums text-fg-muted" data-testid="ci-check">
-                {t("project.grading.check", { score: row.check.score.replace(/\s+/g, "") })}
-              </span>
-            ) : null}
           </span>
           {row.rationale !== undefined || (writable && row.points !== null) ? (
             <RationaleFold>
               <Rationale row={row} writable={writable && row.points !== null} onGrade={onGrade} />
             </RationaleFold>
           ) : null}
-          {row.check ? (
+          {row.ciLog ? (
             <RationaleFold label={t("project.grading.ciLog")}>
-              <CiLog log={row.check.log} />
+              <CiLog path={`${repoPath}/criteria/${encodeURIComponent(row.criterionId)}/ci-log`} />
             </RationaleFold>
           ) : null}
         </span>
@@ -193,16 +194,21 @@ function StateBadge({ row }: { row: CriteriaTableRow }) {
 }
 
 /**
- * An automatic criterion's CI log (ADR-119 §8): its tail as the run wrote
- * it, plain text (a text node, never markup), monospace, scrolled within
- * its box. Staff only: the student's row has no check.
+ * An automatic criterion's CI log (ADR-119 §8), read when its fold opens:
+ * its tail as the run wrote it, plain text (a text node, never markup),
+ * monospace, scrolled within its box. Staff only: the student's row has
+ * no log.
  */
-function CiLog({ log }: { log: string | null }) {
+function CiLog({ path }: { path: string }) {
   const t = useT();
-  if (log === null || log === "") return <RationaleText>{t("project.grading.ciLog.none")}</RationaleText>;
+  const log = useQuery({ queryKey: projectCiLogKey(path), queryFn: async () => CriterionCiLog.parse(await api(path)) });
+  if (log.isLoading) return <Skeleton className="h-16 w-full" />;
+  if (log.isError) return <QueryError title={t("project.grading.ciLog.failed")} query={log} />;
+  const text = log.data!.log;
+  if (text === null) return <RationaleText>{t("project.grading.ciLog.none")}</RationaleText>;
   return (
-    <pre className="max-h-72 w-full overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-surface-2 p-2.5 font-mono text-[12px] leading-relaxed text-fg-muted">
-      {log}
+    <pre className="max-h-72 w-full overflow-auto whitespace-pre-wrap wrap-break-word rounded-md border border-line bg-surface-2 p-2.5 font-mono text-[12px] leading-relaxed text-fg-muted">
+      {text}
     </pre>
   );
 }

@@ -13,7 +13,7 @@ import { branchHead, failFast, githubStatus, ownerRepo } from "./app.js";
 import { repoReadCache } from "./metrics.js";
 
 /** The longest message kept: a commit message is free text of any size. */
-export const COMMIT_MESSAGE_MAX = 2000;
+const COMMIT_MESSAGE_MAX = 2000;
 const PAGE = 100;
 
 export interface ListedCommit {
@@ -72,13 +72,14 @@ async function branchCommits(octokit: Octokit, fullName: string, branch: string)
   return { commits: commits.slice(0, COMMIT_GRAPH_MAX_PER_BRANCH), full: true };
 }
 
-/** The listing of `branches` of `fullName`, the commits shared by several branches once. */
-export async function fetchCommitListing(
-  octokit: Octokit,
-  fullName: string,
-  branches: readonly string[],
-  distribution: string | null,
-): Promise<CommitListing> {
+/** What a listing reads: the project's handed-out branches, and its distribution repository (null before it is built). */
+export interface ListingScope {
+  branches: readonly string[];
+  distribution: string | null;
+}
+
+/** The listing of the `branches` of `fullName`, the commits shared by several branches once. */
+export async function fetchCommitListing(octokit: Octokit, fullName: string, { branches, distribution }: ListingScope): Promise<CommitListing> {
   const listing: CommitListing = { branches: [], commits: [], truncated: false, handedOut: [] };
   const seen = new Set<string>();
   for (const name of branches) {
@@ -101,5 +102,9 @@ export async function fetchCommitListing(
   return listing;
 }
 
-/** {@link fetchCommitListing} through the live state's cache (one minute, served stale up to fifteen, a push forgets it). */
+/**
+ * {@link fetchCommitListing} through the live state's cache (one minute,
+ * served stale up to fifteen, a push forgets it), keyed by the repository
+ * and its scope: a change of branches or distribution reads again.
+ */
 export const readCommitListing = repoReadCache(fetchCommitListing);

@@ -18,17 +18,28 @@ export interface GraphReceipt {
   receivedAt: Date;
 }
 
-/** Every commit of `commits` reachable from `heads` through its parents (a head included). */
-export function reachableCommits(commits: readonly GraphCommit[], heads: Iterable<string>): Set<string> {
-  const parents = new Map(commits.map((c) => [c.sha, c.parents]));
-  const seen = new Set<string>();
-  const stack = [...heads];
+/**
+ * Visits `from` and its ancestors among the listed commits (`parents`, by
+ * sha), each once: a commit `seen` already holds is not entered again, nor
+ * its ancestors.
+ */
+function walk(parents: ReadonlyMap<string, readonly string[]>, from: string, seen: { has(sha: string): boolean }, visit: (sha: string) => void): void {
+  const stack = [from];
   while (stack.length > 0) {
     const sha = stack.pop()!;
     if (seen.has(sha) || !parents.has(sha)) continue;
-    seen.add(sha);
+    visit(sha);
     stack.push(...parents.get(sha)!);
   }
+}
+
+const parentsOf = (commits: readonly GraphCommit[]) => new Map(commits.map((c) => [c.sha, c.parents]));
+
+/** Every commit of `commits` reachable from `heads` through its parents (a head included). */
+export function reachableCommits(commits: readonly GraphCommit[], heads: Iterable<string>): Set<string> {
+  const parents = parentsOf(commits);
+  const seen = new Set<string>();
+  for (const head of heads) walk(parents, head, seen, (sha) => seen.add(sha));
   return seen;
 }
 
@@ -39,18 +50,10 @@ export function reachableCommits(commits: readonly GraphCommit[], heads: Iterabl
  * has none.
  */
 export function commitReceiptTimes(commits: readonly GraphCommit[], receipts: readonly GraphReceipt[]): Map<string, Date> {
-  const parents = new Map(commits.map((c) => [c.sha, c.parents]));
+  const parents = parentsOf(commits);
   const times = new Map<string, Date>();
   const ordered = [...receipts].sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
-  for (const { headSha, receivedAt } of ordered) {
-    // A commit already timed was walked with all its ancestors: the walk stops there.
-    const stack = [headSha];
-    while (stack.length > 0) {
-      const sha = stack.pop()!;
-      if (times.has(sha) || !parents.has(sha)) continue;
-      times.set(sha, receivedAt);
-      stack.push(...parents.get(sha)!);
-    }
-  }
+  // A commit already timed was walked with all its ancestors: the walk stops there.
+  for (const { headSha, receivedAt } of ordered) walk(parents, headSha, times, (sha) => times.set(sha, receivedAt));
   return times;
 }
