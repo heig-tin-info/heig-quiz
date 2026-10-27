@@ -26,6 +26,10 @@ both runner configuration, never a per-request override; the API's wait
 budget for it is that ceiling plus 60 s. Its jobs run on the grading
 priority, paced so that a pass never fills the runner's queue.
 
+**Amended 2026-10-26 by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
+§10** (scope: the amendment above, superseded once the v2 path is
+removed): the `project` action and its two ceilings leave with card L-06g.
+
 ## Context
 
 Production runs the runner with two slots (`RUNNER_CONCURRENCY=2`). The API

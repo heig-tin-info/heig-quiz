@@ -16,6 +16,9 @@ F-PROJ-02, F-PROJ-16.
 the evidence run of a project graded by criteria overlays the
 distribution's current protected files on the student's tree, exactly as a
 restore takes them, and records the distribution sha it used.
+*Superseded 2026-10-26 by [ADR-119](ADR-119-criteres-v3-preuves-de-la-ci.md)
+§6 for a v3 snapshot (whole with card L-06g): no overlay; the graded run
+is accepted only when the protected files are the distribution's.*
 
 **Amended 2026-10-26 (#899, product owner)** (scope: who may read the
 distribution repository): Quiz grants nobody access to it at creation. A
