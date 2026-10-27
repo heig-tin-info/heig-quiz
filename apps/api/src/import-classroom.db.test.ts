@@ -407,7 +407,7 @@ describe("import-classroom", () => {
     expect(report.refusals).toEqual([expect.stringContaining('mapping incomplete: "Sandbox"')]);
   });
 
-  it("refuses a course code two Quiz courses share (ADR-119)", async () => {
+  it("refuses a course code two Quiz courses share (ADR-120)", async () => {
     const w = await world();
     await w.db.insert(courses).values({ id: randomUUID(), name: "Programmation (bis)", code: "PROG" });
     const before = await everything(w.db);

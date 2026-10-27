@@ -8,7 +8,7 @@ and left its open points to the implementation; the values taken are the
 spec challenge of the same day corrected three claims of the first draft (no YAML
 import exists; a staff attempt earns no drill card and no statistic; a seat is per
 classroom). Delivery progress lives in `docs/merge/PROGRESS.md` and `changes/`.
-Amended 2026-10-26 by [ADR-119](ADR-119-code-de-cours-non-unique.md): the training
+Amended 2026-10-26 by [ADR-120](ADR-120-code-de-cours-non-unique.md): the training
 course's code is `INIT` (§1).
 
 Scope: how a new teacher learns the platform by using it — what is provisioned for
@@ -79,7 +79,7 @@ ordinary services of `org`:
   pool links and audits the rebuild. The course is named and coded by the service — name in
   the request's UI language, code `INIT-<n>` free at creation; both editable later as
   any course's, the column alone marks it. *(Amended 2026-10-26 by
-  [ADR-119](ADR-119-code-de-cours-non-unique.md): course codes are no longer unique,
+  [ADR-120](ADR-120-code-de-cours-non-unique.md): course codes are no longer unique,
   so the code is `INIT` for every training course.)* The caller is its only owner;
 - one classroom, the current period (its `periodEnd` the end of the current
   semester), no roster, no seat;

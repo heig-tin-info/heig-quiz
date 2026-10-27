@@ -228,7 +228,7 @@ export async function drillSession(
     cards: rows
       .filter(({ card }) => !heldToday(card, day, practised))
       // Keyed by the course's id, not its code: two courses may share a code
-      // (ADR-119), and their cards must still interleave as two groups.
+      // (ADR-120), and their cards must still interleave as two groups.
       .map(({ card, courseId }) => ({
         id: card.id,
         isNew: card.lastReviewAt === null,

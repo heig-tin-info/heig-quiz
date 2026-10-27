@@ -31,7 +31,7 @@ import { seedDemoContent } from "./seed/demo.js";
 
 /**
  * The demo course. Its id is fixed: the seed upserts on it, the code being a
- * free label another course may share (ADR-119).
+ * free label another course may share (ADR-120).
  */
 const COURSE = { id: "00000000-0000-4000-8000-00000000c001", name: "Programmation C", code: "PRG1" };
 /** Dated explicitly (#156): autumn 2026, so the sidebar's "right now" list holds it. */

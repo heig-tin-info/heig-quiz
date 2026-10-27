@@ -35,7 +35,7 @@ describe("the demo seed's concepts", () => {
     expect(await db.select().from(concepts)).toHaveLength(CONCEPTS.length);
     expect(await db.select().from(questionConcepts)).toHaveLength(links);
     // The demo course is upserted on its fixed id: the code alone no longer
-    // finds it (ADR-119), so a second seed must not make a second course.
+    // finds it (ADR-120), so a second seed must not make a second course.
     expect(await db.select().from(courses).where(eq(courses.code, "PRG1"))).toHaveLength(1);
   }, 120_000);
 });

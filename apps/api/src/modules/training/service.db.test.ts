@@ -262,7 +262,7 @@ describe("provision (§1)", () => {
     expect((await status(db, { userId: unlucky, llmEnabled: false })).course).toBeNull();
   });
 
-  it("codes every training course INIT, shared between teachers (ADR-119)", async () => {
+  it("codes every training course INIT, shared between teachers (ADR-120)", async () => {
     const [third, fourth] = await Promise.all([makeUser("teacher"), makeUser("teacher")]);
     await provisionFor(third!);
     await provisionFor(fourth!);

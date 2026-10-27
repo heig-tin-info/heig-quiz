@@ -1,4 +1,4 @@
-# ADR-119 — A course's code is a free label, no longer unique on the platform
+# ADR-120 — A course's code is a free label, no longer unique on the platform
 
 ## Status
 

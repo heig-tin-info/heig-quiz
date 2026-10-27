@@ -33,7 +33,7 @@ export const courses = pgTable(
     name: text("name").notNull(),
     /**
      * Short school code (`PRG1`), a display label like the name: two courses
-     * may share one (ADR-119).
+     * may share one (ADR-120).
      */
     code: text("code").notNull(),
     /** A lucide icon name (`cpu`), drawn as a pool's is; null shows the default. */
