@@ -28,6 +28,9 @@ import { Disclosure, Section, Segmented, Select, SettingRow, Switch } from "../u
 import { AllowedDevices } from "./AllowedDevices";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
+/** The choice of the multiple-answer select that stands for negative marking. */
+const NEGATIVE = "negative";
+
 /**
  * `body`, a patch that sets the waiting room, with the feedback brought back
  * in the SAME patch when that room forbids the policy in force: a waiting
@@ -100,10 +103,17 @@ export function AdvancedDisclosure({
   // ADR-091: a retake of the questions to review needs free navigation, so
   // the navigation stays put while it is on (`422 retake_scope_navigation`).
   const partialRetake = partialRetakesOn(mode, retakesOf(settings));
-  // ADR-026: negative marking replaces both policies below; each row says so
-  // while it is on, so a teacher never tunes a policy nothing reads.
-  const policyDesc = (desc: string) =>
-    negativeMarkingOn(mode, negativeMarkingOf(settings)) ? `${desc} ${t("eval.policy.overridden")}` : desc;
+  // ADR-026: negative marking replaces both policies below, so it is one
+  // more choice of the multiple-answer select rather than a switch beside
+  // it. The wire keeps two fields: the choice writes `negativeMarking` and
+  // leaves the stored policy alone, so choosing a policy again restores it.
+  const negativeOffered = negativeMarkingAllowedFor(mode);
+  const negative = negativeMarkingOn(mode, negativeMarkingOf(settings));
+  const scoring: McqPolicy | typeof NEGATIVE = negative ? NEGATIVE : mcqPolicy;
+  const chooseScoring = (value: string) => {
+    if (value === NEGATIVE) set({ negativeMarking: true });
+    else patch.mutate({ mcqPolicy: value as McqPolicy, ...(negative ? { settings: { negativeMarking: false } } : {}) });
+  };
 
   return (
     <Disclosure title={t("eval.advanced")} desc={t("eval.advanced.desc")}>
@@ -313,31 +323,35 @@ export function AdvancedDisclosure({
             decides a score. */}
         <SettingRow
           title={t("mcq.policy.title")}
-          desc={policyDesc(t(`mcq.policy.desc.${mcqPolicy}` as keyof Dict))}
+          desc={negative ? t("eval.negativeMarking.desc") : t(`mcq.policy.desc.${mcqPolicy}` as keyof Dict)}
           help="mcq-policies"
         >
           <Select
-            value={mcqPolicy}
+            value={scoring}
             disabled={disabled}
             size="sm"
             width="w-52"
             aria-label={t("mcq.policy.title")}
-            onChange={(e) => patch.mutate({ mcqPolicy: e.target.value as McqPolicy })}
+            onChange={(e) => chooseScoring(e.target.value)}
           >
             {McqPolicy.options.map((policy) => (
               <option key={policy} value={policy}>
                 {t(`mcq.policy.${policy}` as keyof Dict)}
               </option>
             ))}
+            {/* For the whole evaluation, never per question; a poll has no
+                score to penalise. */}
+            {negativeOffered ? <option value={NEGATIVE}>{t("eval.negativeMarking")}</option> : null}
           </Select>
         </SettingRow>
 
         {/* ADR-036: the same, for the categorize items that say "inherited",
-            shown only while the evaluation holds one. */}
-        {holdsCategorize ? (
+            shown only while the evaluation holds one — and not while negative
+            marking, which replaces it too, is chosen above. */}
+        {holdsCategorize && !negative ? (
           <SettingRow
             title={t("eval.categorizePolicy")}
-            desc={policyDesc(t(`eval.categorizePolicy.desc.${categorizePolicyOf(settings)}`))}
+            desc={t(`eval.categorizePolicy.desc.${categorizePolicyOf(settings)}`)}
           >
             <Segmented
               name="categorizePolicy"
@@ -349,20 +363,6 @@ export function AdvancedDisclosure({
                 value: policy,
                 label: t(`eval.categorizePolicy.${policy}`),
               }))}
-            />
-          </SettingRow>
-        ) : null}
-
-        {/* ADR-026: negative marking, beside the policies it overrides. For
-            the whole evaluation, never per question, and frozen with the
-            rest of what decides a score. A poll has no score to penalise. */}
-        {negativeMarkingAllowedFor(mode) ? (
-          <SettingRow title={t("eval.negativeMarking")} desc={t("eval.negativeMarking.desc")}>
-            <Switch
-              checked={negativeMarkingOf(settings)}
-              disabled={disabled}
-              label={t("eval.negativeMarking")}
-              onChange={(negativeMarking) => set({ negativeMarking })}
             />
           </SettingRow>
         ) : null}

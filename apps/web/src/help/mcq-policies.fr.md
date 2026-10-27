@@ -28,8 +28,9 @@ pas répondre.
 
 ## Points négatifs
 
-Une évaluation peut activer les **points négatifs**, dans ses options
-avancées. Toutes ses questions à choix sont alors notées de la même façon,
+Une évaluation peut choisir les **points négatifs** à la place d'une
+politique, dernier choix de sa règle de notation des choix multiples, dans
+ses options avancées. Toutes ses questions à choix sont alors notées de la même façon,
 quelle que soit la politique de la question, à réponse unique ou multiple :
 
 - une bonne réponse parmi `n` choix : la bonne rapporte 1, une fausse coûte `1/(n - 1)` ;

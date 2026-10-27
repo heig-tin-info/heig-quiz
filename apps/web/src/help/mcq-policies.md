@@ -27,7 +27,8 @@ No policy ever goes below zero: answering is never worse than not answering.
 
 ## Negative marking
 
-An evaluation may switch on **negative marking**, under its advanced options.
+An evaluation may choose **negative marking** in place of a policy, as the
+last choice of its multiple-answer scoring, under its advanced options.
 It then scores **every** choice question of that evaluation the same way,
 whatever policy the question names, one answer or several:
 

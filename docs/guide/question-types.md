@@ -37,7 +37,7 @@ The policies are named below as the editor, the evaluation options and **Setting
 
 No policy goes below zero: answering is never worse than leaving the question blank. The result is multiplied by the points of the item.
 
-**Negative marking** is the one exception. It is a switch of the evaluation, not a policy, and when it is on it replaces the policy of every choice question the evaluation plays, single-answer ones included (ADR-026):
+**Negative marking** is the one exception. It is the last choice of the evaluation's **Multiple-answer scoring**, never a choice of a question, and when it is chosen it replaces the policy of every choice question the evaluation plays, single-answer ones included (ADR-026):
 
 - a multiple-answer question scores `c/C - w/W`, the Symmetric formula without its floor, from −1 to 1;
 - a single-answer question scores 1 for the key and `−1/(n − 1)` for a wrong choice, `n` being the number of choices; ticking several choices is refused while the student answers, and scored as wrong;
