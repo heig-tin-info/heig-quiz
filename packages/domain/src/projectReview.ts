@@ -8,8 +8,12 @@
 import { classifyCriterion, type CriteriaLeaf, type CriterionSettings } from "./criteria.js";
 import { REPORT_FILE, sourcePaths, type JunitCase } from "./evidence.js";
 
-/** The llm criteria of a snapshot under the project's tests and identity criteria: an identity criterion never is one. */
-export function llmLeaves(leaves: readonly CriteriaLeaf[], settings: CriterionSettings): CriteriaLeaf[] {
+/**
+ * The llm criteria of a snapshot under the project's tests and identity
+ * criteria (a schema-2 snapshot; null for a schema-3 one, `classifyCriterion`):
+ * an identity criterion never is one.
+ */
+export function llmLeaves(leaves: readonly CriteriaLeaf[], settings: CriterionSettings | null): CriteriaLeaf[] {
   return leaves.filter((leaf) => classifyCriterion(leaf, settings) === "llm");
 }
 

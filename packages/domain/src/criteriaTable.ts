@@ -12,11 +12,17 @@ import { EVIDENCE_STATUSES } from "./evidence.js";
 
 /**
  * Why a criterion's row is a 0-point proposal (ADR-106 §3, §4): no
- * evidence (an evidence status), or the LLM pass failed (ADR-063 §2's
- * reasons). Staff only: a student never reads one (§9).
+ * evidence (an evidence status), the CI's graded run gave none (ADR-119
+ * §6: a protected file differs, `ci_tampered`; no accepted run or no
+ * valid result, `no_result`; the repository cannot run Actions,
+ * `ci_unavailable`), or the LLM pass failed (ADR-063 §2's reasons). Staff
+ * only: a student never reads one (§9).
  */
 export const CRITERION_REASONS = [
   ...EVIDENCE_STATUSES.filter((s) => s !== "ok"),
+  "ci_tampered",
+  "no_result",
+  "ci_unavailable",
   "llm_budget",
   "llm_not_configured",
   "grader_error",

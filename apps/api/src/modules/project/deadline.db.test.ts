@@ -585,6 +585,7 @@ describe("a repository's own deadline (D13 amended)", () => {
       conclusion: "success",
       path: ".github/workflows/build.yml",
       event: "push",
+      title: "build",
       triggeredBy: "person",
       startedAt: null,
       checkSuiteId: null,

@@ -503,7 +503,8 @@ const failureReason = (err: unknown): string =>
  * status as its reason when there is none. For a milestone (`checkpointId`, §5): the evidence at the
  * checkpoint's date, the criteria it tags only, their rows locked. Null
  * when there is nothing to grade: the repository or the checkpoint gone,
- * its project not in `criteria` mode or without a snapshot.
+ * its project not in `criteria` mode, without a snapshot, or whose
+ * snapshot is schema 3 (ADR-119 §11: the CI's evidence, never the runner's).
  */
 export async function runEvidence(app: FastifyInstance, config: AppConfig, repoId: string, checkpointId?: string): Promise<EvidenceOutcome | null> {
   const [row] = await app.db
@@ -513,10 +514,13 @@ export async function runEvidence(app: FastifyInstance, config: AppConfig, repoI
     .innerJoin(projectCriteria, eq(projectCriteria.projectId, projects.id))
     .where(eq(projectRepos.id, repoId));
   if (!row || row.project.gradingMode !== "criteria" || !row.project.distributionFullName) return null;
+  // A schema-3 snapshot's evidence is the CI's graded run (`ci.ts`, ADR-119 §6, §11): never the runner's.
+  if (row.snapshot.schemaVersion !== 2) return null;
   const { repo, project, snapshot } = row;
   const scope = await passScope(app.db, project.id, snapshot.leaves, checkpointId);
   if (!scope) return null;
   const evidence = await collectEvidence(app, config, repo, project, scope.dueAt ?? effectiveDeadline(repo, project), snapshot.grading.sources);
+  // Schema 2 here: the project's settings classify (`snapshotSettings`).
   const settings = criterionSettings(project);
   const automatic = scope.leaves.filter((leaf) => classifyCriterion(leaf, settings) === "automatic" && proratedByTests(leaf));
   const now = app.clock.now();

@@ -19,7 +19,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 
-import { criterionSettings } from "@quiz/contracts";
+import { snapshotSettings } from "@quiz/contracts";
 import {
   awardedRange,
   clampAwarded,
@@ -161,7 +161,7 @@ export async function runReview(app: FastifyInstance, job: ReviewJob): Promise<n
   if (!scope) return 0;
   // Not held, nor already proposed by this pass (a job run twice): spares a needless call, the writer checks again.
   const held = await heldCriteria(db, repo.id, job.passId);
-  const leaves = llmLeaves(scope.leaves, criterionSettings(project)).filter((leaf) => !held.has(leaf.id));
+  const leaves = llmLeaves(scope.leaves, snapshotSettings(project, snapshot.schemaVersion)).filter((leaf) => !held.has(leaf.id));
   if (leaves.length === 0) return 0;
   const [evidence] = await db
     .select()

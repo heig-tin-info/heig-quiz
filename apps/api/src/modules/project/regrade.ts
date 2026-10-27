@@ -13,6 +13,12 @@
  * server's day in the school's zone (ADR-058 L2 (b)): two pressed at the
  * same instant may both pass, the cap bounds a day, not a race. The routes
  * hold the project loader and the course role (invariant 6).
+ *
+ * A project whose snapshot is schema 3 (ADR-119 §6) regrades through its
+ * CI: each repository gets a new pass (`claimRegrades`: a new nonce, the
+ * previous one retired) and its `quiz-grade` dispatch (`sendCiPasses`);
+ * the automatic criteria follow from the run accepted. `payload.passId` is
+ * then the first repository's pass, `payload.passIds` all of them.
  */
 import { randomUUID } from "node:crypto";
 
@@ -27,6 +33,7 @@ import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { auditLog, projectCriteria, projectRepos, projects } from "../../db/schema.js";
 import { PROJECT_EVIDENCE_QUEUE } from "../../jobs.js";
+import { claimRegrades, sendCiPasses } from "./ci.js";
 import { isLive, LIVE } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import type { EvidenceJob } from "./evidence.js";
@@ -92,16 +99,23 @@ export async function regrade(
   if ((await regradesToday(db, project.id, action, repo?.id ?? null, now)) >= PROJECT_REGRADES_PER_DAY) {
     throw new ProjectError("regrade_limit", "Regraded as often as a day allows: try again tomorrow");
   }
-  const passId = randomUUID();
+  // A schema-3 snapshot: each repository's CI graded run dispatched anew, a new nonce each (ADR-119 §6).
+  const ci = snapshot.criteria.schemaVersion === 3;
+  const passIds = ci ? await claimRegrades(db, repos.map((r) => r.id), now) : [randomUUID()];
+  const passId = passIds[0]!;
   // Both on the project; the repository's in the payload, which its own day's cap counts.
   await audit(db, {
     ...actor,
     action,
     subjectType: "project",
     subjectId: project.id,
-    payload: repo === null ? { passId, repos: repos.length } : { passId, repoId: repo.id },
+    payload: repo === null ? { passId, repos: repos.length, ...(ci ? { passIds } : {}) } : { passId, repoId: repo.id },
     at: now,
   });
+  if (ci) {
+    await sendCiPasses(app, config, passIds);
+    return { repos: repos.length };
+  }
   for (const { id } of repos) {
     const job: EvidenceJob = { repoId: id, passId };
     if (app.boss) await app.boss.send(PROJECT_EVIDENCE_QUEUE, job);

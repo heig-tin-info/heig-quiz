@@ -46,7 +46,7 @@ import {
   CriteriaIncomplete,
   CriterionGradeWrite,
   criterionConflict,
-  criterionSettings,
+  snapshotSettings,
   PROJECT_DEFAULTS,
   ProjectGroupResync,
   ProjectPatch,
@@ -1290,7 +1290,8 @@ function sampleSnapshot(loadedAt: string) {
 function criteriaViewOf(p: MockProject): ProjectCriteriaView {
   const snap = CRITERIA.get(p.summary.id);
   if (!snap) return { snapshot: null };
-  const settings = criterionSettings(p.summary);
+  // The sample is a schema-2 snapshot: the project's settings classify it.
+  const settings = snapshotSettings(p.summary, 2);
   return {
     snapshot: {
       ...snap,

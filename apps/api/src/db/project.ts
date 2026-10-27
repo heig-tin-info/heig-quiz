@@ -76,6 +76,7 @@ import {
   PROJECT_STATES,
   PUBLISH_MODES,
 } from "@quiz/domain";
+import type { CheckResults } from "@quiz/domain/checkResults";
 import type { ParsedCriteria } from "@quiz/domain/criteria";
 import type { EvidenceCommit, JunitCase } from "@quiz/domain/evidence";
 import type { CriterionReason } from "@quiz/domain/criteriaTable";
@@ -753,6 +754,15 @@ export const botCommits = pgTable(
  * (repository, final review) and per (repository, checkpoint): the unique
  * index coalesces the final review's null checkpoint. A reopen forgets a
  * repository's `deadline` rows (M3-05a).
+ *
+ * A pass of a project graded by criteria is claimed here too (ADR-106 §6):
+ * for a schema-3 snapshot (ADR-119 §6) the row is its CI pass — the
+ * `quiz-grade` dispatch with its `nonce` (128 random bits, hex), its
+ * target commit in `sha` (empty until the dispatch job claims it), and
+ * `settled_at` once its automatic rows are written (an accepted run, a
+ * reason, the 24 h without one). A Regrade adds a `regrade` row, outside
+ * the unique index, and retires (`retired_at`) the nonce it replaces: a
+ * retired or settled pass accepts no run.
  */
 export const gradeDispatches = pgTable(
   "grade_dispatches",
@@ -767,15 +777,56 @@ export const gradeDispatches = pgTable(
     sha: text("sha").notNull(),
     dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** A CI pass's nonce (ADR-119 §6), carried by its run's name; null for any other row. */
+    nonce: text("nonce"),
+    /** A newer dispatch of the same slot replaced this nonce: no run of it is accepted. */
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+    /** The CI pass's automatic rows written: no run of it is accepted any more. */
+    settledAt: timestamp("settled_at", { withTimezone: true }),
   },
   (t) => [
-    uniqueIndex("grade_dispatches_repo_trigger_uq").on(
-      t.repoId,
-      t.trigger,
-      sql`coalesce(${t.checkpointId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
-    ),
+    uniqueIndex("grade_dispatches_repo_trigger_uq")
+      .on(t.repoId, t.trigger, sql`coalesce(${t.checkpointId}, '00000000-0000-0000-0000-000000000000'::uuid)`)
+      .where(sql`${t.trigger} <> 'regrade'`),
+    uniqueIndex("grade_dispatches_nonce_uq").on(t.nonce),
+    // The 24 h sweep's scan of the CI passes still waiting (ADR-119 §6).
+    index("grade_dispatches_ci_waiting_idx")
+      .on(t.createdAt)
+      .where(sql`${t.nonce} IS NOT NULL AND ${t.settledAt} IS NULL AND ${t.retiredAt} IS NULL`),
   ],
 );
+
+/**
+ * The validated `results.json` of a CI pass's accepted run (ADR-119 §6),
+ * each criterion's log cut to its tail (`tailUtf8`): what its automatic
+ * rows were read from, and the logs the staff see (L-06e) — never the
+ * student (§8), never stored elsewhere. Retention (N-DATA-03): deleted with
+ * the pass (a reopen forgets a final pass), with the project, or six
+ * months after its release (`purgeCiResults`).
+ */
+export const projectCiResults = pgTable("project_ci_results", {
+  passId: uuid("pass_id")
+    .primaryKey()
+    .references(() => gradeDispatches.id, { onDelete: "cascade" }),
+  repoId: uuid("repo_id")
+    .notNull()
+    .references(() => projectRepos.id, { onDelete: "cascade" }),
+  /** GitHub's id of the run accepted. */
+  workflowRunId: bigint("workflow_run_id", { mode: "number" }).notNull(),
+  results: jsonb("results").$type<CheckResults>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+});
+
+/**
+ * The pace of the `quiz-grade` dispatches (ADR-119 §6, choice f): the
+ * next free slot of each App installation, one dispatch every
+ * `DISPATCH_PACE_MS`. A slot is reserved by one upsert when a pass is
+ * queued, its job starting at the slot.
+ */
+export const projectDispatchSlots = pgTable("project_dispatch_slots", {
+  installationId: bigint("installation_id", { mode: "number" }).primaryKey(),
+  nextAt: timestamp("next_at", { withTimezone: true }).notNull(),
+});
 
 /**
  * The protected-file restores of a repository (F-PROJ-08): what counts the

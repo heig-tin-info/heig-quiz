@@ -62,7 +62,9 @@ const secret = (url: string) =>
  * user-to-server, `ghp_` personal, `gho_` OAuth, `ghr_` refresh), and the
  * `AUTHORIZATION: basic <base64>` header the git wrapper hands to git
  * (`github/git.ts`), and a `token=` query parameter — the `codeload` URL a
- * tarball request redirects to carries one (ADR-106 §3). Tokens expire
+ * tarball request redirects to carries one (ADR-106 §3) — and a `sig=`
+ * one — the signed blob URL a graded run's artifact redirects to carries
+ * its signature (ADR-119 §6, `github/artifact.ts`). Tokens expire
  * within the hour, but they are never stored nor logged at all. A safety
  * net: the wrapper puts no token in a URL, and the evidence job passes
  * every failure of its download through here.
@@ -73,7 +75,7 @@ export function redactTokens(text: string): string {
     .replace(/x-access-token:[^@\s]+@/g, "x-access-token:***@")
     .replace(/\bgh[a-z]_[A-Za-z0-9_]+/g, "gh*_***")
     .replace(/\bsk-ant-[A-Za-z0-9_-]+/g, "sk-ant-***")
-    .replace(/([?&;]token=)[^&\s#"'<>]+/gi, "$1***");
+    .replace(/([?&;](?:token|sig)=)[^&\s#"'<>]+/gi, "$1***");
 }
 
 /** `url` (a request's path and query) with every secret replaced by `…`. */

@@ -63,6 +63,7 @@ import { protectStudentRepo } from "../../github/provision.js";
 import type { ScheduledTask } from "../../ticker.js";
 import { pushedBy } from "../github/service.js";
 import { followInvitation, installationClients, inviteAccount, notRecorded } from "./access.js";
+import { CI_PASS_WAITING, purgeCiResults } from "./ci.js";
 import { LIVE } from "./deadline.js";
 import { purgeEvidenceFiles } from "./evidence.js";
 import { ProjectError } from "./errors.js";
@@ -113,10 +114,11 @@ const rateLimited = (err: unknown): boolean => rateLimitReset(err, Date.now()) !
 /** The live repositories in scope (`reconciles`), with their project and course; one read. */
 async function candidates(db: Db, now: Date): Promise<Candidate[]> {
   // A CI final review asked: an `auto` project's only — a `criteria` project's `deadline` row is
-  // its platform pass (ADR-106 §6), whose review slot never fills.
-  const reviewAsked = sql<boolean>`EXISTS (SELECT 1 FROM ${gradeDispatches}
+  // its platform pass (ADR-106 §6), whose review slot never fills —, or a schema-3 project's CI pass
+  // still waiting for its graded run (ADR-119 §6): its runs are read until the pass settles.
+  const reviewAsked = sql<boolean>`(EXISTS (SELECT 1 FROM ${gradeDispatches}
     WHERE ${gradeDispatches.repoId} = ${projectRepos.id} AND ${gradeDispatches.trigger} = 'deadline'
-    AND ${projects.gradingMode} = 'auto')`.mapWith(Boolean);
+    AND ${projects.gradingMode} = 'auto') OR ${CI_PASS_WAITING})`.mapWith(Boolean);
   const rows = await db
     .select({ repo: projectRepos, project: projects, courseId: classrooms.courseId, reviewAsked })
     .from(projectRepos)
@@ -468,7 +470,8 @@ export async function reconcileRepos(app: FastifyInstance, config: AppConfig): P
     (repos, c) =>
       `${repos} repositories checked, ${c.reinvited} re-invited, ${c.accepted} invitations accepted, ${c.heads} heads moved, ${c.renamed} renamed, ${c.deleted} deleted, ${c.protected} protected`,
   );
-  return `${summary}; ${await purgeEvidenceFiles(app.db, app.clock.now())} evidence files purged`;
+  const now = app.clock.now();
+  return `${summary}; ${await purgeEvidenceFiles(app.db, now)} evidence files purged; ${await purgeCiResults(app.db, now)} CI results purged`;
 }
 
 /** The two tasks, in the catalog whether or not the App is configured (the catalog is static): without it they return at once. */

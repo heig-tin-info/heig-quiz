@@ -122,6 +122,17 @@ export const PROJECT_SYNC_QUEUE = "project.sync";
 export const PROJECT_EVIDENCE_QUEUE = "project.evidence";
 
 /**
+ * The `quiz-grade` dispatch of one CI pass of a project whose criteria
+ * snapshot is schema 3 (ADR-119 §6): `{ passId }`, sent by the ticker
+ * (the final and milestone passes it claimed) and by a Regrade, each with
+ * `startAfter` its App installation's next slot (one dispatch every 15 s).
+ * `standard`, no dedupe, no retry: the pass's target is recorded on its
+ * ledger row before GitHub is called, so a job run twice sends nothing
+ * more, and a call whose answer never came is settled by the 24 h.
+ */
+export const PROJECT_CI_QUEUE = "project.ci";
+
+/**
  * The LLM pass of one repository of a project graded by criteria (ADR-106
  * §4): `{ repoId, passId, trigger, evidenceId }`, sent by the evidence job
  * of a pass once its evidence is stored, whatever its status. As

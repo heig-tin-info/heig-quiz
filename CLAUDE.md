@@ -176,6 +176,8 @@ internal bridge).
     template and the student's editable regions — never taken as-is. A
     project's source is fetched by the server at a commit the server chose
     from its push receipts (ADR-106 §3), never uploaded by a client.
+    The graded run of a v3 project checks out the sha the server
+    dispatches, bound by its nonce and the protected workflow (ADR-119 §6).
 
 ### GitHub invariant (ADR-035, N-SEC-16..18)
 
@@ -192,7 +194,10 @@ internal bridge).
     hands it to git through the environment only; a repository's tarball
     redirects to a `codeload` URL carrying a `token=`, which is never
     logged, stored, nor put in an error payload, and the redaction knows
-    `token=` (ADR-106 §3, card L-02b); the user token of an account
+    `token=` (ADR-106 §3, card L-02b); a graded run's `results` artifact
+    redirects to a signed blob URL carrying a `sig=`, under the same rule,
+    and the redaction knows `sig=` beside `token=` (ADR-119 §6, card
+    L-06b); the user token of an account
     link reads the account once and is discarded (M2-03). Under
     `NODE_ENV=production`, `config.ts` refuses to start with an App id whose
     key file is unreadable, a webhook secret under 32 characters, no App

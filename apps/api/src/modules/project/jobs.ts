@@ -25,7 +25,9 @@
  *    lock or with its protection suspended is audited
  *    `project_repo.review_skipped`, M3-05b); a repository of a project
  *    graded by criteria gets its final pass claimed in `grade_dispatches`
- *    (ADR-106 §6), its `project.evidence` job sent with a queue only;
+ *    (ADR-106 §6), its `project.evidence` job sent with a queue only — a
+ *    schema-3 project's, its `project.ci` dispatch (ADR-119 §6); the CI
+ *    passes 24 h without an accepted run are settled `no_result`;
  * 4b. the day-before reminders due are claimed and sent (`remindDeadlines`,
  *    `notify.ts`, M3-09b): no HTTP, the notifications' own jobs carry the
  *    e-mails;
@@ -76,6 +78,7 @@ import { lockStudentRepo, setRepoArchived, unlockStudentRepo } from "../../githu
 import { isPlanRestriction } from "../../github/provision.js";
 import {
   PROJECT_DEADLINE_QUEUE,
+  PROJECT_CI_QUEUE,
   PROJECT_DISPATCH_QUEUE,
   PROJECT_EVIDENCE_QUEUE,
   PROJECT_GROUP_SYNC_QUEUE,
@@ -86,6 +89,7 @@ import {
 import type { TickTask } from "../../ticker.js";
 import { requestCodespaceSync } from "../codespace/service.js";
 import { DomainError } from "../http.js";
+import { expireCiPasses, runCiDispatch, sendCiPasses, type CiDispatchJob } from "./ci.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
 import { EVIDENCE_CONCURRENCY, EVIDENCE_EXPIRY_SECONDS, type EvidenceJob } from "./evidence.js";
 import { stopGroups, stopProjects } from "./groupCopy.js";
@@ -268,17 +272,26 @@ async function freezeDue(db: Db, now: Date): Promise<{ projectIds: string[]; pas
 /**
  * The passes claimed — final at a freeze, milestone at a checkpoint — sent
  * to `project.evidence` — its review follows (`runEvidencePass`) — each
- * ledger row marked `dispatched_at` once sent. Without a queue a final
- * pass's claim stays unconfirmed (the staff see it, and a Regrade runs the
- * pass); a milestone's is only claimed with a queue ({@link projectTick}).
+ * ledger row marked `dispatched_at` once sent. A schema-3 project's pass
+ * (`ci`) goes to `project.ci` instead, paced per installation, its row
+ * marked when GitHub accepts its dispatch (`ci.ts`, ADR-119 §6). Without a
+ * queue a final pass's claim stays unconfirmed (the staff see it, and a
+ * Regrade runs the pass); a milestone's is only claimed with a queue
+ * ({@link projectTick}).
  */
-async function sendPasses(app: FastifyInstance, passes: readonly ClaimedPass[]): Promise<void> {
+async function sendPasses(app: FastifyInstance, config: AppConfig, passes: readonly ClaimedPass[]): Promise<void> {
   if (!app.boss) return;
-  for (const pass of passes) {
+  for (const { ci, ...pass } of passes) {
+    if (ci) continue;
     const job: EvidenceJob = pass;
     await app.boss.send(PROJECT_EVIDENCE_QUEUE, job);
     await app.db.update(gradeDispatches).set({ dispatchedAt: app.clock.now() }).where(eq(gradeDispatches.id, pass.passId));
   }
+  await sendCiPasses(
+    app,
+    config,
+    passes.filter((p) => p.ci).map((p) => p.passId),
+  );
 }
 
 /**
@@ -345,10 +358,12 @@ export async function projectTick(app: FastifyInstance, config: AppConfig): Prom
   const frozen = await freezeDue(app.db, now);
   await hintProjectStaff(app.db, [...published, ...applied, ...frozen.projectIds]);
   await remindDeadlines(app.db, now, app.log);
-  await sendPasses(app, frozen.passes);
+  await sendPasses(app, config, frozen.passes);
+  // The CI passes 24 h without an accepted run (ADR-119 §6): settled `no_result`, no HTTP.
+  await expireCiPasses(app, now);
   if (!app.boss) return;
-  // The milestone passes due (ADR-106 §5): claimed in the ledger, sent as the final passes are; nothing to GitHub.
-  await sendPasses(app, await claimMilestonePasses(app.db, now));
+  // The milestone passes due (ADR-106 §5): claimed in the ledger, sent as the final passes are; nothing to GitHub here.
+  await sendPasses(app, config, await claimMilestonePasses(app.db, now));
   // An online project published by the schedule goes to the portal (ADR-047 §6, M6-06): a job, never a call here.
   for (const id of published) await requestCodespaceSync(app, config, id);
   await sendDeadlineJobs(app, config, await claimDeadlineWork(app.db, now));
@@ -381,6 +396,11 @@ export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue,
   await queue.createQueue(PROJECT_EVIDENCE_QUEUE, { retryLimit: 0, expireInSeconds: EVIDENCE_EXPIRY_SECONDS });
   await queue.work<EvidenceJob>(PROJECT_EVIDENCE_QUEUE, (job) => runEvidencePass(app, config, job), {
     localConcurrency: EVIDENCE_CONCURRENCY,
+  });
+  // The CI's graded run of a schema-3 project (ADR-119 §6): one dispatch per job, paced by its `startAfter`.
+  await queue.createQueue(PROJECT_CI_QUEUE, { retryLimit: 0 });
+  await queue.work<CiDispatchJob>(PROJECT_CI_QUEUE, async (job) => {
+    await runCiDispatch(app, config, job);
   });
   // The LLM pass of one repository (ADR-106 §4): no retry, a failure is a proposal with its reason.
   await queue.createQueue(PROJECT_REVIEW_QUEUE, { retryLimit: 0 });

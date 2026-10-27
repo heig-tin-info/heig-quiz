@@ -38,7 +38,7 @@ import {
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { botCommits, gradeDispatches, projectGradeRuns, projectRepos, projects, pushReceipts, reverts } from "../../db/schema.js";
+import { botCommits, gradeDispatches, projectCriteria, projectGradeRuns, projectRepos, projects, pushReceipts, reverts } from "../../db/schema.js";
 import { ownerRepo } from "../../github/app.js";
 import { pushedBy } from "../github/service.js";
 import type { RepoContext } from "./repos.js";
@@ -66,6 +66,8 @@ export interface CompletedRun {
   path: string;
   /** What triggered it: `push`, `repository_dispatch` (the review), ... */
   event: string;
+  /** Its name as GitHub shows it (the workflow's `run-name`): a graded run's carries its pass's nonce (ADR-119 §6). */
+  title: string;
   /**
    * Who triggered it (`pushedBy` of the run's `triggering_actor` alone; none
    * is a `person`, failing closed): only a review run Quiz's App dispatched —
@@ -98,6 +100,7 @@ export const RawWorkflowRun = z.object({
   conclusion: z.string().nullish(),
   path: z.string().nullish(),
   event: z.string().nullish(),
+  display_title: z.string().nullish(),
   check_suite_id: z.union([z.number().int(), z.bigint()]).nullish(),
   updated_at: z.string().nullish(),
   run_started_at: z.string().nullish(),
@@ -127,6 +130,7 @@ export function completedRun(config: AppConfig, raw: RawWorkflowRun, receivedAt:
     conclusion: raw.conclusion ?? "unknown",
     path: raw.path ?? "",
     event: raw.event ?? "",
+    title: raw.display_title ?? "",
     // A re-run's triggering actor is who re-ran it; none at all counts as a person's (fail closed).
     triggeredBy: pushedBy(config, raw.triggering_actor?.login),
     checkSuiteId: raw.check_suite_id == null ? null : Number(raw.check_suite_id),
@@ -180,6 +184,15 @@ export async function isEligible(
  */
 export function isLastStudentCommit(ctx: RepoContext, sha: string): boolean {
   return ctx.repo.lastCommitSha === null || ctx.repo.lastCommitSha === sha;
+}
+
+/** Whether a project graded by criteria holds a schema-3 snapshot: its dispatched runs are the CI's graded runs (ADR-119 §11). */
+async function gradedByCi(db: Db, projectId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: projectCriteria.projectId })
+    .from(projectCriteria)
+    .where(and(eq(projectCriteria.projectId, projectId), sql`(${projectCriteria.criteria}->>'schemaVersion') = '3'`));
+  return row !== undefined;
 }
 
 /** The server's receipt time of `headSha` on the repository, or null when none was written. */
@@ -353,6 +366,11 @@ export async function aggregateCiStatus(
  *
  * `to_verify`: ingested while the repository's protection is suspended, or
  * on a head whose protected files were restored (F-PROJ-08).
+ *
+ * A dispatched run of a project whose criteria snapshot is schema 3 is its
+ * CI's graded run (`runKind(run, true)`, ADR-119 §6): handed to the
+ * intake (`intakeGradedRun`), never written as a grade run — it fills
+ * neither the review slot nor the `GRADE` one.
  */
 export async function ingestCompletedRun(
   app: FastifyInstance,
@@ -361,7 +379,16 @@ export async function ingestCompletedRun(
   run: CompletedRun,
 ): Promise<string | null> {
   const db = app.db;
-  const kind = runKind(run);
+  // The snapshot is read only for a dispatched run of a project graded by criteria.
+  const ciEvidence = runKind(run) === "review" && ctx.project.gradingMode === "criteria" && (await gradedByCi(db, ctx.project.id));
+  const kind = runKind(run, ciEvidence);
+  if (kind === "graded") {
+    // Loaded here, not at the top: `ci.ts` reaches `deadline.ts`, which imports this file — a static
+    // import would evaluate `review.ts`'s SQL constants before `deadline.ts` defines `LIVE`.
+    const { intakeGradedRun } = await import("./ci.js");
+    await intakeGradedRun(app, octokit, ctx, run);
+    return null;
+  }
   if (!ctx.repo.fullName || !(await isEligible(db, ctx, run))) return null;
   const [existing] = await db
     .select({ id: projectGradeRuns.id })
