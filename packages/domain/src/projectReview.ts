@@ -118,6 +118,7 @@ export function renderMaterial(evidence: MaterialEvidence, sources: readonly str
     ].filter(Boolean);
     parts.push(`${label} step: exit code ${step.exitCode}${step.timedOut ? " (timed out)" : ""}\n${out.join("\n")}`);
   }
+  // The summary is bounded by its own limits (50 failures, two outputs of 4 000), far under the cap: the files take what remains, whole.
   const summary = parts.join("\n\n");
   const files = Object.fromEntries(Object.entries(evidence.files ?? {}).filter(([path]) => path !== REPORT_FILE));
   return [summary, ...whole(filePieces(files, sources, mask), MATERIAL_LIMITS.material - summary.length - 2)].join("\n\n");

@@ -841,6 +841,38 @@ describe("the LLM pass of a schema-3 pass (ADR-119 §7)", () => {
     expect(seen).toHaveLength(0);
   });
 
+  it("writes github_unavailable when the installation's client cannot be made (the App's key refused), never a failed job", async () => {
+    const pass = await (async () => {
+      const repo = await namedRepo("g7");
+      await work(repo);
+      const claimed = await claimFinal(repo.id);
+      await runCiDispatch(server.app, config, { passId: claimed.passId });
+      return { repo, passId: claimed.passId };
+    })();
+    // The project's organization moved to an installation whose token GitHub refuses (no token cached for it).
+    const installationId = 880_000 + nextOrg++;
+    const orgId = randomUUID();
+    await server.app.db.insert(githubOrganizations).values({ id: orgId, login: `org-k${installationId}`, githubOrgId: installationId, installationId });
+    const [{ orgId: before_ } = { orgId: "" }] = await server.app.db.select({ orgId: projects.orgId }).from(projects).where(eq(projects.id, l.projectId));
+    await server.app.db.update(projects).set({ orgId }).where(eq(projects.id, l.projectId));
+    const routes = gh.routes;
+    gh.routes = [
+      (url, req) =>
+        req.method === "POST" && url.pathname === `/app/installations/${installationId}/access_tokens` ? json({ message: "A JSON web token could not be decoded" }, 401) : undefined,
+      ...routes,
+    ];
+    seen.length = 0;
+    try {
+      expect(await runReview(server.app, config, { repoId: pass.repo.id, passId: pass.passId })).toBe(1);
+    } finally {
+      gh.routes = routes;
+      await server.app.db.update(projects).set({ orgId: before_ }).where(eq(projects.id, l.projectId));
+    }
+    expect(gh.calls.some((c) => c.includes(`/app/installations/${installationId}/access_tokens`))).toBe(true);
+    expect(seen).toHaveLength(0);
+    expect((await rowsOf(pass.repo.id))["rapport.style"]).toEqual([0, "github_unavailable", null]);
+  });
+
   it("queues the pass's review once it is settled", async () => {
     const repo = await namedRepo("d4");
     const claimed = await claimFinal(repo.id);

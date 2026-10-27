@@ -77,12 +77,12 @@ import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { githubOrganizations, gradeDispatches, projectCiResults, projectCriteria, projectRepos, projects } from "../../db/schema.js";
-import { branchHead, installationClient, ownerRepo } from "../../github/app.js";
+import { branchHead, ownerRepo } from "../../github/app.js";
 import { fetchResultsArtifact } from "../../github/artifact.js";
 import { PROJECT_CI_QUEUE, PROJECT_REVIEW_QUEUE } from "../../jobs.js";
-import { projectInstallation } from "../github/service.js";
 import { CRITERIA_FILE, snapshotVersion } from "./criteria.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
+import { projectOctokit } from "./evidence.js";
 import { ingestCompletedRun, type CompletedRun } from "./grading.js";
 import { CI_SNAPSHOT, ciNonce, passScope, type PassScope } from "./milestone.js";
 import { hintProjectStaff, markRepoDeleted, releasedBefore, type RepoContext, type RepoRow } from "./repos.js";
@@ -269,8 +269,9 @@ export async function runCiDispatch(app: FastifyInstance, config: AppConfig, job
   if (repo.deletedAt !== null || repo.fullName === null) return settled("repo_missing");
   // Archived (as its lock, H8): Actions cannot run there, nothing is dispatched; the teacher grades.
   if (repo.archivedAt !== null) return settled("ci_unavailable");
-  const org = await projectInstallation(db, project.orgId);
-  if (!org) return settled("ci_unavailable");
+  // No installation, or its client cannot be made: nothing is dispatched, the teacher grades.
+  const octokit = await projectOctokit(db, config, project, app.log);
+  if (!octokit) return settled("ci_unavailable");
   // The claim: the target recorded before GitHub is called, so a pass is never sent twice.
   const [claimed] = await db
     .update(gradeDispatches)
@@ -278,7 +279,6 @@ export async function runCiDispatch(app: FastifyInstance, config: AppConfig, job
     .where(and(eq(gradeDispatches.id, pass.id), eq(gradeDispatches.sha, ""), OPEN))
     .returning({ id: gradeDispatches.id });
   if (!claimed) return "none";
-  const { octokit } = await installationClient(config, org.installationId);
   const payload = {
     sha: target,
     nonce: pass.nonce!,

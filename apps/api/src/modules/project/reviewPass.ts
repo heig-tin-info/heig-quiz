@@ -61,9 +61,7 @@ import {
 import { PROJECT_REVIEW_QUEUE } from "../../jobs.js";
 import { llmFailure, type ProjectReviewCriterion } from "../llm/service.js";
 import { heldCriteria, writeCriterionGrades, type CriterionGradeInput } from "./criterionGrades.js";
-import { installationClient } from "../../github/app.js";
-import { projectInstallation } from "../github/service.js";
-import { fetchSourceFiles, runEvidence, TarballUnavailable, type EvidenceJob } from "./evidence.js";
+import { fetchSourceFiles, projectOctokit, runEvidence, TarballUnavailable, type EvidenceJob } from "./evidence.js";
 import { passScope, type PassScope } from "./milestone.js";
 import { hintProjectStaff, type RepoRow } from "./repos.js";
 import { passTarget } from "./review.js";
@@ -210,9 +208,8 @@ async function ciMaterial(app: FastifyInstance, config: AppConfig, { repo, proje
   if (repo.deletedAt !== null || repo.fullName === null) return { reason: "repo_missing" };
   const target = found.sha !== "" ? found.sha : await passTarget(db, repo, project, scope);
   if (target === null) return { reason: "no_commit" };
-  const org = await projectInstallation(db, project.orgId);
-  if (!org) return { reason: "github_unavailable" };
-  const { octokit } = await installationClient(config, org.installationId);
+  const octokit = await projectOctokit(db, config, project, app.log);
+  if (!octokit) return { reason: "github_unavailable" };
   let files: Awaited<ReturnType<typeof fetchSourceFiles>>;
   try {
     files = await fetchSourceFiles(octokit, repo.fullName, target, snapshot.grading.sources);

@@ -14,7 +14,7 @@
 import { randomUUID } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { and, eq, inArray, not, or, isNotNull, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
@@ -362,11 +362,22 @@ async function store(
   });
 }
 
-/** The installation's client of the project's organization. */
-async function projectOctokit(db: Db, config: AppConfig, project: ProjectRow): Promise<Octokit> {
+/**
+ * The installation's client of the project's organization, or null when
+ * Quiz's App cannot act there: no installation, or its client could not
+ * be made (the App's key, the network; logged). The one entry of the
+ * evidence, the CI's dispatch and the review: each turns null into its
+ * reason, never a failed job with nothing written.
+ */
+export async function projectOctokit(db: Db, config: AppConfig, project: Pick<ProjectRow, "orgId">, log: FastifyBaseLogger): Promise<Octokit | null> {
   const org = await projectInstallation(db, project.orgId);
-  if (!org) throw new Error("Quiz's GitHub App no longer acts on the project's organization");
-  return (await installationClient(config, org.installationId)).octokit;
+  if (!org) return null;
+  try {
+    return (await installationClient(config, org.installationId)).octokit;
+  } catch (err) {
+    log.error({ err, installationId: org.installationId }, "github: the installation's client could not be made");
+    return null;
+  }
 }
 
 /** The commits the identity criterion reads: one page of GitHub's listing, the newest. */
@@ -444,8 +455,10 @@ type Prepared = { distributionSha: string } & ({ reused: EvidenceRow } | { value
  * blocks the tests), and the tarball fetched and composed with the
  * protected files.
  */
-async function prepare(db: Db, config: AppConfig, repoId: string, fullName: string, project: ProjectRow, target: string, now: Date): Promise<Prepared> {
-  const octokit = await projectOctokit(db, config, project);
+async function prepare(app: FastifyInstance, config: AppConfig, repoId: string, fullName: string, project: ProjectRow, target: string, now: Date): Promise<Prepared> {
+  const db = app.db;
+  const octokit = await projectOctokit(db, config, project, app.log);
+  if (!octokit) throw new Error("Quiz's GitHub App cannot act on the project's organization");
   const { owner, repo: name } = ownerRepo(project.distributionFullName!);
   const distributionSha = await branchHead(octokit, owner, name, project.branches[0]!);
   if (distributionSha === null) throw new Error("the distribution repository has no handed-out branch");
@@ -489,7 +502,7 @@ export async function collectEvidence(
   if (repo.deletedAt !== null || repo.fullName === null) return store(db, project, repo.id, target, null, { status: "repo_missing" }, now);
   let prepared: Prepared;
   try {
-    prepared = await prepare(db, config, repo.id, repo.fullName, project, target, now);
+    prepared = await prepare(app, config, repo.id, repo.fullName, project, target, now);
   } catch (err) {
     return store(db, project, repo.id, target, null, { status: "github_unavailable", reason: failureReason(err) }, now);
   }
