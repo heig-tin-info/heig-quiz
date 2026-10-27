@@ -439,6 +439,8 @@ const scenes = [
   // owner with the grant may set; the same draft for an assistant (refused).
   { name: "project-workspace", role: "teacher", path: "/projects/pj-published?projects=1&codespace=1", settle: 2500 },
   { name: "project-workspace-draft", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1" },
+  // ADR-119 §9: the Settings tab with the work mode, its control aligned right like the other options'.
+  { name: "project-settings-workspace", role: "teacher", path: "/projects/pj-published?projects=1&codespace=1&tab=settings", settle: 2500 },
   { name: "project-workspace-assistant", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1&assistant=1" },
   // D21 (M6-07): a project under Safe Exam Browser, synced like an online one.
   { name: "project-workspace-seb", role: "teacher", path: "/projects/pj-draft-manual?projects=1&codespace=1" },

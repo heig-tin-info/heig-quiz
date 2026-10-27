@@ -375,6 +375,7 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   not_online: "project.refusal.notOnline",
   // ADR-106 §2: a `criteria.yml` missing or invalid (its errors are listed where it was asked).
   criteria_invalid: "project.criteria.invalid",
+  source_criteria_invalid: "project.criteria.invalid",
   checkpoint_untagged: "project.refusal.checkpointUntagged",
   // ADR-119 §3: a reload of a file whose schema version is not the snapshot's.
   schema_version_fixed: "project.refusal.schemaVersionFixed",

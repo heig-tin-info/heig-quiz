@@ -15,7 +15,7 @@ On the classroom page, **New** then **Project**. On a classroom that is not conn
   <figcaption>The form: a name, a source repository and a deadline, with the advanced options below. (Mock data.)</figcaption>
 </figure>
 
-The form asks for a **Name**, a **Source repository** (only a repository of the classroom's organization) and a **Deadline**. The **advanced options** have working defaults:
+The form asks for a **Name**, a **Source repository** (only a repository of the classroom's organization) and a **Deadline**. When the source holds a `criteria.yml`, the form previews its criteria as the students receive it (section, criterion, points, graded by: automatic, AI or teacher), or the errors of a file that does not parse, and **Grading by criteria** is on: you confirm it by creating. The file must follow schema 3; a schema-2 file, or one that does not parse, is refused at creation with its errors. The **advanced options** have working defaults:
 
 - **Branches**: the branches handed out; the first one chosen is the default branch of the students' repositories.
 - **History**: **One commit** (default) gives each branch as one commit holding the source's files, without what is reserved for the staff (a `student/` overlay and a `.studentignore` shape what students get); **Whole history** keeps the source's history as it is.
@@ -23,7 +23,7 @@ The form asks for a **Name**, a **Source repository** (only a repository of the 
 - **Deadline as**: a date, or a duration counted from publication.
 - **At the deadline**: **Lock** (default) refuses every push after the deadline; **Mark** leaves the repository open and pushes one empty commit per handed-out branch as a marker.
 - **Grace**: minutes after the deadline during which a run started in time may still finish (30 by default).
-- **Score**: **Automatic**, or **None** (no score is shown and no review is dispatched).
+- **Score**: **Automatic**, **None** (no score is shown and no review is dispatched), or **By criteria** when the source holds a `criteria.yml`.
 - **Grade scale**: **Linear** (1 + 5 × points / maximum, capped at 6, rounded to a tenth), or **Score is the grade** for a score out of 6.
 - **Protected files** and **Groups** (see below and [Groups](groups.md)).
 
@@ -31,7 +31,7 @@ The form asks for a **Name**, a **Source repository** (only a repository of the 
 
 ## Protected files
 
-These are the files a student must not change. `criteria.yml`, `README.md` and `.github/workflows/grading.yml` are pre-checked when the source has them. Unchecking `grading.yml` warns that students could then alter the grading.
+These are the files a student must not change, ticked in the tree the students receive (a file reserved by `.studentignore` is not in it). A ticked directory protects its content: its files are restored, while a file a student adds under it stays. `criteria.yml`, `README.md` and `.github/workflows/grading.yml` are pre-checked when the source has them. Leaving `grading.yml` unprotected warns that students could then alter the grading. In grading by criteria, `.github/workflows/` and `criteria.yml` are always protected: ticked and held, at creation and in the settings.
 
 When a push by anyone but Quiz (a student, or a workflow's own commit) touches a protected file on a handed-out branch, Quiz answers with a **restore commit** that puts the distribution repository's current version back. The student's work is never rewritten, only covered, and they are told which files were restored. Beyond five restores in an hour on one repository, Quiz stops restoring and flags the repository **protected files in conflict**; scores captured meanwhile are marked **to verify**. You re-enable the protection by hand from the repository's sheet. A new list applies to the next pushes only.
 
@@ -50,6 +50,12 @@ A draft's page is a form, written as you go: there is no Save. **Work handed out
 On the project page, **Publish** is the primary action of a draft. It starts the project now, or leaves the schedule to do it. A group project cannot be published while a claimed student is in no group.
 
 Once published, only these change: the name, the deadline (never to a past date), what happens at the deadline (until it passes) and the protected files. The deadline is edited in its tile; the strategy and the protected files are in the folded **Settings** at the bottom of the page. Students then **accept** the project, and each gets a repository `<project>-<login>` with push access.
+
+<figure markdown="span">
+  ![The Settings tab: what happens at the deadline, the protected files picked in the tree, where students work](../assets/screenshots/mock-project-settings-light.png#only-light)
+  ![The Settings tab: what happens at the deadline, the protected files picked in the tree, where students work](../assets/screenshots/mock-project-settings-dark.png#only-dark)
+  <figcaption>A published project's settings. (Mock data.)</figcaption>
+</figure>
 
 ## The project page
 

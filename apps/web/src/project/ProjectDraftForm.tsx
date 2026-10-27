@@ -19,7 +19,7 @@ import { GroupSetBody } from "./ProjectGroupSet";
 import { CriteriaErrors, CriteriaRows, useGradingModeWrite } from "./ProjectCriteria";
 import { ProjectRail } from "./ProjectRail";
 import { DeadlineStrategyRow, GraceMinutesRow, GradingModeRow, ScaleRow } from "./ProjectSettingRows";
-import { ProtectedFilesRow, useProtectedSuggestions } from "./ProjectSettings";
+import { ProtectedFilesRow, useHandoutTree } from "./ProjectSettings";
 import { WorkModeSetting, useWorkspace } from "./ProjectWorkspace";
 import { advancedCount, type WriteProject } from "./projectPage";
 import { RepoLink } from "./parts";
@@ -87,7 +87,7 @@ export function ProjectDraftForm({
   const t = useT();
   const [open, setOpen] = useState(false);
   const disabled = patch.isPending || project.archivedAt !== null;
-  const offer = useProtectedSuggestions(project, open);
+  const source = useHandoutTree(project, open);
   const changed = advancedCount(project);
   const grading = useGradingModeWrite(write);
   const can = (field: "gradingMode" | "gradingScale" | "graceMinutes" | "deadlineStrategy") => project.editable.includes(field);
@@ -189,7 +189,7 @@ export function ProjectDraftForm({
         <ProtectedFilesRow
           project={project}
           disabled={disabled}
-          offer={offer}
+          source={source}
           onChange={(protectedFiles) => write({ protectedFiles })}
         />
         <WorkModeSetting projectId={project.id} archived={project.archivedAt !== null} />

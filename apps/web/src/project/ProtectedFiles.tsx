@@ -1,129 +1,154 @@
-import { AlertTriangle, Plus } from "lucide-react";
-import { useId, useState } from "react";
+import { AlertTriangle, ChevronRight } from "lucide-react";
+import { useState } from "react";
 
-import { ProjectPatch, type ProjectSourceDetail } from "@quiz/contracts";
+import type { ProjectSourceDetail } from "@quiz/contracts";
+import { GRADING_WORKFLOW, isProtected, pathWithin, PROTECTED_DIRECTORIES, type TreeEntry } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { Alert, Button, Checkbox, Chip, Field, FieldError, fieldErrorProps } from "../ui";
+import { Alert, Badge, Checkbox, cx } from "../ui";
 
-/** The grading workflow, which unchecking warns about (F-PROJ-01). */
-const GRADING_WORKFLOW = ".github/workflows/grading.yml";
+/** A row of the picker: an entry of the tree, its depth and whether it holds others. */
+interface Row extends TreeEntry {
+  depth: number;
+  name: string;
+}
 
-/** The files, not the directories, of a source's tree: the completions of an added path. */
-export const sourceFiles = (source: ProjectSourceDetail | undefined): string[] =>
-  (source?.tree ?? []).filter((e) => e.type === "blob").map((e) => e.path);
+const parentOf = (path: string): string | null => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : null);
 
 /**
- * A project's protected files (F-PROJ-01, F-PROJ-08): the suggestions the
- * source holds (`suggestedProtected`), each a checkbox, then any other file
- * of the source the teacher adds by its path — a lab's `tests/`, `Makefile`,
- * which the evidence run also takes from the distribution (ADR-106 §3). An
- * added path is a removable chip; it is checked by the contract's own rule
- * (`ProtectedPath`: relative, no `..`; at most 50) before it reaches the list, and the
- * source's files (`files`, its tree) are offered as completions. A path the
- * source does not hold is accepted: it is simply never restored. Unchecking
- * `grading.yml` warns that the student could then alter the grading. The
- * new project's form draws it, and the project page's settings (M3-12).
+ * The rows the picker draws: the handed-out tree, and any protected path it
+ * does not hold (a path the source lost, a forced entry), as a file at its
+ * place. Directories first at each level, then files, by name.
+ */
+export function pickerRows(tree: readonly TreeEntry[], listed: readonly string[]): Row[] {
+  const byPath = new Map<string, TreeEntry["type"]>();
+  // Each path with its directories, which a truncated tree or a listed path may lack.
+  const add = (path: string, type: TreeEntry["type"]) => {
+    if (!byPath.has(path)) byPath.set(path, type);
+    for (let p = parentOf(path); p !== null && !byPath.has(p); p = parentOf(p)) byPath.set(p, "tree");
+  };
+  for (const e of tree) add(e.path, e.type);
+  for (const path of listed) add(path, PROTECTED_DIRECTORIES.includes(path) ? "tree" : "blob");
+  const children = new Map<string | null, string[]>();
+  for (const path of byPath.keys()) {
+    const parent = parentOf(path);
+    children.set(parent, [...(children.get(parent) ?? []), path]);
+  }
+  const rows: Row[] = [];
+  const walk = (parent: string | null, depth: number) => {
+    const kids = (children.get(parent) ?? []).sort((a, b) => {
+      const dirs = Number(byPath.get(b) === "tree") - Number(byPath.get(a) === "tree");
+      return dirs !== 0 ? dirs : a.localeCompare(b);
+    });
+    for (const path of kids) {
+      rows.push({ path, type: byPath.get(path)!, depth, name: path.slice(parent === null ? 0 : parent.length + 1) });
+      walk(path, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return rows;
+}
+
+/**
+ * A project's protected files (F-PROJ-01, F-PROJ-08, ADR-119 §9), picked
+ * from the tree the students receive: a checkbox per file and per
+ * directory, a ticked directory protecting its content (its entries drawn
+ * ticked and held). The entries a grading mode forces (`forced`, the
+ * `criteria` mode's workflows and criteria) are ticked and held. A
+ * directory opens on demand; those holding a protected path start open.
+ * Leaving `grading.yml` unprotected warns that the students could then
+ * alter the grading. The new project's form draws it, and a project's
+ * settings (M3-12).
  */
 export function ProtectedFiles({
-  suggested,
+  tree,
+  truncated = false,
   value,
+  forced = [],
   onChange,
-  files,
 }: {
-  suggested: readonly string[];
+  /** The handed-out tree (`ProjectSourceDetail.tree`); empty while it cannot be read: the list alone is drawn. */
+  tree: ProjectSourceDetail["tree"];
+  truncated?: boolean;
   value: readonly string[];
+  forced?: readonly string[];
   onChange: (files: string[]) => void;
-  /** The source's files, offered as completions of the added path. */
-  files: readonly string[];
 }) {
   const t = useT();
-  const id = useId();
-  const [draft, setDraft] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const toggle = (path: string, on: boolean) =>
-    onChange(on ? [...value, path] : value.filter((p) => p !== path));
-  const added = value.filter((p) => !suggested.includes(p));
-  const offered = files.filter((p) => !value.includes(p));
+  const listed = [...value, ...forced.filter((p) => !value.includes(p))];
+  const rows = pickerRows(tree, listed);
+  const [open, setOpen] = useState<ReadonlySet<string>>(
+    () => new Set(rows.filter((r) => r.type === "tree" && listed.some((p) => p !== r.path && pathWithin(p, r.path))).map((r) => r.path)),
+  );
+  const shown = rows.filter((r) => {
+    for (let p = parentOf(r.path); p !== null; p = parentOf(p)) if (!open.has(p)) return false;
+    return true;
+  });
 
-  /** Adds `raw` once, if the contract's own rule takes it (relative, no `..`, at most 50 files). */
-  const add = (raw: string) => {
-    const path = raw.trim();
-    if (!path) return;
-    if (!value.includes(path)) {
-      const next = [...value, path];
-      if (!ProjectPatch.shape.protectedFiles.safeParse(next).success) return setError(t("project.protected.add.invalid"));
-      onChange(next);
-    }
-    setDraft("");
-  };
+  /** On: the path listed, the entries under it dropped (it covers them). Off: the path alone. */
+  const toggle = (path: string, on: boolean) =>
+    onChange(on ? [...value.filter((p) => !pathWithin(p, path)), path] : value.filter((p) => p !== path));
+  const flip = (path: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(path)) next.add(path);
+      return next;
+    });
+  const workflowExposed = rows.some((r) => r.path === GRADING_WORKFLOW) && !isProtected(GRADING_WORKFLOW, listed);
 
   return (
-    <div className="space-y-3">
-      {suggested.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          {suggested.map((path) => (
-            <Checkbox
-              key={path}
-              label={<span className="font-mono text-[13px]">{path}</span>}
-              checked={value.includes(path)}
-              onChange={(e) => toggle(path, e.target.checked)}
-            />
-          ))}
-        </div>
-      ) : null}
-      {added.length > 0 ? (
-        <ul className="flex flex-wrap gap-2 font-mono" aria-label={t("project.protected.added")}>
-          {added.map((path) => (
-            <li key={path}>
-              <Chip label={path} remove={t("project.protected.remove")} onRemove={() => toggle(path, false)} />
+    <div className="space-y-2">
+      <ul
+        className="max-h-80 overflow-y-auto rounded-lg border border-line bg-surface py-1"
+        aria-label={t("project.protected")}
+        data-testid="protected-tree"
+      >
+        {shown.map((row) => {
+          const isForced = forced.includes(row.path);
+          // Ticked by a directory above it: held, the directory decides.
+          const covered = listed.some((p) => p !== row.path && pathWithin(row.path, p));
+          const dir = row.type === "tree";
+          return (
+            <li key={row.path} className="flex min-h-8 items-center gap-1 pr-3" style={{ paddingLeft: `${0.5 + row.depth * 1.25}rem` }}>
+              {dir ? (
+                <button
+                  type="button"
+                  className="inline-flex size-6 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  aria-expanded={open.has(row.path)}
+                  aria-label={t(open.has(row.path) ? "project.protected.collapse" : "project.protected.expand", { path: row.path })}
+                  onClick={() => flip(row.path)}
+                >
+                  <ChevronRight className={cx("size-3.5 transition-transform", open.has(row.path) && "rotate-90")} />
+                </button>
+              ) : (
+                <span className="size-6 shrink-0" aria-hidden />
+              )}
+              <Checkbox
+                className="min-w-0"
+                label={
+                  <span className="truncate font-mono text-[13px]" title={row.path}>
+                    {row.name}
+                    {dir ? "/" : ""}
+                  </span>
+                }
+                aria-label={row.path}
+                checked={isForced || covered || listed.includes(row.path)}
+                disabled={isForced || covered}
+                onChange={(e) => toggle(row.path, e.target.checked)}
+              />
+              {isForced ? (
+                <Badge tone="zinc" className="ml-auto shrink-0">
+                  {t("project.protected.forced")}
+                </Badge>
+              ) : null}
             </li>
-          ))}
-        </ul>
-      ) : null}
-      <div className="flex items-end gap-2">
-        <Field
-          id={id}
-          size="sm"
-          width="w-full max-w-sm"
-          className="font-mono"
-          label={t("project.protected.add.label")}
-          placeholder="tests/test_lab.py"
-          autoComplete="off"
-          spellCheck={false}
-          list={offered.length > 0 ? `${id}-files` : undefined}
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            setError(null);
-          }}
-          onKeyDown={(e) => {
-            // Inside the new project's form, Enter adds the path, never submits;
-            // it reads the input itself, which a completion picked by Enter
-            // has already filled, and leaves an IME composition alone.
-            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              add(e.currentTarget.value);
-            }
-          }}
-          {...fieldErrorProps(id, error)}
-        />
-        <Button type="button" variant="ghost" size="sm" disabled={!draft.trim()} onClick={() => add(draft)}>
-          <Plus />
-          {t("project.protected.add")}
-        </Button>
-      </div>
-      <FieldError id={id}>{error}</FieldError>
-      {offered.length > 0 ? (
-        <datalist id={`${id}-files`}>
-          {offered.map((path) => (
-            <option key={path} value={path} />
-          ))}
-        </datalist>
-      ) : null}
-      {suggested.includes(GRADING_WORKFLOW) && !value.includes(GRADING_WORKFLOW) ? (
-        <Alert tone="warning" icon={AlertTriangle} title={t("project.protected.gradingWarning")} />
-      ) : null}
+          );
+        })}
+      </ul>
+      <p className="text-[13px] text-fg-muted">{t("project.protected.directory")}</p>
+      {truncated ? <p className="text-[13px] text-fg-muted">{t("project.protected.truncated")}</p> : null}
+      {forced.length > 0 ? <p className="text-[13px] text-fg-muted">{t("project.protected.forced.hint")}</p> : null}
+      {workflowExposed ? <Alert tone="warning" icon={AlertTriangle} title={t("project.protected.gradingWarning")} /> : null}
     </div>
   );
 }

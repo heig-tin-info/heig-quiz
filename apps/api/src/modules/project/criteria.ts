@@ -34,6 +34,8 @@ import {
   projectFieldRefusal,
   untaggedCheckpoints,
   workflowTestsCriterion,
+  CRITERIA_FILE,
+  GRADING_WORKFLOW,
   type ParsedCriteria,
 } from "@quiz/domain";
 import { parseCriteria } from "@quiz/domain/criteriaParse";
@@ -43,16 +45,16 @@ import { iso } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { projectCheckpoints, projectCriteria, projects } from "../../db/schema.js";
-import { branchHead, installationClient, ownerRepo, unless404 } from "../../github/app.js";
+import type { Octokit } from "octokit";
+
+import { branchHead, HTTP_READ, installationClient, ownerRepo, unless404 } from "../../github/app.js";
 import { projectInstallation } from "../github/service.js";
 import { ProjectError } from "./errors.js";
 import { lifeOf, type ProjectRow } from "./views.js";
 
-/** The file the platform reads, at the repository's root. */
-export const CRITERIA_FILE = "criteria.yml";
-/** The student repositories' grading workflow: its `tests-criterion` pre-fills the setting. */
-export const GRADING_WORKFLOW = ".github/workflows/grading.yml";
-/** A criteria file is a few kilobytes; anything near this is not one. */
+/** The file the platform reads, at the repository's root, and the grading workflow (`@quiz/domain`, defined once). */
+export { CRITERIA_FILE, GRADING_WORKFLOW };
+/** A criteria or ignore file is a few kilobytes; anything near this is not one. */
 const MAX_BYTES = 256 * 1024;
 
 /** A file that parsed: the snapshot to keep. */
@@ -80,6 +82,35 @@ export type CriteriaTrigger = "reload" | "publish" | "sync";
 
 const refused = (code: CriteriaError["code"], path = CRITERIA_FILE): CriteriaRead => ({ ok: false, errors: [{ path, code }] });
 
+/** A text file read through the App: its blob sha, its text, and whether it is too large to be a criteria or ignore file. */
+export interface TextFile {
+  sha: string;
+  text: string;
+  tooLarge: boolean;
+}
+
+/**
+ * The text file `path` of `owner/repo` at `ref` (one file, never a clone);
+ * null when there is no such file (a directory included). A rate limit
+ * fails at once (`HTTP_READ`): every reader serves a request or is
+ * best-effort. The one reading of `criteria.yml` and `.studentignore`
+ * (`sources.ts` too).
+ */
+export async function fileAt(octokit: Octokit, owner: string, repo: string, path: string, ref: string): Promise<TextFile | null> {
+  return unless404(async () => {
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/contents/{path}", {
+      owner,
+      repo,
+      path,
+      ref,
+      request: { retries: 0, ...HTTP_READ },
+    });
+    if (Array.isArray(data) || data.type !== "file") return null;
+    const text = Buffer.from(data.content ?? "", "base64").toString("utf8");
+    return { sha: data.sha, text, tooLarge: (data.size ?? 0) > MAX_BYTES || text.length > MAX_BYTES };
+  });
+}
+
 /**
  * `criteria.yml` at the head of the project's first branch, in its
  * distribution repository (its source's while it has none), parsed at the
@@ -99,26 +130,13 @@ export async function readCriteria(db: Db, config: AppConfig, project: ProjectRo
   const branch = project.branches[0]!;
   const head = await branchHead(octokit, owner, repo, branch);
   if (head === null) return refused("branch_missing");
-  const fileAt = (path: string) =>
-    unless404(async () => {
-      const { data } = await octokit.request("GET /repos/{owner}/{repo}/contents/{path}", {
-        owner,
-        repo,
-        path,
-        ref: head,
-        request: { retries: 0 },
-      });
-      if (Array.isArray(data) || data.type !== "file") return null;
-      const text = Buffer.from(data.content ?? "", "base64").toString("utf8");
-      return { sha: data.sha, text, tooLarge: (data.size ?? 0) > MAX_BYTES || text.length > MAX_BYTES };
-    });
-  const file = await fileAt(CRITERIA_FILE);
+  const file = await fileAt(octokit, owner, repo, CRITERIA_FILE, head);
   if (file === null) return refused("missing_file");
   if (file.tooLarge) return refused("too_large");
   const parsed = parseCriteria(file.text, { version });
   if (!parsed.ok) return held !== null && versionOnly(parsed) ? { ...parsed, fixed: held } : parsed;
   // The workflow's `tests-criterion` pre-fills a schema-2 setting only.
-  const workflow = version === 2 ? await fileAt(GRADING_WORKFLOW) : null;
+  const workflow = version === 2 ? await fileAt(octokit, owner, repo, GRADING_WORKFLOW, head) : null;
   const text = workflow === null || workflow.tooLarge ? null : workflow.text;
   return {
     ok: true,
@@ -150,7 +168,7 @@ async function untagged(db: Db | Tx, projectId: string, snapshot: CriteriaSnapsh
  * checkpoint_untagged`, naming the checkpoints whose name would tag no
  * criterion.
  */
-async function acceptable(db: Db | Tx, projectId: string, read: CriteriaRead, criteriaMode: boolean): Promise<CriteriaSnapshot> {
+export async function acceptable(db: Db | Tx, projectId: string, read: CriteriaRead, criteriaMode: boolean): Promise<CriteriaSnapshot> {
   if (!read.ok && read.fixed !== undefined) {
     throw new ProjectError("schema_version_fixed", `The snapshot is schema ${read.fixed}: a reload keeps its version`, { expected: read.fixed });
   }
@@ -218,6 +236,7 @@ export async function criteriaView(db: Db | Tx, project: ProjectRow): Promise<Pr
   const settings = snapshotSettings(project, row.criteria.schemaVersion);
   return {
     snapshot: {
+      schemaVersion: row.criteria.schemaVersion,
       fileSha: row.fileSha,
       sourceSha: row.sourceSha,
       loadedAt: iso(row.loadedAt),

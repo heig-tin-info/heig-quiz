@@ -34,6 +34,7 @@ import {
   repoName,
   SLUG_MAX,
   slugify,
+  withForcedProtected,
   workModeRefusal,
   type ProjectDatesChange,
   type ProjectPatchField,
@@ -50,11 +51,11 @@ import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
 import type { Caller } from "../guards.js";
 import { DomainError, notFoundError } from "../http.js";
 import { forgetFinalPasses, projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
-import { snapshotLeaves, storeCriteria, type CriteriaSnapshot } from "./criteria.js";
+import { acceptable, CRITERIA_FILE, readCriteria, snapshotLeaves, storeCriteria, type CriteriaSnapshot } from "./criteria.js";
 import { ProjectError } from "./errors.js";
 import { replaceGroupCopy, stopProjects } from "./groupCopy.js";
 import { announcePublished } from "./notify.js";
-import { classroomClient, fetchSource, type Source } from "./sources.js";
+import { classroomClient, fetchSource, readHandout, type Source } from "./sources.js";
 import { lifeOf, type ProjectRow } from "./views.js";
 
 /**
@@ -204,6 +205,7 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
   const groupSetId = body.groupSetId ?? null;
   const { org, client } = await classroomClient(db, config, input.classroomId);
   const { source, branches } = await readSource(db, client, org, body.sourceRepo, body.branches, input.caller);
+  if (body.gradingMode === "criteria") await checkSourceCriteria(client, org, source, branches[0]!, body);
 
   const values: Omit<typeof projects.$inferInsert, "id" | "slug"> = {
     classroomId: input.classroomId,
@@ -221,7 +223,7 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
     groupMode: body.groupMode,
     groupSetId,
     branches,
-    protectedFiles: body.protectedFiles,
+    protectedFiles: withForcedProtected(body.protectedFiles, body.gradingMode),
     gradingScale: body.gradingScale ?? defaultProjectGradingScale(),
     createdBy: input.caller.id,
     createdAt: now,
@@ -260,14 +262,50 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
     .returning();
   // Deleted by its staff while it was being built: the repository stays.
   if (!row) throw notFoundError("project");
+  if (row.gradingMode === "criteria") await snapshotAtCreation(db, config, row, now, input.log);
   await audit(db, {
     ...input.actor,
     action: "project.create",
     subjectType: "project",
     subjectId: draft.id,
-    payload: { slug: draft.slug, source: source.fullName, distribution: built.fullName },
+    payload: { slug: draft.slug, source: source.fullName, distribution: built.fullName, gradingMode: row.gradingMode },
   });
   return row;
+}
+
+/**
+ * A creation in `criteria` mode (ADR-119 §9): the `criteria.yml` the
+ * students would receive from the first branch must parse at schema 3,
+ * before anything is built — `422 source_criteria_invalid` with the
+ * parser's errors otherwise, a missing file or a schema-2 one included.
+ */
+async function checkSourceCriteria(
+  client: InstallationClient,
+  org: InstalledOrg,
+  source: Source,
+  branch: string,
+  body: Pick<ProjectCreate, "sourceStrategy">,
+): Promise<void> {
+  const { criteria } = await readHandout(client, org, source, branch, body.sourceStrategy);
+  const errors = criteria === null ? [{ path: CRITERIA_FILE, code: "missing_file" as const }] : criteria.ok ? null : criteria.errors;
+  if (errors) throw new ProjectError("source_criteria_invalid", `${CRITERIA_FILE} is missing or invalid`, { errors });
+}
+
+/**
+ * The binding snapshot of a project created in `criteria` mode, taken from
+ * its distribution once built (ADR-106 §2, ADR-119 §9): schema 3, a new
+ * project having none (`readCriteria`), judged by the switch's own rule
+ * (`acceptable`; a new project has no checkpoint to leave untagged).
+ * Best-effort: the source's file parsed a moment ago; a failure is logged
+ * and leaves the draft without a snapshot, which a reload takes.
+ */
+async function snapshotAtCreation(db: Db, config: AppConfig, row: ProjectRow, now: Date, log: FastifyBaseLogger): Promise<void> {
+  try {
+    const snapshot = await acceptable(db, row.id, await readCriteria(db, config, row), true);
+    await storeCriteria(db, row.id, snapshot, now);
+  } catch (err) {
+    log.warn({ err, project: row.id }, "the distribution's criteria.yml could not be snapshotted at creation");
+  }
 }
 
 // ---------------------------------------------------------------- the group set (ADR-070)
@@ -323,6 +361,9 @@ function asColumns(body: ProjectPatch): Partial<Record<ProjectPatchField, unknow
  * never the effective tests criterion (`422 criterion_conflict`) nor a bonus
  * or a penalty (`422 identity_criterion_invalid`); a build or test command must
  * not need the network (`422 command_needs_network`, `commandNeedsNetwork`).
+ * In `criteria` mode, or switching to it, the protected files keep
+ * `.github/workflows` and `criteria.yml` whatever the patch sends
+ * (`withForcedProtected`, ADR-119 §9).
  */
 export async function patchProject(
   db: Db,
@@ -337,8 +378,13 @@ export async function patchProject(
     const askedSet = body.groupSetId ? await groupSetOf(tx, body.groupSetId) : undefined;
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw notFoundError("project");
+    // A list written in `criteria` mode, or a switch to it, keeps the forced entries (ADR-119 §9);
+    // any other patch leaves the list as it is (a live project's never moves with a rename).
+    const mode = body.gradingMode ?? project.gradingMode;
+    const forced = mode === "criteria" && (body.protectedFiles !== undefined || project.gradingMode !== "criteria");
+    const asked = forced ? { ...body, protectedFiles: withForcedProtected(body.protectedFiles ?? project.protectedFiles, mode) } : body;
     const changed: Partial<Record<ProjectPatchField, unknown>> = {};
-    for (const [field, value] of Object.entries(asColumns(body)) as [ProjectPatchField, unknown][]) {
+    for (const [field, value] of Object.entries(asColumns(asked)) as [ProjectPatchField, unknown][]) {
       if (isDeepStrictEqual(value, project[field])) continue;
       const refusal = projectFieldRefusal(lifeOf(project), field, now, value);
       if (refusal) throw new ProjectError(refusal, `${field} can no longer change`);

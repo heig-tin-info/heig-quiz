@@ -91,7 +91,7 @@ const call = (method: "GET" | "POST", url: string, headers: Headers, payload?: o
 type Repo = typeof projectRepos.$inferSelect;
 
 /** A published project protecting `grading.yml`, of a connected classroom, and the accepted repositories of its students. */
-async function project(opts: { students?: number } = {}) {
+async function project(opts: { students?: number; protectedFiles?: string[] } = {}) {
   const db = server.app.db;
   const students = await Promise.all(Array.from({ length: opts.students ?? 1 }, () => newStudent()));
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
@@ -106,7 +106,7 @@ async function project(opts: { students?: number } = {}) {
     name: "Lab",
     sourceRepo: "starter",
     deadlineAt: DEADLINE,
-    protectedFiles: [GRADING],
+    protectedFiles: opts.protectedFiles ?? [GRADING],
   });
   expect(created.statusCode, created.body).toBe(201);
   const summary = ProjectSummary.parse(created.json());
@@ -170,6 +170,59 @@ afterAll(async () => {
   setRemoteBaseForTests(null);
   world.remove();
   key.remove();
+});
+
+describe("a protected directory protects its content (ADR-119 §9)", () => {
+  /** A push of `files` on `main`, answered as the webhook would; `before` undefined: a push GitHub cannot list (a new branch). */
+  async function push(repo: Repo, files: Record<string, string>, listed: boolean): Promise<string> {
+    const ctx = (await repoContext(server.app.db, repo.githubRepoId!))!;
+    const before = head(repo.fullName!);
+    const after = world.commit(repo.fullName!, "main", files);
+    await protectFiles(server.app, config, ctx, {
+      branch: "main",
+      before: listed ? before : undefined,
+      after,
+      forced: false,
+      commits: [{ modified: Object.keys(files) }],
+    });
+    return after;
+  }
+
+  it("restores a file a push touched under it, never one under a directory that merely shares its prefix", async () => {
+    const { repos } = await project({ protectedFiles: [".github/workflows"] });
+    const repo = repos[0]!;
+    const pushed = await push(repo, { [GRADING]: "grade: hacked" }, true);
+    expect(restored(repo, pushed)).toBe(true);
+    server.clock.advance(MINUTE);
+    const beside = await push(repo, { ".github/workflows-old/x.yml": "old" }, true);
+    expect(head(repo.fullName!)).toBe(beside);
+  });
+
+  it("restores the distribution's files under it when the push cannot tell what it touched", async () => {
+    const { repos } = await project({ protectedFiles: [".github/workflows"] });
+    const repo = repos[0]!;
+    const pushed = await push(repo, { [GRADING]: "grade: hacked" }, false);
+    expect(restored(repo, pushed)).toBe(true);
+  });
+
+  it("keeps every listed entry when the distribution's listing is truncated", async () => {
+    const { id, repos } = await project({ protectedFiles: [".github/workflows", "README.md"] });
+    const repo = repos[0]!;
+    const distribution = ProjectDetail.parse((await call("GET", `/app/api/projects/${id}`, teacher.headers)).json()).distribution!.fullName;
+    // GitHub's recursive listing past its cap: nothing listed, `truncated`.
+    const routes = gh.routes;
+    gh.routes = [
+      (url, req) => (req.method === "GET" && url.pathname === `/repos/${distribution}/git/trees/main` ? json({ sha: "x", truncated: true, tree: [] }) : undefined),
+      ...routes,
+    ];
+    try {
+      const pushed = await push(repo, { "README.md": "# mine" }, false);
+      expect(head(repo.fullName!)).not.toBe(pushed);
+      expect(world.read(repo.fullName!, head(repo.fullName!), "README.md")).toBe("# Lab");
+    } finally {
+      gh.routes = routes;
+    }
+  });
 });
 
 describe("the protection re-enabled (F-PROJ-08)", () => {

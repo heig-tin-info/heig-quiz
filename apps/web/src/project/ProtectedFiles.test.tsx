@@ -4,23 +4,32 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderWithProviders } from "../test/render";
-import { ProtectedFiles } from "./ProtectedFiles";
+import { pickerRows, ProtectedFiles } from "./ProtectedFiles";
 
 /*
- * The protected files (F-PROJ-01, F-PROJ-08, ADR-106 §3): the source's
- * suggestions as checkboxes, any other file added by its path as a chip,
- * checked by the contract's rule before it reaches the list.
+ * The protected files (F-PROJ-01, F-PROJ-08, ADR-119 §9): picked from the
+ * handed-out tree by checkboxes, a directory protecting its content, the
+ * entries a grading mode forces ticked and held.
  */
 
-const SUGGESTED = ["criteria.yml", "README.md"];
+const TREE = [
+  { path: ".github", type: "tree" as const },
+  { path: ".github/workflows", type: "tree" as const },
+  { path: ".github/workflows/grading.yml", type: "blob" as const },
+  { path: "README.md", type: "blob" as const },
+  { path: "criteria.yml", type: "blob" as const },
+  { path: "tests", type: "tree" as const },
+  { path: "tests/test_lab.py", type: "blob" as const },
+  { path: "tests/conftest.py", type: "blob" as const },
+];
 
-function Harness({ initial, onChange }: { initial: string[]; onChange: (files: string[]) => void }) {
+function Harness({ initial, forced, onChange }: { initial: string[]; forced?: string[]; onChange: (files: string[]) => void }) {
   const [value, setValue] = useState(initial);
   return (
     <ProtectedFiles
-      suggested={SUGGESTED}
-      files={["Makefile", "tests/test_lab.py", "README.md"]}
+      tree={TREE}
       value={value}
+      forced={forced}
       onChange={(files) => {
         setValue(files);
         onChange(files);
@@ -29,56 +38,69 @@ function Harness({ initial, onChange }: { initial: string[]; onChange: (files: s
   );
 }
 
-const field = () => screen.getByLabelText("Add a file");
+const box = (name: string) => screen.getByRole("checkbox", { name });
 
 describe("ProtectedFiles", () => {
-  it("adds a path with Enter or the Add button, and shows it as a chip", async () => {
-    const onChange = vi.fn();
-    renderWithProviders(<Harness initial={["criteria.yml"]} onChange={onChange} />);
-    await userEvent.type(field(), "tests/test_lab.py{Enter}");
-    expect(onChange).toHaveBeenLastCalledWith(["criteria.yml", "tests/test_lab.py"]);
-    expect(field()).toHaveValue("");
-    await userEvent.type(field(), "Makefile");
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect(onChange).toHaveBeenLastCalledWith(["criteria.yml", "tests/test_lab.py", "Makefile"]);
-    const chips = screen.getByRole("list", { name: "Files added by path" });
-    expect(chips).toHaveTextContent("tests/test_lab.py");
-    expect(chips).toHaveTextContent("Makefile");
-    // A suggestion stays a checkbox, never a chip.
-    expect(chips).not.toHaveTextContent("criteria.yml");
+  it("draws directories first, a listed path the tree lacks at its place", () => {
+    expect(pickerRows(TREE, ["docs/old.md"]).map((r) => `${"  ".repeat(r.depth)}${r.name}`)).toEqual([
+      ".github",
+      "  workflows",
+      "    grading.yml",
+      "docs",
+      "  old.md",
+      "tests",
+      "  conftest.py",
+      "  test_lab.py",
+      "criteria.yml",
+      "README.md",
+    ]);
   });
 
-  it("offers the source's files not yet protected as completions", () => {
-    renderWithProviders(<Harness initial={["README.md"]} onChange={vi.fn()} />);
-    const list = document.getElementById(field().getAttribute("list")!)!;
-    expect([...list.querySelectorAll("option")].map((o) => o.value)).toEqual(["Makefile", "tests/test_lab.py"]);
+  it("protects a file by its checkbox, and a directory with its content", async () => {
+    const onChange = vi.fn();
+    renderWithProviders(<Harness initial={["tests/test_lab.py"]} onChange={onChange} />);
+    // The directory holding a protected file starts open.
+    expect(box("tests/test_lab.py")).toBeChecked();
+    await userEvent.click(box("README.md"));
+    expect(onChange).toHaveBeenLastCalledWith(["tests/test_lab.py", "README.md"]);
+    // The directory covers its content: listed alone, its files ticked and held.
+    await userEvent.click(box("tests"));
+    expect(onChange).toHaveBeenLastCalledWith(["README.md", "tests"]);
+    expect(box("tests/conftest.py")).toBeChecked();
+    expect(box("tests/conftest.py")).toBeDisabled();
+    await userEvent.click(box("tests"));
+    expect(onChange).toHaveBeenLastCalledWith(["README.md"]);
   });
 
-  it.each(["../x", "/etc/passwd", "tests/../x", "a\\b"])("refuses %s, with the rule said under the field", async (path) => {
+  it("opens and closes a directory", async () => {
+    renderWithProviders(<Harness initial={[]} onChange={vi.fn()} />);
+    expect(screen.queryByRole("checkbox", { name: "tests/test_lab.py" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Open tests" }));
+    expect(box("tests/test_lab.py")).not.toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Close tests" }));
+    expect(screen.queryByRole("checkbox", { name: "tests/test_lab.py" })).not.toBeInTheDocument();
+  });
+
+  it("holds the forced entries ticked: they cannot be unticked", async () => {
     const onChange = vi.fn();
-    renderWithProviders(<Harness initial={[]} onChange={onChange} />);
-    await userEvent.type(field(), `${path}{Enter}`);
+    renderWithProviders(<Harness initial={["README.md"]} forced={[".github/workflows", "criteria.yml"]} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("button", { name: "Open .github/workflows" }));
+    for (const name of [".github/workflows", "criteria.yml", ".github/workflows/grading.yml"]) {
+      expect(box(name)).toBeChecked();
+      expect(box(name)).toBeDisabled();
+      await userEvent.click(box(name));
+    }
     expect(onChange).not.toHaveBeenCalled();
-    expect(field()).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByText(/A path relative to the repository root/)).toBeInTheDocument();
-    // Typing again clears the refusal.
-    await userEvent.type(field(), "x");
-    expect(field()).not.toHaveAttribute("aria-invalid");
+    expect(screen.getAllByText("required")).toHaveLength(2);
+    expect(screen.getByText("Grading by criteria protects the workflows and criteria.yml.")).toBeInTheDocument();
+    // Protected through its directory: no warning.
+    expect(screen.queryByText(/workflow can be changed by students/)).not.toBeInTheDocument();
   });
 
-  it("does not write a path already protected twice", async () => {
-    const onChange = vi.fn();
-    renderWithProviders(<Harness initial={["Makefile"]} onChange={onChange} />);
-    await userEvent.type(field(), "Makefile{Enter}");
-    expect(onChange).not.toHaveBeenCalled();
-    expect(field()).toHaveValue("");
-  });
-
-  it("removes an added path from its chip", async () => {
-    const onChange = vi.fn();
-    renderWithProviders(<Harness initial={["criteria.yml", "pytest.ini"]} onChange={onChange} />);
-    await userEvent.click(screen.getByRole("button", { name: "Unprotect — pytest.ini" }));
-    expect(onChange).toHaveBeenLastCalledWith(["criteria.yml"]);
-    expect(screen.queryByRole("list", { name: "Files added by path" })).not.toBeInTheDocument();
+  it("warns while the grading workflow is unprotected", async () => {
+    renderWithProviders(<Harness initial={[".github/workflows/grading.yml"]} onChange={vi.fn()} />);
+    expect(screen.queryByText(/workflow can be changed by students/)).not.toBeInTheDocument();
+    await userEvent.click(box(".github/workflows/grading.yml"));
+    expect(screen.getByText(/workflow can be changed by students/)).toBeInTheDocument();
   });
 });

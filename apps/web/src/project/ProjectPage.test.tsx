@@ -42,13 +42,20 @@ function routes(project: ProjectDetail | RouteHandler, extra: Record<string, Rou
   return mockFetch({
     [`GET ${BASE}`]: detail,
     [`GET ${ROOM}`]: ok({ id: CLASSROOM_ID, name: "PRG1-2026", course: { id: "c1", code: "PRG1", name: "C" }, roster: [] }),
-    [`GET ${ROOM}/projects/sources/prg1-labo-02-pointeurs`]: ok({
+    // What the students receive from the project's first branch (ADR-119 §9).
+    [`GET ${ROOM}/projects/sources/prg1-labo-02-pointeurs?branch=main`]: ok({
       name: "prg1-labo-02-pointeurs",
       defaultBranch: "main",
       branches: ["main"],
-      tree: [],
+      branch: "main",
+      tree: [
+        { path: ".github/workflows/grading.yml", type: "blob" },
+        { path: "README.md", type: "blob" },
+        { path: "criteria.yml", type: "blob" },
+      ],
       truncated: false,
       suggestedProtected: ["criteria.yml", "README.md", ".github/workflows/grading.yml"],
+      criteria: null,
     }),
     [`GET ${BASE}/checkpoints`]: ok([]),
     ...extra,
@@ -1316,6 +1323,29 @@ describe("the dashboard (tabs, tiles, filter, rail, settings)", () => {
     expect(await screen.findByRole("radiogroup", { name: "Where students work" })).toBeInTheDocument();
   });
 
+  it("holds the workflows and the criteria protected in criteria mode: they cannot be unticked (ADR-119 §9)", async () => {
+    const project = makeProject({
+      gradingMode: "criteria",
+      protectedFiles: ["README.md", ".github/workflows", "criteria.yml"],
+    });
+    const { calls } = routes(project, {
+      [`GET ${BASE}/criteria`]: ok({ snapshot: null }),
+      [`PATCH ${BASE}`]: ok({}),
+    });
+    renderPage("en", "settings");
+    for (const name of [".github/workflows", "criteria.yml"]) {
+      const box = await screen.findByRole("checkbox", { name });
+      expect(box).toBeChecked();
+      expect(box).toBeDisabled();
+      await userEvent.click(box);
+    }
+    expect(writes(calls)).toHaveLength(0);
+    // Another file is written without the forced entries: the server keeps them.
+    await userEvent.click(screen.getByRole("checkbox", { name: "README.md" }));
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({ protectedFiles: [] });
+  });
+
   it("moves Sync into the source tile beside another primary; the header keeps the one primary action", async () => {
     routes(
       makeProject({
@@ -1579,6 +1609,7 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
   it("shows the criteria of a draft graded by criteria, with their kind, and reloads them", async () => {
     const view = {
       snapshot: {
+        schemaVersion: 2,
         fileSha: "f1",
         sourceSha: "abcdef123456",
         loadedAt: PAST,
@@ -1616,9 +1647,33 @@ describe("a draft's form (F-PROJ-01, F-PROJ-03, docs/spec/08 §8.2)", () => {
     await waitFor(() => expect(writes(calls)).toEqual([expect.objectContaining({ method: "PATCH" }), expect.objectContaining({ method: "POST", url: `${BASE}/criteria/reload` })]));
   });
 
+  it("draws none of the schema-2 settings for a schema-3 snapshot (ADR-119 §1)", async () => {
+    const view = {
+      snapshot: {
+        schemaVersion: 3,
+        fileSha: "f3",
+        sourceSha: "abcdef123456",
+        loadedAt: PAST,
+        grading: { context: null, sources: [] },
+        sections: [{ id: "rendu", path: ["rendu"], description: null }],
+        leaves: [{ id: "rendu.tests", sectionPath: ["rendu"], description: "Tests pass", maxPoints: 6, command: ["make", "test"], kind: "automatic" }],
+        max: 6,
+        bonusMax: 0,
+      },
+    };
+    routes(makeDraft({ gradingMode: "criteria" }), { [WORKSPACE]: workspace("free"), [`GET ${BASE}/criteria`]: ok(view) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Advanced options/ }));
+    expect(await screen.findByText("Tests pass")).toBeInTheDocument();
+    for (const label of ["Tests criterion", "Git identity criterion", "Build command", "Test command", "Outputs kept"]) {
+      expect(screen.queryByLabelText(label)).not.toBeInTheDocument();
+    }
+  });
+
   it("shows the identity criterion's conflict with the tests criterion under its select", async () => {
     const view = {
       snapshot: {
+        schemaVersion: 2,
         fileSha: "f",
         sourceSha: "abcdef1234",
         loadedAt: PAST,

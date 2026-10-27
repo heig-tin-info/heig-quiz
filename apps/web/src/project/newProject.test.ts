@@ -9,9 +9,11 @@ const DETAIL: ProjectSourceDetail = {
   name: "labo",
   defaultBranch: "main",
   branches: ["main", "solution"],
+  branch: "main",
   tree: [],
   truncated: false,
   suggestedProtected: ["criteria.yml"],
+  criteria: null,
 };
 const draft = (over: Partial<ProjectDraft> = {}): ProjectDraft => ({
   ...emptyDraft(),
@@ -24,7 +26,19 @@ const draft = (over: Partial<ProjectDraft> = {}): ProjectDraft => ({
 describe("the new project's body", () => {
   it("is the schema's, defaults filled", () => {
     const { body } = projectBody(draft(), DETAIL);
-    expect(body).toMatchObject({ branches: ["main"], protectedFiles: ["criteria.yml"], graceMinutes: 30 });
+    expect(body).toMatchObject({ branches: ["main"], protectedFiles: ["criteria.yml"], graceMinutes: 30, gradingMode: "auto" });
+  });
+
+  it("grades by criteria when the source holds a criteria.yml, the workflows and the criteria forced, until the teacher picks", () => {
+    const graded: ProjectSourceDetail = { ...DETAIL, criteria: { ok: false, errors: [] } };
+    expect(projectBody(draft(), graded).body).toMatchObject({
+      gradingMode: "criteria",
+      protectedFiles: ["criteria.yml", ".github/workflows"],
+    });
+    expect(projectBody(draft({ gradingMode: "none", protectedFiles: [] }), graded).body).toMatchObject({
+      gradingMode: "none",
+      protectedFiles: [],
+    });
   });
 
   it("asks for a source, and sends no branches nor protected files without its detail", () => {
@@ -73,6 +87,8 @@ describe("picking a source (#821)", () => {
       sourceRepo: "prg1-labo_04",
       branches: null,
       protectedFiles: null,
+      // The grading mode follows the next source's criteria.yml (ADR-119 §9).
+      gradingMode: null,
       name: "Prg1 Labo 04",
     });
     expect(pickSource(draft({ name: "Labo", sourceRepo: "labo" }), "labo-2")).toMatchObject({ name: "Labo 2" });

@@ -32,8 +32,10 @@ const DETAIL: ProjectSourceDetail = {
     { path: "src", type: "tree" },
     { path: "src/arbre.c", type: "blob" },
   ],
+  branch: "main",
   truncated: false,
   suggestedProtected: ["criteria.yml", "README.md", ".github/workflows/grading.yml"],
+  criteria: null,
 };
 const SUMMARY = { id: "11111111-1111-4111-8111-111111111111" } as ProjectSummary;
 
@@ -42,6 +44,8 @@ function routes(post: RouteHandler = ok(SUMMARY), extra: Record<string, RouteHan
     [`GET ${BASE}`]: ok({ id: ROOM, name: "PRG1-2026", course: { id: "co-1", code: "PRG1", name: "Programmation 1" }, roster: [] }),
     [`GET ${BASE}/projects/sources`]: ok(SOURCES),
     [`GET ${BASE}/projects/sources/prg1-labo-04`]: ok(DETAIL),
+    // The handout read again for another strategy (ADR-119 §9).
+    [`GET ${BASE}/projects/sources/prg1-labo-04?strategy=whole`]: ok(DETAIL),
     [`POST ${BASE}/projects`]: post,
     ...extra,
   });
@@ -336,6 +340,83 @@ describe("the new project form", () => {
     renderPage();
     expect(await screen.findByText("Could not load the organization's repositories")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Retry/ })).toBeInTheDocument();
+  });
+
+  describe("a source with a criteria.yml (ADR-119 §9)", () => {
+    const leaf = (id: string, kind: "automatic" | "llm" | "teacher", maxPoints: number) => ({
+      id,
+      sectionPath: ["rendu"],
+      description: `About ${id}`,
+      maxPoints,
+      kind,
+    });
+    const GRADED: ProjectSourceDetail = {
+      ...DETAIL,
+      criteria: {
+        ok: true,
+        leaves: [leaf("rendu.tests", "automatic", 6), leaf("rendu.rapport", "llm", 4), leaf("rendu.style", "teacher", 2)],
+        max: 12,
+        bonusMax: 0,
+      },
+    };
+    const graded = (post?: RouteHandler, detail: ProjectSourceDetail = GRADED) =>
+      routes(post, { [`GET ${BASE}/projects/sources/prg1-labo-04`]: ok(detail) });
+
+    it("previews the criteria, preselects grading by criteria and forces the workflows and the criteria", async () => {
+      const { calls } = graded();
+      renderPage();
+      await fillNovice();
+      const preview = await screen.findByTestId("source-criteria");
+      expect(within(preview).getByRole("switch", { name: "Grade by criteria" })).toBeChecked();
+      expect(within(preview).getByText("Read from criteria.yml: 12 points, +0 bonus.")).toBeInTheDocument();
+      const rows = within(preview).getAllByRole("row").slice(1);
+      expect(rows.map((r) => within(r).getAllByRole("cell").map((c) => c.textContent))).toEqual([
+        ["rendu", "testsAbout rendu.tests", "6", "Automatic"],
+        ["rendu", "rapportAbout rendu.rapport", "4", "AI"],
+        ["rendu", "styleAbout rendu.style", "2", "Teacher"],
+      ]);
+      // The forced entries are ticked and held in the tree.
+      await userEvent.click(screen.getByRole("button", { name: "Advanced options" }));
+      for (const name of [".github/workflows", "criteria.yml"]) {
+        const box = screen.getByRole("checkbox", { name });
+        expect(box).toBeChecked();
+        expect(box).toBeDisabled();
+      }
+      // Under the forced directory, its content is held too.
+      expect(screen.getByRole("checkbox", { name: ".github/workflows/grading.yml" })).toBeDisabled();
+      await userEvent.click(screen.getByRole("button", { name: "Create" }));
+      await waitFor(() => expect(posted(calls)).toHaveLength(1));
+      expect(posted(calls)[0]).toMatchObject({
+        gradingMode: "criteria",
+        protectedFiles: ["criteria.yml", "README.md", ".github/workflows/grading.yml", ".github/workflows"],
+      });
+    });
+
+    it("lets the teacher grade otherwise, which frees the forced entries", async () => {
+      const { calls } = graded();
+      renderPage();
+      await fillNovice();
+      await userEvent.click(await screen.findByRole("switch", { name: "Grade by criteria" }));
+      await userEvent.click(screen.getByRole("button", { name: "Advanced options" }));
+      expect(screen.getByRole("checkbox", { name: "criteria.yml" })).toBeEnabled();
+      await userEvent.click(screen.getByRole("button", { name: "Create" }));
+      await waitFor(() => expect(posted(calls)).toHaveLength(1));
+      expect(posted(calls)[0]).toMatchObject({ gradingMode: "auto", protectedFiles: DETAIL.suggestedProtected });
+    });
+
+    it("shows a file that does not parse with its errors, and the server's refusal under the criteria", async () => {
+      const errors = [{ path: "schema_version", code: "schema_version" as const, params: { expected: 3 } }];
+      graded(fail(422, { error: "source_criteria_invalid", message: "x", errors }), { ...DETAIL, criteria: { ok: false, errors } });
+      renderPage();
+      await fillNovice();
+      const preview = await screen.findByTestId("source-criteria");
+      expect(within(preview).getByText("criteria.yml is missing or invalid")).toBeInTheDocument();
+      expect(within(preview).getByText("schema_version")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Create" }));
+      // Refused: the form stays, the errors under the criteria, no generic failure.
+      await waitFor(() => expect(screen.getByRole("button", { name: "Create" })).toBeEnabled());
+      expect(screen.queryByText("Something went wrong on the server.")).not.toBeInTheDocument();
+    });
   });
 
   it("reads in French", async () => {

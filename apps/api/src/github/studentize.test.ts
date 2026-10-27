@@ -1,8 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { handoutTree, parseStudentIgnore } from "@quiz/domain";
 
 import { applyStudentHandout } from "./studentize.js";
 
@@ -95,5 +97,44 @@ describe("applyStudentHandout", () => {
     } finally {
       rmSync(outside, { recursive: true, force: true });
     }
+  });
+});
+
+/** Every path under `root`, as a tree listing: a directory is a `tree`, anything else a `blob`. */
+function listing(root: string): { path: string; type: "blob" | "tree" }[] {
+  const out: { path: string; type: "blob" | "tree" }[] = [];
+  const walk = (rel: string) => {
+    for (const entry of readdirSync(join(root, rel), { withFileTypes: true })) {
+      const path = rel ? `${rel}/${entry.name}` : entry.name;
+      out.push({ path, type: entry.isDirectory() ? "tree" : "blob" });
+      if (entry.isDirectory()) walk(path);
+    }
+  };
+  walk("");
+  return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+// ADR-119 §9: the creation's preview computes the handout on paths (`handoutTree`); it is the one the build makes on disk.
+describe("handoutTree, the same handout on paths", () => {
+  it("lists what applyStudentHandout leaves: the overlay over a root directory, the ignored paths and the ignore file gone", () => {
+    write("README.md", "# Lab");
+    write("criteria.yml", "schema_version: 3");
+    write("src/main.c", "// solution");
+    write("src/util.c", "// kept");
+    write("student/src/main.c", "// TODO");
+    write("student/src/extra/hint.md", "hint");
+    write("student/NOTES.md", "notes");
+    write("solution/answer.c", "42");
+    write("scripts/build.sh", "#!/bin/sh");
+    write("scripts/keep.sh", "#!/bin/sh");
+    write(".github/workflows/grading.yml", "on: push");
+    write(".studentignore", "# staff\nsolution/\nscripts/build.sh\nmissing/\n");
+    const expected = handoutTree(listing(dir), parseStudentIgnore(read(".studentignore"))).map(({ path, type }) => ({ path, type }));
+    applyStudentHandout(dir);
+    expect(listing(dir)).toEqual(expected);
+    const paths = expected.map((e) => e.path);
+    expect(paths).toEqual(expect.arrayContaining(["src/main.c", "src/util.c", "src/extra/hint.md", "NOTES.md", "scripts/keep.sh"]));
+    for (const gone of ["solution", "solution/answer.c", "scripts/build.sh", "student", ".studentignore"]) expect(paths).not.toContain(gone);
+    expect(read("src/main.c")).toBe("// TODO");
   });
 });

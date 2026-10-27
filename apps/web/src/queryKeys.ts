@@ -137,7 +137,9 @@ export const classroomProjectsKey = (id: string) => ["classroom", id, "projects"
  * create's invalidation of the list leaves the picker as it was.
  */
 export const projectSourcesKey = (id: string) => ["classroom", id, "project-sources"] as const;
-export const projectSourceKey = (id: string, repo: string) => [...projectSourcesKey(id), repo] as const;
+/** One source, as read for a branch and a strategy (ADR-119 §9): each pair its own entry. */
+export const projectSourceKey = (id: string, repo: string, query: { branch?: string; strategy?: string } = {}) =>
+  [...projectSourcesKey(id), repo, ...(query.branch || query.strategy ? [query] : [])] as const;
 /**
  * One project's page (`GET /projects/:id`, M3-12) and what hangs off it — a
  * repository's runs, the review checkpoints — under a root of its own,
