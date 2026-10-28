@@ -17,6 +17,20 @@ and the original section numbers; where this record is silent on a detail (an
 exact log line, a migration step) the archive still describes the
 implementation, and this record wins wherever both speak.
 
+Amended 2026-10-28 (rule 25 only): an e-mail no longer goes to the login
+address (`users.email`), which Switch edu-ID lets the person choose and is
+often a private mailbox, but to the account's notification address: the
+institutional address the account's last login asserts
+(`institutionalAddressesOf` over `user_idp_claims`, never the frozen `source`
+of a stored address, so an address of a former affiliation is never the
+default), else the login address; the user may pick
+another of their known addresses (the login one or a verified one of
+`user_emails`) in Settings, stored in `users.notification_email`, null for
+the default. A choice that is no longer among those addresses falls back to
+the default. One resolver, `notificationAddress` (`notifications/address.ts`),
+serves the delivery job and the administrator's test mail; addresses of
+roster lines are untouched.
+
 ## Context
 
 Users need to hear about work without keeping Quiz open. Slow or failing external
@@ -286,7 +300,9 @@ grading write or release.
 **25.** E-mail uses Scaleway Transactional Email with the shared mailer
 settings. Without both credentials it logs recipient/subject only and sends
 nothing. This is the development/test/staging dry-run. The destination is the
-account's current e-mail.
+account's notification address, resolved when the job runs: the address the
+user chose among their own in Settings, else the institutional one the last
+login asserts, else the login address (amendment of 2026-10-28).
 
 **26.** Teams uses Graph activity-feed notifications with user-granted RSC
 `TeamsActivity.Send.User`, through an app the user uploads. No tenant

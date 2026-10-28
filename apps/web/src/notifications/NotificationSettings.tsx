@@ -5,6 +5,7 @@ import {
   kindChannels,
   NOTIFICATION_CHANNELS,
   type NotificationChannel,
+  type NotificationEmailPut,
   type NotificationKind,
   type NotificationPreferencePut,
   type NotificationSettings,
@@ -22,6 +23,7 @@ import {
   LinkButton,
   QueryError,
   SectionHeading,
+  Select,
   SettingRow,
   Skeleton,
   Switch,
@@ -29,10 +31,11 @@ import {
 
 /**
  * Where each kind of notification reaches this account (ADR-030): a grid of
- * kinds × channels, then the channels themselves — the e-mail address, which
- * needs nothing, and Microsoft Teams, which needs the HEIG Quiz app uploaded
- * into the user's Teams and linked from its tab (`TeamsTabPage`, then the
- * link page, `TeamsLinkPage`). Notifications arrive in the activity feed.
+ * kinds × channels, then the channels themselves — the e-mail address, one
+ * of the account's own (`EmailRow`), and Microsoft Teams, which needs the
+ * HEIG Quiz app uploaded into the user's Teams and linked from its tab
+ * (`TeamsTabPage`, then the link page, `TeamsLinkPage`). Notifications
+ * arrive in the activity feed.
  *
  * The grid lists the server's `kinds`: the kinds this account can receive
  * (`notificationKindsFor`, #277). The Teams column is there only when the
@@ -122,6 +125,55 @@ function ChannelGrid({
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * Where e-mails go (F-NOTIF-01): one of the account's own addresses, the
+ * institutional one by default. Picking saves at once; picking the default
+ * goes back to it (null), so a later institutional address is followed. One
+ * address: said, nothing to choose.
+ */
+function EmailRow({ email }: { email: NotificationSettings["email"] }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toastError = useErrorToast();
+  const save = useMutation({
+    mutationFn: (body: NotificationEmailPut) =>
+      api<NotificationSettings>("/app/api/notifications/email", { method: "PUT", body: JSON.stringify(body) }),
+    onSuccess: (next) => qc.setQueryData(notificationSettingsKey, next),
+    onError: toastError("error.save"),
+  });
+  if (email.options.length < 2) {
+    return <SettingRow title={t("settings.email.title")} desc={t("settings.email.desc", { email: email.address })} />;
+  }
+  const shown = save.isPending && save.variables ? (save.variables.email ?? email.defaultAddress) : email.address;
+  return (
+    <SettingRow
+      title={t("settings.email.title")}
+      desc={
+        email.options.some((o) => o.institutional)
+          ? t("settings.email.choose")
+          : t("settings.email.desc", { email: email.address })
+      }
+    >
+      <Select
+        value={shown}
+        disabled={save.isPending}
+        onChange={(e) => {
+          const picked = e.target.value;
+          save.mutate({ email: picked === email.defaultAddress ? null : picked });
+        }}
+        width="w-72"
+        aria-label={t("settings.email.address")}
+      >
+        {email.options.map((o) => (
+          <option key={o.email} value={o.email}>
+            {o.institutional ? t("settings.email.institutional", { email: o.email }) : o.email}
+          </option>
+        ))}
+      </Select>
+    </SettingRow>
   );
 }
 
@@ -236,10 +288,7 @@ export function NotificationSettingsSection() {
           </Card>
           <FormError error={toggle.error} fallback={t("error.save")} />
           <Card className="divide-y divide-line px-5">
-            <SettingRow
-              title={t("settings.email.title")}
-              desc={t("settings.email.desc", { email: settings.data.email })}
-            />
+            <EmailRow email={settings.data.email} />
             <TeamsRow settings={settings.data} />
           </Card>
         </>

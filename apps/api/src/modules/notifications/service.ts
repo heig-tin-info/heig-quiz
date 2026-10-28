@@ -53,6 +53,7 @@ import {
 } from "../../db/schema.js";
 import { holdsCourseSeat } from "../guards.js";
 import { hint, userTopic } from "../realtime/bus.js";
+import { notificationAddress } from "./address.js";
 import { createMailer } from "./mailer.js";
 import { enqueueDeliveries, teamsOpen, type ExternalChannel } from "./outbox.js";
 import { mailLocale, renderTestMail } from "./templates.js";
@@ -447,11 +448,11 @@ export async function notificationSettings(
   teamsAvailable: boolean,
   githubAvailable: boolean,
 ): Promise<NotificationSettings> {
-  const [matrix, link, [user], [seat], courseSeat] = await Promise.all([
+  const [matrix, link, [user], [seat], courseSeat, email] = await Promise.all([
     preferenceMatrix(db, userId),
     teamsLinkOf(db, { userId }),
     db
-      .select({ email: users.email, role: users.role })
+      .select({ role: users.role })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1),
@@ -462,6 +463,7 @@ export async function notificationSettings(
       .where(and(eq(enrollments.userId, userId), eq(enrollments.staff, false)))
       .limit(1),
     holdsCourseSeat(db, userId),
+    notificationAddress(db, userId),
   ]);
   // A link made while Teams was configured means nothing once it is not.
   const shown = teamsAvailable ? link : null;
@@ -473,7 +475,7 @@ export async function notificationSettings(
       courseSeat,
       github: githubAvailable,
     }),
-    email: user?.email ?? "",
+    email: email ?? { address: "", defaultAddress: "", options: [] },
     teams: {
       available: teamsAvailable,
       linkedAt: shown?.linkedAt.toISOString() ?? null,
@@ -483,6 +485,10 @@ export async function notificationSettings(
     },
   };
 }
+
+// --- The notification address (F-NOTIF-01) --------------------------------
+// Resolved and written in `address.ts`; the entry other modules import is this one.
+export { notificationAddress, setNotificationEmail } from "./address.js";
 
 // --- The Teams link (ADR-030) ----------------------------------------------
 // Made, read and forgotten in `teamsLink.ts`; the entry other modules import

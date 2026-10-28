@@ -58,8 +58,10 @@ import type {
 import {
   DEFAULT_CHANNEL_ENABLED,
   notificationKindsFor,
+  NotificationEmailPut,
   NotificationPreferencePut,
   type Notification,
+  type NotificationEmail,
   type NotificationSettings,
   type TeamsLinkPreview,
   type TeamsTabState,
@@ -2724,6 +2726,21 @@ on("POST", "/app/api/notifications/read-all", () => {
  * has expired. `/teams?teams=<scene>` is the tab inside a fake Teams
  * (`teams.ts`), whose endpoint answers below.
  */
+/**
+ * The notification address (F-NOTIF-01): the institutional one by default,
+ * and the private login address of edu-ID beside it, so the settings show
+ * the select.
+ */
+const INSTITUTIONAL_EMAIL = me?.email ?? "lea.rochat@heig-vd.ch";
+const notificationEmail = (choice: string | null): NotificationEmail => ({
+  address: choice ?? INSTITUTIONAL_EMAIL,
+  defaultAddress: INSTITUTIONAL_EMAIL,
+  options: [
+    { email: INSTITUTIONAL_EMAIL, institutional: true },
+    { email: INSTITUTIONAL_EMAIL.replace(/@.*$/, "@bluewin.ch"), institutional: false },
+  ],
+});
+
 const notificationSettings: NotificationSettings = {
   // The per-kind defaults, with one toggle moved: pool_shared by e-mail.
   matrix: {
@@ -2733,7 +2750,7 @@ const notificationSettings: NotificationSettings = {
   // The mock's teacher and admin hold a course seat and no student seat:
   // the staff kinds only.
   kinds: notificationKindsFor({ role: me?.role ?? "student", studentSeat: false, courseSeat: true, github: true }),
-  email: me?.email ?? "",
+  email: notificationEmail(null),
   teams: { available: true, linkedAt: null, teamsName: null, teamsUsername: null },
 };
 
@@ -2741,6 +2758,15 @@ on("GET", "/app/api/notifications/settings", () => notificationSettings);
 on("PUT", "/app/api/notifications/preferences", (_m, body) => {
   const pref = NotificationPreferencePut.parse(body);
   notificationSettings.matrix[pref.kind][pref.channel] = pref.enabled;
+  return notificationSettings;
+});
+on("PUT", "/app/api/notifications/email", (_m, body) => {
+  const { email } = NotificationEmailPut.parse(body);
+  const chosen = email?.trim().toLowerCase() ?? null;
+  if (chosen !== null && !notificationSettings.email.options.some((o) => o.email === chosen)) {
+    throw new MockPayload(400, { error: "email_not_known" });
+  }
+  notificationSettings.email = notificationEmail(chosen);
   return notificationSettings;
 });
 const TEAMS_NAME = "Léa Rochat (HEIG-VD)";

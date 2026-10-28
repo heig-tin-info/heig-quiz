@@ -23,6 +23,8 @@ import {
   notifications,
   pools,
   teamsLinks,
+  userEmails,
+  userIdpClaims,
   users,
 } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
@@ -420,7 +422,7 @@ describe("preferences", () => {
   it("reports the address and the Teams link, and hides a link when Teams is off", async () => {
     const dave = await seedUser("dave@heig.test");
     const none = await service.notificationSettings(db, dave, true, true);
-    expect(none.email).toBe("dave@heig.test");
+    expect(none.email.address).toBe("dave@heig.test");
     expect(none.teams).toEqual({ available: true, linkedAt: null, teamsName: null, teamsUsername: null });
 
     await linkTeams(dave, new Date("2026-09-01T10:00:00Z"));
@@ -698,6 +700,18 @@ describe("the delivery job", () => {
     expect(mails[0]!.html).toContain(
       "https://quiz.test/attempts/00000000-0000-4000-8000-000000000001/feedback",
     );
+  });
+
+  it("mails the account's notification address: the institutional one by default, else the one chosen", async () => {
+    const lou = await seedUser("lou@gmail.com");
+    await db.insert(userEmails).values({ userId: lou, email: "lou@heig-vd.ch", source: "swissEduIDLinkedAffiliationMail" });
+    await db.insert(userIdpClaims).values({ userId: lou, claims: { swissEduIDLinkedAffiliationMail: "lou@heig-vd.ch" }, affiliations: [] });
+    const { deps, mails } = fakes();
+    await deliver(deps, { userId: lou, channel: "email", payload: released("Labo") });
+    expect(mails.map((m) => m.to)).toEqual(["lou@heig-vd.ch"]);
+    await service.setNotificationEmail(db, lou, "lou@gmail.com");
+    await deliver(deps, { userId: lou, channel: "email", payload: released("Labo") });
+    expect(mails.map((m) => m.to)).toEqual(["lou@heig-vd.ch", "lou@gmail.com"]);
   });
 
   it("drops a job whose payload is of a shape the catalogue no longer has (M1-03)", async () => {

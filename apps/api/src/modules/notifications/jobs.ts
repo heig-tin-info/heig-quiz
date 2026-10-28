@@ -28,7 +28,7 @@ import {
   openOutbox,
   type DeliveryJob,
 } from "./outbox.js";
-import { teamsLinkOf } from "./service.js";
+import { notificationAddress, teamsLinkOf } from "./service.js";
 import { createTeamsClient, TeamsError, type TeamsClient } from "./teams.js";
 import { isTeamsPayload, teamsActivity } from "./teamsApp.js";
 import { tenantAllowed, type AllowedTenants } from "./teamsLink.js";
@@ -51,7 +51,7 @@ export interface DeliveryDeps {
 /** Performs one delivery. Exported for the tests, which pass fakes for both transports. */
 export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<void> {
   const [user] = await deps.db
-    .select({ email: users.email, locale: users.locale, anonymizedAt: users.anonymizedAt, role: users.role })
+    .select({ locale: users.locale, anonymizedAt: users.anonymizedAt, role: users.role })
     .from(users)
     .where(eq(users.id, job.userId))
     .limit(1);
@@ -72,9 +72,12 @@ export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<voi
   const message = renderNotification(payload, mailLocale(user.locale), deps.webUrl);
 
   if (job.channel === "email") {
-    if (!user.email) return;
+    // The account's notification address (`address.ts`), resolved now: a
+    // choice changed after the send is honoured.
+    const to = (await notificationAddress(deps.db, job.userId))?.address;
+    if (!to) return;
     await deps.mailer.send({
-      to: user.email,
+      to,
       subject: message.subject,
       text: message.text,
       html: message.html,

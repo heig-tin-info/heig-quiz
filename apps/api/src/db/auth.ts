@@ -80,6 +80,15 @@ export const users = pgTable(
      */
     coachSeen: jsonb("coach_seen").$type<string[]>().notNull().default([]),
     /**
+     * The address notification e-mails go to, as chosen in the settings
+     * among the account's own (ADR-030, amendment of 2026-10-28); null means
+     * the default, the institutional address when one is known. A choice no
+     * longer among the account's addresses falls back to the default
+     * (`notificationAddress`). An address: a future anonymization clears it
+     * along with `email`.
+     */
+    notificationEmail: text("notification_email"),
+    /**
      * When this user last acknowledged the platform's "What's new" (ADR-087):
      * an entry live after it is unseen. Born with the account, so a new user
      * is shown no history; moved by `POST /app/api/me/changelog`, on the
@@ -334,7 +343,9 @@ export const userEmails = pgTable(
  * Raw claim set released by the IdP at the last login. Diagnostic and
  * matching material only. Deliberately NOT minimized (see auth/claims.ts);
  * in exchange the table is never read by a user-facing view and never
- * leaves the server.
+ * leaves the server. One read derives from it: which of the account's own
+ * addresses the institution asserts (`notifications/address.ts`), exposed
+ * as a flag on addresses the user already sees.
  */
 export const userIdpClaims = pgTable("user_idp_claims", {
   userId: uuid("user_id")
