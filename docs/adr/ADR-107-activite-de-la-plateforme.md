@@ -25,6 +25,14 @@ Amended 2026-10-15 (the privacy-page consequence only, issue #868): the
 activity are kept eight days and read as counts, and the last activity per
 account.
 
+Amended 2026-10-28 (§2, what makes a page not idle only): only a gesture of
+the person counts — `pointerdown`, `keydown`, `wheel`, `touchstart`. A page
+becoming visible again and a `scroll` event no longer do. Production showed
+tabs left open overnight counted every night hour: the device woke, reported
+the page visible, and the reconnection's refetches went out unmarked; a
+`scroll` also fires when a refetch re-renders a list. A person's scroll always
+comes with one of the four gestures. The page load still counts.
+
 ## Context
 
 The owner wants to see, from the administration, how many people use the platform,
