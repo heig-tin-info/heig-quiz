@@ -45,7 +45,8 @@ import { audit, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
 import { codespaceProjects, enrollments, groupSets, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
-import { githubStatus, type InstallationClient } from "../../github/app.js";
+import type { InstallationClient } from "../../github/app.js";
+import { RepoNameTaken } from "../../github/provision.js";
 import { createSquashedRepo } from "../../github/squash.js";
 import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
 import type { Caller } from "../guards.js";
@@ -179,7 +180,9 @@ async function buildDistribution(
         claim: claimFor(db, draft),
       });
     } catch (err) {
-      if (githubStatus(err) !== 422 || n >= MAX_SUFFIX) throw err;
+      // Only a name taken steps on: a build failing after its claim would
+      // otherwise leave a repository under every suffix (2026-10-28).
+      if (!(err instanceof RepoNameTaken) || n >= MAX_SUFFIX) throw err;
     }
   }
 }

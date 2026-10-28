@@ -6,7 +6,10 @@
  *   after the student handout conventions (studentize.ts) are applied.
  * Git operations use the installation token (GH-03). The `squash`
  * strategy's commit is created by the API, GitHub-signed and attributed to
- * the App (`signedCommit.ts`, #917); git only builds its tree.
+ * the App (`signedCommit.ts`, #917); git only builds its tree, carried on
+ * a temporary ref, and the branch is CREATED on the signed commit: never
+ * moved, so an organization ruleset refusing non-fast-forward updates of
+ * branches does not refuse the build.
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,6 +20,7 @@ import type { Octokit } from "octokit";
 import type { SourceStrategy } from "@quiz/contracts";
 
 import { gitRunner, repoUrl } from "./git.js";
+import { RepoNameTaken } from "./provision.js";
 import { pushWithRetry } from "./retry.js";
 import { signedCommit } from "./signedCommit.js";
 import { applyStudentHandout } from "./studentize.js";
@@ -44,7 +48,7 @@ export async function createSquashedRepo(opts: {
   /**
    * Takes the repository for this caller BEFORE anything is pushed to it
    * (Quiz, ADR-062): false — another project already holds it — refuses it
-   * like a name taken (422), and the caller steps to the next name.
+   * like a name taken (`RepoNameTaken`), and the caller steps to the next name.
    */
   claim?: (repo: { repoId: number; fullName: string }) => Promise<boolean>;
 }): Promise<SquashedResult> {
@@ -86,11 +90,11 @@ export async function createSquashedRepo(opts: {
     } catch (probe) {
       empty = (probe as { status?: number }).status === 409; // 409 = empty git repository
     }
-    if (!empty || !existing.private) throw err; // a real collision: surface the 422
+    if (!empty || !existing.private) throw new RepoNameTaken(existing.full_name);
     created = { id: Number(existing.id), full_name: existing.full_name };
   }
   if (opts.claim && !(await opts.claim({ repoId: created.id, fullName: created.full_name }))) {
-    throw Object.assign(new Error(`${created.full_name} is another project's`), { status: 422 });
+    throw new RepoNameTaken(created.full_name);
   }
 
   const work = mkdtempSync(join(tmpdir(), "quiz-squash-"));
@@ -116,22 +120,29 @@ export async function createSquashedRepo(opts: {
         applyStudentHandout(dir);
         await git(dir, "init", "-q", "-b", branch);
         await git(dir, "add", "-A");
-        // A throwaway commit carries the tree to GitHub; the branch ends on
-        // the API's root commit of that tree, GitHub-signed (#917). One
-        // forced move, on a repository no student has cloned yet.
+        // A throwaway commit carries the tree to GitHub on a temporary ref
+        // (as the sync does); the branch is created on the API's root commit
+        // of that tree, GitHub-signed (#917). Nothing is forced: an
+        // organization ruleset may refuse it (Info1-MI-2026, 2026-10-28).
         await git(dir, "commit", "-q", "-m", INITIAL_COMMIT_MESSAGE);
-        await pushWithRetry(() => git(dir, "push", "-q", url(targetRepo), `${branch}:${branch}`));
+        const tmp = `quiz/tmp-${branch}`;
+        await pushWithRetry(() => git(dir, "push", "-q", "--force", url(targetRepo), `HEAD:refs/${tmp}`));
         const tree = (await git(dir, "rev-parse", "HEAD^{tree}")).trim();
         const sha = await signedCommit({ octokit, owner: org, repo: targetRepo, tree, parents: [], message: INITIAL_COMMIT_MESSAGE });
-        await octokit.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
+        await octokit.request("POST /repos/{owner}/{repo}/git/refs", {
           owner: org,
           repo: targetRepo,
-          ref: `heads/${branch}`,
+          ref: `refs/heads/${branch}`,
           sha,
-          force: true,
         });
+        // Best-effort: a leftover carries the handout's tree only, on no branch.
+        await octokit
+          .request("DELETE /repos/{owner}/{repo}/git/refs/{ref}", { owner: org, repo: targetRepo, ref: tmp })
+          .catch(() => undefined);
         heads[branch] = sha;
       }
+      // The first branch asked for is the default, as when each was pushed in turn.
+      await octokit.request("PATCH /repos/{owner}/{repo}", { owner: org, repo: targetRepo, default_branch: branches[0]! });
     }
     return { repoId: created.id, fullName: created.full_name, heads, sourceHeads };
   } finally {

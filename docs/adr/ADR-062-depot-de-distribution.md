@@ -43,6 +43,20 @@ that push leaves a non-empty distribution, so a retry steps to
 did. Identity, verification and older repositories: D23's addendum
 (`docs/merge/08-decisions.md`).
 
+**Amended 2026-10-28 (product owner; scope: the amendment of 2026-10-26
+above):** the forced move is withdrawn. An organization ruleset refusing
+non-fast-forward updates of branches (Info1-MI-2026's) refused it with a
+422, and the build, reading every 422 as a name taken, stepped through
+twenty `-squashed-N` names, leaving a repository under each. The throwaway
+commit is now pushed to the temporary ref `refs/quiz/tmp-<branch>` (as the
+sync does, ADR-073), the branch is created on the signed root (`POST
+/git/refs`, nothing moved), the temporary ref deleted on a best-effort
+basis, and the default branch set to the first branch asked for. The build
+steps to the next name only when the name is taken (`RepoNameTaken`): a
+failure after the claim stops it with `distribution_failed` and leaves one
+repository, which a retry adopts when no branch was created yet, or steps
+over.
+
 **Addendum (2026-10-02, product owner; merge task M3-04): the distribution
 repository is also the reference of the protected files.** F-PROJ-08 is
 amended to match:
