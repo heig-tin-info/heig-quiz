@@ -5,6 +5,7 @@
  * reads the rows; these decide.
  */
 import { projectGrade, type ProjectGrade, type ProjectScale } from "./projectGrade.js";
+import type { DeadlineStrategyName } from "./projectRuns.js";
 
 /** F-PROJ-03: `draft` → `published` → `locked` (at the deadline). */
 export const PROJECT_STATES = ["draft", "published", "locked"] as const;
@@ -102,12 +103,16 @@ function allFrozen(p: Pick<PrimaryActionInput, "gradingMode" | "live" | "frozen"
  * deadline — `graded` once the scores are final ({@link scoresFinal}) and
  * the release awaited, `released` once the staff released them. The
  * database stops at `locked`; the phase is derived, never stored.
+ * `deadline_passed` stands for `locked` under the `commit` deadline
+ * strategy (#958): the repositories stay open and a commit marks the
+ * deadline, so nothing is locked and the badge must not say so.
  */
-export const PROJECT_PHASES = ["draft", "scheduled", "published", "locked", "graded", "released"] as const;
+export const PROJECT_PHASES = ["draft", "scheduled", "published", "locked", "deadline_passed", "graded", "released"] as const;
 export type ProjectPhase = (typeof PROJECT_PHASES)[number];
 
 export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode" | "live" | "frozen" | "unverified" | "unvalidated" | "released"> & {
   publishMode: PublishModeName;
+  deadlineStrategy: DeadlineStrategyName;
 };
 
 /**
@@ -119,13 +124,15 @@ export type ProjectPhaseInput = Pick<PrimaryActionInput, "state" | "gradingMode"
  * `released` as soon as it was, even when a score changed since (the page's
  * primary action says a re-release waits; the list does not). Then `graded`
  * on {@link scoresFinal}, so a project graded `none`, or one with a score
- * still to verify, stays `locked`.
+ * still to verify, stays `locked` — `deadline_passed` under the `commit`
+ * strategy, whose repositories the deadline leaves open (#958).
  */
 export function projectPhase(p: ProjectPhaseInput): ProjectPhase {
   if (p.state === "draft") return p.publishMode === "scheduled" ? "scheduled" : "draft";
   if (p.state !== "locked") return p.state;
   if (p.released) return "released";
-  return scoresFinal(p) ? "graded" : "locked";
+  if (scoresFinal(p)) return "graded";
+  return p.deadlineStrategy === "commit" ? "deadline_passed" : "locked";
 }
 
 /**

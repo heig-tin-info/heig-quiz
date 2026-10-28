@@ -3380,6 +3380,7 @@ export const en = {
   "sproj.status.to_accept": "to accept",
   "sproj.status.in_progress": "in progress",
   "sproj.status.locked": "locked",
+  "sproj.status.deadline_passed": "deadline passed",
   "sproj.status.released": "scores published",
   // M3-13 (F-PROJ-04, F-PROJ-05, F-PROJ-07, F-PROJ-15): the project row's one
   // action by state, the refusals, and the student's project page.
@@ -5665,6 +5666,7 @@ export const en = {
   "project.state.scheduled": "scheduled",
   "project.state.published": "published",
   "project.state.locked": "locked",
+  "project.state.deadline_passed": "deadline passed",
   "project.state.graded": "graded",
   "project.state.released": "released",
 

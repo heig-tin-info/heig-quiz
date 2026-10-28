@@ -5,14 +5,17 @@
  * repository's runs they read before the release. The `project` module
  * reads the rows; these decide.
  */
+import type { DeadlineStrategyName } from "./projectRuns.js";
 
 /**
  * The spec's words (F-PROJ-04), plus `released` once the scores are out
  * (F-PROJ-14): to accept (or not yet open, which `startAt` tells), in
  * progress once the repository exists, locked after the student's effective
- * deadline — or while GitHub holds the repository locked for them.
+ * deadline — or while GitHub holds the repository locked for them. Under
+ * the `commit` deadline strategy the deadline locks nothing (#958): past
+ * it, a repository GitHub does not hold locked reads `deadline_passed`.
  */
-export const STUDENT_PROJECT_STATUSES = ["to_accept", "in_progress", "locked", "released"] as const;
+export const STUDENT_PROJECT_STATUSES = ["to_accept", "in_progress", "locked", "deadline_passed", "released"] as const;
 export type StudentProjectStatus = (typeof STUDENT_PROJECT_STATUSES)[number];
 
 export interface StudentProjectFacts {
@@ -25,12 +28,15 @@ export interface StudentProjectFacts {
   accepted: boolean;
   /** GitHub holds the repository locked (the deadline's lock, or the staff's hand). */
   locked: boolean;
+  /** The project's deadline strategy (F-PROJ-09): `lock` locks the repository at the deadline, `commit` leaves it open. */
+  deadlineStrategy: DeadlineStrategyName;
 }
 
 /** The status word of `facts` at `now`. */
 export function studentProjectStatus(facts: StudentProjectFacts, now: Date): StudentProjectStatus {
   if (facts.released) return "released";
-  if (facts.locked || now.getTime() >= facts.deadlineAt.getTime()) return "locked";
+  if (facts.locked) return "locked";
+  if (now.getTime() >= facts.deadlineAt.getTime()) return facts.deadlineStrategy === "commit" ? "deadline_passed" : "locked";
   return facts.accepted ? "in_progress" : "to_accept";
 }
 
@@ -38,13 +44,15 @@ export type StudentActivityGroup = "open" | "upcoming" | "past";
 
 /**
  * The group of the student's Activities a project falls in, by its dates
- * (F-ORG-15): Upcoming until it starts, Past once it is locked or released
- * for this student, Open now between the two.
+ * (F-ORG-15): Upcoming until it starts, Past once it is locked, its deadline
+ * passed — a repository the `commit` strategy leaves open included: the work
+ * is over and a later push never moves the frozen score (F-PROJ-11) — or
+ * released for this student, Open now between the two.
  */
 export function studentProjectGroup(facts: StudentProjectFacts, now: Date): StudentActivityGroup {
   if (now.getTime() < facts.startAt.getTime()) return "upcoming";
   const status = studentProjectStatus(facts, now);
-  return status === "locked" || status === "released" ? "past" : "open";
+  return status === "in_progress" || status === "to_accept" ? "open" : "past";
 }
 
 /**

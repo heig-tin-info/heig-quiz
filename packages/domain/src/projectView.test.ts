@@ -76,7 +76,7 @@ describe("projectPrimaryAction (F-PROJ-13)", () => {
   });
 
   it("grades a frozen project by criteria while a repository is to validate, then releases (ADR-106 §8)", () => {
-    const criteria = { ...base, gradingMode: "criteria" as const, state: "locked" as const, publishMode: "manual" as const };
+    const criteria = { ...base, gradingMode: "criteria" as const, state: "locked" as const, publishMode: "manual" as const, deadlineStrategy: "lock" as const };
     expect(projectPrimaryAction({ ...criteria, frozen: 2, unvalidated: 3 })).toBe("none");
     expect(projectPrimaryAction({ ...criteria, frozen: 3, unvalidated: 1 })).toBe("grade");
     // A score to verify beneath an unvalidated repository: the validation settles it first.
@@ -158,7 +158,15 @@ describe("projectListDates", () => {
 });
 
 describe("projectPhase (ADR-104)", () => {
-  const final = { gradingMode: "auto" as const, publishMode: "manual" as const, live: 3, frozen: 3, unverified: 0, released: false };
+  const final = {
+    gradingMode: "auto" as const,
+    publishMode: "manual" as const,
+    deadlineStrategy: "lock" as const,
+    live: 3,
+    frozen: 3,
+    unverified: 0,
+    released: false,
+  };
 
   it("follows the state while it is not locked, a kept release notwithstanding (F-PROJ-09)", () => {
     expect(projectPhase({ ...final, state: "draft" })).toBe("draft");
@@ -192,5 +200,16 @@ describe("projectPhase (ADR-104)", () => {
   it("is released once released, even when a score changed since", () => {
     expect(projectPhase({ ...final, state: "locked", released: true })).toBe("released");
     expect(projectPhase({ ...final, state: "locked", released: true, unverified: 1 })).toBe("released");
+  });
+
+  it("says the deadline passed, never locked, under the commit strategy (#958)", () => {
+    const commit = { ...final, deadlineStrategy: "commit" as const };
+    expect(projectPhase({ ...commit, state: "locked", frozen: 2 })).toBe("deadline_passed");
+    expect(projectPhase({ ...commit, state: "locked", gradingMode: "none" })).toBe("deadline_passed");
+    expect(projectPhase({ ...commit, state: "locked", live: 0, frozen: 0 })).toBe("deadline_passed");
+    // Before the deadline, and once graded or released, the strategy changes nothing.
+    expect(projectPhase({ ...commit, state: "published" })).toBe("published");
+    expect(projectPhase({ ...commit, state: "locked" })).toBe("graded");
+    expect(projectPhase({ ...commit, state: "locked", released: true })).toBe("released");
   });
 });

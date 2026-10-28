@@ -868,6 +868,7 @@ function readinessOf(p: MockProject) {
   return {
     state: p.summary.state,
     publishMode: p.summary.publishMode,
+    deadlineStrategy: p.summary.deadlineStrategy,
     gradingMode: p.summary.gradingMode,
     live: live.length,
     frozen: live.filter((r) => r.frozenAt !== null).length,

@@ -916,6 +916,7 @@ const studentHome = (): StudentHomeData => {
       released: card.status === "released",
       accepted: card.status === "in_progress",
       locked: card.status === "locked",
+      deadlineStrategy: card.status === "deadline_passed" ? ("commit" as const) : ("lock" as const),
     };
     groups[studentProjectGroup(facts, new Date(now))].push(card);
   }

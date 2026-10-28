@@ -3355,6 +3355,7 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.status.to_accept": "à accepter",
   "sproj.status.in_progress": "en cours",
   "sproj.status.locked": "verrouillé",
+  "sproj.status.deadline_passed": "échéance passée",
   "sproj.status.released": "scores publiés",
   // M3-13 (F-PROJ-04, F-PROJ-05, F-PROJ-07, F-PROJ-15): the project row's one
   // action by state, the refusals, and the student's project page.
@@ -5627,6 +5628,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.state.scheduled": "planifié",
   "project.state.published": "publié",
   "project.state.locked": "verrouillé",
+  "project.state.deadline_passed": "échéance passée",
   "project.state.graded": "corrigé",
   "project.state.released": "scores publiés",
 

@@ -430,6 +430,7 @@ export async function projectDetail(
   const readiness = {
     state: project.state,
     publishMode: project.publishMode,
+    deadlineStrategy: project.deadlineStrategy,
     gradingMode: project.gradingMode,
     ...counts,
     // Over the live repositories only: a non-live one never freezes, so its score to verify is released as none.
