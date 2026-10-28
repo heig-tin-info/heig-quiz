@@ -438,7 +438,7 @@ describe("EvaluationPreviewPage — fixing a question", () => {
     renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
 
     await user.click(await screen.findByRole("button", { name: "Edit question" }));
-    expect(open).toHaveBeenCalledWith(`/questions/q1?from=${EVAL}`, "_blank", "noopener");
+    expect(open).toHaveBeenCalledWith(`/questions/q1?fromPreview=${EVAL}`, "_blank", "noopener");
     expect(await screen.findByText("Version 2 of this question published")).toBeInTheDocument();
 
     // An answer on each question, then back to the first one.

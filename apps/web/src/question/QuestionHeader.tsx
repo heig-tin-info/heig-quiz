@@ -1,4 +1,4 @@
-import { Copy, Eye, Flag, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, Flag, Save, Trash2 } from "lucide-react";
 
 import type { QuestionDetail } from "@quiz/contracts";
 import { reviewPill } from "@quiz/domain";
@@ -27,6 +27,7 @@ export function QuestionHeader({
   readOnly,
   autosave,
   navigate,
+  onBackToPreview,
   onPublish,
   onDuplicate,
   onDelete,
@@ -40,6 +41,8 @@ export function QuestionHeader({
   readOnly: boolean;
   autosave: Autosave;
   navigate: (r: Route) => void;
+  /** Opened from the evaluation preview: closes this tab, back onto the walk (#959). */
+  onBackToPreview?: () => void;
   onPublish: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -90,6 +93,11 @@ export function QuestionHeader({
       }
       actions={
         <>
+          {onBackToPreview ? (
+            <Button variant="ghost" onClick={onBackToPreview}>
+              <ArrowLeft /> {t("question.backToPreview")}
+            </Button>
+          ) : null}
           {/* It opens a TAB, so it is an anchor: middle-click, Ctrl-click
               and "open in a new window" all have to work, and a <button>
               offers none of them. `noopener` on both halves. */}

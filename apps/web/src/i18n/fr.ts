@@ -1905,6 +1905,7 @@ export const fr: Record<keyof Dict, string> = {
   "question.try.failed": "La réponse n'a pas pu être corrigée.",
   "question.try.invalid": "Terminez le brouillon avant de l'essayer.",
   "question.preview": "Aperçu étudiant",
+  "question.backToPreview": "Retour à l'aperçu",
   "question.previewFailed": "L'aperçu n'a pas pu être construit.",
   "question.preview.show": "Aperçu de {name}",
   "question.preview.back": "Retour à la liste",

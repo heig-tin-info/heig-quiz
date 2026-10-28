@@ -32,6 +32,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * - `fromGrading` (+ `item`): the grading screen of an evaluation (ADR-044,
  *   addendum). Publishing leads back there at once — the fix was made to
  *   re-grade.
+ * - `fromPreview`: the evaluation preview (ADR-018, sixth addendum; #959),
+ *   which opened the editor in a tab of its own. Its way back, and
+ *   Publish, close that tab: the walk and its answers live in the preview's
+ *   tab, which offers the new version when it regains focus.
  * - `fromTemplate`: a template (F-EVAL-25).
  * - `from`: an evaluation (issue #127).
  *
@@ -40,9 +44,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 interface OriginSpec {
   param: Exclude<(typeof QUESTION_ORIGIN_PARAMS)[number], "item">;
-  kind: "grading" | "template" | "evaluation";
+  kind: "grading" | "preview" | "template" | "evaluation";
   back: (id: string, item: string | null) => Route;
-  /** Publishing is the way back (only from the grading screen). */
+  /** Publishing is the way back (from the grading screen and the preview). */
   returnOnPublish: boolean;
 }
 
@@ -53,6 +57,7 @@ const ORIGINS: readonly OriginSpec[] = [
     back: (id, item) => ({ view: "grading", evaluationId: id, ...(item ? { item } : {}) }),
     returnOnPublish: true,
   },
+  { param: "fromPreview", kind: "preview", back: (id) => ({ view: "evaluationPreview", id }), returnOnPublish: true },
   { param: "fromTemplate", kind: "template", back: (id) => ({ view: "template", id }), returnOnPublish: false },
   { param: "from", kind: "evaluation", back: (id) => ({ view: "evaluation", id }), returnOnPublish: false },
 ];
@@ -74,11 +79,13 @@ function useOrigin(): Origin | null {
   const [from] = useSearchParam("from", "");
   const [fromTemplate] = useSearchParam("fromTemplate", "");
   const [fromGrading] = useSearchParam("fromGrading", "");
+  const [fromPreview] = useSearchParam("fromPreview", "");
   const [item] = useSearchParam("item", "");
   const params: Record<(typeof QUESTION_ORIGIN_PARAMS)[number], string> = {
     from,
     fromTemplate,
     fromGrading,
+    fromPreview,
     item,
   };
   const spec = ORIGINS.find((o) => UUID.test(params[o.param]));
@@ -116,7 +123,21 @@ function useQuestionCrumbs(origin: Origin | null, poolId: string | undefined, po
   if (origin?.kind === "template") return templateCrumbs;
   if (origin?.kind === "evaluation") return evaluationCrumbs;
   if (origin?.kind === "grading") return [...evaluationCrumbs, { label: t("grading.title"), route: origin.back }];
+  if (origin?.kind === "preview") return [...evaluationCrumbs, { label: t("eval.preview"), route: origin.back }];
   return [pools, ...(poolName === undefined || poolId === undefined ? [] : [{ label: poolName, route: { view: "pool", id: poolId } as Route }])];
+}
+
+/**
+ * Closes this tab, else runs `fallback` (#959). A tab opened by script — the
+ * preview's Edit question, `noopener` included — may close itself; one the
+ * browser keeps (opened from a link, a reload into a new tab) is still open a
+ * moment later, and the fallback leads where closing would have.
+ */
+function closeTabOr(fallback: () => void, delay = 250): void {
+  window.close();
+  window.setTimeout(() => {
+    if (!window.closed) fallback();
+  }, delay);
 }
 
 /**
@@ -156,6 +177,30 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const reports = useQuestionReports(id);
   const origin = useOrigin();
   const crumbs = useQuestionCrumbs(origin, poolId, pool.data?.pool.name);
+  // Back to the preview is back to ITS tab, the walk's answers intact; a
+  // navigation there would start a new walk, so it is only the fallback.
+  // The pending edit is saved first: a closed tab cannot send it, and a
+  // failed save keeps the tab (and its error) on screen. One way back at a
+  // time: a second click while closing would schedule a second fallback.
+  const leaving = useRef(false);
+  const goTo = (route: Route) => {
+    if (origin?.kind === "preview" && routeToPath(route) === routeToPath(origin.back)) {
+      if (leaving.current) return;
+      leaving.current = true;
+      void autosave.flush().then((saved) => {
+        if (!saved) {
+          leaving.current = false;
+          return;
+        }
+        closeTabOr(() => {
+          leaving.current = false;
+          navigate(route);
+        });
+      });
+    } else {
+      navigate(route);
+    }
+  };
   // The tab panel, so `Ctrl+Enter` can put the reader inside what it opened.
   const panelRef = useRef<HTMLDivElement>(null);
   const followToPanel = useRef(false);
@@ -244,7 +289,8 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         crumbs={crumbs}
         readOnly={readOnly}
         autosave={autosave}
-        navigate={navigate}
+        navigate={goTo}
+        onBackToPreview={origin?.kind === "preview" ? () => goTo(origin.back) : undefined}
         onPublish={startPublish}
         onDuplicate={() => duplicate(data.meta)}
         onDelete={() => void askDelete(data.meta)}
@@ -316,8 +362,9 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
               void qc.invalidateQueries({ queryKey: gradingKey(origin.evaluationId) });
             }
             // Opened from the grading screen, publishing IS the way back: the
-            // fix was made to re-grade with it (ADR-044, addendum).
-            if (origin?.returnOnPublish) navigate(origin.back);
+            // fix was made to re-grade with it (ADR-044, addendum); from the
+            // preview, to use it in the walk (#959).
+            if (origin?.returnOnPublish) goTo(origin.back);
           }}
         />
       ) : null}

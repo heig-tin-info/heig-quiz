@@ -218,7 +218,7 @@ export type Route =
  * from, and on which item: one list, which the route writes in one loop and
  * the editor reads (`QuestionEditor`'s `ORIGINS`).
  */
-export const QUESTION_ORIGIN_PARAMS = ["from", "fromTemplate", "fromGrading", "item"] as const;
+export const QUESTION_ORIGIN_PARAMS = ["from", "fromTemplate", "fromGrading", "fromPreview", "item"] as const;
 export type QuestionOrigin = Partial<Record<(typeof QUESTION_ORIGIN_PARAMS)[number], string>>;
 
 /** The one member of `Route` whose `view` is `V`. */

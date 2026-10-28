@@ -683,7 +683,10 @@ live in `ui/state.ts`, each written once.
 - Breadcrumb (`ui/breadcrumb.tsx`, drawn through `src/Trail.tsx`): the trail
   of a page, in the `PageHeader` eyebrow, `Courses › PRG1 › PRG1-2026 › Quiz 3
   › Results`, in the whole app, staff pages included; there is no separate
-  "one level up" button. A `nav`
+  "one level up" button, with one exception: the question editor opened from
+  the evaluation preview wears a ghost "Back to the preview" button, because
+  that way back CLOSES the editor's tab (the walk lives in the preview's),
+  which a link cannot do. A `nav`
   named by the caller (`breadcrumb.label`, translated), an ordered list;
   ancestors are real links (`href` from `routeToPath`, routed in the app on a
   plain click), the last item is the page, `aria-current="page"`, in `fg`. The
@@ -706,9 +709,10 @@ live in `ui/state.ts`, each written once.
      Staff: `Courses › PRG1 › PRG1-2026 › Quiz 3 › Results`, `Question pools
      › Pointeurs › Categories`. Student: `Courses › PRG1-2026 › Project`.
      Two pages bend it because the way back they offered is a flow, not a
-     place: the question editor opened from an evaluation, a template or the
-     grading screen wears THAT page's own trail then the question (`Courses ›
-     PRG1 › PRG1-2026 › Quiz 3 › Grading › question`), and a group set opened
+     place: the question editor opened from an evaluation, a template, the
+     grading screen or the evaluation preview wears THAT page's own trail
+     then the question (`Courses › PRG1 › PRG1-2026 › Quiz 3 › Grading ›
+     question`, `… › Quiz 3 › Preview › question`), and a group set opened
      from a project puts the project in place of Groups.
   3. Names are what the page already loads (the classroom query is shared by
      every classroom screen, `classroomKey`). A course is its CODE (short:
