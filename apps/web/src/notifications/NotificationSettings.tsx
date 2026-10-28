@@ -149,7 +149,14 @@ function EmailRow({ email }: { email: NotificationSettings["email"] }) {
   }
   const shown = save.isPending && save.variables ? (save.variables.email ?? email.defaultAddress) : email.address;
   return (
-    <SettingRow title={t("settings.email.title")} desc={t("settings.email.choose")}>
+    <SettingRow
+      title={t("settings.email.title")}
+      desc={
+        email.options.some((o) => o.institutional)
+          ? t("settings.email.choose")
+          : t("settings.email.desc", { email: email.address })
+      }
+    >
       <Select
         value={shown}
         disabled={save.isPending}

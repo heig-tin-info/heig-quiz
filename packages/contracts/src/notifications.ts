@@ -546,16 +546,18 @@ type TeamsLinkStatus = z.infer<typeof TeamsLinkStatus>;
  * of 2026-10-28): one of its own addresses, the institutional one by default.
  */
 export const NotificationEmail = z.object({
-  /** The address e-mails go to now: the choice, else the default. */
+  /** The address e-mails go to now: the user's choice, else the default. */
   address: z.string(),
-  /** The address the user chose; null means the default (or a choice no longer among the options). */
-  choice: z.string().nullable(),
-  /** Where e-mails go without a choice: the first institutional option, else the login address. */
+  /**
+   * Where e-mails go without a choice: the first institutional option, else
+   * the login address. Picking it sends null, so the default keeps following
+   * the institutional address.
+   */
   defaultAddress: z.string(),
   /**
    * The login address and every verified address of the account, normalized,
-   * once each, the institutional ones first; `institutional` when the school
-   * asserts it.
+   * once each; `institutional` when the account's last login asserts it. The
+   * order carries no meaning.
    */
   options: z.array(z.object({ email: z.string(), institutional: z.boolean() })),
 });

@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { NotificationSettings, TeamsLinkPreview, TeamsTabState } from "@quiz/contracts";
 
-import { auditLog, teamsLinks, teamsLinkTokens, userEmails } from "../../db/schema.js";
+import { auditLog, teamsLinks, teamsLinkTokens, userEmails, userIdpClaims } from "../../db/schema.js";
 import { ENTRA_TENANT, fakeEntra, type FakeEntra } from "../../test/entra.js";
 import { type Payload, sessionOf, testServer, type TestServer } from "../../test/http.js";
 import { issueLinkToken } from "./teamsLink.js";
@@ -39,7 +39,7 @@ describe("without a Teams application", () => {
     const res = await server.app.inject({ method: "GET", url: "/app/api/notifications/settings", headers });
     expect(res.statusCode).toBe(200);
     const body = NotificationSettings.parse(res.json());
-    expect(body.email).toEqual({ address: "sam@heig.test", choice: null, defaultAddress: "sam@heig.test", options: [{ email: "sam@heig.test", institutional: false }] });
+    expect(body.email).toEqual({ address: "sam@heig.test", defaultAddress: "sam@heig.test", options: [{ email: "sam@heig.test", institutional: false }] });
     expect(body.teams).toEqual({ available: false, linkedAt: null, teamsName: null, teamsUsername: null });
     expect(body.matrix.results_released).toEqual({ bell: true, email: true, teams: true });
   });
@@ -86,12 +86,14 @@ describe("without a Teams application", () => {
       { userId: id, email: "kim@gmail.com", source: "login" },
       { userId: id, email: "kim@heig-vd.ch", source: "swissEduIDLinkedAffiliationMail" },
     ]);
+    await server.app.db
+      .insert(userIdpClaims)
+      .values({ userId: id, claims: { swissEduIDLinkedAffiliationMail: "kim@heig-vd.ch" }, affiliations: [] });
     const put = (payload: Payload, h = headers) =>
       server.app.inject({ method: "PUT", url: "/app/api/notifications/email", headers: h, payload });
     const read = await server.app.inject({ method: "GET", url: "/app/api/notifications/settings", headers });
     expect(NotificationSettings.parse(read.json()).email).toEqual({
       address: "kim@heig-vd.ch",
-      choice: null,
       defaultAddress: "kim@heig-vd.ch",
       options: [
         { email: "kim@heig-vd.ch", institutional: true },
@@ -101,7 +103,7 @@ describe("without a Teams application", () => {
 
     const chosen = await put({ email: "kim@gmail.com" });
     expect(chosen.statusCode).toBe(200);
-    expect(NotificationSettings.parse(chosen.json()).email).toMatchObject({ address: "kim@gmail.com", choice: "kim@gmail.com" });
+    expect(NotificationSettings.parse(chosen.json()).email.address).toBe("kim@gmail.com");
 
     const foreign = await put({ email: "someone@else.ch" });
     expect(foreign.statusCode).toBe(400);
@@ -109,7 +111,7 @@ describe("without a Teams application", () => {
     expect((await put({ email: 42 })).statusCode).toBe(400);
 
     const reset = await put({ email: null });
-    expect(NotificationSettings.parse(reset.json()).email).toMatchObject({ address: "kim@heig-vd.ch", choice: null });
+    expect(NotificationSettings.parse(reset.json()).email.address).toBe("kim@heig-vd.ch");
 
     // A session acting as the student reads, never writes (ADR-034).
     const admin = await server.signIn("admin");

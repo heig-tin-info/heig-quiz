@@ -475,7 +475,7 @@ export async function notificationSettings(
       courseSeat,
       github: githubAvailable,
     }),
-    email: email ?? { address: "", choice: null, defaultAddress: "", options: [] },
+    email: email ?? { address: "", defaultAddress: "", options: [] },
     teams: {
       available: teamsAvailable,
       linkedAt: shown?.linkedAt.toISOString() ?? null,

@@ -2734,7 +2734,6 @@ on("POST", "/app/api/notifications/read-all", () => {
 const INSTITUTIONAL_EMAIL = me?.email ?? "lea.rochat@heig-vd.ch";
 const notificationEmail = (choice: string | null): NotificationEmail => ({
   address: choice ?? INSTITUTIONAL_EMAIL,
-  choice,
   defaultAddress: INSTITUTIONAL_EMAIL,
   options: [
     { email: INSTITUTIONAL_EMAIL, institutional: true },

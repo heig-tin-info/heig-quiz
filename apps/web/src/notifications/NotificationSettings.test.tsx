@@ -30,13 +30,11 @@ const LINKED = {
 
 const ONE_ADDRESS: NotificationSettings["email"] = {
   address: "lea@heig.test",
-  choice: null,
   defaultAddress: "lea@heig.test",
   options: [{ email: "lea@heig.test", institutional: false }],
 };
 const TWO_ADDRESSES = (choice: string | null): NotificationSettings["email"] => ({
   address: choice ?? "lea.rochat@heig-vd.ch",
-  choice,
   defaultAddress: "lea.rochat@heig-vd.ch",
   options: [
     { email: "lea.rochat@heig-vd.ch", institutional: true },
@@ -142,6 +140,23 @@ describe("the notification settings", () => {
     await user.selectOptions(select, "lea@gmail.com");
     await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ email: "lea@gmail.com" }));
     await waitFor(() => expect(select).toHaveValue("lea@gmail.com"));
+  });
+
+  it("says where e-mails go, not the institutional default, when no address is institutional", async () => {
+    const email: NotificationSettings["email"] = {
+      address: "lea@gmail.com",
+      defaultAddress: "lea@gmail.com",
+      options: [
+        { email: "lea@gmail.com", institutional: false },
+        { email: "lea@old-school.ch", institutional: false },
+      ],
+    };
+    mockFetch({ [GET]: ok(settings(UNLINKED, TEACHER, email)) });
+    renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
+
+    expect(await screen.findByRole("combobox", { name: "Email for notifications" })).toHaveValue("lea@gmail.com");
+    expect(screen.getByText("Sent to lea@gmail.com.")).toBeVisible();
+    expect(screen.queryByText("Your institutional address by default.")).toBeNull();
   });
 
   it("goes back to the default when the default address is picked", async () => {

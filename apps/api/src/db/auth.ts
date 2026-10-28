@@ -84,7 +84,8 @@ export const users = pgTable(
      * among the account's own (ADR-030, amendment of 2026-10-28); null means
      * the default, the institutional address when one is known. A choice no
      * longer among the account's addresses falls back to the default
-     * (`notificationAddress`).
+     * (`notificationAddress`). An address: a future anonymization clears it
+     * along with `email`.
      */
     notificationEmail: text("notification_email"),
     /**

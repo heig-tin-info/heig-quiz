@@ -24,6 +24,7 @@ import {
   pools,
   teamsLinks,
   userEmails,
+  userIdpClaims,
   users,
 } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
@@ -704,6 +705,7 @@ describe("the delivery job", () => {
   it("mails the account's notification address: the institutional one by default, else the one chosen", async () => {
     const lou = await seedUser("lou@gmail.com");
     await db.insert(userEmails).values({ userId: lou, email: "lou@heig-vd.ch", source: "swissEduIDLinkedAffiliationMail" });
+    await db.insert(userIdpClaims).values({ userId: lou, claims: { swissEduIDLinkedAffiliationMail: "lou@heig-vd.ch" }, affiliations: [] });
     const { deps, mails } = fakes();
     await deliver(deps, { userId: lou, channel: "email", payload: released("Labo") });
     expect(mails.map((m) => m.to)).toEqual(["lou@heig-vd.ch"]);

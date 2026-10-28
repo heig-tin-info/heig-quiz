@@ -840,7 +840,7 @@ describe("the mock's notification address (F-NOTIF-01)", () => {
     const other = before.options.find((o) => !o.institutional)!.email;
     const chosen = await put({ email: other });
     expect(issuesOf(NotificationSettings, chosen.body)).toEqual([]);
-    expect((chosen.body as NotificationSettings).email).toMatchObject({ address: other, choice: other });
+    expect((chosen.body as NotificationSettings).email.address).toBe(other);
     const refused = await put({ email: "someone@else.ch" });
     expect([refused.status, (refused.body as { error: string }).error]).toEqual([400, "email_not_known"]);
     const reset = (await put({ email: null })).body as NotificationSettings;

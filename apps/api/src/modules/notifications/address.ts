@@ -6,8 +6,11 @@
  *
  *  - the options: the login address and every VERIFIED address of the
  *    account (`user_emails`), normalized, once each;
- *  - the default: the first institutional one (`INSTITUTIONAL_MAIL_CLAIMS`,
- *    in that order), else the login address;
+ *  - institutional: what the LAST login asserts (`institutionalAddressesOf`
+ *    over `user_idp_claims`), never the stored `source` of an address — that
+ *    one is frozen at first sight, and an address of a former affiliation
+ *    stays in `user_emails` forever;
+ *  - the default: the first institutional option, else the login address;
  *  - the effective address: the stored choice while it is still an option,
  *    else the default.
  *
@@ -19,59 +22,59 @@ import { and, eq } from "drizzle-orm";
 
 import type { NotificationEmail } from "@quiz/contracts";
 
-import { INSTITUTIONAL_MAIL_CLAIMS } from "../../auth/claims.js";
+import { institutionalAddressesOf } from "../../auth/claims.js";
 import type { Db } from "../../db/client.js";
-import { userEmails, users } from "../../db/schema.js";
+import { userEmails, userIdpClaims, users } from "../../db/schema.js";
 import { normalizeEmail } from "../../identity.js";
 
-const INSTITUTIONAL: readonly string[] = INSTITUTIONAL_MAIL_CLAIMS;
-
-/** The rank of an institutional claim; anything else ranks after them all. */
-const rank = (source: string) => {
-  const i = INSTITUTIONAL.indexOf(source);
-  return i === -1 ? INSTITUTIONAL.length : i;
-};
-
-/**
- * The pure rule: the options, the default and the effective address, from
- * the login address, the verified stored addresses and the stored choice.
- * The options list the institutional addresses first, by rank, then the
- * login address, then the others.
- */
-export function resolveNotificationEmail(
-  login: string,
-  verified: readonly { email: string; source: string }[],
-  chosen: string | null,
-): NotificationEmail {
-  const institutional = new Set<string>();
-  const sorted = [...verified].sort((a, b) => rank(a.source) - rank(b.source));
-  for (const row of sorted) if (rank(row.source) < INSTITUTIONAL.length) institutional.add(normalizeEmail(row.email));
-  const ordered = [
-    ...sorted.filter((r) => rank(r.source) < INSTITUTIONAL.length).map((r) => r.email),
-    login,
-    ...sorted.filter((r) => rank(r.source) === INSTITUTIONAL.length).map((r) => r.email),
-  ];
-  const emails = [...new Set(ordered.map(normalizeEmail))].filter((e) => e !== "");
-  const options = emails.map((email) => ({ email, institutional: institutional.has(email) }));
-  const fallback = options.find((o) => o.institutional)?.email ?? normalizeEmail(login);
-  const choice = chosen !== null && emails.includes(chosen) ? chosen : null;
-  return { address: choice ?? fallback, choice, defaultAddress: fallback, options };
+/** The account's addresses, as the resolver reads them. */
+export interface AddressSources {
+  /** `users.email`, the login address. */
+  login: string;
+  /** The verified addresses of `user_emails`. */
+  verified: readonly string[];
+  /** The institutional addresses of the last login, most trustworthy first. */
+  institutional: readonly string[];
+  /** `users.notification_email`. */
+  chosen: string | null;
 }
 
-/** The account's notification address, its options and its stored choice; null for no account. */
+/**
+ * The pure rule: the effective address, the default and the options. The
+ * institutional options come first, in claim order, then the login address,
+ * then the others.
+ */
+export function resolveNotificationEmail({ login, verified, institutional, chosen }: AddressSources): NotificationEmail {
+  const known = new Set([login, ...verified].map(normalizeEmail).filter((e) => e !== ""));
+  const asserted = institutional.map(normalizeEmail).filter((e) => known.has(e));
+  const emails = [...new Set([...asserted, ...known])];
+  const options = emails.map((email) => ({ email, institutional: asserted.includes(email) }));
+  const defaultAddress = asserted[0] ?? normalizeEmail(login);
+  const address = chosen !== null && known.has(chosen) ? chosen : defaultAddress;
+  return { address, defaultAddress, options };
+}
+
+/** The account's notification address, its default and its options; null for no account. */
 export async function notificationAddress(db: Db, userId: string): Promise<NotificationEmail | null> {
-  const [[user], verified] = await Promise.all([
+  const [[user], verified, [claims]] = await Promise.all([
     db
       .select({ email: users.email, chosen: users.notificationEmail })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1),
     db
-      .select({ email: userEmails.email, source: userEmails.source })
+      .select({ email: userEmails.email })
       .from(userEmails)
       .where(and(eq(userEmails.userId, userId), eq(userEmails.verified, true))),
+    db.select({ claims: userIdpClaims.claims }).from(userIdpClaims).where(eq(userIdpClaims.userId, userId)).limit(1),
   ]);
-  return user ? resolveNotificationEmail(user.email, verified, user.chosen) : null;
+  if (!user) return null;
+  return resolveNotificationEmail({
+    login: user.email,
+    verified: verified.map((r) => r.email),
+    institutional: claims ? institutionalAddressesOf(claims.claims) : [],
+    chosen: user.chosen,
+  });
 }
 
 /**
