@@ -11,6 +11,7 @@ import type { EditTarget } from "./editTarget";
 import { typeLabel } from "../questionTypes";
 import { Alert, ASIDE_MIN_WIDTH, IconButton, pageBox, PaneOrSheet, useMinWidth } from "../ui";
 import { PreviewedQuestion } from "../question/PreviewedQuestion";
+import { DifficultyDots } from "../pool/QuestionTable";
 
 /** The docked preview's width; the page widens by it (`pageBox`), as the pool's does. */
 const PANE_WIDTH = "30rem";
@@ -90,10 +91,19 @@ export function ItemPreview({
       pane={pane}
       width="lg"
       title={item.internalName}
-      subtitle={t("eval.questions.preview.subtitle", {
-        type: typeLabel(t, item.type),
-        n: item.versionNumber,
-      })}
+      subtitle={
+        <span className="inline-flex flex-wrap items-center gap-x-2">
+          {t("eval.questions.preview.subtitle", {
+            type: typeLabel(t, item.type),
+            n: item.versionNumber,
+          })}
+          {/* The list drops its difficulty column while the preview is docked. */}
+          <span className="inline-flex items-center gap-2">
+            <span aria-hidden className="text-fg-faint">·</span>
+            <DifficultyDots value={item.difficulty} />
+          </span>
+        </span>
+      }
       onClose={onClose}
       actions={
         <>
