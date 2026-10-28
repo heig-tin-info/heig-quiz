@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
+import { CheckboxField, FieldCell, NumberField, Segmented, Switch } from "./fields.js";
 
 describe("Segmented", () => {
   const options = [
@@ -183,5 +183,19 @@ describe("CheckboxField", () => {
     fireEvent.click(screen.getByLabelText("Hidden 2"));
     expect(onChange).toHaveBeenCalledWith(true);
     expect(screen.getByText("Hidden").className).toContain("h-8.5");
+  });
+});
+
+describe("Switch", () => {
+  it("is a named switch that flips its state, and stays put when disabled", () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<Switch label="Normalize" checked={false} onChange={onChange} />);
+    const toggle = screen.getByRole("switch", { name: "Normalize" });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(toggle);
+    expect(onChange).toHaveBeenCalledWith(true);
+    rerender(<Switch label="Normalize" checked onChange={onChange} disabled />);
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    expect(toggle).toBeDisabled();
   });
 });

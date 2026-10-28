@@ -53,7 +53,7 @@ export { answeredCount, CORRECTION_SCALE, CorrectionCount, ExpectedAnswers, KeyF
 export { type CriterionLine, PointsByCriterion } from "./criteria.js";
 export { ExpandableCanvas, type ExpandableCanvasProps, type ExpandableCanvasStrings } from "./expand.js";
 export { Button, IconButton, iconButtonClass, type IconButtonSize, Select, TextInput } from "./controls.js";
-export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
+export { CheckboxField, FieldCell, NumberField, Segmented, Switch } from "./fields.js";
 export { prefersReducedMotion, useMediaQuery } from "./media.js";
 export {
   AnswerChip,

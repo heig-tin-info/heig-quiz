@@ -3,7 +3,9 @@
  * criteria (ADR-118), the grading instructions (folded beside criteria, an
  * old barème to convert without them) and an optional model answer
  * — and, in the host's right column, the two settings of the student's
- * field, its format and its limit, and the points the criteria are worth.
+ * field, its format and its limit, and the points the criteria are worth:
+ * their sum, or a total they share by weight once normalized (ADR-118,
+ * amendment of 2026-10-27).
  *
  * Controlled and offline, like every editor: it reads `config`, emits a whole
  * new config through `onChange` and never fetches. An invalid draft is a
@@ -33,6 +35,7 @@ import {
   RowListHeader,
   sectionClass,
   Segmented,
+  Switch,
   textareaClass,
   useWandRunner,
   WandIcon,
@@ -40,17 +43,20 @@ import {
 
 import {
   CHARS_PER_A4_PAGE,
-  criteriaPoints,
+  essayPoints,
   pagesText,
   RICH_MAX_CHARS,
   RICH_MAX_CRITERIA,
   RICH_MAX_CRITERION_PROMPT,
   RICH_MAX_CRITERION_TITLE,
+  RICH_MAX_TOTAL_POINTS,
   RICH_MAX_WEIGHT,
+  RICH_MIN_TOTAL_POINTS,
   RICH_TARGETS,
   type RichConfig,
   type RichCriterion,
   type RichFormat,
+  weightSum,
 } from "./schema.js";
 import { richEditorStrings, type RichEditorStringKey } from "./strings.js";
 
@@ -126,11 +132,26 @@ export function RichEditor({
   });
   const setCriteria = (next: RichCriterion[]) => patch({ criteria: next });
   /** Optional fields are ABSENT when empty, never `""` or `0`: the schema reads absence. */
-  const withOptional = <K extends "reference" | "maxChars">(key: K, value: RichConfig[K] | undefined) => {
+  const withOptional = <K extends "reference" | "maxChars" | "totalPoints">(key: K, value: RichConfig[K] | undefined) => {
     const next = { ...config };
     if (value === undefined) delete next[key];
     else next[key] = value;
     onChange(next);
+  };
+  /**
+   * Normalized, the numbers are weights sharing `totalPoints`; otherwise they
+   * are the points. Without criteria a stale `normalize` shows nowhere.
+   */
+  const normalized = config.normalize === true;
+  const weighted = normalized && criteria.length > 0;
+  /**
+   * The switch never rescales a weight: on, the total starts at the weights'
+   * sum, so nothing changes at that instant; off, the total is dropped and
+   * the question is worth the sum again.
+   */
+  const setNormalize = (on: boolean) => {
+    const { totalPoints: _t, ...rest } = config;
+    onChange(on ? { ...rest, normalize: true, totalPoints: weightSum(criteria) } : { ...rest, normalize: false });
   };
 
   return (
@@ -158,7 +179,7 @@ export function RichEditor({
           addDisabled={disabled || criteria.length >= RICH_MAX_CRITERIA}
           onAdd={() => setCriteria([...criteria, { id: newId(), title: "", weight: 1, prompt: "" }])}
         />
-        <p className={hint}>{s.criteriaHint}</p>
+        <p className={hint}>{weighted ? s.criteriaHint : s.criteriaHintPoints}</p>
         <RowList items={criteria}>
           {(criterion, i) => {
             const n = i + 1;
@@ -173,8 +194,8 @@ export function RichEditor({
                   nameMaxLength={RICH_MAX_CRITERION_TITLE}
                   onNameChange={(title) => setCriteria(patchAt(criteria, i, { title }))}
                   pointsId={`${id}-weight-${i}`}
-                  pointsLabel={s.criterionWeight}
-                  pointsAriaLabel={fmt(s.criterionWeightAria, { n })}
+                  pointsLabel={weighted ? s.criterionWeight : s.criterionPoints}
+                  pointsAriaLabel={fmt(weighted ? s.criterionWeightAria : s.criterionPointsAria, { n })}
                   points={criterion.weight}
                   pointsMin={1}
                   pointsMax={RICH_MAX_WEIGHT}
@@ -298,8 +319,38 @@ export function RichEditor({
           <IssueList issues={issuesAt(issues, "maxChars")} />
         </div>
 
+        {/* Weighting (ADR-118, amendment of 2026-10-27): only beside criteria,
+            whose numbers it reads as points or as weights. */}
         <div className="flex flex-col gap-1.5">
-          <span className={label}>{fmt(s.defaultPoints, { n: criteriaPoints(criteria) })}</span>
+          {criteria.length > 0 && (
+            <>
+              <span className={label}>{s.weighting}</span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-fg">{s.normalize}</span>
+                <Switch label={s.normalize} checked={normalized} disabled={disabled} onChange={setNormalize} />
+              </div>
+              <p className={hint}>{s.normalizeHint}</p>
+            </>
+          )}
+          {weighted ? (
+            <>
+              <NumberField
+                id={`${id}-total`}
+                label={s.totalPoints}
+                size="md"
+                min={RICH_MIN_TOTAL_POINTS}
+                max={RICH_MAX_TOTAL_POINTS}
+                step={0.5}
+                value={config.totalPoints ?? null}
+                disabled={disabled}
+                onChange={(totalPoints) => withOptional("totalPoints", totalPoints)}
+                onClear={() => withOptional("totalPoints", undefined)}
+              />
+              <IssueList issues={issuesAt(issues, "totalPoints")} />
+            </>
+          ) : (
+            <span className={label}>{fmt(s.defaultPoints, { n: essayPoints(config) })}</span>
+          )}
           <p className={hint}>{s.defaultPointsHint}</p>
         </div>
 

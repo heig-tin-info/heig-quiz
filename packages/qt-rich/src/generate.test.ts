@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { criteriaFromRubricTarget, criterionPromptTarget, mergeRich, richGenerator } from "./generate.js";
-import { emptyRichDraft } from "./schema.js";
+import { emptyRichDraft, RichConfigSchema } from "./schema.js";
 
 describe("mergeRich", () => {
   it("fills an empty model answer and an empty rubric", () => {
@@ -20,6 +20,13 @@ describe("mergeRich", () => {
     const long = mergeRich(before, { reference: "x".repeat(60_000), rubric: "y".repeat(30_000), criteria: [] });
     expect(long.reference).toHaveLength(50_000);
     expect(long.rubric).toHaveLength(20_000);
+  });
+
+  it("turns the switch off with proposed criteria, whose weights are points", () => {
+    const stale = { ...emptyRichDraft(), prompt: "Why?", normalize: true, totalPoints: 9 };
+    const merged = mergeRich(stale, { reference: "", rubric: "", criteria: [{ title: "Cause", weight: 2, prompt: "" }] });
+    expect(merged.normalize).toBe(false);
+    expect("totalPoints" in merged).toBe(false);
   });
 
   it("fills criteria only when there are none, each with a fresh id and a whole weight", () => {
@@ -128,5 +135,28 @@ describe("the essay's targets (ADR-118)", () => {
       const none = { criteria: [{ title: " ", weight: 1, prompt: "" }], rubric: "" };
       expect(target.place(legacy, { kind: "criteriaFromRubric" }, none)).toEqual(legacy);
     });
+
+    it("keeps the weights as points unless the rubric's total differs from their sum (ADR-118, amendment of 2026-10-27)", () => {
+      const reply = (totalPoints?: number) => ({
+        criteria: [
+          { title: "The stack", weight: 3, prompt: "" },
+          { title: "The signal", weight: 1, prompt: "" },
+        ],
+        rubric: "",
+        ...(totalPoints === undefined ? {} : { totalPoints }),
+      });
+      const points = target.place(legacy, { kind: "criteriaFromRubric" }, reply());
+      expect(points.normalize).toBe(false);
+      expect("totalPoints" in points).toBe(false);
+      const same = target.place(legacy, { kind: "criteriaFromRubric" }, reply(4));
+      expect(same.normalize).toBe(false);
+      expect("totalPoints" in same).toBe(false);
+      // A rubric in half points (1.5 + 0.5): the weights doubled, the stated total kept.
+      const halves = target.place(legacy, { kind: "criteriaFromRubric" }, reply(2));
+      expect(halves).toMatchObject({ normalize: true, totalPoints: 2 });
+      expect(halves.criteria.map((c) => c.weight)).toEqual([3, 1]);
+      expect(RichConfigSchema.safeParse(halves).success).toBe(true);
+    });
+
   });
 });

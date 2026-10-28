@@ -17,7 +17,7 @@ import { ConfigMigrationError, zeroGrade, type QuestionTypeServer } from "@quiz/
 import { richGenerator } from "./generate.js";
 import {
   countChars,
-  criteriaPoints,
+  essayPoints,
   emptyRichDraft,
   isRichAnswered,
   RICH_CONFIG_VERSION,
@@ -66,8 +66,11 @@ export const richServer: QuestionTypeServer<
     throw new ConfigMigrationError("rich", fromVersion, RICH_CONFIG_VERSION, "unknown source version");
   },
 
-  /** The sum of the criteria's weights, else 1 (ADR-118); the evaluation item may say otherwise. */
-  defaultPoints: (config) => criteriaPoints(config.criteria),
+  /**
+   * The criteria's points, or the normalized total, else 1 (ADR-118 and its
+   * amendment of 2026-10-27); the evaluation item may say otherwise.
+   */
+  defaultPoints: essayPoints,
 
   /** Nothing to shuffle: one statement, one field. */
   shuffleable: () => false,

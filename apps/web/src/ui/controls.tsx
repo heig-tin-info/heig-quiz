@@ -13,6 +13,7 @@ import {
   Button as ButtonBase,
   Segmented,
   Select as SelectBase,
+  Switch,
   TextInput,
   textareaClass,
   type ButtonSize,
@@ -498,47 +499,12 @@ export function RadioRow<V extends string | number>({
   );
 }
 
-/** On/off switch (settings rows). Accent when on: it is a state, not an action. */
-export function Switch({
-  checked,
-  onChange,
-  disabled,
-  label,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={cx(
-        "relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors duration-150 disabled:opacity-50",
-        checked ? "bg-success" : "bg-line-strong",
-      )}
-    >
-      <span
-        className={cx(
-          "absolute left-0.5 size-5 rounded-full bg-white shadow-[0_1px_2px_rgb(0_0_0/0.2)] transition-transform duration-150 ease-out-emphasized",
-          checked ? "translate-x-4" : "translate-x-0",
-        )}
-      />
-    </button>
-  );
-}
-
 /*
- * The segmented control (`Segmented`) is written once, in `@quiz/ui`: the
- * question editors use the very same one, their `wrap` and `labelledBy`
- * beside the app's `size` and `label`.
+ * The segmented control (`Segmented`) and the on/off `Switch` are written
+ * once, in `@quiz/ui`: the question editors use the very same ones, their
+ * `wrap` and `labelledBy` beside the app's `size` and `label`.
  */
-export { Segmented };
+export { Segmented, Switch };
 
 /**
  * One option of a `Segmented` that switches between pictures of the same

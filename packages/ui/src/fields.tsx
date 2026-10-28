@@ -1,7 +1,7 @@
 /**
  * The small form controls the editors are made of (audit P-01d, h, j, n):
- * a segmented control, a labelled cell, a labelled number field and a
- * checkbox with its word. Native elements every time — the keyboard, the
+ * a segmented control, a labelled cell, a labelled number field, a
+ * checkbox with its word and an on/off switch. Native elements every time — the keyboard, the
  * grouping and the announcement come from the platform.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -305,5 +305,44 @@ export function CheckboxField({
       />
       {label}
     </label>
+  );
+}
+
+/**
+ * On/off switch (settings rows) — `apps/web` re-exports this one. Success
+ * green when on: it is a state, not an action. Its `label` names it for
+ * assistive technology; the row beside it shows the visible words.
+ */
+export function Switch({
+  checked,
+  onChange,
+  disabled,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean | undefined;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cx(
+        "relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors duration-150 disabled:opacity-50",
+        checked ? "bg-success" : "bg-line-strong",
+      )}
+    >
+      <span
+        className={cx(
+          "absolute left-0.5 size-5 rounded-full bg-white shadow-[0_1px_2px_rgb(0_0_0/0.2)] transition-transform duration-150 ease-out-emphasized",
+          checked ? "translate-x-4" : "translate-x-0",
+        )}
+      />
+    </button>
   );
 }
