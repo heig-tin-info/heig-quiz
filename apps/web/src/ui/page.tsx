@@ -88,6 +88,14 @@ export const PAGE_COLUMN = { cap: "70rem", gutter: "2rem" } as const;
 /** The gap between a page's content and the pane docked beside it. */
 export const PANE_GAP = "1.5rem";
 
+/**
+ * The width of a question's preview docked beside its list (the pool's, an
+ * evaluation's or a template's): a share of the row that grows with the
+ * window, within bounds. The list drops its read-only columns while it is
+ * docked, so the room a wide screen has goes to the question being read.
+ */
+export const PREVIEW_PANE = "clamp(30rem, 45%, 48rem)";
+
 const READING = `(${PAGE_COLUMN.cap} - 2 * ${PAGE_COLUMN.gutter})`;
 
 /**
