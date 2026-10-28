@@ -70,26 +70,32 @@ export function PreviewPoints({
     });
   };
 
-  const shown = sent.current !== NONE;
+  const shown = graded !== null || grade.isPending;
   useEffect(() => {
     if (!shown || sent.current === answer) return;
-    const timer = setTimeout(() => send(answer), REGRADE_DEBOUNCE_MS);
+    // A click on Show the points meanwhile has sent this answer already.
+    const timer = setTimeout(() => sent.current !== answer && send(answer), REGRADE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
     // `send` is rebuilt on every render; the answer alone re-arms the timer.
   }, [shown, answer]);
 
   const stale = graded !== null && graded.answer !== answer;
+  // The button is back after a failure: it then carries the one spinner.
+  const retry = graded === null || "error" in graded;
   const item = graded && "correction" in graded ? graded.correction.items.find((i) => i.itemId === itemId) : undefined;
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      {graded === null || "error" in graded ? (
-        <Button variant="ghost" size="sm" onClick={() => send(answer)} loading={grade.isPending}>
+      {retry ? (
+        <Button variant="ghost" size="sm" onClick={() => send(answer)} loading={grade.isPending || stale}>
           <Calculator /> {t("preview.points.show")}
         </Button>
       ) : null}
       {graded ? (
+        // The points change without a click: announced once settled.
         <span
+          role="status"
+          aria-live="polite"
           aria-busy={stale}
           className={cx("inline-flex items-center gap-1.5 transition-opacity", stale && "opacity-50")}
         >
@@ -106,7 +112,7 @@ export function PreviewPoints({
           ) : "error" in graded ? (
             <span className="text-[13px] text-danger">{apiErrorMessage(graded.error, t("preview.points.failed"))}</span>
           ) : null}
-          {stale ? <Loader2 aria-hidden className="size-3.5 animate-spin text-fg-muted" /> : null}
+          {stale && !retry ? <Loader2 aria-hidden className="size-3.5 animate-spin text-fg-muted" /> : null}
         </span>
       ) : null}
     </div>
