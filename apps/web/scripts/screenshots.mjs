@@ -1404,6 +1404,8 @@ const scenes = [
   { name: "editor-suggest-concepts-create", role: "teacher", path: "/questions/q2", act: async (p) => { await p.getByRole("button", { name: /suggest concepts|suggérer des notions/i }).click(); await p.getByRole("dialog").getByRole("button", { name: /^(Create…|Créer…)$/ }).click(); await p.waitForTimeout(600); } },
   // Opened from the grading screen: the trail is that page's own, then the question.
   { name: "editor-from-grading", role: "teacher", path: "/questions/q2?fromGrading=11111111-1111-4111-8111-111111111111" },
+  // Opened from the evaluation preview (#959): the trail runs through the preview, and Back to the preview.
+  { name: "editor-from-preview", role: "teacher", path: "/questions/q2?fromPreview=11111111-1111-4111-8111-111111111111" },
   // A choice emptied: the autosave's issue, on the field and named under the list.
   { name: "editor-mcq-issues", role: "teacher", path: "/questions/q2", settle: 3000, act: async (p) => { await p.getByRole("textbox", { name: "Text of choice B" }).fill(""); await p.waitForTimeout(2500); } },
   // "Generate answers" (ADR-059): the proposal merged, with its Undo; and the

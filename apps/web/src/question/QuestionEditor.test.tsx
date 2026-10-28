@@ -888,6 +888,91 @@ describe("QuestionEditor — opened from an evaluation (#127)", () => {
     );
   });
 
+  /*
+   * #959: opened by the evaluation preview in a tab of its own. The way back
+   * closes that tab (the walk and its answers live in the preview's); a tab
+   * the browser keeps open falls back to the preview's address.
+   */
+  const fromPreview = () => {
+    const base = makeEvaluationDetail();
+    const { calls } = mockFetch(
+      routes(mcqDetail(), {
+        [`GET /app/api/evaluations/${EVAL}`]: ok({
+          ...base,
+          evaluation: { ...base.evaluation, id: EVAL, title: "Test 0", classroomId: "r1" },
+        }),
+        "GET /app/api/classrooms/r1": ok({
+          id: "r1",
+          name: "PRG1-2026",
+          course: { id: "c1", code: "PRG1", name: "Programmation C" },
+          roster: [],
+        }),
+      }),
+    );
+    const navigate = vi.fn();
+    renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />, {
+      route: `/questions/q1?fromPreview=${EVAL}`,
+    });
+    return { navigate, calls };
+  };
+
+  it("closes its tab to go back to the preview, under the preview in the trail", async () => {
+    const user = userEvent.setup();
+    const close = vi.spyOn(window, "close").mockImplementation(() => {});
+    // jsdom keeps the window open: this tab "closes" for the browser.
+    const own = Object.getOwnPropertyDescriptor(window, "closed");
+    Object.defineProperty(window, "closed", { configurable: true, get: () => true });
+    const { navigate } = fromPreview();
+    const trail = await screen.findByRole("navigation", { name: "Breadcrumb" });
+    await waitFor(() =>
+      expect(within(trail).getAllByRole("listitem").map((li) => li.textContent).filter(Boolean)).toEqual([
+        "Courses",
+        "PRG1",
+        "PRG1-2026",
+        "Test 0",
+        "Preview",
+        "ptr-null-check",
+      ]),
+    );
+    expect(within(trail).getByRole("link", { name: "Preview" })).toHaveAttribute("href", `/evaluations/${EVAL}/preview`);
+
+    await user.click(screen.getByRole("button", { name: "Back to the preview" }));
+    await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(navigate).not.toHaveBeenCalled();
+
+    // The trail's Preview is the same way back.
+    await user.click(within(trail).getByRole("link", { name: "Preview" }));
+    await waitFor(() => expect(close).toHaveBeenCalledTimes(2));
+    close.mockRestore();
+    if (own) Object.defineProperty(window, "closed", own);
+    else delete (window as { closed?: boolean }).closed;
+  });
+
+  it("leads to the preview when its tab cannot close", async () => {
+    const user = userEvent.setup();
+    const close = vi.spyOn(window, "close").mockImplementation(() => {});
+    const { navigate } = fromPreview();
+    await user.click(await screen.findByRole("button", { name: "Back to the preview" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "evaluationPreview", id: EVAL }));
+    expect(close).toHaveBeenCalled();
+    close.mockRestore();
+  });
+
+  it("closes its tab once published: the preview offers the new version", async () => {
+    const user = userEvent.setup();
+    const close = vi.spyOn(window, "close").mockImplementation(() => {});
+    const { navigate, calls } = fromPreview();
+    await user.click(await screen.findByRole("button", { name: "Publish" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(close).toHaveBeenCalled());
+    expect(calls.some((c) => c.url === "/app/api/questions/q1/publish")).toBe(true);
+    // jsdom keeps the window open: the fallback leads to the preview.
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "evaluationPreview", id: EVAL }));
+    close.mockRestore();
+  });
+
   it("stays in the editor once published from anywhere else", async () => {
     const user = userEvent.setup();
     const { calls } = mockFetch(routes(mcqDetail()));

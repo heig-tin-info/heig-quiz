@@ -96,9 +96,10 @@ export function usePreviewEdit({
 
   const openEditor = useCallback(() => {
     if (!row) return;
-    // `noopener`, like every other `target="_blank"`; the walk stays in this tab.
+    // `noopener`, like every other `target="_blank"`; the walk stays in this
+    // tab. `fromPreview`: the editor's way back closes its own tab (#959).
     window.open(
-      routeToPath({ view: "question", id: row.questionId, from: evaluationId }),
+      routeToPath({ view: "question", id: row.questionId, fromPreview: evaluationId }),
       "_blank",
       "noopener",
     );

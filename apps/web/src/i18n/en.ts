@@ -1922,6 +1922,7 @@ export const en = {
   "question.try.failed": "The answer could not be graded.",
   "question.try.invalid": "Finish the draft before trying it.",
   "question.preview": "Student preview",
+  "question.backToPreview": "Back to the preview",
   "question.previewFailed": "The preview could not be built.",
   "question.preview.show": "Preview {name}",
   "question.preview.back": "Back to the list",
