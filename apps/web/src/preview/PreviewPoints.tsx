@@ -7,26 +7,33 @@
  * It is the preview's own grading call (`POST /preview/grade`), sent with
  * the one answer of the question on screen: the server grades it exactly as
  * it grades a hand-in, the evaluation's policies included, and stores
- * nothing. The points answer ONE answer: once it changes, or the teacher
- * moves to another question, they are stale and the button comes back.
+ * nothing. Once asked, the points stay for that question (issue #957): each
+ * change of the answer grades it again, debounced, and until the new points
+ * arrive the old ones are dimmed beside a spinner — never shown as if they
+ * were the new answer's. A failure shows its error in their place, with the
+ * button to try again. Another question is another component (its `key` in
+ * `EvaluationPreviewPage`): it starts with the button and no points.
  */
 import { useMutation } from "@tanstack/react-query";
-import { Calculator } from "lucide-react";
+import { Calculator, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { PreviewGradeBody, type PreviewCorrection, type PreviewItemStatus, ANSWER_COORDINATES } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
-import { Badge, Button } from "../ui";
+import { Badge, Button, cx } from "../ui";
 import { STATUS_LABEL } from "./PreviewCorrection";
 
-interface Graded {
-  itemId: string;
-  /** The answer the points were computed for, compared by reference. */
-  answer: unknown;
-  correction: PreviewCorrection;
-}
+/** The pause after the last change of the answer before it is graded again. */
+export const REGRADE_DEBOUNCE_MS = 400;
+
+/** The last settled grading, and the answer it was for (compared by reference). */
+type Graded = { answer: unknown } & ({ correction: PreviewCorrection } | { error: unknown });
+
+/** No answer sent yet: distinct from `undefined`, a question never opened. */
+const NONE = Symbol("none");
 
 export function PreviewPoints({
   evaluationId,
@@ -41,45 +48,65 @@ export function PreviewPoints({
   answer: unknown;
 }) {
   const t = useT();
+  const [graded, setGraded] = useState<Graded | null>(null);
+  const sent = useRef<unknown>(NONE);
   const grade = useMutation({
-    mutationFn: async (input: { itemId: string; answer: unknown }): Promise<Graded> => {
-      const answers = input.answer === undefined ? {} : { [input.itemId]: input.answer };
-      const correction = await api<PreviewCorrection>(
-        `/app/api/evaluations/${evaluationId}/preview/grade`,
-        { method: "POST", body: JSON.stringify(PreviewGradeBody.parse({ seed, answers, coordinates: ANSWER_COORDINATES })) },
-      );
-      return { ...input, correction };
+    mutationFn: (input: unknown) => {
+      const answers = input === undefined ? {} : { [itemId]: input };
+      return api<PreviewCorrection>(`/app/api/evaluations/${evaluationId}/preview/grade`, {
+        method: "POST",
+        body: JSON.stringify(PreviewGradeBody.parse({ seed, answers, coordinates: ANSWER_COORDINATES })),
+      });
     },
   });
 
-  const fresh =
-    grade.data && grade.data.itemId === itemId && grade.data.answer === answer
-      ? grade.data.correction.items.find((i) => i.itemId === itemId)
-      : undefined;
+  // Per-call callbacks fire for the latest call only: a slow answer to an
+  // older one never overwrites the newer.
+  const send = (input: unknown) => {
+    sent.current = input;
+    grade.mutate(input, {
+      onSuccess: (correction) => setGraded({ answer: input, correction }),
+      onError: (error) => setGraded({ answer: input, error }),
+    });
+  };
+
+  const shown = sent.current !== NONE;
+  useEffect(() => {
+    if (!shown || sent.current === answer) return;
+    const timer = setTimeout(() => send(answer), REGRADE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // `send` is rebuilt on every render; the answer alone re-arms the timer.
+  }, [shown, answer]);
+
+  const stale = graded !== null && graded.answer !== answer;
+  const item = graded && "correction" in graded ? graded.correction.items.find((i) => i.itemId === itemId) : undefined;
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => grade.mutate({ itemId, answer })}
-        loading={grade.isPending}
-      >
-        <Calculator /> {t("preview.points.show")}
-      </Button>
-      {fresh ? (
-        fresh.status === "graded" && fresh.points !== null ? (
-          <span className="text-[13px] font-semibold tabular-nums">
-            {t("preview.points.value", { points: formatPoints(fresh.points), max: fresh.maxPoints })}
-          </span>
-        ) : (
-          <Badge tone={fresh.status === "no_key" || fresh.status === "manual" ? "zinc" : "amber"}>
-            {t(STATUS_LABEL[fresh.status as Exclude<PreviewItemStatus, "graded">])}
-          </Badge>
-        )
-      ) : grade.isError && grade.variables?.itemId === itemId && grade.variables.answer === answer ? (
-        <span className="text-[13px] text-danger">
-          {apiErrorMessage(grade.error, t("preview.points.failed"))}
+      {graded === null || "error" in graded ? (
+        <Button variant="ghost" size="sm" onClick={() => send(answer)} loading={grade.isPending}>
+          <Calculator /> {t("preview.points.show")}
+        </Button>
+      ) : null}
+      {graded ? (
+        <span
+          aria-busy={stale}
+          className={cx("inline-flex items-center gap-1.5 transition-opacity", stale && "opacity-50")}
+        >
+          {item ? (
+            item.status === "graded" && item.points !== null ? (
+              <span className="text-[13px] font-semibold tabular-nums">
+                {t("preview.points.value", { points: formatPoints(item.points), max: item.maxPoints })}
+              </span>
+            ) : (
+              <Badge tone={item.status === "no_key" || item.status === "manual" ? "zinc" : "amber"}>
+                {t(STATUS_LABEL[item.status as Exclude<PreviewItemStatus, "graded">])}
+              </Badge>
+            )
+          ) : "error" in graded ? (
+            <span className="text-[13px] text-danger">{apiErrorMessage(graded.error, t("preview.points.failed"))}</span>
+          ) : null}
+          {stale ? <Loader2 aria-hidden className="size-3.5 animate-spin text-fg-muted" /> : null}
         </span>
       ) : null}
     </div>

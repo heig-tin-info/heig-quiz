@@ -229,9 +229,74 @@ describe("EvaluationPreviewPage", () => {
     // Still the walk, not the correction.
     expect(screen.queryByRole("heading", { name: "Preview correction" })).toBeNull();
 
-    // Another answer, stale points: they go away until asked again.
+    // Asked once, the points replace the button.
+    expect(screen.queryByRole("button", { name: "Show the points" })).toBeNull();
+  });
+
+  it("keeps the points shown and grades each new answer again, debounced", async () => {
+    const user = flowingClock();
+    // The second answer, `*x`, is worth nothing; its grading waits for the test.
+    const second = (body: unknown) =>
+      (body as { answers?: Record<string, { selected: number[] }> } | null)?.answers?.[I1]?.selected[0] === 1;
+    const zero = correction(5);
+    zero.items[0] = { ...zero.items[0]!, points: 0 };
+    const { calls, fetchMock } = mockFetch({
+      [`POST ${URL}`]: ok(preview(5)),
+      [`POST ${URL}/grade`]: (call) => ok(second(call.body) ? zero : correction(5)),
+    });
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const reply = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => {
+      const response = await reply(input, init);
+      if (second(calls.at(-1)!.body)) await held;
+      return response;
+    });
+    renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
+    await user.click(await screen.findByRole("radio", { name: "&x" }));
+    await user.click(screen.getByRole("button", { name: "Show the points" }));
+    expect(await screen.findByText("This question: 2 / 2 points")).toBeInTheDocument();
+    const gradings = () => calls.filter((c) => c.url === `${URL}/grade`);
+    expect(gradings()).toHaveLength(1);
+
+    // Another answer: the old points stay, marked as updating, and nothing is
+    // sent before the pause.
     await user.click(screen.getByRole("radio", { name: "*x" }));
+    const old = screen.getByText("This question: 2 / 2 points");
+    expect(old.parentElement).toHaveAttribute("aria-busy", "true");
+    expect(gradings()).toHaveLength(1);
+
+    await elapse(400);
+    expect(gradings()).toHaveLength(2);
+    expect(gradings()[1]).toMatchObject({ body: { answers: { [I1]: { selected: [1] } } } });
+    // Still in flight: still marked.
+    expect(screen.getByText("This question: 2 / 2 points").parentElement).toHaveAttribute("aria-busy", "true");
+
+    release();
+    const fresh = await screen.findByText("This question: 0 / 2 points");
+    expect(fresh.parentElement).toHaveAttribute("aria-busy", "false");
     expect(screen.queryByText("This question: 2 / 2 points")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show the points" })).toBeNull();
+  });
+
+  it("shows a failed regrade in place of the points", async () => {
+    const user = flowingClock();
+    let calls = 0;
+    mockFetch({
+      [`POST ${URL}`]: ok(preview(5)),
+      [`POST ${URL}/grade`]: () => ((calls += 1) === 1 ? ok(correction(5)) : fail(500, { message: "The grader is down." })),
+    });
+    renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
+    await user.click(await screen.findByRole("radio", { name: "&x" }));
+    await user.click(screen.getByRole("button", { name: "Show the points" }));
+    expect(await screen.findByText("This question: 2 / 2 points")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "*x" }));
+    await elapse(400);
+    expect(await screen.findByText("The grader is down.")).toBeInTheDocument();
+    expect(screen.queryByText("This question: 2 / 2 points")).toBeNull();
+    // The button comes back to try again.
+    expect(screen.getByRole("button", { name: "Show the points" })).toBeInTheDocument();
   });
 
   it("stands the question's tools beside its points on a wide screen", async () => {
