@@ -1289,7 +1289,7 @@ const scenes = [
     await p.waitForTimeout(500);
   } },
   // A click on a row shows the question as a student reads it: docked beside
-  // the list from 1280 px (the table drops its low-priority columns), in the
+  // the list from 1280 px (the table drops concepts, difficulty and version), in the
   // list's place below. Run at 1920, 1440 and 1024 to see all three.
   { name: "pool-preview", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await p.getByRole("table").getByText("ptr-arith-01", { exact: true }).click();
