@@ -216,20 +216,20 @@ const scenes = [
   // circuit question from a pool the course does not link — its settings tab
   // with the advanced options open, a new (empty) one, and an unknown id.
   { name: "template-new", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => { await p.getByRole("button", { name: /^(new template|nouveau modèle)$/i }).first().click(); } },
-  { name: "template-editor", role: "teacher", path: "/courses/c1", act: openTemplate },
-  // A click on a row docks its student preview beside the list, which keeps
-  // its concepts and difficulty columns.
-  { name: "template-editor-preview", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => {
+  { name: "template-editor", role: "teacher", path: "/courses/c1/templates", act: openTemplate },
+  // A click on a row docks its student preview beside the list, which
+  // drops its concepts, difficulty and version columns to make room.
+  { name: "template-editor-preview", role: "teacher", path: "/courses/c1/templates", fold: true, act: async (p) => {
       await openTemplate(p);
-      await p.locator("ul.divide-y > li").first().click({ position: { x: 300, y: 30 } });
+      await p.getByRole("button", { name: /^(preview|aperçu) /i }).first().click();
       await p.waitForTimeout(600);
     } },
-  { name: "template-editor-settings", role: "teacher", path: "/courses/c1", act: async (p) => {
+  { name: "template-editor-settings", role: "teacher", path: "/courses/c1/templates", act: async (p) => {
       await openTemplate(p);
       await p.getByRole("tab", { name: /^(settings|réglages)$/i }).click();
       await p.getByRole("button", { name: /^(advanced options|options avancées)$/i }).click();
     } },
-  { name: "template-editor-picker", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => {
+  { name: "template-editor-picker", role: "teacher", path: "/courses/c1/templates", fold: true, act: async (p) => {
       await openTemplate(p);
       await p.getByRole("button", { name: /^(add questions|ajouter des questions)$/i }).first().click();
       // The question looked at (issue #207), docked beside the list at 1440.

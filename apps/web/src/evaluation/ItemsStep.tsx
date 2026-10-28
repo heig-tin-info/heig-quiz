@@ -111,6 +111,8 @@ const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 
  * Beside the name, the question's concepts and difficulty — read, never set
  * here — are the first columns to go when the list narrows (concepts, then
  * difficulty), measured on the list's own width, as `T`'s priorities are.
+ * While the preview is docked, they and the version leave the rows: the
+ * preview's subtitle already says the version and the difficulty.
  */
 
 /** What `PATCH …/items/:itemId` accepts, as the client writes it. */
@@ -323,6 +325,7 @@ function ItemCard({
   index,
   concepts,
   shown,
+  docked,
   stale,
   locked,
   last,
@@ -344,6 +347,8 @@ function ItemCard({
   concepts: readonly ConceptRef[];
   /** This row is the one the preview shows. */
   shown: boolean;
+  /** A preview is docked beside the list: the read-only columns give it their room. */
+  docked: boolean;
   stale: boolean;
   locked: boolean;
   last: boolean;
@@ -431,18 +436,22 @@ function ItemCard({
           </span>
           <span className="text-xs text-fg-faint">{typeLabel(t, item.type)}</span>
         </span>
-        {/* The literal `@` classes of the list's container (`@container` on the ul). */}
-        <span className="hidden w-48 shrink-0 @4xl:block">
-          {concepts.length === 0 ? (
-            <Dash className="text-sm" />
-          ) : (
-            <ConceptNames concepts={concepts} />
-          )}
-        </span>
-        <span className="hidden w-14 shrink-0 @2xl:block">
-          <DifficultyDots value={item.difficulty} />
-        </span>
-        <VersionCell item={item} stale={stale} t={t} />
+        {docked ? null : (
+          <>
+            {/* The literal `@` classes of the list's container (`@container` on the ul). */}
+            <span className="hidden w-48 shrink-0 @4xl:block">
+              {concepts.length === 0 ? (
+                <Dash className="text-sm" />
+              ) : (
+                <ConceptNames concepts={concepts} />
+              )}
+            </span>
+            <span className="hidden w-14 shrink-0 @2xl:block">
+              <DifficultyDots value={item.difficulty} />
+            </span>
+            <VersionCell item={item} stale={stale} t={t} />
+          </>
+        )}
         <span className="flex shrink-0 items-center gap-1">
           <PointsField item={item} disabled={locked} onCommit={onPoints} />
           {/* A pressed chip, secondary to the points it qualifies (ADR-052). */}
@@ -781,6 +790,7 @@ export function ItemsStep({
                         index={index}
                         concepts={detail.concepts[item.questionId] ?? []}
                         shown={item.id === pane.shown}
+                        docked={previewed !== null && pane.pane !== null}
                         stale={stale.has(item.id)}
                         locked={locked}
                         last={index === items.length - 1}
