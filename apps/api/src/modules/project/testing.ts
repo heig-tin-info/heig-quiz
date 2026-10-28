@@ -23,7 +23,8 @@
  * commit listing from a sha (`?sha=`), and a commit by a given author.
  * From #917, every `POST /git/commits` body recorded (`apiCommits`) and its
  * commit made as GitHub makes a signed one (App author, GitHub committer),
- * and a ref deleted (the sync's temporary ref).
+ * and a ref created or deleted (a build's or a sync's temporary ref); an
+ * organization's ruleset refusing a forced update (`linearOrgs`).
  * Test support only; nothing in the application imports it.
  */
 import { execFileSync } from "node:child_process";
@@ -91,6 +92,8 @@ export interface RepoWorld {
   release: (ok: boolean) => void;
   /** While true, GitHub serves no ruleset: the free plan's 403 "Upgrade to GitHub Pro". */
   freePlan: boolean;
+  /** Organizations whose ruleset refuses every non-fast-forward update of a branch, forced or not (Info1-MI-2026). */
+  linearOrgs: Set<string>;
   /** The rulesets of each repository, by `org/name`. */
   rulesets: Map<string, { id: number; name: string }[]>;
   /** The archived repositories (M3-05a): read-only until a `PATCH` un-archives them. */
@@ -280,13 +283,22 @@ export function repoWorld(): RepoWorld {
       world.git(fullName, "update-ref", "-d", `refs/${m[1]}`);
       return new Response(null, { status: 204 });
     }
+    if (req.method === "POST" && rest === "/git/refs") {
+      const { ref, sha } = body() as { ref: string; sha: string };
+      try {
+        world.git(fullName, "update-ref", ref, sha, "");
+      } catch {
+        return json({ message: "Reference already exists" }, 422);
+      }
+      return json({ ref, object: { sha } }, 201);
+    }
     if (req.method === "PATCH" && (m = /^\/git\/refs\/heads\/(.+)$/.exec(rest))) {
       const { sha, force } = body() as { sha: string; force?: boolean };
       const current = world.git(fullName, "rev-parse", `refs/heads/${m[1]}`).trim();
       try {
-        if (!force) world.git(fullName, "merge-base", "--is-ancestor", current, sha);
+        if (!force || world.linearOrgs.has(org)) world.git(fullName, "merge-base", "--is-ancestor", current, sha);
       } catch {
-        return json({ message: "Update is not a fast forward" }, 422);
+        return json({ message: force ? "Repository rule violations found\n\nCannot force-push to this branch" : "Update is not a fast forward" }, 422);
       }
       world.git(fullName, "update-ref", `refs/heads/${m[1]}`, sha);
       return json({ ref: `refs/heads/${m[1]}`, object: { sha } });
@@ -368,6 +380,7 @@ export function repoWorld(): RepoWorld {
     refusePushes: false,
     stallPushes: false,
     freePlan: false,
+    linearOrgs: new Set(),
     rulesets: new Map(),
     archived: new Set(),
     collaborators: new Map(),

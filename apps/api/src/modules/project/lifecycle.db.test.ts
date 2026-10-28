@@ -111,7 +111,8 @@ const auditOf = (id: string, action: string) =>
     .select()
     .from(auditLog)
     .where(and(eq(auditLog.subjectId, id), eq(auditLog.action, action)));
-const githubDeletes = () => gh.calls.filter((c) => c.startsWith("DELETE"));
+/** What a build deleted on GitHub, but its own temporary refs (`refs/quiz/tmp-*`). */
+const githubDeletes = () => gh.calls.filter((c) => c.startsWith("DELETE") && !/\/git\/refs\/quiz(\/|%2F)tmp-/.test(c));
 
 beforeAll(async () => {
   vi.stubGlobal("fetch", gh.fetch);
@@ -253,6 +254,36 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     const project = await create(room.id);
     expect(project.distribution?.fullName).toBe(`${room.login}/lab-1-squashed-3`);
     expect(world.git(`${room.login}/lab-1-squashed`, "show", "main:old.txt")).toBe("2025");
+  });
+
+  it("builds under an organization ruleset refusing forced updates of branches: the branch is created, never moved", async () => {
+    const room = await connectedClassroom();
+    world.linearOrgs.add(room.login);
+    try {
+      const project = await create(room.id);
+      const dist = `${room.login}/lab-1-squashed`;
+      expect(project.distribution?.fullName).toBe(dist);
+      expect(world.git(dist, "log", "--all", "--format=%P|%an|%cn").trim()).toBe(`|${world.botLogin}|GitHub`);
+      expect(world.git(dist, "for-each-ref", "--format=%(refname)").trim()).toBe("refs/heads/main");
+      expect(world.git(dist, "symbolic-ref", "HEAD").trim()).toBe("refs/heads/main");
+    } finally {
+      world.linearOrgs.delete(room.login);
+    }
+  });
+
+  it("does not step to the next name when the build fails after its claim: one repository, not twenty", async () => {
+    const room = await connectedClassroom();
+    const routes = gh.routes;
+    const refused: Route = (url, req) =>
+      req.method === "POST" && url.pathname.endsWith("/git/refs") ? new Response(JSON.stringify({ message: "Repository rule violations found" }), { status: 422 }) : undefined;
+    gh.routes = [refused, ...routes];
+    try {
+      expect(refusal(await call("POST", base(room.id), teacher.headers, LAB))).toEqual([502, "distribution_failed"]);
+    } finally {
+      gh.routes = routes;
+    }
+    expect(world.exists(`${room.login}/lab-1-squashed`)).toBe(true);
+    expect(world.exists(`${room.login}/lab-1-squashed-2`)).toBe(false);
   });
 
   it("on a failed build keeps no row and deletes nothing on GitHub; the next attempt adopts the empty leftover", async () => {
