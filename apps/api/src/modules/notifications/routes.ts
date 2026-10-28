@@ -20,6 +20,7 @@ import type { FastifyInstance } from "fastify";
 
 import {
   IdParam,
+  NotificationEmailPut,
   NotificationPreferencePut,
   NotificationQuery,
   TeamsLinkBody,
@@ -89,6 +90,21 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
     const body = NotificationPreferencePut.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "validation" });
     await service.setPreference(app.db, req.user!.id, body.data);
+    return service.notificationSettings(app.db, req.user!.id, teamsOn, githubOn);
+  });
+
+  /**
+   * Where notification e-mails go: one of the account's own addresses, or
+   * null for the default (F-NOTIF-01). Like the toggles, a write of the
+   * account's own settings: an impersonation is refused upstream (ADR-034),
+   * a confined session never reaches it (ADR-027).
+   */
+  app.put("/app/api/notifications/email", { preHandler: requireSession }, async (req, reply) => {
+    const body = NotificationEmailPut.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: "validation" });
+    if (!(await service.setNotificationEmail(app.db, req.user!.id, body.data.email))) {
+      return reply.code(400).send({ error: "email_not_known", message: "Not one of this account's addresses" });
+    }
     return service.notificationSettings(app.db, req.user!.id, teamsOn, githubOn);
   });
 

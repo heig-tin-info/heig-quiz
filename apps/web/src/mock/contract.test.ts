@@ -829,6 +829,25 @@ describe("the mock numbers what the API numbers", () => {
   });
 });
 
+describe("the mock's notification address (F-NOTIF-01)", () => {
+  const put = async (body: unknown) => {
+    const res = await fetch("/app/api/notifications/email", { method: "PUT", body: JSON.stringify(body) });
+    return { status: res.status, body: (await res.json()) as unknown };
+  };
+
+  it("answers a choice with the settings, null with the default, and refuses a foreign address", async () => {
+    const before = NotificationSettings.parse(await get("/app/api/notifications/settings")).email;
+    const other = before.options.find((o) => !o.institutional)!.email;
+    const chosen = await put({ email: other });
+    expect(issuesOf(NotificationSettings, chosen.body)).toEqual([]);
+    expect((chosen.body as NotificationSettings).email).toMatchObject({ address: other, choice: other });
+    const refused = await put({ email: "someone@else.ch" });
+    expect([refused.status, (refused.body as { error: string }).error]).toEqual([400, "email_not_known"]);
+    const reset = (await put({ email: null })).body as NotificationSettings;
+    expect(reset.email).toEqual(before);
+  });
+});
+
 // Last: the create adds a draft to PRG1-2026's projects, which the checks above count.
 describe("the mock's new project (M3-11)", () => {
   const post = async (classroom: string, body: unknown) => {

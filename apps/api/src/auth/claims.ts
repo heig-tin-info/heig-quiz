@@ -70,9 +70,11 @@ export function affiliationsOf(claims: Record<string, unknown>): string[] {
 /**
  * The claims whose addresses the home organization assigned (the school's
  * own mailbox), as opposed to those the person chose: what login adoption
- * accepts without asking the address to be unique (ADR-061).
+ * accepts without asking the address to be unique (ADR-061), and where
+ * notification e-mails go by default (ADR-030, amendment of 2026-10-28).
+ * Most trustworthy first: the order picks that default.
  */
-const INSTITUTIONAL_MAIL_CLAIMS = [
+export const INSTITUTIONAL_MAIL_CLAIMS = [
   "swissEduIDLinkedAffiliationMail",
   "swissEduPersonOrganizationalMail",
 ] as const;

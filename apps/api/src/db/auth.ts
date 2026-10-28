@@ -80,6 +80,14 @@ export const users = pgTable(
      */
     coachSeen: jsonb("coach_seen").$type<string[]>().notNull().default([]),
     /**
+     * The address notification e-mails go to, as chosen in the settings
+     * among the account's own (ADR-030, amendment of 2026-10-28); null means
+     * the default, the institutional address when one is known. A choice no
+     * longer among the account's addresses falls back to the default
+     * (`notificationAddress`).
+     */
+    notificationEmail: text("notification_email"),
+    /**
      * When this user last acknowledged the platform's "What's new" (ADR-087):
      * an entry live after it is unseen. Born with the account, so a new user
      * is shown no history; moved by `POST /app/api/me/changelog`, on the

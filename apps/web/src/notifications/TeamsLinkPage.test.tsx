@@ -26,7 +26,7 @@ const linked: NotificationSettings = {
   // The defaults of every kind: this page shows none of them.
   matrix: structuredClone(DEFAULT_CHANNEL_ENABLED),
   kinds: ["results_released"],
-  email: "marie.dupont@heig-vd.ch",
+  email: { address: "marie.dupont@heig-vd.ch", choice: null, defaultAddress: "marie.dupont@heig-vd.ch", options: [{ email: "marie.dupont@heig-vd.ch", institutional: true }] },
   teams: {
     available: true,
     linkedAt: "2026-09-27T12:01:00.000Z",

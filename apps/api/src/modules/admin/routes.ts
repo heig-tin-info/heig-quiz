@@ -23,7 +23,7 @@ import { shownAvatar } from "../avatar.js";
 import { codespaceOn } from "../codespace/service.js";
 import { adminGuard } from "../guards.js";
 import { invalid, rateLimited } from "../http.js";
-import { sendTestMail } from "../notifications/service.js";
+import { notificationAddress, sendTestMail } from "../notifications/service.js";
 import {
   claimTaskNow,
   configureScheduledTask,
@@ -188,11 +188,13 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
   const testMails = new Budget();
   app.post("/app/api/admin/system/test-mail", { preHandler: requireAdmin }, async (req, reply) => {
     const user = req.user!;
-    if (!user.email) return reply.code(409).send({ error: "no_email", message: "Your account has no e-mail address" });
+    // Where this admin's notifications go: the test is of that very path.
+    const to = (await notificationAddress(app.db, user.id))?.address;
+    if (!to) return reply.code(409).send({ error: "no_email", message: "Your account has no e-mail address" });
     if (!testMails.spend(`test-mail:${user.id}`, 1, app.clock.now())) {
       return rateLimited(reply, BUDGET_RETRY_AFTER_S, "One test e-mail per minute");
     }
-    const result: TestMailResult = await sendTestMail(config, req.log, { email: user.email, locale: user.locale });
+    const result: TestMailResult = await sendTestMail(config, req.log, { email: to, locale: user.locale });
     await trace(req, "system.test_mail", "user", user.id, result);
     return result;
   });

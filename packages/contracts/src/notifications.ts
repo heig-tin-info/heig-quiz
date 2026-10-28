@@ -334,9 +334,9 @@ export type NotificationKind = z.infer<typeof NotificationKind>;
 
 /**
  * Where one notification may go: the app (`bell`: the inbox, plus a toast in
- * every open tab as it arrives), an e-mail
- * to the account's address, a Microsoft Teams chat message once the account
- * has linked Teams.
+ * every open tab as it arrives), an e-mail to the account's notification
+ * address (`NotificationEmail`), a Microsoft Teams chat message once the
+ * account has linked Teams.
  */
 export const NOTIFICATION_CHANNELS = ["bell", "email", "teams"] as const;
 export const NotificationChannel = z.enum(NOTIFICATION_CHANNELS);
@@ -541,13 +541,32 @@ const TeamsLinkStatus = z.object({
 });
 type TeamsLinkStatus = z.infer<typeof TeamsLinkStatus>;
 
+/**
+ * Where the account's notification e-mails go (F-NOTIF-01, ADR-030 amendment
+ * of 2026-10-28): one of its own addresses, the institutional one by default.
+ */
+export const NotificationEmail = z.object({
+  /** The address e-mails go to now: the choice, else the default. */
+  address: z.string(),
+  /** The address the user chose; null means the default (or a choice no longer among the options). */
+  choice: z.string().nullable(),
+  /** Where e-mails go without a choice: the first institutional option, else the login address. */
+  defaultAddress: z.string(),
+  /**
+   * The login address and every verified address of the account, normalized,
+   * once each, the institutional ones first; `institutional` when the school
+   * asserts it.
+   */
+  options: z.array(z.object({ email: z.string(), institutional: z.boolean() })),
+});
+export type NotificationEmail = z.infer<typeof NotificationEmail>;
+
 /** `GET /app/api/notifications/settings`. */
 export const NotificationSettings = z.object({
   matrix: NotificationMatrix,
   /** The rows of the grid: the kinds this account can receive (`notificationKindsFor`). */
   kinds: z.array(NotificationKind),
-  /** The address e-mails go to: the account's own, nothing to configure. */
-  email: z.string(),
+  email: NotificationEmail,
   teams: TeamsLinkStatus,
 });
 export type NotificationSettings = z.infer<typeof NotificationSettings>;
@@ -559,6 +578,14 @@ export const NotificationPreferencePut = z.object({
   enabled: z.boolean(),
 });
 export type NotificationPreferencePut = z.infer<typeof NotificationPreferencePut>;
+
+/**
+ * `PUT /app/api/notifications/email`: the address notification e-mails go
+ * to, one of `NotificationEmail.options`; null goes back to the default.
+ * Another address is a 400 `email_not_known`.
+ */
+export const NotificationEmailPut = z.object({ email: z.string().max(320).nullable() });
+export type NotificationEmailPut = z.infer<typeof NotificationEmailPut>;
 
 /**
  * The one-time secret of a pending Teams link, as the HEIG Quiz tab in Teams
