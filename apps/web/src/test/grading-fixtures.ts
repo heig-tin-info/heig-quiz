@@ -123,12 +123,10 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
       state: "closed",
       settings: {
         navigation: "free",
-        presentation: "zen",
         lobby: "manual",
         shuffleItems: false,
         shuffleChoices: true,
         timing: "duration",
-        showProgressBar: true,
         logVisibility: true,
         requireFullscreen: false,
       },

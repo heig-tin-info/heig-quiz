@@ -88,10 +88,6 @@ export type EvaluationClosedBy = z.infer<typeof EvaluationClosedBy>;
 export const Navigation = z.enum(NAVIGATIONS);
 export type Navigation = z.infer<typeof Navigation>;
 
-/** F-EVAL-08. `student_choice` is only offered when navigation is `free`. */
-export const Presentation = z.enum(["zen", "continuous", "student_choice"]);
-export type Presentation = z.infer<typeof Presentation>;
-
 /** F-EVAL-06. */
 const LobbyMode = z.enum(LOBBIES);
 type LobbyMode = z.infer<typeof LobbyMode>;
@@ -250,14 +246,12 @@ export const retakesOf = (settings: { retakes?: RetakeSettings | undefined }): R
 
 export const EvaluationSettings = z.object({
   navigation: Navigation.default("free"),
-  presentation: Presentation.default("zen"),
   lobby: LobbyMode.default("manual"),
   /** F-EVAL-09: question order, derived from the attempt seed (decision D19). */
   shuffleItems: z.boolean().default(false),
   /** Choice order, for the types that declare themselves shuffleable. */
   shuffleChoices: z.boolean().default(true),
   timing: Timing.default("duration"),
-  showProgressBar: z.boolean().default(true),
   /**
    * F-EVAL-13, ADR-088: the integrity journal (`INTEGRITY_EVENT_KINDS`
    * of `live.ts`) is kept, never blocking. A creation sets
@@ -609,12 +603,10 @@ export type EvaluationCreate = z.infer<typeof EvaluationCreate>;
 /** `PATCH` of the settings: only the fields sent, merged over the stored ones. */
 export const EvaluationSettingsPatch = z.object({
   navigation: Navigation.optional(),
-  presentation: Presentation.optional(),
   lobby: LobbyMode.optional(),
   shuffleItems: z.boolean().optional(),
   shuffleChoices: z.boolean().optional(),
   timing: Timing.optional(),
-  showProgressBar: z.boolean().optional(),
   logVisibility: z.boolean().optional(),
   requireFullscreen: z.boolean().optional(),
   /** Replaced whole: the three fields of the retake rule travel together. */

@@ -443,12 +443,10 @@ export interface MockEvaluation {
 
 const defaultEvaluationSettings = () => ({
   navigation: "free",
-  presentation: "zen",
   lobby: "manual",
   shuffleItems: false,
   shuffleChoices: true,
   timing: "duration",
-  showProgressBar: true,
   logVisibility: true,
   requireFullscreen: false,
   // ADR-026, behind the `?negative=1` scene flag.

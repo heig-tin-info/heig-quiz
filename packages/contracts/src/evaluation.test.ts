@@ -24,15 +24,19 @@ describe("defaultSettings", () => {
   it("is what a freshly created evaluation gets", () => {
     expect(defaultSettings()).toEqual({
       navigation: "free",
-      presentation: "zen",
       lobby: "manual",
       shuffleItems: false,
       shuffleChoices: true,
       timing: "duration",
-      showProgressBar: true,
       logVisibility: true,
       requireFullscreen: false,
     });
+  });
+
+  it("drops the withdrawn presentation and progress-bar keys of a stored row (F-EVAL-08)", () => {
+    const stored = { navigation: "free", presentation: "continuous", showProgressBar: false };
+    expect(EvaluationSettings.parse(stored)).toEqual(defaultSettings());
+    expect(EvaluationSettingsPatch.parse({ presentation: "zen", showProgressBar: true })).toEqual({});
   });
 
   it("declares no poll block until an evaluation is one", () => {

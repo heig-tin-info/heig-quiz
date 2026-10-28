@@ -49,8 +49,7 @@ l'échéance de sécurité) même s'il reste du temps. Le temps supplémentaire 
 liste s'ajoute, au-delà de cette fin aussi.
 
 Le reste vit sous **Options avancées**, en quatre groupes : **Déroulement**
-(navigation, présentation, mélange, barre de progression, et la salle
-d'attente d'une évaluation en direct), **Sécurité** (journal d'intégrité,
+(navigation, mélange, et la salle d'attente d'une évaluation en direct), **Sécurité** (journal d'intégrité,
 plein écran, appareils autorisés), **Aides** (calculatrice, bloc-notes) et
 **Retour et notation** (retour à l'étudiant, politiques de notation, et
 **Autoriser l'entraînement**, modifiable jusqu'à la publication des résultats).

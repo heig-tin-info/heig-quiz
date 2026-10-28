@@ -157,12 +157,10 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
       state: "draft",
       settings: {
         navigation: "free",
-        presentation: "zen",
         lobby: "manual",
         shuffleItems: false,
         shuffleChoices: true,
         timing: "duration",
-        showProgressBar: true,
         logVisibility: true,
         requireFullscreen: false,
       },

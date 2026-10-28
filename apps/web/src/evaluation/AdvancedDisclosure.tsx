@@ -47,7 +47,7 @@ export function withFeedbackFallback<B extends { settings: { lobby: LobbyName } 
 }
 
 /**
- * Everything docs/spec/08 §8.2 puts under "Options avancées": the eight
+ * Everything docs/spec/08 §8.2 puts under "Options avancées": the
  * settings a teacher who knows what they want reaches for, and which a novice
  * must never have to read to run their first quiz.
  *
@@ -139,28 +139,6 @@ export function AdvancedDisclosure({
           />
         </SettingRow>
 
-        <SettingRow title={t("eval.presentation")}>
-          <Segmented
-            name="presentation"
-            value={settings.presentation}
-            disabled={disabled}
-            onChange={(presentation) => set({ presentation })}
-            options={[
-              { value: "zen", label: t("eval.presentation.zen") },
-              { value: "continuous", label: t("eval.presentation.continuous") },
-              // F-EVAL-08: only offered when navigation is free.
-              ...(settings.navigation === "free"
-                ? [
-                    {
-                      value: "student_choice" as const,
-                      label: t("eval.presentation.student_choice"),
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        </SettingRow>
-
         {/* ADR-086: a Live evaluation's waiting room; a Scheduled one has
             none, its mode says so. */}
         {clock.mode === "live" ? (
@@ -197,14 +175,6 @@ export function AdvancedDisclosure({
             disabled={disabled}
             label={t("eval.shuffleChoices")}
             onChange={(shuffleChoices) => set({ shuffleChoices })}
-          />
-        </SettingRow>
-        <SettingRow title={t("eval.showProgressBar")}>
-          <Switch
-            checked={settings.showProgressBar}
-            disabled={disabled}
-            label={t("eval.showProgressBar")}
-            onChange={(showProgressBar) => set({ showProgressBar })}
           />
         </SettingRow>
       </Section>
@@ -275,8 +245,8 @@ export function AdvancedDisclosure({
       <Section title={t("eval.adv.feedback")} className="py-3" divided>
         {/* F-EVAL-11 and #78: `immediate` is hidden, not disabled, for an
             evaluation sat in class (an exam, or an exercise with a waiting
-            room) — the same treatment as `student_choice` above. The row
-            then says why, so the missing choice is not a mystery. */}
+            room). The row then says why, so the missing choice is not a
+            mystery. */}
         <SettingRow
           title={t("eval.feedback")}
           desc={

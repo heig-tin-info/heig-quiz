@@ -22,6 +22,10 @@ to, the attempt deadline (`attemptDeadline`), the readiness and past-time
 rules (`missingTimingFields`, `pastTiming`), and the live controls that move
 `closesAt` (`extendTime`, `resumeEvaluation`).
 
+Amended 2026-10-27 (product owner): the presentation setting is withdrawn
+(F-EVAL-08, one question per screen always), so what §1 says a mode change
+leaves alone no longer includes it.
+
 Amended by [ADR-092](ADR-092-changer-le-mode-d-une-evaluation.md)
 (2026-10-09): the mode is editable until students are let in; a change reapplies
 no preset and leaves the clock fields alone (`assertStaysScheduled` holds).
