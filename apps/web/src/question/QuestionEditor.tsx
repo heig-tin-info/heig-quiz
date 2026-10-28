@@ -180,11 +180,22 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   // Back to the preview is back to ITS tab, the walk's answers intact; a
   // navigation there would start a new walk, so it is only the fallback.
   // The pending edit is saved first: a closed tab cannot send it, and a
-  // failed save keeps the tab (and its error) on screen.
+  // failed save keeps the tab (and its error) on screen. One way back at a
+  // time: a second click while closing would schedule a second fallback.
+  const leaving = useRef(false);
   const goTo = (route: Route) => {
     if (origin?.kind === "preview" && routeToPath(route) === routeToPath(origin.back)) {
+      if (leaving.current) return;
+      leaving.current = true;
       void autosave.flush().then((saved) => {
-        if (saved) closeTabOr(() => navigate(route));
+        if (!saved) {
+          leaving.current = false;
+          return;
+        }
+        closeTabOr(() => {
+          leaving.current = false;
+          navigate(route);
+        });
       });
     } else {
       navigate(route);

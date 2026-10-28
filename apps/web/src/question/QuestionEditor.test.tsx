@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PoolDetail, QuestionDetail } from "@quiz/contracts";
 
@@ -893,84 +893,114 @@ describe("QuestionEditor — opened from an evaluation (#127)", () => {
    * closes that tab (the walk and its answers live in the preview's); a tab
    * the browser keeps open falls back to the preview's address.
    */
-  const fromPreview = () => {
-    const base = makeEvaluationDetail();
-    const { calls } = mockFetch(
-      routes(mcqDetail(), {
-        [`GET /app/api/evaluations/${EVAL}`]: ok({
-          ...base,
-          evaluation: { ...base.evaluation, id: EVAL, title: "Test 0", classroomId: "r1" },
-        }),
-        "GET /app/api/classrooms/r1": ok({
-          id: "r1",
-          name: "PRG1-2026",
-          course: { id: "c1", code: "PRG1", name: "Programmation C" },
-          roster: [],
-        }),
-      }),
-    );
-    const navigate = vi.fn();
-    renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />, {
-      route: `/questions/q1?fromPreview=${EVAL}`,
+  describe("from the evaluation preview (#959)", () => {
+    let close: ReturnType<typeof vi.spyOn>;
+    let ownClosed: PropertyDescriptor | undefined;
+    beforeEach(() => {
+      close = vi.spyOn(window, "close").mockImplementation(() => {});
+      ownClosed = Object.getOwnPropertyDescriptor(window, "closed");
     });
-    return { navigate, calls };
-  };
+    afterEach(() => {
+      close.mockRestore();
+      if (ownClosed) Object.defineProperty(window, "closed", ownClosed);
+      else delete (window as { closed?: boolean }).closed;
+    });
+    // jsdom keeps the window open: this makes the tab "close" for the browser.
+    const tabCloses = () => Object.defineProperty(window, "closed", { configurable: true, get: () => true });
 
-  it("closes its tab to go back to the preview, under the preview in the trail", async () => {
-    const user = userEvent.setup();
-    const close = vi.spyOn(window, "close").mockImplementation(() => {});
-    // jsdom keeps the window open: this tab "closes" for the browser.
-    const own = Object.getOwnPropertyDescriptor(window, "closed");
-    Object.defineProperty(window, "closed", { configurable: true, get: () => true });
-    const { navigate } = fromPreview();
-    const trail = await screen.findByRole("navigation", { name: "Breadcrumb" });
-    await waitFor(() =>
-      expect(within(trail).getAllByRole("listitem").map((li) => li.textContent).filter(Boolean)).toEqual([
-        "Courses",
-        "PRG1",
-        "PRG1-2026",
-        "Test 0",
-        "Preview",
-        "ptr-null-check",
-      ]),
-    );
-    expect(within(trail).getByRole("link", { name: "Preview" })).toHaveAttribute("href", `/evaluations/${EVAL}/preview`);
+    const fromPreview = (over: Record<string, unknown> = {}) => {
+      const base = makeEvaluationDetail();
+      const { calls } = mockFetch(
+        routes(mcqDetail(), {
+          [`GET /app/api/evaluations/${EVAL}`]: ok({
+            ...base,
+            evaluation: { ...base.evaluation, id: EVAL, title: "Test 0", classroomId: "r1" },
+          }),
+          "GET /app/api/classrooms/r1": ok({
+            id: "r1",
+            name: "PRG1-2026",
+            course: { id: "c1", code: "PRG1", name: "Programmation C" },
+            roster: [],
+          }),
+          ...over,
+        }),
+      );
+      const navigate = vi.fn();
+      renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />, {
+        route: `/questions/q1?fromPreview=${EVAL}`,
+      });
+      return { navigate, calls };
+    };
+    const PREVIEW = { view: "evaluationPreview", id: EVAL };
 
-    await user.click(screen.getByRole("button", { name: "Back to the preview" }));
-    await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
-    await new Promise((r) => setTimeout(r, 300));
-    expect(navigate).not.toHaveBeenCalled();
+    it("closes its tab to go back to the preview, under the preview in the trail", async () => {
+      const user = flowingClock();
+      tabCloses();
+      const { navigate } = fromPreview();
+      const trail = await screen.findByRole("navigation", { name: "Breadcrumb" });
+      await waitFor(() =>
+        expect(within(trail).getAllByRole("listitem").map((li) => li.textContent).filter(Boolean)).toEqual([
+          "Courses",
+          "PRG1",
+          "PRG1-2026",
+          "Test 0",
+          "Preview",
+          "ptr-null-check",
+        ]),
+      );
+      expect(within(trail).getByRole("link", { name: "Preview" })).toHaveAttribute("href", `/evaluations/${EVAL}/preview`);
 
-    // The trail's Preview is the same way back.
-    await user.click(within(trail).getByRole("link", { name: "Preview" }));
-    await waitFor(() => expect(close).toHaveBeenCalledTimes(2));
-    close.mockRestore();
-    if (own) Object.defineProperty(window, "closed", own);
-    else delete (window as { closed?: boolean }).closed;
-  });
+      await user.click(screen.getByRole("button", { name: "Back to the preview" }));
+      await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+      await elapse(1000);
+      expect(navigate).not.toHaveBeenCalled();
+    });
 
-  it("leads to the preview when its tab cannot close", async () => {
-    const user = userEvent.setup();
-    const close = vi.spyOn(window, "close").mockImplementation(() => {});
-    const { navigate } = fromPreview();
-    await user.click(await screen.findByRole("button", { name: "Back to the preview" }));
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "evaluationPreview", id: EVAL }));
-    expect(close).toHaveBeenCalled();
-    close.mockRestore();
-  });
+    it("closes its tab from the trail's Preview too", async () => {
+      const user = userEvent.setup();
+      tabCloses();
+      const { navigate } = fromPreview();
+      const trail = await screen.findByRole("navigation", { name: "Breadcrumb" });
+      await within(trail).findByRole("link", { name: "Test 0" });
+      await user.click(within(trail).getByRole("link", { name: "Preview" }));
+      await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+      expect(navigate).not.toHaveBeenCalled();
+    });
 
-  it("closes its tab once published: the preview offers the new version", async () => {
-    const user = userEvent.setup();
-    const close = vi.spyOn(window, "close").mockImplementation(() => {});
-    const { navigate, calls } = fromPreview();
-    await user.click(await screen.findByRole("button", { name: "Publish" }));
-    const dialog = await screen.findByRole("dialog");
-    await user.click(within(dialog).getByRole("button", { name: "Publish" }));
-    await waitFor(() => expect(close).toHaveBeenCalled());
-    expect(calls.some((c) => c.url === "/app/api/questions/q1/publish")).toBe(true);
-    // jsdom keeps the window open: the fallback leads to the preview.
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "evaluationPreview", id: EVAL }));
-    close.mockRestore();
+    it("leads to the preview, once, when its tab cannot close", async () => {
+      const user = flowingClock();
+      const { navigate } = fromPreview();
+      const back = await screen.findByRole("button", { name: "Back to the preview" });
+      // A double click: one way back, not two.
+      await user.dblClick(back);
+      await elapse(1000);
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(navigate).toHaveBeenCalledWith(PREVIEW);
+    });
+
+    it("stays open when the pending edit cannot be saved", async () => {
+      const user = flowingClock();
+      const { navigate, calls } = fromPreview({ "PUT /app/api/questions/q1/draft": fail(500, { error: "boom" }) });
+      await user.type(await screen.findByLabelText("Statement"), "!");
+      await user.click(screen.getByRole("button", { name: "Back to the preview" }));
+      await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+      await elapse(1000);
+      expect(close).not.toHaveBeenCalled();
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it("closes its tab once published: the preview offers the new version", async () => {
+      const user = userEvent.setup();
+      const { navigate, calls } = fromPreview();
+      await user.click(await screen.findByRole("button", { name: "Publish" }));
+      const dialog = await screen.findByRole("dialog");
+      await user.click(within(dialog).getByRole("button", { name: "Publish" }));
+      await waitFor(() => expect(close).toHaveBeenCalled());
+      expect(calls.some((c) => c.url === "/app/api/questions/q1/publish")).toBe(true);
+      // jsdom keeps the window open: the fallback leads to the preview.
+      await waitFor(() => expect(navigate).toHaveBeenCalledWith(PREVIEW));
+    });
   });
 
   it("stays in the editor once published from anywhere else", async () => {
