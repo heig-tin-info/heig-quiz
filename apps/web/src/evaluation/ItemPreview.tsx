@@ -9,12 +9,17 @@ import { useT } from "../i18n";
 import { itemPreviewKey, solutionKey } from "../queryKeys";
 import type { EditTarget } from "./editTarget";
 import { typeLabel } from "../questionTypes";
-import { Alert, ASIDE_MIN_WIDTH, IconButton, pageBox, PaneOrSheet, useMinWidth } from "../ui";
+import {
+  Alert,
+  ASIDE_MIN_WIDTH,
+  IconButton,
+  pageBox,
+  PaneOrSheet,
+  PREVIEW_PANE,
+  useMinWidth,
+} from "../ui";
 import { PreviewedQuestion } from "../question/PreviewedQuestion";
 import { DifficultyDots } from "../pool/QuestionTable";
-
-/** The docked preview's width; the page widens by it (`pageBox`), as the pool's does. */
-const PANE_WIDTH = "30rem";
 
 /**
  * Which item of the list is previewed, and whether the preview DOCKS beside
@@ -28,9 +33,9 @@ export function useItemPane() {
     shown,
     setShown,
     /** The width of the docked pane, or null when the preview is a sheet. */
-    pane: docked ? PANE_WIDTH : null,
+    pane: docked ? PREVIEW_PANE : null,
     /** The page's box: widened while a docked preview is open on `active` (its tab). */
-    box: (active: boolean) => pageBox(active && shown !== null && docked ? PANE_WIDTH : null),
+    box: (active: boolean) => pageBox(active && shown !== null && docked ? PREVIEW_PANE : null),
     /** Escape closes the preview from anywhere in the list or in it. */
     closeOnEscape: (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented || shown === null) return;

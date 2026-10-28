@@ -33,6 +33,7 @@ import {
   Button,
   pageBox,
   PANE_GAP,
+  PREVIEW_PANE,
   PageError,
   PageHeader,
   PageSkeleton,
@@ -175,9 +176,6 @@ const idsOf = (param: string): string[] => (param === "" ? [] : param.split(",")
  * no "Load more" — then counts the rows that pass rather than the API's
  * `total`, which knows nothing of the bounds.
  */
-
-/** The docked question pane's width; the page widens by it (`pageBox`). */
-const PANE_WIDTH = "30rem";
 
 const VIEW_KEY = "quiz-pool-view";
 const VIEWS: readonly ListView[] = ["cards", "list"];
@@ -457,7 +455,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const readOnly = !poolRoleAllows(detail.role, "contributor");
 
   return (
-    <div className="w-full space-y-6" style={pageBox(shown && docked ? PANE_WIDTH : null)}>
+    <div className="w-full space-y-6" style={pageBox(shown && docked ? PREVIEW_PANE : null)}>
       <PageHeader
         help="pool"
         eyebrow={
@@ -638,7 +636,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
             {shown ? (
               <aside
                 aria-label={t("question.preview.show", { name: shown.internalName })}
-                style={{ width: PANE_WIDTH }}
+                style={{ width: PREVIEW_PANE }}
                 className="sticky top-8 max-h-[calc(100dvh-4rem)] shrink-0 overflow-y-auto rounded-card border border-line bg-surface-2 p-5"
               >
                 <QuestionPreview
