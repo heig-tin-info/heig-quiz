@@ -5,6 +5,7 @@ import type { PreviewResult, QuestionRow } from "@quiz/contracts";
 
 import { useT, type Dict } from "../i18n";
 import { typeLabel } from "../questionTypes";
+import { DifficultyDots } from "../pool/QuestionTable";
 import { routeToPath } from "../router";
 import { Alert, IconButton, isPlainClick, LinkButton } from "../ui";
 import { PreviewedQuestion, type StudentQuestion } from "./PreviewedQuestion";
@@ -69,10 +70,15 @@ export function QuestionPreview(
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1" aria-live="polite">
           <h3 className="truncate font-semibold">{row.internalName}</h3>
-          <p className="mt-0.5 text-sm text-fg-muted">
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-fg-muted">
             {source === "draft"
               ? typeLabel(t, row.type)
               : t(copy.version, { type: typeLabel(t, row.type), n: source })}
+            {/* The pool's table drops its difficulty column while this pane is docked. */}
+            <span className="inline-flex items-center gap-2">
+              <span aria-hidden className="text-fg-faint">·</span>
+              <DifficultyDots value={row.difficulty} />
+            </span>
           </p>
         </div>
         {props.mode === "pick" ? (

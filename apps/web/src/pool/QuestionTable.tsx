@@ -70,6 +70,9 @@ import { ReviewBadge } from "./ReviewBadge";
  * the difficulty, the tick box and the actions never go. On a phone the
  * table turns into row cards (`T.stack`): the tick box, the name and the
  * actions on the first line, the difficulty and the version under the name.
+ * While the question pane is docked (`docked`), Concepts, Difficulty and
+ * Version leave the table to give it room, as the evaluation's question list
+ * does: the pane's subtitle says the version and the difficulty.
  */
 
 export function DifficultyDots({ value }: { value: number }) {
@@ -182,6 +185,7 @@ export function QuestionTable({
   readOnly = false,
   statsFor,
   onStar,
+  docked = false,
 }: {
   /** One section per "group by" value; `none` hands over a single unlabelled one. */
   groups: QuestionGroup[];
@@ -209,6 +213,8 @@ export function QuestionTable({
   statsFor?: StatsFor | undefined;
   /** The row's star (F-POOL-10), for every role. */
   onStar: (row: QuestionRow) => void;
+  /** The question pane is docked beside the table: the read-only columns give it their room. */
+  docked?: boolean;
 }) {
   const t = useT();
   const rows = groups.flatMap((g) => g.rows);
@@ -238,9 +244,13 @@ export function QuestionTable({
     { key: "name", label: t("pool.col.name"), stack: "main" },
     // The concepts are read, never ordered: a row carries several of them, and a
     // list sorted on "the first concept" is an order nobody asked for.
-    { key: "concepts", label: t("pool.col.concepts"), sortable: false, className: T.colHigh },
-    { key: "difficulty", label: t("pool.col.difficulty"), className: "whitespace-nowrap", stack: "sub" },
-    { key: "version", label: t("pool.col.version"), className: T.colLow, stack: "sub" },
+    ...(docked
+      ? []
+      : ([
+          { key: "concepts", label: t("pool.col.concepts"), sortable: false, className: T.colHigh },
+          { key: "difficulty", label: t("pool.col.difficulty"), className: "whitespace-nowrap", stack: "sub" },
+          { key: "version", label: t("pool.col.version"), className: T.colLow, stack: "sub" },
+        ] satisfies Column<QuestionSort>[])),
     { key: "updated", label: t("pool.col.updated"), className: T.colMid },
     ...(readOnly
       ? []
@@ -297,21 +307,25 @@ export function QuestionTable({
                     <RowStatsButton row={row} statsFor={statsFor} />
                   </span>
                 </td>
-                <td role="cell" className={cx(T.td, "max-w-56", T.colHigh)}>
-                  {row.concepts.length === 0 ? (
-                    <Dash />
-                  ) : (
-                    <ConceptNames concepts={row.concepts} />
-                  )}
-                </td>
-                <td role="cell" className={cx(T.td, readOnly ? T.stack.sub : T.stack.subIndent, "whitespace-nowrap")}>
-                  <DifficultyDots value={row.difficulty} />
-                </td>
-                {/* On a card the version is the row's status, beside the difficulty. */}
-                <td role="cell" className={cx(T.td, T.colLow, T.stack.sub, "@max-md:block")}>
-                  <span className="sr-only @md:hidden">{t("pool.col.version")} </span>
-                  <VersionCell row={row} />
-                </td>
+                {docked ? null : (
+                  <>
+                    <td role="cell" className={cx(T.td, "max-w-56", T.colHigh)}>
+                      {row.concepts.length === 0 ? (
+                        <Dash />
+                      ) : (
+                        <ConceptNames concepts={row.concepts} />
+                      )}
+                    </td>
+                    <td role="cell" className={cx(T.td, readOnly ? T.stack.sub : T.stack.subIndent, "whitespace-nowrap")}>
+                      <DifficultyDots value={row.difficulty} />
+                    </td>
+                    {/* On a card the version is the row's status, beside the difficulty. */}
+                    <td role="cell" className={cx(T.td, T.colLow, T.stack.sub, "@max-md:block")}>
+                      <span className="sr-only @md:hidden">{t("pool.col.version")} </span>
+                      <VersionCell row={row} />
+                    </td>
+                  </>
+                )}
                 <td role="cell" className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colMid)}>
                   <RelativeTime iso={row.updatedAt} />
                 </td>
