@@ -621,6 +621,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                       readOnly={readOnly}
                       statsFor={statsFor}
                       onStar={toggleStar}
+                      docked={shown !== null && docked}
                     />
                   )}
                   <PoolListTail
