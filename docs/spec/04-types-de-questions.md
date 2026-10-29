@@ -34,7 +34,7 @@ Rules:
 
 ## 4.2 Canonical format
 
-Planned import/export format (F-EXP): the canonical package and CLI are not
+Planned import/export format: the canonical package and CLI are not
 implemented yet. The examples describe the intended interchange format, not
 a current API payload. One YAML file per question; images live in a sibling
 `assets/` folder, referenced by relative path.

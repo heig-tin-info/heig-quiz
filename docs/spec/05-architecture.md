@@ -136,7 +136,7 @@ qt-mcq/
   The separate `/api/v1` design was rejected (ADR-022).
 - **MCP** is implemented at `/app/api/mcp`, with OAuth or a personal token
   (ADR-022/023). Its tools call those same routes as the caller.
-- **Canonical import/export and CLI** remain planned (F-EXP, spec 04 §4.2):
+- **Canonical import/export and CLI** remain planned (spec 04 §4.2):
   `quiz pull`, `push` and `diff` are intended interfaces, not installed tools.
 
 ## 5.3 Database
@@ -310,6 +310,7 @@ The key has one student exit too: once the feedback policy shows it (`showKey`),
 
 ## 5.8 Export, import, backup
 
+- Documents and data exports: one pipeline, [ADR-121](../adr/ADR-121-fabrique-d-exports.md) (F-EXP).
 - Export of a pool: zip archive generated on the fly, `pool.yaml`, category folders, `<internal_name>.yaml`, `assets/`. The same function feeds the API, the CLI and the button in the interface.
 - Import: validation of each file by the type's schema, `migrate` if `configVersion` is old, error report per file, single transaction, drafts created by default, publication with `--publish`.
 - Backup: the `backup` service of heig-classroom, compressed `pg_dump` plus the assets volume, sent every hour to a Hetzner object storage through `rclone`, 30-day retention. Restoration documented and tested on a blank VM. *Amendment (current state, deployment runbook §6): a daily provider backup of the whole VM (Hetzner Backups) and a daily `pg_dump -Fc` kept 30 days on the VM itself. Since 2026-10-09 (#235) the off-site copy is a borg repository on a Hetzner Storage Box, append-only from the VM (ADR-009, amendment of decision 3; runbook §6, The off-site copy).*
