@@ -49,7 +49,8 @@ question must come from the type through its contract.
    - **Record**: a typed, versioned zod schema in `packages/contracts`, with
      `kind` and `version` (a change of shape bumps `version`). **The JSON
      export IS the record**: `.json` serves it parsed through its schema, so
-     a field beyond the contract never travels.
+     a field beyond the contract never travels. A student record is typed on
+     the student schemas of the views it composes, never `z.unknown()`.
    - **Document**: a small typed block tree in a new pure package,
      `packages/docexport` (no database, no network, no clock): `heading`,
      `markdown` (a statement's text passed through as written), `code`
@@ -69,28 +70,34 @@ question must come from the type through its contract.
      `toStudent`, never from the config, so a statement carries no more than
      a student is served;
    - `solutionDoc(solution, student)`: the staff pass `toSolution`; a
-     student's document passes `studentSolution`'s output, and only where
-     the feedback policy's `showKey` holds (ADR-037); `student` is the same
-     student view, for what a key alone does not say (a program's language);
+     student's document passes `studentSolution`'s output if and only if
+     the feedback policy shows the key (`showKey`, ADR-037); `student` is the
+     same student view, for what a key alone does not say (a program's
+     language);
    - `answerDoc(config, answer, details)`: **staff only**. `code` rebuilds the
      source server-side with `assembleCodeSource` (invariant 14), never from
      a client's text, and lists every test, hidden ones by name.
    A student's answer, when step 5 needs it, gets a hook of its own typed on
    the student shapes only — the student view, the answer as handed back,
    and `studentDetails(details, policy)` — so no hook decides visibility
-   from a raw config. A type without `statementDoc` and `answerDoc` offers
+   from a raw config. A type without both `statementDoc` and `answerDoc` offers
    no Markdown or PDF button; its data stays in the JSON record.
 
-3. **Audience rule** (product owner): F-EXP-02. A student-facing document is
-   a composition of the named student exits under ADR-112's rules (§1, §4:
-   never the player's attempt view; §7: the caller's own portal session),
-   and its rendered text joins the leak tests of 05 §5.7.
+3. **Audience rule** (product owner): F-EXP-02 governs — what the requester
+   can see in the app, and nothing more. A student-facing document is built
+   from student shapes only, on the caller's own portal session (ADR-112 §7),
+   and its rendered text joins the leak tests of 05 §5.7. What a student sees
+   only in the player (the statements of an open exercise series, their own
+   answers once a policy hides them after hand-in), which ADR-112 §4 keeps out
+   of the personal export, is settled when ADR-112 is amended at step 5
+   (open question 62, [06](../spec/06-questions-ouvertes.md)).
 
 4. **Staff documents name the students, in English.** The owner overrode
-   three points of #972: a staff document is not anonymised (only the
+   four points of #972: a staff document is not anonymised (only the
    grading screen is, F-GRADE-03), it carries no personal-data warning line,
-   and it is not audited (like F-RES-02 and F-GBOOK-04); the stable "Copy N"
-   numbering the issue proposed is therefore out of scope. Sending the file
+   it is not audited (like F-RES-02 and F-GBOOK-04), and it holds the
+   attempt that counts (ADR-025) rather than the last one; the stable
+   "Copy N" numbering the issue proposed is therefore out of scope. Sending the file
    to a model is the teacher's own act, outside the platform's LLM path that
    N-DATA-05 governs. A staff document's fixed words are English, like the
    CSV; the language of a student document is decided with step 5.
@@ -107,9 +114,9 @@ question must come from the type through its contract.
    authoring interchange of pools and questions (spec 04 §4.2).
 
 7. **PDF**: Typst is the preferred engine (reproducible, real pagination,
-   cross-references). A first version may try the web app's print view
-   (`@media print`, `break-inside: avoid` per question) only if its result
-   is clean; it moves to Typst as soon as a question splits across pages,
+   cross-references). A first version may try the web app's print view in
+   the user's own browser (`@media print`, `break-inside: avoid` per
+   question; no server-side Chromium) only if its result is clean; it moves to Typst as soon as a question splits across pages,
    a cross-reference is needed, or #551's answer zones need a measured
    layout. Both render the same document tree.
 
@@ -123,7 +130,7 @@ question must come from the type through its contract.
       a parameterized item still refused (rendering each attempt from its
       stored instance is that step's open question);
    3. the evaluation document, **staff only** through the evaluation's
-      loader: statement and key, and a hand-out to print from the student
+      loader (a student's series: step 5): statement and key, and a hand-out to print from the student
       views in the base order (seed 0, no shuffle); a parameterized question
       is refused in its first version;
    4. JSON records of the results, then of the projects;

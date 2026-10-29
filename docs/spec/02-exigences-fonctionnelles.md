@@ -174,9 +174,9 @@ Documents and data files built from the platform's data, through one pipeline ([
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
 | F-EXP-01 | **Every answer to one question in one file** (issue #972). On the grading panel, **Export** downloads and **Copy** copies one Markdown file: the evaluation's title, the item's position and points, the statement and the reference solution, then one section per enrolled student, by name, for the attempt that counts (ADR-025) — the full source as it ran for `code`, every test with its visibility and verdict, hidden ones included, and the current points; a student without an attempt or an answer is listed as such; a teacher's test walk is left out (ADR-018). Staff only, through the evaluation's loader; not anonymised, not audited (ADR-121 §4). Markdown only for a question type that renders as text and is not parameterized; the JSON record, for every item. | P1 | S |
-| F-EXP-02 | **Audience rule**: an export contains exactly what its requester can see in the app, and nothing more. A staff export may hold keys, hidden tests and names; a student export is a composition of the student views (invariant 4, ADR-112 §1), so it holds a key only where the feedback policy shows it to that student. | P1 | M |
+| F-EXP-02 | **Audience rule**: an export contains exactly what its requester can see in the app, and nothing more. A staff export may hold keys, hidden tests and names; a student export is a composition of the student views (invariant 4, ADR-112 §1), so it holds the key if and only if the feedback policy shows it to that student. | P1 | M |
 | F-EXP-03 | **Provenance**: a Markdown export opens with a YAML front matter of ids and a hash of its body (ADR-121 §5); no endpoint replays an old export. | P1 | S |
-| F-EXP-04 | **The evaluation document**, staff only: its statement and key, and a hand-out to print from the student views (ADR-121 §8, step 3). | P2 | S |
+| F-EXP-04 | **The evaluation document**, staff only (a student's series: ADR-121 §8, step 5): its statement and key, and a hand-out to print from the student views (ADR-121 §8, step 3). | P2 | S |
 
 ## F-NOTIF Notifications
 
