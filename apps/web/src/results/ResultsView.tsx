@@ -3,16 +3,19 @@ import {
   AlertTriangle,
   BarChart3,
   ClipboardCheck,
+  Eraser,
   MonitorPlay,
+  Pencil,
   Presentation,
   Send,
   Undo2,
+  UserCheck,
   Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { ResultRow, ReleaseResponse, ResultsView as ResultsPayload } from "@quiz/contracts";
-import { histogramBucket, isPassing, type RESULTS_TABS } from "@quiz/domain";
+import { histogramBucket, inStatistics, isPassing, type RESULTS_TABS } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -38,6 +41,7 @@ import {
   RelativeTime,
   Skeleton,
   Tabs,
+  type MenuItem,
 } from "../ui";
 import { ByQuestionView, isNotOver } from "./ByQuestionView";
 import { ExportButton } from "./ExportButton";
@@ -49,6 +53,8 @@ import { Summary } from "../charts/Summary";
 import { useIsCourseOwner } from "../course/parts";
 import { evaluationKey, resultsKey, resultsViewKey } from "../queryKeys";
 import { useEvaluation, useResultsByQuestion } from "../evaluation/api";
+import { ExcuseDialog } from "../gradebook/dialogs";
+import { useMarkWrites } from "../gradebook/useMarkWrites";
 
 type Tab = (typeof RESULTS_TABS)[number];
 
@@ -62,6 +68,10 @@ const NO_ROWS: ResultRow[] = [];
  * in the overflow menu as a destructive item, and both the publication and
  * its withdrawal name the evaluation in their confirmation — a teacher with
  * four tabs open must be told WHICH class is about to see its grades.
+ *
+ * A student's row has a menu of its own (#969): excuse them, so their grade
+ * counts in no mean — the gradebook's `excused` mark, written through the
+ * gradebook's route and read back by the results' join.
  */
 export function ResultsView({
   evaluationId,
@@ -110,12 +120,13 @@ export function ResultsView({
 
   /**
    * The histogram bar the URL names, if any, and the rows it counts: the
-   * class only, as `resultsView` (api, results service) builds the histogram.
+   * class, excused students left out, as `resultsView` (api, results service)
+   * builds the histogram — the one rule `inStatistics`.
    */
   const bucket = view?.stats.histogram.find((b) => String(b.bucket) === bucketParam)?.bucket ?? null;
   const rows = useMemo(() => {
     const all = view?.rows ?? NO_ROWS;
-    return bucket === null ? all : all.filter((r) => !r.staff && histogramBucket(r.grade) === bucket);
+    return bucket === null ? all : all.filter((r) => inStatistics(r) && histogramBucket(r.grade) === bucket);
   }, [view, bucket]);
   const table = useGradeSort(rows);
   /** The open copy, and ↑ / ↓ through the table's attempts in the order on screen. */
@@ -161,6 +172,31 @@ export function ResultsView({
   // reads and grades, and is offered neither. Not known yet is not an owner.
   const isOwner = useIsCourseOwner(evaluation.data?.courseId);
 
+  /**
+   * The excuse (#969), a gradebook mark on this evaluation's column: offered
+   * once the classroom is known, on a student's row (never a teacher's own
+   * walk). The server decides who may: over a released grade, an owner.
+   */
+  const marks = useMarkWrites(classroomId ?? "");
+  const [excusing, setExcusing] = useState<ResultRow | null>(null);
+  const markColumn = { kind: "evaluation" as const, activityId: evaluationId, title };
+  const markStudent = (row: ResultRow) => ({ enrollmentId: row.enrollmentId, name: row.displayName });
+  const refreshResults = () => void qc.invalidateQueries({ queryKey: resultsKey(evaluationId) });
+  const rowActions = (row: ResultRow): MenuItem[] => {
+    if (row.staff) return [];
+    if (row.excused === null) return [{ label: t("results.excuse"), icon: UserCheck, onSelect: () => setExcusing(row) }];
+    return [
+      { label: t("results.excuse.edit"), icon: Pencil, onSelect: () => setExcusing(row) },
+      {
+        label: t("results.excuse.clear"),
+        icon: Eraser,
+        separator: true,
+        onSelect: () =>
+          void marks.attempt(() => marks.writes.clearMark(markColumn, row.enrollmentId)).then((ok) => ok && refreshResults()),
+      },
+    ];
+  };
+
   const links = gradingLinks(evaluationId);
   useScreenCommands([
     {
@@ -195,6 +231,8 @@ export function ResultsView({
   }
   /** The CLASS: a teacher's own test walk is a row of the table and not one of its students (ADR-018). */
   const classRows = view.rows.filter((r) => !r.staff);
+  /** The rows the statistics count: the class, an excused student left out (#969). */
+  const countedRows = view.rows.filter(inStatistics);
 
   return (
     <div className="space-y-6">
@@ -304,8 +342,8 @@ export function ResultsView({
                 <GradeStats
                   description={view.stats}
                   countLabel={t("results.stat.students", { n: view.stats.count })}
-                  passing={classRows.filter((r) => isPassing(r.grade)).length}
-                  total={classRows.length}
+                  passing={countedRows.filter((r) => isPassing(r.grade)).length}
+                  total={countedRows.length}
                 />
               }
             />
@@ -317,8 +355,27 @@ export function ResultsView({
                   onRemove={() => setBucketParam("")}
                 />
               )}
-              <GradeTable table={table} openId={copy ? copyId : null} onOpen={setCopyId} />
+              <GradeTable
+                table={table}
+                openId={copy ? copyId : null}
+                onOpen={setCopyId}
+                // Once released, an excuse over a grade is an owner's (ADR-068): an assistant is not offered it.
+                actions={classroomId === null || (view.released && !isOwner) ? undefined : rowActions}
+              />
             </div>
+            {excusing ? (
+              <ExcuseDialog
+                student={excusing.displayName}
+                comment={excusing.excused?.comment ?? null}
+                submitting={marks.writes.pending}
+                onClose={() => setExcusing(null)}
+                onSubmit={async (mark) => {
+                  if (!(await marks.putMark(markColumn, markStudent(excusing), mark))) return;
+                  setExcusing(null);
+                  refreshResults();
+                }}
+              />
+            ) : null}
             {copy ? (
               <StudentCopy
                 evaluationId={evaluationId}

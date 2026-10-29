@@ -214,6 +214,19 @@ describe("the writes of a cell", () => {
     await waitFor(() => expect(within(screen.getByRole("button", { name: "Marks for Alice Dupont, Exercises" })).getByText("a1.0")).toBeInTheDocument());
   });
 
+  it("excuses a student (#969): the PUT carries the kind, and the cell answers a boxed - named Excused", async () => {
+    const after = makeTable();
+    after.rows[0]!.cells[EXERCISE] = { ...empty, kind: "excused", source: "mark" };
+    const { calls } = renderTab(makeTable(), { [`PUT ${URL_MARK(EXERCISE, ALICE)}`]: ok(after) });
+    await showExercises();
+    await choose(await cell("Alice Dupont", "Exercises"), "Excuse (no mean)");
+    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ kind: "excused" }));
+    const excused = await waitFor(() => within(screen.getByRole("button", { name: "Marks for Alice Dupont, Exercises" })).getByText("-"));
+    // Named in words beside the sign, never by its look alone (N-A11Y-03), and never the empty cell's em dash.
+    expect(excused.parentElement).toHaveTextContent("Excused. Counts in no mean.");
+    expect(within(screen.getByRole("button", { name: "Marks for Alice Dupont, Exercises" })).queryByText("—")).toBeNull();
+  });
+
   it("asks before replacing a real grade (409 grade_exists), then sends it again with override", async () => {
     let attempts = 0;
     const { calls } = renderTab(makeTable(), {

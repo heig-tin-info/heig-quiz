@@ -1,11 +1,11 @@
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, UserCheck } from "lucide-react";
 
 import type { ResultRow, ResultRowState } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { Grade } from "../Grade";
 import { formatDuration, useT, type Dict, type TFunction } from "../i18n";
-import { Badge, cx, pressable, T, TableHead, useSortableTable, type Column, type Tone } from "../ui";
+import { Actions, Badge, cx, pressable, T, TableHead, Tip, useSortableTable, type Column, type MenuItem, type Tone } from "../ui";
 
 type Key = "name" | "email" | "points" | "grade" | "duration" | "state";
 
@@ -53,9 +53,11 @@ export type GradeSort = ReturnType<typeof useGradeSort>;
  * One student per row (F-RES-02), absent students included: they are a 1.0
  * that belongs in the export and in the statistics, and a table that hides
  * them is not the class. A teacher's own test walk is a row too, badged
- * `staff`, and it is in none of the two (ADR-018).
+ * `staff`, and it is in none of the two (ADR-018). So is an excused student
+ * (#969): listed, badged `Excused`, the grade in the ink, in no statistic.
  *
- * Six columns, under the seven DESIGN.md allows. The name is the identity
+ * Six columns and, when the page offers them (`actions`), a seventh for a
+ * row's menu: the seven DESIGN.md allows. The name is the identity
  * column and carries the weight; the numbers are tabular and right-aligned;
  * the state is a badge and never a colour alone.
  *
@@ -67,11 +69,14 @@ export function GradeTable({
   table: { sorted, sort, toggle },
   openId,
   onOpen,
+  actions,
 }: {
   table: GradeSort;
   /** The attempt whose copy is open, marked in the table. */
   openId?: string | null;
   onOpen?: (attemptId: string) => void;
+  /** A row's secondary actions (the excuse, #969), in a menu at its end; none, no column. */
+  actions?: (row: ResultRow) => MenuItem[];
 }) {
   const t = useT();
 
@@ -88,6 +93,7 @@ export function GradeTable({
     { key: "grade", label: t("results.col.grade"), right: true },
     { key: "duration", label: t("results.col.duration"), right: true, className: T.colLow },
     { key: "state", label: t("results.col.state") },
+    ...(actions ? [{ key: "actions", label: t("common.actions"), srOnly: true, sortable: false as const, className: "w-12" }] : []),
   ];
 
   return (
@@ -115,6 +121,13 @@ export function GradeTable({
                       {t("roster.status.staff")}
                     </Badge>
                   ) : null}
+                  {row.excused ? (
+                    <Tip label={row.excused.comment ?? t("results.excused.help")}>
+                      <Badge tone="zinc" icon={UserCheck}>
+                        {t("results.excused")}
+                      </Badge>
+                    </Tip>
+                  ) : null}
                 </span>
               </td>
               <td className={cx(T.td, "text-fg-muted", T.colHigh)}>{row.email}</td>
@@ -122,7 +135,8 @@ export function GradeTable({
                 {formatPoints(row.points)}
               </td>
               <td className={cx(T.td, "text-right font-semibold tabular-nums")}>
-                <Grade value={row.grade} />
+                {/* Excused: the grade stays readable, in the ink — it counts nowhere. */}
+                <Grade value={row.grade} neutral={row.excused !== null} />
               </td>
               <td className={cx(T.td, "text-right tabular-nums text-fg-muted", T.colLow)}>
                 {row.durationS === null ? "—" : formatDuration(row.durationS * 1000, t)}
@@ -130,6 +144,11 @@ export function GradeTable({
               <td className={T.td}>
                 <Badge tone={STATE_TONES[row.state]}>{resultStateLabel(t, row.state)}</Badge>
               </td>
+              {actions ? (
+                <td className={cx(T.td, "text-right")}>
+                  <Actions menu label={t("results.row.menu", { student: row.displayName })} items={actions(row)} />
+                </td>
+              ) : null}
             </tr>
             );
           })}

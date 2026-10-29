@@ -111,7 +111,7 @@ export async function marksByCell(db: Db | Tx, classroomId: string, enrollmentId
 
 /** A mark as the rules read it: `score` converted by the activity's own scale. */
 export function markOutcome(mark: Pick<MarkRow, "kind" | "points" | "max">, entry: Pick<GradebookEntryFacts, "markGrade">): MarkOutcome {
-  return mark.kind === "absent" ? { kind: "absent" } : { kind: "score", grade: entry.markGrade(mark.points!, mark.max!) };
+  return mark.kind === "score" ? { kind: "score", grade: entry.markGrade(mark.points!, mark.max!) } : { kind: mark.kind };
 }
 
 /** Whether the teacher publishes the mean to the students (off without a row). */

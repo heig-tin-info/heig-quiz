@@ -113,13 +113,15 @@ function Mean({ data }: { data: GradebookStudent }) {
   );
 }
 
-/** A student cell: the grade, the absence, or in words why there is none; `neutral`, an indicative grade (it does not count) in the ink. */
+/** A student cell: the grade, the absence, the excuse in words, or in words why there is none; `neutral`, an indicative grade (it does not count) in the ink. */
 function CellFace({ cell, neutral, t }: { cell: GradebookStudentCell | undefined; neutral: boolean; t: TFunction }) {
   switch (cell?.kind) {
     case "grade":
       return <GradeOrDash value={cell.grade} neutral={neutral} />;
     case "absent":
       return <AbsentSigil why={t("gbook.absent.student")} />;
+    case "excused":
+      return <Badge tone="zinc">{t("gbook.excused.student")}</Badge>;
     case "withheld":
       return <Badge tone="zinc">{t("sgrades.status.withheld")}</Badge>;
     case "indicative":

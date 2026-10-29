@@ -7,7 +7,8 @@
  * columns in the table's order, one row per claimed STUDENT seat — the table
  * never holds a staff seat (ADR-018 §3). A cell is the grade at one decimal,
  * `a1.0` for the school's absence mark (1.0 marked as an absence, which counts
- * as 1.0 and must stay distinguishable from a real 1.0 in the file), or empty.
+ * as 1.0 and must stay distinguishable from a real 1.0 in the file), or empty
+ * — an excused cell too, which counts in no mean (#969).
  * The file says what the screen says: a column not released carries its
  * header's ` (unreleased)` suffix, and stays out of the mean.
  *

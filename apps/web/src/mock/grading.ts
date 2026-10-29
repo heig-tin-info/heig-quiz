@@ -3,6 +3,7 @@ import {
   attemptTotal,
   debrief,
   describe,
+  inStatistics,
   evaluationTotal,
   histogram,
   correctionPublishRefusal,
@@ -1136,6 +1137,18 @@ on("PUT", "/app/api/evaluations/:id/items/:itemId/counting", (m, body) => {
   return { counting, modifiedAfterRelease: changed && e.evaluation.releasedAt !== null };
 });
 
+/** A roster line's id for a mock user: what a gradebook mark addresses (`.../marks/:eid`). */
+const seatOf = (userId: string) => `00000000-0000-4000-9000-${[...userId].map((c) => c.charCodeAt(0) % 10).join("").padStart(12, "0").slice(-12)}`;
+
+/**
+ * An excused student (#969): the gradebook's mark, read by the results view.
+ * The mock excuses the first student of a released world, for the screen.
+ */
+const excusedOf = (e: MockGradingWorld, userId: string) =>
+  e.evaluation.releasedAt !== null && e.attempts.find((a) => !a.staff)?.userId === userId
+    ? { comment: "Certificat medical" }
+    : null;
+
 function resultsView(e: MockGradingWorld) {
   const total = gradedTotalPointsOf(e);
   const rows = e.attempts.map((a) => {
@@ -1153,6 +1166,8 @@ function resultsView(e: MockGradingWorld) {
       durationS: a.durationS,
       state: a.state,
       staff: a.staff,
+      enrollmentId: seatOf(a.userId),
+      excused: excusedOf(e, a.userId),
     };
   });
   // The students who never opened it: a 1.0 that belongs in the table and in
@@ -1173,11 +1188,13 @@ function resultsView(e: MockGradingWorld) {
       durationS: null as unknown as number,
       state: "absent" as MockAttempt["state"],
       staff: row.staff,
+      enrollmentId: seatOf(row.userId),
+      excused: excusedOf(e, row.userId),
     });
   });
   // The class, and only the class: a teacher's own test is a row of the
   // table and of nothing else (ADR-018).
-  const grades = rows.filter((r) => !r.staff).map((r) => r.grade);
+  const grades = rows.filter(inStatistics).map((r) => r.grade);
   const stats = describe(grades);
   return {
     evaluationId: e.evaluation.id,

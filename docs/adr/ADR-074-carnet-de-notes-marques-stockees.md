@@ -31,6 +31,8 @@ Amended 2026-10-13 (product owner, #803): §7's student exit only — a column's
 
 Amended 2026-10-14 (product owner): an archived project has no column, for the staff and the students; see *Amendment of 2026-10-14* at the end of the Decision.
 
+Amended 2026-10-29 (product owner, #969): a third stored mark, `excused`, which takes a cell out of every mean; the results page reads it and sets it. See *Amendment of 2026-10-29* at the end of the Decision.
+
 ## Context
 
 D06 made the gradebook one table per classroom: a column per evaluation or
@@ -227,6 +229,46 @@ Scope: which projects have a column (§6). Everything else stands.
    The cost is that archiving a released project silently changes the
    students' means, so the archive confirmation says so, as a dangerous
    action (F-PROJ-16).
+
+### Amendment of 2026-10-29 (product owner, Yves Chevallier, #969)
+
+Scope: what a cell is (§1), the kinds of a stored mark (§3), what reaches
+a student (§5), the mean (§7) and the class means (amendment of 2026-10-08,
+point 3), the CSV (F-GBOOK-04), and the results page of an evaluation
+(F-RES-01, F-RES-02), which now reads one kind of mark. Everything else
+stands, the override rule (§4) and the owner's role (§9) included.
+
+1. **A third mark kind, `excused`** (`GRADEBOOK_MARK_KINDS`; no points,
+   like `absent`; migration `0124_gradebook_mark_excused` widens the shape
+   check). In the school's tool an unjustified absence is `1.0` and counts,
+   a justified one is written `a1.0` and does not; here `absent` stays the
+   first (1.0, counts) and `excused` is the second. The word, not the
+   school's sigil, since Quiz already uses `a1.0` for the counted absence.
+2. **An excused cell counts in no mean**: not the student's, not the
+   column's class mean — like an empty cell, but named. The staff's cell
+   shows a short boxed `-` whose accessible name and tooltip say "Excused"
+   (N-A11Y-03); an empty cell keeps its faint em dash.
+3. **Setting it** follows the marks' rules unchanged: over a real grade
+   (a student sick during the exam) it needs `override: true`, and on a
+   released column the owner's role (§9); it may be set before the release;
+   clearing it is explicit; every set and clear is audited with before and
+   after (`gradebook.mark_set`, `gradebook.mark_cleared`). A later mark —
+   a make-up's score — replaces it like any mark, without an override.
+4. **The results page reads it by join** (`gradebook_marks` stays the
+   gradebook's, which alone writes it). An excused row stays listed and
+   badged, with its staff-only comment; it is left out of the grade
+   statistics and the histogram (`inStatistics`, `@quiz/domain`, the one
+   rule the web's filter by histogram bar shares), its grade is an empty
+   cell in the CSV. The per-item success rates and the question statistics
+   (ADR-038) keep the attempt: only the grade statistics exclude it. A row's
+   menu sets it, with an optional comment, through the gradebook's own
+   route; the gradebook's cell menu sets it too.
+5. **The student reads "Excused"** once the column is released, whatever the
+   feedback policy (no grade lies behind it to withhold): the Grades page's
+   row has the status `excused` and no score, the classroom's Grades tab the
+   cell `excused`. Never the comment; before the release, nothing (§5).
+6. **The CSV** writes an excused cell empty, in the gradebook's file and in
+   the results' grade column; the school's tool has no code for it.
 
 ## Consequences
 

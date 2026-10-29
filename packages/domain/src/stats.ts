@@ -367,3 +367,12 @@ export function histogram(grades: readonly number[], step = 0.5): HistogramBucke
   }
   return [...counts].map(([bucket, count]) => ({ bucket, count }));
 }
+
+/**
+ * Whether a row of an evaluation's grade table is in its grade statistics
+ * (F-RES-01): a student of the class, not excused. A teacher's own test walk
+ * is not one (ADR-018); an excused student is listed and left out (#969).
+ * The one rule behind the statistics the server computes and the rows a
+ * histogram bar selects on the results page, so the two never disagree.
+ */
+export const inStatistics = (row: { staff: boolean; excused: unknown }): boolean => !row.staff && row.excused === null;

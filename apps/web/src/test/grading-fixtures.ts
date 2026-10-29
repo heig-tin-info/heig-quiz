@@ -210,6 +210,7 @@ function row(displayName: string, points: number, grade: number, over: Partial<R
   userSeq += 1;
   return {
     userId: `u${userSeq}`,
+    enrollmentId: `00000000-0000-4000-8000-${String(userSeq).padStart(12, "0")}`,
     displayName,
     lastName,
     firstName,
@@ -221,6 +222,7 @@ function row(displayName: string, points: number, grade: number, over: Partial<R
     durationS: 600,
     state: "submitted" as const,
     staff: false,
+    excused: null as ResultsView["rows"][number]["excused"],
     ...over,
   };
 }

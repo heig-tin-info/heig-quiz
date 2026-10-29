@@ -34,6 +34,23 @@ export function AbsentSigil({ why }: { why: string }) {
   );
 }
 
+/**
+ * An excused student's cell (#969): a short `-`, boxed as the absence is
+ * so it never reads as an empty cell's faint em dash, in the neutral ink —
+ * it counts in no mean, nothing to warn about. `why` names it, in the
+ * tooltip and for a screen reader (never shape or colour alone, N-A11Y-03).
+ */
+export function ExcusedSigil({ why }: { why: string }) {
+  return (
+    <Tip label={why}>
+      <span className="inline-flex h-5.5 min-w-6 items-center justify-center rounded-md bg-surface-3 px-1.5 font-mono text-xs font-semibold text-fg-muted">
+        <span aria-hidden>-</span>
+        <span className="sr-only">{why}</span>
+      </span>
+    </Tip>
+  );
+}
+
 /** A grade, or a dash where there is none (a null mean, an empty cell). */
 export const GradeOrDash = ({ value, neutral }: { value: number | null; neutral?: boolean }) =>
   value === null ? <Dash /> : <Grade value={value} neutral={neutral} />;

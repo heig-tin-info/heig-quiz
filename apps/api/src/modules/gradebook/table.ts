@@ -111,10 +111,10 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
   };
 }
 
-/** What a student's displayed cell counts as in their mean: a grade, an absence, or nothing. */
+/** What a student's displayed cell counts as in their mean: a grade, an absence, an excuse, or nothing. */
 function outcomeOf(cell: GradebookStudentCell): CellOutcome {
   if (cell.kind === "grade" && cell.grade !== null) return { kind: "grade", grade: cell.grade };
-  return cell.kind === "absent" ? { kind: "absent" } : { kind: "empty" };
+  return cell.kind === "absent" || cell.kind === "excused" ? { kind: cell.kind } : { kind: "empty" };
 }
 
 /**

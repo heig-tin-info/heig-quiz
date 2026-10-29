@@ -192,6 +192,61 @@ describe("ResultsView", () => {
     });
   });
 
+  describe("excusing a student (#969)", () => {
+    const MARKS = "/app/api/classrooms/r1/gradebook/columns/evaluation/e1/marks";
+    /** Zoe Blanc (6.0) excused: listed and badged, out of the statistics the server sent. */
+    const excused = () => {
+      const view = makeResultsView();
+      view.rows[0] = { ...view.rows[0]!, excused: { comment: "Medical certificate" } };
+      view.stats.histogram[10]!.count = 0;
+      return view;
+    };
+    const rowOf = (name: string) =>
+      within(screen.getAllByRole("table").at(-1)!)
+        .getAllByRole("row")
+        .find((r) => within(r).queryAllByRole("cell")[0]?.textContent?.startsWith(name))!;
+
+    it("marks the excused row, and leaves it out of the pass rate and of every histogram bar", async () => {
+      mockFetch({ [`GET ${VIEW}`]: ok(excused()) });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />, { route: "/?bucket=6" });
+      await screen.findByRole("heading", { name: "Results" });
+      // The 6.0 bar holds nobody now: the excused student is not filtered in.
+      expect(within(screen.getAllByRole("table").at(-1)!).getAllByRole("row")).toHaveLength(1);
+      await userEvent.click(screen.getByRole("button", { name: "Clear filter — Grades 6.0" }));
+      expect(within(rowOf("Zoe Blanc")).getByText("Excused")).toBeVisible();
+      // 1 of the 3 counted rows is at 4.0 or above.
+      expect(screen.getByText("Pass rate").nextSibling).toHaveTextContent("33%");
+    });
+
+    it("excuses a student from their row with a staff-only comment, through the gradebook's mark", async () => {
+      const { calls } = mockFetch({
+        [`GET ${VIEW}`]: ok(makeResultsView()),
+        "GET /app/api/evaluations/e1": ok(makeEvaluationDetail()),
+        [`PUT ${MARKS}/${makeResultsView().rows[1]!.enrollmentId}`]: ok({}),
+      });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+      await userEvent.click(await screen.findByRole("button", { name: "Actions for Adam Perret" }));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Excuse…" }));
+      const dialog = await screen.findByRole("dialog", { name: "Excuse Adam Perret" });
+      await userEvent.type(within(dialog).getByLabelText("Comment (staff only)"), "Sick");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Excuse" }));
+      await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ kind: "excused", comment: "Sick" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+
+    it("removes an excuse explicitly, with a DELETE of the mark", async () => {
+      const { calls } = mockFetch({
+        [`GET ${VIEW}`]: ok(excused()),
+        "GET /app/api/evaluations/e1": ok(makeEvaluationDetail()),
+        [`DELETE ${MARKS}/${excused().rows[0]!.enrollmentId}`]: ok({}),
+      });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+      await userEvent.click(await screen.findByRole("button", { name: "Actions for Zoe Blanc" }));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Remove the excuse" }));
+      await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
+    });
+  });
+
   it("exports through a real navigation to the CSV endpoint", async () => {
     mockFetch({ [`GET ${VIEW}`]: ok(makeResultsView()) });
     renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);

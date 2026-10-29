@@ -28,7 +28,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { GradebookStaff, GradebookStudent, StudentGrades, CSRF_COOKIE, type FeedbackPolicy, type GradebookStaffCell } from "@quiz/contracts";
+import { GradebookStaff, GradebookStudent, ResultsView, StudentGrades, CSRF_COOKIE, type FeedbackPolicy, type GradebookStaffCell } from "@quiz/contracts";
 import { gradebookMean, gradeFromPoints } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
@@ -924,5 +924,136 @@ describe("who reaches the gradebook (invariant 6)", () => {
     const as = await sessionOf(students[0]!.id, { kind: "impersonation", actorUserId: admin.id });
     const res = await call("PUT", markUrl("evaluation", "X1", seats[1]!), as, { kind: "absent" });
     expect([403, 404]).toContain(res.statusCode);
+  });
+});
+
+describe("an excused student (#969, ADR-074 amendment of 2026-10-29)", () => {
+  const resultsUrl = () => `/app/api/evaluations/${col["E1"]}/results`;
+  const resultsOf = async () => {
+    const res = await call("GET", resultsUrl(), teacher.headers);
+    expect(res.statusCode, res.body).toBe(200);
+    return ResultsView.parse(res.json());
+  };
+  const excuse = (student: number, headers: Headers, body: object = {}) =>
+    call("PUT", markUrl("evaluation", "E1", seats[student]!), headers, { kind: "excused", comment: SECRET, ...body });
+
+  it("excuses a student over a real grade only with override and as an owner, like an absence over a grade", async () => {
+    const assistant = await server.signIn("teacher");
+    await db().insert(courseStaff).values({ courseId: seed.courseId, userId: assistant.id, role: "assistant" });
+    try {
+      expect((await excuse(0, teacher.headers)).json().error).toBe("grade_exists");
+      const refused = await excuse(0, assistant.headers, { override: true });
+      expect([refused.statusCode, refused.json().error]).toEqual([403, "owner_required"]);
+      // Not released yet: open to every member, before the release (ADR-074).
+      expect((await call("PUT", markUrl("evaluation", "E3", seats[0]!), assistant.headers, { kind: "excused", override: true })).statusCode).toBe(200);
+      expect(cellOf(await staffTable(), 0, "E3")).toMatchObject({ kind: "excused", grade: null, source: "mark" });
+      await call("DELETE", markUrl("evaluation", "E3", seats[0]!), teacher.headers);
+    } finally {
+      await db().delete(courseStaff).where(eq(courseStaff.userId, assistant.id));
+    }
+  });
+
+  it("leaves the cell out of the student's mean and the column's class mean, named, and audits set and clear", async () => {
+    const before = await staffTable();
+    const done = await excuse(0, teacher.headers, { override: true });
+    expect(done.statusCode, done.body).toBe(200);
+    try {
+      const table = GradebookStaff.parse(done.json());
+      expect(cellOf(table, 0, "E1")).toMatchObject({ kind: "excused", grade: null, source: "mark", hasGrade: true, mark: { kind: "excused", comment: SECRET } });
+      // s0 without E1: E2 4.0, E4 4.5, P1 5.5 -> 14 / 3 = 4.67.
+      expect(rowOf(before, 0).mean).toBe(4.8);
+      expect(rowOf(table, 0).mean).toBe(4.7);
+      // E1 without s0: 3.5 and an absence 1.0 -> 2.25.
+      expect(table.columns.find((c) => c.activityId === col["E1"])!.classMean).toBe(2.3);
+    } finally {
+      await call("DELETE", markUrl("evaluation", "E1", seats[0]!), teacher.headers);
+    }
+    const audited = (await db().select().from(auditLog).where(eq(auditLog.subjectId, seed.classroomId)))
+      .filter((r) => (r.payload as { activityId?: string } | null)?.activityId === col["E1"])
+      .map((r) => ({ action: r.action, payload: r.payload }));
+    expect(audited).toEqual(
+      expect.arrayContaining([
+        { action: "gradebook.mark_set", payload: expect.objectContaining({ before: null, after: { kind: "excused", points: null, max: null, comment: SECRET }, override: true }) },
+        { action: "gradebook.mark_cleared", payload: expect.objectContaining({ before: { kind: "excused", points: null, max: null, comment: SECRET }, after: null }) },
+      ]),
+    );
+  });
+
+  it("keeps the row on the results page, marked, out of the grade statistics and the CSV grade, in the success rates", async () => {
+    const before = await resultsOf();
+    await excuse(0, teacher.headers, { override: true });
+    try {
+      const view = await resultsOf();
+      const row = view.rows.find((r) => r.userId === students[0]!.id)!;
+      expect(row).toMatchObject({ enrollmentId: seats[0], excused: { comment: SECRET }, grade: 5 });
+      expect(view.rows.filter((r) => r.excused === null && !r.staff)).toHaveLength(before.stats.count - 1);
+      // E1 without s0: 3.5 and the absent student's 1.0.
+      expect(view.stats).toMatchObject({ count: before.stats.count - 1, mean: 2.25, max: 3.5 });
+      expect(view.stats.histogram.reduce((n, b) => n + b.count, 0)).toBe(before.stats.count - 1);
+      // The per-item success rate keeps the excused attempt (owner, 2026-10-29, e).
+      expect(view.items.map((i) => i.successRate)).toEqual(before.items.map((i) => i.successRate));
+
+      // The results file: the points stay, the grade is an empty cell; the gradebook's: an empty cell.
+      const lineOf = async (url: string) => {
+        const res = await call("GET", url, teacher.headers);
+        expect(res.statusCode, res.body).toBe(200);
+        expect(res.payload).not.toContain(SECRET);
+        return res.payload.split("\r\n").find((l) => l.startsWith(`${row.email};`))!.split(";");
+      };
+      const csv = await lineOf(`${resultsUrl()}.csv`);
+      expect(csv.at(-1)).toBe("");
+      expect(csv.at(-2)).not.toBe("");
+
+      const book = await lineOf(`${base()}.csv`);
+      const table = await staffTable();
+      expect(book[3 + table.columns.findIndex((c) => c.activityId === col["E1"])]).toBe("");
+    } finally {
+      await call("DELETE", markUrl("evaluation", "E1", seats[0]!), teacher.headers);
+    }
+    expect((await resultsOf()).stats).toEqual(before.stats);
+  });
+
+  it("tells the student Excused on the Grades page and the Grades tab, never the comment, whoever the student caller is", async () => {
+    await excuse(0, teacher.headers, { override: true });
+    // Not released: the mark stays the staff's.
+    await call("PUT", markUrl("evaluation", "E3", seats[0]!), teacher.headers, { kind: "excused", comment: SECRET, override: true });
+    try {
+      const callers: [string, Headers][] = [
+        ["student", students[0]!.headers],
+        ["impersonation", await sessionOf(students[0]!.id, { kind: "impersonation", actorUserId: admin.id })],
+      ];
+      for (const [who, headers] of callers) {
+        const page = await call("GET", "/app/api/student/results", headers);
+        expect(page.statusCode, page.body).toBe(200);
+        const rows = evaluationRows(StudentGrades.parse(page.json()));
+        expect(rows.find((r) => r.evaluationId === col["E1"]), who).toMatchObject({ status: "excused", score: null });
+        expect(rows.find((r) => r.evaluationId === col["E3"])!.status, who).not.toBe("excused");
+        expect(page.body, who).not.toContain(SECRET);
+
+        const { parsed, body } = await studentRead(headers);
+        expect(parsed.cells[col["E1"]!], who).toEqual({ kind: "excused", grade: null, points: null, max: null });
+        expect(parsed.cells[col["E3"]!]!.kind, who).not.toBe("excused");
+        expect(body, who).not.toContain(SECRET);
+      }
+      // The published mean leaves the excused column out, as the staff's does.
+      await call("PATCH", base(), teacher.headers, { meanPublished: true });
+      // s0 reads E2 4.0 and P1 5.5 (E4 is withheld, E1 excused).
+      expect((await studentRead(students[0]!.headers)).parsed.mean).toBe(4.8);
+    } finally {
+      await call("PATCH", base(), teacher.headers, { meanPublished: false });
+      await call("DELETE", markUrl("evaluation", "E1", seats[0]!), teacher.headers);
+      await call("DELETE", markUrl("evaluation", "E3", seats[0]!), teacher.headers);
+    }
+  });
+
+  it("gives way to a later score without a new override: a make-up grade replaces the excuse over a real grade", async () => {
+    expect((await excuse(0, teacher.headers, { override: true })).statusCode).toBe(200);
+    try {
+      const res = await call("PUT", markUrl("evaluation", "E1", seats[0]!), teacher.headers, { kind: "score", points: 7, max: 10 });
+      expect(res.statusCode, res.body).toBe(200);
+      expect(cellOf(GradebookStaff.parse(res.json()), 0, "E1")).toMatchObject({ kind: "grade", source: "mark", hasGrade: true, mark: { kind: "score" } });
+    } finally {
+      await call("DELETE", markUrl("evaluation", "E1", seats[0]!), teacher.headers);
+    }
   });
 });

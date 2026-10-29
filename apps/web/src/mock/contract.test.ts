@@ -1102,12 +1102,12 @@ describe("the mock's gradebook (M5-04)", () => {
   const marks = (t: GradebookStaff, column: GradebookStaff["columns"][number], eid: string) =>
     `/app/api/classrooms/${t.classroomId}/gradebook/columns/${column.kind}/${column.activityId}/marks/${eid}`;
 
-  it("has its columns and its claimed students on PRG1-2026, an absence a1.0 and a column not released; none elsewhere", async () => {
+  it("has its columns and its claimed students on PRG1-2026, an absence a1.0, an excused student and a column not released; none elsewhere", async () => {
     const t = await table();
     expect(t.columns.map((c) => c.released)).toContain(false);
     expect(t.rows.length).toBeGreaterThan(5);
     const kinds = new Set(t.rows.flatMap((r) => Object.values(r.cells).map((c) => c.kind)));
-    expect([...kinds].sort()).toEqual(["absent", "empty", "grade"]);
+    expect([...kinds].sort()).toEqual(["absent", "empty", "excused", "grade"]);
     // Nothing of an unreleased column but a staff mark; and it is out of the mean.
     const unreleased = t.columns.find((c) => !c.released)!;
     const shown = t.rows.map((r) => r.cells[unreleased.activityId]!).filter((c) => c.kind !== "empty");

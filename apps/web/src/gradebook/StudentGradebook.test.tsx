@@ -74,6 +74,13 @@ describe("the student's own cells", () => {
     expect(within(await row("Quick quiz")).getByText("grade withheld")).toBeInTheDocument();
   });
 
+  it("says Excused, in words, where the teacher excused the student (#969)", async () => {
+    renderTab(book({ cells: { ...book().cells, [IDS[4]!]: cell("excused") } }));
+    const excused = await row("Quick quiz");
+    expect(within(excused).getByText("Excused")).toBeInTheDocument();
+    expect(within(excused).queryByText("—")).toBeNull();
+  });
+
   it("draws no mean and no weight while the payload has none (the teacher has not published it)", async () => {
     renderTab(book());
     await row("Test 1");

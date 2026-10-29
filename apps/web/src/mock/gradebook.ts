@@ -41,6 +41,8 @@ import {
   gradeFromPoints,
   resolveCell,
   type CellOutcome,
+  type GradebookMarkKind,
+  type MarkOutcome,
   type MeanColumn,
 } from "@quiz/domain";
 
@@ -55,7 +57,7 @@ type Beneath =
   | { kind: "empty" };
 
 interface MockMark {
-  kind: "absent" | "score";
+  kind: GradebookMarkKind;
   points: number | null;
   max: number | null;
   comment: string | null;
@@ -157,6 +159,8 @@ function buildBook(roomId: string): MockBook | null {
   mark(2, 4, { kind: "absent", points: null, max: null });
   mark(3, 2, { kind: "score", points: 8, max: 10 });
   mark(4, 1, { kind: "score", points: 15, max: 20 });
+  // An excused student (#969): named, and in no mean.
+  mark(0, 5, { kind: "excused", points: null, max: null });
   return book;
 }
 
@@ -171,8 +175,8 @@ const bookOf = (roomId: string): MockBook | null => {
 const key = (column: MockColumn, line: string) => `${column.activityId}|${line}`;
 
 /** The outcome a stored mark gives a cell. */
-const markOutcome = (m: MockMark): { kind: "absent" } | { kind: "score"; grade: number } =>
-  m.kind === "absent" ? { kind: "absent" } : { kind: "score", grade: gradeFromPoints(m.points ?? 0, m.max ?? 1, SCALE) };
+const markOutcome = (m: MockMark): MarkOutcome =>
+  m.kind === "score" ? { kind: "score", grade: gradeFromPoints(m.points ?? 0, m.max ?? 1, SCALE) } : { kind: m.kind };
 
 /** What lies beneath a cell as a student reads it: nothing before the release. */
 const shown = (column: MockColumn, line: string): Beneath =>
@@ -207,12 +211,12 @@ function staffCell(column: MockColumn, line: string, book: MockBook): GradebookS
   };
 }
 
-/** What a displayed cell counts as in the mean: a grade, an absence, or nothing. */
+/** What a displayed cell counts as in the mean: a grade, an absence, an excuse, or nothing. */
 const displayed = (cell: { kind: string; grade: number | null }): CellOutcome =>
   cell.kind === "grade" && cell.grade !== null
     ? { kind: "grade", grade: cell.grade }
-    : cell.kind === "absent"
-      ? { kind: "absent" }
+    : cell.kind === "absent" || cell.kind === "excused"
+      ? { kind: cell.kind }
       : { kind: "empty" };
 
 const meanOf = (columns: MockColumn[], outcomes: Map<string, CellOutcome>): number | null =>

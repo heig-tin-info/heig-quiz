@@ -50,6 +50,13 @@ describe("a cell", () => {
     // The teacher's score fills the empty cell of a project never accepted.
     expect(resolveCell({ kind: "score", grade: 4.5 }, { kind: "empty" })).toEqual({ kind: "grade", grade: 4.5 });
   });
+
+  it("reads an excused cell as named and without a grade, over a grade or an absence alike (#969)", () => {
+    expect(cellGrade({ kind: "excused" })).toBeNull();
+    expect(hasGrade({ kind: "excused" })).toBe(false);
+    expect(resolveCell({ kind: "excused" }, { kind: "grade", grade: 5.5 })).toEqual({ kind: "excused" });
+    expect(resolveCell({ kind: "excused" }, { kind: "absent" })).toEqual({ kind: "excused" });
+  });
 });
 
 describe("the mean", () => {
@@ -80,6 +87,11 @@ describe("the mean", () => {
     expect(gradebookMean([grade(4, 10), grade(5, 30), { weight: 100, counts: true, cell: { kind: "empty" } }])).toBe(4.8);
   });
 
+  it("leaves out an excused column like an empty one, renormalising the others (#969)", () => {
+    expect(gradebookMean([grade(5), { weight: 100, counts: true, cell: { kind: "excused" } }])).toBe(5);
+    expect(gradebookMean([{ weight: 100, counts: true, cell: { kind: "excused" } }])).toBeNull();
+  });
+
   it("leaves out a column that does not count, and a 0 % weight", () => {
     expect(gradebookMean([grade(5), grade(2, 100, false)])).toBe(5);
     expect(gradebookMean([grade(5), grade(2, 0)])).toBe(5);
@@ -102,6 +114,7 @@ describe("the class mean", () => {
   it("leaves out a missing grade, and counts an absence as the 1.0 its cell counts as", () => {
     expect(classMean([5, null, 3])).toBe(4);
     expect(classMean([5, cellGrade({ kind: "absent" }), cellGrade({ kind: "empty" })])).toBe(3);
+    expect(classMean([5, cellGrade({ kind: "excused" })])).toBe(5);
   });
 
   it("is null with no grade at all", () => {

@@ -11,6 +11,7 @@ import {
   describe as describeSeries,
   histogram,
   histogramBucket,
+  inStatistics,
   itemStats,
   sameAsLatest,
   optionShares,
@@ -344,5 +345,13 @@ describe("optionShares", () => {
     expect(QUESTION_STATS_MIN_N).toBe(10);
     expect(optionShares([5, 4], 0, 9)).toBeNull();
     expect(optionShares([5, 5], 0, 10)).not.toBeNull();
+  });
+});
+
+describe("inStatistics (F-RES-01, #969)", () => {
+  it("keeps a student, leaves out a teacher walk and an excused student", () => {
+    expect(inStatistics({ staff: false, excused: null })).toBe(true);
+    expect(inStatistics({ staff: true, excused: null })).toBe(false);
+    expect(inStatistics({ staff: false, excused: { comment: null } })).toBe(false);
   });
 });

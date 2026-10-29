@@ -104,6 +104,15 @@ describe("the student's Grades", () => {
     expect((await tableRow("Examen final")).getByText("not taken")).toBeInTheDocument();
   });
 
+  it("says excused where the teacher excused the student, no points nor grade (#969)", async () => {
+    const excused: GradeGroup[] = [{ ...groups[0]!, rows: [row({ evaluationId: "e7", title: "Quiz 0", status: "excused" })] }];
+    mockFetch({ [URL]: ok(excused) });
+    render();
+    const line = await tableRow("Quiz 0");
+    expect(line.getByText("excused")).toBeInTheDocument();
+    expect(line.getAllByText("—")).toHaveLength(2);
+  });
+
   it("prints the points read before the release as indicative, and no grade", async () => {
     mockFetch({ [URL]: ok(groups) });
     render();

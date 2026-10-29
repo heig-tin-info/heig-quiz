@@ -1053,6 +1053,8 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
         row({ title: "Série bonus — Récursivité", mode: "exercise", counts: true, status: "released", date: iso(-10 * D), score: score(7, 10) }),
         // Released, never taken: the scale minimum (F-RES-02).
         row({ title: "Quiz 1 — Types et opérateurs", status: "missed", date: iso(-15 * D), score: score(0, 10) }),
+        // Excused by the teacher (#969): no grade, in no mean.
+        row({ title: "Quiz 0 — Prise en main", status: "excused", date: iso(-20 * D) }),
         ...series,
         // Newest first, as the server sorts them.
       ].sort((a, b) => b.date.localeCompare(a.date)),

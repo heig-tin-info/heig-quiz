@@ -1,0 +1,3 @@
+ALTER TABLE "gradebook_marks" DROP CONSTRAINT "gradebook_marks_shape";--> statement-breakpoint
+ALTER TABLE "gradebook_marks" ADD CONSTRAINT "gradebook_marks_shape" CHECK (("gradebook_marks"."kind" IN ('absent', 'excused') AND "gradebook_marks"."points" IS NULL AND "gradebook_marks"."max" IS NULL)
+        OR ("gradebook_marks"."kind" = 'score' AND "gradebook_marks"."points" IS NOT NULL AND "gradebook_marks"."max" IS NOT NULL AND "gradebook_marks"."max" > 0 AND "gradebook_marks"."points" >= 0 AND "gradebook_marks"."points" <= "gradebook_marks"."max"));

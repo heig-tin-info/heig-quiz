@@ -104,7 +104,7 @@ export const gradebookMarks = pgTable(
     index("gradebook_marks_enrollment_idx").on(t.enrollmentId),
     check(
       "gradebook_marks_shape",
-      sql`(${t.kind} = 'absent' AND ${t.points} IS NULL AND ${t.max} IS NULL)
+      sql`(${t.kind} IN ('absent', 'excused') AND ${t.points} IS NULL AND ${t.max} IS NULL)
         OR (${t.kind} = 'score' AND ${t.points} IS NOT NULL AND ${t.max} IS NOT NULL AND ${t.max} > 0 AND ${t.points} >= 0 AND ${t.points} <= ${t.max})`,
     ),
   ],
