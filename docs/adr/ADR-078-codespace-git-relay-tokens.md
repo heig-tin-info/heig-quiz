@@ -584,7 +584,10 @@ bound, for an `online` project whose deadline strategy is `commit`
   portal reaches the repositories of those projects until they are locked
   or archived, rather than until their deadline plus the grace. The
   deadline commit and the receipt times keep what it could add after the
-  deadline apart from the graded work.
+  deadline apart from the graded work. A token minted before a staff lock
+  is no longer cut at the deadline: it may push until its own expiry (at
+  most one hour) or until the settle job applies GitHub's lock, whichever
+  comes first.
 - **Open.** Whether criteria and LLM grading should read commits received
   after the deadline: [06](../spec/06-questions-ouvertes.md), question 61.
 
