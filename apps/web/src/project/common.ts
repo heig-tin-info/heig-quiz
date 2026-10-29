@@ -15,7 +15,8 @@ import type { BadgeStyle } from "../ui";
  * published — open to the students, whether or not anyone is "in the room"
  * —, blue while a draft waits for its scheduled publication (`scheduled`,
  * an evaluation's `scheduled`, #795), zinc at rest: a draft still in
- * preparation, a project locked at its deadline whose scores are not final;
+ * preparation, a project past its deadline whose scores are not final
+ * (`locked`, or `deadline_passed` under the `commit` strategy, #958);
  * amber once they are and the staff's release is awaited (`graded`, an
  * evaluation's `grading`); outline green once released. Never the accent.
  * "Open to the students" is also what {@link projectTimerAt} encodes; the
@@ -26,6 +27,7 @@ const PHASE_STYLE: Record<ProjectPhase, BadgeStyle> = {
   scheduled: { tone: "blue" },
   published: { tone: "green" },
   locked: { tone: "zinc" },
+  deadline_passed: { tone: "zinc" },
   graded: { tone: "amber" },
   released: { tone: "green", variant: "outline" },
 };

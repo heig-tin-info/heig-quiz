@@ -201,7 +201,7 @@ erDiagram
 
 **Journal**: in Quiz, created with an editable home page and versioned in the database; in GitHub mode, created or chosen → `sync_status` `pending` → `ok` after ingestion, or `error` when GitHub refuses access (the mirrored pages stay readable). Removal drops the platform's copy, never a GitHub repository (ADR-057).
 
-**Project**: `draft` → publish (now, or by the ticker at its start) → `published` → deadline → `locked`; frozen definitively at the deadline plus the grace, then the final review dispatched, then released by the staff. A deadline moved later reopens it. Archived and unarchived at any time. The staff's views derive a **phase** from the frozen repositories and the release, `locked` / `graded` / `released`, which the badge says (ADR-104); the stored state stops at `locked`.
+**Project**: `draft` → publish (now, or by the ticker at its start) → `published` → deadline → `locked`; frozen definitively at the deadline plus the grace, then the final review dispatched, then released by the staff. A deadline moved later reopens it. Archived and unarchived at any time. The staff's views derive a **phase** from the frozen repositories and the release, `locked` / `graded` / `released`, which the badge says (ADR-104) — `deadline_passed` in place of `locked` under the `commit` deadline strategy, which locks nothing (#958); the stored state stops at `locked`.
 
 **Project repository**: accepted → `provision_status` `pending` → `ok` (or `error`, retried by the student) → invitation `pending` → `accepted`; at its effective deadline applied (provisional freeze) and locked, frozen definitively at the effective deadline plus the grace; its own deadline moved later reopens it alone; `deleted` for good when the repository is gone from GitHub.
 

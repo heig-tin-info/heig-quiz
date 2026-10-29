@@ -77,7 +77,7 @@ export type ProjectActionKind = "link" | "accept" | "notStarted" | "invitation" 
 export function projectActionKind(facts: ProjectFacts, now: number): ProjectActionKind {
   if (facts.repo?.state === "deleted") return "deleted";
   if (facts.repo) return facts.repo.invitation === "pending" ? "invitation" : "open";
-  if (facts.status === "locked" || facts.status === "released") return "notAccepted";
+  if (facts.status === "locked" || facts.status === "deadline_passed" || facts.status === "released") return "notAccepted";
   if (!facts.githubLinked) return "link";
   return Date.parse(facts.startAt) > now ? "notStarted" : "accept";
 }
@@ -101,17 +101,21 @@ export const PROJECT_STATUS_KEY = {
   to_accept: "sproj.status.to_accept",
   in_progress: "sproj.status.in_progress",
   locked: "sproj.status.locked",
+  deadline_passed: "sproj.status.deadline_passed",
   released: "sproj.status.released",
 } as const satisfies Record<StudentProjectStatus, keyof Dict>;
 
 /**
  * The status badge's tone, from the one rule of the student's cards: green is
  * under way or done, amber waits on the student, zinc is closed or neutral.
+ * Only a repository GitHub holds locked wears the lock: under the `commit`
+ * strategy the deadline passes and the repository stays open (#958).
  */
 export const PROJECT_STATUS_TONE: Record<StudentProjectStatus, { tone: Tone; icon?: IconType }> = {
   to_accept: { tone: "amber" },
   in_progress: { tone: "green" },
   locked: { tone: "zinc", icon: Lock },
+  deadline_passed: { tone: "zinc" },
   released: { tone: "green" },
 };
 

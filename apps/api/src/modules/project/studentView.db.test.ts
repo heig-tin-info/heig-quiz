@@ -357,6 +357,25 @@ describe("the student's cards (F-PROJ-04, F-ORG-14, F-ORG-15)", () => {
     expect(projectCards(h.open)[0]).toMatchObject({ status: "in_progress", deadlineAt: ownDeadline.toISOString() });
   });
 
+  it("says the deadline passed under the commit strategy, locked only while GitHub holds the repository (#958)", async () => {
+    const student = await newStudent();
+    const room = await connectedClassroom([student]);
+    const open = await project(room, "Open lab");
+    const held = await project(room, "Held lab");
+    for (const p of [open, held]) {
+      await setProject(p.id, { deadlineStrategy: "commit" });
+      await accept(p.id, student);
+    }
+    // The staff's hand locked one repository on GitHub (F-PROJ-09).
+    await setRepo((await repoOf(held.id, student.id)).id, { staffLock: true, lockedAt: at(NOW) });
+    server.clock.set(at(DEADLINE, MINUTE));
+    const h = await home(student.headers);
+    expect(titles(h.open)).toEqual([]);
+    expect(titles(h.past).sort()).toEqual(["Held lab", "Open lab"]);
+    const status = Object.fromEntries(projectCards(h.past).map((c) => [c.title, c.status]));
+    expect(status).toEqual({ "Open lab": "deadline_passed", "Held lab": "locked" });
+  });
+
   it("names the student's repository once accepted, and leads to linking the account otherwise", async () => {
     const linked = await newStudent();
     const unlinked = await newStudent({ linked: false });

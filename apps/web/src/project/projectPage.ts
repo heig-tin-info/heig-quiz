@@ -67,7 +67,9 @@ export const offersSync = (p: ProjectDetail): boolean => p.primaryAction !== "sy
  * there is one (Publish, Release, a release again once a score moved after
  * the release, Sync when the source is ahead, M3-07).
  * `date` is the instant the sentence names: the start of a scheduled draft,
- * the release, else the deadline.
+ * the release, else the deadline. A project past its deadline under the
+ * `commit` strategy (phase `deadline_passed`) is said past its deadline,
+ * never locked (#958).
  */
 export type StatusKey =
   | "project.status.archived"
@@ -80,7 +82,9 @@ export type StatusKey =
   | "project.status.open"
   | "project.status.released"
   | "project.status.lockedFreezing"
-  | "project.status.locked";
+  | "project.status.locked"
+  | "project.status.deadlinePassedFreezing"
+  | "project.status.deadlinePassed";
 
 export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string } {
   const key = ((): StatusKey => {
@@ -92,7 +96,10 @@ export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string 
     if (p.primaryAction === "sync") return "project.status.sync";
     if (p.state === "published") return "project.status.open";
     if (p.releasedAt) return "project.status.released";
-    return p.counts.frozen < p.counts.live ? "project.status.lockedFreezing" : "project.status.locked";
+    const freezing = p.counts.frozen < p.counts.live;
+    // Under the `commit` strategy the repositories stay open: never "Locked" (#958).
+    if (p.phase === "deadline_passed") return freezing ? "project.status.deadlinePassedFreezing" : "project.status.deadlinePassed";
+    return freezing ? "project.status.lockedFreezing" : "project.status.locked";
   })();
   const date =
     key === "project.status.scheduled"

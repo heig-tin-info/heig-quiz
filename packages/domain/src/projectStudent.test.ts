@@ -9,7 +9,9 @@ const base = {
   released: false,
   accepted: false,
   locked: false,
+  deadlineStrategy: "lock" as const,
 };
+const commit = { ...base, deadlineStrategy: "commit" as const };
 const during = at("2026-10-05T12:00:00Z");
 
 describe("studentProjectStatus (F-PROJ-04)", () => {
@@ -32,6 +34,19 @@ describe("studentProjectStatus (F-PROJ-04)", () => {
     expect(studentProjectStatus({ ...base, released: true }, during)).toBe("released");
     expect(studentProjectStatus({ ...base, released: true, locked: true }, at("2026-11-01T00:00:00Z"))).toBe("released");
   });
+
+  it("says the deadline passed under the commit strategy, whose repository stays open (#958)", () => {
+    expect(studentProjectStatus({ ...commit, accepted: true }, during)).toBe("in_progress");
+    expect(studentProjectStatus(commit, during)).toBe("to_accept");
+    expect(studentProjectStatus({ ...commit, accepted: true }, commit.deadlineAt)).toBe("deadline_passed");
+    expect(studentProjectStatus(commit, at("2026-10-20T00:00:00Z"))).toBe("deadline_passed");
+    expect(studentProjectStatus({ ...commit, released: true }, at("2026-10-20T00:00:00Z"))).toBe("released");
+  });
+
+  it("is locked under the commit strategy while GitHub holds the repository (the staff's hand), before or after the deadline", () => {
+    expect(studentProjectStatus({ ...commit, accepted: true, locked: true }, during)).toBe("locked");
+    expect(studentProjectStatus({ ...commit, accepted: true, locked: true }, at("2026-10-20T00:00:00Z"))).toBe("locked");
+  });
 });
 
 describe("studentProjectGroup (F-ORG-15)", () => {
@@ -42,6 +57,11 @@ describe("studentProjectGroup (F-ORG-15)", () => {
     expect(studentProjectGroup({ ...base, accepted: true, locked: true }, during)).toBe("past");
     expect(studentProjectGroup(base, base.deadlineAt)).toBe("past");
     expect(studentProjectGroup({ ...base, released: true }, during)).toBe("past");
+  });
+
+  it("puts a commit project past its deadline in past, though its repository stays open (#958)", () => {
+    expect(studentProjectGroup({ ...commit, accepted: true }, during)).toBe("open");
+    expect(studentProjectGroup({ ...commit, accepted: true }, commit.deadlineAt)).toBe("past");
   });
 });
 

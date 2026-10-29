@@ -3380,6 +3380,7 @@ export const en = {
   "sproj.status.to_accept": "to accept",
   "sproj.status.in_progress": "in progress",
   "sproj.status.locked": "locked",
+  "sproj.status.deadline_passed": "deadline passed",
   "sproj.status.released": "scores published",
   // M3-13 (F-PROJ-04, F-PROJ-05, F-PROJ-07, F-PROJ-15): the project row's one
   // action by state, the refusals, and the student's project page.
@@ -5129,7 +5130,7 @@ export const en = {
   "coach.sproj.score.title": "Your score",
   "coach.sproj.score.body": "The automatic checks score your work as you push. The score is indicative until your teacher releases the final result.",
   "coach.sproj.deadline.title": "The deadline",
-  "coach.sproj.deadline.body": "Your work is evaluated at this date. After it, the repository is locked.",
+  "coach.sproj.deadline.body": "Your work is evaluated as it stands at this date. Later pushes do not count.",
   "palette.openProject": "Open the project {name}",
   "palette.openJournal": "Open the journal of this class",
   "palette.openGroups": "Open the groups of this class",
@@ -5665,6 +5666,7 @@ export const en = {
   "project.state.scheduled": "scheduled",
   "project.state.published": "published",
   "project.state.locked": "locked",
+  "project.state.deadline_passed": "deadline passed",
   "project.state.graded": "graded",
   "project.state.released": "released",
 
@@ -5836,6 +5838,8 @@ export const en = {
   "project.status.open": "Open until {date}.",
   "project.status.locked": "Locked since {date}.",
   "project.status.lockedFreezing": "Locked since {date}. The scores are not final until every repository is frozen.",
+  "project.status.deadlinePassed": "Deadline passed on {date}.",
+  "project.status.deadlinePassedFreezing": "Deadline passed on {date}. The scores are not final until every repository is frozen.",
   "project.status.release": "Every repository is frozen: the scores are final and ready to be released.",
   "project.status.released": "Scores released on {date}.",
   "project.status.sync": "The source repository is ahead of the students' copies: a sync is due.",

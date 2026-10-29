@@ -3355,6 +3355,7 @@ export const fr: Record<keyof Dict, string> = {
   "sproj.status.to_accept": "à accepter",
   "sproj.status.in_progress": "en cours",
   "sproj.status.locked": "verrouillé",
+  "sproj.status.deadline_passed": "échéance passée",
   "sproj.status.released": "scores publiés",
   // M3-13 (F-PROJ-04, F-PROJ-05, F-PROJ-07, F-PROJ-15): the project row's one
   // action by state, the refusals, and the student's project page.
@@ -5098,7 +5099,7 @@ export const fr: Record<keyof Dict, string> = {
   "coach.sproj.score.title": "Votre score",
   "coach.sproj.score.body": "Les vérifications automatiques attribuent un score à votre travail à chaque push. Il reste indicatif jusqu'à la publication du résultat final.",
   "coach.sproj.deadline.title": "L'échéance",
-  "coach.sproj.deadline.body": "Votre travail est évalué à cette date. Ensuite, le dépôt est verrouillé.",
+  "coach.sproj.deadline.body": "Votre travail est évalué tel qu'il est à cette date. Ce qui est poussé ensuite ne compte pas.",
   "palette.openProject": "Ouvrir le projet {name}",
   "palette.openJournal": "Ouvrir le journal de cette classe",
   "palette.openGroups": "Ouvrir les groupes de cette classe",
@@ -5627,6 +5628,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.state.scheduled": "planifié",
   "project.state.published": "publié",
   "project.state.locked": "verrouillé",
+  "project.state.deadline_passed": "échéance passée",
   "project.state.graded": "corrigé",
   "project.state.released": "scores publiés",
 
@@ -5796,6 +5798,8 @@ export const fr: Record<keyof Dict, string> = {
   "project.status.open": "Ouvert jusqu'au {date}.",
   "project.status.locked": "Verrouillé depuis le {date}.",
   "project.status.lockedFreezing": "Verrouillé depuis le {date}. Les scores ne sont pas définitifs tant que tous les dépôts ne sont pas figés.",
+  "project.status.deadlinePassed": "Échéance passée le {date}.",
+  "project.status.deadlinePassedFreezing": "Échéance passée le {date}. Les scores ne sont pas définitifs tant que tous les dépôts ne sont pas figés.",
   "project.status.release": "Tous les dépôts sont figés : les scores sont définitifs et prêts à être publiés.",
   "project.status.released": "Scores publiés le {date}.",
   "project.status.sync": "Le dépôt source a avancé depuis les copies des étudiants : synchronisez-les.",

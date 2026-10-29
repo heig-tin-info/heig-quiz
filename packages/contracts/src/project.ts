@@ -62,9 +62,11 @@ export type ProjectState = z.infer<typeof ProjectState>;
  * What the staff's badge says (ADR-104, `projectPhase` of `@quiz/domain`):
  * the state, with `draft` refined into `draft` (published by hand) and
  * `scheduled` (published by the scheduler at its start), and `locked`
- * refined into `locked` (scores not final), `graded` (final, the release
- * awaited) and `released`. Derived by the server from the publish mode, the
- * frozen repositories and the release; never stored, never a student's.
+ * refined into `locked` (scores not final) — `deadline_passed` under the
+ * `commit` deadline strategy, which leaves the repositories open (#958) —,
+ * `graded` (final, the release awaited) and `released`. Derived by the
+ * server from the publish mode, the deadline strategy, the frozen
+ * repositories and the release; never stored, never a student's.
  */
 export const ProjectPhase = z.enum(PROJECT_PHASES);
 export type ProjectPhase = z.infer<typeof ProjectPhase>;
@@ -1442,7 +1444,9 @@ export type StudentProjectRepo = z.infer<typeof StudentProjectRepo>;
  * draft nor an archived project, never the source or distribution
  * repository, nothing of another student (N-SEC-20). `status`: to accept
  * (or not yet open, which `startAt` tells), in progress once the repository
- * exists, locked after the student's deadline, released once the scores
+ * exists, locked after the student's deadline — `deadline_passed` instead
+ * under the `commit` strategy while GitHub does not hold the repository
+ * locked (#958) —, released once the scores
  * are out. `deadlineAt` is the student's EFFECTIVE deadline: their own
  * extension, else the project's. `githubLinked`, `repoUrl` and
  * `invitation` are the four states of the row's button

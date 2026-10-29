@@ -138,6 +138,7 @@ function cardFacts(row: CardRow, linked: boolean, now: Date): { facts: CardFacts
     released: row.project.releasedAt !== null,
     accepted: provisioned(row.repo) !== null,
     locked: row.repo?.lockedAt != null,
+    deadlineStrategy: row.project.deadlineStrategy,
   };
   return {
     group: studentProjectGroup(judged, now),

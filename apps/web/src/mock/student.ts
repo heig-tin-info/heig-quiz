@@ -717,6 +717,8 @@ export const STUDENT_PROJECT_LOCKED = "77777777-7777-4777-8777-777777777706";
 export const STUDENT_PROJECT_DELETED = "77777777-7777-4777-8777-777777777707";
 /** Locked at the deadline with a repository: its score is frozen, still indicative (M3-14l). */
 export const STUDENT_PROJECT_FROZEN = "77777777-7777-4777-8777-777777777708";
+/** Past its deadline under the `commit` strategy: the repository stays open, the card never says locked (#958). */
+export const STUDENT_PROJECT_COMMIT = "77777777-7777-4777-8777-777777777709";
 export const STUDENT_PROJECT_IDS = [
   STUDENT_PROJECT_OPEN,
   STUDENT_PROJECT_SOON,
@@ -726,6 +728,7 @@ export const STUDENT_PROJECT_IDS = [
   STUDENT_PROJECT_LOCKED,
   STUDENT_PROJECT_DELETED,
   STUDENT_PROJECT_FROZEN,
+  STUDENT_PROJECT_COMMIT,
 ] as const;
 /** The student's repository of a project, `<slug>-<login>` in the classroom's organization, the slug from the title's head ("Labo 1 — …" ⇒ `labo-1`). */
 const studentRepoName = (title: string) =>
@@ -772,6 +775,7 @@ const cardFacts = (): CardFacts[] => {
     { ...base, id: STUDENT_PROJECT_SOON, title: "Labo 3 — Arbres binaires", startAt: iso(3 * D), deadlineAt: iso(17 * D), ...toAccept(STUDENT_PROJECT_SOON, "Labo 3") },
     { ...base, id: STUDENT_PROJECT_LOCKED, title: "Exercice préliminaire — Compilation", startAt: iso(-30 * D), deadlineAt: iso(-14 * D), status: "locked", ...none },
     { ...base, id: STUDENT_PROJECT_FROZEN, title: "Labo 0b — Débogage", startAt: iso(-25 * D), deadlineAt: iso(-2 * D), status: "locked", ...repo("Labo 0b", "accepted") },
+    { ...base, id: STUDENT_PROJECT_COMMIT, title: "Labo 0c — Makefile", startAt: iso(-20 * D), deadlineAt: iso(-1 * D), status: "deadline_passed", ...repo("Labo 0c", "accepted") },
     { ...base, id: STUDENT_PROJECT_PAST, title: "Labo 0 — Prise en main", startAt: iso(-21 * D), deadlineAt: iso(-7 * D), status: "released", ...repo("Labo 0", "accepted") },
   ];
 };
@@ -868,7 +872,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
             ? null
             : released
               ? { points: 18, max: 20, grade: { grade: 5.5 }, frozen: true }
-              : { points: Math.min(40, 34 + 2 * pushes), max: 40, grade: { grade: 5.3 }, frozen: card.status === "locked" },
+              : { points: Math.min(40, 34 + 2 * pushes), max: 40, grade: { grade: 5.3 }, frozen: card.status === "locked" || card.status === "deadline_passed" },
         };
   return {
     ...facts,
@@ -916,6 +920,7 @@ const studentHome = (): StudentHomeData => {
       released: card.status === "released",
       accepted: card.status === "in_progress",
       locked: card.status === "locked",
+      deadlineStrategy: card.status === "deadline_passed" ? ("commit" as const) : ("lock" as const),
     };
     groups[studentProjectGroup(facts, new Date(now))].push(card);
   }
