@@ -1,5 +1,6 @@
 import { screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import { histogram } from "@quiz/domain";
 
@@ -26,6 +27,20 @@ describe("Histogram", () => {
     expect(within(rows[6]!).getByRole("cell")).toHaveTextContent("1");
     expect(within(rows[10]!).getByRole("rowheader")).toHaveTextContent("6.0");
     expect(within(rows[10]!).getByRole("cell")).toHaveTextContent("1");
+  });
+
+  it("is a reading without onSelect, and a row of buttons with it", async () => {
+    const buckets = histogram([1, 4, 4.2]);
+    const { rerender } = renderWithProviders(<Histogram buckets={buckets} />);
+    expect(screen.queryAllByRole("button")).toEqual([]);
+
+    const onSelect = vi.fn();
+    rerender(<Histogram buckets={buckets} onSelect={onSelect} selected={4} />);
+    expect(screen.getAllByRole("button")).toHaveLength(11);
+    expect(screen.getByRole("button", { name: "4.0–4.5: 2" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "1.0–1.5: 1" })).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(screen.getByRole("button", { name: "1.0–1.5: 1" }));
+    expect(onSelect).toHaveBeenCalledWith(1);
   });
 
   it("names the top bucket by its exact grade, not by a range", () => {

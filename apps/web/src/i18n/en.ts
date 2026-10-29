@@ -4562,6 +4562,8 @@ export const en = {
   "results.qstat.q": "Q{n}",
   "results.histogram.col.range": "Grade",
   "results.histogram.col.count": "Students",
+  "results.filter.bucket": "Grades {range}",
+  "results.filter.clear": "Clear filter",
   "results.col.student": "Student",
   "results.col.email": "E-mail",
   "results.col.points": "Points",

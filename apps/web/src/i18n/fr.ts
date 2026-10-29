@@ -4534,6 +4534,8 @@ export const fr: Record<keyof Dict, string> = {
   "results.qstat.q": "Q{n}",
   "results.histogram.col.range": "Note",
   "results.histogram.col.count": "Étudiants",
+  "results.filter.bucket": "Notes {range}",
+  "results.filter.clear": "Effacer le filtre",
   "results.col.student": "Étudiant",
   "results.col.email": "Courriel",
   "results.col.points": "Points",

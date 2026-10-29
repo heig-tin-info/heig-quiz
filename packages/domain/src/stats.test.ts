@@ -10,6 +10,7 @@ import {
   pearson,
   describe as describeSeries,
   histogram,
+  histogramBucket,
   itemStats,
   sameAsLatest,
   optionShares,
@@ -61,6 +62,26 @@ describe("histogram", () => {
 
   it("accepts another step", () => {
     expect(histogram([], 1).map((b) => b.bucket)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+});
+
+describe("histogramBucket", () => {
+  it("names a grade's bucket by its lower bound, 6.0 alone in the last one", () => {
+    expect([1, 1.49, 1.5, 3.99, 4, 5.99, 6].map((g) => histogramBucket(g))).toEqual([1, 1, 1.5, 3.5, 4, 5.5, 6]);
+  });
+
+  it("clamps a grade outside the scale into the first or last bucket", () => {
+    expect(histogramBucket(0.5)).toBe(1);
+    expect(histogramBucket(7)).toBe(6);
+  });
+
+  it("is the rule histogram counts by, for every step", () => {
+    const grades = [1, 1.2, 2.75, 3.5, 3.99, 4, 4.5, 5.5, 5.99, 6, 0.4, 6.3];
+    for (const step of [0.5, 1, 0.25]) {
+      for (const { bucket, count } of histogram(grades, step)) {
+        expect(grades.filter((g) => histogramBucket(g, step) === bucket)).toHaveLength(count);
+      }
+    }
   });
 });
 

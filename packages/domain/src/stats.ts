@@ -338,23 +338,32 @@ export interface HistogramBucket {
   count: number;
 }
 
-/**
- * Buckets grades from 1.0 to 6.0. A grade falls in `[bucket, bucket + step)`,
- * except 6.0 which gets its own final bucket. Values outside the scale are
- * clamped into the first or last bucket.
- */
-export function histogram(grades: readonly number[], step = 0.5): HistogramBucket[] {
-  const buckets: HistogramBucket[] = [];
-  for (let b = MIN_GRADE; b < MAX_GRADE - 1e-9; b += step) buckets.push({ bucket: round2(b), count: 0 });
-  buckets.push({ bucket: MAX_GRADE, count: 0 });
+/** The index of the last half-open bucket `[bucket, bucket + step)`, before the 6.0 one. */
+function lastOpenSlot(step: number): number {
+  return Math.ceil((MAX_GRADE - MIN_GRADE) / step - 1e-9) - 1;
+}
 
+/**
+ * The bucket of {@link histogram} a grade falls in, by its lower bound: a
+ * grade falls in `[bucket, bucket + step)`, except 6.0 which gets its own
+ * final bucket. Values outside the scale are clamped into the first or last
+ * bucket. The one rule behind both the bars' counts and the rows a bar
+ * selects in a grade table, so the two never disagree.
+ */
+export function histogramBucket(grade: number, step = 0.5): number {
+  if (grade >= MAX_GRADE) return MAX_GRADE;
+  const slot = Math.min(Math.max(0, Math.floor((grade - MIN_GRADE) / step)), lastOpenSlot(step));
+  return round2(MIN_GRADE + slot * step);
+}
+
+/** Buckets grades from 1.0 to 6.0, each by {@link histogramBucket}; every bucket is listed, empty or not. */
+export function histogram(grades: readonly number[], step = 0.5): HistogramBucket[] {
+  const counts = new Map<number, number>();
+  for (let slot = 0; slot <= lastOpenSlot(step); slot++) counts.set(round2(MIN_GRADE + slot * step), 0);
+  counts.set(MAX_GRADE, 0);
   for (const grade of grades) {
-    if (grade >= MAX_GRADE) {
-      buckets[buckets.length - 1]!.count += 1;
-      continue;
-    }
-    const slot = Math.max(0, Math.floor((grade - MIN_GRADE) / step));
-    buckets[Math.min(slot, buckets.length - 2)]!.count += 1;
+    const bucket = histogramBucket(grade, step);
+    counts.set(bucket, counts.get(bucket)! + 1);
   }
-  return buckets;
+  return [...counts].map(([bucket, count]) => ({ bucket, count }));
 }

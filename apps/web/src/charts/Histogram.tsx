@@ -6,7 +6,7 @@ import { useT } from "../i18n";
 import { Bars } from "../ui";
 
 /** How the buckets of `@quiz/domain#histogram` are named on screen. */
-export function bucketLabel(bucket: number, step: number): string {
+export function bucketLabel(bucket: number, step = 0.5): string {
   if (bucket >= MAX_GRADE) return formatGrade(bucket);
   return `${formatGrade(bucket)}–${formatGrade(bucket + step)}`;
 }
@@ -19,10 +19,16 @@ export function bucketLabel(bucket: number, step: number): string {
 export function Histogram({
   buckets,
   step = 0.5,
+  onSelect,
+  selected,
   className,
 }: {
   buckets: ResultsStats["histogram"];
   step?: number;
+  /** A bar pressed, by its bucket: the filter of a grade table. */
+  onSelect?: ((bucket: number) => void) | undefined;
+  /** The bucket chosen, marked on its bar. */
+  selected?: number | null | undefined;
   /** The height of the plot (`Bars`). */
   className?: string;
 }) {
@@ -31,6 +37,8 @@ export function Histogram({
     <Bars
       showValues
       {...(className ? { className } : {})}
+      onSelect={onSelect && ((key) => onSelect(Number(key)))}
+      selected={selected == null ? null : String(selected)}
       caption={t("results.histogram.title")}
       labelHeader={t("results.histogram.col.range")}
       valueHeader={t("results.histogram.col.count")}

@@ -92,6 +92,10 @@ export function SegmentedBar({
 
 const BAR_FILL = { danger: "bg-danger", warning: "bg-warning" } as const;
 
+/** A bar that is a button (`onSelect` of `Bars` and `StackedBars`). */
+const BAR_BUTTON =
+  "rounded-t-[4px] transition-opacity duration-150 enabled:hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
 export interface BarDatum {
   key: string;
   value: number;
@@ -172,6 +176,11 @@ function ChartAxis({
  *
  * The bars are `aria-hidden`, and the same numbers are published as a real
  * table, visually hidden: a screen reader gets the data, not a shape.
+ *
+ * `onSelect` turns each non-empty bar into a button named by its label and
+ * count, as `StackedBars` does. `selected` marks one bar pressed and ringed
+ * (a shape, never a colour alone, N-A11Y-03) and fades the others; pressed,
+ * it stays a button even when empty, so a choice can always be undone.
  */
 export function Bars({
   bars,
@@ -179,6 +188,8 @@ export function Bars({
   labelHeader,
   valueHeader,
   showValues = false,
+  onSelect,
+  selected = null,
   className = "h-32",
 }: {
   bars: readonly BarDatum[];
@@ -188,24 +199,58 @@ export function Bars({
   valueHeader: string;
   /** The count above each bar: for a few bars, where every figure matters. */
   showValues?: boolean;
+  onSelect?: ((key: string) => void) | undefined;
+  /** The key of the chosen bar, with `onSelect`. */
+  selected?: string | null | undefined;
   /** The height of the plot. */
   className?: string;
 }) {
+  const t = useT();
   const top = Math.max(1, ...bars.map((b) => b.value));
+  const column = "flex h-full min-w-0 flex-1 flex-col justify-end gap-1";
   return (
     <div>
-      <div className={cx("flex items-end gap-0.5 sm:gap-1", className)} aria-hidden>
-        {bars.map((b) => (
-          <div key={b.key} title={b.title} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-1">
-            {showValues ? (
-              <span className="text-center text-[11px] tabular-nums text-fg-faint">{b.value || ""}</span>
-            ) : null}
-            <span
-              className={cx("w-full rounded-t-[4px]", b.value === 0 ? "bg-surface-3" : b.tone ? BAR_FILL[b.tone] : "bg-fg-muted")}
-              style={{ height: `${Math.max(b.value === 0 ? 2 : 6, (b.value / top) * 100)}%` }}
-            />
-          </div>
-        ))}
+      <div className={cx("flex items-end gap-0.5 sm:gap-1", className)} aria-hidden={onSelect ? undefined : true}>
+        {bars.map((b) => {
+          const shape = (
+            <>
+              {showValues ? (
+                <span className="text-center text-[11px] tabular-nums text-fg-faint">{b.value || ""}</span>
+              ) : null}
+              <span
+                className={cx("w-full rounded-t-[4px]", b.value === 0 ? "bg-surface-3" : b.tone ? BAR_FILL[b.tone] : "bg-fg-muted")}
+                style={{ height: `${Math.max(b.value === 0 ? 2 : 6, (b.value / top) * 100)}%` }}
+              />
+            </>
+          );
+          if (!onSelect) {
+            return (
+              <div key={b.key} title={b.title} className={column}>
+                {shape}
+              </div>
+            );
+          }
+          const pressed = selected === b.key;
+          return (
+            <button
+              key={b.key}
+              type="button"
+              title={b.title}
+              aria-label={t("bar.part", { word: b.label, n: b.value })}
+              aria-pressed={pressed}
+              disabled={b.value === 0 && !pressed}
+              onClick={() => onSelect(b.key)}
+              className={cx(
+                column,
+                BAR_BUTTON,
+                pressed && "ring-2 ring-fg ring-offset-2 ring-offset-surface",
+                selected !== null && !pressed && "opacity-40",
+              )}
+            >
+              {shape}
+            </button>
+          );
+        })}
       </div>
       <ChartAxis
         ticks={bars.map((b) => [b.key, b.tick ?? ""])}
@@ -277,7 +322,7 @@ export function StackedBars({
                   type="button"
                   aria-label={b.label}
                   onClick={() => onSelect(b.key)}
-                  className="flex w-full rounded-t-[4px] transition-opacity duration-150 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  className={cx("flex w-full", BAR_BUTTON)}
                 >
                   {stack}
                 </button>
