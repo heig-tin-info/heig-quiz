@@ -117,7 +117,7 @@ describe("checkpointTag", () => {
   });
 
   it("leaves a text that already is a tag as it is", () => {
-    for (const tag of ["deux-periodes", "milestone_1", "a--b", "m1_"]) expect(checkpointTag(tag)).toBe(tag);
+    for (const tag of ["deux-periodes", "milestone_1", "a--b", "m1_", "a-", "x_-"]) expect(checkpointTag(tag)).toBe(tag);
   });
 
   it("starts with a letter or a digit", () => {

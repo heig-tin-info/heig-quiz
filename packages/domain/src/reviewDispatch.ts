@@ -122,24 +122,25 @@ export const CHECKPOINT_NAME_MAX = 50;
 /**
  * The checkpoint name a teacher's free text stands for (a wire tag: the
  * `milestone:` of criteria.yml, the argument of `score grade --milestone`):
- * lower case, œ and æ spelt out, accents folded, every run of characters a tag refuses one
- * dash, cut to `CHECKPOINT_NAME_MAX`, starting with a letter or digit and
- * ending without a dash. `"fin de la séance (2 périodes)"` is
+ * lower case, œ and æ spelt out, accents folded, every run of characters
+ * a tag refuses one dash (none for those that end the text), starting with
+ * a letter or digit, cut to `CHECKPOINT_NAME_MAX` without a dash left at
+ * the cut. `"fin de la séance (2 périodes)"` is
  * `"fin-de-la-seance-2-periodes"`; "" when the text has no letter nor digit.
  * Not `slugify`: a text that already is a tag (`milestone_1`, `a--b`) stays
  * as it is, since criteria.yml may spell it so.
  */
 export function checkpointTag(text: string): string {
-  return text
+  const tag = text
     .toLowerCase()
     .replace(/œ/g, "oe")
     .replace(/æ/g, "ae")
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
+    .replace(/[^a-z0-9_-]+$/, "")
     .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^[_-]+/, "")
-    .slice(0, CHECKPOINT_NAME_MAX)
-    .replace(/-+$/, "");
+    .replace(/^[_-]+/, "");
+  return tag.length > CHECKPOINT_NAME_MAX ? tag.slice(0, CHECKPOINT_NAME_MAX).replace(/-+$/, "") : tag;
 }
 
 /**
