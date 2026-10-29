@@ -12,7 +12,7 @@ It works **as you**, with your rights and nothing more: it reaches the courses y
 
 | It can | It cannot |
 | --- | --- |
-| Read your courses, classrooms, pools, questions, evaluations and templates | Delete a course, a classroom, a pool, a question, an evaluation or a template |
+| Read your courses, classrooms, pools, questions, evaluations and templates | Delete anything: a course, a classroom, a pool, a question, an evaluation, a template, a project |
 | Create a course, a classroom, a pool, a category | Open, start, pause or close an evaluation |
 | Write, publish and update questions of every type | Grade, or release results |
 | Link a pool to a course | Read students' answers or grades |

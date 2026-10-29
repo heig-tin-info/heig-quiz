@@ -1231,7 +1231,7 @@ export const en = {
   "oauth.consent.can.draft": "Prepare evaluations and GitHub projects as drafts, and launch a poll when you ask for one",
   "oauth.consent.can.items": "Add, change or remove the questions of a draft evaluation or a template",
   "oauth.consent.cannot": "It will not be able to",
-  "oauth.consent.cannot.delete": "Delete a course, a classroom, a pool, a question, an evaluation or a template",
+  "oauth.consent.cannot.delete": "Delete anything",
   "oauth.consent.cannot.run": "Open, start or close an evaluation",
   "oauth.consent.cannot.grades": "Read students' answers or grades",
   "oauth.consent.redirect": "After your answer, you go back to",
