@@ -318,7 +318,9 @@ export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise
   // Absent students count in the mean: a 1.0 that is not in the statistics
   // would flatter every class average (F-RES-01). A teacher's own test does
   // NOT: it is not a member of the class (ADR-018). The web's grade-table
-  // filter by histogram bar (ResultsView) keeps the same rows.
+  // filter by histogram bar (ResultsView) keeps the same rows, and buckets
+  // them with `histogramBucket` at the same default step: pass a step here
+  // and there together, or the table and the bars disagree.
   const grades = computed.rows.filter((r) => !r.staff).map((r) => r.grade);
   const stats = describe(grades);
   return {
