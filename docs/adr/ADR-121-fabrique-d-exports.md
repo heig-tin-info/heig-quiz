@@ -68,9 +68,10 @@ question must come from the type through its contract.
    - `statementDoc(student)`: from the student view the API built with
      `toStudent`, never from the config, so a statement carries no more than
      a student is served;
-   - `solutionDoc(solution)`: the staff pass `toSolution`; a student's
-     document passes `studentSolution`'s output, and only where the feedback
-     policy's `showKey` holds (ADR-037);
+   - `solutionDoc(solution, student)`: the staff pass `toSolution`; a
+     student's document passes `studentSolution`'s output, and only where
+     the feedback policy's `showKey` holds (ADR-037); `student` is the same
+     student view, for what a key alone does not say (a program's language);
    - `answerDoc(config, answer, details)`: **staff only**. `code` rebuilds the
      source server-side with `assembleCodeSource` (invariant 14), never from
      a client's text, and lists every test, hidden ones by name.
