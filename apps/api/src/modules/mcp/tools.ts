@@ -292,62 +292,30 @@ async function editItems(
   return { ...(await api.get(base)), url: api.link(base) };
 }
 
-/** The item tools of a quiz's home: remove an item, move items to their latest version, change an item. */
-function itemTools(home: Home): Tool[] {
-  // The quiz's id under its own tools' name (`evaluationId`, `templateId`): typed out of sight, read by `idOf`.
-  const key = `${home}Id`;
-  const homeId = { [key]: Id } as Record<never, never>;
-  const idOf = (a: object) => (a as Record<string, string>)[key]!;
+/** The descriptions of a home's item tools; the tools themselves are written out below. */
+function itemTexts(home: Home) {
   const noun = home === "evaluation" ? "an evaluation" : "a template";
-  return [
-    tool({
-      name: `remove_question_from_${home}`,
-      title: `Remove a question from ${noun}`,
-      description:
-        `Removes one item from ${noun}: the question as placed there, with its points, intro and frozen version, ` +
-        `addressed by its \`itemId\` (the \`items\` of get_${home}; the same question may be there twice). ` +
-        "The question stays in its pool. Cannot be undone: adding the question back makes a new item, last, on " +
-        `its latest version, with default points. ${NOT_ACROSS[home]} Returns the ${home} with its remaining items.`,
-      input: z.object({ ...homeId, itemId: Id }).strict(),
-      annotations: { ...WRITE, destructiveHint: true },
-      run: (api, a) => editItems(api, home, idOf(a), [a.itemId], (base) => api.delete(`${base}/items/${a.itemId}`)),
-    }),
-    tool({
-      name: `update_${home}_item_versions`,
-      title: `Move ${noun}'s items to their latest question version`,
-      description:
-        `After update_question, ${noun} still plays the version it was built with; this moves its items to ` +
-        `the latest published version of their question (\`staleItems\` of get_${home} lists the items behind). ` +
-        `\`itemIds\` limits it to those items; omitted, every stale item. ${NOT_ACROSS[home]}`,
-      input: z.object({ ...homeId, itemIds: z.array(Id).min(1).max(200).optional() }).strict(),
-      annotations: { ...WRITE, idempotentHint: true },
-      run: (api, a) =>
-        editItems(api, home, idOf(a), a.itemIds ?? [], (base) =>
-          api.post(`${base}/items/update-versions`, a.itemIds ? { itemIds: a.itemIds } : {}),
-        ),
-    }),
-    tool({
-      name: `update_${home}_item`,
-      title: `Change an item of ${noun}`,
-      description:
-        `Changes one item of ${noun}, addressed by its \`itemId\`: \`points\`; \`counting\`, \`normal\` or ` +
-        "`bonus` (left out of the total, its points can only lift a student, ADR-052); `milestone`; `intro`, a " +
-        "Markdown passage shown before the question (null removes it). Neutralizing an item is a grading act, " +
-        `done from the web app, never here. ${NOT_ACROSS[home]}`,
-      input: z.object({ ...homeId, itemId: Id, ...ItemPatch.shape }).strict(),
-      annotations: { ...WRITE, idempotentHint: true },
-      run: (api, a) =>
-        editItems(api, home, idOf(a), [a.itemId], (base) =>
-          api.patch(`${base}/items/${a.itemId}`, {
-            points: a.points,
-            milestone: a.milestone,
-            counting: a.counting,
-            intro: a.intro,
-          }),
-        ),
-    }),
-  ];
+  return {
+    remove:
+      `Removes one item from ${noun}: the question as placed there, with its points, intro and frozen version, ` +
+      `addressed by its \`itemId\` (the \`items\` of get_${home}; the same question may be there twice). ` +
+      "The question stays in its pool. Cannot be undone: adding the question back makes a new item, last, on " +
+      `its latest version, with default points. ${NOT_ACROSS[home]} Returns the ${home} with its remaining items.`,
+    versions:
+      `After update_question, ${noun} still plays the version it was built with; this moves its items to ` +
+      `the latest published version of their question (\`staleItems\` of get_${home} lists the items behind). ` +
+      `\`itemIds\` limits it to those items; omitted, every stale item. ${NOT_ACROSS[home]}`,
+    patch:
+      `Changes one item of ${noun}, addressed by its \`itemId\`: \`points\`; \`counting\`, \`normal\` or ` +
+      "`bonus` (left out of the total, its points can only lift a student, ADR-052); `milestone`; `intro`, a " +
+      "Markdown passage shown before the question (null removes it). Neutralizing an item is a grading act, " +
+      `done from the web app, never here. ${NOT_ACROSS[home]}`,
+  };
 }
+const EVALUATION_ITEMS = itemTexts("evaluation");
+const TEMPLATE_ITEMS = itemTexts("template");
+/** `itemIds` of the update-versions tools: absent, every stale item. */
+const StaleItemIds = z.array(Id).min(1).max(200).optional();
 
 /** The project routes exist only with Quiz's GitHub App (`app.ts`): without it, say so rather than a 404. */
 function requireGithub(api: Api) {
@@ -818,7 +786,37 @@ export const TOOLS: Tool[] = [
     },
   }),
 
-  ...itemTools("evaluation"),
+  tool({
+    name: "remove_question_from_evaluation",
+    title: "Remove a question from an evaluation",
+    description: EVALUATION_ITEMS.remove,
+    input: z.object({ evaluationId: Id, itemId: Id }).strict(),
+    annotations: { ...WRITE, destructiveHint: true },
+    run: (api, { evaluationId, itemId }) =>
+      editItems(api, "evaluation", evaluationId, [itemId], (base) => api.delete(`${base}/items/${itemId}`)),
+  }),
+
+  tool({
+    name: "update_evaluation_item_versions",
+    title: "Move an evaluation's items to their latest question version",
+    description: EVALUATION_ITEMS.versions,
+    input: z.object({ evaluationId: Id, itemIds: StaleItemIds }).strict(),
+    annotations: { ...WRITE, idempotentHint: true },
+    run: (api, { evaluationId, itemIds }) =>
+      editItems(api, "evaluation", evaluationId, itemIds ?? [], (base) =>
+        api.post(`${base}/items/update-versions`, { itemIds }),
+      ),
+  }),
+
+  tool({
+    name: "update_evaluation_item",
+    title: "Change an item of an evaluation",
+    description: EVALUATION_ITEMS.patch,
+    input: z.object({ evaluationId: Id, itemId: Id, ...ItemPatch.shape }).strict(),
+    annotations: { ...WRITE, idempotentHint: true },
+    run: (api, { evaluationId, itemId, ...patch }) =>
+      editItems(api, "evaluation", evaluationId, [itemId], (base) => api.patch(`${base}/items/${itemId}`, patch)),
+  }),
 
   // --- Templates (ADR-031; ADR-022, addendum of 2026-10-01) ------------------
 
@@ -875,7 +873,7 @@ export const TOOLS: Tool[] = [
     title: "Add questions to a template",
     description:
       "Appends published questions to a template; each must come from a pool linked to the template's " +
-      "course. Its instances are not changed: they take the new revision only when the teacher pulls it.",
+      `course. ${NOT_ACROSS.template}`,
     input: z.object({ templateId: Id, questionIds: z.array(Id).min(1).max(200) }),
     annotations: WRITE,
     run: async (api, a) => ({
@@ -884,7 +882,37 @@ export const TOOLS: Tool[] = [
     }),
   }),
 
-  ...itemTools("template"),
+  tool({
+    name: "remove_question_from_template",
+    title: "Remove a question from a template",
+    description: TEMPLATE_ITEMS.remove,
+    input: z.object({ templateId: Id, itemId: Id }).strict(),
+    annotations: { ...WRITE, destructiveHint: true },
+    run: (api, { templateId, itemId }) =>
+      editItems(api, "template", templateId, [itemId], (base) => api.delete(`${base}/items/${itemId}`)),
+  }),
+
+  tool({
+    name: "update_template_item_versions",
+    title: "Move a template's items to their latest question version",
+    description: TEMPLATE_ITEMS.versions,
+    input: z.object({ templateId: Id, itemIds: StaleItemIds }).strict(),
+    annotations: { ...WRITE, idempotentHint: true },
+    run: (api, { templateId, itemIds }) =>
+      editItems(api, "template", templateId, itemIds ?? [], (base) =>
+        api.post(`${base}/items/update-versions`, { itemIds }),
+      ),
+  }),
+
+  tool({
+    name: "update_template_item",
+    title: "Change an item of a template",
+    description: TEMPLATE_ITEMS.patch,
+    input: z.object({ templateId: Id, itemId: Id, ...ItemPatch.shape }).strict(),
+    annotations: { ...WRITE, idempotentHint: true },
+    run: (api, { templateId, itemId, ...patch }) =>
+      editItems(api, "template", templateId, [itemId], (base) => api.patch(`${base}/items/${itemId}`, patch)),
+  }),
 
   tool({
     name: "instantiate_template",

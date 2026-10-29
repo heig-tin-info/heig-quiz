@@ -16,7 +16,6 @@ import { conceptTagSortings, courseConcepts, evaluations } from "../../db/schema
 import { testServer, type TestServer } from "../../test/http.js";
 import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
 
-import { readOnly, withoutDelete } from "../assist/tools.js";
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
 import { injectedApi } from "./service.js";
 import { TOOLS, ToolRefusal } from "./tools.js";
@@ -837,7 +836,7 @@ describe("a quiz's items (#960; ADR-022, amendment of 2026-10-29)", () => {
     expect(after.items[0].points).toBe(made.items[0].points);
   });
 
-  it("reaches no DELETE route but an item's, and the help assistant none at all", async () => {
+  it("reaches no DELETE route but an item's", async () => {
     const { room, pool, ids } = await courseWithQuestions("ITEMS-DELETE");
     const made = await ok("create_evaluation", { classroomId: room.id, title: "Gardée", questionIds: ids });
     const evaluationId = made.evaluation.id as string;
@@ -846,9 +845,6 @@ describe("a quiz's items (#960; ADR-022, amendment of 2026-10-29)", () => {
 
     for (const path of [`/pools/${pool.id}`, `/evaluations/${evaluationId}`, `/questions/${ids[0]}`, `${itemPath}/x`]) {
       await expect(api.delete(path), path).rejects.toBeInstanceOf(ToolRefusal);
-    }
-    for (const assistant of [readOnly(api), withoutDelete(api)]) {
-      await expect(assistant.delete(itemPath)).rejects.toBeInstanceOf(ToolRefusal);
     }
     await ok("get_pool", { poolId: pool.id });
     expect(itemIds(await ok("get_evaluation", { evaluationId }))).toEqual(itemIds(made));

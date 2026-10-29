@@ -28,7 +28,7 @@ const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
  * item is an edit of that list, not a deletion; any other DELETE path is
  * refused before a request is made.
  */
-export const DELETABLE_PATHS: readonly RegExp[] = [
+const DELETABLE_PATHS: readonly RegExp[] = [
   new RegExp(`^/evaluations/${UUID}/items/${UUID}$`, "i"),
   new RegExp(`^/templates/${UUID}/items/${UUID}$`, "i"),
 ];

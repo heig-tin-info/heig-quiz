@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { ASSIST_TOOL_RESULT_CHARS, ASSIST_TRUNCATED } from "@quiz/domain";
 
 import { ApiError, type Api } from "../mcp/service.js";
-import { assistDataTools, readOnly } from "./tools.js";
+import { assistDataTools, readOnly, withoutDelete } from "./tools.js";
 
 const id = "0b6f6a52-6c7e-4a0d-9e8e-3a3f1e2b4c5d";
 
@@ -39,6 +39,16 @@ describe("readOnly", () => {
     await expect(reader.patch("/x", {})).rejects.toThrow("reads only");
     await expect(reader.delete("/x")).rejects.toThrow("reads only");
     expect(api.writes).toEqual([]);
+  });
+});
+
+describe("withoutDelete", () => {
+  it("keeps a confirmed write's methods and refuses a DELETE before it is sent (F-LLM-07)", async () => {
+    const api = fakeApi(() => ({}));
+    const writer = withoutDelete(api);
+    await writer.post("/courses", {});
+    await expect(writer.delete(`/evaluations/${id}/items/${id}`)).rejects.toThrow("never deletes");
+    expect(api.writes).toEqual(["/courses"]);
   });
 });
 
