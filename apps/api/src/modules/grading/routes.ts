@@ -137,10 +137,12 @@ export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: str
    */
   const answerFiles = {
     md: {
+      text: true,
       type: "text/markdown; charset=utf-8",
       body: (found: ItemAnswers) => renderMarkdown(itemAnswersDocument(found, opts.commitSha)),
     },
     json: {
+      text: false,
       type: "application/json; charset=utf-8",
       body: (found: ItemAnswers) => JSON.stringify(ItemAnswersRecord.parse(found.record)),
     },
@@ -150,7 +152,7 @@ export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: str
       `/app/api/evaluations/:id/items/:itemId/answers.${format}`,
       { preHandler: requireTeacher },
       teacher({ params: ItemParam, load: staffEvaluation }, async ({ reply, now, params, scope }) => {
-        const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: format === "md" });
+        const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, text: file.text });
         if (!found) return notFound(reply);
         return sendAttachment(reply, file.type, `${found.basename}.${format}`, file.body(found));
       }),

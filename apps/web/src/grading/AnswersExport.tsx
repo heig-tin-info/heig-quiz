@@ -44,13 +44,14 @@ export function AnswersExport({ evaluationId, itemId }: { evaluationId: string; 
     onError: () => toast(t("grading.answers.copyFailed"), "error"),
   });
   return (
-    <>
+    // One group, so a narrow toolbar wraps the pair together.
+    <span className="flex items-center gap-2">
       <LinkButton href={path} download title={t("grading.answers.help")}>
         <Download /> {t("grading.answers.export")}
       </LinkButton>
       <Button variant="secondary" loading={copy.isPending} onClick={() => copy.mutate()} title={t("grading.answers.help")}>
         <Copy /> {t("grading.answers.copy")}
       </Button>
-    </>
+    </span>
   );
 }
