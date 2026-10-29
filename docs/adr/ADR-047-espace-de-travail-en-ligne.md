@@ -16,6 +16,11 @@ session; no SEB project opens to students before proof B is recorded. See
 single use and bound to its request, and every token's lifetime is capped:
 [ADR-078's amendment of that date](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-11-service-tokens-bound-to-their-request-single-use).
 
+**Amended (2026-10-29, #958, product owner):** under the `commit` deadline
+strategy an `online` project's start route opens while the repository is
+writable, not only until the effective deadline, and the portal receives no
+deadline for it: [ADR-078's amendment of that date](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-29-958-under-commit-the-workspace-follows-the-repositorys-writability).
+
 **Amended (2026-10-11, security audit L24):** what a session may serve on
 the portal's one origin ([amendment](#amendment-2026-10-11-one-origin-for-every-session-audit-l24)).
 

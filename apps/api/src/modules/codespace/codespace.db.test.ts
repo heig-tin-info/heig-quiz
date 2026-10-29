@@ -55,6 +55,7 @@ import {
   githubClassroomLinks,
   githubOrganizations,
   projectRepos,
+  projects,
   teacherGrants,
 } from "../../db/schema.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
@@ -595,6 +596,32 @@ describe("POST /app/api/projects/:id/workspace/start", () => {
     // No launch was issued: the mode is still free to change.
     server.clock.set(NOW);
     expect((await setMode(lab.id, "free")).statusCode).toBe(200);
+  });
+
+  it("under commit, opens past the deadline plus the grace while the repository is writable; the portal gets no deadline (#958)", async () => {
+    const student = await newStudent();
+    const room = await connectedClassroom([student]);
+    const lab = await project(room, "Commit start");
+    await setMode(lab.id, "online");
+    await accept(lab.id, student);
+    portal.calls.length = 0;
+    expect((await call("PATCH", `/app/api/projects/${lab.id}`, owner.headers, { deadlineStrategy: "commit" })).statusCode).toBe(200);
+    expect(CodespaceAssignmentSync.parse(portal.calls[0]!.body).deadlineAt).toBeNull();
+    const repo = await repoOf(lab.id, student.id);
+    const db = server.app.db;
+    await db.update(projectRepos).set({ deadlineAppliedAt: new Date(DEADLINE) }).where(eq(projectRepos.id, repo.id));
+    server.clock.set(new Date(new Date(DEADLINE).getTime() + 24 * 3_600_000));
+    expect((await start(lab.id, student.headers)).statusCode).toBe(200);
+    // The staff's lock closes it; under lock the deadline does.
+    const closed = async () => {
+      const res = await start(lab.id, student.headers);
+      return [res.statusCode, res.json().error];
+    };
+    await db.update(projectRepos).set({ staffLock: true }).where(eq(projectRepos.id, repo.id));
+    expect(await closed()).toEqual([409, "closed"]);
+    await db.update(projectRepos).set({ staffLock: null }).where(eq(projectRepos.id, repo.id));
+    await db.update(projects).set({ deadlineStrategy: "lock" }).where(eq(projects.id, lab.id));
+    expect(await closed()).toEqual([409, "closed"]);
   });
 
   it("launches: a token the portal verifies, its jti audited, the token nowhere else, the mode frozen", async () => {

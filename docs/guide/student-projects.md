@@ -61,7 +61,7 @@ Clone your repository on your computer as you would any GitHub repository (`git 
 - Your teacher may send an update of the project while you work. It arrives in your repository as a **pull request** (its branch is named `sync/...`). Open it on GitHub, resolve the conflicts if there are any, and merge it. The platform never merges it for you.
 - Push to the branches you were given. Work on another branch is not graded.
 
-Some projects run in the **online workspace**: once you accepted, **Open workspace** on the project page opens an editor in your browser, set up with your repository. You work and push there, not from your own machine. If it does not open, the page says why (the deadline has passed, or the project was not accepted yet). A project in **Safe Exam Browser** has **Open in Safe Exam Browser** instead: download the file (it works once, for 5 minutes) and open it; Safe Exam Browser shows the project page, where **Open workspace** opens your editor.
+Some projects run in the **online workspace**: once you accepted, **Open workspace** on the project page opens an editor in your browser, set up with your repository. You work and push there, not from your own machine. If it does not open, the page says why (the deadline has passed on a project that closes then, or the project was not accepted yet). A project in **Safe Exam Browser** has **Open in Safe Exam Browser** instead: download the file (it works once, for 5 minutes) and open it; Safe Exam Browser shows the project page, where **Open workspace** opens your editor.
 
 ## 5. Read your score
 
@@ -82,7 +82,7 @@ After the deadline, a **Rationale** under a criterion explains its points, provi
 
 ## 6. The deadline
 
-The deadline is the server's, like for an evaluation, and the page shows a countdown. If your teacher locked the project, your repository becomes **read-only** at the deadline: pushes are refused and the page reads **Read-only since the deadline**. Otherwise it stays open, but pushes made after the deadline do not count. Either way, what you pushed before the deadline counts, whatever the date written in your commit, and a grading run started in time may still finish a few minutes later. The score is then **frozen**, and the page shows **Evaluated commit**: the one that counts.
+The deadline is the server's, like for an evaluation, and the page shows a countdown. If your teacher locked the project, your repository becomes **read-only** at the deadline: pushes are refused and the page reads **Read-only since the deadline**. Otherwise it stays open, in the online workspace too, which you can still open, but pushes made after the deadline do not count (pull first: the deadline adds a commit to your branch). Either way, what you pushed before the deadline counts, whatever the date written in your commit, and a grading run started in time may still finish a few minutes later. The score is then **frozen**, and the page shows **Evaluated commit**: the one that counts.
 
 A day before, you get a reminder. Your teacher can give one repository more time; if that is you, you hear it from them.
 

@@ -514,6 +514,15 @@ describe("GET /launch", () => {
     expect(reply.body).toContain("fenêtre d'ouverture");
   });
 
+  it("a deadline taken back by the platform reopens launches (no deadline: Quiz decides, #958)", async () => {
+    await syncedAssignment({ deadlineAt: "2020-06-01T00:00:00.000Z" });
+    await syncedAssignment({ deadlineAt: null });
+    expect(findAssignment(h.db, "a-lab")?.closesAt).toBeNull();
+    const reply = await h.app.inject({ url: `/launch?token=${await launchToken()}` });
+    expect(reply.statusCode).toBe(303);
+    expect(h.starts).toHaveLength(1);
+  });
+
   it("403 when the token carries no repository", async () => {
     await syncedAssignment();
     const reply = await h.app.inject({ url: `/launch?token=${await launchToken({ repo: null })}` });
