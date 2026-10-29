@@ -897,6 +897,8 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       minPoints: scoresNegatively(i.type, negativeOf(e.evaluation), i.counting) ? -i.points : 0,
       criteria: criteriaOfItem(e, i.id).map(({ id, title, weight }) => ({ id, title, weight })),
       explanation: questions.find((q) => q.id === i.questionId)?.versions.at(-1)?.explanation || null,
+      // The server's rule (`exportsText`): the types with export hooks, never a parameterized item.
+      exportable: i.type === "code" && !(FALL && i.questionId === FALL.id),
       ...(FALL && i.questionId === FALL.id
         ? {
             parameters: {

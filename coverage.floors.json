@@ -34,6 +34,11 @@
     "branches": 70,
     "functions": 81
   },
+  "packages/docexport": {
+    "lines": 95,
+    "branches": 85,
+    "functions": 95
+  },
   "packages/docrender": {
     "lines": 93,
     "branches": 84,

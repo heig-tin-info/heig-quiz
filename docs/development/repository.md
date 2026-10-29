@@ -21,6 +21,7 @@ packages/
   contracts/  zod schemas and payload types shared api <-> web
   domain/     pure business rules: grade scale, deadlines, policies, cloze, roster
   docrender/  the server-side journal renderer
+  docexport/  the export factory's document tree and Markdown renderer (ADR-121)
   seb/        Safe Exam Browser, pure: typed plist, Config Key, request hashes
   ui/         the shared primitives of the question-type surfaces (@quiz/ui)
   qt-mcq/     question type: multiple choice

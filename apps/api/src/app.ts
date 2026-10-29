@@ -260,7 +260,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(legacyPlugin);
   await app.register(livePlugin, { config });
   await app.register(previewPlugin);
-  await app.register(gradingPlugin);
+  await app.register(gradingPlugin, { commitSha: config.COMMIT_SHA || null });
   await app.register(resultsPlugin);
   await app.register(statsPlugin);
   // The vocabulary of concepts (ADR-081): the registry alone, connected to nothing yet.

@@ -953,3 +953,38 @@ describe("GradingPanel — how a question counts (ADR-108)", () => {
     expect(screen.queryByRole("button", { name: "How this question counts" })).toBeNull();
   });
 });
+
+describe("GradingPanel — every answer as one file (F-EXP-01)", () => {
+  const MD = `${EVAL}/items/i1/answers.md`;
+  const exportable = (on: boolean) => ({
+    [`GET ${QUEUE("i1")}`]: ok(
+      makeQueue([validated("a1", 3)], {
+        items: [{ id: "i1", position: 0, internalName: "sum", type: "code", points: 2, exportable: on }],
+      }),
+    ),
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("offers Export and Copy beside the one primary action, and copies the file", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    mockFetch(routes([], { ...exportable(true), [`GET ${MD}`]: ok("# Answers") }));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+
+    const link = await screen.findByRole("link", { name: "Export" });
+    expect(link).toHaveAttribute("href", MD);
+    expect(link).toHaveAttribute("download");
+    await userEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("# Answers")));
+    expect(await screen.findByText("Answers copied")).toBeInTheDocument();
+  });
+
+  it("offers neither for a question that does not export as text", async () => {
+    mockFetch(routes([], exportable(false)));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    expect(screen.queryByRole("link", { name: "Export" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();
+  });
+});

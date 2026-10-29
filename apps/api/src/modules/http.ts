@@ -73,10 +73,19 @@ export function rateLimited(reply: FastifyReply, retryAfterS: number, message?: 
 
 /** A CSV download: UTF-8, saved by the browser under `filename`. */
 export function sendCsv(reply: FastifyReply, filename: string, csv: string) {
+  return sendAttachment(reply, "text/csv; charset=utf-8", filename, csv);
+}
+
+/**
+ * A file to save, not a page to show: `filename` is a slug already (no quote,
+ * no path). Never cached: these files carry names and answers.
+ */
+export function sendAttachment(reply: FastifyReply, type: string, filename: string, body: string) {
   return reply
-    .type("text/csv; charset=utf-8")
+    .type(type)
     .header("content-disposition", `attachment; filename="${filename}"`)
-    .send(csv);
+    .header("cache-control", "no-store")
+    .send(body);
 }
 
 // ---------------------------------------------------------------------------
