@@ -24,6 +24,7 @@ function fakeApi(get: (path: string) => unknown): Api & { writes: string[] } {
     post: write,
     put: write,
     patch: write,
+    delete: write,
     link: (path) => `https://quiz.test${path}`,
   };
 }
@@ -36,6 +37,7 @@ describe("readOnly", () => {
     await expect(reader.post("/courses", {})).rejects.toThrow("reads only");
     await expect(reader.put("/x", {})).rejects.toThrow("reads only");
     await expect(reader.patch("/x", {})).rejects.toThrow("reads only");
+    await expect(reader.delete("/x")).rejects.toThrow("reads only");
     expect(api.writes).toEqual([]);
   });
 });

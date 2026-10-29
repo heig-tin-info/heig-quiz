@@ -15,7 +15,9 @@
  *
  * Deliberately absent: every deletion, and every transition of a live
  * evaluation (start, pause, close, grading, release). A model may prepare
- * work; a teacher runs it.
+ * work; a teacher runs it. Removing an item from a quiz's list is an edit of
+ * that list, not a deletion (ADR-022, amendment of 2026-10-29): the question
+ * stays in its pool.
  */
 import { z } from "zod";
 
@@ -26,6 +28,7 @@ import {
   EvaluationCreate,
   EvaluationPatch,
   EvaluationPreset,
+  ItemPatch,
   encodeJournalPath,
   JournalPagePath,
   CoursePoolMode,
@@ -71,6 +74,8 @@ export interface Api {
   post(path: string, body?: unknown): Promise<any>;
   put(path: string, body: unknown): Promise<any>;
   patch(path: string, body: unknown): Promise<any>;
+  /** Reaches only the closed list of `DELETABLE_PATHS` (`service.ts`); any other path is refused unsent. */
+  delete(path: string): Promise<any>;
   /** The web app's URL of a screen, for the model to hand the teacher. */
   link(path: string): string;
   /** Whether Quiz's GitHub App is configured, so the project routes exist; absent: off. */
@@ -243,6 +248,106 @@ async function createQuiz(
 const UNSCHEDULED_NOTICE =
   "This evaluation is NOT scheduled: it is still a draft and will not open by itself at opensAt. " +
   "The teacher must schedule it (or open it) in the Launch step of the web app, at `url`.";
+
+/** A quiz whose item list a tool edits (#960): an evaluation of a classroom, or a template of its course. */
+type Home = "evaluation" | "template";
+
+/** An edit never crosses a template's link (F-EVAL-26): what each side's tools say of the other. */
+const NOT_ACROSS: Record<Home, string> = {
+  evaluation:
+    "Only this evaluation changes, and only while it is a `draft` (refused otherwise); the template it was " +
+    "instantiated from, if any, keeps its own items.",
+  template: "Its instances are not changed: they take the new revision only when the teacher pulls it.",
+};
+
+/**
+ * The shared body of the item tools (#960): refuses an evaluation that is no
+ * longer a `draft`, and any item the quiz does not hold — the evaluation's
+ * routes answer an unknown item as a success — then runs `write` on the
+ * quiz's path and answers its detail with the web app's link.
+ */
+async function editItems(
+  api: Api,
+  home: Home,
+  id: string,
+  itemIds: readonly string[],
+  write: (base: string) => Promise<unknown>,
+) {
+  const base = `/${home}s/${id}`;
+  const before = await api.get(base);
+  if (home === "evaluation" && before.evaluation.state !== "draft") {
+    throw new ToolRefusal(
+      `Only a draft evaluation's items are changed here; this one is \`${before.evaluation.state}\`. Nothing was changed.`,
+    );
+  }
+  const held = new Set(before.items.map((i: { id: string }) => i.id));
+  const unknown = itemIds.filter((itemId) => !held.has(itemId));
+  if (unknown.length > 0) {
+    throw new ToolRefusal(
+      `The ${home} holds no such item; nothing was changed. Item ids are the \`items\` of get_${home}.`,
+      { unknown },
+    );
+  }
+  await write(base);
+  return { ...(await api.get(base)), url: api.link(base) };
+}
+
+/** The item tools of a quiz's home: remove an item, move items to their latest version, change an item. */
+function itemTools(home: Home): Tool[] {
+  // The quiz's id under its own tools' name (`evaluationId`, `templateId`): typed out of sight, read by `idOf`.
+  const key = `${home}Id`;
+  const homeId = { [key]: Id } as Record<never, never>;
+  const idOf = (a: object) => (a as Record<string, string>)[key]!;
+  const noun = home === "evaluation" ? "an evaluation" : "a template";
+  return [
+    tool({
+      name: `remove_question_from_${home}`,
+      title: `Remove a question from ${noun}`,
+      description:
+        `Removes one item from ${noun}: the question as placed there, with its points, intro and frozen version, ` +
+        `addressed by its \`itemId\` (the \`items\` of get_${home}; the same question may be there twice). ` +
+        "The question stays in its pool. Cannot be undone: adding the question back makes a new item, last, on " +
+        `its latest version, with default points. ${NOT_ACROSS[home]} Returns the ${home} with its remaining items.`,
+      input: z.object({ ...homeId, itemId: Id }).strict(),
+      annotations: { ...WRITE, destructiveHint: true },
+      run: (api, a) => editItems(api, home, idOf(a), [a.itemId], (base) => api.delete(`${base}/items/${a.itemId}`)),
+    }),
+    tool({
+      name: `update_${home}_item_versions`,
+      title: `Move ${noun}'s items to their latest question version`,
+      description:
+        `After update_question, ${noun} still plays the version it was built with; this moves its items to ` +
+        `the latest published version of their question (\`staleItems\` of get_${home} lists the items behind). ` +
+        `\`itemIds\` limits it to those items; omitted, every stale item. ${NOT_ACROSS[home]}`,
+      input: z.object({ ...homeId, itemIds: z.array(Id).min(1).max(200).optional() }).strict(),
+      annotations: { ...WRITE, idempotentHint: true },
+      run: (api, a) =>
+        editItems(api, home, idOf(a), a.itemIds ?? [], (base) =>
+          api.post(`${base}/items/update-versions`, a.itemIds ? { itemIds: a.itemIds } : {}),
+        ),
+    }),
+    tool({
+      name: `update_${home}_item`,
+      title: `Change an item of ${noun}`,
+      description:
+        `Changes one item of ${noun}, addressed by its \`itemId\`: \`points\`; \`counting\`, \`normal\` or ` +
+        "`bonus` (left out of the total, its points can only lift a student, ADR-052); `milestone`; `intro`, a " +
+        "Markdown passage shown before the question (null removes it). Neutralizing an item is a grading act, " +
+        `done from the web app, never here. ${NOT_ACROSS[home]}`,
+      input: z.object({ ...homeId, itemId: Id, ...ItemPatch.shape }).strict(),
+      annotations: { ...WRITE, idempotentHint: true },
+      run: (api, a) =>
+        editItems(api, home, idOf(a), [a.itemId], (base) =>
+          api.patch(`${base}/items/${a.itemId}`, {
+            points: a.points,
+            milestone: a.milestone,
+            counting: a.counting,
+            intro: a.intro,
+          }),
+        ),
+    }),
+  ];
+}
 
 /** The project routes exist only with Quiz's GitHub App (`app.ts`): without it, say so rather than a 404. */
 function requireGithub(api: Api) {
@@ -614,7 +719,8 @@ export const TOOLS: Tool[] = [
     title: "Update a question",
     description:
       "Changes a question: its metadata, and/or its draft (config, explanation), then publishes a new " +
-      "version (unless `publish` is false). Evaluations keep the version they were built with. A change " +
+      "version (unless `publish` is false). Evaluations and templates keep the version they were built with: " +
+      "move their items with update_evaluation_item_versions or update_template_item_versions. A change " +
       "of metadata alone (a rename, the concepts) passes `publish: false`, or it publishes a new version " +
       "of unchanged content.",
     input: z.object({
@@ -712,6 +818,8 @@ export const TOOLS: Tool[] = [
     },
   }),
 
+  ...itemTools("evaluation"),
+
   // --- Templates (ADR-031; ADR-022, addendum of 2026-10-01) ------------------
 
   tool({
@@ -728,6 +836,21 @@ export const TOOLS: Tool[] = [
         ...t,
         url: api.link(`/templates/${t.id}`),
       })),
+  }),
+
+  tool({
+    name: "get_template",
+    title: "Get a template",
+    description:
+      "One template of a course: its settings, its `revision` and its items (the questions it holds, with their " +
+      "`id`, points and `counting`, as in get_evaluation); `staleItems` lists the items behind their question's " +
+      "latest published version.",
+    input: z.object({ templateId: Id }),
+    annotations: READ,
+    run: async (api, a) => ({
+      ...(await api.get(`/templates/${a.templateId}`)),
+      url: api.link(`/templates/${a.templateId}`),
+    }),
   }),
 
   tool({
@@ -760,6 +883,8 @@ export const TOOLS: Tool[] = [
       url: api.link(`/templates/${a.templateId}`),
     }),
   }),
+
+  ...itemTools("template"),
 
   tool({
     name: "instantiate_template",

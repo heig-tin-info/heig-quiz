@@ -4,6 +4,8 @@
  * course, classroom, pool, three questions of three types, an exercise —
  * through the ordinary routes, with the real question types.
  */
+import { randomUUID } from "node:crypto";
+
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -14,8 +16,10 @@ import { conceptTagSortings, courseConcepts, evaluations } from "../../db/schema
 import { testServer, type TestServer } from "../../test/http.js";
 import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
 
+import { readOnly, withoutDelete } from "../assist/tools.js";
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
-import { TOOLS } from "./tools.js";
+import { injectedApi } from "./service.js";
+import { TOOLS, ToolRefusal } from "./tools.js";
 
 let server: TestServer;
 let teacher: { id: string; headers: Record<string, string>; token: string };
@@ -144,10 +148,17 @@ describe("the transport", () => {
         "create_evaluation",
         "add_questions_to_evaluation",
         "update_evaluation",
+        "remove_question_from_evaluation",
+        "update_evaluation_item_versions",
+        "update_evaluation_item",
         "create_poll",
         "list_templates",
+        "get_template",
         "create_template",
         "add_questions_to_template",
+        "remove_question_from_template",
+        "update_template_item_versions",
+        "update_template_item",
         "instantiate_template",
         "list_projects",
         "list_project_sources",
@@ -172,13 +183,19 @@ describe("the transport", () => {
         "get_journal_page",
         "describe_question_types",
         "list_templates",
+        "get_template",
         "list_projects",
         "list_project_sources",
       ].sort(),
     );
     for (const t of result.tools) expect(t.inputSchema.type, t.name).toBe("object");
-    // Nothing destructive is exposed.
-    expect(names.some((n: string) => /delete|remove|close|release/.test(n))).toBe(false);
+    // Nothing destructive is exposed but removing an item from a quiz's list,
+    // an edit, not a deletion (ADR-022, amendment of 2026-10-29).
+    expect(names.some((n: string) => /delete|close|release/.test(n))).toBe(false);
+    const removals = ["remove_question_from_evaluation", "remove_question_from_template"];
+    expect(names.filter((n: string) => /remove/.test(n)).sort()).toEqual(removals);
+    const destructive = result.tools.filter((t: any) => t.annotations.destructiveHint).map((t: any) => t.name);
+    expect(destructive.sort()).toEqual(removals);
   });
 });
 
@@ -255,6 +272,21 @@ describe("the question-type guide", () => {
     expect(type.publicationIssues?.(config)).toEqual([]);
   });
 });
+
+/** A course with a classroom, a linked pool and two published questions. */
+async function courseWithQuestions(code: string) {
+  const course = await ok("create_course", { name: code, code });
+  const room = await ok("create_classroom", { courseId: course.id, name: `${code} 2026` });
+  const pool = await ok("create_pool", { name: code });
+  await ok("link_pool_to_course", { courseId: course.id, poolId: pool.id });
+  const example = (describeQuestionType("mcq") as { example: unknown }).example;
+  const ids: string[] = [];
+  for (const n of [1, 2]) {
+    const q = await ok("create_question", { poolId: pool.id, type: "mcq", internalName: `${code}-${n}`, config: example });
+    ids.push(q.questionId);
+  }
+  return { course, room, pool, ids };
+}
 
 describe("an authoring session", () => {
   it("builds a course, a classroom, a pool, three questions and an exercise", async () => {
@@ -601,21 +633,6 @@ describe("an authoring session", () => {
 });
 
 describe("templates first (ADR-022, addendum of 2026-10-01)", () => {
-  /** A course with a classroom, a linked pool and two published questions. */
-  async function courseWithQuestions(code: string) {
-    const course = await ok("create_course", { name: code, code });
-    const room = await ok("create_classroom", { courseId: course.id, name: `${code} 2026` });
-    const pool = await ok("create_pool", { name: code });
-    await ok("link_pool_to_course", { courseId: course.id, poolId: pool.id });
-    const example = (describeQuestionType("mcq") as { example: unknown }).example;
-    const ids: string[] = [];
-    for (const n of [1, 2]) {
-      const q = await ok("create_question", { poolId: pool.id, type: "mcq", internalName: `${code}-${n}`, config: example });
-      ids.push(q.questionId);
-    }
-    return { course, room, pool, ids };
-  }
-
   it("adds questions to a template, and refuses an unpublished one", async () => {
     const { course, pool, ids } = await courseWithQuestions("TPL-ADD");
     const made = await ok("create_template", { courseId: course.id, title: "À compléter", questionIds: [ids[0]] });
@@ -730,5 +747,114 @@ describe("GitHub projects without Quiz's App", () => {
       expect(isError, name).toBe(true);
       expect(data.error, name).toContain("GitHub projects are not enabled");
     }
+  });
+});
+
+describe("a quiz's items (#960; ADR-022, amendment of 2026-10-29)", () => {
+  const itemIds = (detail: { items: { id: string }[] }) => detail.items.map((i) => i.id);
+
+  /** Publishes a new version of the question: an item built before it is now stale. */
+  const republish = (questionId: string) => ok("update_question", { questionId, explanation: "Corrigée." });
+
+  for (const home of ["evaluation", "template"] as const) {
+    it(`removes, updates and changes the items of ${home === "evaluation" ? "a draft evaluation" : "a template"}`, async () => {
+      const { course, room, ids } = await courseWithQuestions(`ITEMS-${home}`);
+      const made =
+        home === "evaluation"
+          ? await ok("create_evaluation", { classroomId: room.id, title: "Brouillon", questionIds: ids })
+          : await ok("create_template", { courseId: course.id, title: "Modèle", questionIds: ids });
+      const id = made[home].id as string;
+      const target = { [`${home}Id`]: id };
+      const [first, second] = itemIds(made);
+      const read = await ok(`get_${home}`, target);
+      expect(itemIds(read)).toEqual([first, second]);
+
+      await republish(ids[0]!);
+      expect((await ok(`get_${home}`, target)).staleItems).toEqual([first]);
+      const moved = await ok(`update_${home}_item_versions`, target);
+      expect(moved.staleItems).toEqual([]);
+      expect(moved.url).toContain(`/${home}s/${id}`);
+
+      const changed = await ok(`update_${home}_item`, {
+        ...target,
+        itemId: second,
+        points: 3,
+        counting: "bonus",
+        milestone: true,
+        intro: "Lisez le texte.",
+      });
+      expect(changed.items.find((i: { id: string }) => i.id === second)).toMatchObject({
+        points: 3,
+        counting: "bonus",
+        milestone: true,
+        intro: "Lisez le texte.",
+      });
+      // Neutralizing is a grading act (ADR-108): refused at the tool's own input, by value and by a stray key.
+      for (const stray of [{ counting: "neutralized" }, { neutralized: true }]) {
+        const refused = await call(`update_${home}_item`, { ...target, itemId: second, ...stray });
+        expect(refused.isError).toBe(true);
+        expect(refused.data).toMatchObject({ error: "invalid_arguments" });
+      }
+
+      // An item the quiz does not hold is an error, not the route's silent success.
+      for (const [name, args] of [
+        [`remove_question_from_${home}`, { itemId: randomUUID() }],
+        [`update_${home}_item`, { itemId: randomUUID(), points: 1 }],
+        [`update_${home}_item_versions`, { itemIds: [randomUUID()] }],
+      ] as const) {
+        const unknown = await call(name, { ...target, ...args });
+        expect(unknown.isError, name).toBe(true);
+        expect(unknown.data.error, name).toContain("holds no such item");
+      }
+
+      const removed = await ok(`remove_question_from_${home}`, { ...target, itemId: first });
+      expect(itemIds(removed)).toEqual([second]);
+      expect(removed.url).toContain(`/${home}s/${id}`);
+      // The question stays in its pool: removing an item deletes nothing else.
+      expect((await ok("get_question", { questionId: ids[0] })).meta.id).toBe(ids[0]);
+      if (home === "template") expect(removed.template.revision).toBeGreaterThan(made.template.revision);
+    });
+  }
+
+  it("refuses to edit the items of an evaluation that is no longer a draft", async () => {
+    const { room, ids } = await courseWithQuestions("ITEMS-SCHEDULED");
+    const made = await ok("create_evaluation", { classroomId: room.id, title: "Planifiée", questionIds: ids });
+    const evaluationId = made.evaluation.id as string;
+    const [first] = itemIds(made);
+    await server.app.db.update(evaluations).set({ state: "scheduled" }).where(eq(evaluations.id, evaluationId));
+
+    for (const [name, args] of [
+      ["remove_question_from_evaluation", { itemId: first }],
+      ["update_evaluation_item", { itemId: first, points: 5 }],
+      ["update_evaluation_item_versions", {}],
+    ] as const) {
+      const refused = await call(name, { evaluationId, ...args });
+      expect(refused.isError, name).toBe(true);
+      expect(refused.data.error, name).toContain("Only a draft evaluation");
+    }
+    const after = await ok("get_evaluation", { evaluationId });
+    expect(itemIds(after)).toEqual(itemIds(made));
+    expect(after.items[0].points).toBe(made.items[0].points);
+  });
+
+  it("reaches no DELETE route but an item's, and the help assistant none at all", async () => {
+    const { room, pool, ids } = await courseWithQuestions("ITEMS-DELETE");
+    const made = await ok("create_evaluation", { classroomId: room.id, title: "Gardée", questionIds: ids });
+    const evaluationId = made.evaluation.id as string;
+    const itemPath = `/evaluations/${evaluationId}/items/${made.items[0].id}`;
+    const api = injectedApi(server.app, `Bearer ${teacher.token}`, "http://web.test");
+
+    for (const path of [`/pools/${pool.id}`, `/evaluations/${evaluationId}`, `/questions/${ids[0]}`, `${itemPath}/x`]) {
+      await expect(api.delete(path), path).rejects.toBeInstanceOf(ToolRefusal);
+    }
+    for (const assistant of [readOnly(api), withoutDelete(api)]) {
+      await expect(assistant.delete(itemPath)).rejects.toBeInstanceOf(ToolRefusal);
+    }
+    await ok("get_pool", { poolId: pool.id });
+    expect(itemIds(await ok("get_evaluation", { evaluationId }))).toEqual(itemIds(made));
+
+    // The one list it reaches: an item of an evaluation's (or a template's) list.
+    await api.delete(itemPath);
+    expect(itemIds(await ok("get_evaluation", { evaluationId }))).toEqual([made.items[1].id]);
   });
 });

@@ -60,6 +60,13 @@ issued before are `api`. The L6 parenthesis "the MCP tools depend on them"
 is stale: no tool calls an administration route; the rule it introduces
 stands.
 
+**Amended 2026-10-29 (issue #960, product owner's decisions of
+2026-10-29), scope: §C's "No deletion", its closed list, and the consent's
+"cannot delete".** Removing an item from an evaluation's or a template's
+list is an edit, not a deletion: the reading tool `get_template` and six
+item tools join the closed list, and the in-process client reaches a
+closed list of DELETE routes — see the addendum at the end of §C.
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,
@@ -132,14 +139,17 @@ converted with `z.toJSONSchema`.
 Reading: `list_courses`, `get_course`, `list_pools`, `get_pool`,
 `get_pool_question_stats`, `find_similar_questions`, `list_questions`,
 `get_question`, `list_evaluations`, `get_evaluation`,
-`describe_question_types`, `list_templates`, `get_journal`,
+`describe_question_types`, `list_templates`, `get_template`, `get_journal`,
 `get_journal_page`, `list_projects`, `list_project_sources`.
 
 Writing: `create_course`, `create_classroom`, `create_pool`,
 `link_pool_to_course`, `create_category`, `create_question`,
 `update_question`, `create_evaluation`, `add_questions_to_evaluation`,
 `update_evaluation`, `create_poll`, `create_template`,
-`add_questions_to_template`, `instantiate_template`, `create_project`.
+`add_questions_to_template`, `instantiate_template`, `create_project`,
+`remove_question_from_evaluation`, `remove_question_from_template`,
+`update_evaluation_item_versions`, `update_template_item_versions`,
+`update_evaluation_item`, `update_template_item`.
 
 - `describe_question_types` hands the model the JSON Schema of the type's
   `configSchema` — generated, so it cannot drift from the publication gate —
@@ -154,7 +164,9 @@ Writing: `create_course`, `create_classroom`, `create_pool`,
   close, grade, release) is exposed. A model prepares work; a teacher runs it.
   The one exception is `create_poll`, which starts a poll because that is
   what creating a poll is (F-LIVE-13); its description tells the model to
-  call it only when the teacher wants to poll now.
+  call it only when the teacher wants to poll now. *Amended 2026-10-29: a
+  deletion removes an entity or a student's work; removing an item from a
+  quiz's list is an edit (see the last addendum).*
 - Every write returns the web app's `url` of what it made, so the assistant
   can hand the teacher a link.
 - `get_pool_question_stats` (amendment of 2026-09-29) is one call to the
@@ -295,6 +307,49 @@ it had to fall back on the web form.
 - **Without Quiz's App** the project routes do not exist (`app.ts`); the
   three tools then refuse with a reason a model can repeat ("GitHub projects
   are not enabled"), rather than a 404 it would read as "not accessible".
+
+**Addendum of 2026-10-29 — edit a quiz's items** (#960, decided by the
+product owner). After `update_question`, a quiz still played the old
+version, and no tool could move, change or remove its items.
+
+- **What a deletion is.** A deletion removes an entity — a course, a
+  classroom, a pool, a question, an evaluation, a template, a project — or
+  a student's work. Removing an item from an evaluation's or a template's
+  list is an edit of that list: the question stays in its pool. It cannot
+  be undone (the item's points, intro, frozen version and position go with
+  it), so its tools carry `destructiveHint`.
+- **Seven tools over the item routes of F-EVAL-03 and F-EVAL-25.** Reading
+  gains `get_template` (`GET /templates/:id`), so a model sees a
+  template's item ids as `get_evaluation` shows an evaluation's. Writing
+  gains, for each home, `remove_question_from_evaluation` /
+  `_template` (`DELETE …/items/:itemId`), `update_evaluation_item_versions`
+  / `update_template_item_versions` (`POST …/items/update-versions`) and
+  `update_evaluation_item` / `update_template_item` (`PATCH
+  …/items/:itemId`, `ItemPatch`: points, normal or bonus, milestone,
+  intro). An item is addressed by its id, never its question's: the same
+  question may sit twice. No reorder; replacing a question is a removal
+  and an addition. Neutralizing stays a grading act of the web app
+  (ADR-108): `ItemPatch` has no such value, and a stray key is refused.
+- **A draft evaluation only.** The routes accept `scheduled` too, but a
+  scheduled evaluation opens by the ticker with no further check; the tools
+  refuse an evaluation past `draft` with a reason the model can repeat. A
+  template is always editable. Editing an instance never reaches its
+  template, nor a template its instances until the teacher pulls the
+  revision (F-EVAL-26); each description says so.
+- **No false success.** An evaluation's item routes answer an unknown item
+  as a success (`204`), so each tool first reads the quiz, refuses an item
+  it does not hold, and answers the quiz's detail after the write.
+- **A closed list of DELETE routes.** The in-process client had no
+  `delete`, which was what kept every DELETE route out of reach. It now has
+  one that reaches only `DELETABLE_PATHS` (`modules/mcp/service.ts`): an
+  item of an evaluation's or a template's list; any other path is refused
+  before a request is made, which a test asserts. The help assistant
+  (F-LLM-07, ADR-080 §8) still reaches no DELETE: its reading client and
+  the client of a confirmed write both refuse one unsent, and none of the
+  new tools is among the writes it may prepare.
+- **Consent.** The consent screen's "cannot delete" line now names what it
+  cannot delete, and a line says it can change a quiz's questions; tokens
+  granted before are not asked again, as for `create_project` (#788).
 
 ## Consequences
 

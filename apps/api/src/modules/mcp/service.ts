@@ -7,7 +7,7 @@
 import type { FastifyInstance } from "fastify";
 
 import { INTERNAL_CALL_HEADER } from "../../auth/plugin.js";
-import { ApiError, type Api } from "./tools.js";
+import { ApiError, ToolRefusal, type Api } from "./tools.js";
 export { checkConfig } from "./questionTypes.js";
 
 export {
@@ -20,6 +20,18 @@ export {
   type Tool,
   type ToolFailure,
 } from "./tools.js";
+
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+/**
+ * The DELETE routes a tool may reach, a CLOSED list (ADR-022, amendment of
+ * 2026-10-29): an item of an evaluation's or a template's list. Removing an
+ * item is an edit of that list, not a deletion; any other DELETE path is
+ * refused before a request is made.
+ */
+export const DELETABLE_PATHS: readonly RegExp[] = [
+  new RegExp(`^/evaluations/${UUID}/items/${UUID}$`, "i"),
+  new RegExp(`^/templates/${UUID}/items/${UUID}$`, "i"),
+];
 
 /**
  * The in-process client of `/app/api`, acting with a bearer token
@@ -39,7 +51,7 @@ export function injectedApi(
 ): Api {
   const github = app.hasRoute({ method: "GET", url: "/app/api/classrooms/:id/projects" });
   const call = async (
-    method: "GET" | "POST" | "PUT" | "PATCH",
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
     body?: unknown,
     query?: Record<string, string | number | undefined>,
@@ -78,6 +90,10 @@ export function injectedApi(
     post: (path, body) => call("POST", path, body ?? {}),
     put: (path, body) => call("PUT", path, body),
     patch: (path, body) => call("PATCH", path, body),
+    delete: (path) =>
+      DELETABLE_PATHS.some((allowed) => allowed.test(path))
+        ? call("DELETE", path)
+        : Promise.reject(new ToolRefusal("No tool deletes this; nothing was sent.")),
     link: (path) => `${webUrl}${path}`,
     github,
   };

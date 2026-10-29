@@ -141,6 +141,7 @@ describe("a quiz:read token over MCP (ADR-113 §4)", () => {
       get_journal: { classroomId: room.id },
       get_journal_page: { classroomId: room.id, path: "010-intro/README.md" },
       list_templates: { courseId: course.id },
+      get_template: { templateId: randomUUID() },
       list_projects: { classroomId: room.id },
       list_project_sources: { classroomId: room.id },
     };
