@@ -179,8 +179,8 @@ async function authorizeCall<S extends typeof GitTokenRequestClaims | typeof Rel
  * (the organization's installation acting, GitHub answering; otherwise
  * `503`) and the token on ONE repository id; `useUntil` is `min(expiresAt,
  * effective deadline + grace)` for a write grant — `expiresAt` alone for a
- * repository writable under the `commit` strategy (`writableUnderCommit`,
- * #958) —, GitHub's `expiresAt` for a read one. An issuance is audited,
+ * writable repository of an `online` project under `commit`
+ * (`workspaceClosesAt`, #958) —, GitHub's `expiresAt` for a read one. An issuance is audited,
  * without the token.
  */
 export async function issueGitToken(

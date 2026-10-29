@@ -14,8 +14,8 @@ tokens are single use and bound to their request, and every token's lifetime is 
 ([amendment](#amendment-2026-10-11-743-the-relays-requests-are-single-use)). Amended
 2026-10-14 (M3-14f): the Context's list of the App's permissions — it no longer reads
 organization secrets. Amended 2026-10-29 (#958, product owner): under the `commit` deadline
-strategy the bound of §2 point 5 and §7 is the repository's writability, not the deadline plus
-the grace ([amendment](#amendment-2026-10-29-958-under-commit-the-relay-follows-the-repositorys-writability)).
+strategy an `online` workspace (start route, relay, portal deadline) follows the repository's writability, not the deadline plus
+the grace ([amendment](#amendment-2026-10-29-958-under-commit-the-workspace-follows-the-repositorys-writability)).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -158,7 +158,7 @@ disagree:
    staff *unlock* after the deadline does not reopen the workspace, as it
    does not reopen the start route: extending the repository's deadline
    does (point 8). Why the grace, §7. *Under the `commit` strategy, amended
-   2026-10-29 (#958): see the [amendment](#amendment-2026-10-29-958-under-commit-the-relay-follows-the-repositorys-writability).*
+   2026-10-29 (#958): see the [amendment](#amendment-2026-10-29-958-under-commit-the-workspace-follows-the-repositorys-writability).*
 6. The organization's installation is known, not suspended, and GitHub
    answers; otherwise `503 github_unavailable`.
 
@@ -350,7 +350,7 @@ relayed within the grace, received late if it is late, and judged by the
 receipt time like any other push. A token minted before that limit is
 bounded by `useUntil` (§2). *Under the `commit` strategy, amended
 2026-10-29 (#958): the bound is the repository's writability, see the
-[amendment](#amendment-2026-10-29-958-under-commit-the-relay-follows-the-repositorys-writability).*
+[amendment](#amendment-2026-10-29-958-under-commit-the-workspace-follows-the-repositorys-writability).*
 
 What remains: GitHub keeps a token valid until its `expiresAt`, up to an
 hour past `useUntil`, and only the portal's discipline (`useUntil`, then
@@ -537,43 +537,56 @@ portal's side are unchanged.
   the table holds a few minutes of requests, and no scheduled task is
   needed.
 
-## Amendment 2026-10-29 (#958): under `commit`, the relay follows the repository's writability
+## Amendment 2026-10-29 (#958): under `commit`, the workspace follows the repository's writability
 
 Scope: check 5 of §2, the write grant's `useUntil` (§2), §7, §8 and §9's
-bound, for a project whose deadline strategy is `commit` (F-PROJ-09). Under
-`lock`, and for every other check, nothing changes.
+bound, for an `online` project whose deadline strategy is `commit`
+(F-PROJ-09); and, for the same projects, the start route's closing rule
+(ADR-047 §6) and the deadline Quiz sends the portal. Under `lock`, for an
+`online_seb` exam, and for every other check, nothing changes.
 
 - **Decision (product owner, 2026-10-29).** Under `commit` ("the
   repositories stay open, a commit marks the deadline") the online
-  workspace pushes after the deadline exactly as git can: "if they can push
-  with git, they can push by the other means too". The deadline commit
-  Quiz's App pushes separates the work before the deadline from the work
-  after it; a force push that removes it is visible and the teacher can
-  contest it.
-- **The rule.** Check 5 reads, under `commit`, whether GitHub keeps the
-  repository writable: `writableUnderCommit` (`@quiz/domain`, next to
-  `deadlineWantsLock`, the rule of what GitHub should hold) — no staff lock
-  wanted, no lock held (`locked_at` null), the project not archived. Then
-  the effective deadline plus the grace does not close the relay, an
-  archived classroom still does, and the write grant's `useUntil` is
-  GitHub's `expiresAt` alone (at most an hour). A staff lock, a lock GitHub
-  holds or an archived project gives `409 closed`, as before. The read
-  grant on an `online_seb` distribution keeps the deadline plus the grace.
+  workspace works and pushes after the deadline exactly as git can: "if
+  they can push with git, they can push by the other means too". The
+  deadline commit Quiz's App pushes separates the work before the deadline
+  from the work after it; a force push that removes it is visible and the
+  teacher can contest it.
+- **The rule, one for the start route and the relay.**
+  `workspaceClosesAt` (`@quiz/domain`, `workMode.ts`) is null for an
+  `online` project under `commit` while GitHub keeps the repository
+  writable — `writableUnderCommit`, next to `deadlineWantsLock`, the rule
+  of what GitHub should hold: no staff lock wanted, no lock held
+  (`locked_at` null), the project not archived. Otherwise it is the
+  effective deadline (the start route) or the effective deadline plus the
+  grace (the relay), as before. With no bound, the start route opens a
+  workspace and the relay grants a write token until the repository is
+  locked or archived; an archived classroom still closes both, and the
+  write grant's `useUntil` is GitHub's `expiresAt` alone (at most an
+  hour). A staff lock, a lock GitHub holds or an archived project falls
+  back to the deadline, and past it `409 closed`.
+- **The portal.** Its `closesAt` (from `CodespaceAssignmentSync.deadlineAt`)
+  gates `/launch` and feeds the workspace's countdown; it closes no running
+  session. For these projects Quiz sends `deadlineAt: null`
+  (`portalDeadline`): the portal treats the assignment as one without a
+  deadline — launches always open, no countdown — and Quiz's start route,
+  the only issuer of launch tokens, decides student by student. A change of
+  the deadline strategy re-syncs the project. The portal's code is
+  unchanged.
 - **Unchanged.** One repository, `contents` only, at most an hour, kept in
   memory, every issuance audited without the token, an App push counted as
   the student's only when its head was declared (§6). A push relayed after
   the deadline is received late (F-PROJ-11): it never moves the frozen
-  score and the staff see it marked after the deadline.
+  score and the staff see it marked after the deadline. An `online_seb`
+  exam keeps its deadline everywhere, its read grant on the distribution
+  included.
 - **What it widens.** §9's blast radius under `commit`: a compromised
   portal reaches the repositories of those projects until they are locked
   or archived, rather than until their deadline plus the grace. The
   deadline commit and the receipt times keep what it could add after the
   deadline apart from the graded work.
-- **Not changed here.** The start route (ADR-047 §6) and the portal's
-  own `closesAt` still close the opening of a workspace at the effective
-  deadline; a session already open keeps relaying. Whether criteria and LLM
-  grading should read commits received after the deadline is an open
-  question ([06](../spec/06-questions-ouvertes.md)).
+- **Open.** Whether criteria and LLM grading should read commits received
+  after the deadline: [06](../spec/06-questions-ouvertes.md), question 61.
 
 ## Alternatives considered
 

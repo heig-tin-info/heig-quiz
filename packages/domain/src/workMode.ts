@@ -83,13 +83,60 @@ export function workModeRefusal(facts: WorkModeFacts, from: WorkModeName, to: Wo
 
 /** The facts {@link workspaceStartRefusal} decides on. */
 export interface WorkspaceStartFacts {
-  project: { workMode: WorkModeName; deadlineAt: Date };
+  project: WorkspaceProject;
   /** The student's own repository of the project (online modes are individual); null without one. */
-  repo: (RepoLifeLike & { deadlineAt: Date | null }) | null;
+  repo: (RepoLifeLike & WorkspaceRepo) | null;
   /** The project's classroom is archived: it takes no new work. */
   classroomArchived: boolean;
   /** The request rides on a `seb` session confined to this project (D21, M6-07). */
   fromSeb: boolean;
+}
+
+/** What of a project the workspace's deadline rules read. */
+export interface WorkspaceProject {
+  workMode: WorkModeName;
+  deadlineAt: Date;
+  /** F-PROJ-09: `commit` leaves the repository writable past the deadline. */
+  deadlineStrategy: DeadlineStrategyName;
+  archivedAt: Date | null;
+}
+
+/** What of a student's repository the workspace's deadline rules read. */
+export interface WorkspaceRepo {
+  deadlineAt: Date | null;
+  staffLock: boolean | null;
+  deadlineAppliedAt: Date | null;
+  lockedAt: Date | null;
+}
+
+/**
+ * Whether a project's workspaces follow the repository's writability rather
+ * than the deadline (#958, product owner 2026-10-29: "if they can push with
+ * git, they can push by the other means too"): an `online` project under the
+ * `commit` strategy. An exam under Safe Exam Browser keeps its deadline.
+ */
+function followsWritability(project: Pick<WorkspaceProject, "workMode" | "deadlineStrategy">): boolean {
+  return project.workMode === "online" && project.deadlineStrategy === "commit";
+}
+
+/**
+ * When a student's workspace closes, for the start route and the relay
+ * alike: null while it follows a repository GitHub keeps writable
+ * ({@link writableUnderCommit}); otherwise the effective deadline plus
+ * `graceMinutes` (none for the start route, the project's for the relay).
+ */
+export function workspaceClosesAt(repo: WorkspaceRepo, project: WorkspaceProject, graceMinutes: number): Date | null {
+  if (followsWritability(project) && writableUnderCommit(repo, project)) return null;
+  return new Date(effectiveDeadline(repo, project).getTime() + graceMinutes * 60_000);
+}
+
+/**
+ * The deadline the portal is given (`CodespaceAssignmentSync.deadlineAt`):
+ * its launch gate and the workspace's countdown. None where workspaces
+ * follow writability: Quiz's start route then decides, student by student.
+ */
+export function portalDeadline(project: Pick<WorkspaceProject, "workMode" | "deadlineStrategy" | "deadlineAt">): Date | null {
+  return followsWritability(project) ? null : project.deadlineAt;
 }
 
 /**
@@ -98,25 +145,26 @@ export interface WorkspaceStartFacts {
  * (`not_online`), one under Safe Exam Browser asked from outside it — a
  * `seb` session of this project only (`seb_required`, D21) —, no live
  * repository of the student's (`not_accepted`, {@link isLiveIndividualRepo}),
- * their EFFECTIVE deadline passed or the classroom archived (`closed`).
- * Null: the workspace opens.
+ * their EFFECTIVE deadline passed — unless the workspace follows a writable
+ * repository ({@link workspaceClosesAt}, #958) — or the classroom archived
+ * (`closed`). Null: the workspace opens.
  */
 export function workspaceStartRefusal(facts: WorkspaceStartFacts, now: Date): WorkspaceStartRefusalCode | null {
   const { project, repo } = facts;
   if (!isOnlineMode(project.workMode)) return "not_online";
   if (project.workMode === "online_seb" && !facts.fromSeb) return "seb_required";
   if (repo === null || !isLiveIndividualRepo(repo)) return "not_accepted";
-  if (workspaceClosed(facts, effectiveDeadline(repo, project), now)) return "closed";
+  if (workspaceClosed(facts, workspaceClosesAt(repo, project, 0), now)) return "closed";
   return null;
 }
 
 /**
  * THE closing rule the start route and the git relay share: the classroom
- * archived, or `closesAt` reached on the server's clock — the effective
- * deadline for the start route, the deadline plus the grace for the relay.
+ * archived, or `closesAt` reached on the server's clock
+ * ({@link workspaceClosesAt}; null: no deadline closes it).
  */
-export function workspaceClosed(facts: { classroomArchived: boolean }, closesAt: Date, now: Date): boolean {
-  return facts.classroomArchived || closesAt.getTime() <= now.getTime();
+export function workspaceClosed(facts: { classroomArchived: boolean }, closesAt: Date | null, now: Date): boolean {
+  return facts.classroomArchived || (closesAt !== null && closesAt.getTime() <= now.getTime());
 }
 
 /** An owner seat of a course, as `course_staff` holds it. */
@@ -146,37 +194,24 @@ export function quotaHolder(creatorId: string, owners: readonly OwnerSeat[]): st
  * Why Quiz refuses the portal a GitHub token or a relay declaration
  * (ADR-078 §2): `not_found` (404: no launch of that user on that project,
  * or a repository the grant never covers), `not_online` (409), `closed`
- * (409: past the effective deadline plus the grace — unless the repository
- * stays writable under `commit` —, archived, staff-locked).
+ * (409: past the effective deadline plus the grace — unless an `online`
+ * workspace follows a writable repository —, archived, staff-locked).
  */
 export const GIT_TOKEN_REFUSALS = ["not_found", "not_online", "closed"] as const;
 export type GitTokenRefusalCode = (typeof GIT_TOKEN_REFUSALS)[number];
 
 /** The facts {@link gitTokenRefusal} decides on, read in one transaction. */
 export interface GitTokenFacts {
-  project: {
-    workMode: WorkModeName;
-    deadlineAt: Date;
+  project: WorkspaceProject & {
     /** F-PROJ-01: the grace after the deadline, in minutes. */
     graceMinutes: number;
-    /** F-PROJ-09: `commit` leaves the repository writable past the deadline ({@link writableUnderCommit}). */
-    deadlineStrategy: DeadlineStrategyName;
-    archivedAt: Date | null;
     distributionRepoId: number | null;
     distributionFullName: string | null;
   };
   /** A launch token was issued to the user for the project (`codespace_launches`). */
   launched: boolean;
   /** The user's own repository of the project (no group); null without one. */
-  repo:
-    | (RepoLifeLike & {
-        deadlineAt: Date | null;
-        staffLock: boolean | null;
-        deadlineAppliedAt: Date | null;
-        lockedAt: Date | null;
-        githubRepoId: number | null;
-      })
-    | null;
+  repo: (RepoLifeLike & WorkspaceRepo & { githubRepoId: number | null }) | null;
   /** The classroom of the project is archived. */
   classroomArchived: boolean;
   /** `owner/name`, as the portal asks for it. */
@@ -191,11 +226,6 @@ export interface GitTokenGrantDecision {
   permission: "write" | "read";
   githubRepoId: number;
   useUntil: Date | null;
-}
-
-/** The repository's effective deadline plus the project's grace (ADR-078 §7): when its write tokens stop. */
-export function relayClosesAt(repo: { deadlineAt: Date | null }, project: { deadlineAt: Date; graceMinutes: number }): Date {
-  return new Date(effectiveDeadline(repo, project).getTime() + project.graceMinutes * 60_000);
 }
 
 const sameRepository = (stored: string | null, asked: string): boolean =>
@@ -216,11 +246,11 @@ const sameRepository = (stored: string | null, asked: string): boolean =>
  *      grace (§7, confirmed by the product owner on 2026-10-07), and no
  *      staff lock (`closed`). The start route does not read the staff lock
  *      (ADR-047): a locked repository still opens a workspace, whose
- *      pushes stay pending. Under the `commit` strategy, a repository
- *      writable on GitHub ({@link writableUnderCommit}) has no such bound: it
- *      stays open while the classroom is not archived, and its write grant
- *      runs to the token's own expiry (#958, ADR-078 as amended
- *      2026-10-29, product owner).
+ *      pushes stay pending. An `online` project under the `commit`
+ *      strategy has no such bound while GitHub keeps the repository
+ *      writable ({@link workspaceClosesAt}): it stays open while the
+ *      classroom is not archived, and its write grant runs to the token's
+ *      own expiry (#958, ADR-078 as amended 2026-10-29, product owner).
  *
  * Checks 1 (the signature) and 6 (GitHub) are the route's. Returns the
  * grant, or the refusal's code.
@@ -228,13 +258,10 @@ const sameRepository = (stored: string | null, asked: string): boolean =>
 export function gitTokenRefusal(facts: GitTokenFacts, now: Date): GitTokenRefusalCode | GitTokenGrantDecision {
   const { project, repo } = facts;
   if (!facts.launched || repo === null || !isLiveIndividualRepo(repo) || repo.githubRepoId === null) return "not_found";
-  const own = sameRepository(repo.fullName, facts.repository);
-  // Only the write grant on the student's own repository follows its writability; a read grant keeps the deadline.
-  const writable = own && writableUnderCommit(repo, project);
-  const closesAt = relayClosesAt(repo, project);
+  const closesAt = workspaceClosesAt(repo, project, project.graceMinutes);
   let grant: GitTokenGrantDecision;
-  if (own) {
-    grant = { permission: "write", githubRepoId: repo.githubRepoId, useUntil: writable ? null : closesAt };
+  if (sameRepository(repo.fullName, facts.repository)) {
+    grant = { permission: "write", githubRepoId: repo.githubRepoId, useUntil: closesAt };
   } else if (
     project.workMode === "online_seb" &&
     project.distributionRepoId !== null &&
@@ -246,6 +273,6 @@ export function gitTokenRefusal(facts: GitTokenFacts, now: Date): GitTokenRefusa
   }
   if (!isOnlineMode(project.workMode)) return "not_online";
   // Safe Exam Browser is the start route's to check: the portal's request is not a browser's.
-  const closed = writable ? facts.classroomArchived : workspaceClosed(facts, closesAt, now) || repo.staffLock === true;
-  return closed ? "closed" : grant;
+  if (workspaceClosed(facts, closesAt, now) || repo.staffLock === true) return "closed";
+  return grant;
 }

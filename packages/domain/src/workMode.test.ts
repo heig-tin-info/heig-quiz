@@ -5,7 +5,7 @@ import {
   gitTokenRefusal,
   isOnlineMode,
   quotaHolder,
-  relayClosesAt,
+  portalDeadline,
   workModeRefusal,
   workspaceClosed,
   workspaceStartRefusal,
@@ -79,15 +79,16 @@ describe("quotaHolder (decision C)", () => {
 describe("workspaceStartRefusal (ADR-047 §6)", () => {
   const NOW = new Date("2026-10-07T08:00:00Z");
   const DEADLINE = new Date("2026-10-14T22:00:00Z");
-  const repo = { groupId: null, provisionStatus: "ok", fullName: "org/lab-kid", deletedAt: null, deadlineAt: null };
+  const repo = { groupId: null, provisionStatus: "ok", fullName: "org/lab-kid", deletedAt: null, deadlineAt: null, staffLock: null, deadlineAppliedAt: null, lockedAt: null };
+  const base = { deadlineAt: DEADLINE, deadlineStrategy: "lock", archivedAt: null } as const;
   const facts = (over: Partial<WorkspaceStartFacts> = {}): WorkspaceStartFacts => ({
-    project: { workMode: "online", deadlineAt: DEADLINE },
+    project: { ...base, workMode: "online" },
     repo,
     classroomArchived: false,
     fromSeb: false,
     ...over,
   });
-  const exam = { workMode: "online_seb", deadlineAt: DEADLINE } as const;
+  const exam = { ...base, workMode: "online_seb" } as const;
 
   it("opens an online project's workspace on the student's live repository", () => {
     expect(workspaceStartRefusal(facts(), NOW)).toBeNull();
@@ -101,7 +102,7 @@ describe("workspaceStartRefusal (ADR-047 §6)", () => {
   });
 
   it("refuses, in order: not online, SEB only, not accepted, closed", () => {
-    expect(workspaceStartRefusal(facts({ project: { workMode: "free", deadlineAt: DEADLINE }, repo: null, fromSeb: true }), NOW)).toBe("not_online");
+    expect(workspaceStartRefusal(facts({ project: { ...base, workMode: "free" }, repo: null, fromSeb: true }), NOW)).toBe("not_online");
     expect(workspaceStartRefusal(facts({ project: exam, repo: null }), NOW)).toBe("seb_required");
     expect(workspaceStartRefusal(facts({ repo: null }), NOW)).toBe("not_accepted");
     expect(workspaceStartRefusal(facts({ repo: { ...repo, provisionStatus: "pending" } }), NOW)).toBe("not_accepted");
@@ -113,6 +114,25 @@ describe("workspaceStartRefusal (ADR-047 §6)", () => {
   it("reads the student's own deadline, an extension included", () => {
     const later = new Date("2026-10-21T22:00:00Z");
     expect(workspaceStartRefusal(facts({ repo: { ...repo, deadlineAt: later } }), DEADLINE)).toBeNull();
+  });
+
+  it("under commit, an online project's workspace opens past the deadline while the repository is writable (#958)", () => {
+    const LATE = new Date(DEADLINE.getTime() + 86_400_000);
+    const commit = { ...base, workMode: "online", deadlineStrategy: "commit" } as const;
+    const applied = { ...repo, deadlineAppliedAt: DEADLINE };
+    expect(workspaceStartRefusal(facts({ project: commit, repo: applied }), LATE)).toBeNull();
+    expect(workspaceStartRefusal(facts({ project: commit, repo: { ...applied, staffLock: true } }), LATE)).toBe("closed");
+    expect(workspaceStartRefusal(facts({ project: commit, repo: applied, classroomArchived: true }), LATE)).toBe("closed");
+    // Under Safe Exam Browser, and under lock, the deadline still closes it.
+    expect(workspaceStartRefusal(facts({ project: { ...commit, workMode: "online_seb" }, repo: applied, fromSeb: true }), LATE)).toBe("closed");
+    expect(workspaceStartRefusal(facts({ repo: applied }), LATE)).toBe("closed");
+  });
+
+  it("gives the portal no deadline for an online project under commit: Quiz's start route decides (portalDeadline)", () => {
+    const commit = { ...base, workMode: "online", deadlineStrategy: "commit" } as const;
+    expect(portalDeadline(commit)).toBeNull();
+    expect(portalDeadline({ ...commit, workMode: "online_seb" })).toEqual(DEADLINE);
+    expect(portalDeadline(facts().project)).toEqual(DEADLINE);
   });
 });
 
@@ -153,7 +173,6 @@ describe("gitTokenRefusal (ADR-078 §2)", () => {
     expect(gitTokenRefusal(facts(), NOW)).toEqual({ permission: "write", githubRepoId: 101, useUntil: GRACE_END });
     // GitHub's names are case-insensitive.
     expect(gitTokenRefusal(facts({ repository: "Org/Lab-Kid" }), NOW)).toMatchObject({ permission: "write" });
-    expect(relayClosesAt({ deadlineAt: null }, { deadlineAt: DEADLINE, graceMinutes: 30 })).toEqual(GRACE_END);
   });
 
   it("grants read on the distribution repository of an online_seb project only", () => {
@@ -203,9 +222,10 @@ describe("gitTokenRefusal (ADR-078 §2)", () => {
     const applied = { ...repo, deadlineAppliedAt: DEADLINE };
     expect(gitTokenRefusal(commit({ repo: applied }), LATE)).toEqual({ permission: "write", githubRepoId: 101, useUntil: null });
     expect(gitTokenRefusal(commit({ repo: applied }), NOW)).toMatchObject({ useUntil: null });
-    // A staff lock and an archived classroom close it; the read grant of an exam keeps the deadline.
+    // A staff lock and an archived classroom close it; an exam under Safe Exam Browser keeps its deadline.
     expect(gitTokenRefusal(commit({ repo: { ...applied, staffLock: true } }), LATE)).toBe("closed");
     expect(gitTokenRefusal(commit({ repo: applied, classroomArchived: true }), LATE)).toBe("closed");
+    expect(gitTokenRefusal(commit({ repo: applied }, { workMode: "online_seb" }), LATE)).toBe("closed");
     expect(gitTokenRefusal(commit({ repo: applied, repository: "org/lab-squashed" }, { workMode: "online_seb" }), LATE)).toBe("closed");
     // Under lock, unchanged: closed at the deadline plus the grace.
     expect(gitTokenRefusal(facts({ repo: applied }), GRACE_END)).toBe("closed");

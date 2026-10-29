@@ -7,7 +7,8 @@
  *   - `POST <PLATFORM_URL>/app/codespace/git-token` → a `GitTokenGrant` on
  *     ONE repository, `contents` only, with GitHub's `expiresAt` and Quiz's
  *     `useUntil` (the deadline plus the grace for a write grant, the
- *     token's expiry under `commit` while the repository is writable);
+ *     token's expiry for an `online` project under `commit` while the
+ *     repository is writable);
  *   - `POST <PLATFORM_URL>/app/codespace/relay-heads` → 204, the heads of
  *     the next relay push declared, so that Quiz reads the App's push of
  *     them as the student's.

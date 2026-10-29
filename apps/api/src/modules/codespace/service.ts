@@ -46,7 +46,7 @@ import {
   type ServiceTokenClaims,
   type TeacherCodespaceGrant,
 } from "@quiz/contracts";
-import { isOnlineMode, quotaHolder, requestBinding, signHs256, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
+import { isOnlineMode, portalDeadline, quotaHolder, requestBinding, signHs256, workModeRefusal, workspaceStartRefusal } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -214,7 +214,10 @@ async function quotaHolderOf(db: Db, courseId: string, createdBy: string): Promi
  * step 7, 06 §6.3). The workspace is seeded
  * from the distribution repository, never the source (N-SEC-20). A private
  * one seeds through the portal's `quiz` forge: Quiz grants it a read token
- * on that repository for an `online_seb` project (ADR-078, M6-10).
+ * on that repository for an `online_seb` project (ADR-078, M6-10). Its
+ * `deadlineAt` is `portalDeadline`'s: none for an `online` project under
+ * the `commit` strategy, whose start route decides student by student
+ * (#958; ADR-078 as amended 2026-10-29).
  */
 export async function syncPayload(db: Db, projectId: string): Promise<CodespaceAssignmentSync | null> {
   const [row] = await db
@@ -240,7 +243,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     teacher: { id: holder.id, email: holder.email || holder.id },
     quota: { maxActiveSessions: grant?.maxActiveSessions ?? DEFAULT_MAX_ACTIVE_SESSIONS },
     startAt: project.startAt.toISOString(),
-    deadlineAt: project.deadlineAt.toISOString(),
+    deadlineAt: portalDeadline(project)?.toISOString() ?? null,
   });
 }
 

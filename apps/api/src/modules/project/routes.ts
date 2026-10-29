@@ -80,8 +80,8 @@ import { ownHints } from "../realtime/bus.js";
 import * as service from "./service.js";
 import { registerProjectHandlers } from "./webhooks.js";
 
-/** What the portal reads of a project (`CodespaceAssignmentSync`): a patch of any of them is synced. */
-const PORTAL_FIELDS = ["name", "publishMode", "startAt", "deadlineAt", "durationMinutes"] as const;
+/** What the portal's sync payload (`CodespaceAssignmentSync`) derives from: a patch of any of them is synced. */
+const PORTAL_FIELDS = ["name", "publishMode", "startAt", "deadlineAt", "durationMinutes", "deadlineStrategy"] as const;
 
 export async function projectPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
