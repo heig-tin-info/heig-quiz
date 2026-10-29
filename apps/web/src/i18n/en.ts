@@ -6091,7 +6091,9 @@ export const en = {
   "project.checkpoints.new": "New checkpoint",
   "project.checkpoints.failed": "Could not load the checkpoints",
   "project.checkpoint.name": "Name",
-  "project.checkpoint.name.desc": "Lowercase letters, digits, - and _: the `milestone` value of the criteria it grades in criteria.yml.",
+  "project.checkpoint.name.desc": "The `milestone` value of the criteria it grades in criteria.yml, in lowercase without accents or spaces.",
+  "project.checkpoint.name.tag": "Saved as",
+  "project.checkpoint.name.invalid": "Needs at least one letter or digit.",
   "project.checkpoint.when": "Date",
   "project.checkpoint.kind.date": "A date",
   "project.checkpoint.kind.offset": "Days before",
@@ -6111,6 +6113,7 @@ export const en = {
   "project.refusal.duePast": "This date has passed.",
   "project.refusal.dueAfterDeadline": "The date must come before the project's deadline.",
   "project.refusal.duplicateCheckpoint": "This name is already taken on the project.",
+  "project.refusal.checkpointName": "Name refused: lowercase letters, digits, - and _ only.",
   "project.refusal.checkpointDispatched": "This checkpoint was already sent to some repositories: it cannot be deleted.",
 
   // The staff's writes (F-PROJ-07, F-PROJ-08, F-PROJ-14; M3-12b, M3-12c): the

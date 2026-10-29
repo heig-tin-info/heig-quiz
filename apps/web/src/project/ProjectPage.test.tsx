@@ -1081,6 +1081,41 @@ describe("the review checkpoints", () => {
     expect(await screen.findByText("Checkpoint added")).toBeInTheDocument();
   });
 
+  it("takes a name typed freely and sends its tag, said under the field (#968)", async () => {
+    const { calls } = routes(makeProject(), { [`POST ${BASE}/checkpoints`]: ok(makeCheckpoint(1)) });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Add" }));
+    const dialog = await screen.findByRole("dialog");
+    const name = within(dialog).getByRole("textbox", { name: "Name" });
+    await userEvent.type(name, "fin de la séance (2 périodes)");
+    expect(name).toHaveAccessibleDescription("Saved as fin-de-la-seance-2-periodes");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(writes(calls)).toHaveLength(1));
+    expect(writes(calls)[0]!.body).toEqual({ name: "fin-de-la-seance-2-periodes", offsetDays: -3 });
+  });
+
+  it("refuses a name with no letter nor digit under the field, and names the field on a 400", async () => {
+    routes(makeProject(), {
+      [`POST ${BASE}/checkpoints`]: fail(400, { error: "validation", details: [{ path: ["name"], code: "invalid_format", message: "" }] }),
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Add" }));
+    const dialog = await screen.findByRole("dialog");
+    const name = within(dialog).getByRole("textbox", { name: "Name" });
+    const create = within(dialog).getByRole("button", { name: "Create" });
+    await userEvent.type(name, "(!)");
+    expect(name).toHaveAttribute("aria-invalid", "true");
+    expect(within(dialog).getByText("Needs at least one letter or digit.")).toBeInTheDocument();
+    expect(create).toBeDisabled();
+
+    await userEvent.clear(name);
+    await userEvent.type(name, "s1");
+    expect(name).not.toHaveAttribute("aria-invalid");
+    await userEvent.click(create);
+    await waitFor(() => expect(name).toHaveAccessibleDescription(/Name refused: lowercase letters, digits, - and _ only\./));
+    expect(name).toHaveAttribute("aria-invalid", "true");
+  });
+
   it("says a dispatched checkpoint cannot be deleted (409), and a date past the deadline on add (422)", async () => {
     routes(makeProject(), {
       [`GET ${BASE}/checkpoints`]: ok([makeCheckpoint(1)]),

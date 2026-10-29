@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CHECKPOINT_NAME_MAX,
   checkpointDueAt,
   checkpointPass,
   checkpointRefusal,
+  checkpointTag,
   isVoidCheckpoint,
   planCheckpointReviewDispatch,
   planFinalReviewDispatch,
@@ -103,5 +105,31 @@ describe("the checkpoints' rules (M3-05b)", () => {
     expect(checkpointPass(open, { ...project, state: "draft" }, later)).toBeNull();
     expect(checkpointPass(open, { ...project, gradingMode: "none" }, later)).toBeNull();
     expect(checkpointPass(open, { ...project, archivedAt: later }, later)).toBeNull();
+  });
+});
+
+describe("checkpointTag", () => {
+  it("turns a French phrase into a tag", () => {
+    expect(checkpointTag("fin de la séance (2 périodes)")).toBe("fin-de-la-seance-2-periodes");
+    expect(checkpointTag("  Étape n°1 !  ")).toBe("etape-n-1");
+    expect(checkpointTag("Œuvre finale")).toBe("oeuvre-finale");
+    expect(checkpointTag("İstanbul")).toBe("istanbul");
+  });
+
+  it("leaves a text that already is a tag as it is", () => {
+    for (const tag of ["deux-periodes", "milestone_1", "a--b", "m1_"]) expect(checkpointTag(tag)).toBe(tag);
+  });
+
+  it("starts with a letter or a digit", () => {
+    expect(checkpointTag("_-draft")).toBe("draft");
+  });
+
+  it("is empty when nothing is usable", () => {
+    expect(checkpointTag("—?! ()")).toBe("");
+  });
+
+  it("caps the tag without leaving a dash at the cut", () => {
+    expect(checkpointTag("x".repeat(80))).toHaveLength(CHECKPOINT_NAME_MAX);
+    expect(checkpointTag(`${"x".repeat(CHECKPOINT_NAME_MAX - 1)} y`)).toBe("x".repeat(CHECKPOINT_NAME_MAX - 1));
   });
 });

@@ -27,6 +27,7 @@ import {
   EVIDENCE_STATUSES,
   GRADING_SOURCES,
   CRITERIA_PARSE_ERROR_CODES,
+  CHECKPOINT_NAME_MAX,
   CRITERIA_FILE,
   CRITERION_KINDS,
   DEADLINE_STRATEGIES,
@@ -1154,11 +1155,14 @@ export type ProjectDetail = z.infer<typeof ProjectDetail>;
 /**
  * A checkpoint's name: the tag of `criteria.yml`'s `milestone:` entries and
  * the argument of `score grade --milestone` (a wire name, I16), so shell-
- * and YAML-friendly.
+ * and YAML-friendly. The web app derives it from free text (`checkpointTag`).
  */
 export const CheckpointName = z
   .string()
-  .regex(/^[a-z0-9][a-z0-9_-]{0,49}$/, "lowercase letters, digits, - and _ (at most 50)");
+  .regex(
+    new RegExp(`^[a-z0-9][a-z0-9_-]{0,${CHECKPOINT_NAME_MAX - 1}}$`),
+    `lowercase letters, digits, - and _ (at most ${CHECKPOINT_NAME_MAX})`,
+  );
 
 /**
  * `POST /app/api/projects/:id/checkpoints` (F-PROJ-11): a name and EITHER an
