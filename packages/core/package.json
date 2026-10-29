@@ -55,6 +55,9 @@
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@quiz/docexport": "workspace:*"
+  },
   "peerDependencies": {
     "react": "^19.0.0",
     "zod": "^4.0.0"

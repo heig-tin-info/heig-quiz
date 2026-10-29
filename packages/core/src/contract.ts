@@ -7,6 +7,7 @@
  * (decision D1).
  */
 import type { z } from "zod";
+import type { Block } from "@quiz/docexport";
 import type { AnswerGenerator, AssistTextLabel } from "./generate.js";
 import type { LlmGradeRequest, LlmRequestCriterion } from "./llm.js";
 import type { InteractiveOutcome, RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
@@ -609,6 +610,31 @@ export interface QuestionTypeServer<
     ctx: FinalizeContext,
     outcome: RunnerOutcome,
   ): GradedResult<TDetails>;
+
+  /**
+   * The export factory (ADR-121 §2): the question as blocks of a document.
+   * `student` is what {@link toStudent} returned, through the API's student
+   * exit — never the config — so a statement carries no more than a student
+   * is served. With {@link answerDoc}, it makes the type exportable as text;
+   * a type without them has no Markdown export.
+   */
+  statementDoc?(student: TStudent): Block[];
+
+  /**
+   * The key as blocks (ADR-121 §2): `solution` is {@link toSolution}'s for the
+   * staff, and for a student only {@link studentSolution}'s, under `showKey`.
+   * `student` is the same view {@link statementDoc} reads (a code block's
+   * language, say).
+   */
+  solutionDoc?(solution: TSolution, student: TStudent): Block[];
+
+  /**
+   * One answer as the STAFF read it (ADR-121 §2): the source as it ran,
+   * rebuilt from the stored config (invariant 14), and the grading's
+   * `details` whole — hidden tests by name. `details` is null when nothing
+   * is graded yet. Never called for a student document.
+   */
+  answerDoc?(config: TConfig, answer: TAnswer, details: TDetails | null): Block[];
 
   /** Text fed to the tsvector of `question_versions.search`. */
   searchText(config: TConfig): string;

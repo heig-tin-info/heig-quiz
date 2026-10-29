@@ -9,6 +9,7 @@ import { reparseMigrate, type RunnerOutcome } from "@quiz/core/server";
 import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
+import { codeAnswerDoc, codeSolutionDoc, codeStatementDoc } from "./document.js";
 import { codeGenerator } from "./generate.js";
 import {
   buildInteractiveRequest,
@@ -171,6 +172,11 @@ export const codeServer: QuestionTypeServer<
   ) {
     return finalizeRunnerCode(config, answer, ctx, outcome);
   },
+
+  /** The export factory (ADR-121 §2): the statement, the key, an answer as it ran. */
+  statementDoc: codeStatementDoc,
+  solutionDoc: codeSolutionDoc,
+  answerDoc: codeAnswerDoc,
 
   /** Indexed: what a teacher would type to find the question again. */
   searchText(config) {

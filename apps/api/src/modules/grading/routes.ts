@@ -16,6 +16,7 @@ import {
   GradingQuery,
   GradingRunBody,
   IdParam,
+  ItemAnswersRecord,
   ItemCountingBody,
   type ItemCountingResult,
   ItemParam,
@@ -25,19 +26,22 @@ import {
   RegradeBody,
   ValidateGradingBody,
 } from "@quiz/contracts";
+import { renderMarkdown } from "@quiz/docexport";
 import { evaluationGradingRole } from "@quiz/domain";
 
 import { tracer, type AuditAction } from "../../audit.js";
 import { loadEvaluation, staffAnswer, staffGrading, teacherGuard, withCourseRole } from "../guards.js";
-import { notFound, teacherRoute } from "../http.js";
+import { notFound, sendAttachment, teacherRoute } from "../http.js";
 import { joinedItem, joinedItems, type JoinedItem } from "../evaluation/service.js";
 import { listVersions } from "../pool/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
+import { itemAnswers, requireDocument } from "./itemAnswers.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
 
-export async function gradingPlugin(app: FastifyInstance) {
+/** `commitSha`: the build, named in an export's provenance (ADR-121 §5); null when unknown. */
+export async function gradingPlugin(app: FastifyInstance, opts: { commitSha: string | null }) {
   const requireTeacher = teacherGuard(app);
 
   /** Params, scope, then body: access is loaded before anything else is checked (invariant 6). */
@@ -124,6 +128,33 @@ export async function gradingPlugin(app: FastifyInstance) {
     teacher({ params: IdParam, query: GradingQuery, load: staffEvaluation }, ({ query, scope }) =>
       service.gradingQueue(app.db, scope.evaluation, query),
     ),
+  );
+
+  /**
+   * F-EXP-01 (ADR-121): every enrolled student's answer to one item, as the
+   * Markdown file the panel's Export and Copy fetch, or as its record. Staff
+   * only, beside the results CSV and like it neither anonymised nor audited.
+   */
+  app.get(
+    "/app/api/evaluations/:id/items/:itemId/answers.md",
+    { preHandler: requireTeacher },
+    teacher({ params: ItemParam, load: staffEvaluation }, async ({ reply, now, params, scope }) => {
+      const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, app: opts.commitSha });
+      if (!found) return notFound(reply);
+      const file = renderMarkdown(requireDocument(found));
+      return sendAttachment(reply, "text/markdown; charset=utf-8", `${found.basename}.md`, file);
+    }),
+  );
+
+  app.get(
+    "/app/api/evaluations/:id/items/:itemId/answers.json",
+    { preHandler: requireTeacher },
+    teacher({ params: ItemParam, load: staffEvaluation }, async ({ reply, now, params, scope }) => {
+      const found = await itemAnswers(app.db, scope.evaluation, params.itemId, { now, app: opts.commitSha });
+      if (!found) return notFound(reply);
+      const body = JSON.stringify(ItemAnswersRecord.parse(found.record));
+      return sendAttachment(reply, "application/json; charset=utf-8", `${found.basename}.json`, body);
+    }),
   );
 
   /** The whole history of one answer, newest first (F-GRADE-05). */

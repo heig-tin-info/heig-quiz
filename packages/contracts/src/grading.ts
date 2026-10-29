@@ -17,6 +17,7 @@ import { CRITERION_ID_PATTERN } from "@quiz/core/reasons";
 import { GRADING_SOURCES, GRADING_STATES } from "@quiz/domain";
 
 import { IdParam, StaffItemRef } from "./common.js";
+import { ItemCounting } from "./evaluation.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
 import { VersionRow } from "./pool.js";
 
@@ -111,6 +112,12 @@ export const GradingQueueItem = StaffItemRef.extend({
    * reads as 0.
    */
   minPoints: z.number().optional(),
+  /**
+   * Whether the item's answers export as Markdown (F-EXP-01, ADR-121 §2):
+   * its type renders as text and the question is not parameterized. The
+   * JSON record exists for every item. Absent reads as false.
+   */
+  exportable: z.boolean().optional(),
   /**
    * The criteria an essay is graded by (ADR-118 §6), in their order, from
    * the type's `gradingCriteria` on the version the item holds: the grading
@@ -348,3 +355,49 @@ export type AnswerIdParam = z.infer<typeof AnswerIdParam>;
 /** `/gradings/:id/…` */
 export const GradingIdParam = IdParam;
 export type GradingIdParam = z.infer<typeof GradingIdParam>;
+
+/**
+ * `GET /evaluations/:id/items/:itemId/answers.json` (F-EXP-01, ADR-121 §1):
+ * every enrolled student's answer to one item, the attempt that counts
+ * (ADR-025), a teacher's test walk left out (ADR-018). Staff-only: names,
+ * the key and the gradings' details whole. The Markdown file is rendered
+ * from the same Source. A change of shape bumps `version`.
+ */
+export const ItemAnswersRecord = z.object({
+  kind: z.literal("item-answers"),
+  version: z.literal(1),
+  /** The server's clock. */
+  generatedAt: z.iso.datetime(),
+  evaluation: z.object({ id: z.uuid(), title: z.string() }),
+  item: StaffItemRef.extend({
+    counting: ItemCounting,
+    questionId: z.uuid(),
+    questionVersionId: z.uuid(),
+  }),
+  /** The question as a student is served it, seed 0 and no shuffle; for a parameterized one, as written. */
+  statement: z.unknown(),
+  /** The type's `toSolution`, whole. */
+  solution: z.unknown(),
+  /** One per enrolled student, by name; `attempt` null: no attempt, `answer` null: no answer. */
+  answers: z.array(
+    z.object({
+      student: z.object({
+        /** Null: a seat nobody has claimed yet. */
+        userId: z.uuid().nullable(),
+        lastName: z.string(),
+        firstName: z.string(),
+        email: z.string(),
+      }),
+      attempt: z.object({ id: z.uuid(), number: z.number().int(), state: z.string() }).nullable(),
+      /** A parameterized question's values for this attempt (ADR-056). */
+      values: NamedValues.optional(),
+      /** The stored answer, as graded. */
+      answer: z.unknown().nullable(),
+      /** The standing grading: validated, or else the pending proposal. */
+      grading: z
+        .object({ points: z.number(), maxPoints: z.number(), state: GradingState, details: z.unknown() })
+        .nullable(),
+    }),
+  ),
+});
+export type ItemAnswersRecord = z.infer<typeof ItemAnswersRecord>;

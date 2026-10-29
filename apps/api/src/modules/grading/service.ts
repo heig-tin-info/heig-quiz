@@ -139,9 +139,22 @@ const REFUSALS = {
   // exactly once, each within its maximum; an essay with criteria is graded
   // by them, never by a bare total; an item without criteria takes none.
   criteria_invalid: [422, "the points per criterion do not match the item's criteria"],
+  // F-EXP-01 (ADR-121 §2): the Markdown export of an item whose type does not
+  // render as text, or of a parameterized one; its JSON record still exists.
+  not_exportable: [409, "this question does not export as text"],
 } satisfies Record<string, Refusal>;
 
 export class GradingError extends refusalClass("GradingError", REFUSALS) {}
+
+/**
+ * Whether an item's answers export as Markdown (F-EXP-01, ADR-121 §2): its
+ * type renders a statement and an answer, and the question is not
+ * parameterized — each attempt would have its own statement and key.
+ */
+export function exportsText(type: string, version: { variables: { rows: readonly unknown[] } | null }): boolean {
+  const t = typeOf(type);
+  return t.statementDoc !== undefined && t.answerDoc !== undefined && !isParameterized(version);
+}
 
 // --- Keys -----------------------------------------------------------------
 
@@ -705,6 +718,7 @@ export async function gradingQueue(
       // The declared fields only: a criterion's prompt stays in the key.
       criteria: criteriaOf(i).map(({ id, title, weight }) => ({ id, title, weight })),
       explanation: explanationOrNull(i.version.explanation),
+      exportable: exportsText(i.question.type, i.version),
       ...(isParameterized(i.version) ? { parameters: writtenOf(i) } : {}),
     })),
     entries,

@@ -26,6 +26,7 @@ import { AnswerPanel } from "./AnswerPanel";
 import { gradingColumns, sortColumns } from "./columns";
 import { whoOf } from "./labels";
 import { GradingTable } from "./GradingTable";
+import { AnswersExport } from "./AnswersExport";
 import { GradingToolbar, PrimaryButton } from "./GradingToolbar";
 import { QuestionBar } from "./QuestionBar";
 import { RegradeSheet } from "./RegradeSheet";
@@ -340,6 +341,7 @@ export function GradingPanel({
           setAnonymise(on);
           if (on && sort?.key === "name") setSort(null);
         }}
+        exports={item && data.exportable ? <AnswersExport evaluationId={evaluationId} itemId={item.id} /> : null}
         primary={
           <PrimaryButton
             // Read-only, the screen's one action walks the questions.

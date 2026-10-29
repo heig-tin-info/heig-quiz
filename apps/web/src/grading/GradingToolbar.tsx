@@ -49,6 +49,7 @@ export function GradingToolbar({
   toValidate,
   anonymise,
   onAnonymise,
+  exports,
   primary,
 }: {
   view: GradingView;
@@ -57,6 +58,8 @@ export function GradingToolbar({
   toValidate: number | null;
   anonymise: boolean;
   onAnonymise: (on: boolean) => void;
+  /** The question's Export and Copy (F-EXP-01), when its type renders as text. */
+  exports?: ReactNode;
   primary: ReactNode;
 }) {
   const t = useT();
@@ -112,6 +115,7 @@ export function GradingToolbar({
         </>
       ) : null}
       <span className="flex-1" />
+      {exports}
       <label className="flex items-center gap-2 text-[13px] font-medium text-fg-muted">
         <Switch checked={anonymise} onChange={onAnonymise} label={t("grading.anonymise")} />
         <span aria-hidden>{t("grading.anonymise")}</span>

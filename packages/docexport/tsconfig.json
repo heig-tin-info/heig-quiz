@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  // The renderer hashes the body with `node:crypto` (ADR-121 §5).
+  "compilerOptions": { "lib": ["ES2024"], "types": ["node"] }
+}
