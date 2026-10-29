@@ -31,7 +31,8 @@ For orientation: `apps/api` is Fastify; `apps/web` is the React SPA;
 portal (its own `CLAUDE.md`). `packages/contracts` owns HTTP schemas,
 `packages/domain` pure rules, `packages/core` the question-type contracts,
 `packages/registry` their static wiring, `packages/qt-*` the types,
-`packages/diagram` the diagram engine and `packages/docrender` journal rendering.
+`packages/diagram` the diagram engine, `packages/docrender` journal rendering and
+`packages/docexport` the export factory's document tree and Markdown renderer (ADR-121).
 `mockups/` holds the HTML origins of the circuit and diagram editors, the
 categorize board and the grading table (ADR-044); `extensions/kiosk-attestation/` the kiosk stations' Chrome
 extension (ADR-051); `infra/` the Keycloak development realm.

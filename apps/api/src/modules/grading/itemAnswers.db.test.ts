@@ -22,7 +22,7 @@ import { enterStarted, publishQuestion, reload, seedLive } from "../../test/live
 import { addItems, applyState, joinedItems, type EvaluationRecord } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
-import { writeGrading } from "./service.js";
+import { exportsText, writeGrading } from "./service.js";
 
 const TEMPLATE = "// @@lock\nint main(void) {\n// @@endlock\n    return 0;\n// @@lock\n}\n// @@endlock\n";
 const REFERENCE = "int main(void) { return REFERENCE_MARKER; }";
@@ -48,6 +48,7 @@ let server: TestServer;
 let restore: () => void;
 let teacher: { id: string; headers: Record<string, string> };
 let other: { id: string; headers: Record<string, string> };
+let student: { id: string; headers: Record<string, string> };
 let built: Awaited<ReturnType<typeof gradedExercise>>;
 
 beforeAll(async () => {
@@ -55,6 +56,7 @@ beforeAll(async () => {
   server = await testServer();
   teacher = await server.signIn("teacher");
   other = await server.signIn("teacher");
+  student = await server.signIn("student");
   built = await gradedExercise();
 });
 afterAll(async () => {
@@ -159,6 +161,8 @@ describe("every answer to one item (F-EXP-01)", () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/markdown");
     expect(res.headers["content-disposition"]).toMatch(/^attachment; filename="[a-z0-9-]+-q\d+\.md"$/);
+    // The file carries names and answers: never kept by a cache.
+    expect(res.headers["cache-control"]).toBe("no-store");
     const text = res.body;
     expect(text).toContain("# Test évaluation");
     expect(text).toContain("Return the answer.");
@@ -223,5 +227,22 @@ describe("every answer to one item (F-EXP-01)", () => {
     expect((await get(url(built.code.item.id, "md"), other.headers)).statusCode).toBe(404);
     expect((await get(url(built.code.item.id, "json"), other.headers)).statusCode).toBe(404);
     expect((await get(url(randomUUID(), "md"), teacher.headers)).statusCode).toBe(404);
+  });
+
+  it("is refused to a student session", async () => {
+    for (const ext of ["md", "json"] as const) {
+      const res = await get(url(built.code.item.id, ext), student.headers);
+      expect(res.statusCode).toBe(403);
+      expect(res.body).not.toContain("BEST_MARKER");
+    }
+  });
+
+  it("refuses Markdown for a parameterized item, whatever its type's hooks", () => {
+    // `code` cannot carry variables today (ADR-056: mcq, short, cloze), so the
+    // rule is pinned on the predicate the route and the queue both read.
+    const table = { rows: [{ name: "n", expr: "randint(1, 9)", format: "int" }] };
+    expect(exportsText("code", { variables: null })).toBe(true);
+    expect(exportsText("code", { variables: table })).toBe(false);
+    expect(exportsText("short", { variables: null })).toBe(false);
   });
 });

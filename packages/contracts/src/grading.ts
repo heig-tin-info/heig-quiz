@@ -363,6 +363,11 @@ export type GradingIdParam = z.infer<typeof GradingIdParam>;
  * (ADR-025), a teacher's test walk left out (ADR-018). Staff-only: names,
  * the key and the gradings' details whole. The Markdown file is rendered
  * from the same Source. A change of shape bumps `version`.
+ *
+ * The `z.unknown()` fields (statement, solution, answer, details) are the
+ * type's own payloads, every one staff-visible on the grading panel already;
+ * they are to be typed per question type later. A STUDENT record is never
+ * built this way: it is typed on the student schemas (ADR-121 §1).
  */
 export const ItemAnswersRecord = z.object({
   kind: z.literal("item-answers"),

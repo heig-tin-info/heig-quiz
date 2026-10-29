@@ -76,9 +76,16 @@ export function sendCsv(reply: FastifyReply, filename: string, csv: string) {
   return sendAttachment(reply, "text/csv; charset=utf-8", filename, csv);
 }
 
-/** A file to save, not a page to show: `filename` is a slug already (no quote, no path). */
+/**
+ * A file to save, not a page to show: `filename` is a slug already (no quote,
+ * no path). Never cached: these files carry names and answers.
+ */
 export function sendAttachment(reply: FastifyReply, type: string, filename: string, body: string) {
-  return reply.type(type).header("content-disposition", `attachment; filename="${filename}"`).send(body);
+  return reply
+    .type(type)
+    .header("content-disposition", `attachment; filename="${filename}"`)
+    .header("cache-control", "no-store")
+    .send(body);
 }
 
 // ---------------------------------------------------------------------------
