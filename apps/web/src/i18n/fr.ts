@@ -6051,7 +6051,9 @@ export const fr: Record<keyof Dict, string> = {
   "project.checkpoints.new": "Nouveau point de contrôle",
   "project.checkpoints.failed": "Impossible de charger les points de contrôle",
   "project.checkpoint.name": "Nom",
-  "project.checkpoint.name.desc": "Minuscules, chiffres, - et _ : la valeur `milestone` des critères qu'il note dans criteria.yml.",
+  "project.checkpoint.name.desc": "Valeur `milestone` des critères qu'il note dans criteria.yml, en minuscules sans accents ni espaces.",
+  "project.checkpoint.name.tag": "Enregistré sous",
+  "project.checkpoint.name.invalid": "Il faut au moins une lettre ou un chiffre.",
   "project.checkpoint.when": "Date",
   "project.checkpoint.kind.date": "Une date",
   "project.checkpoint.kind.offset": "Jours avant l'échéance",
@@ -6071,6 +6073,7 @@ export const fr: Record<keyof Dict, string> = {
   "project.refusal.duePast": "Cette date est passée.",
   "project.refusal.dueAfterDeadline": "La date doit précéder l'échéance du projet.",
   "project.refusal.duplicateCheckpoint": "Ce nom est déjà pris sur le projet.",
+  "project.refusal.checkpointName": "Nom refusé : minuscules, chiffres, - et _ uniquement.",
   "project.refusal.checkpointDispatched": "Ce point de contrôle a déjà été envoyé à certains dépôts : il ne peut plus être supprimé.",
 
   // The staff's writes (M3-12b, M3-12c).

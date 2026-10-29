@@ -1,29 +1,49 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState } from "react";
 
-import type { ProjectDetail, ReviewCheckpoint, ReviewCheckpointCreate } from "@quiz/contracts";
+import {
+  CheckpointName,
+  type ProjectDetail,
+  type ReviewCheckpoint,
+  type ReviewCheckpointCreate,
+  type ZodIssueLite,
+} from "@quiz/contracts";
+import { checkpointTag } from "@quiz/domain";
 
-import { api } from "../api";
+import { api, ApiError, refusedWith } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { projectCheckpointsKey } from "../queryKeys";
-import { fromLocalInput, Field, FormDialog, FormError, Segmented } from "../ui";
+import { fromLocalInput, Field, FieldError, fieldErrorProps, FormDialog, FormError, Segmented } from "../ui";
 import { refusalMessage } from "./projectPage";
 
-/** The body of a new checkpoint, or null while a field is missing (the name's pattern is the server's). */
+/** The body of a new checkpoint named `name` (a parsed `CheckpointName`), or null while its date is missing. */
 function checkpointBody(name: string, kind: "date" | "offset", local: string, days: string): ReviewCheckpointCreate | null {
-  const trimmed = name.trim();
-  if (trimmed === "") return null;
   if (kind === "offset") {
     const n = Number(days);
-    return Number.isInteger(n) && n >= 1 && n <= 365 ? { name: trimmed, offsetDays: -n } : null;
+    return Number.isInteger(n) && n >= 1 && n <= 365 ? { name, offsetDays: -n } : null;
   }
   const dueAt = fromLocalInput(local);
-  return dueAt ? { name: trimmed, dueAt } : null;
+  return dueAt ? { name, dueAt } : null;
 }
 
-/** "Add a checkpoint": a name, and a date or a number of days before the deadline. */
+/**
+ * Whether a refusal is the schema's 400 on the name. The dialog checks the
+ * tag with the same `CheckpointName`, so only a client older than the
+ * server's rule earns it; it is then said under the field.
+ */
+function refusesName(error: unknown): boolean {
+  if (!(error instanceof ApiError) || !refusedWith(error, "validation")) return false;
+  const details = (error.body as { details?: ZodIssueLite[] } | null)?.details ?? [];
+  return details.some((issue) => issue.path[0] === "name");
+}
+
+/**
+ * "Add a checkpoint": a name, and a date or a number of days before the
+ * deadline. The name is typed freely and saved as its tag (`checkpointTag`),
+ * said under the field once it differs from what was typed (#968).
+ */
 function AddCheckpoint({
   onSubmit,
   submitting,
@@ -40,7 +60,17 @@ function AddCheckpoint({
   const [kind, setKind] = useState<"date" | "offset">("offset");
   const [local, setLocal] = useState("");
   const [days, setDays] = useState("3");
-  const body = checkpointBody(name, kind, local, days);
+  const nameId = useId();
+  const tag = checkpointTag(name);
+  const parsed = CheckpointName.safeParse(tag);
+  const body = parsed.success ? checkpointBody(parsed.data, kind, local, days) : null;
+  const serverRefusedName = refusesName(error);
+  const nameError =
+    name.trim() !== "" && !parsed.success
+      ? t("project.checkpoint.name.invalid")
+      : serverRefusedName
+        ? t("project.refusal.checkpointName")
+        : null;
   return (
     <FormDialog
       title={t("project.checkpoints.new")}
@@ -49,17 +79,29 @@ function AddCheckpoint({
       submitLabel={t("common.create")}
       submitting={submitting}
       canSubmit={body !== null}
-      error={<FormError error={error} describe={(e) => refusalMessage(e, t)} />}
+      error={<FormError error={serverRefusedName ? null : error} describe={(e) => refusalMessage(e, t)} />}
     >
-      <Field
-        label={t("project.checkpoint.name")}
-        description={t("project.checkpoint.name.desc")}
-        fullWidth
-        autoFocus
-        className="font-mono"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+      <div className="flex flex-col gap-1">
+        <Field
+          id={nameId}
+          label={t("project.checkpoint.name")}
+          description={
+            tag !== "" && tag !== name ? (
+              <>
+                {t("project.checkpoint.name.tag")} <span className="font-mono text-fg">{tag}</span>
+              </>
+            ) : (
+              t("project.checkpoint.name.desc")
+            )
+          }
+          fullWidth
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          {...fieldErrorProps(nameId, nameError)}
+        />
+        <FieldError id={nameId}>{nameError}</FieldError>
+      </div>
       <Segmented
         name="checkpointKind"
         label={t("project.checkpoint.when")}
