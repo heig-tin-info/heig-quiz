@@ -1219,6 +1219,7 @@ export const fr: Record<keyof Dict, string> = {
   "oauth.consent.can.read": "Lire vos cours, classes, banques, questions et évaluations",
   "oauth.consent.can.write": "Créer des cours, des classes, des banques et des questions, et publier des questions",
   "oauth.consent.can.draft": "Préparer des évaluations et des projets GitHub en brouillon, et lancer un sondage quand vous le demandez",
+  "oauth.consent.can.items": "Ajouter, modifier ou retirer les questions d'une évaluation en brouillon ou d'un modèle",
   "oauth.consent.cannot": "Il ne pourra pas",
   "oauth.consent.cannot.delete": "Supprimer quoi que ce soit",
   "oauth.consent.cannot.run": "Ouvrir, démarrer ou clore une évaluation",

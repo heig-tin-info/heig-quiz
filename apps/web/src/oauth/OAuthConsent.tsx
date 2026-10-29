@@ -99,7 +99,7 @@ function Consent({ id, me }: { id: string; me: Me }) {
         <div className="mt-6 space-y-2 text-sm">
           <p className="font-semibold">{t("oauth.consent.can")}</p>
           <ul className="space-y-1.5">
-            {(["read", "write", "draft"] as const).map((k) => (
+            {(["read", "write", "draft", "items"] as const).map((k) => (
               <li key={k} className="flex gap-2">
                 <Check className="mt-0.5 size-4 shrink-0 text-success" />
                 <span>{t(`oauth.consent.can.${k}`)}</span>

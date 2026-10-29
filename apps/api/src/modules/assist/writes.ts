@@ -38,7 +38,7 @@ import { questionType } from "@quiz/registry/server";
 import type { ReadOnlyTool } from "../llm/service.js";
 import { checkConfig, inputJsonSchema, runTool, toolByName, type Api, type Tool } from "../mcp/service.js";
 import { PendingWrites, type PendingWrite } from "./pending.js";
-import { failureText } from "./tools.js";
+import { failureText, withoutDelete } from "./tools.js";
 
 /** The assistant's description of each write: it prepares, the teacher confirms. */
 const WRITE_DESCRIPTIONS: Record<AssistWriteTool, string> = {
@@ -246,7 +246,7 @@ function readFailure(error: unknown): string {
  * access loaders, contracts and audit). Its path, or why it was refused, as a code.
  */
 export async function confirmWrite(api: Api, write: PendingWrite): Promise<{ ok: true; path: string } | { ok: false; reason: AssistWriteFailure }> {
-  const outcome = await runTool(api, writeTool(write.tool), write.args);
+  const outcome = await runTool(withoutDelete(api), writeTool(write.tool), write.args);
   if (!outcome.ok) {
     const e = outcome.error;
     const reason = e.kind === "refused" ? (e.status === 404 ? "not_found" : "refused") : e.kind === "invalid_arguments" ? "invalid" : "failed";

@@ -12,11 +12,12 @@ It works **as you**, with your rights and nothing more: it reaches the courses y
 
 | It can | It cannot |
 | --- | --- |
-| Read your courses, classrooms, pools, questions and evaluations | Delete anything |
+| Read your courses, classrooms, pools, questions, evaluations and templates | Delete anything: a course, a classroom, a pool, a question, an evaluation, a template, a project |
 | Create a course, a classroom, a pool, a category | Open, start, pause or close an evaluation |
 | Write, publish and update questions of every type | Grade, or release results |
 | Link a pool to a course | Read students' answers or grades |
 | Create an exam or an exercise **as a draft**, and fill it with questions | Manage your API tokens |
+| Remove a question from a draft evaluation or a template (the question stays in its pool), change an item's points, bonus, milestone or intro, and move items to their question's latest version | Neutralize a question, or change the questions of an evaluation once it is scheduled |
 | Launch a live poll, when you ask for one | |
 | Read your questions' statistics, as the pool shows them (anonymous figures over ten answers or more) | |
 

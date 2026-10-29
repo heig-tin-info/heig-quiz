@@ -80,7 +80,12 @@ export const ASSIST_DATA_TOOLS: readonly string[] = [...Object.keys(MCP_READS), 
 /** The assistant's client of the API: the GETs of `api`, and a write refused before anything is sent. */
 export function readOnly(api: Api): Api {
   const refuse = () => Promise.reject(new ToolRefusal("The help assistant reads only."));
-  return { get: api.get, link: api.link, post: refuse, put: refuse, patch: refuse };
+  return { get: api.get, link: api.link, post: refuse, put: refuse, patch: refuse, delete: refuse };
+}
+
+/** `api` for a confirmed write (ADR-080 P3): a DELETE is refused unsent, whatever the tool; the assistant never deletes (F-LLM-07). */
+export function withoutDelete(api: Api): Api {
+  return { ...api, delete: () => Promise.reject(new ToolRefusal("The help assistant never deletes.")) };
 }
 
 /**
