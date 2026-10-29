@@ -279,6 +279,49 @@ describe("EvaluationPreviewPage", () => {
     expect(screen.queryByRole("button", { name: "Show the points" })).toBeNull();
   });
 
+  it("never lets a slow older grading overwrite the newer answer's points", async () => {
+    const user = flowingClock();
+    // `*x` is worth nothing, and its grading waits for the test.
+    const second = (body: unknown) =>
+      (body as { answers?: Record<string, { selected: number[] }> } | null)?.answers?.[I1]?.selected[0] === 1;
+    const zero = correction(5);
+    zero.items[0] = { ...zero.items[0]!, points: 0 };
+    const { calls, fetchMock } = mockFetch({
+      [`POST ${URL}`]: ok(preview(5)),
+      [`POST ${URL}/grade`]: (call) => ok(second(call.body) ? zero : correction(5)),
+    });
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const reply = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => {
+      const response = await reply(input, init);
+      // Read at once: a later call may land in `calls` while this one waits.
+      if (second(calls.at(-1)!.body)) await held;
+      return response;
+    });
+    renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
+    await user.click(await screen.findByRole("radio", { name: "&x" }));
+    await user.click(screen.getByRole("button", { name: "Show the points" }));
+    expect(await screen.findByText("This question: 2 / 2 points")).toBeInTheDocument();
+    const gradings = () => calls.filter((c) => c.url === `${URL}/grade`);
+
+    // `*x` is sent and held; the teacher goes back to `&x`, graded at once.
+    await user.click(screen.getByRole("radio", { name: "*x" }));
+    await elapse(400);
+    await user.click(screen.getByRole("radio", { name: "&x" }));
+    await elapse(400);
+    expect(gradings()).toHaveLength(3);
+    await waitFor(() =>
+      expect(screen.getByText("This question: 2 / 2 points").parentElement).toHaveAttribute("aria-busy", "false"),
+    );
+
+    // The late answer for `*x` arrives: it changes nothing.
+    release();
+    await elapse(50);
+    expect(screen.getByText("This question: 2 / 2 points").parentElement).toHaveAttribute("aria-busy", "false");
+    expect(screen.queryByText("This question: 0 / 2 points")).toBeNull();
+  });
+
   it("shows a failed regrade in place of the points", async () => {
     const user = flowingClock();
     let calls = 0;
