@@ -170,6 +170,14 @@ describe("ResultsView", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 
+  it("leads back to the evaluation's live dashboard from the header", async () => {
+    const navigate = vi.fn();
+    mockFetch({ [`GET ${VIEW}`]: ok(makeResultsView()) });
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={navigate} />);
+    await userEvent.click(await screen.findByRole("button", { name: /Live dashboard/ }));
+    expect(navigate).toHaveBeenCalledWith({ view: "live", id: "e1" });
+  });
+
   it("offers the projection in the header once the evaluation is over", async () => {
     const navigate = vi.fn();
     mockFetch({
