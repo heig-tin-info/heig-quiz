@@ -234,6 +234,8 @@ const SEEDS: {
   { id: "pj-locked", title: "Labo 1 — premiers pas en C", state: "locked", start: -35 * D, deadline: -7 * D },
   // Frozen, every score final, the release awaited: the amber `graded` badge beside the released one.
   { id: "pj-graded", title: "Labo 0 — prise en main", state: "locked", start: -21 * D, deadline: -2 * D, unreleased: true },
+  // Past its deadline under the `commit` strategy, its scores not final (graded `none`): `deadline passed`, never `locked` (#958).
+  { id: "pj-commit", title: "Labo 0c — Makefile", state: "locked", start: -20 * D, deadline: -1 * D, unreleased: true, summary: { deadlineStrategy: "commit", gradingMode: "none" } },
   // `?groups=1`: group projects following PRG1-2026's pairs — a draft, a published one, one stopped.
   ...(flags.groups
     ? [

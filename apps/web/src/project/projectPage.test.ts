@@ -72,6 +72,15 @@ describe("the header's sentence", () => {
     );
   });
 
+  it("says a `commit` project past its deadline passed it, never locked (#958)", () => {
+    const counts = { live: 2, frozen: 1 };
+    const commit = { state: "locked", phase: "deadline_passed", deadlineStrategy: "commit" } as const;
+    expect(projectStatus(makeProject({ ...commit, counts }))).toEqual({ key: "project.status.deadlinePassedFreezing", date: AHEAD });
+    expect(statusKey(makeProject({ ...commit, counts: { ...counts, frozen: 2 }, gradingMode: "none" }))).toBe(
+      "project.status.deadlinePassed",
+    );
+  });
+
   it("names the date the sentence is about: the start, the release, else the deadline", () => {
     const start = new Date(Date.now() + 86_400_000).toISOString();
     expect(projectStatus(makeProject({ state: "draft", publishMode: "scheduled", startAt: start })).date).toBe(start);

@@ -31,6 +31,11 @@ the Format summary and the MCP no longer present a draft's window as
 planned
 ([amendment](#amendment-2026-10-26-a-dated-draft-whose-opening-passed)).
 
+Amended 2026-10-29 (#958): §5's phases — `deadline_passed` in place of
+`locked` for a project under the `commit` deadline strategy, which locks
+nothing
+([amendment](#amendment-2026-10-29-a-deadline-that-locks-nothing-is-not-locked)).
+
 Scope: the state badge of an evaluation and of a project on every staff
 surface of `apps/web` (the classroom's Activities tab, `/activities`, the
 evaluation's configuration, the live header, the project page) and the bars
@@ -325,3 +330,28 @@ what happened.
 3. **The MCP says it.** `update_evaluation` returns the evaluation's `url`,
    plus a `notice` for a dated draft on the Scheduled clock; no MCP tool
    schedules or opens anything.
+
+## Amendment 2026-10-29: a deadline that locks nothing is not locked
+
+Scope: §5's phases and the project page's status line. Recorded with
+#958: under the `commit` deadline strategy (F-PROJ-09) the deadline marks
+a commit and leaves every repository open, yet the badge and the page said
+"locked".
+
+1. **A `deadline_passed` phase.** §5's phases become `draft | scheduled |
+   published | locked | deadline_passed | graded | released`: a project in
+   the `locked` state whose scores are not final is `deadline_passed` under
+   the `commit` strategy, `locked` under `lock`. `graded` and `released`
+   are unchanged for both strategies. Zinc, like `locked`: at rest, the
+   scores not final. Labels "deadline passed" / "échéance passée". The
+   stored state still stops at `locked`, and the buckets, the sorting and
+   the gantt keep reading it.
+2. **The page's sentence follows the phase.** The project page's status
+   line (`projectStatus`, `project/projectPage.ts`) says the deadline passed
+   on its date, never "locked since", for a `deadline_passed` project,
+   with the same freezing clause as a locked one.
+
+The student's surfaces stay outside this record (see Scope); their status
+`deadline_passed` (`studentProjectStatus` of `@quiz/domain`) follows the
+same rule for one repository: past its effective deadline, a repository
+GitHub does not hold locked is never said locked.

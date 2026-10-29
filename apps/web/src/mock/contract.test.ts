@@ -749,11 +749,12 @@ describe("the mock's projects (?projects=1)", () => {
   it("serves one project per state, on PRG1-2026 and in the Activities", async () => {
     const own = (await get(`/app/api/classrooms/${classroomId}/projects`)) as { state: string; phase: string }[];
     // `?groups=1` adds a draft group project (M3-16a), a published and a stopped one (M3-16b).
-    expect(own.map((p) => p.state).sort()).toEqual(["draft", "draft", "draft", "locked", "locked", "locked", "published", "published"]);
-    // The locked ones refine (ADR-104): one released, two frozen and awaiting their release (the stopped group project among them).
-    expect(own.filter((p) => p.state === "locked").map((p) => p.phase).sort()).toEqual(["graded", "graded", "released"]);
+    expect(own.map((p) => p.state).sort()).toEqual(["draft", "draft", "draft", "locked", "locked", "locked", "locked", "published", "published"]);
+    // The locked ones refine (ADR-104): one released, two frozen and awaiting their release (the stopped group project among them),
+    // one under the `commit` strategy whose scores are not final: its deadline passed, nothing locked (#958).
+    expect(own.filter((p) => p.state === "locked").map((p) => p.phase).sort()).toEqual(["deadline_passed", "graded", "graded", "released"]);
     const all = (await get("/app/api/activities")) as { kind: string }[];
-    expect(all.filter((a) => a.kind === "project")).toHaveLength(8);
+    expect(all.filter((a) => a.kind === "project")).toHaveLength(9);
   });
 });
 
