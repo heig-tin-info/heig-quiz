@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { markdownBody } from "@quiz/docexport";
+import { markdownBody } from "@quiz/docexport/markdown";
 
 import type { CodeDetails } from "./schema.js";
 import { codeServer } from "./server.js";

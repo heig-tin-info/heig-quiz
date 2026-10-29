@@ -18,51 +18,43 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { ItemAnswersRecord } from "@quiz/contracts";
-import { heading, list, markdown, points, separator, type Block, type Document } from "@quiz/docexport";
+import { heading, markdown, points, separator, type Block, type Document } from "@quiz/docexport";
 import { slugify } from "@quiz/domain";
 import { formattedValues } from "@quiz/domain/parameters";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, enrollments } from "../../db/schema.js";
-import { joinedItem, seatsOf, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
-import { solutionViewOf, studentViewOf } from "../live/studentView.js";
+import { joinedItem, seatsOf, type EvaluationRecord } from "../evaluation/service.js";
 import { typeOf } from "../pool/config.js";
-import { parametersOf, readingPerAttempt, writtenConfig } from "../pool/service.js";
-import { keptAttempts } from "./kept.js";
-import { exportsText, GradingError, pairKey, standingGradings } from "./service.js";
+import { parametersOf, readingPerAttempt } from "../pool/service.js";
+import { exportsText, expectedViews, GradingError, keptAttempts, pairKey, standingGradings } from "./service.js";
 
-/** The record, and the document drawn from it with the configs the record does not carry. */
+/** The record, with what the document needs beside it. */
 export interface ItemAnswers {
   record: ItemAnswersRecord;
-  /** The Markdown document; null when the item's type does not render as text. */
-  document: Document | null;
+  /** `configs[i]`: the parsed config of `record.answers[i]`'s attempt, which `answerDoc` rebuilds the source from. */
+  configs: readonly unknown[];
+  /** The counted attempts, for the provenance. */
+  attempts: readonly string[];
   /** The file name, without its extension: the evaluation and the item, as a slug. */
   basename: string;
 }
 
-/** The statement and the key as the panel's expected row shows them: seed 0, no shuffle, as written. */
-function questionViews(item: JoinedItem): { statement: unknown; solution: unknown } {
-  const { config } = writtenConfig(item.question.type, item.version);
-  const view = { seed: 0, itemId: item.item.id, shuffle: false };
-  return {
-    statement: studentViewOf(item.question.type, config, view),
-    solution: solutionViewOf(item.question.type, config, view),
-  };
-}
-
 /**
  * The Source (ADR-121 §1). Null when the item is not the evaluation's.
- * `app` is the build's commit, for the provenance (ADR-121 §5).
+ * `text: true` asks for the Markdown export: an item whose type does not
+ * render as text is refused at once (`409 not_exportable`), before any read.
  */
 export async function itemAnswers(
   db: Db,
   evaluation: EvaluationRecord,
   itemId: string,
-  context: { now: Date; app: string | null },
+  options: { now: Date; text: boolean },
 ): Promise<ItemAnswers | null> {
   const item = await joinedItem(db, evaluation.id, itemId);
   if (!item) return null;
+  if (options.text && !exportsText(item.question.type, item.version)) throw new GradingError("not_exportable");
   const [roster, kept] = await Promise.all([
     db
       .select({
@@ -93,7 +85,7 @@ export async function itemAnswers(
   const answerOf = new Map(answerRows.map((a) => [a.attemptId, a.payload]));
   const read = readingPerAttempt(item);
   const variables = parametersOf(item.version);
-  const views = questionViews(item);
+  const expected = expectedViews(item);
 
   const rows = roster.map((student) => {
     const attempt = student.userId === null ? undefined : kept.get(student.userId);
@@ -113,61 +105,41 @@ export async function itemAnswers(
     };
   });
 
-  const record: ItemAnswersRecord = {
-    kind: "item-answers",
-    version: 1,
-    generatedAt: iso(context.now),
-    evaluation: { id: evaluation.id, title: evaluation.title },
-    item: {
-      id: item.item.id,
-      position: item.item.position,
-      internalName: item.question.internalName,
-      type: item.question.type,
-      points: item.item.points,
-      counting: item.item.counting,
-      questionId: item.question.id,
-      questionVersionId: item.version.id,
+  return {
+    record: {
+      kind: "item-answers",
+      version: 1,
+      generatedAt: iso(options.now),
+      evaluation: { id: evaluation.id, title: evaluation.title },
+      item: {
+        id: item.item.id,
+        position: item.item.position,
+        internalName: item.question.internalName,
+        type: item.question.type,
+        points: item.item.points,
+        counting: item.item.counting,
+        questionId: item.question.id,
+        questionVersionId: item.version.id,
+      },
+      statement: expected.student,
+      solution: expected.solution,
+      answers: rows.map((r) => r.record),
     },
-    statement: views.statement,
-    solution: views.solution,
-    answers: rows.map((r) => r.record),
+    configs: rows.map((r) => r.config),
+    attempts: ids,
+    basename: slugify(`${evaluation.title} q${item.item.position + 1}`) || "answers",
   };
-
-  const document = exportsText(item.question.type, item.version)
-    ? {
-        provenance: {
-          kind: record.kind,
-          version: record.version,
-          source: {
-            evaluationId: evaluation.id,
-            itemId: item.item.id,
-            questionId: item.question.id,
-            questionVersionId: item.version.id,
-          },
-          attempts: ids,
-          generatedAt: record.generatedAt,
-          app: context.app,
-        },
-        blocks: documentBlocks(record, rows.map((r) => r.config)),
-      }
-    : null;
-  return { record, document, basename: slugify(`${evaluation.title} q${item.item.position + 1}`) || "answers" };
-}
-
-/** The Markdown export of {@link itemAnswers}; `409 not_exportable` for a type that is not text. */
-export function requireDocument(found: ItemAnswers): Document {
-  if (found.document === null) throw new GradingError("not_exportable");
-  return found.document;
 }
 
 /**
- * The document: the header (title, item, statement, key), then one section
- * per student. `configs[i]` is the parsed config of `record.answers[i]`'s
- * attempt, which `answerDoc` rebuilds the source from (invariant 14).
+ * The Markdown document of {@link itemAnswers} asked with `text: true`: the
+ * header (title, item, statement, key), then one section per student.
+ * `app` is the build's commit, for the provenance (ADR-121 §5).
  */
-function documentBlocks(record: ItemAnswersRecord, configs: readonly unknown[]): Block[] {
-  const type = typeOf(record.item.type);
+export function itemAnswersDocument(found: ItemAnswers, app: string | null): Document {
+  const { record } = found;
   const { item } = record;
+  const type = typeOf(item.type);
   const blocks: Block[] = [
     heading(1, record.evaluation.title),
     heading(2, `Question ${item.position + 1}: ${item.internalName} (${item.points} points)`),
@@ -184,11 +156,25 @@ function documentBlocks(record: ItemAnswersRecord, configs: readonly unknown[]):
       blocks.push(markdown("No attempt."));
       return;
     }
-    if (row.values) blocks.push(list(row.values.map((v) => `${v.name} = ${v.value}`)));
-    blocks.push(...answerBlocks(type, configs[i], row.answer, row.grading?.details ?? null));
+    blocks.push(...answerBlocks(type, found.configs[i], row.answer, row.grading?.details ?? null));
     blocks.push(points(row.grading?.points ?? null, item.points));
   });
-  return blocks;
+  return {
+    provenance: {
+      kind: record.kind,
+      version: record.version,
+      source: {
+        evaluationId: record.evaluation.id,
+        itemId: item.id,
+        questionId: item.questionId,
+        questionVersionId: item.questionVersionId,
+      },
+      attempts: found.attempts,
+      generatedAt: record.generatedAt,
+      app,
+    },
+    blocks,
+  };
 }
 
 /** One answer through the type's `answerDoc`, or a sentence saying why there is none to show. */

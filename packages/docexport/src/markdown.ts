@@ -75,7 +75,7 @@ export function markdownBody(blocks: readonly Block[]): string {
 }
 
 /** sha256 of a text, in hex. */
-export const sha256 = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex");
+const sha256 = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex");
 
 /**
  * The whole file: `---`, the provenance as YAML with the body's sha256, `---`,

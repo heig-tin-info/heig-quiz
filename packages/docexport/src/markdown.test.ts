@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 import { code, heading, list, markdown, points, separator, tests, type Document } from "./document.js";
-import { fenceFor, markdownBody, renderMarkdown, sha256 } from "./markdown.js";
+import { createHash } from "node:crypto";
+
+import { fenceFor, markdownBody, renderMarkdown } from "./markdown.js";
+
+const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
 
 const provenance = {
   kind: "item-answers",

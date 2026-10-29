@@ -122,7 +122,7 @@ export function useGradingData(evaluationId: string, itemId: string | null, name
     /** A parameterized question's table and the question as written (ADR-056 §9); null when static. */
     parameters: queue.data?.items[0]?.parameters ?? null,
     /** Whether the question's answers export as Markdown (F-EXP-01, ADR-121). */
-    exportable: queue.data?.items[0]?.exportable ?? false,
+    exportable: queue.data?.items[0]?.exportable === true,
     /** An essay's criteria (ADR-118 §6); empty for every other question. */
     criteria: queue.data?.items[0]?.criteria ?? NO_CRITERIA,
     progress: useGradingProgress(evaluationId),

@@ -727,21 +727,24 @@ export async function gradingQueue(
 }
 
 /**
- * A parameterized item's expected row (ADR-056 §9): its variables, and the
- * question as written — through the type's own views, seed 0 and no
- * shuffle, like every view of the panel. Staff-only, like the queue.
+ * The panel's expected row: the question as written, through the type's own
+ * views, seed 0 and no shuffle, like every view of the panel (ADR-056 §9 for
+ * a parameterized one, `example` when only an instance could be drawn).
+ * Staff-only, like the queue and the answers export (F-EXP-01).
  */
-function writtenOf(item: JoinedItem): NonNullable<GradingQueue["items"][number]["parameters"]> {
+export function expectedViews(item: JoinedItem): { student: unknown; solution: unknown; example: boolean } {
   const { config, example } = writtenConfig(item.question.type, item.version);
   const view = { seed: 0, itemId: item.item.id, shuffle: false };
   return {
-    variables: parametersOf(item.version)!,
-    template: {
-      student: studentViewOf(item.question.type, config, view),
-      solution: solutionViewOf(item.question.type, config, view),
-      example,
-    },
+    student: studentViewOf(item.question.type, config, view),
+    solution: solutionViewOf(item.question.type, config, view),
+    example,
   };
+}
+
+/** A parameterized item's expected row (ADR-056 §9): its variables, and the question as written. */
+function writtenOf(item: JoinedItem): NonNullable<GradingQueue["items"][number]["parameters"]> {
+  return { variables: parametersOf(item.version)!, template: expectedViews(item) };
 }
 
 /**

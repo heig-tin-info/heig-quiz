@@ -6,13 +6,12 @@
  * provenance read back by the journal's front-matter parser, and the
  * 404 of anyone the evaluation does not belong to (invariant 6).
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { GradingQueue, ItemAnswersRecord } from "@quiz/contracts";
 import { splitFrontMatter } from "@quiz/docrender/frontMatter";
-import { sha256 } from "@quiz/docexport";
 import { splitTemplate } from "@quiz/domain/lockedTemplate";
 import { registerForTests } from "@quiz/registry/server";
 
@@ -192,7 +191,7 @@ describe("every answer to one item (F-EXP-01)", () => {
         questionVersionId: built.code.version.id,
       },
       generatedAt: server.clock.now().toISOString(),
-      sha256: sha256(body),
+      sha256: createHash("sha256").update(body, "utf8").digest("hex"),
     });
     expect(new Set(frontMatter["attempts"] as string[])).toEqual(new Set([built.best.id, built.empty.id]));
     expect(res.body).not.toContain("@heig.test");

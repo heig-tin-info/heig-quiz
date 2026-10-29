@@ -115,7 +115,8 @@ export const GradingQueueItem = StaffItemRef.extend({
   /**
    * Whether the item's answers export as Markdown (F-EXP-01, ADR-121 §2):
    * its type renders as text and the question is not parameterized. The
-   * JSON record exists for every item. Absent reads as false.
+   * JSON record exists for every item. Optional because the web's own
+   * `GradingItem` and fixtures share this shape; absent reads as false.
    */
   exportable: z.boolean().optional(),
   /**
