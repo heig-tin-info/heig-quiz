@@ -12,7 +12,7 @@ import {
 import { useMemo, useState } from "react";
 
 import type { ResultRow, ReleaseResponse, ResultsView as ResultsPayload } from "@quiz/contracts";
-import { isPassing, type RESULTS_TABS } from "@quiz/domain";
+import { histogramBucket, isPassing, type RESULTS_TABS } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -29,6 +29,7 @@ import {
   Alert,
   Button,
   Card,
+  Chip,
   EmptyState,
   PageError,
   PageHeader,
@@ -41,7 +42,7 @@ import {
 import { ByQuestionView, isNotOver } from "./ByQuestionView";
 import { ExportButton } from "./ExportButton";
 import { GradeTable, useGradeSort } from "./GradeTable";
-import { Histogram } from "../charts/Histogram";
+import { bucketLabel, Histogram } from "../charts/Histogram";
 import { StudentCopy } from "./StudentCopy";
 import { GradeStats } from "../charts/GradeStats";
 import { Summary } from "../charts/Summary";
@@ -79,6 +80,8 @@ export function ResultsView({
   const [releasing, setReleasing] = useState(false);
   /** The student's copy open over the table, by attempt, in the URL. */
   const [copyId, setCopyId] = useSearchParam("copy", "");
+  /** The histogram bar the table is filtered to, by its lower bound, in the URL. */
+  const [bucketParam, setBucketParam] = useSearchParam("bucket", "");
 
   const results = useQuery<ResultsPayload>({
     queryKey: resultsViewKey(evaluationId),
@@ -105,7 +108,16 @@ export function ResultsView({
   const view = results.data;
   const title = view?.title ?? "";
 
-  const table = useGradeSort(view?.rows ?? NO_ROWS);
+  /**
+   * The histogram bar the URL names, if any, and the rows it counts: the
+   * class only, as `resultsView` (api, results service) builds the histogram.
+   */
+  const bucket = view?.stats.histogram.find((b) => String(b.bucket) === bucketParam)?.bucket ?? null;
+  const rows = useMemo(() => {
+    const all = view?.rows ?? NO_ROWS;
+    return bucket === null ? all : all.filter((r) => !r.staff && histogramBucket(r.grade) === bucket);
+  }, [view, bucket]);
+  const table = useGradeSort(rows);
   /** The open copy, and ↑ / ↓ through the table's attempts in the order on screen. */
   const copy = useMemo(() => {
     const order = table.sorted.flatMap((r) => (r.attemptId === null ? [] : [{ ...r, attemptId: r.attemptId }]));
@@ -280,7 +292,14 @@ export function ResultsView({
           <div className="space-y-6">
             <Summary
               title={t("results.histogram.title")}
-              chart={<Histogram buckets={view.stats.histogram} className="h-40 lg:h-56" />}
+              chart={
+                <Histogram
+                  buckets={view.stats.histogram}
+                  className="h-40 lg:h-56"
+                  selected={bucket}
+                  onSelect={(b) => setBucketParam(b === bucket ? "" : String(b))}
+                />
+              }
               stats={
                 <GradeStats
                   description={view.stats}
@@ -290,7 +309,16 @@ export function ResultsView({
                 />
               }
             />
-            <GradeTable table={table} openId={copy ? copyId : null} onOpen={setCopyId} />
+            <div className="space-y-2">
+              {bucket === null ? null : (
+                <Chip
+                  label={t("results.filter.bucket", { range: bucketLabel(bucket) })}
+                  remove={t("results.filter.clear")}
+                  onRemove={() => setBucketParam("")}
+                />
+              )}
+              <GradeTable table={table} openId={copy ? copyId : null} onOpen={setCopyId} />
+            </div>
             {copy ? (
               <StudentCopy
                 evaluationId={evaluationId}

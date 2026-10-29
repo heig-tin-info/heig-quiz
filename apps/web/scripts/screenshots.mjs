@@ -1644,6 +1644,8 @@ const scenes = [
   { name: "eval-list-delete-assistant", role: "teacher", path: "/classrooms/r1?assistant=1", fold: true, act: (p) => openRowMenu(p, /^(Actions for|Actions pour) Test d/) },
 
   { name: "results", role: "teacher", path: "/evaluations/closed/results" },
+  // The table filtered to one bar of the histogram (#971).
+  { name: "results-bucket", role: "teacher", path: "/evaluations/closed/results?bucket=4" },
   { name: "results-released", role: "teacher", path: "/evaluations/released/results" },
   { name: "results-questions", role: "teacher", path: "/evaluations/closed/results?tab=questions", settle: 2500 },
   // One student's copy, opened from their row: the whole correction, before any release.

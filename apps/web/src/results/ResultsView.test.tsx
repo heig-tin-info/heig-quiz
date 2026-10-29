@@ -105,6 +105,93 @@ describe("ResultsView", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "grading", evaluationId: "e1", item: "i1" });
   });
 
+  describe("filtered by a bar of the histogram", () => {
+    /** One more student in the 2.0–2.5 bar, and a teacher's own test walk there too. */
+    const filterable = () => {
+      const view = makeResultsView();
+      const base = view.rows[1]!;
+      view.rows.push(
+        { ...base, userId: "u5", attemptId: "a5", displayName: "Lea Andrey", firstName: "Lea", lastName: "Andrey", grade: 2.25 },
+        { ...base, userId: "u6", attemptId: "a6", displayName: "Yves Prof", firstName: "Yves", lastName: "Prof", grade: 2, staff: true },
+      );
+      view.stats.histogram[2]!.count = 2;
+      return view;
+    };
+    const bar = (name: string) => screen.getByRole("button", { name });
+
+    it("shows that bar's students only, in the URL, and a second press clears it", async () => {
+      mockFetch({ [`GET ${VIEW}`]: ok(filterable()) });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+      await screen.findByRole("heading", { name: "Results" });
+      expect(names()).toHaveLength(6);
+
+      await userEvent.click(bar("2.0–2.5: 2"));
+      // The class's rows of that bar, by the bar's own rule: the teacher's test is not one.
+      expect(names()).toEqual(["Lea Andrey", "Adam Perret"]);
+      expect(bar("2.0–2.5: 2")).toHaveAttribute("aria-pressed", "true");
+      expect(window.location.search).toBe("?bucket=2");
+      expect(screen.getByText("Grades 2.0–2.5")).toBeVisible();
+
+      await userEvent.click(bar("2.0–2.5: 2"));
+      expect(names()).toHaveLength(6);
+      expect(window.location.search).toBe("");
+      expect(screen.queryByText("Grades 2.0–2.5")).toBeNull();
+    });
+
+    it("clears the filter from the chip above the table", async () => {
+      mockFetch({ [`GET ${VIEW}`]: ok(filterable()) });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />, { route: "/?bucket=2" });
+      await screen.findByRole("heading", { name: "Results" });
+      expect(names()).toEqual(["Lea Andrey", "Adam Perret"]);
+
+      await userEvent.click(screen.getByRole("button", { name: "Clear filter — Grades 2.0–2.5" }));
+      expect(names()).toHaveLength(6);
+      expect(bar("2.0–2.5: 2")).toHaveAttribute("aria-pressed", "false");
+      expect(window.location.search).toBe("");
+    });
+
+    it("lists the absent students in the first bar, where they are counted", async () => {
+      mockFetch({ [`GET ${VIEW}`]: ok(filterable()) });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />, { route: "/?bucket=1" });
+      await screen.findByRole("heading", { name: "Results" });
+      expect(names()).toEqual(["Noah Currat"]);
+      // An empty bar has nothing to show.
+      expect(bar("1.5–2.0: 0")).toBeDisabled();
+    });
+
+    it("ignores a bucket the histogram does not have", async () => {
+      mockFetch({ [`GET ${VIEW}`]: ok(filterable()) });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />, { route: "/?bucket=2.2" });
+      await screen.findByRole("heading", { name: "Results" });
+      expect(names()).toHaveLength(6);
+    });
+
+    it("is reached and pressed from the keyboard", async () => {
+      mockFetch({ [`GET ${VIEW}`]: ok(filterable()) });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+      await screen.findByRole("heading", { name: "Results" });
+      bar("4.0–4.5: 1").focus();
+      await userEvent.keyboard("{Enter}");
+      expect(names()).toEqual(["Marie Rochat"]);
+    });
+
+    it("walks the copies of the filtered rows only", async () => {
+      const { evaluation: _e, available: _a, ...copy } = makeFeedback();
+      mockFetch({
+        [`GET ${VIEW}`]: ok(filterable()),
+        [`GET ${VIEW}/attempts/a5`]: ok({ ...copy, attemptId: "a5", grade: 2.25 }),
+        [`GET ${VIEW}/attempts/a2`]: ok({ ...copy, attemptId: "a2", grade: 2 }),
+      });
+      renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />, { route: "/?bucket=2&copy=a5" });
+      const sheet = await screen.findByRole("dialog", { name: "Lea Andrey" });
+      expect(within(sheet).getByRole("button", { name: "Previous student" })).toBeDisabled();
+      await userEvent.click(within(sheet).getByRole("button", { name: "Next student" }));
+      const next = await screen.findByRole("dialog", { name: "Adam Perret" });
+      // Blanc, Currat and Rochat are out of the bar, the teacher's test too.
+      expect(within(next).getByRole("button", { name: "Next student" })).toBeDisabled();
+    });
+  });
+
   it("exports through a real navigation to the CSV endpoint", async () => {
     mockFetch({ [`GET ${VIEW}`]: ok(makeResultsView()) });
     renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
