@@ -105,12 +105,25 @@ describe("the student's Grades", () => {
   });
 
   it("says excused where the teacher excused the student, no points nor grade (#969)", async () => {
-    const excused: GradeGroup[] = [{ ...groups[0]!, rows: [row({ evaluationId: "e7", title: "Quiz 0", status: "excused" })] }];
+    // The server sends an excused exam with `counts: false`: it counts in no mean.
+    const excused: GradeGroup[] = [
+      {
+        ...groups[0]!,
+        rows: [
+          row({ evaluationId: "e2", title: "Quiz 2", score: { points: 8.5, totalPoints: 12, grade: 4.5, pendingCount: 0 } }),
+          row({ evaluationId: "e7", title: "Quiz 0", status: "excused", counts: false }),
+        ],
+      },
+    ];
     mockFetch({ [URL]: ok(excused) });
     render();
     const line = await tableRow("Quiz 0");
     expect(line.getByText("excused")).toBeInTheDocument();
     expect(line.getAllByText("—")).toHaveLength(2);
+    // Drawn under "Indicative", never with what counts toward the average.
+    const indicative = screen.getByRole("region", { name: "Indicative" });
+    expect(within(indicative).getAllByText("Quiz 0").length).toBeGreaterThan(0);
+    expect(within(screen.getByRole("region", { name: "In the average" })).queryByText("Quiz 0")).toBeNull();
   });
 
   it("prints the points read before the release as indicative, and no grade", async () => {

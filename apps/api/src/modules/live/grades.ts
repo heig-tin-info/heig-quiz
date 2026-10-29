@@ -132,7 +132,8 @@ function gradeRow(entry: PastEntry, counts: boolean): EvaluationGradeRow {
     status,
     // `results` is the counted attempt's own (`resultsState`).
     feedbackAttemptId: card.results === "available" ? (counted?.id ?? null) : null,
-    counts,
+    // An excused row counts in no mean: never drawn with what counts (#969).
+    counts: counts && status !== "excused",
     score: scoreOf(entry, status),
   };
 }

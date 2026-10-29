@@ -266,7 +266,7 @@ stands, the override rule (§4) and the owner's role (§9) included.
 5. **The student reads "Excused"** once the column is released, whatever the
    feedback policy (no grade lies behind it to withhold): the Grades page's
    row has the status `excused` and no score, the classroom's Grades tab the
-   cell `excused`. Never the comment; before the release, nothing (§5).
+   cell `excused`; on both it sits with what does not count (its `counts` is false), since it counts in no mean. Never the comment; before the release, nothing (§5).
 6. **The CSV** writes an excused cell empty, in the gradebook's file and in
    the results' grade column; the school's tool has no code for it.
 

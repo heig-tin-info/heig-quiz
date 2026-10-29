@@ -1026,12 +1026,14 @@ describe("an excused student (#969, ADR-074 amendment of 2026-10-29)", () => {
         const page = await call("GET", "/app/api/student/results", headers);
         expect(page.statusCode, page.body).toBe(200);
         const rows = evaluationRows(StudentGrades.parse(page.json()));
-        expect(rows.find((r) => r.evaluationId === col["E1"]), who).toMatchObject({ status: "excused", score: null });
+        // Counted in no mean, so never drawn with what counts toward the average.
+        expect(rows.find((r) => r.evaluationId === col["E1"]), who).toMatchObject({ status: "excused", score: null, counts: false });
         expect(rows.find((r) => r.evaluationId === col["E3"])!.status, who).not.toBe("excused");
         expect(page.body, who).not.toContain(SECRET);
 
         const { parsed, body } = await studentRead(headers);
         expect(parsed.cells[col["E1"]!], who).toEqual({ kind: "excused", grade: null, points: null, max: null });
+        expect(parsed.columns.find((c) => c.activityId === col["E1"])!.counts, who).toBe(false);
         expect(parsed.cells[col["E3"]!]!.kind, who).not.toBe("excused");
         expect(body, who).not.toContain(SECRET);
       }
