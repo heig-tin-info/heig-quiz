@@ -267,6 +267,10 @@ stands, the override rule (§4) and the owner's role (§9) included.
    feedback policy (no grade lies behind it to withhold): the Grades page's
    row has the status `excused` and no score, the classroom's Grades tab the
    cell `excused`; on both it sits with what does not count (its `counts` is false), since it counts in no mean. Never the comment; before the release, nothing (§5).
+   The attempt's own pages are unchanged, as for any mark: its feedback
+   page, the home card and a `results_updated` notice still show the grade
+   the attempt earned, since the mark changes what counts, not what was
+   done.
 6. **The CSV** writes an excused cell empty, in the gradebook's file and in
    the results' grade column; the school's tool has no code for it.
 
