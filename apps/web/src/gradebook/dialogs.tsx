@@ -75,6 +75,46 @@ export function ScoreDialog({
   );
 }
 
+/**
+ * Excusing one student of one evaluation (#969): what it does in a sentence,
+ * and an optional staff-only comment (why: a certificate, an illness). The
+ * mark is the gradebook's; the results page asks it from a student's row.
+ */
+export function ExcuseDialog({
+  student,
+  comment: initial,
+  submitting,
+  onClose,
+  onSubmit,
+}: {
+  student: string;
+  comment: string | null;
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: (mark: GradebookMarkPut) => void;
+}) {
+  const t = useT();
+  const [comment, setComment] = useState(initial ?? "");
+  return (
+    <FormDialog
+      title={t("results.excuse.title", { student })}
+      onClose={onClose}
+      submitLabel={t("results.excuse.submit")}
+      submitting={submitting}
+      onSubmit={() => onSubmit({ kind: "excused", comment: comment.trim() || null })}
+    >
+      <p className="text-sm text-fg-muted">{t("results.excuse.body")}</p>
+      <Textarea
+        label={t("gbook.score.comment")}
+        value={comment}
+        maxLength={2000}
+        onChange={(e) => setComment(e.target.value)}
+        autoFocus
+      />
+    </FormDialog>
+  );
+}
+
 /** A column's weight in the mean: a whole percentage, 0 to 100, checked by the route's own schema (invariant 7). */
 export function WeightDialog({
   column,

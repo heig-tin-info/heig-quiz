@@ -68,13 +68,17 @@ const countsOf = ({ row }: PastEntry): boolean =>
 /**
  * Where a finished evaluation stands for the student; see `GradeStatus`. A
  * released evaluation whose feedback policy will never show anything
- * (results `none`) is `withheld`: released, and its grade not shared.
+ * (results `none`) is `withheld`: released, and its grade not shared. A
+ * released one the teacher excused the student from is `excused`, whatever
+ * else (#969): a mark is the staff's alone until the release (ADR-074).
  */
 export function gradeStatus(fact: {
   handedIn: boolean;
   released: boolean;
   results: CardResults;
+  excused: boolean;
 }): GradeStatus {
+  if (fact.released && fact.excused) return "excused";
   if (!fact.handedIn) return "missed";
   if (fact.released) return fact.results === "none" ? "withheld" : "released";
   if (fact.results === "available") return "available";
@@ -85,9 +89,10 @@ export function gradeStatus(fact: {
 /**
  * The released points and grade where the student may read them; before the
  * release, the feedback page's points, indicative, no grade, and its count
- * of questions still pending.
+ * of questions still pending. An excused row has none: it counts nowhere.
  */
-function scoreOf({ row, counted, released, early }: PastEntry): EvaluationGradeRow["score"] {
+function scoreOf({ row, counted, released, early }: PastEntry, status: GradeStatus): EvaluationGradeRow["score"] {
+  if (status === "excused") return null;
   if (released && gradeReadable(row.evaluation, counted?.state ?? null)) {
     return {
       points: released.points,
@@ -106,6 +111,12 @@ function scoreOf({ row, counted, released, early }: PastEntry): EvaluationGradeR
 function gradeRow(entry: PastEntry, counts: boolean): EvaluationGradeRow {
   const { row, card, counted } = entry;
   const { evaluation, attempt } = row;
+  const status = gradeStatus({
+    handedIn: attempt !== null && isFinishedAttempt(attempt.state),
+    released: evaluation.releasedAt !== null,
+    results: card.results,
+    excused: row.excusedMarkId !== null,
+  });
   return {
     kind: "evaluation",
     evaluationId: evaluation.id,
@@ -118,14 +129,11 @@ function gradeRow(entry: PastEntry, counts: boolean): EvaluationGradeRow {
         evaluation.closesAt ??
         evaluation.createdAt,
     ),
-    status: gradeStatus({
-      handedIn: attempt !== null && isFinishedAttempt(attempt.state),
-      released: evaluation.releasedAt !== null,
-      results: card.results,
-    }),
+    status,
     // `results` is the counted attempt's own (`resultsState`).
     feedbackAttemptId: card.results === "available" ? (counted?.id ?? null) : null,
-    counts,
-    score: scoreOf(entry),
+    // An excused row counts in no mean: never drawn with what counts (#969).
+    counts: counts && status !== "excused",
+    score: scoreOf(entry, status),
   };
 }

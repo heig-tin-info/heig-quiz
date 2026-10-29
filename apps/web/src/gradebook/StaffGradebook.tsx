@@ -24,7 +24,7 @@
  *     `surface-2` strip with an eye-off over its weight, and stays out of the
  *     mean. Pointing at a head lights its whole column.
  *
- * The secondary actions are menus: one per cell (absent, a score, clear) and
+ * The secondary actions are menus: one per cell (absent, excused, a score, clear) and
  * one per column (weight, counts in the mean). A mark over a real grade
  * answers `409 grade_exists`; the tab then asks, and sends it again with
  * `override: true`.
@@ -39,16 +39,14 @@ import {
   Scale,
   Table2,
   TriangleAlert,
+  UserCheck,
   UserX,
 } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import type { GradebookColumn, GradebookMarkPut, GradebookStaff, GradebookStaffCell, GradebookStaffRow } from "@quiz/contracts";
 
-import { refusedWith } from "../api";
-import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
-import { useToast } from "../notify";
 import {
   Card,
   cx,
@@ -63,9 +61,10 @@ import {
   T,
   Tip,
 } from "../ui";
-import { gradebookRefusalMessage, useGradebookWrites, useStaffGradebook } from "./api";
+import { useStaffGradebook } from "./api";
 import { ScoreDialog, WeightDialog } from "./dialogs";
-import { AbsentSigil, fullName, GradeOrDash, MODE_LABEL } from "./cells";
+import { AbsentSigil, ExcusedSigil, fullName, GradeOrDash, MODE_LABEL } from "./cells";
+import { useMarkWrites } from "./useMarkWrites";
 
 /**
  * The mean stays in view while the grades scroll under it, once the card has
@@ -147,9 +146,8 @@ type Dialog = { kind: "score"; row: GradebookStaffRow; column: GradebookColumn }
 
 function Matrix({ classroomId, data }: { classroomId: string; data: GradebookStaff }) {
   const t = useT();
-  const toast = useToast();
-  const confirm = useConfirm();
-  const writes = useGradebookWrites(classroomId);
+  const marks = useMarkWrites(classroomId);
+  const { writes, attempt } = marks;
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const readOnly = data.archived;
   /*
@@ -167,36 +165,12 @@ function Matrix({ classroomId, data }: { classroomId: string; data: GradebookSta
   const hasOptional = data.columns.some(optional);
   const columns = showExercises ? data.columns : data.columns.filter((column) => !optional(column));
 
-  /**
-   * Runs one write; a refusal is a toast, in words. True when it went through.
-   * `onExists` takes over a `409 grade_exists` instead (the override's question).
-   */
-  const attempt = async (write: () => Promise<unknown>, onExists?: () => Promise<boolean>): Promise<boolean> => {
-    try {
-      await write();
-      return true;
-    } catch (error) {
-      if (onExists && refusedWith(error, "grade_exists")) return onExists();
-      toast(gradebookRefusalMessage(error, t), "error");
-      return false;
-    }
-  };
-
-  /** A mark; over a real grade the server asks for `override`, and so do we. */
   const putMark = (column: GradebookColumn, row: GradebookStaffRow, mark: GradebookMarkPut): Promise<boolean> =>
-    attempt(
-      () => writes.setMark(column, row.enrollmentId, mark),
-      async () =>
-        (await confirm({
-          title: t("gbook.override.title"),
-          message: t("gbook.override.body", { student: fullName(row), column: column.title }),
-          confirmLabel: t("gbook.override.confirm"),
-          danger: true,
-        })) && attempt(() => writes.setMark(column, row.enrollmentId, { ...mark, override: true })),
-    );
+    marks.putMark(column, { enrollmentId: row.enrollmentId, name: fullName(row) }, mark);
 
   const cellItems = (column: GradebookColumn, row: GradebookStaffRow, cell: GradebookStaffCell): MenuItem[] => [
     { label: t("gbook.cell.absent"), icon: UserX, onSelect: () => void putMark(column, row, { kind: "absent" }) },
+    { label: t("gbook.cell.excuse"), icon: UserCheck, onSelect: () => void putMark(column, row, { kind: "excused" }) },
     { label: t("gbook.cell.score"), icon: Pencil, onSelect: () => setDialog({ kind: "score", row, column }) },
     ...(cell.mark
       ? [
@@ -518,7 +492,7 @@ function CellButton({
   );
 }
 
-/** A staff cell's content: the grade, the absence sigil or a dash, and what is worth a second look beside it. */
+/** A staff cell's content: the grade, the absence or excused sigil or a dash, and what is worth a second look beside it. */
 function CellFace({ cell, t }: { cell: GradebookStaffCell; t: TFunction }) {
   const marked = cell.source === "mark";
   return (
@@ -529,6 +503,8 @@ function CellFace({ cell, t }: { cell: GradebookStaffCell; t: TFunction }) {
         </span>
       ) : cell.kind === "absent" ? (
         <AbsentSigil why={t(marked ? "gbook.absent.marked" : "gbook.absent.derived")} />
+      ) : cell.kind === "excused" ? (
+        <ExcusedSigil why={t("gbook.excused")} />
       ) : (
         <Dash />
       )}

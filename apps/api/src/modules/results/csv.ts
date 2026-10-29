@@ -23,7 +23,8 @@ const COUNTING_SUFFIX: Record<ItemCounting, string> = {
 
 /**
  * `email;last_name;first_name;q1;…;total;grade`, one row per STUDENT — the
- * absent ones included, with empty per-item cells and a 1.0. A bonus item's
+ * absent ones included, with empty per-item cells and a 1.0; an excused
+ * one (#969) keeps their points and has an empty grade. A bonus item's
  * header says ` (bonus)`, a neutralized one's ` (not counted)`; `total` is
  * the student's points, bonus included, neutralized items left out.
  *
@@ -55,7 +56,8 @@ export function resultsCsv(view: ResultsView): string {
           return value === undefined ? "" : points(value);
         }),
         points(row.points),
-        grade(row.grade),
+        // An excused student's grade counts nowhere: an empty cell, as in the gradebook's file (#969).
+        row.excused === null ? grade(row.grade) : "",
       ]),
     );
   return csvFile([line(header), ...rows]);

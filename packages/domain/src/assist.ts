@@ -452,10 +452,13 @@ export interface ResultsSource {
   rows: readonly {
     nom: string;
     prenom: string;
-    cells: Readonly<Record<string, { kind: "grade" | "absent" | "empty"; grade: number | null }>>;
+    cells: Readonly<Record<string, { kind: "grade" | "absent" | "excused" | "empty"; grade: number | null }>>;
     mean: number | null;
   }[];
 }
+
+/** A student's cell as the reader says it: a grade, an absence (a1.0), an excuse (in no mean), or none. */
+export type AssistGrade = number | "absent" | "excused" | null;
 
 /** One column of the final results: a released evaluation or project. */
 export interface AssistResultsColumn {
@@ -470,20 +473,21 @@ export interface AssistResultsColumn {
  * What the results reader returns to the model: the FINAL marks of a
  * classroom — its released columns only, so neither a running evaluation's
  * nor an unreleased one's scores, nor a staff mark standing in such a column
- * — each student by name with a grade per column (`"absent"`: a1.0, null:
+ * — each student by name with a grade per column (`"absent"`: a1.0,
+ * `"excused"`: let off, in no mean, null:
  * none) and the gradebook's mean over those released columns.
  */
 export interface AssistResults {
   classroomId: string;
   scale: string;
   columns: AssistResultsColumn[];
-  students: { name: string; grades: (number | "absent" | null)[]; mean: number | null }[];
+  students: { name: string; grades: AssistGrade[]; mean: number | null }[];
   /** How many columns were left out because they are not released. */
   unreleasedColumns: number;
 }
 
 const RESULTS_SCALE =
-  "Swiss grades from 1.0 to 6.0, 4.0 passes; `absent` counts as 1.0. Final (released) columns only; the mean is the gradebook's weighted mean of the released columns that count, each weight a relative whole percentage (0 to 100).";
+  "Swiss grades from 1.0 to 6.0, 4.0 passes; `absent` counts as 1.0, `excused` counts in no mean. Final (released) columns only; the mean is the gradebook's weighted mean of the released columns that count, each weight a relative whole percentage (0 to 100).";
 
 /** The final results of a classroom from its staff gradebook (pure: the route did the access check). */
 export function assistResults(table: ResultsSource): AssistResults {
@@ -497,7 +501,7 @@ export function assistResults(table: ResultsSource): AssistResults {
       grades: released.map((c) => {
         const cell = row.cells[c.activityId];
         if (!cell || cell.kind === "empty") return null;
-        return cell.kind === "absent" ? "absent" : cell.grade;
+        return cell.kind === "absent" || cell.kind === "excused" ? cell.kind : cell.grade;
       }),
       mean: row.mean,
     })),
@@ -548,7 +552,7 @@ export function stubResultsAnswer(
   if ("noClassroom" in outcome) return `${intro}\n\n${text.noClassroom}`;
   if ("refused" in outcome) return `${intro}\n\n${text.refused} ${outcome.refused}`;
   const { results } = outcome;
-  const grade = (g: number | "absent" | null) => (g === null ? "–" : g === "absent" ? "a1.0" : g.toFixed(1));
+  const grade = (g: AssistGrade) => (g === null || g === "excused" ? "–" : g === "absent" ? "a1.0" : g.toFixed(1));
   const lines =
     results.columns.length === 0
       ? [text.none]

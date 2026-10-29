@@ -188,6 +188,8 @@ The **Students** tab opens on four figures: **Mean**, **Median**, **Standard dev
 
 Then one row per student on the roster: **Student**, **E-mail**, **Points**, **Grade**, **Time** used, and the **State** of their attempt: `submitted` by the student, `expired` by the server at the deadline, `in progress` or `not started` for an attempt the close has not caught up with yet, or `absent` for a student who never connected. An absent student has 0 points and the grade 1.0, so that the class figures are honest.
 
+**Excusing a student.** A student absent for a valid reason, or sick during the exam, can be let off: open the menu at the end of their row and choose **Excuse…**, with an optional comment only the staff read. The row stays, marked **Excused**, but their grade leaves the four figures, the distribution and every mean, the classroom's gradebook included; the per-question success rates keep their answers. In the CSV their grade is an empty cell. The student sees **Excused** once the results are published. Excusing a student who has a grade asks you to confirm, and once the results are published only an owner of the course may do it. **Edit the excuse…** and **Remove the excuse** are in the same menu; the gradebook's cell offers the same mark.
+
 ### The grade
 
 The grade maps the points onto the Swiss scale, `1 + 5 × points / total`, capped at 6. The total leaves out the bonus questions (see [Evaluations](evaluations.md#bonus-questions)), whose points only lift a student: a score may read `21 / 18` and the grade stays 6.0. The result lies between 1.0 and 6.0 and is rounded to the tenth, to the nearest by default. In the CSV export, a bonus question's column is marked `(bonus)` and the total includes its points.

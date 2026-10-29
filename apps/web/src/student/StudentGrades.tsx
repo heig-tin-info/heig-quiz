@@ -66,6 +66,7 @@ const STATUS: Record<GradeStatus, { label: keyof Dict; tone: Tone }> = {
   pending: { label: "sgrades.status.pending", tone: "amber" },
   submitted: { label: "sgrades.status.submitted", tone: "zinc" },
   missed: { label: "sgrades.status.missed", tone: "zinc" },
+  excused: { label: "sgrades.status.excused", tone: "zinc" },
 };
 
 

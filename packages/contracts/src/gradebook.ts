@@ -13,7 +13,8 @@
  *   absent from the JSON otherwise.
  *
  * A cell is a `grade` (the Swiss grade to the tenth), an `absent` (the
- * school's a1.0: 1.0 marked as an absence, which counts as 1.0) or `empty`.
+ * school's a1.0: 1.0 marked as an absence, which counts as 1.0), `excused`
+ * (a staff mark: named, and in no mean, #969) or `empty`.
  * A column is addressed by its activity: `kind` + `activityId`.
  */
 import { z } from "zod";
@@ -62,14 +63,15 @@ export const GradebookColumnPatch = z
 export type GradebookColumnPatch = z.infer<typeof GradebookColumnPatch>;
 
 /**
- * `PUT …/gradebook/columns/:kind/:activityId/marks/:eid`: an absence, or the
- * teacher's own score out of a maximum. `override: true` is required when a
- * grade lies beneath the mark (`409 grade_exists` otherwise): replacing a
- * real grade is deliberate. The comment is staff-only.
+ * `PUT …/gradebook/columns/:kind/:activityId/marks/:eid`: an absence, an
+ * excuse (the cell counts in no mean, #969), or the teacher's own score out
+ * of a maximum. `override: true` is required when a grade lies beneath the
+ * mark (`409 grade_exists` otherwise): replacing a real grade is deliberate.
+ * The comment is staff-only.
  */
 export const GradebookMarkPut = z.discriminatedUnion("kind", [
   z.object({
-    kind: z.literal("absent"),
+    kind: z.enum(["absent", "excused"]),
     comment: z.string().trim().max(2000).nullish(),
     override: z.boolean().optional(),
   }),
@@ -114,7 +116,7 @@ export const GradebookColumn = z.object({
   weight: GradebookWeight,
   counts: z.boolean(),
   position: z.number().int().nullable(),
-  /** The class's mean of the column: its released cells' grades (an absence 1.0, an empty cell left out); null before the release or with none. */
+  /** The class's mean of the column: its released cells' grades (an absence 1.0, an empty or excused cell left out); null before the release or with none. */
   classMean: z.number().nullable(),
 });
 export type GradebookColumn = z.infer<typeof GradebookColumn>;
@@ -142,7 +144,7 @@ export type GradebookSource = z.infer<typeof GradebookSource>;
  * `override: true`).
  */
 export const GradebookStaffCell = z.object({
-  kind: z.enum(["grade", "absent", "empty"]),
+  kind: z.enum(["grade", "absent", "excused", "empty"]),
   grade: z.number().nullable(),
   points: z.number().nullable(),
   /** What the points are out of. */
@@ -185,13 +187,14 @@ export type GradebookStaff = z.infer<typeof GradebookStaff>;
 
 /**
  * One cell as the student reads it (F-RES-04): `grade` and `absent` carry a
- * grade; `withheld` — released under the feedback policy `none`, the grade
+ * grade; `excused` — the teacher excused the student, the cell counts in
+ * no mean (#969); `withheld` — released under the feedback policy `none`, the grade
  * is not shared; `indicative` — not released, the feedback page already shows
  * the points: `points` and `max`, no grade; `empty` — nothing to show.
  * Never the source, the teacher's comment, nor a mark of an unreleased column.
  */
 export const GradebookStudentCell = z.object({
-  kind: z.enum(["grade", "absent", "empty", "withheld", "indicative"]),
+  kind: z.enum(["grade", "absent", "excused", "empty", "withheld", "indicative"]),
   grade: z.number().nullable(),
   points: z.number().nullable(),
   max: z.number().nullable(),

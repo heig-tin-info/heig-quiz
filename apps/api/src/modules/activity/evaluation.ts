@@ -98,8 +98,9 @@ const NOTHING = { grade: null, points: null, max: null } as const;
  * The student's cell of one evaluation from their Grades row (F-RES-04):
  * before the release, indicative points where the feedback page shows them
  * and never a grade; once released, the grade the row carries — none under
- * the policy `none` (`withheld`) —; a released exam not taken is an absence.
- * A staff mark shows only on a released column that is not withheld.
+ * the policy `none` (`withheld`) —; a released exam not taken is an absence;
+ * an excused row is excused. A staff mark shows only on a released column
+ * that is not withheld, or that is excused.
  */
 function studentCell(
   ev: EvaluationRecord,
@@ -114,6 +115,8 @@ function studentCell(
       markShown: false,
     };
   }
+  // Excused (#969): the Grades row already says so, whatever the policy — no grade lies behind it to withhold.
+  if (row.status === "excused") return { cell: { kind: "excused", ...NOTHING }, markShown: true };
   if (score === null || score.grade === null) return { cell: { kind: "withheld", ...NOTHING }, markShown: false };
   if (row.status === "missed") {
     const absent = notTakenCell(columnMode(ev)).kind === "absent";

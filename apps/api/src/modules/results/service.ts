@@ -51,6 +51,7 @@ import {
   GROUPED_BY_CHOICE,
   gradeFromPoints,
   histogram,
+  inStatistics,
   isDebriefOpen,
   isEvaluationOpen,
   FINISHED_ATTEMPT_STATES,
@@ -72,6 +73,8 @@ import {
   answers,
   attempts,
   enrollments,
+  gradebookColumns,
+  gradebookMarks,
   gradings,
 } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
@@ -184,6 +187,7 @@ async function computeResults(
 
   const roster = await db
     .select({
+      seatId: enrollments.id,
       userId: enrollments.userId,
       nom: enrollments.nom,
       prenom: enrollments.prenom,
@@ -207,6 +211,7 @@ async function computeResults(
   const byUser = await keptAttempts(db, evaluation);
   const staffAttempts = await staffAttemptIds(db, evaluation);
   const validated = await validatedGradings(db, evaluation.id);
+  const excused = await excusedSeats(db, evaluation.id);
 
   const rows: ResultRow[] = [];
   const seats = [
@@ -246,6 +251,8 @@ async function computeResults(
       durationS: durationOf(attempt),
       state: attempt ? attempt.state : "absent",
       staff: entry.staff,
+      enrollmentId: entry.seatId,
+      excused: excused.get(entry.seatId) ?? null,
     });
   }
 
@@ -255,6 +262,20 @@ async function computeResults(
     items: itemViews(items, validated, countedAttempts(byUser, staffAttempts)),
     rows,
   };
+}
+
+/**
+ * The `excused` gradebook marks on the evaluation's column, by roster line,
+ * with their staff-only comment (#969, ADR-074 amendment of 2026-10-29):
+ * read by join, the table is the gradebook's, which alone writes it.
+ */
+async function excusedSeats(db: Db, evaluationId: string): Promise<Map<string, { comment: string | null }>> {
+  const marks = await db
+    .select({ enrollmentId: gradebookMarks.enrollmentId, comment: gradebookMarks.comment })
+    .from(gradebookMarks)
+    .innerJoin(gradebookColumns, eq(gradebookColumns.id, gradebookMarks.columnId))
+    .where(and(eq(gradebookColumns.evaluationId, evaluationId), eq(gradebookMarks.kind, "excused")));
+  return new Map(marks.map((m) => [m.enrollmentId, { comment: m.comment }]));
 }
 
 /**
@@ -317,11 +338,12 @@ export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise
   const computed = await computeResults(db, evaluation);
   // Absent students count in the mean: a 1.0 that is not in the statistics
   // would flatter every class average (F-RES-01). A teacher's own test does
-  // NOT: it is not a member of the class (ADR-018). The web's grade-table
-  // filter by histogram bar (ResultsView) keeps the same rows, and buckets
-  // them with `histogramBucket` at the same default step: pass a step here
-  // and there together, or the table and the bars disagree.
-  const grades = computed.rows.filter((r) => !r.staff).map((r) => r.grade);
+  // NOT: it is not a member of the class (ADR-018); nor does an excused
+  // student, whom the teacher let off (#969). The web's grade-table filter
+  // by histogram bar (ResultsView, `inStatistics`) keeps the same rows, and
+  // buckets them with `histogramBucket` at the same default step: pass a
+  // step here and there together, or the table and the bars disagree.
+  const grades = computed.rows.filter(inStatistics).map((r) => r.grade);
   const stats = describe(grades);
   return {
     evaluationId: evaluation.id,

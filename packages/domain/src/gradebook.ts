@@ -3,11 +3,14 @@
  * Pure: the `gradebook` module of the API loads the cells, these decide
  * what a cell holds and what a student's mean is.
  *
- * A cell is one of three things: a **grade** (the Swiss grade to the tenth,
+ * A cell is one of four things: a **grade** (the Swiss grade to the tenth,
  * read from the activity's own results), an **absence** (the school's
- * `a1.0`: 1.0 marked as an absence, which counts as 1.0), or **empty**
- * (nothing to count). Two sources make an absence — one derived, one
- * stored — and a stored mark wins over anything beneath it:
+ * `a1.0`: 1.0 marked as an absence, which counts as 1.0), **excused** (a
+ * staff mark: the student is let off the activity, a justified absence or
+ * an illness; named, and counted nowhere, like an empty cell — #969,
+ * ADR-074 amendment of 2026-10-29), or **empty** (nothing to count). Two
+ * sources make an absence — one derived, one stored — and a stored mark
+ * wins over anything beneath it:
  *
  *   - derived: an **exam** released and not taken. An exercise not opened
  *     is an empty cell, never an absence;
@@ -16,7 +19,7 @@
  *     an empty cell (spec 06 no. 48).
  *
  * The **mean** is the weighted mean of the columns that count and in which
- * the student has a grade (an absence is a 1.0), computed from the cell
+ * the student has a grade (an absence is a 1.0, an excused cell has none), computed from the cell
  * grades AS DISPLAYED (each rounded to the tenth), then rounded to the
  * tenth. A weight is a whole percentage, 0 to 100 (#545): RELATIVE, not a
  * budget — the weights need not sum to 100, the mean divides by the sum of
@@ -26,15 +29,18 @@
  *
  * The **class means** are the staff's alone: a column's is the plain mean
  * of the grades its cells count as (an absence a 1.0, as in a student's
- * mean; an empty cell left out), the class's overall one the plain mean of
+ * mean; an empty or excused cell left out), the class's overall one the plain mean of
  * the students' means (a student with none left out).
  */
 import type { EvaluationModeName } from "./evaluationConfig.js";
 import { MIN_GRADE } from "./grade.js";
 import { roundToTenth } from "./round.js";
 
-/** What a staff mark says: the student was absent, or the teacher's own score. */
-export const GRADEBOOK_MARK_KINDS = ["absent", "score"] as const;
+/**
+ * What a staff mark says: the student was absent (a1.0, counts), excused
+ * (counts nowhere), or the teacher's own score.
+ */
+export const GRADEBOOK_MARK_KINDS = ["absent", "excused", "score"] as const;
 export type GradebookMarkKind = (typeof GRADEBOOK_MARK_KINDS)[number];
 
 /** An absence reads as the scale's minimum: `a1.0`. */
@@ -61,12 +67,12 @@ export function countsByDefault(kind: GradebookColumnKind): boolean {
 export const evaluationColumnKind = (mode: EvaluationModeName): Exclude<GradebookColumnKind, "project"> => (mode === "exam" ? "exam" : "exercise");
 
 /** What a cell holds, before any mark. */
-export type CellOutcome = { kind: "grade"; grade: number } | { kind: "absent" } | { kind: "empty" };
+export type CellOutcome = { kind: "grade"; grade: number } | { kind: "absent" } | { kind: "excused" } | { kind: "empty" };
 
 /** A staff mark, as the rules read it: `score` carries the grade it converts to. */
-export type MarkOutcome = { kind: "absent" } | { kind: "score"; grade: number };
+export type MarkOutcome = { kind: "absent" } | { kind: "excused" } | { kind: "score"; grade: number };
 
-/** The grade a cell counts as, or null when it has none: an absence is 1.0. */
+/** The grade a cell counts as, or null when it has none: an absence is 1.0; an excused cell, like an empty one, has none. */
 export function cellGrade(cell: CellOutcome): number | null {
   if (cell.kind === "absent") return ABSENT_GRADE;
   return cell.kind === "grade" ? roundToTenth(cell.grade) : null;
@@ -80,7 +86,7 @@ export function hasGrade(cell: CellOutcome): boolean {
 /** A mark wins over whatever lies beneath it (D06, 2026-10-05); no mark leaves the cell as it was. */
 export function resolveCell(mark: MarkOutcome | null, beneath: CellOutcome): CellOutcome {
   if (mark === null) return beneath;
-  return mark.kind === "absent" ? { kind: "absent" } : { kind: "grade", grade: mark.grade };
+  return mark.kind === "score" ? { kind: "grade", grade: mark.grade } : { kind: mark.kind };
 }
 
 /**

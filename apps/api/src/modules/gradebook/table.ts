@@ -111,10 +111,10 @@ export async function staffGradebook(db: Db, room: typeof classrooms.$inferSelec
   };
 }
 
-/** What a student's displayed cell counts as in their mean: a grade, an absence, or nothing. */
+/** What a student's displayed cell counts as in their mean: a grade, an absence, an excuse, or nothing. */
 function outcomeOf(cell: GradebookStudentCell): CellOutcome {
   if (cell.kind === "grade" && cell.grade !== null) return { kind: "grade", grade: cell.grade };
-  return cell.kind === "absent" ? { kind: "absent" } : { kind: "empty" };
+  return cell.kind === "absent" || cell.kind === "excused" ? { kind: cell.kind } : { kind: "empty" };
 }
 
 /**
@@ -158,7 +158,8 @@ export async function studentGradebook(db: Db, scope: ReadableClassroom, userId:
       title: entry.title,
       date: iso(entry.date),
       // The flag alone always (the tab draws practice apart); the weight with the mean only (ADR-074, 2026-10-13).
-      counts: settings.counts,
+      // An excused cell counts in no mean: its column is not drawn with what counts (#969), as on the Grades page.
+      counts: settings.counts && cells[entry.activityId]!.kind !== "excused",
       ...(published ? { weight: settings.weight } : {}),
     })),
     cells,

@@ -1923,7 +1923,7 @@ What replaces them:
   never remembered. An exercise with a weight counts and always shows. The
   mean and the CSV do not change.
 - **Cell.** The grade as `Grade` writes it, centred, tabular. A cell is a
-  `Menu` trigger — absent, a score, clear the mark — except on an archived
+  `Menu` trigger — absent, excused, a score, clear the mark — except on an archived
   classroom, where it is plain text. A pencil beside a grade says "set by
   the teacher"; an amber triangle says "changed since the release".
 - **The absence `a1.0`.** A 22 px `rounded-md` chip, mono 12 px semibold, in
@@ -1933,6 +1933,13 @@ What replaces them:
   colours (green, amber and red all mean a verdict, as on the live grid).
   The text is the notation of the school and of the CSV, the same in every
   language; the tooltip and the screen reader say what it stands for.
+- **Excused (#969).** The same 22 px chip holding a short `-`, in the
+  neutral ink (`fg-muted` over `surface-3`): it counts in no mean, so there
+  is nothing to warn about, and the chip keeps it apart from an empty cell's
+  faint em dash. The tooltip and the screen reader say "Excused". On the
+  results page the row stays, badged "Excused" (zinc, its comment as the
+  tooltip), its grade in the ink; a menu at the row's end excuses or
+  removes the excuse. The student reads the word "Excused", never a sign.
 - **Class means.** A `<tfoot>` row on `surface-2` (the student's mean row's
   fill), "Class mean" in the sticky student column with a tooltip saying
   what it is: each column's class mean, centred and semibold like a grade,
@@ -1945,7 +1952,7 @@ What replaces them:
 - **The student's** is a list in a card per group, hairline rows, the same at every
   width: the activity bold, kind · date · weight under it, the value on the
   right in 17 px semibold — a grade, `a1.0`, a dash, "indicative" under its
-  points, or "grade not shared". The mean is the last row of the group that
+  points, "grade not shared", or "Excused". The mean is the last row of the group that
   counts, on `surface-2`, present only when the payload carries it.
 - **Two groups, on the tab and on the global Grades page alike** (#803,
   `CountsGroups` in `gradebook/groups.tsx`), split by the effective `counts`

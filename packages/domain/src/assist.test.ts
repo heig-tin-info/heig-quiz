@@ -274,6 +274,11 @@ describe("the results reader (ADR-080 P2, items 1–2)", () => {
     expect(JSON.stringify(results)).not.toContain("Running");
   });
 
+  it("names an excused cell, which counts in no mean (#969)", () => {
+    const excused = { ...table, rows: [{ nom: "Doe", prenom: "Ada", cells: { e1: { kind: "excused" as const, grade: null } }, mean: null }] };
+    expect(assistResults(excused).students).toEqual([{ name: "Ada Doe", grades: ["excused"], mean: null }]);
+  });
+
   it("asks the results reader only for a question about results, in either language", () => {
     expect(wantsResults("Quelle est la moyenne de la classe ?")).toBe(true);
     expect(wantsResults("Show me the results")).toBe(true);

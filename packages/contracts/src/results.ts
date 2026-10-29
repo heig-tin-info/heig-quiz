@@ -24,6 +24,8 @@ export type ResultRowState = z.infer<typeof ResultRowState>;
 
 export const ResultRow = z.object({
   userId: z.uuid(),
+  /** The roster line: what a gradebook mark on this row is addressed by (`…/marks/:eid`). */
+  enrollmentId: z.uuid(),
   displayName: z.string(),
   lastName: z.string(),
   firstName: z.string(),
@@ -41,6 +43,13 @@ export const ResultRow = z.object({
    * statistic, in no success rate and in no exported file.
    */
   staff: z.boolean(),
+  /**
+   * The gradebook's `excused` mark on this row (#969, ADR-074 amendment of
+   * 2026-10-29), read by join, with its staff-only comment; null without
+   * one. An excused row is listed and in no grade statistic (`stats`), nor
+   * in the CSV's grade; the success rates keep its attempt.
+   */
+  excused: z.object({ comment: z.string().nullable() }).nullable(),
 });
 export type ResultRow = z.infer<typeof ResultRow>;
 
@@ -377,8 +386,9 @@ export type StaffCopy = z.infer<typeof StaffCopy>;
  * a published correction, ADR-050), so the row carries indicative points and
  * no grade; `pending` — handed in, results to come; `submitted` — handed in,
  * and the feedback policy will never publish anything; `missed` — nothing
- * handed in. A `missed` row of a released evaluation still carries its
- * grade, the scale minimum (F-RES-02).
+ * handed in; `excused` — released, and the teacher excused the student
+ * (#969): no points, no grade, in no mean. A `missed` row of a released
+ * evaluation still carries its grade, the scale minimum (F-RES-02).
  */
 export const GradeStatus = z.enum([
   "released",
@@ -387,6 +397,7 @@ export const GradeStatus = z.enum([
   "pending",
   "submitted",
   "missed",
+  "excused",
 ]);
 export type GradeStatus = z.infer<typeof GradeStatus>;
 

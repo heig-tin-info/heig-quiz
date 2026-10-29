@@ -46,6 +46,7 @@ import {
   evaluationItems,
   evaluations,
   gradebookColumns,
+  gradebookMarks,
   isStaffAttempt,
   pools,
   questionVersions,
@@ -326,6 +327,8 @@ export async function joinedItem(
  * evaluation's gradebook column, null where none is stored (read by join, the
  * table is the gradebook's; at most one per evaluation,
  * `gradebook_columns_evaluation_uq`), for the Grades page's groups (#803).
+ * `excusedMarkId`: the seat's `excused` gradebook mark on that column, null
+ * without one (#969) — its id alone, never its staff-only comment.
  */
 export function studentEvaluationRows(db: Db, userId: string, classroomId?: string) {
   return db
@@ -342,6 +345,7 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
       timeBonusPercent: enrollments.timeBonusPercent,
       attempt: attempts,
       storedCounts: gradebookColumns.counts,
+      excusedMarkId: gradebookMarks.id,
     })
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
@@ -352,6 +356,14 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
       and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId), isLatestAttempt),
     )
     .leftJoin(gradebookColumns, eq(gradebookColumns.evaluationId, evaluations.id))
+    .leftJoin(
+      gradebookMarks,
+      and(
+        eq(gradebookMarks.columnId, gradebookColumns.id),
+        eq(gradebookMarks.enrollmentId, enrollments.id),
+        eq(gradebookMarks.kind, "excused"),
+      ),
+    )
     .where(
       and(
         eq(enrollments.userId, userId),
