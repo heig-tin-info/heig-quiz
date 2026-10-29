@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   BarChart3,
   ClipboardCheck,
+  MonitorPlay,
   Presentation,
   Send,
   Undo2,
@@ -203,6 +204,10 @@ export function ResultsView({
         actions={
           <>
             <ExportButton evaluationId={evaluationId} />
+            {/* As the evaluation's own page offers it. */}
+            <Button variant="secondary" onClick={() => navigate({ view: "live", id: evaluationId })}>
+              <MonitorPlay /> {t("eval.dashboard")}
+            </Button>
             <Button variant="secondary" onClick={() => navigate(links.grading)}>
               <ClipboardCheck /> {t("results.grading")}
             </Button>
