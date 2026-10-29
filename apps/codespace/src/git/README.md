@@ -206,7 +206,8 @@ project, the user and the repository in its claims); the body is empty.
 
 - **Cache**: in memory, one entry per (project, user, repository); reused
   while `now < expiresAt - 10 min` and `now < useUntil`; one request in
-  flight per entry. `useUntil` (the deadline plus the grace) is a hard
+  flight per entry. `useUntil` (the deadline plus the grace; under `commit`
+  and a writable repository, the token's expiry) is a hard
   stop: the entry is dropped and revoked, no request is made then; the next
   attempt asks again, which only an extended deadline answers. Dropped too
   when GitHub refuses it (401/403: `invalidate`) and when its session closes

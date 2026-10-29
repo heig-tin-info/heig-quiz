@@ -80,6 +80,26 @@ export function deadlineWantsLock(
 }
 
 /**
+ * Whether a repository is writable whatever its deadline (#958; ADR-078 as
+ * amended 2026-10-29): the `commit` strategy locks nothing at the deadline,
+ * so the repository is writable, before the deadline and after it, while
+ * GitHub neither should hold it locked ({@link deadlineWantsLock}, which
+ * under `commit` is the staff's hand alone) nor holds it (`locked_at`), and
+ * its project is not archived. Under `lock`, never: the deadline closes it.
+ */
+export function writableUnderCommit(
+  repo: { staffLock: boolean | null; deadlineAppliedAt: Date | null; lockedAt: Date | null },
+  project: { deadlineStrategy: DeadlineStrategyName; archivedAt: Date | null },
+): boolean {
+  return (
+    project.deadlineStrategy === "commit" &&
+    project.archivedAt === null &&
+    repo.lockedAt === null &&
+    !deadlineWantsLock(repo, project.deadlineStrategy)
+  );
+}
+
+/**
  * Whether a sync leaves a repository alone (F-PROJ-12 as amended
  * 2026-10-05, merge task M3-07): one whose EFFECTIVE deadline has passed
  * takes no update, locked or not — the students' work is over —; one GitHub

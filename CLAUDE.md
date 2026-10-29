@@ -211,7 +211,8 @@ internal bridge).
     only), valid at most an hour, which it keeps in memory only and hands to
     git through the environment, never in a URL, argv or file; Quiz issues
     one only for a repository of an online project the student launched,
-    before its effective deadline plus the grace, and audits each issuance
+    before its effective deadline plus the grace, or, under the `commit`
+    strategy, while the repository is writable, and audits each issuance
     without the token; an App push counts as the student's only when the
     portal declared its head beforehand — a rule that keeps Quiz's own
     commits from being misread, not a defence against a compromised portal,

@@ -10,6 +10,7 @@ import {
   runKind,
   selectScoreRun,
   syncSkips,
+  writableUnderCommit,
   type ScoredRun,
 } from "./projectRuns.js";
 
@@ -68,6 +69,18 @@ describe("deadlineWantsLock (F-PROJ-09)", () => {
     expect(deadlineWantsLock({ staffLock: null, deadlineAppliedAt: at(12) }, "commit")).toBe(false);
     expect(deadlineWantsLock({ staffLock: false, deadlineAppliedAt: at(12) }, "lock")).toBe(false);
     expect(deadlineWantsLock({ staffLock: true, deadlineAppliedAt: null }, "commit")).toBe(true);
+  });
+});
+
+describe("writableUnderCommit (#958)", () => {
+  const repo = { staffLock: false, deadlineAppliedAt: at(12), lockedAt: null };
+  const commit = { deadlineStrategy: "commit" as const, archivedAt: null };
+  it("is a commit repository GitHub neither should hold nor holds locked, its project live", () => {
+    expect(writableUnderCommit(repo, commit)).toBe(true);
+    expect(writableUnderCommit(repo, { ...commit, deadlineStrategy: "lock" })).toBe(false);
+    expect(writableUnderCommit({ ...repo, staffLock: true }, commit)).toBe(false);
+    expect(writableUnderCommit({ ...repo, lockedAt: at(12) }, commit)).toBe(false);
+    expect(writableUnderCommit(repo, { ...commit, archivedAt: at(12) })).toBe(false);
   });
 });
 

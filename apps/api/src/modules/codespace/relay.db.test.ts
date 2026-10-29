@@ -370,6 +370,43 @@ describe("POST /app/codespace/git-token (ADR-078 §2)", () => {
     expect(minted).toHaveLength(1);
   });
 
+  it("under the commit strategy, keeps minting past the deadline plus the grace while the repository is writable (#958)", async () => {
+    const f = await launched();
+    const db = server.app.db;
+    await db.update(projects).set({ deadlineStrategy: "commit" }).where(eq(projects.id, f.project.id));
+    // The ticker applied the deadline (and pushed its commit): the repository stays writable on GitHub.
+    await db.update(projectRepos).set({ deadlineAppliedAt: new Date(DEADLINE) }).where(eq(projectRepos.id, f.repo.id));
+    const late = new Date(Date.parse(GRACE_END) + 24 * 60 * MINUTE).toISOString();
+    server.clock.set(late);
+    minted.length = 0;
+
+    const res = await askToken(f);
+    expect(res.statusCode, res.body).toBe(200);
+    const grant = GitTokenGrant.parse(res.json());
+    expect(minted).toHaveLength(1);
+    expect(minted[0]!.body).toEqual({ repository_ids: [f.repo.githubRepoId], permissions: { contents: "write" } });
+    // No deadline bound: GitHub's hour alone.
+    expect(grant).toMatchObject({ permission: "write", useUntil: grant.expiresAt });
+    expect(Date.parse(grant.expiresAt)).toBe(Date.parse(late) + 60 * MINUTE);
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "codespace.git_token_issued"), eq(auditLog.subjectId, f.project.id)));
+    expect(audits.map((a) => a.payload)).toContainEqual(expect.objectContaining({ userId: f.student.id, permission: "write", expiresAt: grant.expiresAt }));
+    expect(JSON.stringify(audits)).not.toContain(grant.token);
+    expect((await declare(f, [{ ref: "refs/heads/main", sha: "c".repeat(40) }])).statusCode).toBe(204);
+
+    // The staff's lock closes it.
+    minted.length = 0;
+    await db.update(projectRepos).set({ staffLock: true }).where(eq(projectRepos.id, f.repo.id));
+    expect(refused(await askToken(f))).toEqual([409, "closed"]);
+    await db.update(projectRepos).set({ staffLock: null }).where(eq(projectRepos.id, f.repo.id));
+    // Under lock, unchanged: closed past the deadline plus the grace.
+    await db.update(projects).set({ deadlineStrategy: "lock" }).where(eq(projects.id, f.project.id));
+    expect(refused(await askToken(f))).toEqual([409, "closed"]);
+    expect(minted).toHaveLength(0);
+  });
+
   it("mints contents:read on the distribution of an online_seb project only", async () => {
     const exam = await launched("online_seb");
     minted.length = 0;

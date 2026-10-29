@@ -42,7 +42,8 @@ Start button, its teacher dashboard and its YAML seed (all removed, below).
   asks Quiz (`POST /app/codespace/git-token`) for an installation token
   scoped to one repository, `contents` only, kept in memory until 10
   minutes before it expires and never past its `useUntil` (the deadline
-  plus the grace), handed to git through the environment only; it
+  plus the grace; under `commit`, the token's expiry while the repository
+  is writable), handed to git through the environment only; it
   declares each head (`POST /app/codespace/relay-heads`) before a relay
   push that is never forced (`<sha>:<ref>`, no deletion relayed). A
   non-fast-forward is a terminal `rejected` `PushEvent`, shown in the

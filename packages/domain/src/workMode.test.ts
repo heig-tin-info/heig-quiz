@@ -127,10 +127,20 @@ describe("gitTokenRefusal (ADR-078 §2)", () => {
     deletedAt: null,
     deadlineAt: null,
     staffLock: null,
+    deadlineAppliedAt: null,
+    lockedAt: null,
     githubRepoId: 101,
   };
   const facts = (over: Partial<GitTokenFacts> = {}): GitTokenFacts => ({
-    project: { workMode: "online", deadlineAt: DEADLINE, graceMinutes: 30, distributionRepoId: 202, distributionFullName: "org/lab-squashed" },
+    project: {
+      workMode: "online",
+      deadlineAt: DEADLINE,
+      graceMinutes: 30,
+      deadlineStrategy: "lock",
+      archivedAt: null,
+      distributionRepoId: 202,
+      distributionFullName: "org/lab-squashed",
+    },
     launched: true,
     repo,
     classroomArchived: false,
@@ -184,5 +194,20 @@ describe("gitTokenRefusal (ADR-078 §2)", () => {
       githubRepoId: 101,
       useUntil: new Date("2026-10-21T22:30:00Z"),
     });
+  });
+
+  it("under commit, stays open past the grace while the repository is writable (#958)", () => {
+    const LATE = new Date(GRACE_END.getTime() + 86_400_000);
+    const commit = (over: Partial<GitTokenFacts> = {}, p: Partial<GitTokenFacts["project"]> = {}) =>
+      facts({ ...over, project: { ...facts().project, deadlineStrategy: "commit", ...p } });
+    const applied = { ...repo, deadlineAppliedAt: DEADLINE };
+    expect(gitTokenRefusal(commit({ repo: applied }), LATE)).toEqual({ permission: "write", githubRepoId: 101, useUntil: null });
+    expect(gitTokenRefusal(commit({ repo: applied }), NOW)).toMatchObject({ useUntil: null });
+    // A staff lock and an archived classroom close it; the read grant of an exam keeps the deadline.
+    expect(gitTokenRefusal(commit({ repo: { ...applied, staffLock: true } }), LATE)).toBe("closed");
+    expect(gitTokenRefusal(commit({ repo: applied, classroomArchived: true }), LATE)).toBe("closed");
+    expect(gitTokenRefusal(commit({ repo: applied, repository: "org/lab-squashed" }, { workMode: "online_seb" }), LATE)).toBe("closed");
+    // Under lock, unchanged: closed at the deadline plus the grace.
+    expect(gitTokenRefusal(facts({ repo: applied }), GRACE_END)).toBe("closed");
   });
 });

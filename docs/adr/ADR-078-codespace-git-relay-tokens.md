@@ -13,7 +13,9 @@ tokens are single use and bound to their request, and every token's lifetime is 
 2026-10-11 again (#743): the portal's requests to Quiz (§2) are single use on Quiz's side
 ([amendment](#amendment-2026-10-11-743-the-relays-requests-are-single-use)). Amended
 2026-10-14 (M3-14f): the Context's list of the App's permissions — it no longer reads
-organization secrets.
+organization secrets. Amended 2026-10-29 (#958, product owner): under the `commit` deadline
+strategy the bound of §2 point 5 and §7 is the repository's writability, not the deadline plus
+the grace ([amendment](#amendment-2026-10-29-958-under-commit-the-relay-follows-the-repositorys-writability)).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -155,7 +157,8 @@ disagree:
    (`project_repos.staff_lock` is not true); otherwise `409 closed`. A
    staff *unlock* after the deadline does not reopen the workspace, as it
    does not reopen the start route: extending the repository's deadline
-   does (point 8). Why the grace, §7.
+   does (point 8). Why the grace, §7. *Under the `commit` strategy, amended
+   2026-10-29 (#958): see the [amendment](#amendment-2026-10-29-958-under-commit-the-relay-follows-the-repositorys-writability).*
 6. The organization's installation is known, not suspended, and GitHub
    answers; otherwise `503 github_unavailable`.
 
@@ -345,7 +348,9 @@ routine end of a session from leaving pushes stuck: a student who pushes in
 the last seconds, or whose relay waits out a short GitHub hiccup, is
 relayed within the grace, received late if it is late, and judged by the
 receipt time like any other push. A token minted before that limit is
-bounded by `useUntil` (§2).
+bounded by `useUntil` (§2). *Under the `commit` strategy, amended
+2026-10-29 (#958): the bound is the repository's writability, see the
+[amendment](#amendment-2026-10-29-958-under-commit-the-relay-follows-the-repositorys-writability).*
 
 What remains: GitHub keeps a token valid until its `expiresAt`, up to an
 hour past `useUntil`, and only the portal's discipline (`useUntil`, then
@@ -369,7 +374,8 @@ If the engine VM is compromised — a container escape, the portal's process
 — the attacker holds `CODESPACE_LAUNCH_SECRET` and the tokens in memory.
 With them they can push to and read **the repository of every student who
 launched a workspace on a project still open** (before its effective
-deadline plus the grace), contents only, until
+deadline plus the grace, or, under the `commit` strategy, while the
+repository is writable: amendment of 2026-10-29), contents only, until
 `CODESPACE_LAUNCH_SECRET` is rotated, and with the tokens already minted
 for at most an hour after that; and read the distribution repositories of
 the open `online_seb` projects among them. They cannot touch any
@@ -530,6 +536,44 @@ portal's side are unchanged.
   purges the expired rows before it consumes its own, as the portal does:
   the table holds a few minutes of requests, and no scheduled task is
   needed.
+
+## Amendment 2026-10-29 (#958): under `commit`, the relay follows the repository's writability
+
+Scope: check 5 of §2, the write grant's `useUntil` (§2), §7, §8 and §9's
+bound, for a project whose deadline strategy is `commit` (F-PROJ-09). Under
+`lock`, and for every other check, nothing changes.
+
+- **Decision (product owner, 2026-10-29).** Under `commit` ("the
+  repositories stay open, a commit marks the deadline") the online
+  workspace pushes after the deadline exactly as git can: "if they can push
+  with git, they can push by the other means too". The deadline commit
+  Quiz's App pushes separates the work before the deadline from the work
+  after it; a force push that removes it is visible and the teacher can
+  contest it.
+- **The rule.** Check 5 reads, under `commit`, whether GitHub keeps the
+  repository writable: `writableUnderCommit` (`@quiz/domain`, next to
+  `deadlineWantsLock`, the rule of what GitHub should hold) — no staff lock
+  wanted, no lock held (`locked_at` null), the project not archived. Then
+  the effective deadline plus the grace does not close the relay, an
+  archived classroom still does, and the write grant's `useUntil` is
+  GitHub's `expiresAt` alone (at most an hour). A staff lock, a lock GitHub
+  holds or an archived project gives `409 closed`, as before. The read
+  grant on an `online_seb` distribution keeps the deadline plus the grace.
+- **Unchanged.** One repository, `contents` only, at most an hour, kept in
+  memory, every issuance audited without the token, an App push counted as
+  the student's only when its head was declared (§6). A push relayed after
+  the deadline is received late (F-PROJ-11): it never moves the frozen
+  score and the staff see it marked after the deadline.
+- **What it widens.** §9's blast radius under `commit`: a compromised
+  portal reaches the repositories of those projects until they are locked
+  or archived, rather than until their deadline plus the grace. The
+  deadline commit and the receipt times keep what it could add after the
+  deadline apart from the graded work.
+- **Not changed here.** The start route (ADR-047 §6) and the portal's
+  own `closesAt` still close the opening of a workspace at the effective
+  deadline; a session already open keeps relaying. Whether criteria and LLM
+  grading should read commits received after the deadline is an open
+  question ([06](../spec/06-questions-ouvertes.md)).
 
 ## Alternatives considered
 
