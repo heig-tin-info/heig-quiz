@@ -116,8 +116,10 @@ describe("the student payloads (N-SEC-12)", () => {
     expectTypeOf<JournalPageStudent>().not.toHaveProperty("visibleFrom");
     expectTypeOf<JournalStudent>().not.toHaveProperty("hiddenPaths");
     expectTypeOf<JournalStudent>().not.toHaveProperty("warningCount");
-    expectTypeOf<JournalStudent>().not.toHaveProperty("repository");
-    // A student never learns where the journal lives (ADR-057).
+    // A GitHub-mode journal names its repository to a student, nothing else
+    // of it: no branch, folder, commit nor sync state (ADR-057, 2026-10-30).
+    type StudentRepository = NonNullable<JournalStudent["repository"]>;
+    expectTypeOf<StudentRepository>().toEqualTypeOf<{ fullName: string }>();
     expectTypeOf<JournalPageStudent>().not.toHaveProperty("editUrl");
     expectTypeOf<JournalStudent>().not.toHaveProperty("mode");
   });
@@ -135,10 +137,16 @@ describe("the student payloads (N-SEC-12)", () => {
   });
 
   it("refuse the hidden paths and counts in the navigation payload", () => {
-    const student: JournalStudent = { view: "student", nav: [], homePath: null };
+    const student: JournalStudent = { view: "student", nav: [], homePath: null, repository: null };
     expect(JournalStudent.parse(student)).toEqual(student);
-    for (const extra of [{ hiddenPaths: ["a.md"] }, { warningCount: 1 }, { pageCount: 2 }, { files: [] }, { repository: null }, { mode: "github" }]) {
+    for (const extra of [{ hiddenPaths: ["a.md"] }, { warningCount: 1 }, { pageCount: 2 }, { files: [] }, { mode: "github" }]) {
       expect(JournalStudent.safeParse({ ...student, ...extra }).success).toBe(false);
+    }
+    // The repository's name, never its branch, folder, commit or sync state.
+    const repository = { fullName: "heig-prg/journal" };
+    expect(JournalStudent.parse({ ...student, repository }).repository).toEqual(repository);
+    for (const extra of [{ ref: "main" }, { rootPath: "" }, { lastCommitSha: "abc" }, { syncStatus: "ok" }, { syncError: null }]) {
+      expect(JournalStudent.safeParse({ ...student, repository: { ...repository, ...extra } }).success).toBe(false);
     }
   });
 

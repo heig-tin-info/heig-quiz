@@ -107,10 +107,12 @@ const SECRETS = [
   "blobSha",
   "warnings",
   "hidden",
-  // The repository (ADR-057): its organization, the edit links, the mode.
-  "heig-prg",
-  "github.com",
+  // The repository (ADR-057): the edit links, the mode, the branch and sync
+  // state. Its name and link reach the home payload only (checked apart).
   "editUrl",
+  "syncStatus",
+  "lastCommitSha",
+  "rootPath",
   "\"mode\"",
   // Revisions (ADR-057): a draft's, a deleted page's; no student route reads them.
   "REVISION-DRAFT-MARKER",
@@ -271,10 +273,14 @@ describe("the student payload, the journal's one exit (invariant 4)", () => {
 
     const home = await get(`${base()}${query}`, headers);
     expect(home.statusCode, who).toBe(200);
+    // The repository's name, nothing else of it (N-SEC-12).
+    const repository = (home.json() as { repository: { fullName: string } }).repository;
+    expect(repository.fullName).toMatch(/^heig-prg\/journal-\d+$/);
     expect(Journal.parse(home.json())).toEqual({
       view: "student",
       nav: [{ path: "010-open.md", title: "Open page", pagePath: "010-open.md", children: [] }],
       homePath: "README.md",
+      repository: { fullName: repository.fullName },
     });
     bodies.push(home.body);
 
@@ -309,6 +315,10 @@ describe("the student payload, the journal's one exit (invariant 4)", () => {
 
     for (const body of bodies) {
       for (const secret of SECRETS) expect(body, `${who}: ${secret}`).not.toContain(secret);
+    }
+    // Pages and assets never name the repository; the home payload alone does.
+    for (const body of bodies.slice(1)) {
+      for (const secret of ["heig-prg", "github.com"]) expect(body, `${who}: ${secret}`).not.toContain(secret);
     }
   });
 

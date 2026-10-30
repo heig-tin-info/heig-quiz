@@ -8,10 +8,9 @@ import { useConfirm, type ConfirmOptions } from "../confirm";
 import { evaluationLinkItems } from "../evaluation/common";
 import { useT, type TFunction } from "../i18n";
 import { useErrorToast } from "../notify";
-import { repoHref } from "../project/projectPage";
 import { activitiesKey, pollKey } from "../queryKeys";
 import type { Route } from "../router";
-import { Actions, IconLink, Menu, type MenuItem } from "../ui";
+import { Actions, IconLink, Menu, repoHref, type MenuItem } from "../ui";
 import { typeOf } from "./model";
 
 /** The confirmation of ending a poll, on its projection as in a list. */

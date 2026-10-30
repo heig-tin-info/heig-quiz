@@ -1956,6 +1956,8 @@ const scenes = [
   // folder's menu, opened from its chevron; the teacher reads a draft with its
   // badges and warnings; a page nobody has is the not-found page.
   { name: "journal-student", role: "student", path: "/classrooms/r1/journal?journal=1" },
+  // A GitHub-mode journal: the student reads its repository's link where the staff have their bar.
+  { name: "journal-student-github", role: "student", path: "/classrooms/r1/journal?journal=1&journalgithub=1" },
   { name: "journal-phone", role: "student", path: "/classrooms/r1/journal/README.md?journal=1", fold: true, act: async (p) => {
       // From 1280 px the TOC is a column, not a disclosure: nothing to open.
       const toggle = p.getByRole("button", { name: /^(on this page|sur cette page)$/i });

@@ -471,6 +471,8 @@ describe("the student exit (invariant 4)", () => {
       ]) {
         bodies.push((await call("GET", url, headers)).body);
       }
+      // A Quiz-mode journal names no repository.
+      expect(JSON.parse(bodies[0]!), who).toMatchObject({ view: "student", repository: null });
       const asset = await call("GET", `${base(id)}/assets/public.png${query}`, headers);
       expect(asset.body, who).toBe("PUBLIC");
       for (const body of bodies) {

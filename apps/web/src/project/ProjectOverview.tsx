@@ -13,12 +13,13 @@ import {
   FieldError,
   fieldErrorProps,
   isoDateTime,
+  RepoLink,
   RingChart,
   Stat,
   type RingPart,
 } from "../ui";
 import { foreignZone } from "./newProject";
-import { RepoLink, SyncButton } from "./parts";
+import { SyncButton } from "./parts";
 import { DistributionRepo } from "./DistributionRepo";
 import {
   deadlineDesc,

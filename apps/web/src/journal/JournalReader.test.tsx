@@ -61,7 +61,7 @@ const staffJournal = (over: Partial<JournalStaff> = {}): JournalStaff => ({
   ...over,
 });
 
-const studentJournal: Journal = { view: "student", nav: [nav[0]!], homePath: HOME };
+const studentJournal: Journal = { view: "student", nav: [nav[0]!], homePath: HOME, repository: null };
 
 const HOME_HTML =
   '<h1 id="prg1">Programmation 1</h1>' +
@@ -509,6 +509,25 @@ describe("JournalReader — the student", () => {
     await userEvent.click(screen.getByRole("button", { name: "Pages in Semaine 1" }));
     expect(within(screen.getByRole("menu")).getAllByRole("menuitem")).toHaveLength(2);
     expect(screen.queryByRole("img", { name: "Hidden" })).toBeNull();
+  });
+
+  it("links a GitHub-mode journal's repository, and a Quiz-mode one's to nothing", async () => {
+    const repository = { fullName: "heig-prg/journal" };
+    const routes: Record<string, RouteHandler> = {
+      [`GET ${BASE}?view=student`]: ok({ ...studentJournal, repository }),
+      [`GET ${BASE}/pages/${HOME}?view=student`]: ok(studentPage(HOME)),
+    };
+    mockFetch(routes);
+    const { unmount } = renderWithProviders(<Reader path={HOME} studentView />);
+    const link = await screen.findByRole("link", { name: "heig-prg/journal" });
+    expect(link).toHaveAttribute("href", "https://github.com/heig-prg/journal");
+    expect(link).toHaveAttribute("target", "_blank");
+    unmount();
+
+    routes[`GET ${BASE}?view=student`] = ok(studentJournal);
+    renderWithProviders(<Reader path={HOME} studentView />);
+    expect(await screen.findByRole("heading", { level: 1, name: "Programmation 1" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /heig-prg/ })).toBeNull();
   });
 
   it("reads a 404 of the journal as not found", async () => {

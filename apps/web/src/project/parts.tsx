@@ -1,7 +1,7 @@
 /*
- * The small pieces the project page's sections share (M3-12): a repository
- * named on GitHub, a score as points out of their maximum, the final score
- * with its grade and source, a CI status as a tag.
+ * The small pieces the project page's sections share (M3-12): a score as
+ * points out of their maximum, the final score with its grade and source, a
+ * CI status as a tag.
  */
 import type { ProjectRepoView, ProjectStudent, ProjectSyncState } from "@quiz/contracts";
 
@@ -10,40 +10,8 @@ import { GitPullRequest, RefreshCw } from "lucide-react";
 import { Grade } from "../Grade";
 import { studentName } from "../group/groupRules";
 import { useT, type Dict } from "../i18n";
-import { Badge, Button, cx, Dash, GithubIcon, type Tone } from "../ui";
-import { repoHref, repoShortName, syncTag } from "./projectPage";
-
-/**
- * A repository on GitHub, as a mono link in a new tab: its short name in a
- * table cell, its full name in a sheet's subtitle. The click never reaches
- * the row it sits on.
- */
-export function RepoLink({
-  fullName,
-  full,
-  icon,
-  className,
-}: {
-  fullName: string;
-  /** The whole `owner/name` rather than the name alone. */
-  full?: boolean;
-  icon?: boolean;
-  className?: string;
-}) {
-  return (
-    <a
-      href={repoHref(fullName)}
-      target="_blank"
-      rel="noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      className={cx("inline-flex max-w-full items-center gap-1.5 font-mono text-[13px] hover:underline", className)}
-    >
-      {icon ? <GithubIcon className="size-3.5 shrink-0 text-fg-faint" /> : null}
-      {/* One line, cut with an ellipsis where the cell is narrower than the name. */}
-      <span className="truncate">{full ? fullName : repoShortName(fullName)}</span>
-    </a>
-  );
-}
+import { Badge, Button, cx, Dash, type Tone } from "../ui";
+import { syncTag } from "./projectPage";
 
 /** Points out of their maximum ("8/10", "9" without one), or a dash without points. */
 export function Points({ points, max }: { points: number | null; max: number | null }) {
