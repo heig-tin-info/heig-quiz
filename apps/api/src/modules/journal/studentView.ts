@@ -15,6 +15,8 @@
  * - The HTML is `html_student`, in which a link to a hidden page is text.
  * - An asset is served only when a page of that payload references it
  *   (fix J1): otherwise the 404 of a missing one.
+ * - A GitHub-mode journal names its repository (`org/name` and its link),
+ *   nothing else of the row; what a student reads there is GitHub's access.
  */
 import { and, arrayContains, eq, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 
@@ -22,7 +24,8 @@ import { JournalPageStudent, JournalStudent } from "@quiz/contracts";
 import { buildNav, homePage } from "@quiz/docrender";
 
 import type { Db } from "../../db/client.js";
-import { journalPages } from "../../db/schema.js";
+import { classroomJournals, journalPages } from "../../db/schema.js";
+import { githubJournal, repoUrl } from "./mode.js";
 
 /** A page a student may read: published, and past its `visible_from` (the database's `now()`). */
 export function visibleToStudents(): SQL {
@@ -34,6 +37,8 @@ export function visibleToStudents(): SQL {
 
 /** `GET /classrooms/:id/journal`, student payload, for a classroom the route found holding a journal. */
 export async function studentJournal(db: Db, classroomId: string): Promise<JournalStudent> {
+  const [row] = await db.select().from(classroomJournals).where(eq(classroomJournals.classroomId, classroomId));
+  const github = row ? githubJournal(row) : null;
   const pages = await db
     .select({
       path: journalPages.path,
@@ -47,6 +52,7 @@ export async function studentJournal(db: Db, classroomId: string): Promise<Journ
     view: "student",
     nav: buildNav(pages),
     homePath: homePage(pages)?.path ?? null,
+    repository: github ? { fullName: github.fullName, htmlUrl: repoUrl(github) } : null,
   });
 }
 

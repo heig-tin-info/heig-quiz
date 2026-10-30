@@ -424,7 +424,9 @@ on("GET", "/app/api/classrooms/:id/journal", (m, _body, url): Journal => {
   journalOr404(id, url);
   if (studentPayload(url)) {
     const visible = PAGES.filter((p) => !hidden(p));
-    return { view: "student", nav: navOf(visible), homePath: homePage(visible)?.path ?? null };
+    const repo = journals.get(id)?.repo ?? null;
+    const repository = repo ? { fullName: repo.fullName, htmlUrl: repo.htmlUrl } : null;
+    return { view: "student", nav: navOf(visible), homePath: homePage(visible)?.path ?? null, repository };
   }
   return staffJournal(id);
 });

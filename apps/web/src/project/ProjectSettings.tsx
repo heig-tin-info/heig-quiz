@@ -4,9 +4,9 @@ import type { ProjectDetail } from "@quiz/contracts";
 import { forcedProtected, PROJECT_GRADING_MODES } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { Card, SettingRow, Skeleton } from "../ui";
+import { Card, repoShortName, SettingRow, Skeleton } from "../ui";
 import { sourceDetailQuery } from "./newProject";
-import { repoShortName, type WriteProject } from "./projectPage";
+import type { WriteProject } from "./projectPage";
 import { CriteriaRows, CriteriaSwitchRow } from "./ProjectCriteria";
 import { DeadlineStrategyRow, GradingModeRow } from "./ProjectSettingRows";
 import { ProtectedFiles } from "./ProtectedFiles";

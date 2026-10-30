@@ -14,6 +14,7 @@ import {
   isoDateParts,
   pressable,
   RelativeTime,
+  RepoLink,
   SectionHeading,
   T,
   TableHead,
@@ -21,7 +22,7 @@ import {
   useSortableTable,
   type Column,
 } from "../ui";
-import { CiBadge, MemberList, RepoLink, Score, StudentAccount, SyncBadge } from "./parts";
+import { CiBadge, MemberList, Score, StudentAccount, SyncBadge } from "./parts";
 import {
   commitTone,
   filterEntries,

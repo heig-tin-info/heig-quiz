@@ -10,8 +10,8 @@
 //   table     sortable tables: useSortableTable, the styles `T`, TableHead,
 //             the band over a group of rows (TableBand).
 //   identity  a person or an organization as a picture or initials
-//             (PersonAvatar, Avatar, OrgAvatar), and the GitHub mark
-//             (GithubIcon).
+//             (PersonAvatar, Avatar, OrgAvatar), the GitHub mark
+//             (GithubIcon) and a repository named on GitHub (RepoLink).
 //   dates     the account's date format, absolute and relative times, and a
 //             percentage in the interface language.
 //   feedback  Spinner, Skeleton, Progress, Kbd, Badge, Alert, EmptyState.

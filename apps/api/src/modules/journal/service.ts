@@ -27,7 +27,7 @@ import { JOURNAL_INGEST_QUEUE } from "../../jobs.js";
 import type { ClassroomPayload } from "../guards.js";
 import { JournalError } from "./errors.js";
 import { ingestJournal } from "./ingest.js";
-import { editUrl, githubJournal, type GithubJournal, type JournalRow } from "./mode.js";
+import { editUrl, githubJournal, repoUrl, type GithubJournal, type JournalRow } from "./mode.js";
 import { studentMayFetch, visibleToStudents } from "./studentView.js";
 
 /** Whether the classroom has a journal (F-JRN-01): its Journal tab exists exactly then. */
@@ -98,7 +98,7 @@ function repositoryView(row: GithubJournal): JournalRepository {
     fullName: row.fullName,
     ref: row.ref,
     rootPath: row.rootPath,
-    htmlUrl: `https://github.com/${row.fullName}`,
+    htmlUrl: repoUrl(row),
     syncStatus: row.syncStatus,
     syncError: row.syncError,
     lastSyncedAt: isoOrNull(row.lastSyncedAt),

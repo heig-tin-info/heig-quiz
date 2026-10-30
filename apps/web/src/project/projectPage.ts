@@ -32,7 +32,7 @@ import { studentName } from "../group/groupRules";
 import { draftView } from "./draftPatch";
 import type { Dict, TFunction } from "../i18n";
 import type { RouteOf } from "../router";
-import type { Tone } from "../ui";
+import { repoHref, type Tone } from "../ui";
 
 export type UnassignedStudent = ProjectUnassigned["students"][number];
 
@@ -319,12 +319,6 @@ export function checkpointStatus(c: ReviewCheckpoint, deadlineAt: string): Check
 }
 
 export const shortSha = (sha: string): string => sha.slice(0, 7);
-
-/** A repository on GitHub, by its full name. */
-export const repoHref = (fullName: string): string => `https://github.com/${fullName}`;
-
-/** The name of a repository without its organization: what the table has room for. */
-export const repoShortName = (fullName: string): string => fullName.slice(fullName.indexOf("/") + 1);
 
 /**
  * The words of the refusals the page meets — the lifecycle's, the

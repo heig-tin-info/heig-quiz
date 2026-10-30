@@ -42,6 +42,7 @@ import {
   LinkButton,
   PageError,
   QueryError,
+  RepoLink,
   Skeleton,
   useMinWidth,
 } from "../ui";
@@ -86,8 +87,9 @@ import { SYNC_ERRORS, warningText } from "./words";
  *
  * Layout: the strip of pages (`JournalStrip`) is a row of its own under the
  * classroom's tabs, above the staff bar, at every width; it scrolls sideways
- * when the entries outgrow it. The page is a centred column (48 rem, the
- * prose capped at 72 ch inside it); from `xl` the TOC is a 13 rem column at
+ * when the entries outgrow it. A student reading a GitHub-mode journal gets,
+ * in the staff bar's place, the repository's link (`org/name`, new tab).
+ * The page is a centred column (48 rem, the prose capped at 72 ch inside it); from `xl` the TOC is a 13 rem column at
  * its right, below `xl` a small "On this page" disclosure above it.
  *
  * The reader is always some page's tab: the teacher classroom page's Journal
@@ -401,8 +403,17 @@ export function JournalReader({
     );
   }
 
+  // A GitHub-mode journal's sources, for a student who wants them: no action,
+  // a link where the staff have their bar (F-JRN-12).
+  const sources =
+    loaded.view === "student" && loaded.repository ? (
+      <div className="flex justify-end">
+        <RepoLink fullName={loaded.repository.fullName} full icon className="text-fg-muted" />
+      </div>
+    ) : null;
+
   return columns(
-    staffBar,
+    sources ?? staffBar,
     <PageSlot
       page={page}
       classroomId={classroomId}

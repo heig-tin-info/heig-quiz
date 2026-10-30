@@ -224,3 +224,41 @@ export function GithubIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/** A repository on GitHub, by its full name. */
+export const repoHref = (fullName: string): string => `https://github.com/${fullName}`;
+
+/** The name of a repository without its organization: what the table has room for. */
+export const repoShortName = (fullName: string): string => fullName.slice(fullName.indexOf("/") + 1);
+
+/**
+ * A repository on GitHub, as a mono link in a new tab: its short name in a
+ * table cell, its full name in a sheet's subtitle. The click never reaches
+ * the row it sits on.
+ */
+export function RepoLink({
+  fullName,
+  full,
+  icon,
+  className,
+}: {
+  fullName: string;
+  /** The whole `owner/name` rather than the name alone. */
+  full?: boolean;
+  icon?: boolean;
+  className?: string;
+}) {
+  return (
+    <a
+      href={repoHref(fullName)}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className={cx("inline-flex max-w-full items-center gap-1.5 font-mono text-[13px] hover:underline", className)}
+    >
+      {icon ? <GithubIcon className="size-3.5 shrink-0 text-fg-faint" /> : null}
+      {/* One line, cut with an ellipsis where the cell is narrower than the name. */}
+      <span className="truncate">{full ? fullName : repoShortName(fullName)}</span>
+    </a>
+  );
+}

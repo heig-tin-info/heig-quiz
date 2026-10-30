@@ -29,7 +29,7 @@ const page = (hasJournal: boolean): StudentClassroomPage => ({
   serverNow: new Date().toISOString(),
 });
 
-const journal: Journal = { view: "student", nav: [], homePath: "README.md" };
+const journal: Journal = { view: "student", nav: [], homePath: "README.md", repository: null };
 const home: JournalPage = {
   view: "student",
   path: "README.md",

@@ -12,7 +12,7 @@ import { PROJECT_GRADING_MODES, projectGraded } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
-import { Alert, Badge, Card, Disclosure, SectionHeading, SettingRow, Switch, useNumberDraft } from "../ui";
+import { Alert, Badge, Card, Disclosure, RepoLink, SectionHeading, SettingRow, Switch, useNumberDraft } from "../ui";
 import { Facts } from "./ProjectOverview";
 import { ProjectDraftPublication, publicationKey } from "./ProjectDraftPublication";
 import { GroupSetBody } from "./ProjectGroupSet";
@@ -22,7 +22,6 @@ import { DeadlineStrategyRow, GraceMinutesRow, GradingModeRow } from "./ProjectS
 import { ProtectedFilesRow, useHandoutTree } from "./ProjectSettings";
 import { WorkModeSetting, useWorkspace } from "./ProjectWorkspace";
 import { advancedCount, type WriteProject } from "./projectPage";
-import { RepoLink } from "./parts";
 import { DistributionRepo } from "./DistributionRepo";
 
 /** The grace, in minutes: written when the teacher leaves the field; 0 is a grace of none. */

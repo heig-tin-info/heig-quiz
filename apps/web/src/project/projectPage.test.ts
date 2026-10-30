@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ProjectRepoView } from "@quiz/contracts";
 
 import { ApiError } from "../api";
+import { repoShortName } from "../ui";
 import { AHEAD, makeCheckpoint, makeGroup, makeProject, makeRepo, PAST, row } from "../test/project-fixtures";
 import {
   checkpointStatus,
@@ -28,7 +29,6 @@ import {
   reopenedRepos,
   repoEntries,
   repoFlags,
-  repoShortName,
   reviewTag,
   reviewView as reviewViewOf,
   syncTag,

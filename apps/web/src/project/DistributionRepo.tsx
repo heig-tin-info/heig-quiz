@@ -15,8 +15,7 @@ import { api, refusedWith, wordedRefusal } from "../api";
 import { useGithubAccount } from "../github/api";
 import { useT, type Dict } from "../i18n";
 import { routeToPath } from "../router";
-import { Button } from "../ui";
-import { RepoLink } from "./parts";
+import { Button, RepoLink } from "../ui";
 
 /** The refusals the tile words itself; any other is the server's message. */
 const REFUSALS: Partial<Record<string, keyof Dict>> = {
