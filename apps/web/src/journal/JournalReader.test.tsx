@@ -512,7 +512,7 @@ describe("JournalReader — the student", () => {
   });
 
   it("links a GitHub-mode journal's repository, and a Quiz-mode one's to nothing", async () => {
-    const repository = { fullName: "heig-prg/journal", htmlUrl: "https://github.com/heig-prg/journal" };
+    const repository = { fullName: "heig-prg/journal" };
     const routes: Record<string, RouteHandler> = {
       [`GET ${BASE}?view=student`]: ok({ ...studentJournal, repository }),
       [`GET ${BASE}/pages/${HOME}?view=student`]: ok(studentPage(HOME)),
@@ -520,7 +520,7 @@ describe("JournalReader — the student", () => {
     mockFetch(routes);
     const { unmount } = renderWithProviders(<Reader path={HOME} studentView />);
     const link = await screen.findByRole("link", { name: "heig-prg/journal" });
-    expect(link).toHaveAttribute("href", repository.htmlUrl);
+    expect(link).toHaveAttribute("href", "https://github.com/heig-prg/journal");
     expect(link).toHaveAttribute("target", "_blank");
     unmount();
 

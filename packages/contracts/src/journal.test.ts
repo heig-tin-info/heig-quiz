@@ -119,7 +119,7 @@ describe("the student payloads (N-SEC-12)", () => {
     // A GitHub-mode journal names its repository to a student, nothing else
     // of it: no branch, folder, commit nor sync state (ADR-057, 2026-10-30).
     type StudentRepository = NonNullable<JournalStudent["repository"]>;
-    expectTypeOf<StudentRepository>().toEqualTypeOf<{ fullName: string; htmlUrl: string }>();
+    expectTypeOf<StudentRepository>().toEqualTypeOf<{ fullName: string }>();
     expectTypeOf<JournalPageStudent>().not.toHaveProperty("editUrl");
     expectTypeOf<JournalStudent>().not.toHaveProperty("mode");
   });
@@ -142,8 +142,8 @@ describe("the student payloads (N-SEC-12)", () => {
     for (const extra of [{ hiddenPaths: ["a.md"] }, { warningCount: 1 }, { pageCount: 2 }, { files: [] }, { mode: "github" }]) {
       expect(JournalStudent.safeParse({ ...student, ...extra }).success).toBe(false);
     }
-    // The repository's name and link, never its branch, folder, commit or sync state.
-    const repository = { fullName: "heig-prg/journal", htmlUrl: "https://github.com/heig-prg/journal" };
+    // The repository's name, never its branch, folder, commit or sync state.
+    const repository = { fullName: "heig-prg/journal" };
     expect(JournalStudent.parse({ ...student, repository }).repository).toEqual(repository);
     for (const extra of [{ ref: "main" }, { rootPath: "" }, { lastCommitSha: "abc" }, { syncStatus: "ok" }, { syncError: null }]) {
       expect(JournalStudent.safeParse({ ...student, repository: { ...repository, ...extra } }).success).toBe(false);

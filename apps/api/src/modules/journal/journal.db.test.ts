@@ -273,14 +273,14 @@ describe("the student payload, the journal's one exit (invariant 4)", () => {
 
     const home = await get(`${base()}${query}`, headers);
     expect(home.statusCode, who).toBe(200);
-    // The repository's name and its link, nothing else of it (N-SEC-12).
+    // The repository's name, nothing else of it (N-SEC-12).
     const repository = (home.json() as { repository: { fullName: string } }).repository;
     expect(repository.fullName).toMatch(/^heig-prg\/journal-\d+$/);
     expect(Journal.parse(home.json())).toEqual({
       view: "student",
       nav: [{ path: "010-open.md", title: "Open page", pagePath: "010-open.md", children: [] }],
       homePath: "README.md",
-      repository: { fullName: repository.fullName, htmlUrl: `https://github.com/${repository.fullName}` },
+      repository: { fullName: repository.fullName },
     });
     bodies.push(home.body);
 

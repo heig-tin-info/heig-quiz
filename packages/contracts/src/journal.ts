@@ -281,11 +281,11 @@ export const JournalStudent = z.strictObject({
   nav: z.array(JournalNavNode),
   homePath: z.string().nullable(),
   /**
-   * The repository a GitHub-mode journal mirrors, its name and link only (never
+   * The repository a GitHub-mode journal mirrors, its `org/name` only (never
    * its branch, folder, commit or sync state); null in Quiz mode. What a
    * student reads there is GitHub's access, not Quiz's (N-SEC-12).
    */
-  repository: z.strictObject({ fullName: z.string(), htmlUrl: z.string() }).nullable(),
+  repository: z.strictObject({ fullName: z.string() }).nullable(),
 });
 export type JournalStudent = z.infer<typeof JournalStudent>;
 

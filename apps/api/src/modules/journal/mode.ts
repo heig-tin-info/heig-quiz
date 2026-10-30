@@ -27,9 +27,6 @@ export function githubJournal(row: JournalRow): GithubJournal | null {
   return row as GithubJournal;
 }
 
-/** The repository's page on github.com. */
-export const repoUrl = (journal: { fullName: string }) => `https://github.com/${journal.fullName}`;
-
 /** A journal path as a path of the repository: under the row's root folder. */
 export const repoPath = (journal: { rootPath: string }, path: string) =>
   journal.rootPath ? `${journal.rootPath}/${path}` : path;
@@ -41,5 +38,5 @@ export const repoPath = (journal: { rootPath: string }, path: string) =>
  * space or an accent survives and the slashes stay separators.
  */
 export function editUrl(journal: GithubJournal, path: string): string {
-  return `${repoUrl(journal)}/edit/${encodeJournalPath(journal.ref)}/${encodeJournalPath(repoPath(journal, path))}`;
+  return `https://github.com/${journal.fullName}/edit/${encodeJournalPath(journal.ref)}/${encodeJournalPath(repoPath(journal, path))}`;
 }

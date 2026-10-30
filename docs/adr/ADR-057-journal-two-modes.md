@@ -10,8 +10,8 @@ the [correspondence table](#correspondence-with-adr-049) at the end).
 Amended 2026-10-11 by [ADR-100](ADR-100-organisations-github-accordees-aux-cours.md)
 (§7, GitHub mode: which repositories, and the invitations).
 Amended 2026-10-30 (product owner; §7, access and the student's exit): in
-GitHub mode the student view names the repository (`org/name` and its
-link), so students may read the sources.
+GitHub mode the student view names the repository (`org/name`, linked
+to github.com by the reader), so students may read the sources.
 
 ## Context
 
@@ -182,7 +182,7 @@ addendum on 2026-09-30. What still holds, by mode:
     teacher in the student view, ADR-018), which only narrows; an
     impersonation session (ADR-034) gets the student payload whatever it
     asks. *Amended 2026-10-30: in GitHub mode the student view also names
-    the repository, its `org/name` and link only (F-JRN-12, N-SEC-12); what
+    the repository, its `org/name` only (F-JRN-12, N-SEC-12); what
     a student reads there is GitHub's access to that repository, not
     Quiz's, so a repository the student can read shows its drafts and
     future pages too.*
