@@ -2405,7 +2405,10 @@ what it can detect of the rules below.
   "(s)", "recorriger" without a hyphen, "par défaut", "cliquez sur".
 - **English** keeps the same ceilings and the same ban on filler: the
   verbosity of the French came from the English source. Sentence case,
-  serial comma, no em-dash aside either.
+  serial comma, no em-dash aside either. The spelling is British: colour,
+  favourite, recognise, cancelled, and "practise" for the verb ("Practise
+  anyway") beside "practice" for the noun ("Practice with instant
+  feedback"). A report of "Practise" as a typo is not one (#987).
 
 ## The bottom bar (phone)
 
