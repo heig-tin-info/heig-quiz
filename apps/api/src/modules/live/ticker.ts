@@ -73,13 +73,15 @@ export async function expireDueAttempts(
   // An exercise grades each attempt as it ends (ADR-067), the ones time ran
   // out on included: the student reads that score next.
   if (app) {
-    const byEvaluation = new Map<string, string[]>();
+    // A practice attempt (ADR-122) included: its own deadline passed on an
+    // evaluation already over, and the student reads its score next.
+    const byEvaluation = new Map<string, typeof closed>();
     for (const row of closed) {
-      byEvaluation.set(row.evaluationId, [...(byEvaluation.get(row.evaluationId) ?? []), row.id]);
+      byEvaluation.set(row.evaluationId, [...(byEvaluation.get(row.evaluationId) ?? []), row]);
     }
-    for (const [evaluationId, ids] of byEvaluation) {
+    for (const [evaluationId, ended] of byEvaluation) {
       const evaluation = await byId(db, evaluationId);
-      if (evaluation) await gradeAtHandIn(app, evaluation, ids);
+      if (evaluation) await gradeAtHandIn(app, evaluation, ended);
     }
   }
   return closed;

@@ -473,7 +473,7 @@ describe("what a hand-in does NOT do", () => {
       .set({ mode: "poll", state: "running" })
       .where(eq(evaluations.id, seed.evaluationId));
     const poll = await reload(db, seed.evaluationId);
-    await live.gradeAtHandIn(app, poll, [randomUUID()]);
+    await live.gradeAtHandIn(app, poll, [{ id: randomUUID(), afterDue: false }]);
     expect(sent).toEqual([]);
   });
 

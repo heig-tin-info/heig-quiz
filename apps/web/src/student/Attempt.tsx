@@ -21,18 +21,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { Lock, UserX } from "lucide-react";
 
-import type { AttemptEntry } from "@quiz/contracts";
+import type { AttemptEntry, PracticeEntry, PracticeRefusalReason } from "@quiz/contracts";
 
 import { ApiError, api, refusalCodeOf, useMe } from "../api";
 import { feedbackLink } from "../grading";
-import { useT } from "../i18n";
+import { useT, type Dict } from "../i18n";
 import type { Navigate } from "../router";
 import { leaveStudentView, studentViewOn } from "../studentView";
 import { Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { Lobby } from "./Lobby";
 import { Player } from "./Player";
 import { Ready } from "./Ready";
-import { attemptEntryKey } from "../queryKeys";
+import { attemptEntryKey, practiceEntryKey } from "../queryKeys";
 import { toKiosk } from "../kiosk/navigation";
 
 export function AttemptPage({
@@ -157,6 +157,80 @@ export function AttemptPage({
       onResults={(attemptId, options) => navigate(feedbackLink(attemptId).route, options)}
       confinement={confinement}
       {...(exitStudentView ? { onExitStudentView: exitStudentView } : {})}
+    />
+  );
+}
+
+/** Why a practice attempt may not start, in the student's words (ADR-122). */
+const PRACTICE_REFUSED: Record<PracticeRefusalReason, keyof Dict> = {
+  hidden: "practice.refused.hidden",
+  not_over: "practice.refused.not_over",
+  archived: "practice.refused.archived",
+  unfinished: "practice.refused.unfinished",
+};
+
+/**
+ * `/take/:evaluationId/practice` — a practice attempt on an exercise that is
+ * over (ADR-122). `POST /evaluations/:id/practice` writes nothing: it answers
+ * the unfinished practice attempt, resumed, or the ready screen of a new one,
+ * whose Start creates it. The player is the attempt's own, keyed on the
+ * attempt: a new practice attempt gets a fresh one. A refusal the server
+ * spells out (`practice_refused`, a network that is not allowed, no seat) has
+ * its screen, with the one way home.
+ */
+export function PracticePage({ evaluationId, navigate }: { evaluationId: string; navigate: Navigate }) {
+  const t = useT();
+  const entry = useQuery<PracticeEntry>({
+    queryKey: practiceEntryKey(evaluationId),
+    retry: (count, error) => !(error instanceof ApiError) && count < 3,
+    queryFn: () => api<PracticeEntry>(`/app/api/evaluations/${evaluationId}/practice`, { method: "POST" }),
+  });
+  const home = () => navigate({ view: "home" });
+
+  if (entry.isLoading) return <Spinner label={t("player.loading")} className="py-24" />;
+
+  const transient = !(entry.error instanceof ApiError) || entry.error.status >= 500;
+  if (entry.isError && (!entry.data || !transient)) {
+    const code = refusalCodeOf(entry.error);
+    if (code === "practice_refused" || code === "ip_not_allowed" || code === "not_found") {
+      const reason = (entry.error as ApiError).body as { reason?: PracticeRefusalReason } | null;
+      const title =
+        code === "practice_refused" && reason?.reason
+          ? t(PRACTICE_REFUSED[reason.reason])
+          : code === "ip_not_allowed"
+            ? t("player.ipBlocked")
+            : t("player.notAvailable");
+      return (
+        <main className="mx-auto w-full max-w-160 px-4 py-16">
+          <Card className="px-6 py-4">
+            <EmptyState
+              icon={code === "not_found" ? UserX : Lock}
+              title={title}
+              action={
+                <Button variant="primary" onClick={home}>
+                  {t("player.closed.home")}
+                </Button>
+              }
+            />
+          </Card>
+        </main>
+      );
+    }
+    return (
+      <main className="mx-auto w-full max-w-160 px-4 py-16">
+        <QueryError title={t("player.loadFailed")} query={entry} />
+      </main>
+    );
+  }
+
+  const data = entry.data!;
+  if (data.kind === "ready") return <Ready view={data.view} onLater={home} practice />;
+  return (
+    <Player
+      key={data.view.attempt.id}
+      initial={data.view}
+      onHome={home}
+      onResults={(attemptId, options) => navigate(feedbackLink(attemptId).route, options)}
     />
   );
 }

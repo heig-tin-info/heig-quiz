@@ -46,6 +46,7 @@ import {
   attempts,
   evaluationItems,
   evaluations,
+  officialAttempt,
   questionVersions,
   questions,
 } from "../../db/schema.js";
@@ -482,6 +483,39 @@ export async function setAllowDrill(
   return updated;
 }
 
+/** `409 after_due_locked`: the after-due switch exists on an exercise only (ADR-122). */
+export class AfterDueLocked extends EvaluationError {
+  constructor() {
+    super("after_due_locked", "practice after the due date is an exercise's setting");
+  }
+}
+
+/**
+ * The teacher's "practice after the due date" switch (ADR-122 §1):
+ * `settings.afterDue`, writable at ANY state — it is a visibility switch, not
+ * a frozen setting, and the configuration lock does not apply to it. The
+ * second write of the settings outside {@link patchEvaluation}, beside
+ * {@link setAllowDrill}. An exercise only.
+ */
+export async function setAfterDue(
+  db: DbOrTx,
+  row: EvaluationRecord,
+  afterDue: "open" | "hidden",
+  now: Date,
+): Promise<EvaluationRecord> {
+  if (row.mode !== "exercise") throw new AfterDueLocked();
+  const [updated] = await db
+    .update(evaluations)
+    .set({
+      settings: sql`${evaluations.settings} || jsonb_build_object('afterDue', ${afterDue}::text)`,
+      updatedAt: now,
+    })
+    .where(and(eq(evaluations.id, row.id), eq(evaluations.mode, "exercise")))
+    .returning();
+  if (!updated) throw new AfterDueLocked();
+  return updated;
+}
+
 /** `results.releaseResults`: the frozen grades (docs/05 §5.3) and the state they imply. */
 export async function setRelease(
   db: DbOrTx,
@@ -616,7 +650,8 @@ export async function flagReleasedEvaluationsOf(
           db
             .select({ id: attempts.evaluationId })
             .from(attempts)
-            .where(inArray(attempts.id, [...attemptIds])),
+            // A practice attempt's grading (ADR-122) changes no published grade.
+            .where(and(inArray(attempts.id, [...attemptIds]), officialAttempt)),
         ),
       ),
     );

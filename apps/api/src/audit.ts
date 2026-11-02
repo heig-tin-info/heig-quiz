@@ -57,6 +57,8 @@ export type AuditAction =
   | "attempt.read"
   | "attempt.reopen"
   | "attempt.retake"
+  /** ADR-122: a practice attempt started on an exercise that is over. */
+  | "attempt.practice"
   | "attempt.staff_reset"
   | "category.create"
   | "category.delete"
@@ -150,6 +152,8 @@ export type AuditAction =
   | "drill.cards_remove"
   /** "Allow drill" set on an evaluation (`payload.allowDrill`, ADR-041 §2). */
   | "drill.allow"
+  /** ADR-122: the "practice after the due date" switch set (`payload.afterDue`). */
+  | "evaluation.after_due"
   | "evaluation.close"
   /** The correction of an open exercise published, irreversibly (ADR-050). */
   | "evaluation.correction_publish"

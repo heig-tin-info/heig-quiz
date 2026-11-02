@@ -20,7 +20,7 @@
  *     shown: the dwell (ADR-039) has either an open interval or none, never
  *     half of one.
  */
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { AttemptEventKind } from "@quiz/contracts";
 import { ATTEMPT_CLOSERS, ATTEMPT_STATES } from "@quiz/domain";
@@ -143,6 +143,14 @@ export const attempts = pgTable(
      * statistics keep their old rule for them.
      */
     displayTracked: boolean("display_tracked").notNull().default(true),
+    /**
+     * ADR-122: a PRACTICE attempt, started on an exercise already over
+     * (closed, grading, released) — by state, not by clock. It counts
+     * nowhere: not the kept attempt, the grade, the release, the statistics,
+     * the grading queue nor the dashboard ({@link officialAttempt}). Written
+     * once, at creation.
+     */
+    afterDue: boolean("after_due").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -174,6 +182,15 @@ export const attempts = pgTable(
       .where(sql`${t.state} = 'in_progress'`),
   ],
 );
+
+/**
+ * The row `attempts` is an OFFICIAL attempt, not a practice one started
+ * after the due date (ADR-122): THE predicate every reader that counts,
+ * grades, ranks or shows the class adds — the kept attempt, the dashboard,
+ * the grading queue, the regrade, the lists of the teacher. A practice
+ * attempt is reached by id, or through the student's own practice reads.
+ */
+export const officialAttempt = eq(attempts.afterDue, false);
 
 /**
  * The row `attempts` belongs to a STAFF seat of the classroom of the row

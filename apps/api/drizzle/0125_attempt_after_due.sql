@@ -1,0 +1,1 @@
+ALTER TABLE "attempts" ADD COLUMN "after_due" boolean DEFAULT false NOT NULL;

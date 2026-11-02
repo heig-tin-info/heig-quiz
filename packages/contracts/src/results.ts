@@ -84,6 +84,11 @@ export const ResultsView = z.object({
   items: z.array(ResultsItem),
   rows: z.array(ResultRow),
   stats: ResultsStats,
+  /**
+   * ADR-122: how many students started a practice attempt after the due
+   * date. Counted apart: a practice attempt is in no row, no figure above.
+   */
+  practisedCount: z.number().int().nonnegative().optional(),
 });
 export type ResultsView = z.infer<typeof ResultsView>;
 
@@ -318,6 +323,8 @@ const StudentResults = z.object({
   retake: RetakeStatus.optional(),
   /** As on the score-only page (ADR-091): each question's standing, latest attempt only. */
   review: z.array(ReviewItem).optional(),
+  /** ADR-122: a practice attempt after the due date — its points, never a grade (`grade` is null). */
+  practice: z.literal(true).optional(),
 });
 type StudentResults = z.infer<typeof StudentResults>;
 
@@ -340,8 +347,14 @@ export const FeedbackPending = z.object({
    */
   reason: z.enum(FEEDBACK_REFUSALS),
   evaluation: z.object({ id: z.uuid(), title: z.string() }),
-  /** Only with `retakes_open`: the points of this attempt, and nothing else. */
+  /**
+   * Only with `retakes_open`, or on a practice attempt (ADR-122) the policy
+   * does not open yet (`results_pending`): the points of this attempt, and
+   * nothing else.
+   */
   score: AttemptScore.optional(),
+  /** ADR-122: a practice attempt after the due date. */
+  practice: z.literal(true).optional(),
   /** Only with `retakes_open`: whether another attempt may start now, and why not. */
   retake: RetakeStatus.optional(),
   /**

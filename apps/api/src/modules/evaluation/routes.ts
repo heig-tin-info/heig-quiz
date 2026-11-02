@@ -12,6 +12,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
+  EvaluationAfterDueBody,
   EvaluationCreate,
   EvaluationDelete,
   EvaluationDuplicate,
@@ -216,6 +217,26 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
         if (row.mode !== scope.evaluation.mode) {
           await service.announceMove(app.db, row, now);
         }
+        return detail(req, row, scope.classroom.courseId);
+      },
+    ),
+  );
+
+  /**
+   * ADR-122: "Practice after the due date", the one writer of
+   * `settings.afterDue`. An exercise's, editable at any state — the close
+   * and the release included: it opens or hides the practice, nothing a
+   * student already did moves. Any member of the course, like "Allow drill".
+   */
+  app.put(
+    "/app/api/evaluations/:id/after-due",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: EvaluationAfterDueBody, load: staffEvaluation },
+      async ({ req, now, body, scope }) => {
+        const row = await service.setAfterDue(app.db, scope.evaluation, body.afterDue, now);
+        await trace(req, "evaluation.after_due", "evaluation", row.id, { afterDue: body.afterDue });
+        evaluationChanged(service.classroomIdOf(row), row.id);
         return detail(req, row, scope.classroom.courseId);
       },
     ),

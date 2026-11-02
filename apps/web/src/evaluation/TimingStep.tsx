@@ -25,6 +25,7 @@ import {
 
 import { ApiError } from "../api";
 import { EvaluationDrillSetting } from "../drill/EvaluationDrillSetting";
+import { AfterDueSetting } from "./AfterDueSetting";
 import { useT } from "../i18n";
 import {
   Alert,
@@ -521,8 +522,17 @@ export function TimingStep({
         closesAt={closesAt}
         dates={dates}
         /* ADR-041 §2 (#317): its own writer, editable until the release —
-           not one of the settings `patch` saves, nor frozen with them. */
-        feedbackExtra={drillModeOf(mode) ? <EvaluationDrillSetting evaluation={detail.evaluation} /> : undefined}
+           not one of the settings `patch` saves, nor frozen with them. And
+           ADR-122: practice after the due date, an exercise's, editable at
+           any state. */
+        feedbackExtra={
+          drillModeOf(mode) ? (
+            <>
+              {mode === "exercise" ? <AfterDueSetting detail={detail} /> : null}
+              <EvaluationDrillSetting evaluation={detail.evaluation} />
+            </>
+          ) : undefined
+        }
       />
     </div>
   );

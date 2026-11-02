@@ -154,6 +154,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
       createdAt: "2026-09-01T08:00:00.000Z",
       originRevision: null,
       allowDrill: false,
+      afterDueOpen: false,
     },
     items: [
       {

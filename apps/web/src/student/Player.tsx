@@ -166,8 +166,10 @@ export function Player({
   // F-EVAL-13: leaving the page is journaled, and the student told so —
   // except in SEB or on a station, which confine the student already: the
   // journal runs there too, the toast does not.
+  // ADR-122: a practice attempt keeps no journal.
   const journaled =
     initial.attempt.preview !== true &&
+    initial.attempt.practice !== true &&
     (attempt.view ?? initial).evaluation.settings.logVisibility &&
     closed === null;
   useIntegrityJournal(attemptId, attempt.report, { journaled, notify: journaled && confinement === undefined });
@@ -435,6 +437,7 @@ export function PlayerView({
     <ExpandChrome.Provider value={chrome}>
       <PlayerShell
         title={initial.evaluation.title}
+        {...(initial.attempt.practice ? { subtitle: t("practice.player.subtitle") } : {})}
         deadlineAt={session.deadlineAt}
         clock={session.clock}
         paused={paused}

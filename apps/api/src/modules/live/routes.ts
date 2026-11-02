@@ -34,6 +34,7 @@ import {
   isIntegrityEventKind,
   type ExtendResponse,
   type FlagResponse,
+  type PracticeEntry,
   type ResetAttemptResponse,
   type RunAccepted,
   type SkipResponse,
@@ -201,6 +202,45 @@ export async function livePlugin(
       },
     ),
   );
+
+  /**
+   * ADR-122: practice after the due date. `…/practice` writes nothing: it
+   * resumes the student's unfinished practice attempt or answers the ready
+   * screen of a new one (its conditions, no content); `…/practice/start`
+   * starts a new one — `409 practice_refused` with its reason where the rule
+   * refuses, `429 rate_limited` within a minute of the previous one. The same
+   * loader as the entry: a claimed seat, the network allowlist.
+   */
+  const practice = (start: boolean) =>
+    student(
+      {
+        params: IdParam,
+        body: AttemptStartBody,
+        optionalBody: true,
+        load: async (req, reply, p) =>
+          sitting(req, reply, await reachableEvaluation(app, req, reply, p.id)),
+      },
+      async ({ req, reply, now, scope }) => {
+        const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);
+        if (!participant) return notFound(reply);
+        if (!start) {
+          return (await service.practiceEntry(app.db, { evaluation: scope.evaluation, participant, now })) satisfies PracticeEntry;
+        }
+        const { row, created } = await service.startPractice(app.db, { evaluation: scope.evaluation, participant, now });
+        if (created) {
+          await trace(req, "attempt.practice", "attempt", row.id, {
+            evaluationId: scope.evaluation.id,
+            attemptNumber: row.attemptNumber,
+          });
+        }
+        const view = await service.attemptView(app.db, scope.evaluation, row, now, participant);
+        return { kind: "attempt", view } satisfies PracticeEntry;
+      },
+    );
+  // Not `SITTING`: a confined session (`seb`, `kiosk`) never practises —
+  // an exercise asking for a trusted client is hidden after its due date.
+  app.post("/app/api/evaluations/:id/practice", { preHandler: requireSession }, practice(false));
+  app.post("/app/api/evaluations/:id/practice/start", { preHandler: requireSession }, practice(true));
 
   /**
    * ADR-018: a teacher throws away their OWN staff test attempt.
@@ -376,6 +416,9 @@ export async function livePlugin(
       async ({ req, reply, now, body, scope }) => {
         // The journal follows the attempt: once it is over, it stops growing.
         service.assertOpen(scope.evaluation, scope.attempt, now);
+        // ADR-122: a practice attempt keeps no journal at all — the integrity
+        // journal is off, and nothing is watched after the due date.
+        if (scope.attempt.afterDue) return reply.code(204).send();
         // ADR-088: an integrity event the evaluation or the session does not
         // keep is answered like a stored one, and dropped.
         if (isIntegrityEventKind(body.kind) && !service.storesIntegrityEvent(scope.evaluation, req.auth)) {

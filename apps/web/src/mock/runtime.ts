@@ -134,6 +134,8 @@ export const FLAG_NAMES = [
   "whatsnew",
   "training",
   "trainingdone",
+  // ADR-122: the results page counts the students who practised after the due date.
+  "practised",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;

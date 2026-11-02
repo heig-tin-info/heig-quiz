@@ -31,6 +31,7 @@ import {
   trustedClientsOf,
   type TrustedClient,
   drillAllowedOn,
+  afterDueOpen,
   evaluationTotal,
   type MaskedPerson,
   clockChoiceOf,
@@ -48,6 +49,7 @@ import {
   gradebookColumns,
   gradebookMarks,
   isStaffAttempt,
+  officialAttempt,
   pools,
   questionVersions,
   questions,
@@ -100,7 +102,7 @@ export function retakesEnabled(row: EvaluationRecord): boolean {
  * student; a guest (`user_id` null) holds one attempt and always passes.
  * Only in a SELECT, where drizzle qualifies the outer columns by table name.
  */
-export const isLatestAttempt = sql`not exists (select 1 from ${attempts} as later where later.evaluation_id = ${attempts.evaluationId} and later.user_id = ${attempts.userId} and later.attempt_number > ${attempts.attemptNumber})`;
+export const isLatestAttempt = sql`not ${attempts.afterDue} and not exists (select 1 from ${attempts} as later where later.evaluation_id = ${attempts.evaluationId} and later.user_id = ${attempts.userId} and later.attempt_number > ${attempts.attemptNumber} and not later.after_due)`;
 
 export function feedbackOf(row: EvaluationRecord): FeedbackPolicy {
   return FeedbackPolicy.parse(row.feedbackPolicy);
@@ -120,6 +122,7 @@ export function toEvaluation(row: EvaluationRecord): Evaluation {
     state: row.state,
     settings: settingsOf(row),
     allowDrill: drillAllowed(row),
+    afterDueOpen: practiceOpen(row),
     gradingScale: GradingScale.parse(row.gradingScale),
     feedbackPolicy: feedbackOf(row),
     mcqPolicy: row.mcqPolicy,
@@ -203,6 +206,21 @@ export function negativeMarkingEnabled(row: EvaluationRecord): boolean {
 /** ADR-041 §2: its questions become drill cards (the classroom's switch aside). */
 export function drillAllowed(row: EvaluationRecord): boolean {
   return drillAllowedOn(row.mode, settingsOf(row).allowDrill);
+}
+
+/**
+ * ADR-122: whether this exercise takes practice attempts once it is over —
+ * the teacher's switch or its default (`afterDueOpen`, the one rule).
+ */
+export function practiceOpen(row: EvaluationRecord): boolean {
+  const settings = settingsOf(row);
+  return afterDueOpen({
+    mode: row.mode,
+    afterDue: settings.afterDue,
+    feedbackWhen: feedbackOf(row).when,
+    safeExamBrowser: settings.safeExamBrowser,
+    kiosk: settings.kiosk,
+  });
 }
 
 /**
@@ -602,7 +620,7 @@ async function selfOf(
   const [attempt] = await db
     .select({ id: attempts.id })
     .from(attempts)
-    .where(and(eq(attempts.evaluationId, row.id), eq(attempts.userId, userId)))
+    .where(and(eq(attempts.evaluationId, row.id), eq(attempts.userId, userId), officialAttempt))
     .orderBy(desc(attempts.attemptNumber))
     .limit(1);
   return {
@@ -715,8 +733,10 @@ export async function listEvaluations(
   const attemptStats = await db
     .select({
       evaluationId: attempts.evaluationId,
-      n: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId}))`.mapWith(Number),
-      participants: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId})) filter (where ${isStudentAttempt})`.mapWith(Number),
+      // A practice attempt after the due date (ADR-122) is not a participant;
+      // it is a student's data, which the deletion's role still counts.
+      n: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId})) filter (where ${officialAttempt})`.mapWith(Number),
+      participants: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId})) filter (where ${isStudentAttempt} and ${officialAttempt})`.mapWith(Number),
       students: sql<number>`count(*) filter (where ${isStudentAttempt})`.mapWith(Number),
     })
     .from(attempts)

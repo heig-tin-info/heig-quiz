@@ -20,6 +20,8 @@ Amended 2026-10-11 by [ADR-101](ADR-101-budget-du-runner.md) §4, scope §5:
 the runner's interactive-first order is no longer absolute; a grading
 request that has waited 10 s goes first.
 
+Amended 2026-11-02 by [ADR-122](ADR-122-entrainement-apres-l-echeance.md) §6: a practice attempt started after the due date is graded at its hand-in (or its expiry) whatever the evaluation's state, and its items for the model are asked of the model, the exercise being over.
+
 ## Context
 
 The exercise "Premiers pas en C" — mode `exercise`, feedback `immediate`,

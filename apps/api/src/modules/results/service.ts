@@ -20,7 +20,7 @@
  * written through the `evaluation` module's narrow writers (`setRelease`,
  * `clearRelease`, `setModifiedAfterRelease`), never by an UPDATE of its own.
  */
-import { and, asc, eq, inArray, notExists } from "drizzle-orm";
+import { and, asc, countDistinct, eq, inArray, notExists, sql } from "drizzle-orm";
 
 import type {
   ByQuestion,
@@ -73,9 +73,11 @@ import {
   answers,
   attempts,
   enrollments,
+  evaluations,
   gradebookColumns,
   gradebookMarks,
   gradings,
+  isStaffAttempt,
 } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 import {
@@ -335,7 +337,7 @@ function itemViews(
 }
 
 export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise<ResultsView> {
-  const computed = await computeResults(db, evaluation);
+  const [computed, practisedCount] = await Promise.all([computeResults(db, evaluation), practisedCountOf(db, evaluation)]);
   // Absent students count in the mean: a 1.0 that is not in the statistics
   // would flatter every class average (F-RES-01). A teacher's own test does
   // NOT: it is not a member of the class (ADR-018); nor does an excused
@@ -356,7 +358,22 @@ export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise
     items: computed.items,
     rows: computed.rows,
     stats: { ...stats, histogram: histogram(grades) },
+    practisedCount,
   };
+}
+
+/**
+ * ADR-122: how many students — not staff seats — started a practice attempt
+ * after the due date. Shown beside the grade table, never in it.
+ */
+async function practisedCountOf(db: Db, evaluation: EvaluationRecord): Promise<number> {
+  if (evaluation.mode !== "exercise") return 0;
+  const [row] = await db
+    .select({ n: countDistinct(attempts.userId) })
+    .from(attempts)
+    .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
+    .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.afterDue, true), sql`not ${isStaffAttempt}`));
+  return row?.n ?? 0;
 }
 
 // --- Release (F-RES-04, F-GRADE-09) --------------------------------------
@@ -903,6 +920,7 @@ export async function studentFeedback(
     reason,
     evaluation: { id: evaluation.id, title: evaluation.title },
   });
+  if (attempt.afterDue) return practiceFeedback(db, evaluation, attempt, policy, gate, pending);
   if (!gate.ok && gate.reason !== "retakes_open") return pending(gate.reason);
   // While the exercise takes retakes, the page offers the next attempt — on
   // the score alone (ADR-025) or beside a published correction (ADR-050).
@@ -948,6 +966,47 @@ export async function studentFeedback(
     ...copy,
     grade: gradeShown ? copy.grade : null,
     ...retake,
+  };
+}
+
+/**
+ * The feedback of a practice attempt after the due date (ADR-122 §7): the
+ * same gate, unchanged (`feedbackGate`, no retakes open on an exercise that
+ * is over), with POINTS ONLY, labelled practice, never a grade. Under
+ * `immediate` — or once released, or the correction published — the
+ * policy's correction; under `on_release` before that, the score alone;
+ * under `none`, nothing, the score included.
+ */
+async function practiceFeedback(
+  db: Db,
+  evaluation: EvaluationRecord,
+  attempt: typeof attempts.$inferSelect,
+  policy: FeedbackPolicy,
+  gate: FeedbackGate,
+  pending: (reason: FeedbackRefusal) => { available: false; reason: FeedbackRefusal; evaluation: { id: string; title: string } },
+): Promise<StudentFeedback> {
+  if (!gate.ok && gate.reason !== "results_pending") return { ...pending(gate.reason), practice: true };
+  if (!gate.ok) {
+    const items = await joinedItems(db, evaluation.id);
+    const tally = (await tallyByAttempt(db, [attempt.id])).get(attempt.id);
+    return {
+      ...pending(gate.reason),
+      score: scoreOf(
+        tally,
+        items.filter((i) => countsForStudent(i.item.counting)).length,
+        evaluationTotal(items.map((i) => i.item)),
+      ),
+      practice: true,
+    };
+  }
+  const copy = await reviewedItems(db, evaluation, attempt, policy);
+  return {
+    available: true,
+    evaluation: { id: evaluation.id, title: evaluation.title, releasedAt: isoOrNull(evaluation.releasedAt) },
+    attemptId: attempt.id,
+    ...copy,
+    grade: null,
+    practice: true,
   };
 }
 

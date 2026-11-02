@@ -187,6 +187,31 @@ function RetakeOffer({
   );
 }
 
+/**
+ * ADR-122: the one action of a practice attempt's results page — another
+ * practice attempt, whose route shows the ready screen and its conditions
+ * again. The server says on that route whether one may start.
+ */
+function PractiseAgain({ evaluationId, navigate }: { evaluationId: string; navigate: (r: Route) => void }) {
+  const t = useT();
+  return (
+    <Button variant="primary" onClick={() => navigate({ view: "attempt", evaluationId, practice: true })}>
+      <RotateCcw /> {t("practice.again")}
+    </Button>
+  );
+}
+
+/** ADR-122: a practice cell nobody grades (no AI on the platform) is "not graded", never "awaiting". */
+function PracticePendingLine({ count }: { count: number }) {
+  const t = useT();
+  if (count === 0) return null;
+  return (
+    <span className="block text-[13px] text-fg-muted">
+      {t(count === 1 ? "feedback.practice.notGraded.one" : "feedback.practice.notGraded", { n: count })}
+    </span>
+  );
+}
+
 const STANDING: Record<ItemStanding, { tone: Tone; icon: LucideIcon; label: keyof Dict }> = {
   acquired: { tone: "green", icon: CheckCircle2, label: "feedback.review.acquired" },
   to_review: { tone: "amber", icon: RotateCcw, label: "feedback.review.to_review" },
@@ -264,13 +289,16 @@ export function Feedback({
   // The same page header on both branches: a student who opens this from a
   // notification must know what they are looking at before they know whether
   // there is anything in it.
+  const practice = data.practice === true;
   const header = (released: string | null) => (
     <header>
       <p className="text-[13px] text-fg-muted">{data.evaluation.title}</p>
       <h1 className="mt-1 text-[28px] font-bold leading-tight tracking-[-0.02em]">
-        {t("feedback.title")}
+        {t(practice ? "feedback.practice.title" : "feedback.title")}
       </h1>
-      {released ? (
+      {/* ADR-122: a practice attempt counts for nothing, and says so first. */}
+      {practice ? <p className="mt-1.5 text-sm text-fg-muted">{t("feedback.practice.note")}</p> : null}
+      {released && !practice ? (
         <p className="mt-1.5 text-sm text-fg-muted">
           {t("feedback.released")} <RelativeTime iso={released} />
         </p>
@@ -291,22 +319,26 @@ export function Feedback({
               label={t("feedback.score")}
               value={`${formatPoints(data.score.points)} / ${formatPoints(data.score.totalPoints)}`}
             />
-            <PendingLine count={data.score.pendingCount} />
+            {practice ? <PracticePendingLine count={data.score.pendingCount} /> : <PendingLine count={data.score.pendingCount} />}
             {data.retake ? <AttemptCount retake={data.retake} /> : null}
           </div>
         ) : null}
         <Card>
           <EmptyState
             icon={data.reason === "retakes_open" ? CheckCircle2 : Hourglass}
-            title={t(PENDING_TITLE[data.reason])}
+            title={t(practice && data.reason === "results_pending" ? "feedback.practice.pending.title" : PENDING_TITLE[data.reason])}
             {...(data.retake
               ? { action: <RetakeOffer retake={data.retake} review={data.review} navigate={navigate} /> }
-              : {})}
+              : practice
+                ? { action: <PractiseAgain evaluationId={data.evaluation.id} navigate={navigate} /> }
+                : {})}
           >
             {/* ADR-091: with the standings below, the score is not all the student reads. */}
-            {t(data.review ? "feedback.pending.retakes_open.reviewBody" : PENDING_BODY[data.reason], {
-              title: data.evaluation.title,
-            })}
+            {practice && data.reason === "results_pending"
+              ? t("feedback.practice.pending.body")
+              : t(data.review ? "feedback.pending.retakes_open.reviewBody" : PENDING_BODY[data.reason], {
+                  title: data.evaluation.title,
+                })}
           </EmptyState>
         </Card>
         {data.review ? <ReviewList review={data.review} /> : null}
@@ -330,8 +362,13 @@ export function Feedback({
             value={`${formatPoints(data.points)} / ${data.totalPoints}`}
           />
         </div>
-        <PendingLine count={data.pendingCount} />
+        {practice ? <PracticePendingLine count={data.pendingCount} /> : <PendingLine count={data.pendingCount} />}
       </div>
+      {practice ? (
+        <div className="flex justify-center">
+          <PractiseAgain evaluationId={data.evaluation.id} navigate={navigate} />
+        </div>
+      ) : null}
 
       {/* The correction of an exercise published while it runs (ADR-050):
           the retakes go on, so the page still carries the next attempt. */}

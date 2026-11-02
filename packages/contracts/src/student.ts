@@ -10,7 +10,7 @@
 import { z } from "zod";
 
 import { StudentGroupSetCard } from "./group.js";
-import { EvaluationCard, StudentPollCard } from "./live.js";
+import { EvaluationCard, PracticeCard, StudentPollCard } from "./live.js";
 import { StudentProjectCard } from "./project.js";
 
 /** One card of the Courses list: a classroom where the caller holds a claimed seat. */
@@ -62,7 +62,11 @@ export const StudentActivities = z.object({
 export type StudentActivities = z.infer<typeof StudentActivities>;
 
 /** `GET /app/api/student/home`: the Activities of every classroom the caller holds a seat in. */
-export const StudentHome = StudentActivities.extend({ serverNow: z.iso.datetime() });
+export const StudentHome = StudentActivities.extend({
+  serverNow: z.iso.datetime(),
+  /** ADR-122, "Past series": the exercises over and open to practice. Absent for a confined session. */
+  practice: z.array(PracticeCard).optional(),
+});
 export type StudentHome = z.infer<typeof StudentHome>;
 
 /**

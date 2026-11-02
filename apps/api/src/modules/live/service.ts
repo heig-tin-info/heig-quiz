@@ -39,6 +39,7 @@ export {
   RateLimited,
   RunnerDown,
   RetakeRefused,
+  PracticeRefused,
   liveFailureArms,
   participantOf,
   sebSeat,
@@ -66,6 +67,9 @@ export {
   reopenAttempt,
   reopenRole,
   studentHome,
+  practiceEntry,
+  startPractice,
+  practiceCards,
   drawSeed,
   orderItems,
 } from "./attempt.js";

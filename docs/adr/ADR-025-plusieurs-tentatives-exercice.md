@@ -29,6 +29,8 @@ F-RES-04.
 
 Amended 2026-10-09: the Rollback section is removed (the runbook owns procedures); its one lasting fact is a Consequence.
 
+Amended 2026-11-02 by [ADR-122](ADR-122-entrainement-apres-l-echeance.md): once the exercise is over, a student may start PRACTICE attempts on it, which §1's rule of retakes while running does not govern; a practice attempt is never the kept attempt, never counts against the maximum, and is read by none of the results §3 lists.
+
 ## Context
 
 F-EVAL-15 asks that an `exercise` may allow several attempts, keeping the

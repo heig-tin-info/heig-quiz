@@ -363,6 +363,14 @@ export function ResultsView({
                 actions={classroomId === null || (view.released && !isOwner) ? undefined : rowActions}
               />
             </div>
+            {/* ADR-122: the practice after the due date, counted apart — in no row, no figure above. */}
+            {view.practisedCount ? (
+              <p className="text-[13px] text-fg-muted">
+                {view.practisedCount === 1
+                  ? t("results.practised.one")
+                  : t("results.practised", { n: view.practisedCount })}
+              </p>
+            ) : null}
             {excusing ? (
               <ExcuseDialog
                 student={excusing.displayName}

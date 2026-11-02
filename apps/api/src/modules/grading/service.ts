@@ -69,6 +69,7 @@ import {
   auditLog,
   evaluationItems,
   gradings,
+  officialAttempt,
   questionVersions,
   users,
 } from "../../db/schema.js";
@@ -366,12 +367,19 @@ export function verdictOf(row: Pick<GradingRecord, "points" | "maxPoints" | "sta
 /** The cells of an evaluation a read is about: all of them, or one item's. */
 interface CellScope {
   itemId?: string | undefined;
+  /**
+   * ADR-122: the practice attempts' cells too — only the pass grading one
+   * asks for them. Every reader of the class (the panel, the results, the
+   * progress) leaves them out.
+   */
+  practice?: boolean | undefined;
 }
 
 /** The `WHERE` of a {@link CellScope} on `gradings` joined to its attempts. */
 const gradingsIn = (evaluationId: string, scope: CellScope) =>
   and(
     eq(attempts.evaluationId, evaluationId),
+    scope.practice ? undefined : officialAttempt,
     scope.itemId ? eq(gradings.itemId, scope.itemId) : undefined,
   );
 
@@ -419,7 +427,8 @@ export async function progressOf(db: Db, evaluationId: string): Promise<GradingP
   const attemptRows = await db
     .select({ id: attempts.id })
     .from(attempts)
-    .where(eq(attempts.evaluationId, evaluationId));
+    // A practice attempt (ADR-122) awaits no teacher.
+    .where(and(eq(attempts.evaluationId, evaluationId), officialAttempt));
   // A neutralized item (ADR-108) awaits no grade: neither in the total nor done.
   const counted = new Set(items.filter((i) => countsForStudent(i.item.counting)).map((i) => i.item.id));
   const total = counted.size * attemptRows.length;
@@ -683,7 +692,8 @@ export async function gradingQueue(
     db
       .select()
       .from(attempts)
-      .where(eq(attempts.evaluationId, evaluation.id))
+      // Never a practice attempt after the due date (ADR-122): no teacher grades it.
+      .where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt))
       .orderBy(asc(attempts.createdAt)),
   ]);
   const items = query.itemId ? allItems.filter((i) => i.item.id === query.itemId) : allItems;
@@ -760,7 +770,7 @@ export async function gradingSteps(db: Db, evaluation: EvaluationRecord): Promis
   const attemptRows = await db
     .select({ id: attempts.id })
     .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id));
+    .where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt));
   // The validated cells and nothing else — not the details, the comment or
   // the history `standingGradings` carries for the queue: a question is done
   // when each of its cells holds a validated grading.
@@ -768,7 +778,7 @@ export async function gradingSteps(db: Db, evaluation: EvaluationRecord): Promis
     .select({ attemptId: gradings.attemptId, itemId: gradings.itemId })
     .from(gradings)
     .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
-    .where(and(eq(attempts.evaluationId, evaluation.id), eq(gradings.state, "validated")));
+    .where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt, eq(gradings.state, "validated")));
   const validated = new Set(rows.map((row) => pairKey(row.attemptId, row.itemId)));
 
   return {
@@ -1038,6 +1048,7 @@ export async function batchValidate(
     .where(
       and(
         eq(attempts.evaluationId, evaluationId),
+        officialAttempt,
         eq(gradings.state, "proposed"),
         filter.itemId ? eq(gradings.itemId, filter.itemId) : undefined,
         filter.source ? eq(gradings.source, filter.source) : undefined,
@@ -1096,10 +1107,24 @@ export async function regradeItem(
       await retargetItemVersion(tx, item.itemId, version.id);
       note = `${note} (re-graded with version ${input.toVersionNumber})`;
     }
+    // A practice attempt's cells (ADR-122) keep their grading: the regrade's
+    // pass covers the official attempts only.
     await tx
       .update(gradings)
       .set({ state: "superseded" })
-      .where(and(eq(gradings.itemId, item.itemId), ne(gradings.state, "superseded")));
+      .where(
+        and(
+          eq(gradings.itemId, item.itemId),
+          ne(gradings.state, "superseded"),
+          inArray(
+            gradings.attemptId,
+            tx
+              .select({ id: attempts.id })
+              .from(attempts)
+              .where(and(eq(attempts.evaluationId, item.evaluationId), officialAttempt)),
+          ),
+        ),
+      );
     // The item's cells are empty again: the pass that refills them completes a
     // new grid, and the staff hear of it (`ready.ts`, #286).
     await clearGradingReady(tx, item.evaluationId);
@@ -1294,7 +1319,7 @@ async function watchCounting(db: Db, evaluation: EvaluationRecord, itemId: strin
   const owners = await db
     .select({ attemptId: attempts.id })
     .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id));
+    .where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt));
   return watchReleasedGrades(
     db,
     owners.map((o) => ({ attemptId: o.attemptId, itemId })),

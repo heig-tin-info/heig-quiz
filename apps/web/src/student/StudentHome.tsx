@@ -3,7 +3,8 @@
  *
  * Two questions, in the order a student asks them: what can I do NOW, and
  * what is coming — the latter grouped by day, Today to Later (`UpcomingByDay`,
- * product owner 2026-10-01). What they already handed in is the Grades page's
+ * product owner 2026-10-01) — then the past series still open to practice
+ * (`PastSeries`, ADR-122). What they already handed in is the Grades page's
  * (`/grades`, `StudentGrades`). The classrooms come last, because they are
  * administration, not work. A classroom card opens the classroom's page (D07).
  *
@@ -43,6 +44,7 @@ import {
   UpcomingByDay,
   useCardActions,
 } from "./cards";
+import { PastSeries } from "./PastSeries";
 
 /**
  * Today's drill (ADR-041 §6), drawn only while it holds something. Its badge
@@ -129,6 +131,9 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
               <UpcomingByDay cards={upcoming} now={now} navigate={navigate} />
             )}
           </section>
+
+          {/* ADR-122: the exercises over and open to practice; absent when none. */}
+          <PastSeries cards={home.data?.practice ?? []} navigate={navigate} />
         </>
       )}
 

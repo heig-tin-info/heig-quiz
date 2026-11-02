@@ -39,6 +39,8 @@ whose rule (server clock, `deadline + 3 s`, `410 attempt_closed`) is
 unchanged. Replaces the two named presets of the step (docs/spec/08 §8.2,
 "Préréglages nommés").
 
+Amended 2026-11-02 by [ADR-122](ADR-122-entrainement-apres-l-echeance.md): the due date of an exercise still closes it — the ticker, the reminders, the results and the release are unchanged — but no longer ends its use: once over, it may stay open to practice attempts, on their own deadline (the time limit per student, never cut at `closes_at`, or eight hours), which count nowhere.
+
 ## Context
 
 Step 2 exposed three independent settings: `timing` (Per student / Common

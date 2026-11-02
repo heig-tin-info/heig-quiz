@@ -24,6 +24,7 @@ import { enrollments } from "../../db/schema.js";
 import type { Caller, ReadableClassroom } from "../guards.js";
 import { hasStudentGroupSets, studentGroupSetCards } from "../group/service.js";
 import { hasJournal } from "../journal/service.js";
+import { practiceCards } from "../live/service.js";
 import { studentClassroomHeader } from "../org/service.js";
 import { evaluationActivity } from "./evaluation.js";
 import type { GradebookEntry, GradebookSeat, StudentGradebookEntry, StudentScope } from "./kind.js";
@@ -98,7 +99,13 @@ async function studentCards(db: Db, caller: Caller, now: Date, scope: StudentSco
  * confined session (`seb`, `kiosk`) gets its evaluations and no project.
  */
 export async function studentHome(db: Db, caller: Caller, auth: SessionAuth | null, now: Date): Promise<StudentHome> {
-  return { ...(await studentCards(db, caller, now, { confined: confined(auth) })), serverNow: iso(now) };
+  const isConfined = confined(auth);
+  const [cards, practice] = await Promise.all([
+    studentCards(db, caller, now, { confined: isConfined }),
+    // ADR-122, "Past series": never on a trusted client, which sits one evaluation.
+    isConfined ? [] : practiceCards(db, caller.id),
+  ]);
+  return { ...cards, practice, serverNow: iso(now) };
 }
 
 /**

@@ -10,7 +10,7 @@ import type { ClosedBy, EvaluationClosedBy } from "@quiz/contracts";
 import { anchoredOnClosesAt } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { attempts, enrollments } from "../../db/schema.js";
+import { attempts, enrollments, officialAttempt } from "../../db/schema.js";
 import {
   announceMove,
   applyState,
@@ -49,7 +49,9 @@ async function attemptsWithBonus(db: Db, evaluation: EvaluationRecord): Promise<
         seatsOf(evaluation),
       ),
     )
-    .where(eq(attempts.evaluationId, evaluation.id));
+    // The live controls drive the official attempts; a practice one (ADR-122)
+    // only exists once the evaluation is over, and follows its own deadline.
+    .where(and(eq(attempts.evaluationId, evaluation.id), officialAttempt));
   return rows.map((r) => ({ ...r.attempt, timeBonusPercent: r.bonus ?? 0 }));
 }
 

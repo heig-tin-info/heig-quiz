@@ -185,6 +185,7 @@ await import("./index");
 const { routes, flags } = await import("./runtime");
 const {
   STUDENT_ATTEMPT,
+  STUDENT_PRACTICE_ATTEMPT,
   STUDENT_RETAKE_ATTEMPT,
   STUDENT_PROJECT_IDS,
   STUDENT_PROJECT_ACCEPT,
@@ -698,6 +699,12 @@ const CHECKED: Case[] = [
   one(
     `/app/api/attempts/${STUDENT_ATTEMPT}/feedback`,
     `/app/api/attempts/${STUDENT_ATTEMPT}/feedback`,
+    StudentFeedback,
+  ),
+  // ADR-122: a practice attempt after the due date, its points alone before the release.
+  one(
+    `/app/api/attempts/${STUDENT_PRACTICE_ATTEMPT}/feedback`,
+    `/app/api/attempts/${STUDENT_PRACTICE_ATTEMPT}/feedback`,
     StudentFeedback,
   ),
 ];
