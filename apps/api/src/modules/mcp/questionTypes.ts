@@ -296,6 +296,26 @@ const GUIDES: Record<string, TypeGuide> = {
       "Keep AC for linear small-signal circuits (filters, amplifiers biased in their linear range): a saturated op-amp or an unbiased diode gives a meaningless Bode plot.",
     ],
   },
+  logic: {
+    summary:
+      "Logic circuit: the student wires gates between declared inputs and outputs; graded by simulating every input combination against one boolean expression per output.",
+    rules: [
+      "Use it for combinational digital logic (a majority, a comparator, a multiplexer in NAND only). No flip-flops, buses nor don't-care rows.",
+      "`inputs` are 1 to 10 names and `outputs` 1 to 8 `{ name, expression }`. A name is a letter then letters, digits or `_`, at most 6 characters, and no name is used twice across inputs and outputs.",
+      "An expression uses only declared inputs, `0` and `1`, parentheses, and the operators: AND `*` `·` `&`, OR `+` `|`, NOT `!` `~` before or `'` after, XOR `^` `⊕`. Precedence NOT > AND > XOR > OR, left-associative. There is NO juxtaposition: `ab` is one name, write `a*b`. A bad expression is refused with `logic.expression_invalid` or `logic.unknown_identifier` at its path.",
+      "`palette.kinds` lists the gates the student may place, among `AND`, `OR`, `NAND`, `NOR`, `XOR`, `XNOR`, `NOT`, `BUF` (each 2 to 4 inputs where it applies); the constants 0 and 1 are always offered. `palette.maxGates` (optional, null for none) caps every gate, `NOT` and `BUF` included.",
+      "`symbols` is `iec` (IEC 60617, the default) or `ansi`: how the gates are drawn.",
+      "The expressions are the key: never put them in the prompt. The points are the item's points times the share of truth-table rows where every output is right.",
+    ],
+    example: {
+      configVersion: 1,
+      prompt: "Réalisez la fonction **majorité** de trois entrées $a$, $b$ et $c$ avec des portes NON-ET uniquement.",
+      symbols: "iec",
+      inputs: ["a", "b", "c"],
+      outputs: [{ name: "m", expression: "a*b + a*c + b*c" }],
+      palette: { kinds: ["NAND"], maxGates: 6 },
+    },
+  },
 };
 
 /** The JSON Schema of what a publication accepts, without the `$schema` noise. */

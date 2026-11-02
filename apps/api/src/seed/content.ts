@@ -67,6 +67,7 @@ export const CONCEPTS: ConceptSpec[] = [
   c("régime alternatif", "Circuits en régime sinusoïdal", "AC analysis", "Circuits under sinusoidal steady state"),
   c("diode", "Comportement d'une diode à jonction", "diode", "Behaviour of a junction diode"),
   c("semi-conducteurs", "Composants à semi-conducteurs", "semiconductors", "Semiconductor devices"),
+  c("logique combinatoire", "Portes logiques et fonctions booléennes", "combinational logic", "Logic gates and boolean functions"),
 ];
 
 function c(fr: string, frDescription: string, en: string, enDescription: string): ConceptSpec {
@@ -856,6 +857,7 @@ const C_POOL: PoolSpec = {
 
 const DC = "Régime continu";
 const SEMICONDUCTORS = "Semi-conducteurs";
+const LOGIC = "Logique combinatoire";
 
 const ELECTRONICS_POOL: PoolSpec = {
   name: "Électronique",
@@ -865,7 +867,7 @@ const ELECTRONICS_POOL: PoolSpec = {
   // Shared with the administrator persona, so the demo shows a pool from the
   // colleague's side too: `admin@heig-vd.ch` may edit it, not manage it.
   sharedWith: [{ persona: "admin", role: "contributor" }],
-  categories: [DC, SEMICONDUCTORS],
+  categories: [DC, SEMICONDUCTORS, LOGIC],
   questions: [
     {
       internalName: "elec-loi-ohm",
@@ -1027,6 +1029,28 @@ const ELECTRONICS_POOL: PoolSpec = {
         },
         showExpected: false,
         simulationsPerMinute: 10,
+      },
+    },
+    {
+      internalName: "elec-majorite-trois-entrees",
+      type: "logic",
+      category: LOGIC,
+      difficulty: 2,
+      concepts: ["logique combinatoire"],
+      explanation:
+        "La sortie vaut 1 dès que deux entrées au moins valent 1 : $m = ab + ac + bc$. " +
+        "En NON-ET seulement, chaque produit devient une porte NON-ET et la somme une NON-ET à trois entrées.",
+      // Graded at once and final (ADR-123): every row of the truth table is
+      // simulated by the domain, the same engine the player's play mode runs.
+      config: {
+        configVersion: 1,
+        prompt:
+          "Un système de vote à trois juges allume le voyant $m$ quand **au moins deux** juges " +
+          "appuient sur leur bouton $a$, $b$ ou $c$. Réalisez la fonction avec des portes NON-ET uniquement.",
+        symbols: "iec",
+        inputs: ["a", "b", "c"],
+        outputs: [{ name: "m", expression: "a*b + a*c + b*c" }],
+        palette: { kinds: ["NAND"], maxGates: 4 },
       },
     },
     {

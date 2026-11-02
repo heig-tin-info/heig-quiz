@@ -25,7 +25,9 @@ export const ANSWER_SUMMARY_MAX = 24;
 /**
  * The four types of the MVP (PLAN-MVP §0), plus `circuit` — the two-port
  * schematic of docs/spec/04 §4.11, brought forward from phase 3 with a
- * simulation path (`packages/qt-circuit`) — and `codeimage`, the variant of
+ * simulation path (`packages/qt-circuit`), with `logic` right after it — a
+ * combinational circuit of gates, graded in process by `@quiz/domain/logic`,
+ * a second type of the same package (§4.18, ADR-123) — and `codeimage`, the variant of
  * `code` judged by the picture its program prints (§4.9, ADR-021), which
  * lives inside `packages/qt-code`, and `rich` — the essay of §4.8, graded
  * by hand in v1 (`packages/qt-rich`, issue #192), and `categorize` — cards
@@ -44,6 +46,7 @@ export const QUESTION_TYPE_IDS = [
   "cloze",
   "code",
   "circuit",
+  "logic",
   "codeimage",
   "rich",
   "categorize",

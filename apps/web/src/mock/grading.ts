@@ -61,6 +61,8 @@ import {
 } from "./codeimage";
 import {
   BLOCKS_ANSWER,
+  LOGIC_ANSWER,
+  LOGIC_PARTIAL_ANSWER,
   BLOCKS_STRAIGHT_ANSWER,
   CATEGORIZE_ANSWER,
   CircuitStimulusLike,
@@ -274,6 +276,8 @@ const isFall = (q: { id: string }) => q.id === "q-fall";
  * mock draws moves, and no scene's question index either.
  */
 const BLOCKS: MockQuestion | undefined = questions.find((q) => q.id === "q-blocks");
+/* The logic question (`q-logic`, docs/04 §4.18), appended after it the same way. */
+const LOGIC: MockQuestion | undefined = questions.find((q) => q.id === "q-logic");
 
 /**
  * A question appended to the `closed` evaluation, graded in a pass of its own
@@ -314,6 +318,19 @@ const APPENDED: Appended[] = [
           answer: (attempt: MockAttempt, attemptIndex: number) =>
             attemptIndex === 3 ? null : attempt.ability >= 0.6 ? BLOCKS_ANSWER : BLOCKS_STRAIGHT_ANSWER,
           // Validated at once: the run is the grade (ADR-103 §2).
+          proposed: () => false,
+        },
+      ]
+    : []),
+  ...(LOGIC
+    ? [
+        {
+          question: LOGIC,
+          suffix: "0000000a1061",
+          points: 2,
+          // The able half wired the whole majority, the rest forgot the third AND.
+          answer: (attempt: MockAttempt) => (attempt.ability >= 0.6 ? LOGIC_ANSWER : LOGIC_PARTIAL_ANSWER),
+          // Validated at once: the simulation is the grade (ADR-123 §6).
           proposed: () => false,
         },
       ]

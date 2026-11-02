@@ -39,6 +39,8 @@ import {
 } from "./runtime";
 import {
   BLOCKS_CONFIG,
+  LOGIC_CONFIG,
+  LOGIC_PARTIAL_ANSWER,
   CATEGORIZE_CONFIG,
   DIAGRAM_CONFIG,
   RC_STUDENT,
@@ -52,6 +54,7 @@ import { categorizeServer } from "@quiz/qt-categorize/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
 import { diagramServer } from "@quiz/qt-diagram/server";
 import { blocksServer } from "@quiz/qt-blocks/server";
+import { logicServer } from "@quiz/qt-circuit/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
 import { pollOfTeacher, teacherPolls } from "./poll";
 import { hasMockJournal } from "./journal";
@@ -141,6 +144,7 @@ const STUDENT_TYPES = [
   "categorize",
   "diagram",
   "blocks",
+  "logic",
 ] as const;
 
 /**
@@ -208,6 +212,7 @@ const STUDENT_KEYED: Partial<Record<number, StudentKeyed>> = {
   8: { server: categorizeServer, config: CATEGORIZE_CONFIG, view: { seed: 11, itemId: "8", shuffle: true } },
   9: { server: diagramServer, config: DIAGRAM_CONFIG, view: { seed: 0, itemId: "9", shuffle: false } },
   10: { server: blocksServer, config: BLOCKS_CONFIG, view: { seed: 0, itemId: "10", shuffle: false } },
+  11: { server: logicServer, config: logicServer.configSchema.parse(LOGIC_CONFIG), view: { seed: 0, itemId: "11", shuffle: false } },
 };
 
 /** Question n's student view, by its type's own `toStudent`. */
@@ -362,6 +367,11 @@ const studentPayloads: Record<number, unknown> = {
    * own `toStudent`.
    */
   10: keyedStudent(10),
+  /*
+   * The `logic` item (docs/04 §4.18): the names of the inputs and of the
+   * output, never its expression — the type's own `toStudent`.
+   */
+  11: keyedStudent(11),
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
@@ -381,6 +391,8 @@ const studentAnswers = new Map<string, StoredAnswer>();
  * nothing else, and the strip under the drawing is half of what this type IS.
  */
 studentAnswers.set(studentItem(5), { payload: { schematic: RC_STUDENT }, revision: 1, done: false });
+// The logic item opens on a circuit with its third AND missing: play mode has something to light.
+studentAnswers.set(studentItem(11), { payload: LOGIC_PARTIAL_ANSWER, revision: 1, done: false });
 // The essay opens half written, so the counter under the field has something to count.
 studentAnswers.set(studentItem(7), {
   payload: {

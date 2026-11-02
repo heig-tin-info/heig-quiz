@@ -59,7 +59,7 @@ export interface Point2 {
  * pin INDEX and also returns the direction the wire leaves in; this one is
  * the position alone, and it is the one a grade depends on.
  */
-export function pinLocation(component: SchematicComponent, pin: PinSpec): Point2 {
+export function pinLocation(component: Pick<SchematicComponent, "x" | "y" | "m">, pin: PinSpec): Point2 {
   const [a, b, c, d] = component.m;
   return {
     x: component.x + a * pin.x + c * pin.y,
@@ -134,6 +134,9 @@ export interface ExtractOptions {
 
 type SchematicWire = Schematic["wires"][number];
 
+/** What connectivity reads of a wire: its id and its routed polyline, whatever its ends' type. */
+export type WireGeometry = Pick<SchematicWire, "id" | "points">;
+
 const samePoint = (a: Point2, b: Point2): boolean => a.x === b.x && a.y === b.y;
 
 /** Inclusive: an endpoint of the segment counts as being on it. */
@@ -168,7 +171,7 @@ function liesOnPolyline(p: Point2, points: ReadonlyArray<readonly [number, numbe
 }
 
 /** The first and the last point of a wire's polyline (the same point twice for a one-point wire). */
-function endsOf(wire: SchematicWire): Point2[] {
+function endsOf(wire: WireGeometry): Point2[] {
   const first = wire.points[0];
   const last = wire.points[wire.points.length - 1];
   const out: Point2[] = [];
@@ -214,7 +217,7 @@ class PointIndex<T> {
 // Union-find
 // ---------------------------------------------------------------------------
 
-class Dsu {
+export class Dsu {
   private readonly parent = new Map<string, string>();
 
   add(key: string): void {
@@ -283,7 +286,7 @@ interface PinNode {
   terminal: boolean;
 }
 
-const wireKey = (id: string): string => `wire:${id}`;
+export const wireKey = (id: string): string => `wire:${id}`;
 
 /** The nodes: one per component pin, one per port, one per wire. */
 function collectNodes(schematic: Schematic, dsu: Dsu): PinNode[] {
@@ -308,12 +311,12 @@ function collectNodes(schematic: Schematic, dsu: Dsu): PinNode[] {
 }
 
 /** Wire ↔ wire: a free end of one lies anywhere on the other. */
-function unionWires(dsu: Dsu, wires: readonly SchematicWire[]): void {
+export function unionWires(dsu: Dsu, wires: readonly WireGeometry[]): void {
   const ends = wires.map(endsOf);
   for (let i = 0; i < wires.length; i += 1) {
     for (let j = i + 1; j < wires.length; j += 1) {
-      const a = wires[i] as SchematicWire;
-      const b = wires[j] as SchematicWire;
+      const a = wires[i] as WireGeometry;
+      const b = wires[j] as WireGeometry;
       const touches =
         (ends[i] ?? []).some((p) => liesOnPolyline(p, b.points)) ||
         (ends[j] ?? []).some((p) => liesOnPolyline(p, a.points));
@@ -326,8 +329,12 @@ function unionWires(dsu: Dsu, wires: readonly SchematicWire[]): void {
  * Pin ↔ wire (a pin or a port on one of the wire's two ends) and pin ↔ pin
  * (touching symbols), both through one index of the pins by exact position.
  */
-function unionPins(dsu: Dsu, pinNodes: readonly PinNode[], wires: readonly SchematicWire[]): void {
-  const index = new PointIndex<PinNode>();
+export function unionPins(
+  dsu: Dsu,
+  pinNodes: readonly Pick<PinNode, "key" | "at">[],
+  wires: readonly WireGeometry[],
+): void {
+  const index = new PointIndex<Pick<PinNode, "key" | "at">>();
   for (const node of pinNodes) index.add(node.at, node);
   for (const wire of wires) {
     for (const end of endsOf(wire)) {

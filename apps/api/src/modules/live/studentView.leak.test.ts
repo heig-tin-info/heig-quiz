@@ -174,6 +174,16 @@ const DRAFT_COMPLETIONS: Record<string, (draft: unknown) => unknown> = {
    */
   rich: (draft) => ({ ...(draft as object), reference: "" }),
   /*
+   * `logic`'s draft has an output whose expression the teacher writes, and no
+   * filler is an expression over its inputs. The expressions are the key but
+   * not a string a marker can prefix (`S3CR3T…a*b` names no input): its own
+   * `toStudent.test.ts` searches the view for them.
+   */
+  logic: (draft) => {
+    const config = draft as { outputs: { name: string; expression: string }[] };
+    return { ...config, outputs: config.outputs.map((o) => ({ ...o, expression: "a * b" })) };
+  },
+  /*
    * `categorize`'s draft has two columns and no card, and a question needs
    * one card in a column (`categorize.no_target`). Its key is not a string
    * but the id lists inside the columns, which the value search cannot sow:

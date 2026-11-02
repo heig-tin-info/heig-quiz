@@ -62,6 +62,7 @@ const REASON_KEYS: Record<MachineReason, keyof Dict> = {
   finalize_error: "grading.reason.finalize_error",
   reference_failed: "grading.reason.reference_failed",
   palette_violation: "grading.reason.palette_violation",
+  ports_mismatch: "grading.reason.ports_mismatch",
   runner_request_invalid: "grading.reason.runner_request_invalid",
   template_region_mismatch: "grading.reason.template_region_mismatch",
   runner_busy: "grading.reason.runner_busy",

@@ -32,9 +32,18 @@ export interface SymbolMark {
   readonly sign: "+" | "-";
 }
 
+/** A short upright text inside a symbol (`&`, `≥1`, a terminal's name), centred on its point. */
+export interface SymbolText {
+  readonly x: number;
+  readonly y: number;
+  readonly text: string;
+}
+
 export interface SymbolSpec {
   readonly shapes: readonly SymbolShape[];
   readonly marks: readonly SymbolMark[];
+  /** Upright like the marks: they move with the symbol and never turn. */
+  readonly texts?: readonly SymbolText[];
   /** The `viewBox` that frames the symbol alone, for a palette tile. */
   readonly viewBox: string;
 }

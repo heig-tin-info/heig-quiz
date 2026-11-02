@@ -25,6 +25,8 @@ import { countsAsCompleted,
 } from "@quiz/domain";
 import type { BlocksAnswer, BlocksConfig } from "@quiz/qt-blocks/client";
 import { blocksServer } from "@quiz/qt-blocks/server";
+import type { LogicConfig } from "@quiz/qt-circuit/client";
+import { logicServer } from "@quiz/qt-circuit/server";
 import type {
   EvaluationTiming,
   FeedbackWhen,
@@ -48,6 +50,8 @@ import {
 } from "./runtime";
 import {
   BLOCKS_ANSWER,
+  LOGIC_ANSWER,
+  LOGIC_PARTIAL_ANSWER,
   BLOCKS_STRAIGHT_ANSWER,
   CATEGORIZE_ANSWER,
   DIAGRAM_ANSWER,
@@ -143,10 +147,10 @@ function itemSource(): MockQuestion[] {
   const codeimage = published.filter((q) => q.type === "codeimage");
   // The diagram comes eighth (docs/04 §4.14), after the picture.
   const diagram = published.filter((q) => q.type === "diagram");
-  // The blocks question (docs/04 §4.17) is no part of this list: the closed
+  // The blocks question (docs/04 §4.17) and the logic one (§4.18) are no part of this list: the closed
   // evaluation gets it last, after the parameterized one (`mock/grading.ts`),
   // so no item and no draw of the others moves.
-  const rest = primary.filter((q) => !["rich", "categorize", "codeimage", "diagram", "blocks"].includes(q.type));
+  const rest = primary.filter((q) => !["rich", "categorize", "codeimage", "diagram", "blocks", "logic"].includes(q.type));
   if (primary.length === 0) return published;
   return [
     ...rest.slice(0, 2),
@@ -246,6 +250,9 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
     // Counting cells, or reading the sensors.
     case "blocks":
       return wrong ? BLOCKS_STRAIGHT_ANSWER : BLOCKS_ANSWER;
+    // The majority with its third AND missing, or whole.
+    case "logic":
+      return wrong ? LOGIC_PARTIAL_ANSWER : LOGIC_ANSWER;
   }
 }
 
@@ -307,6 +314,9 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
     // The type's own `summarizeAnswer`: the number of blocks.
     case "blocks":
       return blocksServer.summarizeAnswer!(frozenConfig(q) as unknown as BlocksConfig, answer as BlocksAnswer);
+    // The type's own `summarizeAnswer`: gates · wires.
+    case "logic":
+      return logicServer.summarizeAnswer!(frozenConfig(q) as unknown as LogicConfig, answer as never);
     // A poll's alone: no evaluation of the mock holds one.
     case "brainstorm":
       return "";

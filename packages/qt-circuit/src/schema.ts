@@ -78,10 +78,12 @@ export type SchematicComponent = z.infer<typeof SchematicComponent>;
  * point — which is how a wire branches off another wire (a T-junction) and
  * how a dangling wire is stored.
  */
+export const PinEnd = z.object({ kind: z.literal("pin"), c: z.string().regex(/^c\d{1,6}$/), p: z.number().int().min(0).max(7) });
+export const FreeEnd = z.object({ kind: z.literal("free"), x: X, y: Y });
 export const WireEnd = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("pin"), c: z.string().regex(/^c\d{1,6}$/), p: z.number().int().min(0).max(7) }),
+  PinEnd,
   z.object({ kind: z.literal("port"), port: z.enum(PORT_IDS) }),
-  z.object({ kind: z.literal("free"), x: X, y: Y }),
+  FreeEnd,
 ]);
 export type WireEnd = z.infer<typeof WireEnd>;
 
@@ -98,13 +100,15 @@ export type Point = z.infer<typeof Point>;
  * `via` are the user's waypoints, kept so the editor can re-route the wire
  * when a component moves.
  */
-export const Wire = z.object({
-  id: z.string().regex(/^w\d{1,6}$/),
-  a: WireEnd,
-  b: WireEnd,
-  via: z.array(z.object({ x: X, y: Y })).max(16).default([]),
-  points: z.array(Point).min(2).max(64),
-});
+export const wireOf = <E extends z.ZodType>(end: E) =>
+  z.object({
+    id: z.string().regex(/^w\d{1,6}$/),
+    a: end,
+    b: end,
+    via: z.array(z.object({ x: X, y: Y })).max(16).default([]),
+    points: z.array(Point).min(2).max(64),
+  });
+export const Wire = wireOf(WireEnd);
 export type Wire = z.infer<typeof Wire>;
 
 export const Schematic = z.object({

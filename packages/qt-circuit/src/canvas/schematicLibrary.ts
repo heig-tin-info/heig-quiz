@@ -76,7 +76,11 @@ export interface SchematicLibrary {
   readonly kinds: readonly string[];
   /** The kind's geometry; a kind the library does not declare is a bug, and throws. */
   part(kind: string): PartSpec;
-  symbol(kind: string): SymbolSpec;
+  /**
+   * The kind's drawing; `name` is the instance's, for a symbol that prints
+   * it (a logic terminal hugs its name). A palette tile asks without one.
+   */
+  symbol(kind: string, name?: string): SymbolSpec;
   /** A number as the inspector writes it (a value's range). */
   formatValue(value: number): string;
   /** What is wrong with `value` for a part of that kind, or `null`. */

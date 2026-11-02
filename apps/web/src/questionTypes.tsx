@@ -137,6 +137,14 @@ import {
   type CircuitDetails,
   type CircuitEditorProps,
   type KindLabels,
+  LOGIC_EDITOR_STRINGS,
+  LOGIC_GRADING_STRINGS,
+  LOGIC_KEY_STRINGS,
+  LOGIC_KIND_STRINGS,
+  LOGIC_PLAYER_STRINGS,
+  LOGIC_REVIEW_STRINGS,
+  logicKindLabel,
+  type LogicKindStrings,
 } from "@quiz/qt-circuit/client";
 
 import { api, refusedWith } from "./api";
@@ -167,6 +175,14 @@ export const LazyRichText = lazy(async () => ({
 })) as unknown as RichTextComponent;
 
 export { QUESTION_TYPE_IDS };
+
+/**
+ * The types "New question" offers, in the registry's order. `brainstorm` is
+ * left out: it only runs as a poll (ADR-071), and the poll launcher creates
+ * one ("Ask a new question", then "Keep this question" for the pool), as do
+ * the MCP server and a duplicate.
+ */
+export const CREATABLE_TYPE_IDS = QUESTION_TYPE_IDS.filter((id) => id !== "brainstorm");
 
 /** The registry entry, or `undefined` for a type this build does not carry. */
 export function questionType(id: string) {
@@ -271,6 +287,7 @@ export const editorStrings = {
   cloze: (t: TFunction) => translated(t, clozeEditorStrings, "qt.cloze.e"),
   code: (t: TFunction) => translated(t, EDITOR_STRINGS, "qt.code.e"),
   circuit: (t: TFunction) => translated(t, CIRCUIT_EDITOR_STRINGS, "qt.circuit.e"),
+  logic: (t: TFunction) => translated(t, LOGIC_EDITOR_STRINGS, "qt.logic.e"),
   /*
    * `codeimage` is `code`'s program half plus a picture (ADR-021): `code`'s
    * sentences, translated once under `qt.code.*`, with the image's own on
@@ -311,6 +328,31 @@ export const circuitCanvasStrings = (t: TFunction): CanvasStrings => {
   };
 };
 
+/** `logic`'s kinds (`qt.logic.kind.*`): a gate family, a fan-in, a terminal. */
+export const logicKindLabels = (t: TFunction): LogicKindStrings => translated(t, LOGIC_KIND_STRINGS, "qt.logic.kind");
+
+/**
+ * `logic` draws on `circuit`'s canvas, so it speaks its words; only the kinds
+ * are its own, and it has no port on its border.
+ */
+export const logicCanvasStrings = (t: TFunction): CanvasStrings => {
+  const kinds = logicKindLabels(t);
+  return {
+    ...translated(t, CANVAS_STRINGS, "qt.circuit.c"),
+    kind: (kind) => logicKindLabel(kind, kinds),
+    port: (port) => port,
+  };
+};
+
+/**
+ * The kinds' names an editor takes beside its `strings` (`kindLabels`): the
+ * same words label its palette chips and the canvas's symbols.
+ */
+const KIND_LABELS_OF: Partial<Record<QuestionTypeId, (t: TFunction) => unknown>> = {
+  circuit: circuitKindLabels,
+  logic: logicKindLabels,
+};
+
 /**
  * The diagram engine's own dictionary (`qt.diagram.c.*`): the tools'
  * accessible names, the inspector, the text pane — the words of the canvas
@@ -334,6 +376,7 @@ export const blocksCanvasStringsOf = (t: TFunction) => translated(t, blocksCanva
  */
 export const CANVAS_STRINGS_OF: Partial<Record<QuestionTypeId, (t: TFunction) => unknown>> = {
   circuit: circuitCanvasStrings,
+  logic: logicCanvasStrings,
   diagram: diagramCanvasStrings,
   blocks: blocksCanvasStringsOf,
 };
@@ -350,6 +393,7 @@ export const playerStrings = {
   cloze: (t: TFunction) => translated(t, clozePlayerStrings, "qt.cloze.p"),
   code: (t: TFunction) => translated(t, PLAYER_STRINGS, "qt.code.p"),
   circuit: (t: TFunction) => translated(t, CIRCUIT_PLAYER_STRINGS, "qt.circuit.p"),
+  logic: (t: TFunction) => translated(t, LOGIC_PLAYER_STRINGS, "qt.logic.p"),
   codeimage: (t: TFunction) => ({
     ...translated(t, PLAYER_STRINGS, "qt.code.p"),
     ...translated(t, IMAGE_PLAYER_STRINGS, "qt.codeimage.p"),
@@ -368,6 +412,7 @@ export const reviewStrings = {
   cloze: (t: TFunction) => translated(t, clozeReviewStrings, "qt.cloze.r"),
   code: (t: TFunction) => translated(t, REVIEW_STRINGS, "qt.code.r"),
   circuit: (t: TFunction) => translated(t, CIRCUIT_REVIEW_STRINGS, "qt.circuit.r"),
+  logic: (t: TFunction) => translated(t, LOGIC_REVIEW_STRINGS, "qt.logic.r"),
   // The review shows the player's image panel, so it reads the player's words too.
   codeimage: (t: TFunction) => ({
     ...playerStrings.codeimage(t),
@@ -412,6 +457,7 @@ export const keyStrings = {
   rich: (t: TFunction) => translated(t, richKeyStrings, "qt.rich.k"),
   diagram: (t: TFunction) => translated(t, diagramKeyStrings, "qt.diagram.k"),
   circuit: (t: TFunction) => translated(t, CIRCUIT_KEY_STRINGS, "qt.circuit.k"),
+  logic: (t: TFunction) => translated(t, LOGIC_KEY_STRINGS, "qt.logic.k"),
   blocks: (t: TFunction) => translated(t, blocksKeyStrings, "qt.blocks.k"),
 } satisfies Partial<Record<QuestionTypeId, (t: TFunction) => object>>;
 
@@ -432,6 +478,7 @@ export const gradingStrings: Record<QuestionTypeId, (t: TFunction) => Record<str
     ...translated(t, IMAGE_GRADING_STRINGS, "qt.codeimage.g"),
   }),
   circuit: (t) => translated(t, CIRCUIT_GRADING_STRINGS, "qt.circuit.g"),
+  logic: (t) => translated(t, LOGIC_GRADING_STRINGS, "qt.logic.g"),
   rich: (t) => translated(t, richGradingStrings, "qt.rich.g"),
   diagram: (t) => translated(t, diagramGradingStrings, "qt.diagram.g"),
   brainstorm: (t) => translated(t, brainstormGradingStrings, "qt.brainstorm.g"),
@@ -677,7 +724,7 @@ type EditorHostProps = EditorProps<unknown> & {
   strings?: unknown;
   /** `circuit` and `diagram`: the canvas ships a dictionary of its own (`qt.<type>.c.*`). */
   canvasStrings?: unknown;
-  /** `circuit` only: the component names, keyed by kind (`qt.circuit.kind.*`). */
+  /** `circuit` and `logic`: the kinds' names (`qt.<type>.kind.*`, `KIND_LABELS_OF`). */
   kindLabels?: unknown;
   onTry?: (config: unknown) => Promise<TryOutcome>;
   /** `code`: `CodeEditorProps.onTryInBrowser`, called only beside `onTry`. */
@@ -766,7 +813,7 @@ export function QuestionEditorHost({
         issues={issues}
         strings={strings}
         {...canvasStringsProp(client.id, t)}
-        {...(client.id === "circuit" ? { kindLabels: circuitKindLabels(t) } : {})}
+        {...(KIND_LABELS_OF[client.id] === undefined ? {} : { kindLabels: KIND_LABELS_OF[client.id]!(t) })}
         renderMarkdown={renderBlock}
         renderHelp={renderHelp}
         RichText={LazyRichText}
