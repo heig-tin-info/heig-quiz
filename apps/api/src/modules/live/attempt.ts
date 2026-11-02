@@ -35,6 +35,7 @@ import {
   practiceCooldownS,
   practiceDeadline,
   practiceDurationS,
+  practiceOwnLimit,
   practiceRefusal,
   type PracticeRefusal,
   isEvaluationOpen,
@@ -62,6 +63,7 @@ import {
   evaluations,
   guestParticipants,
   officialAttempt,
+  practiceAttempt,
 } from "../../db/schema.js";
 import { rateLimited, refusalClass, type FailureArms, type Refusal } from "../http.js";
 import {
@@ -97,6 +99,7 @@ import {
   studentAttempts,
   tallyByAttempt,
   validatedOfAttempt,
+  type AttemptTally,
   type GradingRecord,
 } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
@@ -686,6 +689,53 @@ export async function ensureAttempt(
   return row;
 }
 
+/**
+ * Inserts an attempt already STARTED, number `number`, on its own seed,
+ * values and deadline: a retake (ADR-025) and a practice attempt (ADR-122)
+ * alike, inside the caller's transaction. `null` when the unique index
+ * `(evaluation, user, number)` or the one unfinished attempt per student
+ * refused it: a concurrent click won, and the caller resumes its attempt.
+ */
+async function insertAttempt(
+  tx: DbOrTx,
+  input: {
+    evaluation: EvaluationRecord;
+    participant: Participant;
+    number: number;
+    seed: number;
+    instances: Record<string, StoredInstance>;
+    deadlineAt: Date | null;
+    bonusS: number;
+    afterDue: boolean;
+    acquiredItemIds?: string[];
+    now: Date;
+  },
+): Promise<AttemptRecord | null> {
+  const { now } = input;
+  const created = await tx
+    .insert(attempts)
+    .values({
+      id: randomUUID(),
+      evaluationId: input.evaluation.id,
+      ...ownerOf(input.participant),
+      attemptNumber: input.number,
+      state: "in_progress",
+      seed: input.seed,
+      instances: input.instances,
+      acquiredItemIds: input.acquiredItemIds ?? [],
+      startedAt: now,
+      deadlineAt: input.deadlineAt,
+      bonusS: input.bonusS,
+      afterDue: input.afterDue,
+      presentAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing()
+    .returning();
+  return created[0] ?? null;
+}
+
 /** What a partial retake carries over: the items, and their validated gradings as read. */
 interface Carried {
   itemIds: string[];
@@ -840,27 +890,18 @@ export async function retakeAttempt(
       const kept = latest.instances[itemId];
       if (kept !== undefined) drawn[itemId] = kept;
     }
-    const created = await tx
-      .insert(attempts)
-      .values({
-        id: randomUUID(),
-        evaluationId: evaluation.id,
-        ...ownerOf(participant),
-        attemptNumber: latest.attemptNumber + 1,
-        state: "in_progress",
-        seed,
-        instances: drawn,
-        acquiredItemIds: carried.itemIds,
-        startedAt: now,
-        deadlineAt,
-        bonusS,
-        presentAt: now,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing()
-      .returning();
-    const row = created[0] ?? null;
+    const row = await insertAttempt(tx, {
+      evaluation,
+      participant,
+      number: latest.attemptNumber + 1,
+      seed,
+      instances: drawn,
+      deadlineAt,
+      bonusS,
+      afterDue: false,
+      acquiredItemIds: carried.itemIds,
+      now,
+    });
     if (row !== null) await carryAcquired(tx, latest, row, carried, now);
     return { evaluation, row };
   });
@@ -1219,7 +1260,7 @@ function conditionsFor(evaluation: EvaluationRecord, timeBonusPercent: number): 
  */
 function practiceConditions(evaluation: EvaluationRecord, timeBonusPercent: number): EvaluationConditions {
   const settings = settingsOf(evaluation);
-  const ownLimit = settings.timing === "duration" && (evaluation.durationS ?? 0) > 0;
+  const limit = { timing: settings.timing, durationS: evaluation.durationS };
   return evaluationConditionsOf({
     mode: evaluation.mode,
     settings: {
@@ -1228,10 +1269,10 @@ function practiceConditions(evaluation: EvaluationRecord, timeBonusPercent: numb
       logVisibility: false,
       retakes: { enabled: true, keep: "best", maxAttempts: null },
     },
-    durationS: practiceDurationS({ timing: settings.timing, durationS: evaluation.durationS }),
+    durationS: practiceDurationS(limit),
     closesAt: null,
     // The accommodation stretches the exercise's own limit, not the eight hours.
-    timeBonusPercent: ownLimit ? timeBonusPercent : 0,
+    timeBonusPercent: practiceOwnLimit(limit) ? timeBonusPercent : 0,
   });
 }
 
@@ -1339,25 +1380,34 @@ export async function enterEvaluation(
 
 // --- Practice after the due date (ADR-122) --------------------------------
 
-/** The student's unfinished practice attempt on this evaluation, if any. */
-async function openPracticeOf(db: DbOrTx, evaluationId: string, userId: string): Promise<AttemptRecord | null> {
-  const [row] = await db
+/**
+ * Where a student stands for practice on one evaluation, from ONE read of
+ * their attempts: the unfinished practice attempt to resume, whether an
+ * official attempt is left unfinished, the latest practice one (for the
+ * minute between two), and the next attempt number.
+ */
+async function practiceState(tx: DbOrTx, evaluationId: string, userId: string) {
+  const mine = await tx
     .select()
     .from(attempts)
-    .where(
-      and(
-        eq(attempts.evaluationId, evaluationId),
-        eq(attempts.userId, userId),
-        eq(attempts.afterDue, true),
-        inArray(attempts.state, ["not_started", "in_progress"]),
-      ),
-    )
-    .limit(1);
-  return row ?? null;
+    .where(and(eq(attempts.evaluationId, evaluationId), eq(attempts.userId, userId)))
+    .orderBy(asc(attempts.attemptNumber));
+  const unfinished = mine.filter((a) => !isFinishedAttempt(a.state));
+  return {
+    open: unfinished.find((a) => a.afterDue) ?? null,
+    unfinishedOfficial: unfinished.some((a) => !a.afterDue),
+    lastPractice: mine.filter((a) => a.afterDue).at(-1) ?? null,
+    nextNumber: (mine.at(-1)?.attemptNumber ?? 0) + 1,
+  };
 }
 
-/** Whether the evaluation's classroom is archived: it takes no writes (ADR-122 §1). */
-async function classroomArchived(db: DbOrTx, evaluation: EvaluationRecord): Promise<boolean> {
+/**
+ * Whether the evaluation's classroom is archived: it takes no writes
+ * (ADR-122 §1). The student's loader read it with their seat; the staff's
+ * did not (`archived: null`), and it is read here then.
+ */
+async function classroomArchived(db: DbOrTx, evaluation: EvaluationRecord, archived: boolean | null): Promise<boolean> {
+  if (archived !== null) return archived;
   if (evaluation.classroomId === null) return false;
   const [row] = await db
     .select({ archivedAt: classrooms.archivedAt })
@@ -1367,12 +1417,28 @@ async function classroomArchived(db: DbOrTx, evaluation: EvaluationRecord): Prom
   return row?.archivedAt != null;
 }
 
-/** The ready screen of a new practice attempt: its conditions, no content (invariant 4). */
-function practiceReadyView(evaluation: EvaluationRecord, participant: Participant): ReadyView {
-  return {
-    conditions: practiceConditions(evaluation, participant.timeBonusPercent),
-    evaluation: { id: evaluation.id, title: evaluation.title },
-  };
+/** The practice rule for this student now, refused as `409 practice_refused`. */
+async function assertPractice(
+  db: DbOrTx,
+  evaluation: EvaluationRecord,
+  archived: boolean | null,
+  unfinishedOfficial: boolean,
+): Promise<void> {
+  const refusal = practiceRefusal({
+    open: practiceOpen(evaluation),
+    evaluationState: evaluation.state,
+    archived: await classroomArchived(db, evaluation, archived),
+    unfinishedOfficial,
+  });
+  if (refusal !== null) throw new PracticeRefused(refusal);
+}
+
+/** What the practice routes are given: the evaluation, who practises, and the loader's `archived`. */
+interface PracticeInput {
+  evaluation: EvaluationRecord;
+  participant: Participant;
+  archived: boolean | null;
+  now: Date;
 }
 
 /**
@@ -1384,30 +1450,31 @@ function practiceReadyView(evaluation: EvaluationRecord, participant: Participan
  */
 export async function practiceEntry(
   db: Db,
-  input: { evaluation: EvaluationRecord; participant: Participant; now: Date },
+  input: PracticeInput,
 ): Promise<{ kind: "attempt"; view: AttemptView } | { kind: "ready"; view: ReadyView }> {
   const { evaluation, participant, now } = input;
   if (participant.userId === null) throw new PracticeRefused("hidden");
-  const open = await openPracticeOf(db, evaluation.id, participant.userId);
-  if (open !== null) return { kind: "attempt", view: await attemptView(db, evaluation, open, now, participant) };
-  const refusal = practiceRefusal({
-    open: practiceOpen(evaluation),
-    evaluationState: evaluation.state,
-    archived: await classroomArchived(db, evaluation),
-    unfinishedOfficial: false,
-  });
-  if (refusal !== null) throw new PracticeRefused(refusal);
-  return { kind: "ready", view: practiceReadyView(evaluation, participant) };
+  const state = await practiceState(db, evaluation.id, participant.userId);
+  if (state.open !== null) {
+    return { kind: "attempt", view: await attemptView(db, evaluation, state.open, now, participant) };
+  }
+  await assertPractice(db, evaluation, input.archived, state.unfinishedOfficial);
+  return {
+    kind: "ready",
+    view: {
+      conditions: practiceConditions(evaluation, participant.timeBonusPercent),
+      evaluation: { id: evaluation.id, title: evaluation.title },
+    },
+  };
 }
 
 /**
  * `POST /evaluations/:id/practice/start` (ADR-122): a NEW practice attempt
  * on an exercise that is over — blank, a new seed (a new order, new values),
- * never a partial retake (ADR-091), started at once with its own deadline:
- * the exercise's time limit and the accommodation, never cut at its closing,
- * or eight hours (`practiceDeadline`). Unlimited, one unfinished at a time:
- * an unfinished practice attempt is answered instead of a new one. At most
- * one new attempt a minute (`429 rate_limited`).
+ * never a partial retake (ADR-091), started at once with its own deadline
+ * (`practiceDeadline`). Unlimited, one unfinished at a time: an unfinished
+ * practice attempt is answered instead of a new one. At most one new
+ * attempt a minute (`429 rate_limited`).
  *
  * The rule is read inside a transaction that holds the evaluation row
  * `FOR SHARE`; its number follows every attempt of the student's, practice
@@ -1416,7 +1483,7 @@ export async function practiceEntry(
  */
 export async function startPractice(
   db: Db,
-  input: { evaluation: EvaluationRecord; participant: Participant; now: Date },
+  input: PracticeInput,
 ): Promise<{ row: AttemptRecord; created: boolean }> {
   const { participant, now } = input;
   if (participant.userId === null) throw new PracticeRefused("hidden");
@@ -1429,56 +1496,36 @@ export async function startPractice(
       .where(eq(evaluations.id, input.evaluation.id))
       .for("share");
     if (!evaluation) throw new PracticeRefused("not_over");
-    const mine = await tx
-      .select()
-      .from(attempts)
-      .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.userId, userId)))
-      .orderBy(asc(attempts.attemptNumber));
-    const unfinished = mine.find((a) => !isFinishedAttempt(a.state)) ?? null;
-    if (unfinished?.afterDue) return { evaluation, row: unfinished, created: false };
-    const refusal = practiceRefusal({
-      open: practiceOpen(evaluation),
-      evaluationState: evaluation.state,
-      archived: await classroomArchived(tx, evaluation),
-      unfinishedOfficial: unfinished !== null,
-    });
-    if (refusal !== null) throw new PracticeRefused(refusal);
-    const lastPractice = mine.filter((a) => a.afterDue).at(-1) ?? null;
-    const wait = practiceCooldownS(lastPractice?.createdAt ?? null, now);
+    const state = await practiceState(tx, evaluation.id, userId);
+    if (state.open !== null) return { evaluation, row: state.open, created: false };
+    await assertPractice(tx, evaluation, input.archived, state.unfinishedOfficial);
+    const wait = practiceCooldownS(state.lastPractice?.createdAt ?? null, now);
     if (wait > 0) throw new RateLimited(wait);
 
     const settings = settingsOf(evaluation);
     const seed = drawSeed();
-    const created = await tx
-      .insert(attempts)
-      .values({
-        id: randomUUID(),
-        evaluationId: evaluation.id,
-        ...ownerOf(participant),
-        attemptNumber: (mine.at(-1)?.attemptNumber ?? 0) + 1,
-        state: "in_progress",
-        seed,
-        instances: await drawInstances(tx, evaluation, seed),
+    const row = await insertAttempt(tx, {
+      evaluation,
+      participant,
+      number: state.nextNumber,
+      seed,
+      instances: await drawInstances(tx, evaluation, seed),
+      deadlineAt: practiceDeadline({
         startedAt: now,
-        deadlineAt: practiceDeadline({
-          startedAt: now,
-          timing: settings.timing,
-          durationS: evaluation.durationS,
-          timeBonusPercent: participant.timeBonusPercent,
-        }),
-        afterDue: true,
-        presentAt: now,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing()
-      .returning();
-    return { evaluation, row: created[0] ?? null, created: created.length > 0 };
+        timing: settings.timing,
+        durationS: evaluation.durationS,
+        timeBonusPercent: participant.timeBonusPercent,
+      }),
+      bonusS: 0,
+      afterDue: true,
+      now,
+    });
+    return { evaluation, row, created: row !== null };
   });
 
   if (outcome.row === null) {
     // Lost the race: resume the attempt the winner opened.
-    const row = await openPracticeOf(db, outcome.evaluation.id, userId);
+    const row = (await practiceState(db, outcome.evaluation.id, userId)).open;
     if (!row) throw new PracticeRefused("unfinished");
     return { row, created: false };
   }
@@ -1486,41 +1533,23 @@ export async function startPractice(
 }
 
 /**
- * ADR-122, the student home's "Past series": the exercises of the student's
- * classrooms that are over and take practice, newest closed first, each with
- * the student's unfinished practice attempt and the score of their latest
- * finished one — points, never a grade, and none under the policy `none`.
- * An archived classroom takes no practice and is left out. Three queries.
+ * ADR-122, the student home's "Past series", from the rows `studentBoard`
+ * already read: the exercises over and open to practice in a classroom that
+ * is not archived, newest closed first, each with the student's unfinished
+ * practice attempt and the score of their latest finished one — points,
+ * never a grade, and none under the policy `none`.
  */
-export async function practiceCards(db: Db, userId: string): Promise<PracticeCard[]> {
-  const rows = (await studentEvaluationRows(db, userId)).filter(
-    (r) => r.archivedAt === null && isEvaluationOver(r.evaluation.state) && practiceOpen(r.evaluation),
-  );
-  if (rows.length === 0) return [];
-  const mine = await db
-    .select()
-    .from(attempts)
-    .where(
-      and(
-        eq(attempts.userId, userId),
-        eq(attempts.afterDue, true),
-        inArray(attempts.evaluationId, rows.map((r) => r.evaluation.id)),
-      ),
-    )
-    .orderBy(asc(attempts.attemptNumber));
-  const finished = mine.filter((a) => isFinishedAttempt(a.state));
-  const latest = new Map(finished.map((a) => [a.evaluationId, a]));
-  const ids = [...new Set(rows.map((r) => r.evaluation.id))];
-  const [totals, itemCounts, tallies] = await Promise.all([
-    totalPointsByEvaluation(db, ids),
-    countedItemsByEvaluation(db, ids),
-    tallyByAttempt(db, [...latest.values()].map((a) => a.id)),
-  ]);
+function practiceCardsOf(
+  rows: readonly StudentRow[],
+  mine: readonly AttemptRecord[],
+  scores: { totals: ReadonlyMap<string, number>; itemCounts: ReadonlyMap<string, number>; tallies: ReadonlyMap<string, AttemptTally> },
+): PracticeCard[] {
   return rows
     .map((row): PracticeCard => {
       const evaluation = row.evaluation;
-      const last = latest.get(evaluation.id) ?? null;
-      const open = mine.find((a) => a.evaluationId === evaluation.id && !isFinishedAttempt(a.state)) ?? null;
+      const own = mine.filter((a) => a.evaluationId === evaluation.id);
+      const finished = own.filter((a) => isFinishedAttempt(a.state));
+      const last = finished.at(-1) ?? null;
       return {
         id: evaluation.id,
         title: evaluation.title,
@@ -1528,8 +1557,8 @@ export async function practiceCards(db: Db, userId: string): Promise<PracticeCar
         classroomName: row.classroomName,
         courseCode: row.courseCode,
         closedAt: isoOrNull(evaluation.closedAt),
-        openAttemptId: open?.id ?? null,
-        count: finished.filter((a) => a.evaluationId === evaluation.id).length,
+        openAttemptId: own.find((a) => !isFinishedAttempt(a.state))?.id ?? null,
+        count: finished.length,
         last:
           last === null
             ? null
@@ -1540,11 +1569,27 @@ export async function practiceCards(db: Db, userId: string): Promise<PracticeCar
                 score:
                   feedbackOf(evaluation).when === "none"
                     ? null
-                    : scoreOf(tallies.get(last.id), itemCounts.get(evaluation.id) ?? 0, totals.get(evaluation.id) ?? 0),
+                    : scoreOf(
+                        scores.tallies.get(last.id),
+                        scores.itemCounts.get(evaluation.id) ?? 0,
+                        scores.totals.get(evaluation.id) ?? 0,
+                      ),
               },
       };
     })
     .sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? ""));
+}
+
+/** The student's practice attempts on `rows`, oldest first; none to read without a row. */
+async function practiceAttemptsOf(db: Db, userId: string, rows: readonly StudentRow[]): Promise<AttemptRecord[]> {
+  if (rows.length === 0) return [];
+  return db
+    .select()
+    .from(attempts)
+    .where(
+      and(eq(attempts.userId, userId), practiceAttempt, inArray(attempts.evaluationId, rows.map((r) => r.evaluation.id))),
+    )
+    .orderBy(asc(attempts.attemptNumber));
 }
 
 // --- Autosave (§4.7) ------------------------------------------------------
@@ -1769,6 +1814,8 @@ export interface EvaluationHome {
   open: EvaluationCard[];
   upcoming: EvaluationCard[];
   past: EvaluationCard[];
+  /** ADR-122, "Past series": on the whole home only (no `classroomId`), else empty. */
+  practice: PracticeCard[];
 }
 
 /**
@@ -1782,8 +1829,10 @@ export async function studentHome(
   now: Date,
   classroomId?: string,
 ): Promise<EvaluationHome> {
-  const { polls, open, upcoming, past } = await studentBoard(db, userId, now, classroomId);
-  return { polls, open, upcoming, past: past.map((entry) => entry.card) };
+  const { polls, open, upcoming, past, practice } = await studentBoard(db, userId, now, classroomId, {
+    practice: classroomId === undefined,
+  });
+  return { polls, open, upcoming, past: past.map((entry) => entry.card), practice };
 }
 
 type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];
@@ -1808,7 +1857,13 @@ export interface PastEntry {
  * rule for what is open, coming and past, which the home and the Grades page
  * (`grades.ts`) both read. Within the module only.
  */
-export async function studentBoard(db: Db, userId: string, now: Date, classroomId?: string) {
+export async function studentBoard(
+  db: Db,
+  userId: string,
+  now: Date,
+  classroomId?: string,
+  options: { practice?: boolean } = {},
+) {
   const all = await studentEvaluationRows(db, userId, classroomId).orderBy(
     desc(evaluations.createdAt),
   );
@@ -1839,11 +1894,22 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
   // or last) and how many were taken; its grade is the kept attempt's. Every
   // other card is its one attempt, as before.
   const withRetakes = rows.filter((r) => retakesEnabled(r.evaluation));
-  const perEvaluation = await studentAttempts(
-    db,
-    userId,
-    withRetakes.map((r) => r.evaluation),
-  );
+  // ADR-122: the exercises over and open to practice, outside an archived
+  // classroom, and the student's practice attempts on them.
+  const practiced = options.practice
+    ? rows.filter((r) => r.archivedAt === null && isEvaluationOver(r.evaluation.state) && practiceOpen(r.evaluation))
+    : [];
+  const [perEvaluation, practiceRows] = await Promise.all([
+    studentAttempts(
+      db,
+      userId,
+      withRetakes.map((r) => r.evaluation),
+    ),
+    practiceAttemptsOf(db, userId, practiced),
+  ]);
+  const lastPractice = [
+    ...new Map(practiceRows.filter((a) => isFinishedAttempt(a.state)).map((a) => [a.evaluationId, a.id])).values(),
+  ];
 
   // The grade of a released evaluation is the results page's (WP6), and the
   // score of a kept attempt what its feedback page would show — so are the
@@ -1858,17 +1924,15 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
     );
   });
   const scored = [...new Set([...withRetakes, ...readableEarly])];
-  const scoredIds = [...new Set(scored.map((r) => r.evaluation.id))];
+  const scoredIds = [...new Set([...scored, ...practiced].map((r) => r.evaluation.id))];
   const [grades, totals, itemCounts, keptTallies] = await Promise.all([
     releasedGradesOf(db, userId, rows, perEvaluation),
     totalPointsByEvaluation(db, scoredIds),
     countedItemsByEvaluation(db, scoredIds),
-    tallyByAttempt(
-      db,
-      scored
-        .map((row) => countedAttemptId(perEvaluation, row))
-        .filter((id): id is string => id !== null),
-    ),
+    tallyByAttempt(db, [
+      ...scored.map((row) => countedAttemptId(perEvaluation, row)).filter((id): id is string => id !== null),
+      ...lastPractice,
+    ]),
   ]);
 
   const retakesOf = (row: (typeof rows)[number]): EvaluationCard["retakes"] => {
@@ -1975,5 +2039,6 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
       past.push(ended);
     } else open.push(withConditions(row, c));
   }
-  return { polls, open, upcoming, past };
+  const practice = practiceCardsOf(practiced, practiceRows, { totals, itemCounts, tallies: keptTallies });
+  return { polls, open, upcoming, past, practice };
 }

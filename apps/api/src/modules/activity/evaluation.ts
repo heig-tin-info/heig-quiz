@@ -139,6 +139,7 @@ export const evaluationActivity: ActivityKind<"evaluation"> = {
       open: tagged(home.open),
       upcoming: tagged(home.upcoming),
       past: tagged(home.past),
+      practice: home.practice,
     };
   },
   async gradebookEntries(db, classroomId) {

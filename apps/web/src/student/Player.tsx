@@ -437,7 +437,7 @@ export function PlayerView({
     <ExpandChrome.Provider value={chrome}>
       <PlayerShell
         title={initial.evaluation.title}
-        {...(initial.attempt.practice ? { subtitle: t("practice.player.subtitle") } : {})}
+        {...(initial.attempt.practice ? { badge: t("practice.badge") } : {})}
         deadlineAt={session.deadlineAt}
         clock={session.clock}
         paused={paused}

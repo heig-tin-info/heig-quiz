@@ -15,7 +15,7 @@ import type {
   LobbyView,
   ReadyView,
   PracticeCard,
-  PracticeEntry,
+  AttemptEntry,
   ProjectAcceptance,
   ProjectInvitationResent,
   StudentClassroomPage,
@@ -999,12 +999,12 @@ const practiceAttemptView = (): AttemptView => {
   };
 };
 
-on("POST", "/app/api/evaluations/:id/practice", (m): PracticeEntry =>
+on("POST", "/app/api/evaluations/:id/practice", (m): AttemptEntry =>
   practiceStarted || m.groups!.id === STUDENT_PRACTICE_B
     ? { kind: "attempt", view: practiceAttemptView() }
     : { kind: "ready", view: practiceReadyView(m.groups!.id!) },
 );
-on("POST", "/app/api/evaluations/:id/practice/start", (): PracticeEntry => {
+on("POST", "/app/api/evaluations/:id/practice/start", (): AttemptEntry => {
   practiceStarted = true;
   return { kind: "attempt", view: practiceAttemptView() };
 });

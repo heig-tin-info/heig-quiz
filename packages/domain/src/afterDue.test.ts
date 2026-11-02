@@ -6,11 +6,12 @@ import {
   practiceCooldownS,
   practiceDeadline,
   practiceDurationS,
+  practiceOwnLimit,
   practiceRefusal,
 } from "./afterDue.js";
 import { gradableNow } from "./retake.js";
 
-const exercise = { mode: "exercise" as const, afterDue: undefined, feedbackWhen: "on_release" as const };
+const exercise = { mode: "exercise" as const, afterDue: undefined, feedbackWhen: "on_release" as const, showKey: true };
 
 describe("afterDueOpen (ADR-122 §1)", () => {
   it("is open by default on an exercise", () => {
@@ -18,8 +19,14 @@ describe("afterDueOpen (ADR-122 §1)", () => {
     expect(afterDueOpen({ ...exercise, feedbackWhen: "immediate" })).toBe(true);
   });
 
-  it("is hidden by default under the feedback policy none", () => {
+  it("is hidden by default where the key stays hidden: the policy none, or no key shown", () => {
     expect(afterDueOpen({ ...exercise, feedbackWhen: "none" })).toBe(false);
+    expect(afterDueOpen({ ...exercise, showKey: false })).toBe(false);
+    expect(afterDueOpen({ ...exercise, feedbackWhen: "immediate", showKey: false })).toBe(false);
+  });
+
+  it("is open when the teacher says so, the hidden key accepted", () => {
+    expect(afterDueOpen({ ...exercise, showKey: false, afterDue: "open" })).toBe(true);
   });
 
   it("follows the teacher's switch when set, the policy none included", () => {
@@ -58,6 +65,8 @@ describe("practiceDeadline (ADR-122 §3)", () => {
     }
     expect(practiceDurationS({ timing: "deadline", durationS: 600 })).toBe(PRACTICE_DEFAULT_S);
     expect(practiceDurationS({ timing: "duration", durationS: 600 })).toBe(600);
+    expect(practiceOwnLimit({ timing: "duration", durationS: null })).toBe(false);
+    expect(practiceOwnLimit({ timing: "duration", durationS: 0 })).toBe(false);
   });
 });
 
@@ -89,9 +98,9 @@ describe("practiceCooldownS", () => {
 
 describe("gradableNow and a practice attempt", () => {
   it("grades a practice attempt once it is finished, whatever the state", () => {
-    expect(gradableNow("closed", "in_progress", true)).toBe(false);
-    expect(gradableNow("released", "submitted", true)).toBe(true);
+    expect(gradableNow("closed", { state: "in_progress", afterDue: true })).toBe(false);
+    expect(gradableNow("released", { state: "submitted", afterDue: true })).toBe(true);
     // An official attempt keeps its rule.
-    expect(gradableNow("closed", "in_progress")).toBe(true);
+    expect(gradableNow("closed", { state: "in_progress", afterDue: false })).toBe(true);
   });
 });

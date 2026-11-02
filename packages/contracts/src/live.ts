@@ -306,6 +306,11 @@ export type AttemptOrLobby = z.infer<typeof AttemptOrLobby>;
  * `POST /evaluations/:id/attempt/start` (ADR-076): a `running` evaluation the
  * participant has not started answers `ready`, nothing written.
  */
+/**
+ * The entry routes' answer: `POST /evaluations/:id/attempt` and
+ * `…/attempt/start`, and the practice's `POST /evaluations/:id/practice`
+ * and `…/practice/start` (ADR-122), which never answer the lobby.
+ */
 export const AttemptEntry = z.union([
   ...AttemptOrLobby.options,
   z.object({ kind: z.literal("ready"), view: ReadyView }),
@@ -320,16 +325,6 @@ export type AttemptEntry = z.infer<typeof AttemptEntry>;
 export const PracticeRefusalReason = z.enum(PRACTICE_REFUSALS);
 export type PracticeRefusalReason = z.infer<typeof PracticeRefusalReason>;
 
-/**
- * `POST /evaluations/:id/practice` and `…/practice/start` (ADR-122): the
- * ready screen of a new practice attempt, or the unfinished practice attempt
- * itself — never a lobby.
- */
-export const PracticeEntry = z.union([
-  z.object({ kind: z.literal("attempt"), view: AttemptView }),
-  z.object({ kind: z.literal("ready"), view: ReadyView }),
-]);
-export type PracticeEntry = z.infer<typeof PracticeEntry>;
 
 /**
  * Empty since the access code was removed (ADR-053); the body of both entry

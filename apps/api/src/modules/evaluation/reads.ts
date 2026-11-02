@@ -123,6 +123,7 @@ export function toEvaluation(row: EvaluationRecord): Evaluation {
     settings: settingsOf(row),
     allowDrill: drillAllowed(row),
     afterDueOpen: practiceOpen(row),
+    afterDueSource: settingsOf(row).afterDue === undefined ? "default" : "set",
     gradingScale: GradingScale.parse(row.gradingScale),
     feedbackPolicy: feedbackOf(row),
     mcqPolicy: row.mcqPolicy,
@@ -218,6 +219,7 @@ export function practiceOpen(row: EvaluationRecord): boolean {
     mode: row.mode,
     afterDue: settings.afterDue,
     feedbackWhen: feedbackOf(row).when,
+    showKey: feedbackOf(row).showKey,
     safeExamBrowser: settings.safeExamBrowser,
     kiosk: settings.kiosk,
   });

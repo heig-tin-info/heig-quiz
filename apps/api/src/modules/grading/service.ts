@@ -368,18 +368,19 @@ export function verdictOf(row: Pick<GradingRecord, "points" | "maxPoints" | "sta
 interface CellScope {
   itemId?: string | undefined;
   /**
-   * ADR-122: the practice attempts' cells too — only the pass grading one
-   * asks for them. Every reader of the class (the panel, the results, the
-   * progress) leaves them out.
+   * These attempts' cells, whatever they are: what a grading pass reads of
+   * the attempts it grades, a practice one after the due date included
+   * (ADR-122). Without it, the official attempts only — every reader of the
+   * class (the panel, the results, the progress) leaves practice out.
    */
-  practice?: boolean | undefined;
+  attemptIds?: readonly string[] | undefined;
 }
 
 /** The `WHERE` of a {@link CellScope} on `gradings` joined to its attempts. */
 const gradingsIn = (evaluationId: string, scope: CellScope) =>
   and(
     eq(attempts.evaluationId, evaluationId),
-    scope.practice ? undefined : officialAttempt,
+    scope.attemptIds ? inArray(attempts.id, [...scope.attemptIds]) : officialAttempt,
     scope.itemId ? eq(gradings.itemId, scope.itemId) : undefined,
   );
 
@@ -1396,6 +1397,7 @@ export {
   scoreOf,
   studentAttempts,
   tallyByAttempt,
+  type AttemptTally,
   type StudentAttempts,
 } from "./kept.js";
 

@@ -69,7 +69,6 @@ export {
   studentHome,
   practiceEntry,
   startPractice,
-  practiceCards,
   drawSeed,
   orderItems,
 } from "./attempt.js";

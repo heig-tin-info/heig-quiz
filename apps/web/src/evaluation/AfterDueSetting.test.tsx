@@ -16,7 +16,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const exercise = (over: { afterDueOpen: boolean; when?: "none" | "on_release"; afterDue?: "open" | "hidden" }) => {
+const exercise = (over: { afterDueOpen: boolean; afterDue?: "open" | "hidden" }) => {
   const detail = makeEvaluationDetail();
   return {
     ...detail,
@@ -24,8 +24,8 @@ const exercise = (over: { afterDueOpen: boolean; when?: "none" | "on_release"; a
       ...detail.evaluation,
       mode: "exercise" as const,
       afterDueOpen: over.afterDueOpen,
+      afterDueSource: over.afterDue ? ("set" as const) : ("default" as const),
       settings: { ...detail.evaluation.settings, ...(over.afterDue ? { afterDue: over.afterDue } : {}) },
-      feedbackPolicy: { ...detail.evaluation.feedbackPolicy, when: over.when ?? "on_release" },
     },
   };
 };
@@ -45,10 +45,16 @@ describe("the after-due practice switch", () => {
     await vi.waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ afterDue: "hidden" }));
   });
 
-  it("says why it is off by default under the feedback None", () => {
+  it("says why it is off by default while the key stays hidden, as the server reports it", () => {
     mockFetch({});
-    renderWithProviders(<AfterDueSetting detail={exercise({ afterDueOpen: false, when: "none" })} />);
+    renderWithProviders(<AfterDueSetting detail={exercise({ afterDueOpen: false })} />);
     expect(screen.getByRole("switch", { name: "Practice after the due date" })).toHaveAttribute("aria-checked", "false");
-    expect(screen.getByText(/Off by default without feedback/)).toBeVisible();
+    expect(screen.getByText(/Off by default while the answer key stays hidden/)).toBeVisible();
+  });
+
+  it("drops the explanation once the teacher set it", () => {
+    mockFetch({});
+    renderWithProviders(<AfterDueSetting detail={exercise({ afterDueOpen: false, afterDue: "hidden" })} />);
+    expect(screen.queryByText(/Off by default/)).toBeNull();
   });
 });

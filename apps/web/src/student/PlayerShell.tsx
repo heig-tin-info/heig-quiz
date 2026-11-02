@@ -47,6 +47,7 @@ import { useT } from "../i18n";
 import { ShortcutKeys, type Shortcut } from "../shortcuts";
 import { setThemeChoice, useResolvedTheme } from "../theme";
 import {
+  Badge,
   ClockCountdown,
   cx,
   IconButton,
@@ -80,6 +81,7 @@ const column = (wide: boolean, docked: boolean) =>
 export function PlayerShell({
   title,
   subtitle,
+  badge,
   deadlineAt,
   clock = Date.now,
   paused = false,
@@ -100,6 +102,12 @@ export function PlayerShell({
 }: {
   title: string;
   subtitle?: string;
+  /**
+   * A badge that stays on screen at every width: beside the title from
+   * `sm`, on its own line under the bar on a phone, where the title is cut
+   * to nothing. A practice attempt says so (ADR-122).
+   */
+  badge?: string;
   /** Epoch ms on the server's clock; `null` in a `manual` evaluation. */
   deadlineAt: number | null;
   /**
@@ -246,6 +254,13 @@ export function PlayerShell({
                 <p className="truncate text-[12px] leading-tight text-fg-muted">{subtitle}</p>
               ) : null}
             </div>
+            {badge ? (
+              // Beside the title from `sm`; on a phone the bar is full, and it
+              // takes a line of its own under the strip (below).
+              <Badge tone="zinc" className="shrink-0 max-sm:!hidden">
+                {badge}
+              </Badge>
+            ) : null}
             {onConditions ? (
               <IconButton label={t("conditions.show")} onClick={onConditions}>
                 <ScrollText />
@@ -279,6 +294,11 @@ export function PlayerShell({
               />
             </div>
           )}
+          {badge ? (
+            <div className="mt-1 pb-1 sm:hidden">
+              <Badge tone="zinc">{badge}</Badge>
+            </div>
+          ) : null}
         </div>
       </header>
 

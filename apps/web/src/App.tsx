@@ -42,10 +42,6 @@ const StudentHome = lazyPage(() =>
 const AttemptPage = lazyPage(() =>
   import("./student/Attempt").then((m) => ({ default: m.AttemptPage })),
 );
-// ADR-122: a practice attempt after the due date, in the same chunk.
-const PracticePage = lazyPage(() =>
-  import("./student/Attempt").then((m) => ({ default: m.PracticePage })),
-);
 const Feedback = lazyPage(() => import("./student/Feedback").then((m) => ({ default: m.Feedback })));
 // F-ORG-14, F-ORG-15 (M5-02): the student's Courses and classroom page.
 const StudentCourses = lazyPage(() =>
@@ -312,12 +308,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
       <RevisePage classroomId={r.classroomId} navigate={c.navigate} />
     ),
   // WP9: student player — the attempt takes the whole screen (`FULL_SCREEN`).
-  attempt: (r, c) =>
-    r.practice ? (
-      <PracticePage evaluationId={r.evaluationId} navigate={c.navigate} />
-    ) : (
-      <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} />
-    ),
+  attempt: (r, c) => (
+    <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} practice={r.practice === true} />
+  ),
   join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,
   oauthConsent: (r, c) => <OAuthConsent id={r.id} me={c.me} />,
   teamsLink: (_, c) => <TeamsLinkPage me={c.me} onSettings={() => c.navigate({ view: "settings" })} />,

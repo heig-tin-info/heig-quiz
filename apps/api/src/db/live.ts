@@ -192,6 +192,9 @@ export const attempts = pgTable(
  */
 export const officialAttempt = eq(attempts.afterDue, false);
 
+/** Its complement: a practice attempt after the due date (ADR-122), read by the student's own practice reads. */
+export const practiceAttempt = eq(attempts.afterDue, true);
+
 /**
  * The row `attempts` belongs to a STAFF seat of the classroom of the row
  * `evaluations` (ADR-018): THE definition, read by `staffAttemptIds` (the

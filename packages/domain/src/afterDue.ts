@@ -17,7 +17,7 @@
  */
 import type { EvaluationModeName, FeedbackWhen } from "./evaluationConfig.js";
 import { isEvaluationOver, type EvaluationStateName } from "./itemList.js";
-import type { EvaluationTiming } from "./deadline.js";
+import { attemptDeadline, type EvaluationTiming } from "./deadline.js";
 
 /** The teacher's switch (`settings.afterDue`): practice after the due date, or not. */
 export const AFTER_DUE_SETTINGS = ["open", "hidden"] as const;
@@ -28,35 +28,47 @@ export type AfterDueSetting = (typeof AFTER_DUE_SETTINGS)[number];
  *
  * Only an exercise. Never one that asks for a trusted client (Safe Exam
  * Browser, a kiosk station): those are out of scope (ADR-122 §1), whatever
- * the switch says. Otherwise the teacher's switch when set; absent, OPEN —
- * except under the feedback policy `none`, where unlimited blank attempts,
- * each with its score, would read the key out question by question: there
- * the default is HIDDEN, and a teacher who opens it anyway gets practice
- * without even the score (`practiceFeedback`'s rule, applied by the
- * results module through `feedbackGate`).
+ * the switch says. Otherwise the teacher's switch when set; absent, OPEN
+ * only where the feedback policy shows the answer key (`showKey`, under a
+ * policy other than `none`). Where the key stays hidden, unlimited blank
+ * attempts, each with its score or its per-question verdicts, would read the
+ * key out question by question: the default there is HIDDEN, and a teacher
+ * who opens it anyway accepts that (ADR-122 §1, §7).
  */
 export function afterDueOpen(input: {
   mode: EvaluationModeName;
   afterDue: AfterDueSetting | undefined;
   feedbackWhen: FeedbackWhen;
+  showKey: boolean;
   safeExamBrowser?: boolean | undefined;
   kiosk?: boolean | undefined;
 }): boolean {
   if (input.mode !== "exercise") return false;
   if (input.safeExamBrowser === true || input.kiosk === true) return false;
   if (input.afterDue !== undefined) return input.afterDue === "open";
-  return input.feedbackWhen !== "none";
+  return input.feedbackWhen !== "none" && input.showKey;
 }
 
 /** How long a practice attempt lasts when the exercise has no time limit of its own: 8 hours. */
 export const PRACTICE_DEFAULT_S = 8 * 3600;
 
+/** Whether the exercise has a time limit per student of its own (a `duration` timing), which a practice attempt keeps. */
+export function practiceOwnLimit(input: { timing: EvaluationTiming; durationS: number | null }): boolean {
+  return input.timing === "duration" && input.durationS !== null && input.durationS > 0;
+}
+
+/** The time limit a practice attempt announces, in seconds: the exercise's own, or {@link PRACTICE_DEFAULT_S}. */
+export function practiceDurationS(input: { timing: EvaluationTiming; durationS: number | null }): number {
+  return practiceOwnLimit(input) ? input.durationS! : PRACTICE_DEFAULT_S;
+}
+
 /**
- * When a practice attempt stops accepting writes, grace excluded: its start
- * plus the exercise's own time limit (a `duration` timing) and the student's
- * accommodation on it, NEVER cut at the exercise's `closes_at` — which has
- * passed; otherwise its start plus {@link PRACTICE_DEFAULT_S}. The ticker
- * expires it on this instant like any attempt (invariant 5).
+ * When a practice attempt stops accepting writes, grace excluded: a
+ * `duration` attempt of {@link practiceDurationS} from its start, by the ONE
+ * deadline rule (`attemptDeadline`), with no window to cut it — the
+ * exercise's `closes_at` has passed. The accommodation stretches the
+ * exercise's own limit, never the eight hours. The ticker expires it on this
+ * instant like any attempt (invariant 5).
  */
 export function practiceDeadline(input: {
   startedAt: Date;
@@ -64,18 +76,16 @@ export function practiceDeadline(input: {
   durationS: number | null;
   timeBonusPercent: number;
 }): Date {
-  const own = input.timing === "duration" && input.durationS !== null && input.durationS > 0;
-  const seconds = own
-    ? input.durationS! + (input.durationS! * Math.max(0, input.timeBonusPercent)) / 100
-    : PRACTICE_DEFAULT_S;
-  return new Date(input.startedAt.getTime() + Math.round(seconds) * 1000);
-}
-
-/** The time limit a practice attempt announces, in seconds: {@link practiceDeadline}'s, accommodation excluded. */
-export function practiceDurationS(input: { timing: EvaluationTiming; durationS: number | null }): number {
-  return input.timing === "duration" && input.durationS !== null && input.durationS > 0
-    ? input.durationS
-    : PRACTICE_DEFAULT_S;
+  return attemptDeadline({
+    timing: "duration",
+    durationS: practiceDurationS(input),
+    opensAt: null,
+    closesAt: null,
+    closesAtShiftS: 0,
+    timeBonusPercent: practiceOwnLimit(input) ? input.timeBonusPercent : 0,
+    startedAt: input.startedAt,
+    extraS: 0,
+  })!;
 }
 
 /** At most one new practice attempt a minute per student (ADR-122 §5). */
@@ -88,9 +98,11 @@ export const PRACTICE_COOLDOWN_MS = 60_000;
  * - `not_over`: it is not over yet — the ordinary attempt (and its retakes)
  *   is what the student takes while it runs;
  * - `archived`: its classroom is archived, which takes no writes;
- * - `unfinished`: an attempt of the student's is still open on it (one at a
- *   time, the partial index of the schema): a stale official one left in a
- *   lobby — a practice one is resumed, never refused.
+ * - `unfinished`: an official attempt of the student's is still open on it
+ *   (one at a time, the partial index of the schema): one left `not_started`
+ *   in a lobby, which the close does not end. Never expired here — an
+ *   expired official attempt would enter the results; the teacher clears
+ *   it. A practice one is resumed, never refused.
  *
  * The one-a-minute limit is {@link practiceCooldownS}, answered `429`.
  */

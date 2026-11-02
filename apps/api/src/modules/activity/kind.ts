@@ -20,6 +20,7 @@ import type {
   GradebookColumnKind,
   GradebookSource,
   GradebookStudentCell,
+  PracticeCard,
   StudentActivities,
   StudentActivityCard,
 } from "@quiz/contracts";
@@ -37,6 +38,9 @@ export type CardOf<K extends ActivityKindName> = Extract<StudentActivityCard, { 
 /** The groups of the student's Activities, holding the cards of one kind. */
 export type StudentCardsOf<K extends ActivityKindName> = Pick<StudentActivities, "polls"> & {
   [G in StudentActivityGroup]: CardOf<K>[];
+} & {
+  /** ADR-122, "Past series": the evaluation kind's alone, on the whole home. */
+  practice?: PracticeCard[];
 };
 
 /** Whose Activities, and how far they reach. */

@@ -33,11 +33,22 @@ the kept attempt. None of that may move.
 ## Decision
 
 1. **A switch, with a default.** `settings.afterDue: "open" | "hidden"`, on
-   an exercise only. Absent, the default is `open` — every past exercise
-   reopens by it, with no data migration — except under the feedback policy
-   `none`, where the default is `hidden`: unlimited attempts, each with its
-   score, would read the answer key out question by question. The rule is
-   one pure function, `afterDueOpen` (`@quiz/domain`, `afterDue.ts`). An
+   an exercise only. Absent, the default is `open` only where the feedback
+   policy shows the answer key (`showKey`, under a policy other than
+   `none`); everywhere else it is `hidden`. The reason is an oracle:
+   unlimited blank attempts, each answered with its total score (the score
+   alone under `on_release` before the release) or with each question's
+   verdict and points (the review under `immediate`, which carries them
+   whatever `showKey` says), let a student try one answer after another and
+   read the key the teacher kept hidden, question by question. The product
+   owner set the rule for `none`; it is extended, on the same grounds, to
+   every policy that hides the key (orchestrator's decision, 2026-11-02). A
+   teacher who opens the practice explicitly under a hidden key accepts that
+   oracle. Every past exercise that shows its key reopens by the default,
+   with no data migration. The rule is one pure function, `afterDueOpen`
+   (`@quiz/domain`, `afterDue.ts`); the evaluation carries its value and
+   whether it is the default (`afterDueOpen`, `afterDueSource`), so the
+   editor never derives the rule again. An
    exercise that asks for a trusted client (Safe Exam Browser, a kiosk
    station) is treated as hidden. The switch is a visibility switch, not a
    frozen setting: it has its own writer (`PUT /evaluations/:id/after-due`,
@@ -75,8 +86,11 @@ the kept attempt. None of that may move.
    `hidden`, `not_over`, `archived` (an archived classroom takes no write),
    `unfinished` (a stale official attempt). Always a whole blank attempt on
    a new seed, never a partial retake (ADR-091). The network allowlist
-   applies, as on every sitting route. The integrity journal is off: no
-   event of a practice attempt is stored.
+   applies, as on every sitting route; the two routes are not `SITTING`: a
+   `seb` or `kiosk` session never practises. The integrity journal is off:
+   no integrity event of a practice attempt is stored
+   (`storesIntegrityEvent`); its other journal entries (a reconnection) are
+   kept like any attempt's.
 6. **Its grading.** Automatic items are graded at the hand-in, whatever the
    evaluation's state, and so is an attempt the ticker expires. An item only
    a model can grade (an essay, a short answer judged by the AI, a rich
@@ -93,7 +107,10 @@ the kept attempt. None of that may move.
    and the explanation at hand-in, under `on_release` once released or the
    correction published (ADR-050) — the score alone before that; under
    `none`, hidden by default, and nothing at all, not even the score, if a
-   teacher opens it anyway. Points only, labelled practice, never a grade.
+   teacher opens it anyway. Under a policy that shows the score or the
+   verdicts but not the key, the practice is hidden by default (§1); opened
+   explicitly, it reads exactly what the policy shows. Points only,
+   labelled practice, never a grade.
    Everything goes through the student view (`toStudent`, `studentFeedback`,
    invariant 4).
 8. **The drill.** A practice attempt that ends through `endAttempts` feeds
@@ -111,7 +128,12 @@ the kept attempt. None of that may move.
     personal export (ADR-112) read the kept attempt or the Grades page:
     practice attempts are excluded from all of them, not labelled.
 
-Deferred: the drill's trigger on "saw the correction" of a practice attempt;
+Deferred: an official attempt left `not_started` in a lobby, which the
+close does not end, blocks practice (`409 practice_refused`, `unfinished`,
+the student told to ask the teacher); it is never expired by the practice
+route, since an expired official attempt would enter the kept attempt and
+the results — a teacher's tool to clear it is open. The drill's trigger on
+"saw the correction" of a practice attempt;
 disabling the Safe Exam Browser and kiosk options on an exercise (a separate
 ticket); re-grading a practice attempt when its item is regraded — a regrade
 stands down and re-grades the official attempts only.

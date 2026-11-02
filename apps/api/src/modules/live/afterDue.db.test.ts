@@ -8,7 +8,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { FeedbackPolicy, StudentHome } from "@quiz/contracts";
@@ -17,11 +17,13 @@ import type { GradeResult } from "@quiz/core/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { attemptEvents, attempts, classrooms, evaluations, gradings } from "../../db/schema.js";
+import { attemptEvents, attempts, classrooms, evaluations, gradings, notifications } from "../../db/schema.js";
 import { testApp } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { type TestServer, testServer } from "../../test/http.js";
+import { sessionOf, type TestServer, testServer } from "../../test/http.js";
+import { keyOpen } from "../drill/serving.js";
 import { keysOf } from "../../test/keys.js";
+import { kioskStation } from "../../test/kiosk.js";
 import { enterStarted, reload, seedLive } from "../../test/live.js";
 import { applyState, joinedItems, setAfterDue, type EvaluationRecord } from "../evaluation/service.js";
 import { gradingQueue, keptAttempts, progressOf } from "../grading/service.js";
@@ -97,7 +99,7 @@ async function closedExercise(
   });
   await db
     .update(evaluations)
-    .set({ feedbackPolicy: { when: "on_release", showAnswer: true, showKey: false, showExplanation: false, showHiddenCaseNames: true, showTeacherComment: true, ...options.feedback } })
+    .set({ feedbackPolicy: { when: "on_release", showAnswer: true, showKey: true, showExplanation: false, showHiddenCaseNames: true, showTeacherComment: true, ...options.feedback } })
     .where(eq(evaluations.id, seed.evaluationId));
   let evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
   const student = seed.studentIds[0]!;
@@ -111,9 +113,13 @@ async function practise(app: App, evaluation: EvaluationRecord, userId: string) 
   return live.startPractice(db, {
     evaluation: await reload(db, evaluation.id),
     participant: await participant(evaluation, userId),
+    archived: null,
     now: app.clock.now(),
   });
 }
+
+/** The student home's "Past series" (ADR-122). */
+const pastSeries = async (userId: string) => (await live.studentHome(db, userId, new Date())).practice;
 
 const refusal = async (promise: Promise<unknown>): Promise<string | null> => {
   try {
@@ -149,7 +155,7 @@ describe("starting a practice attempt (ADR-122 §2, §3, §5)", () => {
     const again = await practise(app, evaluation, student);
     expect(again).toMatchObject({ created: false, row: { id: row.id } });
     // The entry route resumes it too.
-    const entry = await live.practiceEntry(db, { evaluation, participant: await participant(evaluation, student), now: app.clock.now() });
+    const entry = await live.practiceEntry(db, { evaluation, participant: await participant(evaluation, student), archived: null, now: app.clock.now() });
     expect(entry.kind).toBe("attempt");
   });
 
@@ -160,6 +166,7 @@ describe("starting a practice attempt (ADR-122 §2, §3, §5)", () => {
     const entry = await live.practiceEntry(db, {
       evaluation,
       participant: await participant(evaluation, student),
+      archived: null,
       now: app.clock.now(),
     });
     expect(entry.kind).toBe("attempt");
@@ -167,7 +174,7 @@ describe("starting a practice attempt (ADR-122 §2, §3, §5)", () => {
 
   it("answers the ready screen with the practice's conditions before a new one", async () => {
     const { app, evaluation, student } = await closedExercise();
-    const entry = await live.practiceEntry(db, { evaluation, participant: await participant(evaluation, student), now: app.clock.now() });
+    const entry = await live.practiceEntry(db, { evaluation, participant: await participant(evaluation, student), archived: null, now: app.clock.now() });
     expect(entry.kind).toBe("ready");
     if (entry.kind !== "ready") return;
     const keys = entry.view.conditions.imposed.map((line) => line.key);
@@ -186,6 +193,9 @@ describe("starting a practice attempt (ADR-122 §2, §3, §5)", () => {
     expect(await refusal(practise(none.app, none.evaluation, none.student))).toBe("hidden");
     await setAfterDue(db, none.evaluation, "open", none.app.clock.now());
     expect(await refusal(practise(none.app, none.evaluation, none.student))).toBeNull();
+    // Hidden by default where the key stays hidden (ADR-122 §1).
+    const noKey = await closedExercise({ feedback: { showKey: false } });
+    expect(await refusal(practise(noKey.app, noKey.evaluation, noKey.student))).toBe("hidden");
     // Archived classroom.
     const archived = await closedExercise();
     await db.update(classrooms).set({ archivedAt: new Date() }).where(eq(classrooms.id, archived.seed.classroomId));
@@ -283,11 +293,48 @@ describe("a practice attempt counts nowhere (ADR-122 §4)", () => {
       live.saveAnswer(db, { evaluation, attempt: (await live.attemptById(db, row.id))!, itemId: items[1]!.item.id, payload: "x", revision: 1, now: app.clock.now() }),
     ).rejects.toBeInstanceOf(live.AttemptClosedError);
   });
+
+  it("leaves a released exercise unmodified and tells nobody when a practice attempt is graded after the release", async () => {
+    const { app, evaluation, student } = await closedExercise();
+    await results.releaseResults(db, await reload(db, evaluation.id), app.clock.now());
+    const { row } = await practise(app, evaluation, student);
+    await answerAndSubmit(app, await reload(db, evaluation.id), row, [true, true]);
+    const graded = await db.select().from(gradings).where(and(eq(gradings.attemptId, row.id), eq(gradings.state, "validated")));
+    expect(graded).toHaveLength(2);
+    expect((await reload(db, evaluation.id)).modifiedAfterRelease).toBe(false);
+    const told = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.evaluationId, evaluation.id), sql`${notifications.payload}->>'kind' = 'results_updated'`));
+    expect(told).toHaveLength(0);
+  });
+
+  it("never hides a drill key the exercise shows while a practice attempt is in progress", async () => {
+    const { app, evaluation, student } = await closedExercise({ feedback: { when: "immediate", showKey: true } });
+    const card = { evaluationId: evaluation.id, userId: student };
+    expect((await keyOpen(db, [card]))(card)).toBe(true);
+    await practise(app, evaluation, student);
+    expect((await keyOpen(db, [card]))(card)).toBe(true);
+  });
+
+  it("accepts a write until its deadline plus the grace, and refuses it after (invariant 5)", async () => {
+    const { app, evaluation, student } = await closedExercise({ durationS: 600 });
+    const { row } = await practise(app, evaluation, student);
+    const [item] = await joinedItems(db, evaluation.id);
+    const at = (ms: number) => new Date(row.deadlineAt!.getTime() + ms);
+    const write = (revision: number, now: Date) =>
+      live.saveAnswer(db, { evaluation, attempt: row, itemId: item!.item.id, payload: `r${revision}`, revision, now });
+    await expect(write(1, at(2000))).resolves.toBeDefined();
+    await expect(write(2, at(4000))).rejects.toBeInstanceOf(live.AttemptClosedError);
+  });
 });
 
 describe("what a student reads of a practice attempt (ADR-122 §7, invariant 4)", () => {
   it("passes through the student view: no forbidden key, no answer key value", async () => {
     const { app, evaluation, student } = await closedExercise({ feedback: { when: "immediate", showKey: false } });
+    // The key stays hidden: practice is off by default (the oracle, ADR-122 §1); the teacher opens it.
+    expect(await refusal(practise(app, evaluation, student))).toBe("hidden");
+    await setAfterDue(db, evaluation, "open", app.clock.now());
     const { row } = await practise(app, evaluation, student);
     const view = await live.attemptView(db, evaluation, row, app.clock.now());
     const serialized = JSON.stringify(view);
@@ -320,28 +367,28 @@ describe("what a student reads of a practice attempt (ADR-122 §7, invariant 4)"
     expect(nothing).toMatchObject({ available: false, reason: "no_feedback", practice: true });
     expect(nothing).not.toHaveProperty("score");
     // The home's Past series card says no score either.
-    const cards = await live.practiceCards(db, none.student);
+    const cards = await pastSeries(none.student);
     expect(cards.find((c) => c.id === none.evaluation.id)?.last).toMatchObject({ attemptId: ended.id, score: null });
   });
 
   it("lists the exercise in the student's Past series, with the latest practice score", async () => {
     const { app, evaluation, student, seed } = await closedExercise();
-    expect((await live.practiceCards(db, student)).find((c) => c.id === evaluation.id)).toMatchObject({
+    expect((await pastSeries(student)).find((c) => c.id === evaluation.id)).toMatchObject({
       openAttemptId: null,
       count: 0,
       last: null,
     });
     const { row } = await practise(app, evaluation, student);
-    expect((await live.practiceCards(db, student)).find((c) => c.id === evaluation.id)?.openAttemptId).toBe(row.id);
+    expect((await pastSeries(student)).find((c) => c.id === evaluation.id)?.openAttemptId).toBe(row.id);
     await answerAndSubmit(app, await reload(db, evaluation.id), row, [true, true]);
-    expect((await live.practiceCards(db, student)).find((c) => c.id === evaluation.id)).toMatchObject({
+    expect((await pastSeries(student)).find((c) => c.id === evaluation.id)).toMatchObject({
       openAttemptId: null,
       count: 1,
       last: { attemptId: row.id, score: { points: 2, totalPoints: 2, pendingCount: 0 } },
     });
     // Hidden: gone from the list.
     await setAfterDue(db, evaluation, "hidden", app.clock.now());
-    expect((await live.practiceCards(db, seed.studentIds[1]!)).some((c) => c.id === evaluation.id)).toBe(false);
+    expect((await pastSeries(seed.studentIds[1]!)).some((c) => c.id === evaluation.id)).toBe(false);
   });
 });
 
@@ -393,6 +440,32 @@ describe("the practice routes (ADR-122 §5)", () => {
     // The practice attempt is in no row of the teacher's list either.
     const rows = await db.select().from(attempts).where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.afterDue, true)));
     expect(rows).toHaveLength(1);
+  });
+
+  it("refuses a stranger, a confined session and an impersonation (invariant 6, ADR-027, ADR-034)", async () => {
+    const student = await server.signIn("student");
+    const admin = await server.signIn("admin");
+    const { evaluation } = await closedExercise({ users: [student.id, (await server.signIn("student")).id] });
+    const url = `/app/api/evaluations/${evaluation.id}/practice`;
+    // A student of another classroom: the 404 of a missing evaluation.
+    const elsewhere = await server.signIn("student");
+    await closedExercise({ users: [elsewhere.id, (await server.signIn("student")).id] });
+    for (const path of [url, `${url}/start`]) {
+      expect((await server.app.inject({ method: "POST", url: path, headers: elsewhere.headers })).statusCode).toBe(404);
+    }
+    // A seb or kiosk session is nobody here: an exercise behind a trusted client is hidden after its due date.
+    const seb = await sessionOf(db, student.id, { kind: "seb", evaluationId: evaluation.id });
+    expect((await server.app.inject({ method: "POST", url: `${url}/start`, headers: seb })).statusCode).toBe(401);
+    const station = await kioskStation(server.app);
+    const kiosk = await sessionOf(db, student.id, { kind: "kiosk", evaluationId: evaluation.id, deviceId: station.deviceId });
+    const fromStation = { ...kiosk, cookie: `${kiosk.cookie}; ${station.cookie}` };
+    expect((await server.app.inject({ method: "POST", url: `${url}/start`, headers: fromStation })).statusCode).toBe(401);
+    // Acting as the student reads, never writes (ADR-034).
+    const as = await sessionOf(db, student.id, { kind: "impersonation", actorUserId: admin.id });
+    const acted = await server.app.inject({ method: "POST", url: `${url}/start`, headers: as });
+    expect(acted.statusCode).toBe(403);
+    expect(acted.json()).toMatchObject({ error: "impersonation_read_only" });
+    expect(await db.select().from(attempts).where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.afterDue, true)))).toHaveLength(0);
   });
 
   it("lists the Past series on the student's home", async () => {

@@ -152,11 +152,10 @@ export function isFinishedAttempt(state: string): boolean {
  */
 export function gradableNow(
   evaluationState: EvaluationStateName,
-  attemptState: AttemptStateName,
-  afterDue = false,
+  attempt: { state: AttemptStateName; afterDue?: boolean | undefined },
 ): boolean {
-  if (afterDue) return isFinishedAttempt(attemptState);
-  return !isLiveState(evaluationState) || isFinishedAttempt(attemptState);
+  if (attempt.afterDue === true) return isFinishedAttempt(attempt.state);
+  return !isLiveState(evaluationState) || isFinishedAttempt(attempt.state);
 }
 
 /**

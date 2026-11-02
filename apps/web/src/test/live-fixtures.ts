@@ -189,6 +189,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
       originRevision: null,
       allowDrill: false,
       afterDueOpen: false,
+      afterDueSource: "default",
       ...overrides.evaluation,
     },
     items,

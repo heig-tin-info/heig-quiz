@@ -9,6 +9,7 @@
 import { and, countDistinct, eq, inArray } from "drizzle-orm";
 
 import type {
+  PracticeCard,
   ActivityStats,
   ActivitySummary,
   StudentActivities,
@@ -24,7 +25,6 @@ import { enrollments } from "../../db/schema.js";
 import type { Caller, ReadableClassroom } from "../guards.js";
 import { hasStudentGroupSets, studentGroupSetCards } from "../group/service.js";
 import { hasJournal } from "../journal/service.js";
-import { practiceCards } from "../live/service.js";
 import { studentClassroomHeader } from "../org/service.js";
 import { evaluationActivity } from "./evaluation.js";
 import type { GradebookEntry, GradebookSeat, StudentGradebookEntry, StudentScope } from "./kind.js";
@@ -69,15 +69,20 @@ export async function statsForTeacher(db: Db, caller: Caller, now: Date): Promis
   };
 }
 
-/** What every kind adds to the student's Activities: its cards, and the running polls. */
-type KindCards = Omit<StudentActivities, "groupSets">;
+/** What every kind adds to the student's Activities: its cards, the running polls, and the past series (ADR-122). */
+type KindCards = Omit<StudentActivities, "groupSets"> & { practice?: PracticeCard[] };
 
 /**
  * The student's Activities, every classroom or one: every kind's groups,
  * concatenated; and the group sets open to them (F-PROJ-22, S3), none to a
  * confined session.
  */
-async function studentCards(db: Db, caller: Caller, now: Date, scope: StudentScope): Promise<StudentActivities> {
+async function studentCards(
+  db: Db,
+  caller: Caller,
+  now: Date,
+  scope: StudentScope,
+): Promise<StudentActivities & { practice: PracticeCard[] }> {
   const [kinds, groupSets] = await Promise.all([
     Promise.all(KINDS.map((k): Promise<KindCards> => k.studentCards(db, caller, now, scope))),
     scope.confined ? [] : studentGroupSetCards(db, caller.id, now, scope.classroomId),
@@ -88,6 +93,7 @@ async function studentCards(db: Db, caller: Caller, now: Date, scope: StudentSco
     open: kinds.flatMap((k) => k.open),
     upcoming: kinds.flatMap((k) => k.upcoming),
     past: kinds.flatMap((k) => k.past),
+    practice: kinds.flatMap((k) => k.practice ?? []),
   };
 }
 
@@ -100,12 +106,9 @@ async function studentCards(db: Db, caller: Caller, now: Date, scope: StudentSco
  */
 export async function studentHome(db: Db, caller: Caller, auth: SessionAuth | null, now: Date): Promise<StudentHome> {
   const isConfined = confined(auth);
-  const [cards, practice] = await Promise.all([
-    studentCards(db, caller, now, { confined: isConfined }),
-    // ADR-122, "Past series": never on a trusted client, which sits one evaluation.
-    isConfined ? [] : practiceCards(db, caller.id),
-  ]);
-  return { ...cards, practice, serverNow: iso(now) };
+  const { practice, ...cards } = await studentCards(db, caller, now, { confined: isConfined });
+  // ADR-122, "Past series": never on a trusted client, which sits one evaluation.
+  return { ...cards, practice: isConfined ? [] : practice, serverNow: iso(now) };
 }
 
 /**
@@ -123,7 +126,7 @@ export async function studentClassroomPage(
   scope: ReadableClassroom,
   now: Date,
 ): Promise<StudentClassroomPage> {
-  const [classroom, activities, journal, groups] = await Promise.all([
+  const [classroom, { practice: _home, ...activities }, journal, groups] = await Promise.all([
     studentClassroomHeader(db, scope),
     studentCards(db, caller, now, { classroomId: scope.room.id, confined: false }),
     hasJournal(db, scope.room.id),

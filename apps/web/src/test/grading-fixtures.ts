@@ -155,6 +155,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
       originRevision: null,
       allowDrill: false,
       afterDueOpen: false,
+      afterDueSource: "default",
     },
     items: [
       {

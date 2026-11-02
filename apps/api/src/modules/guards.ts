@@ -1122,7 +1122,16 @@ export const loadTemplate = routeLoader((app, req, templateId: string) =>
   findTemplate(app.db, callerOf(req), templateId),
 );
 
-type ReachableEvaluation = { evaluation: typeof evaluations.$inferSelect; staff: boolean };
+type ReachableEvaluation = {
+  evaluation: typeof evaluations.$inferSelect;
+  staff: boolean;
+  /**
+   * Whether its classroom is archived, read with the student's seat; `null`
+   * on the staff branch, which does not read it (ADR-122: an archived
+   * classroom takes no practice attempt).
+   */
+  archived: boolean | null;
+};
 
 /**
  * THE access predicate of an anonymous poll — an evaluation with no
@@ -1214,10 +1223,10 @@ export async function findReachableEvaluation(
   evaluationId: string,
 ): Promise<ReachableEvaluation | null> {
   const managed = await findManagedEvaluation(db, user, evaluationId);
-  if (managed) return { evaluation: managed, staff: true };
+  if (managed) return { evaluation: managed, staff: true, archived: null };
 
   const [student] = await db
-    .select({ evaluation: evaluations })
+    .select({ evaluation: evaluations, archivedAt: classrooms.archivedAt })
     .from(evaluations)
     .innerJoin(
       enrollments,
@@ -1226,9 +1235,10 @@ export async function findReachableEvaluation(
         eq(enrollments.userId, user.id),
       ),
     )
+    .innerJoin(classrooms, eq(classrooms.id, evaluations.classroomId))
     .where(and(eq(evaluations.id, evaluationId), ne(evaluations.state, "draft")))
     .limit(1);
-  return student ? { evaluation: student.evaluation, staff: false } : null;
+  return student ? { evaluation: student.evaluation, staff: false, archived: student.archivedAt !== null } : null;
 }
 
 /**

@@ -78,6 +78,7 @@ import {
   gradebookMarks,
   gradings,
   isStaffAttempt,
+  practiceAttempt,
 } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 import {
@@ -372,7 +373,7 @@ async function practisedCountOf(db: Db, evaluation: EvaluationRecord): Promise<n
     .select({ n: countDistinct(attempts.userId) })
     .from(attempts)
     .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
-    .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.afterDue, true), sql`not ${isStaffAttempt}`));
+    .where(and(eq(attempts.evaluationId, evaluation.id), practiceAttempt, sql`not ${isStaffAttempt}`));
   return row?.n ?? 0;
 }
 
@@ -915,13 +916,18 @@ export async function studentFeedback(
 ): Promise<StudentFeedback> {
   const policy = feedbackOf(evaluation);
   const gate = feedbackAvailable(policy, evaluation, attempt.state);
+  // ADR-122 §7: a practice attempt after the due date reads the same gate,
+  // points only, labelled practice, never a grade — and its score alone
+  // while the policy does not open the correction yet (`results_pending`).
+  const practice = attempt.afterDue ? { practice: true as const } : {};
   const pending = (reason: FeedbackRefusal) => ({
     available: false as const,
     reason,
     evaluation: { id: evaluation.id, title: evaluation.title },
+    ...practice,
   });
-  if (attempt.afterDue) return practiceFeedback(db, evaluation, attempt, policy, gate, pending);
-  if (!gate.ok && gate.reason !== "retakes_open") return pending(gate.reason);
+  const scoreOnly = !gate.ok && (gate.reason === "retakes_open" || (attempt.afterDue && gate.reason === "results_pending"));
+  if (!gate.ok && !scoreOnly) return pending(gate.reason);
   // While the exercise takes retakes, the page offers the next attempt — on
   // the score alone (ADR-025) or beside a published correction (ADR-050).
   const offer =
@@ -950,11 +956,13 @@ export async function studentFeedback(
   }
 
   const copy = await reviewedItems(db, evaluation, attempt, policy);
-  // No grade before the release, nor while a cell is pending.
-  const gradeShown = feedbackGradeShown({
-    released: evaluation.releasedAt !== null,
-    pendingCount: copy.pendingCount,
-  });
+  // No grade before the release, nor while a cell is pending, nor ever on a practice attempt.
+  const gradeShown =
+    !attempt.afterDue &&
+    feedbackGradeShown({
+      released: evaluation.releasedAt !== null,
+      pendingCount: copy.pendingCount,
+    });
   return {
     available: true,
     evaluation: {
@@ -966,47 +974,7 @@ export async function studentFeedback(
     ...copy,
     grade: gradeShown ? copy.grade : null,
     ...retake,
-  };
-}
-
-/**
- * The feedback of a practice attempt after the due date (ADR-122 §7): the
- * same gate, unchanged (`feedbackGate`, no retakes open on an exercise that
- * is over), with POINTS ONLY, labelled practice, never a grade. Under
- * `immediate` — or once released, or the correction published — the
- * policy's correction; under `on_release` before that, the score alone;
- * under `none`, nothing, the score included.
- */
-async function practiceFeedback(
-  db: Db,
-  evaluation: EvaluationRecord,
-  attempt: typeof attempts.$inferSelect,
-  policy: FeedbackPolicy,
-  gate: FeedbackGate,
-  pending: (reason: FeedbackRefusal) => { available: false; reason: FeedbackRefusal; evaluation: { id: string; title: string } },
-): Promise<StudentFeedback> {
-  if (!gate.ok && gate.reason !== "results_pending") return { ...pending(gate.reason), practice: true };
-  if (!gate.ok) {
-    const items = await joinedItems(db, evaluation.id);
-    const tally = (await tallyByAttempt(db, [attempt.id])).get(attempt.id);
-    return {
-      ...pending(gate.reason),
-      score: scoreOf(
-        tally,
-        items.filter((i) => countsForStudent(i.item.counting)).length,
-        evaluationTotal(items.map((i) => i.item)),
-      ),
-      practice: true,
-    };
-  }
-  const copy = await reviewedItems(db, evaluation, attempt, policy);
-  return {
-    available: true,
-    evaluation: { id: evaluation.id, title: evaluation.title, releasedAt: isoOrNull(evaluation.releasedAt) },
-    attemptId: attempt.id,
-    ...copy,
-    grade: null,
-    practice: true,
+    ...practice,
   };
 }
 

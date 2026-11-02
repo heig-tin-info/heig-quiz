@@ -144,16 +144,16 @@ describe("keptAttempt (F-EVAL-15)", () => {
 describe("gradableNow (ADR-067)", () => {
   it("grades only a finished attempt while the evaluation runs", () => {
     for (const evaluation of ["running", "paused"] as const) {
-      expect(gradableNow(evaluation, "submitted")).toBe(true);
-      expect(gradableNow(evaluation, "expired")).toBe(true);
-      expect(gradableNow(evaluation, "in_progress")).toBe(false);
-      expect(gradableNow(evaluation, "not_started")).toBe(false);
+      expect(gradableNow(evaluation, { state: "submitted" })).toBe(true);
+      expect(gradableNow(evaluation, { state: "expired" })).toBe(true);
+      expect(gradableNow(evaluation, { state: "in_progress" })).toBe(false);
+      expect(gradableNow(evaluation, { state: "not_started" })).toBe(false);
     }
   });
 
   it("grades every attempt once the evaluation is over", () => {
-    expect(gradableNow("closed", "in_progress")).toBe(true);
-    expect(gradableNow("released", "submitted")).toBe(true);
+    expect(gradableNow("closed", { state: "in_progress" })).toBe(true);
+    expect(gradableNow("released", { state: "submitted" })).toBe(true);
   });
 });
 
