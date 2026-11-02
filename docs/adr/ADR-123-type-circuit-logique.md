@@ -59,9 +59,11 @@ inputs ≤ 10, outputs ≤ 8, components ≤ 60, wires ≤ 120, vertices per wir
 depth of an expression. The answer and config schemas use it, and the domain
 enforces it itself: it refuses an over-cap netlist, and the event cap is a
 domain constant callers cannot pass. The rebuild is bounded by wires ×
-vertices and the grade by 1 024 rows × the event cap; a test grades the
-worst case — 10 inputs, 60 components, a circuit that oscillates on every
-row so each row hits the cap — in under 500 ms.
+vertices and the grade by 1 024 rows × the event cap. A test drives the
+worst case — 10 inputs, 60 components, rings released mid-row so each of
+the 1 024 rows oscillates and hits the cap — and asserts the event count
+deterministically; its wall-clock ceiling only catches an algorithmic
+blow-up, never machine speed.
 
 ### 3. A netlist IR modeled on Yosys JSON, rebuilt server-side
 
