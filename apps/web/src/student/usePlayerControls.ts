@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
+import type { AttemptClosed } from "@quiz/contracts";
+
 import type { PlayerItem, PlayerState } from "../attempt/playerReducer";
+import { refusalCodeOf, type ApiError } from "../api";
 import { UnsavedAnswer } from "../attempt/useAttempt";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
@@ -12,7 +15,9 @@ import { emptyAnswerOf } from "./QuestionHost";
 
 /**
  * What the player's buttons and keys DO, apart from how they look: validate
- * (behind its confirmation), skip, flag, clear, hand in, and the keyboard.
+ * (behind its confirmation), check (ADR-124 §3: no confirmation, the hint
+ * under the question says it locks), skip, flag, clear, hand in, and the
+ * keyboard.
  * Each one says in a toast when its write did not land; none of them decides
  * that the attempt is over — the session does, from the server.
  *
@@ -41,8 +46,9 @@ export function usePlayerControls({
   const t = useT();
   const toast = useToast();
   const confirm = useConfirm();
-  const { state, dispatch, markDone, skip, flag, submit, setAnswer } = session;
+  const { state, dispatch, markDone, skip, flag, submit, setAnswer, check: checkItem } = session;
   const [submitting, setSubmitting] = useState(false);
+  const [checking, setChecking] = useState(false);
   // The validation step is named for what it closes: an empty question is
   // left blank, not validated (F-LIVE-08).
   const validateLabel = t(blank ? "player.validateBlank" : "player.validate");
@@ -71,6 +77,18 @@ export function usePlayerControls({
       );
     }
   }, [item, canValidate, blank, notepad, validateLabel, state.navigation, confirm, t, markDone, toast]);
+
+  const check = useCallback(async () => {
+    if (!item || readOnly || !checkItem) return;
+    setChecking(true);
+    try {
+      await checkItem(item.id, state.answers[item.id] ?? null);
+    } catch (error) {
+      toast(t(checkFailure(error)), "error");
+    } finally {
+      setChecking(false);
+    }
+  }, [item, readOnly, checkItem, state.answers, toast, t]);
 
   /** A write that may fail, for a question that is still open. */
   const onOpenItem = useCallback(
@@ -139,6 +157,8 @@ export function usePlayerControls({
   ]);
 
   return {
+    check,
+    checking,
     validateLabel,
     submitting,
     openSubmit: () => setSubmitting(true),
@@ -149,4 +169,22 @@ export function usePlayerControls({
     toggleFlag,
     clear,
   };
+}
+
+/** What the toast says of a check that did not land (ADR-124 §3). */
+function checkFailure(error: unknown) {
+  if (error instanceof UnsavedAnswer) return "player.validateUnsaved" as const;
+  switch (refusalCodeOf(error)) {
+    case "item_checked":
+      return "player.check.already" as const;
+    case "nothing_to_check":
+      return "player.check.empty" as const;
+    case "attempt_closed": {
+      // A pause is not an end: its overlay says so, and the check can wait.
+      const reason = ((error as ApiError).body as AttemptClosed | null)?.reason;
+      return reason === "paused" ? ("player.check.failed" as const) : ("player.check.closed" as const);
+    }
+    default:
+      return "player.check.failed" as const;
+  }
 }

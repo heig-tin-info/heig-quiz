@@ -760,7 +760,7 @@ export function studentItemCorrection(input: {
   /** The attempt's one view of the item (`attemptItemView`). */
   itemView: ItemView;
   /** The cell's standing grading, if any: only a validated one is a verdict. */
-  grading: Pick<GradingRecord, "points" | "maxPoints" | "state"> | null;
+  grading: Pick<GradingRecord, "points" | "maxPoints" | "state" | "details"> | null;
 }): ItemCorrection | null {
   const { evaluation, item, itemView } = input;
   const shown = itemCorrectionShown({
@@ -778,22 +778,32 @@ export function studentItemCorrection(input: {
  * none: `pending`): what the feedback page ({@link reviewedItems}) and the
  * player ({@link studentItemCorrection}) both show of it — the verdict, the
  * points as a student reads them (a bonus never "−4 / 2", ADR-108), the
- * student's key (the grading criteria stay the teacher's, ADR-037) and the
- * explanation, in `itemView`'s coordinates.
+ * student's key (the grading criteria stay the teacher's, ADR-037), the
+ * explanation, in `itemView`'s coordinates, and the grading's breakdown
+ * through {@link filterDetails}.
+ *
+ * The breakdown is written in CANONICAL indices (an mcq's `selected`, a
+ * dropdown's `given`), the teacher's order. On a shuffled view they would
+ * tell the student how their choices were moved (ADR-097), so it leaves in
+ * its key-hidden form there, whatever the policy: the key itself travels in
+ * `solution`, in the view's coordinates. Unshuffled, position and index are
+ * one and the policy decides.
  */
 function correctionOf(
   policy: FeedbackPolicy,
-  grading: Pick<GradingRecord, "points" | "maxPoints" | "state"> | null,
+  grading: Pick<GradingRecord, "points" | "maxPoints" | "state" | "details"> | null,
   item: Pick<JoinedItem["item"], "points" | "counting">,
   itemView: ItemView,
 ): ItemCorrection {
   const { type, config, view, instance } = itemView;
+  const detailsPolicy = view.shuffle ? { ...policy, showKey: false } : policy;
   return {
     verdict: grading ? verdictOf(grading) : "pending",
     points: grading ? shownPoints(grading.points, item.counting) : null,
     maxPoints: item.points,
     solution: policy.showKey ? studentSolutionViewOf(type, config, view) : null,
     explanation: policy.showExplanation && instance.explanation !== "" ? instance.explanation : null,
+    details: grading ? filterDetails(type, grading.details, detailsPolicy) : null,
   };
 }
 
@@ -920,7 +930,7 @@ async function reviewedItems(
       answer: policy.showAnswer ? answerToStudent(type, config, view, answer?.payload) : null,
       solution: correction.solution,
       explanation: correction.explanation,
-      details: grading ? filterDetails(type, grading.details, policy) : null,
+      details: correction.details,
       comment: policy.showTeacherComment ? (grading?.comment ?? null) : null,
     };
   });

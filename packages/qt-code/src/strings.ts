@@ -212,7 +212,7 @@ export const REVIEW_STRINGS = {
   runnerError: "The answer could not be run automatically; it is waiting for a manual grade.",
   notAnswered: "Not answered.",
   referenceSolution: "Reference solution",
-  yourCode: "Your code",
+  yourCode: "Submitted code",
 };
 
 export type CodeReviewStrings = typeof REVIEW_STRINGS;

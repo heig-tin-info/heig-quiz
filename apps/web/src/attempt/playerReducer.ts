@@ -15,7 +15,7 @@
  * F-EVAL-07 ("un drapeau par item au-delà duquel on ne revient pas") and
  * F-LIVE-09 ("permet d'y aller si la navigation l'autorise").
  */
-import type { AttemptItem, AttemptView, ItemCounting, Navigation } from "@quiz/contracts";
+import type { AttemptItem, AttemptView, ItemCorrection, ItemCounting, Navigation } from "@quiz/contracts";
 import { answerMark, lockedItems } from "@quiz/domain";
 
 import type { Segment } from "../ui";
@@ -45,6 +45,14 @@ export interface PlayerItem {
    * refusing any write to it.
    */
   acquired: boolean;
+  /**
+   * ADR-124 §3: checked in this attempt of an exercise — read-only for the
+   * rest of it, still reachable (it is not a navigation lock), the server
+   * refusing any write to it. Never taken back within an attempt.
+   */
+  checked: boolean;
+  /** ADR-124 §3: its correction once checked, as the server built it; null before. */
+  correction: ItemCorrection | null;
   /** What `toStudent` published. Opaque here; only the type's Player reads it. */
   student: unknown;
   /** The server's own verdict when the view was built. */
@@ -90,6 +98,8 @@ export type PlayerAction =
   | { type: "done"; itemId: string; done: boolean }
   | { type: "skip"; itemId: string; skipped: boolean }
   | { type: "flag"; itemId: string; flagged: boolean }
+  /** ADR-124 §3: the server checked the question; its correction, as it answered. */
+  | { type: "check"; itemId: string; correction: ItemCorrection }
   /** ADR-084: "Continue" on the passage screen: the question shows. */
   | { type: "pass"; itemId: string }
   /** ADR-084: "Read the text again", under `free` navigation only. */
@@ -121,6 +131,8 @@ const toItem = (item: AttemptItem): PlayerItem => ({
   skipped: item.skipped,
   flagged: item.flagged,
   acquired: item.acquired,
+  checked: item.checked,
+  correction: item.correction,
   student: item.student,
   serverLocked: item.locked,
 });
@@ -156,6 +168,16 @@ export function canReach(state: PlayerState, index: number): boolean {
   if (!item) return false;
   if (index === state.index) return true;
   return !isLocked(state, item.id);
+}
+
+/**
+ * Whether the student may still write to `itemId`: not closed by the
+ * navigation, not carried over (ADR-091), not checked (ADR-124 §3). The
+ * last two leave the question reachable, read-only.
+ */
+export function isWritable(state: PlayerState, itemId: string): boolean {
+  const item = state.items.find((i) => i.id === itemId);
+  return item !== undefined && !item.acquired && !item.checked && !isLocked(state, itemId);
 }
 
 export const currentItem = (state: PlayerState): PlayerItem | undefined => state.items[state.index];
@@ -241,7 +263,16 @@ function patchItem(state: PlayerState, itemId: string, patch: Partial<PlayerItem
 export function playerReducer(state: PlayerState, action: PlayerAction): PlayerState {
   switch (action.type) {
     case "load": {
-      const items = action.view.items.map(toItem);
+      // A check is never taken back within an attempt: a view read before
+      // the check landed must not reopen the question it locked.
+      const before = new Map(state.items.map((item) => [item.id, item]));
+      const items = action.view.items.map((viewItem) => {
+        const item = toItem(viewItem);
+        const prior = before.get(item.id);
+        return !item.checked && prior?.checked === true
+          ? { ...item, checked: true, correction: prior.correction }
+          : item;
+      });
       const answers: Record<string, unknown> = {};
       for (const item of action.view.items) {
         if (action.unsaved?.has(item.id) === true && item.id in state.answers) {
@@ -291,18 +322,20 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
     }
     case "answer":
     case "adopt": {
-      if (action.type === "answer" && isLocked(state, action.itemId)) return state;
+      if (action.type === "answer" && !isWritable(state, action.itemId)) return state;
       const next = { ...state, answers: { ...state.answers, [action.itemId]: action.payload } };
       return action.type === "answer" && action.answered === true
         ? patchItem(next, action.itemId, { skipped: false })
         : next;
     }
     case "skip":
-      if (isLocked(state, action.itemId)) return state;
+      if (!isWritable(state, action.itemId)) return state;
       return patchItem(state, action.itemId, { skipped: action.skipped });
     case "flag":
-      if (isLocked(state, action.itemId)) return state;
+      if (!isWritable(state, action.itemId)) return state;
       return patchItem(state, action.itemId, { flagged: action.flagged });
+    case "check":
+      return patchItem(state, action.itemId, { checked: true, correction: action.correction });
     case "replace": {
       const { id } = action.item;
       if (!state.items.some((item) => item.id === id)) return state;

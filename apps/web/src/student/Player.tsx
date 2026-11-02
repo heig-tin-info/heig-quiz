@@ -30,6 +30,14 @@
  *   - on an unsettled question in `free`, none: the answer field IS the
  *     action, and an accent on "Next" would push past it.
  *
+ * In an exercise (ADR-124 §3) the question on screen may be CHECKED: while
+ * it is open and holds an answer, "Check" is the primary action — no
+ * confirmation, a line under the question says it locks the answer. Once
+ * checked, the question is read-only for the rest of the attempt and its
+ * card shows the correction in place of the player (`CheckedCorrection`);
+ * the thing to do is then to move on, so Next (or Hand in) takes the accent.
+ * Never in an exam, a poll or the teacher's preview, which has no check.
+ *
  * An item may carry the teacher's text before it (ADR-084): arriving on it
  * shows that passage in place of the question, and the one primary action
  * is then "Continue". Under `free` navigation "Read the text again" brings
@@ -55,7 +63,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ChevronRight, ShieldAlert } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
-import { answerMark, calculatorOn, mayValidate, notepadOn } from "@quiz/domain";
+import { answerMark, calculatorOn, checkAllowed, mayValidate, notepadOn } from "@quiz/domain";
 
 import { useIntegrityJournal } from "../attempt/integrity";
 import { postSimulate } from "../attempt/run";
@@ -64,6 +72,7 @@ import {
   canReread,
   currentItem,
   isLocked,
+  isWritable,
   neighbour,
   passageOf,
   segmentsOf,
@@ -72,6 +81,7 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useLentCanvasShortcuts } from "../shortcuts";
 import { Button, Card, LG_PX, Modal, useMinWidth } from "../ui";
+import { CheckedCorrection } from "./CheckedCorrection";
 import { ConditionsList } from "./ConditionsList";
 import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
 import { IntroPassage, RereadButton } from "./IntroPassage";
@@ -115,6 +125,8 @@ export type PlayerSession = Pick<
 > & {
   /** Absent when nothing is saved as one types (the preview): no badge at all. */
   sync?: UseAttempt["sync"];
+  /** ADR-124 §3: checks a question of an exercise. Absent where nothing is checked (the preview). */
+  check?: UseAttempt["check"];
   /**
    * `POST …/simulate`: the `circuit` player's "Simulate", and the backend
    * half of a `codeimage` "Run" (ADR-019, ADR-021).
@@ -313,9 +325,11 @@ export function PlayerView({
   const passage = passageOf(state);
   const total = state.items.length;
   const locked = item ? isLocked(state, item.id) : true;
-  // ADR-091: a question a partial retake carried over is read, not written.
+  // ADR-091 and ADR-124 §3: carried over, or checked — for the badge and the hint.
   const acquired = item?.acquired === true;
-  const readOnly = locked || acquired || closed !== null || paused;
+  const checked = item?.checked === true;
+  // The reducer's one rule of what may still be written, then the attempt's state.
+  const readOnly = item === undefined || !isWritable(state, item.id) || closed !== null || paused;
   // On a phone the three actions live in a sticky footer under the thumb;
   // on a desktop they sit right under the question, where the mouse already
   // is — a footer at the bottom of a 900 px window is a trip per question.
@@ -340,6 +354,14 @@ export function PlayerView({
     !readOnly &&
     !validated &&
     mayValidate(state.navigation, item);
+  // ADR-124 §3: "Check", on an open question of an exercise; enabled once it holds an answer.
+  const canCheck =
+    item !== undefined &&
+    passage === null &&
+    !readOnly &&
+    session.check !== undefined &&
+    checkAllowed(initial.evaluation.mode);
+  const checkPrimary = canCheck && answered && !canValidate;
   // ADR-069, ADR-090: the tools the evaluation provides, for the whole attempt.
   const calculator = calculatorOn(initial.evaluation.mode, initial.evaluation.settings.calculator);
   const notepad = notepadOn(initial.evaluation.mode, initial.evaluation.settings.notepad);
@@ -397,7 +419,7 @@ export function PlayerView({
    * one way out of the last question.
    */
   const settled = mark !== "unanswered" || validated;
-  const handInIsPrimary = passage === null && !canValidate && settled && next === null;
+  const handInIsPrimary = passage === null && !canValidate && !checkPrimary && settled && next === null;
   // A single question has no neighbours to walk to: the two buttons are
   // absent rather than disabled, and so is the strip above (F-LIVE-09 draws
   // the questions, and one question is not a progression). Nothing to show
@@ -420,16 +442,26 @@ export function PlayerView({
           <ChevronRight className="size-4" aria-hidden />
         </Button>
       </>
-    ) : manyItems || canValidate ? (
+    ) : manyItems || canValidate || canCheck ? (
       <PlayerActions
         manyItems={manyItems}
         canValidate={canValidate}
         validateLabel={controls.validateLabel}
         hasPrevious={previous !== null}
         hasNext={next !== null}
-        nextIsPrimary={!canValidate && settled && next !== null}
+        nextIsPrimary={!canValidate && !checkPrimary && settled && next !== null}
         onValidate={() => void controls.validate()}
         onMove={move}
+        check={
+          canCheck
+            ? {
+                primary: checkPrimary,
+                disabled: !answered,
+                busy: controls.checking,
+                onCheck: () => void controls.check(),
+              }
+            : undefined
+        }
       />
     ) : null;
 
@@ -507,6 +539,7 @@ export function PlayerView({
               counting={item.counting}
               validated={validated}
               acquired={acquired}
+              checked={checked}
               mark={mark}
             />
             {canReread(state) ? (
@@ -524,19 +557,28 @@ export function PlayerView({
                   onFlag={() => void controls.toggleFlag()}
                 />
               </div>
-              <PlayerQuestion
-                key={`${item.id}:${item.generation ?? 0}`}
-                itemId={item.id}
-                type={item.type}
-                student={item.student}
-                answer={state.answers[item.id] ?? null}
-                readOnly={readOnly}
-                setAnswer={session.setAnswer}
-                run={session.run}
-                simulate={session.simulate}
-                onUnsent={setUnsent}
-                onCanvasShortcuts={onCanvasShortcuts}
-              />
+              {checked && item.correction ? (
+                <CheckedCorrection
+                  type={item.type}
+                  student={item.student}
+                  answer={state.answers[item.id] ?? null}
+                  correction={item.correction}
+                />
+              ) : (
+                <PlayerQuestion
+                  key={`${item.id}:${item.generation ?? 0}`}
+                  itemId={item.id}
+                  type={item.type}
+                  student={item.student}
+                  answer={state.answers[item.id] ?? null}
+                  readOnly={readOnly}
+                  setAnswer={session.setAnswer}
+                  run={session.run}
+                  simulate={session.simulate}
+                  onUnsent={setUnsent}
+                  onCanvasShortcuts={onCanvasShortcuts}
+                />
+              )}
             </Card>
             <QuestionTools
               item={item}
@@ -552,6 +594,8 @@ export function PlayerView({
             <PlayerHint
               locked={locked}
               acquired={acquired}
+              checked={checked}
+              check={canCheck && !canValidate ? (answered ? "ready" : "blank") : null}
               canValidate={canValidate}
               validateLabel={controls.validateLabel}
               navigation={state.navigation}
@@ -591,32 +635,40 @@ export function PlayerView({
 }
 
 /**
- * Only a rule worth reading under the question: a locked question, or an
- * irreversible validation ahead. That answers are saved as one types is said
+ * Only a rule worth reading under the question: a locked question, an
+ * irreversible validation ahead, or what a check does (ADR-124 §3) — it
+ * locks the answer, and an empty question has nothing to check. That answers are saved as one types is said
  * once, in the lobby, and the free player stays bare.
  */
 function PlayerHint({
   locked,
   acquired,
+  checked,
+  check,
   canValidate,
   validateLabel,
   navigation,
 }: {
   locked: boolean;
   acquired: boolean;
+  checked: boolean;
+  /** "Check" is offered: on an answered question, or a blank one. */
+  check: "ready" | "blank" | null;
   canValidate: boolean;
   validateLabel: string;
   navigation: PlayerSession["state"]["navigation"];
 }) {
   const t = useT();
-  const hint = acquired
-    ? t("player.acquired.hint")
-    : locked
-      ? t("player.hint.locked")
-      : !canValidate
-        ? null
-        : navigation === "milestones"
-          ? t("player.hint.milestone")
-          : t("player.hint.forward", { action: validateLabel });
-  return hint ? <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{hint}</p> : null;
+  const hint = (): string | null => {
+    if (acquired) return t("player.acquired.hint");
+    if (checked) return t("player.checked.hint");
+    if (locked) return t("player.hint.locked");
+    if (check !== null) return t(check === "ready" ? "player.check.hint" : "player.check.blank");
+    if (!canValidate) return null;
+    return navigation === "milestones"
+      ? t("player.hint.milestone")
+      : t("player.hint.forward", { action: validateLabel });
+  };
+  const text = hint();
+  return text ? <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{text}</p> : null;
 }

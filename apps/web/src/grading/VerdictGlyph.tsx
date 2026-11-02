@@ -3,9 +3,10 @@ import type { CSSProperties } from "react";
 
 import type { GradingEntry } from "@quiz/contracts";
 
-import { useT, type Dict } from "../i18n";
+import { useT } from "../i18n";
 import { cx, Tip } from "../ui";
-import { pendingReason, rowVerdict, type RowVerdict } from "./rows";
+import { VERDICT_BADGE } from "../verdictBadge";
+import { pendingReason, rowVerdict } from "./rows";
 
 /**
  * Partly right is right in STRIPES: the success colour at full strength and
@@ -15,12 +16,6 @@ import { pendingReason, rowVerdict, type RowVerdict } from "./rows";
 const HATCH: CSSProperties = {
   background:
     "repeating-linear-gradient(135deg, var(--success) 0 2.5px, color-mix(in srgb, var(--success) 40%, var(--surface)) 2.5px 5px)",
-};
-
-const WORDS: Record<Exclude<RowVerdict, "pending">, keyof Dict> = {
-  correct: "grading.verdict.correct",
-  partial: "grading.verdict.partial",
-  wrong: "grading.verdict.wrong",
 };
 
 const BOX = "inline-flex size-5.5 shrink-0 items-center justify-center rounded-md";
@@ -54,7 +49,7 @@ export function VerdictGlyph({ entry }: { entry: GradingEntry }) {
       </Tip>
     );
   }
-  const label = t(WORDS[verdict]);
+  const label = t(VERDICT_BADGE[verdict].label);
   return (
     <span
       role="img"

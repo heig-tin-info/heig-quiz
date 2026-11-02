@@ -9,7 +9,7 @@
  */
 import { useId, useState } from "react";
 
-import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
+import { fmt, resolveStrings } from "@quiz/core/client";
 import type { ReviewProps } from "@quiz/core/client";
 
 import type {
@@ -21,7 +21,7 @@ import type {
   HiddenCaseVerdict,
   ReviewCaseDetail,
 } from "./schema.js";
-import { CompileFailure, NoBreakdown, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
+import { CompileFailure, NoBreakdown, ProgramCards, ScoreLine } from "./ProgramReview.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
 import {
   badge,
@@ -133,7 +133,19 @@ export function CodeReview({
   );
 
   const breakdown = breakdownOf(details, "cases");
-  if (breakdown === null) return <NoBreakdown statement={statement} answered={answer !== null} s={s} />;
+  if (breakdown === null) {
+    return (
+      <NoBreakdown
+        statement={statement}
+        student={student}
+        answer={answer}
+        solution={solution}
+        sections={sections}
+        graded={points !== null}
+        s={s}
+      />
+    );
+  }
 
   // The key, when it travelled: it is what turns "Failed" into "exit 1 ≠ 0".
   const specs = new Map<string, CaseSpec>((solution?.cases ?? []).map((c) => [c.name, c]));
@@ -220,7 +232,7 @@ export function CodeReview({
         <p className={hint}>{fmt(s.hiddenSummary, { passed: hiddenPassed, count: hidden.length })}</p>
       ) : null}
 
-      {showsSection(sections, "solution") ? <ReferenceSolutionCard solution={solution} s={s} /> : null}
+      <ProgramCards student={student} answer={answer} solution={solution} sections={sections} s={s} />
     </div>
   );
 }

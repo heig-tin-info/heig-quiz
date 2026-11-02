@@ -121,6 +121,7 @@ export function QuestionHeading({
   counting = "normal",
   validated,
   acquired = false,
+  checked = false,
   mark,
 }: {
   /** Zero-based position in the paper. */
@@ -132,6 +133,8 @@ export function QuestionHeading({
   validated: boolean;
   /** ADR-091: carried over by a partial retake, kept as it was. */
   acquired?: boolean;
+  /** ADR-124 §3: checked in this attempt of an exercise, locked since. */
+  checked?: boolean;
   mark: AnswerMark;
 }) {
   const t = useT();
@@ -155,6 +158,10 @@ export function QuestionHeading({
       {acquired ? (
         <Badge tone="green" icon={CheckCircle2}>
           {t("player.acquired")}
+        </Badge>
+      ) : checked ? (
+        <Badge tone="zinc" icon={Lock}>
+          {t("player.checked")}
         </Badge>
       ) : validated ? (
         <Badge tone="zinc" icon={Lock}>

@@ -8,6 +8,7 @@ import {
   currentItem,
   emptyPlayerState,
   isLocked,
+  isWritable,
   lockedIds,
   neighbour,
   passageOf,
@@ -329,5 +330,47 @@ describe("playerReducer: the text before an item (ADR-084)", () => {
     state = playerReducer(state, { type: "pass", itemId: "i4" });
     state = playerReducer(state, { type: "load", view: view("free", items, "i4") });
     expect(passageOf(state)).toBeNull();
+  });
+});
+
+describe("playerReducer: a checked question (ADR-124 §3)", () => {
+  const correction = {
+    verdict: "wrong" as const,
+    points: 0,
+    maxPoints: 1,
+    solution: { correct: [0] },
+    explanation: null,
+    details: null,
+  };
+  const checked = () =>
+    playerReducer(load(view("free", [item(1, { answer: { selected: [1] }, revision: 2 }), item(2)])), {
+      type: "check",
+      itemId: "i1",
+      correction,
+    });
+
+  it("is locked to writing, and stays reachable", () => {
+    const state = checked();
+    expect(state.items[0]).toMatchObject({ checked: true, correction });
+    expect(isWritable(state, "i1")).toBe(false);
+    expect(playerReducer(state, { type: "answer", itemId: "i1", payload: { selected: [0] } })).toBe(state);
+    expect(playerReducer(state, { type: "skip", itemId: "i1", skipped: true })).toBe(state);
+    expect(playerReducer(state, { type: "flag", itemId: "i1", flagged: true })).toBe(state);
+    // Not a navigation lock: the student comes back to read the correction.
+    expect(isLocked(state, "i1")).toBe(false);
+    const away = playerReducer(state, { type: "goto", itemId: "i2" });
+    expect(currentItem(playerReducer(away, { type: "goto", itemId: "i1" }))?.id).toBe("i1");
+  });
+
+  it("is not reopened by a view read before the check landed", () => {
+    const stale = view("free", [item(1, { answer: { selected: [1] }, revision: 2 }), item(2)]);
+    const state = playerReducer(checked(), { type: "load", view: stale });
+    expect(state.items[0]).toMatchObject({ checked: true, correction });
+  });
+
+  it("takes the server's newer correction on a later read", () => {
+    const resolved = { ...correction, verdict: "correct" as const, points: 1 };
+    const later = view("free", [item(1, { checked: true, correction: resolved }), item(2)]);
+    expect(playerReducer(checked(), { type: "load", view: later }).items[0]?.correction).toEqual(resolved);
   });
 });

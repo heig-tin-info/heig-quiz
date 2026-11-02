@@ -116,6 +116,12 @@ export const ItemCorrection = z.object({
   maxPoints: z.number(),
   solution: z.unknown().nullable(),
   explanation: z.string().nullable(),
+  /**
+   * The grading's breakdown as the student may read it (the feedback page's
+   * `filterDetails`): what a type's review draws its verdict from — a code
+   * question's cases, a circuit's stimuli. Null without a validated grading.
+   */
+  details: z.unknown().nullable(),
 });
 export type ItemCorrection = z.infer<typeof ItemCorrection>;
 

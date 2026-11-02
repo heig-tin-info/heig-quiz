@@ -183,6 +183,28 @@ describe("CodeReview", () => {
     expect(screen.getByText("Not answered.")).toBeInTheDocument();
   });
 
+  // ADR-124 §3: a checked answer whose run is still to come has not failed.
+  it("says nothing failed of an answer not graded yet, and shows the program and the key already", () => {
+    setup(null, { points: null, solution: codeServer.toSolution(config, { seed: 0, itemId: "i", shuffle: false }) });
+    expect(screen.getByText(student.prompt)).toBeInTheDocument();
+    expect(screen.queryByText(/could not be run/)).toBeNull();
+    expect(screen.queryByText("Not answered.")).toBeNull();
+    // The student's own region, inside the template's locked lines.
+    expect(screen.getByText("Submitted code")).toBeInTheDocument();
+    expect(screen.getByText(/return 6;/)).toBeInTheDocument();
+    expect(screen.getByText("Reference solution")).toBeInTheDocument();
+  });
+
+  it("shows the student's program under the cases too", () => {
+    setup(studentDetails(graded.details));
+    expect(screen.getByText("Submitted code")).toBeInTheDocument();
+  });
+
+  it("says a graded answer with no breakdown could not be run", () => {
+    setup(null);
+    expect(screen.getByText(/could not be run/)).toBeInTheDocument();
+  });
+
   /*
    * `gradings.details` is a union: this type's breakdown, or a grading-level
    * marker written when no type ever ran. A marker has no `cases`, and
