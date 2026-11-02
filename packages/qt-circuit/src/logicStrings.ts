@@ -83,7 +83,8 @@ export const LOGIC_EDITOR_STRINGS = {
   unknownIdentifier: "Unknown input at character {n}.",
 
   reference: "Reference circuit",
-  referenceHint: "Draw the expected circuit with the students' gates. Students never see it.",
+  referenceHint: "Draw the expected circuit. Shown when the evaluation reveals the expected answer.",
+  referenceHintSequential: "Draw a circuit to fill the expected outputs. Students never see it.",
   expand: "Expand",
   expanded: "The circuit is open over the page.",
   referenceMissing: "Draw the reference circuit first.",

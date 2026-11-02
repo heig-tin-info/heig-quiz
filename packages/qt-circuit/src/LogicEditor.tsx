@@ -352,7 +352,7 @@ export function LogicEditor({
             Expand={Expand}
             title={s.reference}
             heading={<h3 className={sectionTitle}>{s.reference}</h3>}
-            hint={<p className={hint}>{s.referenceHint}</p>}
+            hint={<p className={hint}>{sequential ? s.referenceHintSequential : s.referenceHint}</p>}
             strings={s}
           >
             {(expanded) => (
